@@ -737,6 +737,95 @@ export function StreamlinedWorkoutSession({
     return undefined
   }, [currentExercise])
   
+  // ==========================================================================
+  // [LIVE-WORKOUT-CORRIDOR] UNIFIED ADVANCEMENT SYSTEM
+  // All transition paths MUST use this single function to avoid stale closures
+  // ==========================================================================
+  
+  type AdvancementReason = 
+    | 'complete_set' 
+    | 'rest_complete' 
+    | 'inter_exercise_complete' 
+    | 'skip_inter_exercise' 
+    | 'skip_exercise'
+    | 'skip_rest'
+  
+  /**
+   * Unified advancement function that computes next state from CURRENT state snapshot.
+   * This eliminates stale closure bugs by reading exercises array directly.
+   */
+  const advanceToNextExercise = useCallback((reason: AdvancementReason) => {
+    console.log('[LIVE-WORKOUT-CORRIDOR] advanceToNextExercise called', {
+      reason,
+      currentExerciseIndex: state.currentExerciseIndex,
+      totalExercises: exercises.length,
+      source: reason,
+    })
+    
+    const nextIndex = state.currentExerciseIndex + 1
+    const isLastExercise = nextIndex >= exercises.length
+    
+    if (isLastExercise) {
+      // Complete workout
+      console.log('[LIVE-WORKOUT-CORRIDOR] workout completed via', reason)
+      setState(prev => ({
+        ...prev,
+        status: 'completed',
+      }))
+      clearSessionStorage()
+      clearRestTimerState()
+      return
+    }
+    
+    // Get the NEXT exercise to compute correct initial values
+    const nextExercise = exercises[nextIndex]
+    const nextRepsOrTime = nextExercise?.repsOrTime || ''
+    const nextTargetMatch = nextRepsOrTime.match(/(\d+)/)
+    const nextTargetValue = nextTargetMatch ? parseInt(nextTargetMatch[1], 10) : 5
+    
+    // Get recommended band for next exercise
+    const nextNote = nextExercise?.note || ''
+    const nextNoteLower = safeLower(nextNote)
+    let nextBand: ResistanceBandColor | 'none' = 'none'
+    for (const band of ALL_BAND_COLORS) {
+      if (nextNoteLower.includes(band)) {
+        nextBand = band
+        break
+      }
+    }
+    // Prefer executionTruth band if available
+    const truthBand = nextExercise?.executionTruth?.recommendedBandColor
+    if (truthBand) {
+      nextBand = truthBand
+    }
+    
+    console.log('[LIVE-WORKOUT-CORRIDOR] advancing to next exercise', {
+      reason,
+      fromIndex: state.currentExerciseIndex,
+      toIndex: nextIndex,
+      nextExerciseName: nextExercise?.name,
+      nextTargetValue,
+      nextBand,
+    })
+    
+    // Advance state
+    setState(prev => ({
+      ...prev,
+      status: 'active',
+      currentExerciseIndex: nextIndex,
+      currentSetNumber: 1,
+    }))
+    
+    // Reset inputs for new exercise with CORRECT values
+    setSelectedRPE(null)
+    setRepsValue(nextTargetValue)
+    setHoldValue(nextTargetValue)
+    setBandUsed(nextBand)
+    
+    // Clear inter-exercise rest state
+    setShowInterExerciseRest(false)
+  }, [state.currentExerciseIndex, exercises])
+  
   // Auto-save on state changes - skip for demo sessions
   // [LIVE-SESSION-LOCK] Include structure signature in saved state
   useEffect(() => {
@@ -830,6 +919,14 @@ export function StreamlinedWorkoutSession({
   const handleCompleteSet = useCallback(() => {
     if (!currentExercise) return
     
+    console.log('[LIVE-WORKOUT-CORRIDOR] handleCompleteSet triggered', {
+      exerciseIndex: state.currentExerciseIndex,
+      setNumber: state.currentSetNumber,
+      exerciseName: currentExercise.name,
+      totalSets: currentExercise.sets,
+      totalExercises: exercises.length,
+    })
+    
     const setData: CompletedSetData = {
       exerciseIndex: state.currentExerciseIndex,
       setNumber: state.currentSetNumber,
@@ -913,6 +1010,11 @@ export function StreamlinedWorkoutSession({
       
       if (shouldShowInterRest) {
         // Show inter-exercise rest modal/state
+        console.log('[LIVE-WORKOUT-CORRIDOR] showing inter-exercise rest', {
+          interRestSeconds,
+          currentIndex: state.currentExerciseIndex,
+          nextIndex: nextExerciseIndex,
+        })
         setInterExerciseRestSeconds(interRestSeconds)
         setShowInterExerciseRest(true)
         setState(prev => ({
@@ -921,7 +1023,35 @@ export function StreamlinedWorkoutSession({
           lastSetRPE: lastRPE,
         }))
       } else {
-        // Skip to next exercise immediately (warmup/mobility transitions)
+        // [LIVE-WORKOUT-CORRIDOR] Skip to next exercise immediately (warmup/mobility transitions)
+        // Must compute next exercise values HERE to avoid stale closures
+        console.log('[LIVE-WORKOUT-CORRIDOR] immediate advance to next exercise (no inter-rest)', {
+          currentIndex: state.currentExerciseIndex,
+          nextIndex: nextExerciseIndex,
+          nextExerciseName: nextExercise?.name,
+        })
+        
+        // Compute next exercise input values
+        const nextRepsOrTime = nextExercise?.repsOrTime || ''
+        const nextTargetMatch = nextRepsOrTime.match(/(\d+)/)
+        const nextTargetValue = nextTargetMatch ? parseInt(nextTargetMatch[1], 10) : 5
+        
+        // Get recommended band for next exercise
+        const nextNote = nextExercise?.note || ''
+        const nextNoteLower = safeLower(nextNote)
+        let nextBand: ResistanceBandColor | 'none' = 'none'
+        for (const band of ALL_BAND_COLORS) {
+          if (nextNoteLower.includes(band)) {
+            nextBand = band
+            break
+          }
+        }
+        // Prefer executionTruth band if available
+        const truthBand = nextExercise?.executionTruth?.recommendedBandColor
+        if (truthBand) {
+          nextBand = truthBand
+        }
+        
         setState(prev => ({
           ...prev,
           status: 'active',
@@ -930,6 +1060,12 @@ export function StreamlinedWorkoutSession({
           currentSetNumber: 1,
           lastSetRPE: lastRPE,
         }))
+        
+        // Reset inputs with CORRECT next exercise values
+        setSelectedRPE(null)
+        setRepsValue(nextTargetValue)
+        setHoldValue(nextTargetValue)
+        setBandUsed(nextBand)
       }
     } else {
       // Move to next set with rest
@@ -975,16 +1111,16 @@ export function StreamlinedWorkoutSession({
       }))
     }
     
-    // Reset inputs for next set
+    // Reset inputs for next set (only if staying on same exercise - next set within exercise)
     setSelectedRPE(null)
     setRepsValue(getTargetValue())
     setHoldValue(getTargetValue())
-  }, [currentExercise, state, repsValue, holdValue, selectedRPE, bandUsed, isHoldExercise, exercises.length])
+  }, [currentExercise, state, repsValue, holdValue, selectedRPE, bandUsed, isHoldExercise, exercises, exerciseRuntimeTruth, sessionRuntimeTruth, getTargetValue])
   
-  // Rest complete / skip rest
+  // Rest complete / skip rest (between sets of SAME exercise)
   const handleRestComplete = useCallback(() => {
+    console.log('[LIVE-WORKOUT-CORRIDOR] handleRestComplete triggered (same exercise, next set)')
     clearRestTimerState()
-    // [EXECUTION-TRUTH-FIX] Play timer completion alert
     playTimerCompletionAlert()
     setState(prev => ({
       ...prev,
@@ -992,37 +1128,20 @@ export function StreamlinedWorkoutSession({
     }))
   }, [])
   
-  // [EXECUTION-TRUTH-FIX] Handle inter-exercise rest completion
+  // [LIVE-WORKOUT-CORRIDOR] Handle inter-exercise rest completion
+  // Uses unified advanceToNextExercise to prevent stale closure bugs
   const handleInterExerciseRestComplete = useCallback(() => {
-    setShowInterExerciseRest(false)
+    console.log('[LIVE-WORKOUT-CORRIDOR] handleInterExerciseRestComplete triggered')
     playTimerCompletionAlert()
-    setState(prev => ({
-      ...prev,
-      status: 'active',
-      currentExerciseIndex: prev.currentExerciseIndex + 1,
-      currentSetNumber: 1,
-    }))
-    // Reset inputs for new exercise
-    setSelectedRPE(null)
-    setRepsValue(getTargetValue())
-    setHoldValue(getTargetValue())
-    setBandUsed('none')
-  }, [getTargetValue])
+    advanceToNextExercise('inter_exercise_complete')
+  }, [advanceToNextExercise])
   
-  // [EXECUTION-TRUTH-FIX] Handle skip inter-exercise rest
+  // [LIVE-WORKOUT-CORRIDOR] Handle skip inter-exercise rest
+  // Uses unified advanceToNextExercise to prevent stale closure bugs
   const handleSkipInterExerciseRest = useCallback(() => {
-    setShowInterExerciseRest(false)
-    setState(prev => ({
-      ...prev,
-      status: 'active',
-      currentExerciseIndex: prev.currentExerciseIndex + 1,
-      currentSetNumber: 1,
-    }))
-    setSelectedRPE(null)
-    setRepsValue(getTargetValue())
-    setHoldValue(getTargetValue())
-    setBandUsed('none')
-  }, [getTargetValue])
+    console.log('[LIVE-WORKOUT-CORRIDOR] handleSkipInterExerciseRest triggered')
+    advanceToNextExercise('skip_inter_exercise')
+  }, [advanceToNextExercise])
   
   // [EXECUTION-TRUTH-FIX] Back navigation - review previous exercise
   const handleReviewPreviousExercise = useCallback(() => {
@@ -1068,21 +1187,11 @@ export function StreamlinedWorkoutSession({
     )
   }, [])
   
-  // Skip exercise
+  // [LIVE-WORKOUT-CORRIDOR] Skip exercise - uses unified advancement
   const handleSkipExercise = useCallback(() => {
-    const isLastExercise = state.currentExerciseIndex >= exercises.length - 1
-    if (isLastExercise) {
-      setState(prev => ({ ...prev, status: 'completed' }))
-      clearSessionStorage()
-    } else {
-      setState(prev => ({
-        ...prev,
-        currentExerciseIndex: prev.currentExerciseIndex + 1,
-        currentSetNumber: 1,
-      }))
-    }
-    setSelectedRPE(null)
-  }, [state.currentExerciseIndex, exercises.length])
+    console.log('[LIVE-WORKOUT-CORRIDOR] handleSkipExercise triggered')
+    advanceToNextExercise('skip_exercise')
+  }, [advanceToNextExercise])
   
   // ==========================================================================
   // EXERCISE OVERRIDE HANDLERS

@@ -1991,6 +1991,57 @@ export function resolveSessionIdentityFromContent(params: {
     resolvedSecondarySkillForSession = secondaryGoal || null
   }
   
+  // ==========================================================================
+  // [AI-TRUTH-MATERIALIZATION] BROADER SKILL DETECTION FROM SELECTION CONTEXT
+  // Detects skills beyond primary/secondary from influencingSkills metadata
+  // ==========================================================================
+  const skillExerciseCounts = new Map<string, { count: number; expressionModes: Set<string> }>()
+  const broaderSkillsExpressed: string[] = []
+  const supportSkillsExpressed: string[] = []
+  const skillBreakdown: Array<{ skill: string; exerciseCount: number; expressionMode: string }> = []
+  
+  for (const ex of workingExercises) {
+    // Check influencing skills from selection context
+    if (ex.influencingSkills && Array.isArray(ex.influencingSkills) && ex.influencingSkills.length > 0) {
+      for (const influence of ex.influencingSkills) {
+        const skillId = influence.skillId?.toLowerCase().replace(/_/g, '') || ''
+        if (skillId) {
+          const existing = skillExerciseCounts.get(skillId) || { count: 0, expressionModes: new Set() }
+          existing.count++
+          if (influence.expressionMode) {
+            existing.expressionModes.add(influence.expressionMode)
+          }
+          skillExerciseCounts.set(skillId, existing)
+          
+          if (!broaderSkillsExpressed.includes(influence.skillId)) {
+            broaderSkillsExpressed.push(influence.skillId)
+          }
+          if (influence.expressionMode === 'support' || influence.expressionMode === 'technical') {
+            if (!supportSkillsExpressed.includes(influence.skillId)) {
+              supportSkillsExpressed.push(influence.skillId)
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // Build skill breakdown for reporting
+  skillExerciseCounts.forEach((data, skill) => {
+    const dominantMode = data.expressionModes.size > 0 
+      ? Array.from(data.expressionModes)[0] 
+      : 'unknown'
+    skillBreakdown.push({
+      skill,
+      exerciseCount: data.count,
+      expressionMode: dominantMode,
+    })
+  })
+  
+  // Determine if multi-skill architecture is active
+  const multiSkillArchitectureActive = broaderSkillsExpressed.length >= 3 || 
+    (primaryGoalExercises.length > 0 && secondaryGoalExercises.length > 0 && supportSkillsExpressed.length > 0)
+  
   // Determine method expression
   const hasSuperset = workingExercises.some(e => e.trainingMethod?.includes('superset'))
   const hasCircuit = workingExercises.some(e => e.trainingMethod?.includes('circuit'))
@@ -2017,16 +2068,36 @@ export function resolveSessionIdentityFromContent(params: {
     .sort((a, b) => b[1] - a[1])[0]?.[0] || 'mixed'
   
   // Build resolved session identity label
+  // [AI-TRUTH-MATERIALIZATION] Identity now reflects multi-skill architecture when detected
   let resolvedSessionIdentity: string
   
   if (isDeloadSession) {
     resolvedSessionIdentity = 'Recovery Focus'
+  } else if (multiSkillArchitectureActive && supportSkillsExpressed.length >= 2) {
+    // Multi-skill day with significant broader skill expression
+    if (resolvedPrimarySkillForSession) {
+      resolvedSessionIdentity = `${formatSkillLabel(resolvedPrimarySkillForSession)} + Multi-Skill`
+    } else {
+      resolvedSessionIdentity = 'Integrated Skills Day'
+    }
   } else if (resolvedPrimarySkillForSession && resolvedMovementBias === 'push') {
-    resolvedSessionIdentity = `${formatSkillLabel(resolvedPrimarySkillForSession)} Push Day`
+    if (supportSkillsExpressed.length >= 1) {
+      resolvedSessionIdentity = `${formatSkillLabel(resolvedPrimarySkillForSession)} Push + Support`
+    } else {
+      resolvedSessionIdentity = `${formatSkillLabel(resolvedPrimarySkillForSession)} Push Day`
+    }
   } else if (resolvedPrimarySkillForSession && resolvedMovementBias === 'pull') {
-    resolvedSessionIdentity = `${formatSkillLabel(resolvedPrimarySkillForSession)} Pull Day`
+    if (supportSkillsExpressed.length >= 1) {
+      resolvedSessionIdentity = `${formatSkillLabel(resolvedPrimarySkillForSession)} Pull + Support`
+    } else {
+      resolvedSessionIdentity = `${formatSkillLabel(resolvedPrimarySkillForSession)} Pull Day`
+    }
   } else if (resolvedPrimarySkillForSession && skillExercises.length > strengthExercises.length) {
-    resolvedSessionIdentity = `${formatSkillLabel(resolvedPrimarySkillForSession)} Skill Focus`
+    if (supportSkillsExpressed.length >= 1) {
+      resolvedSessionIdentity = `${formatSkillLabel(resolvedPrimarySkillForSession)} Skill + Support`
+    } else {
+      resolvedSessionIdentity = `${formatSkillLabel(resolvedPrimarySkillForSession)} Skill Focus`
+    }
   } else if (resolvedMovementBias === 'push') {
     resolvedSessionIdentity = 'Push Strength'
   } else if (resolvedMovementBias === 'pull') {
@@ -2126,6 +2197,20 @@ export function resolveSessionIdentityFromContent(params: {
     sessionCoherenceScore: sessionCoherenceScore.toFixed(2),
   })
   
+  // [AI-TRUTH-MATERIALIZATION] Log broader skill detection for visibility audit
+  console.log('[ai-truth-materialization-session-skill-detection]', {
+    dayNumber,
+    broaderSkillsExpressed,
+    supportSkillsExpressed,
+    multiSkillArchitectureActive,
+    skillBreakdownCount: skillBreakdown.length,
+    totalSkillsDetected: broaderSkillsExpressed.length,
+    verdict: multiSkillArchitectureActive 
+      ? 'MULTI_SKILL_SESSION_DETECTED'
+      : supportSkillsExpressed.length > 0
+        ? 'SUPPORT_SKILLS_VISIBLE'
+        : 'PRIMARY_SECONDARY_ONLY',
+  })
   return {
     resolvedSessionIdentity,
     resolvedMovementBias,
@@ -2137,6 +2222,11 @@ export function resolveSessionIdentityFromContent(params: {
     dominantExerciseCategory,
     sessionCoherenceScore,
     identityMatchesContent,
+    // [AI-TRUTH-MATERIALIZATION] Broader skill visibility
+    broaderSkillsExpressed,
+    supportSkillsExpressed,
+    multiSkillArchitectureActive,
+    skillBreakdown,
   }
 }
 

@@ -9411,6 +9411,7 @@ async function generateAdaptiveProgramImpl(
     // NOT from template-level assumptions
     // ==========================================================================
     const resolvedSessionIdentities: ResolvedSessionIdentity[] = sessions.map(session => {
+      // [AI-TRUTH-MATERIALIZATION] Include selection context for broader skill detection
       const exercisesForIdentity = (session.exercises || []).map(e => ({
         name: e.exercise?.name || e.name || '',
         category: e.category || e.exercise?.category,
@@ -9419,6 +9420,9 @@ async function generateAdaptiveProgramImpl(
         trainingMethod: e.method || e.trainingMethod,
         isWarmup: false,
         isCooldown: false,
+        // [AI-TRUTH-MATERIALIZATION] Selection context for multi-skill visibility
+        selectionReason: e.selectionReason,
+        influencingSkills: e.selectionContext?.influencingSkills,
       }))
       
       return resolveSessionIdentityFromContent({
@@ -9445,6 +9449,11 @@ async function generateAdaptiveProgramImpl(
         ;(session as any).resolvedMethodExpression = resolved.resolvedMethodExpression
         ;(session as any).sessionCoherenceScore = resolved.sessionCoherenceScore
         ;(session as any).identityMatchesContent = resolved.identityMatchesContent
+        // [AI-TRUTH-MATERIALIZATION] Store broader skill visibility for UI
+        ;(session as any).broaderSkillsExpressed = resolved.broaderSkillsExpressed
+        ;(session as any).supportSkillsExpressed = resolved.supportSkillsExpressed
+        ;(session as any).multiSkillArchitectureActive = resolved.multiSkillArchitectureActive
+        ;(session as any).skillBreakdown = resolved.skillBreakdown
         
         // If identity doesn't match content, update the label to match truth
         if (!resolved.identityMatchesContent) {
@@ -9482,6 +9491,33 @@ async function generateAdaptiveProgramImpl(
       if (truthfulExplanation) {
         ;(session as any).truthfulSessionExplanation = truthfulExplanation
       }
+    })
+    
+    // ==========================================================================
+    // [AI-TRUTH-MATERIALIZATION] VISIBLE WEEK HARDENING AUDIT
+    // Verify that visible session labels reflect broader skill expression
+    // ==========================================================================
+    const multiSkillVisibilityAudit = {
+      totalSessions: sessions.length,
+      sessionsWithMultiSkillLabel: resolvedSessionIdentities.filter(r => r.multiSkillArchitectureActive).length,
+      sessionsWithSupportSkillsVisible: resolvedSessionIdentities.filter(r => r.supportSkillsExpressed && r.supportSkillsExpressed.length > 0).length,
+      sessionsWithBroaderSkills: resolvedSessionIdentities.filter(r => r.broaderSkillsExpressed && r.broaderSkillsExpressed.length > 2).length,
+      totalBroaderSkillsDetected: [...new Set(resolvedSessionIdentities.flatMap(r => r.broaderSkillsExpressed || []))].length,
+      uniqueSkillsInWeek: [...new Set(resolvedSessionIdentities.flatMap(r => r.broaderSkillsExpressed || []))],
+    }
+    
+    console.log('[ai-truth-materialization-visible-week-audit]', {
+      ...multiSkillVisibilityAudit,
+      selectedSkillsCount: expandedContext.selectedSkills.length,
+      visibleSkillCoverageRatio: multiSkillVisibilityAudit.totalBroaderSkillsDetected / Math.max(1, expandedContext.selectedSkills.length),
+      weekLooksLikeTwoSkillBuild: multiSkillVisibilityAudit.totalBroaderSkillsDetected <= 2,
+      weekReflectsBroaderSelection: multiSkillVisibilityAudit.totalBroaderSkillsDetected >= Math.min(expandedContext.selectedSkills.length, 4),
+      verdict: multiSkillVisibilityAudit.sessionsWithMultiSkillLabel >= 2 || 
+               multiSkillVisibilityAudit.totalBroaderSkillsDetected >= 3
+        ? 'VISIBLE_WEEK_REFLECTS_MULTI_SKILL'
+        : multiSkillVisibilityAudit.sessionsWithSupportSkillsVisible >= 3
+          ? 'VISIBLE_WEEK_HAS_SUPPORT_EXPRESSION'
+          : 'VISIBLE_WEEK_STILL_PRIMARY_BIASED',
     })
     
     console.log('[phase15f-no-template-memory-explanation-verdict]', {

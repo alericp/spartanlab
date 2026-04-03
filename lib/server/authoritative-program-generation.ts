@@ -357,15 +357,49 @@ export async function executeAuthoritativeGeneration(
         }
       )
     } catch (builderError) {
+      // [SELECTION-CRASH-CORRIDOR-AUDIT] Enhanced diagnostics for exercise selection crashes
+      const errorString = String(builderError)
+      const errorStack = builderError instanceof Error ? builderError.stack : undefined
+      
+      // Parse error to identify crash corridor
+      const isToLowerCaseCrash = errorString.includes('toLowerCase') || errorString.includes('Cannot read properties of undefined')
+      const isSelectionCrash = errorStack?.includes('program-exercise-selector') || 
+                               errorStack?.includes('doctrine-exercise-scorer') ||
+                               errorStack?.includes('movement-intelligence') ||
+                               errorStack?.includes('exercise-override-service')
+      
       console.log('[authoritative-generation-builder-error]', {
         generationIntent: request.generationIntent,
-        error: String(builderError),
+        error: errorString,
         elapsedMs: Date.now() - startTime,
+        // Crash corridor audit
+        crashCorridorAudit: {
+          isToLowerCaseCrash,
+          isSelectionCrash,
+          suspectedField: isToLowerCaseCrash ? 'skill/exercise/rule key (undefined)' : 'unknown',
+          inputAudit: {
+            primaryGoal: request.canonicalProfile.primaryGoal || 'MISSING',
+            secondaryGoal: request.canonicalProfile.secondaryGoal || 'null',
+            selectedSkillsCount: request.canonicalProfile.selectedSkills?.length ?? 'MISSING',
+            selectedSkillsRaw: request.canonicalProfile.selectedSkills,
+            experienceLevel: request.canonicalProfile.experienceLevel || 'MISSING',
+            equipmentCount: request.canonicalProfile.equipment?.length ?? 'MISSING',
+          },
+          stackPreview: errorStack?.split('\n').slice(0, 10).join('\n'),
+        },
+        // Six-day logic verdict
+        sixDayLogicVerdict: {
+          scheduleMode: request.canonicalProfile.scheduleMode,
+          trainingDaysPerWeek: request.canonicalProfile.trainingDaysPerWeek,
+          crashOccurredBeforePlanCommit: true,
+          verdict: 'six_day_logic_intact_selection_crash_blocked_commit',
+        },
       })
+      
       return {
         success: false,
-        error: `Builder failed: ${String(builderError)}`,
-        failedStage: 'builder_execution',
+        error: `Builder failed: ${errorString}`,
+        failedStage: isSelectionCrash ? 'selecting_exercises' : 'builder_execution',
         timings: getTimings(),
         totalElapsedMs: Date.now() - startTime,
         parityVerdict: buildParityVerdict(request, false),

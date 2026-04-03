@@ -164,3 +164,122 @@ export function safeIncludes(haystack: string | null | undefined, needle: string
 export function safeEquals(a: string | null | undefined, b: string | null | undefined): boolean {
   return safeString(a) === safeString(b)
 }
+
+// =============================================================================
+// AUTHORITATIVE SELECTION CORRIDOR SAFE HELPERS
+// =============================================================================
+
+/**
+ * Safely get exercise category in lowercase.
+ */
+export function safeExerciseCategory(exercise: { category?: string | null } | null | undefined): string {
+  if (!exercise) return ''
+  return safeString(exercise.category)
+}
+
+/**
+ * Safely get movement pattern in lowercase.
+ */
+export function safeMovementPattern(exercise: { movementPattern?: string | null } | null | undefined): string {
+  if (!exercise) return ''
+  return safeString(exercise.movementPattern)
+}
+
+/**
+ * Safely get target skills array normalized.
+ */
+export function safeTargetSkills(targetSkills: (string | null | undefined)[] | null | undefined): string[] {
+  if (!targetSkills || !Array.isArray(targetSkills)) return []
+  return targetSkills
+    .filter((t): t is string => t !== null && t !== undefined && typeof t === 'string')
+    .map(t => safeString(t))
+}
+
+/**
+ * Safe goal key normalization.
+ */
+export function safeGoalKey(goal: string | null | undefined): string {
+  return safeString(goal)
+}
+
+/**
+ * Safe level key normalization.
+ */
+export function safeLevelKey(level: string | null | undefined): string {
+  return safeString(level)
+}
+
+/**
+ * Safe doctrine rule key normalization.
+ */
+export function safeRuleKey(key: string | null | undefined): string {
+  return safeString(key)
+}
+
+/**
+ * Safely check if a string contains another (both normalized).
+ * Returns false instead of crashing on undefined values.
+ */
+export function safeContains(
+  haystack: string | null | undefined,
+  needle: string | null | undefined
+): boolean {
+  const haystackLower = safeString(haystack)
+  const needleLower = safeString(needle)
+  if (!haystackLower || !needleLower) return false
+  return haystackLower.includes(needleLower)
+}
+
+/**
+ * Safely check if an array of strings contains any match for a target.
+ */
+export function safeArrayContains(
+  arr: (string | null | undefined)[] | null | undefined,
+  target: string | null | undefined
+): boolean {
+  if (!arr || !Array.isArray(arr) || !target) return false
+  const targetLower = safeString(target)
+  if (!targetLower) return false
+  return arr.some(item => safeString(item).includes(targetLower))
+}
+
+/**
+ * Validate and normalize exercise candidate for selection.
+ * Returns null if exercise is malformed (missing required id/name).
+ */
+export function validateExerciseCandidate<T extends { id?: string | null; name?: string | null }>(
+  exercise: T | null | undefined
+): (T & { _validatedId: string; _validatedName: string }) | null {
+  if (!exercise) return null
+  const id = safeString(exercise.id)
+  const name = safeString(exercise.name)
+  // Must have at least one identifier
+  if (!id && !name) return null
+  return {
+    ...exercise,
+    _validatedId: id,
+    _validatedName: name,
+  }
+}
+
+/**
+ * Safe doctrine context normalization.
+ */
+export function safeDoctrineContext(context: {
+  primaryGoal?: string | null
+  secondaryGoal?: string | null
+  experienceLevel?: string | null
+  jointCautions?: (string | null | undefined)[] | null
+} | null | undefined): {
+  primaryGoal: string
+  secondaryGoal: string
+  experienceLevel: string
+  jointCautions: string[]
+} {
+  return {
+    primaryGoal: safeString(context?.primaryGoal),
+    secondaryGoal: safeString(context?.secondaryGoal),
+    experienceLevel: safeString(context?.experienceLevel) || 'intermediate',
+    jointCautions: safeArray(context?.jointCautions).filter((j): j is string => typeof j === 'string').map(j => safeString(j)),
+  }
+}

@@ -28,6 +28,14 @@ import {
   type SkillCarryover,
 } from './exercise-family-integration'
 import { getExerciseClassification } from './exercise-classification-registry'
+import { 
+  safeString,
+  safeExerciseId,
+  safeExerciseName,
+  safeExerciseCategory,
+  safeContains,
+  safeArrayContains,
+} from './utils/safe-string'
 
 // =============================================================================
 // TYPES
@@ -213,8 +221,15 @@ export function getReplacementOptions(
   availableEquipment: string[] = ['pull_bar', 'dip_bars', 'floor', 'bands']
 ): ReplacementOption[] {
   const allExercises = getAllExercises()
-  const exerciseName = exercise.name.toLowerCase()
-  const exerciseCategory = exercise.category.toLowerCase()
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
+  const exerciseName = safeExerciseName(exercise)
+  const exerciseCategory = safeExerciseCategory(exercise)
+  
+  // Early return if exercise has no valid identifiers
+  if (!exerciseName && !exerciseCategory) {
+    console.warn('[exercise-override-service] Skipping malformed exercise with no name/category')
+    return []
+  }
   
   // Determine movement pattern from category or name
   let targetPatterns: string[] = []
@@ -245,7 +260,8 @@ export function getReplacementOptions(
   
   for (const ex of allExercises) {
     // Skip same exercise
-    if (ex.name.toLowerCase() === exerciseName) continue
+    // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
+    if (safeExerciseName(ex) === exerciseName) continue
     
     // Check movement pattern match
     const patternMatch = targetPatterns.includes(ex.movementPattern)
@@ -258,14 +274,15 @@ export function getReplacementOptions(
     if (!equipmentMatch) continue
     
     // Determine if this is a recommended replacement
+    // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
     const isRecommended = ex.category === exercise.category || 
-      (ex.transferTo && ex.transferTo.some(t => exercise.name.toLowerCase().includes(t)))
+      safeArrayContains(ex.transferTo, exercise.name)
     
     // Determine reason
     let reason = 'Similar movement pattern'
     if (ex.alternatives?.includes(exercise.id || '')) {
       reason = 'Direct alternative'
-    } else if (ex.transferTo?.some(t => exercise.name.toLowerCase().includes(t))) {
+    } else if (safeArrayContains(ex.transferTo, exercise.name)) {
       reason = 'Transfers to same skill'
     } else if (ex.category === exercise.category) {
       reason = 'Same category'
@@ -308,7 +325,9 @@ export function getIntelligentReplacements(
   targetSkill?: SkillCarryover
 ): ReplacementOption[] {
   // Try to find classification for this exercise
-  const classification = getExerciseClassification(exercise.id || exercise.name.toLowerCase().replace(/\s+/g, '_'))
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
+  const exerciseKey = exercise.id || safeExerciseName(exercise).replace(/\s+/g, '_')
+  const classification = getExerciseClassification(exerciseKey || 'unknown')
   
   if (classification) {
     // Use the smart substitution system
@@ -337,8 +356,9 @@ export function getProgressionOptions(exercise: AdaptiveExercise): ProgressionOp
   const options: ProgressionOption[] = []
   
   // Find the exercise in the pool
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
   const poolExercise = allExercises.find(ex => 
-    ex.name.toLowerCase() === exercise.name.toLowerCase() ||
+    safeExerciseName(ex) === safeExerciseName(exercise) ||
     ex.id === exercise.id
   )
   
@@ -400,8 +420,9 @@ export function getProgressionOptions(exercise: AdaptiveExercise): ProgressionOp
   }
   
   // If still no options, infer from name patterns
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
   if (options.length === 0) {
-    const name = exercise.name.toLowerCase()
+    const name = safeExerciseName(exercise)
     
     // Common progression patterns
     const progressionPatterns = [
@@ -549,10 +570,11 @@ export function applyOverridesToSession(
   const overrides = getSessionOverrides(sessionId)
   if (overrides.length === 0) return exercises
   
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
   return exercises.map(exercise => {
     const override = overrides.find(o => 
       o.originalExerciseId === exercise.id || 
-      o.originalExerciseName.toLowerCase() === exercise.name.toLowerCase()
+      safeString(o.originalExerciseName) === safeExerciseName(exercise)
     )
     
     if (!override) return exercise

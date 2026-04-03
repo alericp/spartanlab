@@ -33,6 +33,7 @@ import { EXERCISE_CLASSIFICATIONS } from './exercise-classification-registry'
 import type { Exercise, MovementPattern } from './adaptive-exercise-pool'
 import { getAllExercises } from './adaptive-exercise-pool'
 import type { JointCaution } from './athlete-profile'
+import { safeString, safeExerciseId, safeExerciseName } from './utils/safe-string'
 
 // =============================================================================
 // CANONICAL MOVEMENT-INTELLIGENT EXERCISE INTERFACE
@@ -304,7 +305,8 @@ export function normalizeToMovementIntelligent(
 
 function inferArmType(exercise: Exercise, pattern: MovementFamily): ArmType {
   // Check exercise name for straight-arm indicators
-  const nameLower = exercise.name.toLowerCase()
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
+  const nameLower = safeExerciseName(exercise)
   if (
     nameLower.includes('planche') ||
     nameLower.includes('front lever') ||
@@ -318,7 +320,8 @@ function inferArmType(exercise: Exercise, pattern: MovementFamily): ArmType {
   }
   
   // Check exercise ID
-  const idLower = exercise.id.toLowerCase()
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
+  const idLower = safeExerciseId(exercise)
   if (
     idLower.includes('planche') ||
     idLower.includes('fl_') ||
@@ -360,8 +363,9 @@ function buildJointStressProfile(
   }
   
   // Infer from exercise characteristics
-  const nameLower = exercise.name.toLowerCase()
-  const idLower = exercise.id.toLowerCase()
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
+  const nameLower = safeExerciseName(exercise)
+  const idLower = safeExerciseId(exercise)
   
   // Wrist stress inference
   if (

@@ -28,6 +28,14 @@ import {
   type ContraindicationRule,
   type CarryoverRule,
 } from './doctrine-db'
+import { 
+  safeString, 
+  safeExerciseId, 
+  safeExerciseName,
+  safeRuleKey,
+  safeContains,
+  safeArrayContains,
+} from './utils/safe-string'
 
 // =============================================================================
 // TYPES
@@ -283,8 +291,24 @@ function scoreCandidate(
   contraindicationRules: ContraindicationRule[],
   carryoverRules: CarryoverRule[]
 ): DoctrineScoreResult {
-  const exerciseId = candidate.exercise.id.toLowerCase()
-  const exerciseName = candidate.exercise.name?.toLowerCase() || ''
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
+  const exerciseId = safeExerciseId(candidate.exercise)
+  const exerciseName = safeExerciseName(candidate.exercise)
+  
+  // Skip scoring if candidate has no valid identifiers
+  if (!exerciseId && !exerciseName) {
+    console.warn('[doctrine-exercise-scorer] Skipping malformed candidate with no id/name')
+    return {
+      exerciseId: 'unknown',
+      baseScore: candidate.score,
+      doctrineScoreDelta: 0,
+      finalScore: candidate.score,
+      doctrineReasons: ['Skipped: malformed exercise candidate'],
+      doctrineMatchedRules: [],
+      doctrineConfidence: 'low' as const,
+      doctrineApplied: false,
+    }
+  }
   
   let doctrineScoreDelta = 0
   const doctrineReasons: string[] = []
@@ -292,7 +316,7 @@ function scoreCandidate(
   
   // 1. Apply selection rules
   for (const rule of selectionRules) {
-    const ruleExerciseKey = rule.exerciseKey.toLowerCase()
+    const ruleExerciseKey = safeRuleKey(rule.exerciseKey)
     
     // Check if rule applies to this exercise
     if (!exerciseId.includes(ruleExerciseKey) && !exerciseName.includes(ruleExerciseKey)) {
@@ -349,17 +373,18 @@ function scoreCandidate(
   }
   
   // 2. Apply carryover rules
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
   for (const rule of carryoverRules) {
-    const sourceKey = rule.sourceExerciseOrSkillKey.toLowerCase()
-    
-    // Check if this exercise matches the source
-    if (!exerciseId.includes(sourceKey) && !exerciseName.includes(sourceKey)) {
-      // Also check if exercise transfers to target skill
-      const transfersToTarget = candidate.exercise.transferTo?.some(t => 
-        t.toLowerCase().includes(rule.targetSkillKey.toLowerCase())
-      )
-      if (!transfersToTarget) continue
-    }
+  const sourceKey = safeRuleKey(rule.sourceExerciseOrSkillKey)
+  if (!sourceKey) continue // Skip malformed rule
+  
+  // Check if this exercise matches the source
+  if (!safeContains(exerciseId, sourceKey) && !safeContains(exerciseName, sourceKey)) {
+  // Also check if exercise transfers to target skill
+  const targetSkillKey = safeRuleKey(rule.targetSkillKey)
+  const transfersToTarget = targetSkillKey && safeArrayContains(candidate.exercise.transferTo, targetSkillKey)
+  if (!transfersToTarget) continue
+  }
     
     // Apply carryover boost based on type
     let delta = 0
@@ -395,11 +420,13 @@ function scoreCandidate(
   }
   
   // 3. Apply contraindication rules (penalties only)
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
   for (const rule of contraindicationRules) {
-    const ruleExerciseKey = rule.exerciseKey.toLowerCase()
-    
-    // Check if rule applies to this exercise
-    if (!exerciseId.includes(ruleExerciseKey) && !exerciseName.includes(ruleExerciseKey)) {
+  const ruleExerciseKey = safeRuleKey(rule.exerciseKey)
+  if (!ruleExerciseKey) continue // Skip malformed rule
+  
+  // Check if rule applies to this exercise
+  if (!safeContains(exerciseId, ruleExerciseKey) && !safeContains(exerciseName, ruleExerciseKey)) {
       continue
     }
     
@@ -604,9 +631,24 @@ export function scoreExercisesWithDoctrineSync(
   }
   
   // Score each candidate synchronously
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
   return candidates.map(candidate => {
-    const exerciseId = candidate.exercise.id.toLowerCase()
-    const exerciseName = candidate.exercise.name?.toLowerCase() || ''
+    const exerciseId = safeExerciseId(candidate.exercise)
+    const exerciseName = safeExerciseName(candidate.exercise)
+    
+    // Skip scoring if candidate has no valid identifiers
+    if (!exerciseId && !exerciseName) {
+      return {
+        exerciseId: 'unknown',
+        baseScore: candidate.score,
+        doctrineScoreDelta: 0,
+        finalScore: candidate.score,
+        doctrineReasons: ['Skipped: malformed exercise candidate'],
+        doctrineMatchedRules: [],
+        doctrineConfidence: 'low' as const,
+        doctrineApplied: false,
+      }
+    }
     
     let doctrineScoreDelta = 0
     const doctrineReasons: string[] = []
@@ -614,7 +656,7 @@ export function scoreExercisesWithDoctrineSync(
     
     // Apply selection rules
     for (const rule of rules.selectionRules) {
-      const ruleKey = rule.exerciseKey.toLowerCase()
+      const ruleKey = safeRuleKey(rule.exerciseKey)
       if (!exerciseId.includes(ruleKey) && !exerciseName.includes(ruleKey)) continue
       if (rule.levelScope.length > 0 && !rule.levelScope.includes(context.experienceLevel)) continue
       
@@ -634,11 +676,12 @@ export function scoreExercisesWithDoctrineSync(
     
     // Apply carryover rules
     for (const rule of rules.carryoverRules) {
-      const sourceKey = rule.sourceExerciseOrSkillKey.toLowerCase()
-      const hasDirectMatch = exerciseId.includes(sourceKey) || exerciseName.includes(sourceKey)
-      const transfersToTarget = candidate.exercise.transferTo?.some(t => 
-        t.toLowerCase().includes(rule.targetSkillKey.toLowerCase())
-      )
+    // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
+    const sourceKey = safeRuleKey(rule.sourceExerciseOrSkillKey)
+    if (!sourceKey) continue // Skip malformed rule
+    const hasDirectMatch = safeContains(exerciseId, sourceKey) || safeContains(exerciseName, sourceKey)
+    const targetSkillKey = safeRuleKey(rule.targetSkillKey)
+    const transfersToTarget = targetSkillKey && safeArrayContains(candidate.exercise.transferTo, targetSkillKey)
       
       if (!hasDirectMatch && !transfersToTarget) continue
       
@@ -661,10 +704,12 @@ export function scoreExercisesWithDoctrineSync(
       doctrineReasons.push(`${rule.carryoverType} carryover to ${rule.targetSkillKey}`)
     }
     
-    // Apply contraindication rules
-    for (const rule of rules.contraindicationRules) {
-      const ruleKey = rule.exerciseKey.toLowerCase()
-      if (!exerciseId.includes(ruleKey) && !exerciseName.includes(ruleKey)) continue
+  // Apply contraindication rules
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
+  for (const rule of rules.contraindicationRules) {
+    const ruleKey = safeRuleKey(rule.exerciseKey)
+    if (!ruleKey) continue // Skip malformed rule
+    if (!safeContains(exerciseId, ruleKey) && !safeContains(exerciseName, ruleKey)) continue
       
       const blockedJoints = rule.blockedJointJson || []
       const hasMatchingCaution = context.jointCautions.some(j => blockedJoints.includes(j))

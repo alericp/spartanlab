@@ -247,6 +247,14 @@ function safeExerciseName(exercise: { name?: string | null } | null | undefined)
 }
 
 /**
+ * Safely get exercise category in lowercase.
+ */
+function safeExerciseCategory(exercise: { category?: string | null } | null | undefined): string {
+  if (!exercise) return ''
+  return safeLower(exercise.category)
+}
+
+/**
  * Safely normalize transferTo array to lowercase strings.
  * Filters out null/undefined entries.
  */
@@ -2070,8 +2078,9 @@ function selectMainExercises(
   // =========================================================================
   
   /** Infer selection reason from reason string */
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
   function inferSelectionReason(reason: string, exercise: Exercise, goal: string): ExerciseSelectionReason {
-    const r = reason.toLowerCase()
+    const r = safeLower(reason)
     if (r.includes('primary') && r.includes('skill')) return 'primary_skill_direct'
     if (r.includes('secondary') && r.includes('skill')) return 'secondary_skill_direct'
     if (r.includes('technical')) return 'primary_skill_technical'
@@ -3696,10 +3705,11 @@ function applyMaterialityScoreAdjustments(
           selectionSource = doctrineBacked[0].doctrineSource
         } else if (tertiaryCandidates.length > 0) {
           // Sort by carryover and primary skill match
+          // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
           const sorted = tertiaryCandidates.sort((a, b) => {
             // Prioritize exercises with primary skill match
-            const aHasPrimary = a.primarySkills?.some(p => p.toLowerCase().includes(tertiarySkillLower)) ? 1 : 0
-            const bHasPrimary = b.primarySkills?.some(p => p.toLowerCase().includes(tertiarySkillLower)) ? 1 : 0
+            const aHasPrimary = (a.primarySkills || []).some(p => safeLower(p).includes(tertiarySkillLower)) ? 1 : 0
+            const bHasPrimary = (b.primarySkills || []).some(p => safeLower(p).includes(tertiarySkillLower)) ? 1 : 0
             if (aHasPrimary !== bHasPrimary) return bHasPrimary - aHasPrimary
             
             const carryoverDiff = (b.carryover || 0) - (a.carryover || 0)
@@ -3811,8 +3821,9 @@ function applyMaterialityScoreAdjustments(
             exerciseTransfersToSkill(e, supportSkillLower) ||
             safeExerciseId(e).includes(supportSkillLower)
           ),
+          // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
           ...availableAccessory.filter(e =>
-            e.transferTo?.some(t => t.toLowerCase().includes(supportSkillLower))
+            (e.transferTo || []).some(t => safeLower(t).includes(supportSkillLower))
           ),
         ].filter(e => !usedIds.has(e.id))
         
@@ -4304,8 +4315,9 @@ function buildExecutionTruth(
   const usesConservativeStart = progressionData?.isConservative ?? false
   
   // Determine if this exercise is assisted or supports assistance
-  const exerciseNameLower = exercise.name.toLowerCase()
-  const exerciseIdLower = exercise.id.toLowerCase()
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
+  const exerciseNameLower = safeExerciseName(exercise)
+  const exerciseIdLower = safeExerciseId(exercise)
   
   // Check if exercise name/id contains assisted indicators
   const isAssistedExercise = 
@@ -4315,9 +4327,10 @@ function buildExecutionTruth(
     exerciseIdLower.includes('band_')
   
   // Check if this is a skill that commonly uses band assistance
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
   const bandSupportedSkills = ['front_lever', 'back_lever', 'planche', 'muscle_up', 'pull_up', 'dip']
   const skillSupportsBands = sourceSkill 
-    ? bandSupportedSkills.some(s => sourceSkill.toLowerCase().includes(s))
+    ? bandSupportedSkills.some(s => safeLower(sourceSkill).includes(s))
     : bandSupportedSkills.some(s => exerciseIdLower.includes(s))
   
   // Assisted is recommended if: 
@@ -4331,9 +4344,10 @@ function buildExecutionTruth(
   const bandSelectable = assistedAllowed || isAssistedExercise
   
   // Try to infer recommended band color from exercise notes or name
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
   let recommendedBandColor: ResistanceBandColor | null = null
-  const noteOrName = (exercise.notes || '') + ' ' + exercise.name
-  const noteLower = noteOrName.toLowerCase()
+  const noteOrName = (exercise.notes || '') + ' ' + (exercise.name || '')
+  const noteLower = safeLower(noteOrName)
   const bandColors: ResistanceBandColor[] = ['yellow', 'red', 'black', 'purple', 'green', 'blue']
   for (const color of bandColors) {
     if (noteLower.includes(color)) {
@@ -4359,8 +4373,9 @@ function buildExecutionTruth(
     fallbackEasierExerciseName = easierProgression.name
     
     // If easier progression is band-assisted, suggest heavier band
-    if (easierProgression.name.toLowerCase().includes('band') || 
-        easierProgression.id.toLowerCase().includes('band')) {
+    // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
+    if (safeExerciseName(easierProgression).includes('band') || 
+        safeExerciseId(easierProgression).includes('band')) {
       fallbackEasierBandColor = recommendedBandColor 
         ? getNextHeavierBand(recommendedBandColor) 
         : 'purple'
@@ -4416,10 +4431,11 @@ function getNextHeavierBand(currentBand: ResistanceBandColor): ResistanceBandCol
 /**
  * TASK 6: Deduplicate selected exercises by exercise ID.
  */
+// [EXERCISE-SELECTION-HARDENING] Use safe string normalization
 function dedupeSelectedExercises(exercises: SelectedExercise[]): SelectedExercise[] {
   const seen = new Set<string>()
   return exercises.filter(ex => {
-    const key = ex.exercise.id.toLowerCase()
+    const key = safeExerciseId(ex.exercise)
     if (seen.has(key)) {
       console.log('[exercise-selector] TASK 6: Removing duplicate:', ex.exercise.name)
       return false
@@ -4471,9 +4487,10 @@ export function buildFallbackSelectionForSession(
   
   // STEP H: Helper to convert Exercise to SelectedExercise with ALL required fields
   // This ensures rescued exercises have complete metadata for downstream mapping/validation
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
   const toSelectedExercise = (ex: Exercise, reason: string): SelectedExercise => {
     // Compute safe defaults based on exercise category
-    const category = ex.category?.toLowerCase() || 'strength'
+    const category = safeExerciseCategory(ex) || 'strength'
     let defaultSets = 3
     let defaultRepsOrTime = '8-12'
     
@@ -4552,11 +4569,12 @@ export function buildFallbackSelectionForSession(
   const targetTags = goalFocusMap[primaryGoal] || ['compound', 'strength', 'core']
   
   // Try to find exercises matching goal focus
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
   const goalMatchingExercises = [...availableStrength, ...availableAccessory].filter(ex => {
     const exTags = [
-      ex.category?.toLowerCase(),
-      ex.movementFamily?.toLowerCase(),
-      ...(ex.tags || []).map(t => t.toLowerCase())
+      safeExerciseCategory(ex),
+      safeLower(ex.movementFamily),
+      ...(ex.tags || []).map(t => safeLower(t))
     ].filter(Boolean)
     return targetTags.some(tag => exTags.some(et => et.includes(tag)))
   })
@@ -4765,8 +4783,9 @@ function detectFirstSkillProgression(
     return goalSkillMap[primaryGoal] || undefined
   }
   
-  const exerciseName = firstSkill.exercise.name.toLowerCase()
-  const exerciseId = firstSkill.exercise.id.toLowerCase()
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
+  const exerciseName = safeExerciseName(firstSkill.exercise)
+  const exerciseId = safeExerciseId(firstSkill.exercise)
   
   // Detect skill type
   let skillType: 'planche' | 'front_lever' | 'hspu' | 'muscle_up' | 'handstand' | 'back_lever' | 'l_sit' | 'v_sit' | 'other' = 'other'
@@ -5170,7 +5189,8 @@ export function getPrescriptionAwarePrescription(
   recentPerformance?: { avgRPE?: number; completionRate?: number; improving?: boolean }
 ): { sets: number; repsOrTime: string; note?: string; prescriptionMode: PrescriptionMode; supportsWeightedLoad?: boolean } {
   // Detect prescription mode
-  const isWeighted = exercise.id.includes('weighted') || exercise.name.toLowerCase().includes('weighted');
+  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
+  const isWeighted = safeExerciseId(exercise).includes('weighted') || safeExerciseName(exercise).includes('weighted');
   const prescriptionMode = detectPrescriptionMode(
     exercise.category,
     exercise.isIsometric ?? false,

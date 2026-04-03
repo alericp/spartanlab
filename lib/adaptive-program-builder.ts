@@ -2499,17 +2499,21 @@ export function buildAuthoritativeMultiSkillAllocationContract(
     const materiallyExpressed = allocatedSessions >= 1
     
     // Check for constraints
+    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
     if (jointCautions.length > 0) {
-      const skillLower = intent.skill.toLowerCase()
-      const hasJointConflict = jointCautions.some(j => {
-        const cautionLower = j.toLowerCase()
-        if (cautionLower.includes('shoulder') && (skillLower.includes('planche') || skillLower.includes('hspu'))) return true
-        if (cautionLower.includes('elbow') && (skillLower.includes('planche') || skillLower.includes('lever'))) return true
-        if (cautionLower.includes('wrist') && skillLower.includes('handstand')) return true
-        return false
-      })
-      if (hasJointConflict) {
-        constrainedBy.push('joint_caution')
+      const skillLower = (intent.skill ?? '').toLowerCase().trim()
+      if (skillLower) { // Only check if skill is valid
+        const hasJointConflict = jointCautions.some(j => {
+          const cautionLower = (j ?? '').toLowerCase().trim()
+          if (!cautionLower) return false
+          if (cautionLower.includes('shoulder') && (skillLower.includes('planche') || skillLower.includes('hspu'))) return true
+          if (cautionLower.includes('elbow') && (skillLower.includes('planche') || skillLower.includes('lever'))) return true
+          if (cautionLower.includes('wrist') && skillLower.includes('handstand')) return true
+          return false
+        })
+        if (hasJointConflict) {
+          constrainedBy.push('joint_caution')
+        }
       }
     }
     

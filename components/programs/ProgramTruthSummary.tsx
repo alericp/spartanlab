@@ -860,6 +860,14 @@ export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, clas
                         </span>
                       </div>
                       
+                      {/* [AI-TRUTH-BREADTH-AUDIT] Clarification when profile only has 2 skills */}
+                      {truthExplanation.authoritativeMultiSkillIntentContract.sourceTruthCount <= 2 && (
+                        <div className="text-[#5A5A5A] pl-2 text-xs mt-1">
+                          Your profile has {truthExplanation.authoritativeMultiSkillIntentContract.sourceTruthCount} skill{truthExplanation.authoritativeMultiSkillIntentContract.sourceTruthCount === 1 ? '' : 's'} selected. 
+                          {truthExplanation.authoritativeMultiSkillIntentContract.sourceTruthCount < 3 && ' Add more skills in Settings to train a broader skill set.'}
+                        </div>
+                      )}
+                      
                       {/* Audit trail if skills were narrowed */}
                       {truthExplanation.authoritativeMultiSkillIntentContract.auditTrail.skillsNarrowedReason && (
                         <div className="text-[#5A5A5A] pl-2 italic">

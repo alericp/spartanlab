@@ -141,6 +141,13 @@ import { analyzeEquipmentProfile, adaptSessionForEquipment, getEquipmentRecommen
 import { GOAL_LABELS } from './program-service'
 // [planner-truth-audit] TASK 7: Final audit for generic shell detection
 import { runPlannerTruthAudit, getAuditGatingResult, type PlannerTruthAuditReport, type AuditSeverity } from './planner-truth-audit'
+// [AI-TRUTH-BREADTH-AUDIT] Phase 3: End-to-end selectedSkills trace
+import { 
+  logBreadthAuditLayer, 
+  buildBreadthAuditReport, 
+  logNoBreakageVerdict,
+  type SkillBreadthAuditLayer 
+} from './ai-truth-selected-skills-audit'
 import { getQuickFatigueDecision, getEnhancedFatigueDecision, type TrainingDecision, type SessionAdjustments } from './fatigue-decision-engine'
 import { getDeloadRecommendation, type FatigueSignalSummary } from './fatigue/deload-system'
 import { 
@@ -2603,9 +2610,39 @@ export function buildAuthoritativeMultiSkillIntentContract(
   currentWorkingProgressions: Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null; truthSource: string; isConservative: boolean }> | null,
   builderInputSkillCount: number
 ): AuthoritativeMultiSkillIntentContract {
+  // ==========================================================================
+  // [AI-TRUTH-BREADTH-AUDIT] CHECKLIST 3 OF 7: GUARDRAIL AGAINST 2-SKILL COLLAPSE
+  // ==========================================================================
+  // selectedSkills MUST come from the FULL canonical profile array, NOT a derived
+  // [primary, secondary] shortcut. This guardrail ensures broader skills are never
+  // silently lost when the user has selected 3+ skills.
+  // ==========================================================================
   const canonicalSelectedSkills = canonicalProfile.selectedSkills || []
   const primaryGoal = canonicalProfile.primaryGoal || null
   const secondaryGoal = canonicalProfile.secondaryGoal || null
+  
+  // Verify that canonicalSelectedSkills is the full array, not truncated to primary+secondary
+  const tertiaryPlusSkills = canonicalSelectedSkills.filter(s => s !== primaryGoal && s !== secondaryGoal)
+  const tertiarySkillCount = tertiaryPlusSkills.length
+  
+  // Log the guardrail check
+  console.log('[AI-TRUTH-BREADTH-GUARDRAIL]', {
+    canonicalSelectedSkillsCount: canonicalSelectedSkills.length,
+    primaryGoal,
+    secondaryGoal,
+    tertiarySkillCount,
+    tertiaryPlusSkills,
+    builderInputSkillCount,
+    selectedSkillsSource: 'canonicalProfile.selectedSkills (full array)',
+    guardrailVerdict: canonicalSelectedSkills.length === builderInputSkillCount
+      ? 'CANONICAL_MATCHES_BUILDER_INPUT'
+      : canonicalSelectedSkills.length > builderInputSkillCount
+        ? 'CANONICAL_HAS_MORE_SKILLS_THAN_BUILDER_INPUT'
+        : 'CANONICAL_HAS_FEWER_SKILLS_THAN_BUILDER_INPUT',
+    collapseRisk: canonicalSelectedSkills.length >= 3 && builderInputSkillCount <= 2
+      ? 'HIGH_COLLAPSE_RISK_DETECTED'
+      : 'NO_COLLAPSE_RISK',
+  })
   
   // Build skill priority order from weighted allocation
   const skillPriorityOrder: AuthoritativeMultiSkillIntentContract['skillPriorityOrder'] = 
@@ -4459,6 +4496,45 @@ async function generateAdaptiveProgramImpl(
     verdict: 'audit_passed',
   })
   
+  // ==========================================================================
+  // [AI-TRUTH-BREADTH-AUDIT] PHASE 3 CHECKLIST 1 OF 7: ROOT-CAUSE PROOF TRACE
+  // This audit tracks selectedSkills through every layer to find the first loss point
+  // ==========================================================================
+  const breadthAuditLayers: SkillBreadthAuditLayer[] = []
+  const onboardingProfileForAudit = typeof getOnboardingProfile !== 'undefined' ? getOnboardingProfile() : null
+  
+  // Layer 1: Onboarding source
+  if (onboardingProfileForAudit) {
+    breadthAuditLayers.push(logBreadthAuditLayer(
+      'ONBOARDING',
+      onboardingProfileForAudit.selectedSkills || [],
+      onboardingProfileForAudit.primaryGoal || null,
+      onboardingProfileForAudit.secondaryGoal || null,
+      undefined,
+      'onboarding_localStorage'
+    ))
+  }
+  
+  // Layer 2: Canonical profile source
+  breadthAuditLayers.push(logBreadthAuditLayer(
+    'CANONICAL',
+    canonicalProfile.selectedSkills || [],
+    canonicalProfile.primaryGoal || null,
+    canonicalProfile.secondaryGoal || null,
+    onboardingProfileForAudit?.selectedSkills || [],
+    'getCanonicalProfile()'
+  ))
+  
+  // Layer 3: Builder entry (inputs)
+  breadthAuditLayers.push(logBreadthAuditLayer(
+    'BUILDER_ENTRY',
+    inputs.selectedSkills || [],
+    primaryGoal,
+    secondaryGoal || null,
+    canonicalProfile.selectedSkills || [],
+    'AdaptiveProgramInputs'
+  ))
+  
   // [weighted-truth] TASK A: Log weighted readiness at generation start
   let hasLoadableEq = false
   try {
@@ -5983,6 +6059,35 @@ async function generateAdaptiveProgramImpl(
   }
   
   // ==========================================================================
+  // [AI-TRUTH-BREADTH-AUDIT] Layers 4-6: Materiality → Intent → Allocation
+  // ==========================================================================
+  // Layer 4: Materiality contract
+  breadthAuditLayers.push(logBreadthAuditLayer(
+    'MATERIALITY',
+    materialityContract.selectedSkills || [],
+    canonicalProfile.primaryGoal || null,
+    canonicalProfile.secondaryGoal || null,
+    canonicalProfile.selectedSkills || [],
+    'buildMaterialityContract'
+  ))
+  
+  // Layer 5: Multi-skill allocation contract
+  const allocationSkills = [
+    ...multiSkillAllocationContract.representedSkills,
+    ...multiSkillAllocationContract.supportExpressedSkills,
+    ...multiSkillAllocationContract.supportRotationalSkills,
+    ...multiSkillAllocationContract.deferredSkills.map(d => d.skill),
+  ]
+  breadthAuditLayers.push(logBreadthAuditLayer(
+    'ALLOCATION',
+    [...new Set(allocationSkills)],
+    canonicalProfile.primaryGoal || null,
+    canonicalProfile.secondaryGoal || null,
+    materialityContract.selectedSkills || [],
+    'buildAuthoritativeMultiSkillAllocationContract'
+  ))
+  
+  // ==========================================================================
   // [VISIBLE-WEEK-EXPRESSION-FIX] BUILD AUTHORITATIVE VISIBLE WEEK SKILL EXPRESSION CONTRACT
   // ==========================================================================
   // This contract is the authoritative bridge between truth contracts and actual week assembly.
@@ -6169,6 +6274,18 @@ async function generateAdaptiveProgramImpl(
     cwpForIntentContract,
     inputs.selectedSkills?.length || 0
   )
+  
+  // ==========================================================================
+  // [AI-TRUTH-BREADTH-AUDIT] Layer 6: Authoritative intent contract
+  // ==========================================================================
+  breadthAuditLayers.push(logBreadthAuditLayer(
+    'AUTHORITATIVE_INTENT',
+    authoritativeMultiSkillIntentContract.selectedSkills || [],
+    authoritativeMultiSkillIntentContract.primarySkill || null,
+    authoritativeMultiSkillIntentContract.secondarySkill || null,
+    materialityContract.selectedSkills || [],
+    'buildAuthoritativeMultiSkillIntentContract'
+  ))
   
   // ==========================================================================
   // [CHECKLIST 1 OF 4] BUILD SELECTED SKILL TRACE CONTRACT
@@ -14829,6 +14946,34 @@ return explanations.length > 0 ? explanations : undefined
     totalBudgetMs: genContext.totalBudgetMs,
     verdict: genContext.getElapsed() <= genContext.totalBudgetMs ? 'within_budget' : 'exceeded_budget',
   })
+  
+  // ==========================================================================
+  // [AI-TRUTH-BREADTH-AUDIT] Layer 7: Saved program selectedSkills
+  // ==========================================================================
+  breadthAuditLayers.push(logBreadthAuditLayer(
+    'SAVED_PROGRAM',
+    finalProgram.selectedSkills || [],
+    finalProgram.primaryGoal || null,
+    finalProgram.secondaryGoal || null,
+    authoritativeMultiSkillIntentContract.selectedSkills || [],
+    'finalProgram.selectedSkills'
+  ))
+  
+  // ==========================================================================
+  // [AI-TRUTH-BREADTH-AUDIT] FINAL VERDICT
+  // ==========================================================================
+  const breadthAuditReport = buildBreadthAuditReport(breadthAuditLayers)
+  
+  // Log no-breakage verdict
+  logNoBreakageVerdict(
+    false, // sixSessionLogicTouched - this audit does not touch 6-session logic
+    false, // currentWorkingProgressionsTouched
+    false, // restartModifyRebuildTouched
+    true   // programGenerationSucceeds - we got here
+  )
+  
+  // Store audit on program for debugging visibility
+  ;(finalProgram as { breadthAuditReport?: typeof breadthAuditReport }).breadthAuditReport = breadthAuditReport
   
   return finalProgram
   

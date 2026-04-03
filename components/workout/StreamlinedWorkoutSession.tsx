@@ -686,15 +686,16 @@ export function StreamlinedWorkoutSession({
     })
   }, [safeSession])
   
-  // [EXECUTION-TRUTH-FIX] Build per-exercise runtime truth
+  // [LIVE-WORKOUT-CORRIDOR] Build per-exercise runtime truth - uses safeCurrentExercise
   const exerciseRuntimeTruth = useMemo<ExerciseRuntimeTruth>(() => {
     const overrideState = state.exerciseOverrides[safeExerciseIndex]
-    return buildExerciseRuntimeTruth(currentExercise, safeExerciseIndex, overrideState ? {
+    // Pass safeCurrentExercise to buildExerciseRuntimeTruth - it has all required fields
+    return buildExerciseRuntimeTruth(safeCurrentExercise as AdaptiveExercise, safeExerciseIndex, overrideState ? {
       isOverridden: !!(overrideState.isReplaced || overrideState.isProgressionAdjusted || overrideState.isSkipped),
       overrideType: overrideState.isReplaced ? 'replaced' : overrideState.isProgressionAdjusted ? 'progression_adjusted' : overrideState.isSkipped ? 'skipped' : null,
       currentName: overrideState.currentName,
     } : undefined)
-  }, [currentExercise, safeExerciseIndex, state.exerciseOverrides])
+  }, [safeCurrentExercise, safeExerciseIndex, state.exerciseOverrides])
   
   // [EXECUTION-TRUTH-FIX] Calibration message for first workouts
   const calibrationMessage = useMemo(() => {
@@ -712,30 +713,26 @@ export function StreamlinedWorkoutSession({
     }
   }, [isIndexOutOfBounds, safeExerciseIndex, hasValidExercises])
   
-  // Determine if exercise uses holds or reps (with safety)
-  // [LIVE-WORKOUT-CRASH-FIX] Use safeLower for consistent null-safety
-  const isHoldExercise = safeLower(currentExercise?.repsOrTime).includes('sec') || 
-                         safeLower(currentExercise?.repsOrTime).includes('hold')
+  // [LIVE-WORKOUT-CORRIDOR] Determine if exercise uses holds or reps
+  // Uses safeCurrentExercise for guaranteed-safe values
+  const isHoldExercise = safeLower(safeCurrentExercise.repsOrTime).includes('sec') || 
+                         safeLower(safeCurrentExercise.repsOrTime).includes('hold')
   
-  // Parse target value (with full safety)
+  // [LIVE-WORKOUT-CORRIDOR] Parse target value - uses safeCurrentExercise
   const getTargetValue = useCallback((): number => {
-    const repsOrTime = currentExercise?.repsOrTime
-    if (!repsOrTime) return 5
-    const match = repsOrTime.match(/(\d+)/)
+    const match = safeCurrentExercise.repsOrTime.match(/(\d+)/)
     return match ? parseInt(match[1], 10) : 5
-  }, [currentExercise])
+  }, [safeCurrentExercise])
   
-  // Recommended band from exercise (if any)
-  // [LIVE-WORKOUT-CRASH-FIX] Use safeLower for consistent null-safety
+  // [LIVE-WORKOUT-CORRIDOR] Recommended band from exercise - uses safeCurrentExercise
   const getRecommendedBand = useCallback((): ResistanceBandColor | undefined => {
-    const note = currentExercise?.note
-    if (!note) return undefined
-    const noteLower = safeLower(note)
+    if (!safeCurrentExercise.note) return undefined
+    const noteLower = safeLower(safeCurrentExercise.note)
     for (const band of ALL_BAND_COLORS) {
       if (noteLower.includes(band)) return band
     }
     return undefined
-  }, [currentExercise])
+  }, [safeCurrentExercise])
   
   // ==========================================================================
   // [LIVE-WORKOUT-CORRIDOR] UNIFIED ADVANCEMENT SYSTEM
@@ -843,20 +840,17 @@ export function StreamlinedWorkoutSession({
     }
   }, [state, sessionId, isDemoSession, sessionStructureSignature])
   
-  // Initialize values when exercise changes
-  // [LIVE-EXECUTION-TRUTH] Use executionTruth for band recommendation when available
+  // [LIVE-WORKOUT-CORRIDOR] Initialize values when exercise changes - uses safeCurrentExercise
   useEffect(() => {
-    if (currentExercise) {
-      setRepsValue(getTargetValue())
-      setHoldValue(getTargetValue())
-      setSelectedRPE(null)
-      // Prefer authoritative executionTruth, fall back to legacy heuristic
-      const recommendedBandFromTruth = currentExercise.executionTruth?.recommendedBandColor
-      const legacyRecommendedBand = getRecommendedBand()
-      const effectiveRecommendedBand = recommendedBandFromTruth ?? legacyRecommendedBand
-      setBandUsed(effectiveRecommendedBand || 'none')
-    }
-  }, [state.currentExerciseIndex, currentExercise, getTargetValue, getRecommendedBand])
+    setRepsValue(getTargetValue())
+    setHoldValue(getTargetValue())
+    setSelectedRPE(null)
+    // Prefer authoritative executionTruth, fall back to legacy heuristic
+    const recommendedBandFromTruth = safeCurrentExercise.executionTruth?.recommendedBandColor
+    const legacyRecommendedBand = getRecommendedBand()
+    const effectiveRecommendedBand = recommendedBandFromTruth ?? legacyRecommendedBand
+    setBandUsed(effectiveRecommendedBand || 'none')
+  }, [state.currentExerciseIndex, safeCurrentExercise, getTargetValue, getRecommendedBand])
   
   // Timer effect
   useEffect(() => {
@@ -921,15 +915,15 @@ export function StreamlinedWorkoutSession({
     })
   }, [])
   
-  // Complete set
+  // [LIVE-WORKOUT-CORRIDOR] Complete set - uses safeCurrentExercise throughout
   const handleCompleteSet = useCallback(() => {
-    if (!currentExercise) return
+    // safeCurrentExercise always has valid defaults, no null guard needed
     
     console.log('[LIVE-WORKOUT-CORRIDOR] handleCompleteSet triggered', {
       exerciseIndex: state.currentExerciseIndex,
       setNumber: state.currentSetNumber,
-      exerciseName: currentExercise.name,
-      totalSets: currentExercise.sets,
+      exerciseName: safeCurrentExercise.name,
+      totalSets: safeCurrentExercise.sets,
       totalExercises: exercises.length,
     })
     
@@ -944,14 +938,14 @@ export function StreamlinedWorkoutSession({
     }
     
     const newCompletedSets = [...state.completedSets, setData]
-    const totalExerciseSets = currentExercise?.sets ?? 1
+    const totalExerciseSets = safeCurrentExercise.sets
     const isLastSet = state.currentSetNumber >= totalExerciseSets
     const isLastExercise = state.currentExerciseIndex >= exercises.length - 1
     
     const lastRPE = selectedRPE || 8
     
-    // [LIVE-EXECUTION-TRUTH] Evaluate set performance and check for adaptive recommendations
-    if (currentExercise.executionTruth) {
+    // [LIVE-WORKOUT-CORRIDOR] Evaluate set performance - uses safeCurrentExercise
+    if (safeCurrentExercise.executionTruth) {
       const targetValue = getTargetValue()
       const setsForThisExercise = newCompletedSets.filter(s => s.exerciseIndex === state.currentExerciseIndex)
       
@@ -978,9 +972,9 @@ export function StreamlinedWorkoutSession({
           bandUsed: s.bandUsed,
         })),
         exerciseIndex: state.currentExerciseIndex,
-        executionTruth: currentExercise.executionTruth,
+        executionTruth: safeCurrentExercise.executionTruth,
         isHoldExercise,
-        exerciseName: currentExercise.name,
+        exerciseName: safeCurrentExercise.name,
       })
       
       // Show recommendation if warranted
@@ -1081,11 +1075,11 @@ export function StreamlinedWorkoutSession({
       
       // CRITICAL: Guard against incrementing past total sets
       if (nextSetNumber > maxSets) {
-        console.log('[workout-progress] blocked invalid set increment in handleCompleteSet:', {
+        console.log('[LIVE-WORKOUT-CORRIDOR] blocked invalid set increment:', {
           currentSet: state.currentSetNumber,
           nextSet: nextSetNumber,
           maxSets,
-          exerciseName: currentExercise?.name,
+          exerciseName: safeCurrentExercise.name,
         })
         // This shouldn't happen, but if it does, transition to next exercise instead
         if (state.currentExerciseIndex < exercises.length - 1) {
@@ -1121,7 +1115,7 @@ export function StreamlinedWorkoutSession({
     setSelectedRPE(null)
     setRepsValue(getTargetValue())
     setHoldValue(getTargetValue())
-  }, [currentExercise, state, repsValue, holdValue, selectedRPE, bandUsed, isHoldExercise, exercises, exerciseRuntimeTruth, sessionRuntimeTruth, getTargetValue])
+  }, [safeCurrentExercise, state, repsValue, holdValue, selectedRPE, bandUsed, isHoldExercise, exercises, exerciseRuntimeTruth, sessionRuntimeTruth, getTargetValue])
   
   // Rest complete / skip rest (between sets of SAME exercise)
   const handleRestComplete = useCallback(() => {
@@ -1569,6 +1563,24 @@ export function StreamlinedWorkoutSession({
       elapsedSeconds: state.elapsedSeconds,
     }
   }
+  
+  // ==========================================================================
+  // [LIVE-WORKOUT-CORRIDOR] RENDER ENTRY DIAGNOSTICS
+  // Log current render contract state for debugging crash paths
+  // ==========================================================================
+  
+  useEffect(() => {
+    console.log('[LIVE-WORKOUT-CORRIDOR] Render contract state', {
+      componentVersion: STREAMLINED_WORKOUT_VERSION,
+      hasValidExercises,
+      safeExerciseIndex,
+      exerciseName: safeCurrentExercise.name,
+      exerciseSets: safeCurrentExercise.sets,
+      status: state.status,
+      currentSetNumber: state.currentSetNumber,
+      sessionId,
+    })
+  }, [hasValidExercises, safeExerciseIndex, safeCurrentExercise, state.status, state.currentSetNumber, sessionId])
   
   // ==========================================================================
   // RENDER: SAFETY FALLBACK - No Valid Exercises
@@ -2115,13 +2127,12 @@ function InterExerciseRestCountdown({
     const restRecommendation = getRestRecommendationForCurrentExercise()
     const savedRestState = loadRestTimerState()
     
-    // Determine next set info (safely handle null currentExercise)
-    // [workout-progress] Clamp setNumber to valid range
-    const nextSetInfo = currentExercise ? {
-      exerciseName: currentExercise?.name ?? 'Exercise',
-      setNumber: Math.min(state.currentSetNumber, currentExercise.sets),
-      isNewExercise: false, // We skip rest between exercises now
-    } : undefined
+    // [LIVE-WORKOUT-CORRIDOR] Use safeCurrentExercise for guaranteed-safe rendering
+    const nextSetInfo = {
+      exerciseName: safeCurrentExercise.name,
+      setNumber: Math.min(state.currentSetNumber, safeCurrentExercise.sets),
+      isNewExercise: false,
+    }
     
     return (
       <div className="min-h-screen bg-[#0F1115] flex flex-col">
@@ -2192,34 +2203,30 @@ function InterExerciseRestCountdown({
             onSkip={handleRestComplete}
           />
           
-          {/* Exercise Context Card */}
-          {currentExercise && (
-            <Card className="bg-[#1A1F26]/50 border-[#2B313A]/50 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-1">
-                    Current Exercise
-                  </p>
-                  <p className="font-semibold text-[#E6E9EF]">{currentExercise.name}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-[#A4ACB8]">
-                    {/* [workout-progress] Safe set display - never show set > total */}
-                    Set {Math.min(state.currentSetNumber, currentExercise.sets)}/{currentExercise.sets}
-                  </p>
-                  <p className="text-xs text-[#6B7280]">
-                    {currentExercise.repsOrTime}
-                    {/* [weighted-prescription-truth] Show load in resting state */}
-                    {currentExercise.prescribedLoad && currentExercise.prescribedLoad.load > 0 && (
-                      <span className="text-[#C1121F] font-medium ml-1">
-                        @ +{currentExercise.prescribedLoad.load}{currentExercise.prescribedLoad.unit}
-                      </span>
-                    )}
-                  </p>
-                </div>
+          {/* [LIVE-WORKOUT-CORRIDOR] Exercise Context Card - uses safeCurrentExercise */}
+          <Card className="bg-[#1A1F26]/50 border-[#2B313A]/50 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-1">
+                  Current Exercise
+                </p>
+                <p className="font-semibold text-[#E6E9EF]">{safeCurrentExercise.name}</p>
               </div>
-            </Card>
-          )}
+              <div className="text-right">
+                <p className="text-sm text-[#A4ACB8]">
+                  Set {Math.min(state.currentSetNumber, safeCurrentExercise.sets)}/{safeCurrentExercise.sets}
+                </p>
+                <p className="text-xs text-[#6B7280]">
+                  {safeCurrentExercise.repsOrTime}
+                  {safeCurrentExercise.prescribedLoad && safeCurrentExercise.prescribedLoad.load > 0 && (
+                    <span className="text-[#C1121F] font-medium ml-1">
+                      @ +{safeCurrentExercise.prescribedLoad.load}{safeCurrentExercise.prescribedLoad.unit}
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+          </Card>
         </div>
         </div>
       </div>
@@ -2228,9 +2235,9 @@ function InterExerciseRestCountdown({
   
   // ==========================================================================
   // RENDER: ACTIVE STATE (Main Set Logging)
+  // [LIVE-WORKOUT-CORRIDOR] Use safeCurrentExercise for ALL render paths - never null check currentExercise
+  // safeCurrentExercise always has valid fallback values, so no null guard needed
   // ==========================================================================
-  
-  if (!currentExercise) return null
   
   const targetRPE = 8 // Default target
   const targetValue = getTargetValue()

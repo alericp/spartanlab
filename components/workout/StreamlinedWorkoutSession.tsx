@@ -1530,23 +1530,14 @@ export function StreamlinedWorkoutSession({
     }
   }, [session, state, sessionId, perceivedDifficulty])
   
-  // Get intelligent rest recommendation
+  // [LIVE-WORKOUT-CORRIDOR] Rest recommendation - uses safeCurrentExercise for crash safety
   const getRestRecommendationForCurrentExercise = useCallback((): RestRecommendation => {
-    if (!currentExercise) {
-      return {
-        baseSeconds: 120,
-        adjustedSeconds: 120,
-        adjustment: { delta: 0, reason: '', type: 'none' },
-        category: 'accessory',
-      }
-    }
-    
     const avgRPE = state.completedSets.length > 0
       ? state.completedSets.reduce((sum, s) => sum + s.actualRPE, 0) / state.completedSets.length
       : null
     
     return getRestRecommendation(
-      currentExercise,
+      safeCurrentExercise,
       state.lastSetRPE || undefined,
       {
         setNumber: state.currentSetNumber,
@@ -1554,7 +1545,7 @@ export function StreamlinedWorkoutSession({
         averageRPE: avgRPE,
       }
     )
-  }, [currentExercise, state.lastSetRPE, state.currentSetNumber, state.completedSets])
+  }, [safeCurrentExercise, state.lastSetRPE, state.currentSetNumber, state.completedSets])
   
   // Legacy getRestTime for any other usage
   const getRestTime = (): number => {
@@ -2300,20 +2291,20 @@ function InterExerciseRestCountdown({
           </div>
         )}
         
-        {/* Current Exercise - Compact Card */}
+        {/* [LIVE-WORKOUT-CORRIDOR] Current Exercise - uses safeCurrentExercise for crash safety */}
         <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
           {/* Header row */}
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-1.5 flex-wrap">
               <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
-                {currentExercise.category}
+                {safeCurrentExercise.category}
               </Badge>
               {state.exerciseOverrides[state.currentExerciseIndex]?.isReplaced && (
                 <Badge className="bg-blue-500/10 text-blue-400 border-0 text-[10px] px-1.5 py-0">Swapped</Badge>
               )}
             </div>
             <ExerciseOptionsMenu
-              exercise={currentExercise}
+              exercise={safeCurrentExercise}
               exerciseIndex={state.currentExerciseIndex}
               sessionId={sessionId}
               onReplace={handleReplaceExercise}
@@ -2328,30 +2319,29 @@ function InterExerciseRestCountdown({
             {effectiveExercise.name}
           </h2>
           
-          {/* Prescription row */}
+          {/* [LIVE-WORKOUT-CORRIDOR] Prescription row - uses safeCurrentExercise */}
           <div className="flex items-center gap-2 mt-1.5 text-sm flex-wrap">
             <span className="text-[#A4ACB8]">Target:</span>
-            <span className="text-[#E6E9EF] font-medium">{currentExercise.repsOrTime}</span>
+            <span className="text-[#E6E9EF] font-medium">{safeCurrentExercise.repsOrTime}</span>
             {/* [prescription-truth] ISSUE C: Display prescription mode truthfully */}
-            {currentExercise.prescribedLoad && currentExercise.prescribedLoad.load > 0 ? (
+            {safeCurrentExercise.prescribedLoad && safeCurrentExercise.prescribedLoad.load > 0 ? (
               // Weighted exercise with load
               <span className="text-[#C1121F] font-semibold">
-                @ +{currentExercise.prescribedLoad.load} {currentExercise.prescribedLoad.unit}
+                @ +{safeCurrentExercise.prescribedLoad.load} {safeCurrentExercise.prescribedLoad.unit}
               </span>
             ) : (
               // [prescription-render] STEP 4: Check if this is a weighted exercise type without load
-              // [LIVE-WORKOUT-CRASH-FIX] Use safeLower for all string checks
               (() => {
-                const isWeightedType = (currentExercise.id ?? '').includes('weighted_') || 
-                                       safeLower(currentExercise.name).includes('weighted')
-                const isSkillHold = currentExercise.category === 'skill' || 
-                                    safeLower(currentExercise.repsOrTime).includes('sec')
-                const noLoadReason = (currentExercise as { noLoadReason?: string }).noLoadReason
+                const isWeightedType = (safeCurrentExercise.id ?? '').includes('weighted_') || 
+                                       safeLower(safeCurrentExercise.name).includes('weighted')
+                const isSkillHold = safeCurrentExercise.category === 'skill' || 
+                                    safeLower(safeCurrentExercise.repsOrTime).includes('sec')
+                const noLoadReason = (safeCurrentExercise as { noLoadReason?: string }).noLoadReason
                 
                 // [prescription-render] Log why load isn't shown for weighted-capable exercises
                 if (isWeightedType) {
                   console.log('[prescription-render] Weighted exercise without load:', {
-                    exerciseName: currentExercise.name,
+                    exerciseName: safeCurrentExercise.name,
                     reason: noLoadReason || 'no_reason_recorded',
                   })
                 }
@@ -2378,22 +2368,21 @@ function InterExerciseRestCountdown({
             <span className="text-[#6B7280]">·</span>
             <span className="text-[#A4ACB8]">RPE {targetRPE}</span>
           </div>
-          {/* [prescription-truth] ISSUE C: Show confidence for non-high confidence loads */}
-          {currentExercise.prescribedLoad && currentExercise.prescribedLoad.load > 0 && 
-           currentExercise.prescribedLoad.confidenceLevel !== 'high' && (
+          {/* [LIVE-WORKOUT-CORRIDOR] Show confidence for non-high confidence loads */}
+          {safeCurrentExercise.prescribedLoad && safeCurrentExercise.prescribedLoad.load > 0 && 
+           safeCurrentExercise.prescribedLoad.confidenceLevel !== 'high' && (
             <p className="text-[10px] text-[#6B7280] mt-0.5">
-              {currentExercise.prescribedLoad.confidenceLevel === 'moderate' && 'Load based on historical PR'}
-              {currentExercise.prescribedLoad.confidenceLevel === 'low' && 'Estimated load - adjust as needed'}
-              {currentExercise.prescribedLoad.confidenceLevel === 'none' && 'Starting load - adjust based on feel'}
+              {safeCurrentExercise.prescribedLoad.confidenceLevel === 'moderate' && 'Load based on historical PR'}
+              {safeCurrentExercise.prescribedLoad.confidenceLevel === 'low' && 'Estimated load - adjust as needed'}
+              {safeCurrentExercise.prescribedLoad.confidenceLevel === 'none' && 'Starting load - adjust based on feel'}
             </p>
           )}
           
-          {/* Set Progress - Inline */}
+          {/* [LIVE-WORKOUT-CORRIDOR] Set Progress - uses safeCurrentExercise */}
           <div className="flex items-center gap-3 mt-3">
             <div className="flex items-center gap-1.5 flex-1">
-              {/* [workout-progress] Safe set index - clamp to valid range */}
-              {Array.from({ length: currentExercise.sets }).map((_, idx) => {
-                const safeCurrentSet = Math.min(state.currentSetNumber, currentExercise.sets)
+              {Array.from({ length: safeCurrentExercise.sets }).map((_, idx) => {
+                const safeCurrentSet = Math.min(state.currentSetNumber, safeCurrentExercise.sets)
                 return (
                   <div
                     key={idx}
@@ -2409,15 +2398,15 @@ function InterExerciseRestCountdown({
               })}
             </div>
             <span className="text-sm font-medium text-[#E6E9EF] whitespace-nowrap">
-              {/* [workout-progress] Safe set display - never show set > total */}
-              Set {Math.min(state.currentSetNumber, currentExercise.sets)}/{currentExercise.sets}
+              {/* [LIVE-WORKOUT-CORRIDOR] Safe set display - uses safeCurrentExercise */}
+              Set {Math.min(state.currentSetNumber, safeCurrentExercise.sets)}/{safeCurrentExercise.sets}
             </span>
           </div>
         </Card>
         
-        {/* Coaching Insight - Collapsed by default, only for pro users */}
+        {/* [LIVE-WORKOUT-CORRIDOR] Coaching Insight - uses safeCurrentExercise */}
         {!isDemo && (() => {
-          const insight = getExerciseSelectionInsight(currentExercise.id || currentExercise.name)
+          const insight = getExerciseSelectionInsight(safeCurrentExercise.id || safeCurrentExercise.name)
           if (!insight) return null
           
           return (
@@ -2454,39 +2443,37 @@ function InterExerciseRestCountdown({
             targetRPE={targetRPE}
           />
           
-          {/* Band Selector - [LIVE-EXECUTION-TRUTH] Use authoritative executionTruth when available */}
-          {/* Falls back to legacy heuristics for older programs without executionTruth */}
+          {/* [LIVE-WORKOUT-CORRIDOR] Band Selector - uses safeCurrentExercise */}
           {(
             // Authoritative path: Use executionTruth from program generation
-            currentExercise.executionTruth?.bandSelectable === true ||
-            currentExercise.executionTruth?.assistedRecommended === true ||
-            currentExercise.executionTruth?.bandRecommended === true ||
+            safeCurrentExercise.executionTruth?.bandSelectable === true ||
+            safeCurrentExercise.executionTruth?.assistedRecommended === true ||
+            safeCurrentExercise.executionTruth?.bandRecommended === true ||
             // Legacy fallback for older programs: heuristic detection
-            // [LIVE-WORKOUT-CRASH-FIX] Use safeLower to prevent undefined.toLowerCase() crash
-            (!currentExercise.executionTruth && (
+            (!safeCurrentExercise.executionTruth && (
               recommendedBand || 
-              safeLower(currentExercise.note).includes('band') || 
-              safeLower(currentExercise.name).includes('assisted')
+              safeLower(safeCurrentExercise.note).includes('band') || 
+              safeLower(safeCurrentExercise.name).includes('assisted')
             ))
           ) && (
             <BandSelector
               value={bandUsed}
               onChange={setBandUsed}
-              recommendedBand={currentExercise.executionTruth?.recommendedBandColor ?? recommendedBand}
+              recommendedBand={safeCurrentExercise.executionTruth?.recommendedBandColor ?? recommendedBand}
             />
           )}
         </Card>
         
-        {/* Complete Set Button - Primary CTA */}
+        {/* [LIVE-WORKOUT-CORRIDOR] Complete Set Button - uses safeCurrentExercise */}
         <Button
           onClick={handleCompleteSet}
           disabled={selectedRPE === null}
           className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-base font-bold disabled:opacity-50"
         >
           <Check className="w-5 h-5 mr-2" />
-          {state.currentSetNumber >= currentExercise.sets && state.currentExerciseIndex >= exercises.length - 1
+          {state.currentSetNumber >= safeCurrentExercise.sets && state.currentExerciseIndex >= exercises.length - 1
             ? 'Finish Workout'
-            : state.currentSetNumber >= currentExercise.sets
+            : state.currentSetNumber >= safeCurrentExercise.sets
               ? 'Next Exercise'
               : 'Log Set'
           }

@@ -90,16 +90,37 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
       line.includes('loadSessionFromStorage') ||
       line.includes('buildSessionRuntimeTruth') ||
       line.includes('buildExerciseRuntimeTruth') ||
-      line.includes('getExerciseSelectionInsight')
+      line.includes('getExerciseSelectionInsight') ||
+      line.includes('safeWorkoutSessionContract') ||
+      line.includes('safeCurrentExercise')
     )?.match(/at\s+(\w+)/)?.[1] || 'render_unknown'
     
-    console.error('[workout-route-crash]', {
+    // Get last known stage from window if available
+    const lastKnownStage = typeof window !== 'undefined' 
+      ? (window as unknown as { __spartanlabWorkoutStage?: string }).__spartanlabWorkoutStage || 'unknown'
+      : 'ssr'
+    
+    // Get session context if available in sessionStorage
+    let sessionContext = { sessionId: 'unknown', dayLabel: 'unknown', dayNumber: 0, isDemo: false }
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const ctx = sessionStorage.getItem('spartanlab_workout_stage_context')
+        if (ctx) sessionContext = JSON.parse(ctx)
+      }
+    } catch {}
+    
+    console.error('[workout-route-crash] BOUNDARY_TRIGGERED', {
       routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
-      stage: likelyStage,
+      lastKnownStage,
+      inferredStage: likelyStage,
       crashCorridor,
-      errorMessage: error.message,
+      sessionId: sessionContext.sessionId,
+      dayLabel: sessionContext.dayLabel,
+      dayNumber: sessionContext.dayNumber,
+      isDemo: sessionContext.isDemo,
       errorName: error.name,
-      stack: stackLines.slice(0, 7).join('\n'),
+      errorMessage: error.message,
+      stack: stackLines.slice(0, 8).join('\n'),
       componentStack: errorInfo.componentStack?.split('\n').slice(0, 5).join('\n'),
       timestamp: new Date().toISOString(),
     })

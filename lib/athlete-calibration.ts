@@ -27,8 +27,63 @@ import { getOnboardingProfile } from './athlete-profile'
 import { getAthleteProfile, type AthleteProfile as DataServiceAthleteProfile } from './data-service'
 import type { AthleteProfile } from '@/types/domain'
 
-// Unified profile input type - accepts both OnboardingProfile and AthleteProfile
-type CalibrationProfile = OnboardingProfile | AthleteProfile | null
+// =============================================================================
+// [CANONICAL-PROFILE-SKILL-CALIBRATION-FIX] Interface for CanonicalProgrammingProfile
+// This allows calibrateAthleteProfile to handle flat skill fields from canonical profiles
+// =============================================================================
+interface CanonicalProfileForCalibration {
+  // Flat skill fields from CanonicalProgrammingProfile
+  frontLeverProgression?: string | null
+  frontLeverHoldSeconds?: number | null
+  frontLeverIsAssisted?: boolean
+  frontLeverBandLevel?: string | null
+  frontLeverHighestEver?: string | null
+  
+  plancheProgression?: string | null
+  plancheHoldSeconds?: number | null
+  plancheIsAssisted?: boolean
+  plancheBandLevel?: string | null
+  plancheHighestEver?: string | null
+  
+  hspuProgression?: string | null
+  
+  muscleUpReadiness?: string | null
+  lSitHoldSeconds?: string | null
+  vSitHoldSeconds?: string | null
+  
+  // Skill history (same structure as OnboardingProfile)
+  skillHistory?: {
+    front_lever?: SkillHistoryEntry
+    planche?: SkillHistoryEntry
+    muscle_up?: SkillHistoryEntry
+    handstand_pushup?: SkillHistoryEntry
+    l_sit?: SkillHistoryEntry
+    v_sit?: SkillHistoryEntry
+  }
+  
+  // Additional fields that may be present on profiles
+  heightRange?: string | null
+  weightRange?: string | null
+  pullUpMax?: string | number | null
+  pushUpMax?: string | number | null
+  dipMax?: string | number | null
+  lSitHold?: string | null
+  trainingDaysPerWeek?: number | null
+  sessionLengthMinutes?: number | null
+  primaryGoal?: string | null
+  readinessCalibration?: {
+    scores?: {
+      strengthPotentialScore: number
+      skillAdaptationScore: number
+      recoveryToleranceScore: number
+      volumeToleranceScore: number
+    }
+  } | null
+}
+
+// Unified profile input type - accepts OnboardingProfile, AthleteProfile, or CanonicalProgrammingProfile
+// [CANONICAL-PROFILE-SKILL-CALIBRATION-FIX] Added CanonicalProfileForCalibration for flat field support
+type CalibrationProfile = OnboardingProfile | AthleteProfile | CanonicalProfileForCalibration | null
 
 // =============================================================================
 // PROFILE TYPE CONVERSION HELPERS
@@ -734,6 +789,90 @@ function buildSkillCalibration(profile: OnboardingProfile): AthleteCalibration['
   }
 }
 
+/**
+ * [CANONICAL-PROFILE-SKILL-CALIBRATION-FIX]
+ * Build skill calibration from CanonicalProgrammingProfile flat fields.
+ * 
+ * CanonicalProgrammingProfile uses flat fields like:
+ * - plancheProgression, plancheIsAssisted, plancheBandLevel, plancheHighestEver
+ * 
+ * Instead of nested SkillBenchmark objects like OnboardingProfile uses:
+ * - planche: { progression, isAssisted, bandLevel, highestLevelEverReached }
+ * 
+ * This function reconstructs SkillBenchmark objects from the flat fields
+ * so calibrateSkillEntry() can process them correctly.
+ */
+function buildSkillCalibrationFromCanonicalProfile(
+  profile: CanonicalProfileForCalibration
+): AthleteCalibration['skillCalibration'] {
+  const skillHistory = profile.skillHistory ?? {}
+  
+  // Reconstruct SkillBenchmark objects from flat canonical profile fields
+  const frontLeverBenchmark: SkillBenchmark | null = profile.frontLeverProgression 
+    ? {
+        progression: profile.frontLeverProgression,
+        holdSeconds: profile.frontLeverHoldSeconds ?? undefined,
+        isAssisted: profile.frontLeverIsAssisted ?? false,
+        bandLevel: (profile.frontLeverBandLevel as BandLevel) ?? null,
+        highestLevelEverReached: profile.frontLeverHighestEver ?? null,
+      }
+    : null
+  
+  const plancheBenchmark: SkillBenchmark | null = profile.plancheProgression
+    ? {
+        progression: profile.plancheProgression,
+        holdSeconds: profile.plancheHoldSeconds ?? undefined,
+        isAssisted: profile.plancheIsAssisted ?? false,
+        bandLevel: (profile.plancheBandLevel as BandLevel) ?? null,
+        highestLevelEverReached: profile.plancheHighestEver ?? null,
+      }
+    : null
+  
+  const hspuBenchmark: SkillBenchmark | null = profile.hspuProgression
+    ? {
+        progression: profile.hspuProgression,
+        // HSPU doesn't typically have isAssisted/bandLevel in canonical
+      }
+    : null
+  
+  console.log('[CANONICAL-PROFILE-SKILL-CALIBRATION-FIX]', {
+    frontLeverBenchmarkBuilt: !!frontLeverBenchmark,
+    frontLeverIsAssisted: frontLeverBenchmark?.isAssisted,
+    frontLeverBandLevel: frontLeverBenchmark?.bandLevel,
+    frontLeverHighestEver: frontLeverBenchmark?.highestLevelEverReached,
+    plancheBenchmarkBuilt: !!plancheBenchmark,
+    plancheIsAssisted: plancheBenchmark?.isAssisted,
+    plancheBandLevel: plancheBenchmark?.bandLevel,
+    plancheHighestEver: plancheBenchmark?.highestLevelEverReached,
+    hspuBenchmarkBuilt: !!hspuBenchmark,
+    skillHistoryPresent: Object.keys(skillHistory).length > 0,
+  })
+  
+  return {
+    front_lever: calibrateSkillEntry(frontLeverBenchmark, skillHistory.front_lever),
+    planche: calibrateSkillEntry(plancheBenchmark, skillHistory.planche),
+    hspu: calibrateSkillEntry(hspuBenchmark, skillHistory.handstand_pushup),
+    muscle_up: calibrateHistoryBasedSkill(skillHistory.muscle_up, profile.muscleUpReadiness ?? null),
+    v_sit: calibrateHistoryBasedSkill(skillHistory.v_sit, profile.vSitHoldSeconds ?? null),
+    l_sit: calibrateHistoryBasedSkill(skillHistory.l_sit, profile.lSitHoldSeconds ?? null),
+  }
+}
+
+/**
+ * Detect if a profile is a CanonicalProgrammingProfile (has flat skill fields)
+ * vs OnboardingProfile (has nested SkillBenchmark objects)
+ */
+function isCanonicalProgrammingProfile(profile: CalibrationProfile): boolean {
+  // CanonicalProgrammingProfile has flat fields like plancheProgression
+  // OnboardingProfile has nested objects like planche: { progression, isAssisted }
+  return (
+    'plancheProgression' in profile ||
+    'frontLeverProgression' in profile ||
+    'plancheIsAssisted' in profile ||
+    'frontLeverIsAssisted' in profile
+  )
+}
+
 // =============================================================================
 // MAIN CALIBRATION FUNCTION
 // =============================================================================
@@ -847,10 +986,39 @@ export function calibrateAthleteProfile(profile: CalibrationProfile): AthleteCal
     v_sit: skillHistory.v_sit?.tendonAdaptationScore ?? 'low' as TendonAdaptationLevel,
   } : null
 
-  // Build skill calibration from onboarding profile (band assistance, hold times, historical ceiling)
-  const skillCalibration = !isAthleteProfile 
-    ? buildSkillCalibration(profile as OnboardingProfile)
-    : null
+  // [CANONICAL-PROFILE-SKILL-CALIBRATION-FIX]
+  // Build skill calibration from the appropriate source:
+  // - CanonicalProgrammingProfile: uses flat fields (plancheProgression, plancheIsAssisted, etc.)
+  // - OnboardingProfile: uses nested SkillBenchmark objects (planche: { progression, isAssisted })
+  // - AthleteProfile: no skill calibration (null)
+  const isCanonicalProfile = isCanonicalProgrammingProfile(profile)
+  let skillCalibration: AthleteCalibration['skillCalibration'] = null
+  
+  if (!isAthleteProfile) {
+    if (isCanonicalProfile) {
+      // Use new function that handles flat fields from CanonicalProgrammingProfile
+      skillCalibration = buildSkillCalibrationFromCanonicalProfile(profile as CanonicalProfileForCalibration)
+      console.log('[CANONICAL-PROFILE-SKILL-CALIBRATION-FIX] Using canonical profile calibration path')
+    } else {
+      // Original path for OnboardingProfile with nested SkillBenchmark objects
+      skillCalibration = buildSkillCalibration(profile as OnboardingProfile)
+      console.log('[CANONICAL-PROFILE-SKILL-CALIBRATION-FIX] Using onboarding profile calibration path')
+    }
+  } else {
+    console.log('[CANONICAL-PROFILE-SKILL-CALIBRATION-FIX] AthleteProfile detected, skipping skill calibration')
+  }
+  
+  console.log('[SKILL-CALIBRATION-RESULT]', {
+    isAthleteProfile,
+    isCanonicalProfile,
+    skillCalibrationBuilt: !!skillCalibration,
+    plancheCalibrated: !!skillCalibration?.planche,
+    plancheIsAssisted: skillCalibration?.planche?.isAssisted,
+    plancheUseConservativeStart: skillCalibration?.planche?.useConservativeStart,
+    frontLeverCalibrated: !!skillCalibration?.front_lever,
+    frontLeverIsAssisted: skillCalibration?.front_lever?.isAssisted,
+    frontLeverUseConservativeStart: skillCalibration?.front_lever?.useConservativeStart,
+  })
 
   // Suggest adjustments (enhanced with readiness scores)
   let suggestedProgressionLevel = suggestProgressionLevel(

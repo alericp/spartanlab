@@ -267,14 +267,33 @@ export async function executeAuthoritativeGeneration(
     const athleteCalibration = calibrateAthleteProfile(request.canonicalProfile)
     const resolvedProgressions = resolveCurrentWorkingProgressions(request.canonicalProfile, athleteCalibration)
     
+    // [CANONICAL-PROFILE-SKILL-CALIBRATION-FIX] Log whether skill calibration was built successfully
+    console.log('[CANONICAL-PROFILE-SKILL-CALIBRATION-AUDIT]', {
+      skillCalibrationBuilt: !!athleteCalibration.skillCalibration,
+      plancheCalibrated: !!athleteCalibration.skillCalibration?.planche,
+      plancheIsAssisted: athleteCalibration.skillCalibration?.planche?.isAssisted,
+      plancheUseConservativeStart: athleteCalibration.skillCalibration?.planche?.useConservativeStart,
+      plancheHighestEver: athleteCalibration.skillCalibration?.planche?.highestLevelEverReached,
+      frontLeverCalibrated: !!athleteCalibration.skillCalibration?.front_lever,
+      frontLeverIsAssisted: athleteCalibration.skillCalibration?.front_lever?.isAssisted,
+      frontLeverUseConservativeStart: athleteCalibration.skillCalibration?.front_lever?.useConservativeStart,
+      // Input data audit
+      inputHasFlatFields: 'plancheProgression' in request.canonicalProfile,
+      inputPlancheIsAssisted: (request.canonicalProfile as unknown as { plancheIsAssisted?: boolean }).plancheIsAssisted,
+      inputPlancheHighestEver: (request.canonicalProfile as unknown as { plancheHighestEver?: string }).plancheHighestEver,
+    })
+    
     console.log('[authoritative-generation-progression-resolution]', {
       generationIntent: request.generationIntent,
       plancheCanonical: request.canonicalProfile.plancheProgression,
       plancheResolved: resolvedProgressions.planche.currentWorkingProgression,
       plancheSource: resolvedProgressions.planche.truthSource,
+      plancheIsConservative: resolvedProgressions.planche.isConservative,
+      plancheHistoricalCeiling: resolvedProgressions.planche.historicalCeiling,
       frontLeverCanonical: request.canonicalProfile.frontLeverProgression,
       frontLeverResolved: resolvedProgressions.frontLever.currentWorkingProgression,
       frontLeverSource: resolvedProgressions.frontLever.truthSource,
+      frontLeverIsConservative: resolvedProgressions.frontLever.isConservative,
       anyConservativeStart: resolvedProgressions.anyConservativeStart,
     })
     

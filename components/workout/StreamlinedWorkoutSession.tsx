@@ -204,7 +204,7 @@ function loadSessionFromStorage(
     // Only restore if same session and less than 4 hours old
     if (data.sessionId === sessionId && Date.now() - data.savedAt < 4 * 60 * 60 * 1000) {
       
-      // [LIVE-SESSION-LOCK] CRITICAL: Validate structure signature match
+      // [AUTHORITATIVE-HYDRATION-CONTRACT] CRITICAL: Validate structure signature match
       // This prevents restoring state from a session with same dayLabel but different exercises
       if (currentStructureSignature && data.structureSignature) {
         if (data.structureSignature !== currentStructureSignature) {
@@ -225,27 +225,34 @@ function loadSessionFromStorage(
         data.currentExerciseIndex >= 0 && // Ensure index is non-negative
         Array.isArray(data.completedSets)
       ) {
-        // If we know the exercise count, validate index is within bounds
-        if (exerciseCount !== undefined && data.currentExerciseIndex >= exerciseCount) {
-          console.log('[workout-restore] Discarding saved state: currentExerciseIndex out of bounds', {
-            savedIndex: data.currentExerciseIndex,
-            exerciseCount,
-          })
-          try { localStorage.removeItem(STORAGE_KEY) } catch {}
-          return null
+        // [AUTHORITATIVE-HYDRATION-CONTRACT] Validate index within bounds
+        let safeCurrentExerciseIndex = data.currentExerciseIndex
+        if (exerciseCount !== undefined) {
+          if (safeCurrentExerciseIndex >= exerciseCount) {
+            console.log('[workout-restore] Clamping currentExerciseIndex to bounds', {
+              savedIndex: data.currentExerciseIndex,
+              exerciseCount,
+              clampedTo: exerciseCount - 1,
+            })
+            safeCurrentExerciseIndex = Math.max(0, exerciseCount - 1)
+          }
         }
         
-        // [LIVE-SESSION-LOCK] Filter completedSets with stricter validation
+        // [AUTHORITATIVE-HYDRATION-CONTRACT] Filter and validate completedSets
         let completedSets = data.completedSets
         if (exerciseCount !== undefined) {
           const originalCount = completedSets.length
-          completedSets = completedSets.filter((set: { exerciseIndex?: number; setNumber?: number }) => {
+          completedSets = completedSets.filter((set: { exerciseIndex?: number; setNumber?: number; actualRPE?: number }) => {
             // Validate exerciseIndex is in bounds
             if (typeof set.exerciseIndex !== 'number' || set.exerciseIndex < 0 || set.exerciseIndex >= exerciseCount) {
               return false
             }
             // Validate setNumber is positive
             if (typeof set.setNumber !== 'number' || set.setNumber < 1) {
+              return false
+            }
+            // Validate actualRPE is reasonable
+            if (typeof set.actualRPE !== 'number' || set.actualRPE < 1 || set.actualRPE > 10) {
               return false
             }
             return true
@@ -259,13 +266,49 @@ function loadSessionFromStorage(
           }
         }
         
-        // Ensure currentSetNumber is valid
+        // [AUTHORITATIVE-HYDRATION-CONTRACT] Validate and coerce status
+        const validStatuses = ['ready', 'active', 'resting', 'completed']
+        const safeStatus = validStatuses.includes(data.status) ? data.status : 'ready'
+        
+        // [AUTHORITATIVE-HYDRATION-CONTRACT] Clean up exerciseOverrides - remove out-of-bounds keys
+        let safeExerciseOverrides = data.exerciseOverrides || {}
+        if (exerciseCount !== undefined && typeof safeExerciseOverrides === 'object') {
+          const cleanedOverrides: Record<number, ExerciseOverrideState> = {}
+          for (const key of Object.keys(safeExerciseOverrides)) {
+            const idx = parseInt(key, 10)
+            if (!isNaN(idx) && idx >= 0 && idx < exerciseCount) {
+              cleanedOverrides[idx] = safeExerciseOverrides[key]
+            }
+          }
+          if (Object.keys(cleanedOverrides).length !== Object.keys(safeExerciseOverrides).length) {
+            console.log('[workout-restore] Cleaned out-of-bounds exerciseOverrides', {
+              originalCount: Object.keys(safeExerciseOverrides).length,
+              cleanedCount: Object.keys(cleanedOverrides).length,
+            })
+          }
+          safeExerciseOverrides = cleanedOverrides
+        }
+        
+        // Ensure currentSetNumber is valid (will be clamped against exercise sets in render)
+        const safeCurrentSetNumber = typeof data.currentSetNumber === 'number' && data.currentSetNumber > 0 
+          ? data.currentSetNumber 
+          : 1
+        
+        console.log('[workout-restore] Restored session with validation', {
+          sessionId,
+          safeCurrentExerciseIndex,
+          safeCurrentSetNumber,
+          completedSetsCount: completedSets.length,
+          status: safeStatus,
+        })
+        
         return {
           ...data,
+          status: safeStatus,
+          currentExerciseIndex: safeCurrentExerciseIndex,
+          currentSetNumber: safeCurrentSetNumber,
           completedSets,
-          currentSetNumber: typeof data.currentSetNumber === 'number' && data.currentSetNumber > 0 
-            ? data.currentSetNumber 
-            : 1,
+          exerciseOverrides: safeExerciseOverrides,
         }
       }
     }
@@ -456,9 +499,29 @@ export function StreamlinedWorkoutSession({
   isDemo = false,
   isFirstSession = false
 }: StreamlinedWorkoutSessionProps) {
+  // ==========================================================================
+  // [AUTHORITATIVE-HYDRATION-CONTRACT] STAGE LOGGING HELPER
+  // Single local logger for deterministic stage tracking - never crashes
+  // ==========================================================================
+  const logStage = useCallback((stage: string, data?: Record<string, unknown>) => {
+    // Update global stage marker for crash recovery
+    if (typeof window !== 'undefined') {
+      (window as unknown as { __spartanlabWorkoutStage?: string }).__spartanlabWorkoutStage = stage
+    }
+    console.log(`[WORKOUT-STAGE] ${stage}`, {
+      componentVersion: STREAMLINED_WORKOUT_VERSION,
+      timestamp: Date.now(),
+      ...data,
+    })
+  }, [])
+  
+  // STAGE: component_entry
+  logStage('component_entry', { sessionProvided: !!session, sessionType: typeof session })
+  
   // CRITICAL: Early validation - if session is completely invalid, render fallback immediately
   // This prevents any downstream code from crashing on a null/undefined session
   if (!session || typeof session !== 'object') {
+    logStage('early_exit_invalid_session')
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
         <div className="text-center max-w-sm">
@@ -475,15 +538,97 @@ export function StreamlinedWorkoutSession({
     )
   }
   
-  // Create safe session with guaranteed defaults (extra safety layer)
-  const safeSession = useMemo(() => ({
-    ...session,
-    dayLabel: session?.dayLabel || 'Workout',
-    dayNumber: session?.dayNumber ?? 1,
-    focus: session?.focus || 'general',
-    focusLabel: session?.focusLabel || 'Training',
-    exercises: session?.exercises ?? [],
-  }), [session])
+  // ==========================================================================
+  // [AUTHORITATIVE-HYDRATION-CONTRACT] ONE SAFE SESSION CONTRACT
+  // This is the ONLY session object used throughout the component
+  // All downstream code reads from this, NEVER from raw session
+  // ==========================================================================
+  const safeWorkoutSessionContract = useMemo(() => {
+    // STAGE: building_safe_session_contract
+    logStage('safe_session_building')
+    
+    // Normalize exercises with full safety - drop malformed entries
+    const rawExercises = Array.isArray(session?.exercises) ? session.exercises : []
+    const normalizedExercises = rawExercises.map((ex, idx) => {
+      // Skip completely invalid entries
+      if (!ex || typeof ex !== 'object') {
+        console.warn(`[AUTHORITATIVE-CONTRACT] Dropped malformed exercise at index ${idx}: not an object`)
+        return null
+      }
+      
+      // Build guaranteed-safe exercise object with ALL fields used anywhere in render
+      return {
+        // Core identity - ALWAYS strings, never undefined
+        id: typeof ex.id === 'string' && ex.id ? ex.id : `exercise-${idx}`,
+        name: typeof ex.name === 'string' && ex.name ? ex.name : 'Exercise',
+        category: typeof ex.category === 'string' && ex.category ? ex.category : 'general',
+        
+        // Execution parameters - guaranteed safe
+        sets: typeof ex.sets === 'number' && ex.sets > 0 ? ex.sets : 3,
+        repsOrTime: typeof ex.repsOrTime === 'string' && ex.repsOrTime ? ex.repsOrTime : '8-12 reps',
+        note: typeof ex.note === 'string' ? ex.note : '',
+        
+        // Override/selection
+        isOverrideable: ex.isOverrideable !== false,
+        selectionReason: typeof ex.selectionReason === 'string' ? ex.selectionReason : '',
+        
+        // Prescription data (preserve structure)
+        prescribedLoad: ex.prescribedLoad || undefined,
+        targetRPE: typeof ex.targetRPE === 'number' ? ex.targetRPE : undefined,
+        restSeconds: typeof ex.restSeconds === 'number' ? ex.restSeconds : undefined,
+        
+        // Method/block context
+        method: typeof ex.method === 'string' ? ex.method : undefined,
+        methodLabel: typeof ex.methodLabel === 'string' ? ex.methodLabel : undefined,
+        blockId: typeof ex.blockId === 'string' ? ex.blockId : undefined,
+        
+        // Source tracking
+        source: typeof ex.source === 'string' ? ex.source : undefined,
+        wasAdapted: typeof ex.wasAdapted === 'boolean' ? ex.wasAdapted : undefined,
+        progressionDecision: ex.progressionDecision || undefined,
+        
+        // Coaching/truth metadata
+        coachingMeta: ex.coachingMeta || undefined,
+        executionTruth: ex.executionTruth || undefined,
+      }
+    }).filter((ex): ex is NonNullable<typeof ex> => ex !== null)
+    
+    // Build the authoritative contract
+    const contract = {
+      // Session identity
+      dayNumber: typeof session.dayNumber === 'number' ? session.dayNumber : 1,
+      dayLabel: typeof session.dayLabel === 'string' && session.dayLabel ? session.dayLabel : 'Workout',
+      focus: typeof session.focus === 'string' && session.focus ? session.focus : 'general',
+      focusLabel: typeof session.focusLabel === 'string' && session.focusLabel ? session.focusLabel : 'Training',
+      rationale: typeof session.rationale === 'string' ? session.rationale : '',
+      
+      // Duration
+      estimatedMinutes: typeof session.estimatedMinutes === 'number' ? session.estimatedMinutes : 45,
+      
+      // Session type flags
+      isPrimary: session.isPrimary !== false,
+      finisherIncluded: session.finisherIncluded === true,
+      
+      // Exercises - authoritative safe array
+      exercises: normalizedExercises,
+      
+      // Warmup/cooldown (optional arrays)
+      warmup: Array.isArray(session.warmup) ? session.warmup : [],
+      cooldown: Array.isArray(session.cooldown) ? session.cooldown : [],
+    }
+    
+    logStage('safe_session_built', {
+      dayLabel: contract.dayLabel,
+      dayNumber: contract.dayNumber,
+      exerciseCount: contract.exercises.length,
+      droppedCount: rawExercises.length - normalizedExercises.length,
+    })
+    
+    return contract
+  }, [session, logStage])
+  
+  // ALIAS: For backward compatibility, also expose as safeSession
+  const safeSession = safeWorkoutSessionContract
   
   // Generate unique sessionId - demo sessions use different prefix to prevent storage collisions
   const isDemoSession = safeSession.dayLabel?.startsWith('DEMO-') || safeSession.dayNumber === 0
@@ -620,50 +765,87 @@ export function StreamlinedWorkoutSession({
   // Timer
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   
-  // Safety guard: ensure exercises array exists and is valid
-  const exercises = safeSession.exercises
+  // ==========================================================================
+  // [AUTHORITATIVE-HYDRATION-CONTRACT] EXERCISE DERIVATION
+  // All exercise access MUST go through this chain, never raw session
+  // ==========================================================================
+  
+  // STAGE: state_initialized
+  logStage('state_initialized', { status: state.status, currentExerciseIndex: state.currentExerciseIndex })
+  
+  // Get exercises from authoritative contract ONLY
+  const exercises = safeWorkoutSessionContract.exercises
   const hasValidExercises = exercises.length > 0
   
-  // Validate currentExerciseIndex is within bounds
-  const safeExerciseIndex = Math.max(0, Math.min(state.currentExerciseIndex, exercises.length - 1))
+  // Clamp currentExerciseIndex to valid bounds
+  const safeExerciseIndex = hasValidExercises 
+    ? Math.max(0, Math.min(state.currentExerciseIndex, exercises.length - 1))
+    : 0
   const isIndexOutOfBounds = hasValidExercises && state.currentExerciseIndex !== safeExerciseIndex
   
-  // Current exercise (with safety guard for both array existence AND index bounds)
-  const currentExercise = hasValidExercises ? exercises[safeExerciseIndex] ?? null : null
+  // STAGE: current_exercise_resolved
+  logStage('current_exercise_resolved', { 
+    safeExerciseIndex, 
+    totalExercises: exercises.length,
+    isIndexOutOfBounds,
+  })
+  
+  // Derive current exercise from authoritative contract (already normalized/safe)
+  const currentExercise = hasValidExercises ? exercises[safeExerciseIndex] : null
   const totalExercises = exercises.length
-  const totalSets = exercises.reduce((sum, ex) => sum + (ex?.sets || 0), 0)
+  const totalSets = exercises.reduce((sum, ex) => sum + ex.sets, 0)
   const completedSetsCount = state.completedSets.length
   
-  // [LIVE-SESSION-LOCK] AUTHORITATIVE SAFE CURRENT EXERCISE CONTRACT
-  // Create a guaranteed-safe exercise object for rendering (avoids null checks everywhere)
-  // Every field the render path uses MUST be included and guaranteed safe
-  const safeCurrentExercise = useMemo(() => ({
-    // Core identity fields - ALWAYS strings
-    id: typeof currentExercise?.id === 'string' && currentExercise.id ? currentExercise.id : 'unknown',
-    name: typeof currentExercise?.name === 'string' && currentExercise.name ? currentExercise.name : 'Exercise',
-    category: typeof currentExercise?.category === 'string' ? currentExercise.category : 'general',
+  // ==========================================================================
+  // [AUTHORITATIVE-HYDRATION-CONTRACT] SAFE CURRENT EXERCISE
+  // Derived from authoritative contract, guaranteed safe even if array is empty
+  // ==========================================================================
+  const safeCurrentExercise = useMemo(() => {
+    // If we have a valid exercise from the contract, use it directly
+    // (It's already normalized and safe from safeWorkoutSessionContract)
+    if (currentExercise) {
+      return currentExercise
+    }
     
-    // Execution parameters - guaranteed safe types
-    sets: typeof currentExercise?.sets === 'number' && currentExercise.sets > 0 ? currentExercise.sets : 3,
-    repsOrTime: typeof currentExercise?.repsOrTime === 'string' && currentExercise.repsOrTime ? currentExercise.repsOrTime : '8-12 reps',
-    note: typeof currentExercise?.note === 'string' ? currentExercise.note : '',
-    
-    // Override/selection context
-    isOverrideable: currentExercise?.isOverrideable ?? true,
-    selectionReason: typeof currentExercise?.selectionReason === 'string' ? currentExercise.selectionReason : '',
-    
-    // [prescription-render] Preserve prescribedLoad for live workout display
-    prescribedLoad: currentExercise?.prescribedLoad,
-    
-    // Advanced execution context (optional, preserved when present)
-    targetRPE: currentExercise?.targetRPE,
-    restSeconds: currentExercise?.restSeconds,
-    method: currentExercise?.method,
-    methodLabel: currentExercise?.methodLabel,
-    blockId: currentExercise?.blockId,
-    executionTruth: currentExercise?.executionTruth,
-    coachingMeta: currentExercise?.coachingMeta,
-  }), [currentExercise])
+    // Fallback for empty/invalid exercise arrays - guaranteed safe defaults
+    return {
+      id: 'fallback-exercise',
+      name: 'Exercise',
+      category: 'general',
+      sets: 3,
+      repsOrTime: '8-12 reps',
+      note: '',
+      isOverrideable: true,
+      selectionReason: '',
+      prescribedLoad: undefined,
+      targetRPE: undefined,
+      restSeconds: undefined,
+      method: undefined,
+      methodLabel: undefined,
+      blockId: undefined,
+      executionTruth: undefined,
+      coachingMeta: undefined,
+    }
+  }, [currentExercise])
+  
+  // ==========================================================================
+  // [AUTHORITATIVE-HYDRATION-CONTRACT] STAGE CONTEXT PERSISTENCE
+  // Store context in sessionStorage for crash recovery diagnostics
+  // ==========================================================================
+  useEffect(() => {
+    if (typeof sessionStorage !== 'undefined') {
+      try {
+        sessionStorage.setItem('spartanlab_workout_stage_context', JSON.stringify({
+          sessionId,
+          dayLabel: safeWorkoutSessionContract.dayLabel,
+          dayNumber: safeWorkoutSessionContract.dayNumber,
+          isDemo: isDemoSession,
+          exerciseCount: exercises.length,
+          currentExerciseIndex: state.currentExerciseIndex,
+        }))
+      } catch {}
+    }
+  }, [sessionId, safeWorkoutSessionContract.dayLabel, safeWorkoutSessionContract.dayNumber, isDemoSession, exercises.length, state.currentExerciseIndex])
   
   // [weighted-truth] TASK H: Log workout session loading with prescribed load
   useEffect(() => {
@@ -677,30 +859,43 @@ export function StreamlinedWorkoutSession({
     }
   }, [safeCurrentExercise])
   
-  // [EXECUTION-TRUTH-FIX] Build authoritative session runtime truth
+  // ==========================================================================
+  // [AUTHORITATIVE-HYDRATION-CONTRACT] RUNTIME TRUTH BUILDERS
+  // Build from authoritative contracts ONLY, with stage logging
+  // ==========================================================================
+  
+  // STAGE: session_runtime_truth_built
   const sessionRuntimeTruth = useMemo<SessionRuntimeTruth>(() => {
-    return buildSessionRuntimeTruth(safeSession, {
-      programId: null, // Will be set from context if available
-      workoutsCompleted: 0, // Will be enhanced with history lookup
+    logStage('session_runtime_truth_building')
+    const truth = buildSessionRuntimeTruth(safeWorkoutSessionContract as AdaptiveSession, {
+      programId: null,
+      workoutsCompleted: 0,
       sessionIndex: 0,
     })
-  }, [safeSession])
+    logStage('session_runtime_truth_built', { sessionId: truth.sessionId, totalExerciseCount: truth.totalExerciseCount })
+    return truth
+  }, [safeWorkoutSessionContract, logStage])
   
-  // [LIVE-WORKOUT-CORRIDOR] Build per-exercise runtime truth - uses safeCurrentExercise
+  // STAGE: exercise_runtime_truth_built
   const exerciseRuntimeTruth = useMemo<ExerciseRuntimeTruth>(() => {
+    logStage('exercise_runtime_truth_building', { exerciseIndex: safeExerciseIndex })
     const overrideState = state.exerciseOverrides[safeExerciseIndex]
-    // Pass safeCurrentExercise to buildExerciseRuntimeTruth - it has all required fields
-    return buildExerciseRuntimeTruth(safeCurrentExercise as AdaptiveExercise, safeExerciseIndex, overrideState ? {
+    const truth = buildExerciseRuntimeTruth(safeCurrentExercise as AdaptiveExercise, safeExerciseIndex, overrideState ? {
       isOverridden: !!(overrideState.isReplaced || overrideState.isProgressionAdjusted || overrideState.isSkipped),
       overrideType: overrideState.isReplaced ? 'replaced' : overrideState.isProgressionAdjusted ? 'progression_adjusted' : overrideState.isSkipped ? 'skipped' : null,
       currentName: overrideState.currentName,
     } : undefined)
-  }, [safeCurrentExercise, safeExerciseIndex, state.exerciseOverrides])
+    logStage('exercise_runtime_truth_built', { exerciseId: truth.exerciseId, exerciseName: truth.exerciseName })
+    return truth
+  }, [safeCurrentExercise, safeExerciseIndex, state.exerciseOverrides, logStage])
   
-  // [EXECUTION-TRUTH-FIX] Calibration message for first workouts
+  // STAGE: calibration_message_built
   const calibrationMessage = useMemo(() => {
-    return getCalibrationMessage(sessionRuntimeTruth)
-  }, [sessionRuntimeTruth])
+    logStage('calibration_message_building')
+    const msg = getCalibrationMessage(sessionRuntimeTruth)
+    logStage('calibration_message_built', { hasMessage: !!msg })
+    return msg
+  }, [sessionRuntimeTruth, logStage])
   
   // Repair index if out of bounds (happens on next render cycle)
   useEffect(() => {
@@ -1565,13 +1760,22 @@ export function StreamlinedWorkoutSession({
   }
   
   // ==========================================================================
-  // [LIVE-WORKOUT-CORRIDOR] RENDER ENTRY DIAGNOSTICS
-  // Log current render contract state for debugging crash paths
+  // [AUTHORITATIVE-HYDRATION-CONTRACT] RENDER ENTRY VERIFICATION
+  // Final stage markers before render paths
   // ==========================================================================
   
+  // STAGE: reasoning_helpers_built
+  logStage('reasoning_helpers_built', {
+    hasValidExercises,
+    safeExerciseIndex,
+    exerciseName: safeCurrentExercise.name,
+    exerciseSets: safeCurrentExercise.sets,
+    status: state.status,
+  })
+  
   useEffect(() => {
-    console.log('[LIVE-WORKOUT-CORRIDOR] Render contract state', {
-      componentVersion: STREAMLINED_WORKOUT_VERSION,
+    // STAGE: render_contract_verified (effect runs after successful render)
+    logStage('render_contract_verified', {
       hasValidExercises,
       safeExerciseIndex,
       exerciseName: safeCurrentExercise.name,
@@ -1580,13 +1784,15 @@ export function StreamlinedWorkoutSession({
       currentSetNumber: state.currentSetNumber,
       sessionId,
     })
-  }, [hasValidExercises, safeExerciseIndex, safeCurrentExercise, state.status, state.currentSetNumber, sessionId])
+  }, [hasValidExercises, safeExerciseIndex, safeCurrentExercise, state.status, state.currentSetNumber, sessionId, logStage])
   
   // ==========================================================================
-  // RENDER: SAFETY FALLBACK - No Valid Exercises
+  // RENDER: SAFETY FALLBACK - No Valid Exercises (Controlled Route-Level Failure)
+  // This is a CONTROLLED exit, not a crash - exercises array is empty
   // ==========================================================================
   
   if (!hasValidExercises) {
+    logStage('render_exit_no_exercises', { exerciseCount: exercises.length })
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
         <div className="text-center max-w-sm">
@@ -1609,6 +1815,9 @@ export function StreamlinedWorkoutSession({
       </div>
     )
   }
+  
+  // STAGE: render_header_ready - Exercises validated, proceeding to render
+  logStage('render_header_ready', { status: state.status })
   
   // ==========================================================================
   // RENDER: RESUME PROMPT

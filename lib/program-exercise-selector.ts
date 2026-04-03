@@ -356,9 +356,10 @@ interface ExerciseSelectionInputs {
   isConservative: boolean
   }> | null
   // [PHASE-MATERIALITY] Material skill intent from contract
+  // [SESSION-TRUTH-MATERIALIZATION] Added 'tertiary' role for broader skill expression
   materialSkillIntent?: Array<{
   skill: string
-  role: 'primary_spine' | 'secondary_anchor' | 'support' | 'deferred'
+  role: 'primary_spine' | 'secondary_anchor' | 'tertiary' | 'support' | 'deferred'
   currentWorkingProgression: string | null
   historicalCeiling: string | null
   }>
@@ -1032,9 +1033,10 @@ function selectMainExercises(
   isConservative: boolean
   }> | null,
   // [PHASE-MATERIALITY] Material skill intent from contract
+  // [SESSION-TRUTH-MATERIALIZATION] Added 'tertiary' role for broader skill expression
   materialSkillIntent?: Array<{
   skill: string
-  role: 'primary_spine' | 'secondary_anchor' | 'support' | 'deferred'
+  role: 'primary_spine' | 'secondary_anchor' | 'tertiary' | 'support' | 'deferred'
   currentWorkingProgression: string | null
   historicalCeiling: string | null
   }>
@@ -2009,9 +2011,10 @@ function selectMainExercises(
 function applyMaterialityScoreAdjustments(
   exercise: Exercise,
   baseScore: number,
+  // [SESSION-TRUTH-MATERIALIZATION] Added 'tertiary' role for broader skill expression
   materialSkillIntent: Array<{
   skill: string
-  role: 'primary_spine' | 'secondary_anchor' | 'support' | 'deferred'
+  role: 'primary_spine' | 'secondary_anchor' | 'tertiary' | 'support' | 'deferred'
   currentWorkingProgression: string | null
   historicalCeiling: string | null
   }> | undefined,
@@ -2042,6 +2045,7 @@ function applyMaterialityScoreAdjustments(
   
   if (exerciseSkillMatch) {
   // Apply role-based scoring
+  // [SESSION-TRUTH-MATERIALIZATION] Added tertiary case with meaningful boost
   switch (exerciseSkillMatch.role) {
     case 'primary_spine':
     adjustedScore += 15 // Strong boost for primary spine exercises
@@ -2050,6 +2054,12 @@ function applyMaterialityScoreAdjustments(
     case 'secondary_anchor':
     adjustedScore += 10 // Solid boost for secondary anchor
     adjustmentReason = 'secondary_anchor_alignment'
+    break
+    case 'tertiary':
+    // [SESSION-TRUTH-MATERIALIZATION] Tertiary skills get meaningful boost
+    // This ensures broader selected skills actually influence exercise selection
+    adjustedScore += 8 // Good boost for tertiary - between secondary and support
+    adjustmentReason = 'tertiary_skill_alignment'
     break
     case 'support':
     adjustedScore += 5 // Modest boost for support skills

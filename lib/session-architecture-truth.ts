@@ -541,7 +541,8 @@ function buildAllowedProgressionFamilies(
   const allowed: string[] = []
   const blocked: string[] = []
   
-  const skillLower = skill.toLowerCase()
+  // [EXERCISE-SELECTION-HARDENING] Safe string operation
+  const skillLower = (skill ?? '').toLowerCase()
   
   // Define progression hierarchy for common skills
   const progressionHierarchies: Record<string, string[]> = {
@@ -852,7 +853,8 @@ function findCapForSkill(
   caps: Record<string, CurrentWorkingSkillCap>,
   skill: string
 ): CurrentWorkingSkillCap | null {
-  const skillLower = skill.toLowerCase().replace(/[\s_-]/g, '')
+  // [EXERCISE-SELECTION-HARDENING] Safe string operation
+  const skillLower = (skill ?? '').toLowerCase().replace(/[\s_-]/g, '')
   
   for (const [key, cap] of Object.entries(caps)) {
     const keyLower = key.toLowerCase().replace(/[\s_-]/g, '')

@@ -296,9 +296,11 @@ function buildProgressionDoctrine(
     globalConservativeBias = true
   }
   
+  // [EXERCISE-SELECTION-HARDENING] Safe string operations
   for (const skill of selectedSkills) {
+    const skillLowerSafe = (skill ?? '').toLowerCase()
     const skillRules = rules.filter(r => 
-      r.skillKey.toLowerCase() === skill.toLowerCase()
+      (r.skillKey ?? '').toLowerCase() === skillLowerSafe
     )
     
     const currentProgression = currentProgressions[skill]?.currentWorkingProgression
@@ -344,9 +346,10 @@ function buildProgressionDoctrine(
     }
     
     // Apply joint caution influence
+    // [EXERCISE-SELECTION-HARDENING] Safe string operations
     for (const caution of jointCautions) {
-      const cautionLower = caution.toLowerCase()
-      const skillLower = skill.toLowerCase()
+      const cautionLower = (caution ?? '').toLowerCase()
+      const skillLower = (skill ?? '').toLowerCase()
       
       if (cautionLower.includes('shoulder') && 
           (skillLower.includes('planche') || skillLower.includes('hspu') || skillLower.includes('handstand'))) {
@@ -667,9 +670,10 @@ function buildSkillDoctrine(
     if (representedSkills.includes(skill)) continue
     
     // Check if this skill has carryover benefit from primary/secondary
+    // [EXERCISE-SELECTION-HARDENING] Safe string operations
     const hasCarryoverBenefit = carryoverRules.some(r => 
-      r.targetSkillKey.toLowerCase() === skill.toLowerCase() &&
-      (representedSkills.some(rep => r.sourceExerciseOrSkillKey.toLowerCase().includes(rep.toLowerCase())))
+      (r.targetSkillKey ?? '').toLowerCase() === (skill ?? '').toLowerCase() &&
+      (representedSkills.some(rep => (r.sourceExerciseOrSkillKey ?? '').toLowerCase().includes((rep ?? '').toLowerCase())))
     )
     
     if (hasCarryoverBenefit) {

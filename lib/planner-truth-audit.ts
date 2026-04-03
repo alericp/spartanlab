@@ -234,9 +234,10 @@ function auditSkillExpression(
     let isInMainWork = false
     let isInWarmupOnly = true
     
+    // [EXERCISE-SELECTION-HARDENING] Safe string operations
     for (const { exercise, dayNumber } of allExercises) {
       const exLower = (exercise.id || exercise.name || '').toLowerCase()
-      const skillLower = skill.toLowerCase().replace(/_/g, '')
+      const skillLower = (skill ?? '').toLowerCase().replace(/_/g, '')
       
       // Check if exercise relates to skill
       const relatesTo = exLower.includes(skillLower) || 
@@ -743,8 +744,9 @@ function auditGenericShell(
   for (const skill of skillAudit.details) {
     if (skill.isUnderExpressed || skill.isCosmetic) {
       // Check if this skill is mentioned in program rationale
+      // [EXERCISE-SELECTION-HARDENING] Safe string operations
       const rationale = program.programRationale?.toLowerCase() || ''
-      if (rationale.includes(skill.skill.toLowerCase()) || rationale.includes(skill.skillLabel.toLowerCase())) {
+      if (rationale.includes((skill.skill ?? '').toLowerCase()) || rationale.includes((skill.skillLabel ?? '').toLowerCase())) {
         rationaleOverclaim = true
         overclaimDetails.push(`Rationale claims ${skill.skillLabel} but it's ${skill.isCosmetic ? 'only cosmetically expressed' : 'under-expressed'}`)
       }

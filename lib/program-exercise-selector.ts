@@ -5850,3 +5850,217 @@ export function adaptSessionForFatigue(
     return selected
   })
 }
+
+// =============================================================================
+// [EXERCISE-SELECTION-HARDENING-LAYER] SAFE SELECTION WRAPPER & FALLBACK SYSTEM
+// =============================================================================
+
+/**
+ * Get a safe default exercise for a given skill/goal.
+ * NEVER returns undefined - always provides a valid exercise structure.
+ */
+export function getSafeDefaultExercise(
+  skill: string | null | undefined,
+  category: 'skill' | 'strength' | 'accessory' = 'strength'
+): Exercise {
+  const skillLower = safeLower(skill)
+  const allExercises = getAllExercises()
+  
+  // Try to find a matching exercise for the skill
+  if (skillLower) {
+    const matched = allExercises.find(e => 
+      safeLower(e.id).includes(skillLower) ||
+      safeTransferTargets(e.transferTo).some(t => t.includes(skillLower))
+    )
+    if (matched) return matched
+  }
+  
+  // Fallback by category
+  const byCategory = allExercises.filter(e => e.category === category)
+  if (byCategory.length > 0) return byCategory[0]
+  
+  // Ultimate fallback - return first available exercise
+  return allExercises[0] || {
+    id: 'fallback_exercise',
+    name: 'General Training',
+    category: 'accessory',
+    difficulty: 'beginner',
+    movementPattern: 'compound',
+    equipment: [],
+    targetMuscles: [],
+    fatigueCost: 2,
+  } as Exercise
+}
+
+/**
+ * Get a safe accessory exercise for supplemental work.
+ */
+export function getSafeAccessory(skill: string | null | undefined): Exercise {
+  const skillLower = safeLower(skill)
+  const allExercises = getAllExercises()
+  const accessories = allExercises.filter(e => e.category === 'accessory')
+  
+  // Try to find one that supports the skill
+  if (skillLower && accessories.length > 0) {
+    const supporting = accessories.find(e => 
+      safeTransferTargets(e.transferTo).some(t => t.includes(skillLower))
+    )
+    if (supporting) return supporting
+  }
+  
+  return accessories[0] || getSafeDefaultExercise(skill, 'accessory')
+}
+
+/**
+ * Get a safe core exercise.
+ */
+export function getSafeCore(): Exercise {
+  const allExercises = getAllExercises()
+  const coreExercises = allExercises.filter(e => 
+    e.category === 'core' || 
+    safeLower(e.id).includes('core') ||
+    e.targetMuscles?.some(m => safeLower(m).includes('core') || safeLower(m).includes('abs'))
+  )
+  
+  if (coreExercises.length > 0) return coreExercises[0]
+  
+  return getSafeDefaultExercise('core', 'accessory')
+}
+
+/**
+ * Generate fallback exercises when selection fails.
+ * NEVER returns empty array - always provides a valid session structure.
+ */
+export function getFallbackExercises(params: {
+  skill?: string | null
+  dayFocus?: string | null
+  exerciseCount?: number
+}): SelectedExercise[] {
+  const { skill, dayFocus, exerciseCount = 3 } = params
+  const result: SelectedExercise[] = []
+  
+  console.warn('[EXERCISE-SELECTION-HARDENING] Generating fallback exercises', {
+    skill,
+    dayFocus,
+    exerciseCount,
+    reason: 'selection_failed_or_empty'
+  })
+  
+  // Primary exercise for the skill/day
+  const primary = getSafeDefaultExercise(skill, 'strength')
+  result.push({
+    exercise: primary,
+    reason: `Fallback primary for ${skill || dayFocus || 'training'}`,
+    sets: 3,
+    reps: '5-8',
+    category: primary.category as 'skill' | 'strength' | 'accessory' | 'core' | 'prehab',
+  })
+  
+  // Support accessory
+  if (exerciseCount >= 2) {
+    const accessory = getSafeAccessory(skill)
+    result.push({
+      exercise: accessory,
+      reason: 'Fallback support accessory',
+      sets: 3,
+      reps: '8-12',
+      category: accessory.category as 'skill' | 'strength' | 'accessory' | 'core' | 'prehab',
+    })
+  }
+  
+  // Core work
+  if (exerciseCount >= 3) {
+    const core = getSafeCore()
+    result.push({
+      exercise: core,
+      reason: 'Fallback core work',
+      sets: 3,
+      reps: '10-15',
+      category: 'core',
+    })
+  }
+  
+  return result
+}
+
+/**
+ * SAFE SELECTION WRAPPER
+ * Wraps the main selection function with error handling and fallback behavior.
+ * NEVER throws - NEVER returns empty result.
+ */
+export function safeSelectExercisesForSession(
+  params: Parameters<typeof selectExercisesForSession>[0]
+): ExerciseSelection {
+  const { day, primaryGoal } = params
+  
+  // Input validation
+  if (!day) {
+    console.error('[EXERCISE-SELECTION-HARDENING] INVALID_SELECTION_CONTEXT - missing day', { params })
+    return {
+      exercises: getFallbackExercises({ skill: primaryGoal, exerciseCount: 4 }),
+      sessionSkillExpression: [],
+      materialSkillIntent: [],
+      selectionAudit: {
+        fallbackUsed: true,
+        reason: 'missing_day_context',
+        timestamp: new Date().toISOString(),
+      },
+    }
+  }
+  
+  try {
+    const result = selectExercisesForSession(params)
+    
+    // Validate result
+    if (!result || !result.exercises || result.exercises.length === 0) {
+      console.warn('[EXERCISE-SELECTION-HARDENING] EMPTY_SELECTION_RESULT - using fallback', {
+        day: day.focus,
+        primaryGoal,
+        resultWasNull: !result,
+        exerciseCount: result?.exercises?.length || 0,
+      })
+      
+      return {
+        exercises: getFallbackExercises({ 
+          skill: primaryGoal, 
+          dayFocus: day.focus,
+          exerciseCount: 4 
+        }),
+        sessionSkillExpression: result?.sessionSkillExpression || [],
+        materialSkillIntent: result?.materialSkillIntent || [],
+        selectionAudit: {
+          fallbackUsed: true,
+          reason: 'empty_selection_result',
+          originalResult: result,
+          timestamp: new Date().toISOString(),
+        },
+      }
+    }
+    
+    return result
+    
+  } catch (error) {
+    console.error('[EXERCISE-SELECTION-HARDENING] SELECTION_CRASH - using fallback', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      day: day.focus,
+      primaryGoal,
+    })
+    
+    return {
+      exercises: getFallbackExercises({ 
+        skill: primaryGoal, 
+        dayFocus: day.focus,
+        exerciseCount: 4 
+      }),
+      sessionSkillExpression: [],
+      materialSkillIntent: [],
+      selectionAudit: {
+        fallbackUsed: true,
+        reason: 'selection_exception',
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+      },
+    }
+  }
+}

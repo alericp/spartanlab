@@ -34,6 +34,7 @@ import {
   assertProgramStateUsable, 
   markCanonicalPathUsed,
 } from './production-safety'
+import { EMPTY_SKILL_TRACE, getSafeSkillTrace } from './safe-access'
 
 // =============================================================================
 // REBUILD RESULT CONTRACT - TASK 1
@@ -1110,6 +1111,55 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
       sessions: Array.isArray(program.sessions) 
         ? program.sessions.filter(s => s && typeof s === 'object' && Array.isArray(s.exercises))
         : [],
+      
+      // ==========================================================================
+      // [CONTRACT NORMALIZATION] Ensure new truth contract fields always exist
+      // ==========================================================================
+      // These fields may be missing on older programs - provide safe defaults
+      
+      // selectedSkillTrace - Required for skill coverage display
+      selectedSkillTrace: program.selectedSkillTrace 
+        ? getSafeSkillTrace(program.selectedSkillTrace)
+        : EMPTY_SKILL_TRACE,
+      
+      // weeklyRepresentation - Required for schedule display  
+      weeklyRepresentation: program.weeklyRepresentation ?? {
+        sessions: [],
+        frequency: program.trainingDaysPerWeek ?? program.currentWeekFrequency ?? 4,
+        distribution: 'unknown',
+        weekNumber: 1,
+      },
+      
+      // materialSkillIntent - Required for skill intent display
+      materialSkillIntent: program.materialSkillIntent ?? {
+        primarySkills: [],
+        secondarySkills: [],
+        methodsUsed: [],
+        emphasis: 'general',
+      },
+      
+      // currentWorkingProgressions - Required for progression truth display
+      currentWorkingProgressions: program.currentWorkingProgressions ?? {
+        planche: null,
+        frontLever: null, 
+        hspu: null,
+        backLever: null,
+        muscleUp: null,
+        lSit: null,
+        resolvedAt: null,
+        anyConservativeStart: false,
+      },
+    }
+    
+    // [CONTRACT NORMALIZATION] Log when missing fields were normalized
+    const missingFields: string[] = []
+    if (!program.selectedSkillTrace) missingFields.push('selectedSkillTrace')
+    if (!program.weeklyRepresentation) missingFields.push('weeklyRepresentation')
+    if (!program.materialSkillIntent) missingFields.push('materialSkillIntent')
+    if (!program.currentWorkingProgressions) missingFields.push('currentWorkingProgressions')
+    
+    if (missingFields.length > 0) {
+      console.warn('[CONTRACT_NORMALIZATION] Missing fields normalized:', missingFields.join(', '))
     }
     
     console.log('[ProgramState] Normalized program for display:', {
@@ -1118,6 +1168,7 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
       hasConstraintInsight: !!program.constraintInsight,
       hasStructure: !!program.structure,
       hasEngineContext: !!program.engineContext,
+      contractFieldsNormalized: missingFields.length,
     })
     
     return normalized
@@ -1220,12 +1271,17 @@ export function getProgramState(): ProgramState {
       })
     }
     
+    // [CONTRACT NORMALIZATION] Normalize program before returning to ensure all fields exist
+    const normalizedAdaptiveProgram = adaptiveProgram 
+      ? normalizeProgramForDisplay(adaptiveProgram)
+      : null
+    
     return {
       hasProgram,
       hasUsableWorkoutProgram,
-      adaptiveProgram,
+      adaptiveProgram: normalizedAdaptiveProgram,
       legacyProgram,
-      activeProgram,
+      activeProgram: normalizedAdaptiveProgram || legacyProgram,
       sessionCount,
     }
   } catch (err) {

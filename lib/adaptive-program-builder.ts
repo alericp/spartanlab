@@ -1521,6 +1521,12 @@ exerciseExplanations?: {
     generatedAt: string
   }
   // ==========================================================================
+  // [CHECKLIST 1 OF 5] AUTHORITATIVE MULTI-SKILL INTENT CONTRACT
+  // This is the SINGLE AUTHORITATIVE SOURCE for skill classification decisions.
+  // Built BEFORE session assembly, saved on program, used by ProgramTruthSummary.
+  // ==========================================================================
+  authoritativeMultiSkillIntentContract?: AuthoritativeMultiSkillIntentContract | null
+  // ==========================================================================
   // [WEEKLY MATERIALITY] Verdict on weekly program materiality vs defaults
   // ==========================================================================
   weeklyMaterialityVerdict?: {
@@ -1922,6 +1928,66 @@ export interface MultiSkillSessionAllocationContract {
   contractVersion: string
 }
 
+// =============================================================================
+// [CHECKLIST 1 OF 5] AUTHORITATIVE MULTI-SKILL INTENT CONTRACT
+// =============================================================================
+// This is the SINGLE authoritative contract for skill classification.
+// It is built BEFORE session assembly and used by:
+// - Session construction (material effect)
+// - ProgramTruthSummary (display)
+// - Rebuild/Restart (truth preservation)
+// =============================================================================
+
+export interface AuthoritativeMultiSkillIntentContract {
+  // Core skill lists
+  selectedSkills: string[]
+  primarySkill: string | null
+  secondarySkill: string | null
+  supportSkills: string[]
+  deferredSkills: Array<{
+    skill: string
+    reasonCode: DeferralReasonCode | string
+    reasonLabel: string
+    details?: string
+  }>
+  
+  // Material expression tracking
+  materiallyExpressedSkills: string[]
+  reducedThisCycleSkills: string[]
+  
+  // Priority ordering for session distribution
+  skillPriorityOrder: Array<{
+    skill: string
+    role: 'primary' | 'secondary' | 'tertiary' | 'support' | 'deferred'
+    priorityScore: number
+    exposureSessions: number
+    currentWorkingProgression?: string | null
+    historicalCeiling?: string | null
+    progressionTruthSource?: string
+  }>
+  
+  // Coverage verdict
+  coverageVerdict: 'strong' | 'adequate' | 'weak'
+  
+  // Source and material counts
+  sourceTruthCount: number
+  materiallyUsedCount: number
+  
+  // Contract metadata
+  builtAt: string
+  contractVersion: string
+  
+  // Audit trail for debugging
+  auditTrail: {
+    canonicalSourceSkillCount: number
+    builderInputSkillCount: number
+    weightedAllocationSkillCount: number
+    sessionArchitectureSkillCount: number
+    skillsLostInPipeline: string[]
+    skillsNarrowedReason: string | null
+  }
+}
+
 /**
  * Build the authoritative multi-skill session allocation contract.
  * This contract forces every selected skill to be classified and drives session assembly.
@@ -2077,6 +2143,183 @@ export function buildAuthoritativeMultiSkillAllocationContract(
       allocated: e.allocatedSessions,
       deferred: e.deferReasonCode,
     })),
+  })
+  
+  return contract
+}
+
+// =============================================================================
+// [CHECKLIST 1 OF 5] BUILD AUTHORITATIVE MULTI-SKILL INTENT CONTRACT
+// =============================================================================
+// This function builds the AuthoritativeMultiSkillIntentContract from:
+// - canonicalProfile (source truth)
+// - weightedSkillAllocation (prioritized skills)
+// - multiSkillAllocationContract (representation decisions)
+// - sessionArchitectureTruth (architecture decisions)
+// - currentWorkingProgressions (progression truth)
+// =============================================================================
+export function buildAuthoritativeMultiSkillIntentContract(
+  canonicalProfile: CanonicalProgrammingProfile,
+  weightedSkillAllocation: WeightedSkillAllocation[],
+  multiSkillAllocationContract: MultiSkillSessionAllocationContract | null,
+  sessionArchitectureTruth: SessionArchitectureTruthContract | null,
+  currentWorkingProgressions: Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null; truthSource: string; isConservative: boolean }> | null,
+  builderInputSkillCount: number
+): AuthoritativeMultiSkillIntentContract {
+  const canonicalSelectedSkills = canonicalProfile.selectedSkills || []
+  const primaryGoal = canonicalProfile.primaryGoal || null
+  const secondaryGoal = canonicalProfile.secondaryGoal || null
+  
+  // Build skill priority order from weighted allocation
+  const skillPriorityOrder: AuthoritativeMultiSkillIntentContract['skillPriorityOrder'] = 
+    weightedSkillAllocation.map((alloc, index) => {
+      const progressionData = currentWorkingProgressions?.[alloc.skill.replace(/_/g, '')] || 
+                              currentWorkingProgressions?.[alloc.skill] || null
+      return {
+        skill: alloc.skill,
+        role: alloc.priorityLevel as 'primary' | 'secondary' | 'tertiary' | 'support' | 'deferred',
+        priorityScore: Math.round((1 - index * 0.1) * 100) / 100,
+        exposureSessions: alloc.exposureSessions,
+        currentWorkingProgression: progressionData?.currentWorkingProgression || null,
+        historicalCeiling: progressionData?.historicalCeiling || null,
+        progressionTruthSource: progressionData?.truthSource || 'not_calibrated',
+      }
+    })
+  
+  // Classify skills by role
+  const supportSkills: string[] = []
+  const materiallyExpressedSkills: string[] = []
+  const reducedThisCycleSkills: string[] = []
+  const deferredSkills: AuthoritativeMultiSkillIntentContract['deferredSkills'] = []
+  
+  // Use multiSkillAllocationContract as authoritative source if available
+  if (multiSkillAllocationContract) {
+    // Add represented skills as materially expressed
+    materiallyExpressedSkills.push(...multiSkillAllocationContract.representedSkills)
+    materiallyExpressedSkills.push(...multiSkillAllocationContract.supportExpressedSkills)
+    materiallyExpressedSkills.push(...multiSkillAllocationContract.supportRotationalSkills)
+    
+    // Extract support skills
+    supportSkills.push(...multiSkillAllocationContract.supportExpressedSkills)
+    supportSkills.push(...multiSkillAllocationContract.supportRotationalSkills)
+    
+    // Extract deferred skills
+    for (const d of multiSkillAllocationContract.deferredSkills) {
+      deferredSkills.push({
+        skill: d.skill,
+        reasonCode: d.reasonCode,
+        reasonLabel: d.reasonLabel,
+        details: `Deferred during multi-skill allocation due to ${d.reasonCode}`,
+      })
+    }
+  } else {
+    // Fallback: use weightedSkillAllocation
+    for (const alloc of weightedSkillAllocation) {
+      if (alloc.priorityLevel === 'primary' || alloc.priorityLevel === 'secondary') {
+        materiallyExpressedSkills.push(alloc.skill)
+      } else if (alloc.priorityLevel === 'tertiary') {
+        materiallyExpressedSkills.push(alloc.skill)
+        supportSkills.push(alloc.skill)
+      } else if (alloc.priorityLevel === 'support') {
+        supportSkills.push(alloc.skill)
+        if (alloc.exposureSessions >= 1) {
+          materiallyExpressedSkills.push(alloc.skill)
+        } else {
+          reducedThisCycleSkills.push(alloc.skill)
+        }
+      }
+    }
+  }
+  
+  // Find skills that were in canonical but didn't make it to weighted allocation
+  const weightedSkillSet = new Set(weightedSkillAllocation.map(a => a.skill))
+  const skillsLostInPipeline = canonicalSelectedSkills.filter(s => !weightedSkillSet.has(s))
+  
+  // Add lost skills to deferred list
+  for (const skill of skillsLostInPipeline) {
+    if (!deferredSkills.some(d => d.skill === skill)) {
+      deferredSkills.push({
+        skill,
+        reasonCode: 'not_included_in_weekly_allocation',
+        reasonLabel: 'Not included in this week\'s allocation',
+        details: 'Skill was in canonical profile but not included in weighted allocation',
+      })
+    }
+  }
+  
+  // Determine coverage verdict
+  const materiallyUsedCount = materiallyExpressedSkills.length
+  const sourceTruthCount = canonicalSelectedSkills.length
+  const coverageRatio = sourceTruthCount > 0 ? materiallyUsedCount / sourceTruthCount : 1
+  
+  let coverageVerdict: 'strong' | 'adequate' | 'weak' = 'weak'
+  if (coverageRatio >= 0.8) {
+    coverageVerdict = 'strong'
+  } else if (coverageRatio >= 0.5) {
+    coverageVerdict = 'adequate'
+  }
+  
+  // Determine narrowing reason
+  let skillsNarrowedReason: string | null = null
+  if (sourceTruthCount > materiallyUsedCount) {
+    if (skillsLostInPipeline.length > 0) {
+      skillsNarrowedReason = 'skills_lost_between_canonical_and_weighted_allocation'
+    } else if (deferredSkills.length > 0) {
+      skillsNarrowedReason = 'skills_deferred_due_to_budget_constraints'
+    } else {
+      skillsNarrowedReason = 'skills_reduced_during_session_assembly'
+    }
+  }
+  
+  const contract: AuthoritativeMultiSkillIntentContract = {
+    selectedSkills: canonicalSelectedSkills,
+    primarySkill: primaryGoal,
+    secondarySkill: secondaryGoal,
+    supportSkills: [...new Set(supportSkills)], // Dedupe
+    deferredSkills,
+    materiallyExpressedSkills: [...new Set(materiallyExpressedSkills)], // Dedupe
+    reducedThisCycleSkills,
+    skillPriorityOrder,
+    coverageVerdict,
+    sourceTruthCount,
+    materiallyUsedCount,
+    builtAt: new Date().toISOString(),
+    contractVersion: '1.0.0',
+    auditTrail: {
+      canonicalSourceSkillCount: canonicalSelectedSkills.length,
+      builderInputSkillCount,
+      weightedAllocationSkillCount: weightedSkillAllocation.length,
+      sessionArchitectureSkillCount: sessionArchitectureTruth 
+        ? (sessionArchitectureTruth.primarySpineSkills.length + 
+           sessionArchitectureTruth.secondaryAnchorSkills.length + 
+           sessionArchitectureTruth.supportRotationSkills.length)
+        : 0,
+      skillsLostInPipeline,
+      skillsNarrowedReason,
+    },
+  }
+  
+  // Log the MULTI_SKILL_TRUTH_VERIFICATION audit
+  console.log('[MULTI_SKILL_TRUTH_VERIFICATION]', {
+    canonicalSelectedSkillsCount: canonicalSelectedSkills.length,
+    canonicalSelectedSkills,
+    materiallyUsedCount,
+    materiallyExpressedSkills: contract.materiallyExpressedSkills,
+    supportSkills: contract.supportSkills,
+    deferredSkills: contract.deferredSkills.map(d => ({ skill: d.skill, reason: d.reasonCode })),
+    coverageVerdict,
+    weeklySessionsCount: sessionArchitectureTruth?.generationContext.effectiveTrainingDays || 0,
+    sixSessionFlexibleUntouched: true, // This function does not touch 6-session logic
+    verdict: coverageVerdict === 'strong' 
+      ? 'MULTI_SKILL_TRUTH_RICH_AND_MATERIAL'
+      : coverageVerdict === 'adequate'
+        ? 'MULTI_SKILL_TRUTH_PRESENT_BUT_REDUCED'
+        : sourceTruthCount <= 2
+          ? 'MULTI_SKILL_TRUTH_ALREADY_NARROW_AT_CANONICAL_SOURCE'
+          : skillsLostInPipeline.length > 0
+            ? 'MULTI_SKILL_TRUTH_ALREADY_RICH_BUT_COLLAPSED_DOWNSTREAM'
+            : 'MULTI_SKILL_TRUTH_PRESENT_IN_GENERATION_BUT_NOT_MATERIAL',
+    auditTrail: contract.auditTrail,
   })
   
   return contract
@@ -5118,6 +5361,46 @@ async function generateAdaptiveProgramImpl(
       verdict: 'SESSION_ARCHITECTURE_TRUTH_FALLBACK',
     })
   }
+  
+  // ==========================================================================
+  // [CHECKLIST 1 OF 5] BUILD AUTHORITATIVE MULTI-SKILL INTENT CONTRACT
+  // ==========================================================================
+  // This contract is the SINGLE AUTHORITATIVE SOURCE for skill classification.
+  // It MUST be built BEFORE session assembly and consumed by:
+  // - Session construction (material effect)
+  // - ProgramTruthSummary (display)
+  // - Rebuild/Restart (truth preservation)
+  // ==========================================================================
+  const cwpForIntentContract: Record<string, { 
+    currentWorkingProgression: string | null
+    historicalCeiling: string | null 
+    truthSource: string
+    isConservative: boolean 
+  }> = {}
+  
+  if (materialityContract.currentWorkingProgressions) {
+    for (const [skill, data] of Object.entries(materialityContract.currentWorkingProgressions)) {
+      cwpForIntentContract[skill] = {
+        currentWorkingProgression: typeof data === 'object' && data ? 
+          (data as { currentWorkingProgression?: string | null }).currentWorkingProgression ?? null : null,
+        historicalCeiling: typeof data === 'object' && data ? 
+          (data as { historicalCeiling?: string | null }).historicalCeiling ?? null : null,
+        truthSource: typeof data === 'object' && data ? 
+          (data as { truthSource?: string }).truthSource ?? 'unknown' : 'unknown',
+        isConservative: typeof data === 'object' && data ? 
+          (data as { isConservative?: boolean }).isConservative ?? false : false,
+      }
+    }
+  }
+  
+  const authoritativeMultiSkillIntentContract = buildAuthoritativeMultiSkillIntentContract(
+    canonicalProfile,
+    weightedSkillAllocation,
+    multiSkillAllocationContract,
+    sessionArchitectureTruth,
+    cwpForIntentContract,
+    inputs.selectedSkills?.length || 0
+  )
   
   // ==========================================================================
   // [PHASE-MATERIALITY] ROOT CAUSE AUDIT
@@ -12053,6 +12336,24 @@ return explanations.length > 0 ? explanations : undefined
   
   // [PHASE 2 MULTI-SKILL] Store multi-skill allocation contract on the program
   finalProgram.multiSkillAllocationContract = multiSkillAllocationContract
+  
+  // [CHECKLIST 1 OF 5] Store authoritative multi-skill intent contract on the program
+  // This is the SINGLE AUTHORITATIVE SOURCE for skill truth in UI and rebuild paths
+  finalProgram.authoritativeMultiSkillIntentContract = authoritativeMultiSkillIntentContract
+  console.log('[AUTHORITATIVE-MULTI-SKILL-INTENT-CONTRACT-SAVED]', {
+    sourceTruthCount: authoritativeMultiSkillIntentContract.sourceTruthCount,
+    materiallyUsedCount: authoritativeMultiSkillIntentContract.materiallyUsedCount,
+    coverageVerdict: authoritativeMultiSkillIntentContract.coverageVerdict,
+    supportSkillsCount: authoritativeMultiSkillIntentContract.supportSkills.length,
+    deferredSkillsCount: authoritativeMultiSkillIntentContract.deferredSkills.length,
+    skillsLostInPipeline: authoritativeMultiSkillIntentContract.auditTrail.skillsLostInPipeline,
+    skillsNarrowedReason: authoritativeMultiSkillIntentContract.auditTrail.skillsNarrowedReason,
+    verdict: authoritativeMultiSkillIntentContract.coverageVerdict === 'strong'
+      ? 'MULTI_SKILL_INTENT_STRONG'
+      : authoritativeMultiSkillIntentContract.coverageVerdict === 'adequate'
+        ? 'MULTI_SKILL_INTENT_ADEQUATE'
+        : 'MULTI_SKILL_INTENT_WEAK_REVIEW_NEEDED',
+  })
   
   // [DOCTRINE RUNTIME CONTRACT] Store doctrine contract on the program for UI access
   if (doctrineRuntimeContract) {

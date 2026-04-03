@@ -195,6 +195,40 @@ interface TruthExplanation {
       genericRatio: number
     }
   } | null
+  // [CHECKLIST 1 OF 5] Authoritative Multi-Skill Intent Contract
+  authoritativeMultiSkillIntentContract?: {
+    selectedSkills: string[]
+    primarySkill: string | null
+    secondarySkill: string | null
+    supportSkills: string[]
+    deferredSkills: Array<{
+      skill: string
+      reasonCode: string
+      reasonLabel: string
+      details?: string
+    }>
+    materiallyExpressedSkills: string[]
+    reducedThisCycleSkills: string[]
+    skillPriorityOrder: Array<{
+      skill: string
+      role: 'primary' | 'secondary' | 'tertiary' | 'support' | 'deferred'
+      priorityScore: number
+      exposureSessions: number
+      currentWorkingProgression?: string | null
+      historicalCeiling?: string | null
+    }>
+    coverageVerdict: 'strong' | 'adequate' | 'weak'
+    sourceTruthCount: number
+    materiallyUsedCount: number
+    auditTrail: {
+      canonicalSourceSkillCount: number
+      builderInputSkillCount: number
+      weightedAllocationSkillCount: number
+      sessionArchitectureSkillCount: number
+      skillsLostInPipeline: string[]
+      skillsNarrowedReason: string | null
+    }
+  } | null
 }
 
 interface ProgramTruthSummaryProps {
@@ -308,19 +342,36 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
   }
   
   if (selectedSkillsUsed.length > 0) {
-    // [PHASE 2 MULTI-SKILL] Use richer coverage data when available
-    const representedCount = broaderSkillCoverage?.representedSkills.length || representedSkillsInWeek.length
-    const totalSelected = selectedSkillsUsed.length
-    const skillsDisplay = selectedSkillsUsed.slice(0, 3).map(s => s.replace(/_/g, ' ')).join(', ')
+    // [CHECKLIST 1 OF 5] Use authoritative multi-skill intent contract FIRST, then fall back
+    const authContract = truthExplanation.authoritativeMultiSkillIntentContract
+    
+    // Prefer authoritative contract for accurate skill representation
+    const totalSelected = authContract?.sourceTruthCount || selectedSkillsUsed.length
+    const materiallyUsed = authContract?.materiallyUsedCount || 
+      (broaderSkillCoverage?.representedSkills.length || representedSkillsInWeek.length)
+    const deferredCount = authContract?.deferredSkills.length || 
+      broaderSkillCoverage?.deferredSkills.length || 
+      underexpressedSkills.length
+    const supportSkillsCount = authContract?.supportSkills.length || 
+      broaderSkillCoverage?.supportExpressedSkills?.length || 0
+    
+    // Use authoritative skill list if available
+    const skillsToDisplay = authContract?.selectedSkills || selectedSkillsUsed
+    const skillsDisplay = skillsToDisplay.slice(0, 3).map(s => s.replace(/_/g, ' ')).join(', ')
     const hasMore = totalSelected > 3
-    const deferredCount = broaderSkillCoverage?.deferredSkills.length || underexpressedSkills.length
+    
+    // Build skill status display
+    let skillStatusText = ''
+    if (deferredCount > 0) {
+      skillStatusText = ` (${deferredCount} deferred)`
+    } else if (supportSkillsCount > 0) {
+      skillStatusText = ` (+${supportSkillsCount} support)`
+    }
     
     keyDecisions.push({
       label: 'Skills Targeted',
-      value: deferredCount > 0 
-        ? `${skillsDisplay}${hasMore ? ` (+${totalSelected - 3} more)` : ''} (${deferredCount} reduced)`
-        : `${skillsDisplay}${hasMore ? ` (+${totalSelected - 3} more)` : ''}`,
-      type: deferredCount > 0 ? 'warning' : 'success',
+      value: `${skillsDisplay}${hasMore ? ` (+${totalSelected - 3} more)` : ''}${skillStatusText}`,
+      type: deferredCount > 0 ? 'warning' : materiallyUsed >= totalSelected * 0.8 ? 'success' : 'info',
     })
   }
   
@@ -656,13 +707,84 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
               </div>
             </div>
             
-            {/* Skills coverage - [PHASE 2 MULTI-SKILL] Enhanced with deferred reasons */}
+            {/* Skills coverage - [CHECKLIST 1 OF 5] Use authoritative contract first */}
             {selectedSkillsUsed.length > 0 && (
               <div className="space-y-2">
                 <h4 className="text-xs font-medium text-[#8A8A8A] uppercase tracking-wide">
                   Skill Coverage
                 </h4>
-                {broaderSkillCoverage ? (
+                {/* [CHECKLIST 1 OF 5] Display authoritative contract when available */}
+                {truthExplanation.authoritativeMultiSkillIntentContract ? (
+                  <>
+                    {/* Priority order with roles */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {truthExplanation.authoritativeMultiSkillIntentContract.skillPriorityOrder.map((entry) => {
+                        const roleColor = 
+                          entry.role === 'primary' ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                          : entry.role === 'secondary' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                          : entry.role === 'tertiary' ? 'bg-purple-500/10 text-purple-400'
+                          : entry.role === 'support' ? 'bg-indigo-500/10 text-indigo-400'
+                          : 'bg-amber-500/10 text-amber-400'
+                        
+                        const roleLabel = 
+                          entry.role === 'primary' ? ''
+                          : entry.role === 'secondary' ? ''
+                          : entry.role === 'tertiary' ? ' (tertiary)'
+                          : entry.role === 'support' ? ' (support)'
+                          : ' (deferred)'
+                        
+                        return (
+                          <span
+                            key={entry.skill}
+                            className={cn('text-xs px-2 py-0.5 rounded', roleColor)}
+                            title={`${entry.exposureSessions} session(s), priority: ${entry.priorityScore}`}
+                          >
+                            {entry.skill.replace(/_/g, ' ')}{roleLabel}
+                          </span>
+                        )
+                      })}
+                    </div>
+                    
+                    {/* Deferred skills with reasons */}
+                    {truthExplanation.authoritativeMultiSkillIntentContract.deferredSkills.length > 0 && (
+                      <div className="text-xs text-[#6A6A6A] pt-1 space-y-1">
+                        <p className="font-medium text-[#8A8A8A]">Deferred this cycle:</p>
+                        {truthExplanation.authoritativeMultiSkillIntentContract.deferredSkills.map(({ skill, reasonLabel }) => (
+                          <p key={skill} className="pl-2">
+                            {skill.replace(/_/g, ' ')}: {reasonLabel}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Coverage verdict with audit info */}
+                    <div className="text-xs pt-1 flex flex-col gap-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[#6A6A6A]">Coverage:</span>
+                        <span className={cn(
+                          'font-medium',
+                          truthExplanation.authoritativeMultiSkillIntentContract.coverageVerdict === 'strong' && 'text-green-400',
+                          truthExplanation.authoritativeMultiSkillIntentContract.coverageVerdict === 'adequate' && 'text-blue-400',
+                          truthExplanation.authoritativeMultiSkillIntentContract.coverageVerdict === 'weak' && 'text-amber-400'
+                        )}>
+                          {truthExplanation.authoritativeMultiSkillIntentContract.coverageVerdict === 'strong' && 'Strong multi-skill expression'}
+                          {truthExplanation.authoritativeMultiSkillIntentContract.coverageVerdict === 'adequate' && 'Adequate expression'}
+                          {truthExplanation.authoritativeMultiSkillIntentContract.coverageVerdict === 'weak' && 'Focused on primary goals'}
+                        </span>
+                        <span className="text-[#5A5A5A]">
+                          ({truthExplanation.authoritativeMultiSkillIntentContract.materiallyUsedCount}/{truthExplanation.authoritativeMultiSkillIntentContract.sourceTruthCount} skills expressed)
+                        </span>
+                      </div>
+                      
+                      {/* Audit trail if skills were narrowed */}
+                      {truthExplanation.authoritativeMultiSkillIntentContract.auditTrail.skillsNarrowedReason && (
+                        <div className="text-[#5A5A5A] pl-2 italic">
+                          Note: {truthExplanation.authoritativeMultiSkillIntentContract.auditTrail.skillsNarrowedReason.replace(/_/g, ' ')}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : broaderSkillCoverage ? (
                   // Use richer contract data when available
                   <>
                     <div className="flex flex-wrap gap-1.5">

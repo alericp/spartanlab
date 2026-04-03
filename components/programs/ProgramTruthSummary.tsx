@@ -553,20 +553,25 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
   }
   
   // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Add skill/strength profile key decision
-  // Now uses currentWorkingProgressions for accurate current ability display
+  // [CANONICAL-PROFILE-SKILL-CALIBRATION-FIX] Now PREFERS currentWorkingProgressions as authoritative source
+  // Falls back to skillStrengthProfile only for legacy programs that don't have currentWorkingProgressions
   if (skillStrengthProfile && skillStrengthMateriallyApplied) {
     const strengthParts: string[] = []
     const isConservative = currentWorkingProgressions?.anyConservativeStart ?? false
     
-    // Add skill progressions if present (these now reflect CURRENT working level, not historical)
-    if (skillStrengthProfile.plancheProgression) {
-      const plancheLabel = skillStrengthProfile.plancheProgression.replace(/_/g, ' ')
-      // Show conservative indicator if applicable
+    // [CANONICAL-PROFILE-SKILL-CALIBRATION-FIX] Use currentWorkingProgressions as primary truth source
+    // This ensures we display the conservative/downgraded progression, not the historical ceiling
+    const plancheCurrent = currentWorkingProgressions?.planche?.currentWorkingProgression
+    const frontLeverCurrent = currentWorkingProgressions?.frontLever?.currentWorkingProgression
+    
+    // Add skill progressions - prefer currentWorkingProgressions, fall back to skillStrengthProfile
+    if (plancheCurrent || skillStrengthProfile.plancheProgression) {
+      const plancheLabel = (plancheCurrent || skillStrengthProfile.plancheProgression || '').replace(/_/g, ' ')
       const conservativeIndicator = currentWorkingProgressions?.planche?.isConservative ? ' *' : ''
       strengthParts.push(`Planche: ${plancheLabel}${conservativeIndicator}`)
     }
-    if (skillStrengthProfile.frontLeverProgression) {
-      const flLabel = skillStrengthProfile.frontLeverProgression.replace(/_/g, ' ')
+    if (frontLeverCurrent || skillStrengthProfile.frontLeverProgression) {
+      const flLabel = (frontLeverCurrent || skillStrengthProfile.frontLeverProgression || '').replace(/_/g, ' ')
       const conservativeIndicator = currentWorkingProgressions?.frontLever?.isConservative ? ' *' : ''
       strengthParts.push(`FL: ${flLabel}${conservativeIndicator}`)
     }

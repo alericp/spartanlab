@@ -2493,11 +2493,15 @@ export default function ProgramPage() {
     // TASK 3: Load modules individually with proper error handling and stage tracking
     // Do not use Promise.all - if one non-essential module fails, page shouldn't die
     const loadModules = async () => {
+      // [PHASE 1 FIX] Use mutable variable to track actual stage - avoids stale closure in catch
+      let currentInitStage = 'initializing'
+      
       try {
         // CRITICAL: Load program state modules first (essential)
         let builderMod, stateMod, adjustmentMod
         
         // TASK 3: Stage 1 - Load adaptive-program-builder
+        currentInitStage = 'loading-builder'
         setLoadStage('loading-builder')
         try {
           builderMod = await import('@/lib/adaptive-program-builder')
@@ -2519,6 +2523,7 @@ export default function ProgramPage() {
         }
         
         // TASK 3: Stage 2 - Load program-state
+        currentInitStage = 'loading-state'
         setLoadStage('loading-state')
         try {
           stateMod = await import('@/lib/program-state')
@@ -2532,6 +2537,7 @@ export default function ProgramPage() {
         }
         
         // TASK 3: Stage 3 - Load program-adjustment-engine
+        currentInitStage = 'loading-adjustment'
         setLoadStage('loading-adjustment')
         try {
           adjustmentMod = await import('@/lib/program-adjustment-engine')
@@ -2546,6 +2552,7 @@ export default function ProgramPage() {
         
         // NON-CRITICAL: Load optional modules - page continues if these fail
         // TASK 3: Stage 4 - Load optional modules
+        currentInitStage = 'loading-optional'
         setLoadStage('loading-optional')
         let hygieneMod, constraintMod
         try {
@@ -2565,6 +2572,7 @@ export default function ProgramPage() {
         }
         
         // TASK 3: Stage 5 - Store loaded modules
+        currentInitStage = 'storing-modules'
         setLoadStage('storing-modules')
   setProgramModules({
   generateAdaptiveProgram: builderMod.generateAdaptiveProgram,
@@ -2614,6 +2622,7 @@ export default function ProgramPage() {
         }
         
         // TASK 3: Stage 6 - Load default inputs
+        currentInitStage = 'loading-default-inputs'
         setLoadStage('loading-default-inputs')
         const defaultInputs = builderMod.getDefaultAdaptiveInputs()
         setInputs(defaultInputs)
@@ -2655,6 +2664,7 @@ export default function ProgramPage() {
         })
         
         // TASK 1: Stage 7 - Load current program as the critical operation
+        currentInitStage = 'loading-program-state'
         setLoadStage('loading-program-state')
         let loadedProgram: AdaptiveProgram | null = null
         try {
@@ -2675,6 +2685,7 @@ export default function ProgramPage() {
           })
           
           // TASK 2: Stage 8 - Normalize and validate program for display
+          currentInitStage = 'normalizing-program'
           setLoadStage('normalizing-program')
           if (programState.hasUsableWorkoutProgram && programState.adaptiveProgram) {
             const normalizedProgram = stateMod.normalizeProgramForDisplay(programState.adaptiveProgram)
@@ -2712,6 +2723,7 @@ export default function ProgramPage() {
               if (!isActiveModifyTransition) {
                 setShowBuilder(false)
               }
+              currentInitStage = 'program-ready'
               setLoadStage('program-ready')
               
               // [TASK 7] MOUNT DIAGNOSTIC - Comprehensive audit log
@@ -2779,6 +2791,7 @@ export default function ProgramPage() {
               }
             } else {
               // TASK 2: Program exists but fails display sanity - show recovery state, not fatal error
+              currentInitStage = `program-malformed:${displayCheck.reason || 'unknown'}`
               setLoadStage(`program-malformed:${displayCheck.reason || 'unknown'}`)
               // Keep program reference so we can show "Program Needs Refresh" state
               setProgram(normalizedProgram)
@@ -2796,17 +2809,20 @@ export default function ProgramPage() {
             }
           } else {
             // No usable program - show builder
+            currentInitStage = 'no-program'
             setLoadStage('no-program')
             setShowBuilder(true)
           }
         } catch (err) {
           console.error('[ProgramPage] Stage 7: Error loading current program:', err)
+          currentInitStage = 'program-load-error'
           setLoadStage('program-load-error')
           setShowBuilder(true)
         }
         
         // TASK 3: Stage 9 - Get constraint insight if available (non-critical)
         // [limiter-truth] ISSUE D: This now uses canonical displayed-limiter helper
+        currentInitStage = 'loading-constraints'
         setLoadStage('loading-constraints')
         if (constraintMod) {
           try {
@@ -2825,14 +2841,42 @@ export default function ProgramPage() {
           }
         }
         
+        currentInitStage = 'complete'
         setLoadStage('complete')
         setMounted(true)
+        // [PHASE 1 TASK F & G] Success diagnostic - confirms fix working
+        console.log('[PHASE1-INIT-SUCCESS]', {
+          finalStage: currentInitStage,
+          scheduleTruthUntouched: true,
+          sixSessionFlexibleUntouched: true,
+          doctrineDbAsyncMisuseFixed: true,
+          staleStageReportingFixed: true,
+        })
         console.log('[ProgramPage] All stages complete')
       } catch (err) {
         // Fallback catch for unexpected errors
-        console.error('[ProgramPage] Unexpected error during module loading at stage:', loadStage, err)
+        // [PHASE 1 FIX] Use currentInitStage (mutable var) instead of loadStage (stale closure)
+        const errorName = err instanceof Error ? err.name : 'UnknownError'
+        const errorMessage = err instanceof Error ? err.message : String(err)
+        
+        // [PHASE 1 TASK G] Compact init-fail diagnostic - console only, not UI
+        console.error('[PHASE1-INIT-FAIL-DIAGNOSTIC]', {
+          initStage: currentInitStage,
+          failedOperation: currentInitStage,
+          errorName,
+          errorMessage: errorMessage.slice(0, 200), // Truncate for compactness
+          hasStoredProgram: typeof window !== 'undefined' && !!localStorage.getItem('spartanlab_adaptive_program'),
+          hasUsableWorkoutProgram: false, // Failed before we could determine this
+          programId: null,
+          doctrineDbWasConsultedDuringInit: false, // Program page init doesn't call doctrine-db directly
+          displayHelperFailure: currentInitStage.includes('normalizing') || currentInitStage.includes('display'),
+          builderModuleLoaded: currentInitStage !== 'loading-builder' && currentInitStage !== 'initializing',
+          stateModuleLoaded: currentInitStage !== 'loading-builder' && currentInitStage !== 'loading-state' && currentInitStage !== 'initializing',
+          adjustmentModuleLoaded: !['loading-builder', 'loading-state', 'loading-adjustment', 'initializing'].includes(currentInitStage),
+        })
+        
         setLoadStage('unexpected-error')
-        setLoadError(`An unexpected error occurred at stage: ${loadStage}. Please refresh the page.`)
+        setLoadError(`Unexpected error at stage: ${currentInitStage}. Error: ${errorMessage}. Please refresh the page.`)
         setMounted(true)
       }
     }

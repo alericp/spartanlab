@@ -23,6 +23,8 @@ import {
   clearRestTimerState,
   type RestTimerState,
 } from '@/lib/rest-intelligence'
+// [EXECUTION-TRUTH-FIX] Timer alert for completion
+import { playTimerCompletionAlert } from '@/lib/workout-execution-truth'
 
 // =============================================================================
 // TYPES
@@ -102,6 +104,8 @@ export function InlineRestTimer({
             setIsComplete(true)
             setIsRunning(false)
             clearRestTimerState()
+            // [EXECUTION-TRUTH-FIX] Play timer completion alert
+            playTimerCompletionAlert()
           }
           return newTime
         })

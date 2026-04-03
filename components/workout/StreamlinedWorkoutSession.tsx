@@ -67,6 +67,21 @@ import type { WorkoutReasoningSummary } from '@/lib/readiness/canonical-readines
 import { WhyThisWorkout, ExerciseReasonBubble, WorkoutFocusBadge } from '@/components/workout/WhyThisWorkout'
 import { WarmUpInsight, ProgressionReasoning, OverrideProtectionInsight } from '@/components/coaching/CoachingInsights'
 import { getExerciseSelectionInsight, getSkillCarryoverInsight } from '@/lib/coaching/insight-generation'
+// [EXECUTION-TRUTH-FIX] Authoritative runtime contract
+import {
+  buildSessionRuntimeTruth,
+  buildExerciseRuntimeTruth,
+  getCalibrationMessage,
+  playTimerCompletionAlert,
+  createEmptySessionNotes,
+  updateExerciseNote,
+  generateAdaptiveCoachingNote,
+  type SessionRuntimeTruth,
+  type ExerciseRuntimeTruth,
+  type SessionNotes,
+  type ExerciseContextFlag,
+  AVAILABLE_CONTEXT_FLAGS,
+} from '@/lib/workout-execution-truth'
 
 // =============================================================================
 // TYPES
@@ -464,6 +479,17 @@ export function StreamlinedWorkoutSession({
   const [adaptiveRecommendation, setAdaptiveRecommendation] = useState<AdaptiveRecommendationResult | null>(null)
   const [showAdaptiveModal, setShowAdaptiveModal] = useState(false)
   
+  // [EXECUTION-TRUTH-FIX] New state for enhanced workout experience
+  const [sessionNotes, setSessionNotes] = useState<SessionNotes>(createEmptySessionNotes())
+  const [showNotesModal, setShowNotesModal] = useState(false)
+  const [currentNoteFlags, setCurrentNoteFlags] = useState<ExerciseContextFlag['type'][]>([])
+  const [currentNoteText, setCurrentNoteText] = useState('')
+  const [isReviewingPreviousExercise, setIsReviewingPreviousExercise] = useState(false)
+  const [reviewingExerciseIndex, setReviewingExerciseIndex] = useState<number | null>(null)
+  const [showInterExerciseRest, setShowInterExerciseRest] = useState(false)
+  const [interExerciseRestSeconds, setInterExerciseRestSeconds] = useState(60)
+  const [coachingNote, setCoachingNote] = useState<string | null>(null)
+  
   // Timer
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   
@@ -507,6 +533,30 @@ export function StreamlinedWorkoutSession({
       })
     }
   }, [safeCurrentExercise])
+  
+  // [EXECUTION-TRUTH-FIX] Build authoritative session runtime truth
+  const sessionRuntimeTruth = useMemo<SessionRuntimeTruth>(() => {
+    return buildSessionRuntimeTruth(safeSession, {
+      programId: null, // Will be set from context if available
+      workoutsCompleted: 0, // Will be enhanced with history lookup
+      sessionIndex: 0,
+    })
+  }, [safeSession])
+  
+  // [EXECUTION-TRUTH-FIX] Build per-exercise runtime truth
+  const exerciseRuntimeTruth = useMemo<ExerciseRuntimeTruth>(() => {
+    const overrideState = state.exerciseOverrides[safeExerciseIndex]
+    return buildExerciseRuntimeTruth(currentExercise, safeExerciseIndex, overrideState ? {
+      isOverridden: !!(overrideState.isReplaced || overrideState.isProgressionAdjusted || overrideState.isSkipped),
+      overrideType: overrideState.isReplaced ? 'replaced' : overrideState.isProgressionAdjusted ? 'progression_adjusted' : overrideState.isSkipped ? 'skipped' : null,
+      currentName: overrideState.currentName,
+    } : undefined)
+  }, [currentExercise, safeExerciseIndex, state.exerciseOverrides])
+  
+  // [EXECUTION-TRUTH-FIX] Calibration message for first workouts
+  const calibrationMessage = useMemo(() => {
+    return getCalibrationMessage(sessionRuntimeTruth)
+  }, [sessionRuntimeTruth])
   
   // Repair index if out of bounds (happens on next render cycle)
   useEffect(() => {
@@ -702,15 +752,39 @@ export function StreamlinedWorkoutSession({
       clearSessionStorage()
       clearRestTimerState()
     } else if (isLastSet) {
-      // Move to next exercise - no rest timer between exercises
-      setState(prev => ({
-        ...prev,
-        status: 'active', // Go directly to next exercise, no rest
-        completedSets: newCompletedSets,
-        currentExerciseIndex: prev.currentExerciseIndex + 1,
-        currentSetNumber: 1,
-        lastSetRPE: lastRPE,
-      }))
+      // [EXECUTION-TRUTH-FIX] Move to next exercise with optional inter-exercise rest
+      const nextExerciseIndex = state.currentExerciseIndex + 1
+      const nextExercise = exercises[nextExerciseIndex]
+      
+      // Calculate inter-exercise rest based on exercise runtime truth
+      const interRestSeconds = exerciseRuntimeTruth.restSecondsInterExercise
+      
+      // Show inter-exercise rest if enabled and not warmup/mobility
+      const shouldShowInterRest = sessionRuntimeTruth.supportsBetweenExerciseRest && 
+        exerciseRuntimeTruth.category !== 'warmup' && 
+        exerciseRuntimeTruth.category !== 'mobility' &&
+        interRestSeconds >= 30
+      
+      if (shouldShowInterRest) {
+        // Show inter-exercise rest modal/state
+        setInterExerciseRestSeconds(interRestSeconds)
+        setShowInterExerciseRest(true)
+        setState(prev => ({
+          ...prev,
+          completedSets: newCompletedSets,
+          lastSetRPE: lastRPE,
+        }))
+      } else {
+        // Skip to next exercise immediately (warmup/mobility transitions)
+        setState(prev => ({
+          ...prev,
+          status: 'active',
+          completedSets: newCompletedSets,
+          currentExerciseIndex: nextExerciseIndex,
+          currentSetNumber: 1,
+          lastSetRPE: lastRPE,
+        }))
+      }
     } else {
       // Move to next set with rest
       // [workout-progress] Increment set number but add safety bounds
@@ -764,10 +838,88 @@ export function StreamlinedWorkoutSession({
   // Rest complete / skip rest
   const handleRestComplete = useCallback(() => {
     clearRestTimerState()
+    // [EXECUTION-TRUTH-FIX] Play timer completion alert
+    playTimerCompletionAlert()
     setState(prev => ({
       ...prev,
       status: 'active',
     }))
+  }, [])
+  
+  // [EXECUTION-TRUTH-FIX] Handle inter-exercise rest completion
+  const handleInterExerciseRestComplete = useCallback(() => {
+    setShowInterExerciseRest(false)
+    playTimerCompletionAlert()
+    setState(prev => ({
+      ...prev,
+      status: 'active',
+      currentExerciseIndex: prev.currentExerciseIndex + 1,
+      currentSetNumber: 1,
+    }))
+    // Reset inputs for new exercise
+    setSelectedRPE(null)
+    setRepsValue(getTargetValue())
+    setHoldValue(getTargetValue())
+    setBandUsed('none')
+  }, [getTargetValue])
+  
+  // [EXECUTION-TRUTH-FIX] Handle skip inter-exercise rest
+  const handleSkipInterExerciseRest = useCallback(() => {
+    setShowInterExerciseRest(false)
+    setState(prev => ({
+      ...prev,
+      status: 'active',
+      currentExerciseIndex: prev.currentExerciseIndex + 1,
+      currentSetNumber: 1,
+    }))
+    setSelectedRPE(null)
+    setRepsValue(getTargetValue())
+    setHoldValue(getTargetValue())
+    setBandUsed('none')
+  }, [getTargetValue])
+  
+  // [EXECUTION-TRUTH-FIX] Back navigation - review previous exercise
+  const handleReviewPreviousExercise = useCallback(() => {
+    if (state.currentExerciseIndex <= 0) return
+    const prevIndex = state.currentExerciseIndex - 1
+    setReviewingExerciseIndex(prevIndex)
+    setIsReviewingPreviousExercise(true)
+  }, [state.currentExerciseIndex])
+  
+  // [EXECUTION-TRUTH-FIX] Close review and return to current exercise
+  const handleCloseReview = useCallback(() => {
+    setIsReviewingPreviousExercise(false)
+    setReviewingExerciseIndex(null)
+  }, [])
+  
+  // [EXECUTION-TRUTH-FIX] Get completed sets for a specific exercise
+  const getCompletedSetsForExercise = useCallback((exerciseIndex: number) => {
+    return state.completedSets.filter(s => s.exerciseIndex === exerciseIndex)
+  }, [state.completedSets])
+  
+  // [EXECUTION-TRUTH-FIX] Notes capture handlers
+  const handleOpenNotesModal = useCallback(() => {
+    // Load existing notes for current exercise
+    const existingNote = sessionNotes.exerciseNotes[safeExerciseIndex]
+    if (existingNote) {
+      setCurrentNoteFlags(existingNote.flags)
+      setCurrentNoteText(existingNote.freeText)
+    } else {
+      setCurrentNoteFlags([])
+      setCurrentNoteText('')
+    }
+    setShowNotesModal(true)
+  }, [sessionNotes.exerciseNotes, safeExerciseIndex])
+  
+  const handleSaveNote = useCallback(() => {
+    setSessionNotes(prev => updateExerciseNote(prev, safeExerciseIndex, currentNoteFlags, currentNoteText))
+    setShowNotesModal(false)
+  }, [safeExerciseIndex, currentNoteFlags, currentNoteText])
+  
+  const handleToggleNoteFlag = useCallback((flag: ExerciseContextFlag['type']) => {
+    setCurrentNoteFlags(prev => 
+      prev.includes(flag) ? prev.filter(f => f !== flag) : [...prev, flag]
+    )
   }, [])
   
   // Skip exercise
@@ -1078,6 +1230,13 @@ export function StreamlinedWorkoutSession({
         generatedWorkoutId: sessionId,
         keyPerformance,
         notes: state.workoutNotes || undefined,
+        // [EXECUTION-TRUTH-FIX] Include exercise-level notes and flags
+        exerciseNotes: Object.entries(sessionNotes.exerciseNotes).map(([idx, note]) => ({
+          exerciseIndex: parseInt(idx),
+          exerciseName: exercises[parseInt(idx)]?.name || 'Unknown',
+          flags: note.flags,
+          freeText: note.freeText,
+        })),
         // FEEDBACK LOOP: Exercise-level outcomes for progression engine
         exercises: exerciseOutcomes,
         // FEEDBACK LOOP: Mark demo sessions to exclude from adaptive logic
@@ -1539,9 +1698,90 @@ export function StreamlinedWorkoutSession({
               })()}
             />
           </div>
-        </div>
-      )
+    </div>
+  )
+}
+
+// =============================================================================
+// [EXECUTION-TRUTH-FIX] INTER-EXERCISE REST COUNTDOWN COMPONENT
+// =============================================================================
+
+function InterExerciseRestCountdown({ 
+  initialSeconds, 
+  onComplete 
+}: { 
+  initialSeconds: number
+  onComplete: () => void 
+}) {
+  const [timeRemaining, setTimeRemaining] = useState(initialSeconds)
+  const [isComplete, setIsComplete] = useState(false)
+  
+  useEffect(() => {
+    if (timeRemaining <= 0) {
+      setIsComplete(true)
+      onComplete()
+      return
     }
+    
+    const timer = setInterval(() => {
+      setTimeRemaining(prev => {
+        if (prev <= 1) {
+          clearInterval(timer)
+          setIsComplete(true)
+          // Call onComplete on next tick to avoid state update during render
+          setTimeout(onComplete, 0)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    
+    return () => clearInterval(timer)
+  }, [initialSeconds]) // Only depend on initialSeconds, not onComplete
+  
+  const progress = ((initialSeconds - timeRemaining) / initialSeconds) * 100
+  
+  return (
+    <div className="text-center">
+      {/* Circular progress indicator */}
+      <div className="relative w-24 h-24 mx-auto mb-3">
+        <svg className="w-full h-full transform -rotate-90">
+          <circle
+            cx="48"
+            cy="48"
+            r="44"
+            fill="none"
+            stroke="#2B313A"
+            strokeWidth="6"
+          />
+          <circle
+            cx="48"
+            cy="48"
+            r="44"
+            fill="none"
+            stroke={isComplete ? '#22c55e' : '#4F6D8A'}
+            strokeWidth="6"
+            strokeDasharray={`${2 * Math.PI * 44}`}
+            strokeDashoffset={`${2 * Math.PI * 44 * (1 - progress / 100)}`}
+            className="transition-all duration-1000"
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className={`text-2xl font-bold tabular-nums ${
+            isComplete ? 'text-green-500' : 'text-[#E6E9EF]'
+          }`}>
+            {isComplete ? '✓' : `${Math.floor(timeRemaining / 60)}:${(timeRemaining % 60).toString().padStart(2, '0')}`}
+          </span>
+        </div>
+      </div>
+      
+      {isComplete && (
+        <p className="text-sm text-green-500 font-medium">Ready!</p>
+      )}
+    </div>
+  )
+}
+
     
     // After saving - show confirmation with feedback
     const isPartialSession = stats.completedSets < stats.totalSets * 0.5
@@ -1774,6 +2014,21 @@ export function StreamlinedWorkoutSession({
       <div className="flex-1 px-4 py-3 sm:p-5">
       <div className="max-w-lg mx-auto space-y-3">
         
+        {/* [EXECUTION-TRUTH-FIX] Calibration Banner for first workouts */}
+        {calibrationMessage.show && (
+          <div className="bg-[#4F6D8A]/10 border border-[#4F6D8A]/20 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <Lightbulb className="w-4 h-4 text-[#4F6D8A] shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-medium text-[#4F6D8A] mb-0.5">{calibrationMessage.title}</p>
+                <p className="text-[11px] text-[#A4ACB8] leading-relaxed">
+                  {calibrationMessage.description}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* Current Exercise - Compact Card */}
         <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
           {/* Header row */}
@@ -1966,22 +2221,52 @@ export function StreamlinedWorkoutSession({
         
         {/* Secondary Actions */}
         <div className="flex items-center justify-between pt-2">
-          <Button
-            variant="ghost"
-            onClick={handleSkipExercise}
-            className="text-[#6B7280] hover:text-[#A4ACB8] text-sm h-9 px-3"
-          >
-            <SkipForward className="w-3.5 h-3.5 mr-1.5" />
-            Skip
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={handleRequestExit}
-            className="text-[#6B7280] hover:text-[#A4ACB8] text-sm h-9 px-3"
-          >
-            <X className="w-3.5 h-3.5 mr-1.5" />
-            End Early
-          </Button>
+          <div className="flex items-center gap-1">
+            {/* [EXECUTION-TRUTH-FIX] Back navigation button */}
+            {sessionRuntimeTruth.supportsBackNavigation && state.currentExerciseIndex > 0 && (
+              <Button
+                variant="ghost"
+                onClick={handleReviewPreviousExercise}
+                className="text-[#6B7280] hover:text-[#A4ACB8] text-sm h-9 px-3"
+              >
+                <ChevronUp className="w-3.5 h-3.5 mr-1" />
+                Back
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              onClick={handleSkipExercise}
+              className="text-[#6B7280] hover:text-[#A4ACB8] text-sm h-9 px-3"
+            >
+              <SkipForward className="w-3.5 h-3.5 mr-1.5" />
+              Skip
+            </Button>
+          </div>
+          <div className="flex items-center gap-1">
+            {/* [EXECUTION-TRUTH-FIX] Notes capture button */}
+            {sessionRuntimeTruth.supportsNotesCapture && (
+              <Button
+                variant="ghost"
+                onClick={handleOpenNotesModal}
+                className={`text-sm h-9 px-3 ${
+                  sessionNotes.exerciseNotes[safeExerciseIndex]
+                    ? 'text-[#4F6D8A] hover:text-[#6B8CAE]'
+                    : 'text-[#6B7280] hover:text-[#A4ACB8]'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
+                Note
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              onClick={handleRequestExit}
+              className="text-[#6B7280] hover:text-[#A4ACB8] text-sm h-9 px-3"
+            >
+              <X className="w-3.5 h-3.5 mr-1.5" />
+              End
+            </Button>
+          </div>
         </div>
       </div>
       </div>
@@ -2053,6 +2338,187 @@ export function StreamlinedWorkoutSession({
             <p className="text-xs text-center text-[#6B7280]">
               Based on your performance this set
             </p>
+          </div>
+        </div>
+      )}
+      
+      {/* [EXECUTION-TRUTH-FIX] Inter-Exercise Rest Modal */}
+      {showInterExerciseRest && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-[#1A1F26] border-t sm:border border-[#2B313A] sm:rounded-xl p-5 space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0">
+            <div className="text-center">
+              <Badge className="bg-[#4F6D8A]/20 text-[#4F6D8A] border-0 mb-3">
+                Rest Before Next Exercise
+              </Badge>
+              <h3 className="text-lg font-semibold text-[#E6E9EF] mb-1">
+                {exercises[state.currentExerciseIndex + 1]?.name || 'Next Exercise'}
+              </h3>
+              <p className="text-sm text-[#A4ACB8]">
+                {Math.floor(interExerciseRestSeconds / 60)}:{(interExerciseRestSeconds % 60).toString().padStart(2, '0')} rest before starting
+              </p>
+            </div>
+            
+            {/* Simple countdown display */}
+            <div className="py-4">
+              <InterExerciseRestCountdown
+                initialSeconds={interExerciseRestSeconds}
+                onComplete={handleInterExerciseRestComplete}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Button
+                onClick={handleInterExerciseRestComplete}
+                className="w-full h-12 bg-[#C1121F] hover:bg-[#A30F1A] text-white font-medium"
+              >
+                Ready - Start Next Exercise
+              </Button>
+              
+              <Button
+                variant="ghost"
+                onClick={handleSkipInterExerciseRest}
+                className="w-full h-10 text-[#6B7280] hover:text-[#A4ACB8]"
+              >
+                Skip Rest
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* [EXECUTION-TRUTH-FIX] Notes Capture Modal */}
+      {showNotesModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-[#1A1F26] border-t sm:border border-[#2B313A] sm:rounded-xl p-5 space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-lg font-semibold text-[#E6E9EF]">Add Note</h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowNotesModal(false)}
+                className="h-8 w-8 text-[#6B7280]"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            {/* Quick flags */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-[#6B7280] uppercase tracking-wide">Quick Flags</p>
+              <div className="flex flex-wrap gap-2">
+                {AVAILABLE_CONTEXT_FLAGS.map(flag => (
+                  <button
+                    key={flag.type}
+                    onClick={() => handleToggleNoteFlag(flag.type)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                      currentNoteFlags.includes(flag.type)
+                        ? 'bg-[#C1121F] text-white'
+                        : 'bg-[#2B313A] text-[#A4ACB8] hover:bg-[#3A4553]'
+                    }`}
+                  >
+                    {flag.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* Free text note */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-[#6B7280] uppercase tracking-wide">Note (optional)</p>
+              <Textarea
+                value={currentNoteText}
+                onChange={(e) => setCurrentNoteText(e.target.value)}
+                placeholder="Add any additional notes..."
+                className="bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] resize-none h-20"
+              />
+            </div>
+            
+            <Button
+              onClick={handleSaveNote}
+              className="w-full h-12 bg-[#4F6D8A] hover:bg-[#3D5A75] text-white font-medium"
+            >
+              Save Note
+            </Button>
+          </div>
+        </div>
+      )}
+      
+      {/* [EXECUTION-TRUTH-FIX] Previous Exercise Review Modal */}
+      {isReviewingPreviousExercise && reviewingExerciseIndex !== null && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-[#1A1F26] border-t sm:border border-[#2B313A] sm:rounded-xl p-5 space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 max-h-[70vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-lg font-semibold text-[#E6E9EF]">
+                Review: {exercises[reviewingExerciseIndex]?.name || 'Previous Exercise'}
+              </h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleCloseReview}
+                className="h-8 w-8 text-[#6B7280]"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            {/* Completed sets summary */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-[#6B7280] uppercase tracking-wide">Completed Sets</p>
+              {getCompletedSetsForExercise(reviewingExerciseIndex).length > 0 ? (
+                <div className="space-y-2">
+                  {getCompletedSetsForExercise(reviewingExerciseIndex).map((set, idx) => (
+                    <div key={idx} className="flex items-center justify-between bg-[#0F1115] rounded-lg p-3">
+                      <span className="text-[#A4ACB8] text-sm">Set {set.setNumber}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[#E6E9EF] font-medium">
+                          {set.holdSeconds ? `${set.holdSeconds}s` : `${set.actualReps} reps`}
+                        </span>
+                        <Badge variant="outline" className="text-[10px] border-[#3A4553]">
+                          RPE {set.actualRPE}
+                        </Badge>
+                        {set.bandUsed && set.bandUsed !== 'none' && (
+                          <Badge className="text-[10px] bg-[#4F6D8A]/20 text-[#4F6D8A] border-0">
+                            {set.bandUsed}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[#6B7280] text-sm py-4 text-center">No sets logged yet</p>
+              )}
+            </div>
+            
+            {/* Notes for this exercise */}
+            {sessionNotes.exerciseNotes[reviewingExerciseIndex] && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-[#6B7280] uppercase tracking-wide">Notes</p>
+                <div className="bg-[#0F1115] rounded-lg p-3">
+                  {sessionNotes.exerciseNotes[reviewingExerciseIndex].flags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {sessionNotes.exerciseNotes[reviewingExerciseIndex].flags.map(flag => (
+                        <Badge key={flag} className="text-[10px] bg-[#C1121F]/20 text-[#C1121F] border-0">
+                          {AVAILABLE_CONTEXT_FLAGS.find(f => f.type === flag)?.label || flag}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  {sessionNotes.exerciseNotes[reviewingExerciseIndex].freeText && (
+                    <p className="text-[#A4ACB8] text-sm">
+                      {sessionNotes.exerciseNotes[reviewingExerciseIndex].freeText}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            <Button
+              onClick={handleCloseReview}
+              className="w-full h-12 bg-[#2B313A] hover:bg-[#3A4553] text-[#E6E9EF] font-medium"
+            >
+              Return to Current Exercise
+            </Button>
           </div>
         </div>
       )}

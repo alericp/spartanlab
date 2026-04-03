@@ -751,80 +751,86 @@ export function StreamlinedWorkoutSession({
     | 'skip_rest'
   
   /**
-   * Unified advancement function that computes next state from CURRENT state snapshot.
-   * This eliminates stale closure bugs by reading exercises array directly.
+   * [LIVE-WORKOUT-CORRIDOR] Unified advancement function that uses FUNCTIONAL STATE UPDATES
+   * to eliminate stale closure bugs. All state reads happen inside setState callback.
    */
   const advanceToNextExercise = useCallback((reason: AdvancementReason) => {
-    console.log('[LIVE-WORKOUT-CORRIDOR] advanceToNextExercise called', {
-      reason,
-      currentExerciseIndex: state.currentExerciseIndex,
-      totalExercises: exercises.length,
-      source: reason,
-    })
-    
-    const nextIndex = state.currentExerciseIndex + 1
-    const isLastExercise = nextIndex >= exercises.length
-    
-    if (isLastExercise) {
-      // Complete workout
-      console.log('[LIVE-WORKOUT-CORRIDOR] workout completed via', reason)
-      setState(prev => ({
-        ...prev,
-        status: 'completed',
-      }))
-      clearSessionStorage()
-      clearRestTimerState()
-      return
-    }
-    
-    // Get the NEXT exercise to compute correct initial values
-    const nextExercise = exercises[nextIndex]
-    const nextRepsOrTime = nextExercise?.repsOrTime || ''
-    const nextTargetMatch = nextRepsOrTime.match(/(\d+)/)
-    const nextTargetValue = nextTargetMatch ? parseInt(nextTargetMatch[1], 10) : 5
-    
-    // Get recommended band for next exercise
-    const nextNote = nextExercise?.note || ''
-    const nextNoteLower = safeLower(nextNote)
-    let nextBand: ResistanceBandColor | 'none' = 'none'
-    for (const band of ALL_BAND_COLORS) {
-      if (nextNoteLower.includes(band)) {
-        nextBand = band
-        break
+    // Use functional update to get FRESH state values, avoiding stale closures
+    setState(prev => {
+      const currentIndex = prev.currentExerciseIndex
+      const nextIndex = currentIndex + 1
+      const isLastExercise = nextIndex >= exercises.length
+      
+      console.log('[LIVE-WORKOUT-CORRIDOR] advanceToNextExercise called', {
+        reason,
+        currentExerciseIndex: currentIndex,
+        nextIndex,
+        totalExercises: exercises.length,
+        isLastExercise,
+      })
+      
+      if (isLastExercise) {
+        // Complete workout
+        console.log('[LIVE-WORKOUT-CORRIDOR] workout completed via', reason)
+        // Schedule cleanup after state update
+        setTimeout(() => {
+          clearSessionStorage()
+          clearRestTimerState()
+        }, 0)
+        return {
+          ...prev,
+          status: 'completed' as const,
+        }
       }
-    }
-    // Prefer executionTruth band if available
-    const truthBand = nextExercise?.executionTruth?.recommendedBandColor
-    if (truthBand) {
-      nextBand = truthBand
-    }
-    
-    console.log('[LIVE-WORKOUT-CORRIDOR] advancing to next exercise', {
-      reason,
-      fromIndex: state.currentExerciseIndex,
-      toIndex: nextIndex,
-      nextExerciseName: nextExercise?.name,
-      nextTargetValue,
-      nextBand,
+      
+      // Get the NEXT exercise to compute correct initial values
+      const nextExercise = exercises[nextIndex]
+      const nextRepsOrTime = nextExercise?.repsOrTime || ''
+      const nextTargetMatch = nextRepsOrTime.match(/(\d+)/)
+      const nextTargetValue = nextTargetMatch ? parseInt(nextTargetMatch[1], 10) : 5
+      
+      // Get recommended band for next exercise
+      const nextNote = nextExercise?.note || ''
+      const nextNoteLower = safeLower(nextNote)
+      let nextBand: ResistanceBandColor | 'none' = 'none'
+      for (const band of ALL_BAND_COLORS) {
+        if (nextNoteLower.includes(band)) {
+          nextBand = band
+          break
+        }
+      }
+      // Prefer executionTruth band if available
+      const truthBand = nextExercise?.executionTruth?.recommendedBandColor
+      if (truthBand) {
+        nextBand = truthBand
+      }
+      
+      console.log('[LIVE-WORKOUT-CORRIDOR] advancing to next exercise', {
+        reason,
+        fromIndex: currentIndex,
+        toIndex: nextIndex,
+        nextExerciseName: nextExercise?.name,
+        nextTargetValue,
+        nextBand,
+      })
+      
+      // Schedule input resets after state update to use fresh values
+      setTimeout(() => {
+        setSelectedRPE(null)
+        setRepsValue(nextTargetValue)
+        setHoldValue(nextTargetValue)
+        setBandUsed(nextBand)
+        setShowInterExerciseRest(false)
+      }, 0)
+      
+      return {
+        ...prev,
+        status: 'active' as const,
+        currentExerciseIndex: nextIndex,
+        currentSetNumber: 1,
+      }
     })
-    
-    // Advance state
-    setState(prev => ({
-      ...prev,
-      status: 'active',
-      currentExerciseIndex: nextIndex,
-      currentSetNumber: 1,
-    }))
-    
-    // Reset inputs for new exercise with CORRECT values
-    setSelectedRPE(null)
-    setRepsValue(nextTargetValue)
-    setHoldValue(nextTargetValue)
-    setBandUsed(nextBand)
-    
-    // Clear inter-exercise rest state
-    setShowInterExerciseRest(false)
-  }, [state.currentExerciseIndex, exercises])
+  }, [exercises]) // Only depends on exercises array, not state
   
   // Auto-save on state changes - skip for demo sessions
   // [LIVE-SESSION-LOCK] Include structure signature in saved state

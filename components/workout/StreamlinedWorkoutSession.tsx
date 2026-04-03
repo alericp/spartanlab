@@ -145,29 +145,79 @@ export interface SavedSessionInfo {
 // Storage key for auto-save
 const STORAGE_KEY = 'spartanlab_workout_session'
 
+// [LIVE-SESSION-LOCK] Version stamp for execution proof
+const STREAMLINED_WORKOUT_VERSION = 'phase_live_session_lock_v2'
+
+// =============================================================================
+// SESSION STRUCTURE SIGNATURE - PREVENTS STALE RESTORE POISONING
+// =============================================================================
+
+/**
+ * Generates a deterministic signature for session structure.
+ * Used to detect when saved state belongs to a structurally different session.
+ */
+function generateSessionStructureSignature(session: { 
+  dayNumber?: number
+  dayLabel?: string
+  exercises?: Array<{ id?: string; name?: string; sets?: number }>
+}): string {
+  const dayNumber = session.dayNumber ?? 0
+  const dayLabel = session.dayLabel ?? ''
+  const exerciseCount = session.exercises?.length ?? 0
+  
+  // Build ordered exercise identity string
+  const exerciseIdentity = (session.exercises ?? [])
+    .map((ex, idx) => `${idx}:${ex.id || ex.name || 'unknown'}:${ex.sets ?? 0}`)
+    .join('|')
+  
+  // Create deterministic signature
+  return `${dayNumber}:${dayLabel}:${exerciseCount}:${exerciseIdentity}`
+}
+
 // =============================================================================
 // AUTO-SAVE HELPERS
 // =============================================================================
 
-function saveSessionToStorage(state: WorkoutSessionState, sessionId: string) {
+function saveSessionToStorage(state: WorkoutSessionState, sessionId: string, structureSignature?: string) {
   if (typeof window === 'undefined') return
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ 
       ...state, 
       sessionId,
+      structureSignature, // [LIVE-SESSION-LOCK] Include structure signature
       savedAt: Date.now() 
     }))
   } catch {}
 }
 
-function loadSessionFromStorage(sessionId: string, exerciseCount?: number): WorkoutSessionState | null {
+function loadSessionFromStorage(
+  sessionId: string, 
+  exerciseCount?: number,
+  currentStructureSignature?: string
+): WorkoutSessionState | null {
   if (typeof window === 'undefined') return null
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (!saved) return null
     const data = JSON.parse(saved)
+    
     // Only restore if same session and less than 4 hours old
     if (data.sessionId === sessionId && Date.now() - data.savedAt < 4 * 60 * 60 * 1000) {
+      
+      // [LIVE-SESSION-LOCK] CRITICAL: Validate structure signature match
+      // This prevents restoring state from a session with same dayLabel but different exercises
+      if (currentStructureSignature && data.structureSignature) {
+        if (data.structureSignature !== currentStructureSignature) {
+          console.log('[workout-restore] Discarding saved state: structure signature mismatch', {
+            savedSignature: data.structureSignature,
+            currentSignature: currentStructureSignature,
+            reason: 'session_structure_changed',
+          })
+          try { localStorage.removeItem(STORAGE_KEY) } catch {}
+          return null
+        }
+      }
+      
       // Validate the saved data has required structure
       if (
         typeof data.status === 'string' &&
@@ -177,7 +227,6 @@ function loadSessionFromStorage(sessionId: string, exerciseCount?: number): Work
       ) {
         // If we know the exercise count, validate index is within bounds
         if (exerciseCount !== undefined && data.currentExerciseIndex >= exerciseCount) {
-          // [LIVE-WORKOUT-CRASH-FIX] Index is out of bounds for current session - discard saved state
           console.log('[workout-restore] Discarding saved state: currentExerciseIndex out of bounds', {
             savedIndex: data.currentExerciseIndex,
             exerciseCount,
@@ -186,19 +235,26 @@ function loadSessionFromStorage(sessionId: string, exerciseCount?: number): Work
           return null
         }
         
-        // [LIVE-WORKOUT-CRASH-FIX] Filter out completedSets that reference invalid exercise indices
+        // [LIVE-SESSION-LOCK] Filter completedSets with stricter validation
         let completedSets = data.completedSets
         if (exerciseCount !== undefined) {
           const originalCount = completedSets.length
-          completedSets = completedSets.filter((set: { exerciseIndex?: number }) => 
-            typeof set.exerciseIndex === 'number' && 
-            set.exerciseIndex >= 0 && 
-            set.exerciseIndex < exerciseCount
-          )
+          completedSets = completedSets.filter((set: { exerciseIndex?: number; setNumber?: number }) => {
+            // Validate exerciseIndex is in bounds
+            if (typeof set.exerciseIndex !== 'number' || set.exerciseIndex < 0 || set.exerciseIndex >= exerciseCount) {
+              return false
+            }
+            // Validate setNumber is positive
+            if (typeof set.setNumber !== 'number' || set.setNumber < 1) {
+              return false
+            }
+            return true
+          })
           if (completedSets.length !== originalCount) {
-            console.log('[workout-restore] Filtered invalid completedSets references', {
+            console.log('[workout-restore] Filtered invalid completedSets', {
               originalCount,
               filteredCount: completedSets.length,
+              reason: 'invalid_references',
             })
           }
         }
@@ -432,6 +488,12 @@ export function StreamlinedWorkoutSession({
   // Generate unique sessionId - demo sessions use different prefix to prevent storage collisions
   const isDemoSession = safeSession.dayLabel?.startsWith('DEMO-') || safeSession.dayNumber === 0
   
+  // [LIVE-SESSION-LOCK] Safe display label - guaranteed string with DEMO- prefix removed
+  const safeDisplayLabel = useMemo(() => {
+    const label = safeSession.dayLabel || 'Workout'
+    return label.replace('DEMO-', '')
+  }, [safeSession.dayLabel])
+  
   // Use useMemo to ensure stable sessionId across renders
   // Demo sessions don't persist/restore from storage, so they use a fixed demo key
   const sessionId = useMemo(() => {
@@ -440,6 +502,25 @@ export function StreamlinedWorkoutSession({
     }
     return `session-${safeSession.dayLabel}-${safeSession.dayNumber}`
   }, [isDemoSession, safeSession.dayLabel, safeSession.dayNumber])
+  
+  // [LIVE-SESSION-LOCK] Generate structure signature for restore validation
+  const sessionStructureSignature = useMemo(() => {
+    return generateSessionStructureSignature(safeSession)
+  }, [safeSession])
+  
+  // [LIVE-SESSION-LOCK] Log component render proof
+  useEffect(() => {
+    console.log('[workout-route-proof] StreamlinedWorkoutSession render', {
+      componentVersion: STREAMLINED_WORKOUT_VERSION,
+      sessionId,
+      structureSignature: sessionStructureSignature,
+      dayLabel: safeSession.dayLabel,
+      dayNumber: safeSession.dayNumber,
+      exerciseCount: safeSession.exercises?.length ?? 0,
+      isDemoSession,
+      timestamp: new Date().toISOString(),
+    })
+  }, [sessionId, sessionStructureSignature, safeSession.dayLabel, safeSession.dayNumber, safeSession.exercises?.length, isDemoSession])
   
   // Check for existing session on mount
   const [existingSession, setExistingSession] = useState<SavedSessionInfo | null>(null)
@@ -465,9 +546,19 @@ export function StreamlinedWorkoutSession({
     // Get exercise count for validation
     const exerciseCount = safeSession.exercises?.length ?? 0
     
-    // Try to restore real sessions (with exercise count validation)
-    const saved = loadSessionFromStorage(sessionId, exerciseCount)
+    // [LIVE-SESSION-LOCK] Generate signature for restore validation
+    const currentSignature = generateSessionStructureSignature(safeSession)
+    
+    // Try to restore real sessions (with structure signature validation)
+    const saved = loadSessionFromStorage(sessionId, exerciseCount, currentSignature)
     if (saved && saved.status !== 'completed') {
+      console.log('[workout-restore] Restored saved state with signature validation', {
+        sessionId,
+        structureSignature: currentSignature,
+        restoredExerciseIndex: saved.currentExerciseIndex,
+        restoredSetNumber: saved.currentSetNumber,
+        completedSetsCount: saved.completedSets?.length ?? 0,
+      })
       return saved
     }
     return {
@@ -543,19 +634,35 @@ export function StreamlinedWorkoutSession({
   const totalSets = exercises.reduce((sum, ex) => sum + (ex?.sets || 0), 0)
   const completedSetsCount = state.completedSets.length
   
+  // [LIVE-SESSION-LOCK] AUTHORITATIVE SAFE CURRENT EXERCISE CONTRACT
   // Create a guaranteed-safe exercise object for rendering (avoids null checks everywhere)
-  // [prescription-render] TASK 4: Include prescribedLoad for live workout display
+  // Every field the render path uses MUST be included and guaranteed safe
   const safeCurrentExercise = useMemo(() => ({
-    name: currentExercise?.name ?? 'Exercise',
-    category: currentExercise?.category ?? 'general',
-    sets: currentExercise?.sets ?? 3,
-    repsOrTime: currentExercise?.repsOrTime ?? '8-12 reps',
-    note: currentExercise?.note ?? '',
-    id: currentExercise?.id ?? 'unknown',
+    // Core identity fields - ALWAYS strings
+    id: typeof currentExercise?.id === 'string' && currentExercise.id ? currentExercise.id : 'unknown',
+    name: typeof currentExercise?.name === 'string' && currentExercise.name ? currentExercise.name : 'Exercise',
+    category: typeof currentExercise?.category === 'string' ? currentExercise.category : 'general',
+    
+    // Execution parameters - guaranteed safe types
+    sets: typeof currentExercise?.sets === 'number' && currentExercise.sets > 0 ? currentExercise.sets : 3,
+    repsOrTime: typeof currentExercise?.repsOrTime === 'string' && currentExercise.repsOrTime ? currentExercise.repsOrTime : '8-12 reps',
+    note: typeof currentExercise?.note === 'string' ? currentExercise.note : '',
+    
+    // Override/selection context
     isOverrideable: currentExercise?.isOverrideable ?? true,
-    selectionReason: currentExercise?.selectionReason ?? '',
-    // [prescription-render] ISSUE C: Preserve prescribedLoad for live workout display
+    selectionReason: typeof currentExercise?.selectionReason === 'string' ? currentExercise.selectionReason : '',
+    
+    // [prescription-render] Preserve prescribedLoad for live workout display
     prescribedLoad: currentExercise?.prescribedLoad,
+    
+    // Advanced execution context (optional, preserved when present)
+    targetRPE: currentExercise?.targetRPE,
+    restSeconds: currentExercise?.restSeconds,
+    method: currentExercise?.method,
+    methodLabel: currentExercise?.methodLabel,
+    blockId: currentExercise?.blockId,
+    executionTruth: currentExercise?.executionTruth,
+    coachingMeta: currentExercise?.coachingMeta,
   }), [currentExercise])
   
   // [weighted-truth] TASK H: Log workout session loading with prescribed load
@@ -631,14 +738,15 @@ export function StreamlinedWorkoutSession({
   }, [currentExercise])
   
   // Auto-save on state changes - skip for demo sessions
+  // [LIVE-SESSION-LOCK] Include structure signature in saved state
   useEffect(() => {
     // Demo sessions don't persist to storage
     if (isDemoSession) return
     
     if (state.status !== 'ready') {
-      saveSessionToStorage(state, sessionId)
+      saveSessionToStorage(state, sessionId, sessionStructureSignature)
     }
-  }, [state, sessionId, isDemoSession])
+  }, [state, sessionId, isDemoSession, sessionStructureSignature])
   
   // Initialize values when exercise changes
   // [LIVE-EXECUTION-TRUTH] Use executionTruth for band recommendation when available
@@ -1476,7 +1584,7 @@ export function StreamlinedWorkoutSession({
               <Dumbbell className="w-7 h-7 text-[#C1121F]" />
             </div>
             <h1 className="text-xl font-bold text-[#E6E9EF] mb-1">
-              {safeSession.dayLabel.replace('DEMO-', '')}
+              {safeDisplayLabel}
             </h1>
             <div className="flex items-center justify-center gap-2 text-sm text-[#A4ACB8]">
               <span>{exercises.length} exercises</span>
@@ -1600,24 +1708,29 @@ export function StreamlinedWorkoutSession({
     const performance = getSessionPerformance(performanceInput)
     
     // Generate skill signal if skill exercises were performed
-    // [LIVE-WORKOUT-CRASH-FIX] Use safeLower to prevent undefined.toLowerCase() crash
+    // [LIVE-SESSION-LOCK] Safe skill exercise detection with full null guards
     const skillExercises = exercises.filter(ex => 
-      safeLower(ex.name).includes('front lever') ||
-      safeLower(ex.name).includes('planche') ||
-      safeLower(ex.name).includes('muscle-up') ||
-      safeLower(ex.name).includes('handstand')
+      ex && ex.name && (
+        safeLower(ex.name).includes('front lever') ||
+        safeLower(ex.name).includes('planche') ||
+        safeLower(ex.name).includes('muscle-up') ||
+        safeLower(ex.name).includes('handstand')
+      )
     )
     let skillSignal: string | null = null
     if (skillExercises.length > 0 && performance.performanceTier !== 'low') {
-      const skillName = skillExercises[0].name.split(' ')[0]
-      if (performance.performanceTier === 'excellent' || performance.performanceTier === 'strong') {
+      // [LIVE-SESSION-LOCK] Safe split with fallback
+      const firstSkillName = skillExercises[0]?.name || ''
+      const skillName = firstSkillName.includes(' ') ? firstSkillName.split(' ')[0] : firstSkillName
+      if (skillName && (performance.performanceTier === 'excellent' || performance.performanceTier === 'strong')) {
         skillSignal = `${skillName} stability improving.`
-      } else {
+      } else if (skillName) {
         skillSignal = `${skillName} work logged. Consistency building.`
       }
     }
     
     // Generate band progression note if bands were used
+    // [LIVE-SESSION-LOCK] Safe band label generation with null guards
     const bandsUsed = state.completedSets
       .filter(s => s.bandUsed && s.bandUsed !== 'none')
       .map(s => s.bandUsed)
@@ -1625,7 +1738,8 @@ export function StreamlinedWorkoutSession({
     if (bandsUsed.length > 0) {
       const uniqueBands = [...new Set(bandsUsed)]
       const primaryBand = uniqueBands[0]
-      if (primaryBand) {
+      // [LIVE-SESSION-LOCK] Safe charAt with length check
+      if (primaryBand && primaryBand.length > 0) {
         const bandLabel = primaryBand.charAt(0).toUpperCase() + primaryBand.slice(1)
         if (performance.performanceTier === 'excellent' || performance.performanceTier === 'strong') {
           bandProgressNote = `${bandLabel} band is stabilizing well.`
@@ -1914,7 +2028,7 @@ function InterExerciseRestCountdown({
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                   <span className="text-sm font-medium text-[#E6E9EF] truncate max-w-[160px]">
-                    {safeSession.dayLabel.replace('DEMO-', '')}
+                    {safeDisplayLabel}
                   </span>
                   <span className="text-xs text-[#6B7280]">
                     {state.currentExerciseIndex + 1}/{totalExercises}
@@ -2027,7 +2141,7 @@ function InterExerciseRestCountdown({
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                 <span className="text-sm font-medium text-[#E6E9EF] truncate max-w-[160px]">
-                  {safeSession.dayLabel.replace('DEMO-', '')}
+                  {safeDisplayLabel}
                 </span>
                 <span className="text-xs text-[#6B7280]">
                   {state.currentExerciseIndex + 1}/{totalExercises}

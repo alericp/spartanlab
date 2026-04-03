@@ -5,7 +5,14 @@
  * 
  * CRITICAL: Uses LAZY dynamic imports for heavy modules to prevent module-level crashes.
  * The route must be able to render even if program-state or other heavy modules fail to load.
+ * 
+ * [LIVE-SESSION-LOCK] Version stamp for execution proof
  */
+
+// =============================================================================
+// AUTHORITATIVE ROUTE VERSION - PROOF OF EXECUTION
+// =============================================================================
+const WORKOUT_SESSION_ROUTE_VERSION = 'phase_live_session_lock_v2'
 
 import { useState, useEffect, Suspense, Component, type ReactNode, type ErrorInfo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -65,22 +72,36 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // [LIVE-WORKOUT-CRASH-FIX] Enhanced diagnostic logging for faster debugging
-    console.error('[Workout Error Boundary] Crash captured:', {
-      phase: 'workout_session_render',
+    // [LIVE-SESSION-LOCK] Comprehensive diagnostic logging with stage identification
+    const crashCorridor = error.message.includes('toLowerCase') || error.message.includes('toUpperCase')
+      ? 'unsafe_string_operation' 
+      : error.message.includes('undefined') || error.message.includes('null')
+        ? 'null_reference'
+        : error.message.includes('map') || error.message.includes('filter') || error.message.includes('reduce')
+          ? 'array_operation'
+          : error.message.includes('split') || error.message.includes('charAt')
+            ? 'string_method_crash'
+            : 'unknown'
+    
+    // Extract likely stage from stack trace
+    const stackLines = error.stack?.split('\n') || []
+    const likelyStage = stackLines.find(line => 
+      line.includes('normalizeSession') || 
+      line.includes('loadSessionFromStorage') ||
+      line.includes('buildSessionRuntimeTruth') ||
+      line.includes('buildExerciseRuntimeTruth') ||
+      line.includes('getExerciseSelectionInsight')
+    )?.match(/at\s+(\w+)/)?.[1] || 'render_unknown'
+    
+    console.error('[workout-route-crash]', {
+      routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
+      stage: likelyStage,
+      crashCorridor,
       errorMessage: error.message,
       errorName: error.name,
-      stack: error.stack?.split('\n').slice(0, 5).join('\n'),
+      stack: stackLines.slice(0, 7).join('\n'),
       componentStack: errorInfo.componentStack?.split('\n').slice(0, 5).join('\n'),
       timestamp: new Date().toISOString(),
-      // Attempt to identify crash corridor
-      crashCorridor: error.message.includes('toLowerCase') 
-        ? 'unsafe_string_operation' 
-        : error.message.includes('undefined')
-          ? 'null_reference'
-          : error.message.includes('map')
-            ? 'array_operation'
-            : 'unknown',
     })
   }
 
@@ -218,21 +239,73 @@ function normalizeSession(rawSession: AdaptiveSession | null | undefined): Adapt
   }
 }
 
-function isRunnableSession(session: AdaptiveSession | null): boolean {
-  if (!session) return false
-  if (!Array.isArray(session.exercises)) return false
-  if (session.exercises.length === 0) return false
+// =============================================================================
+// SESSION VALIDATION - EXECUTION-SAFE CONTRACT VERIFICATION
+// =============================================================================
+
+interface SessionValidationResult {
+  isValid: boolean
+  reasons: string[]
+  safeExerciseCount: number
+  droppedExerciseIndexes: number[]
+  fieldCoercions: string[]
+}
+
+function validateNormalizedWorkoutSession(session: AdaptiveSession | null): SessionValidationResult {
+  const reasons: string[] = []
+  const droppedExerciseIndexes: number[] = []
+  const fieldCoercions: string[] = []
   
-  // Validate ALL exercises have required fields
-  const allExercisesValid = session.exercises.every(ex => {
-    if (!ex) return false
-    if (typeof ex.name !== 'string' || ex.name.trim() === '') return false
-    if (typeof ex.sets !== 'number' || ex.sets <= 0) return false
-    if (typeof ex.repsOrTime !== 'string' || ex.repsOrTime.trim() === '') return false
-    return true
+  if (!session) {
+    return { isValid: false, reasons: ['session_null'], safeExerciseCount: 0, droppedExerciseIndexes: [], fieldCoercions: [] }
+  }
+  
+  if (!Array.isArray(session.exercises)) {
+    return { isValid: false, reasons: ['exercises_not_array'], safeExerciseCount: 0, droppedExerciseIndexes: [], fieldCoercions: [] }
+  }
+  
+  // Validate each exercise
+  let validCount = 0
+  session.exercises.forEach((ex, idx) => {
+    if (!ex) {
+      reasons.push(`exercise_${idx}_null`)
+      droppedExerciseIndexes.push(idx)
+      return
+    }
+    if (typeof ex.name !== 'string' || ex.name.trim() === '' || ex.name === 'Unknown Exercise') {
+      reasons.push(`exercise_${idx}_invalid_name`)
+    }
+    if (typeof ex.sets !== 'number' || ex.sets <= 0) {
+      reasons.push(`exercise_${idx}_invalid_sets`)
+    }
+    if (typeof ex.repsOrTime !== 'string' || ex.repsOrTime.trim() === '') {
+      reasons.push(`exercise_${idx}_invalid_repsOrTime`)
+    }
+    // Count as valid if has usable name and sets
+    if (typeof ex.name === 'string' && ex.name.trim() !== '' && typeof ex.sets === 'number' && ex.sets > 0) {
+      validCount++
+    }
   })
   
-  return allExercisesValid
+  // Session is valid if it has at least 1 valid exercise
+  const isValid = validCount > 0
+  
+  if (!isValid && reasons.length === 0) {
+    reasons.push('no_valid_exercises')
+  }
+  
+  return {
+    isValid,
+    reasons,
+    safeExerciseCount: validCount,
+    droppedExerciseIndexes,
+    fieldCoercions,
+  }
+}
+
+function isRunnableSession(session: AdaptiveSession | null): boolean {
+  const validation = validateNormalizedWorkoutSession(session)
+  return validation.isValid
 }
 
 // =============================================================================
@@ -332,8 +405,10 @@ function WorkoutSessionContent() {
     
     async function initializeSession() {
       try {
-        // Route diagnostic to confirm latest code is executing
-        console.log('[workout/session] live-init v3', {
+        // [LIVE-SESSION-LOCK] Route execution proof with version stamp
+        console.log('[workout-route-proof]', {
+          routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
+          stage: 'route_init',
           demoMode,
           isFirstSession,
           dayParam,
@@ -421,15 +496,29 @@ function WorkoutSessionContent() {
           return
         }
         
-        if (!normalizedSession || !isRunnableSession(normalizedSession)) {
-          console.log('[workout/session] normalized session invalid', { 
+        // [LIVE-SESSION-LOCK] Validate normalized session with detailed diagnostics
+        const validation = validateNormalizedWorkoutSession(normalizedSession)
+        if (!validation.isValid) {
+          console.error('[workout-route-proof] session_validate_failed', { 
+            routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
+            stage: 'session_validate',
             hasNormalized: !!normalizedSession, 
-            isRunnable: normalizedSession ? isRunnableSession(normalizedSession) : false 
+            validationResult: validation,
+            dayLabel: normalizedSession?.dayLabel,
+            exerciseCount: normalizedSession?.exercises?.length ?? 0,
           })
           setError('This workout session is not properly configured.')
           setLoading(false)
           return
         }
+        
+        console.log('[workout-route-proof] session_validated', {
+          routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
+          stage: 'session_validate_success',
+          safeExerciseCount: validation.safeExerciseCount,
+          dayLabel: normalizedSession.dayLabel,
+          dayNumber: normalizedSession.dayNumber,
+        })
         
         // [workout-init] Log normalized session data for debugging set progression
         console.log('[workout-init] session normalized successfully:', {

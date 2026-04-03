@@ -65,8 +65,23 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log error for debugging but don't crash the app
-    console.error('[Workout Error Boundary]', error, errorInfo)
+    // [LIVE-WORKOUT-CRASH-FIX] Enhanced diagnostic logging for faster debugging
+    console.error('[Workout Error Boundary] Crash captured:', {
+      phase: 'workout_session_render',
+      errorMessage: error.message,
+      errorName: error.name,
+      stack: error.stack?.split('\n').slice(0, 5).join('\n'),
+      componentStack: errorInfo.componentStack?.split('\n').slice(0, 5).join('\n'),
+      timestamp: new Date().toISOString(),
+      // Attempt to identify crash corridor
+      crashCorridor: error.message.includes('toLowerCase') 
+        ? 'unsafe_string_operation' 
+        : error.message.includes('undefined')
+          ? 'null_reference'
+          : error.message.includes('map')
+            ? 'array_operation'
+            : 'unknown',
+    })
   }
 
   render() {
@@ -116,18 +131,31 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
 function normalizeSession(rawSession: AdaptiveSession | null | undefined): AdaptiveSession | null {
   if (!rawSession) return null
   
+  // [LIVE-WORKOUT-CRASH-FIX] Log normalization for debugging
+  console.log('[workout-normalization] Starting session normalization:', {
+    dayLabel: rawSession.dayLabel,
+    exerciseCount: rawSession.exercises?.length ?? 0,
+  })
+  
   // [prescription-render] ISSUE E: Preserve prescribedLoad through normalization
   // Normalize exercises array while keeping all original fields
   const normalizedExercises = (rawSession.exercises ?? []).map((ex, idx) => {
+    // [LIVE-WORKOUT-CRASH-FIX] Skip null/undefined exercise entries
+    if (!ex) {
+      console.warn('[workout-normalization] Skipping null exercise at index', idx)
+      return null
+    }
+    
     const normalized = {
-      id: ex?.id || `exercise-${idx}`,
-      name: ex?.name || 'Unknown Exercise',
-      category: ex?.category || 'general',
+      // [LIVE-WORKOUT-CRASH-FIX] CRITICAL: Ensure id and name are ALWAYS strings, never undefined
+      id: typeof ex?.id === 'string' && ex.id ? ex.id : `exercise-${idx}`,
+      name: typeof ex?.name === 'string' && ex.name ? ex.name : 'Unknown Exercise',
+      category: typeof ex?.category === 'string' ? ex.category : 'general',
       sets: typeof ex?.sets === 'number' && ex.sets > 0 ? ex.sets : 3,
-      repsOrTime: ex?.repsOrTime || '8-12 reps',
-      note: ex?.note || '',
+      repsOrTime: typeof ex?.repsOrTime === 'string' && ex.repsOrTime ? ex.repsOrTime : '8-12 reps',
+      note: typeof ex?.note === 'string' ? ex.note : '',
       isOverrideable: ex?.isOverrideable ?? true,
-      selectionReason: ex?.selectionReason || '',
+      selectionReason: typeof ex?.selectionReason === 'string' ? ex.selectionReason : '',
       // [prescription-render] TASK 2: Preserve prescribedLoad through snapshot/read path
       prescribedLoad: ex?.prescribedLoad,
       // [weighted-prescription-truth] ISSUE E: Preserve targetRPE and restSeconds
@@ -142,6 +170,8 @@ function normalizeSession(rawSession: AdaptiveSession | null | undefined): Adapt
       progressionDecision: ex?.progressionDecision,
       // [coach-meta-survival] TASK 5: Preserve coachingMeta through workout normalization
       coachingMeta: ex?.coachingMeta,
+      // [LIVE-WORKOUT-CRASH-FIX] Preserve executionTruth for band recommendations
+      executionTruth: ex?.executionTruth,
     }
     
     // [prescription-render] TASK 6: Log if prescribedLoad exists
@@ -164,15 +194,21 @@ function normalizeSession(rawSession: AdaptiveSession | null | undefined): Adapt
     }
     
     return normalized
+  }).filter((ex): ex is NonNullable<typeof ex> => ex !== null)
+  
+  // [LIVE-WORKOUT-CRASH-FIX] Log final exercise count after filtering
+  console.log('[workout-normalization] Normalization complete:', {
+    inputExercises: rawSession.exercises?.length ?? 0,
+    outputExercises: normalizedExercises.length,
   })
   
   return {
     ...rawSession,
     dayNumber: typeof rawSession.dayNumber === 'number' ? rawSession.dayNumber : 1,
-    dayLabel: rawSession.dayLabel || 'Workout',
-    focus: rawSession.focus || 'general',
-    focusLabel: rawSession.focusLabel || 'Training',
-    rationale: rawSession.rationale || '',
+    dayLabel: typeof rawSession.dayLabel === 'string' && rawSession.dayLabel ? rawSession.dayLabel : 'Workout',
+    focus: typeof rawSession.focus === 'string' ? rawSession.focus : 'general',
+    focusLabel: typeof rawSession.focusLabel === 'string' ? rawSession.focusLabel : 'Training',
+    rationale: typeof rawSession.rationale === 'string' ? rawSession.rationale : '',
     exercises: normalizedExercises,
     warmup: rawSession.warmup ?? [],
     cooldown: rawSession.cooldown ?? [],

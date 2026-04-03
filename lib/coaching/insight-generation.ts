@@ -20,8 +20,12 @@ import {
 /**
  * Generates exercise selection insight text from knowledge base.
  * Pulls from existing knowledge bubble content.
+ * [LIVE-WORKOUT-CRASH-FIX] Safe handling for null/undefined exerciseId
  */
-export function getExerciseSelectionInsight(exerciseId: string): string | null {
+export function getExerciseSelectionInsight(exerciseId: string | null | undefined): string | null {
+  // Early return if no exerciseId provided
+  if (!exerciseId || typeof exerciseId !== 'string') return null
+  
   // Normalize exercise ID to match knowledge base keys
   const normalizedId = exerciseId.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_')
   const knowledge = EXERCISE_KNOWLEDGE[normalizedId] || EXERCISE_KNOWLEDGE[exerciseId]
@@ -31,8 +35,12 @@ export function getExerciseSelectionInsight(exerciseId: string): string | null {
 
 /**
  * Generates skill carryover insight from exercise knowledge.
+ * [LIVE-WORKOUT-CRASH-FIX] Safe handling for null/undefined exerciseId
  */
-export function getSkillCarryoverInsight(exerciseId: string): string[] | null {
+export function getSkillCarryoverInsight(exerciseId: string | null | undefined): string[] | null {
+  // Early return if no exerciseId provided
+  if (!exerciseId || typeof exerciseId !== 'string') return null
+  
   const normalizedId = exerciseId.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_')
   const knowledge = EXERCISE_KNOWLEDGE[normalizedId] || EXERCISE_KNOWLEDGE[exerciseId]
   if (!knowledge || !knowledge.skillCarryover) return null
@@ -153,25 +161,33 @@ export function getRecoveryPhaseInsight(
 
 /**
  * Generates safety/override protection insight from exercise knowledge.
+ * [LIVE-WORKOUT-CRASH-FIX] Safe handling for null/undefined exerciseId
  */
 export function getOverrideProtectionInsight(
-  exerciseId: string,
-  exerciseName: string
+  exerciseId: string | null | undefined,
+  exerciseName: string | null | undefined
 ): { reason: string; carryover: string[] } | null {
+  // Early return if no exerciseId provided
+  if (!exerciseId || typeof exerciseId !== 'string') return null
+  
   const normalizedId = exerciseId.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_')
   const knowledge = EXERCISE_KNOWLEDGE[normalizedId] || EXERCISE_KNOWLEDGE[exerciseId]
   if (!knowledge) return null
 
   return {
-    reason: knowledge.shortReason || `${exerciseName} was selected for specific training stimulus.`,
+    reason: knowledge.shortReason || `${exerciseName || 'This exercise'} was selected for specific training stimulus.`,
     carryover: knowledge.skillCarryover || [],
   }
 }
 
 /**
  * Generates safety notes from exercise knowledge.
+ * [LIVE-WORKOUT-CRASH-FIX] Safe handling for null/undefined exerciseId
  */
-export function getExerciseSafetyNote(exerciseId: string): string | null {
+export function getExerciseSafetyNote(exerciseId: string | null | undefined): string | null {
+  // Early return if no exerciseId provided
+  if (!exerciseId || typeof exerciseId !== 'string') return null
+  
   const normalizedId = exerciseId.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_')
   const knowledge = EXERCISE_KNOWLEDGE[normalizedId] || EXERCISE_KNOWLEDGE[exerciseId]
   if (!knowledge || !knowledge.safetyNote) return null
@@ -180,8 +196,12 @@ export function getExerciseSafetyNote(exerciseId: string): string | null {
 
 /**
  * Generates common mistake warning from exercise knowledge.
+ * [LIVE-WORKOUT-CRASH-FIX] Safe handling for null/undefined exerciseId
  */
-export function getExerciseCommonMistake(exerciseId: string): string | null {
+export function getExerciseCommonMistake(exerciseId: string | null | undefined): string | null {
+  // Early return if no exerciseId provided
+  if (!exerciseId || typeof exerciseId !== 'string') return null
+  
   const normalizedId = exerciseId.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_')
   const knowledge = EXERCISE_KNOWLEDGE[normalizedId] || EXERCISE_KNOWLEDGE[exerciseId]
   if (!knowledge || !knowledge.commonMistake) return null

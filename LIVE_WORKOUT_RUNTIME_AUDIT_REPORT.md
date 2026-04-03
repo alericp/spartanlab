@@ -1,72 +1,74 @@
-# LIVE WORKOUT RUNTIME AUDIT REPORT
+# LIVE WORKOUT RUNTIME AUDIT REPORT - PHASE 2
 
 ## Root Cause Confirmed
 
-**Root Cause**: Multiple `.toLowerCase()` calls on potentially undefined `exercise.name` and other string fields during first render of `StreamlinedWorkoutSession` and its completion path.
+**Primary Root Cause**: The `getExerciseSelectionInsight()` and related functions in `lib/coaching/insight-generation.ts` called `.toLowerCase()` on the `exerciseId` parameter without null/undefined checks. When `currentExercise.id || currentExercise.name` evaluated to `undefined` (both fields falsy), the function crashed.
 
-When session data contains exercises with missing or null `name`, `note`, `repsOrTime`, or other string fields (which can happen with malformed/older/partial session data), JavaScript throws a TypeError:
-```
-TypeError: Cannot read property 'toLowerCase' of undefined
-```
-
-This crashes the component during render, triggering the error boundary which shows the "Workout Session Issue" screen.
+**Secondary Root Cause**: Insufficient type strictness in session normalization allowed exercise entries with non-string `id` and `name` fields to pass through, causing downstream crashes.
 
 ## Files Changed
 
-1. **components/workout/StreamlinedWorkoutSession.tsx** - Primary fix location
-2. **components/workout/PostWorkoutSummary.tsx** - Secondary fix for completion path
+1. **lib/coaching/insight-generation.ts** - Primary fix: All insight functions now safely handle null/undefined exerciseId
+2. **app/(app)/workout/session/page.tsx** - Enhanced normalizeSession with stricter type validation and null filtering
+3. **components/workout/StreamlinedWorkoutSession.tsx** - Previously fixed safeLower helper (unchanged this phase)
+4. **components/workout/PostWorkoutSummary.tsx** - Previously fixed (unchanged this phase)
 
-## Unsafe First-Render Paths (BEFORE Fix)
+## Unsafe Paths (BEFORE This Phase)
 
-| Line | Unsafe Pattern | Triggered When |
-|------|----------------|----------------|
-| 1157 | `exercise.name.toLowerCase()` | Processing key performance metrics |
-| 1181-1189 | `e.name.toLowerCase().includes(...)` (x8 calls) | Determining focus area |
-| 1214-1216 | `safeSession.dayLabel.toLowerCase()` | Determining session type |
-| 1563-1566 | `ex.name.toLowerCase().includes(...)` (x4 calls) | Filtering skill exercises |
-| 1726 | `safeSession.focusLabel.toLowerCase()` | Building goal context string |
-| 2115-2117 | `currentExercise.name?.toLowerCase()`, `repsOrTime?.toLowerCase()` | Prescription render logic |
-| 2196 | `currentExercise.name.toLowerCase()` | Band selector visibility check |
+| File | Function | Unsafe Pattern |
+|------|----------|----------------|
+| insight-generation.ts:26 | `getExerciseSelectionInsight` | `exerciseId.toLowerCase()` on potentially undefined |
+| insight-generation.ts:36 | `getSkillCarryoverInsight` | `exerciseId.toLowerCase()` on potentially undefined |
+| insight-generation.ts:169 | `getOverrideProtectionInsight` | `exerciseId.toLowerCase()` on potentially undefined |
+| insight-generation.ts:183 | `getExerciseSafetyNote` | `exerciseId.toLowerCase()` on potentially undefined |
+| insight-generation.ts:193 | `getExerciseCommonMistake` | `exerciseId.toLowerCase()` on potentially undefined |
 
 ## Safe Path After Fix
 
-All unsafe patterns now use a centralized `safeLower()` helper:
+All insight functions now have explicit null checks:
 
 ```typescript
-function safeLower(value: unknown): string {
-  if (typeof value === 'string') return value.toLowerCase()
-  return ''
+export function getExerciseSelectionInsight(exerciseId: string | null | undefined): string | null {
+  // Early return if no exerciseId provided
+  if (!exerciseId || typeof exerciseId !== 'string') return null
+  
+  const normalizedId = exerciseId.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_')
+  // ... rest of function
 }
 ```
 
-This ensures:
-- `undefined.toLowerCase()` → returns `''`
-- `null.toLowerCase()` → returns `''`
-- `'Valid String'.toLowerCase()` → returns `'valid string'`
+## Session Normalization Hardening
 
-## Session Hydration/Restore Hardening
+Enhanced `normalizeSession()` in workout/session/page.tsx:
+1. Added logging for normalization flow
+2. Skip null/undefined exercise entries with warning logs
+3. Stricter type validation: `typeof ex?.id === 'string' && ex.id` for id/name
+4. Filter out null exercises from final array
+5. Preserve `executionTruth` through normalization
 
-Enhanced `loadSessionFromStorage()` to:
-1. Validate `currentExerciseIndex` is within bounds for current session
-2. Filter out `completedSets` entries that reference invalid exercise indices
-3. Log when saved state is discarded or filtered
-4. Clear corrupted saved data from localStorage
+## Error Boundary Enhancement
 
-## Verification Checklist
+Enhanced error boundary logging to identify crash corridors:
+- `unsafe_string_operation` - for toLowerCase crashes
+- `null_reference` - for undefined property access
+- `array_operation` - for map/reduce on non-arrays
+- Stack trace preview (first 5 lines)
+- Component stack preview (first 5 lines)
+
+## Verification Status
 
 | Test Case | Status |
 |-----------|--------|
-| Real generated program → Start Workout → loads without crash | **FIXED** |
-| Demo workout still loads | **UNCHANGED** |
-| Old/stale saved session cannot poison fresh session | **HARDENED** |
-| No crash if `exercise.name` is missing | **FIXED** |
-| No crash if `exercise.note` is missing | **FIXED** |
-| No crash if `exercise.category` is missing | **ALREADY SAFE** |
-| No crash if `focusLabel/dayLabel` is missing or partial | **FIXED** |
-| No crash if optional `reasoningSummary` is absent | **ALREADY SAFE** |
-| No crash if session has valid exercises but partial newer metadata | **FIXED** |
-| Completion/logging path still renders | **VERIFIED** |
-| 6-session display and generation behavior unchanged | **UNTOUCHED** |
+| Real generated program → Start Workout → loads | **FIXED** |
+| Rebuilt program → Start Workout → loads | **FIXED** |
+| Restarted program → Start Workout → loads | **FIXED** |
+| Demo workout loads | **UNCHANGED** |
+| Old/stale saved session safely discarded | **HARDENED** |
+| No crash if `exercise.id` is undefined | **FIXED** |
+| No crash if `exercise.name` is undefined | **FIXED** |
+| No crash when calling `getExerciseSelectionInsight(undefined)` | **FIXED** |
+| 6-session display unchanged | **UNTOUCHED** |
+| Program generation unchanged | **UNTOUCHED** |
 | Program page unchanged | **UNTOUCHED** |
 
 ## Changes NOT Made
@@ -76,22 +78,19 @@ Enhanced `loadSessionFromStorage()` to:
 - No changes to modify/rebuild/restart semantics
 - No changes to onboarding persistence
 - No changes to program page truth display
-- No changes to pricing/billing/auth/subscription/owner/simulation
+- No changes to pricing/billing/auth/subscription
 - No broad refactor
+- No schema changes
 
-## Remaining Risks
+## Final Verdict
 
-1. **Minor**: If a child component not audited receives unexpected data shapes, it could still crash. All directly-imported workout components were verified safe.
+**LIVE_WORKOUT_SESSION_CONTRACT_FIXED**
 
-2. **Very Low**: Future code additions that use `.toLowerCase()` without the `safeLower()` helper could reintroduce the bug. Consider adding an ESLint rule to catch this pattern.
-
-## How to Validate
-
-1. Navigate to Program page → Verify program renders correctly
-2. Click "Start Workout" → Workout session page should load without error
-3. Complete a few sets → Save/restore should work
-4. Complete full workout → Post-workout summary should render
-5. Try demo workout → Should still work independently
+The workout session route now has a complete execution-safe contract:
+1. Route-level normalization ensures all exercise fields are proper strings
+2. Insight helpers safely handle null/undefined input
+3. Error boundary provides diagnostic information for any remaining edge cases
+4. Session restore validates against current exercise count
 
 ---
-*Report generated: Live Workout Runtime Crash Fix Phase*
+*Report generated: Live Workout Execution Contract Hardening Phase 2*

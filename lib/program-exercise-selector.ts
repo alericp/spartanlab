@@ -206,6 +206,123 @@ import {
 } from './canonical-profile-service'
 
 // =============================================================================
+// [EXERCISE-SELECTION-RUNTIME-STABILIZATION] SAFE STRING NORMALIZATION LAYER
+// Prevents undefined.toLowerCase() crashes in skill/exercise matching
+// =============================================================================
+
+/**
+ * Safely convert any value to lowercase string.
+ * Returns empty string for null/undefined/non-string values.
+ * [ROOT-CAUSE-FIX] This is the authoritative safe normalizer for all skill/exercise matching.
+ */
+function safeLower(value: unknown): string {
+  if (value === null || value === undefined) return ''
+  if (typeof value !== 'string') return String(value).toLowerCase().trim()
+  return value.toLowerCase().trim()
+}
+
+/**
+ * Safely extract skill key from various skill allocation shapes.
+ * Handles missing/malformed skill fields gracefully.
+ */
+function safeSkillKey(skillAlloc: { skill?: string | null } | null | undefined): string {
+  if (!skillAlloc) return ''
+  return safeLower(skillAlloc.skill)
+}
+
+/**
+ * Safely get exercise ID in lowercase.
+ */
+function safeExerciseId(exercise: { id?: string | null } | null | undefined): string {
+  if (!exercise) return ''
+  return safeLower(exercise.id)
+}
+
+/**
+ * Safely get exercise name in lowercase.
+ */
+function safeExerciseName(exercise: { name?: string | null } | null | undefined): string {
+  if (!exercise) return ''
+  return safeLower(exercise.name)
+}
+
+/**
+ * Safely normalize transferTo array to lowercase strings.
+ * Filters out null/undefined entries.
+ */
+function safeTransferTargets(transferTo: (string | null | undefined)[] | null | undefined): string[] {
+  if (!transferTo || !Array.isArray(transferTo)) return []
+  return transferTo
+    .filter((t): t is string => t !== null && t !== undefined && typeof t === 'string')
+    .map(t => safeLower(t))
+}
+
+/**
+ * Safely check if exercise transfers to a skill.
+ * Returns false instead of crashing on undefined values.
+ */
+function exerciseTransfersToSkill(
+  exercise: { transferTo?: (string | null | undefined)[] | null } | null | undefined,
+  skill: string | null | undefined
+): boolean {
+  if (!exercise || !skill) return false
+  const skillLower = safeLower(skill)
+  if (!skillLower) return false
+  const targets = safeTransferTargets(exercise.transferTo)
+  return targets.some(t => t.includes(skillLower))
+}
+
+/**
+ * Safely check if exercise ID or name includes a skill.
+ */
+function exerciseMatchesSkillByName(
+  exercise: { id?: string | null; name?: string | null } | null | undefined,
+  skill: string | null | undefined
+): boolean {
+  if (!exercise || !skill) return false
+  const skillLower = safeLower(skill)
+  if (!skillLower) return false
+  const idLower = safeExerciseId(exercise)
+  const nameLower = safeExerciseName(exercise)
+  return idLower.includes(skillLower) || nameLower.includes(skillLower)
+}
+
+/**
+ * Validate session skill allocation array.
+ * Filters out entries with missing/invalid skill keys.
+ */
+function validateSessionSkills(
+  skills: Array<{ skill?: string | null; expressionMode?: string; weight?: number }> | null | undefined
+): Array<{ skill: string; expressionMode: string; weight: number }> {
+  if (!skills || !Array.isArray(skills)) return []
+  return skills
+    .filter(s => s && typeof s.skill === 'string' && s.skill.trim() !== '')
+    .map(s => ({
+      skill: s.skill!.trim(),
+      expressionMode: s.expressionMode || 'support',
+      weight: s.weight ?? 1,
+    }))
+}
+
+/**
+ * Validate material skill intent array.
+ * Filters out entries with missing/invalid skill keys.
+ */
+function validateMaterialSkillIntent(
+  intent: Array<{ skill?: string | null; role?: string; currentWorkingProgression?: string | null; historicalCeiling?: string | null }> | null | undefined
+): Array<{ skill: string; role: string; currentWorkingProgression: string | null; historicalCeiling: string | null }> {
+  if (!intent || !Array.isArray(intent)) return []
+  return intent
+    .filter(i => i && typeof i.skill === 'string' && i.skill.trim() !== '')
+    .map(i => ({
+      skill: i.skill!.trim(),
+      role: i.role || 'support',
+      currentWorkingProgression: i.currentWorkingProgression ?? null,
+      historicalCeiling: i.historicalCeiling ?? null,
+    }))
+}
+
+// =============================================================================
 // [AI_SESSION_MATERIALITY_PHASE] Session-level skill expression capture
 // Module-level state to capture skill expression results from selectMainExercises
 // for propagation to ExerciseSelection return
@@ -343,11 +460,12 @@ function applyPrerequisiteGate(
   }
   
   // Exercise not allowed - find substitute
+  // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
   if (gateResult.recommendedSubstitute) {
     const allExercises = getAllExercises()
     const substitute = allExercises.find(e => 
       e.id === gateResult.recommendedSubstitute!.exerciseId ||
-      e.name.toLowerCase().replace(/\s+/g, '_') === gateResult.recommendedSubstitute!.exerciseId
+      safeExerciseName(e).replace(/\s+/g, '_') === gateResult.recommendedSubstitute!.exerciseId
     )
     
     if (substitute) {
@@ -499,9 +617,31 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   materialSkillIntent,
   } = inputs
   
+  // ==========================================================================
+  // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] PHASE 1: Input validation
+  // Validate and normalize all skill allocations BEFORE any matching logic
+  // This prevents undefined.toLowerCase() crashes in the selection corridor
+  // ==========================================================================
+  const validatedSkillsForSession = validateSessionSkills(skillsForSession)
+  const validatedMaterialSkillIntent = validateMaterialSkillIntent(materialSkillIntent)
+  
+  // Log stabilization audit
+  const stabilizationAudit = {
+    originalSkillsForSession: skillsForSession?.length ?? 0,
+    validatedSkillsForSession: validatedSkillsForSession.length,
+    originalMaterialIntent: materialSkillIntent?.length ?? 0,
+    validatedMaterialIntent: validatedMaterialSkillIntent.length,
+    malformedSkillsFiltered: (skillsForSession?.length ?? 0) - validatedSkillsForSession.length,
+    malformedIntentFiltered: (materialSkillIntent?.length ?? 0) - validatedMaterialSkillIntent.length,
+  }
+  
+  if (stabilizationAudit.malformedSkillsFiltered > 0 || stabilizationAudit.malformedIntentFiltered > 0) {
+    console.warn('[EXERCISE-SELECTION-RUNTIME-STABILIZATION] Malformed data filtered:', stabilizationAudit)
+  }
+  
   // SKILL EXPRESSION FIX: Log skill allocation for this session
-  if (skillsForSession && skillsForSession.length > 0) {
-    const sessionSkillLabels = skillsForSession.map(function(s) {
+  if (validatedSkillsForSession.length > 0) {
+    const sessionSkillLabels = validatedSkillsForSession.map(function(s) {
       return s.skill + '(' + s.expressionMode + ')';
     });
     console.log('[skill-expression] Exercise selector received skills for session:', {
@@ -986,13 +1126,15 @@ function getAdvancedSkillExercises(
     if (!advancedFamily) continue
     
     // [advanced-skill-expression] ISSUE B: HSPU special handling
+    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
     if (skill === 'hspu') {
       // HSPU should influence vertical push selection
       if (dayFocus.includes('push') || dayFocus.includes('skill') || dayFocus.includes('vertical')) {
         const hspuProgressions = advancedFamily.directProgressions
         for (const exId of hspuProgressions) {
+          if (!exId) continue // Skip undefined exercise IDs
           const found = [...availableSkills, ...availableStrength].find(
-            e => e.id.toLowerCase() === exId.toLowerCase()
+            e => safeExerciseId(e) === safeLower(exId)
           )
           if (found) {
             recommendations.push({
@@ -1007,12 +1149,14 @@ function getAdvancedSkillExercises(
     }
     
     // [advanced-skill-expression] ISSUE C: Other advanced skills
+    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
     if (skill === 'back_lever' || skill === 'dragon_flag' || skill === 'planche_pushup' ||
         skill === 'one_arm_pull_up' || skill === 'one_arm_chin_up' || skill === 'one_arm_push_up') {
       const progressions = advancedFamily.directProgressions
       for (const exId of progressions) {
+        if (!exId) continue // Skip undefined exercise IDs
         const found = [...availableSkills, ...availableStrength].find(
-          e => e.id.toLowerCase() === exId.toLowerCase()
+          e => safeExerciseId(e) === safeLower(exId)
         )
         if (found) {
           recommendations.push({
@@ -1063,10 +1207,12 @@ function getAdvancedSkillSupportExercises(
     if (!supportPattern) continue
     
     // Primary support work
+    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
     if (expressionMode === 'primary' || expressionMode === 'technical') {
       for (const primary of supportPattern.primarySupport) {
         for (const exId of primary.exerciseIds) {
-          const found = allAvailable.find(e => e.id.toLowerCase() === exId.toLowerCase())
+          if (!exId) continue // Skip undefined exercise IDs
+          const found = allAvailable.find(e => safeExerciseId(e) === safeLower(exId))
           if (found) {
             supportRecommendations.push({
               exerciseId: found.id,
@@ -1080,9 +1226,11 @@ function getAdvancedSkillSupportExercises(
     }
     
     // Trunk support for all expression modes
+    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
     const trunkSupport = supportPattern.trunkSupport
     for (const exId of trunkSupport.exerciseIds) {
-      const found = allAvailable.find(e => e.id.toLowerCase() === exId.toLowerCase())
+      if (!exId) continue // Skip undefined exercise IDs
+      const found = allAvailable.find(e => safeExerciseId(e) === safeLower(exId))
       if (found) {
         supportRecommendations.push({
           exerciseId: found.id,
@@ -1304,8 +1452,8 @@ function selectMainExercises(
       return { allowed: true, reason: 'no_progression_data' }
     }
     
-    // Normalize skill key for lookup
-    const normalizedSkill = skillKey.toLowerCase().replace(/_/g, '')
+    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Normalize skill key safely
+    const normalizedSkill = safeLower(skillKey).replace(/_/g, '')
     const progressionLadder = PROGRESSION_LEVEL_ORDER[normalizedSkill]
     
     if (!progressionLadder) {
@@ -1313,9 +1461,10 @@ function selectMainExercises(
       return { allowed: true, reason: 'no_ladder_defined' }
     }
     
-    // Find current level index
+    // Find current level index - safely normalize currentProgression
+    const currentProgressionLower = safeLower(currentProgression)
     const currentLevelIndex = progressionLadder.findIndex(level => 
-      currentProgression.toLowerCase().includes(level)
+      currentProgressionLower.includes(level)
     )
     
     if (currentLevelIndex === -1) {
@@ -1323,9 +1472,9 @@ function selectMainExercises(
       return { allowed: true, reason: 'current_level_not_in_ladder' }
     }
     
-    // Check exercise level from ID or name
-    const exerciseIdLower = exercise.id.toLowerCase()
-    const exerciseNameLower = exercise.name.toLowerCase()
+    // Check exercise level from ID or name - using safe normalization
+    const exerciseIdLower = safeExerciseId(exercise)
+    const exerciseNameLower = safeExerciseName(exercise)
     
     let exerciseLevelIndex = -1
     let exerciseLevel = 'unknown'
@@ -1973,11 +2122,12 @@ function selectMainExercises(
     
   // [selection-compression-fix] ISSUE B: Selected skill alignment (increased boost for non-primary)
   // STEP 3: Reduce primary goal compression by increasing secondary/technical weights
+  // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
   for (const skillAlloc of sessionSkills) {
-  const skillLower = skillAlloc.skill.toLowerCase()
-  const transfersToSkill = exercise.transferTo?.some(t => t.toLowerCase().includes(skillLower))
-  const exerciseNameMatch = exercise.id.toLowerCase().includes(skillLower) || 
-                            exercise.name.toLowerCase().includes(skillLower)
+  const skillLower = safeSkillKey(skillAlloc)
+  if (!skillLower) continue // Skip malformed skill allocations
+  const transfersToSkill = exerciseTransfersToSkill(exercise, skillLower)
+  const exerciseNameMatch = exerciseMatchesSkillByName(exercise, skillLower)
   
   if (transfersToSkill || exerciseNameMatch) {
   // Direct skill transfer gets biggest boost
@@ -2053,11 +2203,12 @@ function selectMainExercises(
   
   // [session-assembly-truth] TASK 6: Boost exercises that support ANY selected skill (not just primary)
   // This reduces the ranking bias that crushes tertiary skills on mixed days
+  // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
   const supportsMixedDayVariety = sessionSkills.some(s => {
-    const skillLower = s.skill.toLowerCase()
-    const transfersToSkill = exercise.transferTo?.some(t => t.toLowerCase().includes(skillLower))
-    const nameMatchesSkill = exercise.id.toLowerCase().includes(skillLower) ||
-                              exercise.name.toLowerCase().includes(skillLower)
+    const skillLower = safeSkillKey(s)
+    if (!skillLower) return false // Skip malformed skill allocations
+    const transfersToSkill = exerciseTransfersToSkill(exercise, skillLower)
+    const nameMatchesSkill = exerciseMatchesSkillByName(exercise, skillLower)
     return transfersToSkill || nameMatchesSkill
   })
   
@@ -2155,13 +2306,15 @@ function applyMaterialityScoreAdjustments(
   }
   
   // Check if exercise aligns with material skill intent
+  // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
   const exerciseSkillMatch = materialSkillIntent.find(intent => {
-  const skillLower = intent.skill.toLowerCase().replace(/_/g, '')
-  const exerciseIdLower = exercise.id.toLowerCase()
-  const exerciseNameLower = exercise.name.toLowerCase()
+  const skillLower = safeLower(intent.skill).replace(/_/g, '')
+  if (!skillLower) return false // Skip malformed intent
+  const exerciseIdLower = safeExerciseId(exercise)
+  const exerciseNameLower = safeExerciseName(exercise)
   return exerciseIdLower.includes(skillLower) || 
        exerciseNameLower.includes(skillLower) ||
-       exercise.transferTo?.some(t => t.toLowerCase().includes(skillLower))
+       exerciseTransfersToSkill(exercise, skillLower)
   })
   
   if (exerciseSkillMatch) {
@@ -2240,17 +2393,21 @@ function applyMaterialityScoreAdjustments(
     
     const results: { exercise: Exercise; doctrineSource: string }[] = []
     
-    for (const exId of mapping.directSupportExercises) {
-      const found = availableExercises.find(e => e.id.toLowerCase() === exId.toLowerCase())
-      if (found) {
-        results.push({ exercise: found, doctrineSource: `skill-support-mapping:${skill}:direct` })
+  // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
+  for (const exId of mapping.directSupportExercises) {
+    if (!exId) continue // Skip undefined exercise IDs
+    const found = availableExercises.find(e => safeExerciseId(e) === safeLower(exId))
+    if (found) {
+    results.push({ exercise: found, doctrineSource: `skill-support-mapping:${skill}:direct` })
       }
     }
     
-    for (const exId of mapping.accessorySupportExercises) {
-      const found = availableExercises.find(e => e.id.toLowerCase() === exId.toLowerCase())
-      if (found) {
-        results.push({ exercise: found, doctrineSource: `skill-support-mapping:${skill}:accessory` })
+  // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
+  for (const exId of mapping.accessorySupportExercises) {
+    if (!exId) continue // Skip undefined exercise IDs
+    const found = availableExercises.find(e => safeExerciseId(e) === safeLower(exId))
+    if (found) {
+    results.push({ exercise: found, doctrineSource: `skill-support-mapping:${skill}:accessory` })
       }
     }
     
@@ -2425,13 +2582,15 @@ function applyMaterialityScoreAdjustments(
   
   // Check if we can actually find viable direct skill exercises for this goal
   // [exercise-selection] TASK B: Expanded pool search - include strength exercises with transfer
+  // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
   const potentialDirectSkillPool = [...availableSkills, ...goalExercises.filter(e => e.category === 'skill')]
-    .filter(e => e.transferTo?.some(t => t.toLowerCase().includes(primaryGoal.toLowerCase())))
+    .filter(e => exerciseTransfersToSkill(e, primaryGoal))
     .filter(e => hasRequiredEquipment(e, equipment || []))
   
   // [exercise-selection] TASK B: Also check strength exercises that transfer to goal
+  // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
   const potentialStrengthSupport = availableStrength
-    .filter(e => e.transferTo?.some(t => t.toLowerCase().includes(primaryGoal.toLowerCase())))
+    .filter(e => exerciseTransfersToSkill(e, primaryGoal))
     .filter(e => hasRequiredEquipment(e, equipment || []))
   
   // [constraint-balance] TASK A: CHANGED BEHAVIOR
@@ -2516,10 +2675,11 @@ function applyMaterialityScoreAdjustments(
     
     // Primary skill exercise from session allocation
     const primarySkillAlloc = sessionSkillsToExpress.find(s => s.expressionMode === 'primary')
-    if (primarySkillAlloc) {
+    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Validate primary skill allocation has valid skill key
+    if (primarySkillAlloc && safeSkillKey(primarySkillAlloc)) {
       // Find skill exercises that transfer to the allocated primary skill
       const skillCandidates = [...availableSkills, ...goalExercises.filter(e => e.category === 'skill')]
-        .filter(e => e.transferTo?.some(t => t.toLowerCase().includes(primarySkillAlloc.skill.toLowerCase())))
+        .filter(e => exerciseTransfersToSkill(e, primarySkillAlloc.skill))
       
       // [PHASE 1 AI-TRUTH-ARCHITECTURE] TASK 4: Apply progression-based filtering FIRST
       // This ensures exercises above current working level are blocked before scoring
@@ -2568,10 +2728,11 @@ function applyMaterialityScoreAdjustments(
     
     // [selection-compression-fix] ISSUE B: Technical/secondary skill expression
     const technicalSkillAlloc = sessionSkillsToExpress.find(s => s.expressionMode === 'technical')
-    if (technicalSkillAlloc && technicalSkillAlloc.skill !== primarySkillAlloc?.skill) {
+    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Validate technical skill allocation
+    if (technicalSkillAlloc && safeSkillKey(technicalSkillAlloc) && technicalSkillAlloc.skill !== primarySkillAlloc?.skill) {
       // Find exercises for the technical skill (may be different from primary!)
       const techSkillCandidates = [...availableSkills, ...availableStrength]
-        .filter(e => e.transferTo?.some(t => t.toLowerCase().includes(technicalSkillAlloc.skill.toLowerCase())))
+        .filter(e => exerciseTransfersToSkill(e, technicalSkillAlloc.skill))
         .filter(e => !usedIds.has(e.id))
       
       // [PHASE 4] Doctrine integration for technical skill
@@ -2792,10 +2953,13 @@ function applyMaterialityScoreAdjustments(
     }
     
     // Add skill exposure if this is a primary day - use session allocation
+    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization for primary day skill matching
     if (day.isPrimary) {
       const primarySkillAlloc = sessionSkillsToSupport.find(s => s.expressionMode === 'primary') || sessionSkillsToSupport[0]
+      // Safely get skill key with fallback to primaryGoal
+      const targetSkill = safeSkillKey(primarySkillAlloc) || safeLower(primaryGoal)
       const skillCandidates = [...availableSkills, ...goalExercises.filter(e => e.category === 'skill')]
-        .filter(e => e.transferTo?.some(t => t.toLowerCase().includes(primarySkillAlloc?.skill.toLowerCase() || primaryGoal.toLowerCase())))
+        .filter(e => targetSkill && exerciseTransfersToSkill(e, targetSkill))
         .filter(e => !usedIds.has(e.id))
       
       if (skillCandidates.length > 0) {
@@ -2834,12 +2998,16 @@ function applyMaterialityScoreAdjustments(
     const allAccessory = [...availableAccessory, ...availableStrength.filter(e => e.fatigueCost <= 3)]
     
     // Find push work that aligns with session skills
+    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
     const pushCandidates = allAccessory
       .filter(e => e.movementPattern?.includes('push') || e.movementPattern === 'horizontal_push' || e.movementPattern === 'vertical_push')
       .map(e => ({
         exercise: e,
         score: scoreExerciseForSession(e, sessionSkillsForMixed, day.focus, hasWeightedEquipment),
-        skillAligned: sessionSkillsForMixed.some(s => e.transferTo?.some(t => t.toLowerCase().includes(s.skill.toLowerCase())))
+        skillAligned: sessionSkillsForMixed.some(s => {
+          const skillKey = safeSkillKey(s)
+          return skillKey && exerciseTransfersToSkill(e, skillKey)
+        })
       }))
       .sort((a, b) => {
         // Prefer skill-aligned exercises
@@ -2853,9 +3021,11 @@ function applyMaterialityScoreAdjustments(
         ? pushCandidates.find(c => c.exercise.fatigueCost <= 2) || pushCandidates[0]
         : pushCandidates[0]
       
-      const influencingSkill = sessionSkillsForMixed.find(s => 
-        pick.exercise.transferTo?.some(t => t.toLowerCase().includes(s.skill.toLowerCase()))
-      )
+      // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
+      const influencingSkill = sessionSkillsForMixed.find(s => {
+        const skillKey = safeSkillKey(s)
+        return skillKey && exerciseTransfersToSkill(pick.exercise, skillKey)
+      })
       
       addExercise(pick.exercise, pick.skillAligned ? `Push work supporting ${influencingSkill?.skill || 'skills'}` : 'Balanced push work', isLightDay ? 3 : 4, undefined, undefined, 'standalone', {
         primarySelectionReason: pick.skillAligned ? 'selected_skill_support' : 'session_role_fill',
@@ -2871,13 +3041,17 @@ function applyMaterialityScoreAdjustments(
     }
     
     // Find pull work that aligns with session skills
+    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
     const pullCandidates = allAccessory
       .filter(e => e.movementPattern?.includes('pull') || e.movementPattern === 'horizontal_pull' || e.movementPattern === 'vertical_pull')
       .filter(e => !usedIds.has(e.id))
       .map(e => ({
         exercise: e,
         score: scoreExerciseForSession(e, sessionSkillsForMixed, day.focus, hasWeightedEquipment),
-        skillAligned: sessionSkillsForMixed.some(s => e.transferTo?.some(t => t.toLowerCase().includes(s.skill.toLowerCase())))
+        skillAligned: sessionSkillsForMixed.some(s => {
+          const skillKey = safeSkillKey(s)
+          return skillKey && exerciseTransfersToSkill(e, skillKey)
+        })
       }))
       .sort((a, b) => {
         if (a.skillAligned && !b.skillAligned) return -1
@@ -2890,9 +3064,11 @@ function applyMaterialityScoreAdjustments(
         ? pullCandidates.find(c => c.exercise.fatigueCost <= 2) || pullCandidates[0]
         : pullCandidates[0]
       
-      const influencingSkill = sessionSkillsForMixed.find(s => 
-        pick.exercise.transferTo?.some(t => t.toLowerCase().includes(s.skill.toLowerCase()))
-      )
+      // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
+      const influencingSkill = sessionSkillsForMixed.find(s => {
+        const skillKey = safeSkillKey(s)
+        return skillKey && exerciseTransfersToSkill(pick.exercise, skillKey)
+      })
       
       addExercise(pick.exercise, pick.skillAligned ? `Pull work supporting ${influencingSkill?.skill || 'skills'}` : 'Balanced pull work', isLightDay ? 3 : 4, undefined, undefined, 'standalone', {
         primarySelectionReason: pick.skillAligned ? 'selected_skill_support' : 'session_role_fill',
@@ -2908,10 +3084,12 @@ function applyMaterialityScoreAdjustments(
     }
     
     // Add skill exposure at reduced intensity - use session skill allocation
+    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
     if (!isLightDay) {
       const primarySkillAlloc = sessionSkillsForMixed.find(s => s.expressionMode === 'primary' || s.expressionMode === 'support')
+      const targetSkill = safeSkillKey(primarySkillAlloc) || safeLower(primaryGoal)
       const skillCandidates = [...availableSkills, ...goalExercises.filter(e => e.category === 'skill')]
-        .filter(e => e.transferTo?.some(t => t.toLowerCase().includes(primarySkillAlloc?.skill.toLowerCase() || primaryGoal.toLowerCase())))
+        .filter(e => targetSkill && exerciseTransfersToSkill(e, targetSkill))
         .filter(e => !usedIds.has(e.id))
       
       if (skillCandidates.length > 0) {
@@ -3243,11 +3421,13 @@ function applyMaterialityScoreAdjustments(
       }
       
       // Priority 3: Transfer-based fallback
+      // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
       if (!supportExercise) {
+        const supportSkillKey = safeLower(supportAlloc.skill).replace(/_/g, '')
         supportExercise = [...availableAccessory, ...availableStrength]
           .find(e => 
             !usedIds.has(e.id) && 
-            e.transferTo?.some(t => t.toLowerCase().includes(supportAlloc.skill.toLowerCase().replace(/_/g, ''))) &&
+            supportSkillKey && exerciseTransfersToSkill(e, supportSkillKey) &&
             canAddMore(e, 'standalone')
           )
         if (supportExercise) {
@@ -3335,8 +3515,9 @@ function applyMaterialityScoreAdjustments(
     // TASK 1-C: Priority order - support strength > limiter correction > core > general
     
     // Step 1: Goal-relevant support strength
+    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
     const goalSupportExercises = availableStrength.filter(e => 
-      e.transferTo?.some(t => t.toLowerCase().includes(primaryGoal.toLowerCase())) ||
+      exerciseTransfersToSkill(e, primaryGoal) ||
       (primaryGoal === 'planche' && (e.movementFamily === 'push' || e.tags?.includes('straight_arm'))) ||
       (primaryGoal === 'front_lever' && (e.movementFamily === 'pull' || e.tags?.includes('straight_arm'))) ||
       (primaryGoal === 'muscle_up' && (e.movementFamily === 'pull' || e.movementFamily === 'push'))
@@ -3357,11 +3538,12 @@ function applyMaterialityScoreAdjustments(
     }
     
     // Step 2: If still empty, add limiter-correction exercises
+    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
     if (selected.length === 0) {
       const limiterExercises = availableAccessory.filter(e => 
         e.tags?.includes('prehab') || 
         e.tags?.includes('mobility') ||
-        e.transferTo?.some(t => t.toLowerCase().includes(primaryGoal.toLowerCase()))
+        exerciseTransfersToSkill(e, primaryGoal)
       )
       
       for (const ex of limiterExercises.slice(0, 2)) {
@@ -3376,9 +3558,10 @@ function applyMaterialityScoreAdjustments(
     }
     
     // Step 3: If still empty, add goal-relevant core
+    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
     if (selected.length === 0) {
       const coreForGoal = availableCore.filter(e => 
-        e.transferTo?.some(t => t.toLowerCase().includes(primaryGoal.toLowerCase())) ||
+        exerciseTransfersToSkill(e, primaryGoal) ||
         (primaryGoal === 'planche' && e.tags?.includes('compression')) ||
         (primaryGoal === 'front_lever' && e.tags?.includes('anti_extension'))
       )
@@ -3477,23 +3660,25 @@ function applyMaterialityScoreAdjustments(
         }
         
         // Find exercises that transfer to this tertiary skill
-        const tertiarySkillLower = tertiaryEntry.skill.toLowerCase().replace(/_/g, '')
+        // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
+        const tertiarySkillLower = safeLower(tertiaryEntry.skill).replace(/_/g, '')
+        if (!tertiarySkillLower) continue // Skip malformed tertiary skill entries
         
         // Search in all pools for exercises matching tertiary skill
         const tertiaryCandidates = [
           ...availableSkills.filter(e => 
-            e.transferTo?.some(t => t.toLowerCase().includes(tertiarySkillLower)) ||
-            e.id.toLowerCase().includes(tertiarySkillLower) ||
-            e.name.toLowerCase().includes(tertiarySkillLower) ||
-            e.primarySkills?.some(p => p.toLowerCase().includes(tertiarySkillLower))
+            exerciseTransfersToSkill(e, tertiarySkillLower) ||
+            safeExerciseId(e).includes(tertiarySkillLower) ||
+            safeExerciseName(e).includes(tertiarySkillLower) ||
+            (e.primarySkills || []).some(p => safeLower(p).includes(tertiarySkillLower))
           ),
           ...availableStrength.filter(e =>
-            e.transferTo?.some(t => t.toLowerCase().includes(tertiarySkillLower)) ||
-            e.id.toLowerCase().includes(tertiarySkillLower) ||
-            e.primarySkills?.some(p => p.toLowerCase().includes(tertiarySkillLower))
+            exerciseTransfersToSkill(e, tertiarySkillLower) ||
+            safeExerciseId(e).includes(tertiarySkillLower) ||
+            (e.primarySkills || []).some(p => safeLower(p).includes(tertiarySkillLower))
           ),
           ...availableAccessory.filter(e =>
-            e.transferTo?.some(t => t.toLowerCase().includes(tertiarySkillLower))
+            exerciseTransfersToSkill(e, tertiarySkillLower)
           ),
         ].filter(e => !usedIds.has(e.id))
         
@@ -3611,18 +3796,20 @@ function applyMaterialityScoreAdjustments(
         }
         
         // Find exercises that transfer to this support skill
-        const supportSkillLower = supportEntry.skill.toLowerCase().replace(/_/g, '')
+        // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
+        const supportSkillLower = safeLower(supportEntry.skill).replace(/_/g, '')
+        if (!supportSkillLower) continue // Skip malformed support skill entries
         
         // Search in all pools for exercises transferring to support skill
         const supportCandidates = [
           ...availableSkills.filter(e => 
-            e.transferTo?.some(t => t.toLowerCase().includes(supportSkillLower)) ||
-            e.id.toLowerCase().includes(supportSkillLower) ||
-            e.name.toLowerCase().includes(supportSkillLower)
+            exerciseTransfersToSkill(e, supportSkillLower) ||
+            safeExerciseId(e).includes(supportSkillLower) ||
+            safeExerciseName(e).includes(supportSkillLower)
           ),
           ...availableStrength.filter(e =>
-            e.transferTo?.some(t => t.toLowerCase().includes(supportSkillLower)) ||
-            e.id.toLowerCase().includes(supportSkillLower)
+            exerciseTransfersToSkill(e, supportSkillLower) ||
+            safeExerciseId(e).includes(supportSkillLower)
           ),
           ...availableAccessory.filter(e =>
             e.transferTo?.some(t => t.toLowerCase().includes(supportSkillLower))
@@ -3899,9 +4086,10 @@ function applyMaterialityScoreAdjustments(
     console.log('[skill-exposure-check] Enforcing minimum skill floor - attempting to add skill exercises')
     
     // Find unused skill exercises that transfer to goal
+    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
     const unusedSkillCandidates = [...availableSkills, ...goalExercises.filter(e => e.category === 'skill')]
       .filter(e => !usedIds.has(e.id))
-      .filter(e => e.transferTo?.some(t => t.toLowerCase().includes(primaryGoal.toLowerCase())))
+      .filter(e => exerciseTransfersToSkill(e, primaryGoal))
       .slice(0, 2 - directSkillExercises.length)
     
     for (const candidate of unusedSkillCandidates) {
@@ -3955,28 +4143,29 @@ function applyMaterialityScoreAdjustments(
     // Check exercise transfer tags and context to classify
     const exerciseTransfers = ex.exercise.transferTo || []
     
+    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
     if (skillMatch && skillMatch.influence === 'primary') {
       skillSource = 'primary_spine'
       matchedSkill = skillMatch.skillId
     } else if (skillMatch && skillMatch.influence === 'secondary') {
       skillSource = 'secondary_anchor'
       matchedSkill = skillMatch.skillId
-    } else if (primarySkillFromSession && exerciseTransfers.some(t => 
-      t.toLowerCase().includes(primarySkillFromSession.skill.toLowerCase().replace(/_/g, ''))
+    } else if (primarySkillFromSession && safeSkillKey(primarySkillFromSession) && safeTransferTargets(exerciseTransfers).some(t => 
+      t.includes(safeLower(primarySkillFromSession.skill).replace(/_/g, ''))
     )) {
       skillSource = 'primary_spine'
       matchedSkill = primarySkillFromSession.skill
-    } else if (secondarySkillFromSession && exerciseTransfers.some(t => 
-      t.toLowerCase().includes(secondarySkillFromSession.skill.toLowerCase().replace(/_/g, ''))
+    } else if (secondarySkillFromSession && safeSkillKey(secondarySkillFromSession) && safeTransferTargets(exerciseTransfers).some(t => 
+      t.includes(safeLower(secondarySkillFromSession.skill).replace(/_/g, ''))
     )) {
       skillSource = 'secondary_anchor'
       matchedSkill = secondarySkillFromSession.skill
-    } else if (supportSkillsFromSession.some(s => exerciseTransfers.some(t => 
-      t.toLowerCase().includes(s.skill.toLowerCase().replace(/_/g, ''))
+    } else if (supportSkillsFromSession.some(s => safeSkillKey(s) && safeTransferTargets(exerciseTransfers).some(t => 
+      t.includes(safeLower(s.skill).replace(/_/g, ''))
     ))) {
       skillSource = 'support_rotation'
-      matchedSkill = supportSkillsFromSession.find(s => exerciseTransfers.some(t => 
-        t.toLowerCase().includes(s.skill.toLowerCase().replace(/_/g, ''))
+      matchedSkill = supportSkillsFromSession.find(s => safeSkillKey(s) && safeTransferTargets(exerciseTransfers).some(t => 
+        t.includes(safeLower(s.skill).replace(/_/g, ''))
       ))?.skill || null
     } else if (ex.selectionContext?.doctrineSource) {
       skillSource = 'doctrine_driven'
@@ -4903,7 +5092,8 @@ function filterByCurrentProgression(
     )
   }
   
-  const allowedDifficulties = PROGRESSION_TO_MAX_DIFFICULTY[currentProgression.toLowerCase()] || 
+  // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
+  const allowedDifficulties = PROGRESSION_TO_MAX_DIFFICULTY[safeLower(currentProgression)] || 
     ['beginner', 'intermediate'] // Conservative default
   
   const filtered = exercises.filter(e => allowedDifficulties.includes(e.difficultyLevel))

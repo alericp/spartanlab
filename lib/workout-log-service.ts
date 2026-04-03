@@ -76,6 +76,13 @@ export interface WorkoutLog {
   trusted?: boolean
   // FEEDBACK LOOP: Source route for tracking
   sourceRoute?: 'workout_session' | 'first_session' | 'quick_log' | 'demo'
+  // [EXECUTION-TRUTH-FIX] Exercise-level notes and flags
+  exerciseNotes?: {
+    exerciseIndex: number
+    exerciseName: string
+    flags: string[]
+    freeText: string
+  }[]
 }
 
 const STORAGE_KEY = 'spartanlab_workout_logs'
@@ -217,6 +224,8 @@ interface QuickLogInput {
   // FEEDBACK LOOP: Completion quality
   completionStatus?: 'completed' | 'partial' | 'skipped'
   sourceRoute?: 'workout_session' | 'first_session' | 'quick_log' | 'demo'
+  // [EXECUTION-TRUTH-FIX] Exercise-level notes and flags
+  exerciseNotes?: WorkoutLog['exerciseNotes']
 }
 
 /**
@@ -254,6 +263,8 @@ export function quickLogWorkout(input: QuickLogInput): WorkoutLog {
     keyPerformance: input.keyPerformance,
     notes: input.notes,
     exercises: input.exercises || [], // Include exercise-level outcomes
+    // [EXECUTION-TRUTH-FIX] Include exercise-level notes
+    exerciseNotes: input.exerciseNotes,
     // FEEDBACK LOOP fields
     completionStatus: input.completionStatus || 'completed',
     trusted,

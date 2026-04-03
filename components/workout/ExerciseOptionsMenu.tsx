@@ -287,11 +287,25 @@ export function ExerciseOptionsMenu({
           
           <div className="space-y-2 pb-4">
             {progressionOptions.length === 0 ? (
-              <p className="text-[#6B7280] text-center py-8">
-                No progression options available for this exercise.
-              </p>
+              <div className="text-center py-6 px-4">
+                <p className="text-[#A4ACB8] mb-2">
+                  This exercise follows a fixed prescription.
+                </p>
+                <p className="text-[#6B7280] text-sm">
+                  Warmup and mobility exercises are prescribed for optimal preparation and recovery.
+                </p>
+              </div>
             ) : (
               <>
+                {/* [EXECUTION-TRUTH-FIX] Check if all options are fallbacks */}
+                {progressionOptions.every(o => o.isFallback) && (
+                  <div className="bg-[#4F6D8A]/10 border border-[#4F6D8A]/20 rounded-lg p-3 mb-3">
+                    <p className="text-xs text-[#A4ACB8]">
+                      No formal progression ladder found. Here are suggested adjustments based on exercise type.
+                    </p>
+                  </div>
+                )}
+                
                 {/* Easier options */}
                 {progressionOptions.filter(o => o.direction === 'easier').length > 0 && (
                   <div className="space-y-2">
@@ -304,20 +318,24 @@ export function ExerciseOptionsMenu({
                         <button
                           key={option.id}
                           onClick={() => handleProgressionChange(option)}
-                          className="w-full flex items-center justify-between p-4 rounded-lg bg-[#1A1F26] border border-[#2B313A] hover:border-emerald-500/50 transition-colors text-left"
+                          className="w-full flex items-start p-3 rounded-lg bg-[#1A1F26] border border-[#2B313A] hover:border-emerald-500/50 transition-colors text-left"
                         >
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                              <ArrowDown className="w-4 h-4 text-emerald-400" />
-                            </div>
-                            <span className="font-medium text-[#E6E9EF]">{option.name}</span>
+                          <div className="w-7 h-7 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                            <ArrowDown className="w-3.5 h-3.5 text-emerald-400" />
                           </div>
-                          <Badge 
-                            variant="outline" 
-                            className="border-emerald-500/30 text-emerald-400 capitalize"
-                          >
-                            {option.difficultyLevel}
-                          </Badge>
+                          <div className="ml-3 flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium text-[#E6E9EF] text-sm">{option.name}</span>
+                              {option.isFallback && (
+                                <Badge variant="outline" className="border-[#3A4553] text-[#6B7280] text-[10px] shrink-0">
+                                  Adjustment
+                                </Badge>
+                              )}
+                            </div>
+                            {option.description && (
+                              <p className="text-xs text-[#6B7280] mt-0.5">{option.description}</p>
+                            )}
+                          </div>
                         </button>
                       ))}
                   </div>
@@ -335,20 +353,24 @@ export function ExerciseOptionsMenu({
                         <button
                           key={option.id}
                           onClick={() => handleProgressionChange(option)}
-                          className="w-full flex items-center justify-between p-4 rounded-lg bg-[#1A1F26] border border-[#2B313A] hover:border-[#C1121F]/50 transition-colors text-left"
+                          className="w-full flex items-start p-3 rounded-lg bg-[#1A1F26] border border-[#2B313A] hover:border-[#C1121F]/50 transition-colors text-left"
                         >
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-[#C1121F]/20 flex items-center justify-center">
-                              <ArrowUp className="w-4 h-4 text-[#C1121F]" />
-                            </div>
-                            <span className="font-medium text-[#E6E9EF]">{option.name}</span>
+                          <div className="w-7 h-7 rounded-full bg-[#C1121F]/20 flex items-center justify-center shrink-0 mt-0.5">
+                            <ArrowUp className="w-3.5 h-3.5 text-[#C1121F]" />
                           </div>
-                          <Badge 
-                            variant="outline" 
-                            className="border-[#C1121F]/30 text-[#C1121F] capitalize"
-                          >
-                            {option.difficultyLevel}
-                          </Badge>
+                          <div className="ml-3 flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium text-[#E6E9EF] text-sm">{option.name}</span>
+                              {option.isFallback && (
+                                <Badge variant="outline" className="border-[#3A4553] text-[#6B7280] text-[10px] shrink-0">
+                                  Adjustment
+                                </Badge>
+                              )}
+                            </div>
+                            {option.description && (
+                              <p className="text-xs text-[#6B7280] mt-0.5">{option.description}</p>
+                            )}
+                          </div>
                         </button>
                       ))}
                   </div>

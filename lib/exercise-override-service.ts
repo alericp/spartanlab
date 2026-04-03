@@ -74,6 +74,9 @@ export interface ProgressionOption {
   name: string
   direction: 'easier' | 'harder'
   difficultyLevel: DifficultyLevel
+  // [EXECUTION-TRUTH-FIX] Optional description for fallback options
+  description?: string
+  isFallback?: boolean
 }
 
 // =============================================================================
@@ -433,6 +436,17 @@ export function getProgressionOptions(exercise: AdaptiveExercise): ProgressionOp
     }
   }
   
+  // [EXECUTION-TRUTH-FIX] If still no options, add category-specific adjustment fallbacks
+  // This ensures the progression sheet is never empty for adjustable exercises
+  if (options.length === 0) {
+    const category = (exercise.category ?? '').toLowerCase()
+    const name = (exercise.name ?? '').toLowerCase()
+    
+    // Add fallback adjustment options based on category
+    const fallbackOptions = getCategoryFallbackProgressions(name, category)
+    options.push(...fallbackOptions)
+  }
+  
   // Sort: easier first, then harder
   options.sort((a, b) => {
     if (a.direction === 'easier' && b.direction === 'harder') return -1
@@ -441,6 +455,69 @@ export function getProgressionOptions(exercise: AdaptiveExercise): ProgressionOp
   })
   
   return options
+}
+
+/**
+ * [EXECUTION-TRUTH-FIX] Get category-specific fallback progressions
+ * These ensure the progression sheet is never empty for adjustable exercises
+ */
+function getCategoryFallbackProgressions(name: string, category: string): ProgressionOption[] {
+  const fallbacks: ProgressionOption[] = []
+  const timestamp = Date.now()
+  
+  // Core exercises (hanging leg raises, hollow holds, planks, etc.)
+  if (category === 'core' || name.includes('leg raise') || name.includes('hollow') || name.includes('plank') || name.includes('dragon')) {
+    fallbacks.push(
+      { id: `fallback-shorter-hold-${timestamp}`, name: 'Shorter Hold / Fewer Reps', direction: 'easier', difficultyLevel: 'beginner', description: 'Reduce target by ~25% to build quality', isFallback: true },
+      { id: `fallback-tucked-${timestamp}`, name: 'Tucked Variation', direction: 'easier', difficultyLevel: 'beginner', description: 'Use tucked legs to reduce lever arm', isFallback: true },
+      { id: `fallback-cluster-${timestamp}`, name: 'Clustered Sets', direction: 'easier', difficultyLevel: 'beginner', description: 'Split hold into mini-clusters with brief rest', isFallback: true },
+      { id: `fallback-longer-hold-${timestamp}`, name: 'Longer Hold / More Reps', direction: 'harder', difficultyLevel: 'advanced', description: 'Increase target by ~25%', isFallback: true },
+    )
+  }
+  
+  // Skill exercises (levers, planches, l-sits, etc.)
+  else if (category === 'skill' || name.includes('lever') || name.includes('planche') || name.includes('l-sit') || name.includes('handstand')) {
+    fallbacks.push(
+      { id: `fallback-band-assist-${timestamp}`, name: 'Band-Assisted', direction: 'easier', difficultyLevel: 'beginner', description: 'Add band support for quality reps', isFallback: true },
+      { id: `fallback-shorter-${timestamp}`, name: 'Shorter Hold Target', direction: 'easier', difficultyLevel: 'beginner', description: 'Reduce hold duration by ~25%', isFallback: true },
+      { id: `fallback-tuck-${timestamp}`, name: 'More Tucked Position', direction: 'easier', difficultyLevel: 'beginner', description: 'Regress to tighter tuck for stability', isFallback: true },
+      { id: `fallback-longer-${timestamp}`, name: 'Longer Hold Target', direction: 'harder', difficultyLevel: 'advanced', description: 'Increase hold duration', isFallback: true },
+      { id: `fallback-less-tuck-${timestamp}`, name: 'Less Tucked / More Open', direction: 'harder', difficultyLevel: 'advanced', description: 'Progress to more open position', isFallback: true },
+    )
+  }
+  
+  // Pull exercises
+  else if (category === 'pull' || name.includes('pull') || name.includes('row') || name.includes('chin')) {
+    fallbacks.push(
+      { id: `fallback-band-pull-${timestamp}`, name: 'Band-Assisted', direction: 'easier', difficultyLevel: 'beginner', description: 'Add band support for full ROM reps', isFallback: true },
+      { id: `fallback-partial-pull-${timestamp}`, name: 'Partial Range of Motion', direction: 'easier', difficultyLevel: 'beginner', description: 'Use half reps to build strength', isFallback: true },
+      { id: `fallback-eccentric-${timestamp}`, name: 'Eccentric Focus (Slow Negatives)', direction: 'easier', difficultyLevel: 'beginner', description: 'Focus on 3-5s lowering phase', isFallback: true },
+      { id: `fallback-weighted-pull-${timestamp}`, name: 'Add Weight', direction: 'harder', difficultyLevel: 'advanced', description: 'Add external load', isFallback: true },
+      { id: `fallback-wider-pull-${timestamp}`, name: 'Wider Grip / Harder Variation', direction: 'harder', difficultyLevel: 'advanced', description: 'Progress to more challenging variation', isFallback: true },
+    )
+  }
+  
+  // Push exercises
+  else if (category === 'push' || name.includes('push') || name.includes('dip') || name.includes('press')) {
+    fallbacks.push(
+      { id: `fallback-band-push-${timestamp}`, name: 'Band-Assisted', direction: 'easier', difficultyLevel: 'beginner', description: 'Add band support for full ROM reps', isFallback: true },
+      { id: `fallback-incline-${timestamp}`, name: 'Incline / Elevated', direction: 'easier', difficultyLevel: 'beginner', description: 'Use elevation to reduce load', isFallback: true },
+      { id: `fallback-partial-push-${timestamp}`, name: 'Partial Range of Motion', direction: 'easier', difficultyLevel: 'beginner', description: 'Use partial range to build strength', isFallback: true },
+      { id: `fallback-weighted-push-${timestamp}`, name: 'Add Weight', direction: 'harder', difficultyLevel: 'advanced', description: 'Add external load', isFallback: true },
+      { id: `fallback-decline-${timestamp}`, name: 'Decline / More Challenging Angle', direction: 'harder', difficultyLevel: 'advanced', description: 'Progress to harder angle', isFallback: true },
+    )
+  }
+  
+  // Default fallbacks for any other category
+  else {
+    fallbacks.push(
+      { id: `fallback-reduce-intensity-${timestamp}`, name: 'Reduce Intensity', direction: 'easier', difficultyLevel: 'beginner', description: 'Lower difficulty by ~25%', isFallback: true },
+      { id: `fallback-reduce-volume-${timestamp}`, name: 'Reduce Volume', direction: 'easier', difficultyLevel: 'beginner', description: 'Do fewer reps or sets', isFallback: true },
+      { id: `fallback-increase-intensity-${timestamp}`, name: 'Increase Intensity', direction: 'harder', difficultyLevel: 'advanced', description: 'Increase difficulty by ~25%', isFallback: true },
+    )
+  }
+  
+  return fallbacks
 }
 
 // =============================================================================

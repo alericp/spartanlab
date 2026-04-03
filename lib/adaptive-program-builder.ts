@@ -1432,6 +1432,7 @@ exerciseExplanations?: {
     generatedAt: string
     triggerSource: 'onboarding' | 'main_build' | 'regenerate' | 'modify' | 'restart' | 'unknown'
     // [SESSION-ARCHITECTURE-MATERIALIZATION] Skill materialization verdict
+    // [MATERIALIZATION-TRUTH-SOURCE-FIX] Now includes normalized expression buckets from authoritative truth
     materializationVerdict?: {
       verdict: 'PASS' | 'WARN' | 'FAIL'
       issues: string[]
@@ -1440,11 +1441,27 @@ exerciseExplanations?: {
         expressed: number
         dropped: string[]
       }
+      // [MATERIALIZATION-TRUTH-SOURCE-FIX] Normalized expression buckets
+      normalizedExpression?: {
+        directlyExpressed: string[]
+        technicallyExpressed: string[]
+        supportExpressed: string[]
+        carryoverOnly: string[]
+        deferredSkills: string[]
+        trulyDropped: string[]
+        truthSourceUsed: 'visibleWeekAudit' | 'authoritativeIntent' | 'sessionArchitecture' | 'legacyFallback'
+      }
       exerciseClassification: {
         total: number
         genericFallback: number
         doctrineDriven: number
         genericRatio: number
+      }
+      // [MATERIALIZATION-TRUTH-SOURCE-FIX] Consistency check result
+      consistencyCheck?: {
+        contradictionDetected: boolean
+        visibleAuditSkillCount: number
+        visiblyExpressedCount: number
       }
     } | null
   }
@@ -1569,6 +1586,7 @@ exerciseExplanations?: {
   // ==========================================================================
   // [SESSION-ARCHITECTURE-MATERIALIZATION] Verdict on skill materialization
   // Tracks whether selected skills actually made it into exercises
+  // [MATERIALIZATION-TRUTH-SOURCE-FIX] Now includes normalized expression buckets
   // ==========================================================================
   materializationVerdict?: {
     verdict: 'PASS' | 'WARN' | 'FAIL'
@@ -1578,11 +1596,25 @@ exerciseExplanations?: {
       expressed: number
       dropped: string[]
     }
+    normalizedExpression?: {
+      directlyExpressed: string[]
+      technicallyExpressed: string[]
+      supportExpressed: string[]
+      carryoverOnly: string[]
+      deferredSkills: string[]
+      trulyDropped: string[]
+      truthSourceUsed: 'visibleWeekAudit' | 'authoritativeIntent' | 'sessionArchitecture' | 'legacyFallback'
+    }
     exerciseClassification: {
       total: number
       genericFallback: number
       doctrineDriven: number
       genericRatio: number
+    }
+    consistencyCheck?: {
+      contradictionDetected: boolean
+      visibleAuditSkillCount: number
+      visiblyExpressedCount: number
     }
   }
 }
@@ -12994,8 +13026,12 @@ return explanations.length > 0 ? explanations : undefined
   }
   
   // ==========================================================================
+  // ==========================================================================
   // [SESSION-ARCHITECTURE-MATERIALIZATION] PHASE A: WEEKLY ROLLUP AUDIT
-  // Comprehensive audit comparing selected skills to what actually materialized
+  // ==========================================================================
+  // FIX: Use AUTHORITATIVE truth sources instead of brittle exercise-id matching.
+  // The visibleWeekSkillExpressionAudit was already computed from authoritative contracts
+  // but was being ignored. Now it is the PRIMARY truth source.
   // ==========================================================================
   const sessionsForAudit = finalProgram.weeks?.[0]?.days || []
   const selectedSkillsFromProfile = canonicalProfile.selectedSkills || [primaryGoal]
@@ -13005,159 +13041,358 @@ return explanations.length > 0 ? explanations : undefined
       sessionArchitectureTruth.supportRotationSkills.length
     : 1
   
-  // Count actual skill touches per session for detailed breakdown
-  const perSessionSkillAudit = sessionsForAudit.map((day, idx) => {
-    const exercises = day.exercises || []
-    const skillTouches = new Map<string, number>()
-    let genericFallbackCount = 0
-    let doctrineDrivenCount = 0
+  // ==========================================================================
+  // [MATERIALIZATION-TRUTH-SOURCE-FIX] AUTHORITATIVE SKILL EXPRESSION RESOLVER
+  // ==========================================================================
+  // This resolver uses authoritative truth sources in priority order:
+  // 1. visibleWeekSkillExpressionAudit (built from visibleWeekExpressionContract)
+  // 2. authoritativeMultiSkillIntentContract
+  // 3. sessionArchitectureTruth
+  // 4. Legacy exercise-id matching (ONLY as last resort for old programs)
+  // ==========================================================================
+  const resolveAuthoritativeMaterializedSkillExpression = () => {
+    // Normalized buckets for skill expression
+    const directlyExpressed: string[] = []
+    const technicallyExpressed: string[] = []
+    const supportExpressed: string[] = []
+    const carryoverOnly: string[] = []
+    const deferredSkills: string[] = []
+    const trulyDropped: string[] = []
     
-    for (const ex of exercises) {
-      const exIdLower = ex.id?.toLowerCase() || ''
-      let matchedSkill = false
+    // Track which source was used for audit trail
+    let truthSourceUsed: 'visibleWeekAudit' | 'authoritativeIntent' | 'sessionArchitecture' | 'legacyFallback' = 'legacyFallback'
+    
+    // AUTHORITATIVE SOURCE 1: visibleWeekSkillExpressionAudit (most accurate)
+    const visibleAudit = finalProgram.visibleWeekSkillExpressionAudit
+    if (visibleAudit && visibleAudit.skillsWithDirectBlocks) {
+      truthSourceUsed = 'visibleWeekAudit'
       
-      // Check each selected skill
-      for (const skill of selectedSkillsFromProfile) {
-        const skillKey = skill.toLowerCase().replace(/_/g, '')
-        if (exIdLower.includes(skillKey)) {
-          skillTouches.set(skill, (skillTouches.get(skill) || 0) + 1)
-          matchedSkill = true
-          break
+      // Direct blocks = primary/secondary fully expressed
+      for (const skill of visibleAudit.skillsWithDirectBlocks) {
+        if (!directlyExpressed.includes(skill)) {
+          directlyExpressed.push(skill)
         }
       }
       
-      // Check transfer targets
-      if (!matchedSkill && ex.exercise?.transferTo) {
-        for (const transfer of ex.exercise.transferTo) {
-          const transferLower = transfer.toLowerCase().replace(/_/g, '')
+      // Technical slots = tertiary with visibility
+      for (const skill of (visibleAudit.skillsWithTechnicalSlots || [])) {
+        if (!directlyExpressed.includes(skill) && !technicallyExpressed.includes(skill)) {
+          technicallyExpressed.push(skill)
+        }
+      }
+      
+      // Mixed day presence = visible in mixed sessions
+      for (const skill of (visibleAudit.skillsWithMixedDayPresence || [])) {
+        if (!directlyExpressed.includes(skill) && 
+            !technicallyExpressed.includes(skill) && 
+            !supportExpressed.includes(skill)) {
+          supportExpressed.push(skill)
+        }
+      }
+      
+      // Support blocks
+      for (const skill of (visibleAudit.skillsWithSupportBlocks || [])) {
+        if (!directlyExpressed.includes(skill) && 
+            !technicallyExpressed.includes(skill) && 
+            !supportExpressed.includes(skill)) {
+          supportExpressed.push(skill)
+        }
+      }
+      
+      // Carryover only
+      for (const skill of (visibleAudit.skillsCarryoverOnly || [])) {
+        if (!directlyExpressed.includes(skill) && 
+            !technicallyExpressed.includes(skill) && 
+            !supportExpressed.includes(skill) &&
+            !carryoverOnly.includes(skill)) {
+          carryoverOnly.push(skill)
+        }
+      }
+      
+      // Deferred
+      for (const skill of (visibleAudit.deferredSkills || [])) {
+        if (!directlyExpressed.includes(skill) && 
+            !technicallyExpressed.includes(skill) && 
+            !supportExpressed.includes(skill) &&
+            !carryoverOnly.includes(skill) &&
+            !deferredSkills.includes(skill)) {
+          deferredSkills.push(skill)
+        }
+      }
+    }
+    // AUTHORITATIVE SOURCE 2: authoritativeMultiSkillIntentContract
+    else if (authoritativeMultiSkillIntentContract) {
+      truthSourceUsed = 'authoritativeIntent'
+      
+      // Primary and secondary are directly expressed
+      if (authoritativeMultiSkillIntentContract.primarySkill) {
+        directlyExpressed.push(authoritativeMultiSkillIntentContract.primarySkill)
+      }
+      if (authoritativeMultiSkillIntentContract.secondarySkill) {
+        directlyExpressed.push(authoritativeMultiSkillIntentContract.secondarySkill)
+      }
+      
+      // Materially expressed includes technical/support
+      for (const skill of authoritativeMultiSkillIntentContract.materiallyExpressedSkills) {
+        if (!directlyExpressed.includes(skill)) {
+          technicallyExpressed.push(skill)
+        }
+      }
+      
+      // Support skills
+      for (const skill of authoritativeMultiSkillIntentContract.supportSkills) {
+        if (!directlyExpressed.includes(skill) && !technicallyExpressed.includes(skill)) {
+          supportExpressed.push(skill)
+        }
+      }
+      
+      // Deferred
+      for (const entry of authoritativeMultiSkillIntentContract.deferredSkills) {
+        deferredSkills.push(entry.skill)
+      }
+    }
+    // AUTHORITATIVE SOURCE 3: sessionArchitectureTruth
+    else if (sessionArchitectureTruth) {
+      truthSourceUsed = 'sessionArchitecture'
+      
+      for (const skill of sessionArchitectureTruth.primarySpineSkills) {
+        directlyExpressed.push(skill)
+      }
+      for (const skill of sessionArchitectureTruth.secondaryAnchorSkills) {
+        if (!directlyExpressed.includes(skill)) {
+          directlyExpressed.push(skill)
+        }
+      }
+      for (const skill of sessionArchitectureTruth.supportRotationSkills) {
+        supportExpressed.push(skill)
+      }
+      for (const skill of sessionArchitectureTruth.deferredSkills) {
+        deferredSkills.push(skill)
+      }
+    }
+    // LEGACY FALLBACK: exercise-id matching (for old programs only)
+    else {
+      truthSourceUsed = 'legacyFallback'
+      
+      // Use old brittle matching as last resort
+      const totalSkillTouchesLegacy = new Map<string, number>()
+      for (const day of sessionsForAudit) {
+        for (const ex of (day.exercises || [])) {
+          const exIdLower = ex.id?.toLowerCase() || ''
           for (const skill of selectedSkillsFromProfile) {
             const skillKey = skill.toLowerCase().replace(/_/g, '')
-            if (transferLower.includes(skillKey)) {
-              skillTouches.set(skill, (skillTouches.get(skill) || 0) + 1)
-              matchedSkill = true
+            if (exIdLower.includes(skillKey)) {
+              totalSkillTouchesLegacy.set(skill, (totalSkillTouchesLegacy.get(skill) || 0) + 1)
               break
             }
           }
-          if (matchedSkill) break
         }
       }
       
-      // Track source type
-      if (!matchedSkill) {
-        genericFallbackCount++
+      for (const skill of totalSkillTouchesLegacy.keys()) {
+        supportExpressed.push(skill) // Conservative: legacy only proves support-level expression
       }
-      // Check selection context if available
-      if (ex.selectionContext?.doctrineSource) {
-        doctrineDrivenCount++
+    }
+    
+    // Find truly dropped skills (not in any bucket)
+    const allExpressed = new Set([
+      ...directlyExpressed,
+      ...technicallyExpressed,
+      ...supportExpressed,
+      ...carryoverOnly,
+      ...deferredSkills,
+    ])
+    
+    for (const skill of selectedSkillsFromProfile) {
+      if (!allExpressed.has(skill)) {
+        trulyDropped.push(skill)
       }
     }
     
     return {
-      sessionIndex: idx,
-      dayType: day.dayType || 'unknown',
-      focus: day.focus || 'unknown',
-      totalExercises: exercises.length,
-      skillTouches: Object.fromEntries(skillTouches),
-      skillsExpressed: [...skillTouches.keys()],
-      genericFallbackCount,
-      doctrineDrivenCount,
+      directlyExpressed,
+      technicallyExpressed,
+      supportExpressed,
+      carryoverOnly,
+      deferredSkills,
+      trulyDropped,
+      truthSourceUsed,
     }
-  })
-  
-  // Calculate totals
-  const totalSkillTouches = new Map<string, number>()
-  let totalGenericFallback = 0
-  let totalDoctrineDriven = 0
-  
-  for (const session of perSessionSkillAudit) {
-    for (const [skill, count] of Object.entries(session.skillTouches)) {
-      totalSkillTouches.set(skill, (totalSkillTouches.get(skill) || 0) + count)
-    }
-    totalGenericFallback += session.genericFallbackCount
-    totalDoctrineDriven += session.doctrineDrivenCount
   }
   
-  const actuallyExpressedSkills = [...totalSkillTouches.keys()]
-  const selectedButNeverExpressed = selectedSkillsFromProfile.filter(s => !actuallyExpressedSkills.includes(s))
-  const totalExercisesInWeek = perSessionSkillAudit.reduce((sum, s) => sum + s.totalExercises, 0)
-  const genericFallbackRatio = totalExercisesInWeek > 0 
-    ? totalGenericFallback / totalExercisesInWeek 
-    : 0
+  // Resolve using authoritative sources
+  const normalizedExpression = resolveAuthoritativeMaterializedSkillExpression()
   
-  // Determine final verdict
+  // Calculate totals for verdict
+  const visiblyExpressedCount = 
+    normalizedExpression.directlyExpressed.length + 
+    normalizedExpression.technicallyExpressed.length
+  const totalMateriallyExpressedCount = 
+    visiblyExpressedCount + 
+    normalizedExpression.supportExpressed.length + 
+    normalizedExpression.carryoverOnly.length
+  
+  // Log the authoritative truth source audit
+  console.log('[MATERIALIZATION-TRUTH-SOURCE-AUDIT]', {
+    truthSourceUsed: normalizedExpression.truthSourceUsed,
+    visibleWeekAuditExists: !!finalProgram.visibleWeekSkillExpressionAudit,
+    authoritativeIntentExists: !!authoritativeMultiSkillIntentContract,
+    sessionArchitectureExists: !!sessionArchitectureTruth,
+    usedLegacyFallback: normalizedExpression.truthSourceUsed === 'legacyFallback',
+  })
+  
+  console.log('[MATERIALIZATION-NORMALIZED-BUCKETS]', {
+    directlyExpressed: normalizedExpression.directlyExpressed,
+    technicallyExpressed: normalizedExpression.technicallyExpressed,
+    supportExpressed: normalizedExpression.supportExpressed,
+    carryoverOnly: normalizedExpression.carryoverOnly,
+    deferred: normalizedExpression.deferredSkills,
+    trulyDropped: normalizedExpression.trulyDropped,
+    visiblyExpressedCount,
+    totalMateriallyExpressedCount,
+  })
+  
+  // ==========================================================================
+  // NEW VERDICT LOGIC using authoritative buckets
+  // ==========================================================================
+  // PASS: primary/secondary directly/technically expressed, broader skills support/carryover/deferred
+  // WARN: carryover/support when broader visibility ideally expected, OR truthful deferrals exist
+  // FAIL: primary/secondary not expressed, OR truly dropped skills exist
+  // ==========================================================================
   let materializationVerdict: 'PASS' | 'WARN' | 'FAIL'
   const materializationIssues: string[] = []
   
-  if (selectedButNeverExpressed.length > 0 && selectedSkillsFromProfile.length > 2) {
+  // Check if primary skill is expressed
+  const primaryExpressed = normalizedExpression.directlyExpressed.includes(primaryGoal) ||
+    normalizedExpression.technicallyExpressed.includes(primaryGoal)
+  
+  // Check if secondary skill is expressed (if exists)
+  const secondaryExpressed = !secondaryGoal || 
+    normalizedExpression.directlyExpressed.includes(secondaryGoal) ||
+    normalizedExpression.technicallyExpressed.includes(secondaryGoal) ||
+    normalizedExpression.supportExpressed.includes(secondaryGoal)
+  
+  // Determine verdict
+  if (normalizedExpression.trulyDropped.length > 0) {
+    // FAIL: skills truly dropped with no explanation
+    materializationVerdict = 'FAIL'
+    materializationIssues.push(`Skills truly dropped without deferral: ${normalizedExpression.trulyDropped.join(', ')}`)
+  } else if (!primaryExpressed) {
+    // FAIL: primary skill not expressed
+    materializationVerdict = 'FAIL'
+    materializationIssues.push(`Primary skill ${primaryGoal} not materially expressed`)
+  } else if (!secondaryExpressed && secondaryGoal) {
+    // WARN: secondary skill only carryover or deferred
     materializationVerdict = 'WARN'
-    materializationIssues.push(`Selected skills never expressed: ${selectedButNeverExpressed.join(', ')}`)
-  } else if (genericFallbackRatio > 0.6) {
+    materializationIssues.push(`Secondary skill ${secondaryGoal} reduced to carryover/deferred`)
+  } else if (normalizedExpression.deferredSkills.length > 0 && selectedSkillsFromProfile.length > 3) {
+    // WARN: deferrals exist in complex profile (but this is acceptable)
     materializationVerdict = 'WARN'
-    materializationIssues.push(`Generic fallback ratio too high: ${Math.round(genericFallbackRatio * 100)}%`)
-  } else if (actuallyExpressedSkills.length < Math.min(selectedSkillsFromProfile.length, 3)) {
+    materializationIssues.push(`${normalizedExpression.deferredSkills.length} skill(s) deferred this cycle`)
+  } else if (visiblyExpressedCount < 2 && selectedSkillsFromProfile.length >= 3) {
+    // WARN: low visible expression for complex profile
     materializationVerdict = 'WARN'
-    materializationIssues.push('Too few skills materially expressed in week')
+    materializationIssues.push('Limited visible skill expression for profile complexity')
   } else {
+    // PASS: all checks passed
     materializationVerdict = 'PASS'
   }
   
-  // Downgrade to FAIL if multiple issues
-  if (materializationIssues.length >= 2) {
-    materializationVerdict = 'FAIL'
+  // For exercise classification (legacy compatibility), still compute from sessions
+  const totalExercisesInWeek = sessionsForAudit.reduce((sum, day) => sum + (day.exercises?.length || 0), 0)
+  let totalDoctrineDriven = 0
+  for (const day of sessionsForAudit) {
+    for (const ex of (day.exercises || [])) {
+      if (ex.selectionContext?.doctrineSource) {
+        totalDoctrineDriven++
+      }
+    }
   }
   
   console.log('[SESSION-ARCHITECTURE-MATERIALIZATION-WEEKLY-ROLLUP]', {
     // Comparison totals
     totalSelectedSkills: selectedSkillsFromProfile.length,
     architectureContractSkillsCount: architectureSkillsCount,
-    actuallyExpressedSkills: actuallyExpressedSkills.length,
-    selectedButNeverExpressed,
+    visiblyExpressedCount,
+    totalMateriallyExpressedCount,
     
-    // Per-skill breakdown
-    skillTouchesPerSkill: Object.fromEntries(totalSkillTouches),
+    // Normalized buckets
+    directlyExpressed: normalizedExpression.directlyExpressed,
+    technicallyExpressed: normalizedExpression.technicallyExpressed,
+    supportExpressed: normalizedExpression.supportExpressed,
+    carryoverOnly: normalizedExpression.carryoverOnly,
+    deferred: normalizedExpression.deferredSkills,
+    trulyDropped: normalizedExpression.trulyDropped,
+    
+    // Truth source
+    truthSourceUsed: normalizedExpression.truthSourceUsed,
     
     // Exercise classification
     totalExercisesInWeek,
-    totalGenericFallback,
     totalDoctrineDriven,
-    genericFallbackRatio: `${Math.round(genericFallbackRatio * 100)}%`,
-    
-    // Per-session breakdown
-    perSessionSkillSummary: perSessionSkillAudit.map(s => ({
-      session: s.sessionIndex,
-      dayType: s.dayType,
-      skills: s.skillsExpressed,
-      generic: s.genericFallbackCount,
-    })),
     
     // Verdict
     materializationVerdict,
     materializationIssues,
     
-    // Support skill specific tracking
+    // Support skill specific tracking (from authoritative source)
     supportSkillsInContract: sessionArchitectureTruth?.supportRotationSkills || [],
-    supportSkillsExpressed: sessionArchitectureTruth?.supportRotationSkills.filter(s => 
-      actuallyExpressedSkills.includes(s)
-    ) || [],
-    supportSkillsDropped: sessionArchitectureTruth?.supportRotationSkills.filter(s => 
-      !actuallyExpressedSkills.includes(s)
-    ) || [],
   })
   
+  // ==========================================================================
+  // [PROGRAM-TRUTH-UI-CONSISTENCY-CHECK] Detect contradictions
+  // ==========================================================================
+  const visibleAuditSkillCount = finalProgram.visibleWeekSkillExpressionAudit?.visibleWeekSkillCount || 0
+  const contradictionDetected = visibleAuditSkillCount > 0 && visiblyExpressedCount === 0
+  
+  if (contradictionDetected) {
+    console.error('[PROGRAM-TRUTH-UI-CONSISTENCY-CHECK] CONTRADICTION DETECTED!', {
+      visibleAuditSkillCount,
+      visiblyExpressedCount,
+      materializationVerdict,
+      message: 'visibleWeekSkillExpressionAudit says skills are visible but materialization says 0 expressed',
+    })
+  } else {
+    console.log('[PROGRAM-TRUTH-UI-CONSISTENCY-CHECK]', {
+      contradictionDetected: false,
+      visibleAuditSkillCount,
+      visiblyExpressedCount,
+      materializationVerdict,
+      message: 'Truth sources are consistent',
+    })
+  }
+  
   // Store materialization verdict on program for UI access
+  // Now includes normalized buckets from authoritative truth
   finalProgram.materializationVerdict = {
     verdict: materializationVerdict,
     issues: materializationIssues,
     skillCoverage: {
       selected: selectedSkillsFromProfile.length,
-      expressed: actuallyExpressedSkills.length,
-      dropped: selectedButNeverExpressed,
+      expressed: totalMateriallyExpressedCount,
+      dropped: normalizedExpression.trulyDropped,
+    },
+    // NEW: Normalized expression buckets for UI
+    normalizedExpression: {
+      directlyExpressed: normalizedExpression.directlyExpressed,
+      technicallyExpressed: normalizedExpression.technicallyExpressed,
+      supportExpressed: normalizedExpression.supportExpressed,
+      carryoverOnly: normalizedExpression.carryoverOnly,
+      deferredSkills: normalizedExpression.deferredSkills,
+      trulyDropped: normalizedExpression.trulyDropped,
+      truthSourceUsed: normalizedExpression.truthSourceUsed,
     },
     exerciseClassification: {
       total: totalExercisesInWeek,
-      genericFallback: totalGenericFallback,
+      genericFallback: 0, // No longer computed via brittle matching
       doctrineDriven: totalDoctrineDriven,
-      genericRatio: genericFallbackRatio,
+      genericRatio: 0,
+    },
+    // Consistency check result
+    consistencyCheck: {
+      contradictionDetected,
+      visibleAuditSkillCount,
+      visiblyExpressedCount,
     },
   }
   

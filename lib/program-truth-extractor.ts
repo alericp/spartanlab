@@ -389,6 +389,24 @@ export function attachTruthExplanation(
 ): AdaptiveProgram {
   const explanation = buildProgramTruthExplanation(program, profile)
   
+  // [CHECKLIST 1 OF 5] Extract authoritativeMultiSkillIntentContract from program if available
+  const authoritativeContract = (program as {
+    authoritativeMultiSkillIntentContract?: {
+      selectedSkills: string[]
+      primarySkill: string | null
+      secondarySkill: string | null
+      supportSkills: string[]
+      deferredSkills: Array<{ skill: string; reasonCode: string; reasonLabel: string; details?: string }>
+      materiallyExpressedSkills: string[]
+      reducedThisCycleSkills: string[]
+      skillPriorityOrder: Array<{ skill: string; role: string; priorityScore: number; exposureSessions: number; currentWorkingProgression?: string | null; historicalCeiling?: string | null }>
+      coverageVerdict: 'strong' | 'adequate' | 'weak'
+      sourceTruthCount: number
+      materiallyUsedCount: number
+      auditTrail: { canonicalSourceSkillCount: number; builderInputSkillCount: number; weightedAllocationSkillCount: number; sessionArchitectureSkillCount: number; skillsLostInPipeline: string[]; skillsNarrowedReason: string | null }
+    } | null
+  }).authoritativeMultiSkillIntentContract || null
+  
   return {
     ...program,
     truthExplanation: {
@@ -397,6 +415,28 @@ export function attachTruthExplanation(
       triggerSource,
       // [SESSION-ARCHITECTURE-MATERIALIZATION] Include materialization verdict if available
       materializationVerdict: program.materializationVerdict || null,
+      // [CHECKLIST 1 OF 5] Include authoritative multi-skill intent contract if available
+      authoritativeMultiSkillIntentContract: authoritativeContract ? {
+        selectedSkills: authoritativeContract.selectedSkills,
+        primarySkill: authoritativeContract.primarySkill,
+        secondarySkill: authoritativeContract.secondarySkill,
+        supportSkills: authoritativeContract.supportSkills,
+        deferredSkills: authoritativeContract.deferredSkills,
+        materiallyExpressedSkills: authoritativeContract.materiallyExpressedSkills,
+        reducedThisCycleSkills: authoritativeContract.reducedThisCycleSkills,
+        skillPriorityOrder: authoritativeContract.skillPriorityOrder.map(s => ({
+          skill: s.skill,
+          role: s.role as 'primary' | 'secondary' | 'tertiary' | 'support' | 'deferred',
+          priorityScore: s.priorityScore,
+          exposureSessions: s.exposureSessions,
+          currentWorkingProgression: s.currentWorkingProgression,
+          historicalCeiling: s.historicalCeiling,
+        })),
+        coverageVerdict: authoritativeContract.coverageVerdict,
+        sourceTruthCount: authoritativeContract.sourceTruthCount,
+        materiallyUsedCount: authoritativeContract.materiallyUsedCount,
+        auditTrail: authoritativeContract.auditTrail,
+      } : null,
     },
   }
 }

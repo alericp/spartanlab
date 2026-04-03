@@ -2360,6 +2360,36 @@ export default function ProgramPage() {
         truthSurfaceClean: leakedSkills.length === 0,
       })
       
+      // ==========================================================================
+      // [AI-TRUTH-BREADTH-AUDIT] Layer 8: PROGRAM_PAGE render layer
+      // This is the final layer in the breadth audit chain
+      // ==========================================================================
+      const authContract = (program as unknown as { 
+        authoritativeMultiSkillIntentContract?: { 
+          sourceTruthCount: number
+          materiallyUsedCount: number
+          selectedSkills: string[]
+        } 
+      }).authoritativeMultiSkillIntentContract
+      
+      console.log('[AI-TRUTH-BREADTH-AUDIT:PROGRAM_PAGE]', {
+        skills: displayedSkills,
+        count: displayedSkills.length,
+        canonicalSkillsCount: canonicalSkills.length,
+        authoritativeSourceTruthCount: authContract?.sourceTruthCount ?? 'not_available',
+        authoritativeMateriallyUsedCount: authContract?.materiallyUsedCount ?? 'not_available',
+        skillsLostFromAuthContract: authContract 
+          ? (authContract.selectedSkills || []).filter((s: string) => !displayedSkills.includes(s))
+          : [],
+        source: 'program_page_render',
+        profileTrulyHasOnlyTwoSkills: canonicalSkills.length <= 2,
+        verdict: displayedSkills.length === canonicalSkills.length 
+          ? 'RENDER_MATCHES_CANONICAL'
+          : displayedSkills.length > canonicalSkills.length
+            ? 'RENDER_HAS_MORE_THAN_CANONICAL_CHECK_FOR_LEAKS'
+            : 'RENDER_HAS_FEWER_THAN_CANONICAL_LOSS_DETECTED',
+      })
+      
       // [PHASE 5 TASK 6] Primary goal highlight audit
       console.log('[phase5-primary-goal-highlight-truth-audit]', {
         canonicalPrimaryGoal: renderSnapshot.primaryGoal,

@@ -3302,7 +3302,144 @@ function applyMaterialityScoreAdjustments(
     }
   }
   
-  // Add accessory work
+  // ==========================================================================
+  // [AI_TRUTH_GENERATION_MATERIALITY_PHASE_1] SUPPORT SKILL EXERCISE INJECTION
+  // ==========================================================================
+  // This block ensures support skills from materialSkillIntent ACTUALLY GET
+  // exercise slots - not just scoring boosts. This is the key fix for making
+  // broader selected skills materially affect the generated program.
+  // ==========================================================================
+  const supportSkillsExpressed: string[] = []
+  const supportSkillsDeferred: Array<{ skill: string; reason: string }> = []
+  
+  if (materialSkillIntent && materialSkillIntent.length > 0 && selected.length < maxExercises) {
+    // Find support skills that need expression
+    const supportSkillsFromIntent = materialSkillIntent.filter(s => s.role === 'support')
+    
+    if (supportSkillsFromIntent.length > 0) {
+      console.log('[AI_TRUTH_MATERIALITY] Support skill injection starting:', {
+        dayFocus: day.focus,
+        supportSkillCount: supportSkillsFromIntent.length,
+        supportSkills: supportSkillsFromIntent.map(s => s.skill),
+        slotsRemaining: maxExercises - selected.length,
+      })
+      
+      // Calculate how many support slots we can allocate (max 2 per session)
+      const maxSupportSlots = Math.min(2, maxExercises - selected.length)
+      let supportSlotsUsed = 0
+      
+      for (const supportEntry of supportSkillsFromIntent) {
+        if (supportSlotsUsed >= maxSupportSlots) {
+          supportSkillsDeferred.push({
+            skill: supportEntry.skill,
+            reason: 'session_slot_limit_reached',
+          })
+          continue
+        }
+        
+        // Find exercises that transfer to this support skill
+        const supportSkillLower = supportEntry.skill.toLowerCase().replace(/_/g, '')
+        
+        // Search in all pools for exercises transferring to support skill
+        const supportCandidates = [
+          ...availableSkills.filter(e => 
+            e.transferTo?.some(t => t.toLowerCase().includes(supportSkillLower)) ||
+            e.id.toLowerCase().includes(supportSkillLower) ||
+            e.name.toLowerCase().includes(supportSkillLower)
+          ),
+          ...availableStrength.filter(e =>
+            e.transferTo?.some(t => t.toLowerCase().includes(supportSkillLower)) ||
+            e.id.toLowerCase().includes(supportSkillLower)
+          ),
+          ...availableAccessory.filter(e =>
+            e.transferTo?.some(t => t.toLowerCase().includes(supportSkillLower))
+          ),
+        ].filter(e => !usedIds.has(e.id))
+        
+        // Also try doctrine-backed support exercises
+        const doctrineBacked = getDoctrineBackedExercisesForSkill(supportEntry.skill, [
+          ...availableSkills, ...availableStrength, ...availableAccessory
+        ]).filter(d => !usedIds.has(d.exercise.id))
+        
+        // Prefer doctrine-backed, then transfer-based
+        let selectedSupportExercise: Exercise | null = null
+        let selectionSource = 'none'
+        
+        if (doctrineBacked.length > 0) {
+          selectedSupportExercise = doctrineBacked[0].exercise
+          selectionSource = doctrineBacked[0].doctrineSource
+        } else if (supportCandidates.length > 0) {
+          // Sort by carryover and fatigue cost
+          const sorted = supportCandidates.sort((a, b) => {
+            const carryoverDiff = (b.carryover || 0) - (a.carryover || 0)
+            if (carryoverDiff !== 0) return carryoverDiff
+            return (a.fatigueCost || 3) - (b.fatigueCost || 3) // Prefer lower fatigue
+          })
+          selectedSupportExercise = sorted[0]
+          selectionSource = `transfer-to:${supportEntry.skill}`
+        }
+        
+        if (selectedSupportExercise) {
+          const added = addExercise(
+            selectedSupportExercise,
+            `[Support Skill] ${supportEntry.skill.replace(/_/g, ' ')} development`,
+            undefined, undefined, undefined, 'standalone',
+            {
+              primarySelectionReason: 'selected_skill_support',
+              sessionRole: 'accessory',
+              expressionMode: 'skill_accessory',
+              influencingSkills: [{
+                skillId: supportEntry.skill,
+                influence: 'selected',
+                expressionMode: 'support',
+              }],
+              doctrineSource: selectionSource.includes('skill-support-mapping') 
+                ? { type: 'skill_doctrine', ruleId: selectionSource } as DoctrineSourceTrace
+                : null,
+            }
+          )
+          
+          if (added) {
+            supportSlotsUsed++
+            supportSkillsExpressed.push(supportEntry.skill)
+            console.log('[AI_TRUTH_MATERIALITY] Support skill exercise ADDED:', {
+              skill: supportEntry.skill,
+              exerciseId: selectedSupportExercise.id,
+              exerciseName: selectedSupportExercise.name,
+              selectionSource,
+              currentWorkingProgression: supportEntry.currentWorkingProgression,
+            })
+          } else {
+            supportSkillsDeferred.push({
+              skill: supportEntry.skill,
+              reason: 'exercise_add_failed_load_limits',
+            })
+          }
+        } else {
+          supportSkillsDeferred.push({
+            skill: supportEntry.skill,
+            reason: 'no_viable_exercises_found',
+          })
+          console.log('[AI_TRUTH_MATERIALITY] Support skill exercise NOT FOUND:', {
+            skill: supportEntry.skill,
+            candidatesSearched: supportCandidates.length + doctrineBacked.length,
+          })
+        }
+      }
+      
+      console.log('[AI_TRUTH_MATERIALITY] Support skill injection complete:', {
+        dayFocus: day.focus,
+        expressed: supportSkillsExpressed,
+        deferred: supportSkillsDeferred,
+        slotsUsed: supportSlotsUsed,
+        verdict: supportSkillsExpressed.length > 0 
+          ? 'SUPPORT_SKILLS_MATERIALLY_EXPRESSED' 
+          : 'SUPPORT_SKILLS_DEFERRED_WITH_REASONS',
+      })
+    }
+  }
+  
+  // Add accessory work (after support skill injection)
   if (selected.length < maxExercises - 1) {
     // Add movement-appropriate accessory
     const accessoryPool = day.movementEmphasis === 'push'
@@ -3591,7 +3728,10 @@ function applyMaterialityScoreAdjustments(
   // Calculate skill coverage
   const allocatedSkillsCount = skillsForSession?.length || 0
   const supportSkillsAllocated = skillsForSession?.filter(s => s.expressionMode === 'support').map(s => s.skill) || []
-  const supportSkillsMaterialized = [...new Set(supportRotationExercises.map(c => c.matchedSkill).filter(Boolean))]
+  const supportSkillsMaterialized = [...new Set([
+    ...supportRotationExercises.map(c => c.matchedSkill).filter(Boolean),
+    ...supportSkillsExpressed, // From AI_TRUTH_MATERIALITY injection
+  ])]
   const supportSkillsDropped = supportSkillsAllocated.filter(s => !supportSkillsMaterialized.includes(s))
   
   // Determine verdict
@@ -3628,6 +3768,9 @@ function applyMaterialityScoreAdjustments(
     // Support skill tracking
     supportSkillsMaterialized,
     supportSkillsDropped,
+    // [AI_TRUTH_MATERIALITY] Explicit support skill injection results
+    supportSkillsExplicitlyInjected: supportSkillsExpressed,
+    supportSkillsDeferredWithReasons: supportSkillsDeferred,
     // Progression enforcement
     currentWorkingProgressionsApplied: Object.keys(authoritativeProgressionMap).length,
     historicalCeilingBlocked: historicalCeilingWarnings.length,

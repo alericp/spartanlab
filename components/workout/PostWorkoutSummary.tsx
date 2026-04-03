@@ -194,14 +194,15 @@ function generateTrainingSignal(
   const { performanceTier, adjustmentSignal, contributingSignals } = performance
   
   // Check for specific signals in the contributing signals
+  // [LIVE-WORKOUT-CRASH-FIX] Use optional chaining for safety
   const hasQualitySignal = contributingSignals.some(s => 
-    s.toLowerCase().includes('quality') || s.toLowerCase().includes('strong')
+    (s ?? '').toLowerCase().includes('quality') || (s ?? '').toLowerCase().includes('strong')
   )
   const hasEffortSignal = contributingSignals.some(s => 
-    s.toLowerCase().includes('effort') || s.toLowerCase().includes('productive')
+    (s ?? '').toLowerCase().includes('effort') || (s ?? '').toLowerCase().includes('productive')
   )
   const hasCompletionSignal = contributingSignals.some(s => 
-    s.toLowerCase().includes('completion') || s.toLowerCase().includes('full session')
+    (s ?? '').toLowerCase().includes('completion') || (s ?? '').toLowerCase().includes('full session')
   )
   
   // Generate contextual signal

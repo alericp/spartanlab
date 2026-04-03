@@ -84,6 +84,19 @@ import {
 } from '@/lib/workout-execution-truth'
 
 // =============================================================================
+// SAFE STRING HELPER - PREVENTS toLowerCase CRASHES
+// =============================================================================
+
+/**
+ * Safe lowercase string helper that never crashes.
+ * Returns empty string if input is null, undefined, or not a string.
+ */
+function safeLower(value: unknown): string {
+  if (typeof value === 'string') return value.toLowerCase()
+  return ''
+}
+
+// =============================================================================
 // TYPES
 // =============================================================================
 
@@ -164,14 +177,36 @@ function loadSessionFromStorage(sessionId: string, exerciseCount?: number): Work
       ) {
         // If we know the exercise count, validate index is within bounds
         if (exerciseCount !== undefined && data.currentExerciseIndex >= exerciseCount) {
-          // Index is out of bounds for current session - discard saved state
+          // [LIVE-WORKOUT-CRASH-FIX] Index is out of bounds for current session - discard saved state
+          console.log('[workout-restore] Discarding saved state: currentExerciseIndex out of bounds', {
+            savedIndex: data.currentExerciseIndex,
+            exerciseCount,
+          })
           try { localStorage.removeItem(STORAGE_KEY) } catch {}
           return null
+        }
+        
+        // [LIVE-WORKOUT-CRASH-FIX] Filter out completedSets that reference invalid exercise indices
+        let completedSets = data.completedSets
+        if (exerciseCount !== undefined) {
+          const originalCount = completedSets.length
+          completedSets = completedSets.filter((set: { exerciseIndex?: number }) => 
+            typeof set.exerciseIndex === 'number' && 
+            set.exerciseIndex >= 0 && 
+            set.exerciseIndex < exerciseCount
+          )
+          if (completedSets.length !== originalCount) {
+            console.log('[workout-restore] Filtered invalid completedSets references', {
+              originalCount,
+              filteredCount: completedSets.length,
+            })
+          }
         }
         
         // Ensure currentSetNumber is valid
         return {
           ...data,
+          completedSets,
           currentSetNumber: typeof data.currentSetNumber === 'number' && data.currentSetNumber > 0 
             ? data.currentSetNumber 
             : 1,
@@ -181,6 +216,7 @@ function loadSessionFromStorage(sessionId: string, exerciseCount?: number): Work
     return null
   } catch {
     // If parsing fails, clear corrupted data
+    console.log('[workout-restore] Clearing corrupted saved session data')
     try {
       localStorage.removeItem(STORAGE_KEY)
     } catch {}
@@ -570,8 +606,9 @@ export function StreamlinedWorkoutSession({
   }, [isIndexOutOfBounds, safeExerciseIndex, hasValidExercises])
   
   // Determine if exercise uses holds or reps (with safety)
-  const isHoldExercise = currentExercise?.repsOrTime?.toLowerCase().includes('sec') || 
-                         currentExercise?.repsOrTime?.toLowerCase().includes('hold')
+  // [LIVE-WORKOUT-CRASH-FIX] Use safeLower for consistent null-safety
+  const isHoldExercise = safeLower(currentExercise?.repsOrTime).includes('sec') || 
+                         safeLower(currentExercise?.repsOrTime).includes('hold')
   
   // Parse target value (with full safety)
   const getTargetValue = useCallback((): number => {
@@ -582,10 +619,11 @@ export function StreamlinedWorkoutSession({
   }, [currentExercise])
   
   // Recommended band from exercise (if any)
+  // [LIVE-WORKOUT-CRASH-FIX] Use safeLower for consistent null-safety
   const getRecommendedBand = useCallback((): ResistanceBandColor | undefined => {
     const note = currentExercise?.note
     if (!note) return undefined
-    const noteLower = note.toLowerCase()
+    const noteLower = safeLower(note)
     for (const band of ALL_BAND_COLORS) {
       if (noteLower.includes(band)) return band
     }
@@ -1154,7 +1192,8 @@ export function StreamlinedWorkoutSession({
         const bestReps = Math.max(...exerciseSets.map(s => s.actualReps))
         const bestHold = Math.max(...exerciseSets.map(s => s.holdSeconds || 0))
         
-        const nameLower = exercise.name.toLowerCase()
+        // [LIVE-WORKOUT-CRASH-FIX] Use safeLower to prevent undefined.toLowerCase() crash
+        const nameLower = safeLower(exercise.name)
         
         if (nameLower.includes('pull-up') || nameLower.includes('pull up') || nameLower.includes('pullup')) {
           keyPerformance.pullUps = Math.max(keyPerformance.pullUps || 0, bestReps)
@@ -1172,21 +1211,23 @@ export function StreamlinedWorkoutSession({
       })
       
       // Determine session type and focus area
-      const sessionType: SessionType = safeSession.dayLabel.toLowerCase().includes('skill') 
+      // [LIVE-WORKOUT-CRASH-FIX] Use safeLower for session type detection
+      const sessionType: SessionType = safeLower(safeSession.dayLabel).includes('skill') 
         ? 'skill' 
-        : safeSession.dayLabel.toLowerCase().includes('strength')
+        : safeLower(safeSession.dayLabel).includes('strength')
           ? 'strength'
           : 'mixed'
       
-      const focusArea: FocusArea = exercises.some(e => e.name.toLowerCase().includes('planche'))
+      // [LIVE-WORKOUT-CRASH-FIX] Use safeLower to prevent undefined.toLowerCase() crash
+      const focusArea: FocusArea = exercises.some(e => safeLower(e.name).includes('planche'))
         ? 'planche'
-        : exercises.some(e => e.name.toLowerCase().includes('front lever'))
+        : exercises.some(e => safeLower(e.name).includes('front lever'))
           ? 'front_lever'
-          : exercises.some(e => e.name.toLowerCase().includes('muscle'))
+          : exercises.some(e => safeLower(e.name).includes('muscle'))
             ? 'muscle_up'
-            : exercises.some(e => e.name.toLowerCase().includes('hspu') || e.name.toLowerCase().includes('handstand push'))
+            : exercises.some(e => safeLower(e.name).includes('hspu') || safeLower(e.name).includes('handstand push'))
               ? 'handstand_pushup'
-              : exercises.some(e => e.name.toLowerCase().includes('weighted'))
+              : exercises.some(e => safeLower(e.name).includes('weighted'))
                 ? 'weighted_strength'
                 : 'general'
       
@@ -1559,11 +1600,12 @@ export function StreamlinedWorkoutSession({
     const performance = getSessionPerformance(performanceInput)
     
     // Generate skill signal if skill exercises were performed
+    // [LIVE-WORKOUT-CRASH-FIX] Use safeLower to prevent undefined.toLowerCase() crash
     const skillExercises = exercises.filter(ex => 
-      ex.name.toLowerCase().includes('front lever') ||
-      ex.name.toLowerCase().includes('planche') ||
-      ex.name.toLowerCase().includes('muscle-up') ||
-      ex.name.toLowerCase().includes('handstand')
+      safeLower(ex.name).includes('front lever') ||
+      safeLower(ex.name).includes('planche') ||
+      safeLower(ex.name).includes('muscle-up') ||
+      safeLower(ex.name).includes('handstand')
     )
     let skillSignal: string | null = null
     if (skillExercises.length > 0 && performance.performanceTier !== 'low') {
@@ -1682,7 +1724,7 @@ export function StreamlinedWorkoutSession({
               bandProgressNote={bandProgressNote}
               skillSignal={skillSignal}
               overrideSummary={getOverrideSummary(sessionId)}
-              goalContext={safeSession.focusLabel ? `This ${safeSession.focusLabel.toLowerCase()} session builds toward your primary goal. Consistent training accelerates progress.` : "Workout completed. Consistent training builds skill faster."}
+              goalContext={safeSession.focusLabel ? `This ${safeLower(safeSession.focusLabel)} session builds toward your primary goal. Consistent training accelerates progress.` : "Workout completed. Consistent training builds skill faster."}
               nextSession={(() => {
                 const program = getLatestAdaptiveProgram()
                 if (!program?.sessions) return null
@@ -2069,11 +2111,12 @@ function InterExerciseRestCountdown({
               </span>
             ) : (
               // [prescription-render] STEP 4: Check if this is a weighted exercise type without load
+              // [LIVE-WORKOUT-CRASH-FIX] Use safeLower for all string checks
               (() => {
-                const isWeightedType = currentExercise.id?.includes('weighted_') || 
-                                       currentExercise.name?.toLowerCase().includes('weighted')
+                const isWeightedType = (currentExercise.id ?? '').includes('weighted_') || 
+                                       safeLower(currentExercise.name).includes('weighted')
                 const isSkillHold = currentExercise.category === 'skill' || 
-                                    currentExercise.repsOrTime?.toLowerCase().includes('sec')
+                                    safeLower(currentExercise.repsOrTime).includes('sec')
                 const noLoadReason = (currentExercise as { noLoadReason?: string }).noLoadReason
                 
                 // [prescription-render] Log why load isn't shown for weighted-capable exercises
@@ -2190,10 +2233,11 @@ function InterExerciseRestCountdown({
             currentExercise.executionTruth?.assistedRecommended === true ||
             currentExercise.executionTruth?.bandRecommended === true ||
             // Legacy fallback for older programs: heuristic detection
+            // [LIVE-WORKOUT-CRASH-FIX] Use safeLower to prevent undefined.toLowerCase() crash
             (!currentExercise.executionTruth && (
               recommendedBand || 
-              currentExercise.note?.toLowerCase().includes('band') || 
-              currentExercise.name.toLowerCase().includes('assisted')
+              safeLower(currentExercise.note).includes('band') || 
+              safeLower(currentExercise.name).includes('assisted')
             ))
           ) && (
             <BandSelector

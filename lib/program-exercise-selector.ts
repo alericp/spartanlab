@@ -203,6 +203,58 @@ import {
   checkWeightedPrescriptionEligibility,
 } from './canonical-profile-service'
 
+// =============================================================================
+// [AI_SESSION_MATERIALITY_PHASE] Session-level skill expression capture
+// Module-level state to capture skill expression results from selectMainExercises
+// for propagation to ExerciseSelection return
+// =============================================================================
+interface SessionSkillExpressionCapture {
+  directlyExpressedSkills: string[]
+  technicalSlotSkills: string[]
+  supportSkillsInjected: string[]
+  supportSkillsDeferred: Array<{ skill: string; reason: string }>
+  tertiarySkillsInjected: string[]
+  tertiarySkillsDeferred: Array<{ skill: string; reason: string }>
+  carryoverSkills: string[]
+  progressionAuthorityUsed: Array<{
+    skill: string
+    currentWorking: string | null
+    historical: string | null
+    authorityUsed: 'current_working' | 'historical' | 'none'
+  }>
+  materialityVerdict: 'PASS' | 'WARN' | 'FAIL'
+  materialityIssues: string[]
+}
+
+// Session-scoped capture - reset per selectExercisesForSession call
+let _lastSessionSkillExpressionCapture: SessionSkillExpressionCapture | null = null
+
+function resetSessionSkillExpressionCapture(): void {
+  _lastSessionSkillExpressionCapture = {
+    directlyExpressedSkills: [],
+    technicalSlotSkills: [],
+    supportSkillsInjected: [],
+    supportSkillsDeferred: [],
+    tertiarySkillsInjected: [],
+    tertiarySkillsDeferred: [],
+    carryoverSkills: [],
+    progressionAuthorityUsed: [],
+    materialityVerdict: 'PASS',
+    materialityIssues: [],
+  }
+}
+
+function captureSkillExpressionResult(data: Partial<SessionSkillExpressionCapture>): void {
+  if (!_lastSessionSkillExpressionCapture) {
+    resetSessionSkillExpressionCapture()
+  }
+  Object.assign(_lastSessionSkillExpressionCapture!, data)
+}
+
+function getSessionSkillExpressionCapture(): SessionSkillExpressionCapture | null {
+  return _lastSessionSkillExpressionCapture
+}
+
 export interface SelectedExercise {
   exercise: Exercise
   sets: number
@@ -312,6 +364,25 @@ export interface ExerciseSelection {
     doctrineHitCount: number
     rejectedAlternativeCount: number
   }
+  // [AI_SESSION_MATERIALITY_PHASE] Session skill expression metadata
+  // This makes the actual skill materiality visible and traceable
+  skillExpressionResult?: {
+    directlyExpressedSkills: string[]
+    technicalSlotSkills: string[]
+    supportSkillsInjected: string[]
+    supportSkillsDeferred: Array<{ skill: string; reason: string }>
+    tertiarySkillsInjected: string[]
+    tertiarySkillsDeferred: Array<{ skill: string; reason: string }>
+    carryoverSkills: string[]
+    progressionAuthorityUsed: Array<{
+      skill: string
+      currentWorking: string | null
+      historical: string | null
+      authorityUsed: 'current_working' | 'historical' | 'none'
+    }>
+    materialityVerdict: 'PASS' | 'WARN' | 'FAIL'
+    materialityIssues: string[]
+  }
 }
 
 interface ExerciseSelectionInputs {
@@ -370,6 +441,9 @@ interface ExerciseSelectionInputs {
 // =============================================================================
 
 export function selectExercisesForSession(inputs: ExerciseSelectionInputs): ExerciseSelection {
+  // [AI_SESSION_MATERIALITY_PHASE] Reset skill expression capture at start of each session
+  resetSessionSkillExpressionCapture()
+  
   console.log('[exercise-resolver] selectExercisesForSession called:', {
     dayFocus: inputs.day.focus,
     primaryGoal: inputs.primaryGoal,
@@ -800,6 +874,9 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
           : 'moderate_skill_gap_for_capacity',
   });
   
+  // [AI_SESSION_MATERIALITY_PHASE] Get captured skill expression result
+  const skillExpressionCapture = getSessionSkillExpressionCapture()
+  
   // BUILD-HOTFIX: balanced module structure and restored valid EOF closure
   return {
     warmup,
@@ -816,6 +893,19 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     },
     // [exercise-trace] TASK 5: Attach session trace
     sessionTrace: sessionTraceResult,
+    // [AI_SESSION_MATERIALITY_PHASE] Attach skill expression result for session metadata
+    skillExpressionResult: skillExpressionCapture ? {
+      directlyExpressedSkills: skillExpressionCapture.directlyExpressedSkills,
+      technicalSlotSkills: skillExpressionCapture.technicalSlotSkills,
+      supportSkillsInjected: skillExpressionCapture.supportSkillsInjected,
+      supportSkillsDeferred: skillExpressionCapture.supportSkillsDeferred,
+      tertiarySkillsInjected: skillExpressionCapture.tertiarySkillsInjected,
+      tertiarySkillsDeferred: skillExpressionCapture.tertiarySkillsDeferred,
+      carryoverSkills: skillExpressionCapture.carryoverSkills,
+      progressionAuthorityUsed: skillExpressionCapture.progressionAuthorityUsed,
+      materialityVerdict: skillExpressionCapture.materialityVerdict,
+      materialityIssues: skillExpressionCapture.materialityIssues,
+    } : undefined,
   }
 }
 
@@ -3930,6 +4020,34 @@ function applyMaterialityScoreAdjustments(
     materializationVerdict,
     issues,
     exerciseBreakdown: exerciseSkillClassification.map(c => `${c.exerciseName}[${c.skillSource}:${c.matchedSkill || 'none'}]`),
+  })
+  
+  // [AI_SESSION_MATERIALITY_PHASE] Capture skill expression result for propagation to session metadata
+  // This makes the actual skill materiality visible in the final session
+  const primarySkillExpressed = skillsForSession?.find(s => s.expressionMode === 'primary')?.skill || null
+  const secondarySkillExpressed = skillsForSession?.find(s => s.expressionMode === 'technical')?.skill || null
+  
+  captureSkillExpressionResult({
+    directlyExpressedSkills: [
+      ...(primarySkillExpressed ? [primarySkillExpressed] : []),
+      ...(secondarySkillExpressed ? [secondarySkillExpressed] : []),
+    ],
+    technicalSlotSkills: tertiarySkillsExpressed,
+    supportSkillsInjected: supportSkillsExpressed,
+    supportSkillsDeferred: supportSkillsDeferred,
+    tertiarySkillsInjected: tertiarySkillsExpressed,
+    tertiarySkillsDeferred: tertiarySkillsDeferred,
+    carryoverSkills: supportSkillsMaterialized.filter(s => 
+      !supportSkillsExpressed.includes(s) && !tertiarySkillsExpressed.includes(s)
+    ),
+    progressionAuthorityUsed: Object.entries(authoritativeProgressionMap).map(([skill, prog]) => ({
+      skill,
+      currentWorking: prog,
+      historical: currentWorkingProgressions?.[skill]?.historicalCeiling || null,
+      authorityUsed: prog ? 'current_working' as const : 'none' as const,
+    })),
+    materialityVerdict: materializationVerdict,
+    materialityIssues: issues,
   })
   
   return finalExercises

@@ -773,6 +773,29 @@ export interface AdaptiveSession {
       restProtocol: string
     }>
   }
+  // [AI_SESSION_MATERIALITY_PHASE] Session-level skill expression metadata
+  // This makes the ACTUAL skill materiality visible in each session
+  skillExpressionMetadata?: {
+    // Skills with direct exercise blocks in this session
+    directlyExpressedSkills: string[]
+    // Skills with technical/support slots
+    technicalSlotSkills: string[]
+    // Skills receiving carryover benefit (no direct exercise)
+    carryoverSkills: string[]
+    // Progression level used for exercise selection (currentWorking, not historical)
+    progressionAuthority: Array<{
+      skill: string
+      currentWorkingProgression: string | null
+      historicalCeiling: string | null
+      authorityUsed: 'current_working' | 'historical' | 'none'
+    }>
+    // Session purpose classification
+    sessionPurpose: 'primary_skill_focus' | 'secondary_skill_anchor' | 'mixed_skill_density' | 'support_recovery' | 'technical_slots'
+    // Why this session exists
+    sessionIdentityReason: string
+    // Whether skill materiality contract was consumed
+    materialityContractConsumed: boolean
+  }
 }
 
 export interface AdaptiveExercise {
@@ -17241,12 +17264,68 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       styleApplied: styleResult.styleMetadata.primarySessionStyle,
       methodsApplied: styleResult.appliedMethods,
     })
+    
+    // [AI_SESSION_MATERIALITY_PHASE] Log skill expression materiality for debugging
+    if (selection.skillExpressionResult) {
+      console.log('[AI-SESSION-SKILL-MATERIALITY]', {
+        dayNumber: day.dayNumber,
+        originalFocusLabel: day.focusLabel,
+        directlyExpressedSkills: selection.skillExpressionResult.directlyExpressedSkills,
+        technicalSlotSkills: selection.skillExpressionResult.technicalSlotSkills,
+        supportSkillsInjected: selection.skillExpressionResult.supportSkillsInjected,
+        carryoverSkills: selection.skillExpressionResult.carryoverSkills,
+        progressionAuthorityCount: selection.skillExpressionResult.progressionAuthorityUsed.length,
+        materialityVerdict: selection.skillExpressionResult.materialityVerdict,
+        materialityIssues: selection.skillExpressionResult.materialityIssues,
+        verdict: selection.skillExpressionResult.directlyExpressedSkills.length > 0 ||
+                 selection.skillExpressionResult.technicalSlotSkills.length > 0 ||
+                 selection.skillExpressionResult.supportSkillsInjected.length > 0
+          ? 'SKILL_MATERIALITY_EXPRESSED_IN_SESSION'
+          : 'SKILL_MATERIALITY_NOT_VISIBLE_IN_SESSION',
+      })
+    }
 
+    // [AI_SESSION_MATERIALITY_PHASE] Enrich focus label based on actual skill expression
+    // This makes the day identity truthful to what's actually in the session
+    const enrichedFocusLabel = (() => {
+      const expResult = selection.skillExpressionResult
+      if (!expResult) return day.focusLabel
+      
+      const directSkills = expResult.directlyExpressedSkills
+      const techSkills = expResult.technicalSlotSkills
+      
+      // If we have multiple direct skills, this is a multi-skill session
+      if (directSkills.length >= 2) {
+        const skillNames = directSkills.slice(0, 2).map(s => 
+          s.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+        ).join(' + ')
+        return `${skillNames} Focus`
+      }
+      
+      // If we have one direct skill plus technical slots, show both
+      if (directSkills.length === 1 && techSkills.length > 0) {
+        const primaryName = directSkills[0].replace(/_/g, ' ')
+          .split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+        return `${primaryName} + Technical`
+      }
+      
+      // If technical slots only, show as technical day
+      if (techSkills.length > 0 && directSkills.length === 0) {
+        const techNames = techSkills.slice(0, 2).map(s => 
+          s.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+        ).join(', ')
+        return `Technical: ${techNames}`
+      }
+      
+      // Default to original label
+      return day.focusLabel
+    })()
+    
     return {
       dayNumber: day.dayNumber,
       dayLabel: `Day ${day.dayNumber}`,
       focus: day.focus,
-      focusLabel: day.focusLabel,
+      focusLabel: enrichedFocusLabel,
       isPrimary: day.isPrimary,
       rationale,
       // Use validated (deduped, reordered) exercises
@@ -17262,6 +17341,44 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       finisherRationale: enduranceResult.rationale,
       // [PHASE 7A] Add style metadata
       styleMetadata: sessionStyleMetadata,
+      // [AI_SESSION_MATERIALITY_PHASE] Add skill expression metadata from exercise selection
+      // This makes actual skill materiality visible in each session for UI truth
+      skillExpressionMetadata: selection.skillExpressionResult ? {
+        directlyExpressedSkills: selection.skillExpressionResult.directlyExpressedSkills,
+        technicalSlotSkills: selection.skillExpressionResult.technicalSlotSkills,
+        carryoverSkills: selection.skillExpressionResult.carryoverSkills,
+        progressionAuthority: selection.skillExpressionResult.progressionAuthorityUsed.map(p => ({
+          skill: p.skill,
+          currentWorkingProgression: p.currentWorking,
+          historicalCeiling: p.historical,
+          authorityUsed: p.authorityUsed,
+        })),
+        sessionPurpose: day.isPrimary 
+          ? 'primary_skill_focus' as const
+          : day.focus.includes('mixed') || day.focus.includes('skill_density')
+            ? 'mixed_skill_density' as const
+            : day.focus.includes('support') || day.focus.includes('recovery')
+              ? 'support_recovery' as const
+              : selection.skillExpressionResult.technicalSlotSkills.length > 0
+                ? 'technical_slots' as const
+                : 'secondary_skill_anchor' as const,
+        sessionIdentityReason: (() => {
+          const expResult = selection.skillExpressionResult
+          const directCount = expResult.directlyExpressedSkills.length
+          const techCount = expResult.technicalSlotSkills.length
+          const supportCount = expResult.supportSkillsInjected.length
+          if (directCount >= 2) return `Multi-skill session: ${expResult.directlyExpressedSkills.join(' + ')}`
+          if (directCount === 1 && techCount > 0) return `${expResult.directlyExpressedSkills[0]} focus with ${techCount} technical slot(s)`
+          if (directCount === 1) return `${expResult.directlyExpressedSkills[0]} primary focus`
+          if (techCount > 0) return `Technical work: ${expResult.technicalSlotSkills.join(', ')}`
+          if (supportCount > 0) return `Support development: ${expResult.supportSkillsInjected.join(', ')}`
+          return 'Foundation work for broader skill development'
+        })(),
+        materialityContractConsumed: !!(selection.skillExpressionResult && 
+          (selection.skillExpressionResult.directlyExpressedSkills.length > 0 ||
+           selection.skillExpressionResult.technicalSlotSkills.length > 0 ||
+           selection.skillExpressionResult.supportSkillsInjected.length > 0)),
+      } : undefined,
     }
   
   // ==========================================================================

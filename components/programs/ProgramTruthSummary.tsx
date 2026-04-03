@@ -1057,11 +1057,12 @@ export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, clas
               </div>
             )}
             
-            {/* [CHECKLIST 1 OF 4] Selected Skill Trace - Shows exact skill disposition */}
-            {selectedSkillTrace && selectedSkillTrace.sourceSkillCount > 2 && (
+            {/* [PHASE 1] Selected Skill Trace - Shows exact skill disposition */}
+            {/* Show for any program with selectedSkillTrace to prove skill tracking works */}
+            {selectedSkillTrace && selectedSkillTrace.sourceSkillCount >= 1 && (
               <div className="space-y-2">
                 <h4 className="text-xs font-medium text-[#8A8A8A] uppercase tracking-wide">
-                  Skill Expression This Cycle
+                  Skill Expression This Cycle ({selectedSkillTrace.sourceSkillCount} selected)
                 </h4>
                 <div className="text-xs bg-[#1E1E1E] rounded p-2.5 space-y-2">
                   {/* Direct expression */}
@@ -1145,6 +1146,41 @@ export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, clas
                     <p className="text-[#5A5A5A] text-xs italic pt-1">
                       This cycle prioritizes {selectedSkillTrace.primarySpineCount + selectedSkillTrace.secondaryAnchorCount} skills directly while preserving {selectedSkillTrace.tertiaryCount + selectedSkillTrace.supportCount} others as support/rotational based on recovery, schedule budget, and current readiness.
                     </p>
+                  )}
+                  
+                  {/* [PHASE 1] Current Working Progression Truth */}
+                  {selectedSkillTrace.skillTraces && selectedSkillTrace.skillTraces.some(t => t.currentWorkingProgression || t.historicalCeiling) && (
+                    <div className="pt-2 mt-2 border-t border-[#2A2A2A]">
+                      <div className="text-[#6A6A6A] text-xs mb-1.5">Current Working Levels:</div>
+                      <div className="space-y-1">
+                        {selectedSkillTrace.skillTraces
+                          .filter(t => t.currentWorkingProgression || t.historicalCeiling)
+                          .slice(0, 4) // Show top 4 skills
+                          .map(trace => (
+                            <div key={trace.skill} className="flex items-center gap-2 text-xs">
+                              <span className="text-[#8A8A8A] capitalize">{trace.skill.replace(/_/g, ' ')}:</span>
+                              {trace.currentWorkingProgression ? (
+                                <span className="text-[#A4ACB8]">
+                                  {trace.currentWorkingProgression.replace(/_/g, ' ')}
+                                  {trace.isConservative && (
+                                    <span className="text-[#5A5A5A] ml-1">(conservative)</span>
+                                  )}
+                                </span>
+                              ) : trace.historicalCeiling ? (
+                                <span className="text-[#5A5A5A] italic">
+                                  Historical: {trace.historicalCeiling.replace(/_/g, ' ')}
+                                </span>
+                              ) : null}
+                              {trace.historicalCeiling && trace.currentWorkingProgression && 
+                               trace.historicalCeiling !== trace.currentWorkingProgression && (
+                                <span className="text-[#4A4A4A] text-[10px]">
+                                  (ceiling: {trace.historicalCeiling.replace(/_/g, ' ')})
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>

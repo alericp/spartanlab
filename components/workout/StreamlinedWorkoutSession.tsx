@@ -20,13 +20,21 @@ import {
   X,
 } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
-import type { AdaptiveSession } from '@/lib/adaptive-program-builder'
+import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-builder'
 import { 
   ResistanceBandColor, 
   ALL_BAND_COLORS, 
   BAND_SHORT_LABELS, 
   BAND_COLORS 
 } from '@/lib/band-progression-engine'
+// [LIVE-EXECUTION-TRUTH] Adaptive performance evaluator for post-set recommendations
+import {
+  evaluateSetPerformance,
+  shouldShowRecommendation,
+  formatAdaptiveCoachingMessage,
+  type AdaptiveRecommendationResult,
+  type SetPerformanceData,
+} from '@/lib/adaptive-performance-evaluator'
 import { RPE_QUICK_OPTIONS, type RPEValue } from '@/lib/rpe-adjustment-engine'
 import { InlineRestTimer } from '@/components/workout/InlineRestTimer'
 import { ExerciseOptionsMenu } from '@/components/workout/ExerciseOptionsMenu'
@@ -452,6 +460,10 @@ export function StreamlinedWorkoutSession({
   // Exit confirmation modal
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   
+  // [LIVE-EXECUTION-TRUTH] Adaptive recommendation state
+  const [adaptiveRecommendation, setAdaptiveRecommendation] = useState<AdaptiveRecommendationResult | null>(null)
+  const [showAdaptiveModal, setShowAdaptiveModal] = useState(false)
+  
   // Timer
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   
@@ -541,13 +553,17 @@ export function StreamlinedWorkoutSession({
   }, [state, sessionId, isDemoSession])
   
   // Initialize values when exercise changes
+  // [LIVE-EXECUTION-TRUTH] Use executionTruth for band recommendation when available
   useEffect(() => {
     if (currentExercise) {
       setRepsValue(getTargetValue())
       setHoldValue(getTargetValue())
       setSelectedRPE(null)
-      const recBand = getRecommendedBand()
-      setBandUsed(recBand || 'none')
+      // Prefer authoritative executionTruth, fall back to legacy heuristic
+      const recommendedBandFromTruth = currentExercise.executionTruth?.recommendedBandColor
+      const legacyRecommendedBand = getRecommendedBand()
+      const effectiveRecommendedBand = recommendedBandFromTruth ?? legacyRecommendedBand
+      setBandUsed(effectiveRecommendedBand || 'none')
     }
   }, [state.currentExerciseIndex, currentExercise, getTargetValue, getRecommendedBand])
   
@@ -634,6 +650,46 @@ export function StreamlinedWorkoutSession({
     const isLastExercise = state.currentExerciseIndex >= exercises.length - 1
     
     const lastRPE = selectedRPE || 8
+    
+    // [LIVE-EXECUTION-TRUTH] Evaluate set performance and check for adaptive recommendations
+    if (currentExercise.executionTruth) {
+      const targetValue = getTargetValue()
+      const setsForThisExercise = newCompletedSets.filter(s => s.exerciseIndex === state.currentExerciseIndex)
+      
+      const performanceData: SetPerformanceData = {
+        setNumber: state.currentSetNumber,
+        targetReps: isHoldExercise ? 0 : targetValue,
+        actualReps: isHoldExercise ? 0 : repsValue,
+        targetHoldSeconds: isHoldExercise ? targetValue : undefined,
+        actualHoldSeconds: isHoldExercise ? holdValue : undefined,
+        targetRPE: 8, // Default target RPE
+        actualRPE: selectedRPE || 8,
+        bandUsed,
+      }
+      
+      const recommendation = evaluateSetPerformance(performanceData, {
+        completedSets: setsForThisExercise.map(s => ({
+          setNumber: s.setNumber,
+          targetReps: targetValue,
+          actualReps: s.actualReps,
+          targetHoldSeconds: isHoldExercise ? targetValue : undefined,
+          actualHoldSeconds: s.holdSeconds,
+          targetRPE: 8,
+          actualRPE: s.actualRPE,
+          bandUsed: s.bandUsed,
+        })),
+        exerciseIndex: state.currentExerciseIndex,
+        executionTruth: currentExercise.executionTruth,
+        isHoldExercise,
+        exerciseName: currentExercise.name,
+      })
+      
+      // Show recommendation if warranted
+      if (shouldShowRecommendation(recommendation) && !isLastSet && !isLastExercise) {
+        setAdaptiveRecommendation(recommendation)
+        setShowAdaptiveModal(true)
+      }
+    }
     
     if (isLastSet && isLastExercise) {
       // Workout complete
@@ -1871,13 +1927,24 @@ export function StreamlinedWorkoutSession({
             targetRPE={targetRPE}
           />
           
-          {/* Band Selector (only for exercises that support bands) */}
-          {(recommendedBand || currentExercise.note?.toLowerCase().includes('band') || 
-            currentExercise.name.toLowerCase().includes('assisted')) && (
+          {/* Band Selector - [LIVE-EXECUTION-TRUTH] Use authoritative executionTruth when available */}
+          {/* Falls back to legacy heuristics for older programs without executionTruth */}
+          {(
+            // Authoritative path: Use executionTruth from program generation
+            currentExercise.executionTruth?.bandSelectable === true ||
+            currentExercise.executionTruth?.assistedRecommended === true ||
+            currentExercise.executionTruth?.bandRecommended === true ||
+            // Legacy fallback for older programs: heuristic detection
+            (!currentExercise.executionTruth && (
+              recommendedBand || 
+              currentExercise.note?.toLowerCase().includes('band') || 
+              currentExercise.name.toLowerCase().includes('assisted')
+            ))
+          ) && (
             <BandSelector
               value={bandUsed}
               onChange={setBandUsed}
-              recommendedBand={recommendedBand}
+              recommendedBand={currentExercise.executionTruth?.recommendedBandColor ?? recommendedBand}
             />
           )}
         </Card>
@@ -1918,6 +1985,77 @@ export function StreamlinedWorkoutSession({
         </div>
       </div>
       </div>
+      
+      {/* [LIVE-EXECUTION-TRUTH] Adaptive Recommendation Modal */}
+      {showAdaptiveModal && adaptiveRecommendation && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-[#1A1F26] border-t sm:border border-[#2B313A] sm:rounded-xl p-5 space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0">
+            <div className="flex items-start gap-3 mb-2">
+              <div className="w-10 h-10 rounded-full bg-[#4F6D8A]/20 flex items-center justify-center shrink-0">
+                <Lightbulb className="w-5 h-5 text-[#4F6D8A]" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-[#E6E9EF] mb-1">Adaptive Suggestion</h3>
+                <p className="text-sm text-[#A4ACB8]">
+                  {formatAdaptiveCoachingMessage(adaptiveRecommendation)}
+                </p>
+              </div>
+            </div>
+            
+            {/* Trigger indicators */}
+            <div className="flex flex-wrap gap-1.5">
+              {adaptiveRecommendation.triggerInputs.rpeTooHigh && (
+                <Badge className="bg-[#C1121F]/10 text-[#C1121F] border-0 text-[10px]">High RPE</Badge>
+              )}
+              {adaptiveRecommendation.triggerInputs.targetMissedSignificantly && (
+                <Badge className="bg-yellow-500/10 text-yellow-500 border-0 text-[10px]">Target Missed</Badge>
+              )}
+              {adaptiveRecommendation.triggerInputs.repeatedFailures && (
+                <Badge className="bg-orange-500/10 text-orange-500 border-0 text-[10px]">Multiple Fails</Badge>
+              )}
+            </div>
+            
+            <div className="space-y-2">
+              {/* Apply recommendation button */}
+              <Button
+                onClick={() => {
+                  // Apply the recommendation
+                  const { suggestedAction } = adaptiveRecommendation
+                  if (suggestedAction.type === 'add_band' || suggestedAction.type === 'change_band') {
+                    if (suggestedAction.targetBandColor) {
+                      setBandUsed(suggestedAction.targetBandColor)
+                    }
+                  } else if (suggestedAction.type === 'remove_band') {
+                    setBandUsed('none')
+                  }
+                  // Note: switch_exercise would require more integration with the override system
+                  setShowAdaptiveModal(false)
+                  setAdaptiveRecommendation(null)
+                }}
+                className="w-full h-12 bg-[#4F6D8A] hover:bg-[#3D5A75] text-white font-medium"
+              >
+                Apply Suggestion
+              </Button>
+              
+              {/* Keep current button */}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowAdaptiveModal(false)
+                  setAdaptiveRecommendation(null)
+                }}
+                className="w-full h-12 border-[#2B313A] text-[#E6E9EF] hover:bg-[#2B313A]"
+              >
+                Keep Current
+              </Button>
+            </div>
+            
+            <p className="text-xs text-center text-[#6B7280]">
+              Based on your performance this set
+            </p>
+          </div>
+        </div>
+      )}
       
       {/* Exit Confirmation Modal */}
       {showExitConfirm && (

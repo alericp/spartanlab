@@ -12,7 +12,7 @@
 // =============================================================================
 // AUTHORITATIVE ROUTE VERSION - PROOF OF EXECUTION
 // =============================================================================
-const WORKOUT_SESSION_ROUTE_VERSION = 'phase_live_session_lock_v2'
+const WORKOUT_SESSION_ROUTE_VERSION = 'phase_x_session_contract_v1'
 
 import { useState, useEffect, Suspense, Component, type ReactNode, type ErrorInfo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -29,6 +29,14 @@ import { Spinner } from '@/components/ui/spinner'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { Dumbbell, AlertTriangle } from 'lucide-react'
+// [PHASE-X] Authoritative session contract and normalizer
+import { 
+  normalizeWorkoutSession, 
+  normalizeAndValidateSession,
+  createFallbackSession,
+} from '@/lib/workout/normalize-workout-session'
+import { getSessionDiagnostic } from '@/lib/workout/validate-session'
+import type { WorkoutSessionContract } from '@/lib/contracts/workout-session-contract'
 
 // =============================================================================
 // LAZY PROGRAM STATE RESOLVER - Never throws, always returns a safe result
@@ -90,7 +98,9 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
     
     // Extract likely stage from stack trace
     const stackLines = error.stack?.split('\n') || []
+    // [PHASE-X] Added normalizeWorkoutSession to tracked stages
     const likelyStage = stackLines.find(line => 
+      line.includes('normalizeWorkoutSession') ||
       line.includes('normalizeSession') || 
       line.includes('loadSessionFromStorage') ||
       line.includes('buildSessionRuntimeTruth') ||
@@ -460,18 +470,24 @@ function WorkoutSessionContent() {
         // Demo must work regardless of any other conditions
         // CRITICAL: Demo does NOT call resolveProgramStateLazily() - fully isolated
         if (demoMode) {
-          console.log('[workout/session] initializing demo mode')
+          console.log('[PHASE-X] Initializing demo mode', {
+            routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
+            stage: 'demo_init',
+          })
           try {
             const normalizedDemo = normalizeSession(DEMO_SESSION)
             if (mounted) {
               if (normalizedDemo && isRunnableSession(normalizedDemo)) {
+                console.log('[PHASE-X] Demo session normalized successfully')
                 setSession(normalizedDemo)
               } else {
+                console.log('[PHASE-X] Demo session using raw DEMO_SESSION')
                 setSession(DEMO_SESSION)
               }
               setLoading(false)
             }
-          } catch {
+          } catch (demoError) {
+            console.warn('[PHASE-X] Demo normalization failed, using raw:', demoError)
             if (mounted) {
               setSession(DEMO_SESSION)
               setLoading(false)
@@ -527,20 +543,46 @@ function WorkoutSessionContent() {
           return
         }
         
-        // Normalize session to ensure all fields are safe
+        // [PHASE-X] Enhanced session normalization with contract validation
+        // Step 1: Log raw session diagnostic before any normalization
+        const rawDiagnostic = getSessionDiagnostic(rawSession)
+        console.log('[PHASE-X] Raw session diagnostic:', {
+          routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
+          stage: 'pre_normalization',
+          sessionIndex,
+          ...rawDiagnostic,
+        })
+        
+        // Step 2: Normalize session using local normalizer (preserves AdaptiveSession type)
         let normalizedSession = null
         try {
           normalizedSession = normalizeSession(rawSession)
-        } catch {
-          setError('This workout session could not be loaded.')
-          setLoading(false)
-          return
+        } catch (normError) {
+          console.error('[PHASE-X] Local normalization failed:', normError)
+          
+          // Step 2b: Fallback to contract-based normalizer
+          try {
+            const contractResult = normalizeAndValidateSession(rawSession)
+            if (contractResult.session && contractResult.validation.isValid) {
+              console.log('[PHASE-X] Contract-based fallback normalization succeeded')
+              // Cast to AdaptiveSession since the shapes are compatible
+              normalizedSession = contractResult.session as unknown as AdaptiveSession
+            }
+          } catch (contractError) {
+            console.error('[PHASE-X] Contract normalization also failed:', contractError)
+          }
+          
+          if (!normalizedSession) {
+            setError('This workout session could not be loaded.')
+            setLoading(false)
+            return
+          }
         }
         
-        // [LIVE-SESSION-LOCK] Validate normalized session with detailed diagnostics
+        // [PHASE-X] Validate normalized session with detailed diagnostics
         const validation = validateNormalizedWorkoutSession(normalizedSession)
         if (!validation.isValid) {
-          console.error('[workout-route-proof] session_validate_failed', { 
+          console.error('[PHASE-X] session_validate_failed', { 
             routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
             stage: 'session_validate',
             hasNormalized: !!normalizedSession, 
@@ -548,17 +590,29 @@ function WorkoutSessionContent() {
             dayLabel: normalizedSession?.dayLabel,
             exerciseCount: normalizedSession?.exercises?.length ?? 0,
           })
+          
+          // [PHASE-X] Last resort: Create fallback session instead of showing error
+          console.warn('[PHASE-X] Attempting fallback session creation')
+          const fallbackSession = createFallbackSession('validation_failed')
+          if (fallbackSession) {
+            console.log('[PHASE-X] Using fallback session - workout will have limited exercises')
+            setSession(fallbackSession as unknown as AdaptiveSession)
+            setLoading(false)
+            return
+          }
+          
           setError('This workout session is not properly configured.')
           setLoading(false)
           return
         }
         
-        console.log('[workout-route-proof] session_validated', {
+        console.log('[PHASE-X] session_validated', {
           routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
           stage: 'session_validate_success',
           safeExerciseCount: validation.safeExerciseCount,
           dayLabel: normalizedSession.dayLabel,
           dayNumber: normalizedSession.dayNumber,
+          verdict: 'SESSION_RUNTIME_CONTRACT_VALID',
         })
         
         // [workout-init] Log normalized session data for debugging set progression

@@ -12,7 +12,7 @@
 // =============================================================================
 // AUTHORITATIVE ROUTE VERSION - PROOF OF EXECUTION
 // =============================================================================
-const WORKOUT_SESSION_ROUTE_VERSION = 'phase_x_plus_1_authority_corridor_v1'
+const WORKOUT_SESSION_ROUTE_VERSION = 'phase_x_plus_1_authority_corridor_v2'
 
 import { useState, useEffect, Suspense, Component, type ReactNode, type ErrorInfo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -59,19 +59,25 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // [LIVE-SESSION-LOCK] Comprehensive diagnostic logging with stage identification
-    const crashCorridor = error.message.includes('toLowerCase') || error.message.includes('toUpperCase')
-      ? 'unsafe_string_operation' 
-      : error.message.includes('undefined') || error.message.includes('null')
-        ? 'null_reference'
-        : error.message.includes('map') || error.message.includes('filter') || error.message.includes('reduce')
-          ? 'array_operation'
-          : error.message.includes('split') || error.message.includes('charAt')
-            ? 'string_method_crash'
-            : 'unknown'
+    // [LIVE-SESSION-FIX] Enhanced crash corridor detection including reference errors
+    const errorMsg = error.message || ''
+    const crashCorridor = errorMsg.includes('is not defined') 
+      ? 'reference_error_missing_import'
+      : errorMsg.includes('toLowerCase') || errorMsg.includes('toUpperCase')
+        ? 'unsafe_string_operation' 
+        : errorMsg.includes('undefined') || errorMsg.includes('null')
+          ? 'null_reference'
+          : errorMsg.includes('map') || errorMsg.includes('filter') || errorMsg.includes('reduce')
+            ? 'array_operation'
+            : errorMsg.includes('split') || errorMsg.includes('charAt')
+              ? 'string_method_crash'
+              : error.name === 'ReferenceError'
+                ? 'reference_error'
+                : 'unknown'
     
     // Extract likely stage from stack trace
     const stackLines = error.stack?.split('\n') || []
-    // [PHASE-X] Added normalizeWorkoutSession to tracked stages
+    // [PHASE-X] Added normalizeWorkoutSession and getLatestAdaptiveProgram to tracked stages
     const likelyStage = stackLines.find(line => 
       line.includes('normalizeWorkoutSession') ||
       line.includes('normalizeSession') || 
@@ -80,7 +86,10 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
       line.includes('buildExerciseRuntimeTruth') ||
       line.includes('getExerciseSelectionInsight') ||
       line.includes('safeWorkoutSessionContract') ||
-      line.includes('safeCurrentExercise')
+      line.includes('safeCurrentExercise') ||
+      line.includes('getLatestAdaptiveProgram') ||
+      line.includes('PostWorkoutSummary') ||
+      line.includes('nextSession')
     )?.match(/at\s+(\w+)/)?.[1] || 'render_unknown'
     
     // Get last known stage from window if available
@@ -89,7 +98,14 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
       : 'ssr'
     
     // Get session context if available in sessionStorage
-    let sessionContext = { sessionId: 'unknown', dayLabel: 'unknown', dayNumber: 0, isDemo: false }
+    let sessionContext: { 
+      sessionId: string
+      dayLabel: string
+      dayNumber: number
+      isDemo: boolean
+      exerciseCount?: number
+      currentExerciseIndex?: number
+    } = { sessionId: 'unknown', dayLabel: 'unknown', dayNumber: 0, isDemo: false }
     try {
       if (typeof sessionStorage !== 'undefined') {
         const ctx = sessionStorage.getItem('spartanlab_workout_stage_context')
@@ -97,15 +113,28 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
       }
     } catch {}
     
-    // [LIVE-SESSION-FIX] Enhanced crash logging with full context
+    // [LIVE-SESSION-FIX] Get current URL search params for additional context
+    let urlParams = 'unknown'
+    try {
+      if (typeof window !== 'undefined') {
+        urlParams = window.location.search || 'none'
+      }
+    } catch {}
+    
+    // [LIVE-SESSION-FIX] Enhanced crash logging with full context and session fingerprint
     console.error('[workout-route-crash] BOUNDARY_TRIGGERED', {
       routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
       lastKnownStage,
       inferredStage: likelyStage,
       crashCorridor,
-      sessionId: sessionContext.sessionId,
-      dayLabel: sessionContext.dayLabel,
-      dayNumber: sessionContext.dayNumber,
+      urlParams,
+      sessionFingerprint: {
+        sessionId: sessionContext.sessionId,
+        dayLabel: sessionContext.dayLabel,
+        dayNumber: sessionContext.dayNumber,
+        exerciseCount: sessionContext.exerciseCount || 'unknown',
+        currentExerciseIndex: sessionContext.currentExerciseIndex ?? 'unknown',
+      },
       isDemo: sessionContext.isDemo,
       errorName: error.name,
       errorMessage: error.message,
@@ -118,13 +147,15 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
     console.error('[workout-route-crash] QUICK DIAGNOSIS:', {
       cause: crashCorridor,
       failedAt: likelyStage || 'unknown',
-      hint: crashCorridor === 'unsafe_string_operation' 
-        ? 'A string method (toLowerCase/toUpperCase) was called on undefined'
-        : crashCorridor === 'null_reference'
-          ? 'A property was accessed on null/undefined'
-          : crashCorridor === 'array_operation'
-            ? 'An array method (map/filter/reduce) was called on non-array'
-            : 'Unknown crash type - check stack trace',
+      hint: crashCorridor === 'reference_error_missing_import' || crashCorridor === 'reference_error'
+        ? 'A function or variable is used but not defined/imported'
+        : crashCorridor === 'unsafe_string_operation' 
+          ? 'A string method (toLowerCase/toUpperCase) was called on undefined'
+          : crashCorridor === 'null_reference'
+            ? 'A property was accessed on null/undefined'
+            : crashCorridor === 'array_operation'
+              ? 'An array method (map/filter/reduce) was called on non-array'
+              : 'Unknown crash type - check stack trace',
     })
   }
 

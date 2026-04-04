@@ -12,14 +12,13 @@
 // =============================================================================
 // AUTHORITATIVE ROUTE VERSION - PROOF OF EXECUTION
 // =============================================================================
-const WORKOUT_SESSION_ROUTE_VERSION = 'phase_x_session_contract_v1'
+const WORKOUT_SESSION_ROUTE_VERSION = 'phase_x_plus_1_authority_corridor_v1'
 
 import { useState, useEffect, Suspense, Component, type ReactNode, type ErrorInfo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { StreamlinedWorkoutSession } from '@/components/workout/StreamlinedWorkoutSession'
 import { type AdaptiveSession } from '@/lib/adaptive-program-builder'
-// REMOVED: import { getProgramState } from '@/lib/program-state' - now lazily imported
-import type { WorkoutReasoningSummary } from '@/lib/readiness/canonical-readiness-engine'
+// [PHASE-X+1] Program state is loaded internally by loadAuthoritativeSession
 import { 
   buildWorkoutReasoningDisplayContract, 
   getReasoningShapeDiagnostic,
@@ -29,41 +28,15 @@ import { Spinner } from '@/components/ui/spinner'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { Dumbbell, AlertTriangle } from 'lucide-react'
-// [PHASE-X] Authoritative session contract and normalizer
-import { 
-  normalizeWorkoutSession, 
-  normalizeAndValidateSession,
-  createFallbackSession,
-} from '@/lib/workout/normalize-workout-session'
+// [PHASE-X] Kept for potential local use - main loading is via authoritative loader
 import { getSessionDiagnostic } from '@/lib/workout/validate-session'
-import type { WorkoutSessionContract } from '@/lib/contracts/workout-session-contract'
-
-// =============================================================================
-// LAZY PROGRAM STATE RESOLVER - Never throws, always returns a safe result
-// =============================================================================
-
-interface LazyProgramStateResult {
-  hasUsableProgram: boolean
-  adaptiveProgram: { sessions: AdaptiveSession[]; workoutReasoningSummary?: WorkoutReasoningSummary } | null
-}
-
-async function resolveProgramStateLazily(): Promise<LazyProgramStateResult> {
-  try {
-    // Dynamic import to avoid module-level evaluation crashes
-    const { getProgramState } = await import('@/lib/program-state')
-    const programState = getProgramState()
-    return {
-      hasUsableProgram: programState.hasUsableWorkoutProgram === true,
-      adaptiveProgram: programState.adaptiveProgram,
-    }
-  } catch (error) {
-    console.error('[workout/session] Failed to resolve program state:', error)
-    return {
-      hasUsableProgram: false,
-      adaptiveProgram: null,
-    }
-  }
-}
+// [PHASE-X+1] Authoritative session loader - SINGLE ENTRY POINT
+import { 
+  loadAuthoritativeSession, 
+  calculateSessionIndex,
+  type SessionMeta,
+  type AuthoritativeSessionResult,
+} from '@/lib/workout/load-authoritative-session'
 
 // =============================================================================
 // LOCAL ERROR BOUNDARY - Catches workout engine crashes locally
@@ -446,188 +419,83 @@ function WorkoutSessionContent() {
   const isFirstSession = searchParams.get('first') === 'true'
   
   const [session, setSession] = useState<AdaptiveSession | null>(null)
+  // [PHASE-X+1] Session metadata for tracking source and recovery status
+  const [sessionMeta, setSessionMeta] = useState<SessionMeta | null>(null)
   // [DISPLAY-CONTRACT] Use safe display contract instead of raw reasoning
   const [reasoningSummary, setReasoningSummary] = useState<WorkoutReasoningDisplayContract | undefined>(undefined)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // [PHASE-X+1] Error state removed - authoritative loader handles all errors internally
   
   useEffect(() => {
     let mounted = true
     
     async function initializeSession() {
-      try {
-        // [LIVE-SESSION-LOCK] Route execution proof with version stamp
-        console.log('[workout-route-proof]', {
-          routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
-          stage: 'route_init',
-          demoMode,
-          isFirstSession,
-          dayParam,
-          timestamp: new Date().toISOString(),
-        })
-        
-        // DEMO MODE: Always allow, completely isolated from program state
-        // Demo must work regardless of any other conditions
-        // CRITICAL: Demo does NOT call resolveProgramStateLazily() - fully isolated
-        if (demoMode) {
-          console.log('[PHASE-X] Initializing demo mode', {
-            routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
-            stage: 'demo_init',
-          })
-          try {
-            const normalizedDemo = normalizeSession(DEMO_SESSION)
-            if (mounted) {
-              if (normalizedDemo && isRunnableSession(normalizedDemo)) {
-                console.log('[PHASE-X] Demo session normalized successfully')
-                setSession(normalizedDemo)
-              } else {
-                console.log('[PHASE-X] Demo session using raw DEMO_SESSION')
-                setSession(DEMO_SESSION)
-              }
-              setLoading(false)
-            }
-          } catch (demoError) {
-            console.warn('[PHASE-X] Demo normalization failed, using raw:', demoError)
-            if (mounted) {
-              setSession(DEMO_SESSION)
-              setLoading(false)
-            }
-          }
-          return
-        }
-        
-        console.log('[workout/session] safe route loaded - initializing real workout mode')
-        
-        // LAZY import and resolve program state
-        const { hasUsableProgram, adaptiveProgram } = await resolveProgramStateLazily()
-        console.log('[workout/session] program state resolved', { hasUsableProgram, hasAdaptiveProgram: !!adaptiveProgram })
-        
-        if (!mounted) return
-        
-        if (!hasUsableProgram || !adaptiveProgram) {
-          setError('No active program found. Please create a program first.')
-          setLoading(false)
-          return
-        }
-        
-        // Validate sessions array exists and has content
-        if (!Array.isArray(adaptiveProgram.sessions) || adaptiveProgram.sessions.length === 0) {
-          setError('No workout sessions available. Please create a program first.')
-          setLoading(false)
-          return
-        }
-        
-        // Find the session for the requested day (or today)
-        // Sessions array contains all workout days, ordered by dayNumber
-        // If coming from first-session flow, always use day 1 (index 0)
-        let sessionIndex: number
-        if (isFirstSession || dayParam === '1') {
-          sessionIndex = 0
-        } else if (dayParam) {
-          // dayParam is 1-indexed, convert to 0-indexed
-          const parsed = parseInt(dayParam, 10)
-          sessionIndex = isNaN(parsed) ? 0 : Math.max(0, parsed - 1)
-        } else {
-          const today = new Date().getDay() // 0=Sunday through 6=Saturday
-          sessionIndex = Math.min(today === 0 ? 6 : today - 1, adaptiveProgram.sessions.length - 1)
-        }
-        
-        // Clamp session index to valid range
-        sessionIndex = Math.max(0, Math.min(sessionIndex, adaptiveProgram.sessions.length - 1))
-        
-        const rawSession = adaptiveProgram.sessions[sessionIndex] || adaptiveProgram.sessions[0]
-        
-        if (!rawSession) {
-          setError('No workout scheduled for this day.')
-          setLoading(false)
-          return
-        }
-        
-        // [PHASE-X] Enhanced session normalization with contract validation
-        // Step 1: Log raw session diagnostic before any normalization
-        const rawDiagnostic = getSessionDiagnostic(rawSession)
-        console.log('[PHASE-X] Raw session diagnostic:', {
-          routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
-          stage: 'pre_normalization',
-          sessionIndex,
-          ...rawDiagnostic,
-        })
-        
-        // Step 2: Normalize session using local normalizer (preserves AdaptiveSession type)
-        let normalizedSession = null
-        try {
-          normalizedSession = normalizeSession(rawSession)
-        } catch (normError) {
-          console.error('[PHASE-X] Local normalization failed:', normError)
-          
-          // Step 2b: Fallback to contract-based normalizer
-          try {
-            const contractResult = normalizeAndValidateSession(rawSession)
-            if (contractResult.session && contractResult.validation.isValid) {
-              console.log('[PHASE-X] Contract-based fallback normalization succeeded')
-              // Cast to AdaptiveSession since the shapes are compatible
-              normalizedSession = contractResult.session as unknown as AdaptiveSession
-            }
-          } catch (contractError) {
-            console.error('[PHASE-X] Contract normalization also failed:', contractError)
-          }
-          
-          if (!normalizedSession) {
-            setError('This workout session could not be loaded.')
-            setLoading(false)
-            return
-          }
-        }
-        
-        // [PHASE-X] Validate normalized session with detailed diagnostics
-        const validation = validateNormalizedWorkoutSession(normalizedSession)
-        if (!validation.isValid) {
-          console.error('[PHASE-X] session_validate_failed', { 
-            routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
-            stage: 'session_validate',
-            hasNormalized: !!normalizedSession, 
-            validationResult: validation,
-            dayLabel: normalizedSession?.dayLabel,
-            exerciseCount: normalizedSession?.exercises?.length ?? 0,
-          })
-          
-          // [PHASE-X] Last resort: Create fallback session instead of showing error
-          console.warn('[PHASE-X] Attempting fallback session creation')
-          const fallbackSession = createFallbackSession('validation_failed')
-          if (fallbackSession) {
-            console.log('[PHASE-X] Using fallback session - workout will have limited exercises')
-            setSession(fallbackSession as unknown as AdaptiveSession)
-            setLoading(false)
-            return
-          }
-          
-          setError('This workout session is not properly configured.')
-          setLoading(false)
-          return
-        }
-        
-        console.log('[PHASE-X] session_validated', {
-          routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
-          stage: 'session_validate_success',
-          safeExerciseCount: validation.safeExerciseCount,
-          dayLabel: normalizedSession.dayLabel,
-          dayNumber: normalizedSession.dayNumber,
-          verdict: 'SESSION_RUNTIME_CONTRACT_VALID',
-        })
-        
-        // [workout-init] Log normalized session data for debugging set progression
-        console.log('[workout-init] session normalized successfully:', {
-          dayLabel: normalizedSession.dayLabel,
-          exerciseCount: normalizedSession.exercises.length,
-          setCountPerExercise: normalizedSession.exercises.map(ex => ({ name: ex.name, sets: ex.sets })),
-          totalSets: normalizedSession.exercises.reduce((sum, ex) => sum + ex.sets, 0),
-        })
-        
-        // [prescription-render] TASK 6: Log prescription data reaching UI
-        const exercisesWithLoads = normalizedSession.exercises.filter(
-          (ex: { prescribedLoad?: { load: number } }) => ex.prescribedLoad && ex.prescribedLoad.load > 0
-        )
-        console.log('[prescription-render] Exercises with prescribedLoad reaching UI:', {
+      // =======================================================================
+      // [PHASE-X+1] AUTHORITATIVE SESSION LOADING
+      // =======================================================================
+      // This uses the SINGLE ENTRY POINT for session loading.
+      // The loadAuthoritativeSession function GUARANTEES:
+      // 1. NEVER returns null - always returns valid session
+      // 2. NEVER throws - all errors caught and recovered
+      // 3. Full diagnostic logging at every stage
+      // =======================================================================
+      
+      console.log('[PHASE-X+1] SESSION_LOAD_INIT', {
+        routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
+        demoMode,
+        isFirstSession,
+        dayParam,
+        timestamp: new Date().toISOString(),
+      })
+      
+      // Calculate session index (only needed for non-demo mode, but we need a default)
+      // For demo mode, this is ignored. For real mode, we calculate based on params.
+      let sessionIndex = 0
+      if (!demoMode) {
+        // Get total session count (we'll get actual count from loader, use 6 as safe default)
+        const estimatedSessions = 6
+        sessionIndex = calculateSessionIndex(dayParam, isFirstSession, estimatedSessions)
+      }
+      
+      // Load session using AUTHORITATIVE LOADER
+      // This function NEVER throws and NEVER returns null
+      const result: AuthoritativeSessionResult = await loadAuthoritativeSession(sessionIndex, {
+        isDemo: demoMode,
+        isFirstSession,
+      })
+      
+      if (!mounted) return
+      
+      // Log the result
+      console.log('[PHASE-X+1] SESSION_LOAD_COMPLETE', {
+        routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
+        source: result.meta.source,
+        validationPassed: result.meta.validationPassed,
+        recovered: result.meta.recovered,
+        fallbackReason: result.meta.fallbackReason,
+        dayLabel: result.session.dayLabel,
+        exerciseCount: result.session.exercises.length,
+      })
+      
+      // Set session and meta - GUARANTEED to have valid session
+      setSession(result.session)
+      setSessionMeta(result.meta)
+      
+      // [workout-init] Log normalized session data for debugging
+      console.log('[workout-init] session ready:', {
+        dayLabel: result.session.dayLabel,
+        exerciseCount: result.session.exercises.length,
+        setCountPerExercise: result.session.exercises.map(ex => ({ name: ex.name, sets: ex.sets })),
+        totalSets: result.session.exercises.reduce((sum, ex) => sum + ex.sets, 0),
+        source: result.meta.source,
+      })
+      
+      // [prescription-render] Log prescription data
+      const exercisesWithLoads = result.session.exercises.filter(
+        (ex: { prescribedLoad?: { load: number } }) => ex.prescribedLoad && ex.prescribedLoad.load > 0
+      )
+      if (exercisesWithLoads.length > 0) {
+        console.log('[prescription-render] Exercises with prescribedLoad:', {
           count: exercisesWithLoads.length,
           exercises: exercisesWithLoads.map((ex: { name: string; prescribedLoad?: { load: number; unit: string; confidenceLevel: string } }) => ({
             name: ex.name,
@@ -636,49 +504,32 @@ function WorkoutSessionContent() {
             confidence: ex.prescribedLoad?.confidenceLevel,
           })),
         })
-        
-        setSession(normalizedSession)
-        
-        // [DISPLAY-CONTRACT] Extract and normalize workout reasoning with safe contract
-        // This guarantees all nested fields used by WhyThisWorkout have safe defaults
+      }
+      
+      // [DISPLAY-CONTRACT] Extract and normalize workout reasoning
+      if (result.reasoningSummary) {
         try {
-          const rawReasoning = adaptiveProgram.workoutReasoningSummary
-          
-          // Log shape diagnostic BEFORE normalization for debugging
-          const shapeDiag = getReasoningShapeDiagnostic(rawReasoning)
+          const shapeDiag = getReasoningShapeDiagnostic(result.reasoningSummary)
           console.log('[reasoning-shape-diagnostic]', {
             routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
             ...shapeDiag,
           })
           
-          if (rawReasoning) {
-            const safeContract = buildWorkoutReasoningDisplayContract(rawReasoning)
-            if (safeContract) {
-              console.log('[reasoning-contract] normalized', {
-                status: 'normalized',
-                hasWhyThisWorkout: !!safeContract.whyThisWorkout,
-                hasPrimaryLimiter: !!safeContract.primaryLimiter?.label,
-              })
-              setReasoningSummary(safeContract)
-            } else {
-              console.log('[reasoning-contract] malformed_fallback - contract returned null')
-            }
-          } else {
-            console.log('[reasoning-contract] absent - no reasoning summary in program')
+          const safeContract = buildWorkoutReasoningDisplayContract(result.reasoningSummary)
+          if (safeContract) {
+            console.log('[reasoning-contract] normalized', {
+              status: 'normalized',
+              hasWhyThisWorkout: !!safeContract.whyThisWorkout,
+              hasPrimaryLimiter: !!safeContract.primaryLimiter?.label,
+            })
+            setReasoningSummary(safeContract)
           }
         } catch {
-          // Reasoning summary is optional, don't fail if it can't be read
           console.log('[reasoning-contract] error during normalization - continuing without reasoning')
         }
-        setLoading(false)
-      } catch (e) {
-        // Catch-all: if anything unexpected happens, show a safe error
-        console.error('[workout/session] Unexpected error during initialization:', e)
-        if (mounted) {
-          setError('An unexpected error occurred. Please try again.')
-          setLoading(false)
-        }
       }
+      
+      setLoading(false)
     }
     
     initializeSession()
@@ -735,7 +586,10 @@ function WorkoutSessionContent() {
     )
   }
   
-  if (error || !session) {
+  // [PHASE-X+1] With authoritative loader, session should ALWAYS exist
+  // Only show error UI for genuine edge cases (e.g., loader promise rejected before mount)
+  if (!session) {
+    console.warn('[PHASE-X+1] Session is null after loading - this should not happen with authoritative loader')
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
         <div className="text-center max-w-sm">
@@ -769,6 +623,11 @@ function WorkoutSessionContent() {
     )
   }
   
+  // [PHASE-X+1] Log session meta for debugging (visible in console only)
+  if (sessionMeta && process.env.NODE_ENV === 'development') {
+    console.log('[PHASE-X+1] Session meta:', sessionMeta)
+  }
+  
   return (
     <WorkoutErrorBoundary>
       <StreamlinedWorkoutSession
@@ -779,6 +638,12 @@ function WorkoutSessionContent() {
         isDemo={demoMode}
         isFirstSession={isFirstSession}
       />
+      {/* [PHASE-X+1] Dev badge for session source - only in development */}
+      {process.env.NODE_ENV === 'development' && sessionMeta?.recovered && (
+        <div className="fixed bottom-4 left-4 bg-amber-500/20 border border-amber-500/50 rounded px-2 py-1 text-xs text-amber-400">
+          Session recovered: {sessionMeta.fallbackReason || 'fallback'}
+        </div>
+      )}
     </WorkoutErrorBoundary>
   )
 }

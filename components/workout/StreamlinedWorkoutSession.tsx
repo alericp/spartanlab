@@ -2223,6 +2223,157 @@ export function StreamlinedWorkoutSession({
   
   const calibrationMessage = bootPreparation.calibrationMessage
   
+  // ==========================================================================
+  // [ACTIVE-ENTRY-GUARD] UNIFIED ACTIVE ENTRY PREPARATION
+  // This contains all active-state-only derivations that could throw.
+  // If entering active state fails, we catch it locally instead of crashing.
+  // ==========================================================================
+  
+  type ActiveEntryResult = {
+    ok: boolean
+    failureStage: string | null
+    failureReason: string | null
+    targetValue: number
+    recommendedBand: ResistanceBandColor | undefined
+    targetRPE: number
+    isHoldExercise: boolean
+    displaySets: string
+    displayRepsTime: string
+  }
+  
+  const activeEntryPreparation = useMemo<ActiveEntryResult>(() => {
+    // Only prepare if we're in active state (or about to be)
+    // For ready state, we can return placeholder values since they won't be used
+    if (safeStatus !== 'active') {
+      return {
+        ok: true,
+        failureStage: null,
+        failureReason: null,
+        targetValue: 8,
+        recommendedBand: undefined,
+        targetRPE: 8,
+        isHoldExercise: false,
+        displaySets: `${safeCurrentExercise?.sets ?? 3} sets`,
+        displayRepsTime: safeCurrentExercise?.repsOrTime ?? '8-12 reps',
+      }
+    }
+    
+    try {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[v0] [active_entry_start] Preparing active state values...')
+      }
+      
+      // STAGE: target_value_derivation
+      let safeTargetValue = 8 // default
+      try {
+        const repsOrTime = safeCurrentExercise?.repsOrTime ?? ''
+        if (typeof repsOrTime === 'string' && repsOrTime.length > 0) {
+          const match = repsOrTime.match(/(\d+)/)
+          if (match) {
+            safeTargetValue = parseInt(match[1], 10)
+          }
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'unknown'
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[v0] [active_entry_target_value_failed]', msg)
+        }
+        return {
+          ok: false,
+          failureStage: 'target_value_derivation',
+          failureReason: `Failed to parse target value: ${msg}`,
+          targetValue: 8,
+          recommendedBand: undefined,
+          targetRPE: 8,
+          isHoldExercise: false,
+          displaySets: '3 sets',
+          displayRepsTime: '8-12 reps',
+        }
+      }
+      
+      // STAGE: recommended_band_derivation
+      let safeRecommendedBand: ResistanceBandColor | undefined = undefined
+      try {
+        const note = safeCurrentExercise?.note ?? ''
+        if (typeof note === 'string' && note.length > 0) {
+          const noteLower = note.toLowerCase()
+          for (const band of ALL_BAND_COLORS) {
+            if (noteLower.includes(band)) {
+              safeRecommendedBand = band
+              break
+            }
+          }
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'unknown'
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[v0] [active_entry_recommended_band_failed]', msg)
+        }
+        // Non-fatal: continue with undefined band
+        safeRecommendedBand = undefined
+      }
+      
+      // STAGE: hold_exercise_detection
+      let safeIsHoldExercise = false
+      try {
+        const repsOrTime = safeCurrentExercise?.repsOrTime ?? ''
+        if (typeof repsOrTime === 'string') {
+          const lower = repsOrTime.toLowerCase()
+          safeIsHoldExercise = lower.includes('sec') || lower.includes('hold')
+        }
+      } catch {
+        safeIsHoldExercise = false
+      }
+      
+      // STAGE: display_values
+      let safeDisplaySets = '3 sets'
+      let safeDisplayRepsTime = '8-12 reps'
+      try {
+        safeDisplaySets = `${safeCurrentExercise?.sets ?? 3} sets`
+        safeDisplayRepsTime = safeCurrentExercise?.repsOrTime ?? '8-12 reps'
+      } catch {
+        // Keep defaults
+      }
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[v0] [active_entry_success] Active entry preparation complete', {
+          targetValue: safeTargetValue,
+          recommendedBand: safeRecommendedBand,
+          isHoldExercise: safeIsHoldExercise,
+        })
+      }
+      
+      return {
+        ok: true,
+        failureStage: null,
+        failureReason: null,
+        targetValue: safeTargetValue,
+        recommendedBand: safeRecommendedBand,
+        targetRPE: 8,
+        isHoldExercise: safeIsHoldExercise,
+        displaySets: safeDisplaySets,
+        displayRepsTime: safeDisplayRepsTime,
+      }
+    } catch (error) {
+      // Catch-all for unexpected active entry errors
+      const msg = error instanceof Error ? error.message : 'unknown'
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[v0] [active_entry_unexpected_failure]', msg, error)
+      }
+      return {
+        ok: false,
+        failureStage: 'active_entry_unexpected',
+        failureReason: `Unexpected active entry error: ${msg}`,
+        targetValue: 8,
+        recommendedBand: undefined,
+        targetRPE: 8,
+        isHoldExercise: false,
+        displaySets: '3 sets',
+        displayRepsTime: '8-12 reps',
+      }
+    }
+  }, [safeStatus, safeCurrentExercise])
+  
   // [PHASE LW3] Effect-based boot diagnostics - runs after derivations are computed
   useEffect(() => {
     if (!bootHydrationReady) return
@@ -2355,10 +2506,9 @@ export function StreamlinedWorkoutSession({
     safeCurrentExercise
   ])
   
-  // [LIVE-WORKOUT-CORRIDOR] Determine if exercise uses holds or reps
-  // Uses safeCurrentExercise for guaranteed-safe values
-  const isHoldExercise = safeLower(safeCurrentExercise.repsOrTime).includes('sec') || 
-                         safeLower(safeCurrentExercise.repsOrTime).includes('hold')
+  // [ACTIVE-ENTRY-GUARD] Use guarded isHoldExercise from active entry preparation
+  // This ensures consistent derivation and crash safety
+  const isHoldExercise = activeEntryPreparation.isHoldExercise
   
   // [LIVE-WORKOUT-CORRIDOR] Parse target value - uses safeCurrentExercise
   const getTargetValue = useCallback((): number => {
@@ -2516,8 +2666,9 @@ export function StreamlinedWorkoutSession({
   // for each exercise immediately after transition.
   
   // [ATOMIC-HANDOFF] Write render_verified breadcrumb on successful active render
+  // [ACTIVE-ENTRY-GUARD] Only run if active entry preparation succeeded
   useEffect(() => {
-    if (safeStatus === 'active') {
+    if (safeStatus === 'active' && activeEntryPreparation.ok) {
       writeTransitionTrace({
         transitionStage: 'render_verified',
         lastSuccessfulRenderExerciseIndex: safeExerciseIndex,
@@ -2525,12 +2676,13 @@ export function StreamlinedWorkoutSession({
         safeIndexUsed: true,
       })
     }
-  }, [safeStatus, safeExerciseIndex, safeCurrentExercise.name])
+  }, [safeStatus, safeExerciseIndex, safeCurrentExercise.name, activeEntryPreparation.ok])
   
   // Timer effect - uses unified dispatch
   // [LIVE-WORKOUT-BOOT-CONTRACT] Use safe values from validation
+  // [ACTIVE-ENTRY-GUARD] Only run if active entry preparation succeeded
   useEffect(() => {
-    if (safeStatus === 'active' && safeStartTime) {
+    if (safeStatus === 'active' && safeStartTime && activeEntryPreparation.ok) {
       timerRef.current = setInterval(() => {
         dispatch({ type: 'TICK_TIMER' })
       }, 1000)
@@ -2538,7 +2690,7 @@ export function StreamlinedWorkoutSession({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
     }
-  }, [safeStatus, safeStartTime])
+  }, [safeStatus, safeStartTime, activeEntryPreparation.ok])
   
   // Format duration
   const formatDuration = (seconds: number): string => {
@@ -2620,7 +2772,8 @@ export function StreamlinedWorkoutSession({
     
     // Evaluate adaptive performance (optional - doesn't affect transition)
     if (safeCurrentExercise.executionTruth) {
-      const targetValue = getTargetValue()
+      // [ACTIVE-ENTRY-GUARD] Use guarded target value with fallback
+      const targetValue = activeEntryPreparation.ok ? activeEntryPreparation.targetValue : 8
       const setsForThisExercise = newCompletedSets.filter(s => s.exerciseIndex === currentIndex)
       
       const performanceData: SetPerformanceData = {
@@ -2739,7 +2892,8 @@ export function StreamlinedWorkoutSession({
     } else {
       // SAME EXERCISE, NEXT SET - single dispatch
       const nextSetNumber = liveSession.currentSetNumber + 1
-      const targetValue = getTargetValue()
+      // [ACTIVE-ENTRY-GUARD] Use guarded target value with fallback
+      const targetValue = activeEntryPreparation.ok ? activeEntryPreparation.targetValue : 8
       
       // Guard against invalid increment
       if (nextSetNumber > totalExerciseSets) {
@@ -2756,7 +2910,7 @@ export function StreamlinedWorkoutSession({
         targetValue,
       })
     }
-  }, [liveSession, safeCurrentExercise, safeExerciseIndex, isHoldExercise, exercises, exerciseRuntimeTruth, sessionRuntimeTruth, getTargetValue, executeUnifiedAdvance])
+  }, [liveSession, safeCurrentExercise, safeExerciseIndex, isHoldExercise, exercises, exerciseRuntimeTruth, sessionRuntimeTruth, activeEntryPreparation, executeUnifiedAdvance])
   
   // Rest complete / skip rest (between sets of SAME exercise)
   const handleRestComplete = useCallback(() => {
@@ -3209,7 +3363,8 @@ export function StreamlinedWorkoutSession({
     // [PHASE LW2] Mark live_workout_ready - render completed successfully
     // [PHASE LW2] Mark active state render complete if in active state
     // [LIVE-WORKOUT-BOOT-CONTRACT] Use safe values from validation
-    if (safeStatus === 'active') {
+    // [ACTIVE-ENTRY-GUARD] Only mark active render complete if entry succeeded
+    if (safeStatus === 'active' && activeEntryPreparation.ok) {
       markBootStage('active_state_render_complete', {
         sessionId,
         currentExerciseIndex: safeExerciseIndex,
@@ -3309,18 +3464,25 @@ export function StreamlinedWorkoutSession({
   }
 
   // ==========================================================================
-  // RENDER: CONTROLLED LOCAL FALLBACK - Runtime Validation OR Boot Preparation Failed
-  // [LIVE-WORKOUT-BOOT-CONTRACT] This catches BOTH invalid runtime state AND
-  // post-validation boot preparation failures BEFORE crashing the route boundary.
+  // RENDER: CONTROLLED LOCAL FALLBACK - Validation, Boot Prep, OR Active Entry Failed
+  // [LIVE-WORKOUT-BOOT-CONTRACT] This catches invalid runtime state, boot prep failures,
+  // AND active entry failures BEFORE crashing the route boundary.
   // ==========================================================================
   
-  const shouldShowLocalFallback = bootHydrationReady && (!runtimeIsValid || !bootPreparation.ok)
+  // Check for active entry failure only when transitioning to active state
+  const activeEntryFailed = safeStatus === 'active' && !activeEntryPreparation.ok
+  
+  const shouldShowLocalFallback = bootHydrationReady && (!runtimeIsValid || !bootPreparation.ok || activeEntryFailed)
   const fallbackReason = !runtimeIsValid 
     ? runtimeInvalidReason 
-    : bootPreparation.failureReason
+    : !bootPreparation.ok
+      ? bootPreparation.failureReason
+      : activeEntryPreparation.failureReason
   const fallbackStage = !runtimeIsValid 
     ? 'validation' 
-    : bootPreparation.failureStage
+    : !bootPreparation.ok
+      ? bootPreparation.failureStage
+      : activeEntryPreparation.failureStage
   
   if (shouldShowLocalFallback) {
     // Log diagnostic info for debugging
@@ -3330,6 +3492,7 @@ export function StreamlinedWorkoutSession({
         reason: fallbackReason,
         runtimeIsValid,
         bootPrepOk: bootPreparation.ok,
+        activeEntryOk: activeEntryPreparation.ok,
         diagnostics: runtimeDiagnostics,
       })
     }
@@ -3353,6 +3516,7 @@ export function StreamlinedWorkoutSession({
               <p className="text-[#A4ACB8]">Session Valid: {String(runtimeDiagnostics.sessionContractValid)}</p>
               <p className="text-[#A4ACB8]">Live State Valid: {String(runtimeDiagnostics.liveSessionValid)}</p>
               <p className="text-[#A4ACB8]">Boot Prep OK: {String(bootPreparation.ok)}</p>
+              <p className="text-[#A4ACB8]">Active Entry OK: {String(activeEntryPreparation.ok)}</p>
             </div>
           )}
           <div className="space-y-3">
@@ -4127,9 +4291,10 @@ function InterExerciseRestCountdown({
     )
   }
   
-  const targetRPE = 8 // Default target
-  const targetValue = getTargetValue()
-  const recommendedBand = getRecommendedBand()
+  // [ACTIVE-ENTRY-GUARD] Use guarded values from active entry preparation
+  const targetRPE = activeEntryPreparation.targetRPE
+  const targetValue = activeEntryPreparation.targetValue
+  const recommendedBand = activeEntryPreparation.recommendedBand
   
   return (
     <div className="min-h-screen bg-[#0F1115] flex flex-col">

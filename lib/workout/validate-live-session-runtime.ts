@@ -239,16 +239,84 @@ function normalizeOverride(override: unknown): ExerciseOverrideState | null {
 // =============================================================================
 
 /**
+ * Creates a fail-closed invalid result for when the validator itself errors.
+ * This ensures the validator NEVER throws - it fails closed instead.
+ */
+function createValidatorExceptionResult(errorMessage: string): LiveWorkoutRuntimeValidation {
+  return {
+    isValid: false,
+    reason: `validator_exception:${errorMessage}`,
+    invalidFields: ['validator_internal_error'],
+    
+    safeExerciseIndex: 0,
+    safeCurrentSetNumber: 1,
+    safeCurrentExercise: null,
+    hasValidExercises: false,
+    
+    normalizedCompletedSets: [],
+    normalizedExerciseOverrides: {},
+    
+    safeStatus: 'ready',
+    safeStartTime: null,
+    safeElapsedSeconds: 0,
+    safeLastSetRPE: null,
+    safeSelectedRPE: null,
+    safeRepsValue: 8,
+    safeHoldValue: 30,
+    safeBandUsed: 'none',
+    safeWorkoutNotes: '',
+    safeShowInterExerciseRest: false,
+    safeInterExerciseRestSeconds: 0,
+    safeTransitionRepairIssue: null,
+    
+    diagnostics: {
+      exerciseCount: 0,
+      requestedIndex: 0,
+      clampedIndex: 0,
+      requestedSetNumber: 1,
+      clampedSetNumber: 1,
+      status: 'ready',
+      completedSetsValid: true,
+      overridesValid: true,
+      sessionContractValid: false,
+      liveSessionValid: false,
+    },
+  }
+}
+
+/**
  * Validates the live workout runtime state and returns safe derived values.
  * 
  * This is the SINGLE source of truth for whether the live workout can safely render.
  * All active render paths should use values from this result, not raw liveSession values.
+ * 
+ * CRITICAL: This function NEVER throws. It fails closed with a structured invalid result.
  * 
  * @param sessionContract - The normalized session contract (safeWorkoutSessionContract)
  * @param liveSession - The reducer-owned live session state
  * @returns Validation result with safe derived values
  */
 export function validateLiveWorkoutRuntime(
+  sessionContract: NormalizedSessionContract | null | undefined,
+  liveSession: LiveSessionState | null | undefined
+): LiveWorkoutRuntimeValidation {
+  try {
+    return validateLiveWorkoutRuntimeInternal(sessionContract, liveSession)
+  } catch (error) {
+    // FAIL CLOSED: Never throw, return structured invalid result
+    const errorMessage = error instanceof Error ? error.message : 'unknown_error'
+    if (process.env.NODE_ENV === 'development') {
+      console.error('[v0] [validator_exception]', errorMessage, error)
+    }
+    return createValidatorExceptionResult(errorMessage)
+  }
+}
+
+/**
+ * Internal implementation of runtime validation.
+ * Wrapped by validateLiveWorkoutRuntime for exception safety.
+ */
+function validateLiveWorkoutRuntimeInternal(
   sessionContract: NormalizedSessionContract | null | undefined,
   liveSession: LiveSessionState | null | undefined
 ): LiveWorkoutRuntimeValidation {
@@ -524,62 +592,72 @@ export function validateLiveWorkoutRuntime(
 /**
  * Validates hydration data before it's applied to the reducer.
  * Returns null if the data should be rejected, or sanitized data if acceptable.
+ * 
+ * CRITICAL: This function NEVER throws. It returns null on any error.
  */
 export function validateHydrationPayload(
   savedState: Partial<LiveSessionState> | null | undefined,
   exerciseCount: number
 ): Partial<LiveSessionState> | null {
-  if (!savedState || !isPlainObject(savedState)) {
-    return null
-  }
-  
-  // Status must be valid and not completed (completed sessions shouldn't be restored)
-  if (!isValidStatus(savedState.status) || savedState.status === 'completed') {
-    return null
-  }
-  
-  // Index must be valid and within bounds
-  if (!isFiniteNumber(savedState.currentExerciseIndex) || savedState.currentExerciseIndex < 0) {
-    return null
-  }
-  
-  // Clamp index to valid range
-  const safeIndex = Math.min(savedState.currentExerciseIndex, Math.max(0, exerciseCount - 1))
-  
-  // Set number must be valid
-  if (!isFiniteNumber(savedState.currentSetNumber) || savedState.currentSetNumber < 1) {
-    return null
-  }
-  
-  // Normalize completedSets
-  const normalizedSets: CompletedSetData[] = []
-  if (isValidArray(savedState.completedSets)) {
-    for (const rawSet of savedState.completedSets) {
-      const normalized = normalizeCompletedSet(rawSet)
-      if (normalized && normalized.exerciseIndex < exerciseCount) {
-        normalizedSets.push(normalized)
-      }
+  try {
+    if (!savedState || !isPlainObject(savedState)) {
+      return null
     }
-  }
-  
-  // Normalize overrides
-  const normalizedOverrides: Record<number, ExerciseOverrideState> = {}
-  if (isPlainObject(savedState.exerciseOverrides)) {
-    for (const key of Object.keys(savedState.exerciseOverrides as Record<string, unknown>)) {
-      const index = parseInt(key, 10)
-      if (isFiniteNumber(index) && index >= 0 && index < exerciseCount) {
-        const normalized = normalizeOverride((savedState.exerciseOverrides as Record<number, unknown>)[index])
-        if (normalized) {
-          normalizedOverrides[index] = normalized
+    
+    // Status must be valid and not completed (completed sessions shouldn't be restored)
+    if (!isValidStatus(savedState.status) || savedState.status === 'completed') {
+      return null
+    }
+    
+    // Index must be valid and within bounds
+    if (!isFiniteNumber(savedState.currentExerciseIndex) || savedState.currentExerciseIndex < 0) {
+      return null
+    }
+    
+    // Clamp index to valid range
+    const safeIndex = Math.min(savedState.currentExerciseIndex, Math.max(0, exerciseCount - 1))
+    
+    // Set number must be valid
+    if (!isFiniteNumber(savedState.currentSetNumber) || savedState.currentSetNumber < 1) {
+      return null
+    }
+    
+    // Normalize completedSets
+    const normalizedSets: CompletedSetData[] = []
+    if (isValidArray(savedState.completedSets)) {
+      for (const rawSet of savedState.completedSets) {
+        const normalized = normalizeCompletedSet(rawSet)
+        if (normalized && normalized.exerciseIndex < exerciseCount) {
+          normalizedSets.push(normalized)
         }
       }
     }
-  }
-  
-  return {
-    ...savedState,
-    currentExerciseIndex: safeIndex,
-    completedSets: normalizedSets,
-    exerciseOverrides: normalizedOverrides,
+    
+    // Normalize overrides
+    const normalizedOverrides: Record<number, ExerciseOverrideState> = {}
+    if (isPlainObject(savedState.exerciseOverrides)) {
+      for (const key of Object.keys(savedState.exerciseOverrides as Record<string, unknown>)) {
+        const index = parseInt(key, 10)
+        if (isFiniteNumber(index) && index >= 0 && index < exerciseCount) {
+          const normalized = normalizeOverride((savedState.exerciseOverrides as Record<number, unknown>)[index])
+          if (normalized) {
+            normalizedOverrides[index] = normalized
+          }
+        }
+      }
+    }
+    
+    return {
+      ...savedState,
+      currentExerciseIndex: safeIndex,
+      completedSets: normalizedSets,
+      exerciseOverrides: normalizedOverrides,
+    }
+  } catch (error) {
+    // FAIL CLOSED: Never throw, return null to reject hydration
+    if (process.env.NODE_ENV === 'development') {
+      console.error('[v0] [hydration_validation_exception]', error)
+    }
+    return null
   }
 }

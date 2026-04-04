@@ -4602,7 +4602,7 @@ function InterExerciseRestCountdown({
   //   STAGE 5 = secondary actions + complete button
   //   STAGE 6 = full render (all modals, ExerciseOptionsMenu, effects)
   // ==========================================================================
-  const ACTIVE_REINTRODUCTION_STAGE = 6 // Start at 6 for full render, reduce to isolate failure
+  const ACTIVE_REINTRODUCTION_STAGE = 6 // Full render to test
   
   // STAGE 1: Minimal shell only
   if (ACTIVE_REINTRODUCTION_STAGE === 1) {
@@ -4830,18 +4830,22 @@ function InterExerciseRestCountdown({
   
   // STAGE 6: Full render - fall through to existing full active UI below
   
-  console.log('[v0] [active_render_entry]', {
-    safeStatus,
-    machinePhase: machineState.phase,
-    activeWorkoutViewModelIsValid: activeWorkoutViewModel.isValid,
-    hasValidExercises,
-    validatedCurrentExerciseExists: !!validatedCurrentExercise,
-    safeCurrentExerciseName: safeCurrentExercise?.name,
-    exerciseCount: exercises.length,
-    safeExerciseIndex,
-    validatedSetNumber,
-    completedSetsCount,
-  })
+  try {
+    console.log('[v0] [active_render_entry]', {
+      safeStatus,
+      machinePhase: machineState.phase,
+      activeWorkoutViewModelIsValid: activeWorkoutViewModel.isValid,
+      hasValidExercises,
+      validatedCurrentExerciseExists: !!validatedCurrentExercise,
+      safeCurrentExerciseName: safeCurrentExercise?.name,
+      exerciseCount: exercises.length,
+      safeExerciseIndex,
+      validatedSetNumber,
+      completedSetsCount,
+    })
+  } catch (e) {
+    console.error('[v0] [active_render_entry_logging_failed]', e)
+  }
   
   // [PHASE LW2] ACTIVE STATE VALIDATION - Controlled local fallback instead of crash
   // Note: isValid now uses hasValidExercises && !!validatedCurrentExercise

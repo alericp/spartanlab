@@ -198,7 +198,7 @@ interface WorkoutSessionState {
 }
 
 // =============================================================================
-// [PHASE LW4] TRANSITION TRACE SYSTEM
+// [ATOMIC-HANDOFF] TRANSITION TRACE SYSTEM
 // Provides precise breadcrumb logging for exercise transitions
 // =============================================================================
 
@@ -208,6 +208,19 @@ type TransitionReason =
   | 'skip_inter_exercise' 
   | 'skip_exercise'
 
+type TransitionType =
+  | 'same_exercise_next_set'
+  | 'next_exercise'
+  | 'workout_complete'
+  | 'inter_exercise_rest_wait'
+
+type TransitionStage = 
+  | 'requested'
+  | 'computed'
+  | 'committed'
+  | 'inputs_applied'
+  | 'render_verified'
+
 interface TransitionTrace {
   sessionId: string
   fromExerciseIndex: number
@@ -215,44 +228,62 @@ interface TransitionTrace {
   fromExerciseName: string
   toExerciseName: string | null
   reason: TransitionReason
+  transitionType: TransitionType
+  transitionStage: TransitionStage
   beforeStateStatus: string
   afterStateStatus: string
   safeExerciseCount: number
-  transitionCommitted: boolean
-  postCommitInputsApplied: boolean
+  safeIndexUsed: boolean
+  safeNextExerciseExists: boolean
+  guardFallbackReason: string | null
   lastSuccessfulRenderExerciseIndex: number
   lastSuccessfulRenderExerciseName: string
   timestamp: number
 }
 
-interface ExerciseTransitionResult {
-  /** The computed next workout state */
-  nextState: WorkoutSessionState
-  /** Input values to apply after state commit */
-  nextInputs: {
+/**
+ * [ATOMIC-HANDOFF] Complete atomic transition plan
+ * Contains everything needed to execute a transition in ONE commit
+ */
+interface AtomicTransitionPlan {
+  /** The complete next workout state to commit */
+  nextWorkoutState: WorkoutSessionState
+  /** Input state to apply immediately after commit */
+  nextInputState: {
+    selectedRPE: RPEValue | null
     repsValue: number
     holdValue: number
     bandUsed: ResistanceBandColor | 'none'
-  } | null
+  }
+  /** UI flags to set */
+  uiFlags: {
+    showInterExerciseRest: boolean
+    interExerciseRestSeconds: number
+  }
   /** Metadata about the transition */
   meta: {
     fromIndex: number
     toIndex: number | null
     fromExerciseName: string
     toExerciseName: string | null
+    transitionType: TransitionType
     isWorkoutComplete: boolean
   }
-  /** Cleanup actions to perform */
+  /** Cleanup actions */
   cleanup: {
     clearRestTimer: boolean
     clearStorage: boolean
-    hideInterExerciseRest: boolean
+    playCompletionAlert: boolean
+  }
+  /** Guard info if next exercise is invalid */
+  guard: {
+    fallbackReason: string | null
   }
 }
 
 /**
- * [PHASE LW4] Write transition trace to sessionStorage and window for crash diagnosis
- * This is effect-safe and never throws.
+ * [ATOMIC-HANDOFF] Write transition trace to sessionStorage and window for crash diagnosis
+ * MUST only be called OUTSIDE setState updaters - never inside a state callback
  */
 function writeTransitionTrace(trace: Partial<TransitionTrace>): void {
   try {
@@ -265,11 +296,14 @@ function writeTransitionTrace(trace: Partial<TransitionTrace>): void {
       fromExerciseName: trace.fromExerciseName ?? existing?.fromExerciseName ?? 'unknown',
       toExerciseName: trace.toExerciseName ?? existing?.toExerciseName ?? null,
       reason: trace.reason ?? existing?.reason ?? 'complete_set',
+      transitionType: trace.transitionType ?? existing?.transitionType ?? 'next_exercise',
+      transitionStage: trace.transitionStage ?? existing?.transitionStage ?? 'requested',
       beforeStateStatus: trace.beforeStateStatus ?? existing?.beforeStateStatus ?? 'unknown',
       afterStateStatus: trace.afterStateStatus ?? existing?.afterStateStatus ?? 'unknown',
       safeExerciseCount: trace.safeExerciseCount ?? existing?.safeExerciseCount ?? 0,
-      transitionCommitted: trace.transitionCommitted ?? existing?.transitionCommitted ?? false,
-      postCommitInputsApplied: trace.postCommitInputsApplied ?? existing?.postCommitInputsApplied ?? false,
+      safeIndexUsed: trace.safeIndexUsed ?? existing?.safeIndexUsed ?? false,
+      safeNextExerciseExists: trace.safeNextExerciseExists ?? existing?.safeNextExerciseExists ?? false,
+      guardFallbackReason: trace.guardFallbackReason ?? existing?.guardFallbackReason ?? null,
       lastSuccessfulRenderExerciseIndex: trace.lastSuccessfulRenderExerciseIndex ?? existing?.lastSuccessfulRenderExerciseIndex ?? -1,
       lastSuccessfulRenderExerciseName: trace.lastSuccessfulRenderExerciseName ?? existing?.lastSuccessfulRenderExerciseName ?? 'unknown',
       timestamp: trace.timestamp ?? Date.now(),
@@ -284,7 +318,7 @@ function writeTransitionTrace(trace: Partial<TransitionTrace>): void {
 }
 
 /**
- * [PHASE LW4] Read transition trace for crash diagnosis
+ * [ATOMIC-HANDOFF] Read transition trace for crash diagnosis
  */
 function readTransitionTrace(): TransitionTrace | null {
   try {
@@ -296,19 +330,25 @@ function readTransitionTrace(): TransitionTrace | null {
 }
 
 /**
- * [PHASE LW4] AUTHORITATIVE PURE EXERCISE TRANSITION HELPER
+ * [ATOMIC-HANDOFF] BUILD COMPLETE ATOMIC TRANSITION PLAN
  * 
- * This is the SINGLE source of truth for all forward exercise transitions.
- * It computes the next state WITHOUT any side effects - pure math/selection only.
+ * This is the SINGLE pure helper for ALL exercise transitions.
+ * It builds the COMPLETE next state in ONE pass with NO side effects.
  * 
- * ALL forward transitions must use this helper:
- * - After last set of current exercise
- * - After inter-exercise rest timer complete
- * - After skip inter-exercise rest
- * - After skip exercise
+ * NEVER call setState, setters, writeTransitionTrace, or any cleanup from here.
+ * 
+ * @param currentState - Current workout session state
+ * @param exercises - Authoritative normalized exercises array
+ * @param safeCurrentIndex - The clamped safe current exercise index
+ * @param currentExercise - Current exercise from safe contract
+ * @param currentInputs - Current input values
+ * @param newCompletedSets - Already-computed completed sets array (if applicable)
+ * @param reason - Why the transition is happening
+ * @param exerciseRuntimeTruth - Runtime truth for current exercise
+ * @param sessionRuntimeTruth - Runtime truth for session
  */
-function computeNextExerciseTransition(
-  prevState: WorkoutSessionState,
+function buildAtomicExerciseAdvancePlan(
+  currentState: WorkoutSessionState,
   exercises: Array<{
     id?: string
     name: string
@@ -320,48 +360,75 @@ function computeNextExerciseTransition(
       recommendedBandColor?: ResistanceBandColor
     }
   }>,
-  reason: TransitionReason
-): ExerciseTransitionResult {
-  const fromIndex = prevState.currentExerciseIndex
-  const fromExercise = exercises[fromIndex]
-  const fromExerciseName = fromExercise?.name ?? 'Unknown'
+  safeCurrentIndex: number,
+  currentExercise: { name: string; sets: number; repsOrTime: string },
+  currentInputs: {
+    selectedRPE: RPEValue | null
+    repsValue: number
+    holdValue: number
+    bandUsed: ResistanceBandColor | 'none'
+  },
+  newCompletedSets: CompletedSetData[] | null,
+  reason: TransitionReason,
+  exerciseRuntimeTruth?: { category: string; restSecondsInterExercise: number },
+  sessionRuntimeTruth?: { supportsBetweenExerciseRest: boolean }
+): AtomicTransitionPlan {
+  const fromIndex = safeCurrentIndex
+  const fromExerciseName = currentExercise?.name ?? 'Unknown'
   
   const nextIndex = fromIndex + 1
   const isWorkoutComplete = nextIndex >= exercises.length
+  const nextExercise = !isWorkoutComplete ? exercises[nextIndex] : null
+  const safeNextExerciseExists = nextExercise !== null && typeof nextExercise?.name === 'string'
   
+  // Check if next exercise data is valid
+  let guardFallbackReason: string | null = null
+  if (!isWorkoutComplete && !safeNextExerciseExists) {
+    guardFallbackReason = `Next exercise at index ${nextIndex} is missing or malformed`
+  }
+  
+  // WORKOUT COMPLETE
   if (isWorkoutComplete) {
-    // Workout complete - no next exercise
     return {
-      nextState: {
-        ...prevState,
+      nextWorkoutState: {
+        ...currentState,
         status: 'completed',
+        completedSets: newCompletedSets ?? currentState.completedSets,
+        lastSetRPE: currentInputs.selectedRPE ?? currentState.lastSetRPE,
       },
-      nextInputs: null,
+      nextInputState: {
+        selectedRPE: null,
+        repsValue: currentInputs.repsValue,
+        holdValue: currentInputs.holdValue,
+        bandUsed: currentInputs.bandUsed,
+      },
+      uiFlags: {
+        showInterExerciseRest: false,
+        interExerciseRestSeconds: 0,
+      },
       meta: {
         fromIndex,
         toIndex: null,
         fromExerciseName,
         toExerciseName: null,
+        transitionType: 'workout_complete',
         isWorkoutComplete: true,
       },
       cleanup: {
         clearRestTimer: true,
         clearStorage: true,
-        hideInterExerciseRest: true,
+        playCompletionAlert: false,
       },
+      guard: { fallbackReason: null },
     }
   }
   
-  // Get the NEXT exercise to compute correct initial values
-  const nextExercise = exercises[nextIndex]
-  const toExerciseName = nextExercise?.name ?? 'Exercise'
-  
-  // Parse target value from next exercise's repsOrTime
+  // Parse target value from NEXT exercise
   const nextRepsOrTime = nextExercise?.repsOrTime || ''
   const nextTargetMatch = nextRepsOrTime.match(/(\d+)/)
   const nextTargetValue = nextTargetMatch ? parseInt(nextTargetMatch[1], 10) : 5
   
-  // Determine recommended band for next exercise
+  // Determine recommended band for NEXT exercise
   let nextBand: ResistanceBandColor | 'none' = 'none'
   const nextNote = nextExercise?.note || ''
   const nextNoteLower = safeLower(nextNote)
@@ -377,30 +444,87 @@ function computeNextExerciseTransition(
     nextBand = truthBand
   }
   
+  const toExerciseName = nextExercise?.name ?? 'Exercise'
+  
+  // Check for inter-exercise rest (only if reason is 'complete_set' and runtime truth available)
+  const shouldCheckInterRest = reason === 'complete_set' && exerciseRuntimeTruth && sessionRuntimeTruth
+  const interRestSeconds = exerciseRuntimeTruth?.restSecondsInterExercise ?? 0
+  const shouldShowInterRest = shouldCheckInterRest && 
+    sessionRuntimeTruth?.supportsBetweenExerciseRest && 
+    exerciseRuntimeTruth?.category !== 'warmup' && 
+    exerciseRuntimeTruth?.category !== 'mobility' &&
+    interRestSeconds >= 30
+  
+  // INTER-EXERCISE REST REQUIRED
+  if (shouldShowInterRest) {
+    return {
+      nextWorkoutState: {
+        ...currentState,
+        completedSets: newCompletedSets ?? currentState.completedSets,
+        lastSetRPE: currentInputs.selectedRPE ?? currentState.lastSetRPE,
+        // Keep current exercise index - don't advance yet
+      },
+      nextInputState: {
+        selectedRPE: null,
+        repsValue: currentInputs.repsValue,
+        holdValue: currentInputs.holdValue,
+        bandUsed: currentInputs.bandUsed,
+      },
+      uiFlags: {
+        showInterExerciseRest: true,
+        interExerciseRestSeconds: interRestSeconds,
+      },
+      meta: {
+        fromIndex,
+        toIndex: nextIndex, // Target for after rest
+        fromExerciseName,
+        toExerciseName,
+        transitionType: 'inter_exercise_rest_wait',
+        isWorkoutComplete: false,
+      },
+      cleanup: {
+        clearRestTimer: false,
+        clearStorage: false,
+        playCompletionAlert: false,
+      },
+      guard: { fallbackReason: guardFallbackReason },
+    }
+  }
+  
+  // IMMEDIATE ADVANCE TO NEXT EXERCISE
   return {
-    nextState: {
-      ...prevState,
+    nextWorkoutState: {
+      ...currentState,
       status: 'active',
       currentExerciseIndex: nextIndex,
       currentSetNumber: 1,
+      completedSets: newCompletedSets ?? currentState.completedSets,
+      lastSetRPE: currentInputs.selectedRPE ?? currentState.lastSetRPE,
     },
-    nextInputs: {
+    nextInputState: {
+      selectedRPE: null,
       repsValue: nextTargetValue,
       holdValue: nextTargetValue,
       bandUsed: nextBand,
+    },
+    uiFlags: {
+      showInterExerciseRest: false,
+      interExerciseRestSeconds: 0,
     },
     meta: {
       fromIndex,
       toIndex: nextIndex,
       fromExerciseName,
       toExerciseName,
+      transitionType: 'next_exercise',
       isWorkoutComplete: false,
     },
     cleanup: {
       clearRestTimer: false,
       clearStorage: false,
-      hideInterExerciseRest: true,
+      playCompletionAlert: false,
     },
+    guard: { fallbackReason: guardFallbackReason },
   }
 }
 
@@ -1588,105 +1712,101 @@ export function StreamlinedWorkoutSession({
   }, [safeCurrentExercise])
   
   // ==========================================================================
-  // [LIVE-WORKOUT-CORRIDOR] UNIFIED ADVANCEMENT SYSTEM
-  // All transition paths MUST use this single function to avoid stale closures
+  // [ATOMIC-HANDOFF] UNIFIED ATOMIC ADVANCEMENT SYSTEM
+  // All transition paths use buildAtomicExerciseAdvancePlan + immediate commit
+  // NO pendingRef/effect architecture - everything commits atomically
   // ==========================================================================
   
-  // [PHASE LW4] Ref to store pending transition result for post-commit application
-  const pendingTransitionRef = useRef<ExerciseTransitionResult | null>(null)
-  
   /**
-   * [PHASE LW4] UNIFIED ADVANCEMENT FUNCTION
-   * Uses the pure computeNextExerciseTransition helper.
-   * NO side effects inside setState - all cleanup happens in controlled post-commit sequence.
+   * [ATOMIC-HANDOFF] Execute atomic transition to next exercise
+   * Builds plan, commits state, and applies inputs - all in one synchronous pass
    */
-  const advanceToNextExercise = useCallback((reason: TransitionReason) => {
-    // [PHASE LW4] Write transition_requested breadcrumb BEFORE attempting transition
+  const executeAtomicAdvance = useCallback((reason: TransitionReason) => {
+    // [ATOMIC-HANDOFF] Write transition_requested breadcrumb BEFORE
     writeTransitionTrace({
       reason,
+      transitionStage: 'requested',
       timestamp: Date.now(),
-      transitionCommitted: false,
-      postCommitInputsApplied: false,
+      safeIndexUsed: true,
     })
     
-    // Use functional update to get FRESH state values, avoiding stale closures
-    setState(prev => {
-      // [PHASE LW4] Compute transition using PURE helper - no side effects
-      const transitionResult = computeNextExerciseTransition(prev, exercises, reason)
-      
-      console.log('[PHASE LW4] advanceToNextExercise - transition computed', {
-        reason,
-        fromIndex: transitionResult.meta.fromIndex,
-        toIndex: transitionResult.meta.toIndex,
-        fromExerciseName: transitionResult.meta.fromExerciseName,
-        toExerciseName: transitionResult.meta.toExerciseName,
-        isWorkoutComplete: transitionResult.meta.isWorkoutComplete,
-        totalExercises: exercises.length,
-      })
-      
-      // [PHASE LW4] Write transition_computed breadcrumb
-      writeTransitionTrace({
-        fromExerciseIndex: transitionResult.meta.fromIndex,
-        toExerciseIndex: transitionResult.meta.toIndex,
-        fromExerciseName: transitionResult.meta.fromExerciseName,
-        toExerciseName: transitionResult.meta.toExerciseName,
-        beforeStateStatus: prev.status,
-        afterStateStatus: transitionResult.nextState.status,
-        safeExerciseCount: exercises.length,
-      })
-      
-      // Store transition result for post-commit application
-      // This is a ref assignment, not a side effect that affects rendering
-      pendingTransitionRef.current = transitionResult
-      
-      // Return ONLY the next state - no side effects
-      return transitionResult.nextState
-    })
-  }, [exercises]) // Only depends on exercises array, not state
-  
-  // [PHASE LW4] Effect to apply post-commit actions when state changes due to transition
-  useEffect(() => {
-    const pending = pendingTransitionRef.current
-    if (!pending) return
+    // Build the COMPLETE atomic plan from current authoritative values
+    const plan = buildAtomicExerciseAdvancePlan(
+      state,
+      exercises,
+      safeExerciseIndex,
+      safeCurrentExercise,
+      { selectedRPE, repsValue, holdValue, bandUsed },
+      null, // No new completed sets in this path
+      reason,
+      exerciseRuntimeTruth,
+      sessionRuntimeTruth
+    )
     
-    // Clear the pending ref first to prevent re-execution
-    pendingTransitionRef.current = null
-    
-    // [PHASE LW4] Write transition_committed breadcrumb
+    // [ATOMIC-HANDOFF] Write transition_computed breadcrumb
     writeTransitionTrace({
-      transitionCommitted: true,
+      transitionStage: 'computed',
+      fromExerciseIndex: plan.meta.fromIndex,
+      toExerciseIndex: plan.meta.toIndex,
+      fromExerciseName: plan.meta.fromExerciseName,
+      toExerciseName: plan.meta.toExerciseName,
+      transitionType: plan.meta.transitionType,
+      beforeStateStatus: state.status,
+      afterStateStatus: plan.nextWorkoutState.status,
+      safeExerciseCount: exercises.length,
+      safeNextExerciseExists: plan.meta.toIndex !== null && plan.meta.toIndex < exercises.length,
+      guardFallbackReason: plan.guard.fallbackReason,
     })
     
-    // Apply cleanup actions
-    if (pending.cleanup.clearRestTimer) {
-      clearRestTimerState()
-    }
-    if (pending.cleanup.clearStorage) {
-      clearSessionStorage()
-    }
-    if (pending.cleanup.hideInterExerciseRest) {
+    console.log('[ATOMIC-HANDOFF] executeAtomicAdvance', {
+      reason,
+      transitionType: plan.meta.transitionType,
+      fromIndex: plan.meta.fromIndex,
+      toIndex: plan.meta.toIndex,
+      toExerciseName: plan.meta.toExerciseName,
+      isWorkoutComplete: plan.meta.isWorkoutComplete,
+      guardFallbackReason: plan.guard.fallbackReason,
+    })
+    
+    // ONE state commit for the workout state
+    setState(plan.nextWorkoutState)
+    
+    // [ATOMIC-HANDOFF] Write transition_committed breadcrumb
+    writeTransitionTrace({ transitionStage: 'committed' })
+    
+    // Immediately apply UI flags (outside setState, same event handler)
+    if (plan.uiFlags.showInterExerciseRest) {
+      setInterExerciseRestSeconds(plan.uiFlags.interExerciseRestSeconds)
+      setShowInterExerciseRest(true)
+    } else {
       setShowInterExerciseRest(false)
     }
     
-    // Apply input resets for next exercise
-    if (pending.nextInputs) {
-      setSelectedRPE(null)
-      setRepsValue(pending.nextInputs.repsValue)
-      setHoldValue(pending.nextInputs.holdValue)
-      setBandUsed(pending.nextInputs.bandUsed)
+    // Immediately apply input state (outside setState, same event handler)
+    setSelectedRPE(plan.nextInputState.selectedRPE)
+    setRepsValue(plan.nextInputState.repsValue)
+    setHoldValue(plan.nextInputState.holdValue)
+    setBandUsed(plan.nextInputState.bandUsed)
+    
+    // [ATOMIC-HANDOFF] Write inputs_applied breadcrumb
+    writeTransitionTrace({ transitionStage: 'inputs_applied' })
+    
+    // Apply cleanup OUTSIDE setState
+    if (plan.cleanup.clearRestTimer) {
+      clearRestTimerState()
+    }
+    if (plan.cleanup.clearStorage) {
+      clearSessionStorage()
+    }
+    if (plan.cleanup.playCompletionAlert) {
+      playTimerCompletionAlert()
     }
     
-    // [PHASE LW4] Write post_commit_inputs_applied breadcrumb
-    writeTransitionTrace({
-      postCommitInputsApplied: true,
+    console.log('[ATOMIC-HANDOFF] Transition complete', {
+      toIndex: plan.meta.toIndex,
+      inputsApplied: true,
     })
-    
-    console.log('[PHASE LW4] Post-commit actions applied', {
-      toIndex: pending.meta.toIndex,
-      toExerciseName: pending.meta.toExerciseName,
-      isWorkoutComplete: pending.meta.isWorkoutComplete,
-    })
-  }, [state.currentExerciseIndex, state.status]) // Triggered when state changes
+  }, [state, exercises, safeExerciseIndex, safeCurrentExercise, selectedRPE, repsValue, holdValue, bandUsed, exerciseRuntimeTruth, sessionRuntimeTruth])
   
   // [LIVE-WORKOUT-CORRIDOR-FIX] Load next session info when workout completes
   // This uses dynamic import to avoid loading the heavy adaptive-program-builder at module load
@@ -1739,12 +1859,14 @@ export function StreamlinedWorkoutSession({
     setBandUsed(effectiveRecommendedBand || 'none')
   }, [state.currentExerciseIndex, safeCurrentExercise, getTargetValue, getRecommendedBand])
   
-  // [PHASE LW4] Write transition_render_verified breadcrumb on successful active render
+  // [ATOMIC-HANDOFF] Write render_verified breadcrumb on successful active render
   useEffect(() => {
     if (state.status === 'active') {
       writeTransitionTrace({
+        transitionStage: 'render_verified',
         lastSuccessfulRenderExerciseIndex: safeExerciseIndex,
         lastSuccessfulRenderExerciseName: safeCurrentExercise.name,
+        safeIndexUsed: true,
       })
     }
   }, [state.status, safeExerciseIndex, safeCurrentExercise.name])
@@ -1832,12 +1954,12 @@ export function StreamlinedWorkoutSession({
     })
   }, [])
   
-  // [PHASE LW4] Complete set - uses unified transition helper for exercise advancement
+  // [ATOMIC-HANDOFF] Complete set - uses atomic transition plan for ALL exercise changes
   const handleCompleteSet = useCallback(() => {
-    // [PHASE LW4] Use safeExerciseIndex for reads, safeCurrentExercise for exercise data
+    // [ATOMIC-HANDOFF] Use safeExerciseIndex for ALL reads
     const currentIndex = safeExerciseIndex
     
-    console.log('[PHASE LW4] handleCompleteSet triggered', {
+    console.log('[ATOMIC-HANDOFF] handleCompleteSet triggered', {
       exerciseIndex: currentIndex,
       setNumber: state.currentSetNumber,
       exerciseName: safeCurrentExercise.name,
@@ -1845,6 +1967,7 @@ export function StreamlinedWorkoutSession({
       totalExercises: exercises.length,
     })
     
+    // Build completed set data
     const setData: CompletedSetData = {
       exerciseIndex: currentIndex,
       setNumber: state.currentSetNumber,
@@ -1860,9 +1983,7 @@ export function StreamlinedWorkoutSession({
     const isLastSet = state.currentSetNumber >= totalExerciseSets
     const isLastExercise = currentIndex >= exercises.length - 1
     
-    const lastRPE = selectedRPE || 8
-    
-    // [LIVE-WORKOUT-CORRIDOR] Evaluate set performance - uses safeCurrentExercise
+    // Evaluate adaptive performance (optional - doesn't affect transition)
     if (safeCurrentExercise.executionTruth) {
       const targetValue = getTargetValue()
       const setsForThisExercise = newCompletedSets.filter(s => s.exerciseIndex === currentIndex)
@@ -1895,109 +2016,127 @@ export function StreamlinedWorkoutSession({
         exerciseName: safeCurrentExercise.name,
       })
       
-      // Show recommendation if warranted
       if (shouldShowRecommendation(recommendation) && !isLastSet && !isLastExercise) {
         setAdaptiveRecommendation(recommendation)
         setShowAdaptiveModal(true)
       }
     }
     
-    if (isLastSet && isLastExercise) {
-      // [PHASE LW4] Workout complete - use state update then cleanup
-      setState(prev => ({
-        ...prev,
-        status: 'completed',
-        completedSets: newCompletedSets,
-        lastSetRPE: lastRPE,
-      }))
-      // Cleanup happens outside setState - no side effects in updater
-      clearSessionStorage()
-      clearRestTimerState()
+    // ==========================================================================
+    // [ATOMIC-HANDOFF] DETERMINE TRANSITION TYPE AND BUILD ATOMIC PLAN
+    // ==========================================================================
+    
+    if (isLastSet) {
+      // Need to advance to next exercise or complete workout
+      // Build COMPLETE atomic plan including completed sets
       
-    } else if (isLastSet) {
-      // [PHASE LW4] Move to next exercise - check for inter-exercise rest
-      const interRestSeconds = exerciseRuntimeTruth.restSecondsInterExercise
+      // [ATOMIC-HANDOFF] Write transition_requested breadcrumb
+      writeTransitionTrace({
+        reason: 'complete_set',
+        transitionStage: 'requested',
+        timestamp: Date.now(),
+        safeIndexUsed: true,
+      })
       
-      // Show inter-exercise rest if enabled and not warmup/mobility
-      const shouldShowInterRest = sessionRuntimeTruth.supportsBetweenExerciseRest && 
-        exerciseRuntimeTruth.category !== 'warmup' && 
-        exerciseRuntimeTruth.category !== 'mobility' &&
-        interRestSeconds >= 30
+      const plan = buildAtomicExerciseAdvancePlan(
+        state,
+        exercises,
+        currentIndex,
+        safeCurrentExercise,
+        { selectedRPE, repsValue, holdValue, bandUsed },
+        newCompletedSets,
+        'complete_set',
+        exerciseRuntimeTruth,
+        sessionRuntimeTruth
+      )
       
-      if (shouldShowInterRest) {
-        // Show inter-exercise rest - actual advancement happens after rest completes
-        console.log('[PHASE LW4] showing inter-exercise rest', {
-          interRestSeconds,
-          currentIndex,
-          nextIndex: currentIndex + 1,
-        })
-        setInterExerciseRestSeconds(interRestSeconds)
+      // [ATOMIC-HANDOFF] Write transition_computed breadcrumb
+      writeTransitionTrace({
+        transitionStage: 'computed',
+        fromExerciseIndex: plan.meta.fromIndex,
+        toExerciseIndex: plan.meta.toIndex,
+        fromExerciseName: plan.meta.fromExerciseName,
+        toExerciseName: plan.meta.toExerciseName,
+        transitionType: plan.meta.transitionType,
+        beforeStateStatus: state.status,
+        afterStateStatus: plan.nextWorkoutState.status,
+        safeExerciseCount: exercises.length,
+        safeNextExerciseExists: plan.meta.toIndex !== null && plan.meta.toIndex < exercises.length,
+        guardFallbackReason: plan.guard.fallbackReason,
+      })
+      
+      console.log('[ATOMIC-HANDOFF] handleCompleteSet - built plan', {
+        transitionType: plan.meta.transitionType,
+        fromIndex: plan.meta.fromIndex,
+        toIndex: plan.meta.toIndex,
+        isWorkoutComplete: plan.meta.isWorkoutComplete,
+        showInterExerciseRest: plan.uiFlags.showInterExerciseRest,
+      })
+      
+      // ONE state commit for everything
+      setState(plan.nextWorkoutState)
+      
+      // [ATOMIC-HANDOFF] Write transition_committed breadcrumb
+      writeTransitionTrace({ transitionStage: 'committed' })
+      
+      // Apply UI flags immediately (same event handler)
+      if (plan.uiFlags.showInterExerciseRest) {
+        setInterExerciseRestSeconds(plan.uiFlags.interExerciseRestSeconds)
         setShowInterExerciseRest(true)
-        setState(prev => ({
-          ...prev,
-          completedSets: newCompletedSets,
-          lastSetRPE: lastRPE,
-        }))
       } else {
-        // [PHASE LW4] Immediate advance using UNIFIED transition helper
-        // First update completed sets, then advance via unified function
-        setState(prev => ({
-          ...prev,
-          completedSets: newCompletedSets,
-          lastSetRPE: lastRPE,
-        }))
-        // Use unified advancement - this handles all input resets correctly
-        advanceToNextExercise('complete_set')
+        setShowInterExerciseRest(false)
       }
+      
+      // Apply input state immediately
+      setSelectedRPE(plan.nextInputState.selectedRPE)
+      setRepsValue(plan.nextInputState.repsValue)
+      setHoldValue(plan.nextInputState.holdValue)
+      setBandUsed(plan.nextInputState.bandUsed)
+      
+      // [ATOMIC-HANDOFF] Write inputs_applied breadcrumb
+      writeTransitionTrace({ transitionStage: 'inputs_applied' })
+      
+      // Apply cleanup
+      if (plan.cleanup.clearRestTimer) {
+        clearRestTimerState()
+      }
+      if (plan.cleanup.clearStorage) {
+        clearSessionStorage()
+      }
+      
     } else {
-      // Move to next set with rest
+      // [ATOMIC-HANDOFF] SAME EXERCISE, NEXT SET
+      // Simpler path - just increment set and go to rest
       const nextSetNumber = state.currentSetNumber + 1
       const maxSets = totalExerciseSets
       
-      // Guard against incrementing past total sets
+      // Guard against invalid increment
       if (nextSetNumber > maxSets) {
-        console.warn('[PHASE LW4] blocked invalid set increment:', {
+        console.warn('[ATOMIC-HANDOFF] blocked invalid set increment:', {
           currentSet: state.currentSetNumber,
           nextSet: nextSetNumber,
           maxSets,
-          exerciseName: safeCurrentExercise.name,
         })
-        // Failsafe: advance to next exercise if possible
-        if (currentIndex < exercises.length - 1) {
-          setState(prev => ({
-            ...prev,
-            completedSets: newCompletedSets,
-            lastSetRPE: lastRPE,
-          }))
-          advanceToNextExercise('complete_set')
-        } else {
-          setState(prev => ({
-            ...prev,
-            status: 'completed',
-            completedSets: newCompletedSets,
-            lastSetRPE: lastRPE,
-          }))
-          clearSessionStorage()
-          clearRestTimerState()
-        }
+        // Failsafe: use atomic advance to next exercise
+        executeAtomicAdvance('complete_set')
         return
       }
       
-      // Normal next set flow
-      setState(prev => ({
-        ...prev,
+      // ONE state commit for next set
+      setState({
+        ...state,
         status: 'resting',
         completedSets: newCompletedSets,
         currentSetNumber: nextSetNumber,
-        lastSetRPE: lastRPE,
-      }))
+        lastSetRPE: selectedRPE || 8,
+      })
       
-      // Reset inputs for next set of SAME exercise
+      // Reset inputs for SAME exercise next set
       setSelectedRPE(null)
       setRepsValue(getTargetValue())
       setHoldValue(getTargetValue())
     }
-  }, [safeCurrentExercise, safeExerciseIndex, state, repsValue, holdValue, selectedRPE, bandUsed, isHoldExercise, exercises, exerciseRuntimeTruth, sessionRuntimeTruth, getTargetValue, advanceToNextExercise])
+  }, [safeCurrentExercise, safeExerciseIndex, state, repsValue, holdValue, selectedRPE, bandUsed, isHoldExercise, exercises, exerciseRuntimeTruth, sessionRuntimeTruth, getTargetValue, executeAtomicAdvance])
   
   // Rest complete / skip rest (between sets of SAME exercise)
   const handleRestComplete = useCallback(() => {
@@ -2010,20 +2149,18 @@ export function StreamlinedWorkoutSession({
     }))
   }, [])
   
-  // [LIVE-WORKOUT-CORRIDOR] Handle inter-exercise rest completion
-  // Uses unified advanceToNextExercise to prevent stale closure bugs
+  // [ATOMIC-HANDOFF] Handle inter-exercise rest completion
   const handleInterExerciseRestComplete = useCallback(() => {
-    console.log('[LIVE-WORKOUT-CORRIDOR] handleInterExerciseRestComplete triggered')
+    console.log('[ATOMIC-HANDOFF] handleInterExerciseRestComplete triggered')
     playTimerCompletionAlert()
-    advanceToNextExercise('inter_exercise_complete')
-  }, [advanceToNextExercise])
+    executeAtomicAdvance('inter_exercise_complete')
+  }, [executeAtomicAdvance])
   
-  // [LIVE-WORKOUT-CORRIDOR] Handle skip inter-exercise rest
-  // Uses unified advanceToNextExercise to prevent stale closure bugs
+  // [ATOMIC-HANDOFF] Skip inter-exercise rest
   const handleSkipInterExerciseRest = useCallback(() => {
-    console.log('[LIVE-WORKOUT-CORRIDOR] handleSkipInterExerciseRest triggered')
-    advanceToNextExercise('skip_inter_exercise')
-  }, [advanceToNextExercise])
+    console.log('[ATOMIC-HANDOFF] handleSkipInterExerciseRest triggered')
+    executeAtomicAdvance('skip_inter_exercise')
+  }, [executeAtomicAdvance])
   
   // [EXECUTION-TRUTH-FIX] Back navigation - review previous exercise
   const handleReviewPreviousExercise = useCallback(() => {
@@ -2069,11 +2206,11 @@ export function StreamlinedWorkoutSession({
     )
   }, [])
   
-  // [LIVE-WORKOUT-CORRIDOR] Skip exercise - uses unified advancement
+  // [ATOMIC-HANDOFF] Skip exercise - uses atomic advancement
   const handleSkipExercise = useCallback(() => {
-    console.log('[LIVE-WORKOUT-CORRIDOR] handleSkipExercise triggered')
-    advanceToNextExercise('skip_exercise')
-  }, [advanceToNextExercise])
+    console.log('[ATOMIC-HANDOFF] handleSkipExercise triggered')
+    executeAtomicAdvance('skip_exercise')
+  }, [executeAtomicAdvance])
   
   // ==========================================================================
   // EXERCISE OVERRIDE HANDLERS
@@ -2235,7 +2372,8 @@ export function StreamlinedWorkoutSession({
   }, [exercises, state.exerciseOverrides])
   
   // Get current effective exercise (with fallback to safe exercise)
-  const effectiveExercise = getEffectiveExercise(state.currentExerciseIndex) || safeCurrentExercise
+  // [ATOMIC-HANDOFF] Use safeExerciseIndex for all render-time lookups
+  const effectiveExercise = getEffectiveExercise(safeExerciseIndex) || safeCurrentExercise
   
   // Finish workout (moves to completed state for logging)
   const handleFinish = useCallback(() => {
@@ -2447,7 +2585,7 @@ export function StreamlinedWorkoutSession({
       totalSets: totalSets,
       completedSets: totalSetsCompleted,
       totalExercises: totalExercises,
-      completedExercises: state.currentExerciseIndex + (state.status === 'completed' ? 1 : 0),
+      completedExercises: safeExerciseIndex + (state.status === 'completed' ? 1 : 0),
       averageRPE: avgRPE,
       estimatedVolume: totalSetsCompleted * 10, // simplified
       elapsedSeconds: state.elapsedSeconds,
@@ -3122,7 +3260,7 @@ function InterExerciseRestCountdown({
                     {safeDisplayLabel}
                   </span>
                   <span className="text-xs text-[#6B7280]">
-                    {state.currentExerciseIndex + 1}/{totalExercises}
+                    {safeExerciseIndex + 1}/{totalExercises}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
@@ -3169,7 +3307,7 @@ function InterExerciseRestCountdown({
           {/* Inline Rest Timer */}
           <InlineRestTimer
             recommendation={restRecommendation}
-            exerciseIndex={state.currentExerciseIndex}
+            exerciseIndex={safeExerciseIndex}
             setNumber={state.currentSetNumber}
             nextSetInfo={nextSetInfo}
             initialState={savedRestState}
@@ -3280,7 +3418,7 @@ function InterExerciseRestCountdown({
                   {safeDisplayLabel}
                 </span>
                 <span className="text-xs text-[#6B7280]">
-                  {state.currentExerciseIndex + 1}/{totalExercises}
+                  {safeExerciseIndex + 1}/{totalExercises}
                 </span>
               </div>
               <div className="flex items-center gap-3">
@@ -3329,14 +3467,14 @@ function InterExerciseRestCountdown({
               <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
                 {safeCurrentExercise.category}
               </Badge>
-              {state.exerciseOverrides[state.currentExerciseIndex]?.isReplaced && (
+              {state.exerciseOverrides[safeExerciseIndex]?.isReplaced && (
                 <Badge className="bg-blue-500/10 text-blue-400 border-0 text-[10px] px-1.5 py-0">Swapped</Badge>
               )}
             </div>
             <SafeOptionalSubtree label="ExerciseOptionsMenu">
               <ExerciseOptionsMenu
                 exercise={safeCurrentExercise}
-                exerciseIndex={state.currentExerciseIndex}
+                exerciseIndex={safeExerciseIndex}
                 sessionId={sessionId}
                 onReplace={handleReplaceExercise}
                 onSkip={handleMenuSkipExercise}
@@ -3501,14 +3639,14 @@ function InterExerciseRestCountdown({
           )}
         </Card>
         
-        {/* [LIVE-WORKOUT-CORRIDOR] Complete Set Button - uses safeCurrentExercise */}
+        {/* [ATOMIC-HANDOFF] Complete Set Button - uses safe indices */}
         <Button
           onClick={handleCompleteSet}
           disabled={selectedRPE === null}
           className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-base font-bold disabled:opacity-50"
         >
           <Check className="w-5 h-5 mr-2" />
-          {state.currentSetNumber >= safeCurrentExercise.sets && state.currentExerciseIndex >= exercises.length - 1
+          {state.currentSetNumber >= safeCurrentExercise.sets && safeExerciseIndex >= exercises.length - 1
             ? 'Finish Workout'
             : state.currentSetNumber >= safeCurrentExercise.sets
               ? 'Next Exercise'
@@ -3520,7 +3658,7 @@ function InterExerciseRestCountdown({
         <div className="flex items-center justify-between pt-2">
           <div className="flex items-center gap-1">
             {/* [EXECUTION-TRUTH-FIX] Back navigation button */}
-            {sessionRuntimeTruth.supportsBackNavigation && state.currentExerciseIndex > 0 && (
+            {sessionRuntimeTruth.supportsBackNavigation && safeExerciseIndex > 0 && (
               <Button
                 variant="ghost"
                 onClick={handleReviewPreviousExercise}
@@ -3651,7 +3789,7 @@ function InterExerciseRestCountdown({
                 Rest Before Next Exercise
               </Badge>
               <h3 className="text-lg font-semibold text-[#E6E9EF] mb-1">
-                {exercises[state.currentExerciseIndex + 1]?.name || 'Next Exercise'}
+                {safeExerciseIndex < exercises.length - 1 ? exercises[safeExerciseIndex + 1]?.name : 'Next Exercise'}
               </h3>
               <p className="text-sm text-[#A4ACB8]">
                 {Math.floor(interExerciseRestSeconds / 60)}:{(interExerciseRestSeconds % 60).toString().padStart(2, '0')} rest before starting

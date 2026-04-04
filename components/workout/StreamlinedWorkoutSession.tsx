@@ -99,6 +99,12 @@ import {
   type ExerciseContextFlag,
   AVAILABLE_CONTEXT_FLAGS,
 } from '@/lib/workout-execution-truth'
+// [LIVE-WORKOUT-BOOT-CONTRACT] Centralized runtime validation
+import {
+  validateLiveWorkoutRuntime,
+  validateHydrationPayload,
+  type LiveWorkoutRuntimeValidation,
+} from '@/lib/workout/validate-live-session-runtime'
 
 // =============================================================================
 // SAFE STRING HELPER - PREVENTS toLowerCase CRASHES
@@ -1763,7 +1769,7 @@ export function StreamlinedWorkoutSession({
     if (isDemoSession) return
     
     const existing = getExistingSessionInfo()
-    if (existing && existing.sessionId === sessionId && liveSession.completedSets.length > 0 && liveSession.status === 'ready') {
+    if (existing && existing.sessionId === sessionId && (liveSession.completedSets?.length ?? 0) > 0 && liveSession.status === 'ready') {
       // We have a saved session that matches - show resume prompt
       setExistingSession(existing)
       setShowResumePrompt(true)
@@ -1856,7 +1862,7 @@ export function StreamlinedWorkoutSession({
       return
     }
     
-    // Real sessions: attempt restore
+    // Real sessions: attempt restore with validation
     markBootStage('restore_state_check_start', {
       restoreWasAttempted: true,
     })
@@ -1865,25 +1871,44 @@ export function StreamlinedWorkoutSession({
     const saved = loadSessionFromStorage(sessionId, exerciseCount, sessionStructureSignature)
     
     if (saved && saved.status !== 'completed') {
-      // Restore accepted
-      markBootStage('restore_state_check_done', {
-        restoreWasAccepted: true,
-        restoreRejectReason: null,
-        currentExerciseIndex: saved.currentExerciseIndex,
-      })
-      console.log('[workout-restore] Restored saved state with signature validation', {
-        sessionId,
-        structureSignature: sessionStructureSignature,
-        restoredExerciseIndex: saved.currentExerciseIndex,
-        restoredSetNumber: saved.currentSetNumber,
-        completedSetsCount: saved.completedSets?.length ?? 0,
-      })
-      // [UNIFIED-HANDOFF] True hydration from storage - the ONLY valid use of HYDRATE_FROM_STORAGE
-      dispatch({ type: 'HYDRATE_FROM_STORAGE', savedState: saved })
-      markBootStage('state_initialized', {
-        currentExerciseIndex: saved.currentExerciseIndex,
-        status: saved.status,
-      })
+      // [LIVE-WORKOUT-BOOT-CONTRACT] Validate hydration payload before accepting
+      const validatedPayload = validateHydrationPayload(saved, exerciseCount)
+      
+      if (validatedPayload) {
+        // Restore accepted with validated/sanitized payload
+        markBootStage('restore_state_check_done', {
+          restoreWasAccepted: true,
+          restoreRejectReason: null,
+          currentExerciseIndex: validatedPayload.currentExerciseIndex,
+        })
+        console.log('[workout-restore] Restored saved state with validation', {
+          sessionId,
+          structureSignature: sessionStructureSignature,
+          restoredExerciseIndex: validatedPayload.currentExerciseIndex,
+          restoredSetNumber: validatedPayload.currentSetNumber,
+          completedSetsCount: validatedPayload.completedSets?.length ?? 0,
+        })
+        // [UNIFIED-HANDOFF] True hydration from storage - the ONLY valid use of HYDRATE_FROM_STORAGE
+        dispatch({ type: 'HYDRATE_FROM_STORAGE', savedState: validatedPayload })
+        markBootStage('state_initialized', {
+          currentExerciseIndex: validatedPayload.currentExerciseIndex,
+          status: validatedPayload.status,
+        })
+      } else {
+        // Restore rejected - validation failed
+        console.warn('[workout-restore] Hydration payload validation failed, starting fresh', {
+          sessionId,
+          reason: 'payload_validation_failed',
+        })
+        markBootStage('restore_state_check_done', {
+          restoreWasAccepted: false,
+          restoreRejectReason: 'payload_validation_failed',
+        })
+        markBootStage('state_initialized', {
+          currentExerciseIndex: 0,
+          status: 'ready',
+        })
+      }
     } else {
       // Restore rejected or no saved state
       markBootStage('restore_state_check_done', {
@@ -1903,39 +1928,49 @@ export function StreamlinedWorkoutSession({
   }, [sessionId, sessionStructureSignature, isDemoSession])
   
   // ==========================================================================
-  // [AUTHORITATIVE-HYDRATION-CONTRACT] EXERCISE DERIVATION
-  // All exercise access MUST go through this chain, never raw session
-  // [PHASE LW3] All boot ledger calls moved to effects - render is now pure
+  // [LIVE-WORKOUT-BOOT-CONTRACT] CENTRALIZED RUNTIME VALIDATION
+  // This is the SINGLE source of truth for whether the workout can safely render.
+  // All active render paths MUST use values from runtimeValidation, not raw liveSession.
   // ==========================================================================
   
-  // Get exercises from authoritative contract ONLY
+  const runtimeValidation = useMemo<LiveWorkoutRuntimeValidation>(() => {
+    return validateLiveWorkoutRuntime(safeWorkoutSessionContract, liveSession)
+  }, [safeWorkoutSessionContract, liveSession])
+  
+  // Extract safe values from centralized validation
+  const {
+    isValid: runtimeIsValid,
+    reason: runtimeInvalidReason,
+    safeExerciseIndex,
+    safeCurrentSetNumber: validatedSetNumber,
+    safeCurrentExercise: validatedCurrentExercise,
+    hasValidExercises,
+    normalizedCompletedSets,
+    normalizedExerciseOverrides,
+    diagnostics: runtimeDiagnostics,
+  } = runtimeValidation
+  
+  // Get exercises array from contract (for iteration, length checks)
   const exercises = safeWorkoutSessionContract.exercises
-  const hasValidExercises = exercises.length > 0
-  
-  // Clamp currentExerciseIndex to valid bounds
-  const safeExerciseIndex = hasValidExercises 
-    ? Math.max(0, Math.min(liveSession.currentExerciseIndex, exercises.length - 1))
-    : 0
-  const isIndexOutOfBounds = hasValidExercises && liveSession.currentExerciseIndex !== safeExerciseIndex
-  
-  // Derive current exercise from authoritative contract (already normalized/safe)
-  const currentExercise = hasValidExercises ? exercises[safeExerciseIndex] : null
   const totalExercises = exercises.length
-  const totalSets = exercises.reduce((sum, ex) => sum + ex.sets, 0)
-  const completedSetsCount = liveSession.completedSets.length
+  const totalSets = exercises.reduce((sum, ex) => sum + (ex.sets || 3), 0)
+  const completedSetsCount = normalizedCompletedSets.length
+  
+  // Check if index was clamped (for repair effect)
+  const isIndexOutOfBounds = hasValidExercises && 
+    liveSession.currentExerciseIndex !== safeExerciseIndex
   
   // ==========================================================================
-  // [AUTHORITATIVE-HYDRATION-CONTRACT] SAFE CURRENT EXERCISE
-  // Derived from authoritative contract, guaranteed safe even if array is empty
+  // [LIVE-WORKOUT-BOOT-CONTRACT] SAFE CURRENT EXERCISE
+  // Derived from centralized validation - guaranteed safe even if array is empty
   // ==========================================================================
   const safeCurrentExercise = useMemo(() => {
-    // If we have a valid exercise from the contract, use it directly
-    // (It's already normalized and safe from safeWorkoutSessionContract)
-    if (currentExercise) {
-      return currentExercise
+    // Use validated exercise from centralized validation
+    if (validatedCurrentExercise) {
+      return validatedCurrentExercise
     }
     
-    // Fallback for empty/invalid exercise arrays - guaranteed safe defaults
+    // Fallback for invalid runtime - guaranteed safe defaults
     return {
       id: 'fallback-exercise',
       name: 'Exercise',
@@ -1954,7 +1989,7 @@ export function StreamlinedWorkoutSession({
       executionTruth: undefined,
       coachingMeta: undefined,
     }
-  }, [currentExercise])
+  }, [validatedCurrentExercise])
   
   // ==========================================================================
   // [AUTHORITATIVE-HYDRATION-CONTRACT] STAGE CONTEXT PERSISTENCE
@@ -2051,14 +2086,14 @@ export function StreamlinedWorkoutSession({
     const safeDayLabel = safeWorkoutSessionContract.dayLabel || 'Workout'
     const safeDayNumber = safeWorkoutSessionContract.dayNumber || 1
     
-    // Exercise counts
+    // Exercise counts - use centralized validation
     const safeExerciseCount = exercises.length
     const safeTotalSets = exercises.reduce((sum, ex) => sum + (ex?.sets ?? 3), 0)
-    const safeCompletedSetsCount = liveSession.completedSets?.length ?? 0
+    const safeCompletedSetsCount = normalizedCompletedSets.length
     
-    // Current exercise position (bounded)
-    const safeCurrentIndex = Math.max(0, Math.min(liveSession.currentExerciseIndex, Math.max(0, exercises.length - 1)))
-    const safeCurrentSetNumber = Math.max(1, Math.min(liveSession.currentSetNumber, safeCurrentExercise.sets || 3))
+    // Current exercise position - use centralized validation (already clamped/validated)
+    const safeCurrentIndex = safeExerciseIndex
+    const safeCurrentSetNumber = validatedSetNumber
     
     // Current exercise details (from safe contract)
     const currentExerciseName = safeCurrentExercise.name || 'Exercise'
@@ -2775,7 +2810,7 @@ export function StreamlinedWorkoutSession({
   
   // Request exit confirmation (only if there's progress)
   const handleRequestExit = useCallback(() => {
-    if (liveSession.status === 'ready' || liveSession.completedSets.length === 0) {
+    if (liveSession.status === 'ready' || normalizedCompletedSets.length === 0) {
       // No progress yet - just clean up and exit
       clearSessionStorage()
       clearRestTimerState()
@@ -2785,7 +2820,7 @@ export function StreamlinedWorkoutSession({
       // Has progress - show confirmation
       setShowExitConfirm(true)
     }
-  }, [liveSession.status, liveSession.completedSets.length, onCancel])
+  }, [liveSession.status, normalizedCompletedSets.length, onCancel])
   
   // Discard and exit (clears all state, no logging)
   const handleDiscardAndExit = useCallback(() => {
@@ -3021,28 +3056,34 @@ export function StreamlinedWorkoutSession({
     })
   }, [hasValidExercises, safeExerciseIndex, safeCurrentExercise, liveSession.status, liveSession.currentSetNumber, sessionId, logStage, safeWorkoutSessionContract.dayLabel, exercises.length])
   
-  // [LIVE-SESSION-FIX] Internal verification: Log all critical contract values for proof
+  // [LIVE-WORKOUT-BOOT-CONTRACT] Runtime validation proof diagnostic
   // [PHASE LW2-FIX] CRITICAL: This useEffect MUST be declared BEFORE any early returns
   // to comply with React's rules of hooks (same hook count/order on every render)
   useEffect(() => {
-    // Only log if we have valid exercises to avoid noise from fallback states
-    if (hasValidExercises) {
-      console.log('[LIVE-SESSION-PROOF] Runtime contract verification:', {
-        componentVersion: STREAMLINED_WORKOUT_VERSION,
-        sessionId,
+    // Log validation state for debugging
+    console.log('[LIVE-WORKOUT-BOOT-CONTRACT] Runtime validation state:', {
+      componentVersion: STREAMLINED_WORKOUT_VERSION,
+      sessionId,
+      runtimeIsValid,
+      runtimeInvalidReason,
+      diagnostics: runtimeDiagnostics,
+    })
+    
+    // Additional proof log if valid
+    if (runtimeIsValid && hasValidExercises) {
+      console.log('[LIVE-WORKOUT-BOOT-CONTRACT] Active workout runtime verified:', {
         exerciseCount: exercises.length,
         currentExerciseIndex: safeExerciseIndex,
+        currentSetNumber: validatedSetNumber,
         safeCurrentExerciseName: safeCurrentExercise.name,
         sessionRuntimeTruthBuilt: !!sessionRuntimeTruth,
-        sessionRuntimeDayLabel: sessionRuntimeTruth.dayLabel,
         exerciseRuntimeTruthBuilt: !!exerciseRuntimeTruth,
-        exerciseRuntimeName: exerciseRuntimeTruth.exerciseName,
         isDemoSession,
-        estimatedMinutes: safeSession.estimatedMinutes,
-        restoreUsed: liveSession.completedSets.length > 0 && liveSession.status !== 'ready',
+        normalizedCompletedSets: normalizedCompletedSets.length,
+        normalizedOverrides: Object.keys(normalizedExerciseOverrides).length,
       })
     }
-  }, [sessionId, exercises.length, safeExerciseIndex, safeCurrentExercise.name, sessionRuntimeTruth, exerciseRuntimeTruth, isDemoSession, safeSession.estimatedMinutes, liveSession.completedSets.length, liveSession.status, hasValidExercises])
+  }, [sessionId, runtimeIsValid, runtimeInvalidReason, runtimeDiagnostics, exercises.length, safeExerciseIndex, validatedSetNumber, safeCurrentExercise.name, sessionRuntimeTruth, exerciseRuntimeTruth, isDemoSession, hasValidExercises, normalizedCompletedSets.length, normalizedExerciseOverrides])
   
   // ==========================================================================
   // [PHASE LW3] HYDRATION GATE - Wait for hydration before showing UI
@@ -3085,6 +3126,57 @@ export function StreamlinedWorkoutSession({
   }
 
   // ==========================================================================
+  // RENDER: CONTROLLED LOCAL FALLBACK - Runtime Validation Failed
+  // [LIVE-WORKOUT-BOOT-CONTRACT] This catches invalid runtime state BEFORE crashing
+  // ==========================================================================
+  
+  if (!runtimeIsValid && bootHydrationReady) {
+    // Log diagnostic info for debugging
+    console.warn('[LIVE-WORKOUT-BOOT-CONTRACT] Runtime validation failed:', {
+      reason: runtimeInvalidReason,
+      diagnostics: runtimeDiagnostics,
+    })
+    
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 rounded-full bg-[#1A1F26] border border-[#2B313A] flex items-center justify-center mx-auto mb-4">
+            <Dumbbell className="w-8 h-8 text-amber-500" />
+          </div>
+          <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Workout Setup Issue</h2>
+          <p className="text-[#A4ACB8] mb-4">
+            {runtimeInvalidReason || 'Unable to validate workout session state.'}
+          </p>
+          {process.env.NODE_ENV === 'development' && (
+            <div className="text-left bg-[#1A1F26] rounded-lg p-3 mb-4 text-xs font-mono">
+              <p className="text-[#6B7280] mb-1">Diagnostics:</p>
+              <p className="text-[#A4ACB8]">Exercises: {runtimeDiagnostics.exerciseCount}</p>
+              <p className="text-[#A4ACB8]">Status: {runtimeDiagnostics.status}</p>
+              <p className="text-[#A4ACB8]">Session Valid: {String(runtimeDiagnostics.sessionContractValid)}</p>
+              <p className="text-[#A4ACB8]">Live State Valid: {String(runtimeDiagnostics.liveSessionValid)}</p>
+            </div>
+          )}
+          <div className="space-y-3">
+            <Button 
+              onClick={() => dispatch({ type: 'START_FRESH_WORKOUT', startTime: Date.now() })}
+              className="w-full bg-amber-500 hover:bg-amber-600 text-black"
+            >
+              Start Fresh
+            </Button>
+            <Button 
+              onClick={onCancel}
+              variant="outline"
+              className="w-full border-[#2B313A] text-[#E6E9EF]"
+            >
+              Go Back to Dashboard
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
+  // ==========================================================================
   // RENDER: SAFETY FALLBACK - No Valid Exercises (Controlled Route-Level Failure)
   // [PHASE LW3] logStage removed - render is pure
   // ==========================================================================
@@ -3117,7 +3209,7 @@ export function StreamlinedWorkoutSession({
   // RENDER: RESUME PROMPT
   // ==========================================================================
   
-  if (showResumePrompt && existingSession && liveSession.completedSets.length > 0) {
+  if (showResumePrompt && existingSession && normalizedCompletedSets.length > 0) {
     return (
       <div className="min-h-screen bg-[#0F1115] p-4 sm:p-6">
         <div className="max-w-lg mx-auto space-y-6 pt-12">
@@ -4399,7 +4491,7 @@ function InterExerciseRestCountdown({
             <div className="text-center mb-2">
               <h3 className="text-lg font-semibold text-[#E6E9EF] mb-1">Leave Workout?</h3>
               <p className="text-sm text-[#A4ACB8]">
-                You have {liveSession.completedSets.length} {liveSession.completedSets.length === 1 ? 'set' : 'sets'} logged.
+                You have {normalizedCompletedSets.length} {normalizedCompletedSets.length === 1 ? 'set' : 'sets'} logged.
               </p>
             </div>
             

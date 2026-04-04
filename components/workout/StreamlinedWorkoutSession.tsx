@@ -2842,6 +2842,13 @@ export function StreamlinedWorkoutSession({
   // Start workout
   // [LIVE-WORKOUT-MACHINE] Validates active state requirements via machine validation
   const handleStart = useCallback(() => {
+  console.log('[v0] [handleStart] Start Workout clicked', {
+  machinePhase: machineState.phase,
+  hasSessionContract: !!machineSessionContract,
+  exerciseCount: machineSessionContract?.exercises?.length ?? 0,
+  currentExerciseIndex: machineState.currentExerciseIndex,
+  })
+  
   // [LIVE-WORKOUT-MACHINE] Validate via machine before transitioning to active
   const validation = validateActiveEntry(machineState, machineSessionContract)
   if (!validation.isValid) {
@@ -4438,6 +4445,19 @@ function InterExerciseRestCountdown({
   // [PHASE LW3] recordBootError removed - render is pure
   // ==========================================================================
   
+  console.log('[v0] [active_render_entry]', {
+    safeStatus,
+    machinePhase: machineState.phase,
+    activeWorkoutViewModelIsValid: activeWorkoutViewModel.isValid,
+    hasValidExercises,
+    validatedCurrentExerciseExists: !!validatedCurrentExercise,
+    safeCurrentExerciseName: safeCurrentExercise?.name,
+    exerciseCount: exercises.length,
+    safeExerciseIndex,
+    validatedSetNumber,
+    completedSetsCount,
+  })
+  
   // [PHASE LW2] ACTIVE STATE VALIDATION - Controlled local fallback instead of crash
   // Note: isValid now uses hasValidExercises && !!validatedCurrentExercise
   if (!activeWorkoutViewModel.isValid) {
@@ -4550,7 +4570,98 @@ function InterExerciseRestCountdown({
   // [LIVE-WORKOUT-MACHINE] Active values already declared at top of component
   // targetRPE, targetValue, recommendedBand are authoritative - see line ~2651
   
+  // ==========================================================================
+  // [ACTIVE-CORRIDOR-CONTAINMENT] FINAL SAFETY CHECK BEFORE RENDER
+  // Catch any remaining edge cases that could throw in the active render JSX
+  // ==========================================================================
+  
+  // Ensure we have minimum required values for safe active render
+  const canSafelyRenderActive = (
+    safeCurrentExercise?.name &&
+    typeof safeExerciseIndex === 'number' &&
+    typeof validatedSetNumber === 'number' &&
+    typeof completedSetsCount === 'number' &&
+    typeof totalSets === 'number' &&
+    typeof totalExercises === 'number' &&
+    typeof safeElapsedSeconds === 'number'
+  )
+  
+  if (!canSafelyRenderActive) {
+    console.error('[v0] [active_render_safety_check_failed]', {
+      safeCurrentExerciseName: safeCurrentExercise?.name,
+      safeExerciseIndex,
+      validatedSetNumber,
+      completedSetsCount,
+      totalSets,
+      totalExercises,
+      safeElapsedSeconds,
+    })
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 rounded-full bg-[#1A1F26] border border-amber-500/30 flex items-center justify-center mx-auto mb-4">
+            <Dumbbell className="w-8 h-8 text-amber-500" />
+          </div>
+          <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Session Loading</h2>
+          <p className="text-[#A4ACB8] mb-6 text-sm">
+            Preparing your workout session. If this persists, please restart.
+          </p>
+          <div className="space-y-2">
+            <Button
+              onClick={() => dispatch({ type: 'RESET_TO_READY' })}
+              className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Restart Session
+            </Button>
+            <Button
+              variant="outline"
+              onClick={onCancel}
+              className="w-full border-[#2B313A] text-[#A4ACB8] hover:bg-[#1A1F26]"
+            >
+              Return to Dashboard
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
+  // [ACTIVE-CORRIDOR-CONTAINMENT] Wrap entire active render in SafeOptionalSubtree
+  // This ensures that ANY uncontained error in the active render tree gets caught
+  // locally instead of escaping to the route-level error boundary
+  const activeRenderFallback = (
+    <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
+      <div className="text-center max-w-sm">
+        <div className="w-16 h-16 rounded-full bg-[#1A1F26] border border-amber-500/30 flex items-center justify-center mx-auto mb-4">
+          <Dumbbell className="w-8 h-8 text-amber-500" />
+        </div>
+        <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Display Error</h2>
+        <p className="text-[#A4ACB8] mb-6 text-sm">
+          The workout is active but encountered a display issue. Your progress is saved.
+        </p>
+        <div className="space-y-2">
+          <Button
+            onClick={() => dispatch({ type: 'RESET_TO_READY' })}
+            className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
+          >
+            <RotateCcw className="w-4 h-4 mr-2" />
+            Restart Session
+          </Button>
+          <Button
+            variant="outline"
+            onClick={onCancel}
+            className="w-full border-[#2B313A] text-[#A4ACB8] hover:bg-[#1A1F26]"
+          >
+            End Workout
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+  
   return (
+    <SafeOptionalSubtree label="ActiveWorkoutRender" fallback={activeRenderFallback}>
     <div className="min-h-screen bg-[#0F1115] flex flex-col">
       {/* Sticky Session Header - Compact */}
       <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
@@ -5158,5 +5269,6 @@ function InterExerciseRestCountdown({
       )}
       </SafeOptionalSubtree>
     </div>
+    </SafeOptionalSubtree>
   )
 }

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-builder'
+import { getLatestAdaptiveProgram } from '@/lib/adaptive-program-builder'
 import { 
   ResistanceBandColor, 
   ALL_BAND_COLORS, 
@@ -146,8 +147,12 @@ export interface SavedSessionInfo {
 // Storage key for auto-save
 const STORAGE_KEY = 'spartanlab_workout_session'
 
+// [LIVE-SESSION-FIX] Storage schema version - increment when state shape changes
+// Old saved state with different version will be discarded to prevent restore poisoning
+const STORAGE_SCHEMA_VERSION = 'workout_session_v2'
+
 // [PHASE-X+1] Version stamp for execution proof
-const STREAMLINED_WORKOUT_VERSION = 'phase_x_plus_1_authority_corridor_v1'
+const STREAMLINED_WORKOUT_VERSION = 'phase_x_plus_1_authority_corridor_v2'
 
 // =============================================================================
 // SESSION STRUCTURE SIGNATURE - PREVENTS STALE RESTORE POISONING
@@ -186,6 +191,7 @@ function saveSessionToStorage(state: WorkoutSessionState, sessionId: string, str
       ...state, 
       sessionId,
       structureSignature, // [LIVE-SESSION-LOCK] Include structure signature
+      schemaVersion: STORAGE_SCHEMA_VERSION, // [LIVE-SESSION-FIX] Include schema version for restore validation
       savedAt: Date.now() 
     }))
   } catch {}
@@ -201,6 +207,18 @@ function loadSessionFromStorage(
     const saved = localStorage.getItem(STORAGE_KEY)
     if (!saved) return null
     const data = JSON.parse(saved)
+    
+    // [LIVE-SESSION-FIX] CRITICAL: Validate schema version FIRST
+    // If schema version is missing or doesn't match, discard entire saved state
+    if (data.schemaVersion !== STORAGE_SCHEMA_VERSION) {
+      console.log('[workout-restore] Discarding saved state: schema version mismatch', {
+        savedVersion: data.schemaVersion || 'none',
+        currentVersion: STORAGE_SCHEMA_VERSION,
+        reason: 'schema_version_mismatch',
+      })
+      try { localStorage.removeItem(STORAGE_KEY) } catch {}
+      return null
+    }
     
     // Only restore if same session and less than 4 hours old
     if (data.sessionId === sessionId && Date.now() - data.savedAt < 4 * 60 * 60 * 1000) {
@@ -331,6 +349,12 @@ export function getExistingSessionInfo(): SavedSessionInfo | null {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (!saved) return null
     const data = JSON.parse(saved)
+    
+    // [LIVE-SESSION-FIX] Don't show resume prompt for old schema versions
+    if (data.schemaVersion !== STORAGE_SCHEMA_VERSION) {
+      return null
+    }
+    
     // Only show resume prompt if less than 4 hours old and has progress
     if (Date.now() - data.savedAt < 4 * 60 * 60 * 1000 && data.completedSets?.length > 0) {
       return {
@@ -2195,16 +2219,22 @@ export function StreamlinedWorkoutSession({
               overrideSummary={getOverrideSummary(sessionId)}
               goalContext={safeSession.focusLabel ? `This ${safeLower(safeSession.focusLabel)} session builds toward your primary goal. Consistent training accelerates progress.` : "Workout completed. Consistent training builds skill faster."}
               nextSession={(() => {
-                const program = getLatestAdaptiveProgram()
-                if (!program?.sessions) return null
-                const currentIdx = program.sessions.findIndex(s => s.dayNumber === safeSession.dayNumber)
-                const nextIdx = (currentIdx + 1) % program.sessions.length
-                const next = program.sessions[nextIdx]
-                if (!next) return null
-                return {
-                  dayLabel: next.dayLabel || `Day ${next.dayNumber}`,
-                  focusLabel: next.focusLabel || 'Strength Development',
-                  estimatedMinutes: next.estimatedMinutes,
+                // [LIVE-SESSION-FIX] Wrap in try-catch to prevent render crashes
+                try {
+                  const program = getLatestAdaptiveProgram()
+                  if (!program?.sessions) return null
+                  const currentIdx = program.sessions.findIndex(s => s.dayNumber === safeSession.dayNumber)
+                  const nextIdx = (currentIdx + 1) % program.sessions.length
+                  const next = program.sessions[nextIdx]
+                  if (!next) return null
+                  return {
+                    dayLabel: next.dayLabel || `Day ${next.dayNumber}`,
+                    focusLabel: next.focusLabel || 'Strength Development',
+                    estimatedMinutes: next.estimatedMinutes,
+                  }
+                } catch (e) {
+                  console.error('[workout-session] Failed to get next session:', e)
+                  return null
                 }
               })()}
             />

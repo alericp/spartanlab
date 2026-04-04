@@ -307,6 +307,12 @@ function createInitialLiveSessionState(): UnifiedLiveSessionState {
 /**
  * [UNIFIED-HANDOFF] Single reducer for ALL transition-sensitive state
  * Every transition commits atomically - no split state, no effects needed
+ * 
+ * REDUCER PURITY GUARDRAIL:
+ * - This reducer MUST remain pure
+ * - NO component closure variables may be referenced inside (no liveSession, session, exercises, etc.)
+ * - ALL data must come from `state` parameter or `action` payload
+ * - Helper functions must be pure and not depend on component state
  */
 function liveSessionReducer(state: UnifiedLiveSessionState, action: LiveSessionAction): UnifiedLiveSessionState {
   switch (action.type) {
@@ -324,7 +330,7 @@ function liveSessionReducer(state: UnifiedLiveSessionState, action: LiveSessionA
     case 'RESUME_WORKOUT':
       return {
         ...state,
-        status: liveSession.status === 'ready' ? 'active' : liveSession.status,
+        status: state.status === 'ready' ? 'active' : state.status,
         startTime: state.startTime || action.startTime,
         transitionRepairIssue: null,
       }
@@ -398,13 +404,13 @@ function liveSessionReducer(state: UnifiedLiveSessionState, action: LiveSessionA
       return {
         ...state,
         exerciseOverrides: {
-          ...liveSession.exerciseOverrides,
+          ...state.exerciseOverrides,
           [action.index]: action.override,
         },
       }
     
     case 'UNDO_OVERRIDE': {
-      const newOverrides = { ...liveSession.exerciseOverrides }
+      const newOverrides = { ...state.exerciseOverrides }
       delete newOverrides[action.index]
       return {
         ...state,

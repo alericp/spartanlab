@@ -181,15 +181,18 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
         currentExerciseIndex: sessionContext.currentExerciseIndex ?? 'unknown',
       },
       isDemo: sessionContext.isDemo,
-      // [PHASE LW4] Include transition trace for exercise advancement crashes
+      // [ATOMIC-HANDOFF] Include transition trace for exercise advancement crashes
       transitionTrace: Object.keys(transitionTrace).length > 0 ? {
+        transitionStage: transitionTrace.transitionStage,
+        transitionType: transitionTrace.transitionType,
         fromExerciseIndex: transitionTrace.fromExerciseIndex,
         toExerciseIndex: transitionTrace.toExerciseIndex,
         fromExerciseName: transitionTrace.fromExerciseName,
         toExerciseName: transitionTrace.toExerciseName,
         reason: transitionTrace.reason,
-        transitionCommitted: transitionTrace.transitionCommitted,
-        postCommitInputsApplied: transitionTrace.postCommitInputsApplied,
+        safeIndexUsed: transitionTrace.safeIndexUsed,
+        safeNextExerciseExists: transitionTrace.safeNextExerciseExists,
+        guardFallbackReason: transitionTrace.guardFallbackReason,
         lastSuccessfulRenderExerciseIndex: transitionTrace.lastSuccessfulRenderExerciseIndex,
         lastSuccessfulRenderExerciseName: transitionTrace.lastSuccessfulRenderExerciseName,
       } : null,
@@ -204,14 +207,16 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
     console.error('[workout-route-crash] QUICK DIAGNOSIS:', {
       cause: crashCorridor,
       failedAt: likelyStage || 'unknown',
-      // [PHASE LW4] Include transition corridor diagnosis
+      // [ATOMIC-HANDOFF] Include transition corridor diagnosis
       transitionCorridor: Object.keys(transitionTrace).length > 0 ? {
-        crashedDuringTransition: !!transitionTrace.reason && !transitionTrace.postCommitInputsApplied,
-        transitionStage: transitionTrace.transitionCommitted 
-          ? (transitionTrace.postCommitInputsApplied ? 'post_inputs' : 'post_commit') 
-          : 'pre_commit',
+        transitionStage: transitionTrace.transitionStage || 'unknown',
+        transitionType: transitionTrace.transitionType || 'unknown',
+        crashedBeforeInputsApplied: transitionTrace.transitionStage !== 'inputs_applied' && transitionTrace.transitionStage !== 'render_verified',
         fromExercise: transitionTrace.fromExerciseName,
         toExercise: transitionTrace.toExerciseName,
+        safeIndexUsed: transitionTrace.safeIndexUsed,
+        safeNextExerciseExists: transitionTrace.safeNextExerciseExists,
+        guardFallbackReason: transitionTrace.guardFallbackReason,
         lastSuccessfulRender: transitionTrace.lastSuccessfulRenderExerciseName,
       } : null,
       hint: crashCorridor === 'reference_error_missing_import' || crashCorridor === 'reference_error'
@@ -273,9 +278,13 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
                     if (Object.keys(trace).length > 0) {
                       return (
                         <>
+                          <div><span className="text-cyan-400">Stage:</span> {String(trace.transitionStage || 'unknown')}</div>
+                          <div><span className="text-cyan-400">Type:</span> {String(trace.transitionType || 'unknown')}</div>
                           <div><span className="text-cyan-400">Transition:</span> {String(trace.fromExerciseName)} → {String(trace.toExerciseName)}</div>
-                          <div><span className="text-cyan-400">Committed:</span> {String(trace.transitionCommitted)}</div>
-                          <div><span className="text-cyan-400">Inputs Applied:</span> {String(trace.postCommitInputsApplied)}</div>
+                          <div><span className="text-cyan-400">Safe Index:</span> {String(trace.safeIndexUsed)}</div>
+                          {trace.guardFallbackReason && (
+                            <div><span className="text-amber-400">Guard:</span> {String(trace.guardFallbackReason)}</div>
+                          )}
                           <div><span className="text-cyan-400">Last Rendered:</span> {String(trace.lastSuccessfulRenderExerciseName)}</div>
                         </>
                       )

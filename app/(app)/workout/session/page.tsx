@@ -207,11 +207,13 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
     console.error('[workout-route-crash] QUICK DIAGNOSIS:', {
       cause: crashCorridor,
       failedAt: likelyStage || 'unknown',
-      // [ATOMIC-HANDOFF] Include transition corridor diagnosis
+      // [UNIFIED-HANDOFF] Include transition corridor diagnosis
       transitionCorridor: Object.keys(transitionTrace).length > 0 ? {
         transitionStage: transitionTrace.transitionStage || 'unknown',
         transitionType: transitionTrace.transitionType || 'unknown',
-        crashedBeforeInputsApplied: transitionTrace.transitionStage !== 'inputs_applied' && transitionTrace.transitionStage !== 'render_verified',
+        crashedBeforeCommit: transitionTrace.transitionStage === 'requested' || transitionTrace.transitionStage === 'computed',
+        crashedAfterCommit: transitionTrace.transitionStage === 'committed' || transitionTrace.transitionStage === 'inputs_applied' || transitionTrace.transitionStage === 'render_verified',
+        shouldLocalFallbackHandle: transitionTrace.guardFallbackReason !== null,
         fromExercise: transitionTrace.fromExerciseName,
         toExercise: transitionTrace.toExerciseName,
         safeIndexUsed: transitionTrace.safeIndexUsed,

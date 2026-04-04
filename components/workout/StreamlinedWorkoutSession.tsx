@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, useReducer } from 'react'
 import dynamic from 'next/dynamic'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -195,6 +195,272 @@ interface WorkoutSessionState {
   lastSetRPE: RPEValue | null
   workoutNotes: string
   exerciseOverrides: Record<number, ExerciseOverrideState>
+}
+
+// =============================================================================
+// [UNIFIED-HANDOFF] UNIFIED LIVE SESSION STATE
+// All transition-sensitive state under ONE owner to eliminate split-state bugs
+// =============================================================================
+
+interface UnifiedLiveSessionState {
+  // Core workout state
+  status: 'ready' | 'active' | 'resting' | 'completed'
+  currentExerciseIndex: number
+  currentSetNumber: number
+  completedSets: CompletedSetData[]
+  startTime: number | null
+  elapsedSeconds: number
+  lastSetRPE: RPEValue | null
+  workoutNotes: string
+  exerciseOverrides: Record<number, ExerciseOverrideState>
+  
+  // Input state (previously separate useState hooks)
+  selectedRPE: RPEValue | null
+  repsValue: number
+  holdValue: number
+  bandUsed: ResistanceBandColor | 'none'
+  
+  // Inter-exercise rest state
+  showInterExerciseRest: boolean
+  interExerciseRestSeconds: number
+  
+  // Controlled local error state for invalid transitions
+  transitionRepairIssue: { type: 'next_exercise_invalid'; message: string } | null
+}
+
+type LiveSessionAction =
+  | { type: 'START_WORKOUT'; startTime: number }
+  | { type: 'SET_STATUS'; status: 'active' | 'resting' }
+  | { type: 'TICK_TIMER' }
+  | { type: 'SET_RPE'; rpe: RPEValue | null }
+  | { type: 'SET_REPS'; value: number }
+  | { type: 'SET_HOLD'; value: number }
+  | { type: 'SET_BAND'; band: ResistanceBandColor | 'none' }
+  | { type: 'SET_NOTES'; notes: string }
+  | { type: 'ADD_OVERRIDE'; index: number; override: ExerciseOverrideState }
+  | { type: 'UNDO_OVERRIDE'; index: number; originalExercise: { name: string } }
+  | { type: 'COMPLETE_SET_SAME_EXERCISE'; newCompletedSets: CompletedSetData[]; nextSetNumber: number; targetValue: number }
+  | { type: 'ADVANCE_TO_NEXT_EXERCISE'; snapshot: UnifiedTransitionSnapshot }
+  | { type: 'SHOW_INTER_EXERCISE_REST'; seconds: number; newCompletedSets: CompletedSetData[]; lastRPE: RPEValue }
+  | { type: 'COMPLETE_INTER_EXERCISE_REST'; snapshot: UnifiedTransitionSnapshot }
+  | { type: 'SKIP_INTER_EXERCISE_REST'; snapshot: UnifiedTransitionSnapshot }
+  | { type: 'SKIP_EXERCISE'; snapshot: UnifiedTransitionSnapshot }
+  | { type: 'COMPLETE_WORKOUT'; newCompletedSets: CompletedSetData[]; lastRPE: RPEValue }
+  | { type: 'RESTORE_FROM_STORAGE'; savedState: Partial<UnifiedLiveSessionState> }
+  | { type: 'SET_TRANSITION_ERROR'; error: { type: 'next_exercise_invalid'; message: string } }
+  | { type: 'CLEAR_TRANSITION_ERROR' }
+  | { type: 'GO_BACK_EXERCISE'; prevIndex: number; targetValue: number; recommendedBand: ResistanceBandColor | 'none' }
+
+/**
+ * [UNIFIED-HANDOFF] Snapshot for transitions to new exercises
+ * Contains ALL values needed to render the next exercise immediately
+ */
+interface UnifiedTransitionSnapshot {
+  nextExerciseIndex: number
+  nextSetNumber: number
+  nextStatus: 'active' | 'resting'
+  nextSelectedRPE: RPEValue | null
+  nextRepsValue: number
+  nextHoldValue: number
+  nextBandUsed: ResistanceBandColor | 'none'
+  newCompletedSets: CompletedSetData[]
+  lastSetRPE: RPEValue | null
+  showInterExerciseRest: boolean
+  interExerciseRestSeconds: number
+}
+
+function createInitialLiveSessionState(): UnifiedLiveSessionState {
+  return {
+    status: 'ready',
+    currentExerciseIndex: 0,
+    currentSetNumber: 1,
+    completedSets: [],
+    startTime: null,
+    elapsedSeconds: 0,
+    lastSetRPE: null,
+    workoutNotes: '',
+    exerciseOverrides: {},
+    selectedRPE: null,
+    repsValue: 0,
+    holdValue: 0,
+    bandUsed: 'none',
+    showInterExerciseRest: false,
+    interExerciseRestSeconds: 60,
+    transitionRepairIssue: null,
+  }
+}
+
+/**
+ * [UNIFIED-HANDOFF] Single reducer for ALL transition-sensitive state
+ * Every transition commits atomically - no split state, no effects needed
+ */
+function liveSessionReducer(state: UnifiedLiveSessionState, action: LiveSessionAction): UnifiedLiveSessionState {
+  switch (action.type) {
+    case 'START_WORKOUT':
+      return {
+        ...state,
+        status: 'active',
+        startTime: action.startTime,
+        transitionRepairIssue: null,
+      }
+    
+    case 'SET_STATUS':
+      return {
+        ...state,
+        status: action.status,
+      }
+    
+    case 'TICK_TIMER':
+      if (!state.startTime) return state
+      return {
+        ...state,
+        elapsedSeconds: Math.floor((Date.now() - state.startTime) / 1000),
+      }
+    
+    case 'SET_RPE':
+      return { ...state, selectedRPE: action.rpe }
+    
+    case 'SET_REPS':
+      return { ...state, repsValue: action.value }
+    
+    case 'SET_HOLD':
+      return { ...state, holdValue: action.value }
+    
+    case 'SET_BAND':
+      return { ...state, bandUsed: action.band }
+    
+    case 'SET_NOTES':
+      return { ...state, workoutNotes: action.notes }
+    
+    case 'ADD_OVERRIDE':
+      return {
+        ...state,
+        exerciseOverrides: {
+          ...state.exerciseOverrides,
+          [action.index]: action.override,
+        },
+      }
+    
+    case 'UNDO_OVERRIDE': {
+      const newOverrides = { ...state.exerciseOverrides }
+      delete newOverrides[action.index]
+      return {
+        ...state,
+        exerciseOverrides: newOverrides,
+      }
+    }
+    
+    case 'COMPLETE_SET_SAME_EXERCISE':
+      // Same exercise, move to next set with rest - all in ONE commit
+      return {
+        ...state,
+        status: 'resting',
+        completedSets: action.newCompletedSets,
+        currentSetNumber: action.nextSetNumber,
+        lastSetRPE: state.selectedRPE || 8,
+        // Reset inputs for same exercise
+        selectedRPE: null,
+        repsValue: action.targetValue,
+        holdValue: action.targetValue,
+        transitionRepairIssue: null,
+      }
+    
+    case 'ADVANCE_TO_NEXT_EXERCISE':
+      // Atomic advance - snapshot contains EVERYTHING needed
+      return {
+        ...state,
+        status: action.snapshot.nextStatus,
+        currentExerciseIndex: action.snapshot.nextExerciseIndex,
+        currentSetNumber: action.snapshot.nextSetNumber,
+        completedSets: action.snapshot.newCompletedSets,
+        lastSetRPE: action.snapshot.lastSetRPE,
+        selectedRPE: action.snapshot.nextSelectedRPE,
+        repsValue: action.snapshot.nextRepsValue,
+        holdValue: action.snapshot.nextHoldValue,
+        bandUsed: action.snapshot.nextBandUsed,
+        showInterExerciseRest: action.snapshot.showInterExerciseRest,
+        interExerciseRestSeconds: action.snapshot.interExerciseRestSeconds,
+        transitionRepairIssue: null,
+      }
+    
+    case 'SHOW_INTER_EXERCISE_REST':
+      // Show rest modal - keep current exercise, just update completed sets
+      return {
+        ...state,
+        completedSets: action.newCompletedSets,
+        lastSetRPE: action.lastRPE,
+        showInterExerciseRest: true,
+        interExerciseRestSeconds: action.seconds,
+        selectedRPE: null,
+        transitionRepairIssue: null,
+      }
+    
+    case 'COMPLETE_INTER_EXERCISE_REST':
+    case 'SKIP_INTER_EXERCISE_REST':
+    case 'SKIP_EXERCISE':
+      // All use the same snapshot-based atomic advance
+      return {
+        ...state,
+        status: action.snapshot.nextStatus,
+        currentExerciseIndex: action.snapshot.nextExerciseIndex,
+        currentSetNumber: action.snapshot.nextSetNumber,
+        completedSets: action.snapshot.newCompletedSets,
+        lastSetRPE: action.snapshot.lastSetRPE,
+        selectedRPE: action.snapshot.nextSelectedRPE,
+        repsValue: action.snapshot.nextRepsValue,
+        holdValue: action.snapshot.nextHoldValue,
+        bandUsed: action.snapshot.nextBandUsed,
+        showInterExerciseRest: false,
+        interExerciseRestSeconds: 0,
+        transitionRepairIssue: null,
+      }
+    
+    case 'COMPLETE_WORKOUT':
+      return {
+        ...state,
+        status: 'completed',
+        completedSets: action.newCompletedSets,
+        lastSetRPE: action.lastRPE,
+        showInterExerciseRest: false,
+        transitionRepairIssue: null,
+      }
+    
+    case 'RESTORE_FROM_STORAGE':
+      return {
+        ...state,
+        ...action.savedState,
+        transitionRepairIssue: null,
+      }
+    
+    case 'SET_TRANSITION_ERROR':
+      return {
+        ...state,
+        transitionRepairIssue: action.error,
+      }
+    
+    case 'CLEAR_TRANSITION_ERROR':
+      return {
+        ...state,
+        transitionRepairIssue: null,
+      }
+    
+    case 'GO_BACK_EXERCISE':
+      return {
+        ...state,
+        currentExerciseIndex: action.prevIndex,
+        currentSetNumber: 1,
+        status: 'active',
+        selectedRPE: null,
+        repsValue: action.targetValue,
+        holdValue: action.targetValue,
+        bandUsed: action.recommendedBand,
+        showInterExerciseRest: false,
+        transitionRepairIssue: null,
+      }
+    
+    default:
+      return state
+  }
 }
 
 // =============================================================================
@@ -525,6 +791,116 @@ function buildAtomicExerciseAdvancePlan(
       playCompletionAlert: false,
     },
     guard: { fallbackReason: guardFallbackReason },
+  }
+}
+
+/**
+ * [UNIFIED-HANDOFF] BUILD UNIFIED TRANSITION SNAPSHOT
+ * 
+ * Pure helper that builds a complete snapshot for advancing to the next exercise.
+ * Returns everything the reducer needs to commit atomically.
+ * 
+ * NO side effects - no setters, no storage, no logging.
+ */
+function buildUnifiedTransitionSnapshot(
+  currentState: UnifiedLiveSessionState,
+  exercises: Array<{
+    id?: string
+    name: string
+    category: string
+    sets: number
+    repsOrTime: string
+    note?: string
+    executionTruth?: {
+      recommendedBandColor?: ResistanceBandColor
+    }
+  }>,
+  newCompletedSets: CompletedSetData[],
+  safeCurrentIndex: number
+): { snapshot: UnifiedTransitionSnapshot; isWorkoutComplete: boolean; guardError: string | null } {
+  const nextIndex = safeCurrentIndex + 1
+  const isWorkoutComplete = nextIndex >= exercises.length
+  
+  if (isWorkoutComplete) {
+    return {
+      snapshot: {
+        nextExerciseIndex: safeCurrentIndex, // Stay at current
+        nextSetNumber: currentState.currentSetNumber,
+        nextStatus: 'active',
+        nextSelectedRPE: null,
+        nextRepsValue: currentState.repsValue,
+        nextHoldValue: currentState.holdValue,
+        nextBandUsed: currentState.bandUsed,
+        newCompletedSets,
+        lastSetRPE: currentState.selectedRPE || 8,
+        showInterExerciseRest: false,
+        interExerciseRestSeconds: 0,
+      },
+      isWorkoutComplete: true,
+      guardError: null,
+    }
+  }
+  
+  const nextExercise = exercises[nextIndex]
+  
+  // Guard: check if next exercise is valid
+  if (!nextExercise || typeof nextExercise.name !== 'string') {
+    return {
+      snapshot: {
+        nextExerciseIndex: safeCurrentIndex,
+        nextSetNumber: currentState.currentSetNumber,
+        nextStatus: 'active',
+        nextSelectedRPE: null,
+        nextRepsValue: currentState.repsValue,
+        nextHoldValue: currentState.holdValue,
+        nextBandUsed: currentState.bandUsed,
+        newCompletedSets,
+        lastSetRPE: currentState.selectedRPE || 8,
+        showInterExerciseRest: false,
+        interExerciseRestSeconds: 0,
+      },
+      isWorkoutComplete: false,
+      guardError: `Next exercise at index ${nextIndex} is missing or malformed`,
+    }
+  }
+  
+  // Parse target value from NEXT exercise
+  const nextRepsOrTime = nextExercise.repsOrTime || ''
+  const nextTargetMatch = nextRepsOrTime.match(/(\d+)/)
+  const nextTargetValue = nextTargetMatch ? parseInt(nextTargetMatch[1], 10) : 5
+  
+  // Determine recommended band for NEXT exercise
+  let nextBand: ResistanceBandColor | 'none' = 'none'
+  const nextNote = nextExercise.note || ''
+  const nextNoteLower = safeLower(nextNote)
+  for (const band of ALL_BAND_COLORS) {
+    if (nextNoteLower.includes(band)) {
+      nextBand = band
+      break
+    }
+  }
+  // Prefer executionTruth band if available
+  const truthBand = nextExercise.executionTruth?.recommendedBandColor
+  if (truthBand) {
+    nextBand = truthBand
+  }
+  
+  return {
+    snapshot: {
+      nextExerciseIndex: nextIndex,
+      nextSetNumber: 1,
+      nextStatus: 'active',
+      nextSelectedRPE: null,
+      nextRepsValue: nextTargetValue,
+      nextHoldValue: nextTargetValue,
+      nextBandUsed: nextBand,
+      newCompletedSets,
+      lastSetRPE: currentState.selectedRPE || 8,
+      showInterExerciseRest: false,
+      interExerciseRestSeconds: 0,
+    },
+    isWorkoutComplete: false,
+    guardError: null,
   }
 }
 
@@ -1279,19 +1655,57 @@ export function StreamlinedWorkoutSession({
   const [existingSession, setExistingSession] = useState<SavedSessionInfo | null>(null)
   const [showResumePrompt, setShowResumePrompt] = useState(false)
   
-  // [PHASE LW3] PURE DEFAULT STATE - No side effects during render
-  // Restore/hydration happens in a dedicated useEffect below
-  const [state, setState] = useState<WorkoutSessionState>({
-    status: 'ready',
-    currentExerciseIndex: 0,
-    currentSetNumber: 1,
-    completedSets: [],
-    startTime: null,
-    elapsedSeconds: 0,
-    lastSetRPE: null,
-    workoutNotes: '',
-    exerciseOverrides: {},
-  })
+  // ==========================================================================
+  // [UNIFIED-HANDOFF] SINGLE UNIFIED STATE OWNER
+  // ALL transition-sensitive state under one reducer - eliminates split-state bugs
+  // ==========================================================================
+  const [liveSession, dispatch] = useReducer(liveSessionReducer, undefined, createInitialLiveSessionState)
+  
+  // Compatibility aliases for gradual migration
+  const state: WorkoutSessionState = {
+    status: liveSession.status,
+    currentExerciseIndex: liveSession.currentExerciseIndex,
+    currentSetNumber: liveSession.currentSetNumber,
+    completedSets: liveSession.completedSets,
+    startTime: liveSession.startTime,
+    elapsedSeconds: liveSession.elapsedSeconds,
+    lastSetRPE: liveSession.lastSetRPE,
+    workoutNotes: liveSession.workoutNotes,
+    exerciseOverrides: liveSession.exerciseOverrides,
+  }
+  
+  // Direct access to unified input state (no longer separate useState hooks)
+  const selectedRPE = liveSession.selectedRPE
+  const repsValue = liveSession.repsValue
+  const holdValue = liveSession.holdValue
+  const bandUsed = liveSession.bandUsed
+  const showInterExerciseRest = liveSession.showInterExerciseRest
+  const interExerciseRestSeconds = liveSession.interExerciseRestSeconds
+  
+  // [UNIFIED-HANDOFF] Compatibility setState wrapper for gradual migration
+  // Converts old setState calls to dispatch for state that's now in the reducer
+  const setState = useCallback((updater: WorkoutSessionState | ((prev: WorkoutSessionState) => WorkoutSessionState)) => {
+    // This is a compatibility shim - ideally all setState calls should be converted to dispatch
+    // For now, we extract the changes and dispatch RESTORE_FROM_STORAGE
+    const nextState = typeof updater === 'function' 
+      ? updater(state)
+      : updater
+    
+    dispatch({ 
+      type: 'RESTORE_FROM_STORAGE', 
+      savedState: {
+        status: nextState.status,
+        currentExerciseIndex: nextState.currentExerciseIndex,
+        currentSetNumber: nextState.currentSetNumber,
+        completedSets: nextState.completedSets,
+        startTime: nextState.startTime,
+        elapsedSeconds: nextState.elapsedSeconds,
+        lastSetRPE: nextState.lastSetRPE,
+        workoutNotes: nextState.workoutNotes,
+        exerciseOverrides: nextState.exerciseOverrides,
+      }
+    })
+  }, [state])
   
   // [PHASE LW3] Hydration gate - prevents half-hydrated first render
   const [bootHydrationReady, setBootHydrationReady] = useState(false)
@@ -1312,11 +1726,12 @@ export function StreamlinedWorkoutSession({
     }
   }, [isDemoSession])
   
-  // Current set input state
-  const [selectedRPE, setSelectedRPE] = useState<RPEValue | null>(null)
-  const [repsValue, setRepsValue] = useState<number>(0)
-  const [holdValue, setHoldValue] = useState<number>(0)
-  const [bandUsed, setBandUsed] = useState<ResistanceBandColor | 'none'>('none')
+  // [UNIFIED-HANDOFF] Dispatch helpers for input state changes
+  // These wrap dispatch calls for API compatibility
+  const setSelectedRPE = useCallback((rpe: RPEValue | null) => dispatch({ type: 'SET_RPE', rpe }), [])
+  const setRepsValue = useCallback((value: number) => dispatch({ type: 'SET_REPS', value }), [])
+  const setHoldValue = useCallback((value: number) => dispatch({ type: 'SET_HOLD', value }), [])
+  const setBandUsed = useCallback((band: ResistanceBandColor | 'none') => dispatch({ type: 'SET_BAND', band }), [])
   
   // Save state for completed workout
   const [isSaved, setIsSaved] = useState(false)
@@ -1338,8 +1753,8 @@ export function StreamlinedWorkoutSession({
   const [currentNoteText, setCurrentNoteText] = useState('')
   const [isReviewingPreviousExercise, setIsReviewingPreviousExercise] = useState(false)
   const [reviewingExerciseIndex, setReviewingExerciseIndex] = useState<number | null>(null)
-  const [showInterExerciseRest, setShowInterExerciseRest] = useState(false)
-  const [interExerciseRestSeconds, setInterExerciseRestSeconds] = useState(60)
+  // [UNIFIED-HANDOFF] showInterExerciseRest and interExerciseRestSeconds now come from liveSession
+  // No longer separate useState - they're part of the unified reducer
   const [coachingNote, setCoachingNote] = useState<string | null>(null)
   
   // [LIVE-WORKOUT-CORRIDOR-FIX] Next session info - loaded dynamically when workout completes
@@ -1712,17 +2127,16 @@ export function StreamlinedWorkoutSession({
   }, [safeCurrentExercise])
   
   // ==========================================================================
-  // [ATOMIC-HANDOFF] UNIFIED ATOMIC ADVANCEMENT SYSTEM
-  // All transition paths use buildAtomicExerciseAdvancePlan + immediate commit
-  // NO pendingRef/effect architecture - everything commits atomically
+  // [UNIFIED-HANDOFF] UNIFIED REDUCER-BASED ADVANCEMENT SYSTEM
+  // ALL transitions go through ONE dispatch - no split state, no effects needed
   // ==========================================================================
   
   /**
-   * [ATOMIC-HANDOFF] Execute atomic transition to next exercise
-   * Builds plan, commits state, and applies inputs - all in one synchronous pass
+   * [UNIFIED-HANDOFF] Execute unified transition to next exercise
+   * Uses the pure buildUnifiedTransitionSnapshot helper + single dispatch
    */
-  const executeAtomicAdvance = useCallback((reason: TransitionReason) => {
-    // [ATOMIC-HANDOFF] Write transition_requested breadcrumb BEFORE
+  const executeUnifiedAdvance = useCallback((reason: TransitionReason) => {
+    // Write transition_requested breadcrumb
     writeTransitionTrace({
       reason,
       transitionStage: 'requested',
@@ -1730,83 +2144,70 @@ export function StreamlinedWorkoutSession({
       safeIndexUsed: true,
     })
     
-    // Build the COMPLETE atomic plan from current authoritative values
-    const plan = buildAtomicExerciseAdvancePlan(
-      state,
+    // Build snapshot using PURE helper - no side effects
+    const { snapshot, isWorkoutComplete, guardError } = buildUnifiedTransitionSnapshot(
+      liveSession,
       exercises,
-      safeExerciseIndex,
-      safeCurrentExercise,
-      { selectedRPE, repsValue, holdValue, bandUsed },
-      null, // No new completed sets in this path
-      reason,
-      exerciseRuntimeTruth,
-      sessionRuntimeTruth
+      liveSession.completedSets, // Use current completed sets for skip paths
+      safeExerciseIndex
     )
     
-    // [ATOMIC-HANDOFF] Write transition_computed breadcrumb
+    // Write transition_computed breadcrumb
     writeTransitionTrace({
       transitionStage: 'computed',
-      fromExerciseIndex: plan.meta.fromIndex,
-      toExerciseIndex: plan.meta.toIndex,
-      fromExerciseName: plan.meta.fromExerciseName,
-      toExerciseName: plan.meta.toExerciseName,
-      transitionType: plan.meta.transitionType,
-      beforeStateStatus: state.status,
-      afterStateStatus: plan.nextWorkoutState.status,
+      fromExerciseIndex: safeExerciseIndex,
+      toExerciseIndex: snapshot.nextExerciseIndex,
+      fromExerciseName: safeCurrentExercise.name,
+      toExerciseName: exercises[snapshot.nextExerciseIndex]?.name ?? null,
+      transitionType: isWorkoutComplete ? 'workout_complete' : 'next_exercise',
+      beforeStateStatus: liveSession.status,
+      afterStateStatus: isWorkoutComplete ? 'completed' : 'active',
       safeExerciseCount: exercises.length,
-      safeNextExerciseExists: plan.meta.toIndex !== null && plan.meta.toIndex < exercises.length,
-      guardFallbackReason: plan.guard.fallbackReason,
+      safeNextExerciseExists: !isWorkoutComplete && snapshot.nextExerciseIndex < exercises.length,
+      guardFallbackReason: guardError,
     })
     
-    console.log('[ATOMIC-HANDOFF] executeAtomicAdvance', {
+    console.log('[UNIFIED-HANDOFF] executeUnifiedAdvance', {
       reason,
-      transitionType: plan.meta.transitionType,
-      fromIndex: plan.meta.fromIndex,
-      toIndex: plan.meta.toIndex,
-      toExerciseName: plan.meta.toExerciseName,
-      isWorkoutComplete: plan.meta.isWorkoutComplete,
-      guardFallbackReason: plan.guard.fallbackReason,
+      fromIndex: safeExerciseIndex,
+      toIndex: snapshot.nextExerciseIndex,
+      isWorkoutComplete,
+      guardError,
     })
     
-    // ONE state commit for the workout state
-    setState(plan.nextWorkoutState)
+    // Handle guard error - show controlled local fallback
+    if (guardError) {
+      dispatch({ type: 'SET_TRANSITION_ERROR', error: { type: 'next_exercise_invalid', message: guardError } })
+      writeTransitionTrace({ transitionStage: 'committed', guardFallbackReason: guardError })
+      return
+    }
     
-    // [ATOMIC-HANDOFF] Write transition_committed breadcrumb
+    // Handle workout complete
+    if (isWorkoutComplete) {
+      dispatch({ 
+        type: 'COMPLETE_WORKOUT', 
+        newCompletedSets: snapshot.newCompletedSets,
+        lastRPE: snapshot.lastSetRPE || 8
+      })
+      writeTransitionTrace({ transitionStage: 'committed' })
+      clearRestTimerState()
+      clearSessionStorage()
+      return
+    }
+    
+    // ONE dispatch for the entire transition - inputs included
+    dispatch({ type: 'ADVANCE_TO_NEXT_EXERCISE', snapshot })
+    
+    // Write committed breadcrumb
     writeTransitionTrace({ transitionStage: 'committed' })
     
-    // Immediately apply UI flags (outside setState, same event handler)
-    if (plan.uiFlags.showInterExerciseRest) {
-      setInterExerciseRestSeconds(plan.uiFlags.interExerciseRestSeconds)
-      setShowInterExerciseRest(true)
-    } else {
-      setShowInterExerciseRest(false)
-    }
+    // Cleanup outside reducer (external side effects only)
+    clearRestTimerState()
     
-    // Immediately apply input state (outside setState, same event handler)
-    setSelectedRPE(plan.nextInputState.selectedRPE)
-    setRepsValue(plan.nextInputState.repsValue)
-    setHoldValue(plan.nextInputState.holdValue)
-    setBandUsed(plan.nextInputState.bandUsed)
-    
-    // [ATOMIC-HANDOFF] Write inputs_applied breadcrumb
-    writeTransitionTrace({ transitionStage: 'inputs_applied' })
-    
-    // Apply cleanup OUTSIDE setState
-    if (plan.cleanup.clearRestTimer) {
-      clearRestTimerState()
-    }
-    if (plan.cleanup.clearStorage) {
-      clearSessionStorage()
-    }
-    if (plan.cleanup.playCompletionAlert) {
-      playTimerCompletionAlert()
-    }
-    
-    console.log('[ATOMIC-HANDOFF] Transition complete', {
-      toIndex: plan.meta.toIndex,
-      inputsApplied: true,
+    console.log('[UNIFIED-HANDOFF] Transition complete', {
+      toIndex: snapshot.nextExerciseIndex,
     })
-  }, [state, exercises, safeExerciseIndex, safeCurrentExercise, selectedRPE, repsValue, holdValue, bandUsed, exerciseRuntimeTruth, sessionRuntimeTruth])
+  }, [liveSession, exercises, safeExerciseIndex, safeCurrentExercise.name])
   
   // [LIVE-WORKOUT-CORRIDOR-FIX] Load next session info when workout completes
   // This uses dynamic import to avoid loading the heavy adaptive-program-builder at module load
@@ -1847,17 +2248,11 @@ export function StreamlinedWorkoutSession({
     }
   }, [state, sessionId, isDemoSession, sessionStructureSignature])
   
-  // [LIVE-WORKOUT-CORRIDOR] Initialize values when exercise changes - uses safeCurrentExercise
-  useEffect(() => {
-    setRepsValue(getTargetValue())
-    setHoldValue(getTargetValue())
-    setSelectedRPE(null)
-    // Prefer authoritative executionTruth, fall back to legacy heuristic
-    const recommendedBandFromTruth = safeCurrentExercise.executionTruth?.recommendedBandColor
-    const legacyRecommendedBand = getRecommendedBand()
-    const effectiveRecommendedBand = recommendedBandFromTruth ?? legacyRecommendedBand
-    setBandUsed(effectiveRecommendedBand || 'none')
-  }, [state.currentExerciseIndex, safeCurrentExercise, getTargetValue, getRecommendedBand])
+  // [UNIFIED-HANDOFF] REMOVED: Exercise-change reset effect
+  // This was a secondary transition system that caused race conditions.
+  // Input values are now set atomically within the reducer dispatch.
+  // The unified liveSession state already contains correct input values
+  // for each exercise immediately after transition.
   
   // [ATOMIC-HANDOFF] Write render_verified breadcrumb on successful active render
   useEffect(() => {
@@ -1871,20 +2266,17 @@ export function StreamlinedWorkoutSession({
     }
   }, [state.status, safeExerciseIndex, safeCurrentExercise.name])
   
-  // Timer effect
+  // Timer effect - uses unified dispatch
   useEffect(() => {
-    if (state.status === 'active' && state.startTime) {
+    if (liveSession.status === 'active' && liveSession.startTime) {
       timerRef.current = setInterval(() => {
-        setState(prev => ({
-          ...prev,
-          elapsedSeconds: Math.floor((Date.now() - (prev.startTime || Date.now())) / 1000)
-        }))
+        dispatch({ type: 'TICK_TIMER' })
       }, 1000)
     }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
     }
-  }, [state.status, state.startTime])
+  }, [liveSession.status, liveSession.startTime])
   
   // Format duration
   const formatDuration = (seconds: number): string => {
@@ -1954,14 +2346,13 @@ export function StreamlinedWorkoutSession({
     })
   }, [])
   
-  // [ATOMIC-HANDOFF] Complete set - uses atomic transition plan for ALL exercise changes
+  // [UNIFIED-HANDOFF] Complete set - ALL transitions go through single dispatch
   const handleCompleteSet = useCallback(() => {
-    // [ATOMIC-HANDOFF] Use safeExerciseIndex for ALL reads
     const currentIndex = safeExerciseIndex
     
-    console.log('[ATOMIC-HANDOFF] handleCompleteSet triggered', {
+    console.log('[UNIFIED-HANDOFF] handleCompleteSet triggered', {
       exerciseIndex: currentIndex,
-      setNumber: state.currentSetNumber,
+      setNumber: liveSession.currentSetNumber,
       exerciseName: safeCurrentExercise.name,
       totalSets: safeCurrentExercise.sets,
       totalExercises: exercises.length,
@@ -1970,17 +2361,17 @@ export function StreamlinedWorkoutSession({
     // Build completed set data
     const setData: CompletedSetData = {
       exerciseIndex: currentIndex,
-      setNumber: state.currentSetNumber,
-      actualReps: isHoldExercise ? 0 : repsValue,
-      holdSeconds: isHoldExercise ? holdValue : undefined,
-      actualRPE: selectedRPE || 8,
-      bandUsed,
+      setNumber: liveSession.currentSetNumber,
+      actualReps: isHoldExercise ? 0 : liveSession.repsValue,
+      holdSeconds: isHoldExercise ? liveSession.holdValue : undefined,
+      actualRPE: liveSession.selectedRPE || 8,
+      bandUsed: liveSession.bandUsed,
       timestamp: Date.now(),
     }
     
-    const newCompletedSets = [...state.completedSets, setData]
+    const newCompletedSets = [...liveSession.completedSets, setData]
     const totalExerciseSets = safeCurrentExercise.sets
-    const isLastSet = state.currentSetNumber >= totalExerciseSets
+    const isLastSet = liveSession.currentSetNumber >= totalExerciseSets
     const isLastExercise = currentIndex >= exercises.length - 1
     
     // Evaluate adaptive performance (optional - doesn't affect transition)
@@ -1989,14 +2380,14 @@ export function StreamlinedWorkoutSession({
       const setsForThisExercise = newCompletedSets.filter(s => s.exerciseIndex === currentIndex)
       
       const performanceData: SetPerformanceData = {
-        setNumber: state.currentSetNumber,
+        setNumber: liveSession.currentSetNumber,
         targetReps: isHoldExercise ? 0 : targetValue,
-        actualReps: isHoldExercise ? 0 : repsValue,
+        actualReps: isHoldExercise ? 0 : liveSession.repsValue,
         targetHoldSeconds: isHoldExercise ? targetValue : undefined,
-        actualHoldSeconds: isHoldExercise ? holdValue : undefined,
+        actualHoldSeconds: isHoldExercise ? liveSession.holdValue : undefined,
         targetRPE: 8,
-        actualRPE: selectedRPE || 8,
-        bandUsed,
+        actualRPE: liveSession.selectedRPE || 8,
+        bandUsed: liveSession.bandUsed,
       }
       
       const recommendation = evaluateSetPerformance(performanceData, {
@@ -2023,14 +2414,31 @@ export function StreamlinedWorkoutSession({
     }
     
     // ==========================================================================
-    // [ATOMIC-HANDOFF] DETERMINE TRANSITION TYPE AND BUILD ATOMIC PLAN
+    // [UNIFIED-HANDOFF] ALL TRANSITIONS GO THROUGH SINGLE DISPATCH
     // ==========================================================================
     
-    if (isLastSet) {
-      // Need to advance to next exercise or complete workout
-      // Build COMPLETE atomic plan including completed sets
+    if (isLastSet && isLastExercise) {
+      // WORKOUT COMPLETE
+      writeTransitionTrace({
+        reason: 'complete_set',
+        transitionStage: 'requested',
+        transitionType: 'workout_complete',
+        timestamp: Date.now(),
+        safeIndexUsed: true,
+      })
       
-      // [ATOMIC-HANDOFF] Write transition_requested breadcrumb
+      dispatch({
+        type: 'COMPLETE_WORKOUT',
+        newCompletedSets,
+        lastRPE: liveSession.selectedRPE || 8,
+      })
+      
+      writeTransitionTrace({ transitionStage: 'committed' })
+      clearRestTimerState()
+      clearSessionStorage()
+      
+    } else if (isLastSet) {
+      // ADVANCE TO NEXT EXERCISE (with or without inter-exercise rest)
       writeTransitionTrace({
         reason: 'complete_set',
         transitionStage: 'requested',
@@ -2038,129 +2446,94 @@ export function StreamlinedWorkoutSession({
         safeIndexUsed: true,
       })
       
-      const plan = buildAtomicExerciseAdvancePlan(
-        state,
-        exercises,
-        currentIndex,
-        safeCurrentExercise,
-        { selectedRPE, repsValue, holdValue, bandUsed },
-        newCompletedSets,
-        'complete_set',
-        exerciseRuntimeTruth,
-        sessionRuntimeTruth
-      )
+      // Check for inter-exercise rest
+      const interRestSeconds = exerciseRuntimeTruth.restSecondsInterExercise
+      const shouldShowInterRest = sessionRuntimeTruth.supportsBetweenExerciseRest && 
+        exerciseRuntimeTruth.category !== 'warmup' && 
+        exerciseRuntimeTruth.category !== 'mobility' &&
+        interRestSeconds >= 30
       
-      // [ATOMIC-HANDOFF] Write transition_computed breadcrumb
-      writeTransitionTrace({
-        transitionStage: 'computed',
-        fromExerciseIndex: plan.meta.fromIndex,
-        toExerciseIndex: plan.meta.toIndex,
-        fromExerciseName: plan.meta.fromExerciseName,
-        toExerciseName: plan.meta.toExerciseName,
-        transitionType: plan.meta.transitionType,
-        beforeStateStatus: state.status,
-        afterStateStatus: plan.nextWorkoutState.status,
-        safeExerciseCount: exercises.length,
-        safeNextExerciseExists: plan.meta.toIndex !== null && plan.meta.toIndex < exercises.length,
-        guardFallbackReason: plan.guard.fallbackReason,
-      })
-      
-      console.log('[ATOMIC-HANDOFF] handleCompleteSet - built plan', {
-        transitionType: plan.meta.transitionType,
-        fromIndex: plan.meta.fromIndex,
-        toIndex: plan.meta.toIndex,
-        isWorkoutComplete: plan.meta.isWorkoutComplete,
-        showInterExerciseRest: plan.uiFlags.showInterExerciseRest,
-      })
-      
-      // ONE state commit for everything
-      setState(plan.nextWorkoutState)
-      
-      // [ATOMIC-HANDOFF] Write transition_committed breadcrumb
-      writeTransitionTrace({ transitionStage: 'committed' })
-      
-      // Apply UI flags immediately (same event handler)
-      if (plan.uiFlags.showInterExerciseRest) {
-        setInterExerciseRestSeconds(plan.uiFlags.interExerciseRestSeconds)
-        setShowInterExerciseRest(true)
+      if (shouldShowInterRest) {
+        // Show inter-exercise rest - keep on current exercise
+        dispatch({
+          type: 'SHOW_INTER_EXERCISE_REST',
+          seconds: interRestSeconds,
+          newCompletedSets,
+          lastRPE: liveSession.selectedRPE || 8,
+        })
+        writeTransitionTrace({ 
+          transitionStage: 'committed',
+          transitionType: 'inter_exercise_rest_wait',
+        })
       } else {
-        setShowInterExerciseRest(false)
-      }
-      
-      // Apply input state immediately
-      setSelectedRPE(plan.nextInputState.selectedRPE)
-      setRepsValue(plan.nextInputState.repsValue)
-      setHoldValue(plan.nextInputState.holdValue)
-      setBandUsed(plan.nextInputState.bandUsed)
-      
-      // [ATOMIC-HANDOFF] Write inputs_applied breadcrumb
-      writeTransitionTrace({ transitionStage: 'inputs_applied' })
-      
-      // Apply cleanup
-      if (plan.cleanup.clearRestTimer) {
+        // Immediate advance to next exercise
+        const { snapshot, guardError } = buildUnifiedTransitionSnapshot(
+          { ...liveSession, completedSets: newCompletedSets },
+          exercises,
+          newCompletedSets,
+          currentIndex
+        )
+        
+        writeTransitionTrace({
+          transitionStage: 'computed',
+          fromExerciseIndex: currentIndex,
+          toExerciseIndex: snapshot.nextExerciseIndex,
+          transitionType: 'next_exercise',
+          guardFallbackReason: guardError,
+        })
+        
+        if (guardError) {
+          dispatch({ type: 'SET_TRANSITION_ERROR', error: { type: 'next_exercise_invalid', message: guardError } })
+        } else {
+          dispatch({ type: 'ADVANCE_TO_NEXT_EXERCISE', snapshot })
+        }
+        
+        writeTransitionTrace({ transitionStage: 'committed' })
         clearRestTimerState()
-      }
-      if (plan.cleanup.clearStorage) {
-        clearSessionStorage()
       }
       
     } else {
-      // [ATOMIC-HANDOFF] SAME EXERCISE, NEXT SET
-      // Simpler path - just increment set and go to rest
-      const nextSetNumber = state.currentSetNumber + 1
-      const maxSets = totalExerciseSets
+      // SAME EXERCISE, NEXT SET - single dispatch
+      const nextSetNumber = liveSession.currentSetNumber + 1
+      const targetValue = getTargetValue()
       
       // Guard against invalid increment
-      if (nextSetNumber > maxSets) {
-        console.warn('[ATOMIC-HANDOFF] blocked invalid set increment:', {
-          currentSet: state.currentSetNumber,
-          nextSet: nextSetNumber,
-          maxSets,
-        })
-        // Failsafe: use atomic advance to next exercise
-        executeAtomicAdvance('complete_set')
+      if (nextSetNumber > totalExerciseSets) {
+        console.warn('[UNIFIED-HANDOFF] blocked invalid set increment')
+        executeUnifiedAdvance('complete_set')
         return
       }
       
-      // ONE state commit for next set
-      setState({
-        ...state,
-        status: 'resting',
-        completedSets: newCompletedSets,
-        currentSetNumber: nextSetNumber,
-        lastSetRPE: selectedRPE || 8,
+      // ONE dispatch for same-exercise next set
+      dispatch({
+        type: 'COMPLETE_SET_SAME_EXERCISE',
+        newCompletedSets,
+        nextSetNumber,
+        targetValue,
       })
-      
-      // Reset inputs for SAME exercise next set
-      setSelectedRPE(null)
-      setRepsValue(getTargetValue())
-      setHoldValue(getTargetValue())
     }
-  }, [safeCurrentExercise, safeExerciseIndex, state, repsValue, holdValue, selectedRPE, bandUsed, isHoldExercise, exercises, exerciseRuntimeTruth, sessionRuntimeTruth, getTargetValue, executeAtomicAdvance])
+  }, [liveSession, safeCurrentExercise, safeExerciseIndex, isHoldExercise, exercises, exerciseRuntimeTruth, sessionRuntimeTruth, getTargetValue, executeUnifiedAdvance])
   
   // Rest complete / skip rest (between sets of SAME exercise)
   const handleRestComplete = useCallback(() => {
-    console.log('[LIVE-WORKOUT-CORRIDOR] handleRestComplete triggered (same exercise, next set)')
+    console.log('[UNIFIED-HANDOFF] handleRestComplete triggered (same exercise, next set)')
     clearRestTimerState()
     playTimerCompletionAlert()
-    setState(prev => ({
-      ...prev,
-      status: 'active',
-    }))
+    dispatch({ type: 'SET_STATUS', status: 'active' })
   }, [])
   
-  // [ATOMIC-HANDOFF] Handle inter-exercise rest completion
+  // [UNIFIED-HANDOFF] Handle inter-exercise rest completion
   const handleInterExerciseRestComplete = useCallback(() => {
-    console.log('[ATOMIC-HANDOFF] handleInterExerciseRestComplete triggered')
+    console.log('[UNIFIED-HANDOFF] handleInterExerciseRestComplete triggered')
     playTimerCompletionAlert()
-    executeAtomicAdvance('inter_exercise_complete')
-  }, [executeAtomicAdvance])
+    executeUnifiedAdvance('inter_exercise_complete')
+  }, [executeUnifiedAdvance])
   
-  // [ATOMIC-HANDOFF] Skip inter-exercise rest
+  // [UNIFIED-HANDOFF] Skip inter-exercise rest
   const handleSkipInterExerciseRest = useCallback(() => {
-    console.log('[ATOMIC-HANDOFF] handleSkipInterExerciseRest triggered')
-    executeAtomicAdvance('skip_inter_exercise')
-  }, [executeAtomicAdvance])
+    console.log('[UNIFIED-HANDOFF] handleSkipInterExerciseRest triggered')
+    executeUnifiedAdvance('skip_inter_exercise')
+  }, [executeUnifiedAdvance])
   
   // [EXECUTION-TRUTH-FIX] Back navigation - review previous exercise
   const handleReviewPreviousExercise = useCallback(() => {
@@ -2206,11 +2579,11 @@ export function StreamlinedWorkoutSession({
     )
   }, [])
   
-  // [ATOMIC-HANDOFF] Skip exercise - uses atomic advancement
+  // [UNIFIED-HANDOFF] Skip exercise - uses unified advancement
   const handleSkipExercise = useCallback(() => {
-    console.log('[ATOMIC-HANDOFF] handleSkipExercise triggered')
-    executeAtomicAdvance('skip_exercise')
-  }, [executeAtomicAdvance])
+    console.log('[UNIFIED-HANDOFF] handleSkipExercise triggered')
+    executeUnifiedAdvance('skip_exercise')
+  }, [executeUnifiedAdvance])
   
   // ==========================================================================
   // EXERCISE OVERRIDE HANDLERS
@@ -3400,6 +3773,42 @@ function InterExerciseRestCountdown({
   
   // [PHASE LW3] Boot stage calls moved to effects - render is pure
   
+  // [UNIFIED-HANDOFF] Check for controlled transition error (local fallback, not route boundary)
+  if (liveSession.transitionRepairIssue) {
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 rounded-full bg-[#1A1F26] border border-amber-500/30 flex items-center justify-center mx-auto mb-4">
+            <Dumbbell className="w-8 h-8 text-amber-500" />
+          </div>
+          <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Exercise Transition Issue</h2>
+          <p className="text-[#A4ACB8] mb-4 text-sm">
+            Unable to advance to the next exercise. The exercise data may need repair.
+          </p>
+          <p className="text-[#6B7280] text-xs mb-6 font-mono">
+            {liveSession.transitionRepairIssue.message}
+          </p>
+          <div className="space-y-2">
+            <Button
+              onClick={() => dispatch({ type: 'CLEAR_TRANSITION_ERROR' })}
+              className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Retry
+            </Button>
+            <Button
+              variant="outline"
+              onClick={onCancel}
+              className="w-full border-[#2B313A] text-[#A4ACB8] hover:bg-[#1A1F26]"
+            >
+              End Workout
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
   const targetRPE = 8 // Default target
   const targetValue = getTargetValue()
   const recommendedBand = getRecommendedBand()
@@ -3639,7 +4048,7 @@ function InterExerciseRestCountdown({
           )}
         </Card>
         
-        {/* [ATOMIC-HANDOFF] Complete Set Button - uses safe indices */}
+        {/* [UNIFIED-HANDOFF] Complete Set Button - uses safe indices */}
         <Button
           onClick={handleCompleteSet}
           disabled={selectedRPE === null}

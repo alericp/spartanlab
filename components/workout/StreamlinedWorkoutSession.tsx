@@ -1793,6 +1793,14 @@ export function StreamlinedWorkoutSession({
     createInitialMachineState
   )
   
+  // [STAGED-ISOLATION-DEBUG] Log machine state immediately after reducer
+  console.log('[v0] [machine_state_initialized]', {
+    phase: machineState.phase,
+    currentExerciseIndex: machineState.currentExerciseIndex,
+    currentSetNumber: machineState.currentSetNumber,
+    completedSetsCount: machineState.completedSets?.length ?? 0,
+  })
+  
   // ==========================================================================
   // [LIVE-WORKOUT-MACHINE] Derive view model from machine state
   // This is the ONLY source for render values - no scattered ad hoc derivations
@@ -2244,6 +2252,13 @@ export function StreamlinedWorkoutSession({
   const exercises = machineSessionContract?.exercises ?? []
   const totalExercises = exercises.length
   const totalSets = exercises.reduce((sum, ex) => sum + (ex.sets || 3), 0)
+  
+  // [STAGED-ISOLATION-DEBUG] Log exercises derivation
+  console.log('[v0] [exercises_derived]', {
+    exerciseCount: exercises.length,
+    totalSets,
+    machineSessionContractExists: !!machineSessionContract,
+  })
   
   // Machine-derived: hasValidExercises
   const hasValidExercises = exercises.length > 0
@@ -4576,6 +4591,69 @@ function InterExerciseRestCountdown({
   // safeCurrentExercise always has valid fallback values, so no null guard needed
   // [PHASE LW3] recordBootError removed - render is pure
   // ==========================================================================
+  
+  // ==========================================================================
+  // [STAGED-ACTIVE-ISOLATION] STAGE 1: MINIMAL SHELL RENDER
+  // This is a diagnostic stage to isolate the exact throwing unit.
+  // Only primitive values are used - no complex objects or computed values.
+  // ==========================================================================
+  const STAGED_ACTIVE_ISOLATION_ENABLED = true // Set to true to enable minimal shell
+  
+  if (STAGED_ACTIVE_ISOLATION_ENABLED) {
+    // STAGE 1: Render only primitives from safe machine-owned values
+    try {
+      const stage1_label = safeDisplayLabel || 'Workout'
+      const stage1_exercise = safeCurrentExercise?.name || 'Exercise'
+      const stage1_set = validatedSetNumber || 1
+      const stage1_totalSets = safeCurrentExercise?.sets || 3
+      const stage1_elapsed = safeElapsedSeconds || 0
+      const stage1_mins = Math.floor(stage1_elapsed / 60)
+      const stage1_secs = stage1_elapsed % 60
+      
+      console.log('[v0] [staged_active_stage1] All primitives extracted safely')
+      
+      return (
+        <div className="min-h-screen bg-[#0F1115] flex flex-col items-center justify-center p-4">
+          <div className="text-center max-w-sm">
+            <div className="w-16 h-16 rounded-full bg-green-900/30 border border-green-500/50 flex items-center justify-center mx-auto mb-4">
+              <Dumbbell className="w-8 h-8 text-green-500" />
+            </div>
+            <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Stage 1: Active Shell Works</h2>
+            <p className="text-[#A4ACB8] mb-4 text-sm">
+              Minimal active render is successful.
+            </p>
+            <div className="bg-[#1A1F26] rounded-lg p-4 text-left text-sm space-y-2">
+              <p className="text-[#6B7280]">Session: <span className="text-[#E6E9EF]">{stage1_label}</span></p>
+              <p className="text-[#6B7280]">Exercise: <span className="text-[#E6E9EF]">{stage1_exercise}</span></p>
+              <p className="text-[#6B7280]">Set: <span className="text-[#E6E9EF]">{stage1_set}/{stage1_totalSets}</span></p>
+              <p className="text-[#6B7280]">Time: <span className="text-[#E6E9EF]">{stage1_mins}:{stage1_secs.toString().padStart(2, '0')}</span></p>
+            </div>
+            <p className="text-xs text-green-500 mt-4">
+              Core active shell renders successfully. Toggle STAGED_ACTIVE_ISOLATION_ENABLED to false to test full render.
+            </p>
+          </div>
+        </div>
+      )
+    } catch (stage1Error) {
+      console.error('[v0] [staged_active_stage1_FAILED]', stage1Error)
+      return (
+        <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
+          <div className="text-center max-w-sm">
+            <div className="w-16 h-16 rounded-full bg-red-900/30 border border-red-500/50 flex items-center justify-center mx-auto mb-4">
+              <Dumbbell className="w-8 h-8 text-red-500" />
+            </div>
+            <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Stage 1 FAILED</h2>
+            <p className="text-[#A4ACB8] mb-4 text-sm">
+              Even minimal active shell failed. Check console for error.
+            </p>
+            <pre className="text-xs text-left bg-[#1A1F26] p-2 rounded overflow-auto max-h-32">
+              {stage1Error instanceof Error ? stage1Error.message : 'Unknown error'}
+            </pre>
+          </div>
+        </div>
+      )
+    }
+  }
   
   console.log('[v0] [active_render_entry]', {
     safeStatus,

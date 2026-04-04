@@ -12,7 +12,7 @@
 // =============================================================================
 // AUTHORITATIVE ROUTE VERSION - PROOF OF EXECUTION
 // =============================================================================
-const WORKOUT_SESSION_ROUTE_VERSION = 'phase_lw2_boot_ledger_v1'
+const WORKOUT_SESSION_ROUTE_VERSION = 'phase_lw2_active_vm_v1'
 
 // [PHASE LW2] Route-level boot stage marker
 function markRouteStage(stage: string, data?: Record<string, unknown>): void {
@@ -708,8 +708,26 @@ function WorkoutSessionContent() {
     dayLabel: session?.dayLabel,
   })
   
-  // [LW-2 DIAGNOSTIC] Log exact data being passed to StreamlinedWorkoutSession
-  console.log('[LW-2] Rendering StreamlinedWorkoutSession with:', {
+  // [PHASE LW2] Route-level summary for crash diagnosis
+  // Read boot ledger for summary
+  let bootLedgerSummary = { currentStage: 'unknown', errors: [] as string[] }
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      const ledgerStr = sessionStorage.getItem('spartanlab_boot_ledger')
+      if (ledgerStr) {
+        const ledger = JSON.parse(ledgerStr)
+        bootLedgerSummary = {
+          currentStage: ledger.currentStage || 'unknown',
+          errors: (ledger.errors || []).map((e: { stage: string; error: string }) => `${e.stage}: ${e.error}`),
+        }
+      }
+    }
+  } catch {}
+  
+  console.log('[ROUTE-SUMMARY] Pre-render state:', {
+    routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
+    bootLedgerCurrentStage: bootLedgerSummary.currentStage,
+    bootLedgerErrors: bootLedgerSummary.errors,
     sessionExists: !!session,
     sessionDayLabel: session?.dayLabel,
     sessionDayNumber: session?.dayNumber,
@@ -718,6 +736,7 @@ function WorkoutSessionContent() {
     reasoningSummaryExists: !!reasoningSummary,
     demoMode,
     isFirstSession,
+    timestamp: Date.now(),
   })
   
   return (

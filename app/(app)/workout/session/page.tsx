@@ -12,7 +12,7 @@
 // =============================================================================
 // AUTHORITATIVE ROUTE VERSION - PROOF OF EXECUTION
 // =============================================================================
-const WORKOUT_SESSION_ROUTE_VERSION = 'phase_x_plus_1_authority_corridor_v3'
+const WORKOUT_SESSION_ROUTE_VERSION = 'phase_lw1_first_render_fix_v1'
 
 import { useState, useEffect, Suspense, Component, type ReactNode, type ErrorInfo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -658,6 +658,18 @@ function WorkoutSessionContent() {
   if (sessionMeta && process.env.NODE_ENV === 'development') {
     console.log('[PHASE-X+1] Session meta:', sessionMeta)
   }
+  
+  // [LW-1 DIAGNOSTIC] Log exact data being passed to StreamlinedWorkoutSession
+  console.log('[LW-1] Rendering StreamlinedWorkoutSession with:', {
+    sessionExists: !!session,
+    sessionDayLabel: session?.dayLabel,
+    sessionDayNumber: session?.dayNumber,
+    exerciseCount: session?.exercises?.length ?? 0,
+    firstExerciseName: session?.exercises?.[0]?.name ?? 'none',
+    reasoningSummaryExists: !!reasoningSummary,
+    demoMode,
+    isFirstSession,
+  })
   
   return (
     <WorkoutErrorBoundary>

@@ -42,6 +42,13 @@ export interface SessionMeta {
   originalExerciseCount?: number
   /** Timestamp of when session was loaded */
   loadedAt: string
+  // [PHASE LW3] New diagnostic fields for session index truth
+  /** Actual session count from loaded program */
+  sessionCount?: number
+  /** Resolved session index (0-based) */
+  resolvedSessionIndex?: number
+  /** Original day param from request */
+  requestedDayParam?: string | null
 }
 
 export interface AuthoritativeSessionResult {
@@ -184,25 +191,44 @@ function createGuaranteedFallback(reason: string): AdaptiveSession {
 // =============================================================================
 
 /**
+ * Session load request options.
+ * The loader internally resolves the session index using REAL program state.
+ */
+export interface SessionLoadRequest {
+  /** URL day parameter (e.g., "1", "2", etc.) */
+  dayParam?: string | null
+  /** Whether this is a demo session */
+  isDemo?: boolean
+  /** Whether this is the user's first session */
+  isFirstSession?: boolean
+}
+
+/**
  * Load session from program state with GUARANTEED valid result.
+ * 
+ * [PHASE LW3] NOW RESOLVES SESSION INDEX INTERNALLY using real program session count.
+ * The caller no longer needs to compute index from guessed count.
  * 
  * This function NEVER returns null and NEVER throws.
  * It always returns a valid session, using fallbacks if necessary.
  */
 export async function loadAuthoritativeSession(
-  sessionIndex: number,
-  options?: {
-    isDemo?: boolean
-    isFirstSession?: boolean
-  }
+  request: SessionLoadRequest
 ): Promise<AuthoritativeSessionResult> {
-  logSessionLoad('SESSION_LOAD_START', { sessionIndex, options })
+  const { dayParam, isDemo, isFirstSession } = request
+  
+  logSessionLoad('SESSION_LOAD_START', { 
+    dayParam, 
+    isDemo, 
+    isFirstSession,
+    note: 'Session index will be resolved from REAL program state'
+  })
   
   const loadedAt = new Date().toISOString()
   
   // Handle demo mode separately
-  if (options?.isDemo) {
-    logSessionLoad('DEMO_MODE', { sessionIndex })
+  if (isDemo) {
+    logSessionLoad('DEMO_MODE', { dayParam })
     const demoSession = createGuaranteedFallback('DEMO_SESSION')
     demoSession.dayLabel = 'DEMO-Workout'
     demoSession.dayNumber = 0
@@ -214,6 +240,10 @@ export async function loadAuthoritativeSession(
         validationPassed: true,
         recovered: false,
         loadedAt,
+        // [PHASE LW3] New diagnostic fields
+        sessionCount: 0,
+        resolvedSessionIndex: 0,
+        requestedDayParam: dayParam ?? null,
       },
     }
   }
@@ -224,15 +254,21 @@ export async function loadAuthoritativeSession(
     const { getProgramState } = await import('@/lib/program-state')
     const programState = getProgramState()
     
+    const actualSessionCount = programState.adaptiveProgram?.sessions?.length ?? 0
+    
     logSessionLoad('SESSION_FETCH_RESULT', {
       hasUsableProgram: programState.hasUsableWorkoutProgram,
       hasAdaptiveProgram: !!programState.adaptiveProgram,
-      sessionCount: programState.adaptiveProgram?.sessions?.length ?? 0,
+      actualSessionCount,
     })
     
     // Check if we have a usable program
     if (!programState.hasUsableWorkoutProgram || !programState.adaptiveProgram) {
-      logSessionLoad('NO_PROGRAM_FALLBACK', { reason: 'no_usable_program' })
+      logSessionLoad('NO_PROGRAM_FALLBACK', { 
+        reason: 'no_usable_program',
+        dayParam,
+        isFirstSession,
+      })
       return {
         session: createGuaranteedFallback('NO_PROGRAM'),
         meta: {
@@ -241,6 +277,9 @@ export async function loadAuthoritativeSession(
           recovered: true,
           fallbackReason: 'No active program found',
           loadedAt,
+          sessionCount: 0,
+          resolvedSessionIndex: 0,
+          requestedDayParam: dayParam ?? null,
         },
       }
     }
@@ -249,7 +288,11 @@ export async function loadAuthoritativeSession(
     
     // Check if sessions array exists
     if (!Array.isArray(adaptiveProgram.sessions) || adaptiveProgram.sessions.length === 0) {
-      logSessionLoad('EMPTY_SESSIONS_FALLBACK', { reason: 'no_sessions' })
+      logSessionLoad('EMPTY_SESSIONS_FALLBACK', { 
+        reason: 'no_sessions',
+        dayParam,
+        isFirstSession,
+      })
       return {
         session: createGuaranteedFallback('EMPTY_SESSIONS'),
         meta: {
@@ -258,12 +301,32 @@ export async function loadAuthoritativeSession(
           recovered: true,
           fallbackReason: 'No workout sessions in program',
           loadedAt,
+          sessionCount: 0,
+          resolvedSessionIndex: 0,
+          requestedDayParam: dayParam ?? null,
         },
       }
     }
     
-    // Clamp session index to valid range
-    const clampedIndex = Math.max(0, Math.min(sessionIndex, adaptiveProgram.sessions.length - 1))
+    // [PHASE LW3] RESOLVE SESSION INDEX FROM REAL PROGRAM STATE
+    // This is the AUTHORITATIVE session index calculation using actual session count
+    const resolvedSessionIndex = calculateSessionIndex(
+      dayParam ?? null, 
+      isFirstSession ?? false, 
+      adaptiveProgram.sessions.length
+    )
+    
+    // Clamp to valid range (should already be valid, but defensive)
+    const clampedIndex = Math.max(0, Math.min(resolvedSessionIndex, adaptiveProgram.sessions.length - 1))
+    
+    logSessionLoad('SESSION_INDEX_RESOLVED', {
+      dayParam,
+      isFirstSession,
+      actualSessionCount: adaptiveProgram.sessions.length,
+      resolvedSessionIndex,
+      clampedIndex,
+    })
+    
     const rawSession = adaptiveProgram.sessions[clampedIndex]
     
     // Log raw session diagnostic
@@ -275,7 +338,11 @@ export async function loadAuthoritativeSession(
     
     // Check for null/undefined raw session
     if (!rawSession) {
-      logSessionLoad('NULL_SESSION_FALLBACK', { sessionIndex: clampedIndex })
+      logSessionLoad('NULL_SESSION_FALLBACK', { 
+        sessionIndex: clampedIndex,
+        actualSessionCount: adaptiveProgram.sessions.length,
+        dayParam,
+      })
       return {
         session: createGuaranteedFallback('NULL_SESSION'),
         meta: {
@@ -284,6 +351,9 @@ export async function loadAuthoritativeSession(
           recovered: true,
           fallbackReason: 'Session data was null',
           loadedAt,
+          sessionCount: adaptiveProgram.sessions.length,
+          resolvedSessionIndex: clampedIndex,
+          requestedDayParam: dayParam ?? null,
         },
       }
     }
@@ -292,7 +362,11 @@ export async function loadAuthoritativeSession(
     const normalizedSession = normalizeToAdaptiveSession(rawSession, clampedIndex)
     
     if (!normalizedSession) {
-      logSessionLoad('NORMALIZATION_FAILED_FALLBACK', { sessionIndex: clampedIndex })
+      logSessionLoad('NORMALIZATION_FAILED_FALLBACK', { 
+        sessionIndex: clampedIndex,
+        actualSessionCount: adaptiveProgram.sessions.length,
+        dayParam,
+      })
       return {
         session: createGuaranteedFallback('NORMALIZATION_FAILED'),
         meta: {
@@ -302,6 +376,9 @@ export async function loadAuthoritativeSession(
           fallbackReason: 'Session normalization failed',
           originalExerciseCount: diagnostic.exerciseCount,
           loadedAt,
+          sessionCount: adaptiveProgram.sessions.length,
+          resolvedSessionIndex: clampedIndex,
+          requestedDayParam: dayParam ?? null,
         },
       }
     }
@@ -313,7 +390,11 @@ export async function loadAuthoritativeSession(
     
     // CRITICAL: Check for empty exercises (STEP 8)
     if (!normalizedSession.exercises || normalizedSession.exercises.length === 0) {
-      logSessionLoad('EMPTY_EXERCISES_PROTECTION', { sessionIndex: clampedIndex })
+      logSessionLoad('EMPTY_EXERCISES_PROTECTION', { 
+        sessionIndex: clampedIndex,
+        actualSessionCount: adaptiveProgram.sessions.length,
+        dayParam,
+      })
       return {
         session: createGuaranteedFallback('EMPTY_EXERCISES'),
         meta: {
@@ -323,6 +404,9 @@ export async function loadAuthoritativeSession(
           fallbackReason: 'Session had no exercises',
           originalExerciseCount: diagnostic.exerciseCount,
           loadedAt,
+          sessionCount: adaptiveProgram.sessions.length,
+          resolvedSessionIndex: clampedIndex,
+          requestedDayParam: dayParam ?? null,
         },
       }
     }
@@ -339,6 +423,9 @@ export async function loadAuthoritativeSession(
     if (!contractResult.validation.isValid) {
       logSessionLoad('VALIDATION_FAILED_FALLBACK', {
         reasons: contractResult.validation.reasons,
+        actualSessionCount: adaptiveProgram.sessions.length,
+        resolvedSessionIndex: clampedIndex,
+        dayParam,
       })
       return {
         session: createGuaranteedFallback('VALIDATION_FAILED'),
@@ -349,6 +436,9 @@ export async function loadAuthoritativeSession(
           fallbackReason: `Validation failed: ${contractResult.validation.reasons.join(', ')}`,
           originalExerciseCount: diagnostic.exerciseCount,
           loadedAt,
+          sessionCount: adaptiveProgram.sessions.length,
+          resolvedSessionIndex: clampedIndex,
+          requestedDayParam: dayParam ?? null,
         },
       }
     }
@@ -359,6 +449,9 @@ export async function loadAuthoritativeSession(
       dayNumber: normalizedSession.dayNumber,
       exerciseCount: normalizedSession.exercises.length,
       source: 'PROGRAM_STATE',
+      actualSessionCount: adaptiveProgram.sessions.length,
+      resolvedSessionIndex: clampedIndex,
+      requestedDayParam: dayParam ?? null,
     })
     
     return {
@@ -369,6 +462,10 @@ export async function loadAuthoritativeSession(
         recovered: false,
         originalExerciseCount: diagnostic.exerciseCount,
         loadedAt,
+        // [PHASE LW3] New diagnostic fields for session index truth
+        sessionCount: adaptiveProgram.sessions.length,
+        resolvedSessionIndex: clampedIndex,
+        requestedDayParam: dayParam ?? null,
       },
       reasoningSummary: adaptiveProgram.workoutReasoningSummary,
     }
@@ -378,6 +475,8 @@ export async function loadAuthoritativeSession(
     logSessionLoad('FATAL_ERROR_RECOVERY', {
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack?.split('\n').slice(0, 3).join('\n') : undefined,
+      dayParam,
+      isFirstSession,
     })
     
     return {
@@ -388,6 +487,10 @@ export async function loadAuthoritativeSession(
         recovered: true,
         fallbackReason: error instanceof Error ? error.message : 'Unknown fatal error',
         loadedAt,
+        // [PHASE LW3] Include request params in error recovery
+        sessionCount: 0,
+        resolvedSessionIndex: 0,
+        requestedDayParam: dayParam ?? null,
       },
     }
   }

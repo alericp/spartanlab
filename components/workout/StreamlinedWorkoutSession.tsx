@@ -371,16 +371,13 @@ function createEmptyBootLedger(): BootLedgerState {
   }
   }
 
-  // [PHASE LW2-FIX] Initialize boot ledger at module load - ONLY on client side
-  // This must be wrapped because module evaluation happens during SSR too
-  if (typeof window !== 'undefined') {
-    markBootStage('module_loaded', { componentVersion: STREAMLINED_WORKOUT_VERSION })
-  }
+// [PHASE LW3] Module-scope boot ledger call REMOVED
+// Boot ledger initialization now happens in the component's hydration effect
+// This ensures no browser storage writes during module evaluation (SSR-safe, render-pure)
 
-// [LW-1 DIAGNOSTIC] Log module load success
-console.log('[LW-2] StreamlinedWorkoutSession module loaded successfully', {
+// [LW-1 DIAGNOSTIC] Log module load success (pure console log - no storage writes)
+console.log('[LW-3] StreamlinedWorkoutSession module loaded', {
   version: STREAMLINED_WORKOUT_VERSION,
-  bootStages: BOOT_STAGES.length,
   timestamp: Date.now(),
 })
 
@@ -816,38 +813,32 @@ export function StreamlinedWorkoutSession({
   // [AUTHORITATIVE-HYDRATION-CONTRACT] ONE SAFE SESSION CONTRACT
   // This is the ONLY session object used throughout the component
   // All downstream code reads from this, NEVER from raw session
+  // [PHASE LW3] Now pure - no logStage or recordBootError during render
   // ==========================================================================
   const safeWorkoutSessionContract = useMemo(() => {
-    // [LW-1 DIAGNOSTIC] Try-catch to identify any crash in this critical useMemo
-    try {
-      // STAGE: building_safe_session_contract
-      logStage('safe_session_building')
-      
-      // [PHASE LW2-FIX] Handle invalid session by returning a minimal fallback contract
-      // This allows all hooks to be called, then we show the error UI in the render section
-      if (!sessionIsValid) {
-        console.warn('[LW-2] safeWorkoutSessionContract: session is invalid, returning empty contract')
-        return {
-          dayNumber: 0,
-          dayLabel: '__INVALID_SESSION__',
-          focus: 'general',
-          focusLabel: 'Training',
-          rationale: '',
-          estimatedMinutes: 45,
-          isPrimary: true,
-          finisherIncluded: false,
-          exercises: [],
-          warmup: [],
-          cooldown: [],
-        }
+    // [PHASE LW2-FIX] Handle invalid session by returning a minimal fallback contract
+    // This allows all hooks to be called, then we show the error UI in the render section
+    if (!sessionIsValid) {
+      return {
+        dayNumber: 0,
+        dayLabel: '__INVALID_SESSION__',
+        focus: 'general',
+        focusLabel: 'Training',
+        rationale: '',
+        estimatedMinutes: 45,
+        isPrimary: true,
+        finisherIncluded: false,
+        exercises: [],
+        warmup: [],
+        cooldown: [],
       }
-      
-      // Normalize exercises with full safety - drop malformed entries
-      const rawExercises = Array.isArray(session?.exercises) ? session.exercises : []
+    }
+    
+    // Normalize exercises with full safety - drop malformed entries
+    const rawExercises = Array.isArray(session?.exercises) ? session.exercises : []
     const normalizedExercises = rawExercises.map((ex, idx) => {
       // Skip completely invalid entries
       if (!ex || typeof ex !== 'object') {
-        console.warn(`[AUTHORITATIVE-CONTRACT] Dropped malformed exercise at index ${idx}: not an object`)
         return null
       }
       
@@ -889,7 +880,7 @@ export function StreamlinedWorkoutSession({
     }).filter((ex): ex is NonNullable<typeof ex> => ex !== null)
     
     // Build the authoritative contract
-    const contract = {
+    return {
       // Session identity
       dayNumber: typeof session.dayNumber === 'number' ? session.dayNumber : 1,
       dayLabel: typeof session.dayLabel === 'string' && session.dayLabel ? session.dayLabel : 'Workout',
@@ -911,35 +902,7 @@ export function StreamlinedWorkoutSession({
       warmup: Array.isArray(session.warmup) ? session.warmup : [],
       cooldown: Array.isArray(session.cooldown) ? session.cooldown : [],
     }
-    
-    logStage('safe_session_built', {
-      dayLabel: contract.dayLabel,
-      dayNumber: contract.dayNumber,
-      exerciseCount: contract.exercises.length,
-      droppedCount: rawExercises.length - normalizedExercises.length,
-    })
-    
-    return contract
-    } catch (error) {
-      // [PHASE LW2] Record error in boot ledger and log
-      recordBootError('safe_session_build_start', error instanceof Error ? error : new Error(String(error)))
-      console.error('[LW-2] CRITICAL: safeWorkoutSessionContract build failed:', error)
-      // Return a minimal safe contract to prevent total crash
-      return {
-        dayNumber: 1,
-        dayLabel: 'Workout',
-        focus: 'general',
-        focusLabel: 'Training',
-        rationale: '',
-        estimatedMinutes: 45,
-        isPrimary: true,
-        finisherIncluded: false,
-        exercises: [],
-        warmup: [],
-        cooldown: [],
-      }
-    }
-  }, [session, logStage, sessionIsValid])
+  }, [session, sessionIsValid])
   
   // ALIAS: For backward compatibility, also expose as safeSession
   const safeSession = safeWorkoutSessionContract
@@ -985,76 +948,25 @@ export function StreamlinedWorkoutSession({
   const [existingSession, setExistingSession] = useState<SavedSessionInfo | null>(null)
   const [showResumePrompt, setShowResumePrompt] = useState(false)
   
-  // Try to restore from storage - demo sessions never restore
-  const [state, setState] = useState<WorkoutSessionState>(() => {
-    // Don't try to restore demo sessions
-    if (isDemoSession) {
-      // [PHASE LW2] Mark restore skipped for demo mode
-      markBootStage('restore_state_check_done', {
-        restoreWasAttempted: false,
-        restoreWasAccepted: false,
-        restoreRejectReason: 'demo_mode',
-      })
-      return {
-        status: 'ready',
-        currentExerciseIndex: 0,
-        currentSetNumber: 1,
-        completedSets: [],
-        startTime: null,
-        elapsedSeconds: 0,
-        lastSetRPE: null,
-        workoutNotes: '',
-        exerciseOverrides: {},
-      }
-    }
-    
-    // Get exercise count for validation
-    const exerciseCount = safeSession.exercises?.length ?? 0
-    
-    // [LIVE-SESSION-LOCK] Generate signature for restore validation
-    const currentSignature = generateSessionStructureSignature(safeSession)
-    
-    // [PHASE LW2] Mark restore check start in boot ledger
-    markBootStage('restore_state_check_start', {
-      restoreWasAttempted: true,
-    })
-    
-    // Try to restore real sessions (with structure signature validation)
-    const saved = loadSessionFromStorage(sessionId, exerciseCount, currentSignature)
-    if (saved && saved.status !== 'completed') {
-      // [PHASE LW2] Mark restore accepted
-      markBootStage('restore_state_check_done', {
-        restoreWasAccepted: true,
-        restoreRejectReason: null,
-        currentExerciseIndex: saved.currentExerciseIndex,
-      })
-      console.log('[workout-restore] Restored saved state with signature validation', {
-        sessionId,
-        structureSignature: currentSignature,
-        restoredExerciseIndex: saved.currentExerciseIndex,
-        restoredSetNumber: saved.currentSetNumber,
-        completedSetsCount: saved.completedSets?.length ?? 0,
-      })
-      return saved
-    }
-    
-    // [PHASE LW2] Mark restore rejected or no saved state
-    markBootStage('restore_state_check_done', {
-      restoreWasAccepted: false,
-      restoreRejectReason: saved ? 'completed_session' : 'no_saved_state',
-    })
-    return {
-      status: 'ready',
-      currentExerciseIndex: 0,
-      currentSetNumber: 1,
-      completedSets: [],
-      startTime: null,
-      elapsedSeconds: 0,
-      lastSetRPE: null,
-      workoutNotes: '',
-      exerciseOverrides: {},
-    }
+  // [PHASE LW3] PURE DEFAULT STATE - No side effects during render
+  // Restore/hydration happens in a dedicated useEffect below
+  const [state, setState] = useState<WorkoutSessionState>({
+    status: 'ready',
+    currentExerciseIndex: 0,
+    currentSetNumber: 1,
+    completedSets: [],
+    startTime: null,
+    elapsedSeconds: 0,
+    lastSetRPE: null,
+    workoutNotes: '',
+    exerciseOverrides: {},
   })
+  
+  // [PHASE LW3] Hydration gate - prevents half-hydrated first render
+  const [bootHydrationReady, setBootHydrationReady] = useState(false)
+  
+  // [PHASE LW3] Track if hydration effect has run to prevent double-apply in StrictMode
+  const hydrationAppliedRef = useRef<string | null>(null)
   
   // Check for resume prompt on mount - skip for demo sessions
   useEffect(() => {
@@ -1107,62 +1019,113 @@ export function StreamlinedWorkoutSession({
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   
   // ==========================================================================
-  // [AUTHORITATIVE-HYDRATION-CONTRACT] EXERCISE DERIVATION
-  // All exercise access MUST go through this chain, never raw session
-  // ==========================================================================
-  
-  // ==========================================================================
-  // [PHASE LW2-FIX] BOOT LEDGER INITIALIZATION
-  // This effect runs on mount to mark all early boot stages properly.
-  // We do this in useEffect instead of inline to comply with React hook rules.
+  // [PHASE LW3] AUTHORITATIVE SESSION HYDRATION EFFECT
+  // This is the ONLY place where restore from storage happens.
+  // All boot ledger writes happen here - never during render.
   // ==========================================================================
   useEffect(() => {
-    // Mark all the early stages that happened during initial render
+    // Generate hydration key to prevent double-apply in StrictMode
+    const hydrationKey = `${sessionId}::${sessionStructureSignature}`
+    
+    // Skip if already applied for this exact session
+    if (hydrationAppliedRef.current === hydrationKey) {
+      return
+    }
+    
+    // Mark boot stage: component entered
     markBootStage('component_enter', {
-      sessionId: null,
+      sessionId,
       dayLabel: safeWorkoutSessionContract.dayLabel,
       dayNumber: safeWorkoutSessionContract.dayNumber,
       exerciseCount: safeWorkoutSessionContract.exercises.length,
     })
+    
     markBootStage('session_validation', {
       exerciseCount: safeWorkoutSessionContract.exercises.length,
     })
+    
     markBootStage('safe_session_build_done', {
       dayLabel: safeWorkoutSessionContract.dayLabel,
       exerciseCount: safeWorkoutSessionContract.exercises.length,
     })
-    markBootStage('state_initialized', {
-      currentExerciseIndex: state.currentExerciseIndex,
-      status: state.status,
+    
+    // Demo sessions: skip restore entirely
+    if (isDemoSession) {
+      markBootStage('restore_state_check_done', {
+        restoreWasAttempted: false,
+        restoreWasAccepted: false,
+        restoreRejectReason: 'demo_mode',
+      })
+      markBootStage('state_initialized', {
+        currentExerciseIndex: 0,
+        status: 'ready',
+      })
+      markBootStage('core_boot_complete', { coreBootComplete: true })
+      hydrationAppliedRef.current = hydrationKey
+      setBootHydrationReady(true)
+      return
+    }
+    
+    // Real sessions: attempt restore
+    markBootStage('restore_state_check_start', {
+      restoreWasAttempted: true,
     })
+    
+    const exerciseCount = safeWorkoutSessionContract.exercises?.length ?? 0
+    const saved = loadSessionFromStorage(sessionId, exerciseCount, sessionStructureSignature)
+    
+    if (saved && saved.status !== 'completed') {
+      // Restore accepted
+      markBootStage('restore_state_check_done', {
+        restoreWasAccepted: true,
+        restoreRejectReason: null,
+        currentExerciseIndex: saved.currentExerciseIndex,
+      })
+      console.log('[workout-restore] Restored saved state with signature validation', {
+        sessionId,
+        structureSignature: sessionStructureSignature,
+        restoredExerciseIndex: saved.currentExerciseIndex,
+        restoredSetNumber: saved.currentSetNumber,
+        completedSetsCount: saved.completedSets?.length ?? 0,
+      })
+      setState(saved)
+      markBootStage('state_initialized', {
+        currentExerciseIndex: saved.currentExerciseIndex,
+        status: saved.status,
+      })
+    } else {
+      // Restore rejected or no saved state
+      markBootStage('restore_state_check_done', {
+        restoreWasAccepted: false,
+        restoreRejectReason: saved ? 'completed_session' : 'no_saved_state',
+      })
+      markBootStage('state_initialized', {
+        currentExerciseIndex: 0,
+        status: 'ready',
+      })
+    }
+    
+    markBootStage('core_boot_complete', { coreBootComplete: true })
+    hydrationAppliedRef.current = hydrationKey
+    setBootHydrationReady(true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Run once on mount only
+  }, [sessionId, sessionStructureSignature, isDemoSession])
   
-  // STAGE: state_initialized (legacy log)
-  logStage('state_initialized', { status: state.status, currentExerciseIndex: state.currentExerciseIndex })
+  // ==========================================================================
+  // [AUTHORITATIVE-HYDRATION-CONTRACT] EXERCISE DERIVATION
+  // All exercise access MUST go through this chain, never raw session
+  // [PHASE LW3] All boot ledger calls moved to effects - render is now pure
+  // ==========================================================================
   
   // Get exercises from authoritative contract ONLY
   const exercises = safeWorkoutSessionContract.exercises
   const hasValidExercises = exercises.length > 0
-  
-  // [PHASE LW2] Mark exercises derived in boot ledger
-  markBootStage('exercises_derived', {
-    exerciseCount: exercises.length,
-    firstExerciseName: exercises[0]?.name ?? null,
-  })
   
   // Clamp currentExerciseIndex to valid bounds
   const safeExerciseIndex = hasValidExercises 
     ? Math.max(0, Math.min(state.currentExerciseIndex, exercises.length - 1))
     : 0
   const isIndexOutOfBounds = hasValidExercises && state.currentExerciseIndex !== safeExerciseIndex
-  
-  // STAGE: current_exercise_resolved
-  logStage('current_exercise_resolved', { 
-    safeExerciseIndex, 
-    totalExercises: exercises.length,
-    isIndexOutOfBounds,
-  })
   
   // Derive current exercise from authoritative contract (already normalized/safe)
   const currentExercise = hasValidExercises ? exercises[safeExerciseIndex] : null
@@ -1235,41 +1198,49 @@ export function StreamlinedWorkoutSession({
   
   // ==========================================================================
   // [AUTHORITATIVE-HYDRATION-CONTRACT] RUNTIME TRUTH BUILDERS
-  // Build from authoritative contracts ONLY, with stage logging
+  // Build from authoritative contracts ONLY
+  // [PHASE LW3] All stage logging moved to effects - useMemo is now pure
   // ==========================================================================
   
-  // STAGE: session_runtime_truth_built
   const sessionRuntimeTruth = useMemo<SessionRuntimeTruth>(() => {
-    logStage('session_runtime_truth_building')
-    const truth = buildSessionRuntimeTruth(safeWorkoutSessionContract as AdaptiveSession, {
+    return buildSessionRuntimeTruth(safeWorkoutSessionContract as AdaptiveSession, {
       programId: null,
       workoutsCompleted: 0,
       sessionIndex: 0,
     })
-    logStage('session_runtime_truth_built', { sessionId: truth.sessionId, totalExerciseCount: truth.totalExerciseCount })
-    return truth
-  }, [safeWorkoutSessionContract, logStage])
+  }, [safeWorkoutSessionContract])
   
-  // STAGE: exercise_runtime_truth_built
   const exerciseRuntimeTruth = useMemo<ExerciseRuntimeTruth>(() => {
-    logStage('exercise_runtime_truth_building', { exerciseIndex: safeExerciseIndex })
     const overrideState = state.exerciseOverrides[safeExerciseIndex]
-    const truth = buildExerciseRuntimeTruth(safeCurrentExercise as AdaptiveExercise, safeExerciseIndex, overrideState ? {
+    return buildExerciseRuntimeTruth(safeCurrentExercise as AdaptiveExercise, safeExerciseIndex, overrideState ? {
       isOverridden: !!(overrideState.isReplaced || overrideState.isProgressionAdjusted || overrideState.isSkipped),
       overrideType: overrideState.isReplaced ? 'replaced' : overrideState.isProgressionAdjusted ? 'progression_adjusted' : overrideState.isSkipped ? 'skipped' : null,
       currentName: overrideState.currentName,
     } : undefined)
-    logStage('exercise_runtime_truth_built', { exerciseId: truth.exerciseId, exerciseName: truth.exerciseName })
-    return truth
-  }, [safeCurrentExercise, safeExerciseIndex, state.exerciseOverrides, logStage])
+  }, [safeCurrentExercise, safeExerciseIndex, state.exerciseOverrides])
   
-  // STAGE: calibration_message_built
   const calibrationMessage = useMemo(() => {
-    logStage('calibration_message_building')
-    const msg = getCalibrationMessage(sessionRuntimeTruth)
-    logStage('calibration_message_built', { hasMessage: !!msg })
-    return msg
-  }, [sessionRuntimeTruth, logStage])
+    return getCalibrationMessage(sessionRuntimeTruth)
+  }, [sessionRuntimeTruth])
+  
+  // [PHASE LW3] Effect-based boot diagnostics - runs after derivations are computed
+  useEffect(() => {
+    if (!bootHydrationReady) return
+    
+    markBootStage('exercises_derived', {
+      exerciseCount: exercises.length,
+      firstExerciseName: exercises[0]?.name ?? null,
+    })
+    markBootStage('session_runtime_truth_build_done', { 
+      sessionId: sessionRuntimeTruth.sessionId, 
+      totalExerciseCount: sessionRuntimeTruth.totalExerciseCount 
+    })
+    markBootStage('exercise_runtime_truth_build_done', { 
+      exerciseId: exerciseRuntimeTruth.exerciseId, 
+      exerciseName: exerciseRuntimeTruth.exerciseName 
+    })
+    markBootStage('calibration_message_built', { hasMessage: !!calibrationMessage })
+  }, [bootHydrationReady, exercises, sessionRuntimeTruth, exerciseRuntimeTruth, calibrationMessage])
   
   // Repair index if out of bounds (happens on next render cycle)
   useEffect(() => {
@@ -1285,144 +1256,97 @@ export function StreamlinedWorkoutSession({
   // ==========================================================================
   // [PHASE LW2] ACTIVE WORKOUT VIEW MODEL
   // Single authoritative model for all active render values.
-  // Centralizes all derivations and ensures all values are safe before render.
+  // [PHASE LW3] Now pure - no boot ledger writes during render
   // ==========================================================================
   const activeWorkoutViewModel = useMemo(() => {
-    try {
-      markBootStage('active_viewmodel_build_start')
-      
-      // Core session identity
-      const safeSessionId = sessionId || 'unknown-session'
-      const safeDayLabel = safeWorkoutSessionContract.dayLabel || 'Workout'
-      const safeDayNumber = safeWorkoutSessionContract.dayNumber || 1
+    // Core session identity
+    const safeSessionId = sessionId || 'unknown-session'
+    const safeDayLabel = safeWorkoutSessionContract.dayLabel || 'Workout'
+    const safeDayNumber = safeWorkoutSessionContract.dayNumber || 1
+    
+    // Exercise counts
+    const safeExerciseCount = exercises.length
+    const safeTotalSets = exercises.reduce((sum, ex) => sum + (ex?.sets ?? 3), 0)
+    const safeCompletedSetsCount = state.completedSets?.length ?? 0
+    
+    // Current exercise position (bounded)
+    const safeCurrentIndex = Math.max(0, Math.min(state.currentExerciseIndex, Math.max(0, exercises.length - 1)))
+    const safeCurrentSetNumber = Math.max(1, Math.min(state.currentSetNumber, safeCurrentExercise.sets || 3))
+    
+    // Current exercise details (from safe contract)
+    const currentExerciseName = safeCurrentExercise.name || 'Exercise'
+    const currentExerciseCategory = safeCurrentExercise.category || 'general'
+    const currentExerciseSets = safeCurrentExercise.sets || 3
+    const currentExerciseRepsOrTime = safeCurrentExercise.repsOrTime || '8-12 reps'
+    const currentExerciseNote = safeCurrentExercise.note || ''
+    
+    // Next exercise info (bounded)
+    const hasNextExercise = safeCurrentIndex < exercises.length - 1
+    const nextExercise = hasNextExercise ? exercises[safeCurrentIndex + 1] : null
+    const nextExerciseName = nextExercise?.name || null
+    const nextExerciseCategory = nextExercise?.category || null
+    
+    // Derived booleans
+    const isHoldType = safeLower(currentExerciseRepsOrTime).includes('sec') || 
+                       safeLower(currentExerciseRepsOrTime).includes('hold')
+    const hasLoad = !!(safeCurrentExercise.prescribedLoad?.load && safeCurrentExercise.prescribedLoad.load > 0)
+    const isLastExercise = safeCurrentIndex >= exercises.length - 1
+    const isLastSet = safeCurrentSetNumber >= currentExerciseSets
+    const isWorkoutComplete = isLastExercise && isLastSet
+    
+    // Safe display strings
+    const setDisplay = `Set ${safeCurrentSetNumber}/${currentExerciseSets}`
+    const exerciseProgress = `${safeCurrentIndex + 1}/${safeExerciseCount}`
+    const setsProgress = `${safeCompletedSetsCount}/${safeTotalSets}`
+    
+    // Load display
+    const loadDisplay = hasLoad 
+      ? `@ +${safeCurrentExercise.prescribedLoad!.load} ${safeCurrentExercise.prescribedLoad!.unit}`
+      : null
+    
+    return {
+      // Identity
+      sessionId: safeSessionId,
+      dayLabel: safeDayLabel,
+      dayNumber: safeDayNumber,
       
       // Exercise counts
-      const safeExerciseCount = exercises.length
-      const safeTotalSets = exercises.reduce((sum, ex) => sum + (ex?.sets ?? 3), 0)
-      const safeCompletedSetsCount = state.completedSets?.length ?? 0
+      totalExercises: safeExerciseCount,
+      totalSets: safeTotalSets,
+      completedSetsCount: safeCompletedSetsCount,
       
-      // Current exercise position (bounded)
-      const safeCurrentIndex = Math.max(0, Math.min(state.currentExerciseIndex, Math.max(0, exercises.length - 1)))
-      const safeCurrentSetNumber = Math.max(1, Math.min(state.currentSetNumber, safeCurrentExercise.sets || 3))
+      // Current position
+      currentExerciseIndex: safeCurrentIndex,
+      currentSetNumber: safeCurrentSetNumber,
       
-      // Current exercise details (from safe contract)
-      const currentExerciseName = safeCurrentExercise.name || 'Exercise'
-      const currentExerciseCategory = safeCurrentExercise.category || 'general'
-      const currentExerciseSets = safeCurrentExercise.sets || 3
-      const currentExerciseRepsOrTime = safeCurrentExercise.repsOrTime || '8-12 reps'
-      const currentExerciseNote = safeCurrentExercise.note || ''
+      // Current exercise
+      currentExerciseName,
+      currentExerciseCategory,
+      currentExerciseSets,
+      currentExerciseRepsOrTime,
+      currentExerciseNote,
       
-      // Next exercise info (bounded)
-      const hasNextExercise = safeCurrentIndex < exercises.length - 1
-      const nextExercise = hasNextExercise ? exercises[safeCurrentIndex + 1] : null
-      const nextExerciseName = nextExercise?.name || null
-      const nextExerciseCategory = nextExercise?.category || null
+      // Next exercise
+      hasNextExercise,
+      nextExerciseName,
+      nextExerciseCategory,
       
       // Derived booleans
-      const isHoldType = safeLower(currentExerciseRepsOrTime).includes('sec') || 
-                         safeLower(currentExerciseRepsOrTime).includes('hold')
-      const hasLoad = !!(safeCurrentExercise.prescribedLoad?.load && safeCurrentExercise.prescribedLoad.load > 0)
-      const isLastExercise = safeCurrentIndex >= exercises.length - 1
-      const isLastSet = safeCurrentSetNumber >= currentExerciseSets
-      const isWorkoutComplete = isLastExercise && isLastSet
+      isHoldExercise: isHoldType,
+      hasLoad,
+      isLastExercise,
+      isLastSet,
+      isWorkoutComplete,
+      hasValidExercises: safeExerciseCount > 0,
       
-      // Safe display strings
-      const setDisplay = `Set ${safeCurrentSetNumber}/${currentExerciseSets}`
-      const exerciseProgress = `${safeCurrentIndex + 1}/${safeExerciseCount}`
-      const setsProgress = `${safeCompletedSetsCount}/${safeTotalSets}`
+      // Display strings
+      setDisplay,
+      exerciseProgress,
+      setsProgress,
+      loadDisplay,
       
-      // Load display
-      const loadDisplay = hasLoad 
-        ? `@ +${safeCurrentExercise.prescribedLoad!.load} ${safeCurrentExercise.prescribedLoad!.unit}`
-        : null
-      
-      const viewModel = {
-        // Identity
-        sessionId: safeSessionId,
-        dayLabel: safeDayLabel,
-        dayNumber: safeDayNumber,
-        
-        // Exercise counts
-        totalExercises: safeExerciseCount,
-        totalSets: safeTotalSets,
-        completedSetsCount: safeCompletedSetsCount,
-        
-        // Current position
-        currentExerciseIndex: safeCurrentIndex,
-        currentSetNumber: safeCurrentSetNumber,
-        
-        // Current exercise
-        currentExerciseName,
-        currentExerciseCategory,
-        currentExerciseSets,
-        currentExerciseRepsOrTime,
-        currentExerciseNote,
-        
-        // Next exercise
-        hasNextExercise,
-        nextExerciseName,
-        nextExerciseCategory,
-        
-        // Derived booleans
-        isHoldExercise: isHoldType,
-        hasLoad,
-        isLastExercise,
-        isLastSet,
-        isWorkoutComplete,
-        hasValidExercises: safeExerciseCount > 0,
-        
-        // Display strings
-        setDisplay,
-        exerciseProgress,
-        setsProgress,
-        loadDisplay,
-        
-        // Validation flag
-        isValid: safeExerciseCount > 0 && currentExerciseName !== 'Exercise',
-      }
-      
-      markBootStage('active_viewmodel_build_done', {
-        sessionId: viewModel.sessionId,
-        exerciseCount: viewModel.totalExercises,
-        currentExerciseIndex: viewModel.currentExerciseIndex,
-        isValid: viewModel.isValid,
-      })
-      
-      return viewModel
-    } catch (error) {
-      recordBootError('active_viewmodel_build_start', error instanceof Error ? error : new Error(String(error)))
-      console.error('[ACTIVE-VIEWMODEL] Build failed:', error)
-      
-      // Return minimal safe fallback
-      return {
-        sessionId: 'error-session',
-        dayLabel: 'Workout',
-        dayNumber: 1,
-        totalExercises: 0,
-        totalSets: 0,
-        completedSetsCount: 0,
-        currentExerciseIndex: 0,
-        currentSetNumber: 1,
-        currentExerciseName: 'Exercise',
-        currentExerciseCategory: 'general',
-        currentExerciseSets: 3,
-        currentExerciseRepsOrTime: '8-12 reps',
-        currentExerciseNote: '',
-        hasNextExercise: false,
-        nextExerciseName: null,
-        nextExerciseCategory: null,
-        isHoldExercise: false,
-        hasLoad: false,
-        isLastExercise: true,
-        isLastSet: false,
-        isWorkoutComplete: false,
-        hasValidExercises: false,
-        setDisplay: 'Set 1/3',
-        exerciseProgress: '0/0',
-        setsProgress: '0/0',
-        loadDisplay: null,
-        isValid: false,
-      }
+      // Validation flag
+      isValid: safeExerciseCount > 0 && currentExerciseName !== 'Exercise',
     }
   }, [
     sessionId, 
@@ -2343,30 +2267,11 @@ export function StreamlinedWorkoutSession({
   }
   
   // ==========================================================================
-  // [PHASE LW2] RENDER ENTRY VERIFICATION + BOOT LEDGER MARKERS
-  // Final stage markers before render paths
+  // [PHASE LW3] RENDER ENTRY - Boot ledger calls moved to effects (render-pure)
   // ==========================================================================
   
-  // [PHASE LW2] Mark render entry start in boot ledger
-  markBootStage('render_entry_start', {
-    sessionId,
-    dayLabel: safeWorkoutSessionContract.dayLabel,
-    dayNumber: safeWorkoutSessionContract.dayNumber,
-    exerciseCount: exercises.length,
-    currentExerciseIndex: safeExerciseIndex,
-    firstExerciseName: safeCurrentExercise.name,
-  })
-  
-  // STAGE: reasoning_helpers_built
-  logStage('reasoning_helpers_built', {
-    hasValidExercises,
-    safeExerciseIndex,
-    exerciseName: safeCurrentExercise.name,
-    exerciseSets: safeCurrentExercise.sets,
-    status: state.status,
-  })
-  
   useEffect(() => {
+    if (!bootHydrationReady) return
     // [PHASE LW2] Mark live_workout_ready - render completed successfully
     // [PHASE LW2] Mark active state render complete if in active state
     if (state.status === 'active') {
@@ -2423,12 +2328,29 @@ export function StreamlinedWorkoutSession({
   }, [sessionId, exercises.length, safeExerciseIndex, safeCurrentExercise.name, sessionRuntimeTruth, exerciseRuntimeTruth, isDemoSession, safeSession.estimatedMinutes, state.completedSets.length, state.status, hasValidExercises])
   
   // ==========================================================================
+  // [PHASE LW3] HYDRATION GATE - Wait for hydration before showing UI
+  // This prevents half-hydrated first render from racing restore logic
+  // ==========================================================================
+  
+  if (!bootHydrationReady) {
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="w-12 h-12 rounded-full bg-[#1A1F26] border border-[#2B313A] flex items-center justify-center mx-auto mb-4 animate-pulse">
+            <Dumbbell className="w-6 h-6 text-[#C1121F]" />
+          </div>
+          <p className="text-[#A4ACB8]">Preparing workout...</p>
+        </div>
+      </div>
+    )
+  }
+  
+  // ==========================================================================
   // RENDER: SAFETY FALLBACK - Invalid Session (Route should have caught this)
-  // This handles the case where session was null/invalid but we needed all hooks to run
+  // [PHASE LW3] recordBootError moved to useEffect - render is pure
   // ==========================================================================
   
   if (!sessionIsValid) {
-    recordBootError('session_validation', 'Session is null or not an object')
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
         <div className="text-center max-w-sm">
@@ -2447,11 +2369,10 @@ export function StreamlinedWorkoutSession({
 
   // ==========================================================================
   // RENDER: SAFETY FALLBACK - No Valid Exercises (Controlled Route-Level Failure)
-  // This is a CONTROLLED exit, not a crash - exercises array is empty
+  // [PHASE LW3] logStage removed - render is pure
   // ==========================================================================
   
   if (!hasValidExercises) {
-    logStage('render_exit_no_exercises', { exerciseCount: exercises.length })
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
         <div className="text-center max-w-sm">
@@ -2474,9 +2395,6 @@ export function StreamlinedWorkoutSession({
       </div>
     )
   }
-  
-  // STAGE: render_header_ready - Exercises validated, proceeding to render
-  logStage('render_header_ready', { status: state.status })
   
   // ==========================================================================
   // RENDER: RESUME PROMPT
@@ -2558,19 +2476,10 @@ export function StreamlinedWorkoutSession({
   
   // ==========================================================================
   // RENDER: READY STATE
+  // [PHASE LW3] Boot stage calls moved to effects - render is pure
   // ==========================================================================
   
-  // [DISPLAY-CONTRACT] Log ready state entry for crash diagnosis
   if (state.status === 'ready') {
-    // [PHASE LW2] Mark core boot complete for ready state
-    markBootStage('core_boot_complete', {
-      coreBootComplete: true,
-      sessionId,
-      dayLabel: safeWorkoutSessionContract.dayLabel,
-      exerciseCount: exercises.length,
-      currentExerciseIndex: 0,
-      firstExerciseName: exercises[0]?.name ?? null,
-    })
     
     console.log('[ready-state-entry]', {
       componentVersion: STREAMLINED_WORKOUT_VERSION,
@@ -3114,11 +3023,11 @@ function InterExerciseRestCountdown({
   // RENDER: ACTIVE STATE (Main Set Logging)
   // [LIVE-WORKOUT-CORRIDOR] Use safeCurrentExercise for ALL render paths - never null check currentExercise
   // safeCurrentExercise always has valid fallback values, so no null guard needed
+  // [PHASE LW3] recordBootError removed - render is pure
   // ==========================================================================
   
   // [PHASE LW2] ACTIVE STATE VALIDATION - Controlled local fallback instead of crash
   if (!activeWorkoutViewModel.isValid || !activeWorkoutViewModel.hasValidExercises) {
-    recordBootError('active_state_entry', new Error('Active view model invalid at render time'))
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
         <div className="text-center max-w-sm">
@@ -3163,15 +3072,7 @@ function InterExerciseRestCountdown({
     )
   }
   
-  // [PHASE LW2] Mark core boot complete - we've reached the main render path successfully
-  markBootStage('core_boot_complete', {
-    coreBootComplete: true,
-    sessionId,
-    dayLabel: safeWorkoutSessionContract.dayLabel,
-    exerciseCount: exercises.length,
-    currentExerciseIndex: safeExerciseIndex,
-    firstExerciseName: safeCurrentExercise.name,
-  })
+  // [PHASE LW3] Boot stage calls moved to effects - render is pure
   
   const targetRPE = 8 // Default target
   const targetValue = getTargetValue()

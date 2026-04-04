@@ -45,9 +45,9 @@ import { Dumbbell, AlertTriangle } from 'lucide-react'
 // [PHASE-X] Kept for potential local use - main loading is via authoritative loader
 import { getSessionDiagnostic } from '@/lib/workout/validate-session'
 // [PHASE-X+1] Authoritative session loader - SINGLE ENTRY POINT
+// [PHASE LW3] calculateSessionIndex removed - loader now resolves index internally from real program state
 import { 
   loadAuthoritativeSession, 
-  calculateSessionIndex,
   type SessionMeta,
   type AuthoritativeSessionResult,
 } from '@/lib/workout/load-authoritative-session'
@@ -514,18 +514,11 @@ function WorkoutSessionContent() {
         timestamp: new Date().toISOString(),
       })
       
-      // Calculate session index (only needed for non-demo mode, but we need a default)
-      // For demo mode, this is ignored. For real mode, we calculate based on params.
-      let sessionIndex = 0
-      if (!demoMode) {
-        // Get total session count (we'll get actual count from loader, use 6 as safe default)
-        const estimatedSessions = 6
-        sessionIndex = calculateSessionIndex(dayParam, isFirstSession, estimatedSessions)
-      }
-      
-      // Load session using AUTHORITATIVE LOADER
-      // This function NEVER throws and NEVER returns null
-      const result: AuthoritativeSessionResult = await loadAuthoritativeSession(sessionIndex, {
+      // [PHASE LW3] Load session using AUTHORITATIVE LOADER with intent-based API
+      // The loader internally resolves session index from REAL program state
+      // NO MORE GUESSED SESSION COUNT - the loader reads actual program.sessions.length
+      const result: AuthoritativeSessionResult = await loadAuthoritativeSession({
+        dayParam,
         isDemo: demoMode,
         isFirstSession,
       })
@@ -539,8 +532,8 @@ function WorkoutSessionContent() {
         dayLabel: result.session.dayLabel,
       })
       
-      // Log the result
-      console.log('[PHASE LW2] SESSION_LOAD_COMPLETE', {
+      // [PHASE LW3] Log the result with real session index truth
+      console.log('[PHASE LW3] SESSION_LOAD_COMPLETE', {
         routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
         source: result.meta.source,
         validationPassed: result.meta.validationPassed,
@@ -548,6 +541,13 @@ function WorkoutSessionContent() {
         fallbackReason: result.meta.fallbackReason,
         dayLabel: result.session.dayLabel,
         exerciseCount: result.session.exercises.length,
+        // [PHASE LW3] Real session index truth diagnostics
+        sessionCount: result.meta.sessionCount,
+        resolvedSessionIndex: result.meta.resolvedSessionIndex,
+        requestedDayParam: result.meta.requestedDayParam,
+        dayParam,
+        isFirstSession,
+        demoMode,
       })
       
       // Set session and meta - GUARANTEED to have valid session

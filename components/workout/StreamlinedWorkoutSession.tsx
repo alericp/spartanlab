@@ -217,11 +217,134 @@ const STORAGE_KEY = 'spartanlab_workout_session'
 const STORAGE_SCHEMA_VERSION = 'workout_session_v2'
 
 // [PHASE-X+1] Version stamp for execution proof
-const STREAMLINED_WORKOUT_VERSION = 'phase_lw1_first_render_fix_v1'
+const STREAMLINED_WORKOUT_VERSION = 'phase_lw2_boot_ledger_v1'
+
+// =============================================================================
+// [PHASE LW2] AUTHORITATIVE BOOT LEDGER
+// Tracks every boot stage with deterministic markers for crash recovery analysis
+// =============================================================================
+
+const BOOT_STAGES = [
+  'module_loaded',
+  'component_enter',
+  'session_validation',
+  'safe_session_build_start',
+  'safe_session_build_done',
+  'restore_state_check_start',
+  'restore_state_check_done',
+  'state_initialized',
+  'exercises_derived',
+  'current_exercise_resolved',
+  'session_runtime_truth_build_start',
+  'session_runtime_truth_build_done',
+  'exercise_runtime_truth_build_start',
+  'exercise_runtime_truth_build_done',
+  'calibration_message_built',
+  'render_entry_start',
+  'core_header_render_start',
+  'core_execution_card_render_start',
+  'core_boot_complete',
+  'optional_blocks_mount_start',
+  'optional_blocks_mount_done',
+  'live_workout_ready',
+] as const
+
+type BootStage = typeof BOOT_STAGES[number]
+
+interface BootLedgerState {
+  routeVersion: string
+  componentVersion: string
+  currentStage: BootStage
+  stages: Record<BootStage, number | null>
+  sessionId: string | null
+  dayLabel: string | null
+  dayNumber: number | null
+  exerciseCount: number | null
+  currentExerciseIndex: number | null
+  firstExerciseName: string | null
+  restoreWasAttempted: boolean
+  restoreWasAccepted: boolean
+  restoreRejectReason: string | null
+  coreBootComplete: boolean
+  optionalBlocksMounted: boolean
+  errors: Array<{ stage: BootStage; error: string; timestamp: number }>
+}
+
+function createEmptyBootLedger(): BootLedgerState {
+  const stages: Record<BootStage, number | null> = {} as Record<BootStage, number | null>
+  for (const stage of BOOT_STAGES) {
+    stages[stage] = null
+  }
+  return {
+    routeVersion: 'unknown',
+    componentVersion: STREAMLINED_WORKOUT_VERSION,
+    currentStage: 'module_loaded',
+    stages,
+    sessionId: null,
+    dayLabel: null,
+    dayNumber: null,
+    exerciseCount: null,
+    currentExerciseIndex: null,
+    firstExerciseName: null,
+    restoreWasAttempted: false,
+    restoreWasAccepted: false,
+    restoreRejectReason: null,
+    coreBootComplete: false,
+    optionalBlocksMounted: false,
+    errors: [],
+  }
+}
+
+function getBootLedger(): BootLedgerState {
+  if (typeof window === 'undefined') return createEmptyBootLedger()
+  return (window as unknown as { __spartanlabBootLedger?: BootLedgerState }).__spartanlabBootLedger || createEmptyBootLedger()
+}
+
+function setBootLedger(ledger: BootLedgerState): void {
+  if (typeof window === 'undefined') return
+  ;(window as unknown as { __spartanlabBootLedger?: BootLedgerState }).__spartanlabBootLedger = ledger
+  // Also persist to sessionStorage for crash recovery
+  try {
+    sessionStorage.setItem('spartanlab_boot_ledger', JSON.stringify(ledger))
+  } catch {}
+}
+
+function markBootStage(stage: BootStage, data?: Partial<BootLedgerState>): void {
+  const ledger = getBootLedger()
+  ledger.currentStage = stage
+  ledger.stages[stage] = Date.now()
+  if (data) {
+    Object.assign(ledger, data)
+  }
+  // Update window marker for error boundary
+  if (typeof window !== 'undefined') {
+    (window as unknown as { __spartanlabWorkoutStage?: string }).__spartanlabWorkoutStage = stage
+  }
+  setBootLedger(ledger)
+  console.log(`[BOOT-LEDGER] ${stage}`, {
+    ...data,
+    timestamp: Date.now(),
+  })
+}
+
+function recordBootError(stage: BootStage, error: Error | string): void {
+  const ledger = getBootLedger()
+  ledger.errors.push({
+    stage,
+    error: typeof error === 'string' ? error : error.message,
+    timestamp: Date.now(),
+  })
+  setBootLedger(ledger)
+  console.error(`[BOOT-LEDGER] ERROR at ${stage}:`, error)
+}
+
+// Initialize boot ledger at module load
+markBootStage('module_loaded', { componentVersion: STREAMLINED_WORKOUT_VERSION })
 
 // [LW-1 DIAGNOSTIC] Log module load success
-console.log('[LW-1] StreamlinedWorkoutSession module loaded successfully', {
-  version: 'phase_lw1_first_render_fix_v1',
+console.log('[LW-2] StreamlinedWorkoutSession module loaded successfully', {
+  version: STREAMLINED_WORKOUT_VERSION,
+  bootStages: BOOT_STAGES.length,
   timestamp: Date.now(),
 })
 
@@ -597,7 +720,15 @@ export function StreamlinedWorkoutSession({
   isFirstSession = false
 }: StreamlinedWorkoutSessionProps) {
   // [LW-1 DIAGNOSTIC] Component function called - this runs before any hooks
-  console.log('[LW-1] StreamlinedWorkoutSession function entered', {
+  // [PHASE LW2] Mark component entry in boot ledger
+  markBootStage('component_enter', {
+    sessionId: null,
+    dayLabel: session?.dayLabel ?? null,
+    dayNumber: typeof session?.dayNumber === 'number' ? session.dayNumber : null,
+    exerciseCount: Array.isArray(session?.exercises) ? session.exercises.length : null,
+  })
+  
+  console.log('[LW-2] StreamlinedWorkoutSession function entered', {
     sessionProvided: !!session,
     sessionType: typeof session,
     sessionDayLabel: session?.dayLabel ?? 'undefined',
@@ -605,28 +736,53 @@ export function StreamlinedWorkoutSession({
   })
   
   // ==========================================================================
-  // [AUTHORITATIVE-HYDRATION-CONTRACT] STAGE LOGGING HELPER
-  // Single local logger for deterministic stage tracking - never crashes
+  // [PHASE LW2] BOOT LEDGER STAGE LOGGING HELPER
+  // Uses authoritative boot ledger for deterministic crash recovery
   // ==========================================================================
   const logStage = useCallback((stage: string, data?: Record<string, unknown>) => {
-    // Update global stage marker for crash recovery
-    if (typeof window !== 'undefined') {
-      (window as unknown as { __spartanlabWorkoutStage?: string }).__spartanlabWorkoutStage = stage
+    // Map old stage names to boot ledger stages where applicable
+    const stageMap: Record<string, BootStage> = {
+      'component_entry': 'component_enter',
+      'safe_session_building': 'safe_session_build_start',
+      'safe_session_built': 'safe_session_build_done',
+      'state_initialized': 'state_initialized',
+      'current_exercise_resolved': 'current_exercise_resolved',
+      'session_runtime_truth_building': 'session_runtime_truth_build_start',
+      'session_runtime_truth_built': 'session_runtime_truth_build_done',
+      'exercise_runtime_truth_building': 'exercise_runtime_truth_build_start',
+      'exercise_runtime_truth_built': 'exercise_runtime_truth_build_done',
+      'calibration_message_building': 'calibration_message_built',
+      'calibration_message_built': 'calibration_message_built',
     }
-    console.log(`[WORKOUT-STAGE] ${stage}`, {
-      componentVersion: STREAMLINED_WORKOUT_VERSION,
-      timestamp: Date.now(),
-      ...data,
-    })
+    
+    const bootStage = stageMap[stage]
+    if (bootStage) {
+      markBootStage(bootStage, data as Partial<BootLedgerState>)
+    } else {
+      // Legacy logging for unmapped stages
+      if (typeof window !== 'undefined') {
+        (window as unknown as { __spartanlabWorkoutStage?: string }).__spartanlabWorkoutStage = stage
+      }
+      console.log(`[WORKOUT-STAGE] ${stage}`, {
+        componentVersion: STREAMLINED_WORKOUT_VERSION,
+        timestamp: Date.now(),
+        ...data,
+      })
+    }
   }, [])
   
   // STAGE: component_entry
   logStage('component_entry', { sessionProvided: !!session, sessionType: typeof session })
   
+  // [PHASE LW2] Mark session validation stage
+  markBootStage('session_validation', {
+    exerciseCount: Array.isArray(session?.exercises) ? session.exercises.length : null,
+  })
+  
   // CRITICAL: Early validation - if session is completely invalid, render fallback immediately
   // This prevents any downstream code from crashing on a null/undefined session
   if (!session || typeof session !== 'object') {
-    logStage('early_exit_invalid_session')
+    recordBootError('session_validation', 'Session is null or not an object')
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
         <div className="text-center max-w-sm">
@@ -733,8 +889,9 @@ export function StreamlinedWorkoutSession({
     
     return contract
     } catch (error) {
-      // [LW-1 DIAGNOSTIC] Catch any unexpected crash in contract building
-      console.error('[LW-1] CRITICAL: safeWorkoutSessionContract build failed:', error)
+      // [PHASE LW2] Record error in boot ledger and log
+      recordBootError('safe_session_build_start', error instanceof Error ? error : new Error(String(error)))
+      console.error('[LW-2] CRITICAL: safeWorkoutSessionContract build failed:', error)
       // Return a minimal safe contract to prevent total crash
       return {
         dayNumber: 1,
@@ -800,6 +957,12 @@ export function StreamlinedWorkoutSession({
   const [state, setState] = useState<WorkoutSessionState>(() => {
     // Don't try to restore demo sessions
     if (isDemoSession) {
+      // [PHASE LW2] Mark restore skipped for demo mode
+      markBootStage('restore_state_check_done', {
+        restoreWasAttempted: false,
+        restoreWasAccepted: false,
+        restoreRejectReason: 'demo_mode',
+      })
       return {
         status: 'ready',
         currentExerciseIndex: 0,
@@ -819,9 +982,20 @@ export function StreamlinedWorkoutSession({
     // [LIVE-SESSION-LOCK] Generate signature for restore validation
     const currentSignature = generateSessionStructureSignature(safeSession)
     
+    // [PHASE LW2] Mark restore check start in boot ledger
+    markBootStage('restore_state_check_start', {
+      restoreWasAttempted: true,
+    })
+    
     // Try to restore real sessions (with structure signature validation)
     const saved = loadSessionFromStorage(sessionId, exerciseCount, currentSignature)
     if (saved && saved.status !== 'completed') {
+      // [PHASE LW2] Mark restore accepted
+      markBootStage('restore_state_check_done', {
+        restoreWasAccepted: true,
+        restoreRejectReason: null,
+        currentExerciseIndex: saved.currentExerciseIndex,
+      })
       console.log('[workout-restore] Restored saved state with signature validation', {
         sessionId,
         structureSignature: currentSignature,
@@ -831,6 +1005,12 @@ export function StreamlinedWorkoutSession({
       })
       return saved
     }
+    
+    // [PHASE LW2] Mark restore rejected or no saved state
+    markBootStage('restore_state_check_done', {
+      restoreWasAccepted: false,
+      restoreRejectReason: saved ? 'completed_session' : 'no_saved_state',
+    })
     return {
       status: 'ready',
       currentExerciseIndex: 0,
@@ -905,6 +1085,12 @@ export function StreamlinedWorkoutSession({
   // Get exercises from authoritative contract ONLY
   const exercises = safeWorkoutSessionContract.exercises
   const hasValidExercises = exercises.length > 0
+  
+  // [PHASE LW2] Mark exercises derived in boot ledger
+  markBootStage('exercises_derived', {
+    exerciseCount: exercises.length,
+    firstExerciseName: exercises[0]?.name ?? null,
+  })
   
   // Clamp currentExerciseIndex to valid bounds
   const safeExerciseIndex = hasValidExercises 
@@ -1925,9 +2111,19 @@ export function StreamlinedWorkoutSession({
   }
   
   // ==========================================================================
-  // [AUTHORITATIVE-HYDRATION-CONTRACT] RENDER ENTRY VERIFICATION
+  // [PHASE LW2] RENDER ENTRY VERIFICATION + BOOT LEDGER MARKERS
   // Final stage markers before render paths
   // ==========================================================================
+  
+  // [PHASE LW2] Mark render entry start in boot ledger
+  markBootStage('render_entry_start', {
+    sessionId,
+    dayLabel: safeWorkoutSessionContract.dayLabel,
+    dayNumber: safeWorkoutSessionContract.dayNumber,
+    exerciseCount: exercises.length,
+    currentExerciseIndex: safeExerciseIndex,
+    firstExerciseName: safeCurrentExercise.name,
+  })
   
   // STAGE: reasoning_helpers_built
   logStage('reasoning_helpers_built', {
@@ -1939,6 +2135,17 @@ export function StreamlinedWorkoutSession({
   })
   
   useEffect(() => {
+    // [PHASE LW2] Mark live_workout_ready - render completed successfully
+    markBootStage('live_workout_ready', {
+      sessionId,
+      dayLabel: safeWorkoutSessionContract.dayLabel,
+      exerciseCount: exercises.length,
+      currentExerciseIndex: safeExerciseIndex,
+      firstExerciseName: safeCurrentExercise.name,
+      coreBootComplete: true,
+      optionalBlocksMounted: true, // Optional blocks have mounted if we got here
+    })
+    
     // STAGE: render_contract_verified (effect runs after successful render)
     logStage('render_contract_verified', {
       hasValidExercises,
@@ -1949,7 +2156,7 @@ export function StreamlinedWorkoutSession({
       currentSetNumber: state.currentSetNumber,
       sessionId,
     })
-  }, [hasValidExercises, safeExerciseIndex, safeCurrentExercise, state.status, state.currentSetNumber, sessionId, logStage])
+  }, [hasValidExercises, safeExerciseIndex, safeCurrentExercise, state.status, state.currentSetNumber, sessionId, logStage, safeWorkoutSessionContract.dayLabel, exercises.length])
   
   // ==========================================================================
   // RENDER: SAFETY FALLBACK - No Valid Exercises (Controlled Route-Level Failure)
@@ -2086,6 +2293,16 @@ export function StreamlinedWorkoutSession({
   
   // [DISPLAY-CONTRACT] Log ready state entry for crash diagnosis
   if (state.status === 'ready') {
+    // [PHASE LW2] Mark core boot complete for ready state
+    markBootStage('core_boot_complete', {
+      coreBootComplete: true,
+      sessionId,
+      dayLabel: safeWorkoutSessionContract.dayLabel,
+      exerciseCount: exercises.length,
+      currentExerciseIndex: 0,
+      firstExerciseName: exercises[0]?.name ?? null,
+    })
+    
     console.log('[ready-state-entry]', {
       componentVersion: STREAMLINED_WORKOUT_VERSION,
       hasReasoningSummary: !!reasoningSummary,
@@ -2630,6 +2847,16 @@ function InterExerciseRestCountdown({
   // safeCurrentExercise always has valid fallback values, so no null guard needed
   // ==========================================================================
   
+  // [PHASE LW2] Mark core boot complete - we've reached the main render path successfully
+  markBootStage('core_boot_complete', {
+    coreBootComplete: true,
+    sessionId,
+    dayLabel: safeWorkoutSessionContract.dayLabel,
+    exerciseCount: exercises.length,
+    currentExerciseIndex: safeExerciseIndex,
+    firstExerciseName: safeCurrentExercise.name,
+  })
+  
   const targetRPE = 8 // Default target
   const targetValue = getTargetValue()
   const recommendedBand = getRecommendedBand()
@@ -2802,17 +3029,22 @@ function InterExerciseRestCountdown({
           </div>
         </Card>
         
-        {/* [LIVE-WORKOUT-CORRIDOR] Coaching Insight - uses safeCurrentExercise */}
+        {/* [PHASE LW2] Coaching Insight - wrapped in try-catch for safety */}
         {!isDemo && (() => {
-          const insight = getExerciseSelectionInsight(safeCurrentExercise.id || safeCurrentExercise.name)
-          if (!insight) return null
-          
-          return (
-            <div className="text-[11px] text-[#6B7280] rounded-md bg-[#1A1A1A]/50 border border-[#2B313A]/30 px-2.5 py-2 flex items-start gap-2">
-              <Lightbulb className="w-3 h-3 shrink-0 mt-0.5 text-[#4F6D8A]" />
-              <p className="text-[#A4ACB8] leading-relaxed line-clamp-2">{insight}</p>
-            </div>
-          )
+          try {
+            const insight = getExerciseSelectionInsight(safeCurrentExercise.id || safeCurrentExercise.name)
+            if (!insight) return null
+            
+            return (
+              <div className="text-[11px] text-[#6B7280] rounded-md bg-[#1A1A1A]/50 border border-[#2B313A]/30 px-2.5 py-2 flex items-start gap-2">
+                <Lightbulb className="w-3 h-3 shrink-0 mt-0.5 text-[#4F6D8A]" />
+                <p className="text-[#A4ACB8] leading-relaxed line-clamp-2">{insight}</p>
+              </div>
+            )
+          } catch (e) {
+            console.warn('[WORKOUT-OPTIONAL-BLOCK] Coaching insight failed:', e)
+            return null
+          }
         })()}
         
         {/* Log This Set - Input Section */}

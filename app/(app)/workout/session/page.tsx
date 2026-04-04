@@ -12,7 +12,21 @@
 // =============================================================================
 // AUTHORITATIVE ROUTE VERSION - PROOF OF EXECUTION
 // =============================================================================
-const WORKOUT_SESSION_ROUTE_VERSION = 'phase_lw1_first_render_fix_v1'
+const WORKOUT_SESSION_ROUTE_VERSION = 'phase_lw2_boot_ledger_v1'
+
+// [PHASE LW2] Route-level boot stage marker
+function markRouteStage(stage: string, data?: Record<string, unknown>): void {
+  if (typeof window === 'undefined') return
+  ;(window as unknown as { __spartanlabWorkoutStage?: string }).__spartanlabWorkoutStage = `route_${stage}`
+  console.log(`[ROUTE-BOOT] ${stage}`, {
+    routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
+    timestamp: Date.now(),
+    ...data,
+  })
+}
+
+// Mark route init immediately
+markRouteStage('init')
 
 import { useState, useEffect, Suspense, Component, type ReactNode, type ErrorInfo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -58,6 +72,15 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // [PHASE LW2] Read boot ledger for crash recovery analysis
+    let bootLedger: Record<string, unknown> = {}
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const ledgerStr = sessionStorage.getItem('spartanlab_boot_ledger')
+        if (ledgerStr) bootLedger = JSON.parse(ledgerStr)
+      }
+    } catch {}
+    
     // [LIVE-SESSION-LOCK] Comprehensive diagnostic logging with stage identification
     // [LIVE-SESSION-FIX] Enhanced crash corridor detection including reference errors
     const errorMsg = error.message || ''
@@ -121,13 +144,22 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
       }
     } catch {}
     
-    // [LIVE-SESSION-FIX] Enhanced crash logging with full context and session fingerprint
+    // [PHASE LW2] Enhanced crash logging with boot ledger
     console.error('[workout-route-crash] BOUNDARY_TRIGGERED', {
       routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
       lastKnownStage,
       inferredStage: likelyStage,
       crashCorridor,
       urlParams,
+      // [PHASE LW2] Include boot ledger state
+      bootLedger: {
+        currentStage: bootLedger.currentStage || 'unknown',
+        coreBootComplete: bootLedger.coreBootComplete || false,
+        restoreWasAttempted: bootLedger.restoreWasAttempted || false,
+        restoreWasAccepted: bootLedger.restoreWasAccepted || false,
+        restoreRejectReason: bootLedger.restoreRejectReason || null,
+        errors: bootLedger.errors || [],
+      },
       sessionFingerprint: {
         sessionId: sessionContext.sessionId,
         dayLabel: sessionContext.dayLabel,
@@ -471,7 +503,10 @@ function WorkoutSessionContent() {
       // 3. Full diagnostic logging at every stage
       // =======================================================================
       
-      console.log('[PHASE-X+1] SESSION_LOAD_INIT', {
+      // [PHASE LW2] Mark session load start
+      markRouteStage('session_load_start', { demoMode, isFirstSession, dayParam })
+      
+      console.log('[PHASE LW2] SESSION_LOAD_INIT', {
         routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
         demoMode,
         isFirstSession,
@@ -497,8 +532,15 @@ function WorkoutSessionContent() {
       
       if (!mounted) return
       
+      // [PHASE LW2] Mark session load success
+      markRouteStage('session_load_success', {
+        source: result.meta.source,
+        exerciseCount: result.session.exercises.length,
+        dayLabel: result.session.dayLabel,
+      })
+      
       // Log the result
-      console.log('[PHASE-X+1] SESSION_LOAD_COMPLETE', {
+      console.log('[PHASE LW2] SESSION_LOAD_COMPLETE', {
         routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
         source: result.meta.source,
         validationPassed: result.meta.validationPassed,
@@ -659,8 +701,15 @@ function WorkoutSessionContent() {
     console.log('[PHASE-X+1] Session meta:', sessionMeta)
   }
   
-  // [LW-1 DIAGNOSTIC] Log exact data being passed to StreamlinedWorkoutSession
-  console.log('[LW-1] Rendering StreamlinedWorkoutSession with:', {
+  // [PHASE LW2] Mark component handoff - route is about to render StreamlinedWorkoutSession
+  markRouteStage('component_handoff', {
+    sessionExists: !!session,
+    exerciseCount: session?.exercises?.length ?? 0,
+    dayLabel: session?.dayLabel,
+  })
+  
+  // [LW-2 DIAGNOSTIC] Log exact data being passed to StreamlinedWorkoutSession
+  console.log('[LW-2] Rendering StreamlinedWorkoutSession with:', {
     sessionExists: !!session,
     sessionDayLabel: session?.dayLabel,
     sessionDayNumber: session?.dayNumber,

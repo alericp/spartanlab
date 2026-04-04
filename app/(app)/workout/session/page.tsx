@@ -20,6 +20,11 @@ import { StreamlinedWorkoutSession } from '@/components/workout/StreamlinedWorko
 import { type AdaptiveSession } from '@/lib/adaptive-program-builder'
 // REMOVED: import { getProgramState } from '@/lib/program-state' - now lazily imported
 import type { WorkoutReasoningSummary } from '@/lib/readiness/canonical-readiness-engine'
+import { 
+  buildWorkoutReasoningDisplayContract, 
+  getReasoningShapeDiagnostic,
+  type WorkoutReasoningDisplayContract,
+} from '@/lib/workout-reasoning-display-contract'
 import { Spinner } from '@/components/ui/spinner'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -431,7 +436,8 @@ function WorkoutSessionContent() {
   const isFirstSession = searchParams.get('first') === 'true'
   
   const [session, setSession] = useState<AdaptiveSession | null>(null)
-  const [reasoningSummary, setReasoningSummary] = useState<WorkoutReasoningSummary | undefined>(undefined)
+  // [DISPLAY-CONTRACT] Use safe display contract instead of raw reasoning
+  const [reasoningSummary, setReasoningSummary] = useState<WorkoutReasoningDisplayContract | undefined>(undefined)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
@@ -578,13 +584,37 @@ function WorkoutSessionContent() {
         })
         
         setSession(normalizedSession)
-        // Extract workout reasoning summary from the program
+        
+        // [DISPLAY-CONTRACT] Extract and normalize workout reasoning with safe contract
+        // This guarantees all nested fields used by WhyThisWorkout have safe defaults
         try {
-          if (adaptiveProgram.workoutReasoningSummary) {
-            setReasoningSummary(adaptiveProgram.workoutReasoningSummary as WorkoutReasoningSummary)
+          const rawReasoning = adaptiveProgram.workoutReasoningSummary
+          
+          // Log shape diagnostic BEFORE normalization for debugging
+          const shapeDiag = getReasoningShapeDiagnostic(rawReasoning)
+          console.log('[reasoning-shape-diagnostic]', {
+            routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
+            ...shapeDiag,
+          })
+          
+          if (rawReasoning) {
+            const safeContract = buildWorkoutReasoningDisplayContract(rawReasoning)
+            if (safeContract) {
+              console.log('[reasoning-contract] normalized', {
+                status: 'normalized',
+                hasWhyThisWorkout: !!safeContract.whyThisWorkout,
+                hasPrimaryLimiter: !!safeContract.primaryLimiter?.label,
+              })
+              setReasoningSummary(safeContract)
+            } else {
+              console.log('[reasoning-contract] malformed_fallback - contract returned null')
+            }
+          } else {
+            console.log('[reasoning-contract] absent - no reasoning summary in program')
           }
         } catch {
           // Reasoning summary is optional, don't fail if it can't be read
+          console.log('[reasoning-contract] error during normalization - continuing without reasoning')
         }
         setLoading(false)
       } catch (e) {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { 
   ChevronDown, 
   ChevronUp, 
@@ -14,14 +14,15 @@ import {
 import { cn } from '@/lib/utils'
 import type { WorkoutReasoningSummary } from '@/lib/readiness/canonical-readiness-engine'
 import type { SessionLoadSummary, TrainingSessionStyle } from '@/lib/session-load-intelligence'
+import type { WorkoutReasoningDisplayContract } from '@/lib/workout-reasoning-display-contract'
 
 // =============================================================================
 // WHY THIS WORKOUT COMPONENT
 // =============================================================================
 
 interface WhyThisWorkoutProps {
-  /** The reasoning summary from workout generation */
-  reasoning: WorkoutReasoningSummary
+  /** The reasoning summary from workout generation (accepts both raw and safe contract) */
+  reasoning: WorkoutReasoningSummary | WorkoutReasoningDisplayContract
   /** Whether to start collapsed */
   defaultCollapsed?: boolean
   /** Visual variant */
@@ -42,6 +43,43 @@ export function WhyThisWorkout({
 }: WhyThisWorkoutProps) {
   const [isExpanded, setIsExpanded] = useState(!defaultCollapsed)
   
+  // ==========================================================================
+  // [DISPLAY-CONTRACT] SAFE DERIVED VALUES - NEVER CRASH
+  // All UI rendering uses these safe values, not raw reasoning fields
+  // ==========================================================================
+  const safeValues = useMemo(() => {
+    // Safe string helper
+    const safeStr = (val: unknown, fallback: string): string => 
+      typeof val === 'string' && val.trim() ? val : fallback
+    
+    // Safe object helper
+    const safeObj = (val: unknown): Record<string, unknown> | null =>
+      val && typeof val === 'object' && !Array.isArray(val) ? val as Record<string, unknown> : null
+    
+    // Safe array helper
+    const safeArr = (val: unknown): string[] => {
+      if (!Array.isArray(val)) return []
+      return val.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    }
+    
+    const r = reasoning || {}
+    const primaryLimiter = safeObj((r as Record<string, unknown>).primaryLimiter)
+    const secondaryLimiter = safeObj((r as Record<string, unknown>).secondaryLimiter)
+    const frameworkInfluence = safeObj((r as Record<string, unknown>).frameworkInfluence)
+    const envelopeInfluence = safeObj((r as Record<string, unknown>).envelopeInfluence)
+    
+    return {
+      whyThisWorkout: safeStr((r as Record<string, unknown>).whyThisWorkout, 'This workout was loaded successfully.'),
+      workoutFocus: safeStr((r as Record<string, unknown>).workoutFocus, 'Adaptive Session'),
+      reasoningConfidence: safeStr((r as Record<string, unknown>).reasoningConfidence, 'low'),
+      dataQuality: safeStr((r as Record<string, unknown>).dataQuality, 'sparse') as 'sparse' | 'developing' | 'solid',
+      primaryLimiterLabel: primaryLimiter ? safeStr(primaryLimiter.label, 'Current training priority') : 'Current training priority',
+      secondaryLimiterLabel: secondaryLimiter ? safeStr(secondaryLimiter.label, '') : null,
+      frameworkInfluence: frameworkInfluence ? safeStr(frameworkInfluence.influence, '') : null,
+      adaptations: envelopeInfluence ? safeArr(envelopeInfluence.adaptations) : [],
+    }
+  }, [reasoning])
+  
   // Compact inline variant - single line
   if (variant === 'compact') {
     return (
@@ -50,7 +88,7 @@ export function WhyThisWorkout({
         className
       )}>
         <Target className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[#C1121F]" />
-        <p className="leading-relaxed line-clamp-2">{reasoning.whyThisWorkout}</p>
+        <p className="leading-relaxed line-clamp-2">{safeValues.whyThisWorkout}</p>
       </div>
     )
   }
@@ -66,17 +104,17 @@ export function WhyThisWorkout({
           <Target className="w-4 h-4 shrink-0 mt-0.5 text-[#C1121F]" />
           <div className="flex-1 min-w-0">
             <p className="text-sm text-[#E5E7EB] leading-relaxed">
-              {reasoning.whyThisWorkout}
+              {safeValues.whyThisWorkout}
             </p>
             <div className="flex items-center gap-3 mt-2 text-xs text-[#6B7280]">
               <span className="flex items-center gap-1">
                 <TrendingUp className="w-3 h-3" />
-                Focus: {reasoning.workoutFocus}
+                Focus: {safeValues.workoutFocus}
               </span>
-              {reasoning.reasoningConfidence !== 'low' && (
+              {safeValues.reasoningConfidence !== 'low' && (
                 <span className="flex items-center gap-1">
                   <Shield className="w-3 h-3" />
-                  {reasoning.reasoningConfidence === 'high' ? 'Personalized' : 'Adaptive'}
+                  {safeValues.reasoningConfidence === 'high' ? 'Personalized' : 'Adaptive'}
                 </span>
               )}
             </div>
@@ -104,7 +142,7 @@ export function WhyThisWorkout({
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-[#6B7280] px-2 py-0.5 rounded bg-[#252525]">
-            {reasoning.workoutFocus}
+            {safeValues.workoutFocus}
           </span>
           {isExpanded ? (
             <ChevronUp className="w-4 h-4 text-[#6B7280]" />
@@ -119,47 +157,47 @@ export function WhyThisWorkout({
         <div className="px-3 pb-3 space-y-3">
           {/* Main explanation */}
           <p className="text-sm text-[#A4ACB8] leading-relaxed pl-6">
-            {reasoning.whyThisWorkout}
+            {safeValues.whyThisWorkout}
           </p>
           
-          {/* Primary limiter insight */}
+          {/* Primary limiter insight - always safe */}
           <div className="flex items-start gap-2 pl-6">
             <Target className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[#4F6D8A]" />
             <div className="flex-1 min-w-0">
               <p className="text-xs text-[#6B7280]">
                 <span className="text-[#A4ACB8]">Current limiter:</span>{' '}
-                {reasoning.primaryLimiter.label}
+                {safeValues.primaryLimiterLabel}
               </p>
             </div>
           </div>
           
           {/* Secondary limiter if present */}
-          {reasoning.secondaryLimiter && (
+          {safeValues.secondaryLimiterLabel && (
             <div className="flex items-start gap-2 pl-6">
               <Zap className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[#4F6D8A]/60" />
               <p className="text-xs text-[#6B7280]">
                 <span className="text-[#A4ACB8]/80">Secondary focus:</span>{' '}
-                {reasoning.secondaryLimiter.label}
+                {safeValues.secondaryLimiterLabel}
               </p>
             </div>
           )}
           
           {/* Framework influence */}
-          {reasoning.frameworkInfluence && (
+          {safeValues.frameworkInfluence && (
             <div className="flex items-start gap-2 pl-6">
               <Shield className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[#4F6D8A]/60" />
               <p className="text-xs text-[#6B7280]">
-                {reasoning.frameworkInfluence.influence}
+                {safeValues.frameworkInfluence}
               </p>
             </div>
           )}
           
           {/* Envelope adaptations */}
-          {reasoning.envelopeInfluence && reasoning.envelopeInfluence.adaptations.length > 0 && (
+          {safeValues.adaptations.length > 0 && (
             <div className="pl-6">
               <p className="text-xs text-[#6B7280] mb-1">Personalized adaptations:</p>
               <ul className="space-y-1">
-                {reasoning.envelopeInfluence.adaptations.slice(0, 3).map((adaptation, i) => (
+                {safeValues.adaptations.slice(0, 3).map((adaptation, i) => (
                   <li key={i} className="text-xs text-[#A4ACB8]/80 pl-3 flex items-start gap-1.5">
                     <span className="text-[#4F6D8A] mt-1.5 w-1 h-1 rounded-full bg-current shrink-0" />
                     {adaptation}
@@ -171,11 +209,11 @@ export function WhyThisWorkout({
           
           {/* Data quality indicator */}
           <div className="flex items-center gap-2 pt-2 pl-6 border-t border-[#2B313A]">
-            <DataQualityIndicator quality={reasoning.dataQuality} />
+            <DataQualityIndicator quality={safeValues.dataQuality} />
             <span className="text-xs text-[#6B7280]">
-              {reasoning.dataQuality === 'solid' 
+              {safeValues.dataQuality === 'solid' 
                 ? 'Based on your training history'
-                : reasoning.dataQuality === 'developing'
+                : safeValues.dataQuality === 'developing'
                 ? 'Building personalization from your logs'
                 : 'Continue logging to improve recommendations'}
             </span>
@@ -283,8 +321,8 @@ export function ExerciseReasonBubble({
 interface WorkoutFocusBadgeProps {
   /** The focus area */
   focus: string
-  /** Session type */
-  sessionType?: WorkoutReasoningSummary['sessionType']
+  /** Session type - tolerates any string, defaults to mixed */
+  sessionType?: string
   /** Size variant */
   size?: 'sm' | 'md'
   /** Additional CSS classes */
@@ -332,11 +370,13 @@ export function WorkoutFocusBadge({
 // =============================================================================
 
 interface DataQualityIndicatorProps {
-  quality: WorkoutReasoningSummary['dataQuality']
+  /** Data quality string - tolerates unknown values, defaults to sparse/1 dot */
+  quality: string
   className?: string
 }
 
 function DataQualityIndicator({ quality, className }: DataQualityIndicatorProps) {
+  // [DISPLAY-CONTRACT] Safe dots calculation - any unexpected value defaults to 1
   const dots = quality === 'solid' ? 3 : quality === 'developing' ? 2 : 1
   
   return (

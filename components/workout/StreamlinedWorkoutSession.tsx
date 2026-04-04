@@ -217,7 +217,7 @@ const STORAGE_KEY = 'spartanlab_workout_session'
 const STORAGE_SCHEMA_VERSION = 'workout_session_v2'
 
 // [PHASE-X+1] Version stamp for execution proof
-const STREAMLINED_WORKOUT_VERSION = 'phase_lw2_boot_ledger_v1'
+const STREAMLINED_WORKOUT_VERSION = 'phase_lw2_active_vm_v1'
 
 // =============================================================================
 // [PHASE LW2] AUTHORITATIVE BOOT LEDGER
@@ -241,11 +241,18 @@ const BOOT_STAGES = [
   'exercise_runtime_truth_build_done',
   'calibration_message_built',
   'render_entry_start',
+  // Active state specific stages
+  'active_viewmodel_build_start',
+  'active_viewmodel_build_done',
+  'active_state_entry',
   'core_header_render_start',
   'core_execution_card_render_start',
+  'input_block_render_start',
+  'action_buttons_render_start',
   'core_boot_complete',
   'optional_blocks_mount_start',
   'optional_blocks_mount_done',
+  'active_state_render_complete',
   'live_workout_ready',
 ] as const
 
@@ -1214,14 +1221,167 @@ export function StreamlinedWorkoutSession({
   
   // Repair index if out of bounds (happens on next render cycle)
   useEffect(() => {
-    if (isIndexOutOfBounds && hasValidExercises) {
-      setState(prev => ({
-        ...prev,
-        currentExerciseIndex: safeExerciseIndex,
-        currentSetNumber: 1,
-      }))
-    }
+  if (isIndexOutOfBounds && hasValidExercises) {
+  setState(prev => ({
+  ...prev,
+  currentExerciseIndex: safeExerciseIndex,
+  currentSetNumber: 1,
+  }))
+  }
   }, [isIndexOutOfBounds, safeExerciseIndex, hasValidExercises])
+  
+  // ==========================================================================
+  // [PHASE LW2] ACTIVE WORKOUT VIEW MODEL
+  // Single authoritative model for all active render values.
+  // Centralizes all derivations and ensures all values are safe before render.
+  // ==========================================================================
+  const activeWorkoutViewModel = useMemo(() => {
+    try {
+      markBootStage('active_viewmodel_build_start')
+      
+      // Core session identity
+      const safeSessionId = sessionId || 'unknown-session'
+      const safeDayLabel = safeWorkoutSessionContract.dayLabel || 'Workout'
+      const safeDayNumber = safeWorkoutSessionContract.dayNumber || 1
+      
+      // Exercise counts
+      const safeExerciseCount = exercises.length
+      const safeTotalSets = exercises.reduce((sum, ex) => sum + (ex?.sets ?? 3), 0)
+      const safeCompletedSetsCount = state.completedSets?.length ?? 0
+      
+      // Current exercise position (bounded)
+      const safeCurrentIndex = Math.max(0, Math.min(state.currentExerciseIndex, Math.max(0, exercises.length - 1)))
+      const safeCurrentSetNumber = Math.max(1, Math.min(state.currentSetNumber, safeCurrentExercise.sets || 3))
+      
+      // Current exercise details (from safe contract)
+      const currentExerciseName = safeCurrentExercise.name || 'Exercise'
+      const currentExerciseCategory = safeCurrentExercise.category || 'general'
+      const currentExerciseSets = safeCurrentExercise.sets || 3
+      const currentExerciseRepsOrTime = safeCurrentExercise.repsOrTime || '8-12 reps'
+      const currentExerciseNote = safeCurrentExercise.note || ''
+      
+      // Next exercise info (bounded)
+      const hasNextExercise = safeCurrentIndex < exercises.length - 1
+      const nextExercise = hasNextExercise ? exercises[safeCurrentIndex + 1] : null
+      const nextExerciseName = nextExercise?.name || null
+      const nextExerciseCategory = nextExercise?.category || null
+      
+      // Derived booleans
+      const isHoldType = safeLower(currentExerciseRepsOrTime).includes('sec') || 
+                         safeLower(currentExerciseRepsOrTime).includes('hold')
+      const hasLoad = !!(safeCurrentExercise.prescribedLoad?.load && safeCurrentExercise.prescribedLoad.load > 0)
+      const isLastExercise = safeCurrentIndex >= exercises.length - 1
+      const isLastSet = safeCurrentSetNumber >= currentExerciseSets
+      const isWorkoutComplete = isLastExercise && isLastSet
+      
+      // Safe display strings
+      const setDisplay = `Set ${safeCurrentSetNumber}/${currentExerciseSets}`
+      const exerciseProgress = `${safeCurrentIndex + 1}/${safeExerciseCount}`
+      const setsProgress = `${safeCompletedSetsCount}/${safeTotalSets}`
+      
+      // Load display
+      const loadDisplay = hasLoad 
+        ? `@ +${safeCurrentExercise.prescribedLoad!.load} ${safeCurrentExercise.prescribedLoad!.unit}`
+        : null
+      
+      const viewModel = {
+        // Identity
+        sessionId: safeSessionId,
+        dayLabel: safeDayLabel,
+        dayNumber: safeDayNumber,
+        
+        // Exercise counts
+        totalExercises: safeExerciseCount,
+        totalSets: safeTotalSets,
+        completedSetsCount: safeCompletedSetsCount,
+        
+        // Current position
+        currentExerciseIndex: safeCurrentIndex,
+        currentSetNumber: safeCurrentSetNumber,
+        
+        // Current exercise
+        currentExerciseName,
+        currentExerciseCategory,
+        currentExerciseSets,
+        currentExerciseRepsOrTime,
+        currentExerciseNote,
+        
+        // Next exercise
+        hasNextExercise,
+        nextExerciseName,
+        nextExerciseCategory,
+        
+        // Derived booleans
+        isHoldExercise: isHoldType,
+        hasLoad,
+        isLastExercise,
+        isLastSet,
+        isWorkoutComplete,
+        hasValidExercises: safeExerciseCount > 0,
+        
+        // Display strings
+        setDisplay,
+        exerciseProgress,
+        setsProgress,
+        loadDisplay,
+        
+        // Validation flag
+        isValid: safeExerciseCount > 0 && currentExerciseName !== 'Exercise',
+      }
+      
+      markBootStage('active_viewmodel_build_done', {
+        sessionId: viewModel.sessionId,
+        exerciseCount: viewModel.totalExercises,
+        currentExerciseIndex: viewModel.currentExerciseIndex,
+        isValid: viewModel.isValid,
+      })
+      
+      return viewModel
+    } catch (error) {
+      recordBootError('active_viewmodel_build_start', error instanceof Error ? error : new Error(String(error)))
+      console.error('[ACTIVE-VIEWMODEL] Build failed:', error)
+      
+      // Return minimal safe fallback
+      return {
+        sessionId: 'error-session',
+        dayLabel: 'Workout',
+        dayNumber: 1,
+        totalExercises: 0,
+        totalSets: 0,
+        completedSetsCount: 0,
+        currentExerciseIndex: 0,
+        currentSetNumber: 1,
+        currentExerciseName: 'Exercise',
+        currentExerciseCategory: 'general',
+        currentExerciseSets: 3,
+        currentExerciseRepsOrTime: '8-12 reps',
+        currentExerciseNote: '',
+        hasNextExercise: false,
+        nextExerciseName: null,
+        nextExerciseCategory: null,
+        isHoldExercise: false,
+        hasLoad: false,
+        isLastExercise: true,
+        isLastSet: false,
+        isWorkoutComplete: false,
+        hasValidExercises: false,
+        setDisplay: 'Set 1/3',
+        exerciseProgress: '0/0',
+        setsProgress: '0/0',
+        loadDisplay: null,
+        isValid: false,
+      }
+    }
+  }, [
+    sessionId, 
+    safeWorkoutSessionContract.dayLabel, 
+    safeWorkoutSessionContract.dayNumber, 
+    exercises, 
+    state.currentExerciseIndex, 
+    state.currentSetNumber, 
+    state.completedSets, 
+    safeCurrentExercise
+  ])
   
   // [LIVE-WORKOUT-CORRIDOR] Determine if exercise uses holds or reps
   // Uses safeCurrentExercise for guaranteed-safe values
@@ -1413,14 +1573,34 @@ export function StreamlinedWorkoutSession({
   }
   
   // Start workout
+  // [PHASE LW2] Validates active state requirements before transition
   const handleStart = useCallback(() => {
-    setShowResumePrompt(false)
-    setState(prev => ({
-      ...prev,
-      status: 'active',
-      startTime: prev.startTime || Date.now(),
-    }))
-  }, [])
+  // [PHASE LW2] Validate before transitioning to active
+  if (!hasValidExercises) {
+    console.error('[WORKOUT-START] Cannot start - no valid exercises')
+    recordBootError('active_state_entry', new Error('No valid exercises'))
+    return
+  }
+  
+  if (!activeWorkoutViewModel.isValid) {
+    console.error('[WORKOUT-START] Cannot start - view model invalid')
+    recordBootError('active_state_entry', new Error('Active view model invalid'))
+    return
+  }
+  
+  markBootStage('active_state_entry', {
+    sessionId: activeWorkoutViewModel.sessionId,
+    exerciseCount: activeWorkoutViewModel.totalExercises,
+    currentExerciseIndex: activeWorkoutViewModel.currentExerciseIndex,
+  })
+  
+  setShowResumePrompt(false)
+  setState(prev => ({
+  ...prev,
+  status: 'active',
+  startTime: prev.startTime || Date.now(),
+  }))
+  }, [hasValidExercises, activeWorkoutViewModel])
   
   // Resume existing workout
   const handleResume = useCallback(() => {
@@ -2136,6 +2316,15 @@ export function StreamlinedWorkoutSession({
   
   useEffect(() => {
     // [PHASE LW2] Mark live_workout_ready - render completed successfully
+    // [PHASE LW2] Mark active state render complete if in active state
+    if (state.status === 'active') {
+      markBootStage('active_state_render_complete', {
+        sessionId,
+        currentExerciseIndex: safeExerciseIndex,
+        currentSetNumber: state.currentSetNumber,
+      })
+    }
+    
     markBootStage('live_workout_ready', {
       sessionId,
       dayLabel: safeWorkoutSessionContract.dayLabel,
@@ -2847,6 +3036,53 @@ function InterExerciseRestCountdown({
   // safeCurrentExercise always has valid fallback values, so no null guard needed
   // ==========================================================================
   
+  // [PHASE LW2] ACTIVE STATE VALIDATION - Controlled local fallback instead of crash
+  if (!activeWorkoutViewModel.isValid || !activeWorkoutViewModel.hasValidExercises) {
+    recordBootError('active_state_entry', new Error('Active view model invalid at render time'))
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 rounded-full bg-[#1A1F26] border border-amber-500/30 flex items-center justify-center mx-auto mb-4">
+            <Dumbbell className="w-8 h-8 text-amber-500" />
+          </div>
+          <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Session Data Issue</h2>
+          <p className="text-[#A4ACB8] mb-6 text-sm">
+            The workout session loaded but the exercise data needs repair. This can happen with older programs.
+          </p>
+          <div className="space-y-2">
+            <Button
+              onClick={() => setState(prev => ({ ...prev, status: 'ready' }))}
+              className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Retry Session
+            </Button>
+            <Button
+              variant="outline"
+              onClick={onCancel}
+              className="w-full border-[#2B313A] text-[#A4ACB8] hover:bg-[#1A1F26]"
+            >
+              Return to Dashboard
+            </Button>
+            {isDemo !== true && (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.location.href = '/workout/session?demo=true'
+                  }
+                }}
+                className="w-full text-[#6B7280] hover:text-[#A4ACB8]"
+              >
+                Try Demo Workout
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
   // [PHASE LW2] Mark core boot complete - we've reached the main render path successfully
   markBootStage('core_boot_complete', {
     coreBootComplete: true,
@@ -2928,15 +3164,17 @@ function InterExerciseRestCountdown({
                 <Badge className="bg-blue-500/10 text-blue-400 border-0 text-[10px] px-1.5 py-0">Swapped</Badge>
               )}
             </div>
-            <ExerciseOptionsMenu
-              exercise={safeCurrentExercise}
-              exerciseIndex={state.currentExerciseIndex}
-              sessionId={sessionId}
-              onReplace={handleReplaceExercise}
-              onSkip={handleMenuSkipExercise}
-              onProgressionChange={handleProgressionChange}
-              onUndo={handleUndoOverride}
-            />
+            <SafeOptionalSubtree label="ExerciseOptionsMenu">
+              <ExerciseOptionsMenu
+                exercise={safeCurrentExercise}
+                exerciseIndex={state.currentExerciseIndex}
+                sessionId={sessionId}
+                onReplace={handleReplaceExercise}
+                onSkip={handleMenuSkipExercise}
+                onProgressionChange={handleProgressionChange}
+                onUndo={handleUndoOverride}
+              />
+            </SafeOptionalSubtree>
           </div>
           
           {/* Exercise Name */}
@@ -3162,6 +3400,7 @@ function InterExerciseRestCountdown({
       </div>
       
       {/* [LIVE-EXECUTION-TRUTH] Adaptive Recommendation Modal */}
+      <SafeOptionalSubtree label="AdaptiveRecommendationModal">
       {showAdaptiveModal && adaptiveRecommendation && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md bg-[#1A1F26] border-t sm:border border-[#2B313A] sm:rounded-xl p-5 space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0">
@@ -3231,8 +3470,10 @@ function InterExerciseRestCountdown({
           </div>
         </div>
       )}
+      </SafeOptionalSubtree>
       
       {/* [EXECUTION-TRUTH-FIX] Inter-Exercise Rest Modal */}
+      <SafeOptionalSubtree label="InterExerciseRestModal">
       {showInterExerciseRest && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md bg-[#1A1F26] border-t sm:border border-[#2B313A] sm:rounded-xl p-5 space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0">
@@ -3275,8 +3516,10 @@ function InterExerciseRestCountdown({
           </div>
         </div>
       )}
+      </SafeOptionalSubtree>
       
       {/* [EXECUTION-TRUTH-FIX] Notes Capture Modal */}
+      <SafeOptionalSubtree label="NotesCaptureModal">
       {showNotesModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md bg-[#1A1F26] border-t sm:border border-[#2B313A] sm:rounded-xl p-5 space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0">
@@ -3412,8 +3655,10 @@ function InterExerciseRestCountdown({
           </div>
         </div>
       )}
+      </SafeOptionalSubtree>
       
       {/* Exit Confirmation Modal */}
+      <SafeOptionalSubtree label="ExitConfirmModal">
       {showExitConfirm && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md bg-[#1A1F26] border-t sm:border border-[#2B313A] sm:rounded-xl p-5 space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0">
@@ -3455,6 +3700,7 @@ function InterExerciseRestCountdown({
           </div>
         </div>
       )}
+      </SafeOptionalSubtree>
     </div>
   )
 }

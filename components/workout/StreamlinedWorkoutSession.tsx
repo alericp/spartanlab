@@ -64,6 +64,7 @@ import {
 import { evaluateAllChallenges } from '@/lib/challenges/challenge-engine'
 import { evaluateAchievements } from '@/lib/achievements/achievement-engine'
 import type { WorkoutReasoningSummary } from '@/lib/readiness/canonical-readiness-engine'
+import type { WorkoutReasoningDisplayContract } from '@/lib/workout-reasoning-display-contract'
 import { WhyThisWorkout, ExerciseReasonBubble, WorkoutFocusBadge } from '@/components/workout/WhyThisWorkout'
 import { WarmUpInsight, ProgressionReasoning, OverrideProtectionInsight } from '@/components/coaching/CoachingInsights'
 import { getExerciseSelectionInsight, getSkillCarryoverInsight } from '@/lib/coaching/insight-generation'
@@ -484,7 +485,8 @@ function BandSelector({ value, onChange, recommendedBand }: BandSelectorProps) {
 
 interface StreamlinedWorkoutSessionProps {
   session: AdaptiveSession
-  reasoningSummary?: WorkoutReasoningSummary
+  // [DISPLAY-CONTRACT] Accept safe display contract - prevents nested field crashes
+  reasoningSummary?: WorkoutReasoningDisplayContract | WorkoutReasoningSummary
   onComplete: () => void
   onCancel: () => void
   isDemo?: boolean
@@ -1919,7 +1921,15 @@ export function StreamlinedWorkoutSession({
   // RENDER: READY STATE
   // ==========================================================================
   
+  // [DISPLAY-CONTRACT] Log ready state entry for crash diagnosis
   if (state.status === 'ready') {
+    console.log('[ready-state-entry]', {
+      componentVersion: STREAMLINED_WORKOUT_VERSION,
+      hasReasoningSummary: !!reasoningSummary,
+      willRenderWhyThisWorkout: !!reasoningSummary && !isDemo,
+      dayLabel: safeSession.dayLabel,
+      exerciseCount: exercises.length,
+    })
     return (
       <div className="min-h-screen bg-[#0F1115] p-4 sm:p-5">
         <div className="max-w-lg mx-auto space-y-4">
@@ -1950,8 +1960,8 @@ export function StreamlinedWorkoutSession({
               <p className="text-[11px] text-[#6B7280] uppercase tracking-wider font-medium">Today&apos;s Plan</p>
               {reasoningSummary ? (
                 <WorkoutFocusBadge 
-                  focus={reasoningSummary.workoutFocus} 
-                  sessionType={reasoningSummary.sessionType}
+                  focus={(reasoningSummary as { workoutFocus?: string }).workoutFocus || 'Adaptive'} 
+                  sessionType={(reasoningSummary as { sessionType?: string }).sessionType || 'mixed'}
                   size="sm"
                 />
               ) : (

@@ -104,6 +104,7 @@ import {
   validateLiveWorkoutRuntime,
   validateHydrationPayload,
   type LiveWorkoutRuntimeValidation,
+  type NormalizedExercise,
 } from '@/lib/workout/validate-live-session-runtime'
 
 // =============================================================================
@@ -2040,32 +2041,187 @@ export function StreamlinedWorkoutSession({
   }, [safeCurrentExercise])
   
   // ==========================================================================
-  // [AUTHORITATIVE-HYDRATION-CONTRACT] RUNTIME TRUTH BUILDERS
-  // Build from authoritative contracts ONLY
-  // [PHASE LW3] All stage logging moved to effects - useMemo is now pure
+  // [LIVE-WORKOUT-BOOT-CONTRACT] UNIFIED BOOT PREPARATION GUARD
+  // This is a LOCAL containment layer for all post-validation boot derivations.
+  // If ANY boot-critical derivation throws, we capture it here instead of crashing.
   // ==========================================================================
   
-  const sessionRuntimeTruth = useMemo<SessionRuntimeTruth>(() => {
-    return buildSessionRuntimeTruth(safeWorkoutSessionContract as AdaptiveSession, {
-      programId: null,
-      workoutsCompleted: 0,
-      sessionIndex: 0,
-    })
-  }, [safeWorkoutSessionContract])
+  type BootPreparationResult = {
+    ok: boolean
+    failureStage: string | null
+    failureReason: string | null
+    sessionRuntimeTruth: SessionRuntimeTruth | null
+    exerciseRuntimeTruth: ExerciseRuntimeTruth | null
+    calibrationMessage: { show: boolean; title: string; description: string }
+    safeNextExercise: NormalizedExercise | null
+  }
   
-  const exerciseRuntimeTruth = useMemo<ExerciseRuntimeTruth>(() => {
-    // [LIVE-WORKOUT-BOOT-CONTRACT] Use normalized overrides from validation, not raw liveSession
-    const overrideState = normalizedExerciseOverrides[safeExerciseIndex]
-    return buildExerciseRuntimeTruth(safeCurrentExercise as AdaptiveExercise, safeExerciseIndex, overrideState ? {
-      isOverridden: !!(overrideState.isReplaced || overrideState.isProgressionAdjusted || overrideState.isSkipped),
-      overrideType: overrideState.isReplaced ? 'replaced' : overrideState.isProgressionAdjusted ? 'progression_adjusted' : overrideState.isSkipped ? 'skipped' : null,
-      currentName: overrideState.currentName,
-    } : undefined)
-  }, [safeCurrentExercise, safeExerciseIndex, normalizedExerciseOverrides])
+  const bootPreparation = useMemo<BootPreparationResult>(() => {
+    // If validation already failed, skip boot preparation
+    if (!runtimeIsValid) {
+      return {
+        ok: false,
+        failureStage: 'validation_failed',
+        failureReason: runtimeInvalidReason,
+        sessionRuntimeTruth: null,
+        exerciseRuntimeTruth: null,
+        calibrationMessage: { show: false, title: '', description: '' },
+        safeNextExercise: null,
+      }
+    }
+    
+    try {
+      // STAGE: session_runtime_truth
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[v0] [boot_prep_start] Building runtime truth...')
+      }
+      
+      let sessionTruth: SessionRuntimeTruth
+      try {
+        sessionTruth = buildSessionRuntimeTruth(safeWorkoutSessionContract as AdaptiveSession, {
+          programId: null,
+          workoutsCompleted: 0,
+          sessionIndex: 0,
+        })
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'unknown'
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[v0] [boot_prep_session_truth_failed]', msg)
+        }
+        return {
+          ok: false,
+          failureStage: 'session_runtime_truth',
+          failureReason: `Failed to build session truth: ${msg}`,
+          sessionRuntimeTruth: null,
+          exerciseRuntimeTruth: null,
+          calibrationMessage: { show: false, title: '', description: '' },
+          safeNextExercise: null,
+        }
+      }
+      
+      // STAGE: exercise_runtime_truth
+      let exerciseTruth: ExerciseRuntimeTruth
+      try {
+        const overrideState = normalizedExerciseOverrides[safeExerciseIndex]
+        exerciseTruth = buildExerciseRuntimeTruth(safeCurrentExercise as AdaptiveExercise, safeExerciseIndex, overrideState ? {
+          isOverridden: !!(overrideState.isReplaced || overrideState.isProgressionAdjusted || overrideState.isSkipped),
+          overrideType: overrideState.isReplaced ? 'replaced' : overrideState.isProgressionAdjusted ? 'progression_adjusted' : overrideState.isSkipped ? 'skipped' : null,
+          currentName: overrideState.currentName,
+        } : undefined)
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'unknown'
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[v0] [boot_prep_exercise_truth_failed]', msg)
+        }
+        return {
+          ok: false,
+          failureStage: 'exercise_runtime_truth',
+          failureReason: `Failed to build exercise truth: ${msg}`,
+          sessionRuntimeTruth: sessionTruth,
+          exerciseRuntimeTruth: null,
+          calibrationMessage: { show: false, title: '', description: '' },
+          safeNextExercise: null,
+        }
+      }
+      
+      // STAGE: calibration_message
+      let calibration: { show: boolean; title: string; description: string }
+      try {
+        calibration = getCalibrationMessage(sessionTruth)
+      } catch {
+        calibration = { show: false, title: '', description: '' }
+      }
+      
+      // STAGE: next_exercise_derivation
+      let nextExercise: NormalizedExercise | null = null
+      try {
+        const nextIndex = safeExerciseIndex + 1
+        if (nextIndex < exercises.length && exercises[nextIndex]) {
+          nextExercise = exercises[nextIndex] as NormalizedExercise
+        }
+      } catch {
+        nextExercise = null
+      }
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[v0] [boot_prep_success] Boot preparation complete')
+      }
+      
+      return {
+        ok: true,
+        failureStage: null,
+        failureReason: null,
+        sessionRuntimeTruth: sessionTruth,
+        exerciseRuntimeTruth: exerciseTruth,
+        calibrationMessage: calibration,
+        safeNextExercise: nextExercise,
+      }
+    } catch (error) {
+      // Catch-all for any unexpected boot preparation errors
+      const msg = error instanceof Error ? error.message : 'unknown'
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[v0] [boot_prep_unexpected_failure]', msg, error)
+      }
+      return {
+        ok: false,
+        failureStage: 'boot_prep_unexpected',
+        failureReason: `Unexpected boot preparation error: ${msg}`,
+        sessionRuntimeTruth: null,
+        exerciseRuntimeTruth: null,
+        calibrationMessage: { show: false, title: '', description: '' },
+        safeNextExercise: null,
+      }
+    }
+  }, [runtimeIsValid, runtimeInvalidReason, safeWorkoutSessionContract, safeCurrentExercise, safeExerciseIndex, normalizedExerciseOverrides, exercises])
   
-  const calibrationMessage = useMemo(() => {
-    return getCalibrationMessage(sessionRuntimeTruth)
-  }, [sessionRuntimeTruth])
+  // Extract safe boot values with fallbacks matching actual type shapes
+  const sessionRuntimeTruth: SessionRuntimeTruth = bootPreparation.sessionRuntimeTruth ?? {
+    sessionId: sessionId,
+    programId: null,
+    dayNumber: safeWorkoutSessionContract.dayNumber ?? 1,
+    dayLabel: safeWorkoutSessionContract.dayLabel || 'Workout',
+    currentExerciseCount: safeExerciseIndex + 1,
+    totalExerciseCount: exercises.length,
+    totalSetCount: totalSets,
+    adaptationConfidence: 'low' as const,
+    firstWorkoutsCalibrationMode: true,
+    workoutsCompletedInProgram: 0,
+    supportsBackNavigation: true,
+    supportsBetweenExerciseRest: true,
+    supportsNotesCapture: true,
+    supportsTimerAlerts: false,
+    sessionFocus: 'general',
+    estimatedDurationMinutes: safeWorkoutSessionContract.estimatedMinutes ?? 30,
+  }
+  
+  const exerciseRuntimeTruth: ExerciseRuntimeTruth = bootPreparation.exerciseRuntimeTruth ?? {
+    exerciseId: safeCurrentExercise.id || `exercise-${safeExerciseIndex}`,
+    exerciseName: safeCurrentExercise.name,
+    originalName: safeCurrentExercise.name,
+    category: safeCurrentExercise.category || 'general',
+    displayType: 'reps' as const,
+    targetValue: 10,
+    targetUnit: 'reps',
+    targetRPE: 7,
+    restSecondsIntraSet: 90,
+    restSecondsInterExercise: 120,
+    progressionFamily: null,
+    progressionMode: 'fixed' as const,
+    canAdjustProgression: false,
+    progressionFallbacks: [],
+    supportsBandAdjustment: false,
+    recommendedBandColor: null,
+    supportsNotes: true,
+    supportsPainFlag: true,
+    supportsFatigueFlag: true,
+    availableContextFlags: [],
+    isFixedPrescription: false,
+    fixedPrescriptionReason: null,
+    isOverridden: false,
+    overrideType: null,
+  }
+  
+  const calibrationMessage = bootPreparation.calibrationMessage
   
   // [PHASE LW3] Effect-based boot diagnostics - runs after derivations are computed
   useEffect(() => {
@@ -3153,16 +3309,30 @@ export function StreamlinedWorkoutSession({
   }
 
   // ==========================================================================
-  // RENDER: CONTROLLED LOCAL FALLBACK - Runtime Validation Failed
-  // [LIVE-WORKOUT-BOOT-CONTRACT] This catches invalid runtime state BEFORE crashing
+  // RENDER: CONTROLLED LOCAL FALLBACK - Runtime Validation OR Boot Preparation Failed
+  // [LIVE-WORKOUT-BOOT-CONTRACT] This catches BOTH invalid runtime state AND
+  // post-validation boot preparation failures BEFORE crashing the route boundary.
   // ==========================================================================
   
-  if (!runtimeIsValid && bootHydrationReady) {
+  const shouldShowLocalFallback = bootHydrationReady && (!runtimeIsValid || !bootPreparation.ok)
+  const fallbackReason = !runtimeIsValid 
+    ? runtimeInvalidReason 
+    : bootPreparation.failureReason
+  const fallbackStage = !runtimeIsValid 
+    ? 'validation' 
+    : bootPreparation.failureStage
+  
+  if (shouldShowLocalFallback) {
     // Log diagnostic info for debugging
-    console.warn('[LIVE-WORKOUT-BOOT-CONTRACT] Runtime validation failed:', {
-      reason: runtimeInvalidReason,
-      diagnostics: runtimeDiagnostics,
-    })
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[v0] [local_fallback_rendered]', {
+        stage: fallbackStage,
+        reason: fallbackReason,
+        runtimeIsValid,
+        bootPrepOk: bootPreparation.ok,
+        diagnostics: runtimeDiagnostics,
+      })
+    }
     
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
@@ -3172,15 +3342,17 @@ export function StreamlinedWorkoutSession({
           </div>
           <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Workout Setup Issue</h2>
           <p className="text-[#A4ACB8] mb-4">
-            {runtimeInvalidReason || 'Unable to validate workout session state.'}
+            {fallbackReason || 'Unable to prepare workout session.'}
           </p>
           {process.env.NODE_ENV === 'development' && (
             <div className="text-left bg-[#1A1F26] rounded-lg p-3 mb-4 text-xs font-mono">
               <p className="text-[#6B7280] mb-1">Diagnostics:</p>
+              <p className="text-[#A4ACB8]">Stage: {fallbackStage || 'unknown'}</p>
               <p className="text-[#A4ACB8]">Exercises: {runtimeDiagnostics.exerciseCount}</p>
               <p className="text-[#A4ACB8]">Status: {runtimeDiagnostics.status}</p>
               <p className="text-[#A4ACB8]">Session Valid: {String(runtimeDiagnostics.sessionContractValid)}</p>
               <p className="text-[#A4ACB8]">Live State Valid: {String(runtimeDiagnostics.liveSessionValid)}</p>
+              <p className="text-[#A4ACB8]">Boot Prep OK: {String(bootPreparation.ok)}</p>
             </div>
           )}
           <div className="space-y-3">

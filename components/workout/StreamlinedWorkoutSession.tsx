@@ -1748,14 +1748,13 @@ export function StreamlinedWorkoutSession({
   // ==========================================================================
   const [liveSession, dispatch] = useReducer(liveSessionReducer, undefined, createInitialLiveSessionState)
   
-  // Direct read-only access to unified state values
-  // These are convenience aliases - liveSession is the single source of truth
-  const selectedRPE = liveSession.selectedRPE
-  const repsValue = liveSession.repsValue
-  const holdValue = liveSession.holdValue
-  const bandUsed = liveSession.bandUsed
-  const showInterExerciseRest = liveSession.showInterExerciseRest
-  const interExerciseRestSeconds = liveSession.interExerciseRestSeconds
+  // ==========================================================================
+  // [LIVE-WORKOUT-BOOT-CONTRACT] INPUT STATE ALIASES
+  // For mutation handlers that dispatch to reducer, we still need access to raw liveSession
+  // For display/UI, use the safe* values from runtimeValidation
+  // ==========================================================================
+  // NOTE: These are kept for reducer dispatch handlers that need current values
+  // Display code should use safeSelectedRPE, safeRepsValue, etc. from runtimeValidation
   
   // [PHASE LW3] Hydration gate - prevents half-hydrated first render
   const [bootHydrationReady, setBootHydrationReady] = useState(false)
@@ -1937,7 +1936,11 @@ export function StreamlinedWorkoutSession({
     return validateLiveWorkoutRuntime(safeWorkoutSessionContract, liveSession)
   }, [safeWorkoutSessionContract, liveSession])
   
-  // Extract safe values from centralized validation
+  // ==========================================================================
+  // [LIVE-WORKOUT-BOOT-CONTRACT] EXTRACT ALL SAFE VALUES FROM CENTRALIZED VALIDATION
+  // This is the AUTHORITATIVE source for safe runtime values.
+  // Do NOT read raw liveSession.* for display/lookup/UI decisions - use these instead.
+  // ==========================================================================
   const {
     isValid: runtimeIsValid,
     reason: runtimeInvalidReason,
@@ -1947,6 +1950,19 @@ export function StreamlinedWorkoutSession({
     hasValidExercises,
     normalizedCompletedSets,
     normalizedExerciseOverrides,
+    // Full safe runtime contract - use these instead of raw liveSession.*
+    safeStatus,
+    safeStartTime,
+    safeElapsedSeconds,
+    safeLastSetRPE,
+    safeSelectedRPE,
+    safeRepsValue,
+    safeHoldValue,
+    safeBandUsed,
+    safeWorkoutNotes,
+    safeShowInterExerciseRest,
+    safeInterExerciseRestSeconds,
+    safeTransitionRepairIssue,
     diagnostics: runtimeDiagnostics,
   } = runtimeValidation
   
@@ -1998,17 +2014,18 @@ export function StreamlinedWorkoutSession({
   useEffect(() => {
     if (typeof sessionStorage !== 'undefined') {
       try {
+        // [LIVE-WORKOUT-BOOT-CONTRACT] Use safe index from validation
         sessionStorage.setItem('spartanlab_workout_stage_context', JSON.stringify({
           sessionId,
           dayLabel: safeWorkoutSessionContract.dayLabel,
           dayNumber: safeWorkoutSessionContract.dayNumber,
           isDemo: isDemoSession,
           exerciseCount: exercises.length,
-          currentExerciseIndex: liveSession.currentExerciseIndex,
+          currentExerciseIndex: safeExerciseIndex,
         }))
       } catch {}
     }
-  }, [sessionId, safeWorkoutSessionContract.dayLabel, safeWorkoutSessionContract.dayNumber, isDemoSession, exercises.length, liveSession.currentExerciseIndex])
+  }, [sessionId, safeWorkoutSessionContract.dayLabel, safeWorkoutSessionContract.dayNumber, isDemoSession, exercises.length, safeExerciseIndex])
   
   // [weighted-truth] TASK H: Log workout session loading with prescribed load
   useEffect(() => {
@@ -2037,13 +2054,14 @@ export function StreamlinedWorkoutSession({
   }, [safeWorkoutSessionContract])
   
   const exerciseRuntimeTruth = useMemo<ExerciseRuntimeTruth>(() => {
-    const overrideState = liveSession.exerciseOverrides[safeExerciseIndex]
+    // [LIVE-WORKOUT-BOOT-CONTRACT] Use normalized overrides from validation, not raw liveSession
+    const overrideState = normalizedExerciseOverrides[safeExerciseIndex]
     return buildExerciseRuntimeTruth(safeCurrentExercise as AdaptiveExercise, safeExerciseIndex, overrideState ? {
       isOverridden: !!(overrideState.isReplaced || overrideState.isProgressionAdjusted || overrideState.isSkipped),
       overrideType: overrideState.isReplaced ? 'replaced' : overrideState.isProgressionAdjusted ? 'progression_adjusted' : overrideState.isSkipped ? 'skipped' : null,
       currentName: overrideState.currentName,
     } : undefined)
-  }, [safeCurrentExercise, safeExerciseIndex, liveSession.exerciseOverrides])
+  }, [safeCurrentExercise, safeExerciseIndex, normalizedExerciseOverrides])
   
   const calibrationMessage = useMemo(() => {
     return getCalibrationMessage(sessionRuntimeTruth)
@@ -2288,7 +2306,7 @@ export function StreamlinedWorkoutSession({
   // [LIVE-WORKOUT-CORRIDOR-FIX] Load next session info when workout completes
   // This uses dynamic import to avoid loading the heavy adaptive-program-builder at module load
   useEffect(() => {
-    if (liveSession.status === 'completed' && !nextSessionInfo) {
+    if (safeStatus === 'completed' && !nextSessionInfo) {
       (async () => {
         try {
           const { getLatestAdaptiveProgram } = await import('@/lib/adaptive-program-builder')
@@ -2311,7 +2329,7 @@ export function StreamlinedWorkoutSession({
         }
       })()
     }
-  }, [liveSession.status, nextSessionInfo, safeSession.dayNumber])
+  }, [safeStatus, nextSessionInfo, safeSession.dayNumber])
   
   // Auto-save on state changes - skip for demo sessions
   // [UNIFIED-HANDOFF] Now saves from liveSession - the single authoritative owner
@@ -2343,7 +2361,7 @@ export function StreamlinedWorkoutSession({
   
   // [ATOMIC-HANDOFF] Write render_verified breadcrumb on successful active render
   useEffect(() => {
-    if (liveSession.status === 'active') {
+    if (safeStatus === 'active') {
       writeTransitionTrace({
         transitionStage: 'render_verified',
         lastSuccessfulRenderExerciseIndex: safeExerciseIndex,
@@ -2351,11 +2369,12 @@ export function StreamlinedWorkoutSession({
         safeIndexUsed: true,
       })
     }
-  }, [liveSession.status, safeExerciseIndex, safeCurrentExercise.name])
+  }, [safeStatus, safeExerciseIndex, safeCurrentExercise.name])
   
   // Timer effect - uses unified dispatch
+  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safe values from validation
   useEffect(() => {
-    if (liveSession.status === 'active' && liveSession.startTime) {
+    if (safeStatus === 'active' && safeStartTime) {
       timerRef.current = setInterval(() => {
         dispatch({ type: 'TICK_TIMER' })
       }, 1000)
@@ -2363,7 +2382,7 @@ export function StreamlinedWorkoutSession({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
     }
-  }, [liveSession.status, liveSession.startTime])
+  }, [safeStatus, safeStartTime])
   
   // Format duration
   const formatDuration = (seconds: number): string => {
@@ -2605,12 +2624,13 @@ export function StreamlinedWorkoutSession({
   }, [executeUnifiedAdvance])
   
   // [EXECUTION-TRUTH-FIX] Back navigation - review previous exercise
+  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeExerciseIndex from validation
   const handleReviewPreviousExercise = useCallback(() => {
-    if (liveSession.currentExerciseIndex <= 0) return
-    const prevIndex = liveSession.currentExerciseIndex - 1
+    if (safeExerciseIndex <= 0) return
+    const prevIndex = safeExerciseIndex - 1
     setReviewingExerciseIndex(prevIndex)
     setIsReviewingPreviousExercise(true)
-  }, [liveSession.currentExerciseIndex])
+  }, [safeExerciseIndex])
   
   // [EXECUTION-TRUTH-FIX] Close review and return to current exercise
   const handleCloseReview = useCallback(() => {
@@ -2619,9 +2639,10 @@ export function StreamlinedWorkoutSession({
   }, [])
   
   // [EXECUTION-TRUTH-FIX] Get completed sets for a specific exercise
+  // [LIVE-WORKOUT-BOOT-CONTRACT] Use normalizedCompletedSets from validation
   const getCompletedSetsForExercise = useCallback((exerciseIndex: number) => {
-    return liveSession.completedSets.filter(s => s.exerciseIndex === exerciseIndex)
-  }, [liveSession.completedSets])
+    return normalizedCompletedSets.filter(s => s.exerciseIndex === exerciseIndex)
+  }, [normalizedCompletedSets])
   
   // [EXECUTION-TRUTH-FIX] Notes capture handlers
   const handleOpenNotesModal = useCallback(() => {
@@ -2659,11 +2680,10 @@ export function StreamlinedWorkoutSession({
   // ==========================================================================
   
   // Handle exercise replacement
+  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeExerciseIndex from validation
   const handleReplaceExercise = useCallback((newExercise: { id: string; name: string }) => {
-    // Use clamped safe index to prevent out-of-bounds access
-    const exerciseIndex = Math.max(0, Math.min(liveSession.currentExerciseIndex, exercises.length - 1))
     if (exercises.length === 0) return
-    const originalExercise = exercises[exerciseIndex]
+    const originalExercise = exercises[safeExerciseIndex]
     
     // Safety: validate exercise exists at index
     if (!originalExercise) return
@@ -2682,7 +2702,7 @@ export function StreamlinedWorkoutSession({
     // Update local state via dispatch
     dispatch({
       type: 'ADD_EXERCISE_OVERRIDE',
-      index: exerciseIndex,
+      index: safeExerciseIndex,
       override: {
         originalName: originalExercise.name,
         currentName: newExercise.name,
@@ -2691,17 +2711,16 @@ export function StreamlinedWorkoutSession({
         isProgressionAdjusted: false,
       },
     })
-  }, [sessionId, liveSession.currentExerciseIndex, exercises])
+  }, [sessionId, safeExerciseIndex, exercises])
   
   // Handle exercise skip via menu (different from skip button)
+  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeExerciseIndex from validation
   const handleMenuSkipExercise = useCallback(() => {
-    // Use clamped safe index to prevent out-of-bounds access
-    const exerciseIndex = Math.max(0, Math.min(liveSession.currentExerciseIndex, exercises.length - 1))
     if (exercises.length === 0) {
       handleSkipExercise()
       return
     }
-    const originalExercise = exercises[exerciseIndex]
+    const originalExercise = exercises[safeExerciseIndex]
     
     // Safety: validate exercise exists at index
     if (!originalExercise) {
@@ -2721,7 +2740,7 @@ export function StreamlinedWorkoutSession({
     // Mark as skipped via dispatch
     dispatch({
       type: 'MARK_EXERCISE_SKIPPED',
-      index: exerciseIndex,
+      index: safeExerciseIndex,
       override: {
         originalName: originalExercise.name,
         currentName: originalExercise.name,
@@ -2733,14 +2752,13 @@ export function StreamlinedWorkoutSession({
     
     // Then advance to next exercise
     handleSkipExercise()
-  }, [sessionId, liveSession.currentExerciseIndex, exercises, handleSkipExercise])
+  }, [sessionId, safeExerciseIndex, exercises, handleSkipExercise])
   
   // Handle progression adjustment
+  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeExerciseIndex from validation
   const handleProgressionChange = useCallback((newProgression: { id: string; name: string }) => {
-    // Use clamped safe index to prevent out-of-bounds access
-    const exerciseIndex = Math.max(0, Math.min(liveSession.currentExerciseIndex, exercises.length - 1))
     if (exercises.length === 0) return
-    const originalExercise = exercises[exerciseIndex]
+    const originalExercise = exercises[safeExerciseIndex]
     
     // Safety: validate exercise exists at index
     if (!originalExercise) return
@@ -2759,7 +2777,7 @@ export function StreamlinedWorkoutSession({
     // Update local state via dispatch
     dispatch({
       type: 'ADJUST_PROGRESSION',
-      index: exerciseIndex,
+      index: safeExerciseIndex,
       override: {
         originalName: originalExercise.name,
         currentName: newProgression.name,
@@ -2768,14 +2786,16 @@ export function StreamlinedWorkoutSession({
         isProgressionAdjusted: true,
       },
     })
-  }, [sessionId, liveSession.currentExerciseIndex, exercises])
+  }, [sessionId, safeExerciseIndex, exercises])
   
   // Handle undo override
+  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeExerciseIndex from validation
   const handleUndoOverride = useCallback(() => {
-    dispatch({ type: 'UNDO_OVERRIDE', index: liveSession.currentExerciseIndex })
-  }, [liveSession.currentExerciseIndex])
+    dispatch({ type: 'UNDO_OVERRIDE', index: safeExerciseIndex })
+  }, [safeExerciseIndex])
   
   // Get effective exercise (with override applied)
+  // [LIVE-WORKOUT-BOOT-CONTRACT] Use normalizedExerciseOverrides from validation
   const getEffectiveExercise = useCallback((index: number) => {
     // Safety: validate index is within bounds
     if (index < 0 || index >= exercises.length) return null
@@ -2783,7 +2803,7 @@ export function StreamlinedWorkoutSession({
     const baseExercise = exercises[index]
     if (!baseExercise) return null
     
-    const override = liveSession.exerciseOverrides[index]
+    const override = normalizedExerciseOverrides[index]
     
     if (!override) return baseExercise
     
@@ -2795,7 +2815,7 @@ export function StreamlinedWorkoutSession({
       isSkipped: override.isSkipped,
       isProgressionAdjusted: override.isProgressionAdjusted,
     }
-  }, [exercises, liveSession.exerciseOverrides])
+  }, [exercises, normalizedExerciseOverrides])
   
   // Get current effective exercise (with fallback to safe exercise)
   // [ATOMIC-HANDOFF] Use safeExerciseIndex for all render-time lookups
@@ -2809,8 +2829,9 @@ export function StreamlinedWorkoutSession({
   }, [])
   
   // Request exit confirmation (only if there's progress)
+  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeStatus from validation
   const handleRequestExit = useCallback(() => {
-    if (liveSession.status === 'ready' || normalizedCompletedSets.length === 0) {
+    if (safeStatus === 'ready' || normalizedCompletedSets.length === 0) {
       // No progress yet - just clean up and exit
       clearSessionStorage()
       clearRestTimerState()
@@ -2820,7 +2841,7 @@ export function StreamlinedWorkoutSession({
       // Has progress - show confirmation
       setShowExitConfirm(true)
     }
-  }, [liveSession.status, normalizedCompletedSets.length, onCancel])
+  }, [safeStatus, normalizedCompletedSets.length, onCancel])
   
   // Discard and exit (clears all state, no logging)
   const handleDiscardAndExit = useCallback(() => {
@@ -2848,8 +2869,9 @@ export function StreamlinedWorkoutSession({
       } = {}
       
       // Find best performance for key exercises
+      // [LIVE-WORKOUT-BOOT-CONTRACT] Use normalizedCompletedSets from validation
       exercises.forEach((exercise, exerciseIndex) => {
-        const exerciseSets = liveSession.completedSets.filter(s => s.exerciseIndex === exerciseIndex)
+        const exerciseSets = normalizedCompletedSets.filter(s => s.exerciseIndex === exerciseIndex)
         if (exerciseSets.length === 0) return
         
         const bestReps = Math.max(...exerciseSets.map(s => s.actualReps))
@@ -2895,8 +2917,9 @@ export function StreamlinedWorkoutSession({
                 : 'general'
       
       // Build exercise-level outcomes for progression engine
+      // [LIVE-WORKOUT-BOOT-CONTRACT] Use normalizedCompletedSets from validation
       const exerciseOutcomes = exercises.map((exercise, exerciseIndex) => {
-        const exerciseSets = liveSession.completedSets.filter(s => s.exerciseIndex === exerciseIndex)
+        const exerciseSets = normalizedCompletedSets.filter(s => s.exerciseIndex === exerciseIndex)
         const completedSetCount = exerciseSets.length
         const isCompleted = completedSetCount >= (exercise.sets || 1)
         const bestReps = exerciseSets.length > 0 ? Math.max(...exerciseSets.map(s => s.actualReps)) : 0
@@ -2924,7 +2947,8 @@ export function StreamlinedWorkoutSession({
       
   // Quick log the workout with full feedback loop data
     // Ensure minimum 1 minute duration to prevent 0-minute sessions
-    const durationMinutes = Math.max(1, Math.round(liveSession.elapsedSeconds / 60))
+    // [LIVE-WORKOUT-BOOT-CONTRACT] Use safe values from validation
+    const durationMinutes = Math.max(1, Math.round(safeElapsedSeconds / 60))
     quickLogWorkout({
       sessionName: safeSession.dayLabel,
       sessionType,
@@ -2933,7 +2957,7 @@ export function StreamlinedWorkoutSession({
         perceivedDifficulty: finalDifficulty,
         generatedWorkoutId: sessionId,
         keyPerformance,
-        notes: liveSession.workoutNotes || undefined,
+        notes: safeWorkoutNotes || undefined,
         // [EXECUTION-TRUTH-FIX] Include exercise-level notes and flags
         exerciseNotes: Object.entries(sessionNotes.exerciseNotes).map(([idx, note]) => ({
           exerciseIndex: parseInt(idx),
@@ -2979,21 +3003,22 @@ export function StreamlinedWorkoutSession({
   }, [session, liveSession, sessionId, perceivedDifficulty])
   
   // [LIVE-WORKOUT-CORRIDOR] Rest recommendation - uses safeCurrentExercise for crash safety
+  // [LIVE-WORKOUT-BOOT-CONTRACT] Use normalized values from validation
   const getRestRecommendationForCurrentExercise = useCallback((): RestRecommendation => {
-    const avgRPE = liveSession.completedSets.length > 0
-      ? liveSession.completedSets.reduce((sum, s) => sum + s.actualRPE, 0) / liveSession.completedSets.length
+    const avgRPE = normalizedCompletedSets.length > 0
+      ? normalizedCompletedSets.reduce((sum, s) => sum + s.actualRPE, 0) / normalizedCompletedSets.length
       : null
     
     return getRestRecommendation(
       safeCurrentExercise,
-      liveSession.lastSetRPE || undefined,
+      safeLastSetRPE || undefined,
       {
-        setNumber: liveSession.currentSetNumber,
-        totalSetsCompleted: liveSession.completedSets.length,
+        setNumber: validatedSetNumber,
+        totalSetsCompleted: normalizedCompletedSets.length,
         averageRPE: avgRPE,
       }
     )
-  }, [safeCurrentExercise, liveSession.lastSetRPE, liveSession.currentSetNumber, liveSession.completedSets])
+  }, [safeCurrentExercise, safeLastSetRPE, validatedSetNumber, normalizedCompletedSets])
   
   // Legacy getRestTime for any other usage
   const getRestTime = (): number => {
@@ -3001,20 +3026,21 @@ export function StreamlinedWorkoutSession({
   }
   
   // Calculate session stats for performance score
+  // [LIVE-WORKOUT-BOOT-CONTRACT] Use normalized values from validation
   const getSessionStats = () => {
-    const totalSetsCompleted = liveSession.completedSets.length
+    const totalSetsCompleted = normalizedCompletedSets.length
     const avgRPE = totalSetsCompleted > 0 
-      ? liveSession.completedSets.reduce((sum, s) => sum + s.actualRPE, 0) / totalSetsCompleted 
+      ? normalizedCompletedSets.reduce((sum, s) => sum + s.actualRPE, 0) / totalSetsCompleted 
       : null
     
     return {
       totalSets: totalSets,
       completedSets: totalSetsCompleted,
       totalExercises: totalExercises,
-      completedExercises: safeExerciseIndex + (liveSession.status === 'completed' ? 1 : 0),
+      completedExercises: safeExerciseIndex + (safeStatus === 'completed' ? 1 : 0),
       averageRPE: avgRPE,
       estimatedVolume: totalSetsCompleted * 10, // simplified
-      elapsedSeconds: liveSession.elapsedSeconds,
+      elapsedSeconds: safeElapsedSeconds,
     }
   }
   
@@ -3026,11 +3052,12 @@ export function StreamlinedWorkoutSession({
     if (!bootHydrationReady) return
     // [PHASE LW2] Mark live_workout_ready - render completed successfully
     // [PHASE LW2] Mark active state render complete if in active state
-    if (liveSession.status === 'active') {
+    // [LIVE-WORKOUT-BOOT-CONTRACT] Use safe values from validation
+    if (safeStatus === 'active') {
       markBootStage('active_state_render_complete', {
         sessionId,
         currentExerciseIndex: safeExerciseIndex,
-        currentSetNumber: liveSession.currentSetNumber,
+        currentSetNumber: validatedSetNumber,
       })
     }
     
@@ -3050,11 +3077,11 @@ export function StreamlinedWorkoutSession({
       safeExerciseIndex,
       exerciseName: safeCurrentExercise.name,
       exerciseSets: safeCurrentExercise.sets,
-      status: liveSession.status,
-      currentSetNumber: liveSession.currentSetNumber,
+      status: safeStatus,
+      currentSetNumber: validatedSetNumber,
       sessionId,
     })
-  }, [hasValidExercises, safeExerciseIndex, safeCurrentExercise, liveSession.status, liveSession.currentSetNumber, sessionId, logStage, safeWorkoutSessionContract.dayLabel, exercises.length])
+  }, [hasValidExercises, safeExerciseIndex, safeCurrentExercise, safeStatus, validatedSetNumber, sessionId, logStage, safeWorkoutSessionContract.dayLabel, exercises.length])
   
   // [LIVE-WORKOUT-BOOT-CONTRACT] Runtime validation proof diagnostic
   // [PHASE LW2-FIX] CRITICAL: This useEffect MUST be declared BEFORE any early returns
@@ -3288,7 +3315,8 @@ export function StreamlinedWorkoutSession({
   // [PHASE LW3] Boot stage calls moved to effects - render is pure
   // ==========================================================================
   
-  if (liveSession.status === 'ready') {
+  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeStatus from validation
+  if (safeStatus === 'ready') {
     
     console.log('[ready-state-entry]', {
       componentVersion: STREAMLINED_WORKOUT_VERSION,
@@ -3397,7 +3425,8 @@ export function StreamlinedWorkoutSession({
   // RENDER: COMPLETED STATE
   // ==========================================================================
   
-  if (liveSession.status === 'completed') {
+  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeStatus from validation
+  if (safeStatus === 'completed') {
     const stats = getSessionStats()
     let readiness: ReturnType<typeof getDailyReadiness> | null = null
     try {
@@ -3405,6 +3434,7 @@ export function StreamlinedWorkoutSession({
     } catch {
       // Readiness may not be available
     }
+    // [LIVE-WORKOUT-BOOT-CONTRACT] Use normalizedCompletedSets from validation
     const performanceInput = createPerformanceInputFromStats(
       {
         completedSets: stats.completedSets,
@@ -3412,7 +3442,7 @@ export function StreamlinedWorkoutSession({
         elapsedSeconds: stats.elapsedSeconds,
         averageRPE: stats.averageRPE || undefined,
       },
-      liveSession.completedSets
+      normalizedCompletedSets
         .filter(s => s.exerciseIndex >= 0 && s.exerciseIndex < exercises.length) // Filter invalid indexes
         .map(s => {
           // Get target for this specific exercise (with safety)
@@ -3456,7 +3486,8 @@ export function StreamlinedWorkoutSession({
     
     // Generate band progression note if bands were used
     // [LIVE-SESSION-LOCK] Safe band label generation with null guards
-    const bandsUsed = liveSession.completedSets
+    // [LIVE-WORKOUT-BOOT-CONTRACT] Use normalizedCompletedSets from validation
+    const bandsUsed = normalizedCompletedSets
       .filter(s => s.bandUsed && s.bandUsed !== 'none')
       .map(s => s.bandUsed)
     let bandProgressNote: string | null = null
@@ -3530,7 +3561,7 @@ export function StreamlinedWorkoutSession({
                 <span className="text-xs text-[#6B7280]">(optional)</span>
               </div>
               <Textarea
-                value={liveSession.workoutNotes}
+                value={safeWorkoutNotes}
                 onChange={(e) => dispatch({ type: 'SET_WORKOUT_NOTES', notes: e.target.value })}
                 placeholder="Felt strong, wrists sore, short on time..."
                 className="bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] placeholder:text-[#6B7280] min-h-[50px] resize-none text-sm"
@@ -3554,7 +3585,7 @@ export function StreamlinedWorkoutSession({
                 totalSets: stats.totalSets,
                 completedExercises: stats.completedExercises,
                 totalExercises: totalExercises,
-                elapsedSeconds: liveSession.elapsedSeconds,
+                elapsedSeconds: safeElapsedSeconds,
                 averageRPE: stats.averageRPE || undefined,
               }}
               sessionName={safeSession.dayLabel}
@@ -3675,7 +3706,7 @@ function InterExerciseRestCountdown({
 <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
-                  <p className="text-xl font-bold text-[#E6E9EF]">{Math.max(1, Math.round(liveSession.elapsedSeconds / 60))}</p>
+                  <p className="text-xl font-bold text-[#E6E9EF]">{Math.max(1, Math.round(safeElapsedSeconds / 60))}</p>
                   <p className="text-xs text-[#6B7280]">minutes</p>
                 </div>
               <div>
@@ -3718,14 +3749,16 @@ function InterExerciseRestCountdown({
   // RENDER: RESTING STATE
   // ==========================================================================
   
-  if (liveSession.status === 'resting') {
+  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeStatus from validation
+  if (safeStatus === 'resting') {
     const restRecommendation = getRestRecommendationForCurrentExercise()
     const savedRestState = loadRestTimerState()
     
     // [LIVE-WORKOUT-CORRIDOR] Use safeCurrentExercise for guaranteed-safe rendering
+    // [LIVE-WORKOUT-BOOT-CONTRACT] Use validatedSetNumber from validation
     const nextSetInfo = {
       exerciseName: safeCurrentExercise.name,
-      setNumber: Math.min(liveSession.currentSetNumber, safeCurrentExercise.sets),
+      setNumber: Math.min(validatedSetNumber, safeCurrentExercise.sets),
       isNewExercise: false,
     }
     
@@ -3749,7 +3782,7 @@ function InterExerciseRestCountdown({
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-[#6B7280]">{completedSetsCount}/{totalSets}</span>
                   <span className="font-mono text-sm font-bold text-[#E6E9EF] tabular-nums">
-                    {formatDuration(liveSession.elapsedSeconds)}
+                    {formatDuration(safeElapsedSeconds)}
                   </span>
                 </div>
               </div>
@@ -3770,28 +3803,30 @@ function InterExerciseRestCountdown({
         <div className="max-w-lg mx-auto space-y-3">
           
           {/* Last Set Summary */}
-          {liveSession.lastSetRPE && (
+          {/* [LIVE-WORKOUT-BOOT-CONTRACT] Use safeLastSetRPE from validation */}
+          {safeLastSetRPE && (
             <Card className="bg-[#0F1115]/50 border-[#2B313A]/50 p-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[#6B7280]">Last set RPE</span>
                 <Badge className={`${
-                  liveSession.lastSetRPE >= 9 
+                  safeLastSetRPE >= 9 
                     ? 'bg-orange-500/10 text-orange-400 border-0' 
-                    : liveSession.lastSetRPE >= 8
+                    : safeLastSetRPE >= 8
                       ? 'bg-blue-500/10 text-blue-400 border-0'
                       : 'bg-green-500/10 text-green-400 border-0'
                 }`}>
-                  RPE {liveSession.lastSetRPE}
+                  RPE {safeLastSetRPE}
                 </Badge>
               </div>
             </Card>
           )}
           
           {/* Inline Rest Timer */}
+          {/* [LIVE-WORKOUT-BOOT-CONTRACT] Use validatedSetNumber from validation */}
           <InlineRestTimer
             recommendation={restRecommendation}
             exerciseIndex={safeExerciseIndex}
-            setNumber={liveSession.currentSetNumber}
+            setNumber={validatedSetNumber}
             nextSetInfo={nextSetInfo}
             initialState={savedRestState}
             onComplete={handleRestComplete}
@@ -3809,7 +3844,7 @@ function InterExerciseRestCountdown({
               </div>
               <div className="text-right">
                 <p className="text-sm text-[#A4ACB8]">
-                  Set {Math.min(liveSession.currentSetNumber, safeCurrentExercise.sets)}/{safeCurrentExercise.sets}
+                  Set {Math.min(validatedSetNumber, safeCurrentExercise.sets)}/{safeCurrentExercise.sets}
                 </p>
                 <p className="text-xs text-[#6B7280]">
                   {safeCurrentExercise.repsOrTime}
@@ -3884,7 +3919,8 @@ function InterExerciseRestCountdown({
   // [PHASE LW3] Boot stage calls moved to effects - render is pure
   
   // [UNIFIED-HANDOFF] Check for controlled transition error (local fallback, not route boundary)
-  if (liveSession.transitionRepairIssue) {
+  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeTransitionRepairIssue from validation
+  if (safeTransitionRepairIssue) {
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
         <div className="text-center max-w-sm">
@@ -3896,7 +3932,7 @@ function InterExerciseRestCountdown({
             Unable to advance to the next exercise. The exercise data may need repair.
           </p>
           <p className="text-[#6B7280] text-xs mb-6 font-mono">
-            {liveSession.transitionRepairIssue.message}
+            {safeTransitionRepairIssue.message}
           </p>
           <div className="space-y-2">
             <Button
@@ -3943,7 +3979,7 @@ function InterExerciseRestCountdown({
               <div className="flex items-center gap-3">
                 <span className="text-xs text-[#6B7280]">{completedSetsCount}/{totalSets}</span>
                 <span className="font-mono text-sm font-bold text-[#E6E9EF] tabular-nums">
-                  {formatDuration(liveSession.elapsedSeconds)}
+                  {formatDuration(safeElapsedSeconds)}
                 </span>
               </div>
             </div>
@@ -3986,7 +4022,8 @@ function InterExerciseRestCountdown({
               <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
                 {safeCurrentExercise.category}
               </Badge>
-              {liveSession.exerciseOverrides[safeExerciseIndex]?.isReplaced && (
+              {/* [LIVE-WORKOUT-BOOT-CONTRACT] Use normalizedExerciseOverrides from validation */}
+              {normalizedExerciseOverrides[safeExerciseIndex]?.isReplaced && (
                 <Badge className="bg-blue-500/10 text-blue-400 border-0 text-[10px] px-1.5 py-0">Swapped</Badge>
               )}
             </div>
@@ -4068,10 +4105,11 @@ function InterExerciseRestCountdown({
           )}
           
           {/* [LIVE-WORKOUT-CORRIDOR] Set Progress - uses safeCurrentExercise */}
+          {/* [LIVE-WORKOUT-BOOT-CONTRACT] Use validatedSetNumber from validation */}
           <div className="flex items-center gap-3 mt-3">
             <div className="flex items-center gap-1.5 flex-1">
               {Array.from({ length: safeCurrentExercise.sets }).map((_, idx) => {
-                const safeCurrentSet = Math.min(liveSession.currentSetNumber, safeCurrentExercise.sets)
+                const safeCurrentSet = Math.min(validatedSetNumber, safeCurrentExercise.sets)
                 return (
                   <div
                     key={idx}
@@ -4088,7 +4126,7 @@ function InterExerciseRestCountdown({
             </div>
             <span className="text-sm font-medium text-[#E6E9EF] whitespace-nowrap">
               {/* [LIVE-WORKOUT-CORRIDOR] Safe set display - uses safeCurrentExercise */}
-              Set {Math.min(liveSession.currentSetNumber, safeCurrentExercise.sets)}/{safeCurrentExercise.sets}
+              Set {Math.min(validatedSetNumber, safeCurrentExercise.sets)}/{safeCurrentExercise.sets}
             </span>
           </div>
         </Card>
@@ -4151,7 +4189,7 @@ function InterExerciseRestCountdown({
             ))
           ) && (
             <BandSelector
-              value={bandUsed}
+              value={safeBandUsed}
               onChange={setBandUsed}
               recommendedBand={safeCurrentExercise.executionTruth?.recommendedBandColor ?? recommendedBand}
             />
@@ -4159,15 +4197,16 @@ function InterExerciseRestCountdown({
         </Card>
         
         {/* [UNIFIED-HANDOFF] Complete Set Button - uses safe indices */}
+        {/* [LIVE-WORKOUT-BOOT-CONTRACT] Use safeSelectedRPE and validatedSetNumber from validation */}
         <Button
           onClick={handleCompleteSet}
-          disabled={selectedRPE === null}
+          disabled={safeSelectedRPE === null}
           className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-base font-bold disabled:opacity-50"
         >
           <Check className="w-5 h-5 mr-2" />
-          {liveSession.currentSetNumber >= safeCurrentExercise.sets && safeExerciseIndex >= exercises.length - 1
+          {validatedSetNumber >= safeCurrentExercise.sets && safeExerciseIndex >= exercises.length - 1
             ? 'Finish Workout'
-            : liveSession.currentSetNumber >= safeCurrentExercise.sets
+            : validatedSetNumber >= safeCurrentExercise.sets
               ? 'Next Exercise'
               : 'Log Set'
           }

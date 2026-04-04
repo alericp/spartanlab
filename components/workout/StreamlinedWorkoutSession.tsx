@@ -217,7 +217,7 @@ const STORAGE_KEY = 'spartanlab_workout_session'
 const STORAGE_SCHEMA_VERSION = 'workout_session_v2'
 
 // [PHASE-X+1] Version stamp for execution proof
-const STREAMLINED_WORKOUT_VERSION = 'phase_lw2_active_vm_v1'
+const STREAMLINED_WORKOUT_VERSION = 'phase_lw2_boot_safe_v1'
 
 // =============================================================================
 // [PHASE LW2] AUTHORITATIVE BOOT LEDGER
@@ -302,51 +302,80 @@ function createEmptyBootLedger(): BootLedgerState {
   }
 }
 
-function getBootLedger(): BootLedgerState {
-  if (typeof window === 'undefined') return createEmptyBootLedger()
-  return (window as unknown as { __spartanlabBootLedger?: BootLedgerState }).__spartanlabBootLedger || createEmptyBootLedger()
-}
-
-function setBootLedger(ledger: BootLedgerState): void {
-  if (typeof window === 'undefined') return
-  ;(window as unknown as { __spartanlabBootLedger?: BootLedgerState }).__spartanlabBootLedger = ledger
-  // Also persist to sessionStorage for crash recovery
+  function getBootLedger(): BootLedgerState {
+  // [PHASE LW2-FIX] Full try-catch - accessed during render
   try {
-    sessionStorage.setItem('spartanlab_boot_ledger', JSON.stringify(ledger))
-  } catch {}
-}
-
-function markBootStage(stage: BootStage, data?: Partial<BootLedgerState>): void {
-  const ledger = getBootLedger()
-  ledger.currentStage = stage
-  ledger.stages[stage] = Date.now()
-  if (data) {
-    Object.assign(ledger, data)
+    if (typeof window === 'undefined') return createEmptyBootLedger()
+    return (window as unknown as { __spartanlabBootLedger?: BootLedgerState }).__spartanlabBootLedger || createEmptyBootLedger()
+  } catch {
+    return createEmptyBootLedger()
   }
-  // Update window marker for error boundary
-  if (typeof window !== 'undefined') {
+  }
+
+  function setBootLedger(ledger: BootLedgerState): void {
+  // [PHASE LW2-FIX] Full try-catch wrapper - this is called during render via useState initializer
+  try {
+    if (typeof window === 'undefined') return
+    ;(window as unknown as { __spartanlabBootLedger?: BootLedgerState }).__spartanlabBootLedger = ledger
+    // Also persist to sessionStorage for crash recovery
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('spartanlab_boot_ledger', JSON.stringify(ledger))
+    }
+  } catch {
+    // Silently absorb - ledger persistence is non-critical
+  }
+  }
+
+  function markBootStage(stage: BootStage, data?: Partial<BootLedgerState>): void {
+  // [PHASE LW2-FIX] CRITICAL: Wrap entire function in try-catch
+  // This function is called in useState initializers which MUST NOT throw
+  // Any exception here would crash the entire component render
+  try {
+    if (typeof window === 'undefined') return // SSR safe
+    
+    const ledger = getBootLedger()
+    ledger.currentStage = stage
+    ledger.stages[stage] = Date.now()
+    if (data) {
+      Object.assign(ledger, data)
+    }
+    // Update window marker for error boundary
     (window as unknown as { __spartanlabWorkoutStage?: string }).__spartanlabWorkoutStage = stage
+    setBootLedger(ledger)
+    console.log(`[BOOT-LEDGER] ${stage}`, {
+      ...data,
+      timestamp: Date.now(),
+    })
+  } catch (error) {
+    // Silently absorb errors - boot ledger is diagnostic only, not critical
+    console.warn('[BOOT-LEDGER] Failed to mark stage:', stage, error)
   }
-  setBootLedger(ledger)
-  console.log(`[BOOT-LEDGER] ${stage}`, {
-    ...data,
-    timestamp: Date.now(),
-  })
-}
+  }
 
-function recordBootError(stage: BootStage, error: Error | string): void {
-  const ledger = getBootLedger()
-  ledger.errors.push({
-    stage,
-    error: typeof error === 'string' ? error : error.message,
-    timestamp: Date.now(),
-  })
-  setBootLedger(ledger)
-  console.error(`[BOOT-LEDGER] ERROR at ${stage}:`, error)
-}
+  function recordBootError(stage: BootStage, error: Error | string): void {
+  // [PHASE LW2-FIX] CRITICAL: Wrap in try-catch - this can be called during render
+  try {
+    if (typeof window === 'undefined') return // SSR safe
+    
+    const ledger = getBootLedger()
+    ledger.errors.push({
+      stage,
+      error: typeof error === 'string' ? error : error.message,
+      timestamp: Date.now(),
+    })
+    setBootLedger(ledger)
+    console.error(`[BOOT-LEDGER] ERROR at ${stage}:`, error)
+  } catch (err) {
+    // Silently absorb - error recording is diagnostic only
+    console.warn('[BOOT-LEDGER] Failed to record error:', stage, err)
+  }
+  }
 
-// Initialize boot ledger at module load
-markBootStage('module_loaded', { componentVersion: STREAMLINED_WORKOUT_VERSION })
+  // [PHASE LW2-FIX] Initialize boot ledger at module load - ONLY on client side
+  // This must be wrapped because module evaluation happens during SSR too
+  if (typeof window !== 'undefined') {
+    markBootStage('module_loaded', { componentVersion: STREAMLINED_WORKOUT_VERSION })
+  }
 
 // [LW-1 DIAGNOSTIC] Log module load success
 console.log('[LW-2] StreamlinedWorkoutSession module loaded successfully', {

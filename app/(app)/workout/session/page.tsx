@@ -12,7 +12,7 @@
 // =============================================================================
 // AUTHORITATIVE ROUTE VERSION - PROOF OF EXECUTION
 // =============================================================================
-const WORKOUT_SESSION_ROUTE_VERSION = 'phase_lw2_active_vm_v1'
+const WORKOUT_SESSION_ROUTE_VERSION = 'phase_lw2_boot_safe_v1'
 
 // [PHASE LW2] Route-level boot stage marker
 function markRouteStage(stage: string, data?: Record<string, unknown>): void {

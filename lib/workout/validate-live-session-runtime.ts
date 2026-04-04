@@ -86,7 +86,13 @@ export interface LiveSessionState {
   transitionRepairIssue?: unknown
 }
 
-/** Validation result with all safe derived values */
+/** Transition repair issue shape */
+export interface TransitionRepairIssue {
+  type: string
+  message: string
+}
+
+/** Validation result with ALL safe derived values for the complete live workout runtime */
 export interface LiveWorkoutRuntimeValidation {
   // Core validity
   isValid: boolean
@@ -102,6 +108,31 @@ export interface LiveWorkoutRuntimeValidation {
   // Normalized arrays (safe to use even if input was malformed)
   normalizedCompletedSets: CompletedSetData[]
   normalizedExerciseOverrides: Record<number, ExerciseOverrideState>
+  
+  // ==========================================================================
+  // FULL SAFE RUNTIME CONTRACT - ALL values needed for active workout render
+  // These are the AUTHORITATIVE safe values. Do NOT read raw liveSession.*
+  // ==========================================================================
+  
+  // Status & timing
+  safeStatus: 'ready' | 'active' | 'resting' | 'completed' | 'inter_exercise_rest'
+  safeStartTime: number | null
+  safeElapsedSeconds: number
+  safeLastSetRPE: RPEValue | null
+  
+  // User input state
+  safeSelectedRPE: RPEValue | null
+  safeRepsValue: number
+  safeHoldValue: number
+  safeBandUsed: ResistanceBandColor | 'none'
+  safeWorkoutNotes: string
+  
+  // Inter-exercise rest state
+  safeShowInterExerciseRest: boolean
+  safeInterExerciseRestSeconds: number
+  
+  // Transition repair
+  safeTransitionRepairIssue: TransitionRepairIssue | null
   
   // Diagnostics
   diagnostics: {
@@ -346,6 +377,84 @@ export function validateLiveWorkoutRuntime(
   const overridesValid = true // Overrides are always recoverable (empty = valid)
   
   // ==========================================================================
+  // NORMALIZE ALL ADDITIONAL RUNTIME FIELDS (recoverable)
+  // ==========================================================================
+  
+  // Status - default to 'ready' if invalid
+  const safeStatus: LiveWorkoutRuntimeValidation['safeStatus'] = 
+    statusValid ? liveSession!.status : 'ready'
+  
+  // Timing
+  const safeStartTime = liveSessionExists && isFiniteNumber(liveSession?.startTime) 
+    ? liveSession!.startTime 
+    : null
+  
+  const safeElapsedSeconds = liveSessionExists && isFiniteNumber(liveSession?.elapsedSeconds) && liveSession!.elapsedSeconds >= 0
+    ? liveSession!.elapsedSeconds
+    : 0
+  
+  // Last set RPE (nullable, 1-10 range)
+  const rawLastRPE = liveSession?.lastSetRPE
+  const safeLastSetRPE: RPEValue | null = 
+    typeof rawLastRPE === 'number' && rawLastRPE >= 1 && rawLastRPE <= 10
+      ? rawLastRPE as RPEValue
+      : null
+  
+  // Selected RPE (nullable, 1-10 range)
+  const rawSelectedRPE = liveSession?.selectedRPE
+  const safeSelectedRPE: RPEValue | null = 
+    typeof rawSelectedRPE === 'number' && rawSelectedRPE >= 1 && rawSelectedRPE <= 10
+      ? rawSelectedRPE as RPEValue
+      : null
+  
+  // Reps value (default 8)
+  const rawRepsValue = liveSession?.repsValue
+  const safeRepsValue = isFiniteNumber(rawRepsValue) && rawRepsValue >= 0
+    ? rawRepsValue
+    : 8
+  
+  // Hold value (default 30)
+  const rawHoldValue = liveSession?.holdValue
+  const safeHoldValue = isFiniteNumber(rawHoldValue) && rawHoldValue >= 0
+    ? rawHoldValue
+    : 30
+  
+  // Band used (must be valid color or 'none')
+  const VALID_BANDS = ['yellow', 'red', 'green', 'blue', 'black', 'silver', 'gold', 'none'] as const
+  const rawBandUsed = liveSession?.bandUsed
+  const safeBandUsed: ResistanceBandColor | 'none' = 
+    typeof rawBandUsed === 'string' && VALID_BANDS.includes(rawBandUsed as typeof VALID_BANDS[number])
+      ? rawBandUsed as ResistanceBandColor | 'none'
+      : 'none'
+  
+  // Workout notes (default empty string)
+  const safeWorkoutNotes = typeof liveSession?.workoutNotes === 'string'
+    ? liveSession.workoutNotes
+    : ''
+  
+  // Inter-exercise rest state
+  const safeShowInterExerciseRest = typeof liveSession?.showInterExerciseRest === 'boolean'
+    ? liveSession.showInterExerciseRest
+    : false
+  
+  const rawRestSeconds = liveSession?.interExerciseRestSeconds
+  const safeInterExerciseRestSeconds = isFiniteNumber(rawRestSeconds) && rawRestSeconds >= 0
+    ? rawRestSeconds
+    : 0
+  
+  // Transition repair issue (null or valid object)
+  let safeTransitionRepairIssue: TransitionRepairIssue | null = null
+  if (liveSession?.transitionRepairIssue && isPlainObject(liveSession.transitionRepairIssue)) {
+    const issue = liveSession.transitionRepairIssue as Record<string, unknown>
+    if (typeof issue.type === 'string' && typeof issue.message === 'string') {
+      safeTransitionRepairIssue = {
+        type: issue.type,
+        message: issue.message,
+      }
+    }
+  }
+  
+  // ==========================================================================
   // DETERMINE OVERALL VALIDITY
   // ==========================================================================
   
@@ -383,13 +492,27 @@ export function validateLiveWorkoutRuntime(
     normalizedCompletedSets,
     normalizedExerciseOverrides,
     
+    // Full safe runtime contract
+    safeStatus,
+    safeStartTime,
+    safeElapsedSeconds,
+    safeLastSetRPE,
+    safeSelectedRPE,
+    safeRepsValue,
+    safeHoldValue,
+    safeBandUsed,
+    safeWorkoutNotes,
+    safeShowInterExerciseRest,
+    safeInterExerciseRestSeconds,
+    safeTransitionRepairIssue,
+    
     diagnostics: {
       exerciseCount,
       requestedIndex,
       clampedIndex: safeExerciseIndex,
       requestedSetNumber,
       clampedSetNumber: safeCurrentSetNumber,
-      status: liveSession?.status ?? 'unknown',
+      status: safeStatus,
       completedSetsValid,
       overridesValid,
       sessionContractValid,

@@ -146,8 +146,8 @@ export interface SavedSessionInfo {
 // Storage key for auto-save
 const STORAGE_KEY = 'spartanlab_workout_session'
 
-// [LIVE-SESSION-LOCK] Version stamp for execution proof
-const STREAMLINED_WORKOUT_VERSION = 'phase_live_session_lock_v2'
+// [PHASE-X] Version stamp for execution proof
+const STREAMLINED_WORKOUT_VERSION = 'phase_x_session_contract_v1'
 
 // =============================================================================
 // SESSION STRUCTURE SIGNATURE - PREVENTS STALE RESTORE POISONING

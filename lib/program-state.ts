@@ -1107,9 +1107,41 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
           : [],
       } : undefined,
       
-      // Ensure sessions array exists and filter out invalid sessions
+      // [PHASE-X] Ensure sessions array exists and normalize each session
+      // This prevents downstream crashes from malformed session data
       sessions: Array.isArray(program.sessions) 
-        ? program.sessions.filter(s => s && typeof s === 'object' && Array.isArray(s.exercises))
+        ? program.sessions
+            .filter(s => s && typeof s === 'object' && Array.isArray(s.exercises))
+            .map(s => ({
+              ...s,
+              // Ensure session has all required fields
+              dayNumber: typeof s.dayNumber === 'number' ? s.dayNumber : 1,
+              dayLabel: typeof s.dayLabel === 'string' && s.dayLabel ? s.dayLabel : `Day ${s.dayNumber || 1}`,
+              focus: typeof s.focus === 'string' && s.focus ? s.focus : 'general',
+              focusLabel: typeof s.focusLabel === 'string' ? s.focusLabel : 'Training',
+              rationale: typeof s.rationale === 'string' ? s.rationale : '',
+              estimatedMinutes: typeof s.estimatedMinutes === 'number' ? s.estimatedMinutes : 45,
+              isPrimary: s.isPrimary !== false,
+              finisherIncluded: s.finisherIncluded === true,
+              // Normalize exercises with safe defaults
+              exercises: Array.isArray(s.exercises) 
+                ? s.exercises
+                    .filter(ex => ex && typeof ex === 'object')
+                    .map((ex, idx) => ({
+                      ...ex,
+                      id: typeof ex.id === 'string' && ex.id ? ex.id : `exercise-${idx}`,
+                      name: typeof ex.name === 'string' && ex.name ? ex.name : 'Exercise',
+                      category: typeof ex.category === 'string' ? ex.category : 'general',
+                      sets: typeof ex.sets === 'number' && ex.sets > 0 ? ex.sets : 3,
+                      repsOrTime: typeof ex.repsOrTime === 'string' && ex.repsOrTime ? ex.repsOrTime : '8-12 reps',
+                      note: typeof ex.note === 'string' ? ex.note : '',
+                      isOverrideable: ex.isOverrideable !== false,
+                      selectionReason: typeof ex.selectionReason === 'string' ? ex.selectionReason : '',
+                    }))
+                : [],
+              warmup: Array.isArray(s.warmup) ? s.warmup : [],
+              cooldown: Array.isArray(s.cooldown) ? s.cooldown : [],
+            }))
         : [],
       
       // ==========================================================================

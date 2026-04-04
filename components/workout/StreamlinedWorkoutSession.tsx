@@ -726,15 +726,11 @@ export function StreamlinedWorkoutSession({
   isDemo = false,
   isFirstSession = false
 }: StreamlinedWorkoutSessionProps) {
-  // [LW-1 DIAGNOSTIC] Component function called - this runs before any hooks
-  // [PHASE LW2] Mark component entry in boot ledger
-  markBootStage('component_enter', {
-    sessionId: null,
-    dayLabel: session?.dayLabel ?? null,
-    dayNumber: typeof session?.dayNumber === 'number' ? session.dayNumber : null,
-    exerciseCount: Array.isArray(session?.exercises) ? session.exercises.length : null,
-  })
+  // [PHASE LW2-FIX] DO NOT CALL markBootStage() BEFORE HOOKS
+  // React rules of hooks require all hooks to be called unconditionally and in the same order
+  // Boot ledger calls are moved to AFTER all hooks are declared via useEffect
   
+  // Simple console log for immediate debugging (no browser API calls)
   console.log('[LW-2] StreamlinedWorkoutSession function entered', {
     sessionProvided: !!session,
     sessionType: typeof session,
@@ -743,8 +739,9 @@ export function StreamlinedWorkoutSession({
   })
   
   // ==========================================================================
-  // [PHASE LW2] BOOT LEDGER STAGE LOGGING HELPER
+  // [PHASE LW2-FIX] BOOT LEDGER STAGE LOGGING HELPER
   // Uses authoritative boot ledger for deterministic crash recovery
+  // FIX: All browser API calls are now deferred to useEffect to comply with React hook rules
   // ==========================================================================
   const logStage = useCallback((stage: string, data?: Record<string, unknown>) => {
     // Map old stage names to boot ledger stages where applicable
@@ -778,33 +775,13 @@ export function StreamlinedWorkoutSession({
     }
   }, [])
   
-  // STAGE: component_entry
-  logStage('component_entry', { sessionProvided: !!session, sessionType: typeof session })
+  // [PHASE LW2-FIX] Boot ledger calls moved to useEffect below to comply with React hook rules
+  // DO NOT call markBootStage() here - it must be called AFTER all hooks are declared
   
-  // [PHASE LW2] Mark session validation stage
-  markBootStage('session_validation', {
-    exerciseCount: Array.isArray(session?.exercises) ? session.exercises.length : null,
-  })
-  
-  // CRITICAL: Early validation - if session is completely invalid, render fallback immediately
-  // This prevents any downstream code from crashing on a null/undefined session
-  if (!session || typeof session !== 'object') {
-    recordBootError('session_validation', 'Session is null or not an object')
-    return (
-      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
-        <div className="text-center max-w-sm">
-          <div className="w-16 h-16 rounded-full bg-[#1A1F26] border border-[#2B313A] flex items-center justify-center mx-auto mb-4">
-            <Dumbbell className="w-8 h-8 text-[#C1121F]" />
-          </div>
-          <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Session Not Available</h2>
-          <p className="text-[#A4ACB8] mb-6">Unable to load workout session data.</p>
-          <Button onClick={onCancel} className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white">
-            Go Back
-          </Button>
-        </div>
-      </div>
-    )
-  }
+  // [PHASE LW2-FIX] CRITICAL: Track session validity WITHOUT early return
+  // React rules of hooks REQUIRE all hooks to be called in the same order on every render.
+  // We CANNOT return early here - we must declare all hooks first, then return the fallback UI at the end.
+  const sessionIsValid = session && typeof session === 'object'
   
   // ==========================================================================
   // [AUTHORITATIVE-HYDRATION-CONTRACT] ONE SAFE SESSION CONTRACT
@@ -816,6 +793,25 @@ export function StreamlinedWorkoutSession({
     try {
       // STAGE: building_safe_session_contract
       logStage('safe_session_building')
+      
+      // [PHASE LW2-FIX] Handle invalid session by returning a minimal fallback contract
+      // This allows all hooks to be called, then we show the error UI in the render section
+      if (!sessionIsValid) {
+        console.warn('[LW-2] safeWorkoutSessionContract: session is invalid, returning empty contract')
+        return {
+          dayNumber: 0,
+          dayLabel: '__INVALID_SESSION__',
+          focus: 'general',
+          focusLabel: 'Training',
+          rationale: '',
+          estimatedMinutes: 45,
+          isPrimary: true,
+          finisherIncluded: false,
+          exercises: [],
+          warmup: [],
+          cooldown: [],
+        }
+      }
       
       // Normalize exercises with full safety - drop malformed entries
       const rawExercises = Array.isArray(session?.exercises) ? session.exercises : []
@@ -914,7 +910,7 @@ export function StreamlinedWorkoutSession({
         cooldown: [],
       }
     }
-  }, [session, logStage])
+  }, [session, logStage, sessionIsValid])
   
   // ALIAS: For backward compatibility, also expose as safeSession
   const safeSession = safeWorkoutSessionContract
@@ -1086,7 +1082,34 @@ export function StreamlinedWorkoutSession({
   // All exercise access MUST go through this chain, never raw session
   // ==========================================================================
   
-  // STAGE: state_initialized
+  // ==========================================================================
+  // [PHASE LW2-FIX] BOOT LEDGER INITIALIZATION
+  // This effect runs on mount to mark all early boot stages properly.
+  // We do this in useEffect instead of inline to comply with React hook rules.
+  // ==========================================================================
+  useEffect(() => {
+    // Mark all the early stages that happened during initial render
+    markBootStage('component_enter', {
+      sessionId: null,
+      dayLabel: safeWorkoutSessionContract.dayLabel,
+      dayNumber: safeWorkoutSessionContract.dayNumber,
+      exerciseCount: safeWorkoutSessionContract.exercises.length,
+    })
+    markBootStage('session_validation', {
+      exerciseCount: safeWorkoutSessionContract.exercises.length,
+    })
+    markBootStage('safe_session_build_done', {
+      dayLabel: safeWorkoutSessionContract.dayLabel,
+      exerciseCount: safeWorkoutSessionContract.exercises.length,
+    })
+    markBootStage('state_initialized', {
+      currentExerciseIndex: state.currentExerciseIndex,
+      status: state.status,
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Run once on mount only
+  
+  // STAGE: state_initialized (legacy log)
   logStage('state_initialized', { status: state.status, currentExerciseIndex: state.currentExerciseIndex })
   
   // Get exercises from authoritative contract ONLY
@@ -2347,6 +2370,52 @@ export function StreamlinedWorkoutSession({
     })
   }, [hasValidExercises, safeExerciseIndex, safeCurrentExercise, state.status, state.currentSetNumber, sessionId, logStage, safeWorkoutSessionContract.dayLabel, exercises.length])
   
+  // [LIVE-SESSION-FIX] Internal verification: Log all critical contract values for proof
+  // [PHASE LW2-FIX] CRITICAL: This useEffect MUST be declared BEFORE any early returns
+  // to comply with React's rules of hooks (same hook count/order on every render)
+  useEffect(() => {
+    // Only log if we have valid exercises to avoid noise from fallback states
+    if (hasValidExercises) {
+      console.log('[LIVE-SESSION-PROOF] Runtime contract verification:', {
+        componentVersion: STREAMLINED_WORKOUT_VERSION,
+        sessionId,
+        exerciseCount: exercises.length,
+        currentExerciseIndex: safeExerciseIndex,
+        safeCurrentExerciseName: safeCurrentExercise.name,
+        sessionRuntimeTruthBuilt: !!sessionRuntimeTruth,
+        sessionRuntimeDayLabel: sessionRuntimeTruth.dayLabel,
+        exerciseRuntimeTruthBuilt: !!exerciseRuntimeTruth,
+        exerciseRuntimeName: exerciseRuntimeTruth.exerciseName,
+        isDemoSession,
+        estimatedMinutes: safeSession.estimatedMinutes,
+        restoreUsed: state.completedSets.length > 0 && state.status !== 'ready',
+      })
+    }
+  }, [sessionId, exercises.length, safeExerciseIndex, safeCurrentExercise.name, sessionRuntimeTruth, exerciseRuntimeTruth, isDemoSession, safeSession.estimatedMinutes, state.completedSets.length, state.status, hasValidExercises])
+  
+  // ==========================================================================
+  // RENDER: SAFETY FALLBACK - Invalid Session (Route should have caught this)
+  // This handles the case where session was null/invalid but we needed all hooks to run
+  // ==========================================================================
+  
+  if (!sessionIsValid) {
+    recordBootError('session_validation', 'Session is null or not an object')
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 rounded-full bg-[#1A1F26] border border-[#2B313A] flex items-center justify-center mx-auto mb-4">
+            <Dumbbell className="w-8 h-8 text-[#C1121F]" />
+          </div>
+          <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Session Not Available</h2>
+          <p className="text-[#A4ACB8] mb-6">Unable to load workout session data.</p>
+          <Button onClick={onCancel} className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white">
+            Go Back
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   // ==========================================================================
   // RENDER: SAFETY FALLBACK - No Valid Exercises (Controlled Route-Level Failure)
   // This is a CONTROLLED exit, not a crash - exercises array is empty
@@ -2379,24 +2448,6 @@ export function StreamlinedWorkoutSession({
   
   // STAGE: render_header_ready - Exercises validated, proceeding to render
   logStage('render_header_ready', { status: state.status })
-  
-  // [LIVE-SESSION-FIX] Internal verification: Log all critical contract values for proof
-  useEffect(() => {
-    console.log('[LIVE-SESSION-PROOF] Runtime contract verification:', {
-      componentVersion: STREAMLINED_WORKOUT_VERSION,
-      sessionId,
-      exerciseCount: exercises.length,
-      currentExerciseIndex: safeExerciseIndex,
-      safeCurrentExerciseName: safeCurrentExercise.name,
-      sessionRuntimeTruthBuilt: !!sessionRuntimeTruth,
-      sessionRuntimeDayLabel: sessionRuntimeTruth.dayLabel,
-      exerciseRuntimeTruthBuilt: !!exerciseRuntimeTruth,
-      exerciseRuntimeName: exerciseRuntimeTruth.exerciseName,
-      isDemoSession,
-      estimatedMinutes: safeSession.estimatedMinutes,
-      restoreUsed: state.completedSets.length > 0 && state.status !== 'ready',
-    })
-  }, [sessionId, exercises.length, safeExerciseIndex, safeCurrentExercise.name, sessionRuntimeTruth, exerciseRuntimeTruth, isDemoSession, safeSession.estimatedMinutes, state.completedSets.length, state.status])
   
   // ==========================================================================
   // RENDER: RESUME PROMPT

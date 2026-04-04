@@ -217,7 +217,13 @@ const STORAGE_KEY = 'spartanlab_workout_session'
 const STORAGE_SCHEMA_VERSION = 'workout_session_v2'
 
 // [PHASE-X+1] Version stamp for execution proof
-const STREAMLINED_WORKOUT_VERSION = 'phase_x_plus_1_authority_corridor_v3'
+const STREAMLINED_WORKOUT_VERSION = 'phase_lw1_first_render_fix_v1'
+
+// [LW-1 DIAGNOSTIC] Log module load success
+console.log('[LW-1] StreamlinedWorkoutSession module loaded successfully', {
+  version: 'phase_lw1_first_render_fix_v1',
+  timestamp: Date.now(),
+})
 
 // =============================================================================
 // SESSION STRUCTURE SIGNATURE - PREVENTS STALE RESTORE POISONING
@@ -590,6 +596,14 @@ export function StreamlinedWorkoutSession({
   isDemo = false,
   isFirstSession = false
 }: StreamlinedWorkoutSessionProps) {
+  // [LW-1 DIAGNOSTIC] Component function called - this runs before any hooks
+  console.log('[LW-1] StreamlinedWorkoutSession function entered', {
+    sessionProvided: !!session,
+    sessionType: typeof session,
+    sessionDayLabel: session?.dayLabel ?? 'undefined',
+    reasoningSummaryProvided: !!reasoningSummary,
+  })
+  
   // ==========================================================================
   // [AUTHORITATIVE-HYDRATION-CONTRACT] STAGE LOGGING HELPER
   // Single local logger for deterministic stage tracking - never crashes
@@ -635,11 +649,13 @@ export function StreamlinedWorkoutSession({
   // All downstream code reads from this, NEVER from raw session
   // ==========================================================================
   const safeWorkoutSessionContract = useMemo(() => {
-    // STAGE: building_safe_session_contract
-    logStage('safe_session_building')
-    
-    // Normalize exercises with full safety - drop malformed entries
-    const rawExercises = Array.isArray(session?.exercises) ? session.exercises : []
+    // [LW-1 DIAGNOSTIC] Try-catch to identify any crash in this critical useMemo
+    try {
+      // STAGE: building_safe_session_contract
+      logStage('safe_session_building')
+      
+      // Normalize exercises with full safety - drop malformed entries
+      const rawExercises = Array.isArray(session?.exercises) ? session.exercises : []
     const normalizedExercises = rawExercises.map((ex, idx) => {
       // Skip completely invalid entries
       if (!ex || typeof ex !== 'object') {
@@ -716,6 +732,24 @@ export function StreamlinedWorkoutSession({
     })
     
     return contract
+    } catch (error) {
+      // [LW-1 DIAGNOSTIC] Catch any unexpected crash in contract building
+      console.error('[LW-1] CRITICAL: safeWorkoutSessionContract build failed:', error)
+      // Return a minimal safe contract to prevent total crash
+      return {
+        dayNumber: 1,
+        dayLabel: 'Workout',
+        focus: 'general',
+        focusLabel: 'Training',
+        rationale: '',
+        estimatedMinutes: 45,
+        isPrimary: true,
+        finisherIncluded: false,
+        exercises: [],
+        warmup: [],
+        cooldown: [],
+      }
+    }
   }, [session, logStage])
   
   // ALIAS: For backward compatibility, also expose as safeSession

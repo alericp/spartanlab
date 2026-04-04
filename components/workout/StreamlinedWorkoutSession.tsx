@@ -99,6 +99,56 @@ function safeLower(value: unknown): string {
 }
 
 // =============================================================================
+// [LIVE-SESSION-FIX] SAFE OPTIONAL SUBTREE WRAPPER
+// =============================================================================
+// This component catches render errors in OPTIONAL UI blocks (WhyThisWorkout,
+// insight bubbles, etc.) so that the core workout functionality continues
+// even if an optional enhancement fails to render.
+
+import React from 'react'
+
+interface SafeOptionalSubtreeProps {
+  /** Label for logging which subtree failed */
+  label: string
+  /** Children to render */
+  children: React.ReactNode
+  /** Optional fallback to show on error (default: nothing) */
+  fallback?: React.ReactNode
+}
+
+interface SafeOptionalSubtreeState {
+  hasError: boolean
+}
+
+class SafeOptionalSubtree extends React.Component<SafeOptionalSubtreeProps, SafeOptionalSubtreeState> {
+  constructor(props: SafeOptionalSubtreeProps) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError(): SafeOptionalSubtreeState {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    // Log the optional subtree failure - this helps identify issues without crashing workout
+    console.warn(`[WORKOUT-OPTIONAL-BLOCK] ${this.props.label} failed to render:`, {
+      error: error.message,
+      stack: error.stack?.split('\n').slice(0, 3).join('\n'),
+      componentStack: errorInfo.componentStack?.split('\n').slice(0, 3).join('\n'),
+    })
+  }
+
+  render() {
+    if (this.state.hasError) {
+      // Return fallback or nothing - don't crash the workout
+      return this.props.fallback || null
+    }
+    return this.props.children
+  }
+}
+
+// =============================================================================
 // TYPES
 // =============================================================================
 
@@ -152,7 +202,7 @@ const STORAGE_KEY = 'spartanlab_workout_session'
 const STORAGE_SCHEMA_VERSION = 'workout_session_v2'
 
 // [PHASE-X+1] Version stamp for execution proof
-const STREAMLINED_WORKOUT_VERSION = 'phase_x_plus_1_authority_corridor_v2'
+const STREAMLINED_WORKOUT_VERSION = 'phase_x_plus_1_authority_corridor_v3'
 
 // =============================================================================
 // SESSION STRUCTURE SIGNATURE - PREVENTS STALE RESTORE POISONING
@@ -2018,12 +2068,15 @@ export function StreamlinedWorkoutSession({
           </Card>
           
           {/* Why This Workout - Only for adaptive/pro users */}
+          {/* [LIVE-SESSION-FIX] Wrapped in SafeOptionalSubtree to prevent crashes from optional enhancement */}
           {reasoningSummary && !isDemo && (
-            <WhyThisWorkout
-              reasoning={reasoningSummary}
-              defaultCollapsed={true}
-              variant="card"
-            />
+            <SafeOptionalSubtree label="WhyThisWorkout">
+              <WhyThisWorkout
+                reasoning={reasoningSummary}
+                defaultCollapsed={true}
+                variant="card"
+              />
+            </SafeOptionalSubtree>
           )}
           
           {/* Start Button - Primary CTA */}

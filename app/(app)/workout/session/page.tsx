@@ -12,7 +12,7 @@
 // =============================================================================
 // AUTHORITATIVE ROUTE VERSION - PROOF OF EXECUTION
 // =============================================================================
-const WORKOUT_SESSION_ROUTE_VERSION = 'phase_x_plus_1_authority_corridor_v2'
+const WORKOUT_SESSION_ROUTE_VERSION = 'phase_x_plus_1_authority_corridor_v3'
 
 import { useState, useEffect, Suspense, Component, type ReactNode, type ErrorInfo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'

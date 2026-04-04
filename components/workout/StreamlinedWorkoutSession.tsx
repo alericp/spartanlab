@@ -106,6 +106,21 @@ import {
   type LiveWorkoutRuntimeValidation,
   type NormalizedExercise,
 } from '@/lib/workout/validate-live-session-runtime'
+// [LIVE-WORKOUT-MACHINE] Authoritative runtime state machine for workout execution
+import {
+  createInitialMachineState,
+  workoutMachineReducer,
+  validateActiveEntry,
+  deriveViewModel,
+  serializeForStorage,
+  deserializeFromStorage,
+  type WorkoutMachineState,
+  type WorkoutMachineAction,
+  type MachineSessionContract,
+  type MachineExercise,
+  type WorkoutPhase,
+  type CompletedSet,
+} from '@/lib/workout/live-workout-machine'
 
 // =============================================================================
 // SAFE STRING HELPER - PREVENTS toLowerCase CRASHES
@@ -1712,6 +1727,33 @@ export function StreamlinedWorkoutSession({
     return `session-${safeSession.dayLabel}-${safeSession.dayNumber}`
   }, [isDemoSession, safeSession.dayLabel, safeSession.dayNumber])
   
+  // ==========================================================================
+  // [LIVE-WORKOUT-MACHINE] Convert safeWorkoutSessionContract to MachineSessionContract
+  // This is the bridge between the normalized session and the state machine
+  // ==========================================================================
+  const machineSessionContract = useMemo<MachineSessionContract | null>(() => {
+    if (!sessionIsValid || safeSession.dayLabel === '__INVALID_SESSION__') {
+      return null
+    }
+    return {
+      dayLabel: safeSession.dayLabel || 'Workout',
+      dayNumber: safeSession.dayNumber || 1,
+      estimatedMinutes: safeSession.estimatedMinutes || 45,
+      exercises: safeSession.exercises.map((ex): MachineExercise => ({
+        id: ex.id,
+        name: ex.name,
+        category: ex.category,
+        sets: ex.sets,
+        repsOrTime: ex.repsOrTime,
+        note: ex.note,
+        isOverrideable: ex.isOverrideable,
+        prescribedLoad: ex.prescribedLoad,
+        targetRPE: ex.targetRPE,
+        executionTruth: ex.executionTruth,
+      })),
+    }
+  }, [sessionIsValid, safeSession])
+  
   // [LIVE-SESSION-LOCK] Generate structure signature for restore validation
   const sessionStructureSignature = useMemo(() => {
     return generateSessionStructureSignature(safeSession)
@@ -1736,18 +1778,221 @@ export function StreamlinedWorkoutSession({
   const [showResumePrompt, setShowResumePrompt] = useState(false)
   
   // ==========================================================================
-  // [UNIFIED-HANDOFF] SINGLE AUTHORITATIVE STATE OWNER
-  // ALL transition-sensitive state under ONE reducer - no compatibility shims
-  // The reducer is the ONLY mutation path for live session state
-  //
-  // MIGRATION COMPLETE:
-  // - Removed: compatibility `state` alias
-  // - Removed: compatibility `setState` wrapper
-  // - Removed: RESTORE_FROM_STORAGE as runtime mutation (now HYDRATE_FROM_STORAGE for restore only)
-  // - All mutations now go through explicit dispatch actions
-  // - No more split-state architecture
+  // [LIVE-WORKOUT-MACHINE] AUTHORITATIVE STATE MACHINE
+  // The machine is the SINGLE SOURCE OF TRUTH for workout execution
+  // All transitions go through the machine reducer - no parallel state systems
   // ==========================================================================
-  const [liveSession, dispatch] = useReducer(liveSessionReducer, undefined, createInitialLiveSessionState)
+  const [machineState, machineDispatch] = useReducer(
+    workoutMachineReducer,
+    sessionId,
+    createInitialMachineState
+  )
+  
+  // ==========================================================================
+  // [LIVE-WORKOUT-MACHINE] Derive view model from machine state
+  // This is the ONLY source for render values - no scattered ad hoc derivations
+  // ==========================================================================
+  const viewModel = useMemo(() => {
+    return deriveViewModel(machineState, machineSessionContract, existingSession ? { completedSets: existingSession.completedSets } : null)
+  }, [machineState, machineSessionContract, existingSession])
+  
+  // ==========================================================================
+  // [BACKWARD-COMPAT] Alias machine state fields to old names for gradual migration
+  // These will be removed once all code is migrated to use viewModel
+  // ==========================================================================
+  const liveSession = useMemo(() => ({
+    status: machineState.phase === 'between_exercise_rest' ? 'resting' as const : 
+            machineState.phase === 'transitioning' ? 'active' as const :
+            machineState.phase === 'invalid' ? 'ready' as const :
+            machineState.phase as 'ready' | 'active' | 'resting' | 'completed',
+    currentExerciseIndex: machineState.currentExerciseIndex,
+    currentSetNumber: machineState.currentSetNumber,
+    completedSets: machineState.completedSets.map(s => ({
+      exerciseIndex: s.exerciseIndex,
+      setNumber: s.setNumber,
+      actualReps: s.actualReps,
+      holdSeconds: s.holdSeconds,
+      actualRPE: s.actualRPE,
+      bandUsed: s.bandUsed,
+      timestamp: s.timestamp,
+    })),
+    startTime: machineState.startTime,
+    elapsedSeconds: machineState.elapsedSeconds,
+    lastSetRPE: machineState.lastSetRPE,
+    workoutNotes: machineState.workoutNotes,
+    exerciseOverrides: machineState.exerciseOverrides,
+    selectedRPE: machineState.selectedRPE,
+    repsValue: machineState.repsValue,
+    holdValue: machineState.holdValue,
+    bandUsed: machineState.bandUsed,
+    showInterExerciseRest: machineState.phase === 'between_exercise_rest',
+    interExerciseRestSeconds: machineState.interExerciseRestSeconds,
+    transitionRepairIssue: machineState.phase === 'invalid' ? { type: 'next_exercise_invalid' as const, message: machineState.invalidReason || 'Unknown error' } : null,
+  }), [machineState])
+  
+  // Wrapper dispatch that maps old action types to machine actions
+  const dispatch = useCallback((action: LiveSessionAction) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[v0] [legacy_dispatch]', action.type)
+    }
+    switch (action.type) {
+      case 'START_WORKOUT_ACTIVE':
+        machineDispatch({ type: 'START_WORKOUT', startTime: action.startTime })
+        break
+      case 'RESUME_WORKOUT':
+        // Resume needs to restore saved state
+        const savedState = existingSession ? {
+          currentExerciseIndex: existingSession.currentExerciseIndex,
+          currentSetNumber: existingSession.currentSetNumber,
+          completedSets: existingSession.completedSets as unknown as CompletedSet[],
+          elapsedSeconds: existingSession.elapsedSeconds,
+          workoutNotes: existingSession.notes || '',
+        } : {}
+        machineDispatch({ type: 'RESUME_WORKOUT', startTime: action.startTime, savedState })
+        break
+      case 'START_FRESH_WORKOUT':
+        machineDispatch({ type: 'START_FRESH', startTime: action.startTime })
+        break
+      case 'FINISH_WORKOUT':
+        machineDispatch({ type: 'COMPLETE_WORKOUT', finalCompletedSets: machineState.completedSets })
+        break
+      case 'RESET_TO_READY':
+        machineDispatch({ type: 'RESET_TO_READY' })
+        break
+      case 'SET_STATUS':
+        // Status changes happen through other actions in the machine
+        break
+      case 'TICK_TIMER':
+        machineDispatch({ type: 'TICK_TIMER' })
+        break
+      case 'SET_RPE':
+        if (action.rpe !== null) {
+          machineDispatch({ type: 'SET_RPE', rpe: action.rpe })
+        }
+        break
+      case 'SET_REPS':
+        machineDispatch({ type: 'SET_REPS', value: action.value })
+        break
+      case 'SET_HOLD':
+        machineDispatch({ type: 'SET_HOLD', value: action.value })
+        break
+      case 'SET_BAND':
+        machineDispatch({ type: 'SET_BAND', band: action.band })
+        break
+      case 'SET_WORKOUT_NOTES':
+        machineDispatch({ type: 'SET_NOTES', notes: action.notes })
+        break
+      case 'COMPLETE_SET_SAME_EXERCISE':
+        // For same exercise, dispatch COMPLETE_SET with isLastSetOfExercise=false
+        const lastSet = action.newCompletedSets[action.newCompletedSets.length - 1]
+        if (lastSet) {
+          machineDispatch({
+            type: 'COMPLETE_SET',
+            completedSet: {
+              exerciseIndex: lastSet.exerciseIndex,
+              setNumber: lastSet.setNumber,
+              actualReps: lastSet.actualReps,
+              holdSeconds: lastSet.holdSeconds,
+              actualRPE: lastSet.actualRPE,
+              bandUsed: lastSet.bandUsed,
+              timestamp: lastSet.timestamp,
+            },
+            isLastSetOfExercise: false,
+            exerciseCount: machineSessionContract?.exercises.length ?? 1,
+          })
+        }
+        break
+      case 'SHOW_INTER_EXERCISE_REST':
+        // This is handled by COMPLETE_SET when isLastSetOfExercise=true
+        const restSet = action.newCompletedSets[action.newCompletedSets.length - 1]
+        if (restSet) {
+          machineDispatch({
+            type: 'COMPLETE_SET',
+            completedSet: {
+              exerciseIndex: restSet.exerciseIndex,
+              setNumber: restSet.setNumber,
+              actualReps: restSet.actualReps,
+              holdSeconds: restSet.holdSeconds,
+              actualRPE: restSet.actualRPE,
+              bandUsed: restSet.bandUsed,
+              timestamp: restSet.timestamp,
+            },
+            isLastSetOfExercise: true,
+            exerciseCount: machineSessionContract?.exercises.length ?? 1,
+          })
+        }
+        break
+      case 'COMPLETE_INTER_EXERCISE_REST':
+      case 'SKIP_INTER_EXERCISE_REST':
+        machineDispatch({
+          type: 'ADVANCE_TO_NEXT_EXERCISE',
+          nextIndex: action.snapshot.nextExerciseIndex,
+          targetValue: action.snapshot.nextRepsValue,
+        })
+        break
+      case 'SKIP_EXERCISE':
+        machineDispatch({
+          type: 'SKIP_EXERCISE',
+          index: machineState.currentExerciseIndex,
+          exerciseCount: machineSessionContract?.exercises.length ?? 1,
+        })
+        break
+      case 'ADVANCE_TO_NEXT_EXERCISE':
+        machineDispatch({
+          type: 'ADVANCE_TO_NEXT_EXERCISE',
+          nextIndex: action.snapshot.nextExerciseIndex,
+          targetValue: action.snapshot.nextRepsValue,
+        })
+        break
+      case 'COMPLETE_WORKOUT':
+        const cwSet = action.newCompletedSets[action.newCompletedSets.length - 1]
+        if (cwSet) {
+          machineDispatch({
+            type: 'COMPLETE_SET',
+            completedSet: {
+              exerciseIndex: cwSet.exerciseIndex,
+              setNumber: cwSet.setNumber,
+              actualReps: cwSet.actualReps,
+              holdSeconds: cwSet.holdSeconds,
+              actualRPE: cwSet.actualRPE,
+              bandUsed: cwSet.bandUsed,
+              timestamp: cwSet.timestamp,
+            },
+            isLastSetOfExercise: true,
+            exerciseCount: machineSessionContract?.exercises.length ?? 1,
+          })
+        }
+        break
+      case 'HYDRATE_FROM_STORAGE':
+        // Handle hydration by dispatching RESUME_WORKOUT
+        if (action.savedState.completedSets && action.savedState.completedSets.length > 0) {
+          machineDispatch({
+            type: 'RESUME_WORKOUT',
+            startTime: action.savedState.startTime || Date.now(),
+            savedState: {
+              currentExerciseIndex: action.savedState.currentExerciseIndex,
+              currentSetNumber: action.savedState.currentSetNumber,
+              completedSets: action.savedState.completedSets as unknown as CompletedSet[],
+              elapsedSeconds: action.savedState.elapsedSeconds,
+              workoutNotes: action.savedState.workoutNotes,
+              lastSetRPE: action.savedState.lastSetRPE,
+            },
+          })
+        }
+        break
+      case 'SET_TRANSITION_ERROR':
+        machineDispatch({ type: 'ENTER_INVALID', reason: action.error.message, stage: action.error.type })
+        break
+      case 'CLEAR_TRANSITION_ERROR':
+        machineDispatch({ type: 'RETRY' })
+        break
+      default:
+        // Handle remaining actions that don't have machine equivalents
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[v0] [unmapped_action]', (action as { type: string }).type)
+        }
+    }
+  }, [machineDispatch, machineState, machineSessionContract, existingSession])
   
   // ==========================================================================
   // [LIVE-WORKOUT-BOOT-CONTRACT] INPUT STATE ALIASES
@@ -1969,7 +2214,7 @@ export function StreamlinedWorkoutSession({
     normalizedCompletedSets,
     normalizedExerciseOverrides,
     // Full safe runtime contract - use these instead of raw liveSession.*
-    safeStatus,
+    safeStatus: _oldSafeStatus, // Deprecated - machine phase is authoritative
     safeStartTime,
     safeElapsedSeconds,
     safeLastSetRPE,
@@ -1983,6 +2228,24 @@ export function StreamlinedWorkoutSession({
     safeTransitionRepairIssue,
     diagnostics: runtimeDiagnostics,
   } = runtimeValidation
+  
+  // ==========================================================================
+  // [LIVE-WORKOUT-MACHINE] MACHINE PHASE IS AUTHORITATIVE
+  // Map machine phases to UI status for backward compatibility
+  // ==========================================================================
+  const safeStatus = useMemo(() => {
+    const phase = machineState.phase
+    switch (phase) {
+      case 'ready': return 'ready' as const
+      case 'active': return 'active' as const
+      case 'resting': return 'resting' as const
+      case 'between_exercise_rest': return 'resting' as const
+      case 'transitioning': return 'active' as const
+      case 'completed': return 'completed' as const
+      case 'invalid': return 'ready' as const // Show ready UI with error fallback
+      default: return 'ready' as const
+    }
+  }, [machineState.phase])
   
   // Get exercises array from contract (for iteration, length checks)
   const exercises = safeWorkoutSessionContract.exercises
@@ -2411,21 +2674,23 @@ export function StreamlinedWorkoutSession({
   }, [bootHydrationReady, exercises, sessionRuntimeTruth, exerciseRuntimeTruth, calibrationMessage])
   
   // [MACHINE-PHASE-DIAGNOSTIC] Log phase transitions for debugging
+  // [LIVE-WORKOUT-MACHINE] Machine phase diagnostic effect
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[v0] [machine_phase_diagnostic]', {
-        phase: safeStatus,
-        runtimeIsValid,
-        bootPrepOk: bootPreparation.ok,
-        activeEntryOk: activeEntryPreparation.ok,
-        hasValidExercises,
-        validatedCurrentExercise: validatedCurrentExercise?.name ?? 'null',
-        activeWorkoutViewModelValid: activeWorkoutViewModel.isValid,
-        exerciseCount: exercises.length,
-        currentIndex: safeExerciseIndex,
-      })
-    }
-  }, [safeStatus, runtimeIsValid, bootPreparation.ok, activeEntryPreparation.ok, hasValidExercises, validatedCurrentExercise, activeWorkoutViewModel.isValid, exercises.length, safeExerciseIndex])
+  if (process.env.NODE_ENV === 'development') {
+  console.log('[v0] [machine_phase_diagnostic]', {
+  machinePhase: machineState.phase,
+  safeStatus,
+  viewModelPhase: viewModel.phase,
+  currentExerciseIndex: machineState.currentExerciseIndex,
+  currentSetNumber: machineState.currentSetNumber,
+  completedSetsCount: machineState.completedSets.length,
+  runtimeIsValid,
+  bootPrepOk: bootPreparation.ok,
+  hasValidExercises,
+  exerciseCount: machineSessionContract?.exercises.length ?? 0,
+  })
+  }
+  }, [machineState.phase, machineState.currentExerciseIndex, machineState.currentSetNumber, machineState.completedSets.length, safeStatus, viewModel.phase, runtimeIsValid, bootPreparation.ok, hasValidExercises, machineSessionContract])
   
   // Repair index if out of bounds (happens on next render cycle)
   useEffect(() => {
@@ -2715,19 +2980,22 @@ export function StreamlinedWorkoutSession({
     }
   }, [safeStatus, safeExerciseIndex, safeCurrentExercise.name, activeEntryPreparation.ok])
   
-  // Timer effect - uses unified dispatch
-  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safe values from validation
-  // [ACTIVE-ENTRY-GUARD] Only run if active entry preparation succeeded
+  // Timer effect - [LIVE-WORKOUT-MACHINE] Driven by machine phase
+  // Timer runs in active, resting, and between_exercise_rest phases
   useEffect(() => {
-    if (safeStatus === 'active' && safeStartTime && activeEntryPreparation.ok) {
+    const phase = machineState.phase
+    const shouldTick = (phase === 'active' || phase === 'resting' || phase === 'between_exercise_rest') 
+      && machineState.startTime !== null
+    
+    if (shouldTick) {
       timerRef.current = setInterval(() => {
-        dispatch({ type: 'TICK_TIMER' })
+        machineDispatch({ type: 'TICK_TIMER' })
       }, 1000)
     }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
     }
-  }, [safeStatus, safeStartTime, activeEntryPreparation.ok])
+  }, [machineState.phase, machineState.startTime, machineDispatch])
   
   // Format duration
   const formatDuration = (seconds: number): string => {
@@ -2737,30 +3005,37 @@ export function StreamlinedWorkoutSession({
   }
   
   // Start workout
-  // [PHASE LW2] Validates active state requirements before transition
+  // [LIVE-WORKOUT-MACHINE] Validates active state requirements via machine validation
   const handleStart = useCallback(() => {
-  // [PHASE LW2] Validate before transitioning to active
-  if (!hasValidExercises) {
-    console.error('[WORKOUT-START] Cannot start - no valid exercises')
-    recordBootError('active_state_entry', new Error('No valid exercises'))
+  // [LIVE-WORKOUT-MACHINE] Validate via machine before transitioning to active
+  const validation = validateActiveEntry(machineState, machineSessionContract)
+  if (!validation.isValid) {
+    console.error('[WORKOUT-START] Machine validation failed:', validation.reason)
+    recordBootError('active_state_entry', new Error(validation.reason || 'Machine validation failed'))
+    machineDispatch({ 
+      type: 'ENTER_INVALID', 
+      reason: validation.reason || 'Unable to start workout', 
+      stage: validation.stage || 'active_entry_validation' 
+    })
     return
   }
   
-  if (!activeWorkoutViewModel.isValid) {
-    console.error('[WORKOUT-START] Cannot start - view model invalid')
-    recordBootError('active_state_entry', new Error('Active view model invalid'))
-    return
+  // Also check legacy validation for backward compat
+  if (!hasValidExercises) {
+  console.error('[WORKOUT-START] Cannot start - no valid exercises')
+  recordBootError('active_state_entry', new Error('No valid exercises'))
+  return
   }
   
   markBootStage('active_state_entry', {
-    sessionId: activeWorkoutViewModel.sessionId,
-    exerciseCount: activeWorkoutViewModel.totalExercises,
-    currentExerciseIndex: activeWorkoutViewModel.currentExerciseIndex,
+  sessionId: sessionId,
+  exerciseCount: machineSessionContract?.exercises.length ?? 0,
+  currentExerciseIndex: machineState.currentExerciseIndex,
   })
   
   setShowResumePrompt(false)
-  dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
-  }, [hasValidExercises, activeWorkoutViewModel])
+dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
+  }, [hasValidExercises, machineState, machineSessionContract, machineDispatch, sessionId])
   
   // Resume existing workout
   const handleResume = useCallback(() => {
@@ -3509,29 +3784,41 @@ export function StreamlinedWorkoutSession({
   // Check for active entry failure only when transitioning to active state
   const activeEntryFailed = safeStatus === 'active' && !activeEntryPreparation.ok
   
-  const shouldShowLocalFallback = bootHydrationReady && (!runtimeIsValid || !bootPreparation.ok || activeEntryFailed)
-  const fallbackReason = !runtimeIsValid 
-    ? runtimeInvalidReason 
-    : !bootPreparation.ok
-      ? bootPreparation.failureReason
-      : activeEntryPreparation.failureReason
-  const fallbackStage = !runtimeIsValid 
-    ? 'validation' 
-    : !bootPreparation.ok
-      ? bootPreparation.failureStage
-      : activeEntryPreparation.failureStage
+  // [LIVE-WORKOUT-MACHINE] Machine invalid phase is first-class fallback trigger
+  const machineInvalid = machineState.phase === 'invalid'
+  
+  const shouldShowLocalFallback = bootHydrationReady && (
+    !runtimeIsValid || !bootPreparation.ok || activeEntryFailed || machineInvalid
+  )
+  const fallbackReason = machineInvalid
+    ? machineState.invalidReason
+    : !runtimeIsValid
+      ? runtimeInvalidReason
+      : !bootPreparation.ok
+        ? bootPreparation.failureReason
+        : activeEntryPreparation.failureReason
+  const fallbackStage = machineInvalid
+    ? machineState.invalidStage
+    : !runtimeIsValid
+      ? 'validation'
+      : !bootPreparation.ok
+        ? bootPreparation.failureStage
+        : activeEntryPreparation.failureStage
   
   if (shouldShowLocalFallback) {
     // Log diagnostic info for debugging
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('[v0] [local_fallback_rendered]', {
-        stage: fallbackStage,
-        reason: fallbackReason,
-        runtimeIsValid,
-        bootPrepOk: bootPreparation.ok,
-        activeEntryOk: activeEntryPreparation.ok,
-        diagnostics: runtimeDiagnostics,
-      })
+  if (process.env.NODE_ENV === 'development') {
+  console.warn('[v0] [local_fallback_rendered]', {
+  stage: fallbackStage,
+  reason: fallbackReason,
+  machinePhase: machineState.phase,
+  machineInvalid: machineState.phase === 'invalid',
+  machineInvalidReason: machineState.invalidReason,
+  runtimeIsValid,
+  bootPrepOk: bootPreparation.ok,
+  activeEntryOk: activeEntryPreparation.ok,
+  diagnostics: runtimeDiagnostics,
+  })
     }
     
     return (
@@ -4119,7 +4406,106 @@ function InterExerciseRestCountdown({
   }
   
   // ==========================================================================
-  // RENDER: RESTING STATE
+  // RENDER: BETWEEN-EXERCISE REST STATE (machine phase)
+  // ==========================================================================
+  
+  if (machineState.phase === 'between_exercise_rest') {
+    // Derive next exercise info from machine view model
+    const betweenRestVM = viewModel.phase === 'between_exercise_rest' ? viewModel : null
+    const nextExName = betweenRestVM?.nextExerciseName ?? 'Next Exercise'
+    const nextExCategory = betweenRestVM?.nextExerciseCategory ?? 'general'
+    
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex flex-col">
+        {/* Sticky Session Header */}
+        <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
+          <div className="px-4 py-2.5">
+            <div className="max-w-lg mx-auto">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                  <span className="text-sm font-medium text-[#E6E9EF] truncate max-w-[160px]">
+                    {safeDisplayLabel}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-[#6B7280]">{completedSetsCount}/{totalSets}</span>
+                  <span className="font-mono text-sm font-bold text-[#E6E9EF] tabular-nums">
+                    {formatDuration(safeElapsedSeconds)}
+                  </span>
+                </div>
+              </div>
+              <div className="h-1 bg-[#2B313A] rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-green-500 transition-all duration-300"
+                  style={{ width: `${(completedSetsCount / totalSets) * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Between Exercise Rest Content */}
+        <div className="flex-1 px-4 py-6 sm:p-8">
+          <div className="max-w-lg mx-auto space-y-6">
+            {/* Exercise Completed Message */}
+            <Card className="bg-green-500/10 border-green-500/30 p-4">
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="w-8 h-8 text-green-500" />
+                <div>
+                  <p className="text-lg font-bold text-[#E6E9EF]">Exercise Complete!</p>
+                  <p className="text-sm text-[#A4ACB8]">{safeCurrentExercise.name} finished</p>
+                </div>
+              </div>
+            </Card>
+            
+            {/* Next Exercise Preview */}
+            <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
+              <p className="text-xs text-[#6B7280] uppercase tracking-wider mb-2">Up Next</p>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-[#C1121F]/10 border border-[#C1121F]/30 flex items-center justify-center">
+                  <Dumbbell className="w-5 h-5 text-[#C1121F]" />
+                </div>
+                <div>
+                  <p className="font-semibold text-[#E6E9EF]">{nextExName}</p>
+                  <p className="text-xs text-[#6B7280] capitalize">{nextExCategory}</p>
+                </div>
+              </div>
+            </Card>
+            
+            {/* Rest Timer */}
+            <div className="text-center py-4">
+              <p className="text-sm text-[#6B7280] mb-2">Rest Time</p>
+              <p className="text-4xl font-mono font-bold text-[#E6E9EF]">
+                {Math.floor(machineState.interExerciseRestSeconds / 60)}:{String(machineState.interExerciseRestSeconds % 60).padStart(2, '0')}
+              </p>
+            </div>
+            
+            {/* Continue Button */}
+            <Button
+              onClick={() => {
+                const nextIndex = machineState.currentExerciseIndex + 1
+                const nextEx = machineSessionContract?.exercises[nextIndex]
+                const nextTarget = nextEx?.repsOrTime?.match(/(\d+)/)?.[1]
+                machineDispatch({
+                  type: 'ADVANCE_TO_NEXT_EXERCISE',
+                  nextIndex,
+                  targetValue: nextTarget ? parseInt(nextTarget, 10) : 8,
+                })
+              }}
+              className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-lg font-bold"
+            >
+              <SkipForward className="w-5 h-5 mr-2" />
+              Continue to Next Exercise
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
+  // ==========================================================================
+  // RENDER: RESTING STATE (between sets of same exercise)
   // ==========================================================================
   
   // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeStatus from validation

@@ -173,9 +173,10 @@ export function buildSessionRuntimeTruth(
   const { programId = null, workoutsCompleted = 0, sessionIndex = 0 } = options
   
   // Safe extraction with fallbacks
+  // [LIVE-SESSION-FIX] Use dayLabel not label - AdaptiveSession has dayLabel property
   const exercises = session?.exercises ?? []
   const dayNumber = session?.dayNumber ?? (sessionIndex + 1)
-  const dayLabel = session?.label ?? session?.focus ?? `Day ${dayNumber}`
+  const dayLabel = session?.dayLabel ?? session?.focus ?? `Day ${dayNumber}`
   
   // Calculate total sets
   const totalSetCount = exercises.reduce((sum, ex) => sum + (ex?.sets ?? 3), 0)
@@ -312,9 +313,11 @@ function getDefaultExerciseRuntimeTruth(index: number): ExerciseRuntimeTruth {
 
 /**
  * Parse repsOrTime string into structured data
+ * [LIVE-SESSION-FIX] Hardened against non-string inputs
  */
-function parseRepsOrTime(repsOrTime?: string): { displayType: DisplayType; targetValue: number; targetUnit: string } {
-  if (!repsOrTime) {
+function parseRepsOrTime(repsOrTime?: string | unknown): { displayType: DisplayType; targetValue: number; targetUnit: string } {
+  // Early exit for null/undefined/non-string
+  if (!repsOrTime || typeof repsOrTime !== 'string') {
     return { displayType: 'reps', targetValue: 8, targetUnit: 'reps' }
   }
   
@@ -436,7 +439,9 @@ function determineProgressionMode(exercise: AdaptiveExercise): ProgressionMode {
   }
   
   // Check for hold exercises
-  if (name.includes('hold') || exercise.repsOrTime?.toLowerCase().includes('hold')) {
+  // [LIVE-SESSION-FIX] Safe string check for repsOrTime
+  const repsOrTimeStr = typeof exercise.repsOrTime === 'string' ? exercise.repsOrTime.toLowerCase() : ''
+  if (name.includes('hold') || repsOrTimeStr.includes('hold')) {
     return 'hold_duration'
   }
   

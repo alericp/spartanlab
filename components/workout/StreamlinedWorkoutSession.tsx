@@ -1819,6 +1819,24 @@ export function StreamlinedWorkoutSession({
   // STAGE: render_header_ready - Exercises validated, proceeding to render
   logStage('render_header_ready', { status: state.status })
   
+  // [LIVE-SESSION-FIX] Internal verification: Log all critical contract values for proof
+  useEffect(() => {
+    console.log('[LIVE-SESSION-PROOF] Runtime contract verification:', {
+      componentVersion: STREAMLINED_WORKOUT_VERSION,
+      sessionId,
+      exerciseCount: exercises.length,
+      currentExerciseIndex: safeExerciseIndex,
+      safeCurrentExerciseName: safeCurrentExercise.name,
+      sessionRuntimeTruthBuilt: !!sessionRuntimeTruth,
+      sessionRuntimeDayLabel: sessionRuntimeTruth.dayLabel,
+      exerciseRuntimeTruthBuilt: !!exerciseRuntimeTruth,
+      exerciseRuntimeName: exerciseRuntimeTruth.exerciseName,
+      isDemoSession,
+      estimatedMinutes: safeSession.estimatedMinutes,
+      restoreUsed: state.completedSets.length > 0 && state.status !== 'ready',
+    })
+  }, [sessionId, exercises.length, safeExerciseIndex, safeCurrentExercise.name, sessionRuntimeTruth, exerciseRuntimeTruth, isDemoSession, safeSession.estimatedMinutes, state.completedSets.length, state.status])
+  
   // ==========================================================================
   // RENDER: RESUME PROMPT
   // ==========================================================================
@@ -1917,12 +1935,12 @@ export function StreamlinedWorkoutSession({
               <span>{exercises.length} exercises</span>
               <span className="text-[#6B7280]">·</span>
               <span>{totalSets} sets</span>
-              {session.estimatedMinutes && (
-                <>
-                  <span className="text-[#6B7280]">·</span>
-                  <span className="text-[#6B7280]">~{session.estimatedMinutes}min</span>
-                </>
-              )}
+                {safeSession.estimatedMinutes && (
+                  <>
+                    <span className="text-[#6B7280]">·</span>
+                    <span className="text-[#6B7280]">~{safeSession.estimatedMinutes}min</span>
+                  </>
+                )}
             </div>
           </div>
           

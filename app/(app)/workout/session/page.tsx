@@ -109,6 +109,7 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
       }
     } catch {}
     
+    // [LIVE-SESSION-FIX] Enhanced crash logging with full context
     console.error('[workout-route-crash] BOUNDARY_TRIGGERED', {
       routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
       lastKnownStage,
@@ -123,6 +124,19 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
       stack: stackLines.slice(0, 8).join('\n'),
       componentStack: errorInfo.componentStack?.split('\n').slice(0, 5).join('\n'),
       timestamp: new Date().toISOString(),
+    })
+    
+    // Log helpful debugging summary
+    console.error('[workout-route-crash] QUICK DIAGNOSIS:', {
+      cause: crashCorridor,
+      failedAt: likelyStage || 'unknown',
+      hint: crashCorridor === 'unsafe_string_operation' 
+        ? 'A string method (toLowerCase/toUpperCase) was called on undefined'
+        : crashCorridor === 'null_reference'
+          ? 'A property was accessed on null/undefined'
+          : crashCorridor === 'array_operation'
+            ? 'An array method (map/filter/reduce) was called on non-array'
+            : 'Unknown crash type - check stack trace',
     })
   }
 

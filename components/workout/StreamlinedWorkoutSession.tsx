@@ -1934,7 +1934,24 @@ export function StreamlinedWorkoutSession({
   // ==========================================================================
   
   const runtimeValidation = useMemo<LiveWorkoutRuntimeValidation>(() => {
-    return validateLiveWorkoutRuntime(safeWorkoutSessionContract, liveSession)
+    const result = validateLiveWorkoutRuntime(safeWorkoutSessionContract, liveSession)
+    
+    // [MACHINE-DEBUG] Log validation result for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[v0] [runtime_validation_result]', {
+        isValid: result.isValid,
+        reason: result.reason,
+        hasValidExercises: result.hasValidExercises,
+        exerciseCount: result.diagnostics.exerciseCount,
+        safeCurrentExerciseName: result.safeCurrentExercise?.name ?? 'null',
+        sessionContractValid: result.diagnostics.sessionContractValid,
+        liveSessionValid: result.diagnostics.liveSessionValid,
+        status: result.safeStatus,
+        invalidFields: result.invalidFields,
+      })
+    }
+    
+    return result
   }, [safeWorkoutSessionContract, liveSession])
   
   // ==========================================================================
@@ -2393,6 +2410,23 @@ export function StreamlinedWorkoutSession({
     markBootStage('calibration_message_built', { hasMessage: !!calibrationMessage })
   }, [bootHydrationReady, exercises, sessionRuntimeTruth, exerciseRuntimeTruth, calibrationMessage])
   
+  // [MACHINE-PHASE-DIAGNOSTIC] Log phase transitions for debugging
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[v0] [machine_phase_diagnostic]', {
+        phase: safeStatus,
+        runtimeIsValid,
+        bootPrepOk: bootPreparation.ok,
+        activeEntryOk: activeEntryPreparation.ok,
+        hasValidExercises,
+        validatedCurrentExercise: validatedCurrentExercise?.name ?? 'null',
+        activeWorkoutViewModelValid: activeWorkoutViewModel.isValid,
+        exerciseCount: exercises.length,
+        currentIndex: safeExerciseIndex,
+      })
+    }
+  }, [safeStatus, runtimeIsValid, bootPreparation.ok, activeEntryPreparation.ok, hasValidExercises, validatedCurrentExercise, activeWorkoutViewModel.isValid, exercises.length, safeExerciseIndex])
+  
   // Repair index if out of bounds (happens on next render cycle)
   useEffect(() => {
     if (isIndexOutOfBounds && hasValidExercises) {
@@ -2492,8 +2526,9 @@ export function StreamlinedWorkoutSession({
       setsProgress,
       loadDisplay,
       
-      // Validation flag
-      isValid: safeExerciseCount > 0 && currentExerciseName !== 'Exercise',
+      // Validation flag - use runtime validation's hasValidExercises and validatedCurrentExercise
+      // instead of checking fallback name which causes false negatives
+      isValid: hasValidExercises && !!validatedCurrentExercise,
     }
   }, [
     sessionId, 
@@ -2503,7 +2538,9 @@ export function StreamlinedWorkoutSession({
     liveSession.currentExerciseIndex, 
     liveSession.currentSetNumber, 
     liveSession.completedSets, 
-    safeCurrentExercise
+    safeCurrentExercise,
+    hasValidExercises,
+    validatedCurrentExercise
   ])
   
   // [ACTIVE-ENTRY-GUARD] Use guarded isHoldExercise from active entry preparation
@@ -4207,7 +4244,20 @@ function InterExerciseRestCountdown({
   // ==========================================================================
   
   // [PHASE LW2] ACTIVE STATE VALIDATION - Controlled local fallback instead of crash
-  if (!activeWorkoutViewModel.isValid || !activeWorkoutViewModel.hasValidExercises) {
+  // Note: isValid now uses hasValidExercises && !!validatedCurrentExercise
+  if (!activeWorkoutViewModel.isValid) {
+    // Log diagnostic for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[v0] [active_state_validation_failed]', {
+        isValid: activeWorkoutViewModel.isValid,
+        hasValidExercises: activeWorkoutViewModel.hasValidExercises,
+        totalExercises: activeWorkoutViewModel.totalExercises,
+        currentExerciseName: activeWorkoutViewModel.currentExerciseName,
+        runtimeIsValid,
+        bootPrepOk: bootPreparation.ok,
+        activeEntryOk: activeEntryPreparation.ok,
+      })
+    }
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
         <div className="text-center max-w-sm">
@@ -4218,6 +4268,15 @@ function InterExerciseRestCountdown({
           <p className="text-[#A4ACB8] mb-6 text-sm">
             The workout session loaded but the exercise data needs repair. This can happen with older programs.
           </p>
+          {process.env.NODE_ENV === 'development' && (
+            <div className="text-left bg-[#1A1F26] rounded-lg p-3 mb-4 text-xs font-mono">
+              <p className="text-[#6B7280] mb-1">Active State Diagnostics:</p>
+              <p className="text-[#A4ACB8]">isValid: {String(activeWorkoutViewModel.isValid)}</p>
+              <p className="text-[#A4ACB8]">hasValidExercises: {String(activeWorkoutViewModel.hasValidExercises)}</p>
+              <p className="text-[#A4ACB8]">totalExercises: {activeWorkoutViewModel.totalExercises}</p>
+              <p className="text-[#A4ACB8]">currentExercise: {activeWorkoutViewModel.currentExerciseName}</p>
+            </div>
+          )}
           <div className="space-y-2">
             <Button
               onClick={() => dispatch({ type: 'RESET_TO_READY' })}

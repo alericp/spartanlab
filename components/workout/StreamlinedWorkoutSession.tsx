@@ -99,11 +99,9 @@ import {
   type ExerciseContextFlag,
   AVAILABLE_CONTEXT_FLAGS,
 } from '@/lib/workout-execution-truth'
-// [LIVE-WORKOUT-BOOT-CONTRACT] Centralized runtime validation
+// [LIVE-WORKOUT-MACHINE] Hydration validation and types
 import {
-  validateLiveWorkoutRuntime,
   validateHydrationPayload,
-  type LiveWorkoutRuntimeValidation,
   type NormalizedExercise,
 } from '@/lib/workout/validate-live-session-runtime'
 // [LIVE-WORKOUT-MACHINE] Authoritative runtime state machine for workout execution
@@ -1995,12 +1993,12 @@ export function StreamlinedWorkoutSession({
   }, [machineDispatch, machineState, machineSessionContract, existingSession])
   
   // ==========================================================================
-  // [LIVE-WORKOUT-BOOT-CONTRACT] INPUT STATE ALIASES
+  // [LIVE-WORKOUT-MACHINE] INPUT STATE ALIASES
   // For mutation handlers that dispatch to reducer, we still need access to raw liveSession
-  // For display/UI, use the safe* values from runtimeValidation
+  // For display/UI, use the safe* values from machine state
   // ==========================================================================
   // NOTE: These are kept for reducer dispatch handlers that need current values
-  // Display code should use safeSelectedRPE, safeRepsValue, etc. from runtimeValidation
+  // Display code should use safeSelectedRPE, safeRepsValue, etc. from machine state
   
   // [PHASE LW3] Hydration gate - prevents half-hydrated first render
   const [bootHydrationReady, setBootHydrationReady] = useState(false)
@@ -2116,7 +2114,7 @@ export function StreamlinedWorkoutSession({
     const saved = loadSessionFromStorage(sessionId, exerciseCount, sessionStructureSignature)
     
     if (saved && saved.status !== 'completed') {
-      // [LIVE-WORKOUT-BOOT-CONTRACT] Validate hydration payload before accepting
+      // [LIVE-WORKOUT-MACHINE] Validate hydration payload before accepting
       const validatedPayload = validateHydrationPayload(saved, exerciseCount)
       
       if (validatedPayload) {
@@ -2173,61 +2171,19 @@ export function StreamlinedWorkoutSession({
   }, [sessionId, sessionStructureSignature, isDemoSession])
   
   // ==========================================================================
-  // [LIVE-WORKOUT-BOOT-CONTRACT] CENTRALIZED RUNTIME VALIDATION
-  // This is the SINGLE source of truth for whether the workout can safely render.
-  // All active render paths MUST use values from runtimeValidation, not raw liveSession.
+  // [LIVE-WORKOUT-MACHINE] TIMING VALUES FROM MACHINE STATE
+  // These are the AUTHORITATIVE values for timing, derived from machine state.
   // ==========================================================================
+  const safeStartTime = machineState.startTime
+  const safeElapsedSeconds = machineState.elapsedSeconds
+  const safeLastSetRPE = machineState.lastSetRPE
+  const safeWorkoutNotes = machineState.workoutNotes
   
-  const runtimeValidation = useMemo<LiveWorkoutRuntimeValidation>(() => {
-    const result = validateLiveWorkoutRuntime(safeWorkoutSessionContract, liveSession)
-    
-    // [MACHINE-DEBUG] Log validation result for debugging
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[v0] [runtime_validation_result]', {
-        isValid: result.isValid,
-        reason: result.reason,
-        hasValidExercises: result.hasValidExercises,
-        exerciseCount: result.diagnostics.exerciseCount,
-        safeCurrentExerciseName: result.safeCurrentExercise?.name ?? 'null',
-        sessionContractValid: result.diagnostics.sessionContractValid,
-        liveSessionValid: result.diagnostics.liveSessionValid,
-        status: result.safeStatus,
-        invalidFields: result.invalidFields,
-      })
-    }
-    
-    return result
-  }, [safeWorkoutSessionContract, liveSession])
-  
-  // ==========================================================================
-  // [LIVE-WORKOUT-BOOT-CONTRACT] EXTRACT ALL SAFE VALUES FROM CENTRALIZED VALIDATION
-  // This is the AUTHORITATIVE source for safe runtime values.
-  // Do NOT read raw liveSession.* for display/lookup/UI decisions - use these instead.
-  // ==========================================================================
-  const {
-    isValid: runtimeIsValid,
-    reason: runtimeInvalidReason,
-    safeExerciseIndex,
-    safeCurrentSetNumber: validatedSetNumber,
-    safeCurrentExercise: validatedCurrentExercise,
-    hasValidExercises,
-    normalizedCompletedSets,
-    normalizedExerciseOverrides,
-    // Full safe runtime contract - use these instead of raw liveSession.*
-    safeStatus: _oldSafeStatus, // Deprecated - machine phase is authoritative
-    safeStartTime,
-    safeElapsedSeconds,
-    safeLastSetRPE,
-    safeSelectedRPE,
-    safeRepsValue,
-    safeHoldValue,
-    safeBandUsed,
-    safeWorkoutNotes,
-    safeShowInterExerciseRest,
-    safeInterExerciseRestSeconds,
-    safeTransitionRepairIssue,
-    diagnostics: runtimeDiagnostics,
-  } = runtimeValidation
+  // User input values from machine state
+  const safeSelectedRPE = machineState.selectedRPE
+  const safeRepsValue = machineState.repsValue
+  const safeHoldValue = machineState.holdValue
+  const safeBandUsed = machineState.bandUsed
   
   // ==========================================================================
   // [LIVE-WORKOUT-MACHINE] MACHINE PHASE IS AUTHORITATIVE
@@ -2247,24 +2203,49 @@ export function StreamlinedWorkoutSession({
     }
   }, [machineState.phase])
   
+  // ==========================================================================
+  // [LIVE-WORKOUT-MACHINE] MACHINE-DERIVED VALUES - REPLACE OLD VALIDATION
+  // These are the AUTHORITATIVE values for render, derived from machine state.
+  // ==========================================================================
+  
   // Get exercises array from contract (for iteration, length checks)
-  const exercises = safeWorkoutSessionContract.exercises
+  const exercises = machineSessionContract?.exercises ?? []
   const totalExercises = exercises.length
   const totalSets = exercises.reduce((sum, ex) => sum + (ex.sets || 3), 0)
+  
+  // Machine-derived: hasValidExercises
+  const hasValidExercises = exercises.length > 0
+  
+  // Machine-derived: safeExerciseIndex (clamped to valid range)
+  const safeExerciseIndex = hasValidExercises
+    ? Math.max(0, Math.min(machineState.currentExerciseIndex, exercises.length - 1))
+    : 0
+  
+  // Machine-derived: validatedCurrentExercise
+  const validatedCurrentExercise = hasValidExercises ? exercises[safeExerciseIndex] : null
+  
+  // Machine-derived: normalizedCompletedSets (directly from machine state)
+  const normalizedCompletedSets = machineState.completedSets
+  
+  // Machine-derived: completedSetsCount
   const completedSetsCount = normalizedCompletedSets.length
   
-  // Check if index was clamped (for repair effect)
-  const isIndexOutOfBounds = hasValidExercises && 
-    liveSession.currentExerciseIndex !== safeExerciseIndex
+  // Machine-derived: normalizedExerciseOverrides
+  const normalizedExerciseOverrides = machineState.exerciseOverrides
+  
+  // Machine-derived: validatedSetNumber
+  const validatedSetNumber = machineState.currentSetNumber
+  
+  // Machine handles index clamping - no separate check needed
   
   // ==========================================================================
-  // [LIVE-WORKOUT-BOOT-CONTRACT] SAFE CURRENT EXERCISE
-  // Derived from centralized validation - guaranteed safe even if array is empty
+  // [LIVE-WORKOUT-MACHINE] SAFE CURRENT EXERCISE
+  // Derived from machine state - guaranteed safe even if array is empty
   // ==========================================================================
   const safeCurrentExercise = useMemo(() => {
-    // Use validated exercise from centralized validation
+    // Use validated exercise from machine-derived value
     if (validatedCurrentExercise) {
-      return validatedCurrentExercise
+      return validatedCurrentExercise as NormalizedExercise
     }
     
     // Fallback for invalid runtime - guaranteed safe defaults
@@ -2285,7 +2266,7 @@ export function StreamlinedWorkoutSession({
       blockId: undefined,
       executionTruth: undefined,
       coachingMeta: undefined,
-    }
+    } as NormalizedExercise
   }, [validatedCurrentExercise])
   
   // ==========================================================================
@@ -2295,7 +2276,7 @@ export function StreamlinedWorkoutSession({
   useEffect(() => {
     if (typeof sessionStorage !== 'undefined') {
       try {
-        // [LIVE-WORKOUT-BOOT-CONTRACT] Use safe index from validation
+        // [LIVE-WORKOUT-MACHINE] Use safe index from machine
         sessionStorage.setItem('spartanlab_workout_stage_context', JSON.stringify({
           sessionId,
           dayLabel: safeWorkoutSessionContract.dayLabel,
@@ -2321,338 +2302,203 @@ export function StreamlinedWorkoutSession({
   }, [safeCurrentExercise])
   
   // ==========================================================================
-  // [LIVE-WORKOUT-BOOT-CONTRACT] UNIFIED BOOT PREPARATION GUARD
+  // [LIVE-WORKOUT-MACHINE] UNIFIED BOOT PREPARATION GUARD
   // This is a LOCAL containment layer for all post-validation boot derivations.
   // If ANY boot-critical derivation throws, we capture it here instead of crashing.
   // ==========================================================================
+  // [LIVE-WORKOUT-MACHINE] DERIVED RUNTIME TRUTH VALUES
+  // These are helper values for UI display, derived from machine state.
+  // They do NOT act as execution owners - machine is the only owner.
+  // ==========================================================================
   
-  type BootPreparationResult = {
-    ok: boolean
-    failureStage: string | null
-    failureReason: string | null
-    sessionRuntimeTruth: SessionRuntimeTruth | null
-    exerciseRuntimeTruth: ExerciseRuntimeTruth | null
-    calibrationMessage: { show: boolean; title: string; description: string }
-    safeNextExercise: NormalizedExercise | null
-  }
-  
-  const bootPreparation = useMemo<BootPreparationResult>(() => {
-    // If validation already failed, skip boot preparation
-    if (!runtimeIsValid) {
+  // Session runtime truth - derived directly, no parallel validation
+  const sessionRuntimeTruth: SessionRuntimeTruth = useMemo(() => {
+    if (!hasValidExercises) {
       return {
-        ok: false,
-        failureStage: 'validation_failed',
-        failureReason: runtimeInvalidReason,
-        sessionRuntimeTruth: null,
-        exerciseRuntimeTruth: null,
-        calibrationMessage: { show: false, title: '', description: '' },
-        safeNextExercise: null,
+        sessionId: sessionId,
+        programId: null,
+        dayNumber: 1,
+        dayLabel: 'Workout',
+        currentExerciseCount: 1,
+        totalExerciseCount: 0,
+        totalSetCount: 0,
+        adaptationConfidence: 'low' as const,
+        firstWorkoutsCalibrationMode: true,
+        workoutsCompletedInProgram: 0,
+        supportsBackNavigation: true,
+        supportsBetweenExerciseRest: true,
+        supportsNotesCapture: true,
+        supportsTimerAlerts: false,
+        sessionFocus: 'general',
+        estimatedDurationMinutes: 30,
       }
     }
     
     try {
-      // STAGE: session_runtime_truth
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[v0] [boot_prep_start] Building runtime truth...')
-      }
-      
-      let sessionTruth: SessionRuntimeTruth
-      try {
-        sessionTruth = buildSessionRuntimeTruth(safeWorkoutSessionContract as AdaptiveSession, {
-          programId: null,
-          workoutsCompleted: 0,
-          sessionIndex: 0,
-        })
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : 'unknown'
-        if (process.env.NODE_ENV === 'development') {
-          console.error('[v0] [boot_prep_session_truth_failed]', msg)
-        }
-        return {
-          ok: false,
-          failureStage: 'session_runtime_truth',
-          failureReason: `Failed to build session truth: ${msg}`,
-          sessionRuntimeTruth: null,
-          exerciseRuntimeTruth: null,
-          calibrationMessage: { show: false, title: '', description: '' },
-          safeNextExercise: null,
-        }
-      }
-      
-      // STAGE: exercise_runtime_truth
-      let exerciseTruth: ExerciseRuntimeTruth
-      try {
-        const overrideState = normalizedExerciseOverrides[safeExerciseIndex]
-        exerciseTruth = buildExerciseRuntimeTruth(safeCurrentExercise as AdaptiveExercise, safeExerciseIndex, overrideState ? {
-          isOverridden: !!(overrideState.isReplaced || overrideState.isProgressionAdjusted || overrideState.isSkipped),
-          overrideType: overrideState.isReplaced ? 'replaced' : overrideState.isProgressionAdjusted ? 'progression_adjusted' : overrideState.isSkipped ? 'skipped' : null,
-          currentName: overrideState.currentName,
-        } : undefined)
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : 'unknown'
-        if (process.env.NODE_ENV === 'development') {
-          console.error('[v0] [boot_prep_exercise_truth_failed]', msg)
-        }
-        return {
-          ok: false,
-          failureStage: 'exercise_runtime_truth',
-          failureReason: `Failed to build exercise truth: ${msg}`,
-          sessionRuntimeTruth: sessionTruth,
-          exerciseRuntimeTruth: null,
-          calibrationMessage: { show: false, title: '', description: '' },
-          safeNextExercise: null,
-        }
-      }
-      
-      // STAGE: calibration_message
-      let calibration: { show: boolean; title: string; description: string }
-      try {
-        calibration = getCalibrationMessage(sessionTruth)
-      } catch {
-        calibration = { show: false, title: '', description: '' }
-      }
-      
-      // STAGE: next_exercise_derivation
-      let nextExercise: NormalizedExercise | null = null
-      try {
-        const nextIndex = safeExerciseIndex + 1
-        if (nextIndex < exercises.length && exercises[nextIndex]) {
-          nextExercise = exercises[nextIndex] as NormalizedExercise
-        }
-      } catch {
-        nextExercise = null
-      }
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[v0] [boot_prep_success] Boot preparation complete')
-      }
-      
+      return buildSessionRuntimeTruth(safeWorkoutSessionContract as AdaptiveSession, {
+        programId: null,
+        workoutsCompleted: 0,
+        sessionIndex: 0,
+      })
+    } catch {
+      // Fallback on error - machine will transition to invalid if truly broken
       return {
-        ok: true,
-        failureStage: null,
-        failureReason: null,
-        sessionRuntimeTruth: sessionTruth,
-        exerciseRuntimeTruth: exerciseTruth,
-        calibrationMessage: calibration,
-        safeNextExercise: nextExercise,
-      }
-    } catch (error) {
-      // Catch-all for any unexpected boot preparation errors
-      const msg = error instanceof Error ? error.message : 'unknown'
-      if (process.env.NODE_ENV === 'development') {
-        console.error('[v0] [boot_prep_unexpected_failure]', msg, error)
-      }
-      return {
-        ok: false,
-        failureStage: 'boot_prep_unexpected',
-        failureReason: `Unexpected boot preparation error: ${msg}`,
-        sessionRuntimeTruth: null,
-        exerciseRuntimeTruth: null,
-        calibrationMessage: { show: false, title: '', description: '' },
-        safeNextExercise: null,
+        sessionId: sessionId,
+        programId: null,
+        dayNumber: safeWorkoutSessionContract.dayNumber ?? 1,
+        dayLabel: safeWorkoutSessionContract.dayLabel || 'Workout',
+        currentExerciseCount: safeExerciseIndex + 1,
+        totalExerciseCount: exercises.length,
+        totalSetCount: totalSets,
+        adaptationConfidence: 'low' as const,
+        firstWorkoutsCalibrationMode: true,
+        workoutsCompletedInProgram: 0,
+        supportsBackNavigation: true,
+        supportsBetweenExerciseRest: true,
+        supportsNotesCapture: true,
+        supportsTimerAlerts: false,
+        sessionFocus: 'general',
+        estimatedDurationMinutes: safeWorkoutSessionContract.estimatedMinutes ?? 30,
       }
     }
-  }, [runtimeIsValid, runtimeInvalidReason, safeWorkoutSessionContract, safeCurrentExercise, safeExerciseIndex, normalizedExerciseOverrides, exercises])
+  }, [hasValidExercises, sessionId, safeWorkoutSessionContract, safeExerciseIndex, exercises.length, totalSets])
   
-  // Extract safe boot values with fallbacks matching actual type shapes
-  const sessionRuntimeTruth: SessionRuntimeTruth = bootPreparation.sessionRuntimeTruth ?? {
-    sessionId: sessionId,
-    programId: null,
-    dayNumber: safeWorkoutSessionContract.dayNumber ?? 1,
-    dayLabel: safeWorkoutSessionContract.dayLabel || 'Workout',
-    currentExerciseCount: safeExerciseIndex + 1,
-    totalExerciseCount: exercises.length,
-    totalSetCount: totalSets,
-    adaptationConfidence: 'low' as const,
-    firstWorkoutsCalibrationMode: true,
-    workoutsCompletedInProgram: 0,
-    supportsBackNavigation: true,
-    supportsBetweenExerciseRest: true,
-    supportsNotesCapture: true,
-    supportsTimerAlerts: false,
-    sessionFocus: 'general',
-    estimatedDurationMinutes: safeWorkoutSessionContract.estimatedMinutes ?? 30,
-  }
-  
-  const exerciseRuntimeTruth: ExerciseRuntimeTruth = bootPreparation.exerciseRuntimeTruth ?? {
-    exerciseId: safeCurrentExercise.id || `exercise-${safeExerciseIndex}`,
-    exerciseName: safeCurrentExercise.name,
-    originalName: safeCurrentExercise.name,
-    category: safeCurrentExercise.category || 'general',
-    displayType: 'reps' as const,
-    targetValue: 10,
-    targetUnit: 'reps',
-    targetRPE: 7,
-    restSecondsIntraSet: 90,
-    restSecondsInterExercise: 120,
-    progressionFamily: null,
-    progressionMode: 'fixed' as const,
-    canAdjustProgression: false,
-    progressionFallbacks: [],
-    supportsBandAdjustment: false,
-    recommendedBandColor: null,
-    supportsNotes: true,
-    supportsPainFlag: true,
-    supportsFatigueFlag: true,
-    availableContextFlags: [],
-    isFixedPrescription: false,
-    fixedPrescriptionReason: null,
-    isOverridden: false,
-    overrideType: null,
-  }
-  
-  const calibrationMessage = bootPreparation.calibrationMessage
-  
-  // ==========================================================================
-  // [ACTIVE-ENTRY-GUARD] UNIFIED ACTIVE ENTRY PREPARATION
-  // This contains all active-state-only derivations that could throw.
-  // If entering active state fails, we catch it locally instead of crashing.
-  // ==========================================================================
-  
-  type ActiveEntryResult = {
-    ok: boolean
-    failureStage: string | null
-    failureReason: string | null
-    targetValue: number
-    recommendedBand: ResistanceBandColor | undefined
-    targetRPE: number
-    isHoldExercise: boolean
-    displaySets: string
-    displayRepsTime: string
-  }
-  
-  const activeEntryPreparation = useMemo<ActiveEntryResult>(() => {
-    // Only prepare if we're in active state (or about to be)
-    // For ready state, we can return placeholder values since they won't be used
-    if (safeStatus !== 'active') {
+  // Exercise runtime truth - derived directly, no parallel validation
+  const exerciseRuntimeTruth: ExerciseRuntimeTruth = useMemo(() => {
+    if (!hasValidExercises || !safeCurrentExercise) {
       return {
-        ok: true,
-        failureStage: null,
-        failureReason: null,
-        targetValue: 8,
-        recommendedBand: undefined,
-        targetRPE: 8,
-        isHoldExercise: false,
-        displaySets: `${safeCurrentExercise?.sets ?? 3} sets`,
-        displayRepsTime: safeCurrentExercise?.repsOrTime ?? '8-12 reps',
+        exerciseId: 'fallback',
+        exerciseName: 'Exercise',
+        originalName: 'Exercise',
+        category: 'general',
+        displayType: 'reps' as const,
+        targetValue: 10,
+        targetUnit: 'reps',
+        targetRPE: 7,
+        restSecondsIntraSet: 90,
+        restSecondsInterExercise: 120,
+        progressionFamily: null,
+        progressionMode: 'fixed' as const,
+        canAdjustProgression: false,
+        progressionFallbacks: [],
+        supportsBandAdjustment: false,
+        recommendedBandColor: null,
+        supportsNotes: true,
+        supportsPainFlag: true,
+        supportsFatigueFlag: true,
+        availableContextFlags: [],
+        isFixedPrescription: false,
+        fixedPrescriptionReason: null,
+        isOverridden: false,
+        overrideType: null,
       }
     }
     
     try {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[v0] [active_entry_start] Preparing active state values...')
-      }
-      
-      // STAGE: target_value_derivation
-      let safeTargetValue = 8 // default
-      try {
-        const repsOrTime = safeCurrentExercise?.repsOrTime ?? ''
-        if (typeof repsOrTime === 'string' && repsOrTime.length > 0) {
-          const match = repsOrTime.match(/(\d+)/)
-          if (match) {
-            safeTargetValue = parseInt(match[1], 10)
-          }
-        }
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : 'unknown'
-        if (process.env.NODE_ENV === 'development') {
-          console.error('[v0] [active_entry_target_value_failed]', msg)
-        }
-        return {
-          ok: false,
-          failureStage: 'target_value_derivation',
-          failureReason: `Failed to parse target value: ${msg}`,
-          targetValue: 8,
-          recommendedBand: undefined,
-          targetRPE: 8,
-          isHoldExercise: false,
-          displaySets: '3 sets',
-          displayRepsTime: '8-12 reps',
-        }
-      }
-      
-      // STAGE: recommended_band_derivation
-      let safeRecommendedBand: ResistanceBandColor | undefined = undefined
-      try {
-        const note = safeCurrentExercise?.note ?? ''
-        if (typeof note === 'string' && note.length > 0) {
-          const noteLower = note.toLowerCase()
-          for (const band of ALL_BAND_COLORS) {
-            if (noteLower.includes(band)) {
-              safeRecommendedBand = band
-              break
-            }
-          }
-        }
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : 'unknown'
-        if (process.env.NODE_ENV === 'development') {
-          console.error('[v0] [active_entry_recommended_band_failed]', msg)
-        }
-        // Non-fatal: continue with undefined band
-        safeRecommendedBand = undefined
-      }
-      
-      // STAGE: hold_exercise_detection
-      let safeIsHoldExercise = false
-      try {
-        const repsOrTime = safeCurrentExercise?.repsOrTime ?? ''
-        if (typeof repsOrTime === 'string') {
-          const lower = repsOrTime.toLowerCase()
-          safeIsHoldExercise = lower.includes('sec') || lower.includes('hold')
-        }
-      } catch {
-        safeIsHoldExercise = false
-      }
-      
-      // STAGE: display_values
-      let safeDisplaySets = '3 sets'
-      let safeDisplayRepsTime = '8-12 reps'
-      try {
-        safeDisplaySets = `${safeCurrentExercise?.sets ?? 3} sets`
-        safeDisplayRepsTime = safeCurrentExercise?.repsOrTime ?? '8-12 reps'
-      } catch {
-        // Keep defaults
-      }
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[v0] [active_entry_success] Active entry preparation complete', {
-          targetValue: safeTargetValue,
-          recommendedBand: safeRecommendedBand,
-          isHoldExercise: safeIsHoldExercise,
-        })
-      }
-      
+      const overrideState = normalizedExerciseOverrides[safeExerciseIndex]
+      return buildExerciseRuntimeTruth(safeCurrentExercise as AdaptiveExercise, safeExerciseIndex, overrideState ? {
+        isOverridden: !!(overrideState.isReplaced || overrideState.isProgressionAdjusted || overrideState.isSkipped),
+        overrideType: overrideState.isReplaced ? 'replaced' : overrideState.isProgressionAdjusted ? 'progression_adjusted' : overrideState.isSkipped ? 'skipped' : null,
+        currentName: overrideState.currentName,
+      } : undefined)
+    } catch {
+      // Fallback on error
       return {
-        ok: true,
-        failureStage: null,
-        failureReason: null,
-        targetValue: safeTargetValue,
-        recommendedBand: safeRecommendedBand,
-        targetRPE: 8,
-        isHoldExercise: safeIsHoldExercise,
-        displaySets: safeDisplaySets,
-        displayRepsTime: safeDisplayRepsTime,
-      }
-    } catch (error) {
-      // Catch-all for unexpected active entry errors
-      const msg = error instanceof Error ? error.message : 'unknown'
-      if (process.env.NODE_ENV === 'development') {
-        console.error('[v0] [active_entry_unexpected_failure]', msg, error)
-      }
-      return {
-        ok: false,
-        failureStage: 'active_entry_unexpected',
-        failureReason: `Unexpected active entry error: ${msg}`,
-        targetValue: 8,
-        recommendedBand: undefined,
-        targetRPE: 8,
-        isHoldExercise: false,
-        displaySets: '3 sets',
-        displayRepsTime: '8-12 reps',
+        exerciseId: safeCurrentExercise.id || `exercise-${safeExerciseIndex}`,
+        exerciseName: safeCurrentExercise.name,
+        originalName: safeCurrentExercise.name,
+        category: safeCurrentExercise.category || 'general',
+        displayType: 'reps' as const,
+        targetValue: 10,
+        targetUnit: 'reps',
+        targetRPE: 7,
+        restSecondsIntraSet: 90,
+        restSecondsInterExercise: 120,
+        progressionFamily: null,
+        progressionMode: 'fixed' as const,
+        canAdjustProgression: false,
+        progressionFallbacks: [],
+        supportsBandAdjustment: false,
+        recommendedBandColor: null,
+        supportsNotes: true,
+        supportsPainFlag: true,
+        supportsFatigueFlag: true,
+        availableContextFlags: [],
+        isFixedPrescription: false,
+        fixedPrescriptionReason: null,
+        isOverridden: false,
+        overrideType: null,
       }
     }
-  }, [safeStatus, safeCurrentExercise])
+  }, [hasValidExercises, safeCurrentExercise, safeExerciseIndex, normalizedExerciseOverrides])
+  
+  // Calibration message - derived directly
+  const calibrationMessage = useMemo(() => {
+    try {
+      return getCalibrationMessage(sessionRuntimeTruth)
+    } catch {
+      return { show: false, title: '', description: '' }
+    }
+  }, [sessionRuntimeTruth])
+  
+  // Next exercise - derived directly
+  const safeNextExercise = useMemo(() => {
+    const nextIndex = safeExerciseIndex + 1
+    if (nextIndex < exercises.length && exercises[nextIndex]) {
+      return exercises[nextIndex] as NormalizedExercise
+    }
+    return null
+  }, [safeExerciseIndex, exercises])
+  
+  // Legacy bootPreparation.ok compatibility - always true since machine handles failures
+  const bootPreparation = { ok: true, failureStage: null, failureReason: null }
+  
+  // ==========================================================================
+  // [LIVE-WORKOUT-MACHINE] DERIVED ACTIVE ENTRY VALUES
+  // These are helper values for active UI display, derived from machine state.
+  // ==========================================================================
+  const activeEntryPreparation = useMemo(() => {
+    // Parse target value from current exercise
+    let targetValue = 8
+    const repsOrTime = safeCurrentExercise?.repsOrTime ?? ''
+    if (typeof repsOrTime === 'string' && repsOrTime.length > 0) {
+      const match = repsOrTime.match(/(\d+)/)
+      if (match) {
+        targetValue = parseInt(match[1], 10)
+      }
+    }
+    
+    // Parse recommended band from note
+    let recommendedBand: ResistanceBandColor | undefined
+    const note = safeCurrentExercise?.note ?? ''
+    if (typeof note === 'string' && note.length > 0) {
+      const noteLower = note.toLowerCase()
+      for (const band of ALL_BAND_COLORS) {
+        if (noteLower.includes(band)) {
+          recommendedBand = band
+          break
+        }
+      }
+    }
+    
+    // Detect hold exercise
+    const isHoldExercise = typeof repsOrTime === 'string' && 
+      (repsOrTime.toLowerCase().includes('sec') || repsOrTime.toLowerCase().includes('hold'))
+    
+    return {
+      ok: true as const,
+      failureStage: null,
+      failureReason: null,
+      targetValue,
+      recommendedBand,
+      targetRPE: 8,
+      isHoldExercise,
+      displaySets: `${safeCurrentExercise?.sets ?? 3} sets`,
+      displayRepsTime: safeCurrentExercise?.repsOrTime ?? '8-12 reps',
+    }
+  }, [safeCurrentExercise])
+
+
   
   // [PHASE LW3] Effect-based boot diagnostics - runs after derivations are computed
   useEffect(() => {
@@ -2684,20 +2530,11 @@ export function StreamlinedWorkoutSession({
   currentExerciseIndex: machineState.currentExerciseIndex,
   currentSetNumber: machineState.currentSetNumber,
   completedSetsCount: machineState.completedSets.length,
-  runtimeIsValid,
-  bootPrepOk: bootPreparation.ok,
   hasValidExercises,
   exerciseCount: machineSessionContract?.exercises.length ?? 0,
   })
   }
-  }, [machineState.phase, machineState.currentExerciseIndex, machineState.currentSetNumber, machineState.completedSets.length, safeStatus, viewModel.phase, runtimeIsValid, bootPreparation.ok, hasValidExercises, machineSessionContract])
-  
-  // Repair index if out of bounds (happens on next render cycle)
-  useEffect(() => {
-    if (isIndexOutOfBounds && hasValidExercises) {
-      dispatch({ type: 'REPAIR_INDEX', safeIndex: safeExerciseIndex })
-    }
-  }, [isIndexOutOfBounds, safeExerciseIndex, hasValidExercises])
+  }, [machineState.phase, machineState.currentExerciseIndex, machineState.currentSetNumber, machineState.completedSets.length, safeStatus, viewModel.phase, hasValidExercises, machineSessionContract])
   
   // ==========================================================================
   // [PHASE LW2] ACTIVE WORKOUT VIEW MODEL
@@ -2808,25 +2645,18 @@ export function StreamlinedWorkoutSession({
     validatedCurrentExercise
   ])
   
-  // [ACTIVE-ENTRY-GUARD] Use guarded isHoldExercise from active entry preparation
-  // This ensures consistent derivation and crash safety
+  // [LIVE-WORKOUT-MACHINE] Use machine-derived isHoldExercise
   const isHoldExercise = activeEntryPreparation.isHoldExercise
   
-  // [LIVE-WORKOUT-CORRIDOR] Parse target value - uses safeCurrentExercise
-  const getTargetValue = useCallback((): number => {
-    const match = safeCurrentExercise.repsOrTime.match(/(\d+)/)
-    return match ? parseInt(match[1], 10) : 5
-  }, [safeCurrentExercise])
+  // [LIVE-WORKOUT-MACHINE] Use machine-derived targetValue and recommendedBand
+  const targetValue = activeEntryPreparation.targetValue
+  const recommendedBand = activeEntryPreparation.recommendedBand
   
-  // [LIVE-WORKOUT-CORRIDOR] Recommended band from exercise - uses safeCurrentExercise
-  const getRecommendedBand = useCallback((): ResistanceBandColor | undefined => {
-    if (!safeCurrentExercise.note) return undefined
-    const noteLower = safeLower(safeCurrentExercise.note)
-    for (const band of ALL_BAND_COLORS) {
-      if (noteLower.includes(band)) return band
-    }
-    return undefined
-  }, [safeCurrentExercise])
+  // Legacy getTargetValue kept for backward compat in some places
+  const getTargetValue = useCallback((): number => targetValue, [targetValue])
+  
+  // Legacy getRecommendedBand kept for backward compat
+  const getRecommendedBand = useCallback((): ResistanceBandColor | undefined => recommendedBand, [recommendedBand])
   
   // ==========================================================================
   // [UNIFIED-HANDOFF] UNIFIED REDUCER-BASED ADVANCEMENT SYSTEM
@@ -3010,20 +2840,13 @@ export function StreamlinedWorkoutSession({
   // [LIVE-WORKOUT-MACHINE] Validate via machine before transitioning to active
   const validation = validateActiveEntry(machineState, machineSessionContract)
   if (!validation.isValid) {
-    console.error('[WORKOUT-START] Machine validation failed:', validation.reason)
-    recordBootError('active_state_entry', new Error(validation.reason || 'Machine validation failed'))
-    machineDispatch({ 
-      type: 'ENTER_INVALID', 
-      reason: validation.reason || 'Unable to start workout', 
-      stage: validation.stage || 'active_entry_validation' 
-    })
-    return
-  }
-  
-  // Also check legacy validation for backward compat
-  if (!hasValidExercises) {
-  console.error('[WORKOUT-START] Cannot start - no valid exercises')
-  recordBootError('active_state_entry', new Error('No valid exercises'))
+  console.error('[WORKOUT-START] Machine validation failed:', validation.reason)
+  recordBootError('active_state_entry', new Error(validation.reason || 'Machine validation failed'))
+  machineDispatch({
+  type: 'ENTER_INVALID',
+  reason: validation.reason || 'Unable to start workout',
+  stage: validation.stage || 'active_entry_validation'
+  })
   return
   }
   
@@ -3034,8 +2857,8 @@ export function StreamlinedWorkoutSession({
   })
   
   setShowResumePrompt(false)
-dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
-  }, [hasValidExercises, machineState, machineSessionContract, machineDispatch, sessionId])
+  dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
+  }, [machineState, machineSessionContract, machineDispatch, sessionId])
   
   // Resume existing workout
   const handleResume = useCallback(() => {
@@ -3246,7 +3069,7 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
   }, [executeUnifiedAdvance])
   
   // [EXECUTION-TRUTH-FIX] Back navigation - review previous exercise
-  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeExerciseIndex from validation
+  // [LIVE-WORKOUT-MACHINE] Use safeExerciseIndex from machine
   const handleReviewPreviousExercise = useCallback(() => {
     if (safeExerciseIndex <= 0) return
     const prevIndex = safeExerciseIndex - 1
@@ -3261,7 +3084,7 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
   }, [])
   
   // [EXECUTION-TRUTH-FIX] Get completed sets for a specific exercise
-  // [LIVE-WORKOUT-BOOT-CONTRACT] Use normalizedCompletedSets from validation
+  // [LIVE-WORKOUT-MACHINE] Use normalizedCompletedSets from machine
   const getCompletedSetsForExercise = useCallback((exerciseIndex: number) => {
     return normalizedCompletedSets.filter(s => s.exerciseIndex === exerciseIndex)
   }, [normalizedCompletedSets])
@@ -3302,7 +3125,7 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
   // ==========================================================================
   
   // Handle exercise replacement
-  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeExerciseIndex from validation
+  // [LIVE-WORKOUT-MACHINE] Use safeExerciseIndex from machine
   const handleReplaceExercise = useCallback((newExercise: { id: string; name: string }) => {
     if (exercises.length === 0) return
     const originalExercise = exercises[safeExerciseIndex]
@@ -3336,7 +3159,7 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
   }, [sessionId, safeExerciseIndex, exercises])
   
   // Handle exercise skip via menu (different from skip button)
-  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeExerciseIndex from validation
+  // [LIVE-WORKOUT-MACHINE] Use safeExerciseIndex from machine
   const handleMenuSkipExercise = useCallback(() => {
     if (exercises.length === 0) {
       handleSkipExercise()
@@ -3377,7 +3200,7 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
   }, [sessionId, safeExerciseIndex, exercises, handleSkipExercise])
   
   // Handle progression adjustment
-  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeExerciseIndex from validation
+  // [LIVE-WORKOUT-MACHINE] Use safeExerciseIndex from machine
   const handleProgressionChange = useCallback((newProgression: { id: string; name: string }) => {
     if (exercises.length === 0) return
     const originalExercise = exercises[safeExerciseIndex]
@@ -3411,13 +3234,13 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
   }, [sessionId, safeExerciseIndex, exercises])
   
   // Handle undo override
-  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeExerciseIndex from validation
+  // [LIVE-WORKOUT-MACHINE] Use safeExerciseIndex from machine
   const handleUndoOverride = useCallback(() => {
     dispatch({ type: 'UNDO_OVERRIDE', index: safeExerciseIndex })
   }, [safeExerciseIndex])
   
   // Get effective exercise (with override applied)
-  // [LIVE-WORKOUT-BOOT-CONTRACT] Use normalizedExerciseOverrides from validation
+  // [LIVE-WORKOUT-MACHINE] Use normalizedExerciseOverrides from machine
   const getEffectiveExercise = useCallback((index: number) => {
     // Safety: validate index is within bounds
     if (index < 0 || index >= exercises.length) return null
@@ -3451,7 +3274,7 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
   }, [])
   
   // Request exit confirmation (only if there's progress)
-  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeStatus from validation
+  // [LIVE-WORKOUT-MACHINE] Use safeStatus from machine
   const handleRequestExit = useCallback(() => {
     if (safeStatus === 'ready' || normalizedCompletedSets.length === 0) {
       // No progress yet - just clean up and exit
@@ -3491,7 +3314,7 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
       } = {}
       
       // Find best performance for key exercises
-      // [LIVE-WORKOUT-BOOT-CONTRACT] Use normalizedCompletedSets from validation
+      // [LIVE-WORKOUT-MACHINE] Use normalizedCompletedSets from machine
       exercises.forEach((exercise, exerciseIndex) => {
         const exerciseSets = normalizedCompletedSets.filter(s => s.exerciseIndex === exerciseIndex)
         if (exerciseSets.length === 0) return
@@ -3539,7 +3362,7 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
                 : 'general'
       
       // Build exercise-level outcomes for progression engine
-      // [LIVE-WORKOUT-BOOT-CONTRACT] Use normalizedCompletedSets from validation
+      // [LIVE-WORKOUT-MACHINE] Use normalizedCompletedSets from machine
       const exerciseOutcomes = exercises.map((exercise, exerciseIndex) => {
         const exerciseSets = normalizedCompletedSets.filter(s => s.exerciseIndex === exerciseIndex)
         const completedSetCount = exerciseSets.length
@@ -3569,7 +3392,7 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
       
   // Quick log the workout with full feedback loop data
     // Ensure minimum 1 minute duration to prevent 0-minute sessions
-    // [LIVE-WORKOUT-BOOT-CONTRACT] Use safe values from validation
+    // [LIVE-WORKOUT-MACHINE] Use safe values from machine
     const durationMinutes = Math.max(1, Math.round(safeElapsedSeconds / 60))
     quickLogWorkout({
       sessionName: safeSession.dayLabel,
@@ -3625,7 +3448,7 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
   }, [session, liveSession, sessionId, perceivedDifficulty])
   
   // [LIVE-WORKOUT-CORRIDOR] Rest recommendation - uses safeCurrentExercise for crash safety
-  // [LIVE-WORKOUT-BOOT-CONTRACT] Use normalized values from validation
+  // [LIVE-WORKOUT-MACHINE] Use normalized values from machine
   const getRestRecommendationForCurrentExercise = useCallback((): RestRecommendation => {
     const avgRPE = normalizedCompletedSets.length > 0
       ? normalizedCompletedSets.reduce((sum, s) => sum + s.actualRPE, 0) / normalizedCompletedSets.length
@@ -3648,7 +3471,7 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
   }
   
   // Calculate session stats for performance score
-  // [LIVE-WORKOUT-BOOT-CONTRACT] Use normalized values from validation
+  // [LIVE-WORKOUT-MACHINE] Use normalized values from machine
   const getSessionStats = () => {
     const totalSetsCompleted = normalizedCompletedSets.length
     const avgRPE = totalSetsCompleted > 0 
@@ -3674,7 +3497,7 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
     if (!bootHydrationReady) return
     // [PHASE LW2] Mark live_workout_ready - render completed successfully
     // [PHASE LW2] Mark active state render complete if in active state
-    // [LIVE-WORKOUT-BOOT-CONTRACT] Use safe values from validation
+    // [LIVE-WORKOUT-MACHINE] Use safe values from machine
     // [ACTIVE-ENTRY-GUARD] Only mark active render complete if entry succeeded
     if (safeStatus === 'active' && activeEntryPreparation.ok) {
       markBootStage('active_state_render_complete', {
@@ -3706,22 +3529,22 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
     })
   }, [hasValidExercises, safeExerciseIndex, safeCurrentExercise, safeStatus, validatedSetNumber, sessionId, logStage, safeWorkoutSessionContract.dayLabel, exercises.length])
   
-  // [LIVE-WORKOUT-BOOT-CONTRACT] Runtime validation proof diagnostic
+  // [LIVE-WORKOUT-MACHINE] Runtime validation proof diagnostic
   // [PHASE LW2-FIX] CRITICAL: This useEffect MUST be declared BEFORE any early returns
   // to comply with React's rules of hooks (same hook count/order on every render)
   useEffect(() => {
-    // Log validation state for debugging
-    console.log('[LIVE-WORKOUT-BOOT-CONTRACT] Runtime validation state:', {
+    // [LIVE-WORKOUT-MACHINE] Log machine-owned validation state
+    console.log('[LIVE-WORKOUT-MACHINE] Runtime state:', {
       componentVersion: STREAMLINED_WORKOUT_VERSION,
       sessionId,
-      runtimeIsValid,
-      runtimeInvalidReason,
-      diagnostics: runtimeDiagnostics,
+      machinePhase: machineState.phase,
+      hasValidExercises,
+      exerciseCount: exercises.length,
     })
     
     // Additional proof log if valid
-    if (runtimeIsValid && hasValidExercises) {
-      console.log('[LIVE-WORKOUT-BOOT-CONTRACT] Active workout runtime verified:', {
+    if (machineState.phase !== 'invalid' && hasValidExercises) {
+      console.log('[LIVE-WORKOUT-MACHINE] Active workout runtime verified:', {
         exerciseCount: exercises.length,
         currentExerciseIndex: safeExerciseIndex,
         currentSetNumber: validatedSetNumber,
@@ -3733,7 +3556,7 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
         normalizedOverrides: Object.keys(normalizedExerciseOverrides).length,
       })
     }
-  }, [sessionId, runtimeIsValid, runtimeInvalidReason, runtimeDiagnostics, exercises.length, safeExerciseIndex, validatedSetNumber, safeCurrentExercise.name, sessionRuntimeTruth, exerciseRuntimeTruth, isDemoSession, hasValidExercises, normalizedCompletedSets.length, normalizedExerciseOverrides])
+  }, [sessionId, machineState.phase, exercises.length, safeExerciseIndex, validatedSetNumber, safeCurrentExercise.name, sessionRuntimeTruth, exerciseRuntimeTruth, isDemoSession, hasValidExercises, normalizedCompletedSets.length, normalizedExerciseOverrides])
   
   // ==========================================================================
   // [PHASE LW3] HYDRATION GATE - Wait for hydration before showing UI
@@ -3777,49 +3600,31 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
 
   // ==========================================================================
   // RENDER: CONTROLLED LOCAL FALLBACK - Validation, Boot Prep, OR Active Entry Failed
-  // [LIVE-WORKOUT-BOOT-CONTRACT] This catches invalid runtime state, boot prep failures,
+  // [LIVE-WORKOUT-MACHINE] This catches invalid runtime state, boot prep failures,
   // AND active entry failures BEFORE crashing the route boundary.
   // ==========================================================================
   
   // Check for active entry failure only when transitioning to active state
-  const activeEntryFailed = safeStatus === 'active' && !activeEntryPreparation.ok
+  // ==========================================================================
+  // [LIVE-WORKOUT-MACHINE] LOCAL FALLBACK - MACHINE IS ONLY AUTHORITY
+  // The machine invalid phase is the ONLY trigger for local fallback.
+  // Old pre-machine validation/boot/active-entry checks are REMOVED.
+  // ==========================================================================
+  const shouldShowLocalFallback = bootHydrationReady && machineState.phase === 'invalid'
+  const fallbackReason = machineState.invalidReason || 'Unable to prepare workout session'
+  const fallbackStage = machineState.invalidStage || 'machine_invalid'
   
-  // [LIVE-WORKOUT-MACHINE] Machine invalid phase is first-class fallback trigger
-  const machineInvalid = machineState.phase === 'invalid'
-  
-  const shouldShowLocalFallback = bootHydrationReady && (
-    !runtimeIsValid || !bootPreparation.ok || activeEntryFailed || machineInvalid
-  )
-  const fallbackReason = machineInvalid
-    ? machineState.invalidReason
-    : !runtimeIsValid
-      ? runtimeInvalidReason
-      : !bootPreparation.ok
-        ? bootPreparation.failureReason
-        : activeEntryPreparation.failureReason
-  const fallbackStage = machineInvalid
-    ? machineState.invalidStage
-    : !runtimeIsValid
-      ? 'validation'
-      : !bootPreparation.ok
-        ? bootPreparation.failureStage
-        : activeEntryPreparation.failureStage
-  
-  if (shouldShowLocalFallback) {
-    // Log diagnostic info for debugging
+if (shouldShowLocalFallback) {
+  // [LIVE-WORKOUT-MACHINE] Log machine-owned fallback diagnostics
   if (process.env.NODE_ENV === 'development') {
-  console.warn('[v0] [local_fallback_rendered]', {
-  stage: fallbackStage,
-  reason: fallbackReason,
+  console.warn('[v0] [machine_local_fallback_rendered]', {
   machinePhase: machineState.phase,
-  machineInvalid: machineState.phase === 'invalid',
   machineInvalidReason: machineState.invalidReason,
-  runtimeIsValid,
-  bootPrepOk: bootPreparation.ok,
-  activeEntryOk: activeEntryPreparation.ok,
-  diagnostics: runtimeDiagnostics,
+  machineInvalidStage: machineState.invalidStage,
+  sessionId: machineState.sessionId,
+  currentExerciseIndex: machineState.currentExerciseIndex,
   })
-    }
+  }
     
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
@@ -3833,14 +3638,13 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
           </p>
           {process.env.NODE_ENV === 'development' && (
             <div className="text-left bg-[#1A1F26] rounded-lg p-3 mb-4 text-xs font-mono">
-              <p className="text-[#6B7280] mb-1">Diagnostics:</p>
+              <p className="text-[#6B7280] mb-1">Machine Diagnostics:</p>
               <p className="text-[#A4ACB8]">Stage: {fallbackStage || 'unknown'}</p>
-              <p className="text-[#A4ACB8]">Exercises: {runtimeDiagnostics.exerciseCount}</p>
-              <p className="text-[#A4ACB8]">Status: {runtimeDiagnostics.status}</p>
-              <p className="text-[#A4ACB8]">Session Valid: {String(runtimeDiagnostics.sessionContractValid)}</p>
-              <p className="text-[#A4ACB8]">Live State Valid: {String(runtimeDiagnostics.liveSessionValid)}</p>
-              <p className="text-[#A4ACB8]">Boot Prep OK: {String(bootPreparation.ok)}</p>
-              <p className="text-[#A4ACB8]">Active Entry OK: {String(activeEntryPreparation.ok)}</p>
+              <p className="text-[#A4ACB8]">Machine Phase: {machineState.phase}</p>
+              <p className="text-[#A4ACB8]">Exercise Count: {exercises.length}</p>
+              <p className="text-[#A4ACB8]">Current Index: {machineState.currentExerciseIndex}</p>
+              <p className="text-[#A4ACB8]">Has Valid Exercises: {String(hasValidExercises)}</p>
+              <p className="text-[#A4ACB8]">Session ID: {sessionId}</p>
             </div>
           )}
           <div className="space-y-3">
@@ -3975,7 +3779,7 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
   // [PHASE LW3] Boot stage calls moved to effects - render is pure
   // ==========================================================================
   
-  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeStatus from validation
+  // [LIVE-WORKOUT-MACHINE] Use safeStatus from machine
   if (safeStatus === 'ready') {
     
     console.log('[ready-state-entry]', {
@@ -4085,7 +3889,7 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
   // RENDER: COMPLETED STATE
   // ==========================================================================
   
-  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeStatus from validation
+  // [LIVE-WORKOUT-MACHINE] Use safeStatus from machine
   if (safeStatus === 'completed') {
     const stats = getSessionStats()
     let readiness: ReturnType<typeof getDailyReadiness> | null = null
@@ -4094,7 +3898,7 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
     } catch {
       // Readiness may not be available
     }
-    // [LIVE-WORKOUT-BOOT-CONTRACT] Use normalizedCompletedSets from validation
+    // [LIVE-WORKOUT-MACHINE] Use normalizedCompletedSets from machine
     const performanceInput = createPerformanceInputFromStats(
       {
         completedSets: stats.completedSets,
@@ -4146,7 +3950,7 @@ dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
     
     // Generate band progression note if bands were used
     // [LIVE-SESSION-LOCK] Safe band label generation with null guards
-    // [LIVE-WORKOUT-BOOT-CONTRACT] Use normalizedCompletedSets from validation
+    // [LIVE-WORKOUT-MACHINE] Use normalizedCompletedSets from machine
     const bandsUsed = normalizedCompletedSets
       .filter(s => s.bandUsed && s.bandUsed !== 'none')
       .map(s => s.bandUsed)
@@ -4508,13 +4312,13 @@ function InterExerciseRestCountdown({
   // RENDER: RESTING STATE (between sets of same exercise)
   // ==========================================================================
   
-  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeStatus from validation
+  // [LIVE-WORKOUT-MACHINE] Use safeStatus from machine
   if (safeStatus === 'resting') {
     const restRecommendation = getRestRecommendationForCurrentExercise()
     const savedRestState = loadRestTimerState()
     
     // [LIVE-WORKOUT-CORRIDOR] Use safeCurrentExercise for guaranteed-safe rendering
-    // [LIVE-WORKOUT-BOOT-CONTRACT] Use validatedSetNumber from validation
+    // [LIVE-WORKOUT-MACHINE] Use validatedSetNumber from machine
     const nextSetInfo = {
       exerciseName: safeCurrentExercise.name,
       setNumber: Math.min(validatedSetNumber, safeCurrentExercise.sets),
@@ -4562,7 +4366,7 @@ function InterExerciseRestCountdown({
         <div className="max-w-lg mx-auto space-y-3">
           
           {/* Last Set Summary */}
-          {/* [LIVE-WORKOUT-BOOT-CONTRACT] Use safeLastSetRPE from validation */}
+          {/* [LIVE-WORKOUT-MACHINE] Use safeLastSetRPE from machine */}
           {safeLastSetRPE && (
             <Card className="bg-[#0F1115]/50 border-[#2B313A]/50 p-3">
               <div className="flex items-center justify-between text-sm">
@@ -4581,7 +4385,7 @@ function InterExerciseRestCountdown({
           )}
           
           {/* Inline Rest Timer */}
-          {/* [LIVE-WORKOUT-BOOT-CONTRACT] Use validatedSetNumber from validation */}
+          {/* [LIVE-WORKOUT-MACHINE] Use validatedSetNumber from machine */}
           <InlineRestTimer
             recommendation={restRecommendation}
             exerciseIndex={safeExerciseIndex}
@@ -4639,9 +4443,8 @@ function InterExerciseRestCountdown({
         hasValidExercises: activeWorkoutViewModel.hasValidExercises,
         totalExercises: activeWorkoutViewModel.totalExercises,
         currentExerciseName: activeWorkoutViewModel.currentExerciseName,
-        runtimeIsValid,
-        bootPrepOk: bootPreparation.ok,
-        activeEntryOk: activeEntryPreparation.ok,
+        machinePhase: machineState.phase,
+        exerciseCount: exercises.length,
       })
     }
     return (
@@ -4699,9 +4502,12 @@ function InterExerciseRestCountdown({
   
   // [PHASE LW3] Boot stage calls moved to effects - render is pure
   
-  // [UNIFIED-HANDOFF] Check for controlled transition error (local fallback, not route boundary)
-  // [LIVE-WORKOUT-BOOT-CONTRACT] Use safeTransitionRepairIssue from validation
-  if (safeTransitionRepairIssue) {
+  // [LIVE-WORKOUT-MACHINE] Machine invalid phase with active-like context = transition error
+  // This is now redundant with shouldShowLocalFallback but kept for clearer error messaging
+  const hasTransitionError = machineState.phase === 'invalid' && 
+    (machineState.invalidStage === 'exercise_lookup' || machineState.invalidStage === 'transition')
+  
+  if (hasTransitionError) {
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
         <div className="text-center max-w-sm">
@@ -4713,7 +4519,7 @@ function InterExerciseRestCountdown({
             Unable to advance to the next exercise. The exercise data may need repair.
           </p>
           <p className="text-[#6B7280] text-xs mb-6 font-mono">
-            {safeTransitionRepairIssue.message}
+            {machineState.invalidReason || 'Unknown transition error'}
           </p>
           <div className="space-y-2">
             <Button
@@ -4804,7 +4610,7 @@ function InterExerciseRestCountdown({
               <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
                 {safeCurrentExercise.category}
               </Badge>
-              {/* [LIVE-WORKOUT-BOOT-CONTRACT] Use normalizedExerciseOverrides from validation */}
+              {/* [LIVE-WORKOUT-MACHINE] Use normalizedExerciseOverrides from machine */}
               {normalizedExerciseOverrides[safeExerciseIndex]?.isReplaced && (
                 <Badge className="bg-blue-500/10 text-blue-400 border-0 text-[10px] px-1.5 py-0">Swapped</Badge>
               )}
@@ -4887,7 +4693,7 @@ function InterExerciseRestCountdown({
           )}
           
           {/* [LIVE-WORKOUT-CORRIDOR] Set Progress - uses safeCurrentExercise */}
-          {/* [LIVE-WORKOUT-BOOT-CONTRACT] Use validatedSetNumber from validation */}
+          {/* [LIVE-WORKOUT-MACHINE] Use validatedSetNumber from machine */}
           <div className="flex items-center gap-3 mt-3">
             <div className="flex items-center gap-1.5 flex-1">
               {Array.from({ length: safeCurrentExercise.sets }).map((_, idx) => {
@@ -4979,7 +4785,7 @@ function InterExerciseRestCountdown({
         </Card>
         
         {/* [UNIFIED-HANDOFF] Complete Set Button - uses safe indices */}
-        {/* [LIVE-WORKOUT-BOOT-CONTRACT] Use safeSelectedRPE and validatedSetNumber from validation */}
+        {/* [LIVE-WORKOUT-MACHINE] Use safeSelectedRPE and validatedSetNumber from machine state */}
         <Button
           onClick={handleCompleteSet}
           disabled={safeSelectedRPE === null}

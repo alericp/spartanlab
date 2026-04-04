@@ -2648,8 +2648,13 @@ export function StreamlinedWorkoutSession({
   // [LIVE-WORKOUT-MACHINE] Use machine-derived isHoldExercise
   const isHoldExercise = activeEntryPreparation.isHoldExercise
   
-  // [LIVE-WORKOUT-MACHINE] Use machine-derived targetValue and recommendedBand
+  // ==========================================================================
+  // [LIVE-WORKOUT-MACHINE] AUTHORITATIVE ACTIVE-STATE VALUES
+  // This is the SINGLE source for active render values in this component.
+  // Do NOT redeclare these variables elsewhere in the render corridor.
+  // ==========================================================================
   const targetValue = activeEntryPreparation.targetValue
+  const targetRPE = activeEntryPreparation.targetRPE
   const recommendedBand = activeEntryPreparation.recommendedBand
   
   // Legacy getTargetValue kept for backward compat in some places
@@ -4542,10 +4547,8 @@ function InterExerciseRestCountdown({
     )
   }
   
-  // [ACTIVE-ENTRY-GUARD] Use guarded values from active entry preparation
-  const targetRPE = activeEntryPreparation.targetRPE
-  const targetValue = activeEntryPreparation.targetValue
-  const recommendedBand = activeEntryPreparation.recommendedBand
+  // [LIVE-WORKOUT-MACHINE] Active values already declared at top of component
+  // targetRPE, targetValue, recommendedBand are authoritative - see line ~2651
   
   return (
     <div className="min-h-screen bg-[#0F1115] flex flex-col">

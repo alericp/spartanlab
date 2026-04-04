@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import dynamic from 'next/dynamic'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -21,7 +22,9 @@ import {
 } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-builder'
-import { getLatestAdaptiveProgram } from '@/lib/adaptive-program-builder'
+// [LIVE-WORKOUT-CORRIDOR-FIX] getLatestAdaptiveProgram loaded dynamically - post-completion only
+// The adaptive-program-builder is a MASSIVE file (18,000+ lines) that can crash module evaluation
+// We only need it for the "next session" preview in PostWorkoutSummary
 import { 
   ResistanceBandColor, 
   ALL_BAND_COLORS, 
@@ -47,7 +50,18 @@ import {
   type ExerciseOverride,
 } from '@/lib/exercise-override-service'
 import { SessionPerformanceCard } from '@/components/workout/SessionPerformanceCard'
-import { PostWorkoutSummary } from '@/components/workout/PostWorkoutSummary'
+// [LIVE-WORKOUT-CORRIDOR-FIX] PostWorkoutSummary loaded dynamically - completion-only
+// This component is ONLY shown after workout completion, so deferring its load prevents
+// module-level crashes from blocking the initial workout render
+const PostWorkoutSummary = dynamic(
+  () => import('@/components/workout/PostWorkoutSummary').then(mod => mod.PostWorkoutSummary),
+  { 
+    loading: () => (
+      <div className="p-4 text-center text-[#6B7280]">Loading summary...</div>
+    ),
+    ssr: false // Client-only component
+  }
+)
 import { getSessionPerformance, createPerformanceInputFromStats } from '@/lib/session-performance'
 import { getDailyReadiness } from '@/lib/daily-readiness'
 import { 
@@ -62,8 +76,9 @@ import {
   type SessionType,
   type FocusArea,
 } from '@/lib/workout-log-service'
-import { evaluateAllChallenges } from '@/lib/challenges/challenge-engine'
-import { evaluateAchievements } from '@/lib/achievements/achievement-engine'
+// [LIVE-WORKOUT-CORRIDOR-FIX] Challenge/achievement engines loaded dynamically
+// These are POST-COMPLETION-ONLY and have heavy cascading imports that can crash module evaluation
+// Moving to dynamic import prevents route death if these modules have any initialization issues
 import type { WorkoutReasoningSummary } from '@/lib/readiness/canonical-readiness-engine'
 import type { WorkoutReasoningDisplayContract } from '@/lib/workout-reasoning-display-contract'
 import { WhyThisWorkout, ExerciseReasonBubble, WorkoutFocusBadge } from '@/components/workout/WhyThisWorkout'
@@ -838,6 +853,10 @@ export function StreamlinedWorkoutSession({
   const [interExerciseRestSeconds, setInterExerciseRestSeconds] = useState(60)
   const [coachingNote, setCoachingNote] = useState<string | null>(null)
   
+  // [LIVE-WORKOUT-CORRIDOR-FIX] Next session info - loaded dynamically when workout completes
+  // This prevents the heavy adaptive-program-builder from being imported at module load
+  const [nextSessionInfo, setNextSessionInfo] = useState<{ dayLabel: string; focusLabel: string; estimatedMinutes?: number } | null>(null)
+  
   // Timer
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   
@@ -1099,6 +1118,34 @@ export function StreamlinedWorkoutSession({
       }
     })
   }, [exercises]) // Only depends on exercises array, not state
+  
+  // [LIVE-WORKOUT-CORRIDOR-FIX] Load next session info when workout completes
+  // This uses dynamic import to avoid loading the heavy adaptive-program-builder at module load
+  useEffect(() => {
+    if (state.status === 'completed' && !nextSessionInfo) {
+      (async () => {
+        try {
+          const { getLatestAdaptiveProgram } = await import('@/lib/adaptive-program-builder')
+          const program = getLatestAdaptiveProgram()
+          if (!program?.sessions) return
+          const currentIdx = program.sessions.findIndex(s => s.dayNumber === safeSession.dayNumber)
+          const nextIdx = (currentIdx + 1) % program.sessions.length
+          const next = program.sessions[nextIdx]
+          if (next) {
+            setNextSessionInfo({
+              dayLabel: next.dayLabel || `Day ${next.dayNumber}`,
+              focusLabel: next.focusLabel || 'Strength Development',
+              estimatedMinutes: next.estimatedMinutes,
+            })
+            console.log('[LIVE-WORKOUT-CORRIDOR] Next session info loaded dynamically')
+          }
+        } catch (e) {
+          // Non-fatal: next session preview just won't show
+          console.warn('[LIVE-WORKOUT-CORRIDOR] Failed to load next session info (non-fatal):', e)
+        }
+      })()
+    }
+  }, [state.status, nextSessionInfo, safeSession.dayNumber])
   
   // Auto-save on state changes - skip for demo sessions
   // [LIVE-SESSION-LOCK] Include structure signature in saved state
@@ -1774,12 +1821,20 @@ export function StreamlinedWorkoutSession({
         sourceRoute: isFirstSession ? 'first_session' : 'workout_session',
       })
       
-      // Evaluate achievements and challenges
+      // [LIVE-WORKOUT-CORRIDOR-FIX] Evaluate achievements and challenges with DYNAMIC import
+      // These engines have heavy cascading imports - loading them eagerly can crash module evaluation
+      // Using dynamic import ensures the workout route doesn't die if these modules fail
       try {
+        const [{ evaluateAchievements }, { evaluateAllChallenges }] = await Promise.all([
+          import('@/lib/achievements/achievement-engine'),
+          import('@/lib/challenges/challenge-engine'),
+        ])
         evaluateAchievements()
         evaluateAllChallenges()
+        console.log('[LIVE-WORKOUT-CORRIDOR] Challenge/achievement evaluation completed')
       } catch (e) {
-        console.error('Failed to evaluate achievements/challenges:', e)
+        // Non-fatal: workout was still logged, achievements/challenges just won't update
+        console.error('[LIVE-WORKOUT-CORRIDOR] Failed to evaluate achievements/challenges (non-fatal):', e)
       }
       
       // Clear session data
@@ -2271,25 +2326,7 @@ export function StreamlinedWorkoutSession({
               skillSignal={skillSignal}
               overrideSummary={getOverrideSummary(sessionId)}
               goalContext={safeSession.focusLabel ? `This ${safeLower(safeSession.focusLabel)} session builds toward your primary goal. Consistent training accelerates progress.` : "Workout completed. Consistent training builds skill faster."}
-              nextSession={(() => {
-                // [LIVE-SESSION-FIX] Wrap in try-catch to prevent render crashes
-                try {
-                  const program = getLatestAdaptiveProgram()
-                  if (!program?.sessions) return null
-                  const currentIdx = program.sessions.findIndex(s => s.dayNumber === safeSession.dayNumber)
-                  const nextIdx = (currentIdx + 1) % program.sessions.length
-                  const next = program.sessions[nextIdx]
-                  if (!next) return null
-                  return {
-                    dayLabel: next.dayLabel || `Day ${next.dayNumber}`,
-                    focusLabel: next.focusLabel || 'Strength Development',
-                    estimatedMinutes: next.estimatedMinutes,
-                  }
-                } catch (e) {
-                  console.error('[workout-session] Failed to get next session:', e)
-                  return null
-                }
-              })()}
+              nextSession={nextSessionInfo}
             />
           </div>
     </div>

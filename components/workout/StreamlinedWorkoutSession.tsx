@@ -4593,14 +4593,19 @@ function InterExerciseRestCountdown({
   // ==========================================================================
   
   // ==========================================================================
-  // [STAGED-ACTIVE-ISOLATION] STAGE 1: MINIMAL SHELL RENDER
-  // This is a diagnostic stage to isolate the exact throwing unit.
-  // Only primitive values are used - no complex objects or computed values.
+  // [STAGED-ACTIVE-REINTRODUCTION] FULL ACTIVE UI LADDER
+  // Stage owner map:
+  //   STAGE 1 = minimal shell only (primitives)
+  //   STAGE 2 = active header/progress bar (inline JSX)
+  //   STAGE 3 = main exercise card (inline JSX, no child components)
+  //   STAGE 4 = set logging controls (RepsHoldInput, RPEQuickSelector, BandSelector)
+  //   STAGE 5 = secondary actions + complete button
+  //   STAGE 6 = full render (all modals, ExerciseOptionsMenu, effects)
   // ==========================================================================
-  const STAGED_ACTIVE_ISOLATION_ENABLED = true // Set to true to enable minimal shell
+  const ACTIVE_REINTRODUCTION_STAGE = 6 // Start at 6 for full render, reduce to isolate failure
   
-  if (STAGED_ACTIVE_ISOLATION_ENABLED) {
-    // STAGE 1: Render only primitives from safe machine-owned values
+  // STAGE 1: Minimal shell only
+  if (ACTIVE_REINTRODUCTION_STAGE === 1) {
     try {
       const stage1_label = safeDisplayLabel || 'Workout'
       const stage1_exercise = safeCurrentExercise?.name || 'Exercise'
@@ -4619,41 +4624,211 @@ function InterExerciseRestCountdown({
               <Dumbbell className="w-8 h-8 text-green-500" />
             </div>
             <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Stage 1: Active Shell Works</h2>
-            <p className="text-[#A4ACB8] mb-4 text-sm">
-              Minimal active render is successful.
-            </p>
             <div className="bg-[#1A1F26] rounded-lg p-4 text-left text-sm space-y-2">
               <p className="text-[#6B7280]">Session: <span className="text-[#E6E9EF]">{stage1_label}</span></p>
               <p className="text-[#6B7280]">Exercise: <span className="text-[#E6E9EF]">{stage1_exercise}</span></p>
               <p className="text-[#6B7280]">Set: <span className="text-[#E6E9EF]">{stage1_set}/{stage1_totalSets}</span></p>
               <p className="text-[#6B7280]">Time: <span className="text-[#E6E9EF]">{stage1_mins}:{stage1_secs.toString().padStart(2, '0')}</span></p>
             </div>
-            <p className="text-xs text-green-500 mt-4">
-              Core active shell renders successfully. Toggle STAGED_ACTIVE_ISOLATION_ENABLED to false to test full render.
-            </p>
+            <p className="text-xs text-green-500 mt-4">Stage 1 passed. Increase ACTIVE_REINTRODUCTION_STAGE to test more.</p>
           </div>
         </div>
       )
     } catch (stage1Error) {
-      console.error('[v0] [staged_active_stage1_FAILED]', stage1Error)
+      console.error('[v0] [stage1_FAILED]', stage1Error)
+      return <div className="min-h-screen bg-[#0F1115] flex items-center justify-center text-red-500">Stage 1 failed: {stage1Error instanceof Error ? stage1Error.message : 'unknown'}</div>
+    }
+  }
+  
+  // STAGE 2: Active header with progress bar
+  if (ACTIVE_REINTRODUCTION_STAGE === 2) {
+    try {
+      console.log('[v0] [staged_active_stage2] Testing header render')
       return (
-        <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
-          <div className="text-center max-w-sm">
-            <div className="w-16 h-16 rounded-full bg-red-900/30 border border-red-500/50 flex items-center justify-center mx-auto mb-4">
-              <Dumbbell className="w-8 h-8 text-red-500" />
+        <div className="min-h-screen bg-[#0F1115] flex flex-col">
+          <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
+            <div className="px-4 py-2.5">
+              <div className="max-w-lg mx-auto">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                    <span className="text-sm font-medium text-[#E6E9EF] truncate max-w-[160px]">{safeDisplayLabel}</span>
+                    <span className="text-xs text-[#6B7280]">{safeExerciseIndex + 1}/{totalExercises}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-[#6B7280]">{completedSetsCount}/{totalSets}</span>
+                    <span className="font-mono text-sm font-bold text-[#E6E9EF] tabular-nums">{formatDuration(safeElapsedSeconds)}</span>
+                  </div>
+                </div>
+                <div className="h-1 bg-[#2B313A] rounded-full overflow-hidden">
+                  <div className="h-full bg-[#C1121F] transition-all duration-300" style={{ width: `${(completedSetsCount / totalSets) * 100}%` }} />
+                </div>
+              </div>
             </div>
-            <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Stage 1 FAILED</h2>
-            <p className="text-[#A4ACB8] mb-4 text-sm">
-              Even minimal active shell failed. Check console for error.
-            </p>
-            <pre className="text-xs text-left bg-[#1A1F26] p-2 rounded overflow-auto max-h-32">
-              {stage1Error instanceof Error ? stage1Error.message : 'Unknown error'}
-            </pre>
+          </div>
+          <div className="flex-1 flex items-center justify-center">
+            <p className="text-green-500 text-sm">Stage 2 passed: Header renders. Increase to test exercise card.</p>
           </div>
         </div>
       )
+    } catch (stage2Error) {
+      console.error('[v0] [stage2_FAILED]', stage2Error)
+      return <div className="min-h-screen bg-[#0F1115] flex items-center justify-center text-red-500">Stage 2 failed: {stage2Error instanceof Error ? stage2Error.message : 'unknown'}</div>
     }
   }
+  
+  // STAGE 3: Main exercise card (inline only, no ExerciseOptionsMenu)
+  if (ACTIVE_REINTRODUCTION_STAGE === 3) {
+    try {
+      console.log('[v0] [staged_active_stage3] Testing exercise card render')
+      return (
+        <div className="min-h-screen bg-[#0F1115] flex flex-col">
+          <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
+            <div className="px-4 py-2.5">
+              <div className="max-w-lg mx-auto">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                    <span className="text-sm font-medium text-[#E6E9EF]">{safeDisplayLabel}</span>
+                  </div>
+                  <span className="font-mono text-sm font-bold text-[#E6E9EF]">{formatDuration(safeElapsedSeconds)}</span>
+                </div>
+                <div className="h-1 bg-[#2B313A] rounded-full overflow-hidden">
+                  <div className="h-full bg-[#C1121F]" style={{ width: `${(completedSetsCount / totalSets) * 100}%` }} />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="flex-1 px-4 py-3">
+            <div className="max-w-lg mx-auto space-y-3">
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
+                    {safeCurrentExercise.category}
+                  </Badge>
+                </div>
+                <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight">{safeCurrentExercise.name}</h2>
+                <div className="flex items-center gap-2 mt-1.5 text-sm">
+                  <span className="text-[#A4ACB8]">Target:</span>
+                  <span className="text-[#E6E9EF] font-medium">{safeCurrentExercise.repsOrTime}</span>
+                  <span className="text-[#6B7280]">·</span>
+                  <span className="text-[#A4ACB8]">RPE {targetRPE}</span>
+                </div>
+                <div className="flex items-center gap-3 mt-3">
+                  <div className="flex items-center gap-1.5 flex-1">
+                    {Array.from({ length: safeCurrentExercise.sets }).map((_, idx) => (
+                      <div key={idx} className={`h-2 flex-1 rounded-full ${idx < validatedSetNumber - 1 ? 'bg-green-500' : idx === validatedSetNumber - 1 ? 'bg-[#C1121F]' : 'bg-[#2B313A]'}`} />
+                    ))}
+                  </div>
+                  <span className="text-sm font-medium text-[#E6E9EF]">Set {validatedSetNumber}/{safeCurrentExercise.sets}</span>
+                </div>
+              </Card>
+              <p className="text-green-500 text-sm text-center">Stage 3 passed: Exercise card renders. Increase to test input controls.</p>
+            </div>
+          </div>
+        </div>
+      )
+    } catch (stage3Error) {
+      console.error('[v0] [stage3_FAILED]', stage3Error)
+      return <div className="min-h-screen bg-[#0F1115] flex items-center justify-center text-red-500">Stage 3 failed: {stage3Error instanceof Error ? stage3Error.message : 'unknown'}</div>
+    }
+  }
+  
+  // STAGE 4: Add input controls (RepsHoldInput, RPEQuickSelector, BandSelector)
+  if (ACTIVE_REINTRODUCTION_STAGE === 4) {
+    try {
+      console.log('[v0] [staged_active_stage4] Testing input controls')
+      return (
+        <div className="min-h-screen bg-[#0F1115] flex flex-col">
+          <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
+            <div className="px-4 py-2.5"><div className="max-w-lg mx-auto">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-[#E6E9EF]">{safeDisplayLabel}</span>
+                <span className="font-mono text-sm font-bold text-[#E6E9EF]">{formatDuration(safeElapsedSeconds)}</span>
+              </div>
+              <div className="h-1 bg-[#2B313A] rounded-full overflow-hidden"><div className="h-full bg-[#C1121F]" style={{ width: `${(completedSetsCount / totalSets) * 100}%` }} /></div>
+            </div></div>
+          </div>
+          <div className="flex-1 px-4 py-3">
+            <div className="max-w-lg mx-auto space-y-3">
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
+                <h2 className="text-lg font-bold text-[#E6E9EF]">{safeCurrentExercise.name}</h2>
+                <p className="text-sm text-[#A4ACB8]">Set {validatedSetNumber}/{safeCurrentExercise.sets}</p>
+              </Card>
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-3 space-y-4">
+                {isHoldExercise ? (
+                  <RepsHoldInput type="hold" value={holdValue} onChange={setHoldValue} targetValue={targetValue} />
+                ) : (
+                  <RepsHoldInput type="reps" value={repsValue} onChange={setRepsValue} targetValue={targetValue} />
+                )}
+                <RPEQuickSelector value={selectedRPE} onChange={setSelectedRPE} targetRPE={targetRPE} />
+                {(safeCurrentExercise.executionTruth?.bandSelectable === true || recommendedBand) && (
+                  <BandSelector value={safeBandUsed} onChange={setBandUsed} recommendedBand={recommendedBand} />
+                )}
+              </Card>
+              <p className="text-green-500 text-sm text-center">Stage 4 passed: Input controls render. Increase to test actions.</p>
+            </div>
+          </div>
+        </div>
+      )
+    } catch (stage4Error) {
+      console.error('[v0] [stage4_FAILED]', stage4Error)
+      return <div className="min-h-screen bg-[#0F1115] flex items-center justify-center text-red-500">Stage 4 failed: {stage4Error instanceof Error ? stage4Error.message : 'unknown'}</div>
+    }
+  }
+  
+  // STAGE 5: Add complete button and secondary actions
+  if (ACTIVE_REINTRODUCTION_STAGE === 5) {
+    try {
+      console.log('[v0] [staged_active_stage5] Testing action buttons')
+      return (
+        <div className="min-h-screen bg-[#0F1115] flex flex-col">
+          <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
+            <div className="px-4 py-2.5"><div className="max-w-lg mx-auto">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-[#E6E9EF]">{safeDisplayLabel}</span>
+                <span className="font-mono text-sm font-bold text-[#E6E9EF]">{formatDuration(safeElapsedSeconds)}</span>
+              </div>
+              <div className="h-1 bg-[#2B313A] rounded-full overflow-hidden"><div className="h-full bg-[#C1121F]" style={{ width: `${(completedSetsCount / totalSets) * 100}%` }} /></div>
+            </div></div>
+          </div>
+          <div className="flex-1 px-4 py-3">
+            <div className="max-w-lg mx-auto space-y-3">
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
+                <h2 className="text-lg font-bold text-[#E6E9EF]">{safeCurrentExercise.name}</h2>
+                <p className="text-sm text-[#A4ACB8]">Set {validatedSetNumber}/{safeCurrentExercise.sets}</p>
+              </Card>
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-3 space-y-4">
+                {isHoldExercise ? (
+                  <RepsHoldInput type="hold" value={holdValue} onChange={setHoldValue} targetValue={targetValue} />
+                ) : (
+                  <RepsHoldInput type="reps" value={repsValue} onChange={setRepsValue} targetValue={targetValue} />
+                )}
+                <RPEQuickSelector value={selectedRPE} onChange={setSelectedRPE} targetRPE={targetRPE} />
+              </Card>
+              <Button onClick={handleCompleteSet} disabled={safeSelectedRPE === null} className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-base font-bold">
+                <Check className="w-5 h-5 mr-2" />Log Set
+              </Button>
+              <div className="flex items-center justify-between pt-2">
+                <Button variant="ghost" onClick={handleSkipExercise} className="text-[#6B7280] text-sm h-9 px-3">
+                  <SkipForward className="w-3.5 h-3.5 mr-1.5" />Skip
+                </Button>
+                <Button variant="ghost" onClick={handleRequestExit} className="text-[#6B7280] text-sm h-9 px-3">
+                  <X className="w-3.5 h-3.5 mr-1.5" />End
+                </Button>
+              </div>
+              <p className="text-green-500 text-sm text-center">Stage 5 passed. Increase to 6 for full render.</p>
+            </div>
+          </div>
+        </div>
+      )
+    } catch (stage5Error) {
+      console.error('[v0] [stage5_FAILED]', stage5Error)
+      return <div className="min-h-screen bg-[#0F1115] flex items-center justify-center text-red-500">Stage 5 failed: {stage5Error instanceof Error ? stage5Error.message : 'unknown'}</div>
+    }
+  }
+  
+  // STAGE 6: Full render - fall through to existing full active UI below
   
   console.log('[v0] [active_render_entry]', {
     safeStatus,

@@ -1776,6 +1776,13 @@ export function StreamlinedWorkoutSession({
   const [showResumePrompt, setShowResumePrompt] = useState(false)
   
   // ==========================================================================
+  // [ACTIVE-CORRIDOR-CONTAINMENT] COMPONENT-LEVEL ERROR STATE
+  // This catches any runtime errors during active render and shows local fallback
+  // instead of escalating to route-level error boundary
+  // ==========================================================================
+  const [componentError, setComponentError] = useState<Error | null>(null)
+  
+  // ==========================================================================
   // [LIVE-WORKOUT-MACHINE] AUTHORITATIVE STATE MACHINE
   // The machine is the SINGLE SOURCE OF TRUTH for workout execution
   // All transitions go through the machine reducer - no parallel state systems
@@ -1797,36 +1804,61 @@ export function StreamlinedWorkoutSession({
   // ==========================================================================
   // [BACKWARD-COMPAT] Alias machine state fields to old names for gradual migration
   // These will be removed once all code is migrated to use viewModel
+  // [ACTIVE-CORRIDOR-CONTAINMENT] Wrapped in try-catch to prevent escape
   // ==========================================================================
-  const liveSession = useMemo(() => ({
-    status: machineState.phase === 'between_exercise_rest' ? 'resting' as const : 
-            machineState.phase === 'transitioning' ? 'active' as const :
-            machineState.phase === 'invalid' ? 'ready' as const :
-            machineState.phase as 'ready' | 'active' | 'resting' | 'completed',
-    currentExerciseIndex: machineState.currentExerciseIndex,
-    currentSetNumber: machineState.currentSetNumber,
-    completedSets: machineState.completedSets.map(s => ({
-      exerciseIndex: s.exerciseIndex,
-      setNumber: s.setNumber,
-      actualReps: s.actualReps,
-      holdSeconds: s.holdSeconds,
-      actualRPE: s.actualRPE,
-      bandUsed: s.bandUsed,
-      timestamp: s.timestamp,
-    })),
-    startTime: machineState.startTime,
-    elapsedSeconds: machineState.elapsedSeconds,
-    lastSetRPE: machineState.lastSetRPE,
-    workoutNotes: machineState.workoutNotes,
-    exerciseOverrides: machineState.exerciseOverrides,
-    selectedRPE: machineState.selectedRPE,
-    repsValue: machineState.repsValue,
-    holdValue: machineState.holdValue,
-    bandUsed: machineState.bandUsed,
-    showInterExerciseRest: machineState.phase === 'between_exercise_rest',
-    interExerciseRestSeconds: machineState.interExerciseRestSeconds,
-    transitionRepairIssue: machineState.phase === 'invalid' ? { type: 'next_exercise_invalid' as const, message: machineState.invalidReason || 'Unknown error' } : null,
-  }), [machineState])
+  const liveSession = useMemo(() => {
+  try {
+  return {
+  status: machineState.phase === 'between_exercise_rest' ? 'resting' as const : 
+          machineState.phase === 'transitioning' ? 'active' as const :
+          machineState.phase === 'invalid' ? 'ready' as const :
+          machineState.phase as 'ready' | 'active' | 'resting' | 'completed',
+  currentExerciseIndex: machineState.currentExerciseIndex,
+  currentSetNumber: machineState.currentSetNumber,
+  completedSets: (machineState.completedSets ?? []).map(s => ({
+  exerciseIndex: s.exerciseIndex,
+  setNumber: s.setNumber,
+  actualReps: s.actualReps,
+  holdSeconds: s.holdSeconds,
+  actualRPE: s.actualRPE,
+  bandUsed: s.bandUsed,
+  timestamp: s.timestamp,
+  })),
+  startTime: machineState.startTime,
+  elapsedSeconds: machineState.elapsedSeconds,
+  lastSetRPE: machineState.lastSetRPE,
+  workoutNotes: machineState.workoutNotes,
+  exerciseOverrides: machineState.exerciseOverrides,
+  selectedRPE: machineState.selectedRPE,
+  repsValue: machineState.repsValue,
+  holdValue: machineState.holdValue,
+  bandUsed: machineState.bandUsed,
+  showInterExerciseRest: machineState.phase === 'between_exercise_rest',
+  interExerciseRestSeconds: machineState.interExerciseRestSeconds,
+  transitionRepairIssue: machineState.phase === 'invalid' ? { type: 'next_exercise_invalid' as const, message: machineState.invalidReason || 'Unknown error' } : null,
+  }
+  } catch (error) {
+    console.error('[v0] [liveSession_error]', error instanceof Error ? error.message : 'unknown')
+    return {
+      status: 'ready' as const,
+      currentExerciseIndex: 0,
+      currentSetNumber: 1,
+      completedSets: [],
+      startTime: null,
+      elapsedSeconds: 0,
+      lastSetRPE: null,
+      workoutNotes: '',
+      exerciseOverrides: {},
+      selectedRPE: 8,
+      repsValue: 8,
+      holdValue: 30,
+      bandUsed: 'none' as const,
+      showInterExerciseRest: false,
+      interExerciseRestSeconds: 0,
+      transitionRepairIssue: null,
+    }
+  }
+  }, [machineState])
   
   // Wrapper dispatch that maps old action types to machine actions
   const dispatch = useCallback((action: LiveSessionAction) => {
@@ -2456,8 +2488,10 @@ export function StreamlinedWorkoutSession({
   // ==========================================================================
   // [LIVE-WORKOUT-MACHINE] DERIVED ACTIVE ENTRY VALUES
   // These are helper values for active UI display, derived from machine state.
+  // [ACTIVE-CORRIDOR-CONTAINMENT] Wrapped in try-catch to prevent escape
   // ==========================================================================
   const activeEntryPreparation = useMemo(() => {
+    try {
     // Parse target value from current exercise
     let targetValue = 8
     const repsOrTime = safeCurrentExercise?.repsOrTime ?? ''
@@ -2495,6 +2529,20 @@ export function StreamlinedWorkoutSession({
       isHoldExercise,
       displaySets: `${safeCurrentExercise?.sets ?? 3} sets`,
       displayRepsTime: safeCurrentExercise?.repsOrTime ?? '8-12 reps',
+    }
+    } catch (error) {
+      console.error('[v0] [activeEntryPreparation_error]', error instanceof Error ? error.message : 'unknown')
+      return {
+        ok: true as const,
+        failureStage: null,
+        failureReason: null,
+        targetValue: 8,
+        recommendedBand: undefined,
+        targetRPE: 8,
+        isHoldExercise: false,
+        displaySets: '3 sets',
+        displayRepsTime: '8-12 reps',
+      }
     }
   }, [safeCurrentExercise])
 
@@ -2540,8 +2588,10 @@ export function StreamlinedWorkoutSession({
   // [PHASE LW2] ACTIVE WORKOUT VIEW MODEL
   // Single authoritative model for all active render values.
   // [PHASE LW3] Now pure - no boot ledger writes during render
+  // [ACTIVE-CORRIDOR-CONTAINMENT] Wrapped in try-catch to prevent escape
   // ==========================================================================
   const activeWorkoutViewModel = useMemo(() => {
+    try {
     // Core session identity
     const safeSessionId = sessionId || 'unknown-session'
     const safeDayLabel = safeWorkoutSessionContract.dayLabel || 'Workout'
@@ -2582,9 +2632,9 @@ export function StreamlinedWorkoutSession({
     const exerciseProgress = `${safeCurrentIndex + 1}/${safeExerciseCount}`
     const setsProgress = `${safeCompletedSetsCount}/${safeTotalSets}`
     
-    // Load display
-    const loadDisplay = hasLoad 
-      ? `@ +${safeCurrentExercise.prescribedLoad!.load} ${safeCurrentExercise.prescribedLoad!.unit}`
+    // Load display - use optional chaining to avoid potential throw
+    const loadDisplay = hasLoad && safeCurrentExercise.prescribedLoad
+      ? `@ +${safeCurrentExercise.prescribedLoad.load} ${safeCurrentExercise.prescribedLoad.unit}`
       : null
     
     return {
@@ -2631,6 +2681,39 @@ export function StreamlinedWorkoutSession({
       // Validation flag - use runtime validation's hasValidExercises and validatedCurrentExercise
       // instead of checking fallback name which causes false negatives
       isValid: hasValidExercises && !!validatedCurrentExercise,
+    }
+    } catch (error) {
+      // [ACTIVE-CORRIDOR-CONTAINMENT] Catch any error and return safe fallback
+      console.error('[v0] [activeWorkoutViewModel_error]', error instanceof Error ? error.message : 'unknown')
+      return {
+        sessionId: sessionId || 'unknown-session',
+        dayLabel: 'Workout',
+        dayNumber: 1,
+        totalExercises: 0,
+        totalSets: 0,
+        completedSetsCount: 0,
+        currentExerciseIndex: 0,
+        currentSetNumber: 1,
+        currentExerciseName: 'Exercise',
+        currentExerciseCategory: 'general',
+        currentExerciseSets: 3,
+        currentExerciseRepsOrTime: '8-12 reps',
+        currentExerciseNote: '',
+        hasNextExercise: false,
+        nextExerciseName: null,
+        nextExerciseCategory: null,
+        isHoldExercise: false,
+        hasLoad: false,
+        isLastExercise: true,
+        isLastSet: false,
+        isWorkoutComplete: false,
+        hasValidExercises: false,
+        setDisplay: 'Set 1/3',
+        exerciseProgress: '1/1',
+        setsProgress: '0/0',
+        loadDisplay: null,
+        isValid: false, // Mark as invalid to trigger local fallback
+      }
     }
   }, [
     sessionId, 
@@ -3592,6 +3675,55 @@ export function StreamlinedWorkoutSession({
   // RENDER: SAFETY FALLBACK - Invalid Session (Route should have caught this)
   // [PHASE LW3] recordBootError moved to useEffect - render is pure
   // ==========================================================================
+  
+  // ==========================================================================
+  // [ACTIVE-CORRIDOR-CONTAINMENT] COMPONENT-LEVEL ERROR FALLBACK
+  // If any error was caught during render/derivation, show local fallback
+  // ==========================================================================
+  if (componentError) {
+    console.error('[v0] [component_error_fallback]', {
+      errorMessage: componentError.message,
+      errorStack: componentError.stack?.split('\n').slice(0, 5).join('\n'),
+    })
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 rounded-full bg-[#1A1F26] border border-amber-500/30 flex items-center justify-center mx-auto mb-4">
+            <Dumbbell className="w-8 h-8 text-amber-500" />
+          </div>
+          <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Session Error</h2>
+          <p className="text-[#A4ACB8] mb-4 text-sm">
+            An error occurred in the workout session. Your progress may be saved.
+          </p>
+          {process.env.NODE_ENV === 'development' && (
+            <div className="text-left bg-[#1A1F26] rounded-lg p-3 mb-4 text-xs font-mono overflow-auto max-h-32">
+              <p className="text-[#6B7280] mb-1">Error:</p>
+              <p className="text-[#A4ACB8]">{componentError.message}</p>
+            </div>
+          )}
+          <div className="space-y-2">
+            <Button
+              onClick={() => {
+                setComponentError(null)
+                machineDispatch({ type: 'RESET' })
+              }}
+              className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Retry
+            </Button>
+            <Button
+              variant="outline"
+              onClick={onCancel}
+              className="w-full border-[#2B313A] text-[#A4ACB8] hover:bg-[#1A1F26]"
+            >
+              Return to Dashboard
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
   
   if (!sessionIsValid) {
     return (

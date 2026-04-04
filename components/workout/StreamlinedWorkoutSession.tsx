@@ -197,6 +197,213 @@ interface WorkoutSessionState {
   exerciseOverrides: Record<number, ExerciseOverrideState>
 }
 
+// =============================================================================
+// [PHASE LW4] TRANSITION TRACE SYSTEM
+// Provides precise breadcrumb logging for exercise transitions
+// =============================================================================
+
+type TransitionReason = 
+  | 'complete_set' 
+  | 'inter_exercise_complete' 
+  | 'skip_inter_exercise' 
+  | 'skip_exercise'
+
+interface TransitionTrace {
+  sessionId: string
+  fromExerciseIndex: number
+  toExerciseIndex: number | null
+  fromExerciseName: string
+  toExerciseName: string | null
+  reason: TransitionReason
+  beforeStateStatus: string
+  afterStateStatus: string
+  safeExerciseCount: number
+  transitionCommitted: boolean
+  postCommitInputsApplied: boolean
+  lastSuccessfulRenderExerciseIndex: number
+  lastSuccessfulRenderExerciseName: string
+  timestamp: number
+}
+
+interface ExerciseTransitionResult {
+  /** The computed next workout state */
+  nextState: WorkoutSessionState
+  /** Input values to apply after state commit */
+  nextInputs: {
+    repsValue: number
+    holdValue: number
+    bandUsed: ResistanceBandColor | 'none'
+  } | null
+  /** Metadata about the transition */
+  meta: {
+    fromIndex: number
+    toIndex: number | null
+    fromExerciseName: string
+    toExerciseName: string | null
+    isWorkoutComplete: boolean
+  }
+  /** Cleanup actions to perform */
+  cleanup: {
+    clearRestTimer: boolean
+    clearStorage: boolean
+    hideInterExerciseRest: boolean
+  }
+}
+
+/**
+ * [PHASE LW4] Write transition trace to sessionStorage and window for crash diagnosis
+ * This is effect-safe and never throws.
+ */
+function writeTransitionTrace(trace: Partial<TransitionTrace>): void {
+  try {
+    if (typeof window === 'undefined') return
+    const existing = (window as unknown as { __spartanlabTransitionTrace?: TransitionTrace }).__spartanlabTransitionTrace
+    const merged: TransitionTrace = {
+      sessionId: trace.sessionId ?? existing?.sessionId ?? 'unknown',
+      fromExerciseIndex: trace.fromExerciseIndex ?? existing?.fromExerciseIndex ?? -1,
+      toExerciseIndex: trace.toExerciseIndex ?? existing?.toExerciseIndex ?? null,
+      fromExerciseName: trace.fromExerciseName ?? existing?.fromExerciseName ?? 'unknown',
+      toExerciseName: trace.toExerciseName ?? existing?.toExerciseName ?? null,
+      reason: trace.reason ?? existing?.reason ?? 'complete_set',
+      beforeStateStatus: trace.beforeStateStatus ?? existing?.beforeStateStatus ?? 'unknown',
+      afterStateStatus: trace.afterStateStatus ?? existing?.afterStateStatus ?? 'unknown',
+      safeExerciseCount: trace.safeExerciseCount ?? existing?.safeExerciseCount ?? 0,
+      transitionCommitted: trace.transitionCommitted ?? existing?.transitionCommitted ?? false,
+      postCommitInputsApplied: trace.postCommitInputsApplied ?? existing?.postCommitInputsApplied ?? false,
+      lastSuccessfulRenderExerciseIndex: trace.lastSuccessfulRenderExerciseIndex ?? existing?.lastSuccessfulRenderExerciseIndex ?? -1,
+      lastSuccessfulRenderExerciseName: trace.lastSuccessfulRenderExerciseName ?? existing?.lastSuccessfulRenderExerciseName ?? 'unknown',
+      timestamp: trace.timestamp ?? Date.now(),
+    }
+    ;(window as unknown as { __spartanlabTransitionTrace?: TransitionTrace }).__spartanlabTransitionTrace = merged
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('spartanlab_transition_trace', JSON.stringify(merged))
+    }
+  } catch {
+    // Silently absorb - trace is diagnostic only
+  }
+}
+
+/**
+ * [PHASE LW4] Read transition trace for crash diagnosis
+ */
+function readTransitionTrace(): TransitionTrace | null {
+  try {
+    if (typeof window === 'undefined') return null
+    return (window as unknown as { __spartanlabTransitionTrace?: TransitionTrace }).__spartanlabTransitionTrace ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * [PHASE LW4] AUTHORITATIVE PURE EXERCISE TRANSITION HELPER
+ * 
+ * This is the SINGLE source of truth for all forward exercise transitions.
+ * It computes the next state WITHOUT any side effects - pure math/selection only.
+ * 
+ * ALL forward transitions must use this helper:
+ * - After last set of current exercise
+ * - After inter-exercise rest timer complete
+ * - After skip inter-exercise rest
+ * - After skip exercise
+ */
+function computeNextExerciseTransition(
+  prevState: WorkoutSessionState,
+  exercises: Array<{
+    id?: string
+    name: string
+    category: string
+    sets: number
+    repsOrTime: string
+    note?: string
+    executionTruth?: {
+      recommendedBandColor?: ResistanceBandColor
+    }
+  }>,
+  reason: TransitionReason
+): ExerciseTransitionResult {
+  const fromIndex = prevState.currentExerciseIndex
+  const fromExercise = exercises[fromIndex]
+  const fromExerciseName = fromExercise?.name ?? 'Unknown'
+  
+  const nextIndex = fromIndex + 1
+  const isWorkoutComplete = nextIndex >= exercises.length
+  
+  if (isWorkoutComplete) {
+    // Workout complete - no next exercise
+    return {
+      nextState: {
+        ...prevState,
+        status: 'completed',
+      },
+      nextInputs: null,
+      meta: {
+        fromIndex,
+        toIndex: null,
+        fromExerciseName,
+        toExerciseName: null,
+        isWorkoutComplete: true,
+      },
+      cleanup: {
+        clearRestTimer: true,
+        clearStorage: true,
+        hideInterExerciseRest: true,
+      },
+    }
+  }
+  
+  // Get the NEXT exercise to compute correct initial values
+  const nextExercise = exercises[nextIndex]
+  const toExerciseName = nextExercise?.name ?? 'Exercise'
+  
+  // Parse target value from next exercise's repsOrTime
+  const nextRepsOrTime = nextExercise?.repsOrTime || ''
+  const nextTargetMatch = nextRepsOrTime.match(/(\d+)/)
+  const nextTargetValue = nextTargetMatch ? parseInt(nextTargetMatch[1], 10) : 5
+  
+  // Determine recommended band for next exercise
+  let nextBand: ResistanceBandColor | 'none' = 'none'
+  const nextNote = nextExercise?.note || ''
+  const nextNoteLower = safeLower(nextNote)
+  for (const band of ALL_BAND_COLORS) {
+    if (nextNoteLower.includes(band)) {
+      nextBand = band
+      break
+    }
+  }
+  // Prefer executionTruth band if available
+  const truthBand = nextExercise?.executionTruth?.recommendedBandColor
+  if (truthBand) {
+    nextBand = truthBand
+  }
+  
+  return {
+    nextState: {
+      ...prevState,
+      status: 'active',
+      currentExerciseIndex: nextIndex,
+      currentSetNumber: 1,
+    },
+    nextInputs: {
+      repsValue: nextTargetValue,
+      holdValue: nextTargetValue,
+      bandUsed: nextBand,
+    },
+    meta: {
+      fromIndex,
+      toIndex: nextIndex,
+      fromExerciseName,
+      toExerciseName,
+      isWorkoutComplete: false,
+    },
+    cleanup: {
+      clearRestTimer: false,
+      clearStorage: false,
+      hideInterExerciseRest: true,
+    },
+  }
+}
+
 // Resume prompt state (exported for use in other components)
 export interface SavedSessionInfo {
   sessionId: string
@@ -1385,95 +1592,101 @@ export function StreamlinedWorkoutSession({
   // All transition paths MUST use this single function to avoid stale closures
   // ==========================================================================
   
-  type AdvancementReason = 
-    | 'complete_set' 
-    | 'rest_complete' 
-    | 'inter_exercise_complete' 
-    | 'skip_inter_exercise' 
-    | 'skip_exercise'
-    | 'skip_rest'
+  // [PHASE LW4] Ref to store pending transition result for post-commit application
+  const pendingTransitionRef = useRef<ExerciseTransitionResult | null>(null)
   
   /**
-   * [LIVE-WORKOUT-CORRIDOR] Unified advancement function that uses FUNCTIONAL STATE UPDATES
-   * to eliminate stale closure bugs. All state reads happen inside setState callback.
+   * [PHASE LW4] UNIFIED ADVANCEMENT FUNCTION
+   * Uses the pure computeNextExerciseTransition helper.
+   * NO side effects inside setState - all cleanup happens in controlled post-commit sequence.
    */
-  const advanceToNextExercise = useCallback((reason: AdvancementReason) => {
+  const advanceToNextExercise = useCallback((reason: TransitionReason) => {
+    // [PHASE LW4] Write transition_requested breadcrumb BEFORE attempting transition
+    writeTransitionTrace({
+      reason,
+      timestamp: Date.now(),
+      transitionCommitted: false,
+      postCommitInputsApplied: false,
+    })
+    
     // Use functional update to get FRESH state values, avoiding stale closures
     setState(prev => {
-      const currentIndex = prev.currentExerciseIndex
-      const nextIndex = currentIndex + 1
-      const isLastExercise = nextIndex >= exercises.length
+      // [PHASE LW4] Compute transition using PURE helper - no side effects
+      const transitionResult = computeNextExerciseTransition(prev, exercises, reason)
       
-      console.log('[LIVE-WORKOUT-CORRIDOR] advanceToNextExercise called', {
+      console.log('[PHASE LW4] advanceToNextExercise - transition computed', {
         reason,
-        currentExerciseIndex: currentIndex,
-        nextIndex,
+        fromIndex: transitionResult.meta.fromIndex,
+        toIndex: transitionResult.meta.toIndex,
+        fromExerciseName: transitionResult.meta.fromExerciseName,
+        toExerciseName: transitionResult.meta.toExerciseName,
+        isWorkoutComplete: transitionResult.meta.isWorkoutComplete,
         totalExercises: exercises.length,
-        isLastExercise,
       })
       
-      if (isLastExercise) {
-        // Complete workout
-        console.log('[LIVE-WORKOUT-CORRIDOR] workout completed via', reason)
-        // Schedule cleanup after state update
-        setTimeout(() => {
-          clearSessionStorage()
-          clearRestTimerState()
-        }, 0)
-        return {
-          ...prev,
-          status: 'completed' as const,
-        }
-      }
-      
-      // Get the NEXT exercise to compute correct initial values
-      const nextExercise = exercises[nextIndex]
-      const nextRepsOrTime = nextExercise?.repsOrTime || ''
-      const nextTargetMatch = nextRepsOrTime.match(/(\d+)/)
-      const nextTargetValue = nextTargetMatch ? parseInt(nextTargetMatch[1], 10) : 5
-      
-      // Get recommended band for next exercise
-      const nextNote = nextExercise?.note || ''
-      const nextNoteLower = safeLower(nextNote)
-      let nextBand: ResistanceBandColor | 'none' = 'none'
-      for (const band of ALL_BAND_COLORS) {
-        if (nextNoteLower.includes(band)) {
-          nextBand = band
-          break
-        }
-      }
-      // Prefer executionTruth band if available
-      const truthBand = nextExercise?.executionTruth?.recommendedBandColor
-      if (truthBand) {
-        nextBand = truthBand
-      }
-      
-      console.log('[LIVE-WORKOUT-CORRIDOR] advancing to next exercise', {
-        reason,
-        fromIndex: currentIndex,
-        toIndex: nextIndex,
-        nextExerciseName: nextExercise?.name,
-        nextTargetValue,
-        nextBand,
+      // [PHASE LW4] Write transition_computed breadcrumb
+      writeTransitionTrace({
+        fromExerciseIndex: transitionResult.meta.fromIndex,
+        toExerciseIndex: transitionResult.meta.toIndex,
+        fromExerciseName: transitionResult.meta.fromExerciseName,
+        toExerciseName: transitionResult.meta.toExerciseName,
+        beforeStateStatus: prev.status,
+        afterStateStatus: transitionResult.nextState.status,
+        safeExerciseCount: exercises.length,
       })
       
-      // Schedule input resets after state update to use fresh values
-      setTimeout(() => {
-        setSelectedRPE(null)
-        setRepsValue(nextTargetValue)
-        setHoldValue(nextTargetValue)
-        setBandUsed(nextBand)
-        setShowInterExerciseRest(false)
-      }, 0)
+      // Store transition result for post-commit application
+      // This is a ref assignment, not a side effect that affects rendering
+      pendingTransitionRef.current = transitionResult
       
-      return {
-        ...prev,
-        status: 'active' as const,
-        currentExerciseIndex: nextIndex,
-        currentSetNumber: 1,
-      }
+      // Return ONLY the next state - no side effects
+      return transitionResult.nextState
     })
   }, [exercises]) // Only depends on exercises array, not state
+  
+  // [PHASE LW4] Effect to apply post-commit actions when state changes due to transition
+  useEffect(() => {
+    const pending = pendingTransitionRef.current
+    if (!pending) return
+    
+    // Clear the pending ref first to prevent re-execution
+    pendingTransitionRef.current = null
+    
+    // [PHASE LW4] Write transition_committed breadcrumb
+    writeTransitionTrace({
+      transitionCommitted: true,
+    })
+    
+    // Apply cleanup actions
+    if (pending.cleanup.clearRestTimer) {
+      clearRestTimerState()
+    }
+    if (pending.cleanup.clearStorage) {
+      clearSessionStorage()
+    }
+    if (pending.cleanup.hideInterExerciseRest) {
+      setShowInterExerciseRest(false)
+    }
+    
+    // Apply input resets for next exercise
+    if (pending.nextInputs) {
+      setSelectedRPE(null)
+      setRepsValue(pending.nextInputs.repsValue)
+      setHoldValue(pending.nextInputs.holdValue)
+      setBandUsed(pending.nextInputs.bandUsed)
+    }
+    
+    // [PHASE LW4] Write post_commit_inputs_applied breadcrumb
+    writeTransitionTrace({
+      postCommitInputsApplied: true,
+    })
+    
+    console.log('[PHASE LW4] Post-commit actions applied', {
+      toIndex: pending.meta.toIndex,
+      toExerciseName: pending.meta.toExerciseName,
+      isWorkoutComplete: pending.meta.isWorkoutComplete,
+    })
+  }, [state.currentExerciseIndex, state.status]) // Triggered when state changes
   
   // [LIVE-WORKOUT-CORRIDOR-FIX] Load next session info when workout completes
   // This uses dynamic import to avoid loading the heavy adaptive-program-builder at module load
@@ -1525,6 +1738,16 @@ export function StreamlinedWorkoutSession({
     const effectiveRecommendedBand = recommendedBandFromTruth ?? legacyRecommendedBand
     setBandUsed(effectiveRecommendedBand || 'none')
   }, [state.currentExerciseIndex, safeCurrentExercise, getTargetValue, getRecommendedBand])
+  
+  // [PHASE LW4] Write transition_render_verified breadcrumb on successful active render
+  useEffect(() => {
+    if (state.status === 'active') {
+      writeTransitionTrace({
+        lastSuccessfulRenderExerciseIndex: safeExerciseIndex,
+        lastSuccessfulRenderExerciseName: safeCurrentExercise.name,
+      })
+    }
+  }, [state.status, safeExerciseIndex, safeCurrentExercise.name])
   
   // Timer effect
   useEffect(() => {
@@ -1609,12 +1832,13 @@ export function StreamlinedWorkoutSession({
     })
   }, [])
   
-  // [LIVE-WORKOUT-CORRIDOR] Complete set - uses safeCurrentExercise throughout
+  // [PHASE LW4] Complete set - uses unified transition helper for exercise advancement
   const handleCompleteSet = useCallback(() => {
-    // safeCurrentExercise always has valid defaults, no null guard needed
+    // [PHASE LW4] Use safeExerciseIndex for reads, safeCurrentExercise for exercise data
+    const currentIndex = safeExerciseIndex
     
-    console.log('[LIVE-WORKOUT-CORRIDOR] handleCompleteSet triggered', {
-      exerciseIndex: state.currentExerciseIndex,
+    console.log('[PHASE LW4] handleCompleteSet triggered', {
+      exerciseIndex: currentIndex,
       setNumber: state.currentSetNumber,
       exerciseName: safeCurrentExercise.name,
       totalSets: safeCurrentExercise.sets,
@@ -1622,7 +1846,7 @@ export function StreamlinedWorkoutSession({
     })
     
     const setData: CompletedSetData = {
-      exerciseIndex: state.currentExerciseIndex,
+      exerciseIndex: currentIndex,
       setNumber: state.currentSetNumber,
       actualReps: isHoldExercise ? 0 : repsValue,
       holdSeconds: isHoldExercise ? holdValue : undefined,
@@ -1634,14 +1858,14 @@ export function StreamlinedWorkoutSession({
     const newCompletedSets = [...state.completedSets, setData]
     const totalExerciseSets = safeCurrentExercise.sets
     const isLastSet = state.currentSetNumber >= totalExerciseSets
-    const isLastExercise = state.currentExerciseIndex >= exercises.length - 1
+    const isLastExercise = currentIndex >= exercises.length - 1
     
     const lastRPE = selectedRPE || 8
     
     // [LIVE-WORKOUT-CORRIDOR] Evaluate set performance - uses safeCurrentExercise
     if (safeCurrentExercise.executionTruth) {
       const targetValue = getTargetValue()
-      const setsForThisExercise = newCompletedSets.filter(s => s.exerciseIndex === state.currentExerciseIndex)
+      const setsForThisExercise = newCompletedSets.filter(s => s.exerciseIndex === currentIndex)
       
       const performanceData: SetPerformanceData = {
         setNumber: state.currentSetNumber,
@@ -1649,7 +1873,7 @@ export function StreamlinedWorkoutSession({
         actualReps: isHoldExercise ? 0 : repsValue,
         targetHoldSeconds: isHoldExercise ? targetValue : undefined,
         actualHoldSeconds: isHoldExercise ? holdValue : undefined,
-        targetRPE: 8, // Default target RPE
+        targetRPE: 8,
         actualRPE: selectedRPE || 8,
         bandUsed,
       }
@@ -1665,7 +1889,7 @@ export function StreamlinedWorkoutSession({
           actualRPE: s.actualRPE,
           bandUsed: s.bandUsed,
         })),
-        exerciseIndex: state.currentExerciseIndex,
+        exerciseIndex: currentIndex,
         executionTruth: safeCurrentExercise.executionTruth,
         isHoldExercise,
         exerciseName: safeCurrentExercise.name,
@@ -1679,21 +1903,19 @@ export function StreamlinedWorkoutSession({
     }
     
     if (isLastSet && isLastExercise) {
-      // Workout complete
+      // [PHASE LW4] Workout complete - use state update then cleanup
       setState(prev => ({
         ...prev,
         status: 'completed',
         completedSets: newCompletedSets,
         lastSetRPE: lastRPE,
       }))
+      // Cleanup happens outside setState - no side effects in updater
       clearSessionStorage()
       clearRestTimerState()
-    } else if (isLastSet) {
-      // [EXECUTION-TRUTH-FIX] Move to next exercise with optional inter-exercise rest
-      const nextExerciseIndex = state.currentExerciseIndex + 1
-      const nextExercise = exercises[nextExerciseIndex]
       
-      // Calculate inter-exercise rest based on exercise runtime truth
+    } else if (isLastSet) {
+      // [PHASE LW4] Move to next exercise - check for inter-exercise rest
       const interRestSeconds = exerciseRuntimeTruth.restSecondsInterExercise
       
       // Show inter-exercise rest if enabled and not warmup/mobility
@@ -1703,11 +1925,11 @@ export function StreamlinedWorkoutSession({
         interRestSeconds >= 30
       
       if (shouldShowInterRest) {
-        // Show inter-exercise rest modal/state
-        console.log('[LIVE-WORKOUT-CORRIDOR] showing inter-exercise rest', {
+        // Show inter-exercise rest - actual advancement happens after rest completes
+        console.log('[PHASE LW4] showing inter-exercise rest', {
           interRestSeconds,
-          currentIndex: state.currentExerciseIndex,
-          nextIndex: nextExerciseIndex,
+          currentIndex,
+          nextIndex: currentIndex + 1,
         })
         setInterExerciseRestSeconds(interRestSeconds)
         setShowInterExerciseRest(true)
@@ -1717,74 +1939,37 @@ export function StreamlinedWorkoutSession({
           lastSetRPE: lastRPE,
         }))
       } else {
-        // [LIVE-WORKOUT-CORRIDOR] Skip to next exercise immediately (warmup/mobility transitions)
-        // Must compute next exercise values HERE to avoid stale closures
-        console.log('[LIVE-WORKOUT-CORRIDOR] immediate advance to next exercise (no inter-rest)', {
-          currentIndex: state.currentExerciseIndex,
-          nextIndex: nextExerciseIndex,
-          nextExerciseName: nextExercise?.name,
-        })
-        
-        // Compute next exercise input values
-        const nextRepsOrTime = nextExercise?.repsOrTime || ''
-        const nextTargetMatch = nextRepsOrTime.match(/(\d+)/)
-        const nextTargetValue = nextTargetMatch ? parseInt(nextTargetMatch[1], 10) : 5
-        
-        // Get recommended band for next exercise
-        const nextNote = nextExercise?.note || ''
-        const nextNoteLower = safeLower(nextNote)
-        let nextBand: ResistanceBandColor | 'none' = 'none'
-        for (const band of ALL_BAND_COLORS) {
-          if (nextNoteLower.includes(band)) {
-            nextBand = band
-            break
-          }
-        }
-        // Prefer executionTruth band if available
-        const truthBand = nextExercise?.executionTruth?.recommendedBandColor
-        if (truthBand) {
-          nextBand = truthBand
-        }
-        
+        // [PHASE LW4] Immediate advance using UNIFIED transition helper
+        // First update completed sets, then advance via unified function
         setState(prev => ({
           ...prev,
-          status: 'active',
           completedSets: newCompletedSets,
-          currentExerciseIndex: nextExerciseIndex,
-          currentSetNumber: 1,
           lastSetRPE: lastRPE,
         }))
-        
-        // Reset inputs with CORRECT next exercise values
-        setSelectedRPE(null)
-        setRepsValue(nextTargetValue)
-        setHoldValue(nextTargetValue)
-        setBandUsed(nextBand)
+        // Use unified advancement - this handles all input resets correctly
+        advanceToNextExercise('complete_set')
       }
     } else {
       // Move to next set with rest
-      // [workout-progress] Increment set number but add safety bounds
       const nextSetNumber = state.currentSetNumber + 1
       const maxSets = totalExerciseSets
       
-      // CRITICAL: Guard against incrementing past total sets
+      // Guard against incrementing past total sets
       if (nextSetNumber > maxSets) {
-        console.log('[LIVE-WORKOUT-CORRIDOR] blocked invalid set increment:', {
+        console.warn('[PHASE LW4] blocked invalid set increment:', {
           currentSet: state.currentSetNumber,
           nextSet: nextSetNumber,
           maxSets,
           exerciseName: safeCurrentExercise.name,
         })
-        // This shouldn't happen, but if it does, transition to next exercise instead
-        if (state.currentExerciseIndex < exercises.length - 1) {
+        // Failsafe: advance to next exercise if possible
+        if (currentIndex < exercises.length - 1) {
           setState(prev => ({
             ...prev,
-            status: 'active',
             completedSets: newCompletedSets,
-            currentExerciseIndex: prev.currentExerciseIndex + 1,
-            currentSetNumber: 1,
             lastSetRPE: lastRPE,
           }))
+          advanceToNextExercise('complete_set')
         } else {
           setState(prev => ({
             ...prev,
@@ -1792,10 +1977,13 @@ export function StreamlinedWorkoutSession({
             completedSets: newCompletedSets,
             lastSetRPE: lastRPE,
           }))
+          clearSessionStorage()
+          clearRestTimerState()
         }
         return
       }
       
+      // Normal next set flow
       setState(prev => ({
         ...prev,
         status: 'resting',
@@ -1803,13 +1991,13 @@ export function StreamlinedWorkoutSession({
         currentSetNumber: nextSetNumber,
         lastSetRPE: lastRPE,
       }))
+      
+      // Reset inputs for next set of SAME exercise
+      setSelectedRPE(null)
+      setRepsValue(getTargetValue())
+      setHoldValue(getTargetValue())
     }
-    
-    // Reset inputs for next set (only if staying on same exercise - next set within exercise)
-    setSelectedRPE(null)
-    setRepsValue(getTargetValue())
-    setHoldValue(getTargetValue())
-  }, [safeCurrentExercise, state, repsValue, holdValue, selectedRPE, bandUsed, isHoldExercise, exercises, exerciseRuntimeTruth, sessionRuntimeTruth, getTargetValue])
+  }, [safeCurrentExercise, safeExerciseIndex, state, repsValue, holdValue, selectedRPE, bandUsed, isHoldExercise, exercises, exerciseRuntimeTruth, sessionRuntimeTruth, getTargetValue, advanceToNextExercise])
   
   // Rest complete / skip rest (between sets of SAME exercise)
   const handleRestComplete = useCallback(() => {

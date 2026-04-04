@@ -144,6 +144,19 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
       }
     } catch {}
     
+    // [PHASE LW4] Read transition trace for crash diagnosis
+    let transitionTrace: Record<string, unknown> = {}
+    try {
+      if (typeof window !== 'undefined') {
+        const trace = (window as unknown as { __spartanlabTransitionTrace?: Record<string, unknown> }).__spartanlabTransitionTrace
+        if (trace) transitionTrace = trace
+      }
+      if (typeof sessionStorage !== 'undefined' && Object.keys(transitionTrace).length === 0) {
+        const traceStr = sessionStorage.getItem('spartanlab_transition_trace')
+        if (traceStr) transitionTrace = JSON.parse(traceStr)
+      }
+    } catch {}
+    
     // [PHASE LW2] Enhanced crash logging with boot ledger
     console.error('[workout-route-crash] BOUNDARY_TRIGGERED', {
       routeVersion: WORKOUT_SESSION_ROUTE_VERSION,
@@ -168,6 +181,18 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
         currentExerciseIndex: sessionContext.currentExerciseIndex ?? 'unknown',
       },
       isDemo: sessionContext.isDemo,
+      // [PHASE LW4] Include transition trace for exercise advancement crashes
+      transitionTrace: Object.keys(transitionTrace).length > 0 ? {
+        fromExerciseIndex: transitionTrace.fromExerciseIndex,
+        toExerciseIndex: transitionTrace.toExerciseIndex,
+        fromExerciseName: transitionTrace.fromExerciseName,
+        toExerciseName: transitionTrace.toExerciseName,
+        reason: transitionTrace.reason,
+        transitionCommitted: transitionTrace.transitionCommitted,
+        postCommitInputsApplied: transitionTrace.postCommitInputsApplied,
+        lastSuccessfulRenderExerciseIndex: transitionTrace.lastSuccessfulRenderExerciseIndex,
+        lastSuccessfulRenderExerciseName: transitionTrace.lastSuccessfulRenderExerciseName,
+      } : null,
       errorName: error.name,
       errorMessage: error.message,
       stack: stackLines.slice(0, 8).join('\n'),
@@ -179,6 +204,16 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
     console.error('[workout-route-crash] QUICK DIAGNOSIS:', {
       cause: crashCorridor,
       failedAt: likelyStage || 'unknown',
+      // [PHASE LW4] Include transition corridor diagnosis
+      transitionCorridor: Object.keys(transitionTrace).length > 0 ? {
+        crashedDuringTransition: !!transitionTrace.reason && !transitionTrace.postCommitInputsApplied,
+        transitionStage: transitionTrace.transitionCommitted 
+          ? (transitionTrace.postCommitInputsApplied ? 'post_inputs' : 'post_commit') 
+          : 'pre_commit',
+        fromExercise: transitionTrace.fromExerciseName,
+        toExercise: transitionTrace.toExerciseName,
+        lastSuccessfulRender: transitionTrace.lastSuccessfulRenderExerciseName,
+      } : null,
       hint: crashCorridor === 'reference_error_missing_import' || crashCorridor === 'reference_error'
         ? 'A function or variable is used but not defined/imported'
         : crashCorridor === 'unsafe_string_operation' 
@@ -222,6 +257,34 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
                 </Button>
               </Link>
             </div>
+            {/* [PHASE LW4] Dev-only diagnostic info */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="mt-6 text-left text-xs text-[#6B7280] bg-[#1A1F26] border border-[#2B313A] rounded p-3 max-w-md">
+                <div className="font-mono space-y-1">
+                  <div><span className="text-amber-400">Error:</span> {this.state.error?.message?.slice(0, 100)}</div>
+                  {(() => {
+                    let trace: Record<string, unknown> = {}
+                    try {
+                      if (typeof window !== 'undefined') {
+                        const t = (window as unknown as { __spartanlabTransitionTrace?: Record<string, unknown> }).__spartanlabTransitionTrace
+                        if (t) trace = t
+                      }
+                    } catch {}
+                    if (Object.keys(trace).length > 0) {
+                      return (
+                        <>
+                          <div><span className="text-cyan-400">Transition:</span> {String(trace.fromExerciseName)} → {String(trace.toExerciseName)}</div>
+                          <div><span className="text-cyan-400">Committed:</span> {String(trace.transitionCommitted)}</div>
+                          <div><span className="text-cyan-400">Inputs Applied:</span> {String(trace.postCommitInputsApplied)}</div>
+                          <div><span className="text-cyan-400">Last Rendered:</span> {String(trace.lastSuccessfulRenderExerciseName)}</div>
+                        </>
+                      )
+                    }
+                    return <div className="text-[#4B5563]">No transition trace</div>
+                  })()}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )

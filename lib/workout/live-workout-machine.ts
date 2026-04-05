@@ -27,6 +27,7 @@ export type WorkoutPhase =
   | 'active'
   | 'resting'
   | 'between_exercise_rest'
+  | 'block_round_rest'  // Rest between rounds of a grouped block (superset/circuit)
   | 'transitioning'
   | 'completed'
   | 'invalid'
@@ -39,6 +40,13 @@ export interface CompletedSet {
   actualRPE: RPEValue
   bandUsed: ResistanceBandColor | 'none'
   timestamp: number
+  // Per-set notes and tags
+  note?: string
+  reasonTags?: string[]
+  // Grouped execution context
+  blockId?: string
+  memberIndex?: number
+  round?: number
 }
 
 export interface ExerciseOverride {
@@ -57,9 +65,14 @@ export interface WorkoutMachineState {
   // Session identity
   sessionId: string
   
-  // Position
+  // Position (flat index - always maintained for compatibility)
   currentExerciseIndex: number
   currentSetNumber: number
+  
+  // Grouped execution position (used when in superset/circuit/cluster)
+  currentBlockIndex: number
+  currentMemberIndex: number
+  currentRound: number
   
   // Completed work
   completedSets: CompletedSet[]
@@ -75,12 +88,17 @@ export interface WorkoutMachineState {
   holdValue: number
   bandUsed: ResistanceBandColor | 'none'
   
+  // Per-set notes and reason tags
+  currentSetNote: string
+  currentSetReasonTags: string[]
+  
   // Session notes
   workoutNotes: string
   lastSetRPE: RPEValue | null
   
   // Rest state
   interExerciseRestSeconds: number
+  blockRoundRestSeconds: number
   
   // Invalid state info
   invalidReason: string | null
@@ -102,7 +120,32 @@ export interface MachineExercise {
     confidenceLevel?: string
   }
   targetRPE?: number
+  restSeconds?: number
   executionTruth?: unknown
+  // Grouped method fields
+  method?: string
+  methodLabel?: string
+  blockId?: string
+}
+
+/** Execution block for grouped exercises (superset/circuit/cluster) */
+export interface ExecutionBlock {
+  blockId: string
+  groupType: 'superset' | 'circuit' | 'cluster' | null
+  blockLabel: string
+  memberExercises: MachineExercise[]
+  memberExerciseIndexes: number[]
+  targetRounds: number
+  intraBlockRestSeconds: number
+  postRoundRestSeconds: number
+  postBlockRestSeconds: number
+}
+
+/** Execution plan derived from exercises */
+export interface ExecutionPlan {
+  blocks: ExecutionBlock[]
+  hasGroupedBlocks: boolean
+  totalSets: number
 }
 
 /** Session contract for the machine */
@@ -111,6 +154,8 @@ export interface MachineSessionContract {
   dayNumber: number
   exercises: MachineExercise[]
   estimatedMinutes: number
+  // Derived execution plan (computed once at session load)
+  executionPlan?: ExecutionPlan
 }
 
 // =============================================================================
@@ -127,8 +172,12 @@ export type WorkoutMachineAction =
   | { type: 'SET_HOLD'; value: number }
   | { type: 'SET_BAND'; band: ResistanceBandColor | 'none' }
   | { type: 'SET_NOTES'; notes: string }
+  | { type: 'SET_CURRENT_SET_NOTE'; note: string }
+  | { type: 'SET_CURRENT_SET_REASON_TAGS'; tags: string[] }
+  | { type: 'TOGGLE_REASON_TAG'; tag: string }
   | { type: 'COMPLETE_SET'; completedSet: CompletedSet; isLastSetOfExercise: boolean; exerciseCount: number }
   | { type: 'COMPLETE_REST' } // Between-set rest -> next active set (same exercise)
+  | { type: 'COMPLETE_BLOCK_ROUND_REST' } // Block round rest -> next round
   | { type: 'START_BETWEEN_EXERCISE_REST'; seconds: number }
   | { type: 'SKIP_BETWEEN_EXERCISE_REST' }
   | { type: 'ADVANCE_TO_NEXT_EXERCISE'; nextIndex: number; targetValue: number }
@@ -138,6 +187,9 @@ export type WorkoutMachineAction =
   | { type: 'ENTER_INVALID'; reason: string; stage: string }
   | { type: 'RETRY' }
   | { type: 'RESET_TO_READY' }
+  // Edit/back navigation
+  | { type: 'EDIT_PREVIOUS_SET'; setIndex: number; updatedSet: CompletedSet }
+  | { type: 'ADJUST_REST'; adjustment: number }
   // Grouped execution actions
   | { type: 'COMPLETE_BLOCK_SET'; completedSet: CompletedSet; block: ExecutionBlock; memberIndex: number; round: number }
   | { type: 'ADVANCE_TO_NEXT_BLOCK_MEMBER'; nextMemberIndex: number; nextExerciseIndex: number; targetValue: number }
@@ -154,6 +206,11 @@ export function createInitialMachineState(sessionId: string): WorkoutMachineStat
     sessionId,
     currentExerciseIndex: 0,
     currentSetNumber: 1,
+    // Grouped execution position
+    currentBlockIndex: 0,
+    currentMemberIndex: 0,
+    currentRound: 1,
+    // Completed work
     completedSets: [],
     exerciseOverrides: {},
     startTime: null,
@@ -162,9 +219,14 @@ export function createInitialMachineState(sessionId: string): WorkoutMachineStat
     repsValue: 8,
     holdValue: 30,
     bandUsed: 'none',
+    // Per-set notes
+    currentSetNote: '',
+    currentSetReasonTags: [],
+    // Session notes
     workoutNotes: '',
     lastSetRPE: null,
     interExerciseRestSeconds: 0,
+    blockRoundRestSeconds: 0,
     invalidReason: null,
     invalidStage: null,
   }
@@ -220,7 +282,9 @@ export function workoutMachineReducer(
       }
     
     case 'TICK_TIMER': {
-      if (!state.startTime || (state.phase !== 'active' && state.phase !== 'resting' && state.phase !== 'between_exercise_rest')) {
+      // Valid phases for timer tick
+      const timerPhases: WorkoutPhase[] = ['active', 'resting', 'between_exercise_rest', 'block_round_rest']
+      if (!state.startTime || !timerPhases.includes(state.phase)) {
         return state
       }
       
@@ -232,13 +296,21 @@ export function workoutMachineReducer(
         if (newRestSeconds !== state.interExerciseRestSeconds) {
           console.log('[v0] [TICK] between_exercise_rest countdown:', state.interExerciseRestSeconds, '->', newRestSeconds)
         }
-        if (newRestSeconds === 0) {
-          console.log('[v0] [TICK] between_exercise_rest reached zero - waiting for user to start next exercise')
-        }
         return {
           ...state,
           elapsedSeconds: newElapsedSeconds,
           interExerciseRestSeconds: newRestSeconds,
+        }
+      }
+      
+      // Block round rest: decrement the block round rest timer
+      if (state.phase === 'block_round_rest' && state.blockRoundRestSeconds > 0) {
+        const newRestSeconds = Math.max(0, state.blockRoundRestSeconds - 1)
+        console.log('[v0] [TICK] block_round_rest countdown:', state.blockRoundRestSeconds, '->', newRestSeconds)
+        return {
+          ...state,
+          elapsedSeconds: newElapsedSeconds,
+          blockRoundRestSeconds: newRestSeconds,
         }
       }
       
@@ -267,6 +339,20 @@ export function workoutMachineReducer(
     case 'SET_NOTES':
       return { ...state, workoutNotes: action.notes }
     
+    case 'SET_CURRENT_SET_NOTE':
+      return { ...state, currentSetNote: action.note }
+    
+    case 'SET_CURRENT_SET_REASON_TAGS':
+      return { ...state, currentSetReasonTags: action.tags }
+    
+    case 'TOGGLE_REASON_TAG': {
+      const tags = state.currentSetReasonTags
+      const newTags = tags.includes(action.tag)
+        ? tags.filter(t => t !== action.tag)
+        : [...tags, action.tag]
+      return { ...state, currentSetReasonTags: newTags }
+    }
+    
     // =========================================================================
     // SET COMPLETION
     // =========================================================================
@@ -283,6 +369,9 @@ export function workoutMachineReducer(
             phase: 'completed',
             completedSets: newCompletedSets,
             lastSetRPE: action.completedSet.actualRPE,
+            // Clear per-set notes
+            currentSetNote: '',
+            currentSetReasonTags: [],
           }
         }
         // Will need to trigger between_exercise_rest via separate action
@@ -293,6 +382,9 @@ export function workoutMachineReducer(
           lastSetRPE: action.completedSet.actualRPE,
           selectedRPE: null,
           interExerciseRestSeconds: 120,
+          // Clear per-set notes for next exercise
+          currentSetNote: '',
+          currentSetReasonTags: [],
         }
       }
       
@@ -304,6 +396,9 @@ export function workoutMachineReducer(
         currentSetNumber: state.currentSetNumber + 1,
         lastSetRPE: action.completedSet.actualRPE,
         selectedRPE: null,
+        // Clear per-set notes for next set
+        currentSetNote: '',
+        currentSetReasonTags: [],
       }
     }
     
@@ -436,6 +531,8 @@ export function workoutMachineReducer(
           lastSetRPE: completedSet.actualRPE,
           selectedRPE: null,
           interExerciseRestSeconds: block.postBlockRestSeconds,
+          currentSetNote: '',
+          currentSetReasonTags: [],
         }
       }
       
@@ -450,6 +547,8 @@ export function workoutMachineReducer(
           lastSetRPE: completedSet.actualRPE,
           selectedRPE: null,
           blockRoundRestSeconds: block.postRoundRestSeconds,
+          currentSetNote: '',
+          currentSetReasonTags: [],
         }
       }
       
@@ -463,6 +562,8 @@ export function workoutMachineReducer(
         lastSetRPE: completedSet.actualRPE,
         selectedRPE: null,
         interExerciseRestSeconds: block.intraBlockRestSeconds,
+        currentSetNote: '',
+        currentSetReasonTags: [],
       }
     }
     
@@ -501,6 +602,56 @@ export function workoutMachineReducer(
         interExerciseRestSeconds: 0,
         blockRoundRestSeconds: 0,
       }
+    
+    // =========================================================================
+    // BLOCK ROUND REST COMPLETION
+    // =========================================================================
+    
+    case 'COMPLETE_BLOCK_ROUND_REST': {
+      if (state.phase !== 'block_round_rest') {
+        console.warn('[machine] COMPLETE_BLOCK_ROUND_REST called but phase is not block_round_rest:', state.phase)
+        return state
+      }
+      return {
+        ...state,
+        phase: 'active',
+        currentMemberIndex: 0,
+        blockRoundRestSeconds: 0,
+      }
+    }
+    
+    // =========================================================================
+    // EDIT/BACK NAVIGATION
+    // =========================================================================
+    
+    case 'EDIT_PREVIOUS_SET': {
+      // Update a previously completed set without changing position
+      const updatedSets = [...state.completedSets]
+      if (action.setIndex >= 0 && action.setIndex < updatedSets.length) {
+        updatedSets[action.setIndex] = action.updatedSet
+      }
+      return {
+        ...state,
+        completedSets: updatedSets,
+      }
+    }
+    
+    case 'ADJUST_REST': {
+      // Adjust current rest timer by ±N seconds
+      if (state.phase === 'between_exercise_rest') {
+        return {
+          ...state,
+          interExerciseRestSeconds: Math.max(0, state.interExerciseRestSeconds + action.adjustment),
+        }
+      }
+      if (state.phase === 'block_round_rest') {
+        return {
+          ...state,
+          blockRoundRestSeconds: Math.max(0, state.blockRoundRestSeconds + action.adjustment),
+        }
+      }
+      return state
+    }
     
     default:
       return state
@@ -796,6 +947,11 @@ export function serializeForStorage(state: WorkoutMachineState): string {
     sessionId: state.sessionId,
     currentExerciseIndex: state.currentExerciseIndex,
     currentSetNumber: state.currentSetNumber,
+    // Grouped execution state
+    currentBlockIndex: state.currentBlockIndex,
+    currentMemberIndex: state.currentMemberIndex,
+    currentRound: state.currentRound,
+    // Completed work
     completedSets: state.completedSets,
     exerciseOverrides: state.exerciseOverrides,
     elapsedSeconds: state.elapsedSeconds,
@@ -815,6 +971,11 @@ export function deserializeFromStorage(
     return {
       currentExerciseIndex: typeof parsed.currentExerciseIndex === 'number' ? parsed.currentExerciseIndex : 0,
       currentSetNumber: typeof parsed.currentSetNumber === 'number' ? parsed.currentSetNumber : 1,
+      // Grouped execution state
+      currentBlockIndex: typeof parsed.currentBlockIndex === 'number' ? parsed.currentBlockIndex : 0,
+      currentMemberIndex: typeof parsed.currentMemberIndex === 'number' ? parsed.currentMemberIndex : 0,
+      currentRound: typeof parsed.currentRound === 'number' ? parsed.currentRound : 1,
+      // Completed work
       completedSets: Array.isArray(parsed.completedSets) ? parsed.completedSets : [],
       exerciseOverrides: typeof parsed.exerciseOverrides === 'object' ? parsed.exerciseOverrides : {},
       elapsedSeconds: typeof parsed.elapsedSeconds === 'number' ? parsed.elapsedSeconds : 0,

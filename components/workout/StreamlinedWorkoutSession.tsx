@@ -116,7 +116,17 @@ import {
   type MachineExercise,
   type WorkoutPhase,
   type CompletedSet,
+  type ExecutionBlock,
+  type ExecutionPlan,
 } from '@/lib/workout/live-workout-machine'
+// [PHASE-NEXT] Execution unit contract and rest resolver
+import {
+  type SetReasonTag,
+  SET_REASON_TAG_LABELS,
+  type GroupType,
+  GROUP_TYPE_LABELS,
+} from '@/lib/workout/execution-unit-contract'
+import { resolveRestTime, applyRestAdjustment, type RestContext } from '@/lib/workout/rest-doctrine-resolver'
 
 // =============================================================================
 // SAFE STRING HELPER - PREVENTS toLowerCase CRASHES
@@ -182,6 +192,126 @@ class SafeOptionalSubtree extends React.Component<SafeOptionalSubtreeProps, Safe
 }
 
 // =============================================================================
+// EXECUTION PLAN DERIVATION
+// =============================================================================
+
+/**
+ * Derives the execution plan from a flat list of exercises.
+ * Groups exercises by blockId into execution blocks for supersets/circuits.
+ */
+function deriveExecutionPlanFromExercises(exercises: MachineExercise[]): ExecutionPlan {
+  if (!exercises || exercises.length === 0) {
+    return { blocks: [], hasGroupedBlocks: false, totalSets: 0 }
+  }
+  
+  const blocks: ExecutionBlock[] = []
+  let currentBlockId: string | null = null
+  let currentBlockExercises: MachineExercise[] = []
+  let currentBlockIndexes: number[] = []
+  let blockCounter = 0
+  
+  const flushCurrentBlock = () => {
+    if (currentBlockExercises.length === 0) return
+    
+    const firstEx = currentBlockExercises[0]
+    const method = (firstEx.method || '').toLowerCase()
+    const memberCount = currentBlockExercises.length
+    
+    // Determine group type
+    let groupType: 'superset' | 'circuit' | 'cluster' | null = null
+    let blockLabel = firstEx.name
+    
+    if (method.includes('superset') || (memberCount === 2 && currentBlockId)) {
+      groupType = 'superset'
+      blockCounter++
+      blockLabel = `Superset ${String.fromCharCode(64 + blockCounter)}` // A, B, C...
+    } else if (method.includes('circuit') || memberCount > 2) {
+      groupType = 'circuit'
+      blockCounter++
+      blockLabel = `Circuit ${blockCounter}`
+    } else if (method.includes('cluster')) {
+      groupType = 'cluster'
+      blockCounter++
+      blockLabel = `Cluster ${blockCounter}`
+    }
+    
+    // For grouped blocks, targetRounds = sets of each exercise
+    const targetRounds = groupType ? (firstEx.sets || 3) : 1
+    
+    // Rest times based on group type
+    let intraBlockRest = 0
+    let postRoundRest = 90
+    let postBlockRest = 120
+    
+    if (groupType === 'superset') {
+      intraBlockRest = 0 // No rest between superset members
+      postRoundRest = firstEx.restSeconds || 90
+    } else if (groupType === 'circuit') {
+      intraBlockRest = 10 // Quick transition
+      postRoundRest = firstEx.restSeconds || 60
+    } else if (groupType === 'cluster') {
+      intraBlockRest = 15
+      postRoundRest = firstEx.restSeconds || 120
+    }
+    
+    blocks.push({
+      blockId: currentBlockId || `block-${blocks.length}`,
+      groupType,
+      blockLabel,
+      memberExercises: [...currentBlockExercises],
+      memberExerciseIndexes: [...currentBlockIndexes],
+      targetRounds,
+      intraBlockRestSeconds: intraBlockRest,
+      postRoundRestSeconds: postRoundRest,
+      postBlockRestSeconds: postBlockRest,
+    })
+    
+    currentBlockExercises = []
+    currentBlockIndexes = []
+    currentBlockId = null
+  }
+  
+  // Group exercises by blockId
+  exercises.forEach((ex, index) => {
+    const exBlockId = ex.blockId || null
+    
+    if (exBlockId && exBlockId === currentBlockId) {
+      // Same block
+      currentBlockExercises.push(ex)
+      currentBlockIndexes.push(index)
+    } else {
+      // Different block - flush previous
+      flushCurrentBlock()
+      currentBlockId = exBlockId
+      currentBlockExercises = [ex]
+      currentBlockIndexes = [index]
+    }
+  })
+  
+  // Flush final block
+  flushCurrentBlock()
+  
+  const hasGroupedBlocks = blocks.some(b => b.groupType !== null)
+  const totalSets = exercises.reduce((sum, ex) => sum + (ex.sets || 3), 0)
+  
+  return { blocks, hasGroupedBlocks, totalSets }
+}
+
+/**
+ * Get the block containing a given exercise index
+ */
+function getBlockForExercise(plan: ExecutionPlan | undefined, exerciseIndex: number): { block: ExecutionBlock; memberIndex: number } | null {
+  if (!plan?.blocks) return null
+  for (const block of plan.blocks) {
+    const memberIndex = block.memberExerciseIndexes.indexOf(exerciseIndex)
+    if (memberIndex !== -1) {
+      return { block, memberIndex }
+    }
+  }
+  return null
+}
+
+// =============================================================================
 // TYPES
 // =============================================================================
 
@@ -193,6 +323,13 @@ interface CompletedSetData {
   actualRPE: RPEValue
   bandUsed: ResistanceBandColor | 'none'
   timestamp: number
+  // Per-set notes and tags
+  note?: string
+  reasonTags?: string[]
+  // Grouped execution context
+  blockId?: string
+  memberIndex?: number
+  round?: number
 }
 
 interface ExerciseOverrideState {
@@ -1731,22 +1868,35 @@ export function StreamlinedWorkoutSession({
     if (!sessionIsValid || safeSession.dayLabel === '__INVALID_SESSION__') {
       return null
     }
+    
+    // Map exercises with grouped method fields
+    const exercises: MachineExercise[] = safeSession.exercises.map((ex): MachineExercise => ({
+      id: ex.id,
+      name: ex.name,
+      category: ex.category,
+      sets: ex.sets,
+      repsOrTime: ex.repsOrTime,
+      note: ex.note,
+      isOverrideable: ex.isOverrideable,
+      prescribedLoad: ex.prescribedLoad,
+      targetRPE: ex.targetRPE,
+      restSeconds: ex.restSeconds,
+      executionTruth: ex.executionTruth,
+      // Grouped method fields
+      method: ex.method,
+      methodLabel: ex.methodLabel,
+      blockId: ex.blockId,
+    }))
+    
+    // Derive execution plan from exercises
+    const executionPlan = deriveExecutionPlanFromExercises(exercises)
+    
     return {
       dayLabel: safeSession.dayLabel || 'Workout',
       dayNumber: safeSession.dayNumber || 1,
       estimatedMinutes: safeSession.estimatedMinutes || 45,
-      exercises: safeSession.exercises.map((ex): MachineExercise => ({
-        id: ex.id,
-        name: ex.name,
-        category: ex.category,
-        sets: ex.sets,
-        repsOrTime: ex.repsOrTime,
-        note: ex.note,
-        isOverrideable: ex.isOverrideable,
-        prescribedLoad: ex.prescribedLoad,
-        targetRPE: ex.targetRPE,
-        executionTruth: ex.executionTruth,
-      })),
+      exercises,
+      executionPlan,
     }
   }, [sessionIsValid, safeSession])
   
@@ -3052,7 +3202,7 @@ export function StreamlinedWorkoutSession({
   // Timer runs in active, resting, and between_exercise_rest phases
   useEffect(() => {
     const phase = machineState.phase
-    const shouldTick = (phase === 'active' || phase === 'resting' || phase === 'between_exercise_rest') 
+    const shouldTick = (phase === 'active' || phase === 'resting' || phase === 'between_exercise_rest' || phase === 'block_round_rest') 
       && machineState.startTime !== null
     
     if (shouldTick) {
@@ -3134,7 +3284,8 @@ export function StreamlinedWorkoutSession({
       totalExercises: exercises.length,
     })
     
-    // Build completed set data
+    // Build completed set data with notes and grouped context
+    const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, currentIndex)
     const setData: CompletedSetData = {
       exerciseIndex: currentIndex,
       setNumber: liveSession.currentSetNumber,
@@ -3143,6 +3294,13 @@ export function StreamlinedWorkoutSession({
       actualRPE: liveSession.selectedRPE || 8,
       bandUsed: liveSession.bandUsed,
       timestamp: Date.now(),
+      // Per-set notes from machine state
+      note: machineState.currentSetNote || undefined,
+      reasonTags: machineState.currentSetReasonTags.length > 0 ? [...machineState.currentSetReasonTags] : undefined,
+      // Grouped execution context
+      blockId: blockInfo?.block.blockId,
+      memberIndex: blockInfo?.memberIndex,
+      round: machineState.currentRound || undefined,
     }
     
     const newCompletedSets = [...liveSession.completedSets, setData]
@@ -4734,6 +4892,152 @@ function InterExerciseRestCountdown({
   }
   
   // ==========================================================================
+  // RENDER: BLOCK ROUND REST (between rounds of grouped block - superset/circuit)
+  // ==========================================================================
+  
+  if (machineState.phase === 'block_round_rest') {
+    const restSecondsRemaining = machineState.blockRoundRestSeconds
+    const isRestComplete = restSecondsRemaining === 0
+    const currentBlock = getBlockForExercise(machineSessionContract?.executionPlan, machineState.currentExerciseIndex)
+    const blockLabel = currentBlock?.block.blockLabel || 'Round'
+    const currentRound = machineState.currentRound
+    const targetRounds = currentBlock?.block.targetRounds || 3
+    const groupType = currentBlock?.block.groupType || 'superset'
+    
+    const handleBlockRoundRestComplete = () => {
+      console.log('[v0] [block_round_rest] User tapped continue, advancing to next round')
+      machineDispatch({ type: 'COMPLETE_BLOCK_ROUND_REST' })
+    }
+    
+    const handleAdjustRest = (adjustment: number) => {
+      machineDispatch({ type: 'ADJUST_REST', adjustment })
+    }
+    
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex flex-col">
+        {/* Sticky Session Header */}
+        <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
+          <div className="px-4 py-2.5">
+            <div className="max-w-lg mx-auto">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  <span className="text-sm font-medium text-[#E6E9EF] truncate max-w-[160px]">
+                    {safeDisplayLabel}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-[#6B7280]">{completedSetsCount}/{totalSets}</span>
+                  <span className="font-mono text-sm font-bold text-[#E6E9EF] tabular-nums">
+                    {formatDuration(safeElapsedSeconds)}
+                  </span>
+                </div>
+              </div>
+              <div className="h-1 bg-[#2B313A] rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-amber-500 transition-all duration-300"
+                  style={{ width: `${(completedSetsCount / totalSets) * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Block Round Rest Content */}
+        <div className="flex-1 px-4 py-6 sm:p-8">
+          <div className="max-w-lg mx-auto space-y-6">
+            {/* Round Completed Message */}
+            <Card className={`p-4 ${isRestComplete ? 'bg-amber-500/15 border-amber-500/40' : 'bg-amber-500/10 border-amber-500/30'}`}>
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="w-8 h-8 text-amber-500" />
+                <div>
+                  <p className="text-lg font-bold text-[#E6E9EF]">
+                    {isRestComplete ? 'Ready for Next Round' : 'Round Complete!'}
+                  </p>
+                  <p className="text-sm text-[#A4ACB8]">
+                    {blockLabel} - Round {currentRound - 1} of {targetRounds} finished
+                  </p>
+                </div>
+              </div>
+            </Card>
+            
+            {/* Grouped Block Info */}
+            <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Badge variant="outline" className="text-amber-500 border-amber-500/30 text-xs uppercase px-2 py-0.5">
+                  {GROUP_TYPE_LABELS[groupType as keyof typeof GROUP_TYPE_LABELS] || 'Block'}
+                </Badge>
+                <span className="text-sm text-[#A4ACB8]">Round {currentRound} of {targetRounds}</span>
+              </div>
+              <div className="space-y-2">
+                {currentBlock?.block.memberExercises.map((ex, idx) => (
+                  <div key={ex.id} className="flex items-center gap-3 py-1">
+                    <span className="w-6 h-6 rounded-full bg-[#2B313A] text-[#A4ACB8] text-xs flex items-center justify-center font-medium">
+                      {groupType === 'superset' ? `A${idx + 1}` : idx + 1}
+                    </span>
+                    <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+            
+            {/* Rest Timer */}
+            <div className="text-center py-4">
+              <p className="text-sm text-[#6B7280] mb-2">
+                {isRestComplete ? 'Rest Complete' : 'Round Rest'}
+              </p>
+              <p className={`text-4xl font-mono font-bold tabular-nums ${isRestComplete ? 'text-amber-400' : 'text-[#E6E9EF]'}`}>
+                {Math.floor(restSecondsRemaining / 60)}:{String(restSecondsRemaining % 60).padStart(2, '0')}
+              </p>
+              {/* Rest adjustment buttons */}
+              <div className="flex items-center justify-center gap-4 mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleAdjustRest(-30)}
+                  className="text-[#6B7280] border-[#2B313A] h-8 px-3"
+                >
+                  -30s
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleAdjustRest(30)}
+                  className="text-[#6B7280] border-[#2B313A] h-8 px-3"
+                >
+                  +30s
+                </Button>
+              </div>
+            </div>
+            
+            {/* Primary Action */}
+            <Button
+              onClick={handleBlockRoundRestComplete}
+              className={`w-full h-16 text-lg font-bold ${
+                isRestComplete 
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white' 
+                  : 'bg-[#C1121F] hover:bg-[#A30F1A] text-white'
+              }`}
+            >
+              {isRestComplete ? (
+                <>
+                  <Play className="w-5 h-5 mr-2" />
+                  Start Round {currentRound}
+                </>
+              ) : (
+                <>
+                  <SkipForward className="w-5 h-5 mr-2" />
+                  Skip Rest — Start Round {currentRound}
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
+  // ==========================================================================
   // RENDER: RESTING STATE (between sets of same exercise)
   // ==========================================================================
   
@@ -4937,34 +5241,109 @@ function InterExerciseRestCountdown({
     }
   }
   
-  // UNIT 2: Exercise - renders current exercise card
+  // UNIT 2: Exercise - renders current exercise card with grouped block indicator
   const renderExerciseUnit = (): React.ReactNode => {
     if (!unitStatus.exercise.enabled) return null
     try {
       unitStatus.exercise.rendered = true
+      
+      // Check if this exercise is part of a grouped block
+      const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, safeExerciseIndex)
+      const isGrouped = blockInfo?.block.groupType !== null && blockInfo?.block.groupType !== undefined
+      const groupType = blockInfo?.block.groupType
+      const blockLabel = blockInfo?.block.blockLabel || ''
+      const memberIndex = blockInfo?.memberIndex ?? 0
+      const memberCount = blockInfo?.block.memberExercises.length ?? 1
+      const currentRound = machineState.currentRound || 1
+      const targetRounds = blockInfo?.block.targetRounds || 1
+      const memberLabel = groupType === 'superset' 
+        ? `A${memberIndex + 1}` 
+        : `${memberIndex + 1}`
+      
       return (
-        <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
-          <div className="flex items-center justify-between mb-2">
-            <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
-              {safeCurrentExercise.category}
-            </Badge>
-          </div>
-          <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight">{safeCurrentExercise.name}</h2>
-          <div className="flex items-center gap-2 mt-1.5 text-sm">
-            <span className="text-[#A4ACB8]">Target:</span>
-            <span className="text-[#E6E9EF] font-medium">{safeCurrentExercise.repsOrTime}</span>
-            <span className="text-[#6B7280]">·</span>
-            <span className="text-[#A4ACB8]">RPE {targetRPE}</span>
-          </div>
-          <div className="flex items-center gap-3 mt-3">
-            <div className="flex items-center gap-1.5 flex-1">
-              {Array.from({ length: safeCurrentExercise.sets || 3 }).map((_, idx) => (
-                <div key={idx} className={`h-2 flex-1 rounded-full ${idx < validatedSetNumber - 1 ? 'bg-green-500' : idx === validatedSetNumber - 1 ? 'bg-[#C1121F]' : 'bg-[#2B313A]'}`} />
-              ))}
+        <>
+          {/* Grouped Block Card (if in superset/circuit) */}
+          {isGrouped && (
+            <Card className="bg-amber-500/5 border-amber-500/20 p-3 mb-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-amber-500/10 text-amber-400 border-0 text-[10px] uppercase px-2 py-0.5">
+                    {GROUP_TYPE_LABELS[groupType as keyof typeof GROUP_TYPE_LABELS] || 'Block'}
+                  </Badge>
+                  <span className="text-sm font-medium text-[#E6E9EF]">{blockLabel}</span>
+                </div>
+                <span className="text-xs text-[#A4ACB8]">
+                  Round {currentRound}/{targetRounds}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {blockInfo?.block.memberExercises.map((ex, idx) => {
+                  const isCurrent = idx === memberIndex
+                  const isCompleted = idx < memberIndex
+                  const label = groupType === 'superset' ? `A${idx + 1}` : `${idx + 1}`
+                  return (
+                    <div 
+                      key={ex.id} 
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs ${
+                        isCurrent 
+                          ? 'bg-[#C1121F]/10 border border-[#C1121F]/30 text-[#E6E9EF]' 
+                          : isCompleted
+                            ? 'bg-green-500/10 text-green-400'
+                            : 'bg-[#2B313A]/50 text-[#6B7280]'
+                      }`}
+                    >
+                      <span className="font-medium">{label}</span>
+                      <span className="truncate max-w-[80px]">{ex.name}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </Card>
+          )}
+          
+          {/* Current Exercise Card */}
+          <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
+                  {safeCurrentExercise.category}
+                </Badge>
+                {isGrouped && (
+                  <span className="text-xs font-medium text-amber-400">{memberLabel}</span>
+                )}
+              </div>
             </div>
-            <span className="text-sm font-medium text-[#E6E9EF]">Set {validatedSetNumber}/{safeCurrentExercise.sets || 3}</span>
-          </div>
-        </Card>
+            <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight">{safeCurrentExercise.name}</h2>
+            <div className="flex items-center gap-2 mt-1.5 text-sm">
+              <span className="text-[#A4ACB8]">Target:</span>
+              <span className="text-[#E6E9EF] font-medium">{safeCurrentExercise.repsOrTime}</span>
+              <span className="text-[#6B7280]">·</span>
+              <span className="text-[#A4ACB8]">RPE {targetRPE}</span>
+            </div>
+            {/* Set progress for grouped: shows round progress instead of linear sets */}
+            <div className="flex items-center gap-3 mt-3">
+              <div className="flex items-center gap-1.5 flex-1">
+                {isGrouped ? (
+                  // For grouped blocks, show round progress
+                  Array.from({ length: targetRounds }).map((_, idx) => (
+                    <div key={idx} className={`h-2 flex-1 rounded-full ${idx < currentRound - 1 ? 'bg-green-500' : idx === currentRound - 1 ? 'bg-[#C1121F]' : 'bg-[#2B313A]'}`} />
+                  ))
+                ) : (
+                  // For non-grouped, show set progress
+                  Array.from({ length: safeCurrentExercise.sets || 3 }).map((_, idx) => (
+                    <div key={idx} className={`h-2 flex-1 rounded-full ${idx < validatedSetNumber - 1 ? 'bg-green-500' : idx === validatedSetNumber - 1 ? 'bg-[#C1121F]' : 'bg-[#2B313A]'}`} />
+                  ))
+                )}
+              </div>
+              <span className="text-sm font-medium text-[#E6E9EF]">
+                {isGrouped 
+                  ? `Round ${currentRound}/${targetRounds}`
+                  : `Set ${validatedSetNumber}/${safeCurrentExercise.sets || 3}`
+                }
+              </span>
+            </div>
+          </Card>
+        </>
       )
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
@@ -4984,6 +5363,18 @@ function InterExerciseRestCountdown({
   // UNIT 3: Inputs - renders input controls
   // SINGLE SOURCE OF TRUTH: All input values come from machine state (safeHoldValue, safeRepsValue, safeSelectedRPE, safeBandUsed)
   // Setters dispatch into machine state (setHoldValue, setRepsValue, setSelectedRPE, setBandUsed)
+  const [showSetNotes, setShowSetNotes] = useState(false)
+  const currentSetNote = machineState.currentSetNote || ''
+  const currentSetReasonTags = machineState.currentSetReasonTags || []
+  
+  const handleToggleReasonTag = (tag: SetReasonTag) => {
+    machineDispatch({ type: 'TOGGLE_REASON_TAG', tag })
+  }
+  
+  const handleSetNote = (note: string) => {
+    machineDispatch({ type: 'SET_CURRENT_SET_NOTE', note })
+  }
+  
   const renderInputsUnit = (): React.ReactNode => {
     if (!unitStatus.inputs.enabled) return null
     try {
@@ -4999,6 +5390,61 @@ function InterExerciseRestCountdown({
           {(safeCurrentExercise.executionTruth?.bandSelectable === true || recommendedBand) && (
             <BandSelector value={safeBandUsed} onChange={setBandUsed} recommendedBand={recommendedBand} />
           )}
+          
+          {/* Per-set notes section - collapsible */}
+          <div className="border-t border-[#2B313A] pt-3">
+            <button
+              onClick={() => setShowSetNotes(!showSetNotes)}
+              className="flex items-center justify-between w-full text-left"
+            >
+              <div className="flex items-center gap-2 text-sm text-[#A4ACB8]">
+                <MessageSquare className="w-4 h-4" />
+                <span>Add note</span>
+                {(currentSetNote || currentSetReasonTags.length > 0) && (
+                  <span className="text-xs text-[#6B7280]">
+                    ({currentSetReasonTags.length > 0 ? currentSetReasonTags.length + ' tags' : 'note added'})
+                  </span>
+                )}
+              </div>
+              {showSetNotes ? (
+                <ChevronUp className="w-4 h-4 text-[#6B7280]" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-[#6B7280]" />
+              )}
+            </button>
+            
+            {showSetNotes && (
+              <div className="mt-3 space-y-3">
+                {/* Reason tags - quick tap selection */}
+                <div className="flex flex-wrap gap-1.5">
+                  {(Object.entries(SET_REASON_TAG_LABELS) as [SetReasonTag, string][]).map(([tag, label]) => {
+                    const isSelected = currentSetReasonTags.includes(tag)
+                    return (
+                      <button
+                        key={tag}
+                        onClick={() => handleToggleReasonTag(tag)}
+                        className={`px-2 py-1 rounded-md text-xs transition-colors ${
+                          isSelected
+                            ? 'bg-[#C1121F]/20 text-[#C1121F] border border-[#C1121F]/30'
+                            : 'bg-[#2B313A] text-[#A4ACB8] border border-transparent hover:border-[#3B4250]'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+                
+                {/* Free text note */}
+                <Textarea
+                  placeholder="Optional note for this set..."
+                  value={currentSetNote}
+                  onChange={(e) => handleSetNote(e.target.value)}
+                  className="bg-[#2B313A] border-[#3B4250] text-[#E6E9EF] placeholder:text-[#6B7280] text-sm resize-none h-16"
+                />
+              </div>
+            )}
+          </div>
         </Card>
       )
     } catch (err) {

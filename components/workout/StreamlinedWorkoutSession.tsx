@@ -2865,6 +2865,175 @@ export function StreamlinedWorkoutSession({
     }
   }, [safeCurrentExercise])
 
+  // ==========================================================================
+  // [ACTIVE-ENTRY-CONTRACT] SINGLE AUTHORITATIVE ACTIVE RENDER PAYLOAD
+  // This is the ONE object that all active render units read from.
+  // It consolidates all scattered derivations into a fail-closed contract.
+  // If any internal step fails, returns controlled fallback - never throws.
+  // ==========================================================================
+  const activeEntryContract = useMemo(() => {
+    console.log('[v0] [active_contract_build_start]')
+    
+    // Fallback contract for any failure
+    const fallbackContract = {
+      ok: true as const,
+      stage: 'fallback' as const,
+      // Exercise context
+      exerciseIndex: 0,
+      exerciseName: 'Exercise',
+      exerciseCategory: 'general' as string,
+      exerciseSets: 3,
+      exerciseRepsOrTime: '8-12 reps',
+      exerciseNote: '',
+      // Set context
+      setNumber: 1,
+      isHoldExercise: false,
+      targetValue: 8,
+      targetRPE: 8,
+      recommendedBand: undefined as ResistanceBandColor | undefined,
+      // Grouped block context
+      isGrouped: false,
+      groupType: null as 'superset' | 'circuit' | 'cluster' | null,
+      blockLabel: '',
+      memberIndex: 0,
+      memberCount: 1,
+      currentRound: 1,
+      targetRounds: 1,
+      memberLabel: '1',
+      blockInfo: null as { block: ExecutionBlock; memberIndex: number } | null,
+      // UI flags
+      bandSelectable: false,
+      hasLoad: false,
+      loadDisplay: null as string | null,
+      // Progress
+      completedSetsCount: 0,
+      totalSets: 3,
+      totalExercises: 1,
+      // Notes
+      currentSetNote: '',
+      currentSetReasonTags: [] as string[],
+    }
+    
+    try {
+      // STEP 1: Resolve current exercise safely
+      console.log('[v0] [active_contract_current_exercise_resolved]', { index: safeExerciseIndex, name: safeCurrentExercise?.name })
+      const exerciseIndex = safeExerciseIndex
+      const exerciseName = safeCurrentExercise?.name ?? 'Exercise'
+      const exerciseCategory = safeCurrentExercise?.category ?? 'general'
+      const exerciseSets = safeCurrentExercise?.sets ?? 3
+      const exerciseRepsOrTime = safeCurrentExercise?.repsOrTime ?? '8-12 reps'
+      const exerciseNote = safeCurrentExercise?.note ?? ''
+      
+      // STEP 2: Resolve grouped block context safely
+      let blockInfo: { block: ExecutionBlock; memberIndex: number } | null = null
+      let isGrouped = false
+      let groupType: 'superset' | 'circuit' | 'cluster' | null = null
+      let blockLabel = ''
+      let memberIndex = 0
+      let memberCount = 1
+      let currentRound = 1
+      let targetRounds = 1
+      let memberLabel = '1'
+      
+      try {
+        blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, exerciseIndex)
+        if (blockInfo?.block) {
+          isGrouped = blockInfo.block.groupType !== null && blockInfo.block.groupType !== undefined
+          groupType = blockInfo.block.groupType
+          blockLabel = blockInfo.block.blockLabel || ''
+          memberIndex = blockInfo.memberIndex ?? 0
+          memberCount = blockInfo.block.memberExercises?.length ?? 1
+          currentRound = machineState.currentRound || 1
+          targetRounds = blockInfo.block.targetRounds || 1
+          memberLabel = groupType === 'superset' ? `A${memberIndex + 1}` : `${memberIndex + 1}`
+        }
+        console.log('[v0] [active_contract_group_context_resolved]', { isGrouped, groupType, blockLabel })
+      } catch (groupErr) {
+        console.error('[v0] [active_contract_group_context_failed]', groupErr instanceof Error ? groupErr.message : 'unknown')
+        // Continue with defaults - don't throw
+      }
+      
+      // STEP 3: Resolve input context safely
+      const setNumber = validatedSetNumber ?? 1
+      const isHoldExercise = activeEntryPreparation.isHoldExercise ?? false
+      const targetValue = activeEntryPreparation.targetValue ?? 8
+      const targetRPE = activeEntryPreparation.targetRPE ?? 8
+      const recommendedBand = activeEntryPreparation.recommendedBand
+      console.log('[v0] [active_contract_inputs_resolved]', { setNumber, isHoldExercise, targetValue })
+      
+      // STEP 4: Resolve UI flags safely
+      const bandSelectable = safeCurrentExercise?.executionTruth?.bandSelectable === true || !!recommendedBand
+      const hasLoad = !!(safeCurrentExercise?.prescribedLoad?.load && safeCurrentExercise.prescribedLoad.load > 0)
+      const loadDisplay = hasLoad 
+        ? `+${safeCurrentExercise?.prescribedLoad?.load}${safeCurrentExercise?.prescribedLoad?.unit || 'lbs'}`
+        : null
+      
+      // STEP 5: Resolve progress safely
+      const completedSetsCount = machineState.completedSets?.length ?? 0
+      const totalSets = exercises.reduce((sum, ex) => sum + (ex?.sets || 3), 0) || 3
+      const totalExercises = exercises.length || 1
+      
+      // STEP 6: Resolve notes safely
+      const currentSetNote = machineState.currentSetNote || ''
+      const currentSetReasonTags = machineState.currentSetReasonTags || []
+      
+      console.log('[v0] [active_contract_build_success]')
+      
+      return {
+        ok: true as const,
+        stage: 'complete' as const,
+        // Exercise context
+        exerciseIndex,
+        exerciseName,
+        exerciseCategory,
+        exerciseSets,
+        exerciseRepsOrTime,
+        exerciseNote,
+        // Set context
+        setNumber,
+        isHoldExercise,
+        targetValue,
+        targetRPE,
+        recommendedBand,
+        // Grouped block context
+        isGrouped,
+        groupType,
+        blockLabel,
+        memberIndex,
+        memberCount,
+        currentRound,
+        targetRounds,
+        memberLabel,
+        blockInfo,
+        // UI flags
+        bandSelectable,
+        hasLoad,
+        loadDisplay,
+        // Progress
+        completedSetsCount,
+        totalSets,
+        totalExercises,
+        // Notes
+        currentSetNote,
+        currentSetReasonTags,
+      }
+    } catch (err) {
+      console.error('[v0] [active_contract_build_failed]', err instanceof Error ? err.message : 'unknown')
+      return fallbackContract
+    }
+  }, [
+    safeExerciseIndex,
+    safeCurrentExercise,
+    validatedSetNumber,
+    activeEntryPreparation,
+    machineSessionContract?.executionPlan,
+    machineState.currentRound,
+    machineState.completedSets,
+    machineState.currentSetNote,
+    machineState.currentSetReasonTags,
+    exercises,
+  ])
+
 
   
   // [PHASE LW3] Effect-based boot diagnostics - runs after derivations are computed
@@ -5138,10 +5307,20 @@ function InterExerciseRestCountdown({
   // ==========================================================================
   
   // UNIT 1: Header - renders progress bar, timer, workout label
+  // [ACTIVE-ENTRY-CONTRACT] Now reads from activeEntryContract for progress values
   const renderHeaderUnit = (): React.ReactNode => {
     if (!unitStatus.header.enabled) return null
     try {
       unitStatus.header.rendered = true
+      
+      // Read progress values from activeEntryContract
+      const {
+        exerciseIndex: contractExerciseIndex,
+        completedSetsCount: contractCompletedSets,
+        totalSets: contractTotalSets,
+        totalExercises: contractTotalExercises,
+      } = activeEntryContract
+      
       return (
         <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
           <div className="px-4 py-2.5">
@@ -5150,15 +5329,15 @@ function InterExerciseRestCountdown({
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                   <span className="text-sm font-medium text-[#E6E9EF] truncate max-w-[160px]">{safeDisplayLabel}</span>
-                  <span className="text-xs text-[#6B7280]">{safeExerciseIndex + 1}/{totalExercises}</span>
+                  <span className="text-xs text-[#6B7280]">{contractExerciseIndex + 1}/{contractTotalExercises}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-xs text-[#6B7280]">{completedSetsCount}/{totalSets}</span>
+                  <span className="text-xs text-[#6B7280]">{contractCompletedSets}/{contractTotalSets}</span>
                   <span className="font-mono text-sm font-bold text-[#E6E9EF] tabular-nums">{formatDuration(safeElapsedSeconds)}</span>
                 </div>
               </div>
               <div className="h-1 bg-[#2B313A] rounded-full overflow-hidden">
-                <div className="h-full bg-[#C1121F] transition-all duration-300" style={{ width: `${(completedSetsCount / Math.max(totalSets, 1)) * 100}%` }} />
+                <div className="h-full bg-[#C1121F] transition-all duration-300" style={{ width: `${(contractCompletedSets / Math.max(contractTotalSets, 1)) * 100}%` }} />
               </div>
             </div>
           </div>
@@ -5180,33 +5359,39 @@ function InterExerciseRestCountdown({
   }
   
   // UNIT 2: Exercise - renders current exercise card with grouped block indicator
+  // [ACTIVE-ENTRY-CONTRACT] Now reads from activeEntryContract for all values
   const renderExerciseUnit = (): React.ReactNode => {
     if (!unitStatus.exercise.enabled) return null
     try {
       unitStatus.exercise.rendered = true
       
-      // Check if this exercise is part of a grouped block
-      const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, safeExerciseIndex)
-      const isGrouped = blockInfo?.block.groupType !== null && blockInfo?.block.groupType !== undefined
-      const groupType = blockInfo?.block.groupType
-      const blockLabel = blockInfo?.block.blockLabel || ''
-      const memberIndex = blockInfo?.memberIndex ?? 0
-      const memberCount = blockInfo?.block.memberExercises.length ?? 1
-      const currentRound = machineState.currentRound || 1
-      const targetRounds = blockInfo?.block.targetRounds || 1
-      const memberLabel = groupType === 'superset' 
-        ? `A${memberIndex + 1}` 
-        : `${memberIndex + 1}`
+      // Read all values from the authoritative activeEntryContract
+      const {
+        exerciseName,
+        exerciseCategory,
+        exerciseSets,
+        exerciseRepsOrTime,
+        setNumber,
+        targetRPE: contractTargetRPE,
+        isGrouped,
+        groupType,
+        blockLabel,
+        memberIndex,
+        currentRound,
+        targetRounds,
+        memberLabel,
+        blockInfo,
+      } = activeEntryContract
       
       return (
         <>
           {/* Grouped Block Card (if in superset/circuit) */}
-          {isGrouped && (
+          {isGrouped && blockInfo && (
             <Card className="bg-amber-500/5 border-amber-500/20 p-3 mb-3">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <Badge className="bg-amber-500/10 text-amber-400 border-0 text-[10px] uppercase px-2 py-0.5">
-                    {GROUP_TYPE_LABELS[groupType as keyof typeof GROUP_TYPE_LABELS] || 'Block'}
+                    {groupType ? (GROUP_TYPE_LABELS[groupType] || 'Block') : 'Block'}
                   </Badge>
                   <span className="text-sm font-medium text-[#E6E9EF]">{blockLabel}</span>
                 </div>
@@ -5215,7 +5400,7 @@ function InterExerciseRestCountdown({
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                {blockInfo?.block.memberExercises.map((ex, idx) => {
+                {blockInfo.block.memberExercises?.map((ex, idx) => {
                   const isCurrent = idx === memberIndex
                   const isCompleted = idx < memberIndex
                   const label = groupType === 'superset' ? `A${idx + 1}` : `${idx + 1}`
@@ -5244,19 +5429,19 @@ function InterExerciseRestCountdown({
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
-                  {safeCurrentExercise.category}
+                  {exerciseCategory}
                 </Badge>
                 {isGrouped && (
                   <span className="text-xs font-medium text-amber-400">{memberLabel}</span>
                 )}
               </div>
             </div>
-            <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight">{safeCurrentExercise.name}</h2>
+            <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight">{exerciseName}</h2>
             <div className="flex items-center gap-2 mt-1.5 text-sm">
               <span className="text-[#A4ACB8]">Target:</span>
-              <span className="text-[#E6E9EF] font-medium">{safeCurrentExercise.repsOrTime}</span>
+              <span className="text-[#E6E9EF] font-medium">{exerciseRepsOrTime}</span>
               <span className="text-[#6B7280]">·</span>
-              <span className="text-[#A4ACB8]">RPE {targetRPE}</span>
+              <span className="text-[#A4ACB8]">RPE {contractTargetRPE}</span>
             </div>
             {/* Set progress for grouped: shows round progress instead of linear sets */}
             <div className="flex items-center gap-3 mt-3">
@@ -5268,15 +5453,15 @@ function InterExerciseRestCountdown({
                   ))
                 ) : (
                   // For non-grouped, show set progress
-                  Array.from({ length: safeCurrentExercise.sets || 3 }).map((_, idx) => (
-                    <div key={idx} className={`h-2 flex-1 rounded-full ${idx < validatedSetNumber - 1 ? 'bg-green-500' : idx === validatedSetNumber - 1 ? 'bg-[#C1121F]' : 'bg-[#2B313A]'}`} />
+                  Array.from({ length: exerciseSets }).map((_, idx) => (
+                    <div key={idx} className={`h-2 flex-1 rounded-full ${idx < setNumber - 1 ? 'bg-green-500' : idx === setNumber - 1 ? 'bg-[#C1121F]' : 'bg-[#2B313A]'}`} />
                   ))
                 )}
               </div>
               <span className="text-sm font-medium text-[#E6E9EF]">
                 {isGrouped 
                   ? `Round ${currentRound}/${targetRounds}`
-                  : `Set ${validatedSetNumber}/${safeCurrentExercise.sets || 3}`
+                  : `Set ${setNumber}/${exerciseSets}`
                 }
               </span>
             </div>
@@ -5301,9 +5486,8 @@ function InterExerciseRestCountdown({
   // UNIT 3: Inputs - renders input controls
   // SINGLE SOURCE OF TRUTH: All input values come from machine state (safeHoldValue, safeRepsValue, safeSelectedRPE, safeBandUsed)
   // Setters dispatch into machine state (setHoldValue, setRepsValue, setSelectedRPE, setBandUsed)
+  // [ACTIVE-ENTRY-CONTRACT] Now reads from activeEntryContract for context values
   const [showSetNotes, setShowSetNotes] = useState(false)
-  const currentSetNote = machineState.currentSetNote || ''
-  const currentSetReasonTags = machineState.currentSetReasonTags || []
   
   const handleToggleReasonTag = (tag: SetReasonTag) => {
     machineDispatch({ type: 'TOGGLE_REASON_TAG', tag })
@@ -5317,16 +5501,28 @@ function InterExerciseRestCountdown({
     if (!unitStatus.inputs.enabled) return null
     try {
       unitStatus.inputs.rendered = true
+      
+      // Read all values from the authoritative activeEntryContract
+      const {
+        isHoldExercise: contractIsHold,
+        targetValue: contractTargetValue,
+        targetRPE: contractTargetRPE,
+        recommendedBand: contractRecommendedBand,
+        bandSelectable,
+        currentSetNote: contractSetNote,
+        currentSetReasonTags: contractReasonTags,
+      } = activeEntryContract
+      
       return (
         <Card className="bg-[#1A1F26] border-[#2B313A] p-3 space-y-4">
-          {isHoldExercise ? (
-            <RepsHoldInput type="hold" value={safeHoldValue} onChange={setHoldValue} targetValue={targetValue} />
+          {contractIsHold ? (
+            <RepsHoldInput type="hold" value={safeHoldValue} onChange={setHoldValue} targetValue={contractTargetValue} />
           ) : (
-            <RepsHoldInput type="reps" value={safeRepsValue} onChange={setRepsValue} targetValue={targetValue} />
+            <RepsHoldInput type="reps" value={safeRepsValue} onChange={setRepsValue} targetValue={contractTargetValue} />
           )}
-          <RPEQuickSelector value={safeSelectedRPE} onChange={setSelectedRPE} targetRPE={targetRPE} />
-          {(safeCurrentExercise.executionTruth?.bandSelectable === true || recommendedBand) && (
-            <BandSelector value={safeBandUsed} onChange={setBandUsed} recommendedBand={recommendedBand} />
+          <RPEQuickSelector value={safeSelectedRPE} onChange={setSelectedRPE} targetRPE={contractTargetRPE} />
+          {bandSelectable && (
+            <BandSelector value={safeBandUsed} onChange={setBandUsed} recommendedBand={contractRecommendedBand} />
           )}
           
           {/* Per-set notes section - collapsible */}
@@ -5338,9 +5534,9 @@ function InterExerciseRestCountdown({
               <div className="flex items-center gap-2 text-sm text-[#A4ACB8]">
                 <MessageSquare className="w-4 h-4" />
                 <span>Add note</span>
-                {(currentSetNote || currentSetReasonTags.length > 0) && (
+                {(contractSetNote || contractReasonTags.length > 0) && (
                   <span className="text-xs text-[#6B7280]">
-                    ({currentSetReasonTags.length > 0 ? currentSetReasonTags.length + ' tags' : 'note added'})
+                    ({contractReasonTags.length > 0 ? contractReasonTags.length + ' tags' : 'note added'})
                   </span>
                 )}
               </div>
@@ -5356,7 +5552,7 @@ function InterExerciseRestCountdown({
                 {/* Reason tags - quick tap selection */}
                 <div className="flex flex-wrap gap-1.5">
                   {(Object.entries(SET_REASON_TAG_LABELS) as [SetReasonTag, string][]).map(([tag, label]) => {
-                    const isSelected = currentSetReasonTags.includes(tag)
+                    const isSelected = contractReasonTags.includes(tag)
                     return (
                       <button
                         key={tag}
@@ -5376,7 +5572,7 @@ function InterExerciseRestCountdown({
                 {/* Free text note */}
                 <Textarea
                   placeholder="Optional note for this set..."
-                  value={currentSetNote}
+                  value={contractSetNote}
                   onChange={(e) => handleSetNote(e.target.value)}
                   className="bg-[#2B313A] border-[#3B4250] text-[#E6E9EF] placeholder:text-[#6B7280] text-sm resize-none h-16"
                 />

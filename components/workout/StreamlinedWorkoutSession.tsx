@@ -4616,6 +4616,24 @@ function InterExerciseRestCountdown({
     const nextExName = betweenRestVM?.nextExerciseName ?? 'Next Exercise'
     const nextExCategory = betweenRestVM?.nextExerciseCategory ?? 'general'
     
+    // Canonical timer state from machine
+    const restSecondsRemaining = machineState.interExerciseRestSeconds
+    const isRestComplete = restSecondsRemaining === 0
+    
+    // Handler for advancing to next exercise
+    const handleAdvanceToNextExercise = () => {
+      console.log('[v0] [between-exercise] User tapped advance CTA, restSecondsRemaining:', restSecondsRemaining)
+      const nextIndex = machineState.currentExerciseIndex + 1
+      const nextEx = machineSessionContract?.exercises[nextIndex]
+      const nextTarget = nextEx?.repsOrTime?.match(/(\d+)/)?.[1]
+      console.log('[v0] [between-exercise] Dispatching ADVANCE_TO_NEXT_EXERCISE, nextIndex:', nextIndex)
+      machineDispatch({
+        type: 'ADVANCE_TO_NEXT_EXERCISE',
+        nextIndex,
+        targetValue: nextTarget ? parseInt(nextTarget, 10) : 8,
+      })
+    }
+    
     return (
       <div className="min-h-screen bg-[#0F1115] flex flex-col">
         {/* Sticky Session Header */}
@@ -4650,12 +4668,16 @@ function InterExerciseRestCountdown({
         <div className="flex-1 px-4 py-6 sm:p-8">
           <div className="max-w-lg mx-auto space-y-6">
             {/* Exercise Completed Message */}
-            <Card className="bg-green-500/10 border-green-500/30 p-4">
+            <Card className={`p-4 ${isRestComplete ? 'bg-green-500/15 border-green-500/40' : 'bg-green-500/10 border-green-500/30'}`}>
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="w-8 h-8 text-green-500" />
                 <div>
-                  <p className="text-lg font-bold text-[#E6E9EF]">Exercise Complete!</p>
-                  <p className="text-sm text-[#A4ACB8]">{safeCurrentExercise.name} finished</p>
+                  <p className="text-lg font-bold text-[#E6E9EF]">
+                    {isRestComplete ? 'Ready for Next Exercise' : 'Exercise Complete!'}
+                  </p>
+                  <p className="text-sm text-[#A4ACB8]">
+                    {isRestComplete ? 'Rest period finished' : `${safeCurrentExercise.name} finished`}
+                  </p>
                 </div>
               </div>
             </Card>
@@ -4674,30 +4696,36 @@ function InterExerciseRestCountdown({
               </div>
             </Card>
             
-            {/* Rest Timer */}
+            {/* Rest Timer - shows countdown or ready state */}
             <div className="text-center py-4">
-              <p className="text-sm text-[#6B7280] mb-2">Rest Time</p>
-              <p className="text-4xl font-mono font-bold text-[#E6E9EF]">
-                {Math.floor(machineState.interExerciseRestSeconds / 60)}:{String(machineState.interExerciseRestSeconds % 60).padStart(2, '0')}
+              <p className="text-sm text-[#6B7280] mb-2">
+                {isRestComplete ? 'Rest Complete' : 'Rest Time'}
+              </p>
+              <p className={`text-4xl font-mono font-bold tabular-nums ${isRestComplete ? 'text-green-400' : 'text-[#E6E9EF]'}`}>
+                {Math.floor(restSecondsRemaining / 60)}:{String(restSecondsRemaining % 60).padStart(2, '0')}
               </p>
             </div>
             
-            {/* Primary Action */}
+            {/* Primary Action - different label based on timer state */}
             <Button
-              onClick={() => {
-                const nextIndex = machineState.currentExerciseIndex + 1
-                const nextEx = machineSessionContract?.exercises[nextIndex]
-                const nextTarget = nextEx?.repsOrTime?.match(/(\d+)/)?.[1]
-                machineDispatch({
-                  type: 'ADVANCE_TO_NEXT_EXERCISE',
-                  nextIndex,
-                  targetValue: nextTarget ? parseInt(nextTarget, 10) : 8,
-                })
-              }}
-              className="w-full h-16 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-lg font-bold"
+              onClick={handleAdvanceToNextExercise}
+              className={`w-full h-16 text-lg font-bold ${
+                isRestComplete 
+                  ? 'bg-green-600 hover:bg-green-700 text-white' 
+                  : 'bg-[#C1121F] hover:bg-[#A30F1A] text-white'
+              }`}
             >
-              <SkipForward className="w-5 h-5 mr-2" />
-              Start Next Exercise
+              {isRestComplete ? (
+                <>
+                  <Play className="w-5 h-5 mr-2" />
+                  Start Next Exercise
+                </>
+              ) : (
+                <>
+                  <SkipForward className="w-5 h-5 mr-2" />
+                  Skip Rest — Start Next Exercise
+                </>
+              )}
             </Button>
           </div>
         </div>

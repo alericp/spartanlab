@@ -10,7 +10,7 @@
  * PURPOSE:
  * - Bypass the fragile active derivation chain that was causing crashes
  * - Provide a stable, working first exercise render path
- * - Be easily removable/replaceable once the main component is fixed
+ * - Match the original polished workout session UI using plain props
  * 
  * DOES NOT:
  * - Own any complex derivations
@@ -23,13 +23,36 @@ import { useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ChevronLeft, Check, SkipForward, X } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import { ChevronLeft, ChevronDown, ChevronUp, Check, SkipForward, X, MessageSquare } from 'lucide-react'
 import type { RPEValue } from '@/lib/rpe-adjustment-engine'
 import type { ResistanceBandColor } from '@/lib/band-progression-engine'
 
 // =============================================================================
 // TYPES - Plain props only, no complex dependencies
 // =============================================================================
+
+export type SetReasonTag = 'form_issue' | 'fatigue' | 'too_easy' | 'too_hard' | 'pain' | 'grip' | 'balance' | 'focus'
+
+export const SET_REASON_TAG_LABELS: Record<SetReasonTag, string> = {
+  form_issue: 'Form Issue',
+  fatigue: 'Fatigued',
+  too_easy: 'Too Easy',
+  too_hard: 'Too Hard',
+  pain: 'Pain/Discomfort',
+  grip: 'Grip Limited',
+  balance: 'Balance Issue',
+  focus: 'Lost Focus',
+}
+
+export interface CompletedSetInfo {
+  setNumber: number
+  actualReps: number
+  holdSeconds?: number
+  actualRPE: RPEValue
+  bandUsed?: ResistanceBandColor | 'none'
+  reasonTags?: SetReasonTag[]
+}
 
 export interface ActiveWorkoutCorridorProps {
   // Session identity
@@ -56,14 +79,53 @@ export interface ActiveWorkoutCorridorProps {
   selectedRPE: RPEValue | null
   bandUsed: ResistanceBandColor | 'none'
   
+  // Notes state
+  currentSetNote?: string
+  currentSetReasonTags?: SetReasonTag[]
+  
+  // Recent sets for ledger
+  recentSets?: CompletedSetInfo[]
+  
+  // Band configuration
+  bandSelectable?: boolean
+  recommendedBand?: ResistanceBandColor
+  
   // Callbacks (passed from parent)
   onCompleteSet: () => void
   onSetReps: (value: number) => void
   onSetHold: (value: number) => void
   onSetRPE: (rpe: RPEValue | null) => void
   onSetBand: (band: ResistanceBandColor | 'none') => void
+  onSetNote?: (note: string) => void
+  onToggleReasonTag?: (tag: SetReasonTag) => void
   onExit: () => void
   onSkip?: () => void
+}
+
+// =============================================================================
+// CONSTANTS
+// =============================================================================
+
+const RPE_QUICK_OPTIONS: RPEValue[] = [6, 7, 8, 9, 10]
+
+const ALL_BAND_COLORS: ResistanceBandColor[] = ['yellow', 'red', 'green', 'blue', 'black', 'purple']
+
+const BAND_COLORS: Record<ResistanceBandColor, { bg: string; text: string; border: string }> = {
+  yellow: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500/50' },
+  red: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/50' },
+  green: { bg: 'bg-green-500/20', text: 'text-green-400', border: 'border-green-500/50' },
+  blue: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/50' },
+  black: { bg: 'bg-gray-700/40', text: 'text-gray-300', border: 'border-gray-500/50' },
+  purple: { bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500/50' },
+}
+
+const BAND_SHORT_LABELS: Record<ResistanceBandColor, string> = {
+  yellow: 'YLW',
+  red: 'RED',
+  green: 'GRN',
+  blue: 'BLU',
+  black: 'BLK',
+  purple: 'PUR',
 }
 
 // =============================================================================
@@ -90,11 +152,128 @@ function parseTargetValue(repsOrTime: string): number {
   return match ? parseInt(match[1], 10) : 8
 }
 
-// RPE Quick Options - matches original
-const RPE_QUICK_OPTIONS: RPEValue[] = [6, 7, 8, 9, 10]
+// =============================================================================
+// PURE SUB-COMPONENTS (extracted from original, no activeEntryContract dependency)
+// =============================================================================
+
+interface RPEQuickSelectorProps {
+  value: RPEValue | null
+  onChange: (value: RPEValue) => void
+  targetRPE?: number
+}
+
+function RPEQuickSelector({ value, onChange, targetRPE }: RPEQuickSelectorProps) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-[#A4ACB8]">RPE</span>
+        {targetRPE && (
+          <span className="text-xs text-[#6B7280]">Target: {targetRPE}</span>
+        )}
+      </div>
+      <div className="grid grid-cols-5 gap-1.5">
+        {RPE_QUICK_OPTIONS.map((rpe) => (
+          <button
+            key={rpe}
+            onClick={() => onChange(rpe)}
+            className={`py-2.5 rounded-lg text-base font-bold transition-all ${
+              value === rpe 
+                ? 'bg-[#C1121F] text-white scale-[1.02]' 
+                : 'bg-[#0F1115] text-[#A4ACB8] border border-[#2B313A] active:bg-[#2B313A]'
+            }`}
+          >
+            {rpe}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+interface RepsHoldInputProps {
+  type: 'reps' | 'hold'
+  value: number
+  onChange: (value: number) => void
+  targetValue: number
+}
+
+function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProps) {
+  const label = type === 'reps' ? 'Actual Reps' : 'Hold (sec)'
+  
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-[#A4ACB8]">{label}</span>
+        <span className="text-xs text-[#6B7280]">Target: {targetValue}</span>
+      </div>
+      <div className="flex items-center justify-center gap-3">
+        <button
+          onClick={() => onChange(Math.max(1, value - 1))}
+          className="w-12 h-12 rounded-lg bg-[#0F1115] border border-[#2B313A] text-[#A4ACB8] text-xl font-bold active:bg-[#2B313A]"
+        >
+          -
+        </button>
+        <span className="w-16 text-center text-3xl font-bold text-[#E6E9EF] tabular-nums">
+          {value}
+        </span>
+        <button
+          onClick={() => onChange(value + 1)}
+          className="w-12 h-12 rounded-lg bg-[#0F1115] border border-[#2B313A] text-[#A4ACB8] text-xl font-bold active:bg-[#2B313A]"
+        >
+          +
+        </button>
+      </div>
+    </div>
+  )
+}
+
+interface BandSelectorProps {
+  value: ResistanceBandColor | 'none'
+  onChange: (value: ResistanceBandColor | 'none') => void
+  recommendedBand?: ResistanceBandColor
+}
+
+function BandSelector({ value, onChange, recommendedBand }: BandSelectorProps) {
+  const bandOptions: (ResistanceBandColor | 'none')[] = ['none', ...ALL_BAND_COLORS]
+  
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-[#A4ACB8]">Band</span>
+        {recommendedBand && (
+          <span className="text-xs text-[#6B7280]">Rec: {BAND_SHORT_LABELS[recommendedBand]}</span>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {bandOptions.map((band) => {
+          const isSelected = value === band
+          const colors = band === 'none' ? null : BAND_COLORS[band]
+          
+          return (
+            <button
+              key={band}
+              onClick={() => onChange(band)}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                isSelected
+                  ? colors
+                    ? `${colors.bg} ${colors.text} ${colors.border} border`
+                    : 'bg-[#2B313A] text-[#E6E9EF] border border-[#3B4250]'
+                  : colors
+                    ? `bg-transparent ${colors.text} border ${colors.border} opacity-60 hover:opacity-100`
+                    : 'bg-transparent text-[#6B7280] border border-[#2B313A] hover:border-[#3B4250]'
+              }`}
+            >
+              {band === 'none' ? 'None' : BAND_SHORT_LABELS[band]}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 // =============================================================================
-// COMPONENT
+// MAIN COMPONENT
 // =============================================================================
 
 export function ActiveWorkoutStartCorridor({
@@ -113,10 +292,19 @@ export function ActiveWorkoutStartCorridor({
   repsValue,
   holdValue,
   selectedRPE,
+  bandUsed,
+  currentSetNote = '',
+  currentSetReasonTags = [],
+  recentSets = [],
+  bandSelectable = false,
+  recommendedBand,
   onCompleteSet,
   onSetReps,
   onSetHold,
   onSetRPE,
+  onSetBand,
+  onSetNote,
+  onToggleReasonTag,
   onExit,
   onSkip,
 }: ActiveWorkoutCorridorProps) {
@@ -124,14 +312,15 @@ export function ActiveWorkoutStartCorridor({
   const targetValue = parseTargetValue(exerciseRepsOrTime)
   const progressPercent = totalSetsCount > 0 ? (completedSetsCount / totalSetsCount) * 100 : 0
   
-  // Local state for confirming exit
+  // Local UI state
   const [showExitConfirm, setShowExitConfirm] = useState(false)
+  const [showSetNotes, setShowSetNotes] = useState(false)
   
   return (
     <div className="min-h-screen bg-[#0F1115] flex flex-col">
       {/* ========== STICKY HEADER ========== */}
       <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
-        <div className="px-4 py-3">
+        <div className="px-4 py-2.5">
           <div className="max-w-lg mx-auto">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -170,25 +359,25 @@ export function ActiveWorkoutStartCorridor({
       </div>
       
       {/* ========== MAIN CONTENT ========== */}
-      <div className="flex-1 px-4 py-4">
-        <div className="max-w-lg mx-auto space-y-4">
+      <div className="flex-1 px-4 py-3">
+        <div className="max-w-lg mx-auto space-y-3">
           
           {/* ========== EXERCISE CARD ========== */}
-          <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
-            {/* Category + Set label */}
-            <div className="flex items-center justify-between mb-3">
+          <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
+            {/* Category badge */}
+            <div className="flex items-center justify-between mb-2">
               <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
                 {exerciseCategory}
               </Badge>
             </div>
             
             {/* Exercise name */}
-            <h2 className="text-xl font-bold text-[#E6E9EF] leading-tight mb-1">
+            <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight">
               {exerciseName}
             </h2>
             
             {/* Target prescription */}
-            <div className="flex items-center gap-2 text-sm mb-4">
+            <div className="flex items-center gap-2 mt-1.5 text-sm">
               <span className="text-[#A4ACB8]">Target:</span>
               <span className="text-[#E6E9EF] font-medium">{exerciseRepsOrTime}</span>
               <span className="text-[#6B7280]">·</span>
@@ -196,7 +385,7 @@ export function ActiveWorkoutStartCorridor({
             </div>
             
             {/* Set progress dots */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 mt-3">
               <div className="flex items-center gap-1.5 flex-1">
                 {Array.from({ length: exerciseSets }).map((_, idx) => (
                   <div 
@@ -218,64 +407,107 @@ export function ActiveWorkoutStartCorridor({
           </Card>
           
           {/* ========== INPUT CARD ========== */}
-          <Card className="bg-[#1A1F26] border-[#2B313A] p-4 space-y-5">
+          <Card className="bg-[#1A1F26] border-[#2B313A] p-3 space-y-4">
+            {/* Reps/Hold Input */}
+            {isHold ? (
+              <RepsHoldInput type="hold" value={holdValue} onChange={onSetHold} targetValue={targetValue} />
+            ) : (
+              <RepsHoldInput type="reps" value={repsValue} onChange={onSetReps} targetValue={targetValue} />
+            )}
             
-            {/* Reps/Hold Input with +/- buttons */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-[#A4ACB8]">
-                  {isHold ? 'Hold (sec)' : 'Actual Reps'}
-                </span>
-                <span className="text-xs text-[#6B7280]">Target: {targetValue}</span>
-              </div>
-              <div className="flex items-center justify-center gap-4">
-                <button
-                  onClick={() => isHold 
-                    ? onSetHold(Math.max(1, holdValue - 1)) 
-                    : onSetReps(Math.max(1, repsValue - 1))
-                  }
-                  className="w-14 h-14 rounded-xl bg-[#0F1115] border border-[#2B313A] text-[#A4ACB8] text-2xl font-bold active:bg-[#2B313A] transition-colors"
-                >
-                  -
-                </button>
-                <span className="w-20 text-center text-4xl font-bold text-[#E6E9EF] tabular-nums">
-                  {isHold ? holdValue : repsValue}
-                </span>
-                <button
-                  onClick={() => isHold 
-                    ? onSetHold(holdValue + 1) 
-                    : onSetReps(repsValue + 1)
-                  }
-                  className="w-14 h-14 rounded-xl bg-[#0F1115] border border-[#2B313A] text-[#A4ACB8] text-2xl font-bold active:bg-[#2B313A] transition-colors"
-                >
-                  +
-                </button>
-              </div>
-            </div>
+            {/* RPE Selector */}
+            <RPEQuickSelector value={selectedRPE} onChange={onSetRPE} targetRPE={targetRPE} />
             
-            {/* RPE Quick Selector - Grid style */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-[#A4ACB8]">RPE</span>
-                <span className="text-xs text-[#6B7280]">Target: {targetRPE}</span>
+            {/* Band Selector (if enabled) */}
+            {bandSelectable && (
+              <BandSelector value={bandUsed} onChange={onSetBand} recommendedBand={recommendedBand} />
+            )}
+            
+            {/* Per-set notes section - collapsible */}
+            {onSetNote && onToggleReasonTag && (
+              <div className="border-t border-[#2B313A] pt-3">
+                <button
+                  onClick={() => setShowSetNotes(!showSetNotes)}
+                  className="flex items-center justify-between w-full text-left"
+                >
+                  <div className="flex items-center gap-2 text-sm text-[#A4ACB8]">
+                    <MessageSquare className="w-4 h-4" />
+                    <span>Add note</span>
+                    {(currentSetNote || currentSetReasonTags.length > 0) && (
+                      <span className="text-xs text-[#6B7280]">
+                        ({currentSetReasonTags.length > 0 ? currentSetReasonTags.length + ' tags' : 'note added'})
+                      </span>
+                    )}
+                  </div>
+                  {showSetNotes ? (
+                    <ChevronUp className="w-4 h-4 text-[#6B7280]" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-[#6B7280]" />
+                  )}
+                </button>
+                
+                {showSetNotes && (
+                  <div className="mt-3 space-y-3">
+                    {/* Reason tags - quick tap selection */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {(Object.entries(SET_REASON_TAG_LABELS) as [SetReasonTag, string][]).map(([tag, label]) => {
+                        const isSelected = currentSetReasonTags.includes(tag)
+                        return (
+                          <button
+                            key={tag}
+                            onClick={() => onToggleReasonTag(tag)}
+                            className={`px-2 py-1 rounded-md text-xs transition-colors ${
+                              isSelected
+                                ? 'bg-[#C1121F]/20 text-[#C1121F] border border-[#C1121F]/30'
+                                : 'bg-[#2B313A] text-[#A4ACB8] border border-transparent hover:border-[#3B4250]'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    
+                    {/* Free text note */}
+                    <Textarea
+                      placeholder="Optional note for this set..."
+                      value={currentSetNote}
+                      onChange={(e) => onSetNote(e.target.value)}
+                      className="bg-[#2B313A] border-[#3B4250] text-[#E6E9EF] placeholder:text-[#6B7280] text-sm resize-none h-16"
+                    />
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-5 gap-1.5">
-                {RPE_QUICK_OPTIONS.map((rpe) => (
-                  <button
-                    key={rpe}
-                    onClick={() => onSetRPE(rpe)}
-                    className={`py-3 rounded-lg text-base font-bold transition-all ${
-                      selectedRPE === rpe 
-                        ? 'bg-[#C1121F] text-white scale-[1.02]' 
-                        : 'bg-[#0F1115] text-[#A4ACB8] border border-[#2B313A] active:bg-[#2B313A]'
-                    }`}
-                  >
-                    {rpe}
-                  </button>
+            )}
+          </Card>
+          
+          {/* ========== RECENT SETS LEDGER ========== */}
+          {recentSets.length > 0 && (
+            <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
+              <div className="text-xs font-medium text-[#A4ACB8] mb-2">Recent Sets</div>
+              <div className="space-y-1 text-xs">
+                {recentSets.map((set, idx) => (
+                  <div key={idx} className="flex items-center justify-between px-2 py-1.5 bg-[#2B313A]/50 rounded">
+                    <div className="flex items-center gap-2 flex-1">
+                      <span className="text-[#6B7280] w-12">Set {set.setNumber}</span>
+                      <span className="text-[#E6E9EF] font-medium">
+                        {set.actualReps > 0 ? `${set.actualReps}` : set.holdSeconds ? `${set.holdSeconds}s` : '—'}
+                      </span>
+                      {set.bandUsed && set.bandUsed !== 'none' && (
+                        <span className="text-[#C1121F]">{set.bandUsed}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[#A4ACB8]">RPE {set.actualRPE}</span>
+                      {set.reasonTags && set.reasonTags.length > 0 && (
+                        <span className="text-[#C1121F] text-[10px]">+{set.reasonTags.length}</span>
+                      )}
+                    </div>
+                  </div>
                 ))}
               </div>
-            </div>
-          </Card>
+            </Card>
+          )}
           
           {/* ========== PRIMARY ACTION ========== */}
           <Button 
@@ -288,7 +520,7 @@ export function ActiveWorkoutStartCorridor({
           </Button>
           
           {/* ========== SECONDARY ACTIONS ========== */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between pt-2">
             <Button 
               variant="ghost" 
               onClick={onSkip}

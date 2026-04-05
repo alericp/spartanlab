@@ -5143,7 +5143,7 @@ function InterExerciseRestCountdown({
               ) : (
                 <>
                   <SkipForward className="w-5 h-5 mr-2" />
-                  Skip Rest — Start Round {currentRound}
+                  Skip Rest �� Start Round {currentRound}
                 </>
               )}
             </Button>
@@ -5277,7 +5277,8 @@ function InterExerciseRestCountdown({
   // safeCurrentExercise always has valid fallback values, so no null guard needed
   // [PHASE LW3] recordBootError removed - render is pure
   // ==========================================================================
-  
+  console.log('[v0] [active_corridor_entry]', { safeStatus, ACTIVE_DERIVATION_STAGE })
+
   // ==========================================================================
   // [UNIT-BASED-ACTIVE-CONTAINMENT] NAMED UNIT RENDER SYSTEM
   // Each unit has:
@@ -5719,7 +5720,20 @@ function InterExerciseRestCountdown({
   // No grouped context resolution. No activeWorkoutViewModel dependency.
   // ==========================================================================
   if (ACTIVE_DERIVATION_STAGE === 1) {
-    console.log('[v0] [Stage1] Rendering minimal active UI')
+    console.log('[v0] [Stage1] Rendering minimal active UI - ENTRY')
+    console.log('[v0] [Stage1_deps]', {
+      safeCurrentExercise: !!safeCurrentExercise,
+      safeCurrentExerciseName: safeCurrentExercise?.name,
+      validatedSetNumber,
+      safeExerciseIndex,
+      exercisesLength: exercises?.length,
+      normalizedCompletedSetsLength: normalizedCompletedSets?.length,
+      safeElapsedSeconds,
+      safeDisplayLabel,
+      safeHoldValue,
+      safeRepsValue,
+      safeSelectedRPE,
+    })
     unitStatus.shell.rendered = true
     
     // Read ONLY from machine-derived safe values - no complex derivations
@@ -5729,9 +5743,9 @@ function InterExerciseRestCountdown({
     const s1ExerciseRepsOrTime = safeCurrentExercise?.repsOrTime || '8-12 reps'
     const s1SetNumber = validatedSetNumber || 1
     const s1ExerciseIndex = safeExerciseIndex || 0
-    const s1TotalExercises = exercises.length || 1
-    const s1CompletedSets = normalizedCompletedSets.length || 0
-    const s1TotalSets = exercises.reduce((sum, ex) => sum + (ex?.sets || 3), 0) || 3
+    const s1TotalExercises = exercises?.length || 1
+    const s1CompletedSets = normalizedCompletedSets?.length || 0
+    const s1TotalSets = (exercises || []).reduce((sum, ex) => sum + (ex?.sets || 3), 0) || 3
     const s1Elapsed = safeElapsedSeconds || 0
     const s1IsHold = safeLower(s1ExerciseRepsOrTime).includes('sec') || safeLower(s1ExerciseRepsOrTime).includes('hold')
     
@@ -5739,6 +5753,9 @@ function InterExerciseRestCountdown({
     let s1TargetValue = 8
     const s1RepsMatch = s1ExerciseRepsOrTime.match(/(\d+)/)
     if (s1RepsMatch) s1TargetValue = parseInt(s1RepsMatch[1], 10)
+    
+    console.log('[v0] [Stage1_vars_computed]', { s1ExerciseName, s1SetNumber, s1TotalExercises, s1IsHold })
+    console.log('[v0] [Stage1] About to return JSX')
     
     return (
       <div className="min-h-screen bg-[#0F1115] flex flex-col">

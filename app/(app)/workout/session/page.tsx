@@ -106,6 +106,9 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // [SURGICAL-DIAG] Log the exact error immediately for debugging
+    console.error('[v0] [WORKOUT_CRASH] Error caught by boundary:', error.message, error.stack)
+    
     // [PHASE-NEXT] CRASH RECOVERY WIPE: Mark boot failure for next load
     // On the NEXT load, if this marker exists and is recent, we clear saved workout state
     try {

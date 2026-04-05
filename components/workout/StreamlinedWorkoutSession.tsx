@@ -5278,22 +5278,36 @@ function InterExerciseRestCountdown({
   // safeCurrentExercise always has valid fallback values, so no null guard needed
   // [PHASE LW3] recordBootError removed - render is pure
   // ==========================================================================
-  console.log('[v0] [active_corridor_entry]', { safeStatus, ACTIVE_DERIVATION_STAGE })
-
-  // ==========================================================================
   // [ISOLATED-ACTIVE-CORRIDOR] BYPASS ENTIRE FRAGILE HOOK CHAIN
   // This returns the isolated ActiveWorkoutStartCorridor component BEFORE
   // any of the complex derivation chains (unit status, render functions, etc.)
   // execute. This is the key fix - we must return EARLY to avoid the hooks.
   // ==========================================================================
   if (safeStatus === 'active') {
-    console.log('[v0] [active_start_click] Rendering isolated corridor component')
-    console.log('[v0] [active_start_minimal_props_ready]', {
-      sessionLabel: safeDisplayLabel,
-      exerciseName: safeCurrentExercise?.name,
-      currentSetNumber: validatedSetNumber,
-      currentExerciseIndex: safeExerciseIndex,
-    })
+    // [ISOLATED-ACTIVE-CORRIDOR] Derive simple safe values for the corridor
+    // These are plain reads from machine state - no complex derivations
+    const corridorCurrentSetNote = machineState.currentSetNote || ''
+    const corridorCurrentSetReasonTags = (machineState.currentSetReasonTags || []) as import('./ActiveWorkoutStartCorridor').SetReasonTag[]
+    const corridorRecommendedBand = safeCurrentExercise?.executionTruth?.recommendedBand as ResistanceBandColor | undefined
+    const corridorBandSelectable = safeCurrentExercise?.executionTruth?.bandSelectable === true || !!corridorRecommendedBand
+    
+    // Build recent sets for ledger (last 3 completed sets)
+    const corridorRecentSets = normalizedCompletedSets.slice(-3).map(set => ({
+      setNumber: set.setNumber,
+      actualReps: set.actualReps || 0,
+      holdSeconds: set.holdSeconds,
+      actualRPE: set.actualRPE as RPEValue,
+      bandUsed: set.bandUsed as ResistanceBandColor | 'none' | undefined,
+      reasonTags: set.reasonTags as import('./ActiveWorkoutStartCorridor').SetReasonTag[] | undefined,
+    }))
+    
+    // Note handlers (simple dispatches)
+    const handleSetNote = (note: string) => {
+      machineDispatch({ type: 'SET_CURRENT_SET_NOTE', note })
+    }
+    const handleToggleReasonTag = (tag: import('./ActiveWorkoutStartCorridor').SetReasonTag) => {
+      machineDispatch({ type: 'TOGGLE_REASON_TAG', tag })
+    }
     
     return (
       <ActiveWorkoutStartCorridor
@@ -5313,11 +5327,18 @@ function InterExerciseRestCountdown({
         holdValue={safeHoldValue || 30}
         selectedRPE={safeSelectedRPE}
         bandUsed={safeBandUsed || 'none'}
+        currentSetNote={corridorCurrentSetNote}
+        currentSetReasonTags={corridorCurrentSetReasonTags}
+        recentSets={corridorRecentSets}
+        bandSelectable={corridorBandSelectable}
+        recommendedBand={corridorRecommendedBand}
         onCompleteSet={handleCompleteSet}
         onSetReps={setRepsValue}
         onSetHold={setHoldValue}
         onSetRPE={setSelectedRPE}
         onSetBand={setBandUsed}
+        onSetNote={handleSetNote}
+        onToggleReasonTag={handleToggleReasonTag}
         onExit={() => setShowExitConfirm(true)}
         onSkip={handleSkipExercise}
       />

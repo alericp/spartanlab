@@ -4581,23 +4581,36 @@ function InterExerciseRestCountdown({
               </p>
             </div>
             
-            {/* Continue Button */}
-            <Button
-              onClick={() => {
-                const nextIndex = machineState.currentExerciseIndex + 1
-                const nextEx = machineSessionContract?.exercises[nextIndex]
-                const nextTarget = nextEx?.repsOrTime?.match(/(\d+)/)?.[1]
-                machineDispatch({
-                  type: 'ADVANCE_TO_NEXT_EXERCISE',
-                  nextIndex,
-                  targetValue: nextTarget ? parseInt(nextTarget, 10) : 8,
-                })
-              }}
-              className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-lg font-bold"
-            >
-              <SkipForward className="w-5 h-5 mr-2" />
-              Continue to Next Exercise
-            </Button>
+            {/* Action Buttons */}
+            <div className="space-y-3">
+              {/* Continue / Skip Rest Button - Primary action */}
+              <Button
+                onClick={() => {
+                  console.log('[v0] [BetweenExerciseRest] Skip Rest clicked - advancing to next exercise')
+                  const nextIndex = machineState.currentExerciseIndex + 1
+                  const nextEx = machineSessionContract?.exercises[nextIndex]
+                  const nextTarget = nextEx?.repsOrTime?.match(/(\d+)/)?.[1]
+                  machineDispatch({
+                    type: 'ADVANCE_TO_NEXT_EXERCISE',
+                    nextIndex,
+                    targetValue: nextTarget ? parseInt(nextTarget, 10) : 8,
+                  })
+                }}
+                className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-lg font-bold"
+              >
+                <SkipForward className="w-5 h-5 mr-2" />
+                Skip Rest - Start Next Exercise
+              </Button>
+              
+              {/* Dev diagnostic for rest phase */}
+              {process.env.NODE_ENV === 'development' && (
+                <div className="text-xs text-[#6B7280] bg-[#1A1F26] rounded p-2 font-mono">
+                  <p>Phase: {machineState.phase}</p>
+                  <p>Rest seconds: {machineState.interExerciseRestSeconds}</p>
+                  <p>Next index: {machineState.currentExerciseIndex + 1}</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -360,6 +360,15 @@ export function workoutMachineReducer(
     case 'COMPLETE_SET': {
       const newCompletedSets = [...state.completedSets, action.completedSet]
       
+      // [LOG_SET_REDUCER_RESULT] Pre-transition state
+      console.log('[LOG_SET_REDUCER_RESULT] COMPLETE_SET processing', {
+        isLastSetOfExercise: action.isLastSetOfExercise,
+        exerciseCount: action.exerciseCount,
+        currentExerciseIndex: state.currentExerciseIndex,
+        currentSetNumber: state.currentSetNumber,
+        newCompletedSetsCount: newCompletedSets.length,
+      })
+      
       if (action.isLastSetOfExercise) {
         // Last set of exercise - will transition to between_exercise_rest or completed
         const isLastExercise = state.currentExerciseIndex >= action.exerciseCount - 1
@@ -369,6 +378,9 @@ export function workoutMachineReducer(
             phase: 'completed',
             completedSets: newCompletedSets,
             lastSetRPE: action.completedSet.actualRPE,
+            selectedRPE: null,
+            repsValue: 0,
+            holdValue: 0,
             // Clear per-set notes
             currentSetNote: '',
             currentSetReasonTags: [],
@@ -381,6 +393,9 @@ export function workoutMachineReducer(
           completedSets: newCompletedSets,
           lastSetRPE: action.completedSet.actualRPE,
           selectedRPE: null,
+          // Reset input values so component can re-seed from next exercise prescription
+          repsValue: 0,
+          holdValue: 0,
           interExerciseRestSeconds: 120,
           // Clear per-set notes for next exercise
           currentSetNote: '',
@@ -389,17 +404,26 @@ export function workoutMachineReducer(
       }
       
       // Not last set - rest then next set
-      return {
+      const restingResult = {
         ...state,
-        phase: 'resting',
+        phase: 'resting' as const,
         completedSets: newCompletedSets,
         currentSetNumber: state.currentSetNumber + 1,
         lastSetRPE: action.completedSet.actualRPE,
         selectedRPE: null,
+        // Reset input values so component can re-seed from prescription for next set
+        repsValue: 0,
+        holdValue: 0,
         // Clear per-set notes for next set
         currentSetNote: '',
         currentSetReasonTags: [],
       }
+      console.log('[LOG_SET_REDUCER_RESULT] Returning resting phase', {
+        phase: restingResult.phase,
+        currentSetNumber: restingResult.currentSetNumber,
+        completedSetsCount: restingResult.completedSets.length,
+      })
+      return restingResult
     }
     
     // COMPLETE_REST: Between-set rest -> next active set (same exercise)

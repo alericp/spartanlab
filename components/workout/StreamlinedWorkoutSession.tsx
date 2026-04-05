@@ -3284,24 +3284,55 @@ export function StreamlinedWorkoutSession({
       totalExercises: exercises.length,
     })
     
-    // Build completed set data with notes and grouped context
-    const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, currentIndex)
-    const setData: CompletedSetData = {
-      exerciseIndex: currentIndex,
-      setNumber: liveSession.currentSetNumber,
-      actualReps: isHoldExercise ? 0 : liveSession.repsValue,
-      holdSeconds: isHoldExercise ? liveSession.holdValue : undefined,
-      actualRPE: liveSession.selectedRPE || 8,
-      bandUsed: liveSession.bandUsed,
-      timestamp: Date.now(),
-      // Per-set notes from machine state
-      note: machineState.currentSetNote || undefined,
-      reasonTags: machineState.currentSetReasonTags.length > 0 ? [...machineState.currentSetReasonTags] : undefined,
-      // Grouped execution context
-      blockId: blockInfo?.block.blockId,
-      memberIndex: blockInfo?.memberIndex,
-      round: machineState.currentRound || undefined,
-    }
+      // Build completed set data with notes and grouped context
+      const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, currentIndex)
+      const setData: CompletedSetData = {
+        exerciseIndex: currentIndex,
+        setNumber: liveSession.currentSetNumber,
+        actualReps: isHoldExercise ? 0 : liveSession.repsValue,
+        holdSeconds: isHoldExercise ? liveSession.holdValue : undefined,
+        actualRPE: liveSession.selectedRPE || 8,
+        bandUsed: liveSession.bandUsed,
+        timestamp: Date.now(),
+        // Per-set notes from machine state
+        note: machineState.currentSetNote || undefined,
+        reasonTags: machineState.currentSetReasonTags.length > 0 ? [...machineState.currentSetReasonTags] : undefined,
+        // Grouped execution context
+        blockId: blockInfo?.block.blockId,
+        memberIndex: blockInfo?.memberIndex,
+        round: machineState.currentRound || undefined,
+      }
+      
+      // Check if this exercise is part of a grouped block
+      if (blockInfo && blockInfo.block.groupType !== null) {
+        // This is a grouped exercise - dispatch COMPLETE_BLOCK_SET instead
+        console.log('[v0] [grouped] Completing set in grouped block:', {
+          blockId: blockInfo.block.blockId,
+          blockType: blockInfo.block.groupType,
+          memberIndex: blockInfo.memberIndex,
+          round: machineState.currentRound,
+        })
+        
+        machineDispatch({
+          type: 'COMPLETE_BLOCK_SET',
+          completedSet: setData,
+          block: blockInfo.block,
+          memberIndex: blockInfo.memberIndex,
+          round: machineState.currentRound || 1,
+        })
+        return
+      }
+      
+      // Non-grouped set - use standard flat dispatch
+      const newCompletedSets = [...liveSession.completedSets, setData]
+      const isLastSet = liveSession.currentSetNumber >= (safeCurrentExercise.sets || 3)
+      
+      machineDispatch({
+        type: 'COMPLETE_SET',
+        completedSet: setData,
+        isLastSetOfExercise: isLastSet,
+        exerciseCount: exercises.length,
+      })
     
     const newCompletedSets = [...liveSession.completedSets, setData]
     const totalExerciseSets = safeCurrentExercise.sets
@@ -5462,6 +5493,45 @@ function InterExerciseRestCountdown({
     }
   }
   
+  // UNIT 3.5: Execution Ledger - shows recent completed sets
+  const renderLedgerUnit = (): React.ReactNode => {
+    if (machineState.completedSets.length === 0) return null
+    try {
+      const recentSets = machineState.completedSets.slice(-3) // Show last 3 sets
+      const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, safeExerciseIndex)
+      
+      return (
+        <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
+          <div className="text-xs font-medium text-[#A4ACB8] mb-2">Recent Sets</div>
+          <div className="space-y-1 text-xs">
+            {recentSets.map((set, idx) => (
+              <div key={idx} className="flex items-center justify-between px-2 py-1.5 bg-[#2B313A]/50 rounded">
+                <div className="flex items-center gap-2 flex-1">
+                  <span className="text-[#6B7280] w-12">Set {set.setNumber}</span>
+                  <span className="text-[#E6E9EF] font-medium">
+                    {set.actualReps > 0 ? `${set.actualReps}` : set.holdSeconds ? `${set.holdSeconds}s` : '—'}
+                  </span>
+                  {set.bandUsed && set.bandUsed !== 'none' && (
+                    <span className="text-[#C1121F]">{set.bandUsed}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[#A4ACB8]`}>RPE {set.actualRPE}</span>
+                  {set.reasonTags && set.reasonTags.length > 0 && (
+                    <span className="text-[#C1121F] text-[10px]">+{set.reasonTags.length}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )
+    } catch (err) {
+      console.error('[v0] [Unit:Ledger] FAILED', err)
+      return null
+    }
+  }
+  
   // UNIT 4: Actions - renders complete button and secondary actions
   const renderActionsUnit = (): React.ReactNode => {
     if (!unitStatus.actions.enabled) return null
@@ -5576,6 +5646,9 @@ function InterExerciseRestCountdown({
           
           {/* UNIT 3: Input Controls */}
           {renderInputsUnit()}
+          
+          {/* UNIT 3.5: Execution Ledger */}
+          {renderLedgerUnit()}
           
           {/* UNIT 4: Action Buttons */}
           {renderActionsUnit()}

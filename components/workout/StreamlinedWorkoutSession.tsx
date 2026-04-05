@@ -2570,7 +2570,7 @@ export function StreamlinedWorkoutSession({
   //   - activeEntryPreparation (stage 4+)
   //   - activeWorkoutViewModel (stage 6 only)
   // ==========================================================================
-  const ACTIVE_DERIVATION_STAGE = 6 // Controls which derivations run (1-6) - FULL RENDER
+  const ACTIVE_DERIVATION_STAGE = 1 // [SURGICAL-FIX] Bypass complex derivations to restore working start corridor
   const isActivePhase = safeStatus === 'active' || safeStatus === 'resting'
   const shouldSkipFullDerivations = isActivePhase && ACTIVE_DERIVATION_STAGE === 1
   
@@ -5713,29 +5713,129 @@ function InterExerciseRestCountdown({
   }
   
   // ==========================================================================
-  // STAGE 1 ONLY: Minimal shell with diagnostic info (DEV ONLY)
-  // In production with stage 1, we still show the full UI to avoid confusing users
+  // STAGE 1: MINIMAL WORKING ACTIVE UI
+  // [SURGICAL-FIX] This is the narrow, known-good first active render path.
+  // Uses ONLY machine-derived safe values. No complex derivation chains.
+  // No grouped context resolution. No activeWorkoutViewModel dependency.
   // ==========================================================================
-  if (ACTIVE_DERIVATION_STAGE === 1 && process.env.NODE_ENV === 'development') {
-    console.log('[v0] [Unit:Shell] Stage 1 - Minimal shell only (DEV)')
+  if (ACTIVE_DERIVATION_STAGE === 1) {
+    console.log('[v0] [Stage1] Rendering minimal active UI')
     unitStatus.shell.rendered = true
-    const elapsed = safeElapsedSeconds || 0
+    
+    // Read ONLY from machine-derived safe values - no complex derivations
+    const s1ExerciseName = safeCurrentExercise?.name || 'Exercise'
+    const s1ExerciseCategory = safeCurrentExercise?.category || 'general'
+    const s1ExerciseSets = safeCurrentExercise?.sets || 3
+    const s1ExerciseRepsOrTime = safeCurrentExercise?.repsOrTime || '8-12 reps'
+    const s1SetNumber = validatedSetNumber || 1
+    const s1ExerciseIndex = safeExerciseIndex || 0
+    const s1TotalExercises = exercises.length || 1
+    const s1CompletedSets = normalizedCompletedSets.length || 0
+    const s1TotalSets = exercises.reduce((sum, ex) => sum + (ex?.sets || 3), 0) || 3
+    const s1Elapsed = safeElapsedSeconds || 0
+    const s1IsHold = safeLower(s1ExerciseRepsOrTime).includes('sec') || safeLower(s1ExerciseRepsOrTime).includes('hold')
+    
+    // Parse target value simply
+    let s1TargetValue = 8
+    const s1RepsMatch = s1ExerciseRepsOrTime.match(/(\d+)/)
+    if (s1RepsMatch) s1TargetValue = parseInt(s1RepsMatch[1], 10)
+    
     return (
-      <div className="min-h-screen bg-[#0F1115] flex flex-col items-center justify-center p-4">
-        <div className="text-center max-w-sm">
-          <div className="w-16 h-16 rounded-full bg-green-900/30 border border-green-500/50 flex items-center justify-center mx-auto mb-4">
-            <Dumbbell className="w-8 h-8 text-green-500" />
+      <div className="min-h-screen bg-[#0F1115] flex flex-col">
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
+          <div className="px-4 py-2.5">
+            <div className="max-w-lg mx-auto">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                  <span className="text-sm font-medium text-[#E6E9EF] truncate max-w-[160px]">{safeDisplayLabel}</span>
+                  <span className="text-xs text-[#6B7280]">{s1ExerciseIndex + 1}/{s1TotalExercises}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-[#6B7280]">{s1CompletedSets}/{s1TotalSets}</span>
+                  <span className="font-mono text-sm font-bold text-[#E6E9EF] tabular-nums">{formatDuration(s1Elapsed)}</span>
+                </div>
+              </div>
+              <div className="h-1 bg-[#2B313A] rounded-full overflow-hidden">
+                <div className="h-full bg-[#C1121F] transition-all duration-300" style={{ width: `${(s1CompletedSets / Math.max(s1TotalSets, 1)) * 100}%` }} />
+              </div>
+            </div>
           </div>
-          <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">DEV: Stage 1 Shell</h2>
-          <div className="bg-[#1A1F26] rounded-lg p-4 text-left text-sm space-y-2">
-            <p className="text-[#6B7280]">Session: <span className="text-[#E6E9EF]">{safeDisplayLabel || 'Workout'}</span></p>
-            <p className="text-[#6B7280]">Exercise: <span className="text-[#E6E9EF]">{safeCurrentExercise?.name || 'Exercise'}</span></p>
-            <p className="text-[#6B7280]">Set: <span className="text-[#E6E9EF]">{validatedSetNumber || 1}/{safeCurrentExercise?.sets || 3}</span></p>
-            <p className="text-[#6B7280]">Time: <span className="text-[#E6E9EF]">{Math.floor(elapsed / 60)}:{(elapsed % 60).toString().padStart(2, '0')}</span></p>
-          </div>
-          <p className="text-xs text-green-500 mt-4">Stage 1 passed. Increase ACTIVE_DERIVATION_STAGE to test units.</p>
         </div>
-        {renderDiagnosticPanel()}
+        
+        {/* Main content */}
+        <div className="flex-1 px-4 py-3">
+          <div className="max-w-lg mx-auto space-y-3">
+            {/* Exercise Card */}
+            <Card className="bg-[#1A1F26] border-[#2B313A]">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-[#C1121F]/10 text-[#C1121F] border-0 text-[10px] uppercase px-2 py-0.5">
+                      {s1ExerciseCategory}
+                    </Badge>
+                    <span className="text-xs text-[#6B7280]">Set {s1SetNumber}/{s1ExerciseSets}</span>
+                  </div>
+                </div>
+                <h2 className="text-xl font-bold text-[#E6E9EF] mb-1">{s1ExerciseName}</h2>
+                <p className="text-sm text-[#A4ACB8]">{s1ExerciseRepsOrTime}</p>
+              </CardContent>
+            </Card>
+            
+            {/* Input Controls */}
+            <Card className="bg-[#1A1F26] border-[#2B313A]">
+              <CardContent className="p-4 space-y-4">
+                {s1IsHold ? (
+                  <div>
+                    <label className="block text-xs text-[#6B7280] mb-1.5">Hold Time (seconds)</label>
+                    <Input
+                      type="number"
+                      value={safeHoldValue}
+                      onChange={(e) => setHoldValue(parseInt(e.target.value) || 0)}
+                      className="bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] text-lg font-bold"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs text-[#6B7280] mb-1.5">Reps Completed</label>
+                    <Input
+                      type="number"
+                      value={safeRepsValue}
+                      onChange={(e) => setRepsValue(parseInt(e.target.value) || 0)}
+                      className="bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] text-lg font-bold"
+                    />
+                  </div>
+                )}
+                
+                <div>
+                  <label className="block text-xs text-[#6B7280] mb-1.5">RPE (Effort)</label>
+                  <div className="flex gap-1">
+                    {[6, 7, 8, 9, 10].map(rpe => (
+                      <Button
+                        key={rpe}
+                        variant={safeSelectedRPE === rpe ? 'default' : 'outline'}
+                        size="sm"
+                        className={safeSelectedRPE === rpe ? 'bg-[#C1121F] border-[#C1121F]' : 'border-[#2B313A] text-[#A4ACB8]'}
+                        onClick={() => setSelectedRPE(rpe)}
+                      >
+                        {rpe}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            {/* Action Button */}
+            <Button
+              className="w-full h-14 text-lg font-bold bg-[#C1121F] hover:bg-[#A10F1A] text-white"
+              onClick={handleCompleteSet}
+            >
+              Complete Set
+            </Button>
+          </div>
+        </div>
       </div>
     )
   }

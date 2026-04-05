@@ -2367,7 +2367,7 @@ export function StreamlinedWorkoutSession({
   //   - activeEntryPreparation (stage 4+)
   //   - activeWorkoutViewModel (stage 6 only)
   // ==========================================================================
-  const ACTIVE_DERIVATION_STAGE = 1 // Controls which derivations run (1-6) - TEST STAGE 1
+  const ACTIVE_DERIVATION_STAGE = 6 // Controls which derivations run (1-6) - FULL RENDER
   const isActivePhase = safeStatus === 'active' || safeStatus === 'resting'
   const shouldSkipFullDerivations = isActivePhase && ACTIVE_DERIVATION_STAGE === 1
   
@@ -4730,1072 +4730,288 @@ function InterExerciseRestCountdown({
   // ==========================================================================
   
   // ==========================================================================
-  // [STAGED-ACTIVE-REINTRODUCTION] FULL ACTIVE UI LADDER
-  // Stage owner map:
-  //   STAGE 1 = minimal shell only (primitives)
-  //   STAGE 2 = active header/progress bar (inline JSX)
-  //   STAGE 3 = main exercise card (inline JSX, no child components)
-  //   STAGE 4 = set logging controls (RepsHoldInput, RPEQuickSelector, BandSelector)
-  //   STAGE 5 = secondary actions + complete button
-  //   STAGE 6 = full render (all modals, ExerciseOptionsMenu, effects)
+  // [UNIT-BASED-ACTIVE-CONTAINMENT] NAMED UNIT RENDER SYSTEM
+  // Each unit has:
+  //   - Named ownership
+  //   - Stage-gated derivations
+  //   - Local containment (catches errors, shows inline diagnostic)
+  //   - Independent testability
+  //
+  // UNIT MAP:
+  //   Unit 0 (Shell)       = Always renders - minimal safe shell wrapper
+  //   Unit 1 (Header)      = Progress bar, timer, workout label
+  //   Unit 2 (Exercise)    = Current exercise card, set progress
+  //   Unit 3 (Inputs)      = RepsHoldInput, RPEQuickSelector, BandSelector
+  //   Unit 4 (Actions)     = Complete set button, skip/end actions
+  //   Unit 5 (Optional)    = Modals, menus, optional UI elements
+  //
+  // DERIVATION OWNERSHIP:
+  //   - sessionRuntimeTruth    -> Unit 1 (Header)
+  //   - exerciseRuntimeTruth   -> Unit 2 (Exercise)
+  //   - activeEntryPreparation -> Unit 3 (Inputs)
+  //   - activeWorkoutViewModel -> Unit 5 (Optional)
   // ==========================================================================
-  // [UNIFIED] Use ACTIVE_DERIVATION_STAGE from early gate for both derivations and JSX
-  // This ensures derivations and JSX are always in sync
   
-  // STAGE 1: Minimal shell only
-  if (ACTIVE_DERIVATION_STAGE === 1) {
-    try {
-      const stage1_label = safeDisplayLabel || 'Workout'
-      const stage1_exercise = safeCurrentExercise?.name || 'Exercise'
-      const stage1_set = validatedSetNumber || 1
-      const stage1_totalSets = safeCurrentExercise?.sets || 3
-      const stage1_elapsed = safeElapsedSeconds || 0
-      const stage1_mins = Math.floor(stage1_elapsed / 60)
-      const stage1_secs = stage1_elapsed % 60
-      
-      console.log('[v0] [staged_active_stage1] All primitives extracted safely')
-      
-      return (
-        <div className="min-h-screen bg-[#0F1115] flex flex-col items-center justify-center p-4">
-          <div className="text-center max-w-sm">
-            <div className="w-16 h-16 rounded-full bg-green-900/30 border border-green-500/50 flex items-center justify-center mx-auto mb-4">
-              <Dumbbell className="w-8 h-8 text-green-500" />
-            </div>
-            <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Stage 1: Active Shell Works</h2>
-            <div className="bg-[#1A1F26] rounded-lg p-4 text-left text-sm space-y-2">
-              <p className="text-[#6B7280]">Session: <span className="text-[#E6E9EF]">{stage1_label}</span></p>
-              <p className="text-[#6B7280]">Exercise: <span className="text-[#E6E9EF]">{stage1_exercise}</span></p>
-              <p className="text-[#6B7280]">Set: <span className="text-[#E6E9EF]">{stage1_set}/{stage1_totalSets}</span></p>
-              <p className="text-[#6B7280]">Time: <span className="text-[#E6E9EF]">{stage1_mins}:{stage1_secs.toString().padStart(2, '0')}</span></p>
-            </div>
-            <p className="text-xs text-green-500 mt-4">Stage 1 passed. Increase ACTIVE_REINTRODUCTION_STAGE to test more.</p>
-          </div>
-        </div>
-      )
-    } catch (stage1Error) {
-      console.error('[v0] [stage1_FAILED]', stage1Error)
-      return <div className="min-h-screen bg-[#0F1115] flex items-center justify-center text-red-500">Stage 1 failed: {stage1Error instanceof Error ? stage1Error.message : 'unknown'}</div>
-    }
+  // Unit status tracking for diagnostic panel
+  const unitStatus = {
+    shell: { enabled: true, rendered: false, error: null as string | null },
+    header: { enabled: ACTIVE_DERIVATION_STAGE >= 2, rendered: false, error: null as string | null },
+    exercise: { enabled: ACTIVE_DERIVATION_STAGE >= 3, rendered: false, error: null as string | null },
+    inputs: { enabled: ACTIVE_DERIVATION_STAGE >= 4, rendered: false, error: null as string | null },
+    actions: { enabled: ACTIVE_DERIVATION_STAGE >= 5, rendered: false, error: null as string | null },
+    optional: { enabled: ACTIVE_DERIVATION_STAGE >= 6, rendered: false, error: null as string | null },
   }
   
-  // STAGE 2: Active header with progress bar
-  if (ACTIVE_DERIVATION_STAGE === 2) {
-    try {
-      console.log('[v0] [staged_active_stage2] Testing header render')
-      return (
-        <div className="min-h-screen bg-[#0F1115] flex flex-col">
-          <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
-            <div className="px-4 py-2.5">
-              <div className="max-w-lg mx-auto">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                    <span className="text-sm font-medium text-[#E6E9EF] truncate max-w-[160px]">{safeDisplayLabel}</span>
-                    <span className="text-xs text-[#6B7280]">{safeExerciseIndex + 1}/{totalExercises}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-[#6B7280]">{completedSetsCount}/{totalSets}</span>
-                    <span className="font-mono text-sm font-bold text-[#E6E9EF] tabular-nums">{formatDuration(safeElapsedSeconds)}</span>
-                  </div>
-                </div>
-                <div className="h-1 bg-[#2B313A] rounded-full overflow-hidden">
-                  <div className="h-full bg-[#C1121F] transition-all duration-300" style={{ width: `${(completedSetsCount / totalSets) * 100}%` }} />
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-green-500 text-sm">Stage 2 passed: Header renders. Increase to test exercise card.</p>
-          </div>
-        </div>
-      )
-    } catch (stage2Error) {
-      console.error('[v0] [stage2_FAILED]', stage2Error)
-      return <div className="min-h-screen bg-[#0F1115] flex items-center justify-center text-red-500">Stage 2 failed: {stage2Error instanceof Error ? stage2Error.message : 'unknown'}</div>
-    }
-  }
+  // ==========================================================================
+  // UNIT RENDER FUNCTIONS - Each has local containment
+  // ==========================================================================
   
-  // STAGE 3: Main exercise card (inline only, no ExerciseOptionsMenu)
-  if (ACTIVE_DERIVATION_STAGE === 3) {
+  // UNIT 1: Header - renders progress bar, timer, workout label
+  const renderHeaderUnit = (): React.ReactNode => {
+    if (!unitStatus.header.enabled) return null
     try {
-      console.log('[v0] [staged_active_stage3] Testing exercise card render')
+      console.log('[v0] [Unit:Header] Rendering')
+      unitStatus.header.rendered = true
       return (
-        <div className="min-h-screen bg-[#0F1115] flex flex-col">
-          <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
-            <div className="px-4 py-2.5">
-              <div className="max-w-lg mx-auto">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                    <span className="text-sm font-medium text-[#E6E9EF]">{safeDisplayLabel}</span>
-                  </div>
-                  <span className="font-mono text-sm font-bold text-[#E6E9EF]">{formatDuration(safeElapsedSeconds)}</span>
-                </div>
-                <div className="h-1 bg-[#2B313A] rounded-full overflow-hidden">
-                  <div className="h-full bg-[#C1121F]" style={{ width: `${(completedSetsCount / totalSets) * 100}%` }} />
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="flex-1 px-4 py-3">
-            <div className="max-w-lg mx-auto space-y-3">
-              <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
-                    {safeCurrentExercise.category}
-                  </Badge>
-                </div>
-                <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight">{safeCurrentExercise.name}</h2>
-                <div className="flex items-center gap-2 mt-1.5 text-sm">
-                  <span className="text-[#A4ACB8]">Target:</span>
-                  <span className="text-[#E6E9EF] font-medium">{safeCurrentExercise.repsOrTime}</span>
-                  <span className="text-[#6B7280]">·</span>
-                  <span className="text-[#A4ACB8]">RPE {targetRPE}</span>
-                </div>
-                <div className="flex items-center gap-3 mt-3">
-                  <div className="flex items-center gap-1.5 flex-1">
-                    {Array.from({ length: safeCurrentExercise.sets }).map((_, idx) => (
-                      <div key={idx} className={`h-2 flex-1 rounded-full ${idx < validatedSetNumber - 1 ? 'bg-green-500' : idx === validatedSetNumber - 1 ? 'bg-[#C1121F]' : 'bg-[#2B313A]'}`} />
-                    ))}
-                  </div>
-                  <span className="text-sm font-medium text-[#E6E9EF]">Set {validatedSetNumber}/{safeCurrentExercise.sets}</span>
-                </div>
-              </Card>
-              <p className="text-green-500 text-sm text-center">Stage 3 passed: Exercise card renders. Increase to test input controls.</p>
-            </div>
-          </div>
-        </div>
-      )
-    } catch (stage3Error) {
-      console.error('[v0] [stage3_FAILED]', stage3Error)
-      return <div className="min-h-screen bg-[#0F1115] flex items-center justify-center text-red-500">Stage 3 failed: {stage3Error instanceof Error ? stage3Error.message : 'unknown'}</div>
-    }
-  }
-  
-  // STAGE 4: Add input controls (RepsHoldInput, RPEQuickSelector, BandSelector)
-  if (ACTIVE_DERIVATION_STAGE === 4) {
-    try {
-      console.log('[v0] [staged_active_stage4] Testing input controls')
-      return (
-        <div className="min-h-screen bg-[#0F1115] flex flex-col">
-          <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
-            <div className="px-4 py-2.5"><div className="max-w-lg mx-auto">
+        <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
+          <div className="px-4 py-2.5">
+            <div className="max-w-lg mx-auto">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-[#E6E9EF]">{safeDisplayLabel}</span>
-                <span className="font-mono text-sm font-bold text-[#E6E9EF]">{formatDuration(safeElapsedSeconds)}</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                  <span className="text-sm font-medium text-[#E6E9EF] truncate max-w-[160px]">{safeDisplayLabel}</span>
+                  <span className="text-xs text-[#6B7280]">{safeExerciseIndex + 1}/{totalExercises}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-[#6B7280]">{completedSetsCount}/{totalSets}</span>
+                  <span className="font-mono text-sm font-bold text-[#E6E9EF] tabular-nums">{formatDuration(safeElapsedSeconds)}</span>
+                </div>
               </div>
-              <div className="h-1 bg-[#2B313A] rounded-full overflow-hidden"><div className="h-full bg-[#C1121F]" style={{ width: `${(completedSetsCount / totalSets) * 100}%` }} /></div>
-            </div></div>
-          </div>
-          <div className="flex-1 px-4 py-3">
-            <div className="max-w-lg mx-auto space-y-3">
-              <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
-                <h2 className="text-lg font-bold text-[#E6E9EF]">{safeCurrentExercise.name}</h2>
-                <p className="text-sm text-[#A4ACB8]">Set {validatedSetNumber}/{safeCurrentExercise.sets}</p>
-              </Card>
-              <Card className="bg-[#1A1F26] border-[#2B313A] p-3 space-y-4">
-                {isHoldExercise ? (
-                  <RepsHoldInput type="hold" value={holdValue} onChange={setHoldValue} targetValue={targetValue} />
-                ) : (
-                  <RepsHoldInput type="reps" value={repsValue} onChange={setRepsValue} targetValue={targetValue} />
-                )}
-                <RPEQuickSelector value={selectedRPE} onChange={setSelectedRPE} targetRPE={targetRPE} />
-                {(safeCurrentExercise.executionTruth?.bandSelectable === true || recommendedBand) && (
-                  <BandSelector value={safeBandUsed} onChange={setBandUsed} recommendedBand={recommendedBand} />
-                )}
-              </Card>
-              <p className="text-green-500 text-sm text-center">Stage 4 passed: Input controls render. Increase to test actions.</p>
+              <div className="h-1 bg-[#2B313A] rounded-full overflow-hidden">
+                <div className="h-full bg-[#C1121F] transition-all duration-300" style={{ width: `${(completedSetsCount / Math.max(totalSets, 1)) * 100}%` }} />
+              </div>
             </div>
           </div>
         </div>
       )
-    } catch (stage4Error) {
-      console.error('[v0] [stage4_FAILED]', stage4Error)
-      return <div className="min-h-screen bg-[#0F1115] flex items-center justify-center text-red-500">Stage 4 failed: {stage4Error instanceof Error ? stage4Error.message : 'unknown'}</div>
-    }
-  }
-  
-  // STAGE 5: Add complete button and secondary actions
-  if (ACTIVE_DERIVATION_STAGE === 5) {
-    try {
-      console.log('[v0] [staged_active_stage5] Testing action buttons')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      console.error('[v0] [Unit:Header] FAILED', err)
+      unitStatus.header.error = msg
       return (
-        <div className="min-h-screen bg-[#0F1115] flex flex-col">
-          <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
-            <div className="px-4 py-2.5"><div className="max-w-lg mx-auto">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-[#E6E9EF]">{safeDisplayLabel}</span>
-                <span className="font-mono text-sm font-bold text-[#E6E9EF]">{formatDuration(safeElapsedSeconds)}</span>
-              </div>
-              <div className="h-1 bg-[#2B313A] rounded-full overflow-hidden"><div className="h-full bg-[#C1121F]" style={{ width: `${(completedSetsCount / totalSets) * 100}%` }} /></div>
-            </div></div>
-          </div>
-          <div className="flex-1 px-4 py-3">
-            <div className="max-w-lg mx-auto space-y-3">
-              <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
-                <h2 className="text-lg font-bold text-[#E6E9EF]">{safeCurrentExercise.name}</h2>
-                <p className="text-sm text-[#A4ACB8]">Set {validatedSetNumber}/{safeCurrentExercise.sets}</p>
-              </Card>
-              <Card className="bg-[#1A1F26] border-[#2B313A] p-3 space-y-4">
-                {isHoldExercise ? (
-                  <RepsHoldInput type="hold" value={holdValue} onChange={setHoldValue} targetValue={targetValue} />
-                ) : (
-                  <RepsHoldInput type="reps" value={repsValue} onChange={setRepsValue} targetValue={targetValue} />
-                )}
-                <RPEQuickSelector value={selectedRPE} onChange={setSelectedRPE} targetRPE={targetRPE} />
-              </Card>
-              <Button onClick={handleCompleteSet} disabled={safeSelectedRPE === null} className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-base font-bold">
-                <Check className="w-5 h-5 mr-2" />Log Set
-              </Button>
-              <div className="flex items-center justify-between pt-2">
-                <Button variant="ghost" onClick={handleSkipExercise} className="text-[#6B7280] text-sm h-9 px-3">
-                  <SkipForward className="w-3.5 h-3.5 mr-1.5" />Skip
-                </Button>
-                <Button variant="ghost" onClick={handleRequestExit} className="text-[#6B7280] text-sm h-9 px-3">
-                  <X className="w-3.5 h-3.5 mr-1.5" />End
-                </Button>
-              </div>
-              <p className="text-green-500 text-sm text-center">Stage 5 passed. Increase to 6 for full render.</p>
-            </div>
-          </div>
+        <div className="bg-red-900/20 border border-red-500/30 p-3 m-2 rounded-lg">
+          <p className="text-red-400 text-sm font-medium">Unit:Header FAILED</p>
+          <p className="text-red-300 text-xs mt-1">{msg}</p>
         </div>
       )
-    } catch (stage5Error) {
-      console.error('[v0] [stage5_FAILED]', stage5Error)
-      return <div className="min-h-screen bg-[#0F1115] flex items-center justify-center text-red-500">Stage 5 failed: {stage5Error instanceof Error ? stage5Error.message : 'unknown'}</div>
     }
   }
   
-  // STAGE 6: Full render - fall through to existing full active UI below
-  
-  try {
-    console.log('[v0] [active_render_entry]', {
-      safeStatus,
-      machinePhase: machineState.phase,
-      activeWorkoutViewModelIsValid: activeWorkoutViewModel.isValid,
-      hasValidExercises,
-      validatedCurrentExerciseExists: !!validatedCurrentExercise,
-      safeCurrentExerciseName: safeCurrentExercise?.name,
-      exerciseCount: exercises.length,
-      safeExerciseIndex,
-      validatedSetNumber,
-      completedSetsCount,
-    })
-  } catch (e) {
-    console.error('[v0] [active_render_entry_logging_failed]', e)
-  }
-  
-  // [PHASE LW2] ACTIVE STATE VALIDATION - Controlled local fallback instead of crash
-  // Note: isValid now uses hasValidExercises && !!validatedCurrentExercise
-  if (!activeWorkoutViewModel.isValid) {
-    // Log diagnostic for debugging
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('[v0] [active_state_validation_failed]', {
-        isValid: activeWorkoutViewModel.isValid,
-        hasValidExercises: activeWorkoutViewModel.hasValidExercises,
-        totalExercises: activeWorkoutViewModel.totalExercises,
-        currentExerciseName: activeWorkoutViewModel.currentExerciseName,
-        machinePhase: machineState.phase,
-        exerciseCount: exercises.length,
-      })
-    }
-    return (
-      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
-        <div className="text-center max-w-sm">
-          <div className="w-16 h-16 rounded-full bg-[#1A1F26] border border-amber-500/30 flex items-center justify-center mx-auto mb-4">
-            <Dumbbell className="w-8 h-8 text-amber-500" />
-          </div>
-          <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Session Data Issue</h2>
-          <p className="text-[#A4ACB8] mb-6 text-sm">
-            The workout session loaded but the exercise data needs repair. This can happen with older programs.
-          </p>
-          {process.env.NODE_ENV === 'development' && (
-            <div className="text-left bg-[#1A1F26] rounded-lg p-3 mb-4 text-xs font-mono">
-              <p className="text-[#6B7280] mb-1">Active State Diagnostics:</p>
-              <p className="text-[#A4ACB8]">isValid: {String(activeWorkoutViewModel.isValid)}</p>
-              <p className="text-[#A4ACB8]">hasValidExercises: {String(activeWorkoutViewModel.hasValidExercises)}</p>
-              <p className="text-[#A4ACB8]">totalExercises: {activeWorkoutViewModel.totalExercises}</p>
-              <p className="text-[#A4ACB8]">currentExercise: {activeWorkoutViewModel.currentExerciseName}</p>
-            </div>
-          )}
-          <div className="space-y-2">
-            <Button
-              onClick={() => dispatch({ type: 'RESET_TO_READY' })}
-              className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
-            >
-              <RotateCcw className="w-4 h-4 mr-2" />
-              Retry Session
-            </Button>
-            <Button
-              variant="outline"
-              onClick={onCancel}
-              className="w-full border-[#2B313A] text-[#A4ACB8] hover:bg-[#1A1F26]"
-            >
-              Return to Dashboard
-            </Button>
-            {isDemo !== true && (
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    window.location.href = '/workout/session?demo=true'
-                  }
-                }}
-                className="w-full text-[#6B7280] hover:text-[#A4ACB8]"
-              >
-                Try Demo Workout
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
-  
-  // [PHASE LW3] Boot stage calls moved to effects - render is pure
-  
-  // [LIVE-WORKOUT-MACHINE] Machine invalid phase with active-like context = transition error
-  // This is now redundant with shouldShowLocalFallback but kept for clearer error messaging
-  const hasTransitionError = machineState.phase === 'invalid' && 
-    (machineState.invalidStage === 'exercise_lookup' || machineState.invalidStage === 'transition')
-  
-  if (hasTransitionError) {
-    return (
-      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
-        <div className="text-center max-w-sm">
-          <div className="w-16 h-16 rounded-full bg-[#1A1F26] border border-amber-500/30 flex items-center justify-center mx-auto mb-4">
-            <Dumbbell className="w-8 h-8 text-amber-500" />
-          </div>
-          <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Exercise Transition Issue</h2>
-          <p className="text-[#A4ACB8] mb-4 text-sm">
-            Unable to advance to the next exercise. The exercise data may need repair.
-          </p>
-          <p className="text-[#6B7280] text-xs mb-6 font-mono">
-            {machineState.invalidReason || 'Unknown transition error'}
-          </p>
-          <div className="space-y-2">
-            <Button
-              onClick={() => dispatch({ type: 'CLEAR_TRANSITION_ERROR' })}
-              className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
-            >
-              <RotateCcw className="w-4 h-4 mr-2" />
-              Retry
-            </Button>
-            <Button
-              variant="outline"
-              onClick={onCancel}
-              className="w-full border-[#2B313A] text-[#A4ACB8] hover:bg-[#1A1F26]"
-            >
-              End Workout
-            </Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-  
-  // [LIVE-WORKOUT-MACHINE] Active values already declared at top of component
-  // targetRPE, targetValue, recommendedBand are authoritative - see line ~2651
-  
-  // ==========================================================================
-  // [ACTIVE-CORRIDOR-CONTAINMENT] FINAL SAFETY CHECK BEFORE RENDER
-  // Catch any remaining edge cases that could throw in the active render JSX
-  // ==========================================================================
-  
-  // Ensure we have minimum required values for safe active render
-  const canSafelyRenderActive = (
-    safeCurrentExercise?.name &&
-    typeof safeExerciseIndex === 'number' &&
-    typeof validatedSetNumber === 'number' &&
-    typeof completedSetsCount === 'number' &&
-    typeof totalSets === 'number' &&
-    typeof totalExercises === 'number' &&
-    typeof safeElapsedSeconds === 'number'
-  )
-  
-  if (!canSafelyRenderActive) {
-    console.error('[v0] [active_render_safety_check_failed]', {
-      safeCurrentExerciseName: safeCurrentExercise?.name,
-      safeExerciseIndex,
-      validatedSetNumber,
-      completedSetsCount,
-      totalSets,
-      totalExercises,
-      safeElapsedSeconds,
-    })
-    return (
-      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
-        <div className="text-center max-w-sm">
-          <div className="w-16 h-16 rounded-full bg-[#1A1F26] border border-amber-500/30 flex items-center justify-center mx-auto mb-4">
-            <Dumbbell className="w-8 h-8 text-amber-500" />
-          </div>
-          <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Session Loading</h2>
-          <p className="text-[#A4ACB8] mb-6 text-sm">
-            Preparing your workout session. If this persists, please restart.
-          </p>
-          <div className="space-y-2">
-            <Button
-              onClick={() => dispatch({ type: 'RESET_TO_READY' })}
-              className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
-            >
-              <RotateCcw className="w-4 h-4 mr-2" />
-              Restart Session
-            </Button>
-            <Button
-              variant="outline"
-              onClick={onCancel}
-              className="w-full border-[#2B313A] text-[#A4ACB8] hover:bg-[#1A1F26]"
-            >
-              Return to Dashboard
-            </Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-  
-  // [ACTIVE-CORRIDOR-CONTAINMENT] Wrap entire active render in SafeOptionalSubtree
-  // This ensures that ANY uncontained error in the active render tree gets caught
-  // locally instead of escaping to the route-level error boundary
-  const activeRenderFallback = (
-    <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
-      <div className="text-center max-w-sm">
-        <div className="w-16 h-16 rounded-full bg-[#1A1F26] border border-amber-500/30 flex items-center justify-center mx-auto mb-4">
-          <Dumbbell className="w-8 h-8 text-amber-500" />
-        </div>
-        <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Display Error</h2>
-        <p className="text-[#A4ACB8] mb-6 text-sm">
-          The workout is active but encountered a display issue. Your progress is saved.
-        </p>
-        <div className="space-y-2">
-          <Button
-            onClick={() => dispatch({ type: 'RESET_TO_READY' })}
-            className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
-          >
-            <RotateCcw className="w-4 h-4 mr-2" />
-            Restart Session
-          </Button>
-          <Button
-            variant="outline"
-            onClick={onCancel}
-            className="w-full border-[#2B313A] text-[#A4ACB8] hover:bg-[#1A1F26]"
-          >
-            End Workout
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
-  
-  return (
-    <SafeOptionalSubtree label="ActiveWorkoutRender" fallback={activeRenderFallback}>
-    <div className="min-h-screen bg-[#0F1115] flex flex-col">
-      {/* Sticky Session Header - Compact */}
-      <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
-        <div className="px-4 py-2.5">
-          <div className="max-w-lg mx-auto">
-            {/* Top row: Session + Timer */}
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-sm font-medium text-[#E6E9EF] truncate max-w-[160px]">
-                  {safeDisplayLabel}
-                </span>
-                <span className="text-xs text-[#6B7280]">
-                  {safeExerciseIndex + 1}/{totalExercises}
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-[#6B7280]">{completedSetsCount}/{totalSets}</span>
-                <span className="font-mono text-sm font-bold text-[#E6E9EF] tabular-nums">
-                  {formatDuration(safeElapsedSeconds)}
-                </span>
-              </div>
-            </div>
-            
-            {/* Progress Bar */}
-            <div className="h-1 bg-[#2B313A] rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-[#C1121F] transition-all duration-300"
-                style={{ width: `${(completedSetsCount / totalSets) * 100}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Main Content Area - Tighter spacing */}
-      <div className="flex-1 px-4 py-3 sm:p-5">
-      <div className="max-w-lg mx-auto space-y-3">
-        
-        {/* [EXECUTION-TRUTH-FIX] Calibration Banner for first workouts */}
-        {calibrationMessage.show && (
-          <div className="bg-[#4F6D8A]/10 border border-[#4F6D8A]/20 rounded-lg p-3">
-            <div className="flex items-start gap-2">
-              <Lightbulb className="w-4 h-4 text-[#4F6D8A] shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-medium text-[#4F6D8A] mb-0.5">{calibrationMessage.title}</p>
-                <p className="text-[11px] text-[#A4ACB8] leading-relaxed">
-                  {calibrationMessage.description}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {/* [LIVE-WORKOUT-CORRIDOR] Current Exercise - uses safeCurrentExercise for crash safety */}
+  // UNIT 2: Exercise - renders current exercise card
+  const renderExerciseUnit = (): React.ReactNode => {
+    if (!unitStatus.exercise.enabled) return null
+    try {
+      console.log('[v0] [Unit:Exercise] Rendering')
+      unitStatus.exercise.rendered = true
+      return (
         <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
-          {/* Header row */}
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
-                {safeCurrentExercise.category}
-              </Badge>
-              {/* [LIVE-WORKOUT-MACHINE] Use normalizedExerciseOverrides from machine */}
-              {normalizedExerciseOverrides[safeExerciseIndex]?.isReplaced && (
-                <Badge className="bg-blue-500/10 text-blue-400 border-0 text-[10px] px-1.5 py-0">Swapped</Badge>
-              )}
-            </div>
-            <SafeOptionalSubtree label="ExerciseOptionsMenu">
-              <ExerciseOptionsMenu
-                exercise={safeCurrentExercise}
-                exerciseIndex={safeExerciseIndex}
-                sessionId={sessionId}
-                onReplace={handleReplaceExercise}
-                onSkip={handleMenuSkipExercise}
-                onProgressionChange={handleProgressionChange}
-                onUndo={handleUndoOverride}
-              />
-            </SafeOptionalSubtree>
+            <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
+              {safeCurrentExercise.category}
+            </Badge>
           </div>
-          
-          {/* Exercise Name */}
-          <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight">
-            {effectiveExercise.name}
-          </h2>
-          
-          {/* [LIVE-WORKOUT-CORRIDOR] Prescription row - uses safeCurrentExercise */}
-          <div className="flex items-center gap-2 mt-1.5 text-sm flex-wrap">
+          <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight">{safeCurrentExercise.name}</h2>
+          <div className="flex items-center gap-2 mt-1.5 text-sm">
             <span className="text-[#A4ACB8]">Target:</span>
             <span className="text-[#E6E9EF] font-medium">{safeCurrentExercise.repsOrTime}</span>
-            {/* [prescription-truth] ISSUE C: Display prescription mode truthfully */}
-            {safeCurrentExercise.prescribedLoad && safeCurrentExercise.prescribedLoad.load > 0 ? (
-              // Weighted exercise with load
-              <span className="text-[#C1121F] font-semibold">
-                @ +{safeCurrentExercise.prescribedLoad.load} {safeCurrentExercise.prescribedLoad.unit}
-              </span>
-            ) : (
-              // [prescription-render] STEP 4: Check if this is a weighted exercise type without load
-              (() => {
-                const isWeightedType = (safeCurrentExercise.id ?? '').includes('weighted_') || 
-                                       safeLower(safeCurrentExercise.name).includes('weighted')
-                const isSkillHold = safeCurrentExercise.category === 'skill' || 
-                                    safeLower(safeCurrentExercise.repsOrTime).includes('sec')
-                const noLoadReason = (safeCurrentExercise as { noLoadReason?: string }).noLoadReason
-                
-                // [prescription-render] Log why load isn't shown for weighted-capable exercises
-                if (isWeightedType) {
-                  console.log('[prescription-render] Weighted exercise without load:', {
-                    exerciseName: safeCurrentExercise.name,
-                    reason: noLoadReason || 'no_reason_recorded',
-                  })
-                }
-                
-                if (isWeightedType && noLoadReason) {
-                  // Show specific reason for missing load
-                  const reasonText = noLoadReason === 'no_loadable_equipment' ? 'No weights' :
-                                     noLoadReason === 'missing_strength_inputs' ? 'No data' :
-                                     noLoadReason === 'doctrine_prefers_bodyweight' ? 'BW focus' :
-                                     'BW'
-                  return <span className="text-[#6B7280] text-xs">({reasonText})</span>
-                } else if (isWeightedType) {
-                  // Weighted exercise type but no load prescribed
-                  return <span className="text-[#6B7280] text-xs">(Bodyweight)</span>
-                } else if (isSkillHold) {
-                  // Skill hold - show nothing extra
-                  return null
-                } else {
-                  // Regular bodyweight - show nothing
-                  return null
-                }
-              })()
-            )}
             <span className="text-[#6B7280]">·</span>
             <span className="text-[#A4ACB8]">RPE {targetRPE}</span>
           </div>
-          {/* [LIVE-WORKOUT-CORRIDOR] Show confidence for non-high confidence loads */}
-          {safeCurrentExercise.prescribedLoad && safeCurrentExercise.prescribedLoad.load > 0 && 
-           safeCurrentExercise.prescribedLoad.confidenceLevel !== 'high' && (
-            <p className="text-[10px] text-[#6B7280] mt-0.5">
-              {safeCurrentExercise.prescribedLoad.confidenceLevel === 'moderate' && 'Load based on historical PR'}
-              {safeCurrentExercise.prescribedLoad.confidenceLevel === 'low' && 'Estimated load - adjust as needed'}
-              {safeCurrentExercise.prescribedLoad.confidenceLevel === 'none' && 'Starting load - adjust based on feel'}
-            </p>
-          )}
-          
-          {/* [LIVE-WORKOUT-CORRIDOR] Set Progress - uses safeCurrentExercise */}
-          {/* [LIVE-WORKOUT-MACHINE] Use validatedSetNumber from machine */}
           <div className="flex items-center gap-3 mt-3">
             <div className="flex items-center gap-1.5 flex-1">
-              {Array.from({ length: safeCurrentExercise.sets }).map((_, idx) => {
-                const safeCurrentSet = Math.min(validatedSetNumber, safeCurrentExercise.sets)
-                return (
-                  <div
-                    key={idx}
-                    className={`h-2 flex-1 rounded-full transition-all ${
-                      idx < safeCurrentSet - 1 
-                        ? 'bg-green-500' 
-                        : idx === safeCurrentSet - 1 
-                          ? 'bg-[#C1121F]' 
-                          : 'bg-[#2B313A]'
-                    }`}
-                  />
-                )
-              })}
+              {Array.from({ length: safeCurrentExercise.sets || 3 }).map((_, idx) => (
+                <div key={idx} className={`h-2 flex-1 rounded-full ${idx < validatedSetNumber - 1 ? 'bg-green-500' : idx === validatedSetNumber - 1 ? 'bg-[#C1121F]' : 'bg-[#2B313A]'}`} />
+              ))}
             </div>
-            <span className="text-sm font-medium text-[#E6E9EF] whitespace-nowrap">
-              {/* [LIVE-WORKOUT-CORRIDOR] Safe set display - uses safeCurrentExercise */}
-              Set {Math.min(validatedSetNumber, safeCurrentExercise.sets)}/{safeCurrentExercise.sets}
-            </span>
+            <span className="text-sm font-medium text-[#E6E9EF]">Set {validatedSetNumber}/{safeCurrentExercise.sets || 3}</span>
           </div>
         </Card>
-        
-        {/* [PHASE LW2] Coaching Insight - wrapped in try-catch for safety */}
-        {!isDemo && (() => {
-          try {
-            const insight = getExerciseSelectionInsight(safeCurrentExercise.id || safeCurrentExercise.name)
-            if (!insight) return null
-            
-            return (
-              <div className="text-[11px] text-[#6B7280] rounded-md bg-[#1A1A1A]/50 border border-[#2B313A]/30 px-2.5 py-2 flex items-start gap-2">
-                <Lightbulb className="w-3 h-3 shrink-0 mt-0.5 text-[#4F6D8A]" />
-                <p className="text-[#A4ACB8] leading-relaxed line-clamp-2">{insight}</p>
-              </div>
-            )
-          } catch (e) {
-            console.warn('[WORKOUT-OPTIONAL-BLOCK] Coaching insight failed:', e)
-            return null
-          }
-        })()}
-        
-        {/* Log This Set - Input Section */}
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      console.error('[v0] [Unit:Exercise] FAILED', err)
+      unitStatus.exercise.error = msg
+      return (
+        <div className="bg-red-900/20 border border-red-500/30 p-3 rounded-lg">
+          <p className="text-red-400 text-sm font-medium">Unit:Exercise FAILED</p>
+          <p className="text-red-300 text-xs mt-1">{msg}</p>
+        </div>
+      )
+    }
+  }
+  
+  // UNIT 3: Inputs - renders input controls
+  const renderInputsUnit = (): React.ReactNode => {
+    if (!unitStatus.inputs.enabled) return null
+    try {
+      console.log('[v0] [Unit:Inputs] Rendering')
+      unitStatus.inputs.rendered = true
+      return (
         <Card className="bg-[#1A1F26] border-[#2B313A] p-3 space-y-4">
-          {/* Reps or Hold Input */}
           {isHoldExercise ? (
-            <RepsHoldInput
-              type="hold"
-              value={holdValue}
-              onChange={setHoldValue}
-              targetValue={targetValue}
-            />
+            <RepsHoldInput type="hold" value={holdValue} onChange={setHoldValue} targetValue={targetValue} />
           ) : (
-            <RepsHoldInput
-              type="reps"
-              value={repsValue}
-              onChange={setRepsValue}
-              targetValue={targetValue}
-            />
+            <RepsHoldInput type="reps" value={repsValue} onChange={setRepsValue} targetValue={targetValue} />
           )}
-          
-          {/* RPE Quick Selector */}
-          <RPEQuickSelector
-            value={selectedRPE}
-            onChange={setSelectedRPE}
-            targetRPE={targetRPE}
-          />
-          
-          {/* [LIVE-WORKOUT-CORRIDOR] Band Selector - uses safeCurrentExercise */}
-          {(
-            // Authoritative path: Use executionTruth from program generation
-            safeCurrentExercise.executionTruth?.bandSelectable === true ||
-            safeCurrentExercise.executionTruth?.assistedRecommended === true ||
-            safeCurrentExercise.executionTruth?.bandRecommended === true ||
-            // Legacy fallback for older programs: heuristic detection
-            (!safeCurrentExercise.executionTruth && (
-              recommendedBand || 
-              safeLower(safeCurrentExercise.note).includes('band') || 
-              safeLower(safeCurrentExercise.name).includes('assisted')
-            ))
-          ) && (
-            <BandSelector
-              value={safeBandUsed}
-              onChange={setBandUsed}
-              recommendedBand={safeCurrentExercise.executionTruth?.recommendedBandColor ?? recommendedBand}
-            />
+          <RPEQuickSelector value={selectedRPE} onChange={setSelectedRPE} targetRPE={targetRPE} />
+          {(safeCurrentExercise.executionTruth?.bandSelectable === true || recommendedBand) && (
+            <BandSelector value={safeBandUsed} onChange={setBandUsed} recommendedBand={recommendedBand} />
           )}
         </Card>
-        
-        {/* [UNIFIED-HANDOFF] Complete Set Button - uses safe indices */}
-        {/* [LIVE-WORKOUT-MACHINE] Use safeSelectedRPE and validatedSetNumber from machine state */}
-        <Button
-          onClick={handleCompleteSet}
-          disabled={safeSelectedRPE === null}
-          className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-base font-bold disabled:opacity-50"
-        >
-          <Check className="w-5 h-5 mr-2" />
-          {validatedSetNumber >= safeCurrentExercise.sets && safeExerciseIndex >= exercises.length - 1
-            ? 'Finish Workout'
-            : validatedSetNumber >= safeCurrentExercise.sets
-              ? 'Next Exercise'
-              : 'Log Set'
-          }
-        </Button>
-        
-        {/* Secondary Actions */}
-        <div className="flex items-center justify-between pt-2">
-          <div className="flex items-center gap-1">
-            {/* [EXECUTION-TRUTH-FIX] Back navigation button */}
-            {sessionRuntimeTruth.supportsBackNavigation && safeExerciseIndex > 0 && (
-              <Button
-                variant="ghost"
-                onClick={handleReviewPreviousExercise}
-                className="text-[#6B7280] hover:text-[#A4ACB8] text-sm h-9 px-3"
-              >
-                <ChevronUp className="w-3.5 h-3.5 mr-1" />
-                Back
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              onClick={handleSkipExercise}
-              className="text-[#6B7280] hover:text-[#A4ACB8] text-sm h-9 px-3"
-            >
-              <SkipForward className="w-3.5 h-3.5 mr-1.5" />
-              Skip
-            </Button>
-          </div>
-          <div className="flex items-center gap-1">
-            {/* [EXECUTION-TRUTH-FIX] Notes capture button */}
-            {sessionRuntimeTruth.supportsNotesCapture && (
-              <Button
-                variant="ghost"
-                onClick={handleOpenNotesModal}
-                className={`text-sm h-9 px-3 ${
-                  sessionNotes.exerciseNotes[safeExerciseIndex]
-                    ? 'text-[#4F6D8A] hover:text-[#6B8CAE]'
-                    : 'text-[#6B7280] hover:text-[#A4ACB8]'
-                }`}
-              >
-                <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
-                Note
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              onClick={handleRequestExit}
-              className="text-[#6B7280] hover:text-[#A4ACB8] text-sm h-9 px-3"
-            >
-              <X className="w-3.5 h-3.5 mr-1.5" />
-              End
-            </Button>
-          </div>
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      console.error('[v0] [Unit:Inputs] FAILED', err)
+      unitStatus.inputs.error = msg
+      return (
+        <div className="bg-red-900/20 border border-red-500/30 p-3 rounded-lg">
+          <p className="text-red-400 text-sm font-medium">Unit:Inputs FAILED</p>
+          <p className="text-red-300 text-xs mt-1">{msg}</p>
         </div>
+      )
+    }
+  }
+  
+  // UNIT 4: Actions - renders complete button and secondary actions
+  const renderActionsUnit = (): React.ReactNode => {
+    if (!unitStatus.actions.enabled) return null
+    try {
+      console.log('[v0] [Unit:Actions] Rendering')
+      unitStatus.actions.rendered = true
+      return (
+        <>
+          <Button onClick={handleCompleteSet} disabled={safeSelectedRPE === null} className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-base font-bold">
+            <Check className="w-5 h-5 mr-2" />Log Set
+          </Button>
+          <div className="flex items-center justify-between pt-2">
+            <Button variant="ghost" onClick={handleSkipExercise} className="text-[#6B7280] text-sm h-9 px-3">
+              <SkipForward className="w-3.5 h-3.5 mr-1.5" />Skip
+            </Button>
+            <Button variant="ghost" onClick={handleRequestExit} className="text-[#6B7280] text-sm h-9 px-3">
+              <X className="w-3.5 h-3.5 mr-1.5" />End
+            </Button>
+          </div>
+        </>
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      console.error('[v0] [Unit:Actions] FAILED', err)
+      unitStatus.actions.error = msg
+      return (
+        <div className="bg-red-900/20 border border-red-500/30 p-3 rounded-lg">
+          <p className="text-red-400 text-sm font-medium">Unit:Actions FAILED</p>
+          <p className="text-red-300 text-xs mt-1">{msg}</p>
+        </div>
+      )
+    }
+  }
+  
+  // DIAGNOSTIC PANEL - Shows which units succeeded/failed
+  const renderDiagnosticPanel = (): React.ReactNode => {
+    const firstFailingUnit = Object.entries(unitStatus).find(([, s]) => s.enabled && s.error)?.[0] || null
+    return (
+      <div className="fixed bottom-4 left-4 right-4 max-w-sm mx-auto bg-[#1A1F26] border border-[#2B313A] rounded-lg p-3 text-xs z-50">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[#A4ACB8] font-medium">Unit Diagnostic</span>
+          <span className="text-[#6B7280]">Stage: {ACTIVE_DERIVATION_STAGE}</span>
+        </div>
+        <div className="space-y-1">
+          {Object.entries(unitStatus).map(([name, status]) => (
+            <div key={name} className="flex items-center justify-between">
+              <span className="text-[#6B7280]">{name}</span>
+              <span className={status.error ? 'text-red-400' : status.rendered ? 'text-green-400' : status.enabled ? 'text-yellow-400' : 'text-[#3B4250]'}>
+                {status.error ? 'FAILED' : status.rendered ? 'OK' : status.enabled ? 'pending' : 'disabled'}
+              </span>
+            </div>
+          ))}
+        </div>
+        {firstFailingUnit && (
+          <div className="mt-2 pt-2 border-t border-[#2B313A]">
+            <p className="text-red-400">First failing: <span className="font-medium">{firstFailingUnit}</span></p>
+          </div>
+        )}
       </div>
+    )
+  }
+  
+  // ==========================================================================
+  // STAGE 1 ONLY: Minimal shell with diagnostic info
+  // ==========================================================================
+  if (ACTIVE_DERIVATION_STAGE === 1) {
+    console.log('[v0] [Unit:Shell] Stage 1 - Minimal shell only')
+    unitStatus.shell.rendered = true
+    const elapsed = safeElapsedSeconds || 0
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex flex-col items-center justify-center p-4">
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 rounded-full bg-green-900/30 border border-green-500/50 flex items-center justify-center mx-auto mb-4">
+            <Dumbbell className="w-8 h-8 text-green-500" />
+          </div>
+          <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Stage 1: Active Shell Works</h2>
+          <div className="bg-[#1A1F26] rounded-lg p-4 text-left text-sm space-y-2">
+            <p className="text-[#6B7280]">Session: <span className="text-[#E6E9EF]">{safeDisplayLabel || 'Workout'}</span></p>
+            <p className="text-[#6B7280]">Exercise: <span className="text-[#E6E9EF]">{safeCurrentExercise?.name || 'Exercise'}</span></p>
+            <p className="text-[#6B7280]">Set: <span className="text-[#E6E9EF]">{validatedSetNumber || 1}/{safeCurrentExercise?.sets || 3}</span></p>
+            <p className="text-[#6B7280]">Time: <span className="text-[#E6E9EF]">{Math.floor(elapsed / 60)}:{(elapsed % 60).toString().padStart(2, '0')}</span></p>
+          </div>
+          <p className="text-xs text-green-500 mt-4">Stage 1 passed. Increase ACTIVE_DERIVATION_STAGE to test units.</p>
+        </div>
+        {renderDiagnosticPanel()}
       </div>
+    )
+  }
+  
+  // ==========================================================================
+  // STAGE 2+: Unit-based render with containment
+  // Shell stays alive, each unit renders inside with local error handling
+  // ==========================================================================
+  console.log('[v0] [Unit:Shell] Stage 2+ - Rendering units')
+  unitStatus.shell.rendered = true
+  
+  return (
+    <div className="min-h-screen bg-[#0F1115] flex flex-col">
+      {/* UNIT 1: Header */}
+      {renderHeaderUnit()}
       
-      {/* [LIVE-EXECUTION-TRUTH] Adaptive Recommendation Modal */}
-      <SafeOptionalSubtree label="AdaptiveRecommendationModal">
-      {showAdaptiveModal && adaptiveRecommendation && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#1A1F26] border-t sm:border border-[#2B313A] sm:rounded-xl p-5 space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0">
-            <div className="flex items-start gap-3 mb-2">
-              <div className="w-10 h-10 rounded-full bg-[#4F6D8A]/20 flex items-center justify-center shrink-0">
-                <Lightbulb className="w-5 h-5 text-[#4F6D8A]" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-[#E6E9EF] mb-1">Adaptive Suggestion</h3>
-                <p className="text-sm text-[#A4ACB8]">
-                  {formatAdaptiveCoachingMessage(adaptiveRecommendation)}
-                </p>
-              </div>
-            </div>
-            
-            {/* Trigger indicators */}
-            <div className="flex flex-wrap gap-1.5">
-              {adaptiveRecommendation.triggerInputs.rpeTooHigh && (
-                <Badge className="bg-[#C1121F]/10 text-[#C1121F] border-0 text-[10px]">High RPE</Badge>
-              )}
-              {adaptiveRecommendation.triggerInputs.targetMissedSignificantly && (
-                <Badge className="bg-yellow-500/10 text-yellow-500 border-0 text-[10px]">Target Missed</Badge>
-              )}
-              {adaptiveRecommendation.triggerInputs.repeatedFailures && (
-                <Badge className="bg-orange-500/10 text-orange-500 border-0 text-[10px]">Multiple Fails</Badge>
-              )}
-            </div>
-            
-            <div className="space-y-2">
-              {/* Apply recommendation button */}
-              <Button
-                onClick={() => {
-                  // Apply the recommendation
-                  const { suggestedAction } = adaptiveRecommendation
-                  if (suggestedAction.type === 'add_band' || suggestedAction.type === 'change_band') {
-                    if (suggestedAction.targetBandColor) {
-                      setBandUsed(suggestedAction.targetBandColor)
-                    }
-                  } else if (suggestedAction.type === 'remove_band') {
-                    setBandUsed('none')
-                  }
-                  // Note: switch_exercise would require more integration with the override system
-                  setShowAdaptiveModal(false)
-                  setAdaptiveRecommendation(null)
-                }}
-                className="w-full h-12 bg-[#4F6D8A] hover:bg-[#3D5A75] text-white font-medium"
-              >
-                Apply Suggestion
-              </Button>
-              
-              {/* Keep current button */}
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowAdaptiveModal(false)
-                  setAdaptiveRecommendation(null)
-                }}
-                className="w-full h-12 border-[#2B313A] text-[#E6E9EF] hover:bg-[#2B313A]"
-              >
-                Keep Current
-              </Button>
-            </div>
-            
-            <p className="text-xs text-center text-[#6B7280]">
-              Based on your performance this set
+      {/* Main content area */}
+      <div className="flex-1 px-4 py-3">
+        <div className="max-w-lg mx-auto space-y-3">
+          {/* UNIT 2: Exercise Card */}
+          {renderExerciseUnit()}
+          
+          {/* UNIT 3: Input Controls */}
+          {renderInputsUnit()}
+          
+          {/* UNIT 4: Action Buttons */}
+          {renderActionsUnit()}
+          
+          {/* Stage indicator when not at full render */}
+          {ACTIVE_DERIVATION_STAGE < 6 && (
+            <p className="text-green-500 text-sm text-center mt-4">
+              Stage {ACTIVE_DERIVATION_STAGE} active. Units up to stage {ACTIVE_DERIVATION_STAGE} rendered.
             </p>
-          </div>
+          )}
         </div>
-      )}
-      </SafeOptionalSubtree>
+      </div>
       
-      {/* [EXECUTION-TRUTH-FIX] Inter-Exercise Rest Modal */}
-      <SafeOptionalSubtree label="InterExerciseRestModal">
-      {showInterExerciseRest && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#1A1F26] border-t sm:border border-[#2B313A] sm:rounded-xl p-5 space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0">
-            <div className="text-center">
-              <Badge className="bg-[#4F6D8A]/20 text-[#4F6D8A] border-0 mb-3">
-                Rest Before Next Exercise
-              </Badge>
-              <h3 className="text-lg font-semibold text-[#E6E9EF] mb-1">
-                {safeExerciseIndex < exercises.length - 1 ? exercises[safeExerciseIndex + 1]?.name : 'Next Exercise'}
-              </h3>
-              <p className="text-sm text-[#A4ACB8]">
-                {Math.floor(interExerciseRestSeconds / 60)}:{(interExerciseRestSeconds % 60).toString().padStart(2, '0')} rest before starting
-              </p>
-            </div>
-            
-            {/* Simple countdown display */}
-            <div className="py-4">
-              <InterExerciseRestCountdown
-                initialSeconds={interExerciseRestSeconds}
-                onComplete={handleInterExerciseRestComplete}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Button
-                onClick={handleInterExerciseRestComplete}
-                className="w-full h-12 bg-[#C1121F] hover:bg-[#A30F1A] text-white font-medium"
-              >
-                Ready - Start Next Exercise
-              </Button>
-              
-              <Button
-                variant="ghost"
-                onClick={handleSkipInterExerciseRest}
-                className="w-full h-10 text-[#6B7280] hover:text-[#A4ACB8]"
-              >
-                Skip Rest
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-      </SafeOptionalSubtree>
-      
-      {/* [EXECUTION-TRUTH-FIX] Notes Capture Modal */}
-      <SafeOptionalSubtree label="NotesCaptureModal">
-      {showNotesModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#1A1F26] border-t sm:border border-[#2B313A] sm:rounded-xl p-5 space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-semibold text-[#E6E9EF]">Add Note</h3>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowNotesModal(false)}
-                className="h-8 w-8 text-[#6B7280]"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-            
-            {/* Quick flags */}
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-[#6B7280] uppercase tracking-wide">Quick Flags</p>
-              <div className="flex flex-wrap gap-2">
-                {AVAILABLE_CONTEXT_FLAGS.map(flag => (
-                  <button
-                    key={flag.type}
-                    onClick={() => handleToggleNoteFlag(flag.type)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                      currentNoteFlags.includes(flag.type)
-                        ? 'bg-[#C1121F] text-white'
-                        : 'bg-[#2B313A] text-[#A4ACB8] hover:bg-[#3A4553]'
-                    }`}
-                  >
-                    {flag.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            
-            {/* Free text note */}
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-[#6B7280] uppercase tracking-wide">Note (optional)</p>
-              <Textarea
-                value={currentNoteText}
-                onChange={(e) => setCurrentNoteText(e.target.value)}
-                placeholder="Add any additional notes..."
-                className="bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] resize-none h-20"
-              />
-            </div>
-            
-            <Button
-              onClick={handleSaveNote}
-              className="w-full h-12 bg-[#4F6D8A] hover:bg-[#3D5A75] text-white font-medium"
-            >
-              Save Note
-            </Button>
-          </div>
-        </div>
-      )}
-      
-      {/* [EXECUTION-TRUTH-FIX] Previous Exercise Review Modal */}
-      {isReviewingPreviousExercise && reviewingExerciseIndex !== null && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#1A1F26] border-t sm:border border-[#2B313A] sm:rounded-xl p-5 space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 max-h-[70vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-semibold text-[#E6E9EF]">
-                Review: {exercises[reviewingExerciseIndex]?.name || 'Previous Exercise'}
-              </h3>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleCloseReview}
-                className="h-8 w-8 text-[#6B7280]"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-            
-            {/* Completed sets summary */}
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-[#6B7280] uppercase tracking-wide">Completed Sets</p>
-              {getCompletedSetsForExercise(reviewingExerciseIndex).length > 0 ? (
-                <div className="space-y-2">
-                  {getCompletedSetsForExercise(reviewingExerciseIndex).map((set, idx) => (
-                    <div key={idx} className="flex items-center justify-between bg-[#0F1115] rounded-lg p-3">
-                      <span className="text-[#A4ACB8] text-sm">Set {set.setNumber}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[#E6E9EF] font-medium">
-                          {set.holdSeconds ? `${set.holdSeconds}s` : `${set.actualReps} reps`}
-                        </span>
-                        <Badge variant="outline" className="text-[10px] border-[#3A4553]">
-                          RPE {set.actualRPE}
-                        </Badge>
-                        {set.bandUsed && set.bandUsed !== 'none' && (
-                          <Badge className="text-[10px] bg-[#4F6D8A]/20 text-[#4F6D8A] border-0">
-                            {set.bandUsed}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-[#6B7280] text-sm py-4 text-center">No sets logged yet</p>
-              )}
-            </div>
-            
-            {/* Notes for this exercise */}
-            {sessionNotes.exerciseNotes[reviewingExerciseIndex] && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-[#6B7280] uppercase tracking-wide">Notes</p>
-                <div className="bg-[#0F1115] rounded-lg p-3">
-                  {sessionNotes.exerciseNotes[reviewingExerciseIndex].flags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-2">
-                      {sessionNotes.exerciseNotes[reviewingExerciseIndex].flags.map(flag => (
-                        <Badge key={flag} className="text-[10px] bg-[#C1121F]/20 text-[#C1121F] border-0">
-                          {AVAILABLE_CONTEXT_FLAGS.find(f => f.type === flag)?.label || flag}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                  {sessionNotes.exerciseNotes[reviewingExerciseIndex].freeText && (
-                    <p className="text-[#A4ACB8] text-sm">
-                      {sessionNotes.exerciseNotes[reviewingExerciseIndex].freeText}
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-            
-            <Button
-              onClick={handleCloseReview}
-              className="w-full h-12 bg-[#2B313A] hover:bg-[#3A4553] text-[#E6E9EF] font-medium"
-            >
-              Return to Current Exercise
-            </Button>
-          </div>
-        </div>
-      )}
-      </SafeOptionalSubtree>
-      
-      {/* Exit Confirmation Modal */}
-      <SafeOptionalSubtree label="ExitConfirmModal">
-      {showExitConfirm && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#1A1F26] border-t sm:border border-[#2B313A] sm:rounded-xl p-5 space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0">
-            <div className="text-center mb-2">
-              <h3 className="text-lg font-semibold text-[#E6E9EF] mb-1">Leave Workout?</h3>
-              <p className="text-sm text-[#A4ACB8]">
-                You have {normalizedCompletedSets.length} {normalizedCompletedSets.length === 1 ? 'set' : 'sets'} logged.
-              </p>
-            </div>
-            
-            <div className="space-y-2">
-              <Button
-                onClick={() => setShowExitConfirm(false)}
-                className="w-full h-12 bg-[#C1121F] hover:bg-[#A30F1A] text-white font-medium"
-              >
-                Resume Workout
-              </Button>
-              
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowExitConfirm(false)
-                  handleFinish()
-                }}
-                className="w-full h-12 border-[#2B313A] text-[#E6E9EF] hover:bg-[#2B313A]"
-              >
-                <Check className="w-4 h-4 mr-2" />
-                Save & Finish Early
-              </Button>
-              
-              <Button
-                variant="ghost"
-                onClick={handleDiscardAndExit}
-                className="w-full h-10 text-[#6B7280] hover:text-[#A4ACB8]"
-              >
-                Discard & Exit
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-      </SafeOptionalSubtree>
+      {/* Diagnostic Panel */}
+      {renderDiagnosticPanel()}
     </div>
-    </SafeOptionalSubtree>
   )
+  
+  // ==========================================================================
+  // NOTE: The old stage 6 full active UI is now replaced by the unit-based system above.
+  // All active rendering goes through the unit functions with local containment.
+  // The return statement above handles all active state rendering via units.
+  // ==========================================================================
 }

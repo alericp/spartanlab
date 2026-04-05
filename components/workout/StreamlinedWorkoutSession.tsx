@@ -2473,13 +2473,15 @@ export function StreamlinedWorkoutSession({
   const validatedCurrentExercise = hasValidExercises ? exercises[safeExerciseIndex] : null
   
   // Machine-derived: normalizedCompletedSets (directly from machine state)
-  const normalizedCompletedSets = machineState.completedSets
+  // [CRASH-FIX] Added null safety - machineState.completedSets should never be undefined but guard anyway
+  const normalizedCompletedSets = machineState.completedSets ?? []
   
   // Machine-derived: completedSetsCount
   const completedSetsCount = normalizedCompletedSets.length
   
   // Machine-derived: normalizedExerciseOverrides
-  const normalizedExerciseOverrides = machineState.exerciseOverrides
+  // [CRASH-FIX] Added null safety
+  const normalizedExerciseOverrides = machineState.exerciseOverrides ?? {}
   
   // Machine-derived: validatedSetNumber
   const validatedSetNumber = machineState.currentSetNumber
@@ -3065,12 +3067,13 @@ export function StreamlinedWorkoutSession({
   viewModelPhase: viewModel.phase,
   currentExerciseIndex: machineState.currentExerciseIndex,
   currentSetNumber: machineState.currentSetNumber,
-  completedSetsCount: machineState.completedSets.length,
+  completedSetsCount: normalizedCompletedSets.length,
   hasValidExercises,
   exerciseCount: machineSessionContract?.exercises.length ?? 0,
   })
   }
-  }, [machineState.phase, machineState.currentExerciseIndex, machineState.currentSetNumber, machineState.completedSets.length, safeStatus, viewModel.phase, hasValidExercises, machineSessionContract])
+  // [CRASH-FIX] Use normalizedCompletedSets.length instead of direct machineState access
+  }, [machineState.phase, machineState.currentExerciseIndex, machineState.currentSetNumber, normalizedCompletedSets.length, safeStatus, viewModel.phase, hasValidExercises, machineSessionContract])
   
   // ==========================================================================
   // [PHASE LW2] ACTIVE WORKOUT VIEW MODEL
@@ -3517,8 +3520,9 @@ export function StreamlinedWorkoutSession({
         bandUsed: liveSession.bandUsed,
         timestamp: Date.now(),
         // Per-set notes from machine state
+        // [CRASH-FIX] Added null safety for currentSetReasonTags
         note: machineState.currentSetNote || undefined,
-        reasonTags: machineState.currentSetReasonTags.length > 0 ? [...machineState.currentSetReasonTags] : undefined,
+        reasonTags: (machineState.currentSetReasonTags?.length ?? 0) > 0 ? [...machineState.currentSetReasonTags] : undefined,
         // Grouped execution context
         blockId: blockInfo?.block.blockId,
         memberIndex: blockInfo?.memberIndex,
@@ -5598,9 +5602,10 @@ function InterExerciseRestCountdown({
   
   // UNIT 3.5: Execution Ledger - shows recent completed sets
   const renderLedgerUnit = (): React.ReactNode => {
-    if (machineState.completedSets.length === 0) return null
+    // [CRASH-FIX] Use normalizedCompletedSets with null safety
+    if (normalizedCompletedSets.length === 0) return null
     try {
-      const recentSets = machineState.completedSets.slice(-3) // Show last 3 sets
+      const recentSets = normalizedCompletedSets.slice(-3) // Show last 3 sets
       const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, safeExerciseIndex)
       
       return (

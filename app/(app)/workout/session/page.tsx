@@ -25,8 +25,42 @@ function markRouteStage(stage: string, data?: Record<string, unknown>): void {
   })
 }
 
+// [PHASE-NEXT] BOOT RECOVERY CHECK: If previous boot crashed, clear saved state
+function checkAndApplyBootRecovery(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const failedMarker = localStorage.getItem('spartanlab_workout_boot_failed')
+    if (failedMarker) {
+      const failedAt = parseInt(failedMarker, 10)
+      const ageMs = Date.now() - failedAt
+      // If crash was within last 5 minutes, apply recovery wipe
+      if (ageMs > 0 && ageMs < 5 * 60 * 1000) {
+        console.log('[ROUTE-BOOT] boot_recovery_wipe_applied', {
+          failedAt: new Date(failedAt).toISOString(),
+          ageMs,
+          reason: 'previous_boot_crashed',
+        })
+        localStorage.removeItem('spartanlab_workout_session')
+        localStorage.removeItem('spartanlab_workout_boot_failed')
+        return true
+      }
+      // Clear stale marker
+      localStorage.removeItem('spartanlab_workout_boot_failed')
+    }
+  } catch {}
+  return false
+}
+
 // Mark route init immediately
 markRouteStage('init')
+
+// Apply boot recovery if needed
+if (typeof window !== 'undefined') {
+  const recoveryApplied = checkAndApplyBootRecovery()
+  if (recoveryApplied) {
+    markRouteStage('boot_recovery_applied')
+  }
+}
 
 import { useState, useEffect, Suspense, Component, type ReactNode, type ErrorInfo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -72,6 +106,17 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // [PHASE-NEXT] CRASH RECOVERY WIPE: Mark boot failure for next load
+    // On the NEXT load, if this marker exists and is recent, we clear saved workout state
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('spartanlab_workout_boot_failed', String(Date.now()))
+        // Also clear the potentially poisoned saved session immediately
+        localStorage.removeItem('spartanlab_workout_session')
+        console.log('[workout-route-crash] RECOVERY WIPE: Cleared saved workout state to prevent repeat crash')
+      }
+    } catch {}
+    
     // [PHASE LW2] Read boot ledger for crash recovery analysis
     let bootLedger: Record<string, unknown> = {}
     try {

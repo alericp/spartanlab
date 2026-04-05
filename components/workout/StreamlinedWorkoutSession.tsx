@@ -3295,12 +3295,15 @@ export function StreamlinedWorkoutSession({
   }, [liveSession, safeCurrentExercise, safeExerciseIndex, isHoldExercise, exercises, exerciseRuntimeTruth, sessionRuntimeTruth, activeEntryPreparation, executeUnifiedAdvance])
   
   // Rest complete / skip rest (between sets of SAME exercise)
+  // CANONICAL: This is the ONE function for between-set rest -> next active set
+  // Used by both InlineRestTimer onSkip and onComplete
   const handleRestComplete = useCallback(() => {
-    console.log('[UNIFIED-HANDOFF] handleRestComplete triggered (same exercise, next set)')
+    console.log('[CANONICAL-REST] handleRestComplete: transitioning from resting to active (same exercise)')
     clearRestTimerState()
     playTimerCompletionAlert()
-    dispatch({ type: 'SET_STATUS', status: 'active' })
-  }, [])
+    // Use machine dispatch directly - NOT the legacy SET_STATUS which is a no-op
+    machineDispatch({ type: 'COMPLETE_REST' })
+  }, [machineDispatch])
   
   // [UNIFIED-HANDOFF] Handle inter-exercise rest completion
   const handleInterExerciseRestComplete = useCallback(() => {

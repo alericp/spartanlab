@@ -128,6 +128,7 @@ export type WorkoutMachineAction =
   | { type: 'SET_BAND'; band: ResistanceBandColor | 'none' }
   | { type: 'SET_NOTES'; notes: string }
   | { type: 'COMPLETE_SET'; completedSet: CompletedSet; isLastSetOfExercise: boolean; exerciseCount: number }
+  | { type: 'COMPLETE_REST' } // Between-set rest -> next active set (same exercise)
   | { type: 'START_BETWEEN_EXERCISE_REST'; seconds: number }
   | { type: 'SKIP_BETWEEN_EXERCISE_REST' }
   | { type: 'ADVANCE_TO_NEXT_EXERCISE'; nextIndex: number; targetValue: number }
@@ -278,6 +279,19 @@ export function workoutMachineReducer(
         currentSetNumber: state.currentSetNumber + 1,
         lastSetRPE: action.completedSet.actualRPE,
         selectedRPE: null,
+      }
+    }
+    
+    // COMPLETE_REST: Between-set rest -> next active set (same exercise)
+    // Called when rest timer completes or user skips rest
+    case 'COMPLETE_REST': {
+      if (state.phase !== 'resting') {
+        console.warn('[machine] COMPLETE_REST called but phase is not resting:', state.phase)
+        return state
+      }
+      return {
+        ...state,
+        phase: 'active',
       }
     }
     

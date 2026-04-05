@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo, useReducer } from 'react'
 import dynamic from 'next/dynamic'
+import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Play,
   Check,
   Trash2,
@@ -19,6 +21,11 @@ import {
   Lightbulb,
   SkipForward,
   X,
+  Calendar,
+  LayoutDashboard,
+  Crown,
+  Target,
+  Zap,
 } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-builder'
@@ -50,18 +57,8 @@ import {
   type ExerciseOverride,
 } from '@/lib/exercise-override-service'
 import { SessionPerformanceCard } from '@/components/workout/SessionPerformanceCard'
-// [LIVE-WORKOUT-CORRIDOR-FIX] PostWorkoutSummary loaded dynamically - completion-only
-// This component is ONLY shown after workout completion, so deferring its load prevents
-// module-level crashes from blocking the initial workout render
-const PostWorkoutSummary = dynamic(
-  () => import('@/components/workout/PostWorkoutSummary').then(mod => mod.PostWorkoutSummary),
-  { 
-    loading: () => (
-      <div className="p-4 text-center text-[#6B7280]">Loading summary...</div>
-    ),
-    ssr: false // Client-only component
-  }
-)
+// [COMPLETION-SCREEN-POLISH] PostWorkoutSummary component removed from completion flow
+// The completion screen now renders inline with validated metrics and cleaner hierarchy
 import { getSessionPerformance, createPerformanceInputFromStats } from '@/lib/session-performance'
 import { getDailyReadiness } from '@/lib/daily-readiness'
 import { 
@@ -82,6 +79,7 @@ import {
 import type { WorkoutReasoningSummary } from '@/lib/readiness/canonical-readiness-engine'
 import type { WorkoutReasoningDisplayContract } from '@/lib/workout-reasoning-display-contract'
 import { WhyThisWorkout, ExerciseReasonBubble, WorkoutFocusBadge } from '@/components/workout/WhyThisWorkout'
+import { hasProAccess } from '@/lib/feature-access'
 import { WarmUpInsight, ProgressionReasoning, OverrideProtectionInsight } from '@/components/coaching/CoachingInsights'
 import { getExerciseSelectionInsight, getSkillCarryoverInsight } from '@/lib/coaching/insight-generation'
 // [EXECUTION-TRUTH-FIX] Authoritative runtime contract
@@ -4268,12 +4266,31 @@ if (shouldShowLocalFallback) {
       }
     }
     
-    // Before saving - show Quick Log + PostWorkoutSummary
+    // ========================================================================
+    // PRE-SAVE: Show final reflection before committing workout
+    // This is NOT the completion screen - it's the final "are you ready to save" screen
+    // ========================================================================
     if (!isSaved) {
+      // Validate duration for display - show only if plausible (< 4 hours)
+      const durationMinutes = Math.round(safeElapsedSeconds / 60)
+      const isDurationValid = durationMinutes > 0 && durationMinutes < 240
+      
       return (
         <div className="min-h-screen bg-[#0F1115] p-4 sm:p-6">
-          <div className="max-w-lg mx-auto pt-6 space-y-4">
-            {/* Quick Log - Difficulty Selection (Required for quality data) */}
+          <div className="max-w-lg mx-auto pt-6 space-y-5">
+            {/* Pre-save Header - Clear state indication */}
+            <div className="text-center mb-2">
+              <div className="w-16 h-16 rounded-full bg-[#C1121F]/10 border-2 border-[#C1121F]/50 flex items-center justify-center mx-auto mb-3">
+                <Dumbbell className="w-8 h-8 text-[#C1121F]" />
+              </div>
+              <h1 className="text-xl font-bold text-[#E6E9EF] mb-1">{safeSession.dayLabel}</h1>
+              <p className="text-sm text-[#A4ACB8]">
+                {stats.completedSets}/{stats.totalSets} sets
+                {isDurationValid && ` • ${durationMinutes} min`}
+              </p>
+            </div>
+            
+            {/* Quick Log - Difficulty Selection */}
             <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
               <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-3">How did this session feel?</p>
               <div className="grid grid-cols-3 gap-2">
@@ -4316,7 +4333,7 @@ if (shouldShowLocalFallback) {
               </div>
             </Card>
             
-            {/* Optional Workout Notes - Compact */}
+            {/* Optional Workout Notes */}
             <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
               <div className="flex items-center gap-2 mb-2">
                 <MessageSquare className="w-4 h-4 text-[#6B7280]" />
@@ -4337,33 +4354,12 @@ if (shouldShowLocalFallback) {
               disabled={isSaving}
               className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-lg font-bold"
             >
-              {isSaving ? 'Saving...' : 'Complete Workout'}
+              {isSaving ? 'Saving...' : 'Save & Complete'}
             </Button>
-            
-            {/* Performance Summary below - condensed */}
-            <PostWorkoutSummary
-              performance={performance}
-              sessionStats={{
-                completedSets: stats.completedSets,
-                totalSets: stats.totalSets,
-                completedExercises: stats.completedExercises,
-                totalExercises: totalExercises,
-                elapsedSeconds: safeElapsedSeconds,
-                averageRPE: stats.averageRPE || undefined,
-              }}
-              sessionName={safeSession.dayLabel}
-              onReturnToDashboard={() => handleSaveWorkout(perceivedDifficulty || 'normal')}
-              onViewProgram={() => handleSaveWorkout(perceivedDifficulty || 'normal')}
-              bandProgressNote={bandProgressNote}
-              skillSignal={skillSignal}
-              overrideSummary={getOverrideSummary(sessionId)}
-              goalContext={safeSession.focusLabel ? `This ${safeLower(safeSession.focusLabel)} session builds toward your primary goal. Consistent training accelerates progress.` : "Workout completed. Consistent training builds skill faster."}
-              nextSession={nextSessionInfo}
-            />
           </div>
-    </div>
-  )
-}
+        </div>
+      )
+    }
 
 // =============================================================================
 // [EXECUTION-TRUTH-FIX] INTER-EXERCISE REST COUNTDOWN COMPONENT
@@ -4446,63 +4442,165 @@ function InterExerciseRestCountdown({
 }
 
     
-    // After saving - show confirmation with feedback
+    // ========================================================================
+    // POST-SAVE: Authoritative completion screen
+    // This is the ONLY completion screen - workout is saved, show the recap
+    // ========================================================================
     const isPartialSession = stats.completedSets < stats.totalSets * 0.5
+    
+    // Validate duration - only show if plausible (< 4 hours)
+    const durationMinutes = Math.round(safeElapsedSeconds / 60)
+    const isDurationValid = durationMinutes > 0 && durationMinutes < 240
+    const displayDuration = isDurationValid ? `${durationMinutes}m` : null
     
     return (
       <div className="min-h-screen bg-[#0F1115] p-4 sm:p-6">
-        <div className="max-w-lg mx-auto space-y-4 pt-8">
-          {/* Saved Confirmation */}
-          <div className="text-center">
-            <div className={`w-20 h-20 rounded-full ${isPartialSession ? 'bg-amber-500/10 border-amber-500' : 'bg-green-500/10 border-green-500'} border-2 flex items-center justify-center mx-auto mb-4`}>
-              <CheckCircle2 className={`w-10 h-10 ${isPartialSession ? 'text-amber-400' : 'text-green-400'}`} />
+        <div className="max-w-lg mx-auto space-y-4 pt-6">
+          
+          {/* ================================================================
+              1. COMPLETION HERO - Clear end-state anchor
+              ================================================================ */}
+          <div className="text-center pb-2">
+            <div className={`w-16 h-16 rounded-full ${isPartialSession ? 'bg-amber-500/10 border-amber-500' : 'bg-green-500/10 border-green-500'} border-2 flex items-center justify-center mx-auto mb-3`}>
+              <CheckCircle2 className={`w-8 h-8 ${isPartialSession ? 'text-amber-400' : 'text-green-400'}`} />
             </div>
-            <h1 className="text-2xl font-bold text-[#E6E9EF] mb-2">
-              {isPartialSession ? 'Partial Session Logged' : 'Workout Complete'}
+            <h1 className="text-xl font-bold text-[#E6E9EF] mb-1">
+              {isPartialSession ? 'Session Logged' : 'Session Complete'}
             </h1>
-            <p className="text-[#A4ACB8]">
-              {safeSession.dayLabel} • {stats.completedSets}/{stats.totalSets} sets
+            <p className="text-sm text-[#A4ACB8]">
+              {safeSession.dayLabel}
             </p>
           </div>
           
-          {/* Quick Stats Feedback */}
-<Card className="bg-[#1A1F26] border-[#2B313A] p-4">
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div>
-                  <p className="text-xl font-bold text-[#E6E9EF]">{Math.max(1, Math.round(safeElapsedSeconds / 60))}</p>
-                  <p className="text-xs text-[#6B7280]">minutes</p>
-                </div>
+          {/* ================================================================
+              2. METRICS ROW - Compact, trustworthy stats
+              ================================================================ */}
+          <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
+            <div className={`grid ${displayDuration ? 'grid-cols-3' : 'grid-cols-2'} gap-4 text-center`}>
               <div>
-                <p className="text-xl font-bold text-[#E6E9EF]">{stats.completedSets}</p>
-                <p className="text-xs text-[#6B7280]">sets</p>
+                <p className="text-lg font-bold text-[#E6E9EF]">{stats.completedSets}</p>
+                <p className="text-[10px] text-[#6B7280] uppercase">Sets</p>
               </div>
+              {displayDuration && (
+                <div>
+                  <p className="text-lg font-bold text-[#E6E9EF]">{displayDuration}</p>
+                  <p className="text-[10px] text-[#6B7280] uppercase">Duration</p>
+                </div>
+              )}
               <div>
-                <p className="text-xl font-bold text-[#E6E9EF] capitalize">{perceivedDifficulty || 'Normal'}</p>
-                <p className="text-xs text-[#6B7280]">difficulty</p>
+                <p className="text-lg font-bold text-[#E6E9EF]">
+                  {stats.averageRPE ? stats.averageRPE.toFixed(1) : '-'}
+                </p>
+                <p className="text-[10px] text-[#6B7280] uppercase">Avg RPE</p>
               </div>
             </div>
           </Card>
           
-          {/* Progress Signals */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-center gap-2 py-2.5 bg-green-500/10 border border-green-500/30 rounded-lg">
-              <CheckCircle2 className="w-4 h-4 text-green-400" />
-              <span className="text-sm text-green-400 font-medium">Progress recorded</span>
-            </div>
-            {performance.performanceTier === 'excellent' && (
-              <div className="flex items-center justify-center gap-2 py-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                <Dumbbell className="w-4 h-4 text-amber-400" />
-                <span className="text-sm text-amber-400 font-medium">Excellent performance!</span>
+          {/* ================================================================
+              3. PRIMARY OUTCOME - Performance insight
+              ================================================================ */}
+          <Card className={`p-3 ${
+            performance.performanceTier === 'excellent' ? 'bg-green-500/5 border-green-500/20' :
+            performance.performanceTier === 'strong' ? 'bg-blue-500/5 border-blue-500/20' :
+            performance.performanceTier === 'solid' ? 'bg-[#1A1F26] border-[#2B313A]' :
+            'bg-orange-500/5 border-orange-500/20'
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${
+                performance.performanceTier === 'excellent' ? 'border-green-500/50 bg-green-500/10' :
+                performance.performanceTier === 'strong' ? 'border-blue-500/50 bg-blue-500/10' :
+                performance.performanceTier === 'solid' ? 'border-[#2B313A] bg-[#2B313A]/50' :
+                'border-orange-500/50 bg-orange-500/10'
+              }`}>
+                <span className={`text-sm font-bold ${
+                  performance.performanceTier === 'excellent' ? 'text-green-400' :
+                  performance.performanceTier === 'strong' ? 'text-blue-400' :
+                  performance.performanceTier === 'solid' ? 'text-[#A4ACB8]' :
+                  'text-orange-400'
+                }`}>
+                  {performance.performanceScore}
+                </span>
               </div>
-            )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-[#E6E9EF]">{performance.summary}</p>
+              </div>
+            </div>
+          </Card>
+          
+          {/* ================================================================
+              4. SECONDARY INSIGHTS - Skill & Band progress (if relevant)
+              ================================================================ */}
+          {(skillSignal || bandProgressNote) && (
+            <div className="flex flex-wrap gap-2">
+              {skillSignal && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-purple-500/10 border border-purple-500/20">
+                  <Target className="w-3.5 h-3.5 text-purple-400" />
+                  <span className="text-xs text-purple-300">{skillSignal}</span>
+                </div>
+              )}
+              {bandProgressNote && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-blue-500/10 border border-blue-500/20">
+                  <Zap className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="text-xs text-blue-300">{bandProgressNote}</span>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* ================================================================
+              5. NEXT SESSION PREVIEW
+              ================================================================ */}
+          {nextSessionInfo && (
+            <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-[#4F6D8A]/10 flex items-center justify-center shrink-0">
+                  <Calendar className="w-4 h-4 text-[#4F6D8A]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] text-[#6B7280] uppercase">Up Next</p>
+                  <p className="text-sm font-medium text-[#E6E9EF]">{nextSessionInfo.dayLabel}</p>
+                  <p className="text-xs text-[#A4ACB8]">{nextSessionInfo.focusLabel}</p>
+                </div>
+              </div>
+            </Card>
+          )}
+          
+          {/* ================================================================
+              6. NAVIGATION ACTIONS
+              ================================================================ */}
+          <div className="space-y-2 pt-2">
+            <Button
+              onClick={onComplete}
+              className="w-full h-12 bg-[#C1121F] hover:bg-[#A30F1A] text-white font-semibold"
+            >
+              <LayoutDashboard className="w-4 h-4 mr-2" />
+              Return to Dashboard
+            </Button>
+            <Link href="/program" className="block">
+              <Button
+                variant="outline"
+                className="w-full h-10 border-[#2B313A] text-[#A4ACB8] hover:text-[#E6E9EF] hover:bg-[#1A1F26]"
+              >
+                <Calendar className="w-4 h-4 mr-2" />
+                View Program
+              </Button>
+            </Link>
           </div>
           
-          <Button
-            onClick={onComplete}
-            className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-lg"
-          >
-            Return to Dashboard
-          </Button>
+          {/* ================================================================
+              7. MONETIZATION - Demoted below navigation, quieter styling
+              ================================================================ */}
+          {!hasProAccess() && (
+            <Card className="bg-[#1A1F26]/50 border-[#2B313A]/50 p-3 mt-4">
+              <Link href="/upgrade" className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Crown className="w-4 h-4 text-amber-400/70" />
+                  <span className="text-xs text-[#6B7280]">Unlock deeper insights with Pro</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-[#6B7280]" />
+              </Link>
+            </Card>
+          )}
         </div>
       </div>
     )

@@ -360,8 +360,8 @@ export function workoutMachineReducer(
     case 'COMPLETE_SET': {
       const newCompletedSets = [...state.completedSets, action.completedSet]
       
-      // [LOG_SET_REDUCER_RESULT] Pre-transition state
-      console.log('[LOG_SET_REDUCER_RESULT] COMPLETE_SET processing', {
+      // [POST_LOG_REDUCER_OUTPUT] Pre-transition state
+      console.log('[POST_LOG_REDUCER_OUTPUT] COMPLETE_SET processing', {
         isLastSetOfExercise: action.isLastSetOfExercise,
         exerciseCount: action.exerciseCount,
         currentExerciseIndex: state.currentExerciseIndex,
@@ -418,7 +418,7 @@ export function workoutMachineReducer(
         currentSetNote: '',
         currentSetReasonTags: [],
       }
-      console.log('[LOG_SET_REDUCER_RESULT] Returning resting phase', {
+      console.log('[POST_LOG_REDUCER_OUTPUT] Returning resting phase', {
         phase: restingResult.phase,
         currentSetNumber: restingResult.currentSetNumber,
         completedSetsCount: restingResult.completedSets.length,

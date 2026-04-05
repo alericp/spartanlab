@@ -3504,8 +3504,8 @@ export function StreamlinedWorkoutSession({
   const handleCompleteSet = useCallback(() => {
     const currentIndex = safeExerciseIndex
     
-    // [LOG_SET_CLICK] Pre-dispatch state
-    console.log('[LOG_SET_CLICK]', {
+    // [POST_LOG_CLICK_STATE] Pre-dispatch state - exact labels for diagnostics
+    console.log('[POST_LOG_CLICK_STATE]', {
       phaseBeforeClick: machineState.phase,
       exerciseIndex: currentIndex,
       setNumber: validatedSetNumber,
@@ -3559,8 +3559,8 @@ export function StreamlinedWorkoutSession({
       // [CRASH-FIX] Use validatedSetNumber instead of liveSession
       const isLastSet = validatedSetNumber >= (safeCurrentExercise.sets || 3)
       
-      // [LOG_SET_ACTION] Dispatching COMPLETE_SET
-      console.log('[LOG_SET_ACTION]', {
+      // [POST_LOG_REDUCER_INPUT] Dispatching COMPLETE_SET
+      console.log('[POST_LOG_REDUCER_INPUT]', {
         type: 'COMPLETE_SET',
         isLastSetOfExercise: isLastSet,
         exerciseCount: exercises.length,
@@ -3577,25 +3577,35 @@ export function StreamlinedWorkoutSession({
     // [CRASH-FIX] Removed liveSession dep, use machine-derived values
     }, [validatedSetNumber, safeRepsValue, safeHoldValue, safeSelectedRPE, safeBandUsed, safeCurrentExercise, safeExerciseIndex, isHoldExercise, exercises, machineSessionContract, machineState, machineDispatch])
   
-  // Rest complete / skip rest (between sets of SAME exercise)
-  // CANONICAL: This is the ONE function for between-set rest -> next active set
-  // Used by both InlineRestTimer onSkip and onComplete
+  // [UNIFIED-REST-HANDLER] Single handler for all rest completion
+  // Checks machine phase to determine correct transition
   const handleRestComplete = useCallback(() => {
-    console.log('[CANONICAL-REST] handleRestComplete: transitioning from resting to active (same exercise)')
-    clearRestTimerState()
-    playTimerCompletionAlert()
-    // Use machine dispatch directly - NOT the legacy SET_STATUS which is a no-op
-    machineDispatch({ type: 'COMPLETE_REST' })
-  }, [machineDispatch])
+    const currentPhase = machineState.phase
+    console.log('[UNIFIED-REST-HANDLER] handleRestComplete called', { currentPhase })
+    
+    if (currentPhase === 'resting') {
+      // Same-exercise rest -> next set of same exercise
+      console.log('[UNIFIED-REST-HANDLER] Same-exercise rest complete -> COMPLETE_REST')
+      clearRestTimerState()
+      playTimerCompletionAlert()
+      machineDispatch({ type: 'COMPLETE_REST' })
+    } else if (currentPhase === 'between_exercise_rest') {
+      // Between-exercise rest -> advance to next exercise
+      console.log('[UNIFIED-REST-HANDLER] Between-exercise rest complete -> advance to next exercise')
+      playTimerCompletionAlert()
+      executeUnifiedAdvance('inter_exercise_complete')
+    } else {
+      console.warn('[UNIFIED-REST-HANDLER] Unexpected phase for rest complete:', currentPhase)
+    }
+  }, [machineState.phase, machineDispatch, executeUnifiedAdvance])
   
-  // [UNIFIED-HANDOFF] Handle inter-exercise rest completion
+  // Legacy handlers for backward compatibility
   const handleInterExerciseRestComplete = useCallback(() => {
     console.log('[UNIFIED-HANDOFF] handleInterExerciseRestComplete triggered')
     playTimerCompletionAlert()
     executeUnifiedAdvance('inter_exercise_complete')
   }, [executeUnifiedAdvance])
   
-  // [UNIFIED-HANDOFF] Skip inter-exercise rest
   const handleSkipInterExerciseRest = useCallback(() => {
     console.log('[UNIFIED-HANDOFF] handleSkipInterExerciseRest triggered')
     executeUnifiedAdvance('skip_inter_exercise')
@@ -4363,12 +4373,14 @@ if (shouldShowLocalFallback) {
   
   // [LIVE-WORKOUT-MACHINE] Use safeStatus from machine
   if (safeStatus === 'ready') {
-    // [POST_LOG_UNEXPECTED_READY] Check if this is unexpected - ready with progress means something went wrong
+    // [POST_LOG_READY_REGRESSION] Check if this is a regression - ready with progress means state was lost
     if (machineState.completedSets.length > 0 || machineState.startTime !== null) {
-      console.warn('[POST_LOG_UNEXPECTED_READY] Ready state with progress!', {
+      console.error('[POST_LOG_READY_REGRESSION] BUG: Ready state entered with active progress!', {
         machinePhase: machineState.phase,
         completedSetsCount: machineState.completedSets.length,
         startTime: machineState.startTime,
+        currentExerciseIndex: machineState.currentExerciseIndex,
+        currentSetNumber: machineState.currentSetNumber,
       })
     }
     
@@ -5308,27 +5320,21 @@ function InterExerciseRestCountdown({
   // continuation. This prevents post-log render drift to the start shell.
   // ==========================================================================
   if (safeStatus === 'active' || safeStatus === 'resting') {
-    // [AUTHORITATIVE_RENDER_OWNER] Log which panel owns render
-    console.log('[AUTHORITATIVE_RENDER_OWNER]', {
-      owner: 'ActiveWorkoutStartCorridor',
+    // [POST_LOG_RENDER_PHASE] Log render gate entry - this proves machine state is correct
+    console.log('[POST_LOG_RENDER_PHASE]', {
       safeStatus,
       machinePhase: machineState.phase,
-    })
-    
-    // [POST_LOG_MACHINE_PHASE] Machine phase after any state change
-    console.log('[POST_LOG_MACHINE_PHASE]', { phase: machineState.phase })
-    
-    // [POST_LOG_SET_PROGRESS] Current set number and completed count
-    console.log('[POST_LOG_SET_PROGRESS]', {
       currentSetNumber: validatedSetNumber,
       completedSetsCount: normalizedCompletedSets.length,
     })
     
+    // [POST_LOG_VISIBLE_OWNER] Corridor is the active owner
+    console.log('[POST_LOG_VISIBLE_OWNER]', {
+      owner: 'ActiveWorkoutStartCorridor',
+    })
+    
     // Determine corridor mode
     const corridorMode = safeStatus === 'resting' ? 'resting' : 'active'
-    
-    // [POST_LOG_VISIBLE_PANEL] Which mode the corridor is showing
-    console.log('[POST_LOG_VISIBLE_PANEL]', { corridorMode })
     
     // [ISOLATED-ACTIVE-CORRIDOR] Derive simple safe values for the corridor
     // These are plain reads from machine state - no complex derivations
@@ -5359,18 +5365,6 @@ function InterExerciseRestCountdown({
     const corridorHoldValue = isHoldExerciseForDefault 
       ? (machineHoldIsDefault ? prescriptionSeedValue : safeHoldValue)
       : safeHoldValue || 30
-    
-    console.log('[DEFAULT_SEED_DECISION]', {
-      exerciseRepsOrTime,
-      isHoldExercise: isHoldExerciseForDefault,
-      prescriptionSeedValue,
-      machineRepsValue: safeRepsValue,
-      machineHoldValue: safeHoldValue,
-      machineRepsIsDefault,
-      machineHoldIsDefault,
-      corridorRepsValue,
-      corridorHoldValue,
-    })
     
     const corridorCurrentSetNote = machineState.currentSetNote || ''
     const corridorCurrentSetReasonTags = (machineState.currentSetReasonTags || []) as import('./ActiveWorkoutStartCorridor').SetReasonTag[]

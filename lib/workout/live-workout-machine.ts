@@ -214,14 +214,34 @@ export function workoutMachineReducer(
         startTime: action.startTime,
       }
     
-    case 'TICK_TIMER':
+    case 'TICK_TIMER': {
       if (!state.startTime || (state.phase !== 'active' && state.phase !== 'resting' && state.phase !== 'between_exercise_rest')) {
         return state
       }
+      
+      const newElapsedSeconds = Math.floor((Date.now() - state.startTime) / 1000)
+      
+      // Between-exercise rest: decrement the rest timer (but never below 0)
+      if (state.phase === 'between_exercise_rest' && state.interExerciseRestSeconds > 0) {
+        const newRestSeconds = Math.max(0, state.interExerciseRestSeconds - 1)
+        if (newRestSeconds !== state.interExerciseRestSeconds) {
+          console.log('[v0] [TICK] between_exercise_rest countdown:', state.interExerciseRestSeconds, '->', newRestSeconds)
+        }
+        if (newRestSeconds === 0) {
+          console.log('[v0] [TICK] between_exercise_rest reached zero - waiting for user to start next exercise')
+        }
+        return {
+          ...state,
+          elapsedSeconds: newElapsedSeconds,
+          interExerciseRestSeconds: newRestSeconds,
+        }
+      }
+      
       return {
         ...state,
-        elapsedSeconds: Math.floor((Date.now() - state.startTime) / 1000),
+        elapsedSeconds: newElapsedSeconds,
       }
+    }
     
     // =========================================================================
     // INPUT UPDATES

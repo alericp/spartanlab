@@ -2048,7 +2048,11 @@ export function StreamlinedWorkoutSession({
   transitionRepairIssue: machineState.phase === 'invalid' ? { type: 'next_exercise_invalid' as const, message: machineState.invalidReason || 'Unknown error' } : null,
   }
   } catch (error) {
-    console.error('[v0] [liveSession_error]', error instanceof Error ? error.message : 'unknown')
+    console.error('[POST_LOG_UNEXPECTED_READY] liveSession error - falling back to ready!', error instanceof Error ? error.message : 'unknown')
+    console.error('[POST_LOG_UNEXPECTED_READY] machineState was:', {
+      phase: machineState.phase,
+      completedSetsCount: machineState.completedSets?.length,
+    })
     return {
       status: 'ready' as const,
       currentExerciseIndex: 0,
@@ -3504,13 +3508,15 @@ export function StreamlinedWorkoutSession({
   const handleCompleteSet = useCallback(() => {
     const currentIndex = safeExerciseIndex
     
-    // [CRASH-FIX] Use machine-derived values instead of liveSession
-    console.log('[UNIFIED-HANDOFF] handleCompleteSet triggered', {
+    // [LOG_SET_CLICK] Pre-dispatch state
+    console.log('[LOG_SET_CLICK]', {
+      phaseBeforeClick: machineState.phase,
       exerciseIndex: currentIndex,
       setNumber: validatedSetNumber,
       exerciseName: safeCurrentExercise.name,
       totalSets: safeCurrentExercise.sets,
       totalExercises: exercises.length,
+      completedSetsCount: machineState.completedSets.length,
     })
     
       // Build completed set data with notes and grouped context
@@ -3556,6 +3562,14 @@ export function StreamlinedWorkoutSession({
       // Non-grouped set - use standard flat dispatch
       // [CRASH-FIX] Use validatedSetNumber instead of liveSession
       const isLastSet = validatedSetNumber >= (safeCurrentExercise.sets || 3)
+      
+      // [LOG_SET_ACTION] Dispatching COMPLETE_SET
+      console.log('[LOG_SET_ACTION]', {
+        type: 'COMPLETE_SET',
+        isLastSetOfExercise: isLastSet,
+        exerciseCount: exercises.length,
+        setData: { exerciseIndex: setData.exerciseIndex, setNumber: setData.setNumber, actualReps: setData.actualReps },
+      })
       
       machineDispatch({
         type: 'COMPLETE_SET',
@@ -4351,8 +4365,25 @@ if (shouldShowLocalFallback) {
   // [PHASE LW3] Boot stage calls moved to effects - render is pure
   // ==========================================================================
   
+  // [POST_LOG_RENDER_GATE] Log render gate selection
+  console.log('[POST_LOG_RENDER_GATE]', {
+    machinePhase: machineState.phase,
+    safeStatus,
+    completedSetsCount: machineState.completedSets.length,
+    currentExerciseIndex: machineState.currentExerciseIndex,
+    currentSetNumber: machineState.currentSetNumber,
+  })
+  
   // [LIVE-WORKOUT-MACHINE] Use safeStatus from machine
   if (safeStatus === 'ready') {
+    // [POST_LOG_UNEXPECTED_READY] Check if this is unexpected
+    if (machineState.completedSets.length > 0 || machineState.startTime !== null) {
+      console.warn('[POST_LOG_UNEXPECTED_READY] Ready state with progress!', {
+        machinePhase: machineState.phase,
+        completedSetsCount: machineState.completedSets.length,
+        startTime: machineState.startTime,
+      })
+    }
     
     console.log('[ready-state-entry]', {
       componentVersion: STREAMLINED_WORKOUT_VERSION,
@@ -5286,6 +5317,17 @@ function InterExerciseRestCountdown({
   if (safeStatus === 'active') {
     // [ISOLATED-ACTIVE-CORRIDOR] Derive simple safe values for the corridor
     // These are plain reads from machine state - no complex derivations
+    
+    // [DEFAULT-INPUT-SEEDING] Parse target values from exercise prescription
+    const exerciseRepsOrTime = safeCurrentExercise?.repsOrTime || '8-12 reps'
+    const isHoldExerciseForDefault = exerciseRepsOrTime.toLowerCase().includes('sec') || exerciseRepsOrTime.toLowerCase().includes('hold')
+    const targetMatch = exerciseRepsOrTime.match(/(\d+)/)
+    const prescriptionSeedValue = targetMatch ? parseInt(targetMatch[1], 10) : 8
+    
+    // Seed defaults from prescription, but use machine state if user has already modified
+    const corridorRepsValue = safeRepsValue || prescriptionSeedValue
+    const corridorHoldValue = safeHoldValue || (isHoldExerciseForDefault ? prescriptionSeedValue : 30)
+    
     const corridorCurrentSetNote = machineState.currentSetNote || ''
     const corridorCurrentSetReasonTags = (machineState.currentSetReasonTags || []) as import('./ActiveWorkoutStartCorridor').SetReasonTag[]
     const corridorRecommendedBand = safeCurrentExercise?.executionTruth?.recommendedBand as ResistanceBandColor | undefined
@@ -5323,8 +5365,8 @@ function InterExerciseRestCountdown({
         completedSetsCount={normalizedCompletedSets?.length || 0}
         totalSetsCount={totalSets || 3}
         elapsedSeconds={safeElapsedSeconds || 0}
-        repsValue={safeRepsValue || 8}
-        holdValue={safeHoldValue || 30}
+        repsValue={corridorRepsValue}
+        holdValue={corridorHoldValue}
         selectedRPE={safeSelectedRPE}
         bandUsed={safeBandUsed || 'none'}
         currentSetNote={corridorCurrentSetNote}

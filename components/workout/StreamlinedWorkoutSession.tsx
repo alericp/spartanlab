@@ -2459,12 +2459,7 @@ export function StreamlinedWorkoutSession({
   const totalExercises = exercises.length
   const totalSets = exercises.reduce((sum, ex) => sum + (ex.sets || 3), 0)
   
-  // [STAGED-ISOLATION-DEBUG] Log exercises derivation
-  console.log('[v0] [exercises_derived]', {
-    exerciseCount: exercises.length,
-    totalSets,
-    machineSessionContractExists: !!machineSessionContract,
-  })
+
   
   // Machine-derived: hasValidExercises
   const hasValidExercises = exercises.length > 0
@@ -3390,7 +3385,8 @@ export function StreamlinedWorkoutSession({
   }, [safeStatus, nextSessionInfo, safeSession.dayNumber])
   
   // Auto-save on state changes - skip for demo sessions
-  // [UNIFIED-HANDOFF] Now saves from liveSession - the single authoritative owner
+  // [UNIFIED-HANDOFF] liveSession is a computed view of machineState (see useMemo above)
+  // so this save path is effectively saving machineState values
   useEffect(() => {
     // Demo sessions don't persist to storage
     if (isDemoSession) return
@@ -4365,18 +4361,9 @@ if (shouldShowLocalFallback) {
   // [PHASE LW3] Boot stage calls moved to effects - render is pure
   // ==========================================================================
   
-  // [POST_LOG_RENDER_GATE] Log render gate selection
-  console.log('[POST_LOG_RENDER_GATE]', {
-    machinePhase: machineState.phase,
-    safeStatus,
-    completedSetsCount: machineState.completedSets.length,
-    currentExerciseIndex: machineState.currentExerciseIndex,
-    currentSetNumber: machineState.currentSetNumber,
-  })
-  
   // [LIVE-WORKOUT-MACHINE] Use safeStatus from machine
   if (safeStatus === 'ready') {
-    // [POST_LOG_UNEXPECTED_READY] Check if this is unexpected
+    // [POST_LOG_UNEXPECTED_READY] Check if this is unexpected - ready with progress means something went wrong
     if (machineState.completedSets.length > 0 || machineState.startTime !== null) {
       console.warn('[POST_LOG_UNEXPECTED_READY] Ready state with progress!', {
         machinePhase: machineState.phase,
@@ -5321,17 +5308,27 @@ function InterExerciseRestCountdown({
   // continuation. This prevents post-log render drift to the start shell.
   // ==========================================================================
   if (safeStatus === 'active' || safeStatus === 'resting') {
-    // [POST_LOG_PHASE] Log for diagnostic
-    console.log('[POST_LOG_PHASE]', {
+    // [AUTHORITATIVE_RENDER_OWNER] Log which panel owns render
+    console.log('[AUTHORITATIVE_RENDER_OWNER]', {
+      owner: 'ActiveWorkoutStartCorridor',
       safeStatus,
       machinePhase: machineState.phase,
+    })
+    
+    // [POST_LOG_MACHINE_PHASE] Machine phase after any state change
+    console.log('[POST_LOG_MACHINE_PHASE]', { phase: machineState.phase })
+    
+    // [POST_LOG_SET_PROGRESS] Current set number and completed count
+    console.log('[POST_LOG_SET_PROGRESS]', {
       currentSetNumber: validatedSetNumber,
       completedSetsCount: normalizedCompletedSets.length,
     })
     
     // Determine corridor mode
     const corridorMode = safeStatus === 'resting' ? 'resting' : 'active'
-    console.log('[POST_LOG_CORRIDOR_MODE]', { corridorMode })
+    
+    // [POST_LOG_VISIBLE_PANEL] Which mode the corridor is showing
+    console.log('[POST_LOG_VISIBLE_PANEL]', { corridorMode })
     
     // [ISOLATED-ACTIVE-CORRIDOR] Derive simple safe values for the corridor
     // These are plain reads from machine state - no complex derivations
@@ -5339,23 +5336,38 @@ function InterExerciseRestCountdown({
     // [DEFAULT-INPUT-SEEDING] Parse target values from exercise prescription
     // Use authoritative prescription truth to seed defaults
     const exerciseRepsOrTime = safeCurrentExercise?.repsOrTime || '8-12 reps'
-    const isHoldExerciseForDefault = exerciseRepsOrTime.toLowerCase().includes('sec') || exerciseRepsOrTime.toLowerCase().includes('hold')
+    const repsOrTimeLower = exerciseRepsOrTime.toLowerCase()
+    const isHoldExerciseForDefault = repsOrTimeLower.includes('sec') || repsOrTimeLower.includes('hold') || repsOrTimeLower.includes('s ')
     const targetMatch = exerciseRepsOrTime.match(/(\d+)/)
     const prescriptionSeedValue = targetMatch ? parseInt(targetMatch[1], 10) : 8
     
-    // [DEFAULT_SEED_SOURCE] Deterministic seeding rule:
-    // - If machine state has a non-zero value, use it (user has modified)
-    // - Otherwise seed from prescription truth
-    const machineHasRepsValue = safeRepsValue > 0
-    const machineHasHoldValue = safeHoldValue > 0
-    const corridorRepsValue = machineHasRepsValue ? safeRepsValue : prescriptionSeedValue
-    const corridorHoldValue = machineHasHoldValue ? safeHoldValue : (isHoldExerciseForDefault ? prescriptionSeedValue : 30)
+    // [DEFAULT_SEED_DECISION] Deterministic seeding rule:
+    // Machine state initial values are repsValue=8, holdValue=30.
+    // If machine value equals these initial defaults, treat as "not user-modified"
+    // and seed from prescription truth instead.
+    // This ensures a "6s hold" exercise shows 6, not 30.
+    const INITIAL_REPS_VALUE = 8
+    const INITIAL_HOLD_VALUE = 30
     
-    console.log('[DEFAULT_SEED_SOURCE]', {
+    // For holds: if machine has initial default 30 or 0, seed from prescription
+    // For reps: if machine has initial default 8 or 0, seed from prescription
+    const machineRepsIsDefault = safeRepsValue === 0 || safeRepsValue === INITIAL_REPS_VALUE
+    const machineHoldIsDefault = safeHoldValue === 0 || safeHoldValue === INITIAL_HOLD_VALUE
+    
+    // Always seed from prescription if machine has default values
+    const corridorRepsValue = machineRepsIsDefault ? prescriptionSeedValue : safeRepsValue
+    const corridorHoldValue = isHoldExerciseForDefault 
+      ? (machineHoldIsDefault ? prescriptionSeedValue : safeHoldValue)
+      : safeHoldValue || 30
+    
+    console.log('[DEFAULT_SEED_DECISION]', {
+      exerciseRepsOrTime,
       isHoldExercise: isHoldExerciseForDefault,
       prescriptionSeedValue,
-      machineHasRepsValue,
-      machineHasHoldValue,
+      machineRepsValue: safeRepsValue,
+      machineHoldValue: safeHoldValue,
+      machineRepsIsDefault,
+      machineHoldIsDefault,
       corridorRepsValue,
       corridorHoldValue,
     })
@@ -5375,8 +5387,7 @@ function InterExerciseRestCountdown({
       reasonTags: set.reasonTags as import('./ActiveWorkoutStartCorridor').SetReasonTag[] | undefined,
     }))
     
-    console.log('[POST_LOG_CURRENT_SET]', { currentSetNumber: validatedSetNumber })
-    console.log('[POST_LOG_COMPLETED_COUNT]', { completedSetsCount: normalizedCompletedSets.length })
+
     
     // Note handlers (simple dispatches)
     const handleSetNote = (note: string) => {

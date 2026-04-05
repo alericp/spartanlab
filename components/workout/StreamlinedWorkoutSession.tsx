@@ -1149,7 +1149,8 @@ const STORAGE_KEY = 'spartanlab_workout_session'
 
 // [LIVE-SESSION-FIX] Storage schema version - increment when state shape changes
 // Old saved state with different version will be discarded to prevent restore poisoning
-const STORAGE_SCHEMA_VERSION = 'workout_session_v2'
+// [PHASE-NEXT] v3 = grouped-method runtime with execution blocks, per-set notes, reason tags
+const STORAGE_SCHEMA_VERSION = 'workout_session_v3_grouped_runtime'
 
 // [PHASE-X+1] Version stamp for execution proof
 const STREAMLINED_WORKOUT_VERSION = 'phase_lw2_boot_safe_v1'
@@ -1365,135 +1366,187 @@ function loadSessionFromStorage(
   currentStructureSignature?: string
 ): WorkoutSessionState | null {
   if (typeof window === 'undefined') return null
+  
+  // [PHASE-NEXT] Helper to clear storage and log rejection
+  const rejectRestore = (reason: string, details?: Record<string, unknown>) => {
+    console.log('[workout-restore] REJECTED:', reason, details || {})
+    try { localStorage.removeItem(STORAGE_KEY) } catch {}
+    return null
+  }
+  
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (!saved) return null
-    const data = JSON.parse(saved)
+    
+    // [PHASE-NEXT] Parse with explicit error handling
+    let data: Record<string, unknown>
+    try {
+      data = JSON.parse(saved)
+    } catch {
+      return rejectRestore('invalid_json_parse')
+    }
+    
+    // [PHASE-NEXT] Reject if data is not an object
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      return rejectRestore('invalid_data_shape', { type: typeof data })
+    }
     
     // [LIVE-SESSION-FIX] CRITICAL: Validate schema version FIRST
     // If schema version is missing or doesn't match, discard entire saved state
     if (data.schemaVersion !== STORAGE_SCHEMA_VERSION) {
-      console.log('[workout-restore] Discarding saved state: schema version mismatch', {
+      return rejectRestore('schema_version_mismatch', {
         savedVersion: data.schemaVersion || 'none',
         currentVersion: STORAGE_SCHEMA_VERSION,
-        reason: 'schema_version_mismatch',
       })
-      try { localStorage.removeItem(STORAGE_KEY) } catch {}
-      return null
     }
     
-    // Only restore if same session and less than 4 hours old
-    if (data.sessionId === sessionId && Date.now() - data.savedAt < 4 * 60 * 60 * 1000) {
-      
-      // [AUTHORITATIVE-HYDRATION-CONTRACT] CRITICAL: Validate structure signature match
-      // This prevents restoring state from a session with same dayLabel but different exercises
-      if (currentStructureSignature && data.structureSignature) {
-        if (data.structureSignature !== currentStructureSignature) {
-          console.log('[workout-restore] Discarding saved state: structure signature mismatch', {
-            savedSignature: data.structureSignature,
-            currentSignature: currentStructureSignature,
-            reason: 'session_structure_changed',
-          })
-          try { localStorage.removeItem(STORAGE_KEY) } catch {}
-          return null
-        }
-      }
-      
-      // Validate the saved data has required structure
-      if (
-        typeof data.status === 'string' &&
-        typeof data.currentExerciseIndex === 'number' &&
-        data.currentExerciseIndex >= 0 && // Ensure index is non-negative
-        Array.isArray(data.completedSets)
-      ) {
-        // [AUTHORITATIVE-HYDRATION-CONTRACT] Validate index within bounds
-        let safeCurrentExerciseIndex = data.currentExerciseIndex
-        if (exerciseCount !== undefined) {
-          if (safeCurrentExerciseIndex >= exerciseCount) {
-            console.log('[workout-restore] Clamping currentExerciseIndex to bounds', {
-              savedIndex: data.currentExerciseIndex,
-              exerciseCount,
-              clampedTo: exerciseCount - 1,
-            })
-            safeCurrentExerciseIndex = Math.max(0, exerciseCount - 1)
-          }
-        }
-        
-        // [AUTHORITATIVE-HYDRATION-CONTRACT] Filter and validate completedSets
-        let completedSets = data.completedSets
-        if (exerciseCount !== undefined) {
-          const originalCount = completedSets.length
-          completedSets = completedSets.filter((set: { exerciseIndex?: number; setNumber?: number; actualRPE?: number }) => {
-            // Validate exerciseIndex is in bounds
-            if (typeof set.exerciseIndex !== 'number' || set.exerciseIndex < 0 || set.exerciseIndex >= exerciseCount) {
-              return false
-            }
-            // Validate setNumber is positive
-            if (typeof set.setNumber !== 'number' || set.setNumber < 1) {
-              return false
-            }
-            // Validate actualRPE is reasonable
-            if (typeof set.actualRPE !== 'number' || set.actualRPE < 1 || set.actualRPE > 10) {
-              return false
-            }
-            return true
-          })
-          if (completedSets.length !== originalCount) {
-            console.log('[workout-restore] Filtered invalid completedSets', {
-              originalCount,
-              filteredCount: completedSets.length,
-              reason: 'invalid_references',
-            })
-          }
-        }
-        
-        // [AUTHORITATIVE-HYDRATION-CONTRACT] Validate and coerce status
-        const validStatuses = ['ready', 'active', 'resting', 'completed']
-        const safeStatus = validStatuses.includes(data.status) ? data.status : 'ready'
-        
-        // [AUTHORITATIVE-HYDRATION-CONTRACT] Clean up exerciseOverrides - remove out-of-bounds keys
-        let safeExerciseOverrides = data.exerciseOverrides || {}
-        if (exerciseCount !== undefined && typeof safeExerciseOverrides === 'object') {
-          const cleanedOverrides: Record<number, ExerciseOverrideState> = {}
-          for (const key of Object.keys(safeExerciseOverrides)) {
-            const idx = parseInt(key, 10)
-            if (!isNaN(idx) && idx >= 0 && idx < exerciseCount) {
-              cleanedOverrides[idx] = safeExerciseOverrides[key]
-            }
-          }
-          if (Object.keys(cleanedOverrides).length !== Object.keys(safeExerciseOverrides).length) {
-            console.log('[workout-restore] Cleaned out-of-bounds exerciseOverrides', {
-              originalCount: Object.keys(safeExerciseOverrides).length,
-              cleanedCount: Object.keys(cleanedOverrides).length,
-            })
-          }
-          safeExerciseOverrides = cleanedOverrides
-        }
-        
-        // Ensure currentSetNumber is valid (will be clamped against exercise sets in render)
-        const safeCurrentSetNumber = typeof data.currentSetNumber === 'number' && data.currentSetNumber > 0 
-          ? data.currentSetNumber 
-          : 1
-        
-        console.log('[workout-restore] Restored session with validation', {
-          sessionId,
-          safeCurrentExerciseIndex,
-          safeCurrentSetNumber,
-          completedSetsCount: completedSets.length,
-          status: safeStatus,
+    // [PHASE-NEXT] Strict field validation - reject if any required field is corrupt
+    const status = data.status
+    const currentExerciseIndex = data.currentExerciseIndex
+    const currentSetNumber = data.currentSetNumber
+    const completedSets = data.completedSets
+    const elapsedSeconds = data.elapsedSeconds
+    const savedAt = data.savedAt
+    
+    // Status must be a known valid value
+    const validStatuses = ['ready', 'active', 'resting', 'completed']
+    if (typeof status !== 'string' || !validStatuses.includes(status)) {
+      return rejectRestore('invalid_status', { status })
+    }
+    
+    // currentExerciseIndex must be finite and non-negative
+    if (typeof currentExerciseIndex !== 'number' || !Number.isFinite(currentExerciseIndex) || currentExerciseIndex < 0) {
+      return rejectRestore('invalid_currentExerciseIndex', { currentExerciseIndex })
+    }
+    
+    // currentSetNumber must be finite and >= 1
+    if (typeof currentSetNumber !== 'number' || !Number.isFinite(currentSetNumber) || currentSetNumber < 1) {
+      return rejectRestore('invalid_currentSetNumber', { currentSetNumber })
+    }
+    
+    // completedSets must be an array
+    if (!Array.isArray(completedSets)) {
+      return rejectRestore('invalid_completedSets_shape', { type: typeof completedSets })
+    }
+    
+    // elapsedSeconds must be finite and >= 0
+    if (typeof elapsedSeconds !== 'number' || !Number.isFinite(elapsedSeconds) || elapsedSeconds < 0) {
+      return rejectRestore('invalid_elapsedSeconds', { elapsedSeconds })
+    }
+    
+    // savedAt must be a valid timestamp within 4 hours
+    if (typeof savedAt !== 'number' || !Number.isFinite(savedAt) || Date.now() - savedAt > 4 * 60 * 60 * 1000) {
+      return rejectRestore('session_expired_or_invalid_timestamp', { savedAt, age: savedAt ? Date.now() - savedAt : 'invalid' })
+    }
+    
+    // sessionId must match
+    if (data.sessionId !== sessionId) {
+      return rejectRestore('session_id_mismatch', { savedSessionId: data.sessionId, currentSessionId: sessionId })
+    }
+    
+    // [AUTHORITATIVE-HYDRATION-CONTRACT] CRITICAL: Validate structure signature match
+    // This prevents restoring state from a session with same dayLabel but different exercises
+    if (currentStructureSignature && data.structureSignature) {
+      if (data.structureSignature !== currentStructureSignature) {
+        return rejectRestore('structure_signature_mismatch', {
+          savedSignature: data.structureSignature,
+          currentSignature: currentStructureSignature,
         })
-        
-        return {
-          ...data,
-          status: safeStatus,
-          currentExerciseIndex: safeCurrentExerciseIndex,
-          currentSetNumber: safeCurrentSetNumber,
-          completedSets,
-          exerciseOverrides: safeExerciseOverrides,
-        }
       }
     }
-    return null
+    
+    // [PHASE-NEXT] exerciseOverrides must be a plain object if present
+    if (data.exerciseOverrides !== undefined && data.exerciseOverrides !== null) {
+      if (typeof data.exerciseOverrides !== 'object' || Array.isArray(data.exerciseOverrides)) {
+        return rejectRestore('invalid_exerciseOverrides_shape', { type: typeof data.exerciseOverrides })
+      }
+    }
+    
+    // All strict guards passed - now continue with existing coercion/validation logic
+    
+    // [AUTHORITATIVE-HYDRATION-CONTRACT] Validate index within bounds
+    let safeCurrentExerciseIndex = currentExerciseIndex as number
+    if (exerciseCount !== undefined) {
+      if (safeCurrentExerciseIndex >= exerciseCount) {
+        console.log('[workout-restore] Clamping currentExerciseIndex to bounds', {
+          savedIndex: currentExerciseIndex,
+          exerciseCount,
+          clampedTo: exerciseCount - 1,
+        })
+        safeCurrentExerciseIndex = Math.max(0, exerciseCount - 1)
+      }
+    }
+    
+    // [AUTHORITATIVE-HYDRATION-CONTRACT] Filter and validate completedSets
+    let safeCompletedSets = completedSets as Array<{ exerciseIndex?: number; setNumber?: number; actualRPE?: number }>
+    if (exerciseCount !== undefined) {
+      const originalCount = safeCompletedSets.length
+      safeCompletedSets = safeCompletedSets.filter((set) => {
+        // Validate exerciseIndex is in bounds
+        if (typeof set.exerciseIndex !== 'number' || set.exerciseIndex < 0 || set.exerciseIndex >= exerciseCount) {
+          return false
+        }
+        // Validate setNumber is positive
+        if (typeof set.setNumber !== 'number' || set.setNumber < 1) {
+          return false
+        }
+        // Validate actualRPE is reasonable
+        if (typeof set.actualRPE !== 'number' || set.actualRPE < 1 || set.actualRPE > 10) {
+          return false
+        }
+        return true
+      })
+      if (safeCompletedSets.length !== originalCount) {
+        console.log('[workout-restore] Filtered invalid completedSets', {
+          originalCount,
+          filteredCount: safeCompletedSets.length,
+          reason: 'invalid_references',
+        })
+      }
+    }
+    
+    // [AUTHORITATIVE-HYDRATION-CONTRACT] Clean up exerciseOverrides - remove out-of-bounds keys
+    let safeExerciseOverrides = (data.exerciseOverrides || {}) as Record<number, ExerciseOverrideState>
+    if (exerciseCount !== undefined && typeof safeExerciseOverrides === 'object') {
+      const cleanedOverrides: Record<number, ExerciseOverrideState> = {}
+      for (const key of Object.keys(safeExerciseOverrides)) {
+        const idx = parseInt(key, 10)
+        if (!isNaN(idx) && idx >= 0 && idx < exerciseCount) {
+          cleanedOverrides[idx] = safeExerciseOverrides[idx]
+        }
+      }
+      if (Object.keys(cleanedOverrides).length !== Object.keys(safeExerciseOverrides).length) {
+        console.log('[workout-restore] Cleaned out-of-bounds exerciseOverrides', {
+          originalCount: Object.keys(safeExerciseOverrides).length,
+          cleanedCount: Object.keys(cleanedOverrides).length,
+        })
+      }
+      safeExerciseOverrides = cleanedOverrides
+    }
+    
+    // [PHASE-NEXT] Build explicit validated payload - only include fields from WorkoutSessionState
+    const validatedPayload: WorkoutSessionState = {
+      status: status as WorkoutSessionState['status'],
+      currentExerciseIndex: safeCurrentExerciseIndex,
+      currentSetNumber: currentSetNumber as number,
+      completedSets: safeCompletedSets as WorkoutSessionState['completedSets'],
+      startTime: typeof data.startTime === 'number' ? data.startTime : null,
+      elapsedSeconds: elapsedSeconds as number,
+      lastSetRPE: typeof data.lastSetRPE === 'number' ? data.lastSetRPE as RPEValue : null,
+      workoutNotes: typeof data.workoutNotes === 'string' ? data.workoutNotes : '',
+      exerciseOverrides: safeExerciseOverrides,
+    }
+    
+    console.log('[workout-restore] ACCEPTED session with strict validation', {
+      sessionId,
+      safeCurrentExerciseIndex,
+      currentSetNumber,
+      completedSetsCount: safeCompletedSets.length,
+      status,
+      schemaVersion: STORAGE_SCHEMA_VERSION,
+    })
+    
+    return validatedPayload
   } catch {
     // If parsing fails, clear corrupted data
     console.log('[workout-restore] Clearing corrupted saved session data')

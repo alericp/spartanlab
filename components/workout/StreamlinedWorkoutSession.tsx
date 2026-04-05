@@ -2863,7 +2863,7 @@ export function StreamlinedWorkoutSession({
         displayRepsTime: '8-12 reps',
       }
     }
-  }, [safeCurrentExercise])
+  }, [safeCurrentExercise, isActivePhase, shouldSkipFullDerivations]) // [ACTIVE-CORRIDOR-RESTRUCTURE] Include phase-dependent values
 
   // ==========================================================================
   // [ACTIVE-ENTRY-CONTRACT] SINGLE AUTHORITATIVE ACTIVE RENDER PAYLOAD
@@ -2872,7 +2872,17 @@ export function StreamlinedWorkoutSession({
   // If any internal step fails, returns controlled fallback - never throws.
   // ==========================================================================
   const activeEntryContract = useMemo(() => {
-    console.log('[v0] [active_contract_build_start]')
+    // [ACTIVE-CORRIDOR-RESTRUCTURE] Stage-exact logging for crash diagnosis
+    console.log('[v0] [active_execution_contract_begin]', {
+      safeExerciseIndex,
+      hasSafeCurrentExercise: !!safeCurrentExercise,
+      safeCurrentExerciseName: safeCurrentExercise?.name ?? 'none',
+      validatedSetNumber,
+      hasActiveEntryPreparation: !!activeEntryPreparation,
+      activeEntryPreparationOk: activeEntryPreparation?.ok,
+      hasExecutionPlan: !!machineSessionContract?.executionPlan,
+      machinePhase: machineState.phase,
+    })
     
     // Fallback contract for any failure
     const fallbackContract = {
@@ -3018,7 +3028,17 @@ export function StreamlinedWorkoutSession({
         currentSetReasonTags,
       }
     } catch (err) {
-      console.error('[v0] [active_contract_build_failed]', err instanceof Error ? err.message : 'unknown')
+      // [ACTIVE-CORRIDOR-RESTRUCTURE] Enhanced error logging for crash diagnosis
+      console.error('[v0] [active_execution_contract_failed]', {
+        stage: 'contract_build_catch',
+        errorMsg: err instanceof Error ? err.message : 'unknown',
+        errorStack: err instanceof Error ? err.stack?.split('\n').slice(0, 3).join(' | ') : 'no stack',
+        safeExerciseIndex,
+        hasSafeCurrentExercise: !!safeCurrentExercise,
+        validatedSetNumber,
+        machinePhase: machineState.phase,
+      })
+      console.log('[v0] [active_execution_contract_fallback_used]')
       return fallbackContract
     }
   }, [
@@ -3027,6 +3047,7 @@ export function StreamlinedWorkoutSession({
     validatedSetNumber,
     activeEntryPreparation,
     machineSessionContract?.executionPlan,
+    machineState.phase, // [ACTIVE-CORRIDOR-RESTRUCTURE] Ensure contract updates on phase change
     machineState.currentRound,
     machineState.completedSets,
     machineState.currentSetNote,
@@ -3447,11 +3468,13 @@ export function StreamlinedWorkoutSession({
   // Start workout
   // [LIVE-WORKOUT-MACHINE] Validates active state requirements via machine validation
   const handleStart = useCallback(() => {
-  console.log('[v0] [handleStart] Start Workout clicked', {
-  machinePhase: machineState.phase,
-  hasSessionContract: !!machineSessionContract,
-  exerciseCount: machineSessionContract?.exercises?.length ?? 0,
-  currentExerciseIndex: machineState.currentExerciseIndex,
+  // [ACTIVE-CORRIDOR-RESTRUCTURE] Stage-exact logging for start workflow
+  console.log('[v0] [start_workout_requested]', {
+    stage: 'button_clicked',
+    machinePhase: machineState.phase,
+    hasSessionContract: !!machineSessionContract,
+    exerciseCount: machineSessionContract?.exercises?.length ?? 0,
+    currentExerciseIndex: machineState.currentExerciseIndex,
   })
   
   // [LIVE-WORKOUT-MACHINE] Validate via machine before transitioning to active
@@ -3474,7 +3497,18 @@ export function StreamlinedWorkoutSession({
   })
   
   setShowResumePrompt(false)
+  
+  // [ACTIVE-CORRIDOR-RESTRUCTURE] Log just before dispatch
+  console.log('[v0] [machine_phase_advancing_to_active]', {
+    stage: 'pre_dispatch',
+    currentPhase: machineState.phase,
+    targetPhase: 'active',
+    timestamp: Date.now(),
+  })
+  
   dispatch({ type: 'START_WORKOUT_ACTIVE', startTime: Date.now() })
+  
+  console.log('[v0] [machine_phase_dispatch_complete]', { stage: 'post_dispatch' })
   }, [machineState, machineSessionContract, machineDispatch, sessionId])
   
   // Resume existing workout
@@ -5270,6 +5304,24 @@ function InterExerciseRestCountdown({
   // ==========================================================================
   
   // ==========================================================================
+  // [ACTIVE-CORRIDOR-RESTRUCTURE] PRE-RENDER VALIDATION
+  // Before entering the active render corridor, validate that all critical
+  // values are ready. This catches the race condition where the phase changes
+  // but derivations haven't fully stabilized yet.
+  // ==========================================================================
+  console.log('[v0] [active_corridor_entry]', {
+    stage: 'pre_render_validation',
+    machinePhase: machineState.phase,
+    safeStatus,
+    hasActiveContract: !!activeEntryContract,
+    activeContractOk: activeEntryContract?.ok,
+    activeContractStage: activeEntryContract?.stage,
+    hasExercises: hasValidExercises,
+    exerciseCount: exercises.length,
+    currentIndex: safeExerciseIndex,
+  })
+  
+  // ==========================================================================
   // [UNIT-BASED-ACTIVE-CONTAINMENT] NAMED UNIT RENDER SYSTEM
   // Each unit has:
   //   - Named ownership
@@ -5733,42 +5785,106 @@ function InterExerciseRestCountdown({
   // ==========================================================================
   // STAGE 2+: Unit-based render with containment
   // Shell stays alive, each unit renders inside with local error handling
+  // [ACTIVE-CORRIDOR-RESTRUCTURE] Wrap entire active render in try-catch
+  // to prevent any unhandled errors from escaping to error boundary
   // ==========================================================================
-  unitStatus.shell.rendered = true
   
-  return (
-    <div className="min-h-screen bg-[#0F1115] flex flex-col">
-      {/* UNIT 1: Header */}
-      {renderHeaderUnit()}
-      
-      {/* Main content area */}
-      <div className="flex-1 px-4 py-3">
-        <div className="max-w-lg mx-auto space-y-3">
-          {/* UNIT 2: Exercise Card */}
-          {renderExerciseUnit()}
-          
-          {/* UNIT 3: Input Controls */}
-          {renderInputsUnit()}
-          
-          {/* UNIT 3.5: Execution Ledger */}
-          {renderLedgerUnit()}
-          
-          {/* UNIT 4: Action Buttons */}
-          {renderActionsUnit()}
-          
-          {/* Stage indicator - DEV ONLY */}
-          {process.env.NODE_ENV === 'development' && ACTIVE_DERIVATION_STAGE < 6 && (
-            <p className="text-green-500 text-sm text-center mt-4">
-              DEV: Stage {ACTIVE_DERIVATION_STAGE} active.
-            </p>
+  try {
+    console.log('[v0] [active_corridor_render_start]', {
+      stage: 'render_entry',
+      machinePhase: machineState.phase,
+      activeContractOk: activeEntryContract?.ok,
+    })
+    
+    unitStatus.shell.rendered = true
+    
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex flex-col">
+        {/* UNIT 1: Header */}
+        {renderHeaderUnit()}
+        
+        {/* Main content area */}
+        <div className="flex-1 px-4 py-3">
+          <div className="max-w-lg mx-auto space-y-3">
+            {/* UNIT 2: Exercise Card */}
+            {renderExerciseUnit()}
+            
+            {/* UNIT 3: Input Controls */}
+            {renderInputsUnit()}
+            
+            {/* UNIT 3.5: Execution Ledger */}
+            {renderLedgerUnit()}
+            
+            {/* UNIT 4: Action Buttons */}
+            {renderActionsUnit()}
+            
+            {/* Stage indicator - DEV ONLY */}
+            {process.env.NODE_ENV === 'development' && ACTIVE_DERIVATION_STAGE < 6 && (
+              <p className="text-green-500 text-sm text-center mt-4">
+                DEV: Stage {ACTIVE_DERIVATION_STAGE} active.
+              </p>
+            )}
+          </div>
+        </div>
+        
+        {/* Diagnostic Panel - DEV ONLY */}
+        {renderDiagnosticPanel()}
+      </div>
+    )
+  } catch (activeRenderError) {
+    // [ACTIVE-CORRIDOR-RESTRUCTURE] Last-resort catch for any active render failure
+    // This prevents the error boundary from being triggered and shows controlled fallback
+    const errorMsg = activeRenderError instanceof Error ? activeRenderError.message : 'Unknown render error'
+    const errorStack = activeRenderError instanceof Error ? activeRenderError.stack?.split('\n').slice(0, 5).join('\n') : 'No stack'
+    
+    console.error('[v0] [active_corridor_render_CRASH]', {
+      stage: 'active_render_catch',
+      errorMsg,
+      errorStack,
+      machinePhase: machineState.phase,
+      currentIndex: safeExerciseIndex,
+      hasContract: !!activeEntryContract,
+    })
+    
+    // Return controlled fallback instead of crashing to error boundary
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 rounded-full bg-[#1A1F26] border border-amber-500/50 flex items-center justify-center mx-auto mb-4">
+            <Dumbbell className="w-8 h-8 text-amber-500" />
+          </div>
+          <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Session Display Issue</h2>
+          <p className="text-[#A4ACB8] mb-4">
+            There was an issue displaying your workout. Your progress is safe.
+          </p>
+          {process.env.NODE_ENV === 'development' && (
+            <div className="text-left bg-[#1A1F26] rounded-lg p-3 mb-4 text-xs font-mono overflow-auto max-h-32">
+              <p className="text-red-400 mb-1">DEV: {errorMsg}</p>
+              <p className="text-[#6B7280] whitespace-pre-wrap">{errorStack}</p>
+            </div>
           )}
+          <div className="space-y-3">
+            <Button 
+              onClick={() => {
+                // Force refresh to retry render
+                window.location.reload()
+              }}
+              className="w-full bg-amber-500 hover:bg-amber-600 text-black"
+            >
+              Retry
+            </Button>
+            <Button 
+              onClick={onCancel}
+              variant="outline"
+              className="w-full border-[#2B313A] text-[#E6E9EF]"
+            >
+              Go Back
+            </Button>
+          </div>
         </div>
       </div>
-      
-      {/* Diagnostic Panel - DEV ONLY */}
-      {renderDiagnosticPanel()}
-    </div>
-  )
+    )
+  }
   
   // ==========================================================================
   // NOTE: The old stage 6 full active UI is now replaced by the unit-based system above.

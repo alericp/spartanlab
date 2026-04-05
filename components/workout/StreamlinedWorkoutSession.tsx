@@ -5187,10 +5187,13 @@ function InterExerciseRestCountdown({
   
   // ==========================================================================
   // RENDER: RESTING STATE (between sets of same exercise)
+  // [BYPASSED] This old resting render is now handled by ActiveWorkoutStartCorridor
+  // which owns both 'active' and 'resting' states for same-exercise continuity.
+  // The corridor handles resting mode with an integrated rest timer.
   // ==========================================================================
   
-  // [LIVE-WORKOUT-MACHINE] Use safeStatus from machine
-  if (safeStatus === 'resting') {
+  // [LIVE-WORKOUT-MACHINE] BYPASSED - resting now handled by corridor below
+  if (false && safeStatus === 'resting') {
     const restRecommendation = getRestRecommendationForCurrentExercise()
     const savedRestState = loadRestTimerState()
     
@@ -5313,20 +5316,49 @@ function InterExerciseRestCountdown({
   // This returns the isolated ActiveWorkoutStartCorridor component BEFORE
   // any of the complex derivation chains (unit status, render functions, etc.)
   // execute. This is the key fix - we must return EARLY to avoid the hooks.
+  // 
+  // EXPANDED: Now handles BOTH 'active' AND 'resting' states for same-exercise
+  // continuation. This prevents post-log render drift to the start shell.
   // ==========================================================================
-  if (safeStatus === 'active') {
+  if (safeStatus === 'active' || safeStatus === 'resting') {
+    // [POST_LOG_PHASE] Log for diagnostic
+    console.log('[POST_LOG_PHASE]', {
+      safeStatus,
+      machinePhase: machineState.phase,
+      currentSetNumber: validatedSetNumber,
+      completedSetsCount: normalizedCompletedSets.length,
+    })
+    
+    // Determine corridor mode
+    const corridorMode = safeStatus === 'resting' ? 'resting' : 'active'
+    console.log('[POST_LOG_CORRIDOR_MODE]', { corridorMode })
+    
     // [ISOLATED-ACTIVE-CORRIDOR] Derive simple safe values for the corridor
     // These are plain reads from machine state - no complex derivations
     
     // [DEFAULT-INPUT-SEEDING] Parse target values from exercise prescription
+    // Use authoritative prescription truth to seed defaults
     const exerciseRepsOrTime = safeCurrentExercise?.repsOrTime || '8-12 reps'
     const isHoldExerciseForDefault = exerciseRepsOrTime.toLowerCase().includes('sec') || exerciseRepsOrTime.toLowerCase().includes('hold')
     const targetMatch = exerciseRepsOrTime.match(/(\d+)/)
     const prescriptionSeedValue = targetMatch ? parseInt(targetMatch[1], 10) : 8
     
-    // Seed defaults from prescription, but use machine state if user has already modified
-    const corridorRepsValue = safeRepsValue || prescriptionSeedValue
-    const corridorHoldValue = safeHoldValue || (isHoldExerciseForDefault ? prescriptionSeedValue : 30)
+    // [DEFAULT_SEED_SOURCE] Deterministic seeding rule:
+    // - If machine state has a non-zero value, use it (user has modified)
+    // - Otherwise seed from prescription truth
+    const machineHasRepsValue = safeRepsValue > 0
+    const machineHasHoldValue = safeHoldValue > 0
+    const corridorRepsValue = machineHasRepsValue ? safeRepsValue : prescriptionSeedValue
+    const corridorHoldValue = machineHasHoldValue ? safeHoldValue : (isHoldExerciseForDefault ? prescriptionSeedValue : 30)
+    
+    console.log('[DEFAULT_SEED_SOURCE]', {
+      isHoldExercise: isHoldExerciseForDefault,
+      prescriptionSeedValue,
+      machineHasRepsValue,
+      machineHasHoldValue,
+      corridorRepsValue,
+      corridorHoldValue,
+    })
     
     const corridorCurrentSetNote = machineState.currentSetNote || ''
     const corridorCurrentSetReasonTags = (machineState.currentSetReasonTags || []) as import('./ActiveWorkoutStartCorridor').SetReasonTag[]
@@ -5343,6 +5375,9 @@ function InterExerciseRestCountdown({
       reasonTags: set.reasonTags as import('./ActiveWorkoutStartCorridor').SetReasonTag[] | undefined,
     }))
     
+    console.log('[POST_LOG_CURRENT_SET]', { currentSetNumber: validatedSetNumber })
+    console.log('[POST_LOG_COMPLETED_COUNT]', { completedSetsCount: normalizedCompletedSets.length })
+    
     // Note handlers (simple dispatches)
     const handleSetNote = (note: string) => {
       machineDispatch({ type: 'SET_CURRENT_SET_NOTE', note })
@@ -5351,8 +5386,17 @@ function InterExerciseRestCountdown({
       machineDispatch({ type: 'TOGGLE_REASON_TAG', tag })
     }
     
+    // Rest duration based on last set RPE
+    const getRestDuration = () => {
+      if (!safeLastSetRPE) return 90
+      if (safeLastSetRPE >= 9) return 180 // 3 min for RPE 9-10
+      if (safeLastSetRPE >= 8) return 120 // 2 min for RPE 8
+      return 90 // 1.5 min for RPE 6-7
+    }
+    
     return (
       <ActiveWorkoutStartCorridor
+        mode={corridorMode}
         sessionLabel={safeDisplayLabel || 'Workout'}
         exerciseName={safeCurrentExercise?.name || 'Exercise'}
         exerciseCategory={safeCurrentExercise?.category || 'general'}
@@ -5374,6 +5418,8 @@ function InterExerciseRestCountdown({
         recentSets={corridorRecentSets}
         bandSelectable={corridorBandSelectable}
         recommendedBand={corridorRecommendedBand}
+        restDurationSeconds={getRestDuration()}
+        lastSetRPE={safeLastSetRPE}
         onCompleteSet={handleCompleteSet}
         onSetReps={setRepsValue}
         onSetHold={setHoldValue}
@@ -5383,6 +5429,7 @@ function InterExerciseRestCountdown({
         onToggleReasonTag={handleToggleReasonTag}
         onExit={() => setShowExitConfirm(true)}
         onSkip={handleSkipExercise}
+        onRestComplete={handleRestComplete}
       />
     )
   }

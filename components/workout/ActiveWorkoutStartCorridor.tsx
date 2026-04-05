@@ -19,12 +19,12 @@
  * - Participate in stage-lock experiments
  */
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
-import { ChevronLeft, ChevronDown, ChevronUp, Check, SkipForward, X, MessageSquare } from 'lucide-react'
+import { ChevronLeft, ChevronDown, ChevronUp, Check, SkipForward, X, MessageSquare, Play } from 'lucide-react'
 import type { RPEValue } from '@/lib/rpe-adjustment-engine'
 import type { ResistanceBandColor } from '@/lib/band-progression-engine'
 
@@ -55,6 +55,9 @@ export interface CompletedSetInfo {
 }
 
 export interface ActiveWorkoutCorridorProps {
+  // Corridor mode - determines which UI to show
+  mode: 'active' | 'resting'
+  
   // Session identity
   sessionLabel: string
   
@@ -90,6 +93,10 @@ export interface ActiveWorkoutCorridorProps {
   bandSelectable?: boolean
   recommendedBand?: ResistanceBandColor
   
+  // Rest mode props
+  restDurationSeconds?: number
+  lastSetRPE?: RPEValue | null
+  
   // Callbacks (passed from parent)
   onCompleteSet: () => void
   onSetReps: (value: number) => void
@@ -100,6 +107,7 @@ export interface ActiveWorkoutCorridorProps {
   onToggleReasonTag?: (tag: SetReasonTag) => void
   onExit: () => void
   onSkip?: () => void
+  onRestComplete?: () => void
 }
 
 // =============================================================================
@@ -279,6 +287,7 @@ function BandSelector({ value, onChange, recommendedBand }: BandSelectorProps) {
 export function ActiveWorkoutStartCorridor({
   sessionLabel,
   exerciseName,
+  mode,
   exerciseCategory,
   exerciseSets,
   exerciseRepsOrTime,
@@ -298,6 +307,8 @@ export function ActiveWorkoutStartCorridor({
   recentSets = [],
   bandSelectable = false,
   recommendedBand,
+  restDurationSeconds = 90,
+  lastSetRPE,
   onCompleteSet,
   onSetReps,
   onSetHold,
@@ -307,7 +318,15 @@ export function ActiveWorkoutStartCorridor({
   onToggleReasonTag,
   onExit,
   onSkip,
+  onRestComplete,
 }: ActiveWorkoutCorridorProps) {
+  // [SAFE_CORRIDOR_RENDER_OWNER] Log ownership info
+  console.log('[SAFE_CORRIDOR_RENDER_OWNER]', {
+    mode,
+    currentSetNumber,
+    completedSetsCount,
+    exerciseName,
+  })
   const isHold = isHoldExercise(exerciseRepsOrTime)
   const targetValue = parseTargetValue(exerciseRepsOrTime)
   const progressPercent = totalSetsCount > 0 ? (completedSetsCount / totalSetsCount) * 100 : 0
@@ -315,6 +334,37 @@ export function ActiveWorkoutStartCorridor({
   // Local UI state
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [showSetNotes, setShowSetNotes] = useState(false)
+  
+  // Rest timer state (for resting mode)
+  const [restTimeRemaining, setRestTimeRemaining] = useState(restDurationSeconds)
+  const restTimerRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // Reset rest timer when entering resting mode
+  useEffect(() => {
+    if (mode === 'resting') {
+      setRestTimeRemaining(restDurationSeconds)
+      restTimerRef.current = setInterval(() => {
+        setRestTimeRemaining(prev => {
+          if (prev <= 1) {
+            if (restTimerRef.current) clearInterval(restTimerRef.current)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    }
+    return () => {
+      if (restTimerRef.current) clearInterval(restTimerRef.current)
+    }
+  }, [mode, restDurationSeconds])
+  
+  const handleRestSkip = () => {
+    if (restTimerRef.current) clearInterval(restTimerRef.current)
+    onRestComplete?.()
+  }
+  
+  // Indicator color based on mode
+  const indicatorColor = mode === 'resting' ? 'bg-blue-500' : 'bg-green-500'
   
   return (
     <div className="min-h-screen bg-[#0F1115] flex flex-col">
@@ -331,7 +381,7 @@ export function ActiveWorkoutStartCorridor({
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                <div className={`w-1.5 h-1.5 rounded-full ${indicatorColor} animate-pulse`} />
                 <span className="text-sm font-medium text-[#E6E9EF] truncate max-w-[160px]">
                   {sessionLabel}
                 </span>
@@ -362,6 +412,110 @@ export function ActiveWorkoutStartCorridor({
       <div className="flex-1 px-4 py-3">
         <div className="max-w-lg mx-auto space-y-3">
           
+          {/* ========== RESTING MODE UI ========== */}
+          {mode === 'resting' && (
+            <>
+              {/* Last Set RPE Summary */}
+              {lastSetRPE && (
+                <Card className="bg-[#0F1115]/50 border-[#2B313A]/50 p-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-[#6B7280]">Last set RPE</span>
+                    <Badge className={`${
+                      lastSetRPE >= 9 
+                        ? 'bg-orange-500/10 text-orange-400 border-0' 
+                        : lastSetRPE >= 8
+                          ? 'bg-blue-500/10 text-blue-400 border-0'
+                          : 'bg-green-500/10 text-green-400 border-0'
+                    }`}>
+                      RPE {lastSetRPE}
+                    </Badge>
+                  </div>
+                </Card>
+              )}
+              
+              {/* Rest Timer Card */}
+              <Card className="bg-gradient-to-br from-[#1A1F26] to-[#1A1F26]/80 border-[#2B313A] p-6">
+                <div className="text-center space-y-4">
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                    <span className="text-sm font-medium text-blue-400 uppercase tracking-wider">
+                      Rest Before Set {currentSetNumber}
+                    </span>
+                  </div>
+                  
+                  {/* Large Timer Display */}
+                  <div className="text-6xl font-mono font-bold text-[#E6E9EF] tabular-nums">
+                    {Math.floor(restTimeRemaining / 60)}:{(restTimeRemaining % 60).toString().padStart(2, '0')}
+                  </div>
+                  
+                  {/* Timer Progress Bar */}
+                  <div className="h-2 bg-[#2B313A] rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-500 transition-all duration-1000"
+                      style={{ width: `${(restTimeRemaining / restDurationSeconds) * 100}%` }}
+                    />
+                  </div>
+                  
+                  {/* Up Next Info */}
+                  <div className="pt-2 border-t border-[#2B313A]/50">
+                    <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-1">Up Next</p>
+                    <p className="text-sm font-medium text-[#E6E9EF]">{exerciseName}</p>
+                    <p className="text-xs text-[#A4ACB8]">Set {currentSetNumber} of {exerciseSets} · {exerciseRepsOrTime}</p>
+                  </div>
+                </div>
+              </Card>
+              
+              {/* Recent Sets Ledger (during rest) */}
+              {recentSets.length > 0 && (
+                <Card className="bg-[#1A1F26]/50 border-[#2B313A]/50 p-3">
+                  <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-2">Completed Sets</p>
+                  <div className="space-y-1.5">
+                    {recentSets.map((set, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-sm">
+                        <span className="text-[#A4ACB8]">Set {set.setNumber}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[#E6E9EF]">
+                            {set.holdSeconds ? `${set.holdSeconds}s` : `${set.actualReps} reps`}
+                          </span>
+                          {set.actualRPE && (
+                            <Badge variant="outline" className="text-[10px] border-[#2B313A] text-[#A4ACB8]">
+                              RPE {set.actualRPE}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+              
+              {/* Skip Rest / Start Set Button */}
+              <Button
+                onClick={handleRestSkip}
+                className={`w-full h-14 text-lg font-bold ${
+                  restTimeRemaining === 0 
+                    ? 'bg-green-600 hover:bg-green-700 text-white' 
+                    : 'bg-[#C1121F] hover:bg-[#A30F1A] text-white'
+                }`}
+              >
+                {restTimeRemaining === 0 ? (
+                  <>
+                    <Play className="w-5 h-5 mr-2" />
+                    Start Set {currentSetNumber}
+                  </>
+                ) : (
+                  <>
+                    <SkipForward className="w-5 h-5 mr-2" />
+                    Skip Rest — Start Set {currentSetNumber}
+                  </>
+                )}
+              </Button>
+            </>
+          )}
+          
+          {/* ========== ACTIVE MODE UI (original) ========== */}
+          {mode === 'active' && (
+            <>
           {/* ========== EXERCISE CARD ========== */}
           <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
             {/* Category badge */}
@@ -538,6 +692,9 @@ export function ActiveWorkoutStartCorridor({
               End
             </Button>
           </div>
+            </>
+          )}
+          {/* ========== END MODE CONDITIONAL ========== */}
         </div>
       </div>
       

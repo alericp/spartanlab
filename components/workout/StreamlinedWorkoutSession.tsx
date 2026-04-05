@@ -3245,9 +3245,10 @@ export function StreamlinedWorkoutSession({
     safeWorkoutSessionContract.dayLabel, 
     safeWorkoutSessionContract.dayNumber, 
     exercises, 
-    liveSession.currentExerciseIndex, 
-    liveSession.currentSetNumber, 
-    liveSession.completedSets, 
+    // [CRASH-FIX] Use machine-derived values instead of backward-compat liveSession to eliminate split truth
+    safeExerciseIndex, 
+    validatedSetNumber, 
+    normalizedCompletedSets, 
     safeCurrentExercise,
     hasValidExercises,
     validatedCurrentExercise
@@ -3290,10 +3291,11 @@ export function StreamlinedWorkoutSession({
     })
     
     // Build snapshot using PURE helper - no side effects
+    // [CRASH-FIX] Use normalizedCompletedSets instead of liveSession.completedSets
     const { snapshot, isWorkoutComplete, guardError } = buildUnifiedTransitionSnapshot(
       liveSession,
       exercises,
-      liveSession.completedSets, // Use current completed sets for skip paths
+      normalizedCompletedSets, // Use machine-derived completed sets
       safeExerciseIndex
     )
     
@@ -3501,9 +3503,10 @@ export function StreamlinedWorkoutSession({
   const handleCompleteSet = useCallback(() => {
     const currentIndex = safeExerciseIndex
     
+    // [CRASH-FIX] Use machine-derived values instead of liveSession
     console.log('[UNIFIED-HANDOFF] handleCompleteSet triggered', {
       exerciseIndex: currentIndex,
-      setNumber: liveSession.currentSetNumber,
+      setNumber: validatedSetNumber,
       exerciseName: safeCurrentExercise.name,
       totalSets: safeCurrentExercise.sets,
       totalExercises: exercises.length,
@@ -3513,11 +3516,11 @@ export function StreamlinedWorkoutSession({
       const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, currentIndex)
       const setData: CompletedSetData = {
         exerciseIndex: currentIndex,
-        setNumber: liveSession.currentSetNumber,
-        actualReps: isHoldExercise ? 0 : liveSession.repsValue,
-        holdSeconds: isHoldExercise ? liveSession.holdValue : undefined,
-        actualRPE: liveSession.selectedRPE || 8,
-        bandUsed: liveSession.bandUsed,
+        setNumber: validatedSetNumber,
+        actualReps: isHoldExercise ? 0 : safeRepsValue,
+        holdSeconds: isHoldExercise ? safeHoldValue : undefined,
+        actualRPE: safeSelectedRPE || 8,
+        bandUsed: safeBandUsed,
         timestamp: Date.now(),
         // Per-set notes from machine state
         // [CRASH-FIX] Added null safety for currentSetReasonTags
@@ -3550,7 +3553,8 @@ export function StreamlinedWorkoutSession({
       }
       
       // Non-grouped set - use standard flat dispatch
-      const isLastSet = liveSession.currentSetNumber >= (safeCurrentExercise.sets || 3)
+      // [CRASH-FIX] Use validatedSetNumber instead of liveSession
+      const isLastSet = validatedSetNumber >= (safeCurrentExercise.sets || 3)
       
       machineDispatch({
         type: 'COMPLETE_SET',
@@ -3559,7 +3563,8 @@ export function StreamlinedWorkoutSession({
         exerciseCount: exercises.length,
       })
       // Machine now owns all transitions - no legacy dispatch needed
-    }, [liveSession, safeCurrentExercise, safeExerciseIndex, isHoldExercise, exercises, machineSessionContract, machineState, machineDispatch])
+    // [CRASH-FIX] Removed liveSession dep, use machine-derived values
+    }, [validatedSetNumber, safeRepsValue, safeHoldValue, safeSelectedRPE, safeBandUsed, safeCurrentExercise, safeExerciseIndex, isHoldExercise, exercises, machineSessionContract, machineState, machineDispatch])
   
   // Rest complete / skip rest (between sets of SAME exercise)
   // CANONICAL: This is the ONE function for between-set rest -> next active set

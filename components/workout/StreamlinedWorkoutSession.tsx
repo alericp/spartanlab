@@ -5302,6 +5302,7 @@ function InterExerciseRestCountdown({
         exerciseCategory={safeCurrentExercise?.category || 'general'}
         exerciseSets={safeCurrentExercise?.sets || 3}
         exerciseRepsOrTime={safeCurrentExercise?.repsOrTime || '8-12 reps'}
+        targetRPE={safeCurrentExercise?.targetRPE || 8}
         currentSetNumber={validatedSetNumber || 1}
         currentExerciseIndex={safeExerciseIndex || 0}
         totalExercises={exercises?.length || 1}
@@ -5318,6 +5319,7 @@ function InterExerciseRestCountdown({
         onSetRPE={setSelectedRPE}
         onSetBand={setBandUsed}
         onExit={() => setShowExitConfirm(true)}
+        onSkip={handleSkipExercise}
       />
     )
   }

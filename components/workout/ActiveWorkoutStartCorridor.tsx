@@ -3,9 +3,9 @@
 /**
  * [ACTIVE-WORKOUT-START-CORRIDOR] Isolated Active Workout UI
  * 
- * This component is intentionally "dumb" and isolated from the complex hook chain
+ * This component is intentionally isolated from the complex hook chain
  * in StreamlinedWorkoutSession.tsx. It receives only plain, already-validated props
- * and renders a minimal active workout UI.
+ * and renders the full active workout UI.
  * 
  * PURPOSE:
  * - Bypass the fragile active derivation chain that was causing crashes
@@ -20,11 +20,10 @@
  */
 
 import { useState } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { ChevronLeft, X } from 'lucide-react'
+import { ChevronLeft, Check, SkipForward, X } from 'lucide-react'
 import type { RPEValue } from '@/lib/rpe-adjustment-engine'
 import type { ResistanceBandColor } from '@/lib/band-progression-engine'
 
@@ -41,6 +40,7 @@ export interface ActiveWorkoutCorridorProps {
   exerciseCategory: string
   exerciseSets: number
   exerciseRepsOrTime: string
+  targetRPE?: number
   
   // Progress
   currentSetNumber: number
@@ -63,6 +63,7 @@ export interface ActiveWorkoutCorridorProps {
   onSetRPE: (rpe: RPEValue | null) => void
   onSetBand: (band: ResistanceBandColor | 'none') => void
   onExit: () => void
+  onSkip?: () => void
 }
 
 // =============================================================================
@@ -89,6 +90,9 @@ function parseTargetValue(repsOrTime: string): number {
   return match ? parseInt(match[1], 10) : 8
 }
 
+// RPE Quick Options - matches original
+const RPE_QUICK_OPTIONS: RPEValue[] = [6, 7, 8, 9, 10]
+
 // =============================================================================
 // COMPONENT
 // =============================================================================
@@ -99,6 +103,7 @@ export function ActiveWorkoutStartCorridor({
   exerciseCategory,
   exerciseSets,
   exerciseRepsOrTime,
+  targetRPE = 8,
   currentSetNumber,
   currentExerciseIndex,
   totalExercises,
@@ -108,20 +113,13 @@ export function ActiveWorkoutStartCorridor({
   repsValue,
   holdValue,
   selectedRPE,
-  bandUsed,
   onCompleteSet,
   onSetReps,
   onSetHold,
   onSetRPE,
-  onSetBand,
   onExit,
+  onSkip,
 }: ActiveWorkoutCorridorProps) {
-  console.log('[v0] [active_start_corridor_render_begin]', {
-    exerciseName,
-    currentSetNumber,
-    exerciseSets,
-  })
-  
   const isHold = isHoldExercise(exerciseRepsOrTime)
   const targetValue = parseTargetValue(exerciseRepsOrTime)
   const progressPercent = totalSetsCount > 0 ? (completedSetsCount / totalSetsCount) * 100 : 0
@@ -129,19 +127,18 @@ export function ActiveWorkoutStartCorridor({
   // Local state for confirming exit
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   
-  console.log('[v0] [active_start_corridor_render_success]')
-  
   return (
     <div className="min-h-screen bg-[#0F1115] flex flex-col">
-      {/* Header */}
+      {/* ========== STICKY HEADER ========== */}
       <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
-        <div className="px-4 py-2.5">
+        <div className="px-4 py-3">
           <div className="max-w-lg mx-auto">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <button 
                   onClick={() => setShowExitConfirm(true)}
                   className="p-1 -ml-1 text-[#6B7280] hover:text-[#E6E9EF] transition-colors"
+                  aria-label="Back"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
@@ -172,119 +169,180 @@ export function ActiveWorkoutStartCorridor({
         </div>
       </div>
       
-      {/* Main content */}
-      <div className="flex-1 px-4 py-3">
-        <div className="max-w-lg mx-auto space-y-3">
-          {/* Exercise Card */}
-          <Card className="bg-[#1A1F26] border-[#2B313A]">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-[#C1121F]/10 text-[#C1121F] border-0 text-[10px] uppercase px-2 py-0.5">
-                    {exerciseCategory}
-                  </Badge>
-                  <span className="text-xs text-[#6B7280]">
-                    Set {currentSetNumber}/{exerciseSets}
-                  </span>
-                </div>
+      {/* ========== MAIN CONTENT ========== */}
+      <div className="flex-1 px-4 py-4">
+        <div className="max-w-lg mx-auto space-y-4">
+          
+          {/* ========== EXERCISE CARD ========== */}
+          <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
+            {/* Category + Set label */}
+            <div className="flex items-center justify-between mb-3">
+              <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
+                {exerciseCategory}
+              </Badge>
+            </div>
+            
+            {/* Exercise name */}
+            <h2 className="text-xl font-bold text-[#E6E9EF] leading-tight mb-1">
+              {exerciseName}
+            </h2>
+            
+            {/* Target prescription */}
+            <div className="flex items-center gap-2 text-sm mb-4">
+              <span className="text-[#A4ACB8]">Target:</span>
+              <span className="text-[#E6E9EF] font-medium">{exerciseRepsOrTime}</span>
+              <span className="text-[#6B7280]">·</span>
+              <span className="text-[#A4ACB8]">RPE {targetRPE}</span>
+            </div>
+            
+            {/* Set progress dots */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 flex-1">
+                {Array.from({ length: exerciseSets }).map((_, idx) => (
+                  <div 
+                    key={idx} 
+                    className={`h-2 flex-1 rounded-full transition-colors ${
+                      idx < currentSetNumber - 1 
+                        ? 'bg-green-500' 
+                        : idx === currentSetNumber - 1 
+                          ? 'bg-[#C1121F]' 
+                          : 'bg-[#2B313A]'
+                    }`} 
+                  />
+                ))}
               </div>
-              <h2 className="text-xl font-bold text-[#E6E9EF] mb-1">{exerciseName}</h2>
-              <p className="text-sm text-[#A4ACB8]">{exerciseRepsOrTime}</p>
-            </CardContent>
+              <span className="text-sm font-medium text-[#E6E9EF]">
+                Set {currentSetNumber}/{exerciseSets}
+              </span>
+            </div>
           </Card>
           
-          {/* Input Controls */}
-          <Card className="bg-[#1A1F26] border-[#2B313A]">
-            <CardContent className="p-4 space-y-4">
-              {isHold ? (
-                <div>
-                  <label className="block text-xs text-[#6B7280] mb-1.5">Hold Time (seconds)</label>
-                  <Input
-                    type="number"
-                    value={holdValue}
-                    onChange={(e) => onSetHold(parseInt(e.target.value) || 0)}
-                    className="bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] text-lg font-bold"
-                  />
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-xs text-[#6B7280] mb-1.5">Reps Completed</label>
-                  <Input
-                    type="number"
-                    value={repsValue}
-                    onChange={(e) => onSetReps(parseInt(e.target.value) || 0)}
-                    className="bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] text-lg font-bold"
-                  />
-                </div>
-              )}
-              
-              <div>
-                <label className="block text-xs text-[#6B7280] mb-1.5">RPE (Effort)</label>
-                <div className="flex gap-1">
-                  {([6, 7, 8, 9, 10] as RPEValue[]).map(rpe => (
-                    <Button
-                      key={rpe}
-                      variant={selectedRPE === rpe ? 'default' : 'outline'}
-                      size="sm"
-                      className={selectedRPE === rpe 
-                        ? 'bg-[#C1121F] border-[#C1121F] hover:bg-[#A10F1A]' 
-                        : 'border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A]/50'}
-                      onClick={() => onSetRPE(rpe)}
-                    >
-                      {rpe}
-                    </Button>
-                  ))}
-                </div>
+          {/* ========== INPUT CARD ========== */}
+          <Card className="bg-[#1A1F26] border-[#2B313A] p-4 space-y-5">
+            
+            {/* Reps/Hold Input with +/- buttons */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-[#A4ACB8]">
+                  {isHold ? 'Hold (sec)' : 'Actual Reps'}
+                </span>
+                <span className="text-xs text-[#6B7280]">Target: {targetValue}</span>
               </div>
-            </CardContent>
+              <div className="flex items-center justify-center gap-4">
+                <button
+                  onClick={() => isHold 
+                    ? onSetHold(Math.max(1, holdValue - 1)) 
+                    : onSetReps(Math.max(1, repsValue - 1))
+                  }
+                  className="w-14 h-14 rounded-xl bg-[#0F1115] border border-[#2B313A] text-[#A4ACB8] text-2xl font-bold active:bg-[#2B313A] transition-colors"
+                >
+                  -
+                </button>
+                <span className="w-20 text-center text-4xl font-bold text-[#E6E9EF] tabular-nums">
+                  {isHold ? holdValue : repsValue}
+                </span>
+                <button
+                  onClick={() => isHold 
+                    ? onSetHold(holdValue + 1) 
+                    : onSetReps(repsValue + 1)
+                  }
+                  className="w-14 h-14 rounded-xl bg-[#0F1115] border border-[#2B313A] text-[#A4ACB8] text-2xl font-bold active:bg-[#2B313A] transition-colors"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            
+            {/* RPE Quick Selector - Grid style */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-[#A4ACB8]">RPE</span>
+                <span className="text-xs text-[#6B7280]">Target: {targetRPE}</span>
+              </div>
+              <div className="grid grid-cols-5 gap-1.5">
+                {RPE_QUICK_OPTIONS.map((rpe) => (
+                  <button
+                    key={rpe}
+                    onClick={() => onSetRPE(rpe)}
+                    className={`py-3 rounded-lg text-base font-bold transition-all ${
+                      selectedRPE === rpe 
+                        ? 'bg-[#C1121F] text-white scale-[1.02]' 
+                        : 'bg-[#0F1115] text-[#A4ACB8] border border-[#2B313A] active:bg-[#2B313A]'
+                    }`}
+                  >
+                    {rpe}
+                  </button>
+                ))}
+              </div>
+            </div>
           </Card>
           
-          {/* Action Button */}
-          <Button
-            className="w-full h-14 text-lg font-bold bg-[#C1121F] hover:bg-[#A10F1A] text-white"
-            onClick={onCompleteSet}
+          {/* ========== PRIMARY ACTION ========== */}
+          <Button 
+            onClick={onCompleteSet} 
+            disabled={selectedRPE === null}
+            className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] disabled:bg-[#C1121F]/50 disabled:cursor-not-allowed text-white text-base font-bold"
           >
-            Complete Set
+            <Check className="w-5 h-5 mr-2" />
+            Log Set
           </Button>
+          
+          {/* ========== SECONDARY ACTIONS ========== */}
+          <div className="flex items-center justify-between">
+            <Button 
+              variant="ghost" 
+              onClick={onSkip}
+              className="text-[#6B7280] text-sm h-9 px-3 hover:text-[#A4ACB8]"
+            >
+              <SkipForward className="w-3.5 h-3.5 mr-1.5" />
+              Skip
+            </Button>
+            <Button 
+              variant="ghost" 
+              onClick={() => setShowExitConfirm(true)}
+              className="text-[#6B7280] text-sm h-9 px-3 hover:text-[#A4ACB8]"
+            >
+              <X className="w-3.5 h-3.5 mr-1.5" />
+              End
+            </Button>
+          </div>
         </div>
       </div>
       
-      {/* Exit Confirmation Modal */}
+      {/* ========== EXIT CONFIRMATION MODAL ========== */}
       {showExitConfirm && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <Card className="bg-[#1A1F26] border-[#2B313A] max-w-sm w-full">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-[#E6E9EF]">Exit Workout?</h3>
-                <button 
-                  onClick={() => setShowExitConfirm(false)}
-                  className="text-[#6B7280] hover:text-[#E6E9EF]"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <p className="text-sm text-[#A4ACB8] mb-6">
-                Your progress will be saved. You can resume this workout later.
-              </p>
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  className="flex-1 border-[#2B313A] text-[#E6E9EF]"
-                  onClick={() => setShowExitConfirm(false)}
-                >
-                  Continue
-                </Button>
-                <Button
-                  className="flex-1 bg-[#C1121F] hover:bg-[#A10F1A] text-white"
-                  onClick={() => {
-                    setShowExitConfirm(false)
-                    onExit()
-                  }}
-                >
-                  Exit
-                </Button>
-              </div>
-            </CardContent>
+          <Card className="bg-[#1A1F26] border-[#2B313A] max-w-sm w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-[#E6E9EF]">Exit Workout?</h3>
+              <button 
+                onClick={() => setShowExitConfirm(false)}
+                className="text-[#6B7280] hover:text-[#E6E9EF] transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-[#A4ACB8] mb-6">
+              Your progress will be saved. You can resume this workout later.
+            </p>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1 border-[#2B313A] text-[#E6E9EF] hover:bg-[#2B313A]"
+                onClick={() => setShowExitConfirm(false)}
+              >
+                Continue
+              </Button>
+              <Button
+                className="flex-1 bg-[#C1121F] hover:bg-[#A10F1A] text-white"
+                onClick={() => {
+                  setShowExitConfirm(false)
+                  onExit()
+                }}
+              >
+                Exit
+              </Button>
+            </div>
           </Card>
         </div>
       )}

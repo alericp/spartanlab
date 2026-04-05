@@ -4851,19 +4851,21 @@ function InterExerciseRestCountdown({
   }
   
   // UNIT 3: Inputs - renders input controls
+  // SINGLE SOURCE OF TRUTH: All input values come from machine state (safeHoldValue, safeRepsValue, safeSelectedRPE, safeBandUsed)
+  // Setters dispatch into machine state (setHoldValue, setRepsValue, setSelectedRPE, setBandUsed)
   const renderInputsUnit = (): React.ReactNode => {
     if (!unitStatus.inputs.enabled) return null
     try {
-      console.log('[v0] [Unit:Inputs] Rendering')
+      console.log('[v0] [Unit:Inputs] Rendering with machine-owned values:', { safeHoldValue, safeRepsValue, safeSelectedRPE, safeBandUsed })
       unitStatus.inputs.rendered = true
       return (
         <Card className="bg-[#1A1F26] border-[#2B313A] p-3 space-y-4">
           {isHoldExercise ? (
-            <RepsHoldInput type="hold" value={holdValue} onChange={setHoldValue} targetValue={targetValue} />
+            <RepsHoldInput type="hold" value={safeHoldValue} onChange={setHoldValue} targetValue={targetValue} />
           ) : (
-            <RepsHoldInput type="reps" value={repsValue} onChange={setRepsValue} targetValue={targetValue} />
+            <RepsHoldInput type="reps" value={safeRepsValue} onChange={setRepsValue} targetValue={targetValue} />
           )}
-          <RPEQuickSelector value={selectedRPE} onChange={setSelectedRPE} targetRPE={targetRPE} />
+          <RPEQuickSelector value={safeSelectedRPE} onChange={setSelectedRPE} targetRPE={targetRPE} />
           {(safeCurrentExercise.executionTruth?.bandSelectable === true || recommendedBand) && (
             <BandSelector value={safeBandUsed} onChange={setBandUsed} recommendedBand={recommendedBand} />
           )}

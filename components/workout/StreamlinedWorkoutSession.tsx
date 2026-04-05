@@ -48,6 +48,7 @@ import {
 } from '@/lib/adaptive-performance-evaluator'
 import { RPE_QUICK_OPTIONS, type RPEValue } from '@/lib/rpe-adjustment-engine'
 import { InlineRestTimer } from '@/components/workout/InlineRestTimer'
+import { ActiveWorkoutStartCorridor } from '@/components/workout/ActiveWorkoutStartCorridor'
 import { ExerciseOptionsMenu } from '@/components/workout/ExerciseOptionsMenu'
 import {
   addOverride,
@@ -5143,7 +5144,7 @@ function InterExerciseRestCountdown({
               ) : (
                 <>
                   <SkipForward className="w-5 h-5 mr-2" />
-                  Skip Rest �� Start Round {currentRound}
+                  Skip Rest ��� Start Round {currentRound}
                 </>
               )}
             </Button>
@@ -5278,6 +5279,48 @@ function InterExerciseRestCountdown({
   // [PHASE LW3] recordBootError removed - render is pure
   // ==========================================================================
   console.log('[v0] [active_corridor_entry]', { safeStatus, ACTIVE_DERIVATION_STAGE })
+
+  // ==========================================================================
+  // [ISOLATED-ACTIVE-CORRIDOR] BYPASS ENTIRE FRAGILE HOOK CHAIN
+  // This returns the isolated ActiveWorkoutStartCorridor component BEFORE
+  // any of the complex derivation chains (unit status, render functions, etc.)
+  // execute. This is the key fix - we must return EARLY to avoid the hooks.
+  // ==========================================================================
+  if (safeStatus === 'active') {
+    console.log('[v0] [active_start_click] Rendering isolated corridor component')
+    console.log('[v0] [active_start_minimal_props_ready]', {
+      sessionLabel: safeDisplayLabel,
+      exerciseName: safeCurrentExercise?.name,
+      currentSetNumber: validatedSetNumber,
+      currentExerciseIndex: safeExerciseIndex,
+    })
+    
+    return (
+      <ActiveWorkoutStartCorridor
+        sessionLabel={safeDisplayLabel || 'Workout'}
+        exerciseName={safeCurrentExercise?.name || 'Exercise'}
+        exerciseCategory={safeCurrentExercise?.category || 'general'}
+        exerciseSets={safeCurrentExercise?.sets || 3}
+        exerciseRepsOrTime={safeCurrentExercise?.repsOrTime || '8-12 reps'}
+        currentSetNumber={validatedSetNumber || 1}
+        currentExerciseIndex={safeExerciseIndex || 0}
+        totalExercises={exercises?.length || 1}
+        completedSetsCount={normalizedCompletedSets?.length || 0}
+        totalSetsCount={totalSets || 3}
+        elapsedSeconds={safeElapsedSeconds || 0}
+        repsValue={safeRepsValue || 8}
+        holdValue={safeHoldValue || 30}
+        selectedRPE={safeSelectedRPE}
+        bandUsed={safeBandUsed || 'none'}
+        onCompleteSet={handleCompleteSet}
+        onSetReps={setRepsValue}
+        onSetHold={setHoldValue}
+        onSetRPE={setSelectedRPE}
+        onSetBand={setBandUsed}
+        onExit={() => setShowExitConfirm(true)}
+      />
+    )
+  }
 
   // ==========================================================================
   // [UNIT-BASED-ACTIVE-CONTAINMENT] NAMED UNIT RENDER SYSTEM

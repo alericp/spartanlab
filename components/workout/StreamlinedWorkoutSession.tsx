@@ -4581,36 +4581,23 @@ function InterExerciseRestCountdown({
               </p>
             </div>
             
-            {/* Action Buttons */}
-            <div className="space-y-3">
-              {/* Continue / Skip Rest Button - Primary action */}
-              <Button
-                onClick={() => {
-                  console.log('[v0] [BetweenExerciseRest] Skip Rest clicked - advancing to next exercise')
-                  const nextIndex = machineState.currentExerciseIndex + 1
-                  const nextEx = machineSessionContract?.exercises[nextIndex]
-                  const nextTarget = nextEx?.repsOrTime?.match(/(\d+)/)?.[1]
-                  machineDispatch({
-                    type: 'ADVANCE_TO_NEXT_EXERCISE',
-                    nextIndex,
-                    targetValue: nextTarget ? parseInt(nextTarget, 10) : 8,
-                  })
-                }}
-                className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-lg font-bold"
-              >
-                <SkipForward className="w-5 h-5 mr-2" />
-                Skip Rest - Start Next Exercise
-              </Button>
-              
-              {/* Dev diagnostic for rest phase */}
-              {process.env.NODE_ENV === 'development' && (
-                <div className="text-xs text-[#6B7280] bg-[#1A1F26] rounded p-2 font-mono">
-                  <p>Phase: {machineState.phase}</p>
-                  <p>Rest seconds: {machineState.interExerciseRestSeconds}</p>
-                  <p>Next index: {machineState.currentExerciseIndex + 1}</p>
-                </div>
-              )}
-            </div>
+            {/* Primary Action */}
+            <Button
+              onClick={() => {
+                const nextIndex = machineState.currentExerciseIndex + 1
+                const nextEx = machineSessionContract?.exercises[nextIndex]
+                const nextTarget = nextEx?.repsOrTime?.match(/(\d+)/)?.[1]
+                machineDispatch({
+                  type: 'ADVANCE_TO_NEXT_EXERCISE',
+                  nextIndex,
+                  targetValue: nextTarget ? parseInt(nextTarget, 10) : 8,
+                })
+              }}
+              className="w-full h-16 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-lg font-bold"
+            >
+              <SkipForward className="w-5 h-5 mr-2" />
+              Start Next Exercise
+            </Button>
           </div>
         </div>
       </div>
@@ -4783,7 +4770,6 @@ function InterExerciseRestCountdown({
   const renderHeaderUnit = (): React.ReactNode => {
     if (!unitStatus.header.enabled) return null
     try {
-      console.log('[v0] [Unit:Header] Rendering')
       unitStatus.header.rendered = true
       return (
         <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
@@ -4811,9 +4797,11 @@ function InterExerciseRestCountdown({
       const msg = err instanceof Error ? err.message : 'Unknown error'
       console.error('[v0] [Unit:Header] FAILED', err)
       unitStatus.header.error = msg
+      // In production, fail silently; in dev, show error panel
+      if (process.env.NODE_ENV !== 'development') return null
       return (
         <div className="bg-red-900/20 border border-red-500/30 p-3 m-2 rounded-lg">
-          <p className="text-red-400 text-sm font-medium">Unit:Header FAILED</p>
+          <p className="text-red-400 text-sm font-medium">DEV: Unit:Header FAILED</p>
           <p className="text-red-300 text-xs mt-1">{msg}</p>
         </div>
       )
@@ -4824,7 +4812,6 @@ function InterExerciseRestCountdown({
   const renderExerciseUnit = (): React.ReactNode => {
     if (!unitStatus.exercise.enabled) return null
     try {
-      console.log('[v0] [Unit:Exercise] Rendering')
       unitStatus.exercise.rendered = true
       return (
         <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
@@ -4854,9 +4841,11 @@ function InterExerciseRestCountdown({
       const msg = err instanceof Error ? err.message : 'Unknown error'
       console.error('[v0] [Unit:Exercise] FAILED', err)
       unitStatus.exercise.error = msg
+      // In production, fail silently; in dev, show error panel
+      if (process.env.NODE_ENV !== 'development') return null
       return (
         <div className="bg-red-900/20 border border-red-500/30 p-3 rounded-lg">
-          <p className="text-red-400 text-sm font-medium">Unit:Exercise FAILED</p>
+          <p className="text-red-400 text-sm font-medium">DEV: Unit:Exercise FAILED</p>
           <p className="text-red-300 text-xs mt-1">{msg}</p>
         </div>
       )
@@ -4869,7 +4858,6 @@ function InterExerciseRestCountdown({
   const renderInputsUnit = (): React.ReactNode => {
     if (!unitStatus.inputs.enabled) return null
     try {
-      console.log('[v0] [Unit:Inputs] Rendering with machine-owned values:', { safeHoldValue, safeRepsValue, safeSelectedRPE, safeBandUsed })
       unitStatus.inputs.rendered = true
       return (
         <Card className="bg-[#1A1F26] border-[#2B313A] p-3 space-y-4">
@@ -4888,9 +4876,11 @@ function InterExerciseRestCountdown({
       const msg = err instanceof Error ? err.message : 'Unknown error'
       console.error('[v0] [Unit:Inputs] FAILED', err)
       unitStatus.inputs.error = msg
+      // In production, fail silently; in dev, show error panel
+      if (process.env.NODE_ENV !== 'development') return null
       return (
         <div className="bg-red-900/20 border border-red-500/30 p-3 rounded-lg">
-          <p className="text-red-400 text-sm font-medium">Unit:Inputs FAILED</p>
+          <p className="text-red-400 text-sm font-medium">DEV: Unit:Inputs FAILED</p>
           <p className="text-red-300 text-xs mt-1">{msg}</p>
         </div>
       )
@@ -4901,7 +4891,6 @@ function InterExerciseRestCountdown({
   const renderActionsUnit = (): React.ReactNode => {
     if (!unitStatus.actions.enabled) return null
     try {
-      console.log('[v0] [Unit:Actions] Rendering')
       unitStatus.actions.rendered = true
       return (
         <>
@@ -4922,22 +4911,28 @@ function InterExerciseRestCountdown({
       const msg = err instanceof Error ? err.message : 'Unknown error'
       console.error('[v0] [Unit:Actions] FAILED', err)
       unitStatus.actions.error = msg
+      // In production, fail silently; in dev, show error panel
+      if (process.env.NODE_ENV !== 'development') return null
       return (
         <div className="bg-red-900/20 border border-red-500/30 p-3 rounded-lg">
-          <p className="text-red-400 text-sm font-medium">Unit:Actions FAILED</p>
+          <p className="text-red-400 text-sm font-medium">DEV: Unit:Actions FAILED</p>
           <p className="text-red-300 text-xs mt-1">{msg}</p>
         </div>
       )
     }
   }
   
-  // DIAGNOSTIC PANEL - Shows which units succeeded/failed
+  // DIAGNOSTIC PANEL - DEV ONLY - Shows which units succeeded/failed
+  // Hidden in production to avoid debug UI appearing in live workout
   const renderDiagnosticPanel = (): React.ReactNode => {
+    // Only show in development mode
+    if (process.env.NODE_ENV !== 'development') return null
+    
     const firstFailingUnit = Object.entries(unitStatus).find(([, s]) => s.enabled && s.error)?.[0] || null
     return (
       <div className="fixed bottom-4 left-4 right-4 max-w-sm mx-auto bg-[#1A1F26] border border-[#2B313A] rounded-lg p-3 text-xs z-50">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[#A4ACB8] font-medium">Unit Diagnostic</span>
+          <span className="text-[#A4ACB8] font-medium">Unit Diagnostic (DEV)</span>
           <span className="text-[#6B7280]">Stage: {ACTIVE_DERIVATION_STAGE}</span>
         </div>
         <div className="space-y-1">
@@ -4960,10 +4955,11 @@ function InterExerciseRestCountdown({
   }
   
   // ==========================================================================
-  // STAGE 1 ONLY: Minimal shell with diagnostic info
+  // STAGE 1 ONLY: Minimal shell with diagnostic info (DEV ONLY)
+  // In production with stage 1, we still show the full UI to avoid confusing users
   // ==========================================================================
-  if (ACTIVE_DERIVATION_STAGE === 1) {
-    console.log('[v0] [Unit:Shell] Stage 1 - Minimal shell only')
+  if (ACTIVE_DERIVATION_STAGE === 1 && process.env.NODE_ENV === 'development') {
+    console.log('[v0] [Unit:Shell] Stage 1 - Minimal shell only (DEV)')
     unitStatus.shell.rendered = true
     const elapsed = safeElapsedSeconds || 0
     return (
@@ -4972,7 +4968,7 @@ function InterExerciseRestCountdown({
           <div className="w-16 h-16 rounded-full bg-green-900/30 border border-green-500/50 flex items-center justify-center mx-auto mb-4">
             <Dumbbell className="w-8 h-8 text-green-500" />
           </div>
-          <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Stage 1: Active Shell Works</h2>
+          <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">DEV: Stage 1 Shell</h2>
           <div className="bg-[#1A1F26] rounded-lg p-4 text-left text-sm space-y-2">
             <p className="text-[#6B7280]">Session: <span className="text-[#E6E9EF]">{safeDisplayLabel || 'Workout'}</span></p>
             <p className="text-[#6B7280]">Exercise: <span className="text-[#E6E9EF]">{safeCurrentExercise?.name || 'Exercise'}</span></p>
@@ -4990,7 +4986,6 @@ function InterExerciseRestCountdown({
   // STAGE 2+: Unit-based render with containment
   // Shell stays alive, each unit renders inside with local error handling
   // ==========================================================================
-  console.log('[v0] [Unit:Shell] Stage 2+ - Rendering units')
   unitStatus.shell.rendered = true
   
   return (
@@ -5010,16 +5005,16 @@ function InterExerciseRestCountdown({
           {/* UNIT 4: Action Buttons */}
           {renderActionsUnit()}
           
-          {/* Stage indicator when not at full render */}
-          {ACTIVE_DERIVATION_STAGE < 6 && (
+          {/* Stage indicator - DEV ONLY */}
+          {process.env.NODE_ENV === 'development' && ACTIVE_DERIVATION_STAGE < 6 && (
             <p className="text-green-500 text-sm text-center mt-4">
-              Stage {ACTIVE_DERIVATION_STAGE} active. Units up to stage {ACTIVE_DERIVATION_STAGE} rendered.
+              DEV: Stage {ACTIVE_DERIVATION_STAGE} active.
             </p>
           )}
         </div>
       </div>
       
-      {/* Diagnostic Panel */}
+      {/* Diagnostic Panel - DEV ONLY */}
       {renderDiagnosticPanel()}
     </div>
   )

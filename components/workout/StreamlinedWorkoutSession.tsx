@@ -2349,6 +2349,36 @@ export function StreamlinedWorkoutSession({
   }, [safeCurrentExercise])
   
   // ==========================================================================
+  // [EARLY-STAGE-GATE] DERIVATION STAGE CONTROLLER
+  // This gate determines which active-only derivations are allowed to run.
+  // Stage 1 = minimal shell only - NO active-only derivations
+  // Stage 2+ = progressively allow more derivations
+  // ==========================================================================
+  // [ACTIVE-DERIVATION-MAP]
+  // ALWAYS SAFE (run unconditionally):
+  //   - safeWorkoutSessionContract, safeDisplayLabel, sessionId
+  //   - machineState (reducer), safeStatus, safeCurrentExercise
+  //   - validatedSetNumber, safeExerciseIndex, safeElapsedSeconds
+  //
+  // ACTIVE-ONLY (require stage >= 2):
+  //   - sessionRuntimeTruth (stage 2+)
+  //   - exerciseRuntimeTruth (stage 3+)
+  //   - calibrationMessage (stage 3+)
+  //   - activeEntryPreparation (stage 4+)
+  //   - activeWorkoutViewModel (stage 6 only)
+  // ==========================================================================
+  const ACTIVE_DERIVATION_STAGE = 1 // Controls which derivations run (1-6) - TEST STAGE 1
+  const isActivePhase = safeStatus === 'active' || safeStatus === 'resting'
+  const shouldSkipFullDerivations = isActivePhase && ACTIVE_DERIVATION_STAGE === 1
+  
+  console.log('[v0] [early_stage_gate]', {
+    ACTIVE_DERIVATION_STAGE,
+    safeStatus,
+    isActivePhase,
+    shouldSkipFullDerivations,
+  })
+  
+  // ==========================================================================
   // [LIVE-WORKOUT-MACHINE] UNIFIED BOOT PREPARATION GUARD
   // This is a LOCAL containment layer for all post-validation boot derivations.
   // If ANY boot-critical derivation throws, we capture it here instead of crashing.
@@ -2359,7 +2389,31 @@ export function StreamlinedWorkoutSession({
   // ==========================================================================
   
   // Session runtime truth - derived directly, no parallel validation
+  // [STAGE-GATED] Only compute full truth for stage >= 2
   const sessionRuntimeTruth: SessionRuntimeTruth = useMemo(() => {
+    // STAGE 1: Skip full derivation, return minimal safe values
+    if (shouldSkipFullDerivations) {
+      console.log('[v0] [sessionRuntimeTruth] SKIPPED - stage 1 mode')
+      return {
+        sessionId: sessionId,
+        programId: null,
+        dayNumber: 1,
+        dayLabel: safeDisplayLabel || 'Workout',
+        currentExerciseCount: 1,
+        totalExerciseCount: exercises.length || 1,
+        totalSetCount: totalSets || 3,
+        adaptationConfidence: 'low' as const,
+        firstWorkoutsCalibrationMode: true,
+        workoutsCompletedInProgram: 0,
+        supportsBackNavigation: false,
+        supportsBetweenExerciseRest: false,
+        supportsNotesCapture: false,
+        supportsTimerAlerts: false,
+        sessionFocus: 'general',
+        estimatedDurationMinutes: 30,
+      }
+    }
+    
     if (!hasValidExercises) {
       return {
         sessionId: sessionId,
@@ -2411,7 +2465,39 @@ export function StreamlinedWorkoutSession({
   }, [hasValidExercises, sessionId, safeWorkoutSessionContract, safeExerciseIndex, exercises.length, totalSets])
   
   // Exercise runtime truth - derived directly, no parallel validation
+  // [STAGE-GATED] Only compute full truth for stage >= 3
   const exerciseRuntimeTruth: ExerciseRuntimeTruth = useMemo(() => {
+    // STAGE 1-2: Skip full derivation, return minimal safe values
+    if (shouldSkipFullDerivations || (isActivePhase && ACTIVE_DERIVATION_STAGE < 3)) {
+      console.log('[v0] [exerciseRuntimeTruth] SKIPPED - stage < 3 mode')
+      return {
+        exerciseId: safeCurrentExercise?.id || 'fallback',
+        exerciseName: safeCurrentExercise?.name || 'Exercise',
+        originalName: safeCurrentExercise?.name || 'Exercise',
+        category: safeCurrentExercise?.category || 'general',
+        displayType: 'reps' as const,
+        targetValue: 10,
+        targetUnit: 'reps',
+        targetRPE: 7,
+        restSecondsIntraSet: 90,
+        restSecondsInterExercise: 120,
+        progressionFamily: null,
+        progressionMode: 'fixed' as const,
+        canAdjustProgression: false,
+        progressionFallbacks: [],
+        supportsBandAdjustment: false,
+        recommendedBandColor: null,
+        supportsNotes: true,
+        supportsPainFlag: true,
+        supportsFatigueFlag: true,
+        availableContextFlags: [],
+        isFixedPrescription: false,
+        calibrationState: 'needs_calibration' as const,
+        setHistory: [],
+        lastSessionPerformance: null,
+      }
+    }
+    
     if (!hasValidExercises || !safeCurrentExercise) {
       return {
         exerciseId: 'fallback',
@@ -2504,8 +2590,25 @@ export function StreamlinedWorkoutSession({
   // [LIVE-WORKOUT-MACHINE] DERIVED ACTIVE ENTRY VALUES
   // These are helper values for active UI display, derived from machine state.
   // [ACTIVE-CORRIDOR-CONTAINMENT] Wrapped in try-catch to prevent escape
+  // [STAGE-GATED] Only compute full values for stage >= 4
   // ==========================================================================
   const activeEntryPreparation = useMemo(() => {
+    // STAGE 1-3: Skip full derivation, return minimal safe values
+    if (shouldSkipFullDerivations || (isActivePhase && ACTIVE_DERIVATION_STAGE < 4)) {
+      console.log('[v0] [activeEntryPreparation] SKIPPED - stage < 4 mode')
+      return {
+        ok: true as const,
+        failureStage: null,
+        failureReason: null,
+        targetValue: 8,
+        recommendedBand: undefined,
+        targetRPE: 8,
+        isHoldExercise: false,
+        displaySets: `${safeCurrentExercise?.sets ?? 3} sets`,
+        displayRepsTime: safeCurrentExercise?.repsOrTime ?? '8-12 reps',
+      }
+    }
+    
     try {
     // Parse target value from current exercise
     let targetValue = 8
@@ -2604,8 +2707,42 @@ export function StreamlinedWorkoutSession({
   // Single authoritative model for all active render values.
   // [PHASE LW3] Now pure - no boot ledger writes during render
   // [ACTIVE-CORRIDOR-CONTAINMENT] Wrapped in try-catch to prevent escape
+  // [STAGE-GATED] Only compute full view model for stage 6
   // ==========================================================================
   const activeWorkoutViewModel = useMemo(() => {
+    // STAGE 1-5: Skip full derivation, return minimal safe view model
+    if (shouldSkipFullDerivations || (isActivePhase && ACTIVE_DERIVATION_STAGE < 6)) {
+      console.log('[v0] [activeWorkoutViewModel] SKIPPED - stage < 6 mode')
+      return {
+        sessionId: sessionId || 'unknown-session',
+        dayLabel: safeDisplayLabel || 'Workout',
+        dayNumber: 1,
+        totalExercises: exercises.length || 1,
+        totalSets: totalSets || 3,
+        completedSetsCount: completedSetsCount || 0,
+        currentExerciseIndex: safeExerciseIndex || 0,
+        currentSetNumber: validatedSetNumber || 1,
+        currentExerciseName: safeCurrentExercise?.name || 'Exercise',
+        currentExerciseCategory: safeCurrentExercise?.category || 'general',
+        currentExerciseSets: safeCurrentExercise?.sets || 3,
+        currentExerciseRepsOrTime: safeCurrentExercise?.repsOrTime || '8-12 reps',
+        currentExerciseNote: safeCurrentExercise?.note || '',
+        hasNextExercise: false,
+        nextExerciseName: null,
+        nextExerciseCategory: null,
+        isHoldType: false,
+        hasLoad: false,
+        isLastExercise: false,
+        isLastSet: false,
+        isWorkoutComplete: false,
+        setDisplay: `Set ${validatedSetNumber || 1}/${safeCurrentExercise?.sets || 3}`,
+        exerciseProgress: `1/${exercises.length || 1}`,
+        setsProgress: `0/${totalSets || 3}`,
+        loadDisplay: null,
+        isValid: hasValidExercises && !!safeCurrentExercise,
+      }
+    }
+    
     try {
     // Core session identity
     const safeSessionId = sessionId || 'unknown-session'
@@ -4602,10 +4739,11 @@ function InterExerciseRestCountdown({
   //   STAGE 5 = secondary actions + complete button
   //   STAGE 6 = full render (all modals, ExerciseOptionsMenu, effects)
   // ==========================================================================
-  const ACTIVE_REINTRODUCTION_STAGE = 6 // Full render to test
+  // [UNIFIED] Use ACTIVE_DERIVATION_STAGE from early gate for both derivations and JSX
+  // This ensures derivations and JSX are always in sync
   
   // STAGE 1: Minimal shell only
-  if (ACTIVE_REINTRODUCTION_STAGE === 1) {
+  if (ACTIVE_DERIVATION_STAGE === 1) {
     try {
       const stage1_label = safeDisplayLabel || 'Workout'
       const stage1_exercise = safeCurrentExercise?.name || 'Exercise'
@@ -4641,7 +4779,7 @@ function InterExerciseRestCountdown({
   }
   
   // STAGE 2: Active header with progress bar
-  if (ACTIVE_REINTRODUCTION_STAGE === 2) {
+  if (ACTIVE_DERIVATION_STAGE === 2) {
     try {
       console.log('[v0] [staged_active_stage2] Testing header render')
       return (
@@ -4678,7 +4816,7 @@ function InterExerciseRestCountdown({
   }
   
   // STAGE 3: Main exercise card (inline only, no ExerciseOptionsMenu)
-  if (ACTIVE_REINTRODUCTION_STAGE === 3) {
+  if (ACTIVE_DERIVATION_STAGE === 3) {
     try {
       console.log('[v0] [staged_active_stage3] Testing exercise card render')
       return (
@@ -4735,7 +4873,7 @@ function InterExerciseRestCountdown({
   }
   
   // STAGE 4: Add input controls (RepsHoldInput, RPEQuickSelector, BandSelector)
-  if (ACTIVE_REINTRODUCTION_STAGE === 4) {
+  if (ACTIVE_DERIVATION_STAGE === 4) {
     try {
       console.log('[v0] [staged_active_stage4] Testing input controls')
       return (
@@ -4778,7 +4916,7 @@ function InterExerciseRestCountdown({
   }
   
   // STAGE 5: Add complete button and secondary actions
-  if (ACTIVE_REINTRODUCTION_STAGE === 5) {
+  if (ACTIVE_DERIVATION_STAGE === 5) {
     try {
       console.log('[v0] [staged_active_stage5] Testing action buttons')
       return (

@@ -239,17 +239,22 @@ export function InlineRestTimer({
         {/* Controls */}
         {!isComplete ? (
           <div className="space-y-4">
-            {/* Time Adjustment Row */}
-            <div className="flex items-center justify-center gap-3">
-              <Button
-                size="lg"
-                variant="outline"
-                onClick={() => adjustTime(-30)}
-                className="h-12 w-12 p-0 border-[#2B313A] text-[#A4ACB8] hover:text-[#E6E9EF] hover:border-[#3A4553]"
-              >
-                <Minus className="w-5 h-5" />
-              </Button>
+            {/* Time Adjustment Row - Labels directly under buttons */}
+            <div className="flex items-start justify-center gap-3">
+              {/* Minus control group */}
+              <div className="flex flex-col items-center">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => adjustTime(-30)}
+                  className="h-12 w-12 p-0 border-[#2B313A] text-[#A4ACB8] hover:text-[#E6E9EF] hover:border-[#3A4553]"
+                >
+                  <Minus className="w-5 h-5" />
+                </Button>
+                <span className="text-xs text-[#6B7280] mt-1">-30s</span>
+              </div>
               
+              {/* Pause/Resume control */}
               <Button
                 size="lg"
                 onClick={handlePlayPause}
@@ -272,21 +277,25 @@ export function InlineRestTimer({
                 )}
               </Button>
               
-              <Button
-                size="lg"
-                variant="outline"
-                onClick={() => adjustTime(30)}
-                className="h-12 w-12 p-0 border-[#2B313A] text-[#A4ACB8] hover:text-[#E6E9EF] hover:border-[#3A4553]"
-              >
-                <Plus className="w-5 h-5" />
-              </Button>
+              {/* Plus control group */}
+              <div className="flex flex-col items-center">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => adjustTime(30)}
+                  className="h-12 w-12 p-0 border-[#2B313A] text-[#A4ACB8] hover:text-[#E6E9EF] hover:border-[#3A4553]"
+                >
+                  <Plus className="w-5 h-5" />
+                </Button>
+                <span className="text-xs text-[#6B7280] mt-1">+30s</span>
+              </div>
             </div>
             
-            {/* Skip Button */}
+            {/* Skip Button - Primary action during rest */}
             <Button
-              variant="ghost"
+              variant="outline"
               onClick={handleSkip}
-              className="text-[#6B7280] hover:text-[#A4ACB8] w-full"
+              className="w-full h-12 border-[#2B313A] text-[#A4ACB8] hover:text-[#E6E9EF] hover:border-[#3A4553] hover:bg-[#2B313A]/50"
             >
               <SkipForward className="w-4 h-4 mr-2" />
               Skip Rest
@@ -325,14 +334,6 @@ export function InlineRestTimer({
         )}
       </div>
 
-      {/* Time adjustment labels */}
-      {!isComplete && (
-        <div className="px-4 pb-3 flex items-center justify-center gap-8 text-xs text-[#6B7280]">
-          <span>-30s</span>
-          <span className="text-[#4B5563]">|</span>
-          <span>+30s</span>
-        </div>
-      )}
     </Card>
   )
 }

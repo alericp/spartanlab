@@ -138,6 +138,11 @@ export type WorkoutMachineAction =
   | { type: 'ENTER_INVALID'; reason: string; stage: string }
   | { type: 'RETRY' }
   | { type: 'RESET_TO_READY' }
+  // Grouped execution actions
+  | { type: 'COMPLETE_BLOCK_SET'; completedSet: CompletedSet; block: ExecutionBlock; memberIndex: number; round: number }
+  | { type: 'ADVANCE_TO_NEXT_BLOCK_MEMBER'; nextMemberIndex: number; nextExerciseIndex: number; targetValue: number }
+  | { type: 'COMPLETE_BLOCK_ROUND'; restSeconds: number }
+  | { type: 'ADVANCE_TO_NEXT_BLOCK'; nextBlockIndex: number; nextExerciseIndex: number; targetValue: number }
 
 // =============================================================================
 // INITIAL STATE
@@ -410,6 +415,91 @@ export function workoutMachineReducer(
       return {
         ...state,
         phase: 'ready',
+      }
+    
+    // =========================================================================
+    // GROUPED EXECUTION (Supersets / Circuits)
+    // =========================================================================
+    
+    case 'COMPLETE_BLOCK_SET': {
+      const { completedSet, block, memberIndex, round } = action
+      const newCompletedSets = [...state.completedSets, completedSet]
+      const isLastMember = memberIndex >= block.memberExercises.length - 1
+      const isLastRound = round >= block.targetRounds
+      
+      if (isLastMember && isLastRound) {
+        // Block complete
+        return {
+          ...state,
+          phase: 'between_exercise_rest',
+          completedSets: newCompletedSets,
+          lastSetRPE: completedSet.actualRPE,
+          selectedRPE: null,
+          interExerciseRestSeconds: block.postBlockRestSeconds,
+        }
+      }
+      
+      if (isLastMember) {
+        // Round complete but more rounds to go
+        return {
+          ...state,
+          phase: 'block_round_rest',
+          completedSets: newCompletedSets,
+          currentMemberIndex: 0,
+          currentRound: round + 1,
+          lastSetRPE: completedSet.actualRPE,
+          selectedRPE: null,
+          blockRoundRestSeconds: block.postRoundRestSeconds,
+        }
+      }
+      
+      // More members in this round
+      return {
+        ...state,
+        phase: block.intraBlockRestSeconds > 0 ? 'resting' : 'active',
+        completedSets: newCompletedSets,
+        currentMemberIndex: memberIndex + 1,
+        currentExerciseIndex: block.memberExerciseIndexes[memberIndex + 1] ?? state.currentExerciseIndex,
+        lastSetRPE: completedSet.actualRPE,
+        selectedRPE: null,
+        interExerciseRestSeconds: block.intraBlockRestSeconds,
+      }
+    }
+    
+    case 'ADVANCE_TO_NEXT_BLOCK_MEMBER':
+      return {
+        ...state,
+        phase: 'active',
+        currentMemberIndex: action.nextMemberIndex,
+        currentExerciseIndex: action.nextExerciseIndex,
+        repsValue: action.targetValue,
+        holdValue: action.targetValue,
+        bandUsed: 'none',
+        interExerciseRestSeconds: 0,
+        blockRoundRestSeconds: 0,
+      }
+    
+    case 'COMPLETE_BLOCK_ROUND':
+      return {
+        ...state,
+        phase: 'block_round_rest',
+        blockRoundRestSeconds: action.restSeconds,
+        currentMemberIndex: 0,
+      }
+    
+    case 'ADVANCE_TO_NEXT_BLOCK':
+      return {
+        ...state,
+        phase: 'active',
+        currentBlockIndex: action.nextBlockIndex,
+        currentExerciseIndex: action.nextExerciseIndex,
+        currentMemberIndex: 0,
+        currentRound: 1,
+        repsValue: action.targetValue,
+        holdValue: action.targetValue,
+        bandUsed: 'none',
+        interExerciseRestSeconds: 0,
+        blockRoundRestSeconds: 0,
       }
     
     default:

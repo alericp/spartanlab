@@ -485,6 +485,28 @@ export function ActiveWorkoutStartCorridor({
                     {Math.floor(restTimeRemaining / 60)}:{(restTimeRemaining % 60).toString().padStart(2, '0')}
                   </div>
                   
+                  {/* [UI-CLEANUP-FIX] Timer Adjustment Controls: -30s / +30s */}
+                  <div className="flex items-center justify-center gap-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] hover:text-[#E6E9EF] px-4"
+                      onClick={() => setRestTimeRemaining(prev => Math.max(0, prev - 30))}
+                      disabled={restTimeRemaining <= 0}
+                    >
+                      -30s
+                    </Button>
+                    <span className="text-xs text-[#6B7280]">Adjust</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] hover:text-[#E6E9EF] px-4"
+                      onClick={() => setRestTimeRemaining(prev => prev + 30)}
+                    >
+                      +30s
+                    </Button>
+                  </div>
+                  
                   {/* Timer Progress Bar */}
                   <div className="h-2 bg-[#2B313A] rounded-full overflow-hidden">
                     <div 
@@ -826,7 +848,7 @@ export function ActiveWorkoutStartCorridor({
       </div>
       
       {/* ========== EXIT CONFIRMATION MODAL ========== */}
-      {/* [EXIT-INTENT-FIX] Three distinct user intents: Continue, Save & Exit, Discard Workout */}
+      {/* [UI-CLEANUP-FIX] Clean single-owner modal with inline explanations, no duplicate surfaces */}
       {showExitConfirm && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
           <Card className="bg-[#1A1F26] border-[#2B313A] max-w-sm w-full p-6">
@@ -840,59 +862,49 @@ export function ActiveWorkoutStartCorridor({
               </button>
             </div>
             
-            {/* Clear explanation of options */}
-            <div className="space-y-4 mb-6">
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-[#0F1115] border border-[#2B313A]">
-                <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-[#E6E9EF]">Save & Exit</p>
-                  <p className="text-xs text-[#6B7280]">Your progress will be saved. Resume anytime.</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-[#0F1115] border border-[#2B313A]">
-                <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-[#E6E9EF]">Discard Workout</p>
-                  <p className="text-xs text-[#6B7280]">Delete this session. Progress will be lost.</p>
-                </div>
-              </div>
-            </div>
+            <p className="text-sm text-[#A4ACB8] mb-5">
+              Choose how you want to exit this workout session.
+            </p>
             
-            {/* Action buttons - stacked for clarity */}
-            <div className="space-y-2">
+            {/* Single clean button stack with inline explanations */}
+            <div className="space-y-3">
               <Button
                 variant="outline"
-                className="w-full border-[#2B313A] text-[#E6E9EF] hover:bg-[#2B313A]"
+                className="w-full h-auto py-3 border-[#2B313A] text-[#E6E9EF] hover:bg-[#2B313A] flex flex-col items-center"
                 onClick={() => setShowExitConfirm(false)}
               >
-                Continue Workout
+                <span className="font-medium">Continue Workout</span>
               </Button>
+              
               <Button
-                className="w-full bg-[#C1121F] hover:bg-[#A10F1A] text-white"
+                className="w-full h-auto py-3 bg-[#C1121F] hover:bg-[#A10F1A] text-white flex flex-col items-center"
                 onClick={() => {
                   setShowExitConfirm(false)
                   if (onSaveAndExit) {
                     onSaveAndExit()
                   } else {
-                    onExit() // Fallback to legacy behavior
+                    onExit()
                   }
                 }}
               >
-                Save & Exit
+                <span className="font-medium">Save & Exit</span>
+                <span className="text-xs opacity-80 mt-0.5">Resume anytime</span>
               </Button>
+              
               <Button
                 variant="ghost"
-                className="w-full text-[#6B7280] hover:text-red-400 hover:bg-red-500/10"
+                className="w-full h-auto py-3 text-[#6B7280] hover:text-red-400 hover:bg-red-500/10 flex flex-col items-center"
                 onClick={() => {
                   setShowExitConfirm(false)
                   if (onDiscardWorkout) {
                     onDiscardWorkout()
                   } else {
-                    onExit() // Fallback to legacy behavior
+                    onExit()
                   }
                 }}
               >
-                Discard Workout
+                <span className="font-medium">Discard Workout</span>
+                <span className="text-xs opacity-80 mt-0.5">Progress will be lost</span>
               </Button>
             </div>
           </Card>

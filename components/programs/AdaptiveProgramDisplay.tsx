@@ -2137,13 +2137,15 @@ export function AdaptiveProgramDisplay({
       <div className="space-y-4">
         <h4 className="text-lg font-bold">Training Sessions</h4>
   {validSessions.length > 0 ? (
-  validSessions.map((session) => (
+  validSessions.map((session, sessionIndex) => (
   <AdaptiveSessionCard
   // [TASK 2] Use stable session identity that changes when program changes
   // This forces React to remount cards after regeneration, clearing stale variant state
   key={`${program.id}-${session.dayNumber}-${session.name || session.focusLabel}`}
   session={session}
   programId={program.id} // [TASK 4] Pass programId for variant state reset
+  // [UI-CLEANUP-FIX] Only first session (today's workout) auto-expands, rest are collapsed
+  defaultExpanded={sessionIndex === 0}
               onExerciseReplace={
                 onExerciseReplace 
                   ? (exerciseId) => onExerciseReplace(session.dayNumber, exerciseId)

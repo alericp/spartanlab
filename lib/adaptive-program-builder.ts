@@ -7926,21 +7926,52 @@ async function generateAdaptiveProgramImpl(
       session.exercises?.some(e => e.category === 'skill' && e.selectionReason?.includes('primary'))
     
     if (shouldApplySupersets && session.exercises && session.exercises.length >= 4) {
-      // Find accessory/support exercises that can be safely supersetted
-      // Never superset primary skill work or heavy strength work
-      const supersetCandidates = session.exercises.filter(ex => 
-        ex.category !== 'skill' && 
-        !ex.selectionReason?.includes('primary') &&
-        !ex.name?.toLowerCase().includes('weighted') &&
-        !ex.name?.toLowerCase().includes('heavy')
-      )
+      // [SUPERSET-ELIGIBILITY-FIX] Find TRUE accessory/support exercises that can be safely supersetted
+      // Never superset: skill work, primary strength, power/explosive movements, or heavy loaded work
+      // These require full rest and dedicated focus - they are NOT accessory work
+      const supersetCandidates = session.exercises.filter(ex => {
+        const nameLower = ex.name?.toLowerCase() || ''
+        
+        // EXCLUDE: Skill category exercises
+        if (ex.category === 'skill') return false
+        
+        // EXCLUDE: Primary selection reason exercises (main session pillars)
+        if (ex.selectionReason?.includes('primary')) return false
+        
+        // EXCLUDE: Weighted/heavy strength work
+        if (nameLower.includes('weighted') || nameLower.includes('heavy')) return false
+        
+        // EXCLUDE: Power/explosive/plyometric movements - these require full rest
+        // Exercises like "Explosive Pull-Ups" should NOT be in accessory supersets
+        if (nameLower.includes('explosive') || 
+            nameLower.includes('power') || 
+            nameLower.includes('plyometric') ||
+            nameLower.includes('dynamic') ||
+            nameLower.includes('ballistic') ||
+            nameLower.includes('jumping') ||
+            nameLower.includes('clapping')) return false
+        
+        // EXCLUDE: Main compound strength movements that function as session pillars
+        // Even without "primary" tag, these should stay straight
+        if (nameLower.includes('muscle-up') || 
+            nameLower.includes('front lever') || 
+            nameLower.includes('back lever') ||
+            nameLower.includes('planche') ||
+            nameLower.includes('iron cross')) return false
+        
+        return true
+      })
       
+      // [SUPERSET-PAIRING-FIX] Pair from the END of the candidate array (true accessory/core tail)
+      // NOT from the front - earlier exercises are often more important even if they pass the filter
       // Group into pairs for supersets (max 2 superset pairs per session)
       if (supersetCandidates.length >= 2) {
         const pairsToCreate = Math.min(2, Math.floor(supersetCandidates.length / 2))
         let pairsCreated = 0
         
-        for (let i = 0; i < supersetCandidates.length - 1 && pairsCreated < pairsToCreate; i += 2) {
+        // Start from the END of the candidate array and work backwards
+        // This ensures we pair the true accessory/core tail, not earlier strength-support work
+        for (let i = supersetCandidates.length - 2; i >= 0 && pairsCreated < pairsToCreate; i -= 2) {
           const ex1 = supersetCandidates[i]
           const ex2 = supersetCandidates[i + 1]
           

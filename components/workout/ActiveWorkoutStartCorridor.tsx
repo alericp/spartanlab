@@ -321,11 +321,12 @@ export function ActiveWorkoutStartCorridor({
   onRestComplete,
 }: ActiveWorkoutCorridorProps) {
   // [AUTHORITATIVE_RENDER_OWNER] Corridor is rendering - log ownership
-  console.log('[AUTHORITATIVE_RENDER_OWNER]', {
-    component: 'ActiveWorkoutStartCorridor',
+  console.log('[AUTHORITATIVE_RENDER_OWNER] ActiveWorkoutStartCorridor rendering', {
     mode,
     currentSetNumber,
     completedSetsCount,
+    exerciseName,
+    isRestingMode: mode === 'resting',
   })
   const isHold = isHoldExercise(exerciseRepsOrTime)
   const targetValue = parseTargetValue(exerciseRepsOrTime)

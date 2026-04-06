@@ -3573,7 +3573,9 @@ export function StreamlinedWorkoutSession({
         isLastSetOfExercise: isLastSet,
         exerciseCount: exercises.length,
       })
-      // Machine now owns all transitions - no legacy dispatch needed
+      // Machine now owns all transitions - reducer will set phase to 'resting' for non-final sets
+      // The next render will see safeStatus === 'resting' and corridor will show rest timer
+      console.log('[POST_LOG_DISPATCH_COMPLETE] COMPLETE_SET dispatched, next render should show resting mode')
     // [CRASH-FIX] Removed liveSession dep, use machine-derived values
     }, [validatedSetNumber, safeRepsValue, safeHoldValue, safeSelectedRPE, safeBandUsed, safeCurrentExercise, safeExerciseIndex, isHoldExercise, exercises, machineSessionContract, machineState, machineDispatch])
   

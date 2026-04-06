@@ -319,22 +319,28 @@ export function deriveExecutionPlan(exercises: ExerciseWithMeta[]): ExecutionPla
     const memberCount = currentBlockExercises.length
     
     // Determine group type
+    // [GROUPED-FIX] A single-member block must NOT be classified as grouped, even if method contains cluster/superset/circuit
+    // Grouped UI only makes sense for blocks with 2+ exercises done together
     let groupType: GroupType = null
     let blockLabel = firstEx.name
     
-    if (method.includes('superset') || (memberCount === 2 && currentBlockId)) {
-      groupType = 'superset'
-      blockCounter++
-      blockLabel = `Superset ${String.fromCharCode(64 + blockCounter)}` // A, B, C...
-    } else if (method.includes('circuit') || memberCount > 2) {
-      groupType = 'circuit'
-      blockCounter++
-      blockLabel = `Circuit ${blockCounter}`
-    } else if (method.includes('cluster')) {
-      groupType = 'cluster'
-      blockCounter++
-      blockLabel = `Cluster ${blockCounter}`
+    // Only classify as grouped if there are actually multiple members in the block
+    if (memberCount >= 2) {
+      if (method.includes('superset') || (memberCount === 2 && currentBlockId)) {
+        groupType = 'superset'
+        blockCounter++
+        blockLabel = `Superset ${String.fromCharCode(64 + blockCounter)}` // A, B, C...
+      } else if (method.includes('circuit') || memberCount > 2) {
+        groupType = 'circuit'
+        blockCounter++
+        blockLabel = `Circuit ${blockCounter}`
+      } else if (method.includes('cluster')) {
+        groupType = 'cluster'
+        blockCounter++
+        blockLabel = `Cluster ${blockCounter}`
+      }
     }
+    // Single-member blocks remain groupType = null (normal set-by-set execution)
     
     // For grouped blocks, targetRounds = sets of each exercise
     const targetRounds = groupType ? (firstEx.sets || 3) : 1

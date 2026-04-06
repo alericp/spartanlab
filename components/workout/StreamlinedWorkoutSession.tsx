@@ -219,22 +219,28 @@ function deriveExecutionPlanFromExercises(exercises: MachineExercise[]): Executi
     const memberCount = currentBlockExercises.length
     
     // Determine group type
+    // [GROUPED-FIX] A single-member block must NOT be classified as grouped, even if method contains cluster/superset/circuit
+    // Grouped UI only makes sense for blocks with 2+ exercises done together
     let groupType: 'superset' | 'circuit' | 'cluster' | null = null
     let blockLabel = firstEx.name
     
-    if (method.includes('superset') || (memberCount === 2 && currentBlockId)) {
-      groupType = 'superset'
-      blockCounter++
-      blockLabel = `Superset ${String.fromCharCode(64 + blockCounter)}` // A, B, C...
-    } else if (method.includes('circuit') || memberCount > 2) {
-      groupType = 'circuit'
-      blockCounter++
-      blockLabel = `Circuit ${blockCounter}`
-    } else if (method.includes('cluster')) {
-      groupType = 'cluster'
-      blockCounter++
-      blockLabel = `Cluster ${blockCounter}`
+    // Only classify as grouped if there are actually multiple members in the block
+    if (memberCount >= 2) {
+      if (method.includes('superset') || (memberCount === 2 && currentBlockId)) {
+        groupType = 'superset'
+        blockCounter++
+        blockLabel = `Superset ${String.fromCharCode(64 + blockCounter)}` // A, B, C...
+      } else if (method.includes('circuit') || memberCount > 2) {
+        groupType = 'circuit'
+        blockCounter++
+        blockLabel = `Circuit ${blockCounter}`
+      } else if (method.includes('cluster')) {
+        groupType = 'cluster'
+        blockCounter++
+        blockLabel = `Cluster ${blockCounter}`
+      }
     }
+    // Single-member blocks remain groupType = null (normal set-by-set execution)
     
     // For grouped blocks, targetRounds = sets of each exercise
     const targetRounds = groupType ? (firstEx.sets || 3) : 1
@@ -5343,7 +5349,11 @@ function InterExerciseRestCountdown({
     const corridorBandSelectable = safeCurrentExercise?.executionTruth?.bandSelectable === true || !!corridorRecommendedBand
     
     // Build recent sets for ledger (last 3 completed sets)
-    const corridorRecentSets = normalizedCompletedSets.slice(-3).map(set => ({
+    // [RECENT-SETS-FIX] Filter recent sets by CURRENT EXERCISE only, not global last 3
+    const currentExerciseCompletedSets = normalizedCompletedSets.filter(
+      s => s.exerciseIndex === safeExerciseIndex
+    )
+    const corridorRecentSets = currentExerciseCompletedSets.slice(-3).map(set => ({
       setNumber: set.setNumber,
       actualReps: set.actualReps || 0,
       holdSeconds: set.holdSeconds,

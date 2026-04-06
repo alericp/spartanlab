@@ -3504,14 +3504,6 @@ export function StreamlinedWorkoutSession({
   const handleCompleteSet = useCallback(() => {
     const currentIndex = safeExerciseIndex
     
-    // [FLOW_TRACE] Log pre-dispatch state
-    console.log('[v0] [FLOW_TRACE] handleCompleteSet BEFORE dispatch', {
-      currentPhase: machineState.phase,
-      currentSetNumber: validatedSetNumber,
-      exerciseIndex: currentIndex,
-      completedSetsCount: machineState.completedSets.length,
-    })
-    
     // Build completed set data with notes and grouped context
       const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, currentIndex)
       const setData: CompletedSetData = {
@@ -3561,13 +3553,6 @@ export function StreamlinedWorkoutSession({
         completedSet: setData,
         isLastSetOfExercise: isLastSet,
         exerciseCount: exercises.length,
-      })
-      
-      // [FLOW_TRACE] Log AFTER dispatch - next render will pick up new phase
-      console.log('[v0] [FLOW_TRACE] handleCompleteSet AFTER dispatch', {
-        dispatched: 'COMPLETE_SET',
-        isLastSet,
-        expectedNextPhase: isLastSet ? 'between_exercise_rest or completed' : 'resting',
       })
     // [CRASH-FIX] Removed liveSession dep, use machine-derived values
     }, [validatedSetNumber, safeRepsValue, safeHoldValue, safeSelectedRPE, safeBandUsed, safeCurrentExercise, safeExerciseIndex, isHoldExercise, exercises, machineSessionContract, machineState, machineDispatch])
@@ -4362,17 +4347,9 @@ if (shouldShowLocalFallback) {
   
   // [LIVE-WORKOUT-MACHINE] Use safeStatus from machine
   if (safeStatus === 'ready') {
-    // [FLOW_TRACE] Ready gate entered - check if this is expected
-    console.log('[v0] [FLOW_TRACE] Ready render gate ENTERED', {
-      safeStatus,
-      machinePhase: machineState.phase,
-      completedSetsCount: machineState.completedSets.length,
-      startTime: machineState.startTime,
-    })
-    
-    // [POST_LOG_READY_REGRESSION] Check if this is a regression - ready with progress means state was lost
+    // [LIVE-PHASE-ASSERTION] Guard against ready render during live execution
     if (machineState.completedSets.length > 0 || machineState.startTime !== null) {
-      console.error('[v0] [FLOW_TRACE] BUG: Ready state with active progress!', {
+      console.error('[v0] [LIVE-PHASE-ASSERTION] BUG: Ready shell entered with active progress!', {
         machinePhase: machineState.phase,
         completedSetsCount: machineState.completedSets.length,
         startTime: machineState.startTime,
@@ -4910,9 +4887,11 @@ function InterExerciseRestCountdown({
   
   // ==========================================================================
   // RENDER: BETWEEN-EXERCISE REST STATE (machine phase)
+  // [OWNERSHIP-FIX] BYPASSED - Now handled by ActiveWorkoutStartCorridor via restType='between_exercise'
+  // This block was intercepting the flow before corridor could render. Corridor owns all live phases now.
   // ==========================================================================
   
-  if (machineState.phase === 'between_exercise_rest') {
+  if (false && machineState.phase === 'between_exercise_rest') {
     // Derive next exercise info from machine view model
     const betweenRestVM = viewModel.phase === 'between_exercise_rest' ? viewModel : null
     const nextExName = betweenRestVM?.nextExerciseName ?? 'Next Exercise'
@@ -5317,14 +5296,6 @@ function InterExerciseRestCountdown({
   // continuation. This prevents post-log render drift to the start shell.
   // ==========================================================================
   if (safeStatus === 'active' || safeStatus === 'resting') {
-    // [FLOW_TRACE] Corridor render gate reached
-    console.log('[v0] [FLOW_TRACE] Corridor render gate ENTERED', {
-      safeStatus,
-      machinePhase: machineState.phase,
-      currentSetNumber: validatedSetNumber,
-      completedSetsCount: normalizedCompletedSets.length,
-    })
-    
     // Determine corridor mode
     const corridorMode = safeStatus === 'resting' ? 'resting' : 'active'
     
@@ -5383,17 +5354,22 @@ function InterExerciseRestCountdown({
       machineDispatch({ type: 'TOGGLE_REASON_TAG', tag })
     }
     
-    // Rest duration based on last set RPE
+    // Determine rest type and next exercise for between-exercise transitions
+    const isBetweenExerciseRest = machineState.phase === 'between_exercise_rest'
+    const restType = isBetweenExerciseRest ? 'between_exercise' as const : 'same_exercise' as const
+    
+    // Rest duration based on rest type and RPE
     const getRestDuration = () => {
+      if (isBetweenExerciseRest) {
+        // Between-exercise rest uses machine-tracked inter-exercise rest seconds
+        return machineState.interExerciseRestSeconds || 90
+      }
+      // Same-exercise rest based on RPE
       if (!safeLastSetRPE) return 90
       if (safeLastSetRPE >= 9) return 180 // 3 min for RPE 9-10
       if (safeLastSetRPE >= 8) return 120 // 2 min for RPE 8
       return 90 // 1.5 min for RPE 6-7
     }
-    
-    // Determine rest type and next exercise for between-exercise transitions
-    const isBetweenExerciseRest = machineState.phase === 'between_exercise_rest'
-    const restType = isBetweenExerciseRest ? 'between_exercise' as const : 'same_exercise' as const
     const nextExerciseIndex = safeExerciseIndex + 1
     const nextExerciseName = nextExerciseIndex < exercises.length 
       ? exercises[nextExerciseIndex]?.name 

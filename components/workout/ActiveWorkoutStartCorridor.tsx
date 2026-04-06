@@ -324,14 +324,7 @@ export function ActiveWorkoutStartCorridor({
   onSkip,
   onRestComplete,
 }: ActiveWorkoutCorridorProps) {
-  // [FLOW_TRACE] Log corridor render
-  console.log('[v0] [FLOW_TRACE] ActiveWorkoutStartCorridor RENDER', {
-    mode,
-    currentSetNumber,
-    completedSetsCount,
-    exerciseName,
-    restType,
-  })
+
   const isHold = isHoldExercise(exerciseRepsOrTime)
   const targetValue = parseTargetValue(exerciseRepsOrTime)
   const progressPercent = totalSetsCount > 0 ? (completedSetsCount / totalSetsCount) * 100 : 0

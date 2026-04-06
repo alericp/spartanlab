@@ -1133,6 +1133,58 @@ function MainExercisesRenderer({
   // Also map by name as a fallback (styledGroups may have ID mismatches)
   displayExercises.forEach(e => exerciseDataMap.set(e.name, e))
   
+  // ==========================================================================
+  // [FIX] CANONICAL DISPLAY BLOCKS - Preserve TRUE session order
+  // Instead of rendering all groups first then ungrouped, we interleave based on 
+  // the actual position of exercises in displayExercises (canonical order)
+  // ==========================================================================
+  type DisplayBlock = 
+    | { type: 'group'; group: typeof styledGroups[0]; groupIndex: number }
+    | { type: 'exercise'; exercise: typeof displayExercises[0] }
+  
+  const displayBlocks: DisplayBlock[] = []
+  const processedGroupIndices = new Set<number>()
+  const processedExerciseIds = new Set<string>()
+  
+  // Build maps for quick lookup
+  const groupedExerciseIds = new Set(styledGroups.flatMap(g => g.exercises.map(e => e.id)))
+  const groupedExerciseNames = new Set(styledGroups.flatMap(g => g.exercises.map(e => e.name.toLowerCase())))
+  
+  // Map each exercise to its group
+  const exerciseToGroupIndex = new Map<string, number>()
+  styledGroups.forEach((group, idx) => {
+    group.exercises.forEach(e => {
+      exerciseToGroupIndex.set(e.id, idx)
+      exerciseToGroupIndex.set(e.name.toLowerCase(), idx)
+    })
+  })
+  
+  // Walk through displayExercises in canonical order
+  displayExercises.forEach(exercise => {
+    const isGrouped = groupedExerciseIds.has(exercise.id) || groupedExerciseNames.has(exercise.name.toLowerCase())
+    
+    if (isGrouped) {
+      // Find the group index
+      const gIdx = exerciseToGroupIndex.get(exercise.id) ?? exerciseToGroupIndex.get(exercise.name.toLowerCase())
+      if (gIdx !== undefined && !processedGroupIndices.has(gIdx)) {
+        // First encounter of this group - add the entire group block here
+        displayBlocks.push({ type: 'group', group: styledGroups[gIdx], groupIndex: gIdx })
+        processedGroupIndices.add(gIdx)
+        // Mark all exercises in this group as processed
+        styledGroups[gIdx].exercises.forEach(e => {
+          processedExerciseIds.add(e.id)
+          processedExerciseIds.add(e.name.toLowerCase())
+        })
+      }
+    } else {
+      // Ungrouped exercise - render at canonical position
+      if (!processedExerciseIds.has(exercise.id)) {
+        displayBlocks.push({ type: 'exercise', exercise })
+        processedExerciseIds.add(exercise.id)
+      }
+    }
+  })
+  
   let globalExerciseIndex = 0
   
   // ==========================================================================
@@ -1143,14 +1195,36 @@ function MainExercisesRenderer({
     groupedRenderUsed: true,
     groupTypesRendered: [...new Set(styledGroups.map(g => g.groupType))],
     totalGroupsRendered: styledGroups.length,
+    displayBlocksCreated: displayBlocks.length,
+    blockOrder: displayBlocks.map(b => b.type === 'group' ? `group-${b.groupIndex}` : `ex-${b.exercise.id}`),
     flatFallbackUsed: false,
     whyFallbackUsed: null,
-    verdict: 'grouped_render_active',
+    verdict: 'canonical_order_preserved',
   })
   
   return (
     <div className="space-y-4">
-      {styledGroups.map((group, groupIndex) => {
+      {displayBlocks.map((block, blockIdx) => {
+        // Handle ungrouped exercise
+        if (block.type === 'exercise') {
+          globalExerciseIndex++
+          return (
+            <ExerciseRow
+              key={block.exercise.id}
+              exercise={block.exercise}
+              index={globalExerciseIndex}
+              sessionId={sessionId}
+              isSkipped={skippedExercises.has(block.exercise.id)}
+              adjustedName={adjustedExercises.get(block.exercise.id)}
+              onReplace={onReplace}
+              onSkip={onSkip}
+              onProgressionAdjust={onProgressionAdjust}
+            />
+          )
+        }
+        
+        // Handle grouped block
+        const { group, groupIndex } = block
         const colors = getGroupTypeColors(group.groupType)
         const label = getGroupTypeLabel(group.groupType)
         const icon = getGroupTypeIcon(group.groupType)
@@ -1260,42 +1334,6 @@ function MainExercisesRenderer({
           </div>
         )
       })}
-      
-      {/* Render any exercises that weren't in styled groups as fallback */}
-      {(() => {
-        const groupedExerciseIds = new Set(
-          styledGroups.flatMap(g => g.exercises.map(e => e.id))
-        )
-        const groupedExerciseNames = new Set(
-          styledGroups.flatMap(g => g.exercises.map(e => e.name.toLowerCase()))
-        )
-        const ungroupedExercises = displayExercises.filter(
-          e => !groupedExerciseIds.has(e.id) && !groupedExerciseNames.has(e.name.toLowerCase())
-        )
-        
-        if (ungroupedExercises.length === 0) return null
-        
-        return (
-          <div className="space-y-2 pt-2">
-            {ungroupedExercises.map((exercise) => {
-              globalExerciseIndex++
-              return (
-                <ExerciseRow
-                  key={exercise.id}
-                  exercise={exercise}
-                  index={globalExerciseIndex}
-                  sessionId={sessionId}
-                  isSkipped={skippedExercises.has(exercise.id)}
-                  adjustedName={adjustedExercises.get(exercise.id)}
-                  onReplace={onReplace}
-                  onSkip={onSkip}
-                  onProgressionAdjust={onProgressionAdjust}
-                />
-              )
-            })}
-          </div>
-        )
-      })()}
     </div>
   )
 }
@@ -1423,55 +1461,68 @@ function ExerciseRow({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 mt-1">
-            <p className="font-medium">{displayName}</p>
-            {hasRPE && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#E63946]/10 text-[#E63946] font-medium">
-                RPE
-              </span>
-            )}
-          </div>
+          {/* Exercise Name */}
+          <p className="font-medium mt-1">{displayName}</p>
           {adjustedName && (
             <p className="text-xs text-[#4F6D8A] mt-0.5">
               Originally: {safeName}
             </p>
           )}
-          {exercise.note && (
-            <p className="text-xs text-[#6A6A6A] mt-0.5">{exercise.note}</p>
-          )}
-        </div>
-        <div className="flex items-start gap-2 shrink-0">
-          <div className="text-right">
-            <p className="text-sm text-[#A5A5A5]">
-              {safeSets} x {safeReps}
-            {/* WEIGHTED LOAD PR: Display prescribed load for weighted exercises */}
+          
+          {/* [FIX] CLEAN PRESCRIPTION LINE - Unified prescription display */}
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            {/* Sets x Reps */}
+            <span className="text-sm text-[#A5A5A5] font-medium">
+              {safeSets} × {safeReps}
+            </span>
+            
+            {/* Target RPE - Clean presentation when applicable */}
+            {hasRPE && exercise.targetRPE && (
+              <span className="text-xs px-2 py-0.5 rounded bg-[#E63946]/10 text-[#E63946] font-medium">
+                RPE {exercise.targetRPE}
+              </span>
+            )}
+            {hasRPE && !exercise.targetRPE && (
+              <span className="text-xs px-2 py-0.5 rounded bg-[#E63946]/10 text-[#E63946]/70 font-medium">
+                RPE tracked
+              </span>
+            )}
+            
+            {/* Prescribed Load */}
             {exercise.prescribedLoad && exercise.prescribedLoad.load > 0 && (
-              <span className="text-[#E63946] font-medium">
-                {' @ '}+{exercise.prescribedLoad.load} {exercise.prescribedLoad.unit}
+              <span className="text-xs px-2 py-0.5 rounded bg-[#4F6D8A]/10 text-[#4F6D8A] font-medium">
+                +{exercise.prescribedLoad.load} {exercise.prescribedLoad.unit}
               </span>
             )}
-            {/* [weighted-truth] TASK F & G: Log when weighted exercise has no load reason */}
+            
+            {/* No load reason - subtle */}
             {!exercise.prescribedLoad && exercise.noLoadReason && (
-              <span className="text-[#6A6A6A] text-xs">
-                {' ('}
-                {exercise.noLoadReason === 'no_loadable_equipment' && 'no equipment'}
+              <span className="text-[10px] text-[#6A6A6A]">
+                ({exercise.noLoadReason === 'no_loadable_equipment' && 'no equipment'}
                 {exercise.noLoadReason === 'missing_strength_inputs' && 'no strength data'}
-                {exercise.noLoadReason === 'exercise_not_load_eligible' && 'bodyweight focus'}
-                {exercise.noLoadReason === 'doctrine_prefers_bodyweight' && 'bodyweight preferred'}
+                {exercise.noLoadReason === 'exercise_not_load_eligible' && 'bodyweight'}
+                {exercise.noLoadReason === 'doctrine_prefers_bodyweight' && 'bodyweight'}
                 {exercise.noLoadReason === 'skill_day_non_loaded_variant' && 'skill focus'}
-                {exercise.noLoadReason === 'support_day_volume_bias' && 'support day'}
-                {')'}
+                {exercise.noLoadReason === 'support_day_volume_bias' && 'support day'})
               </span>
-            )}
-            </p>
-            {/* Show confidence indicator for weighted load */}
-            {exercise.prescribedLoad && exercise.prescribedLoad.load > 0 && exercise.prescribedLoad.confidenceLevel !== 'high' && (
-              <p className="text-[10px] text-[#6A6A6A] mt-0.5">
-                {exercise.prescribedLoad.confidenceLevel === 'moderate' && '(from historical PR)'}
-                {exercise.prescribedLoad.confidenceLevel === 'low' && '(estimated)'}
-              </p>
             )}
           </div>
+          
+          {/* Load confidence indicator */}
+          {exercise.prescribedLoad && exercise.prescribedLoad.load > 0 && exercise.prescribedLoad.confidenceLevel !== 'high' && (
+            <p className="text-[10px] text-[#6A6A6A] mt-0.5">
+              {exercise.prescribedLoad.confidenceLevel === 'moderate' && 'Based on historical PR'}
+              {exercise.prescribedLoad.confidenceLevel === 'low' && 'Estimated load'}
+            </p>
+          )}
+          
+          {exercise.note && (
+            <p className="text-xs text-[#6A6A6A] mt-1">{exercise.note}</p>
+          )}
+        </div>
+        
+        {/* Right side - Actions only */}
+        <div className="flex items-center shrink-0">
           {!isWarmupCooldown && exercise.isOverrideable && sessionId && onReplace && onSkip && onProgressionAdjust && (
             <ExerciseActionMenu
               exercise={exercise}

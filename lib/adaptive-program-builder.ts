@@ -8044,15 +8044,23 @@ async function generateAdaptiveProgramImpl(
             restProtocol: ex.category === 'skill' ? '120-180s' : '60-90s',
           }))
           
-          // Initialize or update styleMetadata
-          session.styleMetadata = session.styleMetadata || {
+          // [STALE-GROUPED-FIX] ALWAYS refresh grouped metadata from final post-mutation truth
+          // The || pattern was preserving stale styledGroups when styleMetadata already existed
+          // This caused Program screen / Today's Plan to show wrong grouped members
+          // Fix: explicitly overwrite grouped-contract fields, preserve unrelated fields
+          const existingMeta = session.styleMetadata || {}
+          session.styleMetadata = {
+            // Preserve any unrelated fields from prior metadata
+            ...existingMeta,
+            // ALWAYS overwrite grouped-contract fields with fresh truth
             primaryStyle: 'supersets',
             hasSupersetsApplied: true,
-            hasCircuitsApplied: false,
-            hasDensityApplied: false,
+            hasCircuitsApplied: existingMeta.hasCircuitsApplied || false,
+            hasDensityApplied: existingMeta.hasDensityApplied || false,
             structureDescription: `${pairsCreated} superset pair${pairsCreated > 1 ? 's' : ''} on accessory work`,
             appliedMethods: ['supersets', 'straight_sets'],
             rejectedMethods: [],
+            // CRITICAL: Always rebuild styledGroups from FINAL post-mutation exercises
             styledGroups: [...supersetGroups, ...straightGroups],
           }
         }

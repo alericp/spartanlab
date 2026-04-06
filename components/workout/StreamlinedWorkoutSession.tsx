@@ -229,15 +229,48 @@ function deriveExecutionPlanFromExercises(exercises: MachineExercise[]): Executi
       if (method.includes('superset') || (memberCount === 2 && currentBlockId)) {
         groupType = 'superset'
         blockCounter++
-        blockLabel = `Superset ${String.fromCharCode(64 + blockCounter)}` // A, B, C...
+        // [GROUPED-IDENTITY-FIX] Derive label from blockId if it follows the pattern superset_dayN_index
+        // This ensures label matches the authoritative blockId from program builder
+        // Format: "superset_1_1" -> "Superset A", "superset_1_2" -> "Superset B"
+        if (currentBlockId) {
+          const blockIdMatch = currentBlockId.match(/superset_\d+_(\d+)/)
+          if (blockIdMatch) {
+            const pairNumber = parseInt(blockIdMatch[1], 10)
+            blockLabel = `Superset ${String.fromCharCode(64 + pairNumber)}` // 1->A, 2->B, etc.
+          } else {
+            blockLabel = `Superset ${String.fromCharCode(64 + blockCounter)}` // Fallback to counter
+          }
+        } else {
+          blockLabel = `Superset ${String.fromCharCode(64 + blockCounter)}` // Fallback to counter
+        }
       } else if (method.includes('circuit') || memberCount > 2) {
         groupType = 'circuit'
         blockCounter++
-        blockLabel = `Circuit ${blockCounter}`
+        // [GROUPED-IDENTITY-FIX] Extract circuit number from blockId if present
+        if (currentBlockId) {
+          const circuitMatch = currentBlockId.match(/circuit_\d+_(\d+)/)
+          if (circuitMatch) {
+            blockLabel = `Circuit ${circuitMatch[1]}`
+          } else {
+            blockLabel = `Circuit ${blockCounter}`
+          }
+        } else {
+          blockLabel = `Circuit ${blockCounter}`
+        }
       } else if (method.includes('cluster')) {
         groupType = 'cluster'
         blockCounter++
-        blockLabel = `Cluster ${blockCounter}`
+        // [GROUPED-IDENTITY-FIX] Extract cluster number from blockId if present
+        if (currentBlockId) {
+          const clusterMatch = currentBlockId.match(/cluster_\d+_(\d+)/)
+          if (clusterMatch) {
+            blockLabel = `Cluster ${clusterMatch[1]}`
+          } else {
+            blockLabel = `Cluster ${blockCounter}`
+          }
+        } else {
+          blockLabel = `Cluster ${blockCounter}`
+        }
       }
     }
     // Single-member blocks remain groupType = null (normal set-by-set execution)
@@ -5429,7 +5462,12 @@ function InterExerciseRestCountdown({
     const blockGroupType = currentBlock?.block.groupType as 'superset' | 'circuit' | 'cluster' | 'emom' | undefined
     const currentRound = machineState.currentRound || 1
     const targetRounds = currentBlock?.block.targetRounds || 3
-    const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({ id: ex.id, name: ex.name })) || []
+    // [GROUPED-IDENTITY-FIX] Derive member exercises from authoritative ExecutionBlock data
+    // Machine's ExecutionBlock stores full memberExercises array with MachineExercise objects
+    const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
+      id: ex.id,
+      name: ex.name,
+    })) || []
     const blockRoundRestSeconds = machineState.blockRoundRestSeconds || 90
     
     // Handler for block round rest completion

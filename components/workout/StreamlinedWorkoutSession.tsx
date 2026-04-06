@@ -3511,16 +3511,37 @@ export function StreamlinedWorkoutSession({
   }, [])
   
   // [UNIFIED-HANDOFF] Complete set - ALL transitions go through single dispatch
+  // [LOGGED-VALUE-FIX] We need to log the DISPLAYED value, not the raw machine value
+  // The user sees a seeded value (e.g., 6s from prescription) but machine holdValue might still be 30 (default)
+  // So we must compute the same displayed value here to log what the user actually saw
   const handleCompleteSet = useCallback(() => {
     const currentIndex = safeExerciseIndex
+    
+    // [LOGGED-VALUE-FIX] Compute the DISPLAYED hold/reps value that matches what the UI showed
+    // This mirrors the corridorHoldValue/corridorRepsValue derivation logic
+    const exerciseRepsOrTime = safeCurrentExercise?.repsOrTime || '8-12 reps'
+    const isHoldExerciseForLog = /(\d+)\s*s(ec)?/i.test(exerciseRepsOrTime) || exerciseRepsOrTime.toLowerCase().includes('hold')
+    const targetMatch = exerciseRepsOrTime.match(/(\d+)/)
+    const prescriptionSeedValue = targetMatch ? parseInt(targetMatch[1], 10) : (isHoldExerciseForLog ? 30 : 8)
+    
+    const INITIAL_REPS_VALUE = 8
+    const INITIAL_HOLD_VALUE = 30
+    const machineRepsIsDefault = safeRepsValue === 0 || safeRepsValue === INITIAL_REPS_VALUE
+    const machineHoldIsDefault = safeHoldValue === 0 || safeHoldValue === INITIAL_HOLD_VALUE
+    
+    // Log the value the user SAW (seeded from prescription if not modified, otherwise machine value)
+    const loggedRepsValue = isHoldExercise ? 0 : (machineRepsIsDefault ? prescriptionSeedValue : safeRepsValue)
+    const loggedHoldValue = isHoldExercise 
+      ? (machineHoldIsDefault ? prescriptionSeedValue : safeHoldValue)
+      : undefined
     
     // Build completed set data with notes and grouped context
       const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, currentIndex)
       const setData: CompletedSetData = {
         exerciseIndex: currentIndex,
         setNumber: validatedSetNumber,
-        actualReps: isHoldExercise ? 0 : safeRepsValue,
-        holdSeconds: isHoldExercise ? safeHoldValue : undefined,
+        actualReps: loggedRepsValue,
+        holdSeconds: loggedHoldValue,
         actualRPE: safeSelectedRPE || 8,
         bandUsed: safeBandUsed,
         timestamp: Date.now(),
@@ -3565,6 +3586,7 @@ export function StreamlinedWorkoutSession({
         exerciseCount: exercises.length,
       })
     // [CRASH-FIX] Removed liveSession dep, use machine-derived values
+    // [LOGGED-VALUE-FIX] Added safeCurrentExercise to deps for prescription seed derivation
     }, [validatedSetNumber, safeRepsValue, safeHoldValue, safeSelectedRPE, safeBandUsed, safeCurrentExercise, safeExerciseIndex, isHoldExercise, exercises, machineSessionContract, machineState, machineDispatch])
   
   // [UNIFIED-REST-HANDLER] Single handler for all rest completion
@@ -5429,7 +5451,14 @@ function InterExerciseRestCountdown({
         if (nextExerciseTargetRPE >= 8) return 120
         return machineState.interExerciseRestSeconds || 90
       }
-      // Same-exercise rest based on last set's RPE
+      // [SAME-EXERCISE-REST-FIX] Same-exercise rest: 
+      // Priority 1: Current exercise's prescribed restSeconds (authoritative)
+      // Priority 2: Derive from last set's RPE (adaptive)
+      // Priority 3: Static fallback (90s)
+      if (safeCurrentExercise?.restSeconds && safeCurrentExercise.restSeconds > 0) {
+        return safeCurrentExercise.restSeconds
+      }
+      // Adaptive: derive from last set's RPE
       if (!safeLastSetRPE) return 90
       if (safeLastSetRPE >= 9) return 180 // 3 min for RPE 9-10
       if (safeLastSetRPE >= 8) return 120 // 2 min for RPE 8

@@ -679,6 +679,41 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       {/* Expanded Content */}
       {isExpanded && (
         <div className="px-4 pb-4 space-y-4">
+          {/* [VISIBLE-IMPROVEMENT] Session Structure Summary - VISIBLE explanation of session */}
+          {!isCompleted && !isActive && !isPaused && sessionStyleMetadata?.structureDescription && (
+            <div className="px-3 py-2.5 rounded-lg bg-[#1A1A1A] border border-[#2A2A2A]">
+              <div className="flex items-start gap-2">
+                <Info className="w-4 h-4 text-[#4F6D8A] mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-xs font-medium text-[#A5A5A5] mb-1">Session Structure</p>
+                  <p className="text-xs text-[#8A8A8A] leading-relaxed">
+                    {sessionStyleMetadata.structureDescription}
+                  </p>
+                  {/* Show grouped method badges if present */}
+                  {hasNonStraightGroups && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {sessionStyleMetadata.hasSupersetsApplied && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4F6D8A]/10 text-[#4F6D8A] font-medium">
+                          Supersets
+                        </span>
+                      )}
+                      {sessionStyleMetadata.hasCircuitsApplied && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 font-medium">
+                          Circuits
+                        </span>
+                      )}
+                      {sessionStyleMetadata.hasDensityApplied && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 font-medium">
+                          Density Blocks
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          
           {/* Session Completed - Show Summary */}
           {isCompleted ? (
             <WorkoutSessionSummary
@@ -1052,21 +1087,46 @@ function MainExercisesRenderer({
           <div key={group.id || `group-${groupIndex}`}>
             {/* Group Header - Only show for non-straight groups */}
             {isSpecialGroup && (
-              <div className={`mb-2 px-3 py-2 rounded-t-lg border-l-2 ${colors.border} ${colors.bg}`}>
+              <div className={`mb-2 px-3 py-2.5 rounded-lg border-l-2 ${colors.border} ${colors.bg}`}>
                 <div className="flex items-center gap-2">
                   <span className={colors.text}>{icon}</span>
-                  <span className={`text-sm font-medium ${colors.text}`}>{label}</span>
+                  {/* Enhanced label: Show purpose + method (e.g., "Accessory Superset") */}
+                  <span className={`text-sm font-medium ${colors.text}`}>
+                    {/* Derive purpose from first exercise category if available */}
+                    {(() => {
+                      const firstExercise = group.exercises[0]
+                      const fullExercise = displayExercises.find(e => 
+                        e.id === firstExercise?.id || 
+                        e.name.toLowerCase() === firstExercise?.name.toLowerCase()
+                      )
+                      const category = fullExercise?.category
+                      // Capitalize category and prepend to method label
+                      const purposePrefix = category && category !== 'accessory' 
+                        ? `${category.charAt(0).toUpperCase() + category.slice(1)} ` 
+                        : category === 'accessory' 
+                          ? 'Accessory ' 
+                          : ''
+                      return `${purposePrefix}${label}`
+                    })()}
+                  </span>
                   {/* [EDUCATIONAL] Method info bubble - explains what this training method is */}
                   <MethodInfoBubble 
                     methodType={group.groupType as 'superset' | 'circuit' | 'cluster' | 'density_block'}
                     context={group.exercises[0]?.methodRationale || undefined}
                   />
-                  {group.instruction && (
-                    <span className="text-xs text-[#6A6A6A] ml-auto">{group.instruction}</span>
-                  )}
+                  {/* Show exercise count in group */}
+                  <span className="text-xs text-[#6A6A6A]">
+                    ({group.exercises.length} exercises)
+                  </span>
                 </div>
+                {/* Show instruction or methodRationale if available */}
+                {(group.instruction || group.exercises[0]?.methodRationale) && (
+                  <p className="text-xs text-[#8A8A8A] mt-1.5 leading-relaxed">
+                    {group.instruction || group.exercises[0]?.methodRationale}
+                  </p>
+                )}
                 {group.restProtocol && (
-                  <p className="text-xs text-[#6A6A6A] mt-1">{group.restProtocol}</p>
+                  <p className="text-xs text-[#6A6A6A] mt-1">Rest: {group.restProtocol}</p>
                 )}
               </div>
             )}
@@ -1363,31 +1423,32 @@ function ExerciseRow({
         </div>
       )}
       
-      {/* Selection Reason (expandable) with Knowledge Bubble */}
-      {!isWarmupCooldown && (exercise.selectionReason || hasKnowledge) && (
+      {/* Selection Reason - NOW VISIBLE BY DEFAULT for transparency */}
+      {!isWarmupCooldown && exercise.selectionReason && (
+        <div className="mt-2 py-1.5 px-2 rounded bg-[#1F1F1F] border border-[#2A2A2A]">
+          <p className="text-xs text-[#8A8A8A] leading-relaxed">
+            <span className="text-[#6A6A6A]">Why: </span>
+            {exercise.selectionReason}
+          </p>
+        </div>
+      )}
+      
+      {/* Knowledge bubble expandable - only show if has knowledge but no selection reason already displayed */}
+      {!isWarmupCooldown && hasKnowledge && !exercise.selectionReason && (
         <div className="mt-2">
           <button
             className="text-xs text-[#6A6A6A] hover:text-[#A5A5A5] flex items-center gap-1"
             onClick={() => setShowReason(!showReason)}
           >
-            {showReason ? 'Hide why' : 'Why this exercise?'}
+            {showReason ? 'Hide info' : 'Learn more'}
           </button>
           {showReason && (
             <div className="mt-2 space-y-2">
-              {/* Knowledge bubble if available */}
-              {hasKnowledge && (
-                <ExerciseKnowledgeBubble 
+              <ExerciseKnowledgeBubble 
                   exerciseId={exerciseId}
                   showSkillCarryover
                   showSafetyNote
                 />
-              )}
-              {/* Selection reason from engine */}
-              {exercise.selectionReason && !hasKnowledge && (
-                <p className="text-xs text-[#6A6A6A] pl-2 border-l-2 border-[#3A3A3A]">
-                  {exercise.selectionReason}
-                </p>
-              )}
             </div>
           )}
         </div>

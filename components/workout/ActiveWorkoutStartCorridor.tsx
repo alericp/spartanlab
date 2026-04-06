@@ -56,7 +56,9 @@ export interface CompletedSetInfo {
 
 export interface ActiveWorkoutCorridorProps {
   // Corridor mode - determines which UI to show
-  mode: 'active' | 'resting'
+  // active = logging sets, resting = same-exercise rest or between-exercise rest
+  // block_round_rest = rest between rounds of grouped block (superset/circuit)
+  mode: 'active' | 'resting' | 'block_round_rest'
   
   // Session identity
   sessionLabel: string
@@ -96,8 +98,17 @@ export interface ActiveWorkoutCorridorProps {
   // Rest mode props
   restDurationSeconds?: number
   lastSetRPE?: RPEValue | null
-  restType?: 'same_exercise' | 'between_exercise' // Type of rest period
+  restType?: 'same_exercise' | 'between_exercise' | 'block_round' // Type of rest period
   nextExerciseName?: string // For between-exercise rest, name of next exercise
+  
+  // Block round rest props (for grouped methods - superset/circuit)
+  blockLabel?: string
+  blockGroupType?: 'superset' | 'circuit' | 'cluster' | 'emom'
+  currentRound?: number
+  targetRounds?: number
+  blockMemberExercises?: Array<{ id: string; name: string }>
+  blockRoundRestSeconds?: number
+  onBlockRoundRestComplete?: () => void
   
   // Callbacks (passed from parent)
   onCompleteSet: () => void
@@ -313,6 +324,14 @@ export function ActiveWorkoutStartCorridor({
   lastSetRPE,
   restType = 'same_exercise',
   nextExerciseName,
+  // Block round rest props
+  blockLabel,
+  blockGroupType,
+  currentRound = 1,
+  targetRounds = 3,
+  blockMemberExercises = [],
+  blockRoundRestSeconds = 90,
+  onBlockRoundRestComplete,
   onCompleteSet,
   onSetReps,
   onSetHold,
@@ -337,10 +356,11 @@ export function ActiveWorkoutStartCorridor({
   const [restTimeRemaining, setRestTimeRemaining] = useState(restDurationSeconds)
   const restTimerRef = useRef<NodeJS.Timeout | null>(null)
   
-  // Reset rest timer when entering resting mode
+  // Reset rest timer when entering resting or block_round_rest mode
   useEffect(() => {
-    if (mode === 'resting') {
-      setRestTimeRemaining(restDurationSeconds)
+    if (mode === 'resting' || mode === 'block_round_rest') {
+      const duration = mode === 'block_round_rest' ? blockRoundRestSeconds : restDurationSeconds
+      setRestTimeRemaining(duration)
       restTimerRef.current = setInterval(() => {
         setRestTimeRemaining(prev => {
           if (prev <= 1) {
@@ -354,15 +374,19 @@ export function ActiveWorkoutStartCorridor({
     return () => {
       if (restTimerRef.current) clearInterval(restTimerRef.current)
     }
-  }, [mode, restDurationSeconds])
+  }, [mode, restDurationSeconds, blockRoundRestSeconds])
   
   const handleRestSkip = () => {
     if (restTimerRef.current) clearInterval(restTimerRef.current)
-    onRestComplete?.()
+    if (mode === 'block_round_rest') {
+      onBlockRoundRestComplete?.()
+    } else {
+      onRestComplete?.()
+    }
   }
   
   // Indicator color based on mode
-  const indicatorColor = mode === 'resting' ? 'bg-blue-500' : 'bg-green-500'
+  const indicatorColor = mode === 'block_round_rest' ? 'bg-amber-500' : mode === 'resting' ? 'bg-blue-500' : 'bg-green-500'
   
   return (
     <div className="min-h-screen bg-[#0F1115] flex flex-col">
@@ -514,6 +538,81 @@ export function ActiveWorkoutStartCorridor({
                   <>
                     <SkipForward className="w-5 h-5 mr-2" />
                     {restType === 'between_exercise' ? 'Skip — Next Exercise' : `Skip Rest — Start Set ${currentSetNumber}`}
+                  </>
+                )}
+              </Button>
+            </>
+          )}
+          
+          {/* ========== BLOCK ROUND REST MODE UI (grouped methods) ========== */}
+          {mode === 'block_round_rest' && (
+            <>
+              {/* Round Completed Message */}
+              <Card className={`p-4 ${restTimeRemaining === 0 ? 'bg-amber-500/15 border-amber-500/40' : 'bg-amber-500/10 border-amber-500/30'}`}>
+                <div className="flex items-center gap-3">
+                  <Check className="w-8 h-8 text-amber-500" />
+                  <div>
+                    <p className="text-lg font-bold text-[#E6E9EF]">
+                      {restTimeRemaining === 0 ? 'Ready for Next Round' : 'Round Complete!'}
+                    </p>
+                    <p className="text-sm text-[#A4ACB8]">
+                      {blockLabel || 'Block'} - Round {currentRound - 1} of {targetRounds} finished
+                    </p>
+                  </div>
+                </div>
+              </Card>
+              
+              {/* Grouped Block Info */}
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Badge variant="outline" className="text-amber-500 border-amber-500/30 text-xs uppercase px-2 py-0.5">
+                    {blockGroupType === 'superset' ? 'Superset' : 
+                     blockGroupType === 'circuit' ? 'Circuit' : 
+                     blockGroupType === 'cluster' ? 'Cluster' : 
+                     blockGroupType === 'emom' ? 'EMOM' : 'Block'}
+                  </Badge>
+                  <span className="text-sm text-[#A4ACB8]">Round {currentRound} of {targetRounds}</span>
+                </div>
+                <div className="space-y-2">
+                  {blockMemberExercises.map((ex, idx) => (
+                    <div key={ex.id} className="flex items-center gap-3 py-1">
+                      <span className="w-6 h-6 rounded-full bg-[#2B313A] text-[#A4ACB8] text-xs flex items-center justify-center font-medium">
+                        {blockGroupType === 'superset' ? `A${idx + 1}` : idx + 1}
+                      </span>
+                      <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+              
+              {/* Rest Timer */}
+              <div className="text-center py-4">
+                <p className="text-sm text-[#6B7280] mb-2">
+                  {restTimeRemaining === 0 ? 'Rest Complete' : 'Round Rest'}
+                </p>
+                <p className={`text-4xl font-mono font-bold tabular-nums ${restTimeRemaining === 0 ? 'text-amber-400' : 'text-[#E6E9EF]'}`}>
+                  {Math.floor(restTimeRemaining / 60)}:{(restTimeRemaining % 60).toString().padStart(2, '0')}
+                </p>
+              </div>
+              
+              {/* Primary Action */}
+              <Button
+                onClick={handleRestSkip}
+                className={`w-full h-16 text-lg font-bold ${
+                  restTimeRemaining === 0 
+                    ? 'bg-amber-600 hover:bg-amber-700 text-white' 
+                    : 'bg-[#C1121F] hover:bg-[#A30F1A] text-white'
+                }`}
+              >
+                {restTimeRemaining === 0 ? (
+                  <>
+                    <Play className="w-5 h-5 mr-2" />
+                    Start Round {currentRound}
+                  </>
+                ) : (
+                  <>
+                    <SkipForward className="w-5 h-5 mr-2" />
+                    Skip Rest - Start Round {currentRound}
                   </>
                 )}
               </Button>

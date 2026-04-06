@@ -2435,6 +2435,9 @@ export function StreamlinedWorkoutSession({
   // [LIVE-WORKOUT-MACHINE] MACHINE PHASE IS AUTHORITATIVE
   // Map machine phases to UI status for backward compatibility
   // ==========================================================================
+  // [LIVE-OWNERSHIP-FIX] safeStatus maps ALL live phases to 'active' or 'resting'
+  // so the corridor check at line 5298 catches ALL live execution phases.
+  // This ensures no live phase falls through to ready shell.
   const safeStatus = useMemo(() => {
     const phase = machineState.phase
     switch (phase) {
@@ -2442,6 +2445,7 @@ export function StreamlinedWorkoutSession({
       case 'active': return 'active' as const
       case 'resting': return 'resting' as const
       case 'between_exercise_rest': return 'resting' as const
+      case 'block_round_rest': return 'resting' as const // Grouped block rest -> live execution
       case 'transitioning': return 'active' as const
       case 'completed': return 'completed' as const
       case 'invalid': return 'ready' as const // Show ready UI with error fallback
@@ -5016,9 +5020,11 @@ function InterExerciseRestCountdown({
   
   // ==========================================================================
   // RENDER: BLOCK ROUND REST (between rounds of grouped block - superset/circuit)
+  // [OWNERSHIP-FIX] BYPASSED - Now handled by ActiveWorkoutStartCorridor via mode='block_round_rest'
+  // This block was a parent-owned live phase. Corridor owns ALL live phases now.
   // ==========================================================================
   
-  if (machineState.phase === 'block_round_rest') {
+  if (false && machineState.phase === 'block_round_rest') {
     const restSecondsRemaining = machineState.blockRoundRestSeconds
     const isRestComplete = restSecondsRemaining === 0
     const currentBlock = getBlockForExercise(machineSessionContract?.executionPlan, machineState.currentExerciseIndex)
@@ -5296,8 +5302,10 @@ function InterExerciseRestCountdown({
   // continuation. This prevents post-log render drift to the start shell.
   // ==========================================================================
   if (safeStatus === 'active' || safeStatus === 'resting') {
-    // Determine corridor mode
-    const corridorMode = safeStatus === 'resting' ? 'resting' : 'active'
+    // Determine corridor mode - check machineState.phase directly for block_round_rest
+    const isBlockRoundRest = machineState.phase === 'block_round_rest'
+    const corridorMode = isBlockRoundRest ? 'block_round_rest' as const : 
+                         safeStatus === 'resting' ? 'resting' as const : 'active' as const
     
     // [ISOLATED-ACTIVE-CORRIDOR] Derive simple safe values for the corridor
     // These are plain reads from machine state - no complex derivations
@@ -5356,10 +5364,28 @@ function InterExerciseRestCountdown({
     
     // Determine rest type and next exercise for between-exercise transitions
     const isBetweenExerciseRest = machineState.phase === 'between_exercise_rest'
-    const restType = isBetweenExerciseRest ? 'between_exercise' as const : 'same_exercise' as const
+    const restType = isBlockRoundRest ? 'block_round' as const :
+                     isBetweenExerciseRest ? 'between_exercise' as const : 'same_exercise' as const
+    
+    // Block round rest props (for grouped methods)
+    const currentBlock = getBlockForExercise(machineSessionContract?.executionPlan, machineState.currentExerciseIndex)
+    const blockLabel = currentBlock?.block.blockLabel || 'Block'
+    const blockGroupType = currentBlock?.block.groupType as 'superset' | 'circuit' | 'cluster' | 'emom' | undefined
+    const currentRound = machineState.currentRound || 1
+    const targetRounds = currentBlock?.block.targetRounds || 3
+    const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({ id: ex.id, name: ex.name })) || []
+    const blockRoundRestSeconds = machineState.blockRoundRestSeconds || 90
+    
+    // Handler for block round rest completion
+    const handleBlockRoundRestComplete = () => {
+      machineDispatch({ type: 'COMPLETE_BLOCK_ROUND_REST' })
+    }
     
     // Rest duration based on rest type and RPE
     const getRestDuration = () => {
+      if (isBlockRoundRest) {
+        return blockRoundRestSeconds
+      }
       if (isBetweenExerciseRest) {
         // Between-exercise rest uses machine-tracked inter-exercise rest seconds
         return machineState.interExerciseRestSeconds || 90
@@ -5403,6 +5429,14 @@ function InterExerciseRestCountdown({
         lastSetRPE={safeLastSetRPE}
         restType={restType}
         nextExerciseName={nextExerciseName}
+        // Block round rest props
+        blockLabel={blockLabel}
+        blockGroupType={blockGroupType}
+        currentRound={currentRound}
+        targetRounds={targetRounds}
+        blockMemberExercises={blockMemberExercises}
+        blockRoundRestSeconds={blockRoundRestSeconds}
+        onBlockRoundRestComplete={handleBlockRoundRestComplete}
         onCompleteSet={handleCompleteSet}
         onSetReps={setRepsValue}
         onSetHold={setHoldValue}

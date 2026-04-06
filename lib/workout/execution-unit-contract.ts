@@ -58,12 +58,14 @@ export const SET_REASON_TAG_LABELS: Record<SetReasonTag, string> = {
 // GROUP TYPES
 // =============================================================================
 
-export type GroupType = 'superset' | 'circuit' | 'cluster' | null
+// [GROUPED-CONTRACT-ALIGN] GroupType must match all values from styledGroups.groupType
+export type GroupType = 'superset' | 'circuit' | 'cluster' | 'density_block' | null
 
 export const GROUP_TYPE_LABELS: Record<NonNullable<GroupType>, string> = {
   superset: 'Superset',
   circuit: 'Circuit',
   cluster: 'Cluster',
+  density_block: 'Density Block',
 }
 
 // =============================================================================
@@ -107,10 +109,11 @@ export interface CompletedSetWithNotes {
 // EXECUTION BLOCK - Groups of exercises done together
 // =============================================================================
 
+// [GROUPED-CONTRACT-ALIGN] ExecutionBlock supports all group types for runtime consistency
 export interface ExecutionBlock {
   blockId: string
-  groupType: GroupType
-  blockLabel: string // e.g., "Superset A", "Circuit 1"
+  groupType: GroupType  // Now includes 'density_block'
+  blockLabel: string // e.g., "Superset", "Circuit", "Density Block"
   memberExerciseIndexes: number[]
   memberExerciseNames: string[]
   targetRounds: number

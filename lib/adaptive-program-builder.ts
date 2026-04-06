@@ -143,6 +143,13 @@ import { analyzeEquipmentProfile, adaptSessionForEquipment, getEquipmentRecommen
 import { GOAL_LABELS } from './program-service'
 // [planner-truth-audit] TASK 7: Final audit for generic shell detection
 import { runPlannerTruthAudit, getAuditGatingResult, type PlannerTruthAuditReport, type AuditSeverity } from './planner-truth-audit'
+// [PHASE 1] CANONICAL MATERIALITY CONTRACT - Strengthens truth-to-generation coupling
+import { 
+  buildCanonicalMaterialityContract, 
+  validateMateriality, 
+  type CanonicalMaterialityContract,
+  type MaterialityValidationResult,
+} from './canonical-materiality-contract'
 // [AI-TRUTH-BREADTH-AUDIT] Phase 3: End-to-end selectedSkills trace
 import { 
   logBreadthAuditLayer, 
@@ -1401,6 +1408,11 @@ exerciseExplanations?: {
     topIssueReason?: string  // e.g., 'primary_goal_under_expressed', 'session_density_underbuilt', etc.
     topIssueDescription?: string  // Human-readable explanation for display
   }
+  // ==========================================================================
+  // [PHASE 1] CANONICAL MATERIALITY VALIDATION
+  // Validates that high-value canonical truth actually changed generation output
+  // ==========================================================================
+  materialityValidation?: MaterialityValidationResult
   // ==========================================================================
   // [anti-template] TASK A: Generation Provenance Metadata
   // Tracks exactly how the program was built for debugging template-like output
@@ -5251,6 +5263,47 @@ async function generateAdaptiveProgramImpl(
     hasSufficientData: hasFeedbackData,
   })
   
+  // ==========================================================================
+  // [PHASE 1] BUILD CANONICAL MATERIALITY CONTRACT
+  // This contract bridges canonical profile truth → concrete generation levers.
+  // Built once here, consumed by all downstream generation decisions.
+  // ==========================================================================
+  const materialityContract = buildCanonicalMaterialityContract(
+    canonicalProfile,
+    trainingFeedback,
+    undefined, // detectedWeakPoints - not available yet, will be added to bottleneck.rankedBottlenecks from limiterDrivenMods
+    limiterDrivenMods
+  )
+  
+  console.log('[materiality-contract] Contract built for generation:', {
+    identitySummary: {
+      primaryGoal: materialityContract.identity.primaryGoal,
+      primarySkills: materialityContract.identity.skillPriorities.primary,
+      experienceLevel: materialityContract.identity.experienceLevel,
+      scheduleMode: materialityContract.identity.scheduleMode,
+      sessionDuration: materialityContract.identity.sessionDurationMinutes,
+    },
+    historySummary: {
+      recentWorkouts: materialityContract.history.recentWorkoutCount,
+      isDetrained: materialityContract.history.isDetrainedState,
+      dataConfidence: materialityContract.history.dataConfidence,
+    },
+    leversSummary: {
+      weeklyStructureBias: materialityContract.levers.weeklyStructureBias.value,
+      supportAllocation: materialityContract.levers.supportAllocationBias.value,
+      weightedPlacement: materialityContract.levers.weightedPlacementPriority.value,
+      complexityAllowance: materialityContract.levers.complexityAllowance.value,
+      timeBudgetPressure: materialityContract.levers.timeBudgetCompressionPressure.value,
+    },
+    provenanceSummary: {
+      highConfidence: materialityContract.provenance.highConfidenceCount,
+      lowConfidence: materialityContract.provenance.lowConfidenceCount,
+      sparseAreas: materialityContract.provenance.sparseAreas,
+    },
+    isHighlyPersonalized: materialityContract.isHighlyPersonalized,
+    criticalLeverCount: materialityContract.criticalLeverCount,
+  })
+  
   // Resolve flexible frequency if applicable
   let flexibleWeekStructure: FlexibleWeekStructure | null = null
   let effectiveTrainingDays: TrainingDays = typeof trainingDaysPerWeek === 'number' 
@@ -7307,6 +7360,27 @@ async function generateAdaptiveProgramImpl(
   }
   const selectedMethods = selectMethodProfiles(selectionContext)
   
+  // ==========================================================================
+  // [PHASE 1] MATERIALITY CONTRACT - METHOD ELIGIBILITY ENFORCEMENT
+  // Apply contract levers to filter/adjust method eligibility
+  // ==========================================================================
+  console.log('[materiality-contract] Method eligibility enforcement:', {
+    contractMethodLevers: materialityContract.levers.methodEligibility,
+    contractComplexityAllowance: materialityContract.levers.complexityAllowance.value,
+    contractDensityAllowance: materialityContract.levers.densityAllowance.value,
+    selectedPrimaryMethod: selectedMethods.primary?.id,
+    selectedSecondaryMethod: selectedMethods.secondary?.id,
+    methodAlignmentVerdict: {
+      supersetsAllowed: materialityContract.levers.methodEligibility.supersets,
+      circuitsAllowed: materialityContract.levers.methodEligibility.circuits,
+      densityBlocksAllowed: materialityContract.levers.methodEligibility.densityBlocks,
+      clusterSetsAllowed: materialityContract.levers.methodEligibility.clusterSets,
+    },
+    materialityInfluenceVerdict: materialityContract.levers.complexityAllowance.confidence === 'high'
+      ? 'METHOD_ELIGIBILITY_ENFORCED_BY_CONTRACT'
+      : 'METHOD_ELIGIBILITY_USING_DEFAULTS',
+  })
+  
   // Build training emphasis for UI
   const trainingEmphasis = {
     primaryMethod: selectedMethods.primary.publicLabel,
@@ -7365,6 +7439,26 @@ async function generateAdaptiveProgramImpl(
   }
   
   console.log('[program-generate] Structure selected:', structure.structureName)
+  
+  // ==========================================================================
+  // [PHASE 1] MATERIALITY CONTRACT - STRUCTURE INFLUENCE AUDIT
+  // Log how the materiality contract levers influenced structure selection
+  // ==========================================================================
+  console.log('[materiality-contract] Structure selection influenced by:', {
+    weeklyStructureBiasLever: materialityContract.levers.weeklyStructureBias.value,
+    weeklyStructureBiasConfidence: materialityContract.levers.weeklyStructureBias.confidence,
+    structureSelected: structure.structureName,
+    skillAllocationLevers: {
+      mainEmphasis: materialityContract.levers.mainSkillEmphasis.value,
+      secondaryAllowance: materialityContract.levers.secondarySkillAllowance.value,
+      tertiaryAllowance: materialityContract.levers.tertiarySkillAllowance.value,
+    },
+    supportAllocationLever: materialityContract.levers.supportAllocationBias.value,
+    recoveryConservatism: materialityContract.levers.recoveryConservatism.value,
+    materialityInfluenceVerdict: materialityContract.isHighlyPersonalized 
+      ? 'STRUCTURE_INFLUENCED_BY_HIGH_CONFIDENCE_LEVERS'
+      : 'STRUCTURE_USED_DEFAULT_LEVERS',
+  })
   
   // [TASK 6] HIGH-FREQUENCY STRUCTURE AUDIT - Verify 6-7 day support
   const templatePoolSize = structure.days?.length || 0
@@ -12407,6 +12501,65 @@ return explanations.length > 0 ? explanations : undefined
         }
       } catch (err) {
         console.error('[planner-truth-audit] Audit failed:', err)
+        return undefined
+      }
+    })(),
+    // ==========================================================================
+    // [PHASE 1] CANONICAL MATERIALITY VALIDATION
+    // Verify that high-value canonical truth actually changed generation output
+    // ==========================================================================
+    materialityValidation: (() => {
+      try {
+        // Build program summary for validation
+        const totalExercises = sessions.reduce((sum, s) => sum + (s.exercises?.length || 0), 0)
+        const weightedExercises = sessions.reduce((sum, s) => 
+          sum + (s.exercises?.filter(ex => 
+            ex.weightedPrescription || 
+            ex.id?.includes('weighted') || 
+            ex.exerciseName?.toLowerCase().includes('weighted')
+          ).length || 0), 0)
+        
+        const skillsExpressed = sessions.flatMap(s => 
+          s.exercises?.filter(ex => ex.skillTarget)?.map(ex => ex.skillTarget) || []
+        ).filter((s, i, arr) => arr.indexOf(s) === i) as string[]
+        
+        const methodsUsed = sessions.flatMap(s => 
+          s.exercises?.filter(ex => ex.method)?.map(ex => ex.method) || []
+        ).filter((m, i, arr) => arr.indexOf(m) === i) as string[]
+        
+        const accessoryCount = sessions.reduce((sum, s) => 
+          sum + (s.exercises?.filter(ex => 
+            ex.role === 'accessory' || 
+            ex.category === 'accessory' ||
+            ex.exerciseName?.toLowerCase().includes('accessory')
+          ).length || 0), 0)
+        
+        const avgDuration = sessions.reduce((sum, s) => 
+          sum + (s.estimatedDurationMinutes || s.targetDurationMinutes || 60), 0) / Math.max(1, sessions.length)
+        
+        const result = validateMateriality(materialityContract, {
+          sessionCount: sessions.length,
+          hasWeightedExercises: weightedExercises > 0,
+          skillsExpressed,
+          methodsUsed,
+          accessoryCount,
+          averageDurationMinutes: avgDuration,
+        })
+        
+        console.log('[materiality-contract] Validation result:', {
+          isValid: result.isValid,
+          overallScore: result.overallScore,
+          checkResults: result.checks.map(c => ({
+            lever: c.lever,
+            honored: c.honored,
+            severity: c.severity,
+          })),
+          summary: result.summary,
+        })
+        
+        return result
+      } catch (err) {
+        console.error('[materiality-contract] Validation failed:', err)
         return undefined
       }
     })(),

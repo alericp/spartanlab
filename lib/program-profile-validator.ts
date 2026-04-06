@@ -26,6 +26,8 @@ import type { CanonicalProgrammingProfile } from './canonical-profile-service'
 // Note: AdaptiveProgram is imported via type to avoid circular dependency
 // The actual validation function receives the program as a parameter
 import type { AdaptiveProgram, AdaptiveSession, AdaptiveExercise } from './adaptive-program-builder'
+// [PHASE 1] Import materiality contract for integrated validation
+import type { CanonicalMaterialityContract, MaterialityValidationResult } from './canonical-materiality-contract'
 
 // Re-export ValidationSeverity for external use
 export type { ValidationSeverity }

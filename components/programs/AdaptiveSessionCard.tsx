@@ -38,6 +38,9 @@ interface AdaptiveSessionCardProps {
   onExerciseOverride?: (override: ExerciseOverride) => void
   // [TASK 4] Program ID for variant state reset when program changes
   programId?: string
+  // [UI-CLEANUP-FIX] Control initial expanded state - defaults to false for cleaner list view
+  // Today's workout should pass true, all others should pass false or omit
+  defaultExpanded?: boolean
 }
 
 // =============================================================================
@@ -151,7 +154,7 @@ function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
   }
 }
 
-export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId }: AdaptiveSessionCardProps) {
+export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, defaultExpanded = false }: AdaptiveSessionCardProps) {
   // PHASE 3: Normalize session immediately to prevent crashes
   const session = normalizeSessionForDisplay(rawSession)
   
@@ -200,7 +203,8 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     isMetadataOnlyOrFullyDropped: builderHasStyledGroups ? 'being_rendered' : 'not_present_in_session',
   })
   const router = useRouter()
-  const [isExpanded, setIsExpanded] = useState(true)
+  // [UI-CLEANUP-FIX] Use defaultExpanded prop (defaults to false for cleaner list view)
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded)
   const [showWarmup, setShowWarmup] = useState(false)
   const [showCooldown, setShowCooldown] = useState(false)
   const [selectedVariant, setSelectedVariant] = useState<number | null>(null)

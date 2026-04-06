@@ -4466,26 +4466,94 @@ if (shouldShowLocalFallback) {
                 </Badge>
               )}
             </div>
+            {/* [GROUPED-PLAN-FIX] Render grouped structure in Today's Plan */}
+            {/* Uses same executionPlan as live workout for truth alignment */}
             <div className="space-y-0">
-              {exercises.map((ex, i) => (
-                <div key={i} className="flex items-center justify-between py-1.5 border-b border-[#2B313A]/30 last:border-0">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-5 h-5 rounded-full bg-[#2B313A] text-[#6B7280] text-[10px] flex items-center justify-center font-medium">
-                      {i + 1}
-                    </span>
-                    <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
-                  </div>
-                  <span className="text-[11px] text-[#6B7280] tabular-nums">
-                    {ex.sets}×{ex.repsOrTime}
-                    {/* [weighted-prescription-truth] Show prescribed load in ready view */}
-                    {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
-                      <span className="ml-1 text-[#C1121F] font-medium">
-                        @ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}
+              {executionPlan.hasGroupedBlocks ? (
+                // GROUPED RENDER - Show blocks with proper structure
+                executionPlan.blocks.map((block, blockIdx) => {
+                  const isGrouped = block.groupType !== null
+                  
+                  if (isGrouped) {
+                    // Grouped block - show header + nested members
+                    return (
+                      <div key={block.blockId} className="py-1">
+                        {/* Group Header */}
+                        <div className="flex items-center gap-2 py-1.5 border-b border-[#2B313A]/30">
+                          <span className="w-5 h-5 rounded bg-[#C1121F]/20 text-[#C1121F] text-[9px] flex items-center justify-center font-bold">
+                            {block.groupType === 'superset' ? 'SS' : block.groupType === 'circuit' ? 'CR' : 'CL'}
+                          </span>
+                          <span className="text-xs font-medium text-[#C1121F]">{block.blockLabel}</span>
+                          <span className="text-[10px] text-[#6B7280] ml-auto">{block.targetRounds} rounds</span>
+                        </div>
+                        {/* Member exercises - nested */}
+                        {block.memberExercises.map((ex, memberIdx) => (
+                          <div key={ex.id} className="flex items-center justify-between py-1.5 pl-7 border-b border-[#2B313A]/20 last:border-0">
+                            <div className="flex items-center gap-2">
+                              <span className="w-4 h-4 rounded-full bg-[#2B313A]/50 text-[#A4ACB8] text-[9px] flex items-center justify-center font-medium">
+                                {String.fromCharCode(65 + memberIdx)}
+                              </span>
+                              <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
+                            </div>
+                            <span className="text-[11px] text-[#6B7280] tabular-nums">
+                              {ex.sets}×{ex.repsOrTime}
+                              {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
+                                <span className="ml-1 text-[#C1121F] font-medium">
+                                  @ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  } else {
+                    // Single exercise - flat row
+                    const ex = block.memberExercises[0]
+                    const globalIndex = executionPlan.blocks
+                      .slice(0, blockIdx)
+                      .reduce((sum, b) => sum + b.memberExercises.length, 0) + 1
+                    return (
+                      <div key={block.blockId} className="flex items-center justify-between py-1.5 border-b border-[#2B313A]/30 last:border-0">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-5 h-5 rounded-full bg-[#2B313A] text-[#6B7280] text-[10px] flex items-center justify-center font-medium">
+                            {globalIndex}
+                          </span>
+                          <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
+                        </div>
+                        <span className="text-[11px] text-[#6B7280] tabular-nums">
+                          {ex.sets}×{ex.repsOrTime}
+                          {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
+                            <span className="ml-1 text-[#C1121F] font-medium">
+                              @ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    )
+                  }
+                })
+              ) : (
+                // FLAT RENDER - No grouped blocks, simple numbered list
+                exercises.map((ex, i) => (
+                  <div key={i} className="flex items-center justify-between py-1.5 border-b border-[#2B313A]/30 last:border-0">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-[#2B313A] text-[#6B7280] text-[10px] flex items-center justify-center font-medium">
+                        {i + 1}
                       </span>
-                    )}
-                  </span>
-                </div>
-              ))}
+                      <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
+                    </div>
+                    <span className="text-[11px] text-[#6B7280] tabular-nums">
+                      {ex.sets}×{ex.repsOrTime}
+                      {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
+                        <span className="ml-1 text-[#C1121F] font-medium">
+                          @ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </Card>
           

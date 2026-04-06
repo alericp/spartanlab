@@ -5736,6 +5736,9 @@ function InterExerciseRestCountdown({
       name: ex.name,
     })) || []
     const blockRoundRestSeconds = machineState.blockRoundRestSeconds || 90
+    // [GROUPED-IDENTITY-FIX] Derive grouped member index for A/B/C display
+    // Only expose when in a grouped block (groupType is not null)
+    const groupedMemberIndex = currentBlock?.block.groupType ? currentBlock.memberIndex : null
     
     // Handler for block round rest completion
     const handleBlockRoundRestComplete = () => {
@@ -5855,6 +5858,7 @@ function InterExerciseRestCountdown({
         blockMemberExercises={blockMemberExercises}
         blockRoundRestSeconds={blockRoundRestSeconds}
         onBlockRoundRestComplete={handleBlockRoundRestComplete}
+        groupedMemberIndex={groupedMemberIndex}
         onCompleteSet={handleCompleteSet}
         onSetReps={setRepsValue}
         onSetHold={setHoldValue}

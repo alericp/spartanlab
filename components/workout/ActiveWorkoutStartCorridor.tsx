@@ -116,6 +116,8 @@ export interface ActiveWorkoutCorridorProps {
   blockMemberExercises?: Array<{ id: string; name: string }>
   blockRoundRestSeconds?: number
   onBlockRoundRestComplete?: () => void
+  // [GROUPED-IDENTITY-FIX] Current exercise position within grouped block
+  groupedMemberIndex?: number | null  // 0 = A, 1 = B, etc. null = not in grouped block
   
   // Callbacks (passed from parent)
   onCompleteSet: () => void
@@ -349,6 +351,7 @@ export function ActiveWorkoutStartCorridor({
   blockMemberExercises = [],
   blockRoundRestSeconds = 90,
   onBlockRoundRestComplete,
+  groupedMemberIndex = null,
   onCompleteSet,
   onSetReps,
   onSetHold,
@@ -666,19 +669,28 @@ export function ActiveWorkoutStartCorridor({
           {/* ========== ACTIVE MODE UI (original) ========== */}
           {mode === 'active' && (
             <>
-          {/* ========== EXERCISE CARD ========== */}
-          <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
-            {/* Category badge */}
-            <div className="flex items-center justify-between mb-2">
-              <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
-                {exerciseCategory}
-              </Badge>
-            </div>
-            
-            {/* Exercise name */}
-            <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight">
-              {exerciseName}
-            </h2>
+              {/* ========== EXERCISE CARD ========== */}
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
+                {/* Category badge + Grouped member indicator */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
+                      {exerciseCategory}
+                    </Badge>
+                    {/* [GROUPED-IDENTITY-FIX] Show grouped member identity when in grouped block */}
+                    {groupedMemberIndex !== null && blockGroupType && (
+                      <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px] uppercase px-1.5 py-0">
+                        {blockGroupType === 'superset' ? 'Superset' : blockGroupType === 'circuit' ? 'Circuit' : blockGroupType}{' '}
+                        {String.fromCharCode(65 + groupedMemberIndex)}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Exercise name */}
+                <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight">
+                  {exerciseName}
+                </h2>
             
             {/* Target prescription */}
             <div className="flex items-center gap-2 mt-1.5 text-sm flex-wrap">

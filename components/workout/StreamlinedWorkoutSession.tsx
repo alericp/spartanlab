@@ -3504,6 +3504,14 @@ export function StreamlinedWorkoutSession({
   const handleCompleteSet = useCallback(() => {
     const currentIndex = safeExerciseIndex
     
+    // [FLOW_TRACE] Log pre-dispatch state
+    console.log('[v0] [FLOW_TRACE] handleCompleteSet BEFORE dispatch', {
+      currentPhase: machineState.phase,
+      currentSetNumber: validatedSetNumber,
+      exerciseIndex: currentIndex,
+      completedSetsCount: machineState.completedSets.length,
+    })
+    
     // Build completed set data with notes and grouped context
       const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, currentIndex)
       const setData: CompletedSetData = {
@@ -3554,7 +3562,13 @@ export function StreamlinedWorkoutSession({
         isLastSetOfExercise: isLastSet,
         exerciseCount: exercises.length,
       })
-      // Machine now owns all transitions - reducer sets phase to 'resting' for non-final sets
+      
+      // [FLOW_TRACE] Log AFTER dispatch - next render will pick up new phase
+      console.log('[v0] [FLOW_TRACE] handleCompleteSet AFTER dispatch', {
+        dispatched: 'COMPLETE_SET',
+        isLastSet,
+        expectedNextPhase: isLastSet ? 'between_exercise_rest or completed' : 'resting',
+      })
     // [CRASH-FIX] Removed liveSession dep, use machine-derived values
     }, [validatedSetNumber, safeRepsValue, safeHoldValue, safeSelectedRPE, safeBandUsed, safeCurrentExercise, safeExerciseIndex, isHoldExercise, exercises, machineSessionContract, machineState, machineDispatch])
   
@@ -4348,9 +4362,17 @@ if (shouldShowLocalFallback) {
   
   // [LIVE-WORKOUT-MACHINE] Use safeStatus from machine
   if (safeStatus === 'ready') {
+    // [FLOW_TRACE] Ready gate entered - check if this is expected
+    console.log('[v0] [FLOW_TRACE] Ready render gate ENTERED', {
+      safeStatus,
+      machinePhase: machineState.phase,
+      completedSetsCount: machineState.completedSets.length,
+      startTime: machineState.startTime,
+    })
+    
     // [POST_LOG_READY_REGRESSION] Check if this is a regression - ready with progress means state was lost
     if (machineState.completedSets.length > 0 || machineState.startTime !== null) {
-      console.error('[POST_LOG_READY_REGRESSION] BUG: Ready state entered with active progress!', {
+      console.error('[v0] [FLOW_TRACE] BUG: Ready state with active progress!', {
         machinePhase: machineState.phase,
         completedSetsCount: machineState.completedSets.length,
         startTime: machineState.startTime,
@@ -5295,6 +5317,14 @@ function InterExerciseRestCountdown({
   // continuation. This prevents post-log render drift to the start shell.
   // ==========================================================================
   if (safeStatus === 'active' || safeStatus === 'resting') {
+    // [FLOW_TRACE] Corridor render gate reached
+    console.log('[v0] [FLOW_TRACE] Corridor render gate ENTERED', {
+      safeStatus,
+      machinePhase: machineState.phase,
+      currentSetNumber: validatedSetNumber,
+      completedSetsCount: normalizedCompletedSets.length,
+    })
+    
     // Determine corridor mode
     const corridorMode = safeStatus === 'resting' ? 'resting' : 'active'
     

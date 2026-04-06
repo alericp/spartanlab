@@ -5391,25 +5391,34 @@ function InterExerciseRestCountdown({
       machineDispatch({ type: 'COMPLETE_BLOCK_ROUND_REST' })
     }
     
-    // Rest duration based on rest type and RPE
+    // Derive next exercise for between-exercise transitions
+    const nextExerciseIndex = safeExerciseIndex + 1
+    const nextExercise = nextExerciseIndex < exercises.length ? exercises[nextExerciseIndex] : null
+    const nextExerciseName = nextExercise?.name
+    
+    // [ADAPTIVE-REST-FIX] Rest duration based on rest type and exercise prescription truth
     const getRestDuration = () => {
       if (isBlockRoundRest) {
         return blockRoundRestSeconds
       }
       if (isBetweenExerciseRest) {
-        // Between-exercise rest uses machine-tracked inter-exercise rest seconds
+        // Between-exercise rest: Use NEXT exercise's prescribed rest if available,
+        // otherwise derive adaptively from next exercise's category/intensity
+        if (nextExercise?.restSeconds && nextExercise.restSeconds > 0) {
+          return nextExercise.restSeconds
+        }
+        // Adaptive fallback: derive from next exercise target RPE or machine tracked value
+        const nextExerciseTargetRPE = nextExercise?.targetRPE || 8
+        if (nextExerciseTargetRPE >= 9) return 180 // Heavy next exercise = more rest
+        if (nextExerciseTargetRPE >= 8) return 120
         return machineState.interExerciseRestSeconds || 90
       }
-      // Same-exercise rest based on RPE
+      // Same-exercise rest based on last set's RPE
       if (!safeLastSetRPE) return 90
       if (safeLastSetRPE >= 9) return 180 // 3 min for RPE 9-10
       if (safeLastSetRPE >= 8) return 120 // 2 min for RPE 8
       return 90 // 1.5 min for RPE 6-7
     }
-    const nextExerciseIndex = safeExerciseIndex + 1
-    const nextExerciseName = nextExerciseIndex < exercises.length 
-      ? exercises[nextExerciseIndex]?.name 
-      : undefined
     
     return (
       <ActiveWorkoutStartCorridor
@@ -5420,6 +5429,11 @@ function InterExerciseRestCountdown({
         exerciseSets={safeCurrentExercise?.sets || 3}
         exerciseRepsOrTime={safeCurrentExercise?.repsOrTime || '8-12 reps'}
         targetRPE={safeCurrentExercise?.targetRPE || 8}
+        prescribedLoad={safeCurrentExercise?.prescribedLoad?.load && safeCurrentExercise.prescribedLoad.load > 0 ? {
+          load: safeCurrentExercise.prescribedLoad.load,
+          unit: safeCurrentExercise.prescribedLoad.unit || 'lbs',
+          confidenceLevel: safeCurrentExercise.prescribedLoad.confidenceLevel,
+        } : undefined}
         currentSetNumber={validatedSetNumber || 1}
         currentExerciseIndex={safeExerciseIndex || 0}
         totalExercises={exercises?.length || 1}

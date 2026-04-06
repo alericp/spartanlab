@@ -70,6 +70,13 @@ export interface ActiveWorkoutCorridorProps {
   exerciseRepsOrTime: string
   targetRPE?: number
   
+  // Prescribed load for weighted exercises
+  prescribedLoad?: {
+    load: number
+    unit: string
+    confidenceLevel?: 'high' | 'medium' | 'low'
+  }
+  
   // Progress
   currentSetNumber: number
   currentExerciseIndex: number
@@ -305,6 +312,7 @@ export function ActiveWorkoutStartCorridor({
   exerciseSets,
   exerciseRepsOrTime,
   targetRPE = 8,
+  prescribedLoad,
   currentSetNumber,
   currentExerciseIndex,
   totalExercises,
@@ -637,11 +645,17 @@ export function ActiveWorkoutStartCorridor({
             </h2>
             
             {/* Target prescription */}
-            <div className="flex items-center gap-2 mt-1.5 text-sm">
+            <div className="flex items-center gap-2 mt-1.5 text-sm flex-wrap">
               <span className="text-[#A4ACB8]">Target:</span>
               <span className="text-[#E6E9EF] font-medium">{exerciseRepsOrTime}</span>
               <span className="text-[#6B7280]">·</span>
               <span className="text-[#A4ACB8]">RPE {targetRPE}</span>
+              {prescribedLoad && prescribedLoad.load > 0 && (
+                <>
+                  <span className="text-[#6B7280]">·</span>
+                  <span className="text-amber-400 font-medium">+{prescribedLoad.load}{prescribedLoad.unit}</span>
+                </>
+              )}
             </div>
             
             {/* Set progress dots */}

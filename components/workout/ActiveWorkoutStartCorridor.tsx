@@ -620,7 +620,8 @@ export function ActiveWorkoutStartCorridor({
                   {blockMemberExercises.map((ex, idx) => (
                     <div key={ex.id} className="flex items-center gap-3 py-1">
                       <span className="w-6 h-6 rounded-full bg-[#2B313A] text-[#A4ACB8] text-xs flex items-center justify-center font-medium">
-                        {blockGroupType === 'superset' ? `A${idx + 1}` : idx + 1}
+                        {/* [GROUPED-IDENTITY-FIX] Use A, B, C for superset members to match session card display */}
+                        {blockGroupType === 'superset' ? String.fromCharCode(65 + idx) : idx + 1}
                       </span>
                       <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
                     </div>

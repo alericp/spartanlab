@@ -3862,6 +3862,14 @@ export function StreamlinedWorkoutSession({
     onCancel()
   }, [onCancel])
   
+  // [BACK-NAVIGATION] Navigate backward through workout sets/exercises
+  const handleGoBack = useCallback(() => {
+    machineDispatch({ type: 'GO_BACK', exercises })
+  }, [machineDispatch, exercises])
+  
+  // Compute whether user can go back (not at first set of first exercise)
+  const canGoBack = safeExerciseIndex > 0 || validatedSetNumber > 1
+  
   // Save completed workout with full logging
   const handleSaveWorkout = useCallback(async (difficulty?: PerceivedDifficulty) => {
     setIsSaving(true)
@@ -5518,6 +5526,8 @@ function InterExerciseRestCountdown({
         onDiscardWorkout={handleDiscardAndExit}
         onSkip={handleSkipExercise}
         onRestComplete={handleRestComplete}
+        onGoBack={handleGoBack}
+        canGoBack={canGoBack}
       />
     )
   }

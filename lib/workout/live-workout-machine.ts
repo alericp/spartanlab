@@ -190,6 +190,7 @@ export type WorkoutMachineAction =
   // Edit/back navigation
   | { type: 'EDIT_PREVIOUS_SET'; setIndex: number; updatedSet: CompletedSet }
   | { type: 'ADJUST_REST'; adjustment: number }
+  | { type: 'GO_BACK'; exercises: MachineExercise[] } // Navigate backward through sets/exercises
   // Grouped execution actions
   | { type: 'COMPLETE_BLOCK_SET'; completedSet: CompletedSet; block: ExecutionBlock; memberIndex: number; round: number }
   | { type: 'ADVANCE_TO_NEXT_BLOCK_MEMBER'; nextMemberIndex: number; nextExerciseIndex: number; targetValue: number }
@@ -660,6 +661,81 @@ export function workoutMachineReducer(
           blockRoundRestSeconds: Math.max(0, state.blockRoundRestSeconds + action.adjustment),
         }
       }
+      return state
+    }
+    
+    case 'GO_BACK': {
+      // [BACK-NAVIGATION] Navigate backward through workout sets/exercises
+      // Only allowed from active or resting phases
+      if (state.phase !== 'active' && state.phase !== 'resting') {
+        return state
+      }
+      
+      const exercises = action.exercises
+      const currentExercise = exercises[state.currentExerciseIndex]
+      
+      // RULE A: If on Set N > 1, go back to Set N-1 of same exercise
+      if (state.currentSetNumber > 1) {
+        // Remove the last completed set for this exercise if it exists
+        const lastSetForExercise = state.completedSets.findLastIndex(
+          s => s.exerciseIndex === state.currentExerciseIndex && s.setNumber === state.currentSetNumber - 1
+        )
+        const updatedSets = lastSetForExercise >= 0 
+          ? state.completedSets.filter((_, i) => i !== lastSetForExercise)
+          : state.completedSets
+        
+        // Restore values from the removed set for re-editing
+        const removedSet = lastSetForExercise >= 0 ? state.completedSets[lastSetForExercise] : null
+        
+        return {
+          ...state,
+          phase: 'active',
+          currentSetNumber: state.currentSetNumber - 1,
+          completedSets: updatedSets,
+          // Restore editable values from the removed set
+          repsValue: removedSet?.actualReps || 8,
+          holdValue: removedSet?.holdSeconds || 30,
+          selectedRPE: removedSet?.actualRPE || null,
+          bandUsed: removedSet?.bandUsed || 'none',
+          currentSetNote: removedSet?.note || '',
+          currentSetReasonTags: removedSet?.reasonTags || [],
+        }
+      }
+      
+      // RULE B: If on Set 1 and there's a previous exercise, go to last set of previous exercise
+      if (state.currentExerciseIndex > 0) {
+        const prevExerciseIndex = state.currentExerciseIndex - 1
+        const prevExercise = exercises[prevExerciseIndex]
+        const prevExerciseSets = prevExercise?.sets || 3
+        
+        // Find and remove the last completed set for the previous exercise
+        const lastSetForPrevExercise = state.completedSets.findLastIndex(
+          s => s.exerciseIndex === prevExerciseIndex && s.setNumber === prevExerciseSets
+        )
+        const updatedSets = lastSetForPrevExercise >= 0 
+          ? state.completedSets.filter((_, i) => i !== lastSetForPrevExercise)
+          : state.completedSets
+        
+        // Restore values from the removed set
+        const removedSet = lastSetForPrevExercise >= 0 ? state.completedSets[lastSetForPrevExercise] : null
+        
+        return {
+          ...state,
+          phase: 'active',
+          currentExerciseIndex: prevExerciseIndex,
+          currentSetNumber: prevExerciseSets,
+          completedSets: updatedSets,
+          // Restore editable values
+          repsValue: removedSet?.actualReps || 8,
+          holdValue: removedSet?.holdSeconds || 30,
+          selectedRPE: removedSet?.actualRPE || null,
+          bandUsed: removedSet?.bandUsed || 'none',
+          currentSetNote: removedSet?.note || '',
+          currentSetReasonTags: removedSet?.reasonTags || [],
+        }
+      }
+      
+      // At first set of first exercise - can't go back further
       return state
     }
     

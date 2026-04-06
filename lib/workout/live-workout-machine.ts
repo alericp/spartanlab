@@ -128,10 +128,10 @@ export interface MachineExercise {
   blockId?: string
 }
 
-/** Execution block for grouped exercises (superset/circuit/cluster) */
+/** Execution block for grouped exercises (superset/circuit/cluster/density_block) */
 export interface ExecutionBlock {
   blockId: string
-  groupType: 'superset' | 'circuit' | 'cluster' | null
+  groupType: 'superset' | 'circuit' | 'cluster' | 'density_block' | null
   blockLabel: string
   memberExercises: MachineExercise[]
   memberExerciseIndexes: number[]

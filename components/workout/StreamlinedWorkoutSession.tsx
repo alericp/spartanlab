@@ -219,10 +219,11 @@ function deriveExecutionPlanFromExercises(exercises: MachineExercise[]): Executi
     const memberCount = currentBlockExercises.length
     
     // Determine group type
-    // [GROUPED-FIX] A single-member block must NOT be classified as grouped, even if method contains cluster/superset/circuit
-    // Grouped UI only makes sense for blocks with 2+ exercises done together
-    let groupType: 'superset' | 'circuit' | 'cluster' | null = null
-    let blockLabel = firstEx.name
+  // [GROUPED-FIX] A single-member block must NOT be classified as grouped, even if method contains cluster/superset/circuit
+  // Grouped UI only makes sense for blocks with 2+ exercises done together
+  // [GROUPED-CONTRACT-ALIGN] Support density_block for parity with Program screen
+  let groupType: 'superset' | 'circuit' | 'cluster' | 'density_block' | null = null
+  let blockLabel = firstEx.name
     
     // Only classify as grouped if there are actually multiple members in the block
     if (memberCount >= 2) {
@@ -1968,9 +1969,14 @@ export function StreamlinedWorkoutSession({
       let totalSets = 0
       
       for (const group of styledGroups) {
-        const groupType = group.groupType === 'superset' ? 'superset'
+        // [GROUPED-CONTRACT-ALIGN] Map ALL styledGroup.groupType values to ExecutionBlock.groupType
+        // This ensures Program screen and live runtime use identical grouped identity
+        const groupType: 'superset' | 'circuit' | 'cluster' | 'density_block' | null = 
+          group.groupType === 'superset' ? 'superset'
           : group.groupType === 'circuit' ? 'circuit'
           : group.groupType === 'cluster' ? 'cluster'
+          : group.groupType === 'density_block' ? 'density_block'
+          : group.groupType === 'straight' ? null
           : null
         
         if (groupType) hasGroupedBlocks = true
@@ -1992,11 +1998,19 @@ export function StreamlinedWorkoutSession({
           }
         }
         
-        // Get label matching Program screen convention
+        // Get label matching Program screen convention - must match AdaptiveSessionCard display
         const blockLabel = groupType === 'superset' ? 'Superset'
           : groupType === 'circuit' ? 'Circuit'
           : groupType === 'cluster' ? 'Cluster Set'
+          : groupType === 'density_block' ? 'Density Block'
           : memberExercises[0]?.name || 'Exercise'
+        
+        // [GROUPED-CONTRACT-ALIGN] Rest timing per group type matching Program screen expectations
+        const intraBlockRest = groupType === 'superset' ? 0 
+          : groupType === 'circuit' ? 10 
+          : groupType === 'cluster' ? 15
+          : groupType === 'density_block' ? 0  // Density blocks are timed, not rest-based
+          : 15
         
         blocks.push({
           blockId: group.id,
@@ -2005,7 +2019,7 @@ export function StreamlinedWorkoutSession({
           memberExercises,
           memberExerciseIndexes,
           targetRounds: memberExercises[0]?.sets || 3,
-          intraBlockRestSeconds: groupType === 'superset' ? 0 : groupType === 'circuit' ? 10 : 15,
+          intraBlockRestSeconds: intraBlockRest,
           postRoundRestSeconds: memberExercises[0]?.restSeconds || 90,
           postBlockRestSeconds: 120,
         })
@@ -2975,7 +2989,7 @@ export function StreamlinedWorkoutSession({
       recommendedBand: undefined as ResistanceBandColor | undefined,
       // Grouped block context
       isGrouped: false,
-      groupType: null as 'superset' | 'circuit' | 'cluster' | null,
+      groupType: null as 'superset' | 'circuit' | 'cluster' | 'density_block' | null,
       blockLabel: '',
       memberIndex: 0,
       memberCount: 1,
@@ -3009,7 +3023,7 @@ export function StreamlinedWorkoutSession({
       // STEP 2: Resolve grouped block context safely
       let blockInfo: { block: ExecutionBlock; memberIndex: number } | null = null
       let isGrouped = false
-      let groupType: 'superset' | 'circuit' | 'cluster' | null = null
+      let groupType: 'superset' | 'circuit' | 'cluster' | 'density_block' | null = null
       let blockLabel = ''
       let memberIndex = 0
       let memberCount = 1
@@ -4635,10 +4649,13 @@ if (shouldShowLocalFallback) {
                   
                   if (isGrouped) {
                     // Grouped block - show header + nested members with visual bracket
+                    // [GROUPED-CONTRACT-ALIGN] Support all group types including density_block
                     const groupMethodInfo = block.groupType === 'superset' 
                       ? 'Alternate between exercises with minimal rest'
                       : block.groupType === 'circuit' 
                       ? 'Complete all exercises in sequence, then rest'
+                      : block.groupType === 'density_block'
+                      ? 'High-intensity timed block'
                       : 'Short rest between reps for heavier loads'
                     
                     return (
@@ -4649,7 +4666,7 @@ if (shouldShowLocalFallback) {
                         {/* Group Header with info affordance */}
                         <div className="flex items-center gap-2 py-1.5 mb-0.5">
                           <span className="w-5 h-5 rounded bg-[#C1121F]/20 text-[#C1121F] text-[9px] flex items-center justify-center font-bold">
-                            {block.groupType === 'superset' ? 'SS' : block.groupType === 'circuit' ? 'CR' : 'CL'}
+                            {block.groupType === 'superset' ? 'SS' : block.groupType === 'circuit' ? 'CR' : block.groupType === 'density_block' ? 'DB' : 'CL'}
                           </span>
                           <span className="text-xs font-medium text-[#C1121F]">{block.blockLabel}</span>
                           {/* [GROUPED-INFO] Tiny info text explaining the method */}

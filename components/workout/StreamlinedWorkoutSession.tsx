@@ -127,7 +127,12 @@ import {
   type GroupType,
   GROUP_TYPE_LABELS,
 } from '@/lib/workout/execution-unit-contract'
-import { resolveRestTime, applyRestAdjustment, type RestContext } from '@/lib/workout/rest-doctrine-resolver'
+  import { resolveRestTime, applyRestAdjustment, type RestContext } from '@/lib/workout/rest-doctrine-resolver'
+  import {
+    buildLiveExecutionContract,
+    type LiveExecutionContract,
+    type GroupedBlockContext,
+  } from '@/lib/workout/live-execution-contract'
 
 // =============================================================================
 // SAFE STRING HELPER - PREVENTS toLowerCase CRASHES
@@ -3187,6 +3192,45 @@ export function StreamlinedWorkoutSession({
     markBootStage('calibration_message_built', { hasMessage: !!calibrationMessage })
   }, [bootHydrationReady, exercises, sessionRuntimeTruth, exerciseRuntimeTruth, calibrationMessage])
   
+  // ==========================================================================
+  // [CANONICAL-RUNTIME-CONTRACT] Build the unified live execution contract
+  // ==========================================================================
+  // This is the SINGLE authoritative view for the current workout execution state.
+  // All UI consumers should read from this contract instead of calling
+  // getBlockForExercise() multiple times with potentially inconsistent inputs.
+  const liveExecutionContract: LiveExecutionContract | null = useMemo(() => {
+    // Only build contract when we have valid runtime truth
+    if (!hasValidExercises || !exerciseRuntimeTruth || !sessionRuntimeTruth) {
+      return null
+    }
+    
+    try {
+      return buildLiveExecutionContract({
+        sessionTruth: sessionRuntimeTruth,
+        exerciseTruth: exerciseRuntimeTruth,
+        executionPlan: machineSessionContract?.executionPlan ?? null,
+        currentExerciseIndex: safeExerciseIndex,
+        currentSet: machineState.currentSet,
+        currentRound: machineState.currentRound,
+        targetSets: safeCurrentExercise?.sets ?? 3,
+        lastSetRPE: machineState.lastSetRPE ?? null,
+      })
+    } catch (err) {
+      console.error('[v0] [live_execution_contract] Failed to build contract:', err)
+      return null
+    }
+  }, [
+    hasValidExercises,
+    exerciseRuntimeTruth,
+    sessionRuntimeTruth,
+    machineSessionContract?.executionPlan,
+    safeExerciseIndex,
+    machineState.currentSet,
+    machineState.currentRound,
+    machineState.lastSetRPE,
+    safeCurrentExercise?.sets,
+  ])
+  
   // [MACHINE-PHASE-DIAGNOSTIC] Log phase transitions for debugging
   // [LIVE-WORKOUT-MACHINE] Machine phase diagnostic effect
   useEffect(() => {
@@ -3200,10 +3244,14 @@ export function StreamlinedWorkoutSession({
   completedSetsCount: normalizedCompletedSets.length,
   hasValidExercises,
   exerciseCount: machineSessionContract?.exercises.length ?? 0,
+  // [CANONICAL-RUNTIME-CONTRACT] Log canonical contract status
+  liveContractBuilt: !!liveExecutionContract,
+  liveContractGrouped: liveExecutionContract?.groupedContext !== null,
+  liveContractMemberLabel: liveExecutionContract?.groupedContext?.memberLabel ?? null,
   })
   }
   // [CRASH-FIX] Use normalizedCompletedSets.length instead of direct machineState access
-  }, [machineState.phase, machineState.currentExerciseIndex, machineState.currentSetNumber, normalizedCompletedSets.length, safeStatus, viewModel.phase, hasValidExercises, machineSessionContract])
+  }, [machineState.phase, machineState.currentExerciseIndex, machineState.currentSetNumber, normalizedCompletedSets.length, safeStatus, viewModel.phase, hasValidExercises, machineSessionContract, liveExecutionContract])
   
   // ==========================================================================
   // [PHASE LW2] ACTIVE WORKOUT VIEW MODEL
@@ -5731,14 +5779,14 @@ function InterExerciseRestCountdown({
     const targetRounds = currentBlock?.block.targetRounds || 3
     // [GROUPED-IDENTITY-FIX] Derive member exercises from authoritative ExecutionBlock data
     // Machine's ExecutionBlock stores full memberExercises array with MachineExercise objects
-    const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
-      id: ex.id,
-      name: ex.name,
-    })) || []
-    const blockRoundRestSeconds = machineState.blockRoundRestSeconds || 90
-    // [GROUPED-IDENTITY-FIX] Derive grouped member index for A/B/C display
-    // Only expose when in a grouped block (groupType is not null)
-    const groupedMemberIndex = currentBlock?.block.groupType ? currentBlock.memberIndex : null
+const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
+  id: ex.id,
+  name: ex.name,
+  })) || []
+  const blockRoundRestSeconds = machineState.blockRoundRestSeconds || 90
+  // [CANONICAL-RUNTIME-CONTRACT] Use the canonical live execution contract for grouped member identity
+  // This ensures all surfaces read from the same authoritative source
+  const groupedMemberIndex = liveExecutionContract?.groupedContext?.memberIndex ?? null
     
     // Handler for block round rest completion
     const handleBlockRoundRestComplete = () => {

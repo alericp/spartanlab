@@ -115,7 +115,10 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
     })
     .filter((ex): ex is NonNullable<typeof ex> => ex !== null)
   
-  return {
+  // [GROUPED-TRUTH-UNIFY] Preserve styleMetadata through session load
+  // This is the authoritative grouped source that the Program screen uses
+  // It must be preserved so the current live workout can read the same grouped authority
+  const result: AdaptiveSession = {
     dayNumber: typeof session.dayNumber === 'number' ? session.dayNumber : index + 1,
     dayLabel: typeof session.dayLabel === 'string' && session.dayLabel ? session.dayLabel : `Day ${index + 1}`,
     focus: typeof session.focus === 'string' ? session.focus : 'general',
@@ -127,7 +130,14 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
     estimatedMinutes: typeof session.estimatedMinutes === 'number' ? session.estimatedMinutes : 45,
     isPrimary: session.isPrimary !== false,
     finisherIncluded: session.finisherIncluded === true,
-  } as AdaptiveSession
+  }
+  
+  // Preserve styleMetadata if present
+  if (session.styleMetadata && typeof session.styleMetadata === 'object') {
+    result.styleMetadata = session.styleMetadata as AdaptiveSession['styleMetadata']
+  }
+  
+  return result
 }
 
 // =============================================================================

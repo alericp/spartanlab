@@ -4471,10 +4471,87 @@ if (shouldShowLocalFallback) {
               )}
             </div>
             {/* [GROUPED-PLAN-FIX] Render grouped structure in Today's Plan */}
-            {/* Uses same executionPlan as live workout for truth alignment */}
+            {/* [GROUPED-TRUTH-UNIFY] Use styleMetadata.styledGroups as authoritative source when available */}
+            {/* Falls back to executionPlan if styleMetadata is not present */}
             <div className="space-y-0">
-              {executionPlan.hasGroupedBlocks ? (
-                // GROUPED RENDER - Show blocks with proper structure
+              {safeSession.styleMetadata?.styledGroups && safeSession.styleMetadata.styledGroups.length > 0 ? (
+                // AUTHORITATIVE GROUPED RENDER - Use styleMetadata from program builder
+                safeSession.styleMetadata.styledGroups.map((group, groupIdx) => {
+                  const isGrouped = group.groupType !== 'straight'
+                  
+                  if (isGrouped) {
+                    // Grouped block from styleMetadata - show header + nested members
+                    return (
+                      <div key={group.id} className="py-1">
+                        {/* Group Header */}
+                        <div className="flex items-center gap-2 py-1.5 border-b border-[#2B313A]/30">
+                          <span className="w-5 h-5 rounded bg-[#C1121F]/20 text-[#C1121F] text-[9px] flex items-center justify-center font-bold">
+                            {group.groupType === 'superset' ? 'SS' : group.groupType === 'circuit' ? 'CR' : group.groupType === 'cluster' ? 'CL' : 'DB'}
+                          </span>
+                          <span className="text-xs font-medium text-[#C1121F]">
+                            {group.groupType === 'superset' ? 'Superset' : group.groupType === 'circuit' ? 'Circuit' : group.groupType === 'cluster' ? 'Cluster Set' : 'Density Block'}
+                          </span>
+                          {group.instruction && (
+                            <span className="text-[10px] text-[#6B7280] ml-auto">{group.instruction}</span>
+                          )}
+                        </div>
+                        {/* Member exercises - nested */}
+                        {group.exercises.map((exInfo, memberIdx) => {
+                          // Find actual exercise from main exercises array for full details
+                          const fullEx = exercises.find(e => e.id === exInfo.id)
+                          return (
+                            <div key={exInfo.id} className="flex items-center justify-between py-1.5 pl-7 border-b border-[#2B313A]/20 last:border-0">
+                              <div className="flex items-center gap-2">
+                                <span className="w-4 h-4 rounded-full bg-[#2B313A]/50 text-[#A4ACB8] text-[9px] flex items-center justify-center font-medium">
+                                  {exInfo.prefix || String.fromCharCode(65 + memberIdx)}
+                                </span>
+                                <span className="text-sm text-[#E6E9EF]">{exInfo.name}</span>
+                              </div>
+                              <span className="text-[11px] text-[#6B7280] tabular-nums">
+                                {fullEx?.sets || 3}×{fullEx?.repsOrTime || '8-12 reps'}
+                                {fullEx?.prescribedLoad && fullEx.prescribedLoad.load > 0 && (
+                                  <span className="ml-1 text-[#C1121F] font-medium">
+                                    @ +{fullEx.prescribedLoad.load}{fullEx.prescribedLoad.unit}
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  } else {
+                    // Single exercise from styleMetadata
+                    const exInfo = group.exercises[0]
+                    const fullEx = exercises.find(e => e.id === exInfo?.id)
+                    const globalIndex = safeSession.styleMetadata!.styledGroups
+                      .slice(0, groupIdx)
+                      .reduce((sum, g) => sum + g.exercises.length, 0) + 1
+                    
+                    if (!exInfo || !fullEx) return null
+                    
+                    return (
+                      <div key={group.id} className="flex items-center justify-between py-1.5 border-b border-[#2B313A]/30 last:border-0">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-5 h-5 rounded-full bg-[#2B313A] text-[#6B7280] text-[10px] flex items-center justify-center font-medium">
+                            {globalIndex}
+                          </span>
+                          <span className="text-sm text-[#E6E9EF]">{exInfo.name}</span>
+                        </div>
+                        <span className="text-[11px] text-[#6B7280] tabular-nums">
+                          {fullEx.sets}×{fullEx.repsOrTime}
+                          {fullEx.prescribedLoad && fullEx.prescribedLoad.load > 0 && (
+                            <span className="ml-1 text-[#C1121F] font-medium">
+                              @ +{fullEx.prescribedLoad.load}{fullEx.prescribedLoad.unit}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    )
+                  }
+                })
+              ) : executionPlan.hasGroupedBlocks ? (
+                // FALLBACK GROUPED RENDER - Use executionPlan if styleMetadata is absent
                 executionPlan.blocks.map((block, blockIdx) => {
                   const isGrouped = block.groupType !== null
                   

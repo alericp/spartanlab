@@ -423,6 +423,91 @@ export function OverrideWarningBubble({
 }
 
 // =============================================================================
+// METHOD INFO BUBBLE - For training method explanations (Superset, Circuit, etc.)
+// =============================================================================
+
+interface MethodInfoBubbleProps {
+  /** Training method type */
+  methodType: 'superset' | 'circuit' | 'cluster' | 'density_block' | 'emom' | 'straight_sets'
+  /** Optional additional context */
+  context?: string
+  /** Show as inline icon or full bubble */
+  variant?: 'icon' | 'inline' | 'full'
+  className?: string
+}
+
+export function MethodInfoBubble({
+  methodType,
+  context,
+  variant = 'icon',
+  className,
+}: MethodInfoBubbleProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  
+  const knowledge = getStructureKnowledge(methodType)
+  if (!knowledge) return null
+  
+  // Icon-only variant with tooltip
+  if (variant === 'icon') {
+    return (
+      <div className={cn('relative inline-flex', className)}>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            setIsOpen(!isOpen)
+          }}
+          className="p-0.5 text-[#6B7280] hover:text-[#A4ACB8] transition-colors"
+          aria-label={`Learn about ${methodType}`}
+        >
+          <Info className="w-3.5 h-3.5" />
+        </button>
+        
+        {isOpen && (
+          <>
+            <div 
+              className="fixed inset-0 z-40"
+              onClick={() => setIsOpen(false)}
+            />
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-64 p-2.5 rounded-lg bg-[#1A1A1A] border border-[#2B313A] shadow-lg">
+              <p className="text-xs font-medium text-[#E6E9EF] mb-1 capitalize">{methodType.replace(/_/g, ' ')}</p>
+              <p className="text-xs text-[#A4ACB8] leading-relaxed">{knowledge.reason}</p>
+              <p className="text-xs text-[#6B7280] mt-1.5 leading-relaxed">{knowledge.benefit}</p>
+              {context && (
+                <p className="text-xs text-[#4F6D8A] mt-1.5 italic">{context}</p>
+              )}
+              <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
+                <div className="border-4 border-transparent border-t-[#2B313A]" />
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    )
+  }
+  
+  // Inline variant - compact single line
+  if (variant === 'inline') {
+    return (
+      <span className={cn('text-xs text-[#6B7280]', className)}>
+        {knowledge.reason}
+      </span>
+    )
+  }
+  
+  // Full variant - expandable card
+  return (
+    <KnowledgeBubble
+      content={knowledge.reason}
+      type="workout_structure_reason"
+      priority="low"
+      expandedContent={knowledge.benefit}
+      className={className}
+    />
+  )
+}
+
+// =============================================================================
 // COACHING INSIGHT BUBBLE (Generic)
 // =============================================================================
 

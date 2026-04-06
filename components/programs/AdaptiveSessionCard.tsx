@@ -20,7 +20,7 @@ import { WorkoutSessionSummary } from '@/components/workout/WorkoutSessionSummar
 import { trackWorkoutStarted, trackWorkoutCompleted } from '@/lib/analytics'
 import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
-import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble } from '@/components/coaching'
+import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { 
@@ -1056,6 +1056,11 @@ function MainExercisesRenderer({
                 <div className="flex items-center gap-2">
                   <span className={colors.text}>{icon}</span>
                   <span className={`text-sm font-medium ${colors.text}`}>{label}</span>
+                  {/* [EDUCATIONAL] Method info bubble - explains what this training method is */}
+                  <MethodInfoBubble 
+                    methodType={group.groupType as 'superset' | 'circuit' | 'cluster' | 'density_block'}
+                    context={group.exercises[0]?.methodRationale || undefined}
+                  />
                   {group.instruction && (
                     <span className="text-xs text-[#6A6A6A] ml-auto">{group.instruction}</span>
                   )}

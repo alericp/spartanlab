@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { ChevronLeft, ChevronDown, ChevronUp, Check, SkipForward, X, MessageSquare, Play } from 'lucide-react'
+import { MethodInfoBubble } from '@/components/coaching'
 import type { RPEValue } from '@/lib/rpe-adjustment-engine'
 import type { ResistanceBandColor } from '@/lib/band-progression-engine'
 
@@ -611,12 +612,18 @@ export function ActiveWorkoutStartCorridor({
               {/* Grouped Block Info */}
               <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="outline" className="text-amber-500 border-amber-500/30 text-xs uppercase px-2 py-0.5">
-                    {blockGroupType === 'superset' ? 'Superset' : 
-                     blockGroupType === 'circuit' ? 'Circuit' : 
-                     blockGroupType === 'cluster' ? 'Cluster' : 
-                     blockGroupType === 'emom' ? 'EMOM' : 'Block'}
-                  </Badge>
+<Badge variant="outline" className="text-amber-500 border-amber-500/30 text-xs uppercase px-2 py-0.5">
+                  {blockGroupType === 'superset' ? 'Superset' :
+                   blockGroupType === 'circuit' ? 'Circuit' :
+                   blockGroupType === 'cluster' ? 'Cluster' :
+                   blockGroupType === 'emom' ? 'EMOM' : 'Block'}
+                </Badge>
+                {/* [EDUCATIONAL] Method info bubble - explains what this training method is */}
+                {blockGroupType && (
+                  <MethodInfoBubble 
+                    methodType={blockGroupType as 'superset' | 'circuit' | 'cluster' | 'emom'}
+                  />
+                )}
                   <span className="text-sm text-[#A4ACB8]">Round {currentRound} of {targetRounds}</span>
                 </div>
                 <div className="space-y-2">

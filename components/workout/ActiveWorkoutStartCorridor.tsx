@@ -133,6 +133,10 @@ export interface ActiveWorkoutCorridorProps {
   
   onSkip?: () => void
   onRestComplete?: () => void
+  
+  // Back navigation
+  onGoBack?: () => void
+  canGoBack?: boolean // True if user can navigate backward (not at first set of first exercise)
 }
 
 // =============================================================================
@@ -357,6 +361,8 @@ export function ActiveWorkoutStartCorridor({
   onDiscardWorkout,
   onSkip,
   onRestComplete,
+  onGoBack,
+  canGoBack = false,
 }: ActiveWorkoutCorridorProps) {
 
   const isHold = isHoldExercise(exerciseRepsOrTime)
@@ -785,10 +791,11 @@ export function ActiveWorkoutStartCorridor({
           </Card>
           
           {/* ========== RECENT SETS LEDGER ========== */}
+          {/* [MOBILE-FIX] Constrained height with internal scroll to prevent pushing action rail too low */}
           {recentSets.length > 0 && (
             <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
               <div className="text-xs font-medium text-[#A4ACB8] mb-2">Recent Sets</div>
-              <div className="space-y-1 text-xs">
+              <div className="space-y-1 text-xs max-h-24 overflow-y-auto">
                 {recentSets.map((set, idx) => (
                   <div key={idx} className="flex items-center justify-between px-2 py-1.5 bg-[#2B313A]/50 rounded">
                     <div className="flex items-center gap-2 flex-1">
@@ -812,34 +819,55 @@ export function ActiveWorkoutStartCorridor({
             </Card>
           )}
           
-          {/* ========== PRIMARY ACTION ========== */}
-          <Button 
-            onClick={onCompleteSet} 
-            disabled={selectedRPE === null}
-            className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] disabled:bg-[#C1121F]/50 disabled:cursor-not-allowed text-white text-base font-bold"
-          >
-            <Check className="w-5 h-5 mr-2" />
-            Log Set
-          </Button>
-          
-          {/* ========== SECONDARY ACTIONS ========== */}
-          <div className="flex items-center justify-between pt-2">
+          {/* ========== ACTION RAIL ========== */}
+          {/* [MOBILE-FIX] Sticky action rail that stays accessible on mobile */}
+          <div className="sticky bottom-0 bg-[#0F1115] pt-3 pb-2 -mx-4 px-4 border-t border-[#2B313A]/50">
+            {/* Primary Action */}
             <Button 
-              variant="ghost" 
-              onClick={onSkip}
-              className="text-[#6B7280] text-sm h-9 px-3 hover:text-[#A4ACB8]"
+              onClick={onCompleteSet} 
+              disabled={selectedRPE === null}
+              className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] disabled:bg-[#C1121F]/50 disabled:cursor-not-allowed text-white text-base font-bold"
             >
-              <SkipForward className="w-3.5 h-3.5 mr-1.5" />
-              Skip
+              <Check className="w-5 h-5 mr-2" />
+              Log Set
             </Button>
-            <Button 
-              variant="ghost" 
-              onClick={() => setShowExitConfirm(true)}
-              className="text-[#6B7280] text-sm h-9 px-3 hover:text-[#A4ACB8]"
-            >
-              <X className="w-3.5 h-3.5 mr-1.5" />
-              End
-            </Button>
+            
+            {/* Secondary Actions with Back Button */}
+            <div className="flex items-center justify-between pt-2">
+              {/* Left: Back button */}
+              {canGoBack && onGoBack ? (
+                <Button 
+                  variant="ghost" 
+                  onClick={onGoBack}
+                  className="text-[#6B7280] text-sm h-9 px-3 hover:text-[#A4ACB8]"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5 mr-1" />
+                  Back
+                </Button>
+              ) : (
+                <div className="w-16" /> // Spacer when back not available
+              )}
+              
+              {/* Center: Skip */}
+              <Button 
+                variant="ghost" 
+                onClick={onSkip}
+                className="text-[#6B7280] text-sm h-9 px-3 hover:text-[#A4ACB8]"
+              >
+                <SkipForward className="w-3.5 h-3.5 mr-1.5" />
+                Skip
+              </Button>
+              
+              {/* Right: End */}
+              <Button 
+                variant="ghost" 
+                onClick={() => setShowExitConfirm(true)}
+                className="text-[#6B7280] text-sm h-9 px-3 hover:text-[#A4ACB8]"
+              >
+                <X className="w-3.5 h-3.5 mr-1.5" />
+                End
+              </Button>
+            </div>
           </div>
             </>
           )}

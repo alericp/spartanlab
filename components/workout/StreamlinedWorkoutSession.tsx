@@ -2474,6 +2474,10 @@ export function StreamlinedWorkoutSession({
   const totalExercises = exercises.length
   const totalSets = exercises.reduce((sum, ex) => sum + (ex.sets || 3), 0)
   
+  // [START-CRASH-FIX] Get executionPlan from contract for grouped rendering in ready state
+  // This was missing and causing undefined access crash when clicking Start Workout
+  const executionPlan = machineSessionContract?.executionPlan ?? { blocks: [], hasGroupedBlocks: false, totalSets: 0 }
+  
 
   
   // Machine-derived: hasValidExercises

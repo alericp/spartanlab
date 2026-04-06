@@ -3815,12 +3815,28 @@ export function StreamlinedWorkoutSession({
     }
   }, [safeStatus, normalizedCompletedSets.length, onCancel])
   
-  // Discard and exit (clears all state, no logging)
+  // [EXIT-INTENT-FIX] Save & Exit - preserves session for resume, then leaves
+  // Does NOT clear session storage - allows user to resume later
+  const handleSaveAndExit = useCallback(() => {
+    // Clear only transient state (rest timers), keep workout session for resume
+    clearRestTimerState()
+    setShowExitConfirm(false)
+    // Session storage is intentionally NOT cleared - workout can be resumed
+    console.log('[exit-intent] Save & Exit: Preserving session for resume', {
+      completedSets: normalizedCompletedSets.length,
+      currentExerciseIndex: safeExerciseIndex,
+    })
+    onCancel()
+  }, [normalizedCompletedSets.length, safeExerciseIndex, onCancel])
+  
+  // [EXIT-INTENT-FIX] Discard Workout - clears all state, no logging, no resume
+  // Explicitly clears session storage so workout cannot be resumed
   const handleDiscardAndExit = useCallback(() => {
     clearSessionStorage()
     clearRestTimerState()
     clearSessionOverrides()
     setShowExitConfirm(false)
+    console.log('[exit-intent] Discard Workout: Cleared all session state')
     onCancel()
   }, [onCancel])
   
@@ -5469,6 +5485,8 @@ function InterExerciseRestCountdown({
         onSetNote={handleSetNote}
         onToggleReasonTag={handleToggleReasonTag}
         onExit={() => setShowExitConfirm(true)}
+        onSaveAndExit={handleSaveAndExit}
+        onDiscardWorkout={handleDiscardAndExit}
         onSkip={handleSkipExercise}
         onRestComplete={handleRestComplete}
       />

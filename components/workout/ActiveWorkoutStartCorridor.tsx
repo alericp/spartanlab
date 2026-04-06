@@ -125,7 +125,12 @@ export interface ActiveWorkoutCorridorProps {
   onSetBand: (band: ResistanceBandColor | 'none') => void
   onSetNote?: (note: string) => void
   onToggleReasonTag?: (tag: SetReasonTag) => void
-  onExit: () => void
+  
+  // Exit intent handlers - three distinct user actions
+  onExit: () => void // Legacy/fallback - opens modal
+  onSaveAndExit?: () => void // Save progress for resume, then leave
+  onDiscardWorkout?: () => void // Clear resumable state, then leave
+  
   onSkip?: () => void
   onRestComplete?: () => void
 }
@@ -348,6 +353,8 @@ export function ActiveWorkoutStartCorridor({
   onSetNote,
   onToggleReasonTag,
   onExit,
+  onSaveAndExit,
+  onDiscardWorkout,
   onSkip,
   onRestComplete,
 }: ActiveWorkoutCorridorProps) {
@@ -819,6 +826,7 @@ export function ActiveWorkoutStartCorridor({
       </div>
       
       {/* ========== EXIT CONFIRMATION MODAL ========== */}
+      {/* [EXIT-INTENT-FIX] Three distinct user intents: Continue, Save & Exit, Discard Workout */}
       {showExitConfirm && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
           <Card className="bg-[#1A1F26] border-[#2B313A] max-w-sm w-full p-6">
@@ -831,25 +839,60 @@ export function ActiveWorkoutStartCorridor({
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-sm text-[#A4ACB8] mb-6">
-              Your progress will be saved. You can resume this workout later.
-            </p>
-            <div className="flex gap-3">
+            
+            {/* Clear explanation of options */}
+            <div className="space-y-4 mb-6">
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-[#0F1115] border border-[#2B313A]">
+                <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-[#E6E9EF]">Save & Exit</p>
+                  <p className="text-xs text-[#6B7280]">Your progress will be saved. Resume anytime.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-[#0F1115] border border-[#2B313A]">
+                <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-[#E6E9EF]">Discard Workout</p>
+                  <p className="text-xs text-[#6B7280]">Delete this session. Progress will be lost.</p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Action buttons - stacked for clarity */}
+            <div className="space-y-2">
               <Button
                 variant="outline"
-                className="flex-1 border-[#2B313A] text-[#E6E9EF] hover:bg-[#2B313A]"
+                className="w-full border-[#2B313A] text-[#E6E9EF] hover:bg-[#2B313A]"
                 onClick={() => setShowExitConfirm(false)}
               >
-                Continue
+                Continue Workout
               </Button>
               <Button
-                className="flex-1 bg-[#C1121F] hover:bg-[#A10F1A] text-white"
+                className="w-full bg-[#C1121F] hover:bg-[#A10F1A] text-white"
                 onClick={() => {
                   setShowExitConfirm(false)
-                  onExit()
+                  if (onSaveAndExit) {
+                    onSaveAndExit()
+                  } else {
+                    onExit() // Fallback to legacy behavior
+                  }
                 }}
               >
-                Exit
+                Save & Exit
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full text-[#6B7280] hover:text-red-400 hover:bg-red-500/10"
+                onClick={() => {
+                  setShowExitConfirm(false)
+                  if (onDiscardWorkout) {
+                    onDiscardWorkout()
+                  } else {
+                    onExit() // Fallback to legacy behavior
+                  }
+                }}
+              >
+                Discard Workout
               </Button>
             </div>
           </Card>

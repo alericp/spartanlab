@@ -28,13 +28,165 @@
  * - spartanlab_adaptive_programs (canonical key) → preferred source of truth
  */
 
-import { getLatestAdaptiveProgram, saveAdaptiveProgram, type AdaptiveProgram, type GenerationErrorCode } from './adaptive-program-builder'
+import { getLatestAdaptiveProgram, saveAdaptiveProgram, type AdaptiveProgram, type GenerationErrorCode, type AdaptiveSession, type AdaptiveExercise } from './adaptive-program-builder'
 import { getLatestProgram, type GeneratedProgram } from './program-service'
 import { 
   assertProgramStateUsable, 
   markCanonicalPathUsed,
 } from './production-safety'
 import { EMPTY_SKILL_TRACE, getSafeSkillTrace } from './safe-access'
+
+// =============================================================================
+// [GROUPED-CONTRACT-RECONCILIATION] Canonical Load-Time Grouped Truth Reconciler
+// =============================================================================
+// This ensures persisted programs don't keep obsolete grouped metadata after
+// grouping rules evolve. Stale grouped fields are CLEARED and REBUILT from
+// CURRENT grouping eligibility rules - not blindly preserved.
+// =============================================================================
+
+/**
+ * Check if an exercise is eligible for superset grouping under CURRENT rules.
+ * This is the SAME eligibility logic as the builder, extracted for load-time reconciliation.
+ */
+function isEligibleForSuperset(ex: AdaptiveExercise): boolean {
+  const nameLower = ex.name?.toLowerCase() || ''
+  
+  // EXCLUDE: Skill category exercises
+  if (ex.category === 'skill') return false
+  
+  // EXCLUDE: Primary selection reason exercises (main session pillars)
+  if (ex.selectionReason?.includes('primary')) return false
+  
+  // EXCLUDE: Weighted/heavy strength work
+  if (nameLower.includes('weighted') || nameLower.includes('heavy')) return false
+  
+  // EXCLUDE: Power/explosive/plyometric movements - these require full rest
+  if (nameLower.includes('explosive') ||
+      nameLower.includes('power') ||
+      nameLower.includes('plyometric') ||
+      nameLower.includes('dynamic') ||
+      nameLower.includes('ballistic') ||
+      nameLower.includes('jumping') ||
+      nameLower.includes('clapping')) return false
+  
+  // EXCLUDE: Main compound strength movements that function as session pillars
+  if (nameLower.includes('muscle-up') ||
+      nameLower.includes('front lever') ||
+      nameLower.includes('back lever') ||
+      nameLower.includes('planche') ||
+      nameLower.includes('iron cross')) return false
+  
+  return true
+}
+
+/**
+ * Reconcile session grouped contract to CURRENT rules.
+ * This CLEARS stale grouped fields and REBUILDS canonical grouped truth.
+ * 
+ * - Strips stale blockId/method/methodLabel from exercises that no longer qualify
+ * - Rebuilds styleMetadata.styledGroups from CURRENT eligibility rules
+ * - Ensures grouped truth matches what the builder would produce today
+ */
+function reconcileSessionGroupedContract(session: AdaptiveSession): AdaptiveSession {
+  if (!session || !Array.isArray(session.exercises)) return session
+  
+  // Step 1: Clean all exercises - remove stale grouped decorations
+  const cleanedExercises = session.exercises.map((ex, idx) => {
+    // Check if this exercise CURRENTLY qualifies for superset
+    const qualifiesNow = isEligibleForSuperset(ex)
+    
+    // If it had grouped fields but no longer qualifies, STRIP THEM
+    if (!qualifiesNow && (ex.blockId || ex.method === 'superset' || ex.method === 'circuit')) {
+      const { blockId, method, methodLabel, ...cleanEx } = ex as AdaptiveExercise & { blockId?: string; method?: string; methodLabel?: string }
+      return cleanEx
+    }
+    
+    return ex
+  })
+  
+  // Step 2: Identify CURRENT valid superset candidates (from tail, per builder logic)
+  const supersetCandidates = cleanedExercises
+    .map((ex, idx) => ({ ex, idx }))
+    .filter(({ ex }) => isEligibleForSuperset(ex))
+  
+  // Step 3: Rebuild superset pairs from the END of the candidate array (matching builder)
+  const newSupersetGroups: Array<{
+    id: string
+    groupType: 'superset' | 'straight'
+    exercises: Array<{ id: string; name: string; prefix?: string }>
+    instruction?: string
+  }> = []
+  
+  const pairedIndexes = new Set<number>()
+  
+  if (supersetCandidates.length >= 2) {
+    const pairsToCreate = Math.min(2, Math.floor(supersetCandidates.length / 2))
+    let pairsCreated = 0
+    
+    // Pair from the END (true accessory/core tail)
+    for (let i = supersetCandidates.length - 2; i >= 0 && pairsCreated < pairsToCreate; i -= 2) {
+      const { ex: ex1, idx: idx1 } = supersetCandidates[i]
+      const { ex: ex2, idx: idx2 } = supersetCandidates[i + 1]
+      
+      // Assign blockId to these exercises
+      const blockId = `superset-${pairsCreated + 1}`
+      cleanedExercises[idx1] = { ...cleanedExercises[idx1], blockId, method: 'superset' as const }
+      cleanedExercises[idx2] = { ...cleanedExercises[idx2], blockId, method: 'superset' as const }
+      
+      pairedIndexes.add(idx1)
+      pairedIndexes.add(idx2)
+      
+      newSupersetGroups.push({
+        id: blockId,
+        groupType: 'superset',
+        exercises: [
+          { id: ex1.id || `ex-${idx1}`, name: ex1.name, prefix: 'A' },
+          { id: ex2.id || `ex-${idx2}`, name: ex2.name, prefix: 'B' },
+        ],
+        instruction: 'Alternate with minimal rest',
+      })
+      
+      pairsCreated++
+    }
+  }
+  
+  // Step 4: Build straight groups for non-supersetted exercises
+  const straightGroups: typeof newSupersetGroups = []
+  cleanedExercises.forEach((ex, idx) => {
+    if (!pairedIndexes.has(idx)) {
+      straightGroups.push({
+        id: `straight-${idx}`,
+        groupType: 'straight',
+        exercises: [{ id: ex.id || `ex-${idx}`, name: ex.name }],
+      })
+    }
+  })
+  
+  // Step 5: Rebuild styleMetadata with CURRENT grouped truth
+  const hasSupersetsApplied = newSupersetGroups.length > 0
+  const styledGroups = [...newSupersetGroups, ...straightGroups]
+  
+  // Preserve unrelated styleMetadata fields, but OVERWRITE grouped fields
+  const existingMeta = session.styleMetadata || {}
+  const reconciledMeta = {
+    ...existingMeta,
+    // ALWAYS overwrite grouped-contract fields with CURRENT truth
+    hasSupersetsApplied,
+    styledGroups,
+    structureDescription: hasSupersetsApplied 
+      ? `${newSupersetGroups.length} superset pair${newSupersetGroups.length > 1 ? 's' : ''} on accessory work`
+      : existingMeta.structureDescription || '',
+    appliedMethods: hasSupersetsApplied 
+      ? ['supersets', 'straight_sets']
+      : ['straight_sets'],
+  }
+  
+  return {
+    ...session,
+    exercises: cleanedExercises,
+    styleMetadata: reconciledMeta,
+  }
+}
 
 // =============================================================================
 // REBUILD RESULT CONTRACT - TASK 1
@@ -1109,39 +1261,47 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
       
       // [PHASE-X] Ensure sessions array exists and normalize each session
       // This prevents downstream crashes from malformed session data
+      // [GROUPED-CONTRACT-RECONCILIATION] Also reconcile stale grouped truth to CURRENT rules
       sessions: Array.isArray(program.sessions) 
         ? program.sessions
             .filter(s => s && typeof s === 'object' && Array.isArray(s.exercises))
-            .map(s => ({
-              ...s,
-              // Ensure session has all required fields
-              dayNumber: typeof s.dayNumber === 'number' ? s.dayNumber : 1,
-              dayLabel: typeof s.dayLabel === 'string' && s.dayLabel ? s.dayLabel : `Day ${s.dayNumber || 1}`,
-              focus: typeof s.focus === 'string' && s.focus ? s.focus : 'general',
-              focusLabel: typeof s.focusLabel === 'string' ? s.focusLabel : 'Training',
-              rationale: typeof s.rationale === 'string' ? s.rationale : '',
-              estimatedMinutes: typeof s.estimatedMinutes === 'number' ? s.estimatedMinutes : 45,
-              isPrimary: s.isPrimary !== false,
-              finisherIncluded: s.finisherIncluded === true,
-              // Normalize exercises with safe defaults
-              exercises: Array.isArray(s.exercises) 
-                ? s.exercises
-                    .filter(ex => ex && typeof ex === 'object')
-                    .map((ex, idx) => ({
-                      ...ex,
-                      id: typeof ex.id === 'string' && ex.id ? ex.id : `exercise-${idx}`,
-                      name: typeof ex.name === 'string' && ex.name ? ex.name : 'Exercise',
-                      category: typeof ex.category === 'string' ? ex.category : 'general',
-                      sets: typeof ex.sets === 'number' && ex.sets > 0 ? ex.sets : 3,
-                      repsOrTime: typeof ex.repsOrTime === 'string' && ex.repsOrTime ? ex.repsOrTime : '8-12 reps',
-                      note: typeof ex.note === 'string' ? ex.note : '',
-                      isOverrideable: ex.isOverrideable !== false,
-                      selectionReason: typeof ex.selectionReason === 'string' ? ex.selectionReason : '',
-                    }))
-                : [],
-              warmup: Array.isArray(s.warmup) ? s.warmup : [],
-              cooldown: Array.isArray(s.cooldown) ? s.cooldown : [],
-            }))
+            .map(s => {
+              // First normalize basic session fields
+              const normalizedSession = {
+                ...s,
+                // Ensure session has all required fields
+                dayNumber: typeof s.dayNumber === 'number' ? s.dayNumber : 1,
+                dayLabel: typeof s.dayLabel === 'string' && s.dayLabel ? s.dayLabel : `Day ${s.dayNumber || 1}`,
+                focus: typeof s.focus === 'string' && s.focus ? s.focus : 'general',
+                focusLabel: typeof s.focusLabel === 'string' ? s.focusLabel : 'Training',
+                rationale: typeof s.rationale === 'string' ? s.rationale : '',
+                estimatedMinutes: typeof s.estimatedMinutes === 'number' ? s.estimatedMinutes : 45,
+                isPrimary: s.isPrimary !== false,
+                finisherIncluded: s.finisherIncluded === true,
+                // Normalize exercises with safe defaults
+                exercises: Array.isArray(s.exercises) 
+                  ? s.exercises
+                      .filter(ex => ex && typeof ex === 'object')
+                      .map((ex, idx) => ({
+                        ...ex,
+                        id: typeof ex.id === 'string' && ex.id ? ex.id : `exercise-${idx}`,
+                        name: typeof ex.name === 'string' && ex.name ? ex.name : 'Exercise',
+                        category: typeof ex.category === 'string' ? ex.category : 'general',
+                        sets: typeof ex.sets === 'number' && ex.sets > 0 ? ex.sets : 3,
+                        repsOrTime: typeof ex.repsOrTime === 'string' && ex.repsOrTime ? ex.repsOrTime : '8-12 reps',
+                        note: typeof ex.note === 'string' ? ex.note : '',
+                        isOverrideable: ex.isOverrideable !== false,
+                        selectionReason: typeof ex.selectionReason === 'string' ? ex.selectionReason : '',
+                      }))
+                  : [],
+                warmup: Array.isArray(s.warmup) ? s.warmup : [],
+                cooldown: Array.isArray(s.cooldown) ? s.cooldown : [],
+              }
+              
+              // [GROUPED-CONTRACT-RECONCILIATION] Reconcile grouped truth to CURRENT rules
+              // This ensures stale persisted grouped metadata doesn't survive builder evolution
+              return reconcileSessionGroupedContract(normalizedSession)
+            })
         : [],
       
       // ==========================================================================
@@ -1194,6 +1354,29 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
       console.warn('[CONTRACT_NORMALIZATION] Missing fields normalized:', missingFields.join(', '))
     }
     
+    // [GROUPED-CONTRACT-RECONCILIATION] Log grouped truth reconciliation results
+    const reconciledSessions = normalized.sessions.map((s, idx) => {
+      const originalMeta = program.sessions?.[idx]?.styleMetadata
+      const newMeta = s.styleMetadata
+      return {
+        day: s.dayNumber,
+        originalSupersetsApplied: originalMeta?.hasSupersetsApplied,
+        reconciledSupersetsApplied: newMeta?.hasSupersetsApplied,
+        originalGroupCount: originalMeta?.styledGroups?.length || 0,
+        reconciledGroupCount: newMeta?.styledGroups?.length || 0,
+        supersetGroups: newMeta?.styledGroups?.filter((g: { groupType: string }) => g.groupType === 'superset').length || 0,
+      }
+    })
+    
+    const groupedReconciliationOccurred = reconciledSessions.some(s => 
+      s.originalSupersetsApplied !== s.reconciledSupersetsApplied ||
+      s.originalGroupCount !== s.reconciledGroupCount
+    )
+    
+    if (groupedReconciliationOccurred) {
+      console.log('[GROUPED-CONTRACT-RECONCILIATION] Stale grouped truth reconciled:', reconciledSessions)
+    }
+    
     console.log('[ProgramState] Normalized program for display:', {
       originalSessions: program.sessions?.length || 0,
       normalizedSessions: normalized.sessions.length,
@@ -1201,6 +1384,7 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
       hasStructure: !!program.structure,
       hasEngineContext: !!program.engineContext,
       contractFieldsNormalized: missingFields.length,
+      groupedReconciliationOccurred,
     })
     
     return normalized

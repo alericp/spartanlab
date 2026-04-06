@@ -229,48 +229,20 @@ function deriveExecutionPlanFromExercises(exercises: MachineExercise[]): Executi
       if (method.includes('superset') || (memberCount === 2 && currentBlockId)) {
         groupType = 'superset'
         blockCounter++
-        // [GROUPED-IDENTITY-FIX] Derive label from blockId if it follows the pattern superset_dayN_index
-        // This ensures label matches the authoritative blockId from program builder
-        // Format: "superset_1_1" -> "Superset A", "superset_1_2" -> "Superset B"
-        if (currentBlockId) {
-          const blockIdMatch = currentBlockId.match(/superset_\d+_(\d+)/)
-          if (blockIdMatch) {
-            const pairNumber = parseInt(blockIdMatch[1], 10)
-            blockLabel = `Superset ${String.fromCharCode(64 + pairNumber)}` // 1->A, 2->B, etc.
-          } else {
-            blockLabel = `Superset ${String.fromCharCode(64 + blockCounter)}` // Fallback to counter
-          }
-        } else {
-          blockLabel = `Superset ${String.fromCharCode(64 + blockCounter)}` // Fallback to counter
-        }
+        // [GROUPED-IDENTITY-FIX] Match session card display convention
+        // Session card shows just "Superset" header, not "Superset A/B"
+        // The member exercises within are labeled A, B, C
+        blockLabel = 'Superset'
       } else if (method.includes('circuit') || memberCount > 2) {
         groupType = 'circuit'
         blockCounter++
-        // [GROUPED-IDENTITY-FIX] Extract circuit number from blockId if present
-        if (currentBlockId) {
-          const circuitMatch = currentBlockId.match(/circuit_\d+_(\d+)/)
-          if (circuitMatch) {
-            blockLabel = `Circuit ${circuitMatch[1]}`
-          } else {
-            blockLabel = `Circuit ${blockCounter}`
-          }
-        } else {
-          blockLabel = `Circuit ${blockCounter}`
-        }
+        // [GROUPED-IDENTITY-FIX] Match session card display convention - just "Circuit"
+        blockLabel = 'Circuit'
       } else if (method.includes('cluster')) {
         groupType = 'cluster'
         blockCounter++
-        // [GROUPED-IDENTITY-FIX] Extract cluster number from blockId if present
-        if (currentBlockId) {
-          const clusterMatch = currentBlockId.match(/cluster_\d+_(\d+)/)
-          if (clusterMatch) {
-            blockLabel = `Cluster ${clusterMatch[1]}`
-          } else {
-            blockLabel = `Cluster ${blockCounter}`
-          }
-        } else {
-          blockLabel = `Cluster ${blockCounter}`
-        }
+        // [GROUPED-IDENTITY-FIX] Match session card display convention - just "Cluster Set"
+        blockLabel = 'Cluster Set'
       }
     }
     // Single-member blocks remain groupType = null (normal set-by-set execution)
@@ -5481,34 +5453,70 @@ function InterExerciseRestCountdown({
     const nextExerciseName = nextExercise?.name
     
     // [ADAPTIVE-REST-FIX] Rest duration based on rest type and exercise prescription truth
-    const getRestDuration = () => {
+    const getRestDuration = (): number => {
+      let restSource = 'unknown'
+      let restValue = 90
+      
       if (isBlockRoundRest) {
-        return blockRoundRestSeconds
-      }
-      if (isBetweenExerciseRest) {
+        restSource = 'block_round_rest_prescribed'
+        restValue = blockRoundRestSeconds
+      } else if (isBetweenExerciseRest) {
         // Between-exercise rest: Use NEXT exercise's prescribed rest if available,
         // otherwise derive adaptively from next exercise's category/intensity
         if (nextExercise?.restSeconds && nextExercise.restSeconds > 0) {
-          return nextExercise.restSeconds
+          restSource = 'next_exercise_prescribed_restSeconds'
+          restValue = nextExercise.restSeconds
+        } else {
+          // Adaptive fallback: derive from next exercise target RPE or machine tracked value
+          const nextExerciseTargetRPE = nextExercise?.targetRPE || 8
+          if (nextExerciseTargetRPE >= 9) {
+            restSource = 'adaptive_next_rpe_high'
+            restValue = 180 // Heavy next exercise = more rest
+          } else if (nextExerciseTargetRPE >= 8) {
+            restSource = 'adaptive_next_rpe_moderate'
+            restValue = 120
+          } else {
+            restSource = 'machine_inter_exercise_fallback'
+            restValue = machineState.interExerciseRestSeconds || 90
+          }
         }
-        // Adaptive fallback: derive from next exercise target RPE or machine tracked value
-        const nextExerciseTargetRPE = nextExercise?.targetRPE || 8
-        if (nextExerciseTargetRPE >= 9) return 180 // Heavy next exercise = more rest
-        if (nextExerciseTargetRPE >= 8) return 120
-        return machineState.interExerciseRestSeconds || 90
+      } else {
+        // [SAME-EXERCISE-REST-FIX] Same-exercise rest: 
+        // Priority 1: Current exercise's prescribed restSeconds (authoritative)
+        // Priority 2: Derive from last set's RPE (adaptive)
+        // Priority 3: Static fallback (90s)
+        if (safeCurrentExercise?.restSeconds && safeCurrentExercise.restSeconds > 0) {
+          restSource = 'current_exercise_prescribed_restSeconds'
+          restValue = safeCurrentExercise.restSeconds
+        } else if (!safeLastSetRPE) {
+          restSource = 'static_fallback_no_rpe'
+          restValue = 90
+        } else if (safeLastSetRPE >= 9) {
+          restSource = 'adaptive_last_rpe_high'
+          restValue = 180 // 3 min for RPE 9-10
+        } else if (safeLastSetRPE >= 8) {
+          restSource = 'adaptive_last_rpe_moderate'
+          restValue = 120 // 2 min for RPE 8
+        } else {
+          restSource = 'adaptive_last_rpe_low'
+          restValue = 90 // 1.5 min for RPE 6-7
+        }
       }
-      // [SAME-EXERCISE-REST-FIX] Same-exercise rest: 
-      // Priority 1: Current exercise's prescribed restSeconds (authoritative)
-      // Priority 2: Derive from last set's RPE (adaptive)
-      // Priority 3: Static fallback (90s)
-      if (safeCurrentExercise?.restSeconds && safeCurrentExercise.restSeconds > 0) {
-        return safeCurrentExercise.restSeconds
-      }
-      // Adaptive: derive from last set's RPE
-      if (!safeLastSetRPE) return 90
-      if (safeLastSetRPE >= 9) return 180 // 3 min for RPE 9-10
-      if (safeLastSetRPE >= 8) return 120 // 2 min for RPE 8
-      return 90 // 1.5 min for RPE 6-7
+      
+      // [REST-SOURCE-AUDIT] Log rest derivation for debugging
+      console.log('[v0] [rest_source_audit]', {
+        restType: isBlockRoundRest ? 'block_round' : isBetweenExerciseRest ? 'between_exercise' : 'same_exercise',
+        restSource,
+        restValue,
+        exerciseName: safeCurrentExercise?.name,
+        exercisePrescribedRest: safeCurrentExercise?.restSeconds,
+        lastSetRPE: safeLastSetRPE,
+        nextExerciseName: nextExercise?.name,
+        nextExercisePrescribedRest: nextExercise?.restSeconds,
+        nextExerciseTargetRPE: nextExercise?.targetRPE,
+      })
+      
+      return restValue
     }
     
     return (

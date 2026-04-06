@@ -12,6 +12,8 @@
 
 import type { AdaptiveSession, AdaptiveExercise } from './adaptive-program-builder'
 import type { ResistanceBandColor } from './band-progression-engine'
+import { resolveRestTime, type RestContext } from './workout/rest-doctrine-resolver'
+import type { GroupType } from './workout/execution-unit-contract'
 
 // =============================================================================
 // SESSION RUNTIME TRUTH
@@ -45,6 +47,10 @@ export interface SessionRuntimeTruth {
   // Session type context
   sessionFocus: string
   estimatedDurationMinutes: number
+  
+  // [AI-RUNTIME-CONTRACT] AI context preserved from program
+  sessionRationale: string | null  // Session-level explanation of why this workout was chosen
+  hasGroupedBlocks: boolean        // Whether this session uses grouped methods (superset/circuit)
 }
 
 // =============================================================================
@@ -81,9 +87,18 @@ export interface ExerciseRuntimeTruth {
   targetUnit: string
   targetRPE: number
   
-  // Rest configuration
+  // Rest configuration - [AI-RUNTIME-CONTRACT] Now doctrine-derived
   restSecondsIntraSet: number
   restSecondsInterExercise: number
+  restReason: string  // Doctrine explanation for rest time
+  
+  // AI selection context - [AI-RUNTIME-CONTRACT] Preserved from program
+  selectionReason: string | null
+  coachingNote: string | null  // From coachingMeta.adaptationNote or loadDecisionSummary
+  
+  // Grouped context - [AI-RUNTIME-CONTRACT] For grouped block awareness
+  method: string | null        // superset, circuit, cluster, etc.
+  blockId: string | null
   
   // Progression context
   progressionFamily: string | null
@@ -192,6 +207,11 @@ export function buildSessionRuntimeTruth(
   // First workouts calibration mode (first 2 workouts)
   const firstWorkoutsCalibrationMode = workoutsCompleted < 2
   
+  // [AI-RUNTIME-CONTRACT] Determine if session has grouped blocks (superset/circuit)
+  const hasGroupedBlocks = exercises.some(ex => 
+    ex?.blockId && exercises.filter(e => e?.blockId === ex.blockId).length > 1
+  )
+  
   return {
     sessionId: session?.id || `session-${Date.now()}`,
     programId,
@@ -209,12 +229,18 @@ export function buildSessionRuntimeTruth(
     supportsTimerAlerts: true,
     sessionFocus: session?.focus ?? 'general',
     estimatedDurationMinutes: session?.estimatedMinutes ?? 45,
+    // [AI-RUNTIME-CONTRACT] AI context fields
+    sessionRationale: session?.rationale ?? null,
+    hasGroupedBlocks,
   }
 }
 
 /**
  * Build per-exercise runtime truth.
  * Always returns a valid object with safe fallbacks.
+ * 
+ * [AI-RUNTIME-CONTRACT] Now uses rest-doctrine-resolver for intelligent rest times
+ * and preserves AI context fields (selectionReason, coachingMeta, method, blockId).
  */
 export function buildExerciseRuntimeTruth(
   exercise: AdaptiveExercise | null,
@@ -223,6 +249,11 @@ export function buildExerciseRuntimeTruth(
     isOverridden: boolean
     overrideType: 'replaced' | 'skipped' | 'progression_adjusted' | null
     currentName?: string
+  },
+  // [AI-RUNTIME-CONTRACT] Optional grouped context for doctrine-aware rest
+  groupedContext?: {
+    groupType: GroupType
+    lastActualRPE?: number | null
   }
 ): ExerciseRuntimeTruth {
   if (!exercise) {
@@ -234,10 +265,40 @@ export function buildExerciseRuntimeTruth(
   
   // Determine category for rest times
   const category = (exercise.category ?? 'general').toLowerCase()
+  const targetRPE = exercise.targetRPE ?? 8
+  const isHoldBased = displayType === 'hold'
   
-  // Get rest times based on category
-  const restSecondsIntraSet = exercise.restSeconds ?? REST_DEFAULTS.intraSet[category as keyof typeof REST_DEFAULTS.intraSet] ?? REST_DEFAULTS.intraSet.default
-  const restSecondsInterExercise = REST_DEFAULTS.interExercise[category as keyof typeof REST_DEFAULTS.interExercise] ?? REST_DEFAULTS.interExercise.default
+  // [AI-RUNTIME-CONTRACT] Use doctrine resolver for intelligent rest timing
+  // This connects the live runtime to the full doctrine logic including:
+  // - Category-specific traits (straight-arm, high-neural, skill-based)
+  // - Target RPE adjustments
+  // - Actual RPE adjustments (when provided)
+  // - Grouped context (superset/circuit rest rules)
+  const intraSetRestContext: RestContext = {
+    restType: 'between_sets',
+    exerciseCategory: category,
+    exerciseName: exercise.name ?? 'Exercise',
+    targetRPE,
+    actualRPE: groupedContext?.lastActualRPE ?? null,
+    isHoldBased,
+    groupType: groupedContext?.groupType ?? null,
+    explicitRestSeconds: exercise.restSeconds,
+  }
+  
+  const intraSetRest = resolveRestTime(intraSetRestContext)
+  
+  const interExerciseRestContext: RestContext = {
+    restType: 'between_exercises',
+    exerciseCategory: category,
+    exerciseName: exercise.name ?? 'Exercise',
+    targetRPE,
+    actualRPE: groupedContext?.lastActualRPE ?? null,
+    isHoldBased,
+    groupType: groupedContext?.groupType ?? null,
+    // Inter-exercise rest doesn't use explicit override
+  }
+  
+  const interExerciseRest = resolveRestTime(interExerciseRestContext)
   
   // Build progression fallbacks
   const progressionFallbacks = buildProgressionFallbacks(exercise)
@@ -251,6 +312,11 @@ export function buildExerciseRuntimeTruth(
   // Check if this is a fixed prescription
   const { isFixed, reason } = checkFixedPrescription(exercise)
   
+  // [AI-RUNTIME-CONTRACT] Extract AI context from coachingMeta
+  const coachingNote = exercise.coachingMeta?.adaptationNote 
+    ?? exercise.coachingMeta?.loadDecisionSummary 
+    ?? null
+  
   return {
     exerciseId: exercise.id ?? `exercise-${exerciseIndex}`,
     exerciseName: overrideState?.currentName ?? exercise.name ?? 'Unknown Exercise',
@@ -259,9 +325,18 @@ export function buildExerciseRuntimeTruth(
     displayType,
     targetValue,
     targetUnit,
-    targetRPE: exercise.targetRPE ?? 8,
-    restSecondsIntraSet,
-    restSecondsInterExercise,
+    targetRPE,
+    // [AI-RUNTIME-CONTRACT] Doctrine-derived rest timing
+    restSecondsIntraSet: intraSetRest.seconds,
+    restSecondsInterExercise: interExerciseRest.seconds,
+    restReason: intraSetRest.reason,
+    // [AI-RUNTIME-CONTRACT] AI selection context
+    selectionReason: exercise.selectionReason ?? null,
+    coachingNote,
+    // [AI-RUNTIME-CONTRACT] Grouped context
+    method: exercise.method ?? null,
+    blockId: exercise.blockId ?? null,
+    // Progression context
     progressionFamily: inferProgressionFamily(exercise),
     progressionMode,
     canAdjustProgression: !isFixed && progressionFallbacks.length > 0,
@@ -294,6 +369,11 @@ function getDefaultExerciseRuntimeTruth(index: number): ExerciseRuntimeTruth {
     targetRPE: 8,
     restSecondsIntraSet: 90,
     restSecondsInterExercise: 60,
+    restReason: 'Standard rest',  // [AI-RUNTIME-CONTRACT]
+    selectionReason: null,         // [AI-RUNTIME-CONTRACT]
+    coachingNote: null,            // [AI-RUNTIME-CONTRACT]
+    method: null,                  // [AI-RUNTIME-CONTRACT]
+    blockId: null,                 // [AI-RUNTIME-CONTRACT]
     progressionFamily: null,
     progressionMode: 'fixed',
     canAdjustProgression: false,

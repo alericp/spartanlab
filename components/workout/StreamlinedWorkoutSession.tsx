@@ -2687,6 +2687,7 @@ export function StreamlinedWorkoutSession({
   
   // Session runtime truth - derived directly, no parallel validation
   // [STAGE-GATED] Only compute full truth for stage >= 2
+  // [AI-RUNTIME-CONTRACT] Now includes sessionRationale and hasGroupedBlocks
   const sessionRuntimeTruth: SessionRuntimeTruth = useMemo(() => {
     // STAGE 1: Skip full derivation, return minimal safe values
     if (shouldSkipFullDerivations) {
@@ -2708,6 +2709,8 @@ export function StreamlinedWorkoutSession({
         supportsTimerAlerts: false,
         sessionFocus: 'general',
         estimatedDurationMinutes: 30,
+        sessionRationale: null,
+        hasGroupedBlocks: false,
       }
     }
     
@@ -2729,6 +2732,8 @@ export function StreamlinedWorkoutSession({
         supportsTimerAlerts: false,
         sessionFocus: 'general',
         estimatedDurationMinutes: 30,
+        sessionRationale: null,
+        hasGroupedBlocks: false,
       }
     }
     
@@ -2757,13 +2762,23 @@ export function StreamlinedWorkoutSession({
         supportsTimerAlerts: false,
         sessionFocus: 'general',
         estimatedDurationMinutes: safeWorkoutSessionContract.estimatedMinutes ?? 30,
+        sessionRationale: safeWorkoutSessionContract.rationale ?? null,
+        hasGroupedBlocks: machineSessionContract?.executionPlan?.hasGroupedBlocks ?? false,
       }
     }
-  }, [hasValidExercises, sessionId, safeWorkoutSessionContract, safeExerciseIndex, exercises.length, totalSets])
+  }, [hasValidExercises, sessionId, safeWorkoutSessionContract, safeExerciseIndex, exercises.length, totalSets, machineSessionContract?.executionPlan?.hasGroupedBlocks])
   
   // Exercise runtime truth - derived directly, no parallel validation
   // [STAGE-GATED] Only compute full truth for stage >= 3
+  // [AI-RUNTIME-CONTRACT] Now includes grouped context and passes to doctrine resolver
   const exerciseRuntimeTruth: ExerciseRuntimeTruth = useMemo(() => {
+    // [AI-RUNTIME-CONTRACT] Derive grouped context for doctrine-aware rest
+    const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, safeExerciseIndex)
+    const groupedContext = blockInfo?.block?.groupType ? {
+      groupType: blockInfo.block.groupType as 'superset' | 'circuit' | 'cluster' | 'density_block' | null,
+      lastActualRPE: machineState.lastSetRPE ?? null,
+    } : undefined
+    
     // STAGE 1-2: Skip full derivation, return minimal safe values
     if (shouldSkipFullDerivations || (isActivePhase && ACTIVE_DERIVATION_STAGE < 3)) {
       console.log('[v0] [exerciseRuntimeTruth] SKIPPED - stage < 3 mode')
@@ -2778,6 +2793,11 @@ export function StreamlinedWorkoutSession({
         targetRPE: 7,
         restSecondsIntraSet: 90,
         restSecondsInterExercise: 120,
+        restReason: 'Standard rest',
+        selectionReason: null,
+        coachingNote: null,
+        method: null,
+        blockId: null,
         progressionFamily: null,
         progressionMode: 'fixed' as const,
         canAdjustProgression: false,
@@ -2789,9 +2809,9 @@ export function StreamlinedWorkoutSession({
         supportsFatigueFlag: true,
         availableContextFlags: [],
         isFixedPrescription: false,
-        calibrationState: 'needs_calibration' as const,
-        setHistory: [],
-        lastSessionPerformance: null,
+        fixedPrescriptionReason: null,
+        isOverridden: false,
+        overrideType: null,
       }
     }
     
@@ -2807,6 +2827,11 @@ export function StreamlinedWorkoutSession({
         targetRPE: 7,
         restSecondsIntraSet: 90,
         restSecondsInterExercise: 120,
+        restReason: 'Standard rest',
+        selectionReason: null,
+        coachingNote: null,
+        method: null,
+        blockId: null,
         progressionFamily: null,
         progressionMode: 'fixed' as const,
         canAdjustProgression: false,
@@ -2826,11 +2851,17 @@ export function StreamlinedWorkoutSession({
     
     try {
       const overrideState = normalizedExerciseOverrides[safeExerciseIndex]
-      return buildExerciseRuntimeTruth(safeCurrentExercise as AdaptiveExercise, safeExerciseIndex, overrideState ? {
-        isOverridden: !!(overrideState.isReplaced || overrideState.isProgressionAdjusted || overrideState.isSkipped),
-        overrideType: overrideState.isReplaced ? 'replaced' : overrideState.isProgressionAdjusted ? 'progression_adjusted' : overrideState.isSkipped ? 'skipped' : null,
-        currentName: overrideState.currentName,
-      } : undefined)
+      // [AI-RUNTIME-CONTRACT] Pass grouped context to doctrine resolver
+      return buildExerciseRuntimeTruth(
+        safeCurrentExercise as AdaptiveExercise,
+        safeExerciseIndex,
+        overrideState ? {
+          isOverridden: !!(overrideState.isReplaced || overrideState.isProgressionAdjusted || overrideState.isSkipped),
+          overrideType: overrideState.isReplaced ? 'replaced' : overrideState.isProgressionAdjusted ? 'progression_adjusted' : overrideState.isSkipped ? 'skipped' : null,
+          currentName: overrideState.currentName,
+        } : undefined,
+        groupedContext
+      )
     } catch {
       // Fallback on error
       return {
@@ -2844,6 +2875,11 @@ export function StreamlinedWorkoutSession({
         targetRPE: 7,
         restSecondsIntraSet: 90,
         restSecondsInterExercise: 120,
+        restReason: 'Standard rest',
+        selectionReason: (safeCurrentExercise as AdaptiveExercise).selectionReason ?? null,
+        coachingNote: null,
+        method: (safeCurrentExercise as AdaptiveExercise).method ?? null,
+        blockId: (safeCurrentExercise as AdaptiveExercise).blockId ?? null,
         progressionFamily: null,
         progressionMode: 'fixed' as const,
         canAdjustProgression: false,
@@ -2860,7 +2896,7 @@ export function StreamlinedWorkoutSession({
         overrideType: null,
       }
     }
-  }, [hasValidExercises, safeCurrentExercise, safeExerciseIndex, normalizedExerciseOverrides])
+  }, [hasValidExercises, safeCurrentExercise, safeExerciseIndex, normalizedExerciseOverrides, machineSessionContract?.executionPlan, machineState.lastSetRPE])
   
   // Calibration message - derived directly
   const calibrationMessage = useMemo(() => {

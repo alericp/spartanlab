@@ -10,4 +10,5 @@ export {
   ReadinessKnowledgeBubble,
   OverrideWarningBubble,
   CoachingInsightBubble,
+  MethodInfoBubble,
 } from './KnowledgeBubble'

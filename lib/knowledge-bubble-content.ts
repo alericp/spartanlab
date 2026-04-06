@@ -407,6 +407,42 @@ export const PROTOCOL_KNOWLEDGE: Record<string, ProtocolKnowledge> = {
 // =============================================================================
 
 export const STRUCTURE_KNOWLEDGE: Record<string, StructureKnowledge> = {
+  // ==========================================================================
+  // TRAINING METHOD EXPLANATIONS
+  // ==========================================================================
+  'superset': {
+    structureType: 'superset',
+    reason: 'Two exercises performed back-to-back with minimal rest between them.',
+    benefit: 'Saves time and maintains elevated heart rate while one muscle group recovers as the other works.',
+  },
+  'circuit': {
+    structureType: 'circuit',
+    reason: 'Three or more exercises performed in sequence before resting.',
+    benefit: 'Maximizes training density and metabolic demand while managing local muscle fatigue.',
+  },
+  'cluster': {
+    structureType: 'cluster',
+    reason: 'Sets broken into mini-sets with brief intra-set rest periods.',
+    benefit: 'Allows heavier loads or more total reps by managing fatigue within each set.',
+  },
+  'density_block': {
+    structureType: 'density_block',
+    reason: 'Timed block where you complete as many quality rounds as possible.',
+    benefit: 'Builds work capacity and conditioning while accumulating training volume.',
+  },
+  'emom': {
+    structureType: 'emom',
+    reason: 'Every Minute On the Minute - exercise starts at the top of each minute.',
+    benefit: 'Ensures consistent rest and pacing while building work capacity.',
+  },
+  'straight_sets': {
+    structureType: 'straight_sets',
+    reason: 'Traditional sets with full rest between each set of the same exercise.',
+    benefit: 'Maximizes recovery for strength and skill work requiring peak performance each set.',
+  },
+  // ==========================================================================
+  // SESSION STRUCTURE EXPLANATIONS
+  // ==========================================================================
   'skill_first': {
     structureType: 'skill_first',
     reason: 'Skill work comes first so technique quality stays high before fatigue sets in.',

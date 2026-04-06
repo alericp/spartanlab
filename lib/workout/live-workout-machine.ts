@@ -360,15 +360,6 @@ export function workoutMachineReducer(
     case 'COMPLETE_SET': {
       const newCompletedSets = [...state.completedSets, action.completedSet]
       
-      // [POST_LOG_REDUCER_OUTPUT] Pre-transition state
-      console.log('[POST_LOG_REDUCER_OUTPUT] COMPLETE_SET processing', {
-        isLastSetOfExercise: action.isLastSetOfExercise,
-        exerciseCount: action.exerciseCount,
-        currentExerciseIndex: state.currentExerciseIndex,
-        currentSetNumber: state.currentSetNumber,
-        newCompletedSetsCount: newCompletedSets.length,
-      })
-      
       if (action.isLastSetOfExercise) {
         // Last set of exercise - will transition to between_exercise_rest or completed
         const isLastExercise = state.currentExerciseIndex >= action.exerciseCount - 1
@@ -404,7 +395,8 @@ export function workoutMachineReducer(
       }
       
       // Not last set - rest then next set
-      const restingResult = {
+      // Not last set - transition to resting for same-exercise continuation
+      return {
         ...state,
         phase: 'resting' as const,
         completedSets: newCompletedSets,
@@ -418,12 +410,6 @@ export function workoutMachineReducer(
         currentSetNote: '',
         currentSetReasonTags: [],
       }
-      console.log('[POST_LOG_REDUCER_OUTPUT] Returning resting phase', {
-        phase: restingResult.phase,
-        currentSetNumber: restingResult.currentSetNumber,
-        completedSetsCount: restingResult.completedSets.length,
-      })
-      return restingResult
     }
     
     // COMPLETE_REST: Between-set rest -> next active set (same exercise)

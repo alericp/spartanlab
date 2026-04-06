@@ -96,6 +96,8 @@ export interface ActiveWorkoutCorridorProps {
   // Rest mode props
   restDurationSeconds?: number
   lastSetRPE?: RPEValue | null
+  restType?: 'same_exercise' | 'between_exercise' // Type of rest period
+  nextExerciseName?: string // For between-exercise rest, name of next exercise
   
   // Callbacks (passed from parent)
   onCompleteSet: () => void
@@ -309,6 +311,8 @@ export function ActiveWorkoutStartCorridor({
   recommendedBand,
   restDurationSeconds = 90,
   lastSetRPE,
+  restType = 'same_exercise',
+  nextExerciseName,
   onCompleteSet,
   onSetReps,
   onSetHold,
@@ -320,14 +324,10 @@ export function ActiveWorkoutStartCorridor({
   onSkip,
   onRestComplete,
 }: ActiveWorkoutCorridorProps) {
-  // [AUTHORITATIVE_RENDER_OWNER] Corridor is rendering - log ownership
-  console.log('[AUTHORITATIVE_RENDER_OWNER] ActiveWorkoutStartCorridor rendering', {
-    mode,
-    currentSetNumber,
-    completedSetsCount,
-    exerciseName,
-    isRestingMode: mode === 'resting',
-  })
+  // Log only in development for debugging
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[v0] [corridor] render', { mode, currentSetNumber, completedSetsCount })
+  }
   const isHold = isHoldExercise(exerciseRepsOrTime)
   const targetValue = parseTargetValue(exerciseRepsOrTime)
   const progressPercent = totalSetsCount > 0 ? (completedSetsCount / totalSetsCount) * 100 : 0
@@ -435,12 +435,12 @@ export function ActiveWorkoutStartCorridor({
               )}
               
               {/* Rest Timer Card */}
-              <Card className="bg-gradient-to-br from-[#1A1F26] to-[#1A1F26]/80 border-[#2B313A] p-6">
+              <Card className={`bg-gradient-to-br ${restType === 'between_exercise' ? 'from-[#1A2326] to-[#1A2326]/80 border-green-500/30' : 'from-[#1A1F26] to-[#1A1F26]/80 border-[#2B313A]'} p-6`}>
                 <div className="text-center space-y-4">
                   <div className="flex items-center justify-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                    <span className="text-sm font-medium text-blue-400 uppercase tracking-wider">
-                      Rest Before Set {currentSetNumber}
+                    <div className={`w-2 h-2 rounded-full ${restType === 'between_exercise' ? 'bg-green-500' : 'bg-blue-500'} animate-pulse`} />
+                    <span className={`text-sm font-medium ${restType === 'between_exercise' ? 'text-green-400' : 'text-blue-400'} uppercase tracking-wider`}>
+                      {restType === 'between_exercise' ? 'Exercise Complete!' : `Rest Before Set ${currentSetNumber}`}
                     </span>
                   </div>
                   
@@ -452,7 +452,7 @@ export function ActiveWorkoutStartCorridor({
                   {/* Timer Progress Bar */}
                   <div className="h-2 bg-[#2B313A] rounded-full overflow-hidden">
                     <div 
-                      className="h-full bg-blue-500 transition-all duration-1000"
+                      className={`h-full ${restType === 'between_exercise' ? 'bg-green-500' : 'bg-blue-500'} transition-all duration-1000`}
                       style={{ width: `${(restTimeRemaining / restDurationSeconds) * 100}%` }}
                     />
                   </div>
@@ -460,8 +460,17 @@ export function ActiveWorkoutStartCorridor({
                   {/* Up Next Info */}
                   <div className="pt-2 border-t border-[#2B313A]/50">
                     <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-1">Up Next</p>
-                    <p className="text-sm font-medium text-[#E6E9EF]">{exerciseName}</p>
-                    <p className="text-xs text-[#A4ACB8]">Set {currentSetNumber} of {exerciseSets} · {exerciseRepsOrTime}</p>
+                    {restType === 'between_exercise' ? (
+                      <>
+                        <p className="text-sm font-medium text-[#E6E9EF]">{nextExerciseName || 'Next Exercise'}</p>
+                        <p className="text-xs text-[#A4ACB8]">Exercise {currentExerciseIndex + 2} of {totalExercises}</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium text-[#E6E9EF]">{exerciseName}</p>
+                        <p className="text-xs text-[#A4ACB8]">Set {currentSetNumber} of {exerciseSets} · {exerciseRepsOrTime}</p>
+                      </>
+                    )}
                   </div>
                 </div>
               </Card>
@@ -490,7 +499,7 @@ export function ActiveWorkoutStartCorridor({
                 </Card>
               )}
               
-              {/* Skip Rest / Start Set Button */}
+              {/* Skip Rest / Start Next Button */}
               <Button
                 onClick={handleRestSkip}
                 className={`w-full h-14 text-lg font-bold ${
@@ -502,12 +511,12 @@ export function ActiveWorkoutStartCorridor({
                 {restTimeRemaining === 0 ? (
                   <>
                     <Play className="w-5 h-5 mr-2" />
-                    Start Set {currentSetNumber}
+                    {restType === 'between_exercise' ? 'Start Next Exercise' : `Start Set ${currentSetNumber}`}
                   </>
                 ) : (
                   <>
                     <SkipForward className="w-5 h-5 mr-2" />
-                    Skip Rest — Start Set {currentSetNumber}
+                    {restType === 'between_exercise' ? 'Skip — Next Exercise' : `Skip Rest — Start Set ${currentSetNumber}`}
                   </>
                 )}
               </Button>

@@ -1953,8 +1953,69 @@ export function StreamlinedWorkoutSession({
       blockId: ex.blockId,
     }))
     
-    // Derive execution plan from exercises
-    const executionPlan = deriveExecutionPlanFromExercises(exercises)
+    // [GROUPED-TRUTH-UNIFY] Derive execution plan from AUTHORITATIVE source
+    // Priority 1: styleMetadata.styledGroups (same source as Program screen / Today's Plan)
+    // Priority 2: Fallback to flat blockId-based derivation
+    const styledGroups = safeSession.styleMetadata?.styledGroups
+    
+    let executionPlan: ExecutionPlan
+    
+    if (styledGroups && styledGroups.length > 0) {
+      // AUTHORITATIVE PATH: Convert styledGroups to ExecutionPlan
+      // This ensures live session uses SAME grouped structure as Program screen
+      const blocks: ExecutionBlock[] = []
+      let hasGroupedBlocks = false
+      let totalSets = 0
+      
+      for (const group of styledGroups) {
+        const groupType = group.groupType === 'superset' ? 'superset'
+          : group.groupType === 'circuit' ? 'circuit'
+          : group.groupType === 'cluster' ? 'cluster'
+          : null
+        
+        if (groupType) hasGroupedBlocks = true
+        
+        // Find matching exercises from the exercises array
+        const memberExercises: MachineExercise[] = []
+        const memberExerciseIndexes: number[] = []
+        
+        for (const groupEx of group.exercises) {
+          // Match by ID first, then by name as fallback
+          let exIndex = exercises.findIndex(e => e.id === groupEx.id)
+          if (exIndex === -1) {
+            exIndex = exercises.findIndex(e => e.name === groupEx.name)
+          }
+          if (exIndex !== -1) {
+            memberExercises.push(exercises[exIndex])
+            memberExerciseIndexes.push(exIndex)
+            totalSets += exercises[exIndex].sets || 3
+          }
+        }
+        
+        // Get label matching Program screen convention
+        const blockLabel = groupType === 'superset' ? 'Superset'
+          : groupType === 'circuit' ? 'Circuit'
+          : groupType === 'cluster' ? 'Cluster Set'
+          : memberExercises[0]?.name || 'Exercise'
+        
+        blocks.push({
+          blockId: group.id,
+          groupType,
+          blockLabel,
+          memberExercises,
+          memberExerciseIndexes,
+          targetRounds: memberExercises[0]?.sets || 3,
+          intraBlockRestSeconds: groupType === 'superset' ? 0 : groupType === 'circuit' ? 10 : 15,
+          postRoundRestSeconds: memberExercises[0]?.restSeconds || 90,
+          postBlockRestSeconds: 120,
+        })
+      }
+      
+      executionPlan = { blocks, hasGroupedBlocks, totalSets }
+    } else {
+      // FALLBACK PATH: Derive from flat exercise blockId fields
+      executionPlan = deriveExecutionPlanFromExercises(exercises)
+    }
     
     return {
       dayLabel: safeSession.dayLabel || 'Workout',
@@ -4480,44 +4541,61 @@ if (shouldShowLocalFallback) {
                   const isGrouped = group.groupType !== 'straight'
                   
                   if (isGrouped) {
-                    // Grouped block from styleMetadata - show header + nested members
+                    // Grouped block from styleMetadata - show header + nested members with visual bracket
+                    const groupMethodInfo = group.groupType === 'superset' 
+                      ? 'Alternate between exercises with minimal rest'
+                      : group.groupType === 'circuit' 
+                      ? 'Complete all exercises in sequence, then rest'
+                      : group.groupType === 'cluster' 
+                      ? 'Short rest between reps for heavier loads'
+                      : 'High-intensity timed block'
+                    
                     return (
-                      <div key={group.id} className="py-1">
-                        {/* Group Header */}
-                        <div className="flex items-center gap-2 py-1.5 border-b border-[#2B313A]/30">
+                      <div key={group.id} className="py-1.5 relative">
+                        {/* [GROUPED-VISUAL] Red vertical bracket/connector for grouped exercises */}
+                        <div className="absolute left-1 top-9 bottom-2 w-0.5 bg-gradient-to-b from-[#C1121F]/60 via-[#C1121F]/40 to-[#C1121F]/20 rounded-full" />
+                        
+                        {/* Group Header with info affordance */}
+                        <div className="flex items-center gap-2 py-1.5 mb-0.5">
                           <span className="w-5 h-5 rounded bg-[#C1121F]/20 text-[#C1121F] text-[9px] flex items-center justify-center font-bold">
                             {group.groupType === 'superset' ? 'SS' : group.groupType === 'circuit' ? 'CR' : group.groupType === 'cluster' ? 'CL' : 'DB'}
                           </span>
                           <span className="text-xs font-medium text-[#C1121F]">
                             {group.groupType === 'superset' ? 'Superset' : group.groupType === 'circuit' ? 'Circuit' : group.groupType === 'cluster' ? 'Cluster Set' : 'Density Block'}
                           </span>
+                          {/* [GROUPED-INFO] Tiny info text explaining the method */}
+                          <span className="text-[9px] text-[#6B7280]/70 italic hidden sm:inline">
+                            {groupMethodInfo}
+                          </span>
                           {group.instruction && (
                             <span className="text-[10px] text-[#6B7280] ml-auto">{group.instruction}</span>
                           )}
                         </div>
-                        {/* Member exercises - nested */}
-                        {group.exercises.map((exInfo, memberIdx) => {
-                          // Find actual exercise from main exercises array for full details
-                          const fullEx = exercises.find(e => e.id === exInfo.id)
-                          return (
-                            <div key={exInfo.id} className="flex items-center justify-between py-1.5 pl-7 border-b border-[#2B313A]/20 last:border-0">
-                              <div className="flex items-center gap-2">
-                                <span className="w-4 h-4 rounded-full bg-[#2B313A]/50 text-[#A4ACB8] text-[9px] flex items-center justify-center font-medium">
-                                  {exInfo.prefix || String.fromCharCode(65 + memberIdx)}
-                                </span>
-                                <span className="text-sm text-[#E6E9EF]">{exInfo.name}</span>
-                              </div>
-                              <span className="text-[11px] text-[#6B7280] tabular-nums">
-                                {fullEx?.sets || 3}×{fullEx?.repsOrTime || '8-12 reps'}
-                                {fullEx?.prescribedLoad && fullEx.prescribedLoad.load > 0 && (
-                                  <span className="ml-1 text-[#C1121F] font-medium">
-                                    @ +{fullEx.prescribedLoad.load}{fullEx.prescribedLoad.unit}
+                        {/* Member exercises - nested with visual connection */}
+                        <div className="pl-3 space-y-0">
+                          {group.exercises.map((exInfo, memberIdx) => {
+                            // Find actual exercise from main exercises array for full details
+                            const fullEx = exercises.find(e => e.id === exInfo.id)
+                            return (
+                              <div key={exInfo.id} className="flex items-center justify-between py-1.5 pl-4 border-b border-[#2B313A]/15 last:border-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-4 h-4 rounded-full bg-[#C1121F]/10 text-[#C1121F] text-[9px] flex items-center justify-center font-semibold border border-[#C1121F]/30">
+                                    {exInfo.prefix || String.fromCharCode(65 + memberIdx)}
                                   </span>
-                                )}
-                              </span>
-                            </div>
-                          )
-                        })}
+                                  <span className="text-sm text-[#E6E9EF]">{exInfo.name}</span>
+                                </div>
+                                <span className="text-[11px] text-[#6B7280] tabular-nums">
+                                  {fullEx?.sets || 3}×{fullEx?.repsOrTime || '8-12 reps'}
+                                  {fullEx?.prescribedLoad && fullEx.prescribedLoad.load > 0 && (
+                                    <span className="ml-1 text-[#C1121F] font-medium">
+                                      @ +{fullEx.prescribedLoad.load}{fullEx.prescribedLoad.unit}
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
                       </div>
                     )
                   } else {
@@ -4556,36 +4634,51 @@ if (shouldShowLocalFallback) {
                   const isGrouped = block.groupType !== null
                   
                   if (isGrouped) {
-                    // Grouped block - show header + nested members
+                    // Grouped block - show header + nested members with visual bracket
+                    const groupMethodInfo = block.groupType === 'superset' 
+                      ? 'Alternate between exercises with minimal rest'
+                      : block.groupType === 'circuit' 
+                      ? 'Complete all exercises in sequence, then rest'
+                      : 'Short rest between reps for heavier loads'
+                    
                     return (
-                      <div key={block.blockId} className="py-1">
-                        {/* Group Header */}
-                        <div className="flex items-center gap-2 py-1.5 border-b border-[#2B313A]/30">
+                      <div key={block.blockId} className="py-1.5 relative">
+                        {/* [GROUPED-VISUAL] Red vertical bracket/connector for grouped exercises */}
+                        <div className="absolute left-1 top-9 bottom-2 w-0.5 bg-gradient-to-b from-[#C1121F]/60 via-[#C1121F]/40 to-[#C1121F]/20 rounded-full" />
+                        
+                        {/* Group Header with info affordance */}
+                        <div className="flex items-center gap-2 py-1.5 mb-0.5">
                           <span className="w-5 h-5 rounded bg-[#C1121F]/20 text-[#C1121F] text-[9px] flex items-center justify-center font-bold">
                             {block.groupType === 'superset' ? 'SS' : block.groupType === 'circuit' ? 'CR' : 'CL'}
                           </span>
                           <span className="text-xs font-medium text-[#C1121F]">{block.blockLabel}</span>
+                          {/* [GROUPED-INFO] Tiny info text explaining the method */}
+                          <span className="text-[9px] text-[#6B7280]/70 italic hidden sm:inline">
+                            {groupMethodInfo}
+                          </span>
                           <span className="text-[10px] text-[#6B7280] ml-auto">{block.targetRounds} rounds</span>
                         </div>
-                        {/* Member exercises - nested */}
-                        {block.memberExercises.map((ex, memberIdx) => (
-                          <div key={ex.id} className="flex items-center justify-between py-1.5 pl-7 border-b border-[#2B313A]/20 last:border-0">
-                            <div className="flex items-center gap-2">
-                              <span className="w-4 h-4 rounded-full bg-[#2B313A]/50 text-[#A4ACB8] text-[9px] flex items-center justify-center font-medium">
-                                {String.fromCharCode(65 + memberIdx)}
-                              </span>
-                              <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
-                            </div>
-                            <span className="text-[11px] text-[#6B7280] tabular-nums">
-                              {ex.sets}×{ex.repsOrTime}
-                              {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
-                                <span className="ml-1 text-[#C1121F] font-medium">
-                                  @ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}
+                        {/* Member exercises - nested with visual connection */}
+                        <div className="pl-3 space-y-0">
+                          {block.memberExercises.map((ex, memberIdx) => (
+                            <div key={ex.id} className="flex items-center justify-between py-1.5 pl-4 border-b border-[#2B313A]/15 last:border-0">
+                              <div className="flex items-center gap-2">
+                                <span className="w-4 h-4 rounded-full bg-[#C1121F]/10 text-[#C1121F] text-[9px] flex items-center justify-center font-semibold border border-[#C1121F]/30">
+                                  {String.fromCharCode(65 + memberIdx)}
                                 </span>
-                              )}
-                            </span>
-                          </div>
-                        ))}
+                                <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
+                              </div>
+                              <span className="text-[11px] text-[#6B7280] tabular-nums">
+                                {ex.sets}×{ex.repsOrTime}
+                                {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
+                                  <span className="ml-1 text-[#C1121F] font-medium">
+                                    @ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )
                   } else {

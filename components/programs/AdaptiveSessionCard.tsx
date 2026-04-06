@@ -679,32 +679,67 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       {/* Expanded Content */}
       {isExpanded && (
         <div className="px-4 pb-4 space-y-4">
-          {/* [VISIBLE-IMPROVEMENT] Session Structure Summary - VISIBLE explanation of session */}
-          {!isCompleted && !isActive && !isPaused && sessionStyleMetadata?.structureDescription && (
-            <div className="px-3 py-2.5 rounded-lg bg-[#1A1A1A] border border-[#2A2A2A]">
-              <div className="flex items-start gap-2">
+          {/* [VISIBLE-IMPROVEMENT] Session Structure Summary - ALWAYS VISIBLE with dynamic fallback */}
+          {!isCompleted && !isActive && !isPaused && (
+            <div className="px-3 py-2.5 rounded-lg bg-gradient-to-r from-[#1A1A1A] to-[#1F1F1F] border border-[#2A2A2A]">
+              <div className="flex items-start gap-2.5">
                 <Info className="w-4 h-4 text-[#4F6D8A] mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-xs font-medium text-[#A5A5A5] mb-1">Session Structure</p>
+                <div className="flex-1">
+                  <p className="text-xs font-medium text-[#A5A5A5] mb-1.5">About This Session</p>
                   <p className="text-xs text-[#8A8A8A] leading-relaxed">
-                    {sessionStyleMetadata.structureDescription}
+                    {/* Use structureDescription if available, otherwise generate from session data */}
+                    {sessionStyleMetadata?.structureDescription || (() => {
+                      // Generate dynamic description from session content
+                      const exerciseCount = displayExercises.length
+                      const skillCount = displayExercises.filter(e => e.category === 'skill').length
+                      const strengthCount = displayExercises.filter(e => e.category === 'strength').length
+                      const accessoryCount = displayExercises.filter(e => e.category === 'accessory').length
+                      
+                      const parts: string[] = []
+                      if (skillCount > 0) parts.push(`${skillCount} skill movement${skillCount > 1 ? 's' : ''}`)
+                      if (strengthCount > 0) parts.push(`${strengthCount} strength exercise${strengthCount > 1 ? 's' : ''}`)
+                      if (accessoryCount > 0) parts.push(`${accessoryCount} accessory work${accessoryCount > 1 ? ' items' : ''}`)
+                      
+                      const focus = session.focus || session.focusLabel || 'balanced training'
+                      return `${exerciseCount} exercises focusing on ${focus.toLowerCase()}${parts.length > 0 ? `. Includes ${parts.join(', ')}.` : '.'}`
+                    })()}
                   </p>
                   {/* Show grouped method badges if present */}
                   {hasNonStraightGroups && (
                     <div className="flex flex-wrap gap-1.5 mt-2">
-                      {sessionStyleMetadata.hasSupersetsApplied && (
+                      {sessionStyleMetadata?.hasSupersetsApplied && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4F6D8A]/10 text-[#4F6D8A] font-medium">
                           Supersets
                         </span>
                       )}
-                      {sessionStyleMetadata.hasCircuitsApplied && (
+                      {sessionStyleMetadata?.hasCircuitsApplied && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 font-medium">
                           Circuits
                         </span>
                       )}
-                      {sessionStyleMetadata.hasDensityApplied && (
+                      {sessionStyleMetadata?.hasDensityApplied && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 font-medium">
                           Density Blocks
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {/* Show category breakdown badges even without grouped methods */}
+                  {!hasNonStraightGroups && displayExercises.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {displayExercises.some(e => e.category === 'skill') && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#E63946]/10 text-[#E63946] font-medium">
+                          Skill Work
+                        </span>
+                      )}
+                      {displayExercises.some(e => e.category === 'strength') && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium">
+                          Strength
+                        </span>
+                      )}
+                      {displayExercises.some(e => e.category === 'accessory') && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#6A6A6A]/10 text-[#A5A5A5] font-medium">
+                          Accessory
                         </span>
                       )}
                     </div>
@@ -1028,24 +1063,62 @@ function MainExercisesRenderer({
   })
   
   // ==========================================================================
-  // FLAT RENDER PATH - Traditional exercise list
+  // FLAT RENDER PATH - [VISIBLE-IMPROVEMENT] Now groups by category for clarity
   // ==========================================================================
   if (!useGroupedRender) {
+    // Group exercises by category for visual organization
+    const skillExercises = displayExercises.filter(e => e.category === 'skill')
+    const strengthExercises = displayExercises.filter(e => e.category === 'strength')
+    const accessoryExercises = displayExercises.filter(e => e.category === 'accessory')
+    const otherExercises = displayExercises.filter(e => !['skill', 'strength', 'accessory'].includes(e.category || ''))
+    
+    let globalIdx = 0
+    
+    const renderCategorySection = (
+      exercises: typeof displayExercises, 
+      categoryLabel: string, 
+      categoryColor: string,
+      categoryDescription: string
+    ) => {
+      if (exercises.length === 0) return null
+      return (
+        <div className="space-y-2">
+          {/* Category header - subtle but clear */}
+          <div className="flex items-center gap-2 pt-1">
+            <span className={`text-[10px] uppercase tracking-wider font-semibold ${categoryColor}`}>
+              {categoryLabel}
+            </span>
+            <span className="text-[10px] text-[#6A6A6A]">
+              {categoryDescription}
+            </span>
+            <div className="flex-1 h-px bg-[#2A2A2A]" />
+          </div>
+          {exercises.map((exercise) => {
+            globalIdx++
+            return (
+              <ExerciseRow
+                key={exercise.id}
+                exercise={exercise}
+                index={globalIdx}
+                sessionId={sessionId}
+                isSkipped={skippedExercises.has(exercise.id)}
+                adjustedName={adjustedExercises.get(exercise.id)}
+                onReplace={onReplace}
+                onSkip={onSkip}
+                onProgressionAdjust={onProgressionAdjust}
+              />
+            )
+          })}
+        </div>
+      )
+    }
+    
     return (
-      <div className="space-y-2">
-        {displayExercises.map((exercise, idx) => (
-          <ExerciseRow
-            key={exercise.id}
-            exercise={exercise}
-            index={idx + 1}
-            sessionId={sessionId}
-            isSkipped={skippedExercises.has(exercise.id)}
-            adjustedName={adjustedExercises.get(exercise.id)}
-            onReplace={onReplace}
-            onSkip={onSkip}
-            onProgressionAdjust={onProgressionAdjust}
-          />
-        ))}
+      <div className="space-y-4">
+        {renderCategorySection(skillExercises, 'Skill Work', 'text-[#E63946]', 'Movement mastery')}
+        {renderCategorySection(strengthExercises, 'Strength', 'text-blue-400', 'Building power')}
+        {renderCategorySection(accessoryExercises, 'Accessory', 'text-[#A5A5A5]', 'Support & balance')}
+        {renderCategorySection(otherExercises, 'Additional', 'text-[#6A6A6A]', '')}
       </div>
     )
   }
@@ -1085,13 +1158,13 @@ function MainExercisesRenderer({
         
         return (
           <div key={group.id || `group-${groupIndex}`}>
-            {/* Group Header - Only show for non-straight groups */}
+            {/* [VISIBLE-IMPROVEMENT] Group Header - Enhanced with educational context */}
             {isSpecialGroup && (
-              <div className={`mb-2 px-3 py-2.5 rounded-lg border-l-2 ${colors.border} ${colors.bg}`}>
-                <div className="flex items-center gap-2">
-                  <span className={colors.text}>{icon}</span>
+              <div className={`mb-3 px-3 py-3 rounded-lg border-l-4 ${colors.border} ${colors.bg}`}>
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <span className={`${colors.text} text-lg`}>{icon}</span>
                   {/* Enhanced label: Show purpose + method (e.g., "Accessory Superset") */}
-                  <span className={`text-sm font-medium ${colors.text}`}>
+                  <span className={`text-sm font-semibold ${colors.text}`}>
                     {/* Derive purpose from first exercise category if available */}
                     {(() => {
                       const firstExercise = group.exercises[0]
@@ -1115,18 +1188,32 @@ function MainExercisesRenderer({
                     context={group.exercises[0]?.methodRationale || undefined}
                   />
                   {/* Show exercise count in group */}
-                  <span className="text-xs text-[#6A6A6A]">
-                    ({group.exercises.length} exercises)
+                  <span className="text-xs text-[#6A6A6A] bg-[#2A2A2A] px-1.5 py-0.5 rounded">
+                    {group.exercises.length} exercises
                   </span>
                 </div>
-                {/* Show instruction or methodRationale if available */}
-                {(group.instruction || group.exercises[0]?.methodRationale) && (
-                  <p className="text-xs text-[#8A8A8A] mt-1.5 leading-relaxed">
-                    {group.instruction || group.exercises[0]?.methodRationale}
-                  </p>
-                )}
+                {/* Show instruction or methodRationale if available, otherwise show default educational text */}
+                <p className="text-xs text-[#8A8A8A] mt-2 leading-relaxed">
+                  {group.instruction || group.exercises[0]?.methodRationale || (() => {
+                    // Provide default educational text based on group type
+                    switch (group.groupType) {
+                      case 'superset':
+                        return 'Perform these exercises back-to-back with minimal rest between them. This increases training efficiency and muscular endurance.'
+                      case 'circuit':
+                        return 'Complete all exercises in sequence before resting. This builds work capacity and cardiovascular conditioning.'
+                      case 'density_block':
+                        return 'Complete as many quality rounds as possible in the time block. Focus on maintaining form over speed.'
+                      case 'cluster':
+                        return 'Perform sets with short intra-set rest periods to maintain power output while accumulating volume.'
+                      default:
+                        return 'Perform these exercises as a group for optimal training effect.'
+                    }
+                  })()}
+                </p>
                 {group.restProtocol && (
-                  <p className="text-xs text-[#6A6A6A] mt-1">Rest: {group.restProtocol}</p>
+                  <p className="text-xs text-[#6A6A6A] mt-1.5 flex items-center gap-1">
+                    <span className="font-medium">Rest:</span> {group.restProtocol}
+                  </p>
                 )}
               </div>
             )}
@@ -1423,32 +1510,49 @@ function ExerciseRow({
         </div>
       )}
       
-      {/* Selection Reason - NOW VISIBLE BY DEFAULT for transparency */}
-      {!isWarmupCooldown && exercise.selectionReason && (
-        <div className="mt-2 py-1.5 px-2 rounded bg-[#1F1F1F] border border-[#2A2A2A]">
-          <p className="text-xs text-[#8A8A8A] leading-relaxed">
-            <span className="text-[#6A6A6A]">Why: </span>
-            {exercise.selectionReason}
-          </p>
-        </div>
-      )}
-      
-      {/* Knowledge bubble expandable - only show if has knowledge but no selection reason already displayed */}
-      {!isWarmupCooldown && hasKnowledge && !exercise.selectionReason && (
-        <div className="mt-2">
-          <button
-            className="text-xs text-[#6A6A6A] hover:text-[#A5A5A5] flex items-center gap-1"
-            onClick={() => setShowReason(!showReason)}
-          >
-            {showReason ? 'Hide info' : 'Learn more'}
-          </button>
-          {showReason && (
-            <div className="mt-2 space-y-2">
+      {/* [VISIBLE-IMPROVEMENT] Educational "Why" Surface - ALWAYS visible for learning */}
+      {!isWarmupCooldown && (
+        <div className="mt-2.5 space-y-2">
+          {/* Selection Reason - primary source of "why" */}
+          {exercise.selectionReason && (
+            <div className="py-1.5 px-2.5 rounded-md bg-gradient-to-r from-[#1F1F1F] to-[#1A1A1A] border border-[#2A2A2A]">
+              <p className="text-xs text-[#9A9A9A] leading-relaxed">
+                <span className="text-[#4F6D8A] font-medium">Why this exercise: </span>
+                {exercise.selectionReason}
+              </p>
+            </div>
+          )}
+          
+          {/* [VISIBLE-IMPROVEMENT] Category Purpose Chip - explains what this exercise type does */}
+          {!exercise.selectionReason && (
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] px-2 py-1 rounded-md bg-[#1F1F1F] border border-[#2A2A2A] text-[#8A8A8A]">
+                {safeCategory === 'skill' && 'Builds movement mastery and coordination'}
+                {safeCategory === 'strength' && 'Develops raw strength and power'}
+                {safeCategory === 'accessory' && 'Supports main movements and addresses weak points'}
+                {safeCategory === 'core' && 'Strengthens core stability and control'}
+                {!['skill', 'strength', 'accessory', 'core'].includes(safeCategory) && 'Supports your training goals'}
+              </span>
+            </div>
+          )}
+          
+          {/* Knowledge bubble - more prominent trigger */}
+          {hasKnowledge && (
+            <button
+              className="flex items-center gap-1.5 text-xs text-[#4F6D8A] hover:text-[#6A8AA8] transition-colors"
+              onClick={() => setShowReason(!showReason)}
+            >
+              <Info className="w-3.5 h-3.5" />
+              <span className="font-medium">{showReason ? 'Hide details' : 'Learn about this exercise'}</span>
+            </button>
+          )}
+          {showReason && hasKnowledge && (
+            <div className="pl-2 border-l-2 border-[#4F6D8A]/30">
               <ExerciseKnowledgeBubble 
-                  exerciseId={exerciseId}
-                  showSkillCarryover
-                  showSafetyNote
-                />
+                exerciseId={exerciseId}
+                showSkillCarryover
+                showSafetyNote
+              />
             </div>
           )}
         </div>

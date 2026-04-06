@@ -1,5 +1,6 @@
-// REDEPLOY_TRIGGER_v1
+// REDEPLOY_TRIGGER_v2
 // No-op change to force Vercel rebuild. Do not remove.
+// Timestamp: 2026-04-06T20:40:00Z - Confirming Info import present at line 50
 
 'use client'
 

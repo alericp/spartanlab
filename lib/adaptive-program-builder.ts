@@ -5266,7 +5266,9 @@ async function generateAdaptiveProgramImpl(
   // ==========================================================================
   // [PHASE 1] BUILD CANONICAL MATERIALITY CONTRACT
   // This contract bridges canonical profile truth → concrete generation levers.
-  // Built once here, consumed by all downstream generation decisions.
+  // Built once here, consumed by downstream method/structure/validation decisions.
+  // NOTE: This is the CANONICAL owner. See multiSkillMaterialityContract below
+  // for the separate multi-skill allocation contract (line ~6090).
   // ==========================================================================
   const materialityContract = buildCanonicalMaterialityContract(
     canonicalProfile,
@@ -6082,7 +6084,12 @@ async function generateAdaptiveProgramImpl(
   }
   }
   
-  const materialityContract = buildMaterialityContract(
+  // ==========================================================================
+  // [MULTI-SKILL MATERIALITY CONTRACT] - Additive contract for multi-skill allocation
+  // This is DISTINCT from the earlier canonical materialityContract built at line ~5271.
+  // This contract governs multi-skill intent classification and session allocation.
+  // ==========================================================================
+  const multiSkillMaterialityContract = buildMaterialityContract(
   canonicalProfile,
   weightedSkillAllocation,
   currentWorkingProgressionsForContract,
@@ -6095,9 +6102,9 @@ async function generateAdaptiveProgramImpl(
   // ==========================================================================
   console.log('[MULTI_SKILL_TRACE_CHECKPOINT]', {
     checkpoint: 'post_materiality_contract',
-    sourceSelectedSkills: materialityContract.selectedSkills,
-    sourceSelectedSkillsCount: materialityContract.selectedSkills.length,
-    perSkill: materialityContract.materialSkillIntent.map(intent => ({
+    sourceSelectedSkills: multiSkillMaterialityContract.selectedSkills,
+    sourceSelectedSkillsCount: multiSkillMaterialityContract.selectedSkills.length,
+    perSkill: multiSkillMaterialityContract.materialSkillIntent.map(intent => ({
       skill: intent.skill,
       role: intent.role,
       materiallyAllocated: intent.materiallyAllocated,
@@ -6108,11 +6115,11 @@ async function generateAdaptiveProgramImpl(
       historicalCeiling: intent.historicalCeiling,
     })),
     roleCounts: {
-      primary_spine: materialityContract.materialSkillIntent.filter(i => i.role === 'primary_spine').length,
-      secondary_anchor: materialityContract.materialSkillIntent.filter(i => i.role === 'secondary_anchor').length,
-      tertiary: materialityContract.materialSkillIntent.filter(i => i.role === 'tertiary').length,
-      support: materialityContract.materialSkillIntent.filter(i => i.role === 'support').length,
-      deferred: materialityContract.materialSkillIntent.filter(i => i.role === 'deferred').length,
+      primary_spine: multiSkillMaterialityContract.materialSkillIntent.filter(i => i.role === 'primary_spine').length,
+      secondary_anchor: multiSkillMaterialityContract.materialSkillIntent.filter(i => i.role === 'secondary_anchor').length,
+      tertiary: multiSkillMaterialityContract.materialSkillIntent.filter(i => i.role === 'tertiary').length,
+      support: multiSkillMaterialityContract.materialSkillIntent.filter(i => i.role === 'support').length,
+      deferred: multiSkillMaterialityContract.materialSkillIntent.filter(i => i.role === 'deferred').length,
     },
     sixSessionLogicTouched: false,
   })
@@ -6124,7 +6131,7 @@ async function generateAdaptiveProgramImpl(
   // It MUST be built BEFORE session construction and governs ALL downstream logic.
   // ==========================================================================
   const authoritativeSpineContract = buildAuthoritativeSpineContract(
-  materialityContract,
+  multiSkillMaterialityContract,
   effectiveTrainingDays
   )
   
@@ -6135,16 +6142,16 @@ async function generateAdaptiveProgramImpl(
   // It forces every selected skill into a classification that session assembly MUST respect.
   // ==========================================================================
   const multiSkillAllocationContract = buildAuthoritativeMultiSkillAllocationContract(
-  materialityContract.materialSkillIntent,
+  multiSkillMaterialityContract.materialSkillIntent,
   effectiveTrainingDays,
-  materialityContract.jointCautions,
-  materialityContract.equipmentAvailable
+  multiSkillMaterialityContract.jointCautions,
+  multiSkillMaterialityContract.equipmentAvailable
   )
   
   // ==========================================================================
   // [PHASE 2 MULTI-SKILL] AUDIT: Verify no selected skill vanished without classification
   // ==========================================================================
-  const selectedSkillsFromProfile = materialityContract.selectedSkills
+  const selectedSkillsFromProfile = multiSkillMaterialityContract.selectedSkills
   const classifiedSkills = new Set(multiSkillAllocationContract.entries.map(e => e.skill))
   const vanishedSkills = selectedSkillsFromProfile.filter(s => !classifiedSkills.has(s))
   
@@ -6174,7 +6181,7 @@ async function generateAdaptiveProgramImpl(
   // Layer 4: Materiality contract
   breadthAuditLayers.push(logBreadthAuditLayer(
     'MATERIALITY',
-    materialityContract.selectedSkills || [],
+    multiSkillMaterialityContract.selectedSkills || [],
     canonicalProfile.primaryGoal || null,
     canonicalProfile.secondaryGoal || null,
     canonicalProfile.selectedSkills || [],
@@ -6193,7 +6200,7 @@ async function generateAdaptiveProgramImpl(
     [...new Set(allocationSkills)],
     canonicalProfile.primaryGoal || null,
     canonicalProfile.secondaryGoal || null,
-    materialityContract.selectedSkills || [],
+    multiSkillMaterialityContract.selectedSkills || [],
     'buildAuthoritativeMultiSkillAllocationContract'
   ))
   
@@ -6204,12 +6211,12 @@ async function generateAdaptiveProgramImpl(
   // It forces broader selected-skill truth to materially influence the weekly program.
   // ==========================================================================
   const visibleWeekExpressionContract = buildVisibleWeekSkillExpressionContract(
-    materialityContract.materialSkillIntent,
+    multiSkillMaterialityContract.materialSkillIntent,
     multiSkillAllocationContract,
     effectiveTrainingDays,
-    String(materialityContract.experienceLevel || 'intermediate'),
-    materialityContract.primaryGoal || '',
-    materialityContract.secondaryGoal || null
+    String(multiSkillMaterialityContract.experienceLevel || 'intermediate'),
+    multiSkillMaterialityContract.primaryGoal || '',
+    multiSkillMaterialityContract.secondaryGoal || null
   )
   
   // ==========================================================================
@@ -6223,8 +6230,8 @@ async function generateAdaptiveProgramImpl(
   let doctrineRuntimeContract: DoctrineRuntimeContract | null = null
   try {
     const cwpRecord: Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null }> = {}
-    if (materialityContract.currentWorkingProgressions) {
-      for (const [skill, data] of Object.entries(materialityContract.currentWorkingProgressions)) {
+    if (multiSkillMaterialityContract.currentWorkingProgressions) {
+      for (const [skill, data] of Object.entries(multiSkillMaterialityContract.currentWorkingProgressions)) {
         cwpRecord[skill] = {
           currentWorkingProgression: typeof data === 'object' && data ? (data as { currentWorkingProgression?: string | null }).currentWorkingProgression ?? null : null,
           historicalCeiling: typeof data === 'object' && data ? (data as { historicalCeiling?: string | null }).historicalCeiling ?? null : null,
@@ -6233,12 +6240,12 @@ async function generateAdaptiveProgramImpl(
     }
     
     doctrineRuntimeContract = await buildDoctrineRuntimeContract({
-      primaryGoal: materialityContract.primaryGoal,
-      secondaryGoal: materialityContract.secondaryGoal,
-      selectedSkills: materialityContract.selectedSkills,
-      experienceLevel: materialityContract.experienceLevel,
-      jointCautions: materialityContract.jointCautions,
-      equipmentAvailable: materialityContract.equipmentAvailable,
+      primaryGoal: multiSkillMaterialityContract.primaryGoal,
+      secondaryGoal: multiSkillMaterialityContract.secondaryGoal,
+      selectedSkills: multiSkillMaterialityContract.selectedSkills,
+      experienceLevel: multiSkillMaterialityContract.experienceLevel,
+      jointCautions: multiSkillMaterialityContract.jointCautions,
+      equipmentAvailable: multiSkillMaterialityContract.equipmentAvailable,
       currentWorkingProgressions: cwpRecord,
       trainingMethodPreferences: inputs.trainingMethodPreferences?.map(p => p.name) || [],
       sessionStyle: inputs.sessionStyle || null,
@@ -6284,8 +6291,8 @@ async function generateAdaptiveProgramImpl(
       isConservative: boolean
     }> = {}
     
-    if (materialityContract.currentWorkingProgressions) {
-      for (const [skill, data] of Object.entries(materialityContract.currentWorkingProgressions)) {
+    if (multiSkillMaterialityContract.currentWorkingProgressions) {
+      for (const [skill, data] of Object.entries(multiSkillMaterialityContract.currentWorkingProgressions)) {
         cwpForArchitecture[skill] = {
           currentWorkingProgression: typeof data === 'object' && data ? 
             (data as { currentWorkingProgression?: string | null }).currentWorkingProgression ?? null : null,
@@ -6300,7 +6307,7 @@ async function generateAdaptiveProgramImpl(
     }
     
     sessionArchitectureTruth = buildSessionArchitectureTruthContract({
-      materialityContract,
+      materialityContract: multiSkillMaterialityContract,
       doctrineRuntimeContract,
       currentWorkingProgressions: cwpForArchitecture,
       trainingMethodPreferences: inputs.trainingMethodPreferences || null,
@@ -6361,8 +6368,8 @@ async function generateAdaptiveProgramImpl(
     isConservative: boolean 
   }> = {}
   
-  if (materialityContract.currentWorkingProgressions) {
-    for (const [skill, data] of Object.entries(materialityContract.currentWorkingProgressions)) {
+  if (multiSkillMaterialityContract.currentWorkingProgressions) {
+    for (const [skill, data] of Object.entries(multiSkillMaterialityContract.currentWorkingProgressions)) {
       cwpForIntentContract[skill] = {
         currentWorkingProgression: typeof data === 'object' && data ? 
           (data as { currentWorkingProgression?: string | null }).currentWorkingProgression ?? null : null,
@@ -6393,7 +6400,7 @@ async function generateAdaptiveProgramImpl(
     authoritativeMultiSkillIntentContract.selectedSkills || [],
     authoritativeMultiSkillIntentContract.primarySkill || null,
     authoritativeMultiSkillIntentContract.secondarySkill || null,
-    materialityContract.selectedSkills || [],
+    multiSkillMaterialityContract.selectedSkills || [],
     'buildAuthoritativeMultiSkillIntentContract'
   ))
   
@@ -6406,7 +6413,7 @@ async function generateAdaptiveProgramImpl(
   const selectedSkillTrace = buildSelectedSkillTraceContract(
     canonicalProfile,
     weightedSkillAllocation,
-    materialityContract,
+    multiSkillMaterialityContract,
     cwpForIntentContract
   )
   
@@ -6435,27 +6442,27 @@ async function generateAdaptiveProgramImpl(
   // Log whether the current builder is properly consuming multi-skill truth
   console.log('[phase-materiality-root-cause-audit]', {
   // A. selectedSkills beyond primary/secondary driving quotas?
-  selectedSkillsBeyondPrimarySecondary: materialityContract.materialSkillIntent
+  selectedSkillsBeyondPrimarySecondary: multiSkillMaterialityContract.materialSkillIntent
     .filter(e => e.role === 'support' || e.role === 'deferred').length,
-  supportSkillsAllocated: materialityContract.materialSkillIntent
+  supportSkillsAllocated: multiSkillMaterialityContract.materialSkillIntent
     .filter(e => e.role === 'support' && e.materiallyAllocated).length,
-  deferredSkillsCount: materialityContract.materialSkillIntent
+  deferredSkillsCount: multiSkillMaterialityContract.materialSkillIntent
     .filter(e => e.role === 'deferred').length,
   
   // B. currentWorkingProgressions being used vs historical?
-  hasCurrentWorkingProgressions: !!materialityContract.currentWorkingProgressions,
-  skillsWithConservativeProgression: materialityContract.materialSkillIntent
+  hasCurrentWorkingProgressions: !!multiSkillMaterialityContract.currentWorkingProgressions,
+  skillsWithConservativeProgression: multiSkillMaterialityContract.materialSkillIntent
     .filter(e => e.currentWorkingProgression && e.historicalCeiling && 
             e.currentWorkingProgression !== e.historicalCeiling).length,
   
   // C. doctrine influence enabled?
-  doctrineInfluenceEnabled: materialityContract.doctrineInfluenceEnabled,
+  doctrineInfluenceEnabled: multiSkillMaterialityContract.doctrineInfluenceEnabled,
   
   // D. fallback prevention flag
-  strictNoGenericFallback: materialityContract.strictNoGenericFallbackUntilTruthExhausted,
+  strictNoGenericFallback: multiSkillMaterialityContract.strictNoGenericFallbackUntilTruthExhausted,
   
   // E. truthExplanation vs actual decisions
-  contractMaterialSkillsClassified: materialityContract.materialSkillIntent.length,
+  contractMaterialSkillsClassified: multiSkillMaterialityContract.materialSkillIntent.length,
   verdict: 'MATERIALITY_CONTRACT_BUILT',
   })
   
@@ -7726,8 +7733,8 @@ async function generateAdaptiveProgramImpl(
   // [PHASE-MATERIALITY-SCOPE-FIX] Pass materiality contract data explicitly
   // This avoids the out-of-scope ReferenceError in generateAdaptiveSession
   sessionAssemblyTruth: {
-  currentWorkingProgressions: materialityContract.currentWorkingProgressions,
-  materialSkillIntent: materialityContract.materialSkillIntent,
+  currentWorkingProgressions: multiSkillMaterialityContract.currentWorkingProgressions,
+  materialSkillIntent: multiSkillMaterialityContract.materialSkillIntent,
   },
   // [PHASE 1 SPINE] Pass authoritative spine contract for generation boundaries
   authoritativeSpine: authoritativeSpineContract,
@@ -12313,24 +12320,24 @@ return explanations.length > 0 ? explanations : undefined
       },
       // 2. Multi-skill materiality
       multiSkillMateriality: {
-        selectedSkillsCount: materialityContract.selectedSkills.length,
-        primarySpine: materialityContract.materialSkillIntent.filter(e => e.role === 'primary_spine').map(e => e.skill),
-        secondaryAnchor: materialityContract.materialSkillIntent.filter(e => e.role === 'secondary_anchor').map(e => e.skill),
-        supportSkills: materialityContract.materialSkillIntent.filter(e => e.role === 'support').map(e => e.skill),
-        deferredSkills: materialityContract.materialSkillIntent.filter(e => e.role === 'deferred').map(e => e.skill),
-        supportCount: materialityContract.materialSkillIntent.filter(e => e.role === 'support').length,
-        deferredCount: materialityContract.materialSkillIntent.filter(e => e.role === 'deferred').length,
-        verdict: materialityContract.materialSkillIntent.filter(e => e.role === 'support').length > 0 
+        selectedSkillsCount: multiSkillMaterialityContract.selectedSkills.length,
+        primarySpine: multiSkillMaterialityContract.materialSkillIntent.filter(e => e.role === 'primary_spine').map(e => e.skill),
+        secondaryAnchor: multiSkillMaterialityContract.materialSkillIntent.filter(e => e.role === 'secondary_anchor').map(e => e.skill),
+        supportSkills: multiSkillMaterialityContract.materialSkillIntent.filter(e => e.role === 'support').map(e => e.skill),
+        deferredSkills: multiSkillMaterialityContract.materialSkillIntent.filter(e => e.role === 'deferred').map(e => e.skill),
+        supportCount: multiSkillMaterialityContract.materialSkillIntent.filter(e => e.role === 'support').length,
+        deferredCount: multiSkillMaterialityContract.materialSkillIntent.filter(e => e.role === 'deferred').length,
+        verdict: multiSkillMaterialityContract.materialSkillIntent.filter(e => e.role === 'support').length > 0 
         ? 'MULTI_SKILL_MATERIALITY_ACTIVE' 
         : 'PRIMARY_SECONDARY_ONLY',
       },
       // 3. Current progression truth
       currentProgressionTruth: {
-        hasCurrentWorkingProgressions: !!materialityContract.currentWorkingProgressions,
-        skillsWithConservativeProgression: materialityContract.materialSkillIntent
+        hasCurrentWorkingProgressions: !!multiSkillMaterialityContract.currentWorkingProgressions,
+        skillsWithConservativeProgression: multiSkillMaterialityContract.materialSkillIntent
         .filter(e => e.currentWorkingProgression && e.historicalCeiling && 
               e.currentWorkingProgression !== e.historicalCeiling).length,
-        verdict: materialityContract.currentWorkingProgressions 
+        verdict: multiSkillMaterialityContract.currentWorkingProgressions 
         ? 'PROGRESSION_TRUTH_AVAILABLE' 
         : 'NO_PROGRESSION_DATA',
       },
@@ -12343,9 +12350,9 @@ return explanations.length > 0 ? explanations : undefined
       },
       // 5. Doctrine influence
       doctrineInfluence: {
-        enabled: materialityContract.doctrineInfluenceEnabled,
-        summaryCount: materialityContract.doctrineInfluenceSummary.length,
-        verdict: materialityContract.doctrineInfluenceEnabled 
+        enabled: multiSkillMaterialityContract.doctrineInfluenceEnabled,
+        summaryCount: multiSkillMaterialityContract.doctrineInfluenceSummary.length,
+        verdict: multiSkillMaterialityContract.doctrineInfluenceEnabled 
         ? 'DOCTRINE_SCORING_ACTIVE' 
         : 'DOCTRINE_NOT_AVAILABLE',
       },
@@ -12358,7 +12365,7 @@ return explanations.length > 0 ? explanations : undefined
       },
       // Overall verdict
       overallVerdict: 'PHASE_MATERIALITY_CONTRACT_VERIFIED',
-      contractVersion: materialityContract.contractVersion,
+      contractVersion: multiSkillMaterialityContract.contractVersion,
       })
       
       return diagnostics
@@ -13652,11 +13659,11 @@ return explanations.length > 0 ? explanations : undefined
   // This log confirms that broader skill truth and current ability truth
   // materially altered session construction - not just the UI explanation.
   // ==========================================================================
-  const supportSkillsFromContract = materialityContract.materialSkillIntent
+  const supportSkillsFromContract = multiSkillMaterialityContract.materialSkillIntent
     .filter(e => e.role === 'support')
     .map(e => e.skill)
   
-  const deferredSkillsFromContract = materialityContract.materialSkillIntent
+  const deferredSkillsFromContract = multiSkillMaterialityContract.materialSkillIntent
     .filter(e => e.role === 'deferred')
     .map(e => e.skill)
   
@@ -13696,7 +13703,7 @@ return explanations.length > 0 ? explanations : undefined
     supportSkillExerciseSample,
     
     // Current working progression enforcement
-    currentWorkingProgressionsEnforced: Object.keys(materialityContract.currentWorkingProgressions || {}).length,
+    currentWorkingProgressionsEnforced: Object.keys(multiSkillMaterialityContract.currentWorkingProgressions || {}).length,
     
     // Stable systems check
     sixSessionFlexibleUntouched: true,

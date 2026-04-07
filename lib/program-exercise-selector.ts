@@ -205,6 +205,20 @@ import {
   checkWeightedPrescriptionEligibility,
 } from './canonical-profile-service'
 
+// [EXERCISE-SELECTION-MATERIALITY] Import materiality engine for intelligent ranking
+import {
+  scoreExerciseMateriality,
+  rankCandidatesForSlot,
+  selectBestExerciseForSlot,
+  buildExerciseSelectionMaterialityContext,
+  logMaterialityRankingAudit,
+  type ExerciseMaterialityContext,
+  type ExerciseMaterialityScore,
+  type SlotType,
+  type SlotMaterialityRanking,
+  type MaterialityReasonCode,
+} from './program-generation/exercise-selection-materiality'
+
 // =============================================================================
 // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] SAFE STRING NORMALIZATION LAYER
 // Prevents undefined.toLowerCase() crashes in skill/exercise matching
@@ -1729,6 +1743,10 @@ function selectMainExercises(
       weightedBlockerReason?: WeightedBlockerReason
       limiterInfluence?: string
       recoveryInfluence?: string
+      // [EXERCISE-SELECTION-MATERIALITY] Materiality trace fields
+      materialityReasonCode?: string
+      materialityConfidence?: 'high' | 'medium' | 'low'
+      materialityFactors?: string[]
     }
   ) => {
     if (usedIds.has(exercise.id)) return false
@@ -2034,6 +2052,10 @@ function selectMainExercises(
       recoveryInfluence: traceContext?.recoveryInfluence ?? null,
       confidence: traceContext ? 0.8 : 0.5,
       traceQuality: traceContext ? 'partial' : 'minimal',
+      // [EXERCISE-SELECTION-MATERIALITY] Include materiality metadata if available
+      materialityReasonCode: traceContext?.materialityReasonCode,
+      materialityConfidence: traceContext?.materialityConfidence,
+      materialityFactors: traceContext?.materialityFactors,
     }
     
     // [exercise-trace] TASK 7: Log the trace
@@ -2668,6 +2690,139 @@ function applyMaterialityScoreAdjustments(
   })
   
   // ==========================================================================
+  // [EXERCISE-SELECTION-MATERIALITY] Build canonical materiality context
+  // This context drives slot-aware exercise ranking with athlete-specific truth
+  // ==========================================================================
+  const secondaryGoalFromSession = skillsForSession?.find(s => 
+    s.expressionMode === 'technical' || s.expressionMode === 'support'
+  )?.skill || null
+  
+  // Determine training style from available equipment and selected skills
+  const detectedTrainingStyle = hasWeightedEquipment 
+    ? (equipment.length <= 3 ? 'hybrid' : 'weighted_integrated')
+    : (equipment.length <= 2 ? 'minimalist' : 'pure_skill')
+  
+  // Determine session complexity from day focus and constraint
+  const sessionComplexityBudget: 'low' | 'medium' | 'high' = 
+    mustDowngradeToSupport || day.focus.includes('recovery') ? 'low' :
+    day.focus.includes('density') || day.focus.includes('mixed') ? 'medium' : 'high'
+  
+  // Transform currentWorkingProgressions into format expected by materiality engine
+  const materialityProgressions: Record<string, {
+    currentWorkingProgression: string | null
+    historicalCeiling: string | null
+  }> | null = currentWorkingProgressions ? Object.fromEntries(
+    Object.entries(currentWorkingProgressions).map(([key, val]) => [
+      key,
+      { currentWorkingProgression: val.currentWorkingProgression, historicalCeiling: val.historicalCeiling }
+    ])
+  ) : null
+  
+  // Build the canonical materiality context
+  const materialityContext = buildExerciseSelectionMaterialityContext(
+    primaryGoal,
+    secondaryGoalFromSession,
+    selectedSkills || [primaryGoal],
+    experienceLevel,
+    equipment || [],
+    normalizedJointCautions,
+    materialityProgressions,
+    4, // Assume 4 sessions/week as default - could be passed from context
+    sessionComplexityBudget,
+    detectedTrainingStyle as 'pure_skill' | 'hybrid' | 'weighted_integrated' | 'minimalist',
+    undefined, // recentExerciseHistory - could be passed from context
+    cachedDoctrineRules ? {
+      preferredExercises: [],
+      avoidExercises: [],
+      carryoverRules: [],
+    } : undefined
+  )
+  
+  console.log('[EXERCISE-SELECTION-MATERIALITY] Context built:', {
+    primaryGoal: materialityContext.primaryGoal,
+    secondaryGoal: materialityContext.secondaryGoal,
+    trainingStyle: materialityContext.trainingStyle,
+    sessionComplexityBudget: materialityContext.sessionComplexityBudget,
+    hasWeightedEquipment: materialityContext.hasWeightedEquipment,
+    jointCautionsCount: materialityContext.jointCautions.length,
+    hasProgressionData: !!materialityContext.currentWorkingProgressions,
+  })
+  
+  /**
+   * [EXERCISE-SELECTION-MATERIALITY] Enhanced scoring with materiality engine
+   * This function combines the existing session-based scoring with deep materiality analysis
+   * to produce rankings that are visibly more personalized.
+   */
+  function scoreExerciseWithMateriality(
+    exercise: Exercise,
+    sessionSkills: SessionSkillAllocation[],
+    dayFocus: string,
+    slotType: SlotType
+  ): { score: number; materialityScore: ExerciseMaterialityScore | null; primaryReason: MaterialityReasonCode } {
+    // Get base session score
+    const baseScore = scoreExerciseForSession(exercise, sessionSkills, dayFocus, hasWeightedEquipment)
+    
+    // Apply materiality scoring
+    const materialityScore = scoreExerciseMateriality(exercise, materialityContext)
+    
+    // Combine scores: base session logic (60%) + materiality (40%)
+    // This ensures backward compatibility while adding materiality influence
+    const combinedScore = Math.round(baseScore * 0.6 + materialityScore.totalScore * 0.4)
+    
+    return {
+      score: combinedScore,
+      materialityScore,
+      primaryReason: materialityScore.primaryReasonCode,
+    }
+  }
+  
+  /**
+   * [EXERCISE-SELECTION-MATERIALITY] Rank candidates using materiality engine
+   * Returns candidates sorted by materiality-aware score with full audit trail.
+   */
+  function rankCandidatesWithMateriality<T extends { exercise: Exercise; score: number }>(
+    candidates: T[],
+    slotType: SlotType,
+    sessionSkills: SessionSkillAllocation[]
+  ): Array<T & { materialityScore: ExerciseMaterialityScore | null; primaryReason: MaterialityReasonCode }> {
+    // Score each candidate with materiality
+    const scored = candidates.map(c => {
+      const { score, materialityScore, primaryReason } = scoreExerciseWithMateriality(
+        c.exercise,
+        sessionSkills,
+        day.focus,
+        slotType
+      )
+      return { ...c, score, materialityScore, primaryReason }
+    })
+    
+    // Sort by combined score
+    scored.sort((a, b) => b.score - a.score)
+    
+    // Log materiality ranking audit for top candidates
+    if (scored.length > 0 && scored[0].materialityScore) {
+      console.log('[EXERCISE-SELECTION-MATERIALITY-RANKING]', {
+        slotType,
+        totalCandidates: scored.length,
+        top3: scored.slice(0, 3).map(c => ({
+          id: c.exercise.id,
+          combinedScore: c.score,
+          materialityScore: c.materialityScore?.totalScore || 0,
+          primaryReason: c.primaryReason,
+        })),
+        contextInfluence: {
+          trainingStyle: materialityContext.trainingStyle,
+          hasWeightedEquipment: materialityContext.hasWeightedEquipment,
+          jointCautions: materialityContext.jointCautions.length > 0,
+          progressionData: !!materialityContext.currentWorkingProgressions,
+        },
+      })
+    }
+    
+    return scored
+  }
+  
+  // ==========================================================================
   // Selection based on day focus
   // ==========================================================================
   
@@ -2701,9 +2856,20 @@ function applyMaterialityScoreAdjustments(
       const { filtered: progressionFilteredCandidates, audit: progressionAudit } = 
         filterByCurrentProgression(baseScoredCandidates, primarySkillAlloc.skill)
       
-      // Score and rank candidates, then apply doctrine scoring
+      // [EXERCISE-SELECTION-MATERIALITY] Apply materiality-aware ranking
+      // This replaces the basic doctrine-only scoring with full materiality analysis
+      const materialityRankedCandidates = rankCandidatesWithMateriality(
+        progressionFilteredCandidates,
+        'direct_skill',
+        sessionSkillsToExpress
+      )
+      
+      // Apply doctrine scoring on top (bounded modifier layer)
       // [PHASE 4] Doctrine integration - applies DB-backed scoring modifiers
-      const scoredCandidates = applyDoctrineToPool(progressionFilteredCandidates, day.focus)
+      const scoredCandidates = applyDoctrineToPool(
+        materialityRankedCandidates.map(c => ({ exercise: c.exercise, score: c.score })),
+        day.focus
+      )
       
       // Log progression enforcement for primary skill
       if (progressionAudit.blockedCount > 0) {
@@ -2717,7 +2883,21 @@ function applyMaterialityScoreAdjustments(
         })
       }
       
+      // Get the winning candidate with materiality metadata
+      const winningCandidate = materialityRankedCandidates[0]
       const primarySkill = scoredCandidates[0]?.exercise || selectByLevel(goalExercises.filter(e => e.category === 'skill'), experienceLevel)
+      
+      // Log materiality selection reason
+      if (winningCandidate?.materialityScore) {
+        console.log('[EXERCISE-SELECTION-MATERIALITY-WINNER]', {
+          slotType: 'direct_skill',
+          selectedExercise: primarySkill?.id,
+          materialityScore: winningCandidate.materialityScore.totalScore,
+          primaryReason: winningCandidate.primaryReason,
+          confidenceLevel: winningCandidate.materialityScore.confidenceLevel,
+          keyFactors: winningCandidate.materialityScore.auditNotes.slice(0, 3),
+        })
+      }
       
       if (primarySkill) {
         addExercise(primarySkill, `Primary ${primarySkillAlloc.skill} skill work`, undefined, undefined, undefined, 'standalone', {
@@ -2726,6 +2906,10 @@ function applyMaterialityScoreAdjustments(
           expressionMode: 'direct_intensity',
           influencingSkills: [{ skillId: primarySkillAlloc.skill, influence: 'primary', expressionMode: 'direct' }],
           candidatePoolSize: skillCandidates.length,
+          // [EXERCISE-SELECTION-MATERIALITY] Include materiality trace data
+          materialityReasonCode: winningCandidate?.primaryReason,
+          materialityConfidence: winningCandidate?.materialityScore?.confidenceLevel,
+          materialityFactors: winningCandidate?.materialityScore?.auditNotes?.slice(0, 3),
         })
         
         // Track rejected alternatives
@@ -2749,17 +2933,38 @@ function applyMaterialityScoreAdjustments(
         exercise: e,
         score: scoreExerciseForSession(e, sessionSkillsToExpress, day.focus, hasWeightedEquipment)
       }))
-      const scoredTech = applyDoctrineToPool(baseScoredTech, day.focus)
+      
+      // [EXERCISE-SELECTION-MATERIALITY] Apply materiality-aware ranking for secondary skill
+      const materialityRankedTech = rankCandidatesWithMateriality(baseScoredTech, 'secondary_skill', sessionSkillsToExpress)
+      const scoredTech = applyDoctrineToPool(
+        materialityRankedTech.map(c => ({ exercise: c.exercise, score: c.score })),
+        day.focus
+      )
       
       if (scoredTech[0]) {
+        const techWinner = materialityRankedTech[0]
         addExercise(scoredTech[0].exercise, `Technical work for ${technicalSkillAlloc.skill}`, undefined, undefined, 'Moderate intensity', 'standalone', {
           primarySelectionReason: 'secondary_skill_technical',
           sessionRole: 'skill_secondary',
           expressionMode: 'technical_focus',
           influencingSkills: [{ skillId: technicalSkillAlloc.skill, influence: 'secondary', expressionMode: 'technical' }],
           candidatePoolSize: techSkillCandidates.length,
+          // [EXERCISE-SELECTION-MATERIALITY] Include materiality trace data
+          materialityReasonCode: techWinner?.primaryReason,
+          materialityConfidence: techWinner?.materialityScore?.confidenceLevel,
+          materialityFactors: techWinner?.materialityScore?.auditNotes?.slice(0, 3),
         })
         console.log('[selected-skill-exposure] Technical skill expressed:', technicalSkillAlloc.skill)
+        
+        // Log materiality-driven selection
+        if (techWinner?.materialityScore) {
+          console.log('[EXERCISE-SELECTION-MATERIALITY-WINNER]', {
+            slotType: 'secondary_skill',
+            selectedExercise: scoredTech[0].exercise.id,
+            materialityReason: techWinner.primaryReason,
+            confidenceLevel: techWinner.materialityScore.confidenceLevel,
+          })
+        }
       }
     } else if (day.focus === 'skill_density') {
       // Fallback for density days - add secondary skill from same goal
@@ -2804,19 +3009,44 @@ function applyMaterialityScoreAdjustments(
     }
     
     // Fallback to generic goal-based strength if no doctrine match
+    // [EXERCISE-SELECTION-MATERIALITY] Use materiality-aware selection for support
     if (!strengthPicked) {
       const primaryStrength = goalExercises.filter(e => e.category === 'strength')
-      const strengthPick = selectByLevel(primaryStrength, experienceLevel) ||
-        availableStrength.find(e => e.transferTo?.includes(primaryGoal))
+      const strengthCandidates = [...primaryStrength, ...availableStrength.filter(e => e.transferTo?.includes(primaryGoal))]
+        .filter(e => !usedIds.has(e.id))
       
-      if (strengthPick) {
-        addExercise(strengthPick, `Supports ${primaryGoal} development`, undefined, undefined, undefined, 'standalone', {
-          primarySelectionReason: 'selected_skill_support',
-          sessionRole: 'strength_support',
-          expressionMode: 'strength_support',
-          influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'support' }],
-          candidatePoolSize: primaryStrength.length,
-        })
+      if (strengthCandidates.length > 0) {
+        // Apply materiality ranking for support slot
+        const baseScoredStrength = strengthCandidates.map(e => ({
+          exercise: e,
+          score: scoreExerciseForSession(e, sessionSkillsToExpress, day.focus, hasWeightedEquipment)
+        }))
+        const materialityRankedStrength = rankCandidatesWithMateriality(baseScoredStrength, 'support_carryover', sessionSkillsToExpress)
+        
+        const strengthWinner = materialityRankedStrength[0]
+        if (strengthWinner) {
+          addExercise(strengthWinner.exercise, `Supports ${primaryGoal} development`, undefined, undefined, undefined, 'standalone', {
+            primarySelectionReason: 'selected_skill_support',
+            sessionRole: 'strength_support',
+            expressionMode: 'strength_support',
+            influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'support' }],
+            candidatePoolSize: strengthCandidates.length,
+            // [EXERCISE-SELECTION-MATERIALITY] Include materiality trace data
+            materialityReasonCode: strengthWinner?.primaryReason,
+            materialityConfidence: strengthWinner?.materialityScore?.confidenceLevel,
+            materialityFactors: strengthWinner?.materialityScore?.auditNotes?.slice(0, 2),
+          })
+          
+          // Log materiality selection
+          if (strengthWinner.materialityScore) {
+            console.log('[EXERCISE-SELECTION-MATERIALITY-WINNER]', {
+              slotType: 'support_carryover',
+              selectedExercise: strengthWinner.exercise.id,
+              materialityReason: strengthWinner.primaryReason,
+              keyFactors: strengthWinner.materialityScore.auditNotes.slice(0, 2),
+            })
+          }
+        }
       }
     }
   }

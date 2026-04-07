@@ -543,11 +543,10 @@ function hasIndirectCarryover(exercise: Exercise, skill: string): boolean {
   const supportMapping = getSupportMapping(skill as any)
   if (!supportMapping) return false
   
+  // [SUPPORT-MAPPING-CONTRACT-REPAIR] Use canonical field names from SkillSupportMapping type
   const allSupport = [
-    ...supportMapping.directSupport,
-    ...supportMapping.secondarySupport,
-    ...(supportMapping.coreSupport || []),
-    ...(supportMapping.mobilitySupport || []),
+    ...(supportMapping.directSupportExercises || []),
+    ...(supportMapping.accessorySupportExercises || []),
   ]
   
   return allSupport.some(s => 

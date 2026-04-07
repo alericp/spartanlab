@@ -369,8 +369,8 @@ export async function buildDoctrineInfluenceContract(
     safetyFlags: {
       dbAvailable: readiness.doctrineDBAvaialble,
       fallbackActive: !readiness.safeToConsumeInLaterPhase,
-      shadowModeOnly: true, // [SHADOW MODE] This phase does not change visible behavior
-      noVisibleBehaviorChange: true,
+      shadowModeOnly: false, // [PHASE 2] Now actively consumed by materiality scoring
+      noVisibleBehaviorChange: false, // [PHASE 2] Contract now influences generation
     },
   }
   

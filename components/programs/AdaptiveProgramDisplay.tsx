@@ -44,6 +44,9 @@ import {
 import { runAdaptiveDisplayParityAudit } from '@/lib/adaptive-display-contract'
 import { ProgramTruthSummary } from './ProgramTruthSummary'
 import { ProgramErrorBoundary } from '@/components/system/ProgramErrorBoundary'
+// [PROGRAM-DISPLAY-CONTRACT] Canonical program intelligence surface
+import { buildProgramIntelligenceContract, type ProgramIntelligenceContract } from '@/lib/program/program-display-contract'
+import { Zap, Shield, Scale, Layers } from 'lucide-react'
 
 interface AdaptiveProgramDisplayProps {
   program: AdaptiveProgram
@@ -1952,6 +1955,152 @@ export function AdaptiveProgramDisplay({
         </div>
         <p className="text-sm text-[#A5A5A5]">{structure.rationale}</p>
       </Card>
+      
+      {/* [PROGRAM-DISPLAY-CONTRACT] Canonical Program Intelligence Surfaces */}
+      {(() => {
+        const intelligence = buildProgramIntelligenceContract(program)
+        
+        // Log intelligence contract for debugging
+        console.log('[program-intelligence-contract-audit]', {
+          programId: intelligence.programId,
+          trainingSpineLabel: intelligence.trainingSpine.label,
+          trainingSpineSource: intelligence.trainingSpine.source,
+          emphasisCount: intelligence.planEmphasis.items.length,
+          constraintCount: intelligence.protectedConstraints.length,
+          tradeoffCount: intelligence.tradeoffs.length,
+          weekDriverSource: intelligence.weekDriver.source,
+          quality: intelligence.quality,
+        })
+        
+        return (
+          <div className="space-y-3">
+            {/* Training Spine - Primary direction */}
+            <Card className="bg-[#1E1E1E] border-[#2A2A2A] p-3">
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 rounded bg-[#E63946]/10">
+                  <Layers className="w-4 h-4 text-[#E63946]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-medium text-[#6A6A6A] uppercase tracking-wide">Training Spine</span>
+                  </div>
+                  <p className="text-sm font-medium text-[#E5E5E5]">{intelligence.trainingSpine.label}</p>
+                  {intelligence.trainingSpine.rationale && (
+                    <p className="text-xs text-[#8A8A8A] mt-1">{intelligence.trainingSpine.rationale}</p>
+                  )}
+                  {intelligence.trainingSpine.secondaryInfluences.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {intelligence.trainingSpine.secondaryInfluences.map((influence, idx) => (
+                        <span key={idx} className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#7A7A7A]">
+                          +{influence.replace(/_/g, ' ')}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Card>
+            
+            {/* Plan Emphasis - What this plan prioritizes */}
+            {intelligence.planEmphasis.items.length > 0 && (
+              <Card className="bg-[#1E1E1E] border-[#2A2A2A] p-3">
+                <div className="flex items-start gap-3">
+                  <div className="p-1.5 rounded bg-purple-500/10">
+                    <Zap className="w-4 h-4 text-purple-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-medium text-[#6A6A6A] uppercase tracking-wide">Plan Emphasis</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {intelligence.planEmphasis.items.slice(0, 4).map((item, idx) => (
+                        <span key={idx} className="text-xs px-2 py-0.5 rounded-full bg-[#2A2A2A] text-[#A5A5A5] border border-[#3A3A3A]">
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+            
+            {/* Protected Constraints - What the plan is protecting */}
+            {intelligence.protectedConstraints.length > 0 && (
+              <Card className="bg-[#1E1E1E] border-[#2A2A2A] p-3">
+                <div className="flex items-start gap-3">
+                  <div className="p-1.5 rounded bg-amber-500/10">
+                    <Shield className="w-4 h-4 text-amber-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-medium text-[#6A6A6A] uppercase tracking-wide">Protected</span>
+                    </div>
+                    <div className="space-y-1">
+                      {intelligence.protectedConstraints.slice(0, 3).map((constraint, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            constraint.type === 'protective' ? 'bg-amber-400' :
+                            constraint.type === 'limiting' ? 'bg-blue-400' : 'bg-[#6A6A6A]'
+                          }`} />
+                          <span className="text-xs text-[#A5A5A5]">{constraint.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+            
+            {/* Tradeoffs Made - What was prioritized vs limited */}
+            {intelligence.tradeoffs.length > 0 && (
+              <Card className="bg-[#1E1E1E] border-[#2A2A2A] p-3">
+                <div className="flex items-start gap-3">
+                  <div className="p-1.5 rounded bg-blue-500/10">
+                    <Scale className="w-4 h-4 text-blue-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-medium text-[#6A6A6A] uppercase tracking-wide">Tradeoffs</span>
+                    </div>
+                    <div className="space-y-2">
+                      {intelligence.tradeoffs.slice(0, 2).map((tradeoff, idx) => (
+                        <div key={idx} className="text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-green-400">+</span>
+                            <span className="text-[#A5A5A5]">{tradeoff.prioritized}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 ml-3 mt-0.5">
+                            <span className="text-[#5A5A5A]">over</span>
+                            <span className="text-[#7A7A7A]">{tradeoff.limited}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+            
+            {/* This Week's Driver - Why this specific structure */}
+            {intelligence.weekDriver.source !== 'inferred' && (
+              <Card className="bg-[#1E1E1E] border-[#2A2A2A] p-3">
+                <div className="flex items-start gap-3">
+                  <div className="p-1.5 rounded bg-teal-500/10">
+                    <Calendar className="w-4 h-4 text-teal-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-medium text-[#6A6A6A] uppercase tracking-wide">This Week</span>
+                    </div>
+                    <p className="text-sm font-medium text-[#E5E5E5]">{intelligence.weekDriver.label}</p>
+                    <p className="text-xs text-[#7A7A7A] mt-0.5">{intelligence.weekDriver.reason}</p>
+                  </div>
+                </div>
+              </Card>
+            )}
+          </div>
+        )
+      })()}
 
       {/* [AI-TRUTH-ALIGNMENT] Why This Plan - Truth Explanation Summary */}
       {/* [UI CONTRACT ALIGNMENT] Wrapped in ErrorBoundary to catch undefined crashes */}

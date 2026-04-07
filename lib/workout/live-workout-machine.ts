@@ -43,6 +43,13 @@ import {
   type ExercisePlanningContext,
 } from '@/lib/workout/live-workout-action-planner'
 
+// [LIVE-WORKOUT-NORMALIZERS] Import live input normalizers
+import {
+  normalizeCoachingSignals,
+  normalizeSupportLoad,
+  normalizeExerciseIntent,
+} from '@/lib/workout/live-workout-normalizers'
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -579,18 +586,44 @@ export function workoutMachineReducer(
       
       // [LIVE-WORKOUT-ACTION-PLANNER] Build action plan for current exercise
       const exerciseSummaries = newSessionReadiness.exerciseSummaries.get(state.currentExerciseIndex) || []
+      
+      // [LIVE-WORKOUT-NORMALIZERS] Normalize coaching signals from current set
+      const normalizedCoachingSignals = normalizeCoachingSignals({
+        tags: action.completedSet.structuredCoachingInputs || state.currentSetReasonTags as any[],
+        freeText: action.completedSet.note || state.currentSetNote || null,
+      })
+      
+      // Normalize support/load based on input mode
+      const inputMode = action.completedSet.inputMode || 'bodyweight_strength'
+      const normalizedSupportLoad = normalizeSupportLoad({
+        inputMode,
+        selectedBands: action.completedSet.selectedBands || action.completedSet.multiBandSelection?.bands,
+        prescribedLoad: action.completedSet.prescribedLoad,
+        prescribedLoadUnit: action.completedSet.prescribedLoadUnit,
+        actualLoadUsed: action.completedSet.actualLoadUsed ?? state.actualLoadUsed ?? undefined,
+        actualLoadUnit: action.completedSet.actualLoadUnit ?? state.actualLoadUnit,
+      })
+      
+      // Normalize exercise intent
+      const normalizedExerciseIntent = normalizeExerciseIntent({
+        targetReps: action.targetReps,
+        targetSets: action.totalPrescribedSets,
+        inputMode,
+        exerciseName: action.exerciseName || '',
+      })
+      
       const planningContext: ExercisePlanningContext = {
         exerciseIndex: state.currentExerciseIndex,
         exerciseName: action.exerciseName || '',
-        inputMode: action.completedSet.inputMode || 'bodyweight_strength',
+        inputMode,
         totalPrescribedSets: action.totalPrescribedSets || 3,
         currentSetNumber: state.currentSetNumber,
         isStraightArm: false,  // Will be detected by planner from name
         isRecoverySensitive: false,  // Will be detected by planner from name
-        isHoldBased: action.completedSet.inputMode === 'timed_hold',
-        isWeighted: action.completedSet.inputMode === 'weighted_strength',
-        isBandAssisted: action.completedSet.inputMode === 'band_assisted_skill',
-        isUnilateral: action.completedSet.inputMode === 'reps_per_side',
+        isHoldBased: inputMode === 'timed_hold',
+        isWeighted: inputMode === 'weighted_strength',
+        isBandAssisted: inputMode === 'band_assisted_skill',
+        isUnilateral: inputMode === 'reps_per_side',
         targetReps: action.targetReps,
         targetHoldSeconds: action.targetHoldSeconds,
         targetRPE: action.targetRPE,
@@ -598,6 +631,13 @@ export function workoutMachineReducer(
         recommendedBand: action.recommendedBand,
         completedSummaries: exerciseSummaries,
         sessionReadiness: newSessionReadiness,
+        // [LIVE-WORKOUT-NORMALIZERS] Add normalized inputs
+        coachingSignals: normalizedCoachingSignals,
+        supportLoad: normalizedSupportLoad,
+        exerciseIntent: normalizedExerciseIntent,
+        selectedBands: action.completedSet.selectedBands || action.completedSet.multiBandSelection?.bands,
+        actualLoadUsed: action.completedSet.actualLoadUsed ?? state.actualLoadUsed ?? undefined,
+        actualLoadUnit: action.completedSet.actualLoadUnit ?? state.actualLoadUnit,
       }
       
       const actionPlan = buildActionPlan(planningContext)

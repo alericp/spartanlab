@@ -118,6 +118,13 @@ import {
   generateDoctrineInfluenceAuditSummary,
   type DoctrineInfluenceContract 
 } from './doctrine/doctrine-influence-contract'
+// [PHASE 2] Canonical skill materiality scoring - consumes doctrine influence contract
+import {
+  computeCanonicalMaterialityRanking,
+  mapMaterialityRoleToSkillRole,
+  type MaterialityRankingResult,
+  type MaterialityScoreResult,
+} from './ai/skill-materiality-score'
 
 // [SESSION ARCHITECTURE TRUTH] Authoritative contract for generation enforcement
 import { 
@@ -1778,6 +1785,11 @@ export interface MaterialSkillIntentEntry {
   allocatedSessions: number
   supportReason: string | null
   constrainedBy: string[]
+  // [PHASE 2] Canonical materiality score fields for audit visibility
+  canonicalMaterialityScore?: number
+  canonicalExplanationTags?: string[]
+  dbInfluenceApplied?: boolean
+  realismAdjustmentsApplied?: number
 }
 
 export interface AuthoritativeGenerationMaterialityContract {
@@ -2881,17 +2893,76 @@ export function buildAuthoritativeMultiSkillIntentContract(
   /**
   * Build the authoritative generation materiality contract from canonical profile.
   * This contract is the SINGLE SOURCE OF TRUTH for all downstream generation decisions.
+  * 
+  * [PHASE 2] Now consumes doctrine influence contract for:
+  * - Canonical skill materiality scoring
+  * - Progression realism gating
+  * - Deliberate support allocation
   */
   export function buildMaterialityContract(
   canonicalProfile: CanonicalProgrammingProfile,
   weightedSkillAllocation: WeightedSkillAllocation[],
   currentWorkingProgressions: Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null; truthSource: string; isConservative: boolean }> | null,
   doctrineEnabled: boolean = false,
-  doctrineSummary: string[] = []
+  doctrineSummary: string[] = [],
+  doctrineInfluenceContract: DoctrineInfluenceContract | null = null
 ): AuthoritativeGenerationMaterialityContract {
   const selectedSkills = canonicalProfile.selectedSkills || []
   const primaryGoal = canonicalProfile.primaryGoal || null
   const secondaryGoal = canonicalProfile.secondaryGoal || null
+  const jointCautions = canonicalProfile.jointCautions || []
+  const equipmentAvailable = canonicalProfile.equipment || canonicalProfile.equipmentAvailable || []
+  const experienceLevel = canonicalProfile.experienceLevel || 'intermediate'
+  const targetFrequency = canonicalProfile.trainingFrequency || 4
+
+  // ==========================================================================
+  // [PHASE 2] CANONICAL MATERIALITY RANKING
+  // ==========================================================================
+  // Use the canonical scoring system to rank skills based on:
+  // - Primary/secondary goal alignment
+  // - Current working progression truth (NOT historical fantasy)
+  // - Doctrine influence (DB first, code fallback second)
+  // - Joint caution risk
+  // - Schedule realism
+  // ==========================================================================
+  
+  let materialityRanking: MaterialityRankingResult | null = null
+  const materialityScoreMap = new Map<string, MaterialityScoreResult>()
+  
+  try {
+    materialityRanking = computeCanonicalMaterialityRanking(
+      selectedSkills,
+      primaryGoal,
+      secondaryGoal,
+      currentWorkingProgressions,
+      weightedSkillAllocation.map(a => ({ skill: a.skill, exposureSessions: a.exposureSessions })),
+      jointCautions,
+      equipmentAvailable,
+      experienceLevel,
+      targetFrequency,
+      doctrineInfluenceContract
+    )
+    
+    // Build lookup map for fast access
+    for (const result of materialityRanking.rankedSkills) {
+      materialityScoreMap.set(result.skill, result)
+    }
+    
+    console.log('[PHASE2-MATERIALITY-RANKING-APPLIED]', {
+      primarySkill: materialityRanking.primarySkill,
+      secondarySkill: materialityRanking.secondarySkill,
+      supportCount: materialityRanking.supportSkills.length,
+      suppressedCount: materialityRanking.suppressedSkills.length,
+      dbInfluenceUsed: materialityRanking.auditSummary.dbInfluenceUsed,
+      realismGatingApplied: materialityRanking.auditSummary.realismGatingApplied,
+    })
+  } catch (err) {
+    console.log('[PHASE2-MATERIALITY-RANKING-FALLBACK]', {
+      error: String(err),
+      verdict: 'USING_LEGACY_ROLE_ASSIGNMENT',
+    })
+    // Fallback to legacy behavior if scoring fails
+  }
 
   // Build material skill intent by classifying each selected skill
   const materialSkillIntent: MaterialSkillIntentEntry[] = selectedSkills.map(skill => {
@@ -2900,31 +2971,64 @@ export function buildAuthoritativeMultiSkillIntentContract(
                             currentWorkingProgressions?.[skill] || null
 
     // ==========================================================================
-    // [VISIBLE-WEEK-EXPRESSION-FIX] Preserve tertiary distinction for week-level visibility
+    // [PHASE 2] USE CANONICAL MATERIALITY SCORE FOR ROLE ASSIGNMENT
     // ==========================================================================
-    // Previously: tertiary and support both mapped to 'support' role, losing week identity
-    // Fix: tertiary skills get their own role for stronger session architecture influence
+    // If canonical ranking is available, use it for role assignment.
+    // This ensures progression realism gating and doctrine influence are applied.
     // ==========================================================================
+    const scoreResult = materialityScoreMap.get(skill)
     let role: MaterialSkillRole = 'deferred'
-    if (skill === primaryGoal) {
-      role = 'primary_spine'
-    } else if (skill === secondaryGoal) {
-      role = 'secondary_anchor'
-    } else if (allocation && allocation.priorityLevel === 'tertiary') {
-      // [VISIBLE-WEEK-EXPRESSION-FIX] Tertiary skills now get 'tertiary' role instead of 'support'
-      // This allows them to receive technical slots and visible week expression
-      role = 'tertiary'
-    } else if (allocation && allocation.priorityLevel === 'support') {
-      role = 'support'
-    } else if (allocation) {
-      role = 'support' // Any allocation means some support
+    let constrainedBy: string[] = []
+    
+    if (scoreResult) {
+      // Use canonical scoring result
+      role = mapMaterialityRoleToSkillRole(scoreResult.role)
+      
+      // Track realism adjustments as constraints
+      constrainedBy = scoreResult.realismAdjustments.map(adj => adj.reason)
+      
+      // Log realism gating when it affects role
+      if (scoreResult.realismAdjustments.length > 0) {
+        console.log('[PHASE2-REALISM-GATING]', {
+          skill,
+          originalScore: scoreResult.finalMaterialityScore,
+          adjustments: scoreResult.realismAdjustments,
+          finalRole: role,
+          explanationTags: scoreResult.explanationTags,
+        })
+      }
+    } else {
+      // Legacy fallback if scoring not available
+      if (skill === primaryGoal) {
+        role = 'primary_spine'
+      } else if (skill === secondaryGoal) {
+        role = 'secondary_anchor'
+      } else if (allocation && allocation.priorityLevel === 'tertiary') {
+        role = 'tertiary'
+      } else if (allocation && allocation.priorityLevel === 'support') {
+        role = 'support'
+      } else if (allocation) {
+        role = 'support'
+      }
     }
 
     const materiallyAllocated = !!allocation && allocation.exposureSessions >= 1
     let deferralReason: string | null = null
     let deferralReasonCode: DeferralReasonCode | null = null
-    if (!materiallyAllocated) {
-      if (!allocation) {
+    
+    // ==========================================================================
+    // [PHASE 2] ENHANCED DEFERRAL REASONS FROM REALISM GATING
+    // ==========================================================================
+    if (!materiallyAllocated || role === 'deferred') {
+      if (scoreResult?.role === 'suppressed') {
+        // Suppressed by realism gating
+        const suppressionReason = scoreResult.realismAdjustments
+          .map(adj => adj.type)
+          .join('_') || 'low_materiality_score'
+        deferralReason = `suppressed_by_realism_gating_${suppressionReason}`
+        deferralReasonCode = 'scheduling_constraints'
+        constrainedBy.push('realism_gating_suppression')
+      } else if (!allocation) {
         deferralReason = 'not_included_in_weekly_allocation'
         deferralReasonCode = 'not_included_in_weekly_allocation'
       } else if (allocation.exposureSessions < 1) {
@@ -2933,10 +3037,14 @@ export function buildAuthoritativeMultiSkillIntentContract(
       }
     }
     
-    // [PHASE 2 MULTI-SKILL] Determine representation mode
+    // ==========================================================================
+    // [PHASE 2] DELIBERATE SUPPORT ALLOCATION
+    // ==========================================================================
+    // Support categories are now explicitly determined by canonical scoring.
+    // Support must serve the main plan, not feel tacked on.
+    // ==========================================================================
     let representationMode: SkillRepresentationMode = 'deferred'
     let supportReason: string | null = null
-    const constrainedBy: string[] = []
     const allocatedSessions = allocation?.exposureSessions || 0
     
     if (role === 'primary_spine') {
@@ -2944,8 +3052,6 @@ export function buildAuthoritativeMultiSkillIntentContract(
     } else if (role === 'secondary_anchor') {
       representationMode = 'direct_block'
     } else if (role === 'tertiary') {
-      // [VISIBLE-WEEK-EXPRESSION-FIX] Tertiary skills get visible week expression
-      // They receive technical_slot representation, not just support work
       if (materiallyAllocated && allocatedSessions >= 2) {
         representationMode = 'technical_slot'
         supportReason = 'technical_skill_work_scheduled'
@@ -2957,7 +3063,21 @@ export function buildAuthoritativeMultiSkillIntentContract(
         supportReason = 'rotated_through_sessions'
       }
     } else if (role === 'support') {
-      if (materiallyAllocated && allocatedSessions >= 2) {
+      // [PHASE 2] Use support category from canonical scoring if available
+      const supportCategory = scoreResult?.supportCategory
+      if (supportCategory === 'direct_support') {
+        representationMode = 'support_expressed'
+        supportReason = 'direct_support_for_primary_goals'
+      } else if (supportCategory === 'structural_support') {
+        representationMode = 'support_expressed'
+        supportReason = 'structural_base_work_for_progression'
+      } else if (supportCategory === 'rotational_support') {
+        representationMode = 'support_rotational'
+        supportReason = 'rotational_maintenance_exposure'
+      } else if (supportCategory === 'exposure_only') {
+        representationMode = 'carryover_only'
+        supportReason = 'minimal_exposure_via_carryover'
+      } else if (materiallyAllocated && allocatedSessions >= 2) {
         representationMode = 'support_expressed'
         supportReason = 'dedicated_support_work_scheduled'
       } else if (materiallyAllocated && allocatedSessions >= 1) {
@@ -2988,6 +3108,11 @@ export function buildAuthoritativeMultiSkillIntentContract(
       allocatedSessions,
       supportReason,
       constrainedBy,
+      // [PHASE 2] Canonical materiality score fields for audit visibility
+      canonicalMaterialityScore: scoreResult?.finalMaterialityScore,
+      canonicalExplanationTags: scoreResult?.explanationTags,
+      dbInfluenceApplied: scoreResult?.dbInfluenceApplied,
+      realismAdjustmentsApplied: scoreResult?.realismAdjustments.length,
     }
   })
 
@@ -3033,20 +3158,35 @@ export function buildAuthoritativeMultiSkillIntentContract(
     contractVersion: '1.0.0',
   }
 
-  // Log the contract for audit
+  // Log the contract for audit with Phase 2 canonical scoring info
   console.log('[phase-materiality-contract]', {
     primaryGoal: contract.primaryGoal,
     secondaryGoal: contract.secondaryGoal,
     selectedSkillsCount: contract.selectedSkills.length,
+    // [PHASE 2] Include canonical materiality scoring audit
     materialSkillIntentSummary: contract.materialSkillIntent.map(e => ({
       skill: e.skill,
       role: e.role,
       allocated: e.materiallyAllocated,
       exposure: e.weeklyExposureTarget,
       hasCurrentProgression: !!e.currentWorkingProgression,
+      // [PHASE 2] Canonical scoring audit fields
+      canonicalScore: e.canonicalMaterialityScore,
+      dbInfluence: e.dbInfluenceApplied,
+      realismAdjustments: e.realismAdjustmentsApplied,
+      explanationTags: e.canonicalExplanationTags?.slice(0, 3), // Top 3 tags
     })),
     supportSkillsCount: contract.materialSkillIntent.filter(e => e.role === 'support').length,
     deferredSkillsCount: contract.materialSkillIntent.filter(e => e.role === 'deferred').length,
+    // [PHASE 2] Canonical ranking audit
+    canonicalRankingUsed: materialityRanking !== null,
+    dbInfluenceAppliedToAny: contract.materialSkillIntent.some(e => e.dbInfluenceApplied),
+    skillsWithRealismGating: contract.materialSkillIntent.filter(e => (e.realismAdjustmentsApplied || 0) > 0).length,
+    topThreeByScore: contract.materialSkillIntent
+      .filter(e => e.canonicalMaterialityScore !== undefined)
+      .sort((a, b) => (b.canonicalMaterialityScore || 0) - (a.canonicalMaterialityScore || 0))
+      .slice(0, 3)
+      .map(e => ({ skill: e.skill, score: e.canonicalMaterialityScore, role: e.role })),
     weightedLoadingEligible: contract.weightedLoadingEligible,
     doctrineEnabled: contract.doctrineInfluenceEnabled,
     contractVersion: contract.contractVersion,
@@ -6095,16 +6235,60 @@ async function generateAdaptiveProgramImpl(
   }
   
   // ==========================================================================
+  // [PHASE 2] BUILD DOCTRINE INFLUENCE CONTRACT EARLY
+  // ==========================================================================
+  // PURPOSE: Build doctrine influence contract BEFORE materiality contract so
+  // it can be consumed by canonical materiality scoring.
+  // ==========================================================================
+  let doctrineInfluenceContract: DoctrineInfluenceContract | null = null
+  try {
+    doctrineInfluenceContract = await buildDoctrineInfluenceContract(
+      {
+        primaryGoal: canonicalProfile.primaryGoal || null,
+        secondaryGoal: canonicalProfile.secondaryGoal || null,
+        selectedSkills: canonicalProfile.selectedSkills || [],
+        experienceLevel: canonicalProfile.experienceLevel || null,
+        scheduleMode: canonicalProfile.scheduleMode || null,
+        targetFrequency: effectiveTrainingDays,
+        jointCautions: canonicalProfile.jointCautions || [],
+        equipmentAvailable: canonicalProfile.equipment || canonicalProfile.equipmentAvailable || [],
+        currentWorkingProgressions: cwpRecord,
+        trainingPath: canonicalProfile.trainingPath || null,
+        sessionStyle: inputs.sessionStyle || null,
+        timeAvailability: canonicalProfile.sessionDurationMinutes || null,
+      },
+      doctrineRuntimeContract
+    )
+    
+    console.log('[PHASE2-DOCTRINE-INFLUENCE-CONTRACT-EARLY-BUILD]', {
+      contractId: doctrineInfluenceContract.contractId,
+      dbAvailable: doctrineInfluenceContract.safetyFlags.dbAvailable,
+      fallbackActive: doctrineInfluenceContract.safetyFlags.fallbackActive,
+      sourceAttribution: doctrineInfluenceContract.sourceAttribution,
+      readinessVerdict: doctrineInfluenceContract.readinessState.readinessVerdict,
+      verdict: 'DOCTRINE_INFLUENCE_READY_FOR_MATERIALITY',
+    })
+  } catch (err) {
+    console.log('[PHASE2-DOCTRINE-INFLUENCE-CONTRACT-EARLY-FALLBACK]', {
+      error: String(err),
+      verdict: 'MATERIALITY_WILL_USE_LEGACY_SCORING',
+    })
+    // Continue with null - materiality scoring will use legacy behavior
+  }
+  
+  // ==========================================================================
   // [MULTI-SKILL MATERIALITY CONTRACT] - Additive contract for multi-skill allocation
   // This is DISTINCT from the earlier canonical materialityContract built at line ~5271.
   // This contract governs multi-skill intent classification and session allocation.
+  // [PHASE 2] Now consumes doctrine influence contract for canonical scoring.
   // ==========================================================================
   const multiSkillMaterialityContract = buildMaterialityContract(
   canonicalProfile,
   weightedSkillAllocation,
   currentWorkingProgressionsForContract,
   doctrineEnabled,
-  doctrineSummary
+  doctrineSummary,
+  doctrineInfluenceContract  // [PHASE 2] Pass doctrine influence for canonical scoring
   )
   
   // ==========================================================================
@@ -6285,44 +6469,18 @@ async function generateAdaptiveProgramImpl(
   }
   
   // ==========================================================================
-  // [SHADOW INTEGRATION] BUILD DOCTRINE INFLUENCE CONTRACT
+  // [PHASE 2] DOCTRINE INFLUENCE CONTRACT ALREADY BUILT EARLIER
   // ==========================================================================
-  // PURPOSE: Single normalized influence layer that explicitly separates:
-  // - athleteTruth (canonical profile data)
-  // - doctrineDbTruth (DB-backed rules from Neon)
-  // - codeDoctrineFallbackTruth (code registries)
-  // - mergedInfluence (combined influence per domain)
-  // - sourceAttribution (per-domain ownership: db | code | merged | missing)
-  // - readinessState (DB availability and coverage diagnostics)
-  //
-  // SHADOW MODE: This phase is resolved + carried forward + auditable only.
-  // No visible behavior changes are made by this contract in this phase.
+  // The doctrineInfluenceContract is now built BEFORE multiSkillMaterialityContract
+  // so it can be consumed by canonical materiality scoring.
+  // See [PHASE 2] BUILD DOCTRINE INFLUENCE CONTRACT EARLY section above.
   // ==========================================================================
-  let doctrineInfluenceContract: DoctrineInfluenceContract | null = null
-  try {
-    doctrineInfluenceContract = await buildDoctrineInfluenceContract(
-      {
-        primaryGoal: multiSkillMaterialityContract.primaryGoal || null,
-        secondaryGoal: multiSkillMaterialityContract.secondaryGoal || null,
-        selectedSkills: multiSkillMaterialityContract.selectedSkills,
-        experienceLevel: multiSkillMaterialityContract.experienceLevel || null,
-        scheduleMode: canonicalProfile.scheduleMode || null,
-        targetFrequency: effectiveTrainingDays,
-        jointCautions: multiSkillMaterialityContract.jointCautions,
-        equipmentAvailable: multiSkillMaterialityContract.equipmentAvailable,
-        currentWorkingProgressions: cwpRecord,
-        trainingPath: canonicalProfile.trainingPath || null,
-        sessionStyle: inputs.sessionStyle || null,
-        timeAvailability: canonicalProfile.sessionDurationMinutes || null,
-      },
-      doctrineRuntimeContract
-    )
-    
+  if (doctrineInfluenceContract) {
     // Generate audit summary for debug visibility
     const auditSummary = generateDoctrineInfluenceAuditSummary(doctrineInfluenceContract)
     
-    console.log('[DOCTRINE-INFLUENCE-CONTRACT-SHADOW-INTEGRATION]', {
-      phase: 'SHADOW_MODE',
+    console.log('[DOCTRINE-INFLUENCE-CONTRACT-AUDIT]', {
+      phase: 'ACTIVE_CONSUMPTION',
       contractId: doctrineInfluenceContract.contractId,
       dbAvailable: doctrineInfluenceContract.safetyFlags.dbAvailable,
       fallbackActive: doctrineInfluenceContract.safetyFlags.fallbackActive,
@@ -6331,15 +6489,8 @@ async function generateAdaptiveProgramImpl(
       readinessVerdict: doctrineInfluenceContract.readinessState.readinessVerdict,
       unresolvedDomains: doctrineInfluenceContract.readinessState.unresolvedDomains.length,
       fallbackDomains: doctrineInfluenceContract.readinessState.fallbackDomains.length,
-      verdict: 'DOCTRINE_INFLUENCE_CONTRACT_BUILT_SHADOW',
+      verdict: 'DOCTRINE_INFLUENCE_CONSUMED_BY_MATERIALITY',
     })
-  } catch (err) {
-    console.log('[DOCTRINE-INFLUENCE-CONTRACT-FALLBACK-SAFE]', {
-      error: String(err),
-      phase: 'SHADOW_MODE',
-      verdict: 'DOCTRINE_INFLUENCE_CONTRACT_FALLBACK_SAFE',
-    })
-    // Generation continues safely - this is shadow mode, no behavior changes
   }
   
   // ==========================================================================

@@ -138,6 +138,8 @@ import {
   checkRecommendationTrigger,
   type RuntimeRecommendation,
 } from '@/lib/workout/live-workout-authority-contract'
+  // [LIVE-WORKOUT-ACTION-PLANNER] Import coaching expression builder
+  import { buildCoachingExpression } from '@/lib/workout/live-workout-action-planner'
   import { resolveRestTime, applyRestAdjustment, type RestContext } from '@/lib/workout/rest-doctrine-resolver'
   import {
     buildLiveExecutionContract,
@@ -6099,9 +6101,8 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
         blockRoundRestSeconds={blockRoundRestSeconds}
         onBlockRoundRestComplete={handleBlockRoundRestComplete}
         groupedMemberIndex={groupedMemberIndex}
-        // [LIVE-WORKOUT-ACTION-PLANNER] Pass adaptive hint from planner
-        actionPlanHint={machineState.currentActionPlan?.humanReadableHint}
-        actionPlanRecoveryLevel={machineState.currentActionPlan?.recoveryProtectionLevel}
+        // [LIVE-WORKOUT-ACTION-PLANNER] Pass coaching expression from planner
+        coachingExpression={buildCoachingExpression(machineState.currentActionPlan)}
         onCompleteSet={handleCompleteSet}
         onSetReps={setRepsValue}
         onSetHold={setHoldValue}

@@ -94,6 +94,20 @@ export type RecoveryProtectionLevel = 'none' | 'light' | 'moderate' | 'high' | '
  */
 export type TechnicalProtectionLevel = 'none' | 'form_focus' | 'reduced_load' | 'supervised_only'
 
+/**
+ * Optimization focus - what dimension the planner is currently optimizing.
+ * This enables the UI to show clear intent to the user.
+ */
+export type OptimizationFocus =
+  | 'strength_output'           // Maximizing load/reps for strength
+  | 'skill_quality'             // Prioritizing technique/form
+  | 'recovery_protection'       // Protecting joints/connective tissue
+  | 'technical_control'         // Maintaining form under fatigue
+  | 'assistance_calibration'    // Finding right support level
+  | 'volume_control'            // Managing total work exposure
+  | 'endurance_building'        // Building work capacity
+  | 'none'                      // No specific focus (default behavior)
+
 // =============================================================================
 // CANONICAL PLANNER RESULT
 // =============================================================================
@@ -114,6 +128,9 @@ export interface ActionPlannerResult {
   // Protection levels
   recoveryProtectionLevel: RecoveryProtectionLevel
   technicalProtectionLevel: TechnicalProtectionLevel
+  
+  // [VISIBLE-EXPRESSION] Optimization focus for UI display
+  optimizationFocus: OptimizationFocus
   
   // Specific suggestions (optional, filled when relevant)
   suggestedRestDeltaSec: number | null  // Positive = more rest, negative = less
@@ -757,11 +774,84 @@ function planBodyweightAction(
 // RESULT BUILDERS
 // =============================================================================
 
+/**
+ * Derive optimization focus from action type, context, and protection levels.
+ * This is the SINGLE source for UI focus expression.
+ */
+function deriveOptimizationFocus(
+  actionType: PlannerActionType,
+  context: ExercisePlanningContext,
+  recoveryProtectionLevel: RecoveryProtectionLevel,
+  technicalProtectionLevel: TechnicalProtectionLevel
+): OptimizationFocus {
+  // Critical/high recovery = always recovery protection focus
+  if (recoveryProtectionLevel === 'critical' || recoveryProtectionLevel === 'high') {
+    return 'recovery_protection'
+  }
+  
+  // Technical protection active
+  if (technicalProtectionLevel !== 'none') {
+    return 'technical_control'
+  }
+  
+  // Action-specific mapping
+  switch (actionType) {
+    case 'end_exercise_early_pain':
+    case 'end_exercise_early_recovery':
+    case 'cap_remaining_sets':
+    case 'preserve_load_reduce_volume':
+      return 'recovery_protection'
+    
+    case 'technique_priority_mode':
+      return 'technical_control'
+    
+    case 'reduce_load':
+    case 'increase_load':
+      return 'strength_output'
+    
+    case 'raise_assistance':
+    case 'lower_assistance':
+      return 'assistance_calibration'
+    
+    case 'reduce_target_range':
+      return 'volume_control'
+    
+    case 'keep_load_add_rest':
+      // Context-dependent: is it for recovery or strength?
+      if (recoveryProtectionLevel !== 'none') {
+        return 'recovery_protection'
+      }
+      return 'strength_output'
+    
+    case 'hold_current_no_change':
+    case 'continue_as_prescribed':
+    default:
+      // No specific focus for default/continue actions
+      if (context.isHoldBased || context.isStraightArm) {
+        return 'skill_quality'
+      }
+      if (context.isBandAssisted) {
+        return 'assistance_calibration'
+      }
+      if (context.isWeighted) {
+        return 'strength_output'
+      }
+      return 'none'
+  }
+}
+
 function buildDefaultResult(
   context: ExercisePlanningContext,
   trend: ReturnType<typeof analyzeTrend>,
   inputsConsumed: string[]
 ): ActionPlannerResult {
+  const optimizationFocus = deriveOptimizationFocus(
+    'continue_as_prescribed',
+    context,
+    'none',
+    'none'
+  )
+  
   return {
     actionType: 'continue_as_prescribed',
     reasonCodes: ['performance_stable'],
@@ -769,6 +859,7 @@ function buildDefaultResult(
     appliesTo: 'next_set',
     recoveryProtectionLevel: 'none',
     technicalProtectionLevel: 'none',
+    optimizationFocus,
     suggestedRestDeltaSec: null,
     suggestedLoadDelta: null,
     suggestedAssistanceDelta: null,
@@ -808,6 +899,14 @@ function buildResult(
     appliesTo = 'later_exercises_same_session'
   }
   
+  // Derive optimization focus from action and context
+  const optimizationFocus = deriveOptimizationFocus(
+    actionType,
+    context,
+    extras.recoveryProtectionLevel,
+    extras.technicalProtectionLevel
+  )
+  
   return {
     actionType,
     reasonCodes,
@@ -815,6 +914,7 @@ function buildResult(
     appliesTo,
     recoveryProtectionLevel: extras.recoveryProtectionLevel,
     technicalProtectionLevel: extras.technicalProtectionLevel,
+    optimizationFocus,
     suggestedRestDeltaSec: extras.suggestedRestDeltaSec,
     suggestedLoadDelta: extras.suggestedLoadDelta,
     suggestedAssistanceDelta: extras.suggestedAssistanceDelta ?? null,
@@ -918,6 +1018,14 @@ export function buildPartialCompletionPlan(
       break
   }
   
+  // Derive optimization focus
+  const optimizationFocus = deriveOptimizationFocus(
+    actionType,
+    context,
+    recoveryProtectionLevel,
+    'none'
+  )
+  
   return {
     actionType,
     reasonCodes,
@@ -925,6 +1033,7 @@ export function buildPartialCompletionPlan(
     appliesTo: 'remaining_sets_current_exercise',
     recoveryProtectionLevel,
     technicalProtectionLevel: 'none',
+    optimizationFocus,
     suggestedRestDeltaSec: null,
     suggestedLoadDelta: null,
     suggestedAssistanceDelta: null,
@@ -934,6 +1043,248 @@ export function buildPartialCompletionPlan(
     humanReadableHint,
     inputsConsumed: [`partialCompletion:${reason}`],
   }
+}
+
+// =============================================================================
+// UI EXPRESSION LAYER - Maps canonical planner output to visible coaching
+// =============================================================================
+
+/**
+ * Get human-readable optimization focus label for UI display.
+ */
+export function getOptimizationFocusLabel(focus: OptimizationFocus): string {
+  const labels: Record<OptimizationFocus, string> = {
+    strength_output: 'Strength',
+    skill_quality: 'Skill Quality',
+    recovery_protection: 'Recovery Protection',
+    technical_control: 'Technical Control',
+    assistance_calibration: 'Assistance Calibration',
+    volume_control: 'Volume Control',
+    endurance_building: 'Endurance',
+    none: '',
+  }
+  return labels[focus]
+}
+
+/**
+ * Get scope label for UI display.
+ */
+export function getActionScopeLabel(scope: ActionScope): string {
+  const labels: Record<ActionScope, string> = {
+    next_set: 'Next Set',
+    remaining_sets_current_exercise: 'Remaining Sets',
+    later_exercises_same_session: 'Rest of Session',
+    session_wide: 'Session',
+  }
+  return labels[scope]
+}
+
+/**
+ * Structured coaching expression for UI rendering.
+ * This is the SINGLE canonical source for visible coaching text.
+ */
+export interface CoachingExpression {
+  // Whether to show coaching (false = no coaching visible)
+  shouldShow: boolean
+  // Primary recommendation (short, clear)
+  primaryText: string | null
+  // Secondary rationale (explains why)
+  rationaleText: string | null
+  // Focus badge label
+  focusLabel: string | null
+  // Scope badge label
+  scopeLabel: string | null
+  // Visual severity for styling
+  severity: 'info' | 'warning' | 'caution' | 'critical'
+  // Whether this is a protective/defensive recommendation
+  isProtective: boolean
+}
+
+/**
+ * Build coaching expression from planner result.
+ * This is the SINGLE UI expression mapper - no other component should
+ * invent coaching text outside of this function.
+ */
+export function buildCoachingExpression(
+  plan: ActionPlannerResult | null
+): CoachingExpression {
+  // No plan or continue_as_prescribed with high confidence = no coaching
+  if (!plan) {
+    return {
+      shouldShow: false,
+      primaryText: null,
+      rationaleText: null,
+      focusLabel: null,
+      scopeLabel: null,
+      severity: 'info',
+      isProtective: false,
+    }
+  }
+  
+  // Low confidence or default action = minimal or no coaching
+  if (plan.actionType === 'continue_as_prescribed' && plan.confidence < 0.7) {
+    return {
+      shouldShow: false,
+      primaryText: null,
+      rationaleText: null,
+      focusLabel: null,
+      scopeLabel: null,
+      severity: 'info',
+      isProtective: false,
+    }
+  }
+  
+  // Determine severity from protection levels
+  let severity: CoachingExpression['severity'] = 'info'
+  if (plan.recoveryProtectionLevel === 'critical') {
+    severity = 'critical'
+  } else if (plan.recoveryProtectionLevel === 'high') {
+    severity = 'warning'
+  } else if (plan.recoveryProtectionLevel === 'moderate' || plan.technicalProtectionLevel !== 'none') {
+    severity = 'caution'
+  }
+  
+  // Determine if protective
+  const isProtective = 
+    plan.recoveryProtectionLevel !== 'none' ||
+    plan.technicalProtectionLevel !== 'none' ||
+    plan.actionType.includes('recovery') ||
+    plan.actionType.includes('pain') ||
+    plan.actionType === 'cap_remaining_sets' ||
+    plan.actionType === 'preserve_load_reduce_volume'
+  
+  // Build rationale from reason codes
+  const rationaleText = buildRationaleText(plan.reasonCodes, plan.trendSummary)
+  
+  // Use humanReadableHint if available, otherwise generate primary text
+  const primaryText = plan.humanReadableHint || generatePrimaryText(plan)
+  
+  // Skip showing if primary text is empty/null and it's just continue_as_prescribed
+  if (!primaryText && plan.actionType === 'continue_as_prescribed') {
+    return {
+      shouldShow: false,
+      primaryText: null,
+      rationaleText: null,
+      focusLabel: null,
+      scopeLabel: null,
+      severity: 'info',
+      isProtective: false,
+    }
+  }
+  
+  return {
+    shouldShow: primaryText !== null && primaryText.length > 0,
+    primaryText,
+    rationaleText,
+    focusLabel: plan.optimizationFocus !== 'none' ? getOptimizationFocusLabel(plan.optimizationFocus) : null,
+    scopeLabel: getActionScopeLabel(plan.appliesTo),
+    severity,
+    isProtective,
+  }
+}
+
+/**
+ * Generate primary text from action type when humanReadableHint is not available.
+ */
+function generatePrimaryText(plan: ActionPlannerResult): string | null {
+  switch (plan.actionType) {
+    case 'continue_as_prescribed':
+      return null  // No message needed for normal flow
+    case 'keep_load_add_rest':
+      return 'Take extra rest before next set'
+    case 'reduce_load':
+      return 'Consider reducing weight'
+    case 'increase_load':
+      return 'Ready for progression'
+    case 'raise_assistance':
+      return 'Add more support for quality'
+    case 'lower_assistance':
+      return 'Ready to reduce assistance'
+    case 'cap_remaining_sets':
+      return 'Capping remaining sets for recovery'
+    case 'reduce_target_range':
+      return 'Reducing target for this exercise'
+    case 'preserve_load_reduce_volume':
+      return 'Maintaining load, protecting volume'
+    case 'end_exercise_early_recovery':
+      return 'Recovery protection active'
+    case 'end_exercise_early_pain':
+      return 'Stop for safety'
+    case 'hold_current_no_change':
+      return null
+    case 'technique_priority_mode':
+      return 'Focus on form quality'
+    default:
+      return null
+  }
+}
+
+/**
+ * Build rationale text from reason codes and trend.
+ */
+function buildRationaleText(
+  reasonCodes: PlannerReasonCode[],
+  trend: ActionPlannerResult['trendSummary']
+): string | null {
+  // Build context-aware rationale
+  const reasons: string[] = []
+  
+  if (reasonCodes.includes('pain_signal_detected')) {
+    return 'Pain detected. Safety first.'
+  }
+  
+  if (reasonCodes.includes('rpe_overshoot_trend')) {
+    reasons.push('RPE rising across sets')
+  } else if (reasonCodes.includes('rpe_overshoot_single')) {
+    reasons.push('High effort on last set')
+  }
+  
+  if (reasonCodes.includes('target_missed_repeatedly')) {
+    reasons.push('Missing targets consistently')
+  } else if (reasonCodes.includes('target_missed_single')) {
+    reasons.push('Under target on last set')
+  }
+  
+  if (reasonCodes.includes('technique_degradation')) {
+    reasons.push('Form quality declining')
+  }
+  
+  if (reasonCodes.includes('fatigue_accumulating')) {
+    reasons.push('Fatigue building')
+  }
+  
+  if (reasonCodes.includes('straight_arm_exposure_high')) {
+    reasons.push('Protecting straight-arm work')
+  }
+  
+  if (reasonCodes.includes('assistance_insufficient')) {
+    reasons.push('Need more support')
+  } else if (reasonCodes.includes('assistance_excessive')) {
+    reasons.push('Strong with current support')
+  }
+  
+  if (reasonCodes.includes('load_too_heavy')) {
+    reasons.push('Load feels heavy')
+  } else if (reasonCodes.includes('load_too_light')) {
+    reasons.push('Ready for more weight')
+  }
+  
+  if (reasonCodes.includes('ready_for_progression')) {
+    reasons.push('Performing well')
+  }
+  
+  // Add trend context if meaningful
+  if (trend === 'declining' && reasons.length === 0) {
+    reasons.push('Performance trending down')
+  } else if (trend === 'improving' && reasons.length === 0) {
+    reasons.push('Performance improving')
+  }
+  
+  if (reasons.length === 0) {
+    return null
+  }
+  
+  return reasons.slice(0, 2).join('. ') + '.'
 }
 
 // =============================================================================

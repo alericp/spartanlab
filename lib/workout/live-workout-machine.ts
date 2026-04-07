@@ -56,6 +56,20 @@ export interface CompletedSet {
   blockId?: string
   memberIndex?: number
   round?: number
+  // [LIVE-WORKOUT-AUTHORITY] Extended execution facts
+  inputMode?: import('./live-workout-authority-contract').ExerciseInputMode
+  // Multi-band support (canonical)
+  selectedBands?: ResistanceBandColor[]
+  multiBandSelection?: import('./live-workout-authority-contract').MultiBandSelection | null
+  // Weighted exercise facts
+  prescribedLoad?: number
+  prescribedLoadUnit?: string
+  actualLoadUsed?: number
+  actualLoadUnit?: string
+  // Unilateral exercise facts
+  isPerSide?: boolean
+  // Structured coaching inputs
+  structuredCoachingInputs?: import('./live-workout-authority-contract').CoachingSignalTag[]
 }
 
 export interface ExerciseOverride {
@@ -105,6 +119,11 @@ export interface WorkoutMachineState {
   bandUsed: ResistanceBandColor | 'none'
   // [LIVE-WORKOUT-AUTHORITY] Multi-band support
   multiBandSelection: MultiBandSelection | null
+  // [LIVE-WORKOUT-AUTHORITY] Weighted exercise support
+  actualLoadUsed: number | null
+  actualLoadUnit: string
+  // [LIVE-WORKOUT-AUTHORITY] Per-side tracking for unilateral
+  isPerSide: boolean
   
   // Per-set notes and reason tags
   currentSetNote: string
@@ -225,6 +244,8 @@ export type WorkoutMachineAction =
   | { type: 'ADD_COACHING_SIGNAL'; signals: CoachingSignalTag[]; freeText?: string }
   | { type: 'SKIP_SET'; totalSets: number; exerciseCount: number; reason?: string }
   | { type: 'END_EXERCISE'; totalSets: number; exerciseCount: number; reason?: string }
+  | { type: 'SET_ACTUAL_LOAD'; load: number; unit?: string }
+  | { type: 'SET_IS_PER_SIDE'; isPerSide: boolean }
 
 // =============================================================================
 // INITIAL STATE
@@ -266,6 +287,11 @@ export function createInitialMachineState(
     bandUsed: 'none',
     // [LIVE-WORKOUT-AUTHORITY] Multi-band support
     multiBandSelection: null,
+    // [LIVE-WORKOUT-AUTHORITY] Weighted exercise support
+    actualLoadUsed: null,
+    actualLoadUnit: 'lbs',
+    // [LIVE-WORKOUT-AUTHORITY] Per-side tracking
+    isPerSide: false,
     // Per-set notes
     currentSetNote: '',
     currentSetReasonTags: [],
@@ -411,6 +437,21 @@ export function workoutMachineReducer(
         currentSetReasonTags: [...state.currentSetReasonTags, ...action.signals],
       }
     }
+    
+    // [LIVE-WORKOUT-AUTHORITY] Set actual load used for weighted exercises
+    case 'SET_ACTUAL_LOAD':
+      return {
+        ...state,
+        actualLoadUsed: action.load,
+        actualLoadUnit: action.unit || state.actualLoadUnit,
+      }
+    
+    // [LIVE-WORKOUT-AUTHORITY] Set per-side tracking for unilateral exercises
+    case 'SET_IS_PER_SIDE':
+      return {
+        ...state,
+        isPerSide: action.isPerSide,
+      }
     
     case 'SET_NOTES':
       return { ...state, workoutNotes: action.notes }
@@ -1219,6 +1260,10 @@ export function serializeForStorage(state: WorkoutMachineState): string {
     multiBandSelection: state.multiBandSelection,
     coachingInputs: state.coachingInputs,
     consecutiveHighRPECount: state.consecutiveHighRPECount,
+    // [LIVE-WORKOUT-AUTHORITY] Weighted and unilateral tracking
+    actualLoadUsed: state.actualLoadUsed,
+    actualLoadUnit: state.actualLoadUnit,
+    isPerSide: state.isPerSide,
     elapsedSeconds: state.elapsedSeconds,
     workoutNotes: state.workoutNotes,
     lastSetRPE: state.lastSetRPE,
@@ -1252,6 +1297,10 @@ export function deserializeFromStorage(
       multiBandSelection: parsed.multiBandSelection || null,
       coachingInputs: Array.isArray(parsed.coachingInputs) ? parsed.coachingInputs : [],
       consecutiveHighRPECount: typeof parsed.consecutiveHighRPECount === 'number' ? parsed.consecutiveHighRPECount : 0,
+      // [LIVE-WORKOUT-AUTHORITY] Weighted and unilateral tracking
+      actualLoadUsed: typeof parsed.actualLoadUsed === 'number' ? parsed.actualLoadUsed : null,
+      actualLoadUnit: typeof parsed.actualLoadUnit === 'string' ? parsed.actualLoadUnit : 'lbs',
+      isPerSide: typeof parsed.isPerSide === 'boolean' ? parsed.isPerSide : false,
       elapsedSeconds: typeof parsed.elapsedSeconds === 'number' ? parsed.elapsedSeconds : 0,
       workoutNotes: typeof parsed.workoutNotes === 'string' ? parsed.workoutNotes : '',
       lastSetRPE: parsed.lastSetRPE ?? null,

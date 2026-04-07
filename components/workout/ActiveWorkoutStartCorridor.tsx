@@ -99,9 +99,25 @@ export interface ActiveWorkoutCorridorProps {
   // Recent sets for ledger
   recentSets?: CompletedSetInfo[]
   
+  // [LIVE-WORKOUT-AUTHORITY] Input mode contract - drives visible controls
+  inputMode?: import('@/lib/workout/live-workout-authority-contract').ExerciseInputMode
+  showLoadInput?: boolean
+  showMultiBandSelector?: boolean
+  showPerSideToggle?: boolean
+  primaryInputLabel?: string
+  
   // Band configuration
   bandSelectable?: boolean
   recommendedBand?: ResistanceBandColor
+  
+  // [LIVE-WORKOUT-AUTHORITY] Weighted exercise inputs
+  actualLoadUsed?: number | null
+  actualLoadUnit?: string
+  onSetActualLoad?: (load: number, unit?: string) => void
+  
+  // [LIVE-WORKOUT-AUTHORITY] Per-side tracking
+  isPerSide?: boolean
+  onSetIsPerSide?: (isPerSide: boolean) => void
   
   // Rest mode props
   restDurationSeconds?: number
@@ -341,8 +357,21 @@ export function ActiveWorkoutStartCorridor({
   currentSetNote = '',
   currentSetReasonTags = [],
   recentSets = [],
+  // [LIVE-WORKOUT-AUTHORITY] Input mode contract
+  inputMode,
+  showLoadInput = false,
+  showMultiBandSelector = false,
+  showPerSideToggle = false,
+  primaryInputLabel,
   bandSelectable = false,
   recommendedBand,
+  // [LIVE-WORKOUT-AUTHORITY] Weighted exercise inputs
+  actualLoadUsed,
+  actualLoadUnit = 'lbs',
+  onSetActualLoad,
+  // [LIVE-WORKOUT-AUTHORITY] Per-side tracking
+  isPerSide = false,
+  onSetIsPerSide,
   restDurationSeconds = 90,
   lastSetRPE,
   restType = 'same_exercise',
@@ -742,20 +771,98 @@ export function ActiveWorkoutStartCorridor({
           </Card>
           
           {/* ========== INPUT CARD ========== */}
+          {/* [LIVE-WORKOUT-AUTHORITY] Authoritative execution-fact inputs driven by inputMode */}
           <Card className="bg-[#1A1F26] border-[#2B313A] p-3 space-y-4">
-            {/* Reps/Hold Input */}
+            
+            {/* [LIVE-WORKOUT-AUTHORITY] Input mode label for clarity */}
+            {inputMode && (
+              <div className="flex items-center justify-between pb-2 border-b border-[#2B313A]/50">
+                <span className="text-xs text-[#6B7280] uppercase tracking-wide">
+                  {inputMode === 'band_assisted_skill' && 'Band-Assisted'}
+                  {inputMode === 'weighted_strength' && 'Weighted'}
+                  {inputMode === 'bodyweight_strength' && 'Bodyweight'}
+                  {inputMode === 'timed_hold' && 'Timed Hold'}
+                  {inputMode === 'reps_per_side' && 'Unilateral'}
+                  {inputMode === 'density_block' && 'Density Block'}
+                </span>
+                {/* Per-side indicator for unilateral exercises */}
+                {showPerSideToggle && (
+                  <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded">
+                    Per Side
+                  </span>
+                )}
+              </div>
+            )}
+            
+            {/* [LIVE-WORKOUT-AUTHORITY] Actual Load Input - for weighted exercises */}
+            {showLoadInput && prescribedLoad && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-[#A4ACB8]">Load Used</span>
+                  <span className="text-xs text-[#6B7280]">
+                    Prescribed: +{prescribedLoad.load}{prescribedLoad.unit}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] h-10 px-3"
+                    onClick={() => onSetActualLoad?.((actualLoadUsed ?? prescribedLoad.load) - 5, actualLoadUnit)}
+                    disabled={(actualLoadUsed ?? prescribedLoad.load) <= 0}
+                  >
+                    -5
+                  </Button>
+                  <div className="flex-1 text-center">
+                    <span className="text-2xl font-bold text-amber-400">
+                      +{actualLoadUsed ?? prescribedLoad.load}
+                    </span>
+                    <span className="text-sm text-[#A4ACB8] ml-1">{actualLoadUnit || prescribedLoad.unit}</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] h-10 px-3"
+                    onClick={() => onSetActualLoad?.((actualLoadUsed ?? prescribedLoad.load) + 5, actualLoadUnit)}
+                  >
+                    +5
+                  </Button>
+                </div>
+              </div>
+            )}
+            
+            {/* Reps/Hold Input - with per-side label when applicable */}
             {isHold ? (
               <RepsHoldInput type="hold" value={holdValue} onChange={onSetHold} targetValue={targetValue} />
             ) : (
-              <RepsHoldInput type="reps" value={repsValue} onChange={onSetReps} targetValue={targetValue} />
+              <div className="space-y-2">
+                {showPerSideToggle && (
+                  <div className="text-center text-xs text-amber-400 font-medium">
+                    Reps per Side
+                  </div>
+                )}
+                <RepsHoldInput 
+                  type="reps" 
+                  value={repsValue} 
+                  onChange={onSetReps} 
+                  targetValue={targetValue}
+                />
+              </div>
             )}
             
             {/* RPE Selector */}
             <RPEQuickSelector value={selectedRPE} onChange={onSetRPE} targetRPE={targetRPE} />
             
-            {/* Band Selector (if enabled) */}
+            {/* [LIVE-WORKOUT-AUTHORITY] Band Selector - only for band-assisted exercises */}
             {bandSelectable && (
-              <BandSelector value={bandUsed} onChange={onSetBand} recommendedBand={recommendedBand} />
+              <div className="space-y-2">
+                {showMultiBandSelector && (
+                  <div className="text-xs text-[#6B7280] text-center">
+                    Select assistance band(s)
+                  </div>
+                )}
+                <BandSelector value={bandUsed} onChange={onSetBand} recommendedBand={recommendedBand} />
+              </div>
             )}
             
             {/* Per-set notes section - collapsible */}

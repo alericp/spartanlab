@@ -118,6 +118,7 @@ export interface WorkoutMachineState {
   holdValue: number
   bandUsed: ResistanceBandColor | 'none'
   // [LIVE-WORKOUT-AUTHORITY] Multi-band support
+  selectedBands: ResistanceBandColor[]
   multiBandSelection: MultiBandSelection | null
   // [LIVE-WORKOUT-AUTHORITY] Weighted exercise support
   actualLoadUsed: number | null
@@ -241,6 +242,7 @@ export type WorkoutMachineAction =
   | { type: 'ADVANCE_TO_NEXT_BLOCK'; nextBlockIndex: number; nextExerciseIndex: number; targetValue: number }
   // [LIVE-WORKOUT-AUTHORITY] New authority actions
   | { type: 'SET_MULTI_BAND'; selection: MultiBandSelection | null }
+  | { type: 'SET_SELECTED_BANDS'; bands: ResistanceBandColor[] }
   | { type: 'ADD_COACHING_SIGNAL'; signals: CoachingSignalTag[]; freeText?: string }
   | { type: 'SKIP_SET'; totalSets: number; exerciseCount: number; reason?: string }
   | { type: 'END_EXERCISE'; totalSets: number; exerciseCount: number; reason?: string }
@@ -286,6 +288,7 @@ export function createInitialMachineState(
     holdValue: 30,
     bandUsed: 'none',
     // [LIVE-WORKOUT-AUTHORITY] Multi-band support
+    selectedBands: [],
     multiBandSelection: null,
     // [LIVE-WORKOUT-AUTHORITY] Weighted exercise support
     actualLoadUsed: null,
@@ -420,6 +423,22 @@ export function workoutMachineReducer(
         multiBandSelection: action.selection,
         // Also set single band for backward compatibility
         bandUsed: action.selection?.bands[0] || 'none',
+      }
+    
+    // [LIVE-WORKOUT-AUTHORITY] Set selected bands array directly (for MultiBandSelector)
+    case 'SET_SELECTED_BANDS':
+      return {
+        ...state,
+        selectedBands: action.bands,
+        // Also update legacy single band field and normalized selection
+        bandUsed: action.bands[0] || 'none',
+        multiBandSelection: action.bands.length > 0 ? {
+          bands: action.bands,
+          primaryBand: action.bands[0],
+          assistanceSummary: action.bands.length === 1 
+            ? `${action.bands[0]} band` 
+            : `${action.bands.join(' + ')} bands combined`,
+        } : null,
       }
     
     // [LIVE-WORKOUT-AUTHORITY] Add coaching signal
@@ -1257,6 +1276,7 @@ export function serializeForStorage(state: WorkoutMachineState): string {
     // [LIVE-WORKOUT-AUTHORITY] Skip tracking
     skipDecisions: state.skipDecisions,
     // [LIVE-WORKOUT-AUTHORITY] Multi-band and coaching
+    selectedBands: state.selectedBands,
     multiBandSelection: state.multiBandSelection,
     coachingInputs: state.coachingInputs,
     consecutiveHighRPECount: state.consecutiveHighRPECount,
@@ -1294,6 +1314,7 @@ export function deserializeFromStorage(
       // [LIVE-WORKOUT-AUTHORITY] Skip tracking
       skipDecisions: Array.isArray(parsed.skipDecisions) ? parsed.skipDecisions : [],
       // [LIVE-WORKOUT-AUTHORITY] Multi-band and coaching
+      selectedBands: Array.isArray(parsed.selectedBands) ? parsed.selectedBands : [],
       multiBandSelection: parsed.multiBandSelection || null,
       coachingInputs: Array.isArray(parsed.coachingInputs) ? parsed.coachingInputs : [],
       consecutiveHighRPECount: typeof parsed.consecutiveHighRPECount === 'number' ? parsed.consecutiveHighRPECount : 0,

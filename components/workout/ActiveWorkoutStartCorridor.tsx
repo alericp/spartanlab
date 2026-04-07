@@ -53,6 +53,13 @@ export interface CompletedSetInfo {
   actualRPE: RPEValue
   bandUsed?: ResistanceBandColor | 'none'
   reasonTags?: SetReasonTag[]
+  // [LIVE-WORKOUT-AUTHORITY] Extended execution facts
+  inputMode?: import('@/lib/workout/live-workout-authority-contract').ExerciseInputMode
+  selectedBands?: ResistanceBandColor[]
+  actualLoadUsed?: number
+  actualLoadUnit?: string
+  isPerSide?: boolean
+  structuredCoachingInputs?: string[]
 }
 
 export interface ActiveWorkoutCorridorProps {
@@ -109,6 +116,9 @@ export interface ActiveWorkoutCorridorProps {
   // Band configuration
   bandSelectable?: boolean
   recommendedBand?: ResistanceBandColor
+  // [LIVE-WORKOUT-AUTHORITY] Multi-band selection
+  selectedBands?: ResistanceBandColor[]
+  onSetSelectedBands?: (bands: ResistanceBandColor[]) => void
   
   // [LIVE-WORKOUT-AUTHORITY] Weighted exercise inputs
   actualLoadUsed?: number | null
@@ -331,6 +341,117 @@ function BandSelector({ value, onChange, recommendedBand }: BandSelectorProps) {
   )
 }
 
+/**
+ * [LIVE-WORKOUT-AUTHORITY] Multi-Band Selector
+ * Allows selecting multiple assistance bands simultaneously.
+ * When bands are selected, removing one keeps the others.
+ */
+interface MultiBandSelectorProps {
+  selectedBands: ResistanceBandColor[]
+  onChange: (bands: ResistanceBandColor[]) => void
+  recommendedBand?: ResistanceBandColor
+}
+
+function MultiBandSelector({ selectedBands, onChange, recommendedBand }: MultiBandSelectorProps) {
+  const hasNoBands = selectedBands.length === 0
+  
+  const toggleBand = (band: ResistanceBandColor) => {
+    if (selectedBands.includes(band)) {
+      // Remove the band
+      onChange(selectedBands.filter(b => b !== band))
+    } else {
+      // Add the band
+      onChange([...selectedBands, band])
+    }
+  }
+  
+  const clearAll = () => {
+    onChange([])
+  }
+  
+  // Sort selected bands for consistent display
+  const sortedSelectedBands = [...selectedBands].sort((a, b) => 
+    ALL_BAND_COLORS.indexOf(a) - ALL_BAND_COLORS.indexOf(b)
+  )
+  
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-[#A4ACB8]">Assistance Band(s)</span>
+        {recommendedBand && (
+          <span className="text-xs text-[#6B7280]">Rec: {BAND_SHORT_LABELS[recommendedBand]}</span>
+        )}
+      </div>
+      
+      {/* Selected bands summary */}
+      {selectedBands.length > 0 && (
+        <div className="flex items-center gap-2 pb-1">
+          <span className="text-xs text-[#6B7280]">Selected:</span>
+          <div className="flex gap-1">
+            {sortedSelectedBands.map(band => {
+              const colors = BAND_COLORS[band]
+              return (
+                <span 
+                  key={band}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${colors.bg} ${colors.text}`}
+                >
+                  {BAND_SHORT_LABELS[band]}
+                </span>
+              )
+            })}
+          </div>
+          <button 
+            onClick={clearAll}
+            className="text-xs text-[#6B7280] hover:text-[#A4ACB8] ml-auto"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+      
+      {/* Band selection grid */}
+      <div className="flex flex-wrap gap-1.5">
+        {/* None option */}
+        <button
+          onClick={clearAll}
+          className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            hasNoBands
+              ? 'bg-[#2B313A] text-[#E6E9EF] border border-[#3B4250]'
+              : 'bg-transparent text-[#6B7280] border border-[#2B313A] hover:border-[#3B4250]'
+          }`}
+        >
+          None
+        </button>
+        
+        {/* Band options - multi-select */}
+        {ALL_BAND_COLORS.map((band) => {
+          const isSelected = selectedBands.includes(band)
+          const colors = BAND_COLORS[band]
+          
+          return (
+            <button
+              key={band}
+              onClick={() => toggleBand(band)}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                isSelected
+                  ? `${colors.bg} ${colors.text} ${colors.border} border ring-1 ring-offset-1 ring-offset-[#0F1115] ring-current`
+                  : `bg-transparent ${colors.text} border ${colors.border} opacity-60 hover:opacity-100`
+              }`}
+            >
+              {BAND_SHORT_LABELS[band]}
+            </button>
+          )
+        })}
+      </div>
+      
+      {/* Adaptive hint */}
+      <div className="text-[10px] text-[#6B7280] text-center">
+        Tap multiple bands to combine assistance
+      </div>
+    </div>
+  )
+}
+
 // =============================================================================
 // MAIN COMPONENT
 // =============================================================================
@@ -365,6 +486,9 @@ export function ActiveWorkoutStartCorridor({
   primaryInputLabel,
   bandSelectable = false,
   recommendedBand,
+  // [LIVE-WORKOUT-AUTHORITY] Multi-band selection
+  selectedBands = [],
+  onSetSelectedBands,
   // [LIVE-WORKOUT-AUTHORITY] Weighted exercise inputs
   actualLoadUsed,
   actualLoadUnit = 'lbs',
@@ -855,17 +979,20 @@ export function ActiveWorkoutStartCorridor({
             
             {/* [LIVE-WORKOUT-AUTHORITY] Band Selector - only for band-assisted exercises */}
             {bandSelectable && (
-              <div className="space-y-2">
-                {showMultiBandSelector && (
-                  <div className="text-xs text-[#6B7280] text-center">
-                    Select assistance band(s)
-                  </div>
-                )}
+              showMultiBandSelector && onSetSelectedBands ? (
+                // True multi-band selector for band-assisted exercises
+                <MultiBandSelector 
+                  selectedBands={selectedBands} 
+                  onChange={onSetSelectedBands} 
+                  recommendedBand={recommendedBand} 
+                />
+              ) : (
+                // Legacy single-band selector fallback
                 <BandSelector value={bandUsed} onChange={onSetBand} recommendedBand={recommendedBand} />
-              </div>
+              )
             )}
             
-            {/* Per-set notes section - collapsible */}
+            {/* [LIVE-WORKOUT-AUTHORITY] Adaptive Input Section - coaching signals that drive adaptation */}
             {onSetNote && onToggleReasonTag && (
               <div className="border-t border-[#2B313A] pt-3">
                 <button
@@ -874,10 +1001,12 @@ export function ActiveWorkoutStartCorridor({
                 >
                   <div className="flex items-center gap-2 text-sm text-[#A4ACB8]">
                     <MessageSquare className="w-4 h-4" />
-                    <span>Add note</span>
+                    <span>Coaching Feedback</span>
                     {(currentSetNote || currentSetReasonTags.length > 0) && (
-                      <span className="text-xs text-[#6B7280]">
-                        ({currentSetReasonTags.length > 0 ? currentSetReasonTags.length + ' tags' : 'note added'})
+                      <span className="text-xs text-amber-400/80">
+                        {currentSetReasonTags.length > 0 
+                          ? `${currentSetReasonTags.length} signal${currentSetReasonTags.length > 1 ? 's' : ''}`
+                          : 'note added'}
                       </span>
                     )}
                   </div>
@@ -890,33 +1019,43 @@ export function ActiveWorkoutStartCorridor({
                 
                 {showSetNotes && (
                   <div className="mt-3 space-y-3">
-                    {/* Reason tags - quick tap selection */}
-                    <div className="flex flex-wrap gap-1.5">
-                      {(Object.entries(SET_REASON_TAG_LABELS) as [SetReasonTag, string][]).map(([tag, label]) => {
-                        const isSelected = currentSetReasonTags.includes(tag)
-                        return (
-                          <button
-                            key={tag}
-                            onClick={() => onToggleReasonTag(tag)}
-                            className={`px-2 py-1 rounded-md text-xs transition-colors ${
-                              isSelected
-                                ? 'bg-[#C1121F]/20 text-[#C1121F] border border-[#C1121F]/30'
-                                : 'bg-[#2B313A] text-[#A4ACB8] border border-transparent hover:border-[#3B4250]'
-                            }`}
-                          >
-                            {label}
-                          </button>
-                        )
-                      })}
+                    {/* [LIVE-WORKOUT-AUTHORITY] Structured coaching signals - these drive future adaptation */}
+                    <div className="space-y-1.5">
+                      <div className="text-xs text-[#6B7280]">
+                        Quick tags (affects future sets)
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(Object.entries(SET_REASON_TAG_LABELS) as [SetReasonTag, string][]).map(([tag, label]) => {
+                          const isSelected = currentSetReasonTags.includes(tag)
+                          return (
+                            <button
+                              key={tag}
+                              onClick={() => onToggleReasonTag(tag)}
+                              className={`px-2 py-1 rounded-md text-xs transition-colors ${
+                                isSelected
+                                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                  : 'bg-[#2B313A] text-[#A4ACB8] border border-transparent hover:border-[#3B4250]'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
                     
                     {/* Free text note */}
-                    <Textarea
-                      placeholder="Optional note for this set..."
-                      value={currentSetNote}
-                      onChange={(e) => onSetNote(e.target.value)}
-                      className="bg-[#2B313A] border-[#3B4250] text-[#E6E9EF] placeholder:text-[#6B7280] text-sm resize-none h-16"
-                    />
+                    <div className="space-y-1.5">
+                      <div className="text-xs text-[#6B7280]">
+                        Notes
+                      </div>
+                      <Textarea
+                        placeholder="Any details for your coach AI..."
+                        value={currentSetNote}
+                        onChange={(e) => onSetNote(e.target.value)}
+                        className="bg-[#2B313A] border-[#3B4250] text-[#E6E9EF] placeholder:text-[#6B7280] text-sm resize-none h-16"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -925,25 +1064,42 @@ export function ActiveWorkoutStartCorridor({
           
           {/* ========== RECENT SETS LEDGER ========== */}
           {/* [MOBILE-FIX] Constrained height with internal scroll to prevent pushing action rail too low */}
+          {/* [LIVE-WORKOUT-AUTHORITY] Now displays extended execution facts */}
           {recentSets.length > 0 && (
             <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
               <div className="text-xs font-medium text-[#A4ACB8] mb-2">Recent Sets</div>
               <div className="space-y-1 text-xs max-h-24 overflow-y-auto">
                 {recentSets.map((set, idx) => (
                   <div key={idx} className="flex items-center justify-between px-2 py-1.5 bg-[#2B313A]/50 rounded">
-                    <div className="flex items-center gap-2 flex-1">
-                      <span className="text-[#6B7280] w-12">Set {set.setNumber}</span>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-[#6B7280] w-12 flex-shrink-0">Set {set.setNumber}</span>
                       <span className="text-[#E6E9EF] font-medium">
-                        {set.actualReps > 0 ? `${set.actualReps}` : set.holdSeconds ? `${set.holdSeconds}s` : '—'}
+                        {set.actualReps > 0 
+                          ? `${set.actualReps}${set.isPerSide ? '/side' : ''}` 
+                          : set.holdSeconds 
+                            ? `${set.holdSeconds}s` 
+                            : '—'}
                       </span>
-                      {set.bandUsed && set.bandUsed !== 'none' && (
-                        <span className="text-[#C1121F]">{set.bandUsed}</span>
+                      {/* Load used - for weighted exercises */}
+                      {set.actualLoadUsed !== undefined && set.actualLoadUsed > 0 && (
+                        <span className="text-amber-400 text-[10px]">+{set.actualLoadUsed}{set.actualLoadUnit || 'lbs'}</span>
+                      )}
+                      {/* Multi-band - show combined */}
+                      {set.selectedBands && set.selectedBands.length > 0 ? (
+                        <span className="text-[#C1121F] text-[10px] truncate max-w-[60px]">
+                          {set.selectedBands.map(b => BAND_SHORT_LABELS[b]).join('+')}
+                        </span>
+                      ) : set.bandUsed && set.bandUsed !== 'none' && (
+                        <span className="text-[#C1121F] text-[10px]">{BAND_SHORT_LABELS[set.bandUsed]}</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <span className="text-[#A4ACB8]">RPE {set.actualRPE}</span>
-                      {set.reasonTags && set.reasonTags.length > 0 && (
-                        <span className="text-[#C1121F] text-[10px]">+{set.reasonTags.length}</span>
+                      {/* Coaching signals indicator */}
+                      {((set.reasonTags && set.reasonTags.length > 0) || (set.structuredCoachingInputs && set.structuredCoachingInputs.length > 0)) && (
+                        <span className="text-amber-400 text-[10px]">
+                          +{(set.reasonTags?.length || 0) + (set.structuredCoachingInputs?.length || 0)}
+                        </span>
                       )}
                     </div>
                   </div>

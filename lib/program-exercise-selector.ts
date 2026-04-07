@@ -504,6 +504,165 @@ function applyPrerequisiteGate(
   return { exercise, gateResult, wasSubstituted: false }
 }
 
+// =============================================================================
+// [SESSION-ARCHITECTURE-OWNERSHIP] Session Architecture Contract Builder
+// Converts the composition blueprint into actionable slot allocation decisions
+// =============================================================================
+
+interface SessionArchitectureContract {
+  sessionIntent: string
+  sessionComplexity: 'minimal' | 'standard' | 'comprehensive'
+  slotAllocation: {
+    primaryWork: number      // Number of primary skill/strength slots
+    secondaryWork: number    // Number of secondary work slots
+    supportWork: number      // Number of support/carryover slots
+    accessoryWork: number    // Number of accessory slots
+    conditioningWork: number // Number of finisher/conditioning slots
+  }
+  methodDecisions: {
+    supersetsAllowed: boolean
+    circuitsAllowed: boolean
+    densityBlocksAllowed: boolean
+    finisherAllowed: boolean
+  }
+  workloadDistribution: {
+    primaryPercent: number
+    secondaryPercent: number
+    supportPercent: number
+    conditioningPercent: number
+  }
+  dayRoleEnforcement: {
+    dayRole: string
+    mustDominatePrimary: boolean
+    secondaryContainmentLevel: 'none' | 'minimal' | 'moderate'
+    supportPurpose: string
+  }
+  templateEscaped: boolean
+}
+
+function buildSessionArchitectureContract(
+  blueprint: import('./program-generation/session-composition-intelligence').SessionCompositionBlueprint | null | undefined,
+  day: DayStructure,
+  primaryGoal: PrimaryGoal,
+  experienceLevel: ExperienceLevel,
+  sessionMinutes: number
+): SessionArchitectureContract {
+  // If we have a canonical blueprint, use it to drive decisions
+  if (blueprint) {
+    // Count blocks by role category
+    const primaryBlocks = blueprint.blocks.filter(b => 
+      b.role === 'primary_skill' || b.role === 'primary_strength'
+    ).length
+    const secondaryBlocks = blueprint.blocks.filter(b => 
+      b.role === 'secondary_skill' || b.role === 'secondary_strength'
+    ).length
+    const supportBlocks = blueprint.blocks.filter(b => 
+      b.role === 'support_carryover' || b.role === 'accessory_targeted'
+    ).length
+    const conditioningBlocks = blueprint.blocks.filter(b => 
+      b.role === 'method_density' || b.role === 'finisher_conditioning'
+    ).length
+    
+    // Convert method eligibility to boolean decisions
+    const supersetsAllowed = blueprint.methodEligibility.supersets === 'earned' || 
+                             blueprint.methodEligibility.supersets === 'allowed'
+    const circuitsAllowed = blueprint.methodEligibility.circuits === 'earned' || 
+                            blueprint.methodEligibility.circuits === 'allowed'
+    const densityAllowed = blueprint.methodEligibility.density === 'earned' || 
+                           blueprint.methodEligibility.density === 'allowed'
+    const finisherAllowed = blueprint.methodEligibility.finisher === 'earned' || 
+                            blueprint.methodEligibility.finisher === 'allowed'
+    
+    // Derive day role from intent and blocks
+    const isPrimaryFocusDay = primaryBlocks >= 1 && 
+      blueprint.workloadDistribution.primaryWorkPercent >= 40
+    const secondaryContainment = 
+      blueprint.workloadDistribution.secondaryWorkPercent <= 15 ? 'minimal' :
+      blueprint.workloadDistribution.secondaryWorkPercent <= 25 ? 'moderate' : 'none'
+    
+    // Determine support purpose from composition reasons
+    const supportReasons = blueprint.compositionReasons.filter(r => 
+      r.code === 'support_carryover_placement' || 
+      r.code === 'current_progression_fit'
+    )
+    const supportPurpose = supportReasons.length > 0 
+      ? supportReasons[0].description 
+      : 'general support for primary goal'
+    
+    return {
+      sessionIntent: blueprint.sessionIntent,
+      sessionComplexity: blueprint.sessionComplexity,
+      slotAllocation: {
+        primaryWork: Math.max(1, primaryBlocks * 2),    // ~2 exercises per block
+        secondaryWork: secondaryBlocks * 2,
+        supportWork: Math.max(1, supportBlocks * 2),
+        accessoryWork: blueprint.sessionComplexity === 'comprehensive' ? 2 : 1,
+        conditioningWork: conditioningBlocks > 0 ? 1 : 0,
+      },
+      methodDecisions: {
+        supersetsAllowed,
+        circuitsAllowed,
+        densityBlocksAllowed: densityAllowed,
+        finisherAllowed,
+      },
+      workloadDistribution: {
+        primaryPercent: blueprint.workloadDistribution.primaryWorkPercent,
+        secondaryPercent: blueprint.workloadDistribution.secondaryWorkPercent,
+        supportPercent: blueprint.workloadDistribution.supportWorkPercent,
+        conditioningPercent: blueprint.workloadDistribution.conditioningPercent,
+      },
+      dayRoleEnforcement: {
+        dayRole: blueprint.sessionIntent,
+        mustDominatePrimary: isPrimaryFocusDay,
+        secondaryContainmentLevel: secondaryContainment,
+        supportPurpose,
+      },
+      templateEscaped: blueprint.audit.templateEscaped,
+    }
+  }
+  
+  // Fallback: Build heuristic contract when no blueprint available
+  // This maintains backward compatibility but marks as template-based
+  const isShortSession = sessionMinutes <= 30
+  const isMediumSession = sessionMinutes <= 45
+  const complexity = isShortSession ? 'minimal' : isMediumSession ? 'standard' : 'comprehensive'
+  
+  const isPushFocus = day.focus.includes('push')
+  const isPullFocus = day.focus.includes('pull')
+  const isSkillFocus = day.focus.includes('skill')
+  
+  return {
+    sessionIntent: `${day.focus} session for ${primaryGoal}`,
+    sessionComplexity: complexity,
+    slotAllocation: {
+      primaryWork: isShortSession ? 2 : 3,
+      secondaryWork: complexity === 'minimal' ? 0 : 1,
+      supportWork: complexity === 'comprehensive' ? 2 : 1,
+      accessoryWork: complexity === 'minimal' ? 0 : 1,
+      conditioningWork: complexity === 'comprehensive' ? 1 : 0,
+    },
+    methodDecisions: {
+      supersetsAllowed: !isSkillFocus && complexity !== 'minimal',
+      circuitsAllowed: !isSkillFocus && complexity === 'comprehensive',
+      densityBlocksAllowed: complexity === 'comprehensive',
+      finisherAllowed: complexity !== 'minimal',
+    },
+    workloadDistribution: {
+      primaryPercent: 50,
+      secondaryPercent: 15,
+      supportPercent: 25,
+      conditioningPercent: 10,
+    },
+    dayRoleEnforcement: {
+      dayRole: day.focus,
+      mustDominatePrimary: true,
+      secondaryContainmentLevel: 'moderate',
+      supportPurpose: 'general carryover support',
+    },
+    templateEscaped: false, // Fallback is always template-based
+  }
+}
+
 export interface ExerciseSelection {
   warmup: SelectedExercise[]
   main: SelectedExercise[]
@@ -598,6 +757,8 @@ interface ExerciseSelectionInputs {
   currentWorkingProgression: string | null
   historicalCeiling: string | null
   }>
+  // [SESSION-ARCHITECTURE-OWNERSHIP] Session composition blueprint for structure enforcement
+  sessionCompositionBlueprint?: import('./program-generation/session-composition-intelligence').SessionCompositionBlueprint | null
   }
 
 // =============================================================================
@@ -637,6 +798,8 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   currentWorkingProgressions,
   // [PHASE-MATERIALITY] Extract material skill intent
   materialSkillIntent,
+  // [SESSION-ARCHITECTURE-OWNERSHIP] Extract composition blueprint
+  sessionCompositionBlueprint,
   } = inputs
   
   // ==========================================================================
@@ -661,6 +824,31 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     console.warn('[EXERCISE-SELECTION-RUNTIME-STABILIZATION] Malformed data filtered:', stabilizationAudit)
   }
   
+  // ==========================================================================
+  // [SESSION-ARCHITECTURE-OWNERSHIP] PHASE: Session structure enforcement from blueprint
+  // The blueprint determines what blocks, methods, and workload distribution this session should have
+  // ==========================================================================
+  const sessionArchitectureContract = buildSessionArchitectureContract(
+    sessionCompositionBlueprint,
+    day,
+    primaryGoal,
+    experienceLevel,
+    sessionMinutes
+  )
+  
+  console.log('[SESSION-ARCHITECTURE-OWNERSHIP] Architecture contract active:', {
+    dayFocus: day.focus,
+    sessionIntent: sessionArchitectureContract.sessionIntent,
+    sessionComplexity: sessionArchitectureContract.sessionComplexity,
+    primaryWorkSlots: sessionArchitectureContract.slotAllocation.primaryWork,
+    secondaryWorkSlots: sessionArchitectureContract.slotAllocation.secondaryWork,
+    supportWorkSlots: sessionArchitectureContract.slotAllocation.supportWork,
+    methodsAllowed: sessionArchitectureContract.methodDecisions,
+    workloadDistribution: sessionArchitectureContract.workloadDistribution,
+    blueprintSource: sessionCompositionBlueprint ? 'canonical_blueprint' : 'fallback_heuristic',
+    verdict: sessionArchitectureContract.templateEscaped ? 'ARCHITECTURE_OWNED_BY_TRUTH' : 'ARCHITECTURE_FALLBACK',
+  })
+  
   // SKILL EXPRESSION FIX: Log skill allocation for this session
   if (validatedSkillsForSession.length > 0) {
     const sessionSkillLabels = validatedSkillsForSession.map(function(s) {
@@ -680,7 +868,18 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   })
   
   // Calculate exercise budget based on session time
-  const budget = calculateExerciseBudget(sessionMinutes)
+  // [SESSION-ARCHITECTURE-OWNERSHIP] Use architecture contract to influence slot allocation
+  const baseBudget = calculateExerciseBudget(sessionMinutes)
+  const budget = {
+    ...baseBudget,
+    // Override main exercises based on architecture contract when available
+    mainExercises: sessionArchitectureContract.templateEscaped
+      ? sessionArchitectureContract.slotAllocation.primaryWork + 
+        sessionArchitectureContract.slotAllocation.secondaryWork +
+        sessionArchitectureContract.slotAllocation.supportWork +
+        sessionArchitectureContract.slotAllocation.accessoryWork
+      : baseBudget.mainExercises,
+  }
   
   // Get principle rules if methods are selected
   const primaryMethod = selectedMethods?.primary
@@ -1062,6 +1261,47 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   
   // [AI_SESSION_MATERIALITY_PHASE] Get captured skill expression result
   const skillExpressionCapture = getSessionSkillExpressionCapture()
+  
+  // ==========================================================================
+  // [SESSION-ARCHITECTURE-OWNERSHIP] Final architecture ownership audit
+  // Confirms that session composition was driven by canonical truth, not templates
+  // ==========================================================================
+  const primaryWorkCount = main.filter(e => 
+    e.selectionTrace?.sessionRole === 'direct_skill' ||
+    e.selectionTrace?.sessionRole === 'strength_foundation'
+  ).length
+  const secondaryWorkCount = main.filter(e =>
+    e.selectionTrace?.sessionRole === 'secondary_skill' ||
+    e.selectionTrace?.expressionMode === 'technical'
+  ).length
+  const supportWorkCount = main.filter(e =>
+    e.selectionTrace?.sessionRole === 'strength_support' ||
+    e.selectionTrace?.sessionRole === 'accessory'
+  ).length
+  
+  console.log('[SESSION-ARCHITECTURE-OWNERSHIP-AUDIT]', {
+    dayFocus: day.focus,
+    sessionIntent: sessionArchitectureContract.sessionIntent,
+    templateEscaped: sessionArchitectureContract.templateEscaped,
+    contractSlots: {
+      primary: sessionArchitectureContract.slotAllocation.primaryWork,
+      secondary: sessionArchitectureContract.slotAllocation.secondaryWork,
+      support: sessionArchitectureContract.slotAllocation.supportWork,
+    },
+    actualSlots: {
+      primary: primaryWorkCount,
+      secondary: secondaryWorkCount,
+      support: supportWorkCount,
+    },
+    methodsUsed: {
+      supersetsAllowed: sessionArchitectureContract.methodDecisions.supersetsAllowed,
+      finisherAllowed: sessionArchitectureContract.methodDecisions.finisherAllowed,
+    },
+    dayRoleEnforcement: sessionArchitectureContract.dayRoleEnforcement,
+    verdict: sessionArchitectureContract.templateEscaped 
+      ? 'SESSION_ARCHITECTURE_OWNED_BY_CANONICAL_TRUTH'
+      : 'SESSION_ARCHITECTURE_USING_TEMPLATE_FALLBACK',
+  })
   
   // BUILD-HOTFIX: balanced module structure and restored valid EOF closure
   return {

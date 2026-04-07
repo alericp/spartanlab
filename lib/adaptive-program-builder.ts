@@ -17109,19 +17109,50 @@ function generateAdaptiveSession(
   middleStep = 'before_effective_selection'
   
   // ==========================================================================
-  // STEP B: Build canonical effectiveSelection to fix split-brain logic
+  // STEP B: Build canonical effectiveSelection - SINGLE AUTHORITATIVE OWNER
   // ==========================================================================
-  // Recompute estimated time based on rescued/adapted/recovered exercises
-  const effectiveMainSource = wasRecoveredFromInvalidation ? effectiveMainForSession : rescuedMain
-  const effectiveMainEstimatedTime = effectiveMainSource.length * 5 // ~5 min per exercise estimate
-  const effectiveTotalTime = effectiveMainEstimatedTime + 10 // Add warmup/cooldown buffer
+  // [FINAL-SESSION-ASSEMBLY-FIX] The canonical final source is ALWAYS effectiveMainForSession.
+  // 
+  // OWNERSHIP CHAIN (in order of transformation):
+  //   1. selection.main         → raw selector output
+  //   2. safeMain               → null-safe array
+  //   3. rescuedMain            → rescue applied if safeMain was empty
+  //   4. adaptedMain.adapted    → equipment filtering applied
+  //   5. effectiveMainForSession → recovery applied if adaptation zeroed out
+  //   6. canonicalFinalMain     → THE ONE TRUE SOURCE for all downstream usage
+  //
+  // PREVIOUS BUG: Line used `rescuedMain` in non-recovery path, which is PRE-adaptation.
+  // This threw away equipment-adapted exercises in the normal success path.
+  //
+  // FIX: Always use effectiveMainForSession, which already contains:
+  //   - adaptedMain.adapted in normal path
+  //   - recovered exercises if recovery was triggered
+  // ==========================================================================
+  const canonicalFinalMain = effectiveMainForSession
+  const canonicalMainEstimatedTime = canonicalFinalMain.length * 5 // ~5 min per exercise estimate
+  const canonicalTotalTime = canonicalMainEstimatedTime + 10 // Add warmup/cooldown buffer
+  
+  // Audit log to prove canonical ownership
+  console.log('[CANONICAL-FINAL-MAIN-AUDIT]', {
+    phase: 'final_assembly',
+    canonicalMainCount: canonicalFinalMain.length,
+    canonicalMainNames: canonicalFinalMain.map(e => e.exercise?.name || 'unknown').slice(0, 8),
+    wasRecovered: wasRecoveredFromInvalidation,
+    wasRescued: sessionWasRescued,
+    // Show what would have been used under old buggy logic
+    oldBuggySourceWouldHaveUsed: wasRecoveredFromInvalidation ? 'effectiveMainForSession' : 'rescuedMain',
+    rescuedMainCount: rescuedMain.length,
+    adaptedMainCount: adaptedMain.adapted.length,
+    effectiveMainForSessionCount: effectiveMainForSession.length,
+    verdict: 'CANONICAL_FINAL_MAIN_IS_AUTHORITATIVE',
+  })
   
   const effectiveSelection = {
     ...selection,
-    main: effectiveMainSource, // Use recovered source if invalidation recovery succeeded
+    main: canonicalFinalMain, // THE ONE TRUE SOURCE
     warmup: safeWarmup,
     cooldown: safeCooldown,
-    totalEstimatedTime: (sessionWasRescued || wasRecoveredFromInvalidation) ? effectiveTotalTime : selection.totalEstimatedTime,
+    totalEstimatedTime: (sessionWasRescued || wasRecoveredFromInvalidation) ? canonicalTotalTime : selection.totalEstimatedTime,
   }
   
   middleStep = 'effective_selection_built'
@@ -17395,7 +17426,8 @@ function generateAdaptiveSession(
     
   } catch (middleError) {
     // STEP E: Graceful degradation - if middle helpers fail but core session exists, continue
-    const hasValidCoreSession = adaptedMain.adapted.length > 0
+    // [FINAL-SESSION-ASSEMBLY-FIX] Use canonicalFinalMain, not stale adaptedMain.adapted
+    const hasValidCoreSession = canonicalFinalMain.length > 0
     
     console.error('[session-middle-failure]', {
       dayNumber: day.dayNumber,
@@ -17438,17 +17470,20 @@ function generateAdaptiveSession(
 
     // Map exercises first, then validate/dedupe
     sessionStep = 'mapping_exercises'
-    // [program-build] Log inputs to mapToAdaptiveExercises for diagnosis
-    const adaptedMainArray = Array.isArray(adaptedMain?.adapted) ? adaptedMain.adapted : []
+    // [FINAL-SESSION-ASSEMBLY-FIX] Use canonicalFinalMain as the authoritative source
+    // PREVIOUS BUG: Used adaptedMain.adapted which ignores recovery path
     console.log('[program-build] Mapping exercises for session', {
       dayNumber: day.dayNumber,
-      adaptedMainLength: adaptedMainArray.length,
+      canonicalFinalMainLength: canonicalFinalMain.length,
       adaptedWarmupLength: Array.isArray(adaptedWarmup?.adapted) ? adaptedWarmup.adapted.length : 0,
       adaptedCooldownLength: Array.isArray(adaptedCooldown?.adapted) ? adaptedCooldown.adapted.length : 0,
+      // Diagnostic: show what old buggy code would have used
+      oldBuggyAdaptedMainLength: adaptedMain.adapted.length,
+      usingCanonicalSource: true,
     })
     
     const rawExercises = mapToAdaptiveExercises(
-      adaptedMainArray, 
+      canonicalFinalMain,  // THE ONE TRUE SOURCE
       primaryGoal, 
       sessionLength, 
       fatigueSensitivity,
@@ -17471,21 +17506,22 @@ function generateAdaptiveSession(
     sessionStep = 'mapping_completed'
     
     // Detect if mapping zeroed out adapted exercises
-    if (adaptedMainArray.length > 0 && rawExercises.length === 0) {
+    // [FINAL-SESSION-ASSEMBLY-FIX] Use canonicalFinalMain for collapse detection
+    if (canonicalFinalMain.length > 0 && rawExercises.length === 0) {
       sessionTrace.collapseStage = 'mapping'
       console.error('[session-collapse-point] Mapping removed all exercises:', {
         stage: 'mapping',
         dayNumber: day.dayNumber,
         dayFocus: day.focus,
         primaryGoal,
-        inputCount: adaptedMainArray.length,
+        inputCount: canonicalFinalMain.length,
         outputCount: 0,
-        inputExercises: adaptedMainArray.map(e => e.exercise?.name || 'unknown'),
+        inputExercises: canonicalFinalMain.map(e => e.exercise?.name || 'unknown'),
         rescueAttempted: sessionWasRescued,
       })
       throw new Error(
         `mapping_zeroed_session: day=${day.dayNumber} focus=${day.focus} ` +
-        `goal=${primaryGoal} inputCount=${adaptedMainArray.length} rescueAttempted=${sessionWasRescued}`
+        `goal=${primaryGoal} inputCount=${canonicalFinalMain.length} rescueAttempted=${sessionWasRescued}`
       )
     }
     
@@ -17599,6 +17635,7 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
         selectedSkillsCount: selectedSkills?.length || 0,
         initialMainCount: safeMain.length,
         rescuedMainCount: rescuedMain.length,
+        canonicalFinalMainCount: canonicalFinalMain.length, // [FINAL-SESSION-ASSEMBLY-FIX] Show canonical source
         sessionWasRescued,
         rescuePath,
         rawExercisesCount: rawExercises.length,

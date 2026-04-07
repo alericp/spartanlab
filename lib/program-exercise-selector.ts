@@ -2718,6 +2718,19 @@ function applyMaterialityScoreAdjustments(
     ])
   ) : null
   
+  // [TRUTH-TO-SELECTION-MATERIALITY] Extract doctrine preferences from cached rules
+  // This ensures doctrine knowledge affects materiality scoring
+  const doctrinePreferences = cachedDoctrineRules ? {
+    preferredExercises: cachedDoctrineRules.preferredExercises?.map(e => e.exerciseId || e.id || e) || [],
+    avoidExercises: cachedDoctrineRules.avoidExercises?.map(e => e.exerciseId || e.id || e) || [],
+    carryoverRules: cachedDoctrineRules.carryoverRules?.map(r => ({
+      sourceSkill: r.sourceSkill || r.source || '',
+      targetSkill: r.targetSkill || r.target || '',
+      carryoverType: (r.carryoverType || r.type || 'indirect') as 'direct' | 'indirect' | 'prerequisite',
+      preferredExercises: r.preferredExercises || r.exercises || [],
+    })) || [],
+  } : undefined
+  
   // Build the canonical materiality context
   const materialityContext = buildExerciseSelectionMaterialityContext(
     primaryGoal,
@@ -2731,11 +2744,7 @@ function applyMaterialityScoreAdjustments(
     sessionComplexityBudget,
     detectedTrainingStyle as 'pure_skill' | 'hybrid' | 'weighted_integrated' | 'minimalist',
     undefined, // recentExerciseHistory - could be passed from context
-    cachedDoctrineRules ? {
-      preferredExercises: [],
-      avoidExercises: [],
-      carryoverRules: [],
-    } : undefined
+    doctrinePreferences
   )
   
   console.log('[EXERCISE-SELECTION-MATERIALITY] Context built:', {
@@ -2765,9 +2774,38 @@ function applyMaterialityScoreAdjustments(
     // Apply materiality scoring
     const materialityScore = scoreExerciseMateriality(exercise, materialityContext)
     
-    // Combine scores: base session logic (60%) + materiality (40%)
-    // This ensures backward compatibility while adding materiality influence
-    const combinedScore = Math.round(baseScore * 0.6 + materialityScore.totalScore * 0.4)
+    // [TRUTH-TO-SELECTION-MATERIALITY] Slot-aware weighting ratios
+    // Direct skill slots and support slots should be MORE heavily driven by materiality
+    // because personalization matters most there. Accessory/finisher can use more generic logic.
+    const slotMaterialityRatios: Record<SlotType, { base: number; materiality: number }> = {
+      direct_skill: { base: 0.25, materiality: 0.75 },      // Strong materiality ownership
+      main_strength: { base: 0.30, materiality: 0.70 },     // Strong materiality for support
+      secondary_skill: { base: 0.30, materiality: 0.70 },   // Secondary still needs personalization
+      support_carryover: { base: 0.25, materiality: 0.75 }, // Carryover must be truth-driven
+      assistance: { base: 0.40, materiality: 0.60 },        // Accessories can be more generic
+      prehab_joint_care: { base: 0.35, materiality: 0.65 }, // Joint care needs truth
+      density_finisher: { base: 0.50, materiality: 0.50 },  // Finishers can be generic
+    }
+    
+    const ratio = slotMaterialityRatios[slotType] || { base: 0.35, materiality: 0.65 }
+    
+    // [TRUTH-TO-SELECTION-MATERIALITY] Apply progression boost
+    // If exercise has high currentProgressionFit score, give additional boost
+    const progressionBoost = materialityScore.breakdown.currentProgressionFit >= 20 ? 15 : 
+                             materialityScore.breakdown.currentProgressionFit >= 15 ? 8 : 0
+    
+    // [TRUTH-TO-SELECTION-MATERIALITY] Apply doctrine boost if present
+    // Doctrine knowledge should decisively affect support/carryover selection
+    const doctrineBoost = materialityScore.breakdown.doctrineBoost >= 10 ? 12 :
+                          materialityScore.breakdown.doctrineBoost >= 5 ? 6 : 0
+    
+    // Combine with slot-specific ratio + truth boosts
+    const combinedScore = Math.round(
+      baseScore * ratio.base + 
+      materialityScore.totalScore * ratio.materiality +
+      progressionBoost +
+      doctrineBoost
+    )
     
     return {
       score: combinedScore,
@@ -2799,9 +2837,12 @@ function applyMaterialityScoreAdjustments(
     // Sort by combined score
     scored.sort((a, b) => b.score - a.score)
     
-    // Log materiality ranking audit for top candidates
+    // [TRUTH-TO-SELECTION-MATERIALITY] Log materiality ranking audit with truth influence breakdown
     if (scored.length > 0 && scored[0].materialityScore) {
-      console.log('[EXERCISE-SELECTION-MATERIALITY-RANKING]', {
+      const topCandidate = scored[0]
+      const breakdown = topCandidate.materialityScore?.breakdown
+      
+      console.log('[TRUTH-TO-SELECTION-MATERIALITY-RANKING]', {
         slotType,
         totalCandidates: scored.length,
         top3: scored.slice(0, 3).map(c => ({
@@ -2810,12 +2851,23 @@ function applyMaterialityScoreAdjustments(
           materialityScore: c.materialityScore?.totalScore || 0,
           primaryReason: c.primaryReason,
         })),
-        contextInfluence: {
+        truthInfluence: {
+          // Show which truth sources drove the ranking
+          progressionInfluence: breakdown?.currentProgressionFit || 0,
+          doctrineInfluence: breakdown?.doctrineBoost || 0,
+          equipmentInfluence: breakdown?.equipmentOptimality || 0,
+          jointSafetyInfluence: breakdown?.jointCautionSafety || 0,
+          carryoverInfluence: breakdown?.carryoverValue || 0,
+          // Context that enabled this
           trainingStyle: materialityContext.trainingStyle,
           hasWeightedEquipment: materialityContext.hasWeightedEquipment,
-          jointCautions: materialityContext.jointCautions.length > 0,
-          progressionData: !!materialityContext.currentWorkingProgressions,
+          jointCautionsCount: materialityContext.jointCautions.length,
+          hasProgressionData: !!materialityContext.currentWorkingProgressions,
+          hasDoctrineData: !!(materialityContext.doctrinePreferredExercises?.length || materialityContext.doctrineCarryoverRules?.length),
         },
+        verdict: breakdown?.doctrineBoost >= 8 || breakdown?.currentProgressionFit >= 18 
+          ? 'TRUTH_DRIVEN_SELECTION' 
+          : 'BASELINE_SELECTION',
       })
     }
     

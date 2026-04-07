@@ -359,6 +359,20 @@ interface CompletedSetData {
   blockId?: string
   memberIndex?: number
   round?: number
+  // [LIVE-WORKOUT-AUTHORITY] Extended execution facts
+  inputMode?: import('@/lib/workout/live-workout-authority-contract').ExerciseInputMode
+  // Multi-band support
+  selectedBands?: ResistanceBandColor[]
+  multiBandSelection?: import('@/lib/workout/live-workout-authority-contract').MultiBandSelection | null
+  // Weighted exercise facts
+  prescribedLoad?: number
+  prescribedLoadUnit?: string
+  actualLoadUsed?: number
+  actualLoadUnit?: string
+  // Unilateral exercise facts
+  isPerSide?: boolean
+  // Structured coaching inputs
+  structuredCoachingInputs?: import('@/lib/workout/live-workout-authority-contract').CoachingSignalTag[]
 }
 
 interface ExerciseOverrideState {
@@ -3755,6 +3769,22 @@ export function StreamlinedWorkoutSession({
     
     // Build completed set data with notes and grouped context
       const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, currentIndex)
+      
+      // [LIVE-WORKOUT-AUTHORITY] Resolve input mode for execution fact capture
+      const inputMode = resolveExerciseInputMode({
+        name: safeCurrentExercise?.name || '',
+        category: safeCurrentExercise?.category,
+        method: safeCurrentExercise?.method,
+        executionTruth: safeCurrentExercise?.executionTruth,
+        prescribedLoad: safeCurrentExercise?.prescribedLoad,
+      })
+      
+      // [LIVE-WORKOUT-AUTHORITY] Capture structured coaching signals from reason tags
+      const structuredCoachingInputs = (machineState.currentSetReasonTags || [])
+        .filter((tag): tag is import('@/lib/workout/live-workout-authority-contract').CoachingSignalTag => 
+          ['too_easy', 'too_hard', 'pain_discomfort', 'form_issue', 'fatigue', 'grip_limited', 'balance_issue', 'lost_focus', 'load_adjustment_used', 'mixed_band_assistance_used'].includes(tag)
+        )
+      
       const setData: CompletedSetData = {
         exerciseIndex: currentIndex,
         setNumber: validatedSetNumber,
@@ -3771,6 +3801,20 @@ export function StreamlinedWorkoutSession({
         blockId: blockInfo?.block.blockId,
         memberIndex: blockInfo?.memberIndex,
         round: machineState.currentRound || undefined,
+        // [LIVE-WORKOUT-AUTHORITY] Extended execution facts
+        inputMode: inputMode.mode,
+        // Multi-band support
+        selectedBands: machineState.multiBandSelection?.bands,
+        multiBandSelection: machineState.multiBandSelection,
+        // Weighted exercise facts
+        prescribedLoad: safeCurrentExercise?.prescribedLoad?.load,
+        prescribedLoadUnit: safeCurrentExercise?.prescribedLoad?.unit,
+        actualLoadUsed: machineState.actualLoadUsed ?? safeCurrentExercise?.prescribedLoad?.load,
+        actualLoadUnit: machineState.actualLoadUnit || safeCurrentExercise?.prescribedLoad?.unit,
+        // Unilateral exercise facts
+        isPerSide: inputMode.showPerSideToggle || machineState.isPerSide,
+        // Structured coaching inputs
+        structuredCoachingInputs: structuredCoachingInputs.length > 0 ? structuredCoachingInputs : undefined,
       }
       
       // Check if this exercise is part of a grouped block
@@ -6004,8 +6048,21 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
         currentSetNote={corridorCurrentSetNote}
         currentSetReasonTags={corridorCurrentSetReasonTags}
         recentSets={corridorRecentSets}
+        // [LIVE-WORKOUT-AUTHORITY] Input mode contract
+        inputMode={corridorInputMode.mode}
+        showLoadInput={corridorInputMode.showLoadInput}
+        showMultiBandSelector={corridorInputMode.showMultiBandSelector}
+        showPerSideToggle={corridorInputMode.showPerSideToggle}
+        primaryInputLabel={corridorInputMode.primaryInputLabel}
         bandSelectable={corridorBandSelectable}
         recommendedBand={corridorRecommendedBand}
+        // [LIVE-WORKOUT-AUTHORITY] Weighted exercise inputs
+        actualLoadUsed={machineState.actualLoadUsed}
+        actualLoadUnit={machineState.actualLoadUnit}
+        onSetActualLoad={(load, unit) => machineDispatch({ type: 'SET_ACTUAL_LOAD', load, unit })}
+        // [LIVE-WORKOUT-AUTHORITY] Per-side tracking
+        isPerSide={machineState.isPerSide}
+        onSetIsPerSide={(isPerSide) => machineDispatch({ type: 'SET_IS_PER_SIDE', isPerSide })}
         restDurationSeconds={getRestDuration()}
         lastSetRPE={safeLastSetRPE}
         restType={restType}

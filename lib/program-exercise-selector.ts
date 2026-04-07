@@ -138,6 +138,13 @@ import {
   type WeightedPRBenchmark,
   type WeightedLoadPrescription,
   type WeightedPrescriptionMode,
+  // [PRESCRIPTION-INTELLIGENCE] Import canonical prescription resolver
+  resolveCanonicalPrescription,
+  formatPrescription,
+  detectPrescriptionMode,
+  inferExerciseRole,
+  type PrescriptionTruthContext,
+  type ExerciseRoleForPrescription,
 } from './prescription-contract'
 import {
   SKILL_SUPPORT_MAPPINGS,
@@ -1279,6 +1286,39 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     e.selectionTrace?.sessionRole === 'accessory'
   ).length
   
+  // ==========================================================================
+  // [PRESCRIPTION-INTELLIGENCE] Final prescription audit for session
+  // ==========================================================================
+  const prescriptionAudit = {
+    totalExercises: main.length,
+    withCanonicalPrescription: main.filter(e => e.sets && e.repsOrTime).length,
+    setsDistribution: {
+      lowVolume: main.filter(e => (e.sets || 0) <= 2).length,
+      standardVolume: main.filter(e => (e.sets || 0) >= 3 && (e.sets || 0) <= 4).length,
+      highVolume: main.filter(e => (e.sets || 0) >= 5).length,
+    },
+    prescriptionTypes: {
+      holds: main.filter(e => e.repsOrTime?.includes('hold') || e.repsOrTime?.includes('s')).length,
+      reps: main.filter(e => e.repsOrTime?.includes('rep') || /\d+-\d+$/.test(e.repsOrTime || '')).length,
+      other: main.filter(e => !e.repsOrTime?.includes('hold') && !e.repsOrTime?.includes('rep')).length,
+    },
+  }
+  
+  console.log('[PRESCRIPTION-INTELLIGENCE-SESSION-AUDIT]', {
+    dayFocus: day.focus,
+    primaryGoal,
+    prescriptionAudit,
+    samplePrescriptions: main.slice(0, 3).map(e => ({
+      name: e.exercise?.name,
+      sets: e.sets,
+      repsOrTime: e.repsOrTime,
+      selectionReason: e.selectionReason?.substring(0, 50),
+    })),
+    verdict: prescriptionAudit.withCanonicalPrescription === main.length
+      ? 'ALL_PRESCRIPTIONS_FROM_CANONICAL_TRUTH'
+      : 'SOME_PRESCRIPTIONS_USING_DEFAULTS',
+  })
+  
   console.log('[SESSION-ARCHITECTURE-OWNERSHIP-AUDIT]', {
     dayFocus: day.focus,
     sessionIntent: sessionArchitectureContract.sessionIntent,
@@ -2306,13 +2346,91 @@ function selectMainExercises(
     const matchedSkillForExecution = traceContext?.influencingSkills?.[0]?.skillId || finalExercise.primarySkill || null
     const executionTruth = buildExecutionTruth(finalExercise, currentWorkingProgressions, matchedSkillForExecution)
     
+    // ==========================================================================
+    // [PRESCRIPTION-INTELLIGENCE] Resolve canonical prescription from truth
+    // This replaces the generic adjustSetsForLevel/adjustRepsForLevel functions
+    // ==========================================================================
+    let canonicalSets = finalSets
+    let canonicalRepsOrTime = finalRepsOrTime
+    let canonicalNote = finalNote
+    
+    if (!finalSets || !finalRepsOrTime) {
+      // Detect prescription mode from exercise characteristics
+      const isWeighted = safeExerciseId(finalExercise).includes('weighted') || 
+                         safeExerciseName(finalExercise).includes('weighted')
+      const prescriptionMode = detectPrescriptionMode(
+        finalExercise.category,
+        finalExercise.isIsometric ?? false,
+        finalExercise.neuralDemand,
+        finalExercise.fatigueCost,
+        isWeighted,
+        finalExercise.id
+      )
+      
+      // Infer exercise role from selection context
+      const exerciseRole = inferExerciseRole(
+        finalExercise.category,
+        reason,
+        selectionTrace.sessionRole,
+        finalExercise.primarySkill === primaryGoal || reason.toLowerCase().includes(primaryGoal.toLowerCase())
+      )
+      
+      // Build truth context for prescription resolution
+      const prescriptionTruthContext: PrescriptionTruthContext = {
+        experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced' | 'elite',
+        exerciseRole,
+        fatigueState: 'moderate', // Could be enriched from session context
+        jointCautions: [], // Could be enriched from profile
+        sessionArchitecture: sessionArchitectureContract ? {
+          sessionIntent: sessionArchitectureContract.sessionIntent,
+          sessionComplexity: sessionArchitectureContract.sessionComplexity,
+          dayRole: sessionArchitectureContract.dayRoleEnforcement.dayRole,
+        } : undefined,
+        currentProgressionContext: currentWorkingProgressions?.[matchedSkillForExecution || primaryGoal] ? {
+          currentProgression: currentWorkingProgressions[matchedSkillForExecution || primaryGoal].currentWorkingProgression,
+          historicalCeiling: currentWorkingProgressions[matchedSkillForExecution || primaryGoal].historicalCeiling,
+          isAtPlateau: false, // Could be enriched from performance data
+        } : undefined,
+      }
+      
+      // Resolve canonical prescription
+      const canonicalPrescription = resolveCanonicalPrescription(prescriptionMode, prescriptionTruthContext)
+      const formattedPrescription = formatPrescription(canonicalPrescription)
+      
+      canonicalSets = finalSets ?? formattedPrescription.sets
+      canonicalRepsOrTime = finalRepsOrTime ?? formattedPrescription.repsOrTime
+      
+      // Use prescription note if no custom note exists
+      if (!canonicalNote && formattedPrescription.note) {
+        canonicalNote = formattedPrescription.note
+      }
+      
+      // Log prescription intelligence decision
+      console.log('[PRESCRIPTION-INTELLIGENCE-RESOLUTION]', {
+        exerciseId: finalExercise.id,
+        prescriptionMode,
+        exerciseRole,
+        truthContext: {
+          level: experienceLevel,
+          sessionComplexity: prescriptionTruthContext.sessionArchitecture?.sessionComplexity,
+          hasProgressionContext: !!prescriptionTruthContext.currentProgressionContext,
+        },
+        resolved: {
+          sets: canonicalSets,
+          repsOrTime: canonicalRepsOrTime,
+          note: canonicalNote,
+        },
+        verdict: 'PRESCRIPTION_FROM_CANONICAL_TRUTH',
+      })
+    }
+    
     selected.push({
       exercise: finalExercise,
-      sets: finalSets ?? adjustSetsForLevel(finalExercise.defaultSets, experienceLevel),
-      repsOrTime: finalRepsOrTime ?? adjustRepsForLevel(finalExercise.defaultRepsOrTime, experienceLevel),
+      sets: canonicalSets ?? finalExercise.defaultSets ?? 3,
+      repsOrTime: canonicalRepsOrTime ?? finalExercise.defaultRepsOrTime ?? '8-12',
       note: wasSubstituted 
         ? `Substituted from ${exercise.name} - ${gateResult.recommendedSubstitute?.reason || 'Prerequisites not met'}`
-        : finalNote ?? finalExercise.notes,
+        : canonicalNote ?? finalExercise.notes,
       isOverrideable: finalExercise.category !== 'skill', // Skills are harder to replace
       selectionReason: wasSubstituted 
         ? `${reason} (safe progression substitute)`

@@ -514,6 +514,265 @@ export function formatPrescription(prescription: PrescriptionContract): {
 }
 
 // =============================================================================
+// [PRESCRIPTION-INTELLIGENCE] EXERCISE ROLE-AWARE PRESCRIPTION RESOLUTION
+// This is the authoritative owner for prescription decisions from canonical truth
+// =============================================================================
+
+/**
+ * Exercise role for prescription differentiation
+ */
+export type ExerciseRoleForPrescription = 
+  | 'primary_skill_direct'      // Direct skill exposure (planche holds, etc.)
+  | 'primary_skill_support'     // Direct support for primary skill
+  | 'secondary_skill_exposure'  // Secondary skill work
+  | 'strength_foundation'       // Foundational strength building
+  | 'carryover_support'         // Carryover strength for skills
+  | 'accessory_hypertrophy'     // Accessory/hypertrophy work
+  | 'core_compression'          // Core and compression work
+  | 'prehab_tissue'             // Prehab/tissue resilience
+  | 'density_conditioning'      // Density/conditioning work
+
+/**
+ * Canonical truth context for prescription resolution
+ * [PRESCRIPTION-INTELLIGENCE] This ensures prescriptions reflect athlete reality
+ */
+export interface PrescriptionTruthContext extends AthleteContext {
+  exerciseRole: ExerciseRoleForPrescription
+  sessionArchitecture?: {
+    sessionIntent: string
+    sessionComplexity: 'minimal' | 'standard' | 'comprehensive'
+    dayRole?: string
+  }
+  currentProgressionContext?: {
+    currentProgression: string | null
+    historicalCeiling: string | null
+    isAtPlateau: boolean
+  }
+  weeklyContext?: {
+    weekNumber: number
+    isDeloadWeek: boolean
+    volumeAccumulation: 'low' | 'moderate' | 'high'
+  }
+}
+
+/**
+ * [PRESCRIPTION-INTELLIGENCE] Authoritative prescription resolver from canonical truth
+ * This function is the single owner for determining sets/reps/holds/rest/intensity
+ */
+export function resolveCanonicalPrescription(
+  mode: PrescriptionMode,
+  truthContext: PrescriptionTruthContext
+): PrescriptionContract {
+  // Start with base resolution
+  const prescription = resolvePrescription(mode, truthContext)
+  
+  // ==========================================================================
+  // [PRESCRIPTION-INTELLIGENCE] Apply exercise-role-based adjustments
+  // ==========================================================================
+  
+  switch (truthContext.exerciseRole) {
+    case 'primary_skill_direct':
+      // Primary skill work gets maximum quality focus
+      prescription.sets.recommended = Math.min(prescription.sets.max, prescription.sets.recommended + 1)
+      prescription.rest.recommended = Math.max(prescription.rest.recommended, 120) // Ensure adequate rest
+      prescription.intensity.target = Math.min(prescription.intensity.range[1], prescription.intensity.target + 1)
+      prescription.coachingNotes.push('Primary skill - prioritize quality and full neural recovery')
+      break
+      
+    case 'primary_skill_support':
+      // Support for primary skill - moderate intensity, build capacity
+      prescription.volume.recommended = Math.min(
+        prescription.volume.max,
+        Math.ceil(prescription.volume.recommended * 1.1)
+      )
+      prescription.intensity.target = Math.max(prescription.intensity.range[0], prescription.intensity.target - 1)
+      prescription.coachingNotes.push('Supporting primary skill development')
+      break
+      
+    case 'secondary_skill_exposure':
+      // Secondary skills get maintenance-level dosage
+      prescription.sets.recommended = Math.max(prescription.sets.min, prescription.sets.recommended - 1)
+      prescription.rest.recommended = Math.max(prescription.rest.min, Math.floor(prescription.rest.recommended * 0.85))
+      prescription.coachingNotes.push('Secondary skill maintenance - quality over volume')
+      break
+      
+    case 'strength_foundation':
+      // Foundational strength - moderate-high intensity, controlled volume
+      prescription.intensity.target = Math.min(prescription.intensity.range[1], prescription.intensity.target)
+      prescription.rest.recommended = Math.max(prescription.rest.recommended, 90)
+      prescription.coachingNotes.push('Building strength foundation')
+      break
+      
+    case 'carryover_support':
+      // Carryover strength - purposeful, not grinding
+      prescription.volume.recommended = Math.min(
+        prescription.volume.max - 1,
+        prescription.volume.recommended
+      )
+      prescription.intensity.target = Math.max(prescription.intensity.range[0] + 1, prescription.intensity.target - 1)
+      prescription.coachingNotes.push('Strength carryover for skill support')
+      break
+      
+    case 'accessory_hypertrophy':
+      // Accessories - higher reps, shorter rest, moderate intensity
+      prescription.volume.recommended = Math.min(prescription.volume.max, prescription.volume.recommended + 2)
+      prescription.rest.recommended = Math.max(prescription.rest.min, Math.floor(prescription.rest.recommended * 0.7))
+      prescription.intensity.target = Math.max(prescription.intensity.range[0], prescription.intensity.target - 1)
+      prescription.coachingNotes.push('Accessory work - controlled tempo, mind-muscle connection')
+      break
+      
+    case 'core_compression':
+      // Core work - quality holds, not grinding
+      prescription.sets.recommended = Math.max(prescription.sets.min, prescription.sets.recommended)
+      prescription.intensity.target = Math.min(prescription.intensity.range[1] - 1, prescription.intensity.target)
+      prescription.coachingNotes.push('Core compression - maintain position quality')
+      break
+      
+    case 'prehab_tissue':
+      // Prehab - low intensity, consistent execution
+      prescription.sets.recommended = Math.max(prescription.sets.min, prescription.sets.recommended - 1)
+      prescription.intensity.target = Math.max(prescription.intensity.range[0], prescription.intensity.target - 2)
+      prescription.rest.recommended = Math.max(prescription.rest.min, Math.floor(prescription.rest.recommended * 0.5))
+      prescription.coachingNotes.push('Prehab - consistency over intensity')
+      break
+      
+    case 'density_conditioning':
+      // Density work - maintain output, manage fatigue
+      prescription.volume.recommended = Math.min(prescription.volume.max, prescription.volume.recommended + 1)
+      prescription.rest.recommended = Math.max(prescription.rest.min, Math.floor(prescription.rest.recommended * 0.6))
+      prescription.intensity.target = Math.max(prescription.intensity.range[0], prescription.intensity.target - 1)
+      prescription.coachingNotes.push('Density conditioning - maintain quality as fatigue builds')
+      break
+  }
+  
+  // ==========================================================================
+  // [PRESCRIPTION-INTELLIGENCE] Apply session architecture adjustments
+  // ==========================================================================
+  
+  if (truthContext.sessionArchitecture) {
+    const { sessionComplexity, dayRole } = truthContext.sessionArchitecture
+    
+    // Minimal sessions need conservative volume
+    if (sessionComplexity === 'minimal') {
+      prescription.sets.recommended = Math.max(prescription.sets.min, prescription.sets.recommended - 1)
+      prescription.coachingNotes.push('Adjusted for time-efficient session')
+    }
+    
+    // Comprehensive sessions can handle fuller volume
+    if (sessionComplexity === 'comprehensive') {
+      prescription.sets.recommended = Math.min(prescription.sets.max, prescription.sets.recommended)
+    }
+    
+    // Recovery-focused days get reduced intensity
+    if (dayRole?.includes('recovery') || dayRole?.includes('technique')) {
+      prescription.intensity.target = Math.max(prescription.intensity.range[0], prescription.intensity.target - 1)
+      prescription.coachingNotes.push('Recovery-mindful session')
+    }
+  }
+  
+  // ==========================================================================
+  // [PRESCRIPTION-INTELLIGENCE] Apply progression context adjustments
+  // ==========================================================================
+  
+  if (truthContext.currentProgressionContext) {
+    const { isAtPlateau, currentProgression } = truthContext.currentProgressionContext
+    
+    // At plateau - slightly reduced volume, maintain intensity
+    if (isAtPlateau) {
+      prescription.sets.recommended = Math.max(prescription.sets.min, prescription.sets.recommended - 1)
+      prescription.coachingNotes.push('At progression plateau - quality over volume')
+    }
+    
+    // Early progression - build volume foundation
+    if (currentProgression?.includes('tuck') || currentProgression?.includes('band')) {
+      prescription.volume.recommended = Math.min(
+        prescription.volume.max,
+        Math.ceil(prescription.volume.recommended * 1.1)
+      )
+    }
+  }
+  
+  // ==========================================================================
+  // [PRESCRIPTION-INTELLIGENCE] Apply weekly context adjustments
+  // ==========================================================================
+  
+  if (truthContext.weeklyContext) {
+    const { isDeloadWeek, volumeAccumulation } = truthContext.weeklyContext
+    
+    if (isDeloadWeek) {
+      prescription.sets.recommended = Math.max(prescription.sets.min, prescription.sets.recommended - 1)
+      prescription.intensity.target = Math.max(prescription.intensity.range[0], prescription.intensity.target - 1)
+      prescription.coachingNotes.push('Deload week - reduced volume and intensity')
+    }
+    
+    if (volumeAccumulation === 'high') {
+      prescription.rest.recommended = Math.min(
+        prescription.rest.max,
+        Math.floor(prescription.rest.recommended * 1.15)
+      )
+    }
+  }
+  
+  return prescription
+}
+
+/**
+ * [PRESCRIPTION-INTELLIGENCE] Infer exercise role from selection context
+ */
+export function inferExerciseRole(
+  exerciseCategory: string,
+  selectionReason: string,
+  sessionRole?: string,
+  isPrimaryGoalRelated?: boolean
+): ExerciseRoleForPrescription {
+  const reason = selectionReason.toLowerCase()
+  const role = sessionRole?.toLowerCase() || ''
+  
+  // Direct skill work
+  if (exerciseCategory === 'skill' && (reason.includes('primary') || reason.includes('direct'))) {
+    return 'primary_skill_direct'
+  }
+  
+  // Secondary skill
+  if (exerciseCategory === 'skill' && reason.includes('secondary')) {
+    return 'secondary_skill_exposure'
+  }
+  
+  // Primary skill support
+  if (isPrimaryGoalRelated && (reason.includes('support') || reason.includes('carryover'))) {
+    return 'primary_skill_support'
+  }
+  
+  // Strength foundation
+  if (role.includes('strength_primary') || role.includes('strength_foundation')) {
+    return 'strength_foundation'
+  }
+  
+  // Carryover support
+  if (reason.includes('carryover') || role.includes('strength_support')) {
+    return 'carryover_support'
+  }
+  
+  // Core/compression
+  if (exerciseCategory === 'core' || reason.includes('compression') || reason.includes('trunk')) {
+    return 'core_compression'
+  }
+  
+  // Prehab
+  if (exerciseCategory === 'prehab' || reason.includes('prehab') || reason.includes('joint')) {
+    return 'prehab_tissue'
+  }
+  
+  // Density/conditioning
+  if (reason.includes('density') || reason.includes('conditioning') || reason.includes('finisher')) {
+    return 'density_conditioning'
+  }
+  
+  // Default to accessory
+  return 'accessory_hypertrophy'
+}
+
+// =============================================================================
 // WEIGHTED STRENGTH CARRYOVER LOGIC - TASK 3
 // =============================================================================
 

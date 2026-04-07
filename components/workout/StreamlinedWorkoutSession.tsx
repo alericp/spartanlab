@@ -3803,8 +3803,10 @@ export function StreamlinedWorkoutSession({
         round: machineState.currentRound || undefined,
         // [LIVE-WORKOUT-AUTHORITY] Extended execution facts
         inputMode: inputMode.mode,
-        // Multi-band support
-        selectedBands: machineState.multiBandSelection?.bands,
+        // Multi-band support - use selectedBands array directly, fall back to multiBandSelection for compatibility
+        selectedBands: (machineState.selectedBands && machineState.selectedBands.length > 0) 
+          ? machineState.selectedBands 
+          : machineState.multiBandSelection?.bands,
         multiBandSelection: machineState.multiBandSelection,
         // Weighted exercise facts
         prescribedLoad: safeCurrentExercise?.prescribedLoad?.load,
@@ -5903,6 +5905,7 @@ function InterExerciseRestCountdown({
     const currentExerciseCompletedSets = normalizedCompletedSets.filter(
       s => s.exerciseIndex === safeExerciseIndex
     )
+    // [LIVE-WORKOUT-AUTHORITY] Include extended execution facts in recent sets
     const corridorRecentSets = currentExerciseCompletedSets.slice(-3).map(set => ({
       setNumber: set.setNumber,
       actualReps: set.actualReps || 0,
@@ -5910,6 +5913,13 @@ function InterExerciseRestCountdown({
       actualRPE: set.actualRPE as RPEValue,
       bandUsed: set.bandUsed as ResistanceBandColor | 'none' | undefined,
       reasonTags: set.reasonTags as import('./ActiveWorkoutStartCorridor').SetReasonTag[] | undefined,
+      // [LIVE-WORKOUT-AUTHORITY] Extended execution facts
+      inputMode: set.inputMode,
+      selectedBands: set.selectedBands,
+      actualLoadUsed: set.actualLoadUsed,
+      actualLoadUnit: set.actualLoadUnit,
+      isPerSide: set.isPerSide,
+      structuredCoachingInputs: set.structuredCoachingInputs,
     }))
     
 
@@ -6056,6 +6066,9 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
         primaryInputLabel={corridorInputMode.primaryInputLabel}
         bandSelectable={corridorBandSelectable}
         recommendedBand={corridorRecommendedBand}
+        // [LIVE-WORKOUT-AUTHORITY] Multi-band selection
+        selectedBands={machineState.selectedBands || []}
+        onSetSelectedBands={(bands) => machineDispatch({ type: 'SET_SELECTED_BANDS', bands })}
         // [LIVE-WORKOUT-AUTHORITY] Weighted exercise inputs
         actualLoadUsed={machineState.actualLoadUsed}
         actualLoadUnit={machineState.actualLoadUnit}

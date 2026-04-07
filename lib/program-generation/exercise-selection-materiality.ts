@@ -826,7 +826,7 @@ function scoreDoctrinePreference(
   const notes: string[] = []
   let score = 0
   
-  // Check preferred exercises
+  // Check preferred exercises from context
   if (context.doctrinePreferredExercises?.includes(exercise.id)) {
     score = 15
     notes.push('Doctrine preferred exercise')
@@ -836,6 +836,54 @@ function scoreDoctrinePreference(
   if (context.doctrineAvoidExercises?.includes(exercise.id)) {
     score = -10
     notes.push('Doctrine recommends avoiding')
+  }
+  
+  // [TRUTH-TO-SELECTION-MATERIALITY] Check skill-support-mappings for doctrine knowledge
+  // This ensures DB-backed doctrine affects actual candidate ranking
+  const exerciseIdNorm = normalizeSkillKey(exercise.id)
+  const exerciseNameNorm = normalizeSkillKey(exercise.name)
+  
+  // Check if exercise is a direct support for primary skill
+  if (isExercisePrimarySupportFor(exercise.id, context.primaryGoal)) {
+    score += 12
+    notes.push(`Primary support for ${context.primaryGoal} via doctrine`)
+  }
+  
+  // Check direct support exercises from support mapping
+  const primarySupport = getDirectSupportExercises(context.primaryGoal as any)
+  if (primarySupport.some(s => 
+    exerciseIdNorm.includes(normalizeSkillKey(s)) ||
+    exerciseNameNorm.includes(normalizeSkillKey(s))
+  )) {
+    score += 10
+    notes.push('In direct support list for primary goal')
+  }
+  
+  // Check carryover rules if provided
+  if (context.doctrineCarryoverRules) {
+    for (const rule of context.doctrineCarryoverRules) {
+      if (rule.preferredExercises.some(e => 
+        exerciseIdNorm.includes(normalizeSkillKey(e)) ||
+        exerciseNameNorm.includes(normalizeSkillKey(e))
+      )) {
+        const boost = rule.carryoverType === 'direct' ? 10 : 
+                      rule.carryoverType === 'prerequisite' ? 8 : 5
+        score += boost
+        notes.push(`Carryover rule: ${rule.sourceSkill} -> ${rule.targetSkill} (${rule.carryoverType})`)
+      }
+    }
+  }
+  
+  // Secondary skill doctrine support
+  if (context.secondaryGoal) {
+    const secondarySupport = getDirectSupportExercises(context.secondaryGoal as any)
+    if (secondarySupport.some(s => 
+      exerciseIdNorm.includes(normalizeSkillKey(s)) ||
+      exerciseNameNorm.includes(normalizeSkillKey(s))
+    )) {
+      score += 6
+      notes.push('Support for secondary goal via doctrine')
+    }
   }
   
   return { score, notes }

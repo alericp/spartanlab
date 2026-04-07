@@ -21,7 +21,7 @@ import { trackWorkoutStarted, trackWorkoutCompleted } from '@/lib/analytics'
 import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
-import { buildExerciseCardContract } from '@/lib/program/program-display-contract'
+import { buildExerciseCardContract, buildSessionDisplayContract } from '@/lib/program/program-display-contract'
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { 
@@ -744,109 +744,102 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       {/* Expanded Content */}
       {isExpanded && (
         <div className="px-4 pb-4 space-y-4">
-          {/* [SESSION-ARCHITECTURE-VISIBLE-EXPRESSION] Why This Workout summary from canonical truth */}
-          {!isCompleted && !isActive && !isPaused && (
-            <div className="px-3 py-2.5 rounded-lg bg-gradient-to-r from-[#1A1A1A] to-[#1F1F1F] border border-[#2A2A2A]">
-              <div className="flex items-start gap-2.5">
-                <Info className="w-4 h-4 text-[#4F6D8A] mt-0.5 flex-shrink-0" />
-                <div className="flex-1">
-                  <p className="text-xs font-medium text-[#A5A5A5] mb-1.5">Why This Workout</p>
-                  <p className="text-xs text-[#8A8A8A] leading-relaxed">
-                    {/* [SESSION-ARCHITECTURE-VISIBLE-EXPRESSION] Use canonical composition metadata */}
-                    {(() => {
-                      const metadata = (session as any).compositionMetadata
-                      const spineType = metadata?.spineSessionType
-                      const spineMode = metadata?.spineMode
-                      const sessionIntent = metadata?.sessionIntent
-                      const blockRoles = metadata?.blockRoles || []
-                      
-                      // Build architecture-driven explanation
-                      if (sessionIntent && spineType) {
-                        // Detailed explanation from canonical truth
-                        const typeDescriptions: Record<string, string> = {
-                          'direct_intensity': 'max effort primary skill development',
-                          'technical_focus': 'movement quality and form refinement',
-                          'strength_support': 'foundational strength to support your skills',
-                          'mixed_balanced': 'balanced skill and strength expression',
-                          'rotation_light': 'active recovery with reduced intensity',
-                        }
-                        
-                        const primaryWork = blockRoles.filter((r: string) => r.includes('primary')).length
-                        const supportWork = blockRoles.filter((r: string) => r.includes('support') || r.includes('accessory')).length
-                        
-                        const typeDesc = typeDescriptions[spineType] || 'balanced training'
-                        
-                        let explanation = `This session emphasizes ${typeDesc}.`
-                        if (primaryWork > 0 && supportWork > 0) {
-                          explanation += ` ${primaryWork} primary block${primaryWork > 1 ? 's' : ''} with ${supportWork} support exercise${supportWork > 1 ? 's' : ''}.`
-                        }
-                        
-                        return explanation
-                      }
-                      
-                      // Fallback to structureDescription or dynamic generation
-                      if (sessionStyleMetadata?.structureDescription) {
-                        return sessionStyleMetadata.structureDescription
-                      }
-                      // Generate dynamic description from session content
-                      const exerciseCount = displayExercises.length
-                      const skillCount = displayExercises.filter(e => e.category === 'skill').length
-                      const strengthCount = displayExercises.filter(e => e.category === 'strength').length
-                      const accessoryCount = displayExercises.filter(e => e.category === 'accessory').length
-                      
-                      const parts: string[] = []
-                      if (skillCount > 0) parts.push(`${skillCount} skill movement${skillCount > 1 ? 's' : ''}`)
-                      if (strengthCount > 0) parts.push(`${strengthCount} strength exercise${strengthCount > 1 ? 's' : ''}`)
-                      if (accessoryCount > 0) parts.push(`${accessoryCount} accessory work${accessoryCount > 1 ? ' items' : ''}`)
-                      
-                      const focus = session.focus || session.focusLabel || 'balanced training'
-                      return `${exerciseCount} exercises focusing on ${focus.toLowerCase()}${parts.length > 0 ? `. Includes ${parts.join(', ')}.` : '.'}`
-                    })()}
+          {/* [SESSION-DISPLAY-CONTRACT] Today at a Glance - Compact session summary */}
+          {!isCompleted && !isActive && !isPaused && (() => {
+            const sessionContract = buildSessionDisplayContract({
+              name: session.name,
+              dayLabel: session.dayLabel,
+              focus: session.focus,
+              focusLabel: session.focusLabel,
+              isPrimary: session.isPrimary,
+              rationale: session.rationale,
+              estimatedMinutes: activeSessionView.estimatedMinutes,
+              exercises: displayExercises,
+              compositionMetadata: (session as any).compositionMetadata,
+              skillExpressionMetadata: (session as any).skillExpressionMetadata,
+              styleMetadata: sessionStyleMetadata,
+              loadSummary: session.loadSummary,
+              timeOptimization: session.timeOptimization,
+            })
+            
+            const typeColors: Record<string, { bg: string; text: string; border: string }> = {
+              skill_dominant: { bg: 'bg-[#E63946]/10', text: 'text-[#E63946]', border: 'border-[#E63946]/20' },
+              strength_dominant: { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/20' },
+              mixed: { bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/20' },
+              support: { bg: 'bg-[#6A6A6A]/10', text: 'text-[#A5A5A5]', border: 'border-[#6A6A6A]/20' },
+              density: { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/20' },
+              recovery: { bg: 'bg-green-500/10', text: 'text-green-400', border: 'border-green-500/20' },
+            }
+            const colors = typeColors[sessionContract.sessionType] || typeColors.mixed
+            
+            const intensityIcons: Record<string, React.ReactNode> = {
+              high_effort: <Zap className="w-3 h-3" />,
+              technique_focused: <AlertCircle className="w-3 h-3" />,
+              volume_density: <Timer className="w-3 h-3" />,
+              recovery: <RefreshCw className="w-3 h-3" />,
+              moderate: <Dumbbell className="w-3 h-3" />,
+            }
+            
+            return (
+              <div className={`rounded-lg border ${colors.border} overflow-hidden`}>
+                {/* Header Row: Session Type + Duration + Method */}
+                <div className={`px-3 py-2 ${colors.bg} flex items-center justify-between`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-semibold uppercase tracking-wide ${colors.text}`}>
+                      {sessionContract.sessionType.replace(/_/g, ' ')}
+                    </span>
+                    {sessionContract.trainingMethod && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#8A8A8A]">
+                        {sessionContract.trainingMethod}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 text-[10px] text-[#6A6A6A]">
+                    <Clock className="w-3 h-3" />
+                    <span>{sessionContract.estimatedMinutes} min</span>
+                  </div>
+                </div>
+                
+                {/* Main Content: Objective + Priority + Work Distribution */}
+                <div className="px-3 py-2.5 bg-[#1A1A1A] space-y-2">
+                  {/* Primary Objective */}
+                  <p className="text-sm text-[#E5E5E5] font-medium leading-snug">
+                    {sessionContract.primaryObjective}
                   </p>
-                  {/* Show grouped method badges if present */}
-                  {hasNonStraightGroups && (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {sessionStyleMetadata?.hasSupersetsApplied && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4F6D8A]/10 text-[#4F6D8A] font-medium">
-                          Supersets
-                        </span>
-                      )}
-                      {sessionStyleMetadata?.hasCircuitsApplied && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 font-medium">
-                          Circuits
-                        </span>
-                      )}
-                      {sessionStyleMetadata?.hasDensityApplied && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 font-medium">
-                          Density Blocks
-                        </span>
-                      )}
+                  
+                  {/* Work Distribution Row */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#2A2A2A] text-[#B5B5B5]">
+                      {sessionContract.primaryWorkLabel}
+                    </span>
+                    {sessionContract.supportWorkLabel && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#2A2A2A] text-[#8A8A8A]">
+                        {sessionContract.supportWorkLabel}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Intensity + Execution Priority */}
+                  <div className="flex items-center gap-2 pt-1 border-t border-[#2A2A2A]">
+                    <div className={`flex items-center gap-1 text-[10px] ${colors.text}`}>
+                      {intensityIcons[sessionContract.intensityProfile]}
+                      <span className="capitalize">{sessionContract.intensityProfile.replace(/_/g, ' ')}</span>
                     </div>
-                  )}
-                  {/* Show category breakdown badges even without grouped methods */}
-                  {!hasNonStraightGroups && displayExercises.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {displayExercises.some(e => e.category === 'skill') && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#E63946]/10 text-[#E63946] font-medium">
-                          Skill Work
-                        </span>
-                      )}
-                      {displayExercises.some(e => e.category === 'strength') && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium">
-                          Strength
-                        </span>
-                      )}
-                      {displayExercises.some(e => e.category === 'accessory') && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#6A6A6A]/10 text-[#A5A5A5] font-medium">
-                          Accessory
-                        </span>
-                      )}
+                    <span className="text-[#3A3A3A]">·</span>
+                    <span className="text-[10px] text-[#7A7A7A]">{sessionContract.executionPriority}</span>
+                  </div>
+                  
+                  {/* Caution Note (only if present) */}
+                  {sessionContract.cautionNote && (
+                    <div className="flex items-center gap-1.5 text-[10px] text-amber-400 pt-1">
+                      <AlertCircle className="w-3 h-3" />
+                      <span>{sessionContract.cautionNote}</span>
                     </div>
                   )}
                 </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
           
           {/* Session Completed - Show Summary */}
           {isCompleted ? (
@@ -879,11 +872,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 rpeExerciseCount={rpeExerciseCount}
                 onStart={handleStartWorkout}
               />
-
-              {/* Session Rationale */}
-              <div className="p-3 bg-[#1A1A1A] rounded-lg text-sm text-[#A5A5A5]">
-                {session.rationale}
-              </div>
 
   {/* Session Variety Info - Justified Repetition */}
   {session.varietyInfo?.isIntentionalRepetition && session.varietyInfo.repetitionReason && (

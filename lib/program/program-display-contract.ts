@@ -252,6 +252,246 @@ export interface WeekSessionMapDisplay {
 }
 
 // =============================================================================
+// SESSION DISPLAY CONTRACT
+// =============================================================================
+
+/**
+ * Strict session display contract.
+ * Canonical source of truth for session-level summary display.
+ * Enables instant understanding before reading exercise cards.
+ */
+export interface SessionDisplayContract {
+  // IDENTITY
+  sessionHeadline: string               // "Straight-Arm Push Day" or "Upper Body Strength"
+  sessionType: 'skill_dominant' | 'strength_dominant' | 'mixed' | 'support' | 'density' | 'recovery'
+  
+  // PRIMARY OBJECTIVE
+  primaryObjective: string              // "Build pressing strength through planche progressions"
+  executionPriority: string             // "Focus on form quality over volume"
+  
+  // WORK DISTRIBUTION (compact)
+  primaryWorkLabel: string              // "2 skill blocks" or "3 compound lifts"
+  primaryWorkCount: number
+  supportWorkLabel: string | null       // "3 accessory exercises" or null
+  supportWorkCount: number
+  
+  // INTENSITY PROFILE
+  intensityProfile: 'high_effort' | 'moderate' | 'technique_focused' | 'recovery' | 'volume_density'
+  intensityNote: string                 // "RPE 8-9 on main lifts" or "Quality over quantity"
+  
+  // TRAINING METHOD (if applicable)
+  trainingMethod: string | null         // "Supersets" or "Density Blocks" or null
+  estimatedMinutes: number
+  
+  // CAUTION/CONSTRAINT (only if real)
+  cautionNote: string | null            // "Volume capped due to recent high load" or null
+  
+  // SOURCE TRACING
+  source: 'composition_metadata' | 'skill_expression' | 'style_metadata' | 'derived'
+}
+
+/**
+ * Build session display contract from AdaptiveSession.
+ * Single canonical source of truth for session-level display.
+ */
+export function buildSessionDisplayContract(
+  session: {
+    name?: string
+    dayLabel?: string
+    focus?: string
+    focusLabel?: string
+    isPrimary?: boolean
+    rationale?: string
+    estimatedMinutes?: number
+    exercises?: Array<{ category?: string; name?: string; selectionReason?: string }>
+    compositionMetadata?: {
+      sessionIntent?: string
+      sessionComplexity?: string
+      spineSessionType?: string
+      spineMode?: string
+      blockRoles?: string[]
+    }
+    skillExpressionMetadata?: {
+      directlyExpressedSkills?: string[]
+      technicalSlotSkills?: string[]
+      sessionPurpose?: string
+      sessionIdentityReason?: string
+    }
+    styleMetadata?: {
+      primaryStyle?: string
+      hasSupersetsApplied?: boolean
+      hasCircuitsApplied?: boolean
+      hasDensityApplied?: boolean
+      structureDescription?: string
+    }
+    loadSummary?: {
+      isOptimal?: boolean
+      removed?: string[]
+    }
+    timeOptimization?: {
+      wasOptimized?: boolean
+      coachingMessage?: string
+    }
+  }
+): SessionDisplayContract {
+  const composition = session.compositionMetadata
+  const skillMeta = session.skillExpressionMetadata
+  const styleMeta = session.styleMetadata
+  const exercises = session.exercises || []
+  
+  // Count exercise categories
+  const skillCount = exercises.filter(e => e.category === 'skill').length
+  const strengthCount = exercises.filter(e => e.category === 'strength').length
+  const accessoryCount = exercises.filter(e => e.category === 'accessory' || e.category === 'core').length
+  
+  // Determine session type
+  let sessionType: SessionDisplayContract['sessionType'] = 'mixed'
+  const spineType = composition?.spineSessionType
+  
+  if (spineType === 'direct_intensity' || spineType === 'technical_focus' || session.isPrimary) {
+    sessionType = 'skill_dominant'
+  } else if (spineType === 'strength_support' || strengthCount > skillCount) {
+    sessionType = 'strength_dominant'
+  } else if (spineType === 'rotation_light' || skillMeta?.sessionPurpose === 'support_recovery') {
+    sessionType = 'recovery'
+  } else if (styleMeta?.hasDensityApplied) {
+    sessionType = 'density'
+  } else if (skillCount > 0 && strengthCount > 0) {
+    sessionType = 'mixed'
+  } else if (accessoryCount > skillCount + strengthCount) {
+    sessionType = 'support'
+  }
+  
+  // Build headline from focus or composition
+  let sessionHeadline = session.focusLabel || session.focus || session.name || 'Training Session'
+  // Clean up overly long headlines
+  if (sessionHeadline.length > 40) {
+    sessionHeadline = sessionHeadline.split(' - ')[0] || sessionHeadline.substring(0, 37) + '...'
+  }
+  
+  // Build primary objective
+  let primaryObjective = ''
+  if (skillMeta?.sessionIdentityReason) {
+    primaryObjective = skillMeta.sessionIdentityReason.split('.')[0]
+  } else if (composition?.sessionIntent) {
+    primaryObjective = composition.sessionIntent.split('.')[0]
+  } else if (session.rationale) {
+    primaryObjective = session.rationale.split('.')[0]
+  }
+  if (primaryObjective.length > 80) {
+    primaryObjective = primaryObjective.substring(0, 77) + '...'
+  }
+  if (!primaryObjective) {
+    primaryObjective = sessionType === 'skill_dominant' 
+      ? 'Build skill proficiency through focused practice'
+      : sessionType === 'strength_dominant'
+        ? 'Develop foundational strength'
+        : 'Balanced training session'
+  }
+  
+  // Build execution priority based on session type
+  let executionPriority = ''
+  if (sessionType === 'skill_dominant') {
+    executionPriority = 'Prioritize movement quality over reps'
+  } else if (sessionType === 'strength_dominant') {
+    executionPriority = 'Focus on progressive load'
+  } else if (sessionType === 'density') {
+    executionPriority = 'Maintain tempo, minimize rest'
+  } else if (sessionType === 'recovery') {
+    executionPriority = 'Keep effort controlled'
+  } else {
+    executionPriority = 'Balance technique and effort'
+  }
+  
+  // Build work distribution labels
+  const primaryWorkCount = skillCount + strengthCount
+  let primaryWorkLabel = ''
+  if (skillCount > 0 && strengthCount > 0) {
+    primaryWorkLabel = `${skillCount} skill, ${strengthCount} strength`
+  } else if (skillCount > 0) {
+    primaryWorkLabel = `${skillCount} skill movement${skillCount > 1 ? 's' : ''}`
+  } else if (strengthCount > 0) {
+    primaryWorkLabel = `${strengthCount} strength exercise${strengthCount > 1 ? 's' : ''}`
+  } else {
+    primaryWorkLabel = `${exercises.length} exercise${exercises.length > 1 ? 's' : ''}`
+  }
+  
+  const supportWorkCount = accessoryCount
+  const supportWorkLabel = accessoryCount > 0 
+    ? `${accessoryCount} support/accessory` 
+    : null
+  
+  // Determine intensity profile
+  let intensityProfile: SessionDisplayContract['intensityProfile'] = 'moderate'
+  let intensityNote = ''
+  
+  if (sessionType === 'skill_dominant' && spineType === 'direct_intensity') {
+    intensityProfile = 'high_effort'
+    intensityNote = 'High effort on primary skill work'
+  } else if (sessionType === 'skill_dominant') {
+    intensityProfile = 'technique_focused'
+    intensityNote = 'Quality over quantity'
+  } else if (sessionType === 'strength_dominant') {
+    intensityProfile = 'high_effort'
+    intensityNote = 'Push towards RPE 8-9 on main lifts'
+  } else if (sessionType === 'density') {
+    intensityProfile = 'volume_density'
+    intensityNote = 'Maintain work rate throughout'
+  } else if (sessionType === 'recovery') {
+    intensityProfile = 'recovery'
+    intensityNote = 'Sub-maximal effort, focus on movement'
+  } else {
+    intensityProfile = 'moderate'
+    intensityNote = 'Balanced effort across exercises'
+  }
+  
+  // Training method badge
+  let trainingMethod: string | null = null
+  if (styleMeta?.hasSupersetsApplied) {
+    trainingMethod = 'Supersets'
+  } else if (styleMeta?.hasCircuitsApplied) {
+    trainingMethod = 'Circuits'
+  } else if (styleMeta?.hasDensityApplied) {
+    trainingMethod = 'Density Blocks'
+  }
+  
+  // Caution note (only if real)
+  let cautionNote: string | null = null
+  if (session.loadSummary?.removed && session.loadSummary.removed.length > 0) {
+    cautionNote = `Volume managed (${session.loadSummary.removed.length} exercise${session.loadSummary.removed.length > 1 ? 's' : ''} adjusted)`
+  } else if (session.timeOptimization?.wasOptimized) {
+    cautionNote = session.timeOptimization.coachingMessage || 'Session optimized for time'
+  }
+  
+  // Determine source
+  let source: SessionDisplayContract['source'] = 'derived'
+  if (composition?.sessionIntent && composition?.spineSessionType) {
+    source = 'composition_metadata'
+  } else if (skillMeta?.sessionIdentityReason) {
+    source = 'skill_expression'
+  } else if (styleMeta?.structureDescription) {
+    source = 'style_metadata'
+  }
+  
+  return {
+    sessionHeadline,
+    sessionType,
+    primaryObjective,
+    executionPriority,
+    primaryWorkLabel,
+    primaryWorkCount,
+    supportWorkLabel,
+    supportWorkCount,
+    intensityProfile,
+    intensityNote,
+    trainingMethod,
+    estimatedMinutes: session.estimatedMinutes || 45,
+    cautionNote,
+    source,
+  }
+}
+
+// =============================================================================
 // EXERCISE CARD DISPLAY CONTRACT
 // =============================================================================
 

@@ -112,6 +112,12 @@ import { prefetchDoctrineRules, getDoctrineInfluenceSummary, getCachedDoctrineRu
 
 // [DOCTRINE RUNTIME CONTRACT] Authoritative doctrine contract for upstream generation influence
 import { buildDoctrineRuntimeContract, type DoctrineRuntimeContract } from './doctrine-runtime-contract'
+// [SHADOW INTEGRATION] Doctrine Influence Contract - bridges doctrine DB → generator
+import { 
+  buildDoctrineInfluenceContract, 
+  generateDoctrineInfluenceAuditSummary,
+  type DoctrineInfluenceContract 
+} from './doctrine/doctrine-influence-contract'
 
 // [SESSION ARCHITECTURE TRUTH] Authoritative contract for generation enforcement
 import { 
@@ -682,6 +688,10 @@ type AdaptiveSessionContext = {
   multiSkillAllocation?: MultiSkillSessionAllocationContract | null
   // [DOCTRINE RUNTIME CONTRACT] Authoritative doctrine contract for upstream generation influence
   doctrineRuntimeContract?: DoctrineRuntimeContract | null
+  // [SHADOW INTEGRATION] Doctrine influence contract - bridges doctrine DB → generator
+  // This contract explicitly separates athleteTruth, doctrineDbTruth, codeDoctrineFallbackTruth,
+  // mergedInfluence, sourceAttribution, and readinessState for audit visibility.
+  doctrineInfluenceContract?: DoctrineInfluenceContract | null
   // [SESSION ARCHITECTURE TRUTH] Authoritative contract for generation enforcement
   sessionArchitectureTruth?: SessionArchitectureTruthContract | null
   }
@@ -6227,18 +6237,20 @@ async function generateAdaptiveProgramImpl(
   // It is NOT decorative - it materially influences progression, methods,
   // prescription, skill coverage, and exercise selection.
   // ==========================================================================
-  let doctrineRuntimeContract: DoctrineRuntimeContract | null = null
-  try {
-    const cwpRecord: Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null }> = {}
-    if (multiSkillMaterialityContract.currentWorkingProgressions) {
-      for (const [skill, data] of Object.entries(multiSkillMaterialityContract.currentWorkingProgressions)) {
-        cwpRecord[skill] = {
-          currentWorkingProgression: typeof data === 'object' && data ? (data as { currentWorkingProgression?: string | null }).currentWorkingProgression ?? null : null,
-          historicalCeiling: typeof data === 'object' && data ? (data as { historicalCeiling?: string | null }).historicalCeiling ?? null : null,
-        }
+  
+  // Build cwpRecord outside try block so it's accessible for doctrine influence contract
+  const cwpRecord: Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null }> = {}
+  if (multiSkillMaterialityContract.currentWorkingProgressions) {
+    for (const [skill, data] of Object.entries(multiSkillMaterialityContract.currentWorkingProgressions)) {
+      cwpRecord[skill] = {
+        currentWorkingProgression: typeof data === 'object' && data ? (data as { currentWorkingProgression?: string | null }).currentWorkingProgression ?? null : null,
+        historicalCeiling: typeof data === 'object' && data ? (data as { historicalCeiling?: string | null }).historicalCeiling ?? null : null,
       }
     }
-    
+  }
+  
+  let doctrineRuntimeContract: DoctrineRuntimeContract | null = null
+  try {
     doctrineRuntimeContract = await buildDoctrineRuntimeContract({
       primaryGoal: multiSkillMaterialityContract.primaryGoal,
       secondaryGoal: multiSkillMaterialityContract.secondaryGoal,
@@ -6270,6 +6282,64 @@ async function generateAdaptiveProgramImpl(
       verdict: 'DOCTRINE_RUNTIME_CONTRACT_FALLBACK',
     })
     // Generation continues without doctrine influence - fallback is safe
+  }
+  
+  // ==========================================================================
+  // [SHADOW INTEGRATION] BUILD DOCTRINE INFLUENCE CONTRACT
+  // ==========================================================================
+  // PURPOSE: Single normalized influence layer that explicitly separates:
+  // - athleteTruth (canonical profile data)
+  // - doctrineDbTruth (DB-backed rules from Neon)
+  // - codeDoctrineFallbackTruth (code registries)
+  // - mergedInfluence (combined influence per domain)
+  // - sourceAttribution (per-domain ownership: db | code | merged | missing)
+  // - readinessState (DB availability and coverage diagnostics)
+  //
+  // SHADOW MODE: This phase is resolved + carried forward + auditable only.
+  // No visible behavior changes are made by this contract in this phase.
+  // ==========================================================================
+  let doctrineInfluenceContract: DoctrineInfluenceContract | null = null
+  try {
+    doctrineInfluenceContract = await buildDoctrineInfluenceContract(
+      {
+        primaryGoal: multiSkillMaterialityContract.primaryGoal || null,
+        secondaryGoal: multiSkillMaterialityContract.secondaryGoal || null,
+        selectedSkills: multiSkillMaterialityContract.selectedSkills,
+        experienceLevel: multiSkillMaterialityContract.experienceLevel || null,
+        scheduleMode: canonicalProfile.scheduleMode || null,
+        targetFrequency: effectiveTrainingDays,
+        jointCautions: multiSkillMaterialityContract.jointCautions,
+        equipmentAvailable: multiSkillMaterialityContract.equipmentAvailable,
+        currentWorkingProgressions: cwpRecord,
+        trainingPath: canonicalProfile.trainingPath || null,
+        sessionStyle: inputs.sessionStyle || null,
+        timeAvailability: canonicalProfile.sessionDurationMinutes || null,
+      },
+      doctrineRuntimeContract
+    )
+    
+    // Generate audit summary for debug visibility
+    const auditSummary = generateDoctrineInfluenceAuditSummary(doctrineInfluenceContract)
+    
+    console.log('[DOCTRINE-INFLUENCE-CONTRACT-SHADOW-INTEGRATION]', {
+      phase: 'SHADOW_MODE',
+      contractId: doctrineInfluenceContract.contractId,
+      dbAvailable: doctrineInfluenceContract.safetyFlags.dbAvailable,
+      fallbackActive: doctrineInfluenceContract.safetyFlags.fallbackActive,
+      shadowModeOnly: doctrineInfluenceContract.safetyFlags.shadowModeOnly,
+      sourceAttribution: doctrineInfluenceContract.sourceAttribution,
+      readinessVerdict: doctrineInfluenceContract.readinessState.readinessVerdict,
+      unresolvedDomains: doctrineInfluenceContract.readinessState.unresolvedDomains.length,
+      fallbackDomains: doctrineInfluenceContract.readinessState.fallbackDomains.length,
+      verdict: 'DOCTRINE_INFLUENCE_CONTRACT_BUILT_SHADOW',
+    })
+  } catch (err) {
+    console.log('[DOCTRINE-INFLUENCE-CONTRACT-FALLBACK-SAFE]', {
+      error: String(err),
+      phase: 'SHADOW_MODE',
+      verdict: 'DOCTRINE_INFLUENCE_CONTRACT_FALLBACK_SAFE',
+    })
+    // Generation continues safely - this is shadow mode, no behavior changes
   }
   
   // ==========================================================================
@@ -13620,6 +13690,21 @@ return explanations.length > 0 ? explanations : undefined
   hasLiveRules: doctrineRuntimeContract.doctrineCoverage.hasLiveRules,
   verdict: 'DOCTRINE_UI_TRUTH_ALIGNED',
   })
+  }
+  
+  // [SHADOW INTEGRATION] Store doctrine influence contract for audit visibility
+  // This is shadow mode - contract is stored but does not change visible behavior
+  if (doctrineInfluenceContract) {
+    finalProgram.doctrineInfluenceContract = doctrineInfluenceContract
+    console.log('[DOCTRINE-INFLUENCE-CONTRACT-ATTACHED]', {
+      contractId: doctrineInfluenceContract.contractId,
+      shadowModeOnly: doctrineInfluenceContract.safetyFlags.shadowModeOnly,
+      dbAvailable: doctrineInfluenceContract.safetyFlags.dbAvailable,
+      fallbackActive: doctrineInfluenceContract.safetyFlags.fallbackActive,
+      sourceAttribution: doctrineInfluenceContract.sourceAttribution,
+      readinessVerdict: doctrineInfluenceContract.readinessState.readinessVerdict,
+      verdict: 'DOCTRINE_INFLUENCE_SHADOW_ATTACHED',
+    })
   }
   
   // [SESSION ARCHITECTURE TRUTH] Store architecture truth on the program for UI access

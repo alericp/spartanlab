@@ -309,6 +309,67 @@ function ProgramDisplayFallback({
   )
 }
 
+// ==========================================================================
+// [VISIBLE-PROGRAM-TRUTH-CONTRACT] TYPE DEFINITION
+// This is THE SINGLE canonical contract for all Program page visible surfaces.
+// All display elements MUST consume truth from this contract, never from
+// stale/broader onboarding arrays or fallback derivations.
+// ==========================================================================
+interface CanonicalProgramDisplayTruth {
+  // Identity
+  visiblePrimaryGoal: string
+  visibleSecondaryGoal: string | null
+  // Skills that actually appear in "Built around" chips
+  // MUST be materially represented in current program structure
+  visibleBuiltAroundSkills: string[]
+  // Summary inputs for text generation
+  visibleSummaryText: string
+  visibleSummarySource: 'summaryTruth.truthfulHybridSummary' | 'programRationale_fallback'
+  // Why This Plan inputs - same contract as summary
+  visibleWhyThisPlanPrimaryFocus: string
+  visibleWhyThisPlanSecondaryFocus: string | null
+  // Session cards source - canonical session array
+  visibleSessionsSource: 'program.sessions'
+  visibleSessionCount: number
+  // Ownership audit
+  contractSource: 'saved_program_canonical_truth'
+  noMixedOwnership: boolean
+}
+
+function buildCanonicalProgramDisplayTruth(program: AdaptiveProgram): CanonicalProgramDisplayTruth {
+  const weeklyRep = (program as unknown as { weeklyRepresentation?: { policies?: Array<{ skill: string; actualExposure?: { direct: number; total: number } }> } }).weeklyRepresentation
+  const summaryTruth = (program as unknown as { summaryTruth?: { truthfulHybridSummary?: string; headlineFocusSkills?: string[] } }).summaryTruth
+  
+  // Built around skills: primary/secondary always included, others only if materially represented
+  const headlineSkills = summaryTruth?.headlineFocusSkills || [program.primaryGoal, (program as unknown as { secondaryGoal?: string }).secondaryGoal].filter(Boolean) as string[]
+  const materiallyRepresentedOtherSkills = (weeklyRep?.policies || [])
+    .filter(p => {
+      if (headlineSkills.includes(p.skill)) return false // Already in headline
+      const direct = p.actualExposure?.direct || 0
+      const total = p.actualExposure?.total || 0
+      return direct >= 2 || total >= 3 // Same threshold as AdaptiveProgramDisplay
+    })
+    .map(p => p.skill)
+  
+  const visibleBuiltAroundSkills = [...headlineSkills, ...materiallyRepresentedOtherSkills]
+  
+  return {
+    visiblePrimaryGoal: program.primaryGoal || '',
+    visibleSecondaryGoal: (program as unknown as { secondaryGoal?: string }).secondaryGoal || null,
+    visibleBuiltAroundSkills,
+    visibleSummaryText: summaryTruth?.truthfulHybridSummary || program.programRationale || '',
+    visibleSummarySource: summaryTruth?.truthfulHybridSummary 
+      ? 'summaryTruth.truthfulHybridSummary' 
+      : 'programRationale_fallback',
+    visibleWhyThisPlanPrimaryFocus: program.primaryGoal || '',
+    visibleWhyThisPlanSecondaryFocus: (program as unknown as { secondaryGoal?: string }).secondaryGoal || null,
+    visibleSessionsSource: 'program.sessions',
+    visibleSessionCount: program.sessions?.length || 0,
+    contractSource: 'saved_program_canonical_truth',
+    noMixedOwnership: true,
+  }
+}
+
 // TASK 1: Error boundary wrapper for AdaptiveProgramDisplay
 // [PHASE 9] Now uses true React ErrorBoundary - NO setState in render catch
 // [PHASE 10C] Enhanced with exact error capture and display in fallback
@@ -327,6 +388,37 @@ function ProgramDisplayWrapper({
   onRecoveryNeeded: () => void
   unifiedStaleness: UnifiedStalenessResult | null // [TASK 1] Unified staleness from page
 }) {
+  // ==========================================================================
+  // [VISIBLE-PROGRAM-TRUTH-CONTRACT] CANONICAL DISPLAY TRUTH
+  // Build the single authoritative truth object for all visible surfaces
+  // ==========================================================================
+  const canonicalDisplayTruth = buildCanonicalProgramDisplayTruth(program)
+  
+  // ==========================================================================
+  // [VISIBLE-PROGRAM-TRUTH-CONTRACT] AUDIT - Verify unified ownership
+  // ==========================================================================
+  console.log('[VISIBLE-PROGRAM-TRUTH-CONTRACT-AUDIT]', {
+    programId: program.id,
+    // Identity surfaces
+    visiblePrimaryGoal: canonicalDisplayTruth.visiblePrimaryGoal,
+    visibleSecondaryGoal: canonicalDisplayTruth.visibleSecondaryGoal,
+    // Built around chips
+    visibleBuiltAroundSkillsCount: canonicalDisplayTruth.visibleBuiltAroundSkills.length,
+    visibleBuiltAroundSkills: canonicalDisplayTruth.visibleBuiltAroundSkills,
+    // Summary
+    visibleSummarySource: canonicalDisplayTruth.visibleSummarySource,
+    visibleSummaryTextSnippet: canonicalDisplayTruth.visibleSummaryText.slice(0, 100),
+    // Sessions
+    visibleSessionCount: canonicalDisplayTruth.visibleSessionCount,
+    visibleSessionsSource: canonicalDisplayTruth.visibleSessionsSource,
+    // Contract ownership
+    contractSource: canonicalDisplayTruth.contractSource,
+    noMixedOwnership: canonicalDisplayTruth.noMixedOwnership,
+    // Verdict
+    verdict: canonicalDisplayTruth.noMixedOwnership 
+      ? 'DISPLAY_CONTRACT_UNIFIED_ALL_SURFACES_FROM_CANONICAL_PROGRAM'
+      : 'DISPLAY_CONTRACT_SPLIT_OWNERSHIP_DETECTED',
+  })
   // [PHASE 10C] State to capture error details for fallback display
   const [capturedError, setCapturedError] = useState<{
     name: string

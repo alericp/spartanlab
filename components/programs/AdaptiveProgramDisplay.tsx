@@ -22,6 +22,8 @@ import {
   Minus,
   Sparkles,
   RefreshCw,
+  Dumbbell,
+  ListChecks,
 } from 'lucide-react'
 import {
   Dialog,
@@ -2176,6 +2178,126 @@ export function AdaptiveProgramDisplay({
                         ))}
                       </div>
                     )}
+                  </div>
+                </div>
+              </Card>
+            )}
+            
+            {/* [EXERCISE-PRESCRIPTION-TRUTH] Why These Exercises & Dosage */}
+            {intelligence.exercisePrescription.source !== 'unavailable' && (
+              <Card className="bg-[#1A1A1A] border-[#2A2A2A] p-3">
+                <div className="space-y-3">
+                  {/* Header with dosage style */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded bg-green-500/10">
+                        <Dumbbell className="w-4 h-4 text-green-400" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-[#6A6A6A] uppercase tracking-wide">Exercise Logic</span>
+                        <p className="text-sm font-medium text-[#E5E5E5]">{intelligence.exercisePrescription.dosageIntent.styleLabel}</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-[#2A2A2A] text-[#6A6A6A]">
+                      {intelligence.exercisePrescription.uniqueFamilies} families
+                    </span>
+                  </div>
+                  
+                  {/* Primary Drivers */}
+                  {intelligence.exercisePrescription.primaryDrivers.length > 0 && (
+                    <div className="space-y-1">
+                      <span className="text-[10px] uppercase tracking-wide text-[#5A5A5A]">Primary Drivers</span>
+                      <div className="space-y-1">
+                        {intelligence.exercisePrescription.primaryDrivers.slice(0, 3).map((driver, idx) => (
+                          <div key={idx} className="flex items-start gap-2">
+                            <span className="text-green-400 mt-0.5">+</span>
+                            <div className="flex-1 min-w-0">
+                              <span className="text-xs font-medium text-[#A5A5A5]">{driver.familyName}</span>
+                              <span className="text-[10px] text-[#5A5A5A] ml-1">({driver.sessionCount}×/wk)</span>
+                              {driver.purposeSummary && (
+                                <p className="text-[10px] text-[#6A6A6A] truncate">{driver.purposeSummary}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Support Work */}
+                  {intelligence.exercisePrescription.supportWork.length > 0 && (
+                    <div className="space-y-1 pt-2 border-t border-[#2A2A2A]">
+                      <span className="text-[10px] uppercase tracking-wide text-[#5A5A5A]">Support/Carryover</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {intelligence.exercisePrescription.supportWork.slice(0, 4).map((support, idx) => (
+                          <span key={idx} className="text-xs px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                            {support.familyName}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Constrained Work */}
+                  {intelligence.exercisePrescription.constrainedWork.length > 0 && (
+                    <div className="space-y-1 pt-2 border-t border-[#2A2A2A]">
+                      <span className="text-[10px] uppercase tracking-wide text-[#5A5A5A]">Volume-Managed</span>
+                      <div className="space-y-1">
+                        {intelligence.exercisePrescription.constrainedWork.slice(0, 2).map((constrained, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                            <span className="text-xs text-[#8A8A8A]">{constrained.familyName}</span>
+                            {constrained.constraintReason && (
+                              <span className="text-[10px] text-[#5A5A5A]">— {constrained.constraintReason}</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Dosage Characteristics */}
+                  {intelligence.exercisePrescription.dosageIntent.characteristics.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-2 border-t border-[#2A2A2A]">
+                      {intelligence.exercisePrescription.dosageIntent.characteristics.map((char, idx) => (
+                        <span key={idx} className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#7A7A7A]">
+                          {char}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
+            
+            {/* [EXERCISE-PRESCRIPTION-TRUTH] Notable Decisions */}
+            {intelligence.exercisePrescription.notableDecisions.length > 0 && (
+              <Card className="bg-[#1A1A1A] border-[#2A2A2A] p-3">
+                <div className="flex items-start gap-3">
+                  <div className="p-1.5 rounded bg-purple-500/10">
+                    <ListChecks className="w-4 h-4 text-purple-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-medium text-[#6A6A6A] uppercase tracking-wide">Prescription Decisions</span>
+                    </div>
+                    <div className="space-y-2">
+                      {intelligence.exercisePrescription.notableDecisions.slice(0, 4).map((decision, idx) => (
+                        <div key={idx} className="flex items-start gap-2">
+                          <span className={`w-1.5 h-1.5 rounded-full mt-1.5 ${
+                            decision.category === 'selection' ? 'bg-green-400' :
+                            decision.category === 'dosage' ? 'bg-blue-400' :
+                            decision.category === 'frequency' ? 'bg-purple-400' :
+                            decision.category === 'interference' ? 'bg-amber-400' :
+                            'bg-[#6A6A6A]'
+                          }`} />
+                          <div>
+                            <span className="text-xs text-[#A5A5A5]">{decision.decision}</span>
+                            <p className="text-[10px] text-[#6A6A6A]">{decision.reason}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </Card>

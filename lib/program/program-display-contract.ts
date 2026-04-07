@@ -147,6 +147,64 @@ export interface WeeklyDecisionSummaryDisplay {
   source: string
 }
 
+// =============================================================================
+// EXERCISE PRESCRIPTION TYPES
+// =============================================================================
+
+export interface ExerciseRoleSummary {
+  /** Exercise family name (e.g., "Front Lever Pulls", "Planche Leans") */
+  familyName: string
+  /** Role: 'primary_driver' | 'support_carryover' | 'accessory' | 'density' | 'constrained' */
+  role: 'primary_driver' | 'support_carryover' | 'accessory' | 'density' | 'constrained'
+  /** What this exercise family is doing */
+  purposeSummary: string
+  /** Session frequency this week */
+  sessionCount: number
+  /** If constrained, why */
+  constraintReason?: string
+}
+
+export interface DosageIntentDisplay {
+  /** Overall dosage style label */
+  styleLabel: string
+  /** Primary intent: 'skill_expression' | 'strength_building' | 'volume_accumulation' | 'tissue_prep' */
+  primaryIntent: string
+  /** Key dosage characteristics */
+  characteristics: string[]
+  /** What is intentionally limited */
+  limitedAspects: string[]
+  /** Source of dosage data */
+  source: string
+}
+
+export interface NotablePrescriptionDecision {
+  /** Decision description */
+  decision: string
+  /** Why this was chosen */
+  reason: string
+  /** Category: 'selection' | 'dosage' | 'frequency' | 'interference' | 'progression' */
+  category: 'selection' | 'dosage' | 'frequency' | 'interference' | 'progression'
+}
+
+export interface ExercisePrescriptionDisplay {
+  /** Primary driver exercises summary */
+  primaryDrivers: ExerciseRoleSummary[]
+  /** Support/carryover exercises summary */
+  supportWork: ExerciseRoleSummary[]
+  /** Constrained/limited exercises summary */
+  constrainedWork: ExerciseRoleSummary[]
+  /** Overall dosage intent */
+  dosageIntent: DosageIntentDisplay
+  /** Notable prescription decisions */
+  notableDecisions: NotablePrescriptionDecision[]
+  /** Total exercise count */
+  totalExercises: number
+  /** Unique exercise families */
+  uniqueFamilies: number
+  /** Source of prescription data */
+  source: string
+}
+
 export interface ProgramIntelligenceContract {
   /** Program ID for verification */
   programId: string
@@ -188,6 +246,13 @@ export interface ProgramIntelligenceContract {
   
   /** Weekly decision summary - why this week looks like this */
   weeklyDecisionSummary: WeeklyDecisionSummaryDisplay
+  
+  // ==========================================================================
+  // EXERCISE PRESCRIPTION OUTPUTS
+  // ==========================================================================
+  
+  /** Exercise prescription truth - why these exercises and doses */
+  exercisePrescription: ExercisePrescriptionDisplay
   
   /** Contract quality */
   quality: {
@@ -774,6 +839,293 @@ export function buildProgramIntelligenceContract(
   }
   
   // ==========================================================================
+  // 11. EXERCISE PRESCRIPTION EXTRACTION
+  // ==========================================================================
+  
+  // Collect all exercises from all sessions
+  const allExercises: Array<{
+    name: string
+    category: string
+    selectionReason: string
+    coachingMeta?: {
+      expressionMode?: string
+      progressionIntent?: string
+      skillSupportTargets?: string[]
+      loadDecisionSummary?: string
+    }
+    prescribedLoad?: {
+      intensityBand?: string
+    }
+    sessionFocus: string
+    isPrimarySession: boolean
+  }> = []
+  
+  for (const session of sessions) {
+    const sessionFocus = session.focus || session.focusLabel || 'Mixed'
+    const isPrimarySession = session.isPrimary || false
+    
+    for (const exercise of (session.exercises || [])) {
+      allExercises.push({
+        name: exercise.name,
+        category: exercise.category,
+        selectionReason: exercise.selectionReason || '',
+        coachingMeta: exercise.coachingMeta as typeof allExercises[0]['coachingMeta'],
+        prescribedLoad: exercise.prescribedLoad as typeof allExercises[0]['prescribedLoad'],
+        sessionFocus,
+        isPrimarySession,
+      })
+    }
+  }
+  
+  // Group exercises by family (simplified name)
+  const exerciseFamilyMap = new Map<string, {
+    exercises: typeof allExercises
+    roles: Set<string>
+    intents: Set<string>
+    sessionCount: number
+  }>()
+  
+  for (const ex of allExercises) {
+    // Create family name by removing qualifiers
+    const familyName = ex.name
+      .replace(/\s*(Assisted|Band|Weighted|Negative|Eccentric|Isometric|Hold|Tuck|Advanced|Straddle|Full)\s*/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    
+    if (!exerciseFamilyMap.has(familyName)) {
+      exerciseFamilyMap.set(familyName, {
+        exercises: [],
+        roles: new Set(),
+        intents: new Set(),
+        sessionCount: 0,
+      })
+    }
+    
+    const family = exerciseFamilyMap.get(familyName)!
+    family.exercises.push(ex)
+    
+    // Track roles based on coaching meta
+    const expressionMode = ex.coachingMeta?.expressionMode?.toLowerCase() || ''
+    if (expressionMode.includes('direct') || expressionMode.includes('primary')) {
+      family.roles.add('primary_driver')
+    } else if (expressionMode.includes('support') || expressionMode.includes('carryover')) {
+      family.roles.add('support_carryover')
+    } else if (expressionMode.includes('accessory')) {
+      family.roles.add('accessory')
+    } else if (expressionMode.includes('density') || expressionMode.includes('conditioning')) {
+      family.roles.add('density')
+    }
+    
+    // Track intents
+    const intent = ex.coachingMeta?.progressionIntent || ''
+    if (intent) family.intents.add(intent)
+  }
+  
+  // Count unique sessions per family
+  for (const [_, family] of exerciseFamilyMap) {
+    const uniqueSessions = new Set(family.exercises.map(e => e.sessionFocus))
+    family.sessionCount = uniqueSessions.size
+  }
+  
+  // Build role summaries
+  const primaryDrivers: ExerciseRoleSummary[] = []
+  const supportWork: ExerciseRoleSummary[] = []
+  const constrainedWork: ExerciseRoleSummary[] = []
+  
+  for (const [familyName, family] of exerciseFamilyMap) {
+    // Determine primary role
+    let role: ExerciseRoleSummary['role'] = 'accessory'
+    if (family.roles.has('primary_driver')) {
+      role = 'primary_driver'
+    } else if (family.roles.has('support_carryover')) {
+      role = 'support_carryover'
+    } else if (family.roles.has('density')) {
+      role = 'density'
+    }
+    
+    // Check if constrained
+    const isConstrained = family.exercises.some(ex => {
+      const reason = ex.selectionReason.toLowerCase()
+      return reason.includes('limited') || reason.includes('capped') || 
+             reason.includes('constrained') || reason.includes('reduced')
+    })
+    
+    // Build purpose from selection reasons and intents
+    const firstReason = family.exercises[0]?.selectionReason || ''
+    const intents = Array.from(family.intents)
+    let purposeSummary = firstReason.split('.')[0] || 
+      (intents.length > 0 ? intents[0].replace(/_/g, ' ') : 'Training support')
+    
+    // Clean up purpose
+    purposeSummary = purposeSummary.charAt(0).toUpperCase() + purposeSummary.slice(1)
+    if (purposeSummary.length > 80) {
+      purposeSummary = purposeSummary.substring(0, 77) + '...'
+    }
+    
+    const summary: ExerciseRoleSummary = {
+      familyName,
+      role: isConstrained ? 'constrained' : role,
+      purposeSummary,
+      sessionCount: family.sessionCount,
+      constraintReason: isConstrained ? 'Volume managed for recovery/interference' : undefined,
+    }
+    
+    if (isConstrained) {
+      constrainedWork.push(summary)
+    } else if (role === 'primary_driver') {
+      primaryDrivers.push(summary)
+    } else if (role === 'support_carryover') {
+      supportWork.push(summary)
+    }
+  }
+  
+  // Sort by session count (more frequent = more important)
+  primaryDrivers.sort((a, b) => b.sessionCount - a.sessionCount)
+  supportWork.sort((a, b) => b.sessionCount - a.sessionCount)
+  constrainedWork.sort((a, b) => b.sessionCount - a.sessionCount)
+  
+  // Build dosage intent
+  const allIntents = allExercises
+    .map(e => e.coachingMeta?.progressionIntent)
+    .filter(Boolean) as string[]
+  
+  const intentCounts = new Map<string, number>()
+  for (const intent of allIntents) {
+    intentCounts.set(intent, (intentCounts.get(intent) || 0) + 1)
+  }
+  
+  const sortedIntents = Array.from(intentCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+  
+  const primaryIntentRaw = sortedIntents[0]?.[0] || 'balanced_training'
+  const primaryIntent = primaryIntentRaw.replace(/_/g, ' ')
+  
+  // Build dosage characteristics
+  const dosageCharacteristics: string[] = []
+  
+  // Check intensity distribution
+  const hasStrengthBand = allExercises.some(e => 
+    e.prescribedLoad?.intensityBand === 'strength')
+  const hasVolumeBand = allExercises.some(e => 
+    e.prescribedLoad?.intensityBand === 'support_volume' || 
+    e.prescribedLoad?.intensityBand === 'hypertrophy')
+  
+  if (hasStrengthBand && hasVolumeBand) {
+    dosageCharacteristics.push('Mixed intensity bands (strength + volume)')
+  } else if (hasStrengthBand) {
+    dosageCharacteristics.push('Strength-focused intensity')
+  } else if (hasVolumeBand) {
+    dosageCharacteristics.push('Volume/hypertrophy-focused intensity')
+  }
+  
+  // Check skill exposure pattern
+  if (primaryDrivers.length > 0) {
+    const avgFreq = primaryDrivers.reduce((a, b) => a + b.sessionCount, 0) / primaryDrivers.length
+    if (avgFreq >= 3) {
+      dosageCharacteristics.push('High skill exposure frequency')
+    } else if (avgFreq >= 2) {
+      dosageCharacteristics.push('Moderate skill exposure frequency')
+    } else {
+      dosageCharacteristics.push('Concentrated skill exposure')
+    }
+  }
+  
+  // Check support work pattern
+  if (supportWork.length > 0) {
+    dosageCharacteristics.push(`${supportWork.length} support exercise families`)
+  }
+  
+  // Check density inclusion
+  if (weeklyDistribution.hasDensityWork) {
+    dosageCharacteristics.push('Conditioning/density work included')
+  }
+  
+  // Limited aspects
+  const dosageLimitedAspects: string[] = []
+  if (densityCapActive) {
+    dosageLimitedAspects.push('Density volume capped')
+  }
+  if (constrainedWork.length > 0) {
+    dosageLimitedAspects.push(`${constrainedWork.length} exercise families volume-managed`)
+  }
+  if (recoveryLevel === 'low') {
+    dosageLimitedAspects.push('Overall volume adjusted for recovery')
+  }
+  
+  const dosageIntent: DosageIntentDisplay = {
+    styleLabel: hasStrengthBand && hasVolumeBand 
+      ? 'Hybrid Strength-Volume'
+      : hasStrengthBand 
+      ? 'Strength-Focused'
+      : hasVolumeBand
+      ? 'Volume-Accumulation'
+      : 'Balanced',
+    primaryIntent,
+    characteristics: dosageCharacteristics.slice(0, 4),
+    limitedAspects: dosageLimitedAspects,
+    source: allExercises.length > 0 ? 'exercise_analysis' : 'unavailable',
+  }
+  
+  // Build notable decisions
+  const notableDecisions: NotablePrescriptionDecision[] = []
+  
+  // Primary driver decision
+  if (primaryDrivers.length > 0) {
+    notableDecisions.push({
+      decision: `${primaryDrivers[0].familyName} anchored as primary driver`,
+      reason: primaryDrivers[0].purposeSummary,
+      category: 'selection',
+    })
+  }
+  
+  // Support work decision
+  if (supportWork.length > 0) {
+    notableDecisions.push({
+      decision: `Support work via ${supportWork.slice(0, 2).map(s => s.familyName).join(', ')}`,
+      reason: 'Carryover and strength base development',
+      category: 'selection',
+    })
+  }
+  
+  // Constraint decision
+  if (constrainedWork.length > 0) {
+    notableDecisions.push({
+      decision: `${constrainedWork.map(c => c.familyName).join(', ')} volume-managed`,
+      reason: 'Recovery and interference control',
+      category: 'interference',
+    })
+  }
+  
+  // Density decision
+  if (densityCapActive) {
+    notableDecisions.push({
+      decision: 'Conditioning work capped',
+      reason: 'Preserving skill quality and recovery',
+      category: 'dosage',
+    })
+  }
+  
+  // Frequency decision
+  if (primaryDrivers.length > 0 && primaryDrivers[0].sessionCount >= 3) {
+    notableDecisions.push({
+      decision: `High-frequency ${primaryDrivers[0].familyName} exposure`,
+      reason: 'Skill acquisition prioritized',
+      category: 'frequency',
+    })
+  }
+  
+  const exercisePrescription: ExercisePrescriptionDisplay = {
+    primaryDrivers: primaryDrivers.slice(0, 4),
+    supportWork: supportWork.slice(0, 4),
+    constrainedWork: constrainedWork.slice(0, 3),
+    dosageIntent,
+    notableDecisions: notableDecisions.slice(0, 5),
+    totalExercises: allExercises.length,
+    uniqueFamilies: exerciseFamilyMap.size,
+    source: allExercises.length > 0 ? 'exercise_analysis' : 'unavailable',
+  }
+  
+  // ==========================================================================
   // BUILD CONTRACT
   // ==========================================================================
   const confidence: 'high' | 'moderate' | 'low' = 
@@ -792,6 +1144,7 @@ export function buildProgramIntelligenceContract(
     weeklyDistribution,
     weeklyProtection,
     weeklyDecisionSummary,
+    exercisePrescription,
     quality: {
       truthFieldsAvailable,
       truthFieldsTotal,

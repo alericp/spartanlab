@@ -3458,6 +3458,12 @@ export interface ExerciseSelectionTrace {
   confidence: number
   /** Quality of trace data (how much we actually know) */
   traceQuality: 'full' | 'partial' | 'minimal'
+  /** [EXERCISE-SELECTION-MATERIALITY] Materiality-based reason code */
+  materialityReasonCode?: string
+  /** [EXERCISE-SELECTION-MATERIALITY] Materiality confidence level */
+  materialityConfidence?: 'high' | 'medium' | 'low'
+  /** [EXERCISE-SELECTION-MATERIALITY] Key materiality factors that influenced selection */
+  materialityFactors?: string[]
 }
 
 /**

@@ -1964,6 +1964,112 @@ export function AdaptiveProgramDisplay({
         
         return (
           <div className="space-y-3">
+            {/* [SESSION-MAP] This Week at a Glance */}
+            {intelligence.weekSessionMap.source !== 'unavailable' && (
+              <Card className="bg-[#1A1A1A] border-[#2A2A2A] p-3">
+                <div className="space-y-3">
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded bg-[#E63946]/10">
+                        <Calendar className="w-4 h-4 text-[#E63946]" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-[#6A6A6A] uppercase tracking-wide">This Week</span>
+                        <p className="text-sm font-medium text-[#E5E5E5]">{intelligence.weekSessionMap.totalSessions} Sessions</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-[#E63946]/10 text-[#E63946]">
+                        {intelligence.weekSessionMap.primarySessionCount} primary
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400">
+                        {intelligence.weekSessionMap.supportSessionCount} support
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Session Grid */}
+                  <div className="grid grid-cols-1 gap-2">
+                    {intelligence.weekSessionMap.sessions.map((session) => (
+                      <div 
+                        key={session.dayNumber}
+                        className={`flex items-center gap-3 p-2 rounded-md border ${
+                          session.isPrimary 
+                            ? 'bg-[#E63946]/5 border-[#E63946]/20' 
+                            : 'bg-[#2A2A2A]/50 border-[#3A3A3A]'
+                        }`}
+                      >
+                        {/* Day Badge */}
+                        <div className={`w-8 h-8 rounded-md flex items-center justify-center text-xs font-medium ${
+                          session.isPrimary
+                            ? 'bg-[#E63946]/20 text-[#E63946]'
+                            : 'bg-[#3A3A3A] text-[#8A8A8A]'
+                        }`}>
+                          {session.dayNumber}
+                        </div>
+                        
+                        {/* Session Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-[#E5E5E5] truncate">
+                              {session.primaryFocus}
+                            </span>
+                            {session.trainingStyle && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 shrink-0">
+                                {session.trainingStyle}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className={`text-[10px] ${
+                              session.intentCategory === 'skill_acquisition' ? 'text-[#E63946]' :
+                              session.intentCategory === 'strength_building' ? 'text-blue-400' :
+                              session.intentCategory === 'density' ? 'text-purple-400' :
+                              session.intentCategory === 'recovery' ? 'text-green-400' :
+                              'text-[#6A6A6A]'
+                            }`}>
+                              {session.intentCategory.replace(/_/g, ' ')}
+                            </span>
+                            {session.secondaryEmphasis && (
+                              <>
+                                <span className="text-[#4A4A4A]">·</span>
+                                <span className="text-[10px] text-[#6A6A6A] truncate">
+                                  {session.secondaryEmphasis}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Duration */}
+                        <div className="flex items-center gap-1 text-[10px] text-[#5A5A5A] shrink-0">
+                          <Clock className="w-3 h-3" />
+                          <span>{session.estimatedMinutes}m</span>
+                        </div>
+                        
+                        {/* Constraint Flags */}
+                        {session.constraintFlags.length > 0 && (
+                          <div className="flex gap-1">
+                            {session.constraintFlags.slice(0, 2).map((flag, idx) => (
+                              <span key={idx} className="text-[9px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400">
+                                {flag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Week Flow Summary */}
+                  <div className="pt-2 border-t border-[#2A2A2A]">
+                    <p className="text-[10px] text-[#6A6A6A]">{intelligence.weekSessionMap.weekFlow}</p>
+                  </div>
+                </div>
+              </Card>
+            )}
+            
             {/* Training Spine - Primary direction */}
             <Card className="bg-[#1E1E1E] border-[#2A2A2A] p-3">
               <div className="flex items-start gap-3">
@@ -2071,58 +2177,14 @@ export function AdaptiveProgramDisplay({
               </Card>
             )}
             
-            {/* This Week's Driver - Why this specific structure */}
-            {intelligence.weekDriver.source !== 'inferred' && (
-              <Card className="bg-[#1E1E1E] border-[#2A2A2A] p-3">
-                <div className="flex items-start gap-3">
-                  <div className="p-1.5 rounded bg-teal-500/10">
-                    <Calendar className="w-4 h-4 text-teal-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-medium text-[#6A6A6A] uppercase tracking-wide">This Week</span>
-                    </div>
-                    <p className="text-sm font-medium text-[#E5E5E5]">{intelligence.weekDriver.label}</p>
-                    <p className="text-xs text-[#7A7A7A] mt-0.5">{intelligence.weekDriver.reason}</p>
-                  </div>
-                </div>
-              </Card>
-            )}
-            
-            {/* [WEEKLY-DECISION-OUTPUT] Weekly Decision Summary */}
+            {/* [WEEKLY-DECISION-OUTPUT] Key Decisions - streamlined since session map shows structure */}
             <Card className="bg-[#1A1A1A] border-[#2A2A2A] p-3">
-              <div className="space-y-3">
-                {/* Headline */}
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded bg-[#E63946]/10">
-                    <Activity className="w-4 h-4 text-[#E63946]" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-medium text-[#6A6A6A] uppercase tracking-wide">Why This Week</span>
-                    <p className="text-sm font-medium text-[#E5E5E5]">{intelligence.weeklyDecisionSummary.headline}</p>
-                  </div>
-                </div>
-                
-                {/* Distribution Row */}
-                <div className="flex flex-wrap gap-2">
-                  {intelligence.weeklyDistribution.distribution.slice(0, 3).map((entry, idx) => (
-                    <div key={idx} className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs ${
-                      entry.category === 'skill_primary' ? 'bg-[#E63946]/10 text-[#E63946]' :
-                      entry.category === 'strength_support' ? 'bg-blue-500/10 text-blue-400' :
-                      entry.category === 'accessory' ? 'bg-purple-500/10 text-purple-400' :
-                      'bg-[#2A2A2A] text-[#8A8A8A]'
-                    }`}>
-                      <span className="font-medium">{entry.count}</span>
-                      <span className="text-[#6A6A6A]">×</span>
-                      <span>{entry.category === 'skill_primary' ? 'Skill' : 
-                             entry.category === 'strength_support' ? 'Strength' :
-                             entry.category === 'accessory' ? 'Accessory' :
-                             entry.category === 'recovery' ? 'Recovery' : 'Mixed'}</span>
-                    </div>
-                  ))}
-                </div>
-                
+              <div className="space-y-2">
                 {/* Key Decisions */}
+                <div className="flex items-center gap-2 mb-1">
+                  <Activity className="w-3.5 h-3.5 text-[#6A6A6A]" />
+                  <span className="text-xs font-medium text-[#6A6A6A] uppercase tracking-wide">Key Decisions</span>
+                </div>
                 <div className="space-y-1">
                   {intelligence.weeklyDecisionSummary.decisions.slice(0, 3).map((decision, idx) => (
                     <div key={idx} className="flex items-start gap-2">

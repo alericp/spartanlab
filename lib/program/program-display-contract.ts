@@ -205,6 +205,52 @@ export interface ExercisePrescriptionDisplay {
   source: string
 }
 
+// =============================================================================
+// SESSION MAP TYPES
+// =============================================================================
+
+export interface SessionMapEntry {
+  /** Session day number */
+  dayNumber: number
+  /** Session day label (e.g., "Day 1", "Session A") */
+  dayLabel: string
+  /** Primary focus of the session */
+  primaryFocus: string
+  /** Secondary emphasis if present */
+  secondaryEmphasis: string | null
+  /** Intent category: 'skill_acquisition' | 'strength_building' | 'mixed' | 'support' | 'density' | 'recovery' */
+  intentCategory: 'skill_acquisition' | 'strength_building' | 'mixed' | 'support' | 'density' | 'recovery'
+  /** Is this a primary skill session */
+  isPrimary: boolean
+  /** Short architecture summary */
+  architectureSummary: string
+  /** Constraint flags if any */
+  constraintFlags: string[]
+  /** Estimated duration in minutes */
+  estimatedMinutes: number
+  /** Skills directly expressed */
+  directSkills: string[]
+  /** Training style applied */
+  trainingStyle: string | null
+}
+
+export interface WeekSessionMapDisplay {
+  /** Total sessions in the week */
+  totalSessions: number
+  /** Session entries in order */
+  sessions: SessionMapEntry[]
+  /** Week flow description */
+  weekFlow: string
+  /** Primary skill sessions count */
+  primarySessionCount: number
+  /** Support/mixed sessions count */
+  supportSessionCount: number
+  /** Has density work */
+  hasDensityWork: boolean
+  /** Source of session map data */
+  source: string
+}
+
 export interface ProgramIntelligenceContract {
   /** Program ID for verification */
   programId: string
@@ -253,6 +299,13 @@ export interface ProgramIntelligenceContract {
   
   /** Exercise prescription truth - why these exercises and doses */
   exercisePrescription: ExercisePrescriptionDisplay
+  
+  // ==========================================================================
+  // SESSION MAP OUTPUTS
+  // ==========================================================================
+  
+  /** Week session map - canonical session structure at a glance */
+  weekSessionMap: WeekSessionMapDisplay
   
   /** Contract quality */
   quality: {
@@ -1126,6 +1179,138 @@ export function buildProgramIntelligenceContract(
   }
   
   // ==========================================================================
+  // 12. WEEK SESSION MAP EXTRACTION
+  // ==========================================================================
+  
+  const sessionMapEntries: SessionMapEntry[] = sessions.map(session => {
+    const focus = session.focus || ''
+    const focusLabel = session.focusLabel || session.focus || 'Mixed'
+    const isPrimary = session.isPrimary || false
+    const rationale = session.rationale || ''
+    
+    // Extract skill expression metadata if available
+    const skillMeta = session.skillExpressionMetadata as {
+      directlyExpressedSkills?: string[]
+      technicalSlotSkills?: string[]
+      carryoverSkills?: string[]
+    } | undefined
+    
+    // Extract style metadata if available
+    const styleMeta = session.styleMetadata as {
+      primaryStyle?: string
+      hasDensityApplied?: boolean
+      hasSupersetsApplied?: boolean
+      hasCircuitsApplied?: boolean
+      structureDescription?: string
+    } | undefined
+    
+    // Determine intent category from focus and metadata
+    let intentCategory: SessionMapEntry['intentCategory'] = 'mixed'
+    const focusLower = focus.toLowerCase()
+    
+    if (focusLower.includes('skill') || focusLower.includes('progression') || isPrimary) {
+      intentCategory = 'skill_acquisition'
+    } else if (focusLower.includes('strength') || focusLower.includes('support')) {
+      intentCategory = 'strength_building'
+    } else if (focusLower.includes('density') || styleMeta?.hasDensityApplied) {
+      intentCategory = 'density'
+    } else if (focusLower.includes('recovery') || focusLower.includes('deload')) {
+      intentCategory = 'recovery'
+    } else if (focusLower.includes('mixed') || focusLower.includes('hybrid')) {
+      intentCategory = 'mixed'
+    }
+    
+    // Build secondary emphasis from skill metadata
+    let secondaryEmphasis: string | null = null
+    if (skillMeta?.technicalSlotSkills && skillMeta.technicalSlotSkills.length > 0) {
+      secondaryEmphasis = skillMeta.technicalSlotSkills.map(formatSkillName).join(', ') + ' technique'
+    } else if (skillMeta?.carryoverSkills && skillMeta.carryoverSkills.length > 0) {
+      secondaryEmphasis = skillMeta.carryoverSkills.map(formatSkillName).join(', ') + ' carryover'
+    }
+    
+    // Build architecture summary from rationale or style
+    let architectureSummary = ''
+    if (styleMeta?.structureDescription) {
+      architectureSummary = styleMeta.structureDescription
+    } else if (rationale) {
+      // Take first sentence of rationale
+      architectureSummary = rationale.split('.')[0]
+    } else {
+      architectureSummary = isPrimary ? 'Primary skill work' : 'Support training'
+    }
+    
+    // Truncate if too long
+    if (architectureSummary.length > 60) {
+      architectureSummary = architectureSummary.substring(0, 57) + '...'
+    }
+    
+    // Build constraint flags
+    const constraintFlags: string[] = []
+    if (styleMeta?.hasDensityApplied === false && focusLower.includes('density')) {
+      constraintFlags.push('density-capped')
+    }
+    if (session.timeOptimization?.wasOptimized) {
+      constraintFlags.push('time-optimized')
+    }
+    if (session.loadSummary?.removed && session.loadSummary.removed.length > 0) {
+      constraintFlags.push('load-managed')
+    }
+    
+    // Build training style label
+    let trainingStyle: string | null = null
+    if (styleMeta?.hasSupersetsApplied) {
+      trainingStyle = 'Supersets'
+    } else if (styleMeta?.hasCircuitsApplied) {
+      trainingStyle = 'Circuits'
+    } else if (styleMeta?.hasDensityApplied) {
+      trainingStyle = 'Density'
+    } else if (styleMeta?.primaryStyle) {
+      trainingStyle = String(styleMeta.primaryStyle).replace(/_/g, ' ')
+    }
+    
+    return {
+      dayNumber: session.dayNumber,
+      dayLabel: session.dayLabel || `Day ${session.dayNumber}`,
+      primaryFocus: focusLabel,
+      secondaryEmphasis,
+      intentCategory,
+      isPrimary,
+      architectureSummary,
+      constraintFlags,
+      estimatedMinutes: session.estimatedMinutes || 45,
+      directSkills: skillMeta?.directlyExpressedSkills?.map(formatSkillName) || [],
+      trainingStyle,
+    }
+  })
+  
+  // Sort by day number
+  sessionMapEntries.sort((a, b) => a.dayNumber - b.dayNumber)
+  
+  // Build week flow description
+  const primaryCount = sessionMapEntries.filter(s => s.isPrimary).length
+  const supportCount = sessionMapEntries.length - primaryCount
+  const hasDensity = sessionMapEntries.some(s => s.intentCategory === 'density' || s.trainingStyle === 'Density')
+  
+  let weekFlow = ''
+  if (primaryCount > supportCount) {
+    weekFlow = `Skill-dominant flow: ${primaryCount} primary, ${supportCount} support sessions`
+  } else if (supportCount > primaryCount) {
+    weekFlow = `Strength-support flow: ${supportCount} support, ${primaryCount} skill sessions`
+  } else {
+    weekFlow = `Balanced flow: ${primaryCount} primary, ${supportCount} support sessions`
+  }
+  
+  const weekSessionMap: WeekSessionMapDisplay = {
+    totalSessions: sessions.length,
+    sessions: sessionMapEntries,
+    weekFlow,
+    primarySessionCount: primaryCount,
+    supportSessionCount: supportCount,
+    hasDensityWork: hasDensity,
+    source: sessions.length > 0 ? 'session_analysis' : 'unavailable',
+  }
+  
+  // ==========================================================================
   // BUILD CONTRACT
   // ==========================================================================
   const confidence: 'high' | 'moderate' | 'low' = 
@@ -1145,6 +1330,7 @@ export function buildProgramIntelligenceContract(
     weeklyProtection,
     weeklyDecisionSummary,
     exercisePrescription,
+    weekSessionMap,
     quality: {
       truthFieldsAvailable,
       truthFieldsTotal,

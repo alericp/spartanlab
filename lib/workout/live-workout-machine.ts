@@ -36,6 +36,13 @@ import {
   type TargetPrescription,
 } from '@/lib/workout/live-workout-adaptive-signals'
 
+// [LIVE-WORKOUT-ACTION-PLANNER] Import action planner
+import {
+  buildActionPlan,
+  type ActionPlannerResult,
+  type ExercisePlanningContext,
+} from '@/lib/workout/live-workout-action-planner'
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -154,6 +161,9 @@ export interface WorkoutMachineState {
   // [LIVE-WORKOUT-ADAPTIVE] Session-level adaptive readiness state
   sessionAdaptiveReadiness: import('./live-workout-adaptive-signals').SessionAdaptiveReadiness
   
+  // [LIVE-WORKOUT-ACTION-PLANNER] Current action plan for the exercise
+  currentActionPlan: import('./live-workout-action-planner').ActionPlannerResult | null
+  
   // Rest state
   interExerciseRestSeconds: number
   blockRoundRestSeconds: number
@@ -243,6 +253,9 @@ export type WorkoutMachineAction =
       targetHoldSeconds?: number
       targetRPE?: number
       recommendedBand?: ResistanceBandColor
+      // [LIVE-WORKOUT-ACTION-PLANNER] Exercise context for planning
+      exerciseName?: string
+      totalPrescribedSets?: number
     }
   | { type: 'COMPLETE_REST' } // Between-set rest -> next active set (same exercise)
   | { type: 'COMPLETE_BLOCK_ROUND_REST' } // Block round rest -> next round
@@ -331,6 +344,8 @@ export function createInitialMachineState(
     consecutiveHighRPECount: 0,
     // [LIVE-WORKOUT-ADAPTIVE] Session-level adaptive readiness
     sessionAdaptiveReadiness: createInitialSessionReadiness(),
+    // [LIVE-WORKOUT-ACTION-PLANNER] Current action plan
+    currentActionPlan: null,
     interExerciseRestSeconds: 0,
     blockRoundRestSeconds: 0,
     invalidReason: null,
@@ -562,6 +577,38 @@ export function workoutMachineReducer(
         adaptiveSummary
       )
       
+      // [LIVE-WORKOUT-ACTION-PLANNER] Build action plan for current exercise
+      const exerciseSummaries = newSessionReadiness.exerciseSummaries.get(state.currentExerciseIndex) || []
+      const planningContext: ExercisePlanningContext = {
+        exerciseIndex: state.currentExerciseIndex,
+        exerciseName: action.exerciseName || '',
+        inputMode: action.completedSet.inputMode || 'bodyweight_strength',
+        totalPrescribedSets: action.totalPrescribedSets || 3,
+        currentSetNumber: state.currentSetNumber,
+        isStraightArm: false,  // Will be detected by planner from name
+        isRecoverySensitive: false,  // Will be detected by planner from name
+        isHoldBased: action.completedSet.inputMode === 'timed_hold',
+        isWeighted: action.completedSet.inputMode === 'weighted_strength',
+        isBandAssisted: action.completedSet.inputMode === 'band_assisted_skill',
+        isUnilateral: action.completedSet.inputMode === 'reps_per_side',
+        targetReps: action.targetReps,
+        targetHoldSeconds: action.targetHoldSeconds,
+        targetRPE: action.targetRPE,
+        prescribedLoad: action.completedSet.prescribedLoad,
+        recommendedBand: action.recommendedBand,
+        completedSummaries: exerciseSummaries,
+        sessionReadiness: newSessionReadiness,
+      }
+      
+      const actionPlan = buildActionPlan(planningContext)
+      
+      console.log('[LIVE-WORKOUT-ACTION-PLANNER] Action plan built', {
+        actionType: actionPlan.actionType,
+        reasonCodes: actionPlan.reasonCodes,
+        recoveryProtection: actionPlan.recoveryProtectionLevel,
+        hint: actionPlan.humanReadableHint,
+      })
+      
       console.log('[LIVE-WORKOUT-ADAPTIVE] Set completed with summary', {
         exerciseIndex: state.currentExerciseIndex,
         setNumber: state.currentSetNumber,
@@ -583,6 +630,7 @@ export function workoutMachineReducer(
             lastSetRPE: action.completedSet.actualRPE,
             consecutiveHighRPECount: 0, // Reset at workout end
             sessionAdaptiveReadiness: newSessionReadiness,
+            currentActionPlan: null,  // Clear at workout end
             selectedRPE: null,
             repsValue: 0,
             holdValue: 0,
@@ -599,6 +647,7 @@ export function workoutMachineReducer(
           lastSetRPE: action.completedSet.actualRPE,
           consecutiveHighRPECount: 0, // Reset between exercises
           sessionAdaptiveReadiness: newSessionReadiness,
+          currentActionPlan: null,  // Clear between exercises, will rebuild for next
           selectedRPE: null,
           // Reset input values so component can re-seed from next exercise prescription
           repsValue: 0,
@@ -620,6 +669,7 @@ export function workoutMachineReducer(
         lastSetRPE: action.completedSet.actualRPE,
         consecutiveHighRPECount: newConsecutiveHighRPE,
         sessionAdaptiveReadiness: newSessionReadiness,
+        currentActionPlan: actionPlan,  // Store for next set guidance
         selectedRPE: null,
         // Reset input values so component can re-seed from prescription for next set
         repsValue: 0,
@@ -1348,6 +1398,8 @@ export function serializeForStorage(state: WorkoutMachineState): string {
       ...state.sessionAdaptiveReadiness,
       exerciseSummaries: Array.from(state.sessionAdaptiveReadiness.exerciseSummaries.entries()),
     },
+    // [LIVE-WORKOUT-ACTION-PLANNER] Current action plan
+    currentActionPlan: state.currentActionPlan,
     // [LIVE-WORKOUT-AUTHORITY] Weighted and unilateral tracking
     actualLoadUsed: state.actualLoadUsed,
     actualLoadUnit: state.actualLoadUnit,
@@ -1399,6 +1451,8 @@ export function deserializeFromStorage(
       actualLoadUsed: typeof parsed.actualLoadUsed === 'number' ? parsed.actualLoadUsed : null,
       actualLoadUnit: typeof parsed.actualLoadUnit === 'string' ? parsed.actualLoadUnit : 'lbs',
       isPerSide: typeof parsed.isPerSide === 'boolean' ? parsed.isPerSide : false,
+      // [LIVE-WORKOUT-ACTION-PLANNER] Current action plan
+      currentActionPlan: parsed.currentActionPlan || null,
       elapsedSeconds: typeof parsed.elapsedSeconds === 'number' ? parsed.elapsedSeconds : 0,
       workoutNotes: typeof parsed.workoutNotes === 'string' ? parsed.workoutNotes : '',
       lastSetRPE: parsed.lastSetRPE ?? null,

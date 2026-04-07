@@ -801,6 +801,8 @@ export function AdaptiveProgramDisplay({
   }
   
   // F. Compute sharedStrictRepresentedSkillsForChips - THE KEY HOISTED LOCAL
+  // [VISIBLE-PROGRAM-TRUTH-CONTRACT] This is the SINGLE owner of "Built around" chip content
+  // Only skills that meet strict representation thresholds appear as chips
   const sharedStrictRepresentedSkillsForChips = safeSelectedSkills.filter(skill => {
     const chipState = getSharedChipState(skill)
     const policy = safeWeeklyRepresentation?.policies?.find(p => p.skill === skill)
@@ -813,19 +815,43 @@ export function AdaptiveProgramDisplay({
     const hasSignificantTotal = totalExposure >= 3
     const isRepresentedBroaderWithSubstance = chipState === 'represented_broader' && (hasMeaningfulDirect || hasSignificantTotal)
     
+    // [VISIBLE-PROGRAM-TRUTH-CONTRACT] TASK 3 - TIGHTER FALLBACK
+    // When weeklyRepresentation policies are unavailable, ONLY show headline skills
+    // Do NOT show broader skills from fallback client-side exercise name matching
+    // This prevents stale/generic chips when canonical truth is unavailable
+    const hasWeeklyRepPolicies = safeWeeklyRepresentation?.policies && safeWeeklyRepresentation.policies.length > 0
+    
+    if (!hasWeeklyRepPolicies) {
+      // Fallback: only headline identity chips, no others
+      return isHeadline
+    }
+    
     return isHeadline || isRepresentedBroaderWithSubstance
   })
   
   // [PHASE 10F TASK 5] Shared chip truth hoist contract audit
+  const hasWeeklyRepPolicies = safeWeeklyRepresentation?.policies && safeWeeklyRepresentation.policies.length > 0
   console.log('[phase10f-shared-chip-truth-hoist-contract-audit]', {
     safeSelectedSkills,
+    safeSelectedSkillsCount: safeSelectedSkills.length,
     sharedRepresentedSkills,
     sharedHeadlineSkills,
     sharedWeekSupportSkills,
     sharedStrictRepresentedSkillsForChips,
+    sharedStrictRepresentedSkillsForChipsCount: sharedStrictRepresentedSkillsForChips.length,
     availableBeforeBuiltAroundSection: true,
     availableBeforePhase7Audits: true,
-    verdict: 'CHIP_TRUTH_HOISTED_TO_TRUE_SHARED_SCOPE',
+    // [VISIBLE-PROGRAM-TRUTH-CONTRACT] Source tracking
+    chipSourcePath: hasWeeklyRepPolicies 
+      ? 'canonical_weeklyRepresentation.policies' 
+      : 'fallback_headline_only',
+    hasWeeklyRepPolicies,
+    weeklyRepPoliciesCount: safeWeeklyRepresentation?.policies?.length || 0,
+    skillsFilteredOut: safeSelectedSkills.filter(s => !sharedStrictRepresentedSkillsForChips.includes(s)),
+    skillsFilteredOutCount: safeSelectedSkills.length - sharedStrictRepresentedSkillsForChips.length,
+    verdict: sharedStrictRepresentedSkillsForChips.length < safeSelectedSkills.length
+      ? 'CHIPS_TIGHTENED_STALE_SKILLS_FILTERED_OUT'
+      : 'ALL_SELECTED_SKILLS_MEET_REPRESENTATION_THRESHOLD',
   })
   
   // ==========================================================================
@@ -918,6 +944,45 @@ export function AdaptiveProgramDisplay({
     chipSourceArray: 'safeSelectedSkills', // What the chips actually iterate over
     chipsShowOnlyProfileSelected: true, // We only show safeSelectedSkills
     noLeakedBroaderSupport: true, // Support skills are NOT shown as selected chips
+  })
+  
+  // ==========================================================================
+  // [VISIBLE-PROGRAM-TRUTH-CONTRACT] UNIFIED DISPLAY CONTRACT AUDIT
+  // All three visible surfaces must consume the same canonical program truth:
+  // 1. Built around chips → weeklyRepresentation.policies
+  // 2. Summary text → summaryTruth.truthfulHybridSummary
+  // 3. Session cards → sessions[]
+  // ==========================================================================
+  const displayContractSources = {
+    chipsSource: safeWeeklyRepresentation?.policies ? 'weeklyRepresentation.policies' : 'fallback_safeSelectedSkills',
+    summarySource: safeSummaryTruth?.truthfulHybridSummary ? 'summaryTruth.truthfulHybridSummary' : 'programRationale_fallback',
+    sessionCardsSource: validSessions.length > 0 ? 'program.sessions' : 'no_sessions',
+    
+    // Verify alignment: primary goal should appear in all three
+    primaryInChips: sharedStrictRepresentedSkillsForChips.includes(program.primaryGoal),
+    primaryInSummary: (safeSummaryTruth?.truthfulHybridSummary || program.programRationale || '')
+      .toLowerCase().includes((program.primaryGoal || '').replace(/_/g, ' ')),
+    primaryInSessions: validSessions.some(s => 
+      s.focus?.toLowerCase().includes((program.primaryGoal || '').replace(/_/g, ' ').split(' ')[0]) ||
+      s.exercises?.some(e => e.transfersTo?.includes(program.primaryGoal))
+    ),
+  }
+  
+  const displayContractAligned = 
+    displayContractSources.primaryInChips && 
+    displayContractSources.primaryInSummary &&
+    displayContractSources.primaryInSessions
+  
+  console.log('[VISIBLE-PROGRAM-TRUTH-CONTRACT-AUDIT]', {
+    ...displayContractSources,
+    primaryGoal: program.primaryGoal,
+    secondaryGoal: program.secondaryGoal,
+    chipsCount: sharedStrictRepresentedSkillsForChips.length,
+    sessionCount: validSessions.length,
+    contractAligned: displayContractAligned,
+    verdict: displayContractAligned 
+      ? 'DISPLAY_CONTRACT_UNIFIED_PRIMARY_VISIBLE_IN_ALL_SURFACES'
+      : 'DISPLAY_CONTRACT_MISALIGNED_PRIMARY_NOT_IN_ALL_SURFACES',
   })
   
   // [PHASE 6] SELECTED VS PROGRAMMED SKILL TRUTH AUDIT

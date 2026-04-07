@@ -21,6 +21,7 @@ import { trackWorkoutStarted, trackWorkoutCompleted } from '@/lib/analytics'
 import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
+import { buildExerciseCardContract } from '@/lib/program/program-display-contract'
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { 
@@ -1465,7 +1466,7 @@ function ExerciseRow({
   onSkip,
   onProgressionAdjust,
 }: ExerciseRowProps) {
-  const [showReason, setShowReason] = useState(false)
+  const [showDetails, setShowDetails] = useState(false)
   
   // TASK 3: Safety guard for malformed exercise data
   if (!exercise || typeof exercise !== 'object') {
@@ -1473,38 +1474,30 @@ function ExerciseRow({
     return null
   }
   
-  // Ensure required fields have safe defaults
-  const safeName = exercise.name || 'Exercise'
-  const safeCategory = exercise.category || 'accessory'
-  const safeSets = exercise.sets ?? 3
-  const safeReps = exercise.repsOrTime || '8-12'
+  // [EXERCISE-CARD-CONTRACT] Build canonical display contract
+  const card = buildExerciseCardContract({
+    name: exercise.name || 'Exercise',
+    category: exercise.category || 'accessory',
+    sets: exercise.sets ?? 3,
+    repsOrTime: exercise.repsOrTime || '8-12',
+    selectionReason: exercise.selectionReason,
+    targetRPE: exercise.targetRPE,
+    restSeconds: exercise.restSeconds,
+    prescribedLoad: exercise.prescribedLoad as Parameters<typeof buildExerciseCardContract>[0]['prescribedLoad'],
+    coachingMeta: exercise.coachingMeta as Parameters<typeof buildExerciseCardContract>[0]['coachingMeta'],
+  })
   
-  // [weighted-truth] TASK G: Log weighted exercises at display time
-  if (exercise.prescribedLoad?.load) {
-    console.log('[weighted-truth] Displaying weighted load:', {
-      exerciseName: safeName,
-      load: exercise.prescribedLoad.load,
-      unit: exercise.prescribedLoad.unit,
-      confidence: exercise.prescribedLoad.confidenceLevel,
-    })
-  } else if (exercise.noLoadReason) {
-    console.log('[weighted-truth] No load for exercise:', {
-      exerciseName: safeName,
-      reason: exercise.noLoadReason,
-    })
-  }
-  
-  const hasRPE = !isWarmupCooldown && exerciseSupportsRPE(safeName)
-  const exerciseId = safeName.toLowerCase().replace(/[\s-]+/g, '_')
+  const hasRPE = !isWarmupCooldown && exerciseSupportsRPE(card.displayTitle)
+  const exerciseId = card.displayTitle.toLowerCase().replace(/[\s-]+/g, '_')
   const hasKnowledge = hasExerciseKnowledge(exerciseId)
   
   // Display name - show adjusted name if progression was changed
-  const displayName = adjustedName || safeName
+  const displayName = adjustedName || card.displayTitle
 
   const categoryColors: Record<string, string> = {
     skill: 'text-[#E63946]',
     strength: 'text-blue-400',
-    accessory: 'text-[#A5A5A5]',
+    accessory: 'text-[#8A8A8A]',
     core: 'text-purple-400',
     warmup: 'text-green-400',
     cooldown: 'text-green-400',
@@ -1520,7 +1513,7 @@ function ExerciseRow({
               <span className="text-xs text-[#6A6A6A] font-mono w-4">{index}.</span>
             )}
             <SkipForward className="w-4 h-4 text-[#6A6A6A]" />
-            <span className="text-sm text-[#6A6A6A] line-through">{safeName}</span>
+            <span className="text-sm text-[#6A6A6A] line-through">{card.displayTitle}</span>
           </div>
           <span className="text-xs text-[#6A6A6A]">Skipped</span>
         </div>
@@ -1536,90 +1529,39 @@ function ExerciseRow({
           ? 'bg-[#1A1A1A] border-[#4F6D8A]/30' 
           : 'bg-[#1A1A1A] border-[#3A3A3A] hover:border-[#4A4A4A]'
     }`}>
+      {/* ROW 1: Identity + Actions */}
       <div className="flex items-start justify-between gap-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            {/* [PHASE 7B] Show prefix (A1, A2) for grouped exercises, fallback to index */}
+        <div className="flex-1 min-w-0">
+          {/* Category + Role badges */}
+          <div className="flex items-center gap-2 flex-wrap">
             {prefix ? (
-              <span className="text-xs text-[#4F6D8A] font-mono font-medium w-6">{prefix}</span>
+              <span className="text-xs text-[#4F6D8A] font-mono font-medium">{prefix}</span>
             ) : index ? (
-              <span className="text-xs text-[#6A6A6A] font-mono w-4">{index}.</span>
+              <span className="text-xs text-[#6A6A6A] font-mono">{index}.</span>
             ) : null}
-            <span className={`text-xs uppercase tracking-wider ${categoryColors[safeCategory] || 'text-[#6A6A6A]'}`}>
-              {safeCategory}
+            <span className={`text-[10px] uppercase tracking-wider font-medium ${categoryColors[card.displayCategory]}`}>
+              {card.displayCategory}
             </span>
-            {exercise.methodLabel && exercise.method !== 'straight_sets' && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4F6D8A]/10 text-[#4F6D8A] font-medium">
-                {exercise.methodLabel}
+            {card.roleLabel && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#7A7A7A]">
+                {card.roleLabel}
               </span>
             )}
             {adjustedName && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4F6D8A]/20 text-[#4F6D8A] font-medium">
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4F6D8A]/20 text-[#4F6D8A]">
                 Adjusted
               </span>
             )}
           </div>
+          
           {/* Exercise Name */}
-          <p className="font-medium mt-1">{displayName}</p>
+          <p className="font-medium text-[#E5E5E5] mt-1 leading-tight">{displayName}</p>
           {adjustedName && (
-            <p className="text-xs text-[#4F6D8A] mt-0.5">
-              Originally: {safeName}
-            </p>
-          )}
-          
-          {/* [FIX] CLEAN PRESCRIPTION LINE - Unified prescription display */}
-          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-            {/* Sets x Reps */}
-            <span className="text-sm text-[#A5A5A5] font-medium">
-              {safeSets} × {safeReps}
-            </span>
-            
-            {/* Target RPE - Clean presentation when applicable */}
-            {hasRPE && exercise.targetRPE && (
-              <span className="text-xs px-2 py-0.5 rounded bg-[#E63946]/10 text-[#E63946] font-medium">
-                RPE {exercise.targetRPE}
-              </span>
-            )}
-            {hasRPE && !exercise.targetRPE && (
-              <span className="text-xs px-2 py-0.5 rounded bg-[#E63946]/10 text-[#E63946]/70 font-medium">
-                RPE tracked
-              </span>
-            )}
-            
-            {/* Prescribed Load */}
-            {exercise.prescribedLoad && exercise.prescribedLoad.load > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded bg-[#4F6D8A]/10 text-[#4F6D8A] font-medium">
-                +{exercise.prescribedLoad.load} {exercise.prescribedLoad.unit}
-              </span>
-            )}
-            
-            {/* No load reason - subtle */}
-            {!exercise.prescribedLoad && exercise.noLoadReason && (
-              <span className="text-[10px] text-[#6A6A6A]">
-                ({exercise.noLoadReason === 'no_loadable_equipment' && 'no equipment'}
-                {exercise.noLoadReason === 'missing_strength_inputs' && 'no strength data'}
-                {exercise.noLoadReason === 'exercise_not_load_eligible' && 'bodyweight'}
-                {exercise.noLoadReason === 'doctrine_prefers_bodyweight' && 'bodyweight'}
-                {exercise.noLoadReason === 'skill_day_non_loaded_variant' && 'skill focus'}
-                {exercise.noLoadReason === 'support_day_volume_bias' && 'support day'})
-              </span>
-            )}
-          </div>
-          
-          {/* Load confidence indicator */}
-          {exercise.prescribedLoad && exercise.prescribedLoad.load > 0 && exercise.prescribedLoad.confidenceLevel !== 'high' && (
-            <p className="text-[10px] text-[#6A6A6A] mt-0.5">
-              {exercise.prescribedLoad.confidenceLevel === 'moderate' && 'Based on historical PR'}
-              {exercise.prescribedLoad.confidenceLevel === 'low' && 'Estimated load'}
-            </p>
-          )}
-          
-          {exercise.note && (
-            <p className="text-xs text-[#6A6A6A] mt-1">{exercise.note}</p>
+            <p className="text-[10px] text-[#5A5A5A] mt-0.5">was: {card.displayTitle}</p>
           )}
         </div>
         
-        {/* Right side - Actions only */}
+        {/* Actions */}
         <div className="flex items-center shrink-0">
           {!isWarmupCooldown && exercise.isOverrideable && sessionId && onReplace && onSkip && onProgressionAdjust && (
             <ExerciseActionMenu
@@ -1633,70 +1575,71 @@ function ExerciseRow({
         </div>
       </div>
       
-      {/* [coach-layer] TASK 3: Coaching metadata display - appears above "Why this exercise?" */}
-      {!isWarmupCooldown && exercise.coachingMeta && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {/* Expression Mode Badge - capitalize and format nicely */}
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#A5A5A5] capitalize">
-            {exercise.coachingMeta.expressionMode.replace(/_/g, ' ')}
+      {/* ROW 2: Prescription Line - Unified, coherent */}
+      <div className="flex items-center gap-2 mt-2 flex-wrap">
+        {/* Sets × Reps - Primary prescription */}
+        <span className="text-sm text-[#B5B5B5] font-medium">
+          {card.prescriptionLine}
+        </span>
+        
+        {/* Intensity Badge (RPE) */}
+        {hasRPE && card.intensityBadge && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#E63946]/10 text-[#E63946] font-medium">
+            {card.intensityBadge}
           </span>
-          {/* Load Decision Summary - weighted gets highlight */}
-          {exercise.coachingMeta.loadDecisionSummary && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-              exercise.coachingMeta.loadDecisionSummary.toLowerCase().includes('weighted') 
-                ? 'bg-[#E63946]/10 text-[#E63946]' 
-                : 'bg-[#3A3A3A] text-[#8A8A8A]'
-            }`}>
-              {exercise.coachingMeta.loadDecisionSummary}
-            </span>
-          )}
-          {/* Rest Guidance - only show if we have meaningful rest data */}
-          {exercise.coachingMeta.restLabel && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#3A3A3A] text-[#8A8A8A]">
-              Rest: {exercise.coachingMeta.restLabel}
-            </span>
-          )}
-        </div>
+        )}
+        
+        {/* Load Badge */}
+        {card.loadBadge && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4F6D8A]/10 text-[#4F6D8A] font-medium">
+            {card.loadBadge}
+          </span>
+        )}
+        
+        {/* Rest Guidance - only if meaningful */}
+        {card.restGuidance && (
+          <span className="text-[10px] text-[#6A6A6A]">
+            rest {card.restGuidance}
+          </span>
+        )}
+        
+        {/* Constraint flag */}
+        {card.constraintNote && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">
+            {card.constraintNote}
+          </span>
+        )}
+      </div>
+      
+      {/* Load confidence note - subtle inline */}
+      {card.showLoadConfidence && card.loadConfidenceNote && (
+        <p className="text-[10px] text-[#5A5A5A] mt-1">{card.loadConfidenceNote}</p>
       )}
       
-      {/* [VISIBLE-IMPROVEMENT] Educational "Why" Surface - ALWAYS visible for learning */}
-      {!isWarmupCooldown && (
-        <div className="mt-2.5 space-y-2">
-          {/* Selection Reason - primary source of "why" */}
-          {exercise.selectionReason && (
-            <div className="py-1.5 px-2.5 rounded-md bg-gradient-to-r from-[#1F1F1F] to-[#1A1A1A] border border-[#2A2A2A]">
-              <p className="text-xs text-[#9A9A9A] leading-relaxed">
-                <span className="text-[#4F6D8A] font-medium">Why this exercise: </span>
-                {exercise.selectionReason}
-              </p>
-            </div>
-          )}
-          
-          {/* [VISIBLE-IMPROVEMENT] Category Purpose Chip - explains what this exercise type does */}
-          {!exercise.selectionReason && (
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] px-2 py-1 rounded-md bg-[#1F1F1F] border border-[#2A2A2A] text-[#8A8A8A]">
-                {safeCategory === 'skill' && 'Builds movement mastery and coordination'}
-                {safeCategory === 'strength' && 'Develops raw strength and power'}
-                {safeCategory === 'accessory' && 'Supports main movements and addresses weak points'}
-                {safeCategory === 'core' && 'Strengthens core stability and control'}
-                {!['skill', 'strength', 'accessory', 'core'].includes(safeCategory) && 'Supports your training goals'}
-              </span>
-            </div>
-          )}
-          
-          {/* Knowledge bubble - more prominent trigger */}
-          {hasKnowledge && (
-            <button
-              className="flex items-center gap-1.5 text-xs text-[#4F6D8A] hover:text-[#6A8AA8] transition-colors"
-              onClick={() => setShowReason(!showReason)}
-            >
-              <Info className="w-3.5 h-3.5" />
-              <span className="font-medium">{showReason ? 'Hide details' : 'Learn about this exercise'}</span>
-            </button>
-          )}
-          {showReason && hasKnowledge && (
-            <div className="pl-2 border-l-2 border-[#4F6D8A]/30">
+      {/* Exercise note if present */}
+      {exercise.note && (
+        <p className="text-xs text-[#6A6A6A] mt-1.5 italic">{exercise.note}</p>
+      )}
+      
+      {/* ROW 3: Why Line - Only if real selection reason exists */}
+      {!isWarmupCooldown && card.whyLine && (
+        <p className="text-xs text-[#7A7A7A] mt-2 leading-relaxed">
+          {card.whyLine}
+        </p>
+      )}
+      
+      {/* Knowledge expansion - only for main exercises with knowledge */}
+      {!isWarmupCooldown && hasKnowledge && (
+        <div className="mt-2">
+          <button
+            className="flex items-center gap-1 text-[10px] text-[#5A5A5A] hover:text-[#8A8A8A] transition-colors"
+            onClick={() => setShowDetails(!showDetails)}
+          >
+            <Info className="w-3 h-3" />
+            <span>{showDetails ? 'Hide details' : 'Learn more'}</span>
+          </button>
+          {showDetails && (
+            <div className="mt-2 pl-2 border-l-2 border-[#3A3A3A]">
               <ExerciseKnowledgeBubble 
                 exerciseId={exerciseId}
                 showSkillCarryover

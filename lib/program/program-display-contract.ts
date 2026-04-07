@@ -251,6 +251,167 @@ export interface WeekSessionMapDisplay {
   source: string
 }
 
+// =============================================================================
+// EXERCISE CARD DISPLAY CONTRACT
+// =============================================================================
+
+/**
+ * Strict exercise card display contract.
+ * Defines exactly what each exercise card should show in what order.
+ * Prevents noisy/duplicate display by owning each display field explicitly.
+ */
+export interface ExerciseCardDisplayContract {
+  // IDENTITY - What is this exercise
+  displayTitle: string
+  displayCategory: 'skill' | 'strength' | 'accessory' | 'core' | 'warmup' | 'cooldown'
+  roleLabel: string | null  // 'primary_driver' | 'support' | 'technical' | null
+  
+  // PRESCRIPTION - What to do (single coherent line)
+  prescriptionLine: string   // "4 × 5s holds" or "3 × 8-12"
+  intensityBadge: string | null  // "RPE 8" or null
+  loadBadge: string | null  // "+35 lb" or null
+  restGuidance: string | null  // "90-120s" or null
+  
+  // WHY - Why this exercise (one line, no fallback generic)
+  whyLine: string | null  // Selection reason, trimmed, or null
+  
+  // FLAGS - Only when meaningful
+  isWeighted: boolean
+  isConstrained: boolean
+  constraintNote: string | null  // "Volume managed" or null
+  
+  // DERIVED DISPLAY HINTS
+  exerciseType: 'isometric_hold' | 'reps_based' | 'timed' | 'weighted_lift' | 'bodyweight' | 'explosive'
+  showLoadConfidence: boolean  // Only when load confidence is not 'high'
+  loadConfidenceNote: string | null
+}
+
+/**
+ * Build exercise card display contract from AdaptiveExercise.
+ * Single canonical source of truth for exercise card display.
+ */
+export function buildExerciseCardContract(
+  exercise: {
+    name: string
+    category: string
+    sets: number
+    repsOrTime: string
+    selectionReason?: string
+    targetRPE?: number
+    restSeconds?: number
+    prescribedLoad?: {
+      load: number
+      unit: 'lbs' | 'kg'
+      confidenceLevel?: string
+      intensityBand?: string
+    }
+    coachingMeta?: {
+      expressionMode?: string
+      loadDecisionSummary?: string
+      restLabel?: string
+    }
+  }
+): ExerciseCardDisplayContract {
+  // Determine exercise type
+  const repsLower = exercise.repsOrTime?.toLowerCase() || ''
+  let exerciseType: ExerciseCardDisplayContract['exerciseType'] = 'reps_based'
+  if (repsLower.includes('s hold') || repsLower.includes('sec') || repsLower.includes('second')) {
+    exerciseType = 'isometric_hold'
+  } else if (repsLower.includes('min') || repsLower.includes(':')) {
+    exerciseType = 'timed'
+  } else if (exercise.prescribedLoad?.load && exercise.prescribedLoad.load > 0) {
+    exerciseType = 'weighted_lift'
+  }
+  
+  // Determine category
+  const categoryLower = (exercise.category || 'accessory').toLowerCase()
+  let displayCategory: ExerciseCardDisplayContract['displayCategory'] = 'accessory'
+  if (categoryLower === 'skill') displayCategory = 'skill'
+  else if (categoryLower === 'strength') displayCategory = 'strength'
+  else if (categoryLower === 'core') displayCategory = 'core'
+  else if (categoryLower === 'warmup') displayCategory = 'warmup'
+  else if (categoryLower === 'cooldown') displayCategory = 'cooldown'
+  
+  // Build prescription line - sets × reps format
+  const prescriptionLine = `${exercise.sets} × ${exercise.repsOrTime}`
+  
+  // Intensity badge - only RPE if tracked
+  const intensityBadge = exercise.targetRPE ? `RPE ${exercise.targetRPE}` : null
+  
+  // Load badge - only if weighted
+  const loadBadge = exercise.prescribedLoad?.load && exercise.prescribedLoad.load > 0 
+    ? `+${exercise.prescribedLoad.load} ${exercise.prescribedLoad.unit}` 
+    : null
+  
+  // Rest guidance - prefer coachingMeta.restLabel, else derive from restSeconds
+  let restGuidance: string | null = null
+  if (exercise.coachingMeta?.restLabel) {
+    restGuidance = exercise.coachingMeta.restLabel
+  } else if (exercise.restSeconds) {
+    if (exercise.restSeconds >= 120) {
+      restGuidance = `${Math.round(exercise.restSeconds / 60)}-${Math.round(exercise.restSeconds / 60) + 1} min`
+    } else {
+      restGuidance = `${exercise.restSeconds}s`
+    }
+  }
+  
+  // Role label from expression mode
+  let roleLabel: string | null = null
+  const expressionMode = exercise.coachingMeta?.expressionMode?.toLowerCase() || ''
+  if (expressionMode.includes('direct') || expressionMode.includes('primary')) {
+    roleLabel = 'Primary'
+  } else if (expressionMode.includes('technical')) {
+    roleLabel = 'Technical'
+  } else if (expressionMode.includes('support') || expressionMode.includes('carryover')) {
+    roleLabel = 'Support'
+  }
+  
+  // Why line - trimmed selection reason, first sentence only
+  let whyLine: string | null = null
+  if (exercise.selectionReason) {
+    const firstSentence = exercise.selectionReason.split('.')[0]
+    whyLine = firstSentence.length > 100 
+      ? firstSentence.substring(0, 97) + '...' 
+      : firstSentence
+  }
+  
+  // Constraint detection
+  const isConstrained = (exercise.selectionReason || '').toLowerCase().includes('limited') ||
+    (exercise.selectionReason || '').toLowerCase().includes('capped') ||
+    (exercise.selectionReason || '').toLowerCase().includes('constrained')
+  
+  const constraintNote = isConstrained ? 'Volume managed' : null
+  
+  // Load confidence
+  const showLoadConfidence = loadBadge !== null && 
+    exercise.prescribedLoad?.confidenceLevel !== 'high' &&
+    exercise.prescribedLoad?.confidenceLevel !== undefined
+  
+  let loadConfidenceNote: string | null = null
+  if (showLoadConfidence) {
+    const confidence = exercise.prescribedLoad?.confidenceLevel
+    if (confidence === 'moderate') loadConfidenceNote = 'Based on prior PR'
+    else if (confidence === 'low') loadConfidenceNote = 'Estimated'
+  }
+  
+  return {
+    displayTitle: exercise.name,
+    displayCategory,
+    roleLabel,
+    prescriptionLine,
+    intensityBadge,
+    loadBadge,
+    restGuidance,
+    whyLine,
+    isWeighted: loadBadge !== null,
+    isConstrained,
+    constraintNote,
+    exerciseType,
+    showLoadConfidence,
+    loadConfidenceNote,
+  }
+}
+
 export interface ProgramIntelligenceContract {
   /** Program ID for verification */
   programId: string

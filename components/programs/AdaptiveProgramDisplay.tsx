@@ -1960,18 +1960,6 @@ export function AdaptiveProgramDisplay({
       {(() => {
         const intelligence = buildProgramIntelligenceContract(program)
         
-        // Log intelligence contract for debugging
-        console.log('[program-intelligence-contract-audit]', {
-          programId: intelligence.programId,
-          trainingSpineLabel: intelligence.trainingSpine.label,
-          trainingSpineSource: intelligence.trainingSpine.source,
-          emphasisCount: intelligence.planEmphasis.items.length,
-          constraintCount: intelligence.protectedConstraints.length,
-          tradeoffCount: intelligence.tradeoffs.length,
-          weekDriverSource: intelligence.weekDriver.source,
-          quality: intelligence.quality,
-        })
-        
         return (
           <div className="space-y-3">
             {/* Training Spine - Primary direction */}
@@ -2094,6 +2082,100 @@ export function AdaptiveProgramDisplay({
                     </div>
                     <p className="text-sm font-medium text-[#E5E5E5]">{intelligence.weekDriver.label}</p>
                     <p className="text-xs text-[#7A7A7A] mt-0.5">{intelligence.weekDriver.reason}</p>
+                  </div>
+                </div>
+              </Card>
+            )}
+            
+            {/* [WEEKLY-DECISION-OUTPUT] Weekly Decision Summary */}
+            <Card className="bg-[#1A1A1A] border-[#2A2A2A] p-3">
+              <div className="space-y-3">
+                {/* Headline */}
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded bg-[#E63946]/10">
+                    <Activity className="w-4 h-4 text-[#E63946]" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-medium text-[#6A6A6A] uppercase tracking-wide">Why This Week</span>
+                    <p className="text-sm font-medium text-[#E5E5E5]">{intelligence.weeklyDecisionSummary.headline}</p>
+                  </div>
+                </div>
+                
+                {/* Distribution Row */}
+                <div className="flex flex-wrap gap-2">
+                  {intelligence.weeklyDistribution.distribution.slice(0, 3).map((entry, idx) => (
+                    <div key={idx} className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs ${
+                      entry.category === 'skill_primary' ? 'bg-[#E63946]/10 text-[#E63946]' :
+                      entry.category === 'strength_support' ? 'bg-blue-500/10 text-blue-400' :
+                      entry.category === 'accessory' ? 'bg-purple-500/10 text-purple-400' :
+                      'bg-[#2A2A2A] text-[#8A8A8A]'
+                    }`}>
+                      <span className="font-medium">{entry.count}</span>
+                      <span className="text-[#6A6A6A]">×</span>
+                      <span>{entry.category === 'skill_primary' ? 'Skill' : 
+                             entry.category === 'strength_support' ? 'Strength' :
+                             entry.category === 'accessory' ? 'Accessory' :
+                             entry.category === 'recovery' ? 'Recovery' : 'Mixed'}</span>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Key Decisions */}
+                <div className="space-y-1">
+                  {intelligence.weeklyDecisionSummary.decisions.slice(0, 3).map((decision, idx) => (
+                    <div key={idx} className="flex items-start gap-2">
+                      <span className="text-[#4A4A4A] mt-0.5">•</span>
+                      <span className="text-xs text-[#8A8A8A]">{decision}</span>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Secondary Handling */}
+                {intelligence.secondarySkillHandling.skills.length > 0 && (
+                  <div className="pt-2 border-t border-[#2A2A2A]">
+                    <span className="text-[10px] uppercase tracking-wide text-[#5A5A5A]">Secondary Skills</span>
+                    <p className="text-xs text-[#7A7A7A] mt-0.5">{intelligence.weeklyDecisionSummary.secondaryHandling}</p>
+                  </div>
+                )}
+              </div>
+            </Card>
+            
+            {/* [WEEKLY-DECISION-OUTPUT] Protected This Week */}
+            {intelligence.weeklyProtection.protectedAreas.length > 0 && (
+              <Card className="bg-[#1A1A1A] border-[#2A2A2A] p-3">
+                <div className="flex items-start gap-3">
+                  <div className="p-1.5 rounded bg-amber-500/10">
+                    <Shield className="w-4 h-4 text-amber-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-medium text-[#6A6A6A] uppercase tracking-wide">Protected This Week</span>
+                    </div>
+                    <div className="space-y-2">
+                      {intelligence.weeklyProtection.protectedAreas.slice(0, 4).map((area, idx) => (
+                        <div key={idx} className="flex items-start gap-2">
+                          <span className={`w-1.5 h-1.5 rounded-full mt-1.5 ${
+                            area.isActive ? 'bg-amber-400' : 'bg-[#4A4A4A]'
+                          }`} />
+                          <div>
+                            <span className="text-xs text-[#A5A5A5]">{area.label}</span>
+                            <p className="text-[10px] text-[#6A6A6A]">{area.reason}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* Intentional Limits */}
+                    {intelligence.weeklyDecisionSummary.intentionalLimits.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-[#2A2A2A]">
+                        <span className="text-[10px] text-[#5A5A5A] mr-1">Intentionally limited:</span>
+                        {intelligence.weeklyDecisionSummary.intentionalLimits.map((limit, idx) => (
+                          <span key={idx} className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#6A6A6A]">
+                            {limit}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </Card>

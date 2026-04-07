@@ -26,6 +26,15 @@ import type {
   CoachingSignalTag,
 } from '@/lib/workout/live-workout-authority-contract'
 import { EXECUTION_MODE_TARGET_MINUTES } from '@/lib/workout/live-workout-authority-contract'
+// [LIVE-WORKOUT-ADAPTIVE] Import adaptive signal system
+import { 
+  createInitialSessionReadiness,
+  updateSessionReadiness,
+  buildAdaptiveExecutionSummary,
+  type SessionAdaptiveReadiness,
+  type AdaptiveExecutionSummary,
+  type TargetPrescription,
+} from '@/lib/workout/live-workout-adaptive-signals'
 
 // =============================================================================
 // TYPES
@@ -70,6 +79,8 @@ export interface CompletedSet {
   isPerSide?: boolean
   // Structured coaching inputs
   structuredCoachingInputs?: import('./live-workout-authority-contract').CoachingSignalTag[]
+  // [LIVE-WORKOUT-ADAPTIVE] Canonical adaptive execution summary
+  adaptiveSummary?: import('./live-workout-adaptive-signals').AdaptiveExecutionSummary
 }
 
 export interface ExerciseOverride {
@@ -139,6 +150,9 @@ export interface WorkoutMachineState {
   
   // [LIVE-WORKOUT-AUTHORITY] Performance tracking for recommendations
   consecutiveHighRPECount: number
+  
+  // [LIVE-WORKOUT-ADAPTIVE] Session-level adaptive readiness state
+  sessionAdaptiveReadiness: import('./live-workout-adaptive-signals').SessionAdaptiveReadiness
   
   // Rest state
   interExerciseRestSeconds: number
@@ -219,7 +233,17 @@ export type WorkoutMachineAction =
   | { type: 'SET_CURRENT_SET_NOTE'; note: string }
   | { type: 'SET_CURRENT_SET_REASON_TAGS'; tags: string[] }
   | { type: 'TOGGLE_REASON_TAG'; tag: string }
-  | { type: 'COMPLETE_SET'; completedSet: CompletedSet; isLastSetOfExercise: boolean; exerciseCount: number }
+  | { 
+      type: 'COMPLETE_SET'
+      completedSet: CompletedSet
+      isLastSetOfExercise: boolean
+      exerciseCount: number
+      // [LIVE-WORKOUT-ADAPTIVE] Target prescription for adaptive summary
+      targetReps?: number
+      targetHoldSeconds?: number
+      targetRPE?: number
+      recommendedBand?: ResistanceBandColor
+    }
   | { type: 'COMPLETE_REST' } // Between-set rest -> next active set (same exercise)
   | { type: 'COMPLETE_BLOCK_ROUND_REST' } // Block round rest -> next round
   | { type: 'START_BETWEEN_EXERCISE_REST'; seconds: number }
@@ -305,6 +329,8 @@ export function createInitialMachineState(
     lastSetRPE: null,
     // [LIVE-WORKOUT-AUTHORITY] Performance tracking
     consecutiveHighRPECount: 0,
+    // [LIVE-WORKOUT-ADAPTIVE] Session-level adaptive readiness
+    sessionAdaptiveReadiness: createInitialSessionReadiness(),
     interExerciseRestSeconds: 0,
     blockRoundRestSeconds: 0,
     invalidReason: null,
@@ -494,8 +520,6 @@ export function workoutMachineReducer(
     // =========================================================================
     
     case 'COMPLETE_SET': {
-      const newCompletedSets = [...state.completedSets, action.completedSet]
-      
       // [LIVE-WORKOUT-AUTHORITY] Track consecutive high RPE for recommendations
       const rpeValue = action.completedSet.actualRPE as number
       const isHighRPE = rpeValue >= 9
@@ -503,13 +527,49 @@ export function workoutMachineReducer(
         ? state.consecutiveHighRPECount + 1 
         : 0 // Reset on normal RPE
       
-      console.log('[LIVE-WORKOUT-AUTHORITY] Set completed', {
+      // [LIVE-WORKOUT-ADAPTIVE] Build canonical adaptive execution summary
+      const targetPrescription: TargetPrescription = {
+        targetReps: action.targetReps,
+        targetHoldSeconds: action.targetHoldSeconds,
+        targetRPE: action.targetRPE || 8,
+        prescribedLoad: action.completedSet.prescribedLoad,
+        prescribedLoadUnit: action.completedSet.prescribedLoadUnit,
+        recommendedBand: action.recommendedBand,
+      }
+      
+      const priorContext = {
+        completedSets: state.completedSets,
+        exerciseIndex: action.completedSet.exerciseIndex,
+      }
+      
+      const adaptiveSummary = buildAdaptiveExecutionSummary(
+        action.completedSet,
+        targetPrescription,
+        priorContext
+      )
+      
+      // Attach summary to the completed set
+      const enrichedCompletedSet: CompletedSet = {
+        ...action.completedSet,
+        adaptiveSummary,
+      }
+      
+      const newCompletedSets = [...state.completedSets, enrichedCompletedSet]
+      
+      // Update session-level adaptive readiness
+      const newSessionReadiness = updateSessionReadiness(
+        state.sessionAdaptiveReadiness,
+        adaptiveSummary
+      )
+      
+      console.log('[LIVE-WORKOUT-ADAPTIVE] Set completed with summary', {
         exerciseIndex: state.currentExerciseIndex,
         setNumber: state.currentSetNumber,
         rpe: rpeValue,
-        isHighRPE,
-        consecutiveHighRPE: newConsecutiveHighRPE,
-        tags: action.completedSet.reasonTags,
+        performanceOutcome: adaptiveSummary.performanceOutcome,
+        intensityDirection: adaptiveSummary.intensityDirection,
+        recoverySignal: adaptiveSummary.recoverySignal,
+        sessionFatigue: newSessionReadiness.sessionFatigueLevel,
       })
       
       if (action.isLastSetOfExercise) {
@@ -522,6 +582,7 @@ export function workoutMachineReducer(
             completedSets: newCompletedSets,
             lastSetRPE: action.completedSet.actualRPE,
             consecutiveHighRPECount: 0, // Reset at workout end
+            sessionAdaptiveReadiness: newSessionReadiness,
             selectedRPE: null,
             repsValue: 0,
             holdValue: 0,
@@ -537,6 +598,7 @@ export function workoutMachineReducer(
           completedSets: newCompletedSets,
           lastSetRPE: action.completedSet.actualRPE,
           consecutiveHighRPECount: 0, // Reset between exercises
+          sessionAdaptiveReadiness: newSessionReadiness,
           selectedRPE: null,
           // Reset input values so component can re-seed from next exercise prescription
           repsValue: 0,
@@ -557,6 +619,7 @@ export function workoutMachineReducer(
         currentSetNumber: state.currentSetNumber + 1,
         lastSetRPE: action.completedSet.actualRPE,
         consecutiveHighRPECount: newConsecutiveHighRPE,
+        sessionAdaptiveReadiness: newSessionReadiness,
         selectedRPE: null,
         // Reset input values so component can re-seed from prescription for next set
         repsValue: 0,
@@ -1280,6 +1343,11 @@ export function serializeForStorage(state: WorkoutMachineState): string {
     multiBandSelection: state.multiBandSelection,
     coachingInputs: state.coachingInputs,
     consecutiveHighRPECount: state.consecutiveHighRPECount,
+    // [LIVE-WORKOUT-ADAPTIVE] Session readiness (serialized as object, Map converted)
+    sessionAdaptiveReadiness: {
+      ...state.sessionAdaptiveReadiness,
+      exerciseSummaries: Array.from(state.sessionAdaptiveReadiness.exerciseSummaries.entries()),
+    },
     // [LIVE-WORKOUT-AUTHORITY] Weighted and unilateral tracking
     actualLoadUsed: state.actualLoadUsed,
     actualLoadUnit: state.actualLoadUnit,
@@ -1318,6 +1386,15 @@ export function deserializeFromStorage(
       multiBandSelection: parsed.multiBandSelection || null,
       coachingInputs: Array.isArray(parsed.coachingInputs) ? parsed.coachingInputs : [],
       consecutiveHighRPECount: typeof parsed.consecutiveHighRPECount === 'number' ? parsed.consecutiveHighRPECount : 0,
+      // [LIVE-WORKOUT-ADAPTIVE] Session readiness (with Map reconstruction)
+      sessionAdaptiveReadiness: parsed.sessionAdaptiveReadiness ? {
+        ...parsed.sessionAdaptiveReadiness,
+        exerciseSummaries: new Map(
+          Array.isArray(parsed.sessionAdaptiveReadiness.exerciseSummaries)
+            ? parsed.sessionAdaptiveReadiness.exerciseSummaries
+            : []
+        ),
+      } : createInitialSessionReadiness(),
       // [LIVE-WORKOUT-AUTHORITY] Weighted and unilateral tracking
       actualLoadUsed: typeof parsed.actualLoadUsed === 'number' ? parsed.actualLoadUsed : null,
       actualLoadUnit: typeof parsed.actualLoadUnit === 'string' ? parsed.actualLoadUnit : 'lbs',

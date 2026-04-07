@@ -602,6 +602,19 @@ function WorkoutSessionContent() {
   const dayParam = searchParams.get('day')
   const demoMode = searchParams.get('demo') === 'true'
   const isFirstSession = searchParams.get('first') === 'true'
+  // [LIVE-WORKOUT-AUTHORITY] Read execution mode from URL - locked at workout start
+  const executionModeParam = searchParams.get('mode') as '30_min' | '45_min' | 'full' | null
+  const executionMode = executionModeParam || 'full'
+  const variantIndexParam = searchParams.get('variant')
+  const variantIndex = variantIndexParam ? parseInt(variantIndexParam, 10) : 0
+  
+  console.log('[LIVE-WORKOUT-AUTHORITY] Route params read', {
+    dayParam,
+    executionMode,
+    variantIndex,
+    demoMode,
+    isFirstSession,
+  })
   
   const [session, setSession] = useState<AdaptiveSession | null>(null)
   // [PHASE-X+1] Session metadata for tracking source and recovery status
@@ -870,6 +883,9 @@ function WorkoutSessionContent() {
         onCancel={handleCancel}
         isDemo={demoMode}
         isFirstSession={isFirstSession}
+        // [LIVE-WORKOUT-AUTHORITY] Pass execution mode to component
+        executionMode={executionMode}
+        variantIndex={variantIndex}
       />
       {/* [PHASE-X+1] Dev badge for session source - only in development */}
       {process.env.NODE_ENV === 'development' && sessionMeta?.recovered && (

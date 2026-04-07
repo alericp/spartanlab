@@ -17,6 +17,15 @@
 import type { RPEValue } from '@/lib/rpe-adjustment-engine'
 import type { ResistanceBandColor } from '@/lib/band-progression-engine'
 import { ALL_BAND_COLORS } from '@/lib/band-progression-engine'
+// [LIVE-WORKOUT-AUTHORITY] Import execution mode and authority types
+import type { 
+  WorkoutExecutionMode, 
+  MultiBandSelection,
+  SkipDecision,
+  StructuredCoachingInput,
+  CoachingSignalTag,
+} from '@/lib/workout/live-workout-authority-contract'
+import { EXECUTION_MODE_TARGET_MINUTES } from '@/lib/workout/live-workout-authority-contract'
 
 // =============================================================================
 // TYPES
@@ -65,6 +74,10 @@ export interface WorkoutMachineState {
   // Session identity
   sessionId: string
   
+  // [LIVE-WORKOUT-AUTHORITY] Execution mode - locked at workout start
+  executionMode: WorkoutExecutionMode
+  targetDurationMinutes: number | null
+  
   // Position (flat index - always maintained for compatibility)
   currentExerciseIndex: number
   currentSetNumber: number
@@ -78,6 +91,9 @@ export interface WorkoutMachineState {
   completedSets: CompletedSet[]
   exerciseOverrides: Record<number, ExerciseOverride>
   
+  // [LIVE-WORKOUT-AUTHORITY] Skip tracking
+  skipDecisions: SkipDecision[]
+  
   // Timing
   startTime: number | null
   elapsedSeconds: number
@@ -87,14 +103,22 @@ export interface WorkoutMachineState {
   repsValue: number
   holdValue: number
   bandUsed: ResistanceBandColor | 'none'
+  // [LIVE-WORKOUT-AUTHORITY] Multi-band support
+  multiBandSelection: MultiBandSelection | null
   
   // Per-set notes and reason tags
   currentSetNote: string
   currentSetReasonTags: string[]
   
+  // [LIVE-WORKOUT-AUTHORITY] Structured coaching signals
+  coachingInputs: StructuredCoachingInput[]
+  
   // Session notes
   workoutNotes: string
   lastSetRPE: RPEValue | null
+  
+  // [LIVE-WORKOUT-AUTHORITY] Performance tracking for recommendations
+  consecutiveHighRPECount: number
   
   // Rest state
   interExerciseRestSeconds: number
@@ -196,15 +220,33 @@ export type WorkoutMachineAction =
   | { type: 'ADVANCE_TO_NEXT_BLOCK_MEMBER'; nextMemberIndex: number; nextExerciseIndex: number; targetValue: number }
   | { type: 'COMPLETE_BLOCK_ROUND'; restSeconds: number }
   | { type: 'ADVANCE_TO_NEXT_BLOCK'; nextBlockIndex: number; nextExerciseIndex: number; targetValue: number }
+  // [LIVE-WORKOUT-AUTHORITY] New authority actions
+  | { type: 'SET_MULTI_BAND'; selection: MultiBandSelection | null }
+  | { type: 'ADD_COACHING_SIGNAL'; signals: CoachingSignalTag[]; freeText?: string }
+  | { type: 'SKIP_SET'; totalSets: number; exerciseCount: number; reason?: string }
+  | { type: 'END_EXERCISE'; totalSets: number; exerciseCount: number; reason?: string }
 
 // =============================================================================
 // INITIAL STATE
 // =============================================================================
 
-export function createInitialMachineState(sessionId: string): WorkoutMachineState {
+export function createInitialMachineState(
+  sessionId: string,
+  executionMode: WorkoutExecutionMode = 'full'
+): WorkoutMachineState {
+  // Log authority state creation
+  console.log('[LIVE-WORKOUT-AUTHORITY] Machine state created', {
+    sessionId,
+    executionMode,
+    targetDurationMinutes: EXECUTION_MODE_TARGET_MINUTES[executionMode],
+  })
+  
   return {
     phase: 'ready',
     sessionId,
+    // [LIVE-WORKOUT-AUTHORITY] Execution mode locked at creation
+    executionMode,
+    targetDurationMinutes: EXECUTION_MODE_TARGET_MINUTES[executionMode],
     currentExerciseIndex: 0,
     currentSetNumber: 1,
     // Grouped execution position
@@ -214,18 +256,26 @@ export function createInitialMachineState(sessionId: string): WorkoutMachineStat
     // Completed work
     completedSets: [],
     exerciseOverrides: {},
+    // [LIVE-WORKOUT-AUTHORITY] Skip tracking
+    skipDecisions: [],
     startTime: null,
     elapsedSeconds: 0,
     selectedRPE: null,
     repsValue: 8,
     holdValue: 30,
     bandUsed: 'none',
+    // [LIVE-WORKOUT-AUTHORITY] Multi-band support
+    multiBandSelection: null,
     // Per-set notes
     currentSetNote: '',
     currentSetReasonTags: [],
+    // [LIVE-WORKOUT-AUTHORITY] Structured coaching inputs
+    coachingInputs: [],
     // Session notes
     workoutNotes: '',
     lastSetRPE: null,
+    // [LIVE-WORKOUT-AUTHORITY] Performance tracking
+    consecutiveHighRPECount: 0,
     interExerciseRestSeconds: 0,
     blockRoundRestSeconds: 0,
     invalidReason: null,
@@ -337,6 +387,31 @@ export function workoutMachineReducer(
     case 'SET_BAND':
       return { ...state, bandUsed: action.band }
     
+    // [LIVE-WORKOUT-AUTHORITY] Multi-band support
+    case 'SET_MULTI_BAND':
+      return { 
+        ...state, 
+        multiBandSelection: action.selection,
+        // Also set single band for backward compatibility
+        bandUsed: action.selection?.bands[0] || 'none',
+      }
+    
+    // [LIVE-WORKOUT-AUTHORITY] Add coaching signal
+    case 'ADD_COACHING_SIGNAL': {
+      const newInput: StructuredCoachingInput = {
+        signals: action.signals,
+        freeTextNote: action.freeText || null,
+        timestamp: Date.now(),
+        exerciseIndex: state.currentExerciseIndex,
+        setNumber: state.currentSetNumber,
+      }
+      return {
+        ...state,
+        coachingInputs: [...state.coachingInputs, newInput],
+        currentSetReasonTags: [...state.currentSetReasonTags, ...action.signals],
+      }
+    }
+    
     case 'SET_NOTES':
       return { ...state, workoutNotes: action.notes }
     
@@ -361,6 +436,22 @@ export function workoutMachineReducer(
     case 'COMPLETE_SET': {
       const newCompletedSets = [...state.completedSets, action.completedSet]
       
+      // [LIVE-WORKOUT-AUTHORITY] Track consecutive high RPE for recommendations
+      const rpeValue = action.completedSet.actualRPE as number
+      const isHighRPE = rpeValue >= 9
+      const newConsecutiveHighRPE = isHighRPE 
+        ? state.consecutiveHighRPECount + 1 
+        : 0 // Reset on normal RPE
+      
+      console.log('[LIVE-WORKOUT-AUTHORITY] Set completed', {
+        exerciseIndex: state.currentExerciseIndex,
+        setNumber: state.currentSetNumber,
+        rpe: rpeValue,
+        isHighRPE,
+        consecutiveHighRPE: newConsecutiveHighRPE,
+        tags: action.completedSet.reasonTags,
+      })
+      
       if (action.isLastSetOfExercise) {
         // Last set of exercise - will transition to between_exercise_rest or completed
         const isLastExercise = state.currentExerciseIndex >= action.exerciseCount - 1
@@ -370,6 +461,7 @@ export function workoutMachineReducer(
             phase: 'completed',
             completedSets: newCompletedSets,
             lastSetRPE: action.completedSet.actualRPE,
+            consecutiveHighRPECount: 0, // Reset at workout end
             selectedRPE: null,
             repsValue: 0,
             holdValue: 0,
@@ -384,6 +476,7 @@ export function workoutMachineReducer(
           phase: 'between_exercise_rest',
           completedSets: newCompletedSets,
           lastSetRPE: action.completedSet.actualRPE,
+          consecutiveHighRPECount: 0, // Reset between exercises
           selectedRPE: null,
           // Reset input values so component can re-seed from next exercise prescription
           repsValue: 0,
@@ -403,6 +496,7 @@ export function workoutMachineReducer(
         completedSets: newCompletedSets,
         currentSetNumber: state.currentSetNumber + 1,
         lastSetRPE: action.completedSet.actualRPE,
+        consecutiveHighRPECount: newConsecutiveHighRPE,
         selectedRPE: null,
         // Reset input values so component can re-seed from prescription for next set
         repsValue: 0,
@@ -473,6 +567,82 @@ export function workoutMachineReducer(
           [action.index]: action.override,
         },
       }
+    
+    // [LIVE-WORKOUT-AUTHORITY] Skip current set only - advance to next set of same exercise
+    case 'SKIP_SET': {
+      const skipDecision: SkipDecision = {
+        action: 'skip_set',
+        reason: action.reason,
+        completedSets: state.currentSetNumber - 1,
+        skippedSets: 1,
+        remainingSets: action.totalSets - state.currentSetNumber,
+        timestamp: Date.now(),
+      }
+      
+      console.log('[LIVE-WORKOUT-AUTHORITY] SKIP_SET', {
+        exerciseIndex: state.currentExerciseIndex,
+        setNumber: state.currentSetNumber,
+        totalSets: action.totalSets,
+        reason: action.reason,
+      })
+      
+      // Check if this was the last set
+      if (state.currentSetNumber >= action.totalSets) {
+        // Skipping last set = end exercise
+        const isLastExercise = state.currentExerciseIndex >= action.exerciseCount - 1
+        return {
+          ...state,
+          phase: isLastExercise ? 'completed' : 'between_exercise_rest',
+          skipDecisions: [...state.skipDecisions, skipDecision],
+          currentSetNumber: state.currentSetNumber,
+          interExerciseRestSeconds: isLastExercise ? 0 : 120,
+          currentSetNote: '',
+          currentSetReasonTags: [],
+        }
+      }
+      
+      // Move to next set of same exercise
+      return {
+        ...state,
+        skipDecisions: [...state.skipDecisions, skipDecision],
+        currentSetNumber: state.currentSetNumber + 1,
+        selectedRPE: null,
+        currentSetNote: '',
+        currentSetReasonTags: [],
+      }
+    }
+    
+    // [LIVE-WORKOUT-AUTHORITY] End current exercise - skip all remaining sets
+    case 'END_EXERCISE': {
+      const remainingSets = action.totalSets - state.currentSetNumber + 1
+      const skipDecision: SkipDecision = {
+        action: 'end_exercise',
+        reason: action.reason,
+        completedSets: state.currentSetNumber - 1,
+        skippedSets: remainingSets,
+        remainingSets: 0,
+        timestamp: Date.now(),
+      }
+      
+      console.log('[LIVE-WORKOUT-AUTHORITY] END_EXERCISE', {
+        exerciseIndex: state.currentExerciseIndex,
+        setNumber: state.currentSetNumber,
+        totalSets: action.totalSets,
+        skippedSets: remainingSets,
+        reason: action.reason,
+      })
+      
+      const isLastExercise = state.currentExerciseIndex >= action.exerciseCount - 1
+      
+      return {
+        ...state,
+        phase: isLastExercise ? 'completed' : 'between_exercise_rest',
+        skipDecisions: [...state.skipDecisions, skipDecision],
+        interExerciseRestSeconds: isLastExercise ? 0 : 120,
+        currentSetNote: '',
+        currentSetReasonTags: [],
+      }
+    }
     
     case 'SKIP_EXERCISE': {
       const nextIndex = action.index + 1
@@ -1031,6 +1201,9 @@ export function serializeForStorage(state: WorkoutMachineState): string {
   return JSON.stringify({
     phase: state.phase,
     sessionId: state.sessionId,
+    // [LIVE-WORKOUT-AUTHORITY] Execution mode
+    executionMode: state.executionMode,
+    targetDurationMinutes: state.targetDurationMinutes,
     currentExerciseIndex: state.currentExerciseIndex,
     currentSetNumber: state.currentSetNumber,
     // Grouped execution state
@@ -1040,6 +1213,12 @@ export function serializeForStorage(state: WorkoutMachineState): string {
     // Completed work
     completedSets: state.completedSets,
     exerciseOverrides: state.exerciseOverrides,
+    // [LIVE-WORKOUT-AUTHORITY] Skip tracking
+    skipDecisions: state.skipDecisions,
+    // [LIVE-WORKOUT-AUTHORITY] Multi-band and coaching
+    multiBandSelection: state.multiBandSelection,
+    coachingInputs: state.coachingInputs,
+    consecutiveHighRPECount: state.consecutiveHighRPECount,
     elapsedSeconds: state.elapsedSeconds,
     workoutNotes: state.workoutNotes,
     lastSetRPE: state.lastSetRPE,
@@ -1055,6 +1234,9 @@ export function deserializeFromStorage(
     if (typeof parsed !== 'object' || parsed === null) return null
     
     return {
+      // [LIVE-WORKOUT-AUTHORITY] Execution mode - default to 'full' for backward compatibility
+      executionMode: parsed.executionMode || 'full',
+      targetDurationMinutes: typeof parsed.targetDurationMinutes === 'number' ? parsed.targetDurationMinutes : null,
       currentExerciseIndex: typeof parsed.currentExerciseIndex === 'number' ? parsed.currentExerciseIndex : 0,
       currentSetNumber: typeof parsed.currentSetNumber === 'number' ? parsed.currentSetNumber : 1,
       // Grouped execution state
@@ -1064,6 +1246,12 @@ export function deserializeFromStorage(
       // Completed work
       completedSets: Array.isArray(parsed.completedSets) ? parsed.completedSets : [],
       exerciseOverrides: typeof parsed.exerciseOverrides === 'object' ? parsed.exerciseOverrides : {},
+      // [LIVE-WORKOUT-AUTHORITY] Skip tracking
+      skipDecisions: Array.isArray(parsed.skipDecisions) ? parsed.skipDecisions : [],
+      // [LIVE-WORKOUT-AUTHORITY] Multi-band and coaching
+      multiBandSelection: parsed.multiBandSelection || null,
+      coachingInputs: Array.isArray(parsed.coachingInputs) ? parsed.coachingInputs : [],
+      consecutiveHighRPECount: typeof parsed.consecutiveHighRPECount === 'number' ? parsed.consecutiveHighRPECount : 0,
       elapsedSeconds: typeof parsed.elapsedSeconds === 'number' ? parsed.elapsedSeconds : 0,
       workoutNotes: typeof parsed.workoutNotes === 'string' ? parsed.workoutNotes : '',
       lastSetRPE: parsed.lastSetRPE ?? null,

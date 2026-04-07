@@ -24,7 +24,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
-import { ChevronLeft, ChevronDown, ChevronUp, Check, SkipForward, X, MessageSquare, Play } from 'lucide-react'
+import { ChevronLeft, ChevronDown, ChevronUp, ChevronRight, Check, SkipForward, X, MessageSquare, Play } from 'lucide-react'
 import { MethodInfoBubble } from '@/components/coaching'
 import type { RPEValue } from '@/lib/rpe-adjustment-engine'
 import type { ResistanceBandColor } from '@/lib/band-progression-engine'
@@ -134,7 +134,10 @@ export interface ActiveWorkoutCorridorProps {
   onSaveAndExit?: () => void // Save progress for resume, then leave
   onDiscardWorkout?: () => void // Clear resumable state, then leave
   
-  onSkip?: () => void
+  // [LIVE-WORKOUT-AUTHORITY] Distinct skip actions
+  onSkipSet?: () => void      // Skip current set only, continue to next set of same exercise
+  onEndExercise?: () => void  // Skip all remaining sets of current exercise, advance to next
+  onSkip?: () => void         // Legacy fallback - if neither above is provided, use this
   onRestComplete?: () => void
   
   // Back navigation
@@ -363,7 +366,10 @@ export function ActiveWorkoutStartCorridor({
   onExit,
   onSaveAndExit,
   onDiscardWorkout,
-  onSkip,
+  // [LIVE-WORKOUT-AUTHORITY] Distinct skip actions
+  onSkipSet,
+  onEndExercise,
+  onSkip, // Legacy fallback
   onRestComplete,
   onGoBack,
   canGoBack = false,
@@ -868,17 +874,46 @@ export function ActiveWorkoutStartCorridor({
                 <div className="w-16" /> // Spacer when back not available
               )}
               
-              {/* Center: Skip */}
+              {/* [LIVE-WORKOUT-AUTHORITY] Distinct Skip Actions */}
+              {/* Skip Set: Skip only current set, continue to next set of same exercise */}
               <Button 
                 variant="ghost" 
-                onClick={onSkip}
+                onClick={() => {
+                  console.log('[LIVE-WORKOUT-AUTHORITY] Skip Set clicked', {
+                    exerciseName,
+                    currentSetNumber,
+                    exerciseSets,
+                  })
+                  // Use distinct handler if provided, else fallback to legacy
+                  if (onSkipSet) onSkipSet()
+                  else if (onSkip) onSkip()
+                }}
                 className="text-[#6B7280] text-sm h-9 px-3 hover:text-[#A4ACB8]"
               >
                 <SkipForward className="w-3.5 h-3.5 mr-1.5" />
-                Skip
+                Skip Set
               </Button>
               
-              {/* Right: End */}
+              {/* End Exercise: Skip all remaining sets, advance to next exercise */}
+              <Button 
+                variant="ghost" 
+                onClick={() => {
+                  console.log('[LIVE-WORKOUT-AUTHORITY] End Exercise clicked', {
+                    exerciseName,
+                    currentSetNumber,
+                    exerciseSets,
+                    remainingSets: exerciseSets - currentSetNumber + 1,
+                  })
+                  if (onEndExercise) onEndExercise()
+                  else setShowExitConfirm(true) // Fallback to exit confirm
+                }}
+                className="text-amber-500/80 text-sm h-9 px-3 hover:text-amber-400"
+              >
+                <ChevronRight className="w-3.5 h-3.5 mr-1.5" />
+                Next Exercise
+              </Button>
+              
+              {/* End Workout: Opens exit modal */}
               <Button 
                 variant="ghost" 
                 onClick={() => setShowExitConfirm(true)}

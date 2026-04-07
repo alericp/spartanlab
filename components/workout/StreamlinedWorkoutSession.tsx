@@ -127,6 +127,17 @@ import {
   type GroupType,
   GROUP_TYPE_LABELS,
 } from '@/lib/workout/execution-unit-contract'
+// [LIVE-WORKOUT-AUTHORITY] Input mode resolver and coaching signals
+import {
+  resolveExerciseInputMode,
+  type ExerciseInputModeContract,
+  type CoachingSignalTag,
+  COACHING_SIGNAL_TAGS,
+  COACHING_SIGNAL_LABELS,
+  classifyAdaptationHorizons,
+  checkRecommendationTrigger,
+  type RuntimeRecommendation,
+} from '@/lib/workout/live-workout-authority-contract'
   import { resolveRestTime, applyRestAdjustment, type RestContext } from '@/lib/workout/rest-doctrine-resolver'
   import {
     buildLiveExecutionContract,
@@ -1748,6 +1759,9 @@ interface StreamlinedWorkoutSessionProps {
   onCancel: () => void
   isDemo?: boolean
   isFirstSession?: boolean
+  // [LIVE-WORKOUT-AUTHORITY] Execution mode locked at workout start
+  executionMode?: '30_min' | '45_min' | 'full'
+  variantIndex?: number
 }
 
 export function StreamlinedWorkoutSession({
@@ -1756,7 +1770,10 @@ export function StreamlinedWorkoutSession({
   onComplete,
   onCancel,
   isDemo = false,
-  isFirstSession = false
+  isFirstSession = false,
+  // [LIVE-WORKOUT-AUTHORITY] Default to full if not specified
+  executionMode = 'full',
+  variantIndex = 0,
 }: StreamlinedWorkoutSessionProps) {
   // [PHASE LW2-FIX] DO NOT CALL markBootStage() BEFORE HOOKS
   // React rules of hooks require all hooks to be called unconditionally and in the same order
@@ -2080,10 +2097,21 @@ export function StreamlinedWorkoutSession({
   // The machine is the SINGLE SOURCE OF TRUTH for workout execution
   // All transitions go through the machine reducer - no parallel state systems
   // ==========================================================================
+  // [LIVE-WORKOUT-AUTHORITY] Initialize machine state with execution mode
+  // Note: useReducer initializer is called once at mount. We capture executionMode at that time.
   const [machineState, machineDispatch] = useReducer(
     workoutMachineReducer,
-    sessionId,
-    createInitialMachineState
+    null, // Pass null as initial arg, we handle it in the initializer
+    () => {
+      const state = createInitialMachineState(sessionId, executionMode)
+      console.log('[LIVE-WORKOUT-AUTHORITY] Machine initialized with execution mode', {
+        sessionId,
+        executionMode,
+        targetDurationMinutes: state.targetDurationMinutes,
+        variantIndex,
+      })
+      return state
+    }
   )
   
   // [STAGED-ISOLATION-DEBUG] Log machine state immediately after reducer
@@ -2092,6 +2120,9 @@ export function StreamlinedWorkoutSession({
     currentExerciseIndex: machineState.currentExerciseIndex,
     currentSetNumber: machineState.currentSetNumber,
     completedSetsCount: machineState.completedSets?.length ?? 0,
+    // [LIVE-WORKOUT-AUTHORITY] Log execution mode
+    executionMode: machineState.executionMode,
+    targetDurationMinutes: machineState.targetDurationMinutes,
   })
   
   // ==========================================================================
@@ -3098,8 +3129,27 @@ export function StreamlinedWorkoutSession({
       const recommendedBand = activeEntryPreparation.recommendedBand
       console.log('[v0] [active_contract_inputs_resolved]', { setNumber, isHoldExercise, targetValue })
       
-      // STEP 4: Resolve UI flags safely
-      const bandSelectable = safeCurrentExercise?.executionTruth?.bandSelectable === true || !!recommendedBand
+      // [LIVE-WORKOUT-AUTHORITY] Resolve exercise input mode using authoritative resolver
+      const inputModeContract = resolveExerciseInputMode({
+        name: exerciseName,
+        category: exerciseCategory,
+        method: safeCurrentExercise?.method,
+        executionTruth: safeCurrentExercise?.executionTruth,
+        prescribedLoad: safeCurrentExercise?.prescribedLoad,
+      })
+      
+      console.log('[LIVE-WORKOUT-AUTHORITY] Exercise input mode resolved', {
+        exerciseName,
+        inputMode: inputModeContract.mode,
+        showBandSelector: inputModeContract.showBandSelector,
+        showLoadInput: inputModeContract.showLoadInput,
+        showRepsInput: inputModeContract.showRepsInput,
+        showHoldInput: inputModeContract.showHoldInput,
+      })
+      
+      // STEP 4: Resolve UI flags safely - using input mode contract
+      // [LIVE-WORKOUT-AUTHORITY] Band selector only shows for band-assisted exercises
+      const bandSelectable = inputModeContract.showBandSelector || !!recommendedBand
       const hasLoad = !!(safeCurrentExercise?.prescribedLoad?.load && safeCurrentExercise.prescribedLoad.load > 0)
       const loadDisplay = hasLoad 
         ? `+${safeCurrentExercise?.prescribedLoad?.load}${safeCurrentExercise?.prescribedLoad?.unit || 'lbs'}`
@@ -3836,6 +3886,50 @@ export function StreamlinedWorkoutSession({
     console.log('[UNIFIED-HANDOFF] handleSkipExercise triggered')
     executeUnifiedAdvance('skip_exercise')
   }, [executeUnifiedAdvance])
+  
+  // [LIVE-WORKOUT-AUTHORITY] Skip current set only - advance to next set of same exercise
+  const handleSkipSet = useCallback(() => {
+    const exercise = exercises[safeExerciseIndex]
+    const totalSets = exercise?.sets || 3
+    const currentSet = machineState.currentSetNumber
+    
+    console.log('[LIVE-WORKOUT-AUTHORITY] handleSkipSet', {
+      exerciseName: exercise?.name,
+      currentSet,
+      totalSets,
+      remainingSets: totalSets - currentSet,
+    })
+    
+    // Dispatch skip set action
+    machineDispatch({
+      type: 'SKIP_SET',
+      totalSets,
+      exerciseCount: exercises.length,
+      reason: 'user_skipped',
+    })
+  }, [safeExerciseIndex, exercises, machineState.currentSetNumber, machineDispatch])
+  
+  // [LIVE-WORKOUT-AUTHORITY] End current exercise - skip all remaining sets and advance
+  const handleEndExercise = useCallback(() => {
+    const exercise = exercises[safeExerciseIndex]
+    const totalSets = exercise?.sets || 3
+    const currentSet = machineState.currentSetNumber
+    
+    console.log('[LIVE-WORKOUT-AUTHORITY] handleEndExercise', {
+      exerciseName: exercise?.name,
+      currentSet,
+      totalSets,
+      skippingSets: totalSets - currentSet + 1,
+    })
+    
+    // Dispatch end exercise action
+    machineDispatch({
+      type: 'END_EXERCISE',
+      totalSets,
+      exerciseCount: exercises.length,
+      reason: 'user_ended_exercise',
+    })
+  }, [safeExerciseIndex, exercises, machineState.currentSetNumber, machineDispatch])
   
   // ==========================================================================
   // EXERCISE OVERRIDE HANDLERS
@@ -5740,7 +5834,25 @@ function InterExerciseRestCountdown({
     const corridorCurrentSetNote = machineState.currentSetNote || ''
     const corridorCurrentSetReasonTags = (machineState.currentSetReasonTags || []) as import('./ActiveWorkoutStartCorridor').SetReasonTag[]
     const corridorRecommendedBand = safeCurrentExercise?.executionTruth?.recommendedBand as ResistanceBandColor | undefined
-    const corridorBandSelectable = safeCurrentExercise?.executionTruth?.bandSelectable === true || !!corridorRecommendedBand
+    
+    // [LIVE-WORKOUT-AUTHORITY] Use authoritative input mode resolver for corridor
+    const corridorInputMode = resolveExerciseInputMode({
+      name: safeCurrentExercise?.name || '',
+      category: safeCurrentExercise?.category,
+      method: safeCurrentExercise?.method,
+      executionTruth: safeCurrentExercise?.executionTruth,
+      prescribedLoad: safeCurrentExercise?.prescribedLoad,
+    })
+    
+    console.log('[LIVE-WORKOUT-AUTHORITY] Corridor input mode', {
+      exerciseName: safeCurrentExercise?.name,
+      inputMode: corridorInputMode.mode,
+      showBandSelector: corridorInputMode.showBandSelector,
+      showLoadInput: corridorInputMode.showLoadInput,
+    })
+    
+    // [LIVE-WORKOUT-AUTHORITY] Band selector only for band-assisted exercises
+    const corridorBandSelectable = corridorInputMode.showBandSelector || !!corridorRecommendedBand
     
     // Build recent sets for ledger (last 3 completed sets)
     // [RECENT-SETS-FIX] Filter recent sets by CURRENT EXERCISE only, not global last 3
@@ -5917,7 +6029,10 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
         onExit={() => setShowExitConfirm(true)}
         onSaveAndExit={handleSaveAndExit}
         onDiscardWorkout={handleDiscardAndExit}
-        onSkip={handleSkipExercise}
+        // [LIVE-WORKOUT-AUTHORITY] Distinct skip actions
+        onSkipSet={handleSkipSet}
+        onEndExercise={handleEndExercise}
+        onSkip={handleSkipExercise} // Legacy fallback
         onRestComplete={handleRestComplete}
         onGoBack={handleGoBack}
         canGoBack={canGoBack}

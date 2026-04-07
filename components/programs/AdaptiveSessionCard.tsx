@@ -277,6 +277,30 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     // The embedded WorkoutExecutionCard is no longer used for full workout execution
     
     // ==========================================================================
+    // [LIVE-WORKOUT-AUTHORITY] Determine execution mode from selected variant
+    // ==========================================================================
+    const variant = selectedVariant !== null ? session.variants?.[selectedVariant] : session.variants?.[0]
+    const variantDuration = variant?.duration || session.estimatedMinutes
+    
+    // Map variant duration to execution mode
+    let executionMode: '30_min' | '45_min' | 'full' = 'full'
+    if (variantDuration && variantDuration <= 35) {
+      executionMode = '30_min'
+    } else if (variantDuration && variantDuration <= 50) {
+      executionMode = '45_min'
+    }
+    
+    console.log('[LIVE-WORKOUT-AUTHORITY] handleStartWorkout', {
+      dayNumber: session.dayNumber,
+      sessionName: session.name,
+      selectedVariant,
+      variantLabel: variant?.label,
+      variantDuration,
+      executionMode,
+      variantIndex: selectedVariant ?? 0,
+    })
+    
+    // ==========================================================================
     // [PHASE 7B TASK 6] WORKOUT EXECUTION TRUTH AUDIT
     // Verify workout execution uses same source as grouped render
     // ==========================================================================
@@ -292,12 +316,9 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       verdict: 'workout_execution_uses_same_exercise_data',
     })
     
-    console.log('[workout-route] routing to canonical session from program card:', {
-      dayNumber: session.dayNumber,
-      sessionName: session.name,
-    })
     trackWorkoutStarted(session.name)
-    router.push(`/workout/session?day=${session.dayNumber || 1}`)
+    // [LIVE-WORKOUT-AUTHORITY] Pass execution mode and variant index to workout route
+    router.push(`/workout/session?day=${session.dayNumber || 1}&mode=${executionMode}&variant=${selectedVariant ?? 0}`)
   }
 
   const handleWorkoutComplete = () => {

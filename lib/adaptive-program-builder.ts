@@ -714,6 +714,8 @@ type AdaptiveSessionContext = {
   sessionArchitectureTruth?: SessionArchitectureTruthContract | null
   // [SESSION-COMPOSITION-INTELLIGENCE] Session composition blueprint for structure decisions
   sessionCompositionBlueprint?: SessionCompositionBlueprint | null
+  // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] Canonical session spine for session type determination
+  canonicalSessionSpine?: CanonicalSessionSpine | null
   }
 
 export interface AdaptiveProgramInputs {
@@ -840,6 +842,9 @@ export interface AdaptiveSession {
   compositionMetadata?: {
     sessionIntent: string
     sessionComplexity: 'minimal' | 'standard' | 'comprehensive'
+    // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] TASK 5: Spine-derived session type for visible differentiation
+    spineSessionType?: 'direct_intensity' | 'technical_focus' | 'strength_support' | 'mixed_balanced' | 'rotation_light'
+    spineMode?: 'pure_skill' | 'skill_dominant' | 'hybrid_balanced' | 'strength_dominant' | 'general_fitness'
     blockRoles: SessionBlockRole[]
     methodEligibility: {
       supersets: 'earned' | 'allowed' | 'discouraged' | 'blocked'
@@ -7952,6 +7957,39 @@ async function generateAdaptiveProgramImpl(
     phase: 'pre_assembly',
   })
   
+  // ==========================================================================
+  // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] TASK 3: Build canonical session spine
+  // This spine controls how sessions are typed based on resolved training mode.
+  // It must be built BEFORE session assembly and passed to each session context.
+  // ==========================================================================
+  const canonicalSessionSpine = buildCanonicalSessionSpine(
+    canonicalProfile.trainingStyle,
+    trainingOutcome,
+    primaryGoal,
+    secondaryGoal || canonicalProfile.secondaryGoal || null,
+    effectiveTrainingDays
+  )
+  
+  console.log('[SESSION-ARCHITECTURE-SPINE-BUILT]', {
+    mode: canonicalSessionSpine.mode,
+    totalSessions: effectiveTrainingDays,
+    primaryGoal,
+    secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || null,
+    trainingStyle: canonicalProfile.trainingStyle,
+    trainingOutcome,
+    spineSummary: {
+      directIntensity: canonicalSessionSpine.directIntensitySessions,
+      technicalFocus: canonicalSessionSpine.technicalFocusSessions,
+      strengthSupport: canonicalSessionSpine.strengthSupportSessions,
+      mixedBalanced: canonicalSessionSpine.mixedBalancedSessions,
+      rotationLight: canonicalSessionSpine.rotationLightSessions,
+    },
+    primaryGoalDominance: canonicalSessionSpine.primaryGoalDominanceRatio,
+    secondaryConstraint: canonicalSessionSpine.secondarySkillConstraint,
+    tertiaryAllowed: canonicalSessionSpine.tertiarySkillAllowed,
+    verdict: 'CANONICAL_SPINE_READY_FOR_SESSION_ASSEMBLY',
+  })
+  
   const sessions: AdaptiveSession[] = []
   try {
     // [PHASE 16C TASK 4] Convert to async for loop with yields inside
@@ -8061,6 +8099,8 @@ async function generateAdaptiveProgramImpl(
   sessionArchitectureTruth,
   // [SESSION-COMPOSITION-INTELLIGENCE] Pass composition blueprint for structure enforcement
   sessionCompositionBlueprint,
+  // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] Pass canonical session spine
+  canonicalSessionSpine,
   }
     
     const session = generateAdaptiveSession(
@@ -15766,11 +15806,200 @@ type WeeklySessionType =
   | 'mixed_balanced'     // Balanced skill + strength
   | 'rotation_light'     // Lighter skill exposure, recovery emphasis
 
+// =============================================================================
+// [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] CANONICAL SESSION SPINE
+// =============================================================================
+// This spine controls how sessions are distributed based on resolved training style.
+// The spine MUST be respected by all downstream session composition logic.
+// =============================================================================
+
+type ResolvedTrainingMode = 
+  | 'pure_skill'           // Athlete wants max skill progression (e.g., Planche-focused)
+  | 'skill_dominant'       // Primary skill focus with some strength support
+  | 'hybrid_balanced'      // Balanced skill + strength/hypertrophy
+  | 'strength_dominant'    // Strength/hypertrophy primary with skill maintenance
+  | 'general_fitness'      // Broad general fitness
+
+interface CanonicalSessionSpine {
+  mode: ResolvedTrainingMode
+  directIntensitySessions: number   // Max effort skill sessions
+  technicalFocusSessions: number    // Quality/form-focused sessions
+  strengthSupportSessions: number   // Weighted/strength sessions
+  mixedBalancedSessions: number     // Hybrid sessions
+  rotationLightSessions: number     // Recovery/light sessions
+  primaryGoalDominanceRatio: number // 0-1: How much primary goal dominates
+  secondarySkillConstraint: 'strict' | 'moderate' | 'loose'
+  tertiarySkillAllowed: boolean
+}
+
+/**
+ * [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] TASK 3: Build canonical session spine
+ * from resolved training style and goal structure.
+ * 
+ * This ensures session distribution matches the athlete's actual training identity,
+ * not a generic position-based template.
+ */
+function buildCanonicalSessionSpine(
+  trainingStyle: string | undefined,
+  trainingOutcome: string | undefined,
+  primaryGoal: string,
+  secondaryGoal: string | null | undefined,
+  totalSessions: number
+): CanonicalSessionSpine {
+  // Resolve training mode from style/outcome
+  let mode: ResolvedTrainingMode = 'hybrid_balanced'
+  
+  const styleStr = (trainingStyle || '').toLowerCase()
+  const outcomeStr = (trainingOutcome || '').toLowerCase()
+  
+  // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] TASK 4: Determine mode from canonical truth
+  if (styleStr.includes('skill') || outcomeStr === 'skills' || outcomeStr.includes('skill_progression')) {
+    mode = secondaryGoal ? 'skill_dominant' : 'pure_skill'
+  } else if (styleStr.includes('strength') || outcomeStr === 'strength' || outcomeStr === 'max_reps') {
+    mode = 'strength_dominant'
+  } else if (styleStr.includes('hybrid') || styleStr.includes('balanced') || outcomeStr.includes('hybrid')) {
+    mode = 'hybrid_balanced'
+  } else if (styleStr.includes('general') || outcomeStr === 'general_fitness') {
+    mode = 'general_fitness'
+  }
+  
+  // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] TASK 3: Enforce canonical spine per mode
+  // These distributions create VISIBLY DIFFERENT session structures
+  let spine: CanonicalSessionSpine
+  
+  switch (mode) {
+    case 'pure_skill':
+      // Pure skill: maximize direct intensity, minimize support dilution
+      spine = {
+        mode,
+        directIntensitySessions: Math.ceil(totalSessions * 0.5),   // 50% max effort skill
+        technicalFocusSessions: Math.ceil(totalSessions * 0.3),    // 30% technical
+        strengthSupportSessions: Math.max(1, Math.floor(totalSessions * 0.1)), // 10% strength
+        mixedBalancedSessions: 0,                                   // NO mixed sessions
+        rotationLightSessions: Math.max(1, totalSessions - Math.ceil(totalSessions * 0.9)),
+        primaryGoalDominanceRatio: 0.85,
+        secondarySkillConstraint: 'strict',
+        tertiarySkillAllowed: false,
+      }
+      break
+      
+    case 'skill_dominant':
+      // Skill dominant with secondary: clear primary focus, controlled secondary
+      spine = {
+        mode,
+        directIntensitySessions: Math.ceil(totalSessions * 0.4),   // 40% max effort
+        technicalFocusSessions: Math.ceil(totalSessions * 0.25),   // 25% technical
+        strengthSupportSessions: Math.ceil(totalSessions * 0.2),   // 20% strength
+        mixedBalancedSessions: Math.max(1, Math.floor(totalSessions * 0.1)), // 10% mixed
+        rotationLightSessions: Math.max(1, totalSessions - Math.ceil(totalSessions * 0.95)),
+        primaryGoalDominanceRatio: 0.7,
+        secondarySkillConstraint: 'moderate',
+        tertiarySkillAllowed: false,
+      }
+      break
+      
+    case 'strength_dominant':
+      // Strength dominant: prioritize weighted work
+      spine = {
+        mode,
+        directIntensitySessions: Math.ceil(totalSessions * 0.15),  // 15% skill intensity
+        technicalFocusSessions: Math.ceil(totalSessions * 0.2),    // 20% technical
+        strengthSupportSessions: Math.ceil(totalSessions * 0.45),  // 45% strength
+        mixedBalancedSessions: Math.ceil(totalSessions * 0.15),    // 15% mixed
+        rotationLightSessions: Math.max(1, Math.floor(totalSessions * 0.05)),
+        primaryGoalDominanceRatio: 0.6,
+        secondarySkillConstraint: 'moderate',
+        tertiarySkillAllowed: true,
+      }
+      break
+      
+    case 'general_fitness':
+      // General fitness: balanced variety
+      spine = {
+        mode,
+        directIntensitySessions: Math.ceil(totalSessions * 0.2),   // 20% intensity
+        technicalFocusSessions: Math.ceil(totalSessions * 0.2),    // 20% technical
+        strengthSupportSessions: Math.ceil(totalSessions * 0.25),  // 25% strength
+        mixedBalancedSessions: Math.ceil(totalSessions * 0.25),    // 25% mixed
+        rotationLightSessions: Math.max(1, Math.floor(totalSessions * 0.1)),
+        primaryGoalDominanceRatio: 0.4,
+        secondarySkillConstraint: 'loose',
+        tertiarySkillAllowed: true,
+      }
+      break
+      
+    case 'hybrid_balanced':
+    default:
+      // Hybrid balanced: intentional mix
+      spine = {
+        mode,
+        directIntensitySessions: Math.ceil(totalSessions * 0.3),   // 30% intensity
+        technicalFocusSessions: Math.ceil(totalSessions * 0.2),    // 20% technical
+        strengthSupportSessions: Math.ceil(totalSessions * 0.25),  // 25% strength
+        mixedBalancedSessions: Math.ceil(totalSessions * 0.2),     // 20% mixed
+        rotationLightSessions: Math.max(1, Math.floor(totalSessions * 0.05)),
+        primaryGoalDominanceRatio: 0.55,
+        secondarySkillConstraint: 'moderate',
+        tertiarySkillAllowed: true,
+      }
+      break
+  }
+  
+  console.log('[SESSION-ARCHITECTURE-SPINE-AUDIT]', {
+    trainingStyle: styleStr,
+    trainingOutcome: outcomeStr,
+    resolvedMode: mode,
+    primaryGoal,
+    secondaryGoal,
+    totalSessions,
+    spine,
+    verdict: mode === 'pure_skill' || mode === 'skill_dominant'
+      ? 'SKILL_DOMINANT_SPINE_ENFORCED'
+      : mode === 'strength_dominant'
+        ? 'STRENGTH_DOMINANT_SPINE_ENFORCED'
+        : 'BALANCED_SPINE_APPLIED',
+  })
+  
+  return spine
+}
+
+/**
+ * [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] Get session type from canonical spine
+ * instead of generic position-based logic.
+ */
+function getSessionTypeFromSpine(
+  sessionIndex: number,
+  spine: CanonicalSessionSpine
+): WeeklySessionType {
+  // Accumulate thresholds
+  const directEnd = spine.directIntensitySessions
+  const technicalEnd = directEnd + spine.technicalFocusSessions
+  const strengthEnd = technicalEnd + spine.strengthSupportSessions
+  const mixedEnd = strengthEnd + spine.mixedBalancedSessions
+  
+  if (sessionIndex < directEnd) return 'direct_intensity'
+  if (sessionIndex < technicalEnd) return 'technical_focus'
+  if (sessionIndex < strengthEnd) return 'strength_support'
+  if (sessionIndex < mixedEnd) return 'mixed_balanced'
+  return 'rotation_light'
+}
+
 /**
  * TASK 4: Determine session type based on position in week.
- * Front-loads intensity, back-loads recovery.
+ * [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] Now uses canonical spine when available.
+ * Falls back to position-based logic only when spine is not provided.
  */
-function getSessionTypeForPosition(sessionIndex: number, totalSessions: number): WeeklySessionType {
+function getSessionTypeForPosition(
+  sessionIndex: number, 
+  totalSessions: number,
+  canonicalSpine?: CanonicalSessionSpine | null
+): WeeklySessionType {
+  // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] TASK 6: Prefer spine over position-based
+  if (canonicalSpine) {
+    return getSessionTypeFromSpine(sessionIndex, canonicalSpine)
+  }
+  
+  // Fallback: position-based (only when spine unavailable)
   const weekPosition = sessionIndex / totalSessions
   
   // First 40% of week: direct intensity / heavy work
@@ -15848,7 +16077,9 @@ function getSkillsForSession(
   // [PHASE 2 MULTI-SKILL] Optional multi-skill allocation contract for authoritative skill representation
   multiSkillAllocation?: MultiSkillSessionAllocationContract | null,
   // [PHASE 1 AI-TRUTH-ARCHITECTURE] Session architecture truth for authoritative skill classification
-  sessionArchitectureTruth?: SessionArchitectureTruthContract | null
+  sessionArchitectureTruth?: SessionArchitectureTruthContract | null,
+  // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] Canonical spine for session type determination
+  canonicalSpine?: CanonicalSessionSpine | null
 ): SessionSkillAllocation[] {
   if (!weightedAllocation || weightedAllocation.length === 0) {
     return []
@@ -15859,9 +16090,9 @@ function getSkillsForSession(
   // [advanced-skill-expression] ISSUE B: Track which advanced skills need expression this session
   const advancedSkillsInAllocation = weightedAllocation.filter(a => isAdvancedSkill(a.skill))
   
-  // TASK 4: Calculate session type based on position in week
-  // This creates variety across sessions - not every session is max effort
-  const sessionType = getSessionTypeForPosition(sessionIndex, totalSessions)
+  // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] TASK 4: Use canonical spine for session type
+  // This creates variety across sessions based on RESOLVED TRAINING MODE, not generic position
+  const sessionType = getSessionTypeForPosition(sessionIndex, totalSessions, canonicalSpine)
   
   // [PHASE 2 MULTI-SKILL] Build a lookup of representation modes from the contract
   const representationModeMap = new Map<string, { mode: SkillRepresentationMode; allocatedSessions: number }>()
@@ -15907,15 +16138,23 @@ function getSkillsForSession(
       continue
     }
     
-    // [selection-compression-fix] ISSUE B: Secondary skills MUST appear more often
-    // This is the key fix for "selected skills don't affect the week"
+    // [selection-compression-fix] ISSUE B: Secondary skills appearance
+    // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] TASK 4: Respect spine's secondary skill constraint
     if (priorityLevel === 'secondary' || weight >= 0.15) {
-      // [selection-compression-fix] TASK 2: Stronger inclusion logic for secondary skills
-      // Secondary skills should appear in at least 70% of sessions
-      const minSessionsForSecondary = Math.max(Math.ceil(totalSessions * 0.7), exposureSessions)
+      // Determine inclusion threshold based on canonical spine constraint
+      const secondaryConstraint = canonicalSpine?.secondarySkillConstraint || 'moderate'
+      
+      // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] Constraint-based secondary inclusion
+      // - strict: only 30-40% of sessions (pure skill focus)
+      // - moderate: 50-60% of sessions (balanced)
+      // - loose: 70%+ of sessions (general fitness)
+      const constraintMultiplier = secondaryConstraint === 'strict' ? 0.35 
+        : secondaryConstraint === 'moderate' ? 0.55 : 0.7
+      
+      const minSessionsForSecondary = Math.max(Math.ceil(totalSessions * constraintMultiplier), exposureSessions)
       const shouldInclude = sessionIndex < minSessionsForSecondary || 
         exposureSessions >= totalSessions ||
-        (sessionIndex % 2 === 0) // Even sessions always get secondary skills
+        (secondaryConstraint !== 'strict' && sessionIndex % 2 === 0) // Skip even session rule for strict constraint
       
       if (shouldInclude) {
         // [selection-compression-fix] TASK 4: Session role affects secondary skill expression mode
@@ -16007,6 +16246,20 @@ function getSkillsForSession(
       // FIX: Ensure tertiary skills get at least 2 sessions per week as support, and mixed/hybrid
       // days should include multiple tertiary skills for broader profile representation
       
+      // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] TASK 4: Check if tertiary skills are allowed by spine
+      const tertiaryAllowedBySpine = canonicalSpine?.tertiarySkillAllowed ?? true
+      
+      // If spine forbids tertiary (pure skill / skill dominant modes), skip this skill
+      if (!tertiaryAllowedBySpine) {
+        console.log('[SESSION-ARCHITECTURE-TERTIARY-BLOCKED]', {
+          skill,
+          sessionIndex,
+          spineMode: canonicalSpine?.mode,
+          reason: 'spine_forbids_tertiary_for_primary_goal_dominance',
+        })
+        continue // Skip tertiary skill - let primary dominate
+      }
+      
       // [PRIORITY-COLLAPSE-FIX] TASK 5: All tertiary skills (not just weight-based) should be considered
       const tertiarySkills = weightedAllocation
         .filter(a => a.priorityLevel === 'tertiary' || (a.weight >= 0.05 && a.weight < 0.15))
@@ -16015,12 +16268,9 @@ function getSkillsForSession(
       const tertiaryCount = tertiarySkills.length
       
       // [PRIORITY-COLLAPSE-FIX] TASK 3 & 5: Improved minimum sessions for broader commitment
-      // - Each broad selected skill should appear in at least 2 sessions per week
-      // - This is the "broad_selected_commitment" floor
-      // - Mixed/hybrid/density days should include more tertiary skills
-      // - Distribute tertiary skills across sessions more evenly
-      // [PRIORITY-COLLAPSE-FIX] Increased minimum from 2 to 3 for better floor guarantee
-      const minSessionsForTertiary = Math.max(3, exposureSessions)
+      // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] TASK 4: Reduced exposure for strength-dominant modes
+      const baseMinSessions = canonicalSpine?.mode === 'strength_dominant' ? 2 : 3
+      const minSessionsForTertiary = Math.max(baseMinSessions, exposureSessions)
       const sessionsPerSkill = Math.ceil(totalSessions / Math.max(1, tertiaryCount))
       
       // [session-assembly-truth] Multiple inclusion conditions - any can trigger inclusion
@@ -16032,7 +16282,7 @@ function getSkillsForSession(
       const isEvenSessionForOddIndex = (sessionIndex % 2 === 0) && (tertiaryIndex % 2 === 1)
       
       // [session-assembly-truth] Mixed/hybrid days MUST include broader tertiary skills
-      // This is key for making the profile feel represented
+      // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] TASK 4: Respect spine mode in tertiary inclusion
       const shouldIncludeTertiary = isMixedOrHybridDay || // Mixed days always get tertiary skills
         isRotationSession || // Regular rotation
         isExposureGuarantee || // First 2 sessions guarantee exposure
@@ -16643,6 +16893,8 @@ function generateAdaptiveSession(
   sessionArchitectureTruth,
   // [SESSION-COMPOSITION-INTELLIGENCE] Extract composition blueprint for structure enforcement
   sessionCompositionBlueprint,
+  // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] Extract canonical session spine
+  canonicalSessionSpine,
   } = context
   
   // [DOCTRINE RUNTIME CONTRACT] Log doctrine influence for this session
@@ -16767,28 +17019,33 @@ function generateAdaptiveSession(
   // based on weighted allocation and session index
   // [PHASE 2 MULTI-SKILL] Pass multi-skill allocation contract for authoritative skill enforcement
   // [PHASE 1 AI-TRUTH-ARCHITECTURE] Pass sessionArchitectureTruth for authoritative skill classification
+  // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] Pass canonical spine for session type determination
   const skillsForThisSession = getSkillsForSession(
   weightedSkillAllocation || [],
   sessionIndex || 0,
   totalSessions || 1,
   day.focus,
   multiSkillAllocation,
-  sessionArchitectureTruth // [PHASE 1 AI-TRUTH-ARCHITECTURE] Authoritative skill classification
+  sessionArchitectureTruth, // [PHASE 1 AI-TRUTH-ARCHITECTURE] Authoritative skill classification
+  canonicalSessionSpine // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] Canonical spine for session variety
   )
   
   sessionStep = 'skills_for_session_resolved'
   
-  // TASK 4: Log session type for debugging session variety
-  const sessionType = getSessionTypeForPosition(sessionIndex || 0, totalSessions || 1)
+  // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] Log session type using canonical spine
+  const sessionType = getSessionTypeForPosition(sessionIndex || 0, totalSessions || 1, canonicalSessionSpine)
   console.log('[skill-expression] Skills for session:', {
     sessionIndex,
-    sessionType, // TASK 4: Shows what type of session this is
+    sessionType, // Now shows spine-derived session type
+    spineMode: canonicalSessionSpine?.mode || 'no_spine',
     dayFocus: day.focus,
     skillsForThisSession: skillsForThisSession.map(s => ({ 
       skill: s.skill, 
-      mode: s.expressionMode // TASK 4: Now shows varied modes
+      mode: s.expressionMode
     })),
     primaryGoal,
+    // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] TASK 5: Show visible differentiation
+    sessionTypeSource: canonicalSessionSpine ? 'canonical_spine' : 'position_fallback',
   })
     
   // Select exercises
@@ -18003,9 +18260,15 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
            selection.skillExpressionResult.supportSkillsInjected.length > 0)),
       } : undefined,
       // [SESSION-COMPOSITION-INTELLIGENCE] Add composition metadata for explainability
+      // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] TASK 5: Include spine-derived session type
       compositionMetadata: sessionCompositionBlueprint ? {
         sessionIntent: sessionCompositionBlueprint.sessionIntent,
         sessionComplexity: sessionCompositionBlueprint.sessionComplexity,
+        // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] Visible differentiation fields
+        spineSessionType: canonicalSessionSpine 
+          ? getSessionTypeForPosition(sessionIndex || 0, totalSessions || 1, canonicalSessionSpine)
+          : undefined,
+        spineMode: canonicalSessionSpine?.mode,
         blockRoles: sessionCompositionBlueprint.blocks.map(b => b.role),
         methodEligibility: sessionCompositionBlueprint.methodEligibility,
         workloadDistribution: sessionCompositionBlueprint.workloadDistribution,

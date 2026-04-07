@@ -807,15 +807,92 @@ export function buildSessionCompositionBlueprint(
     sourceField: 'blockOrdering',
   })
   
-  // Build audit
+  // ==========================================================================
+  // [SESSION-ARCHITECTURE-OWNERSHIP] Add canonical truth-derived reasons
+  // ==========================================================================
+  
+  // Current working progression reason
+  if (ctx.currentWorkingProgressions && Object.keys(ctx.currentWorkingProgressions).length > 0) {
+    const progressionSkills = Object.keys(ctx.currentWorkingProgressions)
+    const hasActiveProgression = progressionSkills.some(skill => 
+      ctx.currentWorkingProgressions![skill].currentWorkingProgression !== null
+    )
+    if (hasActiveProgression) {
+      compositionReasons.push({
+        code: 'current_progression_fit',
+        description: `Session structure shaped by active progressions: ${progressionSkills.slice(0, 2).join(', ')}`,
+        affectedBlocks: ['primary_skill', 'support_carryover'],
+        sourceField: 'currentWorkingProgressions',
+      })
+    }
+  }
+  
+  // Session architecture truth reason
+  const archTruth = ctx.sessionArchitectureTruth
+  if (archTruth) {
+    const sessionRoleBias = archTruth.doctrineArchitectureBias?.sessionRoleBias
+    if (sessionRoleBias && sessionRoleBias !== 'balanced_multi_skill') {
+      compositionReasons.push({
+        code: sessionRoleBias === 'primary_dominant' ? 'primary_goal_anchor' : 'support_carryover_placement',
+        description: `Session role bias: ${sessionRoleBias.replace(/_/g, ' ')}`,
+        affectedBlocks: sessionRoleBias === 'primary_dominant' ? ['primary_skill', 'primary_strength'] : ['support_carryover', 'accessory_targeted'],
+        sourceField: 'sessionArchitectureTruth.doctrineArchitectureBias',
+      })
+    }
+    
+    // Template escape achieved if we have strong canonical signals
+    if (archTruth.primarySpineSkills.length > 0 && archTruth.sourceVerdict === 'FULL_TRUTH_AVAILABLE') {
+      compositionReasons.push({
+        code: 'template_escape_achieved',
+        description: `Session driven by canonical athlete truth, not generic template`,
+        affectedBlocks: ['primary_skill', 'primary_strength', 'support_carryover'],
+        sourceField: 'sessionArchitectureTruth.sourceVerdict',
+      })
+    }
+  }
+  
+  // Method eligibility reason
+  const methodsEarned = methodEligibility.supersets === 'earned' || methodEligibility.density === 'earned'
+  if (methodsEarned) {
+    const earnedMethods = []
+    if (methodEligibility.supersets === 'earned') earnedMethods.push('supersets')
+    if (methodEligibility.density === 'earned') earnedMethods.push('density')
+    if (methodEligibility.circuits === 'earned') earnedMethods.push('circuits')
+    
+    compositionReasons.push({
+      code: 'method_earned_by_context',
+      description: `Methods earned by athlete profile: ${earnedMethods.join(', ')}`,
+      affectedBlocks: ['method_density', 'method_superset'],
+      sourceField: 'methodEligibility',
+    })
+  }
+  
+  // Joint caution reason
+  if (ctx.jointCautions.length > 0) {
+    compositionReasons.push({
+      code: 'joint_protection_simplification',
+      description: `Session structure respects joint cautions: ${ctx.jointCautions.slice(0, 2).join(', ')}`,
+      affectedBlocks: ['prehab_joint_care', 'accessory_targeted'],
+      sourceField: 'jointCautions',
+    })
+  }
+  
+  // Build audit - template escaped when we have canonical truth-derived reasons
+  const hasCanonicalTruthReasons = compositionReasons.some(r => 
+    r.code === 'current_progression_fit' || 
+    r.code === 'template_escape_achieved' ||
+    r.sourceField.includes('sessionArchitectureTruth')
+  )
+  
   const audit = {
     primaryGoalDominated: primaryPercent >= 25,
     secondaryGoalContained: secondaryMinutes <= totalMinutes * 0.2,
-    progressionRespected: !!ctx.currentWorkingProgressions,
+    progressionRespected: !!ctx.currentWorkingProgressions && Object.keys(ctx.currentWorkingProgressions).length > 0,
     equipmentUtilized: ctx.equipment.length > 0,
     jointProtectionApplied: ctx.jointCautions.length > 0 && blocks.some(b => b.role === 'prehab_joint_care'),
     methodsEarned: methodEligibility.supersets === 'earned' || methodEligibility.density === 'earned',
-    templateEscaped: compositionReasons.length >= 3,
+    // [SESSION-ARCHITECTURE-OWNERSHIP] Template escape requires canonical truth reasons
+    templateEscaped: hasCanonicalTruthReasons || compositionReasons.length >= 4,
   }
   
   // Build session intent string
@@ -855,39 +932,140 @@ export function buildSessionCompositionBlueprint(
 
 /**
  * Build a human-readable session intent string
+ * [SESSION-ARCHITECTURE-OWNERSHIP] Enhanced to derive distinct day purposes from canonical truth
  */
 function buildSessionIntentString(
   ctx: SessionCompositionContext,
   blocks: SessionBlockPlan[]
 ): string {
+  // ==========================================================================
+  // [SESSION-ARCHITECTURE-OWNERSHIP] Determine canonical day role from truth
+  // ==========================================================================
+  
+  // Check session architecture truth for spine/secondary classification
+  const archTruth = ctx.sessionArchitectureTruth
+  const primarySpineSkills = archTruth?.primarySpineSkills || []
+  const supportRotationSkills = archTruth?.supportRotationSkills || []
+  const currentWorkingProgressions = ctx.currentWorkingProgressions || {}
+  
+  // Determine if this is a primary-spine-dominant session
+  const dayFocus = ctx.day.focus
+  const isPrimarySkillDay = dayFocus.includes('skill') || dayFocus.includes('vertical_push_skill')
+  const isPushDay = dayFocus.includes('push')
+  const isPullDay = dayFocus.includes('pull')
+  const isMixedDay = dayFocus.includes('mixed')
+  const isLowIntensityDay = ctx.day.targetIntensity === 'low'
+  
+  // Build session role from canonical signals
+  let sessionRole: string
+  
+  if (isLowIntensityDay || ctx.fatigueState === 'needs_deload') {
+    // Low intensity days get recovery-focused role
+    sessionRole = 'recovery_technique'
+  } else if (primarySpineSkills.includes(ctx.primaryGoal) && isPrimarySkillDay) {
+    // Direct primary spine skill expression
+    sessionRole = 'primary_skill_exposure'
+  } else if (isPushDay && !isPullDay) {
+    // Determine push emphasis from primary goal
+    const isPlanches = ctx.primaryGoal === 'planche'
+    const isHSPU = ctx.primaryGoal === 'handstand_pushup'
+    const isWeightedPush = ctx.primaryGoal === 'weighted_strength'
+    
+    if (isPlanches) {
+      sessionRole = 'planche_strength_biased'
+    } else if (isHSPU) {
+      sessionRole = 'vertical_push_dominant'
+    } else if (isWeightedPush) {
+      sessionRole = 'weighted_push_capacity'
+    } else {
+      sessionRole = 'push_strength_carryover'
+    }
+  } else if (isPullDay && !isPushDay) {
+    // Determine pull emphasis from primary goal
+    const isFrontLever = ctx.primaryGoal === 'front_lever'
+    const isMuscleUp = ctx.primaryGoal === 'muscle_up'
+    
+    if (isFrontLever) {
+      sessionRole = 'front_lever_strength_biased'
+    } else if (isMuscleUp) {
+      sessionRole = 'muscle_up_technical'
+    } else {
+      sessionRole = 'pull_strength_carryover'
+    }
+  } else if (isMixedDay) {
+    // Mixed days serve as support/structure reinforcement
+    const hasCurrentProgression = Object.keys(currentWorkingProgressions).length > 0
+    if (hasCurrentProgression) {
+      sessionRole = 'multi_skill_structure_day'
+    } else {
+      sessionRole = 'balanced_skill_exposure'
+    }
+  } else {
+    // Fallback for undefined focus
+    sessionRole = 'general_strength_support'
+  }
+  
+  // Build the final intent string with more specific language
   const parts: string[] = []
   
-  // Primary focus
-  const hasPrimarySkill = blocks.some(b => b.role === 'primary_skill')
-  const hasPrimaryStrength = blocks.some(b => b.role === 'primary_strength')
+  // Add session role as primary intent
+  const roleLabel = SESSION_ROLE_LABELS[sessionRole] || sessionRole.replace(/_/g, ' ')
+  parts.push(roleLabel)
   
-  if (hasPrimarySkill) {
-    parts.push(`${ctx.primaryGoal} skill focus`)
-  } else if (hasPrimaryStrength) {
-    parts.push(`${ctx.primaryGoal} strength focus`)
-  }
-  
-  // Secondary if present
+  // Add secondary goal if present and contained
   if (ctx.secondaryGoal && blocks.some(b => b.role === 'secondary_skill' || b.role === 'secondary_strength')) {
-    parts.push(`${ctx.secondaryGoal} support`)
+    parts.push(`${formatGoalLabel(ctx.secondaryGoal)} maintenance`)
   }
   
-  // Method qualifier
-  if (blocks.some(b => b.role === 'method_density')) {
-    parts.push('density work')
+  // Add method qualifier for density/circuit sessions
+  const hasDensityBlock = blocks.some(b => b.role === 'method_density')
+  const hasFinisher = blocks.some(b => b.role === 'finisher_conditioning')
+  
+  if (hasDensityBlock) {
+    parts.push('with density work')
+  } else if (hasFinisher) {
+    parts.push('with conditioning finish')
   }
   
-  // Recovery qualifier
-  if (ctx.fatigueState === 'accumulated' || ctx.fatigueState === 'needs_deload') {
-    parts.push('recovery-mindful')
+  // Add recovery qualifier if fatigued
+  if (ctx.fatigueState === 'accumulated') {
+    parts.push('(managed volume)')
   }
   
-  return parts.join(' + ') || 'general training'
+  return parts.join(' + ') || `${ctx.primaryGoal} training`
+}
+
+/**
+ * Session role labels for human-readable output
+ */
+const SESSION_ROLE_LABELS: Record<string, string> = {
+  'recovery_technique': 'Recovery-focused technique work',
+  'primary_skill_exposure': 'Primary skill progression day',
+  'planche_strength_biased': 'Planche strength development',
+  'vertical_push_dominant': 'HSPU progression focus',
+  'weighted_push_capacity': 'Weighted push capacity',
+  'push_strength_carryover': 'Push strength carryover',
+  'front_lever_strength_biased': 'Front lever strength development',
+  'muscle_up_technical': 'Muscle-up technique focus',
+  'pull_strength_carryover': 'Pull strength carryover',
+  'multi_skill_structure_day': 'Multi-skill structure reinforcement',
+  'balanced_skill_exposure': 'Balanced skill expression',
+  'general_strength_support': 'General strength support',
+}
+
+/**
+ * Format goal ID to readable label
+ */
+function formatGoalLabel(goal: string): string {
+  const labels: Record<string, string> = {
+    'planche': 'Planche',
+    'front_lever': 'Front Lever',
+    'handstand_pushup': 'HSPU',
+    'muscle_up': 'Muscle-Up',
+    'weighted_strength': 'Weighted',
+    'flexibility': 'Flexibility',
+  }
+  return labels[goal] || goal.replace(/_/g, ' ')
 }
 
 /**

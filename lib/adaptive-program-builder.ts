@@ -16836,6 +16836,8 @@ function generateAdaptiveSession(
     currentWorkingProgression: e.currentWorkingProgression,
     historicalCeiling: e.historicalCeiling,
   })) || [],
+  // [SESSION-ARCHITECTURE-OWNERSHIP] Pass composition blueprint for structure enforcement
+  sessionCompositionBlueprint,
   })
   
   sessionStep = 'selection_received'

@@ -15603,6 +15603,74 @@ return explanations.length > 0 ? explanations : undefined
   // Store audit on program for debugging visibility
   ;(finalProgram as { breadthAuditReport?: typeof breadthAuditReport }).breadthAuditReport = breadthAuditReport
   
+  // ==========================================================================
+  // [SESSION-ARCHITECTURE-VISIBLE-EXPRESSION] Week-level differentiation audit
+  // Detect when sessions with different intended roles converge into similar structures
+  // ==========================================================================
+  const sessionSignatures = sessions.map((s, idx) => {
+    const meta = (s as any).compositionMetadata
+    const firstThreeExercises = s.exercises?.slice(0, 3).map(e => e.category) || []
+    return {
+      dayNumber: idx + 1,
+      spineSessionType: meta?.spineSessionType || 'unknown',
+      sessionIntent: meta?.sessionIntent || s.focusLabel,
+      firstThreeCategories: firstThreeExercises.join(','),
+      exerciseCount: s.exercises?.length || 0,
+      primaryCount: s.exercises?.filter(e => (e as any).selectionTrace?.sessionRole?.includes('primary') || (e as any).selectionTrace?.sessionRole?.includes('direct_skill')).length || 0,
+      supportCount: s.exercises?.filter(e => (e as any).selectionTrace?.sessionRole?.includes('support') || (e as any).selectionTrace?.sessionRole?.includes('accessory')).length || 0,
+    }
+  })
+  
+  // Check for convergence: sessions with different spine types that have same first 3 categories
+  const spineTypeGroups = new Map<string, typeof sessionSignatures>()
+  for (const sig of sessionSignatures) {
+    const key = sig.spineSessionType
+    if (!spineTypeGroups.has(key)) spineTypeGroups.set(key, [])
+    spineTypeGroups.get(key)!.push(sig)
+  }
+  
+  // Detect convergence: count how many unique visible structures exist
+  const uniqueStructures = new Set(sessionSignatures.map(s => `${s.spineSessionType}|${s.firstThreeCategories}|${s.primaryCount}`))
+  const differentiationRatio = uniqueStructures.size / Math.max(1, sessions.length)
+  
+  // Find pairs of sessions with different intents but similar structures
+  const convergentPairs: Array<{ day1: number; day2: number; sharedPattern: string }> = []
+  for (let i = 0; i < sessionSignatures.length; i++) {
+    for (let j = i + 1; j < sessionSignatures.length; j++) {
+      const sig1 = sessionSignatures[i]
+      const sig2 = sessionSignatures[j]
+      // Different spine types but same visible structure = convergence
+      if (sig1.spineSessionType !== sig2.spineSessionType && 
+          sig1.firstThreeCategories === sig2.firstThreeCategories &&
+          sig1.primaryCount === sig2.primaryCount) {
+        convergentPairs.push({
+          day1: sig1.dayNumber,
+          day2: sig2.dayNumber,
+          sharedPattern: sig1.firstThreeCategories,
+        })
+      }
+    }
+  }
+  
+  console.log('[SESSION-ARCHITECTURE-WEEK-DIFFERENTIATION-AUDIT]', {
+    totalSessions: sessions.length,
+    uniqueStructures: uniqueStructures.size,
+    differentiationRatio: differentiationRatio.toFixed(2),
+    spineTypesUsed: [...spineTypeGroups.keys()],
+    convergentPairsCount: convergentPairs.length,
+    convergentPairs: convergentPairs.length > 0 ? convergentPairs.slice(0, 3) : 'none',
+    sessionSignatures: sessionSignatures.map(s => ({
+      day: s.dayNumber,
+      type: s.spineSessionType,
+      pattern: s.firstThreeCategories,
+      primary: s.primaryCount,
+      support: s.supportCount,
+    })),
+    verdict: differentiationRatio >= 0.5 && convergentPairs.length <= 1
+      ? 'ARCHITECTURE_MATERIALLY_EXPRESSED'
+      : 'ARCHITECTURE_UNDER_EXPRESSED_SESSIONS_CONVERGING',
+  })
+  
   return finalProgram
   
   // TASK 2-B: End of post-validation try block - should never reach here due to return above

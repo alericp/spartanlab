@@ -950,6 +950,7 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   // [exercise-expression] ISSUE A: Pass skillsForSession to enable multi-skill expression
   // TASK 1-B: Pass weightedBenchmarks to fix ReferenceError in selectMainExercises
   // [PHASE 4 HOTFIX] Pass jointCautions for doctrine context
+  // [SESSION-ARCHITECTURE-VISIBLE-EXPRESSION] Pass architecture contract for slot enforcement
   const main = selectMainExercises(
   day,
   primaryGoal,
@@ -968,7 +969,8 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   weightedBenchmarks, // TASK 1-B: Weighted benchmark data for load prescription
   jointCautions,     // [PHASE 4 HOTFIX] Joint cautions for doctrine scoring
   currentWorkingProgressions, // [PHASE-MATERIALITY] Current working progressions
-  materialSkillIntent // [PHASE-MATERIALITY] Material skill intent
+  materialSkillIntent, // [PHASE-MATERIALITY] Material skill intent
+  sessionArchitectureContract // [SESSION-ARCHITECTURE-VISIBLE-EXPRESSION] Architecture contract for slot enforcement
   )
   
   // [session-assembly] ISSUE C: Validate main exercises before proceeding
@@ -1370,6 +1372,21 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
       materialityVerdict: skillExpressionCapture.materialityVerdict,
       materialityIssues: skillExpressionCapture.materialityIssues,
     } : undefined,
+    // [SESSION-ARCHITECTURE-VISIBLE-EXPRESSION] Session differentiation signature for convergence detection
+    sessionDifferentiationSignature: {
+      sessionIntent: sessionArchitectureContract.sessionIntent,
+      primaryWorkCount,
+      secondaryWorkCount,
+      supportWorkCount,
+      totalExercises: main.length,
+      firstThreeCategories: main.slice(0, 3).map(e => e.category || 'unknown'),
+      firstThreeTypes: main.slice(0, 3).map(e => e.selectionTrace?.sessionRole || 'unknown'),
+      hasDirectSkillWork: main.some(e => e.selectionTrace?.sessionRole === 'direct_skill' || e.selectionTrace?.sessionRole === 'skill_primary'),
+      hasStrengthSupport: main.some(e => e.selectionTrace?.sessionRole === 'strength_support'),
+      hasMixedContent: primaryWorkCount > 0 && supportWorkCount > 0 && secondaryWorkCount > 0,
+      dayRole: sessionArchitectureContract.dayRoleEnforcement.dayRole,
+      workloadRatio: `${sessionArchitectureContract.workloadDistribution.primaryPercent}/${sessionArchitectureContract.workloadDistribution.secondaryPercent}/${sessionArchitectureContract.workloadDistribution.supportPercent}`,
+    },
   }
 }
 
@@ -1601,7 +1618,9 @@ function selectMainExercises(
   role: 'primary_spine' | 'secondary_anchor' | 'tertiary' | 'support' | 'deferred'
   currentWorkingProgression: string | null
   historicalCeiling: string | null
-  }>
+  }>,
+  // [SESSION-ARCHITECTURE-VISIBLE-EXPRESSION] Architecture contract for material slot enforcement
+  sessionArchitectureContract?: SessionArchitectureContract
   ): SelectedExercise[] {
   // [selection-contract] TASK 1-F: Verify weighted benchmarks threading
   console.log('[selection-contract]', {
@@ -4777,10 +4796,115 @@ function applyMaterialityScoreAdjustments(
   }
   
   // ==========================================================================
+  // [SESSION-ARCHITECTURE-VISIBLE-EXPRESSION] SLOT ENFORCEMENT
+  // Enforce architecture contract slot counts for visible session differentiation
+  // ==========================================================================
+  let enforcedExercises = deduplicatedSelected
+  
+  if (sessionArchitectureContract && sessionArchitectureContract.templateEscaped) {
+    const { slotAllocation, dayRoleEnforcement, workloadDistribution } = sessionArchitectureContract
+    
+    // Count current exercises by role
+    const currentPrimary = deduplicatedSelected.filter(e => 
+      e.selectionContext?.sessionRole === 'skill_primary' ||
+      e.selectionContext?.sessionRole === 'direct_skill' ||
+      e.selectionContext?.sessionRole === 'strength_primary'
+    )
+    const currentSecondary = deduplicatedSelected.filter(e => 
+      e.selectionContext?.sessionRole === 'skill_secondary' ||
+      e.selectionContext?.sessionRole === 'secondary_skill'
+    )
+    const currentSupport = deduplicatedSelected.filter(e => 
+      e.selectionContext?.sessionRole === 'strength_support' ||
+      e.selectionContext?.sessionRole === 'accessory' ||
+      e.selectionContext?.sessionRole === 'support_volume'
+    )
+    const currentOther = deduplicatedSelected.filter(e => {
+      const role = e.selectionContext?.sessionRole
+      return !role || (
+        role !== 'skill_primary' && role !== 'direct_skill' && role !== 'strength_primary' &&
+        role !== 'skill_secondary' && role !== 'secondary_skill' &&
+        role !== 'strength_support' && role !== 'accessory' && role !== 'support_volume'
+      )
+    })
+    
+    // Calculate target counts from workload distribution
+    const totalSlots = slotAllocation.primaryWork + slotAllocation.secondaryWork + slotAllocation.supportWork + slotAllocation.accessoryWork
+    const targetPrimaryCount = Math.max(1, Math.round((workloadDistribution.primaryPercent / 100) * Math.min(totalSlots, maxExercises)))
+    const targetSecondaryCount = Math.round((workloadDistribution.secondaryPercent / 100) * Math.min(totalSlots, maxExercises))
+    const targetSupportCount = Math.round((workloadDistribution.supportPercent / 100) * Math.min(totalSlots, maxExercises))
+    
+    // Enforce primary dominance on primary days
+    const shouldEnforcePrimaryDominance = dayRoleEnforcement.mustDominatePrimary && 
+      currentPrimary.length < targetPrimaryCount
+    
+    // Enforce secondary containment on non-mixed days
+    const shouldContainSecondary = dayRoleEnforcement.secondaryContainmentLevel !== 'none' &&
+      currentSecondary.length > targetSecondaryCount + 1
+    
+    // Build enforced exercise list
+    let assembledExercises: typeof deduplicatedSelected = []
+    
+    // 1. Add primary exercises first (up to target)
+    const primaryToAdd = currentPrimary.slice(0, Math.max(targetPrimaryCount, currentPrimary.length))
+    assembledExercises.push(...primaryToAdd)
+    
+    // 2. Add secondary exercises (contained by target)
+    const secondaryLimit = dayRoleEnforcement.secondaryContainmentLevel === 'minimal' 
+      ? Math.min(1, targetSecondaryCount)
+      : dayRoleEnforcement.secondaryContainmentLevel === 'moderate'
+        ? Math.min(2, targetSecondaryCount)
+        : targetSecondaryCount
+    const secondaryToAdd = currentSecondary.slice(0, secondaryLimit)
+    assembledExercises.push(...secondaryToAdd)
+    
+    // 3. Add support exercises (up to remaining slots)
+    const remainingSlots = maxExercises - assembledExercises.length
+    const supportToAdd = currentSupport.slice(0, Math.min(targetSupportCount, remainingSlots))
+    assembledExercises.push(...supportToAdd)
+    
+    // 4. Fill remaining with other exercises
+    const finalRemainingSlots = maxExercises - assembledExercises.length
+    if (finalRemainingSlots > 0 && currentOther.length > 0) {
+      assembledExercises.push(...currentOther.slice(0, finalRemainingSlots))
+    }
+    
+    // Log enforcement
+    console.log('[SESSION-ARCHITECTURE-VISIBLE-EXPRESSION-ENFORCEMENT]', {
+      dayFocus: day.focus,
+      sessionIntent: sessionArchitectureContract.sessionIntent,
+      workloadDistribution,
+      targetCounts: { primary: targetPrimaryCount, secondary: targetSecondaryCount, support: targetSupportCount },
+      actualCountsBefore: { 
+        primary: currentPrimary.length, 
+        secondary: currentSecondary.length, 
+        support: currentSupport.length,
+        other: currentOther.length,
+      },
+      actualCountsAfter: {
+        primary: primaryToAdd.length,
+        secondary: secondaryToAdd.length,
+        support: supportToAdd.length,
+        total: assembledExercises.length,
+      },
+      enforcementApplied: {
+        primaryDominanceEnforced: shouldEnforcePrimaryDominance,
+        secondaryContained: shouldContainSecondary,
+        secondaryContainmentLevel: dayRoleEnforcement.secondaryContainmentLevel,
+      },
+      verdict: assembledExercises.length >= maxExercises - 1 
+        ? 'ARCHITECTURE_SLOTS_ENFORCED'
+        : 'ARCHITECTURE_SLOTS_PARTIAL_ENFORCEMENT',
+    })
+    
+    enforcedExercises = assembledExercises
+  }
+  
+  // ==========================================================================
   // [SESSION-ARCHITECTURE-MATERIALIZATION] AUTHORITATIVE TRACE AUDIT
   // This audit tracks whether broader skill truth actually materialized into exercises
   // ==========================================================================
-  const finalExercises = deduplicatedSelected.sort((a, b) => b.exercise.neuralDemand - a.exercise.neuralDemand)
+  const finalExercises = enforcedExercises.sort((a, b) => b.exercise.neuralDemand - a.exercise.neuralDemand)
   
   // Classify each final exercise by its skill source
   const exerciseSkillClassification = finalExercises.map(ex => {

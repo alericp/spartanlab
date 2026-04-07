@@ -60,6 +60,7 @@ export type MaterialityReasonCode =
 export interface MaterialityScoreBreakdown {
   primaryGoalAlignment: number      // 0-30: How directly it serves primary goal
   secondaryGoalSupport: number      // 0-15: Support for secondary goal
+  additionalSkillsSupport: number   // 0-12: Support for tertiary/additional selected skills
   currentProgressionFit: number     // 0-25: Aligned to CURRENT ability, not ceiling
   equipmentOptimality: number       // 0-15: Best use of available equipment
   jointCautionSafety: number        // 0-10: Safe for declared joint cautions
@@ -145,37 +146,44 @@ const SLOT_WEIGHT_PROFILES: Record<SlotType, Partial<Record<keyof MaterialitySco
     currentProgressionFit: 1.3,     // Must match current ability
     carryoverValue: 0.8,
     equipmentOptimality: 1.0,
+    additionalSkillsSupport: 0.5,   // Tertiary skills less relevant for direct skill work
   },
   main_strength: {
     primaryGoalAlignment: 1.2,
     carryoverValue: 1.4,            // Strength should transfer well
     equipmentOptimality: 1.3,       // Important to use available equipment well
     trainingStyleMatch: 1.2,
+    additionalSkillsSupport: 0.8,   // Some influence for tertiary skills
   },
   secondary_skill: {
     secondaryGoalSupport: 1.5,      // Secondary goal matters most here
     currentProgressionFit: 1.2,
     carryoverValue: 1.0,
+    additionalSkillsSupport: 1.0,   // Tertiary skills relevant here
   },
   assistance: {
     carryoverValue: 1.3,
     jointCautionSafety: 1.2,        // Should be safe
     scheduleComplexityFit: 1.2,     // Should not bloat session
+    additionalSkillsSupport: 1.4,   // HIGH: Accessories should express tertiary skills
   },
   support_carryover: {
     carryoverValue: 1.5,            // Carryover is the point
     primaryGoalAlignment: 1.2,
     jointCautionSafety: 1.1,
+    additionalSkillsSupport: 1.3,   // HIGH: Support work is ideal for tertiary expression
   },
   prehab_joint_care: {
     jointCautionSafety: 2.0,        // Safety is paramount
     carryoverValue: 0.8,
     scheduleComplexityFit: 1.0,
+    additionalSkillsSupport: 0.6,   // Low: prehab is less about skill exposure
   },
   density_finisher: {
     scheduleComplexityFit: 1.3,
     recentHistoryPenalty: 1.5,      // Should rotate more
     jointCautionSafety: 1.2,
+    additionalSkillsSupport: 1.2,   // Finishers can express tertiary skills
   },
 }
 
@@ -194,6 +202,7 @@ export function scoreExerciseMateriality(
   const breakdown: MaterialityScoreBreakdown = {
     primaryGoalAlignment: 0,
     secondaryGoalSupport: 0,
+    additionalSkillsSupport: 0,
     currentProgressionFit: 0,
     equipmentOptimality: 0,
     jointCautionSafety: 0,
@@ -259,6 +268,58 @@ export function scoreExerciseMateriality(
       auditNotes.push(`Support for secondary goal ${context.secondaryGoal}`)
     } else if (hasIndirectCarryover(exercise, context.secondaryGoal)) {
       breakdown.secondaryGoalSupport = 8
+    }
+  }
+  
+  // =========================================================================
+  // 2B. ADDITIONAL SELECTED SKILLS SUPPORT (0-12)
+  // [EXERCISE-SELECTION-TRUTH-DOMINANCE] Tertiary and additional selected skills
+  // must influence ranking, not just primary/secondary. This prevents generic
+  // convergence where all athletes with same primary get same support work.
+  // =========================================================================
+  if (context.selectedSkills && context.selectedSkills.length > 0) {
+    // Filter out primary and secondary to get truly "additional" skills
+    const additionalSkills = context.selectedSkills.filter(skill => {
+      const skillNorm = normalizeSkillKey(skill)
+      return skillNorm !== primaryGoalNorm && 
+             skillNorm !== (context.secondaryGoal ? normalizeSkillKey(context.secondaryGoal) : '')
+    })
+    
+    if (additionalSkills.length > 0) {
+      let additionalScore = 0
+      const matchedAdditionalSkills: string[] = []
+      
+      for (const additionalSkill of additionalSkills) {
+        const additionalNorm = normalizeSkillKey(additionalSkill)
+        
+        // Direct transfer to an additional skill
+        if (exerciseTransfers.some(t => normalizeSkillKey(t) === additionalNorm)) {
+          additionalScore = Math.max(additionalScore, 12)
+          matchedAdditionalSkills.push(additionalSkill)
+          reasonCodes.push('support_for_skill_component')
+        }
+        // Support exercise for additional skill
+        else if (isExercisePrimarySupportFor(exercise.id, additionalSkill)) {
+          additionalScore = Math.max(additionalScore, 10)
+          matchedAdditionalSkills.push(additionalSkill)
+        }
+        // Indirect carryover to additional skill
+        else if (hasIndirectCarryover(exercise, additionalSkill)) {
+          additionalScore = Math.max(additionalScore, 6)
+          matchedAdditionalSkills.push(additionalSkill)
+        }
+        // Name-based match for additional skill
+        else if (exercise.name.toLowerCase().includes(additionalNorm) || 
+                 exercise.id.toLowerCase().includes(additionalNorm)) {
+          additionalScore = Math.max(additionalScore, 8)
+          matchedAdditionalSkills.push(additionalSkill)
+        }
+      }
+      
+      breakdown.additionalSkillsSupport = additionalScore
+      if (matchedAdditionalSkills.length > 0) {
+        auditNotes.push(`Supports additional skills: ${matchedAdditionalSkills.join(', ')}`)
+      }
     }
   }
   
@@ -359,10 +420,12 @@ export function scoreExerciseMateriality(
   
   // =========================================================================
   // CALCULATE TOTAL SCORE
+  // [EXERCISE-SELECTION-TRUTH-DOMINANCE] Now includes additionalSkillsSupport
   // =========================================================================
   const totalScore = 
     breakdown.primaryGoalAlignment +
     breakdown.secondaryGoalSupport +
+    breakdown.additionalSkillsSupport +  // NEW: Tertiary skills now influence ranking
     breakdown.currentProgressionFit +
     breakdown.equipmentOptimality +
     breakdown.jointCautionSafety +
@@ -915,6 +978,7 @@ function calculateSlotSuitability(
                         key === 'primaryGoalAlignment' ? 30 :
                         key === 'currentProgressionFit' ? 25 :
                         key === 'secondaryGoalSupport' ? 15 :
+                        key === 'additionalSkillsSupport' ? 12 :  // NEW: tertiary skills max
                         key === 'equipmentOptimality' ? 15 :
                         key === 'carryoverValue' ? 15 :
                         key === 'doctrineBoost' ? 15 : 10

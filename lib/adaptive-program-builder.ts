@@ -133,6 +133,17 @@ import {
   validateWeeklyMateriality,
   type SessionArchitectureTruthContract 
 } from './session-architecture-truth'
+
+// [SESSION-COMPOSITION-INTELLIGENCE] Canonical session structure decisions
+import {
+  buildSessionCompositionContext,
+  buildSessionCompositionBlueprint,
+  validateSessionComposition,
+  logSessionCompositionAudit,
+  type SessionCompositionBlueprint,
+  type SessionCompositionContext,
+  type SessionBlockRole,
+} from './program-generation/session-composition-intelligence'
 // [exercise-trace] TASK 8: Import comparison utilities for build-to-build traceability
 import {
   type ProgramSelectionTrace,
@@ -701,6 +712,8 @@ type AdaptiveSessionContext = {
   doctrineInfluenceContract?: DoctrineInfluenceContract | null
   // [SESSION ARCHITECTURE TRUTH] Authoritative contract for generation enforcement
   sessionArchitectureTruth?: SessionArchitectureTruthContract | null
+  // [SESSION-COMPOSITION-INTELLIGENCE] Session composition blueprint for structure decisions
+  sessionCompositionBlueprint?: SessionCompositionBlueprint | null
   }
 
 export interface AdaptiveProgramInputs {
@@ -821,6 +834,38 @@ export interface AdaptiveSession {
     sessionIdentityReason: string
     // Whether skill materiality contract was consumed
     materialityContractConsumed: boolean
+  }
+  // [SESSION-COMPOSITION-INTELLIGENCE] Session composition metadata
+  // Makes the structural decisions visible for explainability
+  compositionMetadata?: {
+    sessionIntent: string
+    sessionComplexity: 'minimal' | 'standard' | 'comprehensive'
+    blockRoles: SessionBlockRole[]
+    methodEligibility: {
+      supersets: 'earned' | 'allowed' | 'discouraged' | 'blocked'
+      circuits: 'earned' | 'allowed' | 'discouraged' | 'blocked'
+      density: 'earned' | 'allowed' | 'discouraged' | 'blocked'
+      finisher: 'earned' | 'allowed' | 'discouraged' | 'blocked'
+    }
+    workloadDistribution: {
+      primaryWorkPercent: number
+      secondaryWorkPercent: number
+      supportWorkPercent: number
+      conditioningPercent: number
+    }
+    compositionReasons: Array<{
+      code: string
+      description: string
+    }>
+    audit: {
+      primaryGoalDominated: boolean
+      secondaryGoalContained: boolean
+      progressionRespected: boolean
+      equipmentUtilized: boolean
+      jointProtectionApplied: boolean
+      methodsEarned: boolean
+      templateEscaped: boolean
+    }
   }
 }
 
@@ -7938,6 +7983,55 @@ async function generateAdaptiveProgramImpl(
     
     const intent = sessionIntents[index]
     
+    // ==========================================================================
+    // [SESSION-COMPOSITION-INTELLIGENCE] Build composition blueprint for this session
+    // This determines block structure, ordering, method eligibility BEFORE exercise selection
+    // ==========================================================================
+    const sessionMinutesForComposition = typeof sessionLength === 'number' 
+      ? sessionLength 
+      : parseInt(String(sessionLength).split('-')[0]) || 60
+    
+    // Determine fatigue state from fatigueDecision
+    const fatigueStateForComposition: 'fresh' | 'moderate' | 'accumulated' | 'needs_deload' = 
+      fatigueDecision?.decision === 'SKIP_TODAY' ? 'needs_deload' :
+      fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 'needs_deload' :
+      fatigueDecision?.decision === 'REDUCE_INTENSITY' ? 'accumulated' :
+      fatigueDecision?.decision === 'REDUCE_VOLUME' ? 'moderate' : 'fresh'
+    
+    // Build composition context with all canonical truth
+    const compositionContext = buildSessionCompositionContext(
+      day,
+      index,
+      effectiveTrainingDays,
+      primaryGoal,
+      secondaryGoal || null,
+      canonicalProfile.selectedSkills || [],
+      experienceLevel,
+      equipment,
+      canonicalProfile.jointCautions || [],
+      sessionLength,
+      sessionMinutesForComposition,
+      multiSkillMaterialityContract?.currentWorkingProgressions || null,
+      sessionArchitectureTruth || null,
+      doctrineRuntimeContract || null,
+      fatigueStateForComposition
+    )
+    
+    // Build the authoritative composition blueprint
+    const sessionCompositionBlueprint = buildSessionCompositionBlueprint(compositionContext)
+    
+    // Validate composition
+    const compositionValidation = validateSessionComposition(sessionCompositionBlueprint, compositionContext)
+    if (!compositionValidation.valid) {
+      console.warn('[SESSION-COMPOSITION-VALIDATION-WARNING]', {
+        dayNumber: day.dayNumber,
+        issues: compositionValidation.issues,
+      })
+    }
+    
+    // Log composition audit for debugging
+    logSessionCompositionAudit(sessionCompositionBlueprint, compositionContext)
+    
   // SKILL EXPRESSION FIX: Create per-session context with skill allocation
   const sessionContext: AdaptiveSessionContext = {
   athleteCalibration,
@@ -7965,6 +8059,8 @@ async function generateAdaptiveProgramImpl(
   doctrineRuntimeContract,
   // [SESSION ARCHITECTURE TRUTH] Pass authoritative session architecture contract
   sessionArchitectureTruth,
+  // [SESSION-COMPOSITION-INTELLIGENCE] Pass composition blueprint for structure enforcement
+  sessionCompositionBlueprint,
   }
     
     const session = generateAdaptiveSession(
@@ -16545,6 +16641,8 @@ function generateAdaptiveSession(
   doctrineRuntimeContract,
   // [SESSION ARCHITECTURE TRUTH] Extract authoritative session architecture contract
   sessionArchitectureTruth,
+  // [SESSION-COMPOSITION-INTELLIGENCE] Extract composition blueprint for structure enforcement
+  sessionCompositionBlueprint,
   } = context
   
   // [DOCTRINE RUNTIME CONTRACT] Log doctrine influence for this session
@@ -16576,6 +16674,23 @@ function generateAdaptiveSession(
       methodPackagingBias: sessionArchitectureTruth.doctrineArchitectureBias.methodPackagingBias,
       currentWorkingCapsCount: Object.keys(sessionArchitectureTruth.currentWorkingSkillCaps).length,
       verdict: 'ARCHITECTURE_TRUTH_SESSION_ENFORCEMENT_ACTIVE',
+    })
+  }
+  
+  // [SESSION-COMPOSITION-INTELLIGENCE] Log composition blueprint for this session
+  if (sessionCompositionBlueprint) {
+    console.log('[session-assembly-composition-blueprint]', {
+      sessionIndex,
+      dayFocus: day.focus,
+      sessionIntent: sessionCompositionBlueprint.sessionIntent,
+      sessionComplexity: sessionCompositionBlueprint.sessionComplexity,
+      blockCount: sessionCompositionBlueprint.blockCount,
+      blockRoles: sessionCompositionBlueprint.blocks.map(b => b.role),
+      methodEligibility: sessionCompositionBlueprint.methodEligibility,
+      workloadDistribution: sessionCompositionBlueprint.workloadDistribution,
+      compositionReasonCodes: sessionCompositionBlueprint.compositionReasons.map(r => r.code),
+      auditPassed: Object.values(sessionCompositionBlueprint.audit).filter(Boolean).length,
+      verdict: 'COMPOSITION_BLUEPRINT_ACTIVE_FOR_SESSION',
     })
   }
   
@@ -17847,6 +17962,19 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
           (selection.skillExpressionResult.directlyExpressedSkills.length > 0 ||
            selection.skillExpressionResult.technicalSlotSkills.length > 0 ||
            selection.skillExpressionResult.supportSkillsInjected.length > 0)),
+      } : undefined,
+      // [SESSION-COMPOSITION-INTELLIGENCE] Add composition metadata for explainability
+      compositionMetadata: sessionCompositionBlueprint ? {
+        sessionIntent: sessionCompositionBlueprint.sessionIntent,
+        sessionComplexity: sessionCompositionBlueprint.sessionComplexity,
+        blockRoles: sessionCompositionBlueprint.blocks.map(b => b.role),
+        methodEligibility: sessionCompositionBlueprint.methodEligibility,
+        workloadDistribution: sessionCompositionBlueprint.workloadDistribution,
+        compositionReasons: sessionCompositionBlueprint.compositionReasons.map(r => ({
+          code: r.code,
+          description: r.description,
+        })),
+        audit: sessionCompositionBlueprint.audit,
       } : undefined,
     }
   

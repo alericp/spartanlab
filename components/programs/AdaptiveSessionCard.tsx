@@ -624,6 +624,49 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             <p className="text-sm text-[#E63946]">
               {(session as any).resolvedSessionIdentity || session.focusLabel}
             </p>
+            {/* [SESSION-ARCHITECTURE-VISIBLE-EXPRESSION] Render session role badge from compositionMetadata */}
+            {(() => {
+              const metadata = (session as any).compositionMetadata
+              const spineType = metadata?.spineSessionType
+              const spineMode = metadata?.spineMode
+              const sessionIntent = metadata?.sessionIntent
+              
+              // Map spine types to user-friendly labels and colors
+              const typeLabels: Record<string, { label: string; color: string }> = {
+                'direct_intensity': { label: 'Max Effort', color: 'bg-[#E63946]/20 text-[#E63946] border-[#E63946]/30' },
+                'technical_focus': { label: 'Technical', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+                'strength_support': { label: 'Strength', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+                'mixed_balanced': { label: 'Mixed', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+                'rotation_light': { label: 'Recovery', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+              }
+              
+              const typeConfig = spineType ? typeLabels[spineType] : null
+              
+              // Log visibility of architecture truth
+              console.log('[SESSION-ARCHITECTURE-VISIBLE-AUDIT]', {
+                dayNumber: session.dayNumber,
+                hasCompositionMetadata: !!metadata,
+                spineSessionType: spineType,
+                spineMode,
+                sessionIntent,
+                willShowBadge: !!typeConfig,
+              })
+              
+              if (!typeConfig) return null
+              
+              return (
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded border ${typeConfig.color}`}>
+                    {typeConfig.label}
+                  </span>
+                  {sessionIntent && (
+                    <span className="text-[10px] text-[#6A6A6A] max-w-[200px] truncate" title={sessionIntent}>
+                      {sessionIntent.length > 40 ? sessionIntent.slice(0, 40) + '...' : sessionIntent}
+                    </span>
+                  )}
+                </div>
+              )
+            })()}
             {/* [TASK 3 & 6] Use activeSessionView for header - ensures header matches body */}
             <div className="flex items-center gap-3 mt-2 text-xs text-[#6A6A6A]">
               <span className="flex items-center gap-1">
@@ -679,16 +722,50 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       {/* Expanded Content */}
       {isExpanded && (
         <div className="px-4 pb-4 space-y-4">
-          {/* [VISIBLE-IMPROVEMENT] Session Structure Summary - ALWAYS VISIBLE with dynamic fallback */}
+          {/* [SESSION-ARCHITECTURE-VISIBLE-EXPRESSION] Why This Workout summary from canonical truth */}
           {!isCompleted && !isActive && !isPaused && (
             <div className="px-3 py-2.5 rounded-lg bg-gradient-to-r from-[#1A1A1A] to-[#1F1F1F] border border-[#2A2A2A]">
               <div className="flex items-start gap-2.5">
                 <Info className="w-4 h-4 text-[#4F6D8A] mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
-                  <p className="text-xs font-medium text-[#A5A5A5] mb-1.5">About This Session</p>
+                  <p className="text-xs font-medium text-[#A5A5A5] mb-1.5">Why This Workout</p>
                   <p className="text-xs text-[#8A8A8A] leading-relaxed">
-                    {/* Use structureDescription if available, otherwise generate from session data */}
-                    {sessionStyleMetadata?.structureDescription || (() => {
+                    {/* [SESSION-ARCHITECTURE-VISIBLE-EXPRESSION] Use canonical composition metadata */}
+                    {(() => {
+                      const metadata = (session as any).compositionMetadata
+                      const spineType = metadata?.spineSessionType
+                      const spineMode = metadata?.spineMode
+                      const sessionIntent = metadata?.sessionIntent
+                      const blockRoles = metadata?.blockRoles || []
+                      
+                      // Build architecture-driven explanation
+                      if (sessionIntent && spineType) {
+                        // Detailed explanation from canonical truth
+                        const typeDescriptions: Record<string, string> = {
+                          'direct_intensity': 'max effort primary skill development',
+                          'technical_focus': 'movement quality and form refinement',
+                          'strength_support': 'foundational strength to support your skills',
+                          'mixed_balanced': 'balanced skill and strength expression',
+                          'rotation_light': 'active recovery with reduced intensity',
+                        }
+                        
+                        const primaryWork = blockRoles.filter((r: string) => r.includes('primary')).length
+                        const supportWork = blockRoles.filter((r: string) => r.includes('support') || r.includes('accessory')).length
+                        
+                        const typeDesc = typeDescriptions[spineType] || 'balanced training'
+                        
+                        let explanation = `This session emphasizes ${typeDesc}.`
+                        if (primaryWork > 0 && supportWork > 0) {
+                          explanation += ` ${primaryWork} primary block${primaryWork > 1 ? 's' : ''} with ${supportWork} support exercise${supportWork > 1 ? 's' : ''}.`
+                        }
+                        
+                        return explanation
+                      }
+                      
+                      // Fallback to structureDescription or dynamic generation
+                      if (sessionStyleMetadata?.structureDescription) {
+                        return sessionStyleMetadata.structureDescription
+                      }
                       // Generate dynamic description from session content
                       const exerciseCount = displayExercises.length
                       const skillCount = displayExercises.filter(e => e.category === 'skill').length

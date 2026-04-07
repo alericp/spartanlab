@@ -146,9 +146,8 @@ export interface ActiveWorkoutCorridorProps {
   // [GROUPED-IDENTITY-FIX] Current exercise position within grouped block
   groupedMemberIndex?: number | null  // 0 = A, 1 = B, etc. null = not in grouped block
   
-  // [LIVE-WORKOUT-ACTION-PLANNER] Adaptive hint from planner
-  actionPlanHint?: string | null
-  actionPlanRecoveryLevel?: 'none' | 'light' | 'moderate' | 'high' | 'critical'
+  // [LIVE-WORKOUT-ACTION-PLANNER] Adaptive coaching expression from planner
+  coachingExpression?: import('@/lib/workout/live-workout-action-planner').CoachingExpression | null
   
   // Callbacks (passed from parent)
   onCompleteSet: () => void
@@ -513,9 +512,8 @@ export function ActiveWorkoutStartCorridor({
   blockRoundRestSeconds = 90,
   onBlockRoundRestComplete,
   groupedMemberIndex = null,
-  // [LIVE-WORKOUT-ACTION-PLANNER] Adaptive hint from planner
-  actionPlanHint,
-  actionPlanRecoveryLevel,
+  // [LIVE-WORKOUT-ACTION-PLANNER] Adaptive coaching expression
+  coachingExpression,
   onCompleteSet,
   onSetReps,
   onSetHold,
@@ -646,38 +644,76 @@ export function ActiveWorkoutStartCorridor({
                 </Card>
               )}
               
-              {/* [LIVE-WORKOUT-ACTION-PLANNER] Adaptive Hint Display */}
-              {actionPlanHint && (
+              {/* [LIVE-WORKOUT-ACTION-PLANNER] Adaptive Coaching Panel */}
+              {coachingExpression?.shouldShow && (
                 <Card className={`bg-gradient-to-br p-3 ${
-                  actionPlanRecoveryLevel === 'critical' 
+                  coachingExpression.severity === 'critical' 
                     ? 'from-red-900/30 to-red-900/10 border-red-500/40'
-                    : actionPlanRecoveryLevel === 'high'
+                    : coachingExpression.severity === 'warning'
                       ? 'from-orange-900/30 to-orange-900/10 border-orange-500/40'
-                      : actionPlanRecoveryLevel === 'moderate'
+                      : coachingExpression.severity === 'caution'
                         ? 'from-amber-900/20 to-amber-900/10 border-amber-500/30'
                         : 'from-blue-900/20 to-blue-900/10 border-blue-500/30'
                 }`}>
-                  <div className="flex items-start gap-2">
-                    <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${
-                      actionPlanRecoveryLevel === 'critical' 
-                        ? 'bg-red-500'
-                        : actionPlanRecoveryLevel === 'high'
-                          ? 'bg-orange-500'
-                          : actionPlanRecoveryLevel === 'moderate'
-                            ? 'bg-amber-500'
-                            : 'bg-blue-500'
-                    }`} />
-                    <p className={`text-sm ${
-                      actionPlanRecoveryLevel === 'critical' 
-                        ? 'text-red-300'
-                        : actionPlanRecoveryLevel === 'high'
-                          ? 'text-orange-300'
-                          : actionPlanRecoveryLevel === 'moderate'
-                            ? 'text-amber-300'
-                            : 'text-blue-300'
-                    }`}>
-                      {actionPlanHint}
-                    </p>
+                  <div className="space-y-2">
+                    {/* Focus + Scope Badges */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {coachingExpression.focusLabel && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          coachingExpression.severity === 'critical'
+                            ? 'bg-red-500/20 text-red-300'
+                            : coachingExpression.severity === 'warning'
+                              ? 'bg-orange-500/20 text-orange-300'
+                              : coachingExpression.severity === 'caution'
+                                ? 'bg-amber-500/20 text-amber-300'
+                                : 'bg-blue-500/20 text-blue-300'
+                        }`}>
+                          {coachingExpression.focusLabel}
+                        </span>
+                      )}
+                      {coachingExpression.scopeLabel && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-[#2B313A]/50 text-[#8A919C]">
+                          {coachingExpression.scopeLabel}
+                        </span>
+                      )}
+                      {coachingExpression.isProtective && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-[#2B313A]/50 text-[#8A919C]">
+                          Protective
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Primary Text */}
+                    <div className="flex items-start gap-2">
+                      <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${
+                        coachingExpression.severity === 'critical' 
+                          ? 'bg-red-500'
+                          : coachingExpression.severity === 'warning'
+                            ? 'bg-orange-500'
+                            : coachingExpression.severity === 'caution'
+                              ? 'bg-amber-500'
+                              : 'bg-blue-500'
+                      }`} />
+                      <div className="flex-1">
+                        <p className={`text-sm font-medium ${
+                          coachingExpression.severity === 'critical' 
+                            ? 'text-red-300'
+                            : coachingExpression.severity === 'warning'
+                              ? 'text-orange-300'
+                              : coachingExpression.severity === 'caution'
+                                ? 'text-amber-300'
+                                : 'text-blue-300'
+                        }`}>
+                          {coachingExpression.primaryText}
+                        </p>
+                        {/* Rationale Text */}
+                        {coachingExpression.rationaleText && (
+                          <p className="text-xs text-[#8A919C] mt-0.5">
+                            {coachingExpression.rationaleText}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </Card>
               )}
@@ -936,6 +972,53 @@ export function ActiveWorkoutStartCorridor({
               </span>
             </div>
           </Card>
+          
+          {/* [LIVE-WORKOUT-ACTION-PLANNER] Compact Inline Coaching Hint (active mode) */}
+          {coachingExpression?.shouldShow && coachingExpression.isProtective && (
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${
+              coachingExpression.severity === 'critical'
+                ? 'bg-red-900/20 border border-red-500/30'
+                : coachingExpression.severity === 'warning'
+                  ? 'bg-orange-900/20 border border-orange-500/30'
+                  : coachingExpression.severity === 'caution'
+                    ? 'bg-amber-900/15 border border-amber-500/20'
+                    : 'bg-blue-900/15 border border-blue-500/20'
+            }`}>
+              <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                coachingExpression.severity === 'critical'
+                  ? 'bg-red-500'
+                  : coachingExpression.severity === 'warning'
+                    ? 'bg-orange-500'
+                    : coachingExpression.severity === 'caution'
+                      ? 'bg-amber-500'
+                      : 'bg-blue-500'
+              }`} />
+              <span className={`text-xs ${
+                coachingExpression.severity === 'critical'
+                  ? 'text-red-300'
+                  : coachingExpression.severity === 'warning'
+                    ? 'text-orange-300'
+                    : coachingExpression.severity === 'caution'
+                      ? 'text-amber-300'
+                      : 'text-blue-300'
+              }`}>
+                {coachingExpression.primaryText}
+              </span>
+              {coachingExpression.focusLabel && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded ml-auto ${
+                  coachingExpression.severity === 'critical'
+                    ? 'bg-red-500/20 text-red-400'
+                    : coachingExpression.severity === 'warning'
+                      ? 'bg-orange-500/20 text-orange-400'
+                      : coachingExpression.severity === 'caution'
+                        ? 'bg-amber-500/20 text-amber-400'
+                        : 'bg-blue-500/20 text-blue-400'
+                }`}>
+                  {coachingExpression.focusLabel}
+                </span>
+              )}
+            </div>
+          )}
           
           {/* ========== INPUT CARD ========== */}
           {/* [LIVE-WORKOUT-AUTHORITY] Authoritative execution-fact inputs driven by inputMode */}

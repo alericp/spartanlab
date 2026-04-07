@@ -12,7 +12,7 @@
  * No parallel decision paths allowed.
  */
 
-import type { ExerciseInputMode } from './live-workout-authority-contract'
+import type { ExerciseInputMode, CoachingSignalTag } from './live-workout-authority-contract'
 import type { 
   AdaptiveExecutionSummary, 
   SessionAdaptiveReadiness,
@@ -21,6 +21,12 @@ import type {
   IntensityDirection,
 } from './live-workout-adaptive-signals'
 import type { ResistanceBandColor } from '@/lib/band-progression-engine'
+// [LIVE-WORKOUT-NORMALIZERS] Import normalized input types
+import type { 
+  NormalizedCoachingSignals, 
+  NormalizedSupportLoad,
+  NormalizedExerciseIntent,
+} from './live-workout-normalizers'
 
 // =============================================================================
 // ACTION TYPE DEFINITIONS
@@ -180,6 +186,18 @@ export interface ExercisePlanningContext {
   
   // Session-level readiness
   sessionReadiness: SessionAdaptiveReadiness
+  
+  // [LIVE-WORKOUT-NORMALIZERS] Canonical normalized inputs
+  coachingSignals?: NormalizedCoachingSignals
+  supportLoad?: NormalizedSupportLoad
+  exerciseIntent?: NormalizedExerciseIntent
+  
+  // Multi-band support (structured)
+  selectedBands?: ResistanceBandColor[]
+  
+  // Actual load used (for weighted)
+  actualLoadUsed?: number
+  actualLoadUnit?: string
 }
 
 // =============================================================================
@@ -942,6 +960,135 @@ export function buildActionPlan(context: ExercisePlanningContext): ActionPlanner
   const lastSummary = context.completedSummaries.length > 0
     ? context.completedSummaries[context.completedSummaries.length - 1]
     : null
+  
+  // [LIVE-WORKOUT-NORMALIZERS] Check coaching signals for immediate action triggers
+  const signals = context.coachingSignals
+  if (signals) {
+    // Critical signals override all other planning
+    if (signals.hasCriticalSignal) {
+      return buildResult(
+        'end_exercise_early_pain',
+        ['pain_signal_detected'],
+        context,
+        trend,
+        {
+          confidence: 1.0,
+          recoveryProtectionLevel: 'critical',
+          technicalProtectionLevel: 'supervised_only',
+          suggestedRestDeltaSec: null,
+          suggestedLoadDelta: null,
+          remainingSetCap: context.currentSetNumber,
+          humanReadableHint: 'Stop for safety. Pain or joint stress detected.',
+          inputsConsumed: ['coachingSignals:pain', 'coachingSignals:jointStress'],
+        }
+      )
+    }
+    
+    // Severe warning signals trigger protective action
+    if (signals.tooHard && signals.fatigueDetected) {
+      return buildResult(
+        'cap_remaining_sets',
+        ['fatigue_accumulating', 'technique_degradation'],
+        context,
+        trend,
+        {
+          confidence: 0.9,
+          recoveryProtectionLevel: 'high',
+          technicalProtectionLevel: 'form_focus',
+          suggestedRestDeltaSec: 30,
+          suggestedLoadDelta: null,
+          remainingSetCap: Math.min(context.currentSetNumber + 1, context.totalPrescribedSets),
+          humanReadableHint: 'Fatigue building. Capping sets to protect quality.',
+          inputsConsumed: ['coachingSignals:tooHard', 'coachingSignals:fatigue'],
+        }
+      )
+    }
+    
+    // Straight-arm fatigue from notes triggers protection
+    if (signals.straightArmFatigue && (context.isStraightArm || isStraightArmExercise(context.exerciseName))) {
+      return buildResult(
+        'cap_remaining_sets',
+        ['straight_arm_exposure_high', 'recovery_protection_needed'],
+        context,
+        trend,
+        {
+          confidence: 0.85,
+          recoveryProtectionLevel: 'moderate',
+          technicalProtectionLevel: 'form_focus',
+          suggestedRestDeltaSec: 45,
+          suggestedLoadDelta: null,
+          remainingSetCap: context.currentSetNumber + 1,
+          humanReadableHint: 'Protecting straight-arm connective tissue.',
+          inputsConsumed: ['coachingSignals:straightArmFatigue'],
+        }
+      )
+    }
+    
+    // Form issue triggers technique priority
+    if (signals.formIssue) {
+      return buildResult(
+        'technique_priority_mode',
+        ['technique_degradation'],
+        context,
+        trend,
+        {
+          confidence: 0.8,
+          recoveryProtectionLevel: 'light',
+          technicalProtectionLevel: 'form_focus',
+          suggestedRestDeltaSec: 15,
+          suggestedLoadDelta: context.inputMode === 'weighted_strength' ? -5 : null,
+          remainingSetCap: null,
+          humanReadableHint: 'Focus on form quality for next set.',
+          inputsConsumed: ['coachingSignals:formIssue'],
+        }
+      )
+    }
+    
+    // Support mismatch detected from notes
+    if (signals.supportMismatch && context.inputMode === 'band_assisted_skill') {
+      return buildResult(
+        signals.tooHard ? 'raise_assistance' : 'lower_assistance',
+        [signals.tooHard ? 'assistance_insufficient' : 'assistance_excessive'],
+        context,
+        trend,
+        {
+          confidence: 0.75,
+          recoveryProtectionLevel: 'none',
+          technicalProtectionLevel: 'none',
+          suggestedRestDeltaSec: null,
+          suggestedLoadDelta: null,
+          suggestedAssistanceDelta: signals.tooHard ? 1 : -1,
+          remainingSetCap: null,
+          humanReadableHint: signals.tooHard 
+            ? 'Try adding more band support.' 
+            : 'Ready to reduce assistance.',
+          inputsConsumed: ['coachingSignals:supportMismatch'],
+        }
+      )
+    }
+    
+    // Load mismatch detected from notes
+    if (signals.loadMismatch && context.inputMode === 'weighted_strength') {
+      return buildResult(
+        signals.tooHard ? 'reduce_load' : 'increase_load',
+        [signals.tooHard ? 'load_too_heavy' : 'load_too_light'],
+        context,
+        trend,
+        {
+          confidence: 0.75,
+          recoveryProtectionLevel: 'none',
+          technicalProtectionLevel: 'none',
+          suggestedRestDeltaSec: null,
+          suggestedLoadDelta: signals.tooHard ? -5 : 5,
+          remainingSetCap: null,
+          humanReadableHint: signals.tooHard 
+            ? 'Consider reducing weight.' 
+            : 'Ready for more weight.',
+          inputsConsumed: ['coachingSignals:loadMismatch'],
+        }
+      )
+    }
+  }
   
   // Enrich context with exercise classification
   const enrichedContext: ExercisePlanningContext = {

@@ -509,6 +509,13 @@ export const COACHING_SIGNAL_TAGS = [
   'breathing_issue',
   'joint_stress',
   'muscle_cramping',
+  // [LIVE-WORKOUT-NORMALIZERS] Additional canonical signals for adaptive control
+  'straight_arm_fatigue',
+  'support_mismatch',
+  'load_mismatch',
+  'recovery_concern',
+  'technique_breakdown',
+  'endurance_limited',
 ] as const
 
 export type CoachingSignalTag = typeof COACHING_SIGNAL_TAGS[number]
@@ -526,6 +533,13 @@ export const COACHING_SIGNAL_LABELS: Record<CoachingSignalTag, string> = {
   'breathing_issue': 'Breathing Issue',
   'joint_stress': 'Joint Stress',
   'muscle_cramping': 'Cramping',
+  // [LIVE-WORKOUT-NORMALIZERS] Additional signal labels
+  'straight_arm_fatigue': 'Straight-Arm Fatigue',
+  'support_mismatch': 'Band Support Issue',
+  'load_mismatch': 'Load Issue',
+  'recovery_concern': 'Recovery Concern',
+  'technique_breakdown': 'Technique Breaking',
+  'endurance_limited': 'Endurance Limited',
 }
 
 export const COACHING_SIGNAL_SEVERITY: Record<CoachingSignalTag, 'info' | 'warning' | 'critical'> = {
@@ -541,6 +555,13 @@ export const COACHING_SIGNAL_SEVERITY: Record<CoachingSignalTag, 'info' | 'warni
   'breathing_issue': 'warning',
   'joint_stress': 'critical',
   'muscle_cramping': 'warning',
+  // [LIVE-WORKOUT-NORMALIZERS] Additional signal severities
+  'straight_arm_fatigue': 'warning',
+  'support_mismatch': 'warning',
+  'load_mismatch': 'warning',
+  'recovery_concern': 'warning',
+  'technique_breakdown': 'warning',
+  'endurance_limited': 'info',
 }
 
 export interface StructuredCoachingInput {

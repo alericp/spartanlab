@@ -28,23 +28,37 @@ import { ChevronLeft, ChevronDown, ChevronUp, ChevronRight, Check, SkipForward, 
 import { MethodInfoBubble } from '@/components/coaching'
 import type { RPEValue } from '@/lib/rpe-adjustment-engine'
 import type { ResistanceBandColor } from '@/lib/band-progression-engine'
+// [LIVE-WORKOUT-NORMALIZERS] Import canonical coaching signal types
+import { 
+  COACHING_SIGNAL_LABELS,
+  type CoachingSignalTag,
+} from '@/lib/workout/live-workout-authority-contract'
 
 // =============================================================================
 // TYPES - Plain props only, no complex dependencies
 // =============================================================================
 
-export type SetReasonTag = 'form_issue' | 'fatigue' | 'too_easy' | 'too_hard' | 'pain' | 'grip' | 'balance' | 'focus'
+// [LIVE-WORKOUT-NORMALIZERS] Re-export canonical type for backwards compatibility
+export type SetReasonTag = CoachingSignalTag
 
-export const SET_REASON_TAG_LABELS: Record<SetReasonTag, string> = {
-  form_issue: 'Form Issue',
-  fatigue: 'Fatigued',
-  too_easy: 'Too Easy',
-  too_hard: 'Too Hard',
-  pain: 'Pain/Discomfort',
-  grip: 'Grip Limited',
-  balance: 'Balance Issue',
-  focus: 'Lost Focus',
-}
+// [LIVE-WORKOUT-NORMALIZERS] Use canonical labels with local fallback for backwards compat
+export const SET_REASON_TAG_LABELS: Record<SetReasonTag, string> = COACHING_SIGNAL_LABELS
+
+// [LIVE-WORKOUT-NORMALIZERS] Primary signals shown in quick-tag UI (keep UI clean)
+// Full signal list available via COACHING_SIGNAL_TAGS for advanced use
+export const PRIMARY_SIGNAL_TAGS: CoachingSignalTag[] = [
+  'too_easy',
+  'too_hard',
+  'pain',
+  'fatigue',
+  'form_issue',
+  'grip_limited',
+  'balance_issue',
+  'focus_lost',
+  'straight_arm_fatigue',
+  'support_mismatch',
+  'load_mismatch',
+]
 
 export interface CompletedSetInfo {
   setNumber: number
@@ -1145,14 +1159,15 @@ export function ActiveWorkoutStartCorridor({
                 
                 {showSetNotes && (
                   <div className="mt-3 space-y-3">
-                    {/* [LIVE-WORKOUT-AUTHORITY] Structured coaching signals - these drive future adaptation */}
+                    {/* [LIVE-WORKOUT-NORMALIZERS] Structured coaching signals - drive adaptive control */}
                     <div className="space-y-1.5">
                       <div className="text-xs text-[#6B7280]">
-                        Quick tags (affects future sets)
+                        Quick tags (feeds adaptive coaching)
                       </div>
                       <div className="flex flex-wrap gap-1.5">
-                        {(Object.entries(SET_REASON_TAG_LABELS) as [SetReasonTag, string][]).map(([tag, label]) => {
+                        {PRIMARY_SIGNAL_TAGS.map((tag) => {
                           const isSelected = currentSetReasonTags.includes(tag)
+                          const label = SET_REASON_TAG_LABELS[tag]
                           return (
                             <button
                               key={tag}

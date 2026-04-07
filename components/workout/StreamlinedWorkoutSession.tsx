@@ -3843,11 +3843,17 @@ export function StreamlinedWorkoutSession({
       // [CRASH-FIX] Use validatedSetNumber instead of liveSession
       const isLastSet = validatedSetNumber >= (safeCurrentExercise.sets || 3)
       
+      // [LIVE-WORKOUT-ADAPTIVE] Include target prescription for adaptive summary
       machineDispatch({
         type: 'COMPLETE_SET',
         completedSet: setData,
         isLastSetOfExercise: isLastSet,
         exerciseCount: exercises.length,
+        // Target prescription for adaptive summary
+        targetReps: isHoldExercise ? undefined : prescriptionSeedValue,
+        targetHoldSeconds: isHoldExercise ? prescriptionSeedValue : undefined,
+        targetRPE: safeCurrentExercise?.targetRPE || 8,
+        recommendedBand: corridorRecommendedBand,
       })
     // [CRASH-FIX] Removed liveSession dep, use machine-derived values
     // [LOGGED-VALUE-FIX] Added safeCurrentExercise to deps for prescription seed derivation

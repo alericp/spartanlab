@@ -3214,14 +3214,17 @@ function applyMaterialityScoreAdjustments(
           equipmentInfluence: breakdown?.equipmentOptimality || 0,
           jointSafetyInfluence: breakdown?.jointCautionSafety || 0,
           carryoverInfluence: breakdown?.carryoverValue || 0,
+          additionalSkillsInfluence: breakdown?.additionalSkillsSupport || 0, // NEW: tertiary skills
           // Context that enabled this
           trainingStyle: materialityContext.trainingStyle,
           hasWeightedEquipment: materialityContext.hasWeightedEquipment,
           jointCautionsCount: materialityContext.jointCautions.length,
           hasProgressionData: !!materialityContext.currentWorkingProgressions,
           hasDoctrineData: !!(materialityContext.doctrinePreferredExercises?.length || materialityContext.doctrineCarryoverRules?.length),
+          additionalSkillsCount: materialityContext.selectedSkills?.length || 0, // NEW
         },
-        verdict: breakdown?.doctrineBoost >= 8 || breakdown?.currentProgressionFit >= 18 
+        // [EXERCISE-SELECTION-TRUTH-DOMINANCE] Expanded verdict to include tertiary skills
+        verdict: breakdown?.doctrineBoost >= 8 || breakdown?.currentProgressionFit >= 18 || breakdown?.additionalSkillsSupport >= 8
           ? 'TRUTH_DRIVEN_SELECTION' 
           : 'BASELINE_SELECTION',
       })

@@ -140,8 +140,6 @@ import {
   type WeightedPrescriptionMode,
   // [PRESCRIPTION-INTELLIGENCE] Import canonical prescription resolver
   resolveCanonicalPrescription,
-  formatPrescription,
-  detectPrescriptionMode,
   inferExerciseRole,
   type PrescriptionTruthContext,
   type ExerciseRoleForPrescription,

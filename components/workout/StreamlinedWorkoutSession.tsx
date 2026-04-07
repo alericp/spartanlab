@@ -3844,6 +3844,7 @@ export function StreamlinedWorkoutSession({
       const isLastSet = validatedSetNumber >= (safeCurrentExercise.sets || 3)
       
       // [LIVE-WORKOUT-ADAPTIVE] Include target prescription for adaptive summary
+      // [LIVE-WORKOUT-ACTION-PLANNER] Include exercise context for action planning
       machineDispatch({
         type: 'COMPLETE_SET',
         completedSet: setData,
@@ -3854,6 +3855,9 @@ export function StreamlinedWorkoutSession({
         targetHoldSeconds: isHoldExercise ? prescriptionSeedValue : undefined,
         targetRPE: safeCurrentExercise?.targetRPE || 8,
         recommendedBand: corridorRecommendedBand,
+        // Exercise context for action planning
+        exerciseName: safeCurrentExercise?.name || '',
+        totalPrescribedSets: safeCurrentExercise?.sets || 3,
       })
     // [CRASH-FIX] Removed liveSession dep, use machine-derived values
     // [LOGGED-VALUE-FIX] Added safeCurrentExercise to deps for prescription seed derivation
@@ -6095,6 +6099,9 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
         blockRoundRestSeconds={blockRoundRestSeconds}
         onBlockRoundRestComplete={handleBlockRoundRestComplete}
         groupedMemberIndex={groupedMemberIndex}
+        // [LIVE-WORKOUT-ACTION-PLANNER] Pass adaptive hint from planner
+        actionPlanHint={machineState.currentActionPlan?.humanReadableHint}
+        actionPlanRecoveryLevel={machineState.currentActionPlan?.recoveryProtectionLevel}
         onCompleteSet={handleCompleteSet}
         onSetReps={setRepsValue}
         onSetHold={setHoldValue}

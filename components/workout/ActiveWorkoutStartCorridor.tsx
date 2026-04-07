@@ -146,6 +146,10 @@ export interface ActiveWorkoutCorridorProps {
   // [GROUPED-IDENTITY-FIX] Current exercise position within grouped block
   groupedMemberIndex?: number | null  // 0 = A, 1 = B, etc. null = not in grouped block
   
+  // [LIVE-WORKOUT-ACTION-PLANNER] Adaptive hint from planner
+  actionPlanHint?: string | null
+  actionPlanRecoveryLevel?: 'none' | 'light' | 'moderate' | 'high' | 'critical'
+  
   // Callbacks (passed from parent)
   onCompleteSet: () => void
   onSetReps: (value: number) => void
@@ -509,6 +513,9 @@ export function ActiveWorkoutStartCorridor({
   blockRoundRestSeconds = 90,
   onBlockRoundRestComplete,
   groupedMemberIndex = null,
+  // [LIVE-WORKOUT-ACTION-PLANNER] Adaptive hint from planner
+  actionPlanHint,
+  actionPlanRecoveryLevel,
   onCompleteSet,
   onSetReps,
   onSetHold,
@@ -635,6 +642,42 @@ export function ActiveWorkoutStartCorridor({
                     }`}>
                       RPE {lastSetRPE}
                     </Badge>
+                  </div>
+                </Card>
+              )}
+              
+              {/* [LIVE-WORKOUT-ACTION-PLANNER] Adaptive Hint Display */}
+              {actionPlanHint && (
+                <Card className={`bg-gradient-to-br p-3 ${
+                  actionPlanRecoveryLevel === 'critical' 
+                    ? 'from-red-900/30 to-red-900/10 border-red-500/40'
+                    : actionPlanRecoveryLevel === 'high'
+                      ? 'from-orange-900/30 to-orange-900/10 border-orange-500/40'
+                      : actionPlanRecoveryLevel === 'moderate'
+                        ? 'from-amber-900/20 to-amber-900/10 border-amber-500/30'
+                        : 'from-blue-900/20 to-blue-900/10 border-blue-500/30'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${
+                      actionPlanRecoveryLevel === 'critical' 
+                        ? 'bg-red-500'
+                        : actionPlanRecoveryLevel === 'high'
+                          ? 'bg-orange-500'
+                          : actionPlanRecoveryLevel === 'moderate'
+                            ? 'bg-amber-500'
+                            : 'bg-blue-500'
+                    }`} />
+                    <p className={`text-sm ${
+                      actionPlanRecoveryLevel === 'critical' 
+                        ? 'text-red-300'
+                        : actionPlanRecoveryLevel === 'high'
+                          ? 'text-orange-300'
+                          : actionPlanRecoveryLevel === 'moderate'
+                            ? 'text-amber-300'
+                            : 'text-blue-300'
+                    }`}>
+                      {actionPlanHint}
+                    </p>
                   </div>
                 </Card>
               )}

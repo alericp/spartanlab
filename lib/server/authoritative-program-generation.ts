@@ -32,6 +32,13 @@ import {
   type AuthoritativeGenerationTruthIngestion,
   type IngestionInput
 } from './authoritative-generation-truth-ingestion'
+import {
+  buildWeekAdaptationDecision,
+  buildWeekAdaptationInputFromIngestion,
+  getAdaptationSummary,
+  type WeekAdaptationDecision,
+  type WeekAdaptationInput,
+} from '@/lib/program-generation/week-adaptation-decision-contract'
 
 // ==========================================================================
 // TYPES: Generation Intent and Request Contract
@@ -321,6 +328,55 @@ export async function executeAuthoritativeGeneration(
   
   markStage('truth_ingestion_complete')
   
+  // ==========================================================================
+  // [WEEK-ADAPTATION-DECISION-CONTRACT] STAGE: Build week adaptation decision
+  // This is the SINGLE authoritative source for week-level adaptation.
+  // The generator MUST obey this contract.
+  // ==========================================================================
+  markStage('week_adaptation_decision_start')
+  
+  let weekAdaptationDecision: WeekAdaptationDecision
+  try {
+    const weekAdaptationInput = buildWeekAdaptationInputFromIngestion(
+      truthIngestion,
+      {
+        generationIntent: request.generationIntent,
+        isFreshBaselineBuild: request.isFreshBaselineBuild,
+        weekNumber: 1, // For initial generation, this is week 1
+        previousWeekAdaptation: null,
+      }
+    )
+    
+    weekAdaptationDecision = buildWeekAdaptationDecision(weekAdaptationInput)
+    
+    console.log('[authoritative-generation-week-adaptation-decision]', {
+      generationIntent: request.generationIntent,
+      phase: weekAdaptationDecision.phase,
+      targetDays: weekAdaptationDecision.targetDays,
+      confidence: weekAdaptationDecision.confidence,
+      triggerSource: weekAdaptationDecision.triggerSource,
+      volumeBias: weekAdaptationDecision.loadStrategy.volumeBias,
+      intensityBias: weekAdaptationDecision.loadStrategy.intensityBias,
+      finisherBias: weekAdaptationDecision.loadStrategy.finisherBias,
+      firstWeekGovernorActive: weekAdaptationDecision.firstWeekGovernor.active,
+      governorReasons: weekAdaptationDecision.firstWeekGovernor.reasons,
+      complexityLevel: weekAdaptationDecision.complexityContext.onboardingComplexity,
+      recoveryRisk: weekAdaptationDecision.recoveryContext.recoveryRisk,
+      adherenceStatus: weekAdaptationDecision.adherenceContext.consistencyStatus,
+      doctrineConstraints: weekAdaptationDecision.doctrineConstraints,
+      summary: getAdaptationSummary(weekAdaptationDecision),
+    })
+  } catch (adaptationError) {
+    console.log('[authoritative-generation-week-adaptation-failed]', {
+      generationIntent: request.generationIntent,
+      error: String(adaptationError),
+    })
+    // Create a minimal fallback decision
+    weekAdaptationDecision = createFallbackWeekAdaptationDecision(request.isFreshBaselineBuild)
+  }
+  
+  markStage('week_adaptation_decision_complete')
+  
   try {
     // ==========================================================================
     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] STAGE: Resolve current working progressions
@@ -543,6 +599,35 @@ export async function executeAuthoritativeGeneration(
         safeGenerationNotes: truthIngestion.safeGenerationNotes,
       },
       
+      // [WEEK-ADAPTATION-DECISION-CONTRACT] Week adaptation decision audit
+      weekAdaptationDecisionAudit: {
+        phase: weekAdaptationDecision.phase,
+        targetDays: weekAdaptationDecision.targetDays,
+        confidence: weekAdaptationDecision.confidence,
+        triggerSource: weekAdaptationDecision.triggerSource,
+        loadStrategy: {
+          volumeBias: weekAdaptationDecision.loadStrategy.volumeBias,
+          intensityBias: weekAdaptationDecision.loadStrategy.intensityBias,
+          densityBias: weekAdaptationDecision.loadStrategy.densityBias,
+          finisherBias: weekAdaptationDecision.loadStrategy.finisherBias,
+          straightArmExposureBias: weekAdaptationDecision.loadStrategy.straightArmExposureBias,
+        },
+        firstWeekGovernor: {
+          active: weekAdaptationDecision.firstWeekGovernor.active,
+          reasons: weekAdaptationDecision.firstWeekGovernor.reasons,
+          reduceDays: weekAdaptationDecision.firstWeekGovernor.reduceDays,
+          reduceSets: weekAdaptationDecision.firstWeekGovernor.reduceSets,
+          reduceRPE: weekAdaptationDecision.firstWeekGovernor.reduceRPE,
+          suppressFinishers: weekAdaptationDecision.firstWeekGovernor.suppressFinishers,
+        },
+        complexityLevel: weekAdaptationDecision.complexityContext.onboardingComplexity,
+        recoveryRisk: weekAdaptationDecision.recoveryContext.recoveryRisk,
+        adherenceStatus: weekAdaptationDecision.adherenceContext.consistencyStatus,
+        doctrineConstraints: weekAdaptationDecision.doctrineConstraints,
+        evidence: weekAdaptationDecision.evidence,
+        summary: getAdaptationSummary(weekAdaptationDecision),
+      },
+      
       // HIGH-PRIORITY: Training method preferences
       trainingMethodPreferences: canonicalProfileTyped.trainingMethodPreferences || [],
       sessionStylePreference: canonicalProfileTyped.sessionStylePreference || null,
@@ -612,6 +697,20 @@ export async function executeAuthoritativeGeneration(
     // This ensures user's flexibility targets (e.g., hip_flexor, hamstring, shoulder)
     // survive save/read/rebuild/restart and are accessible without digging into snapshot
     program.selectedFlexibility = canonicalProfileTyped.selectedFlexibility || []
+    
+    // [WEEK-ADAPTATION-DECISION-CONTRACT] Elevate week adaptation decision to first-class program field
+    // This ensures the week-level dosage/adaptation decisions are accessible and traceable
+    program.weekAdaptationDecision = {
+      phase: weekAdaptationDecision.phase,
+      targetDays: weekAdaptationDecision.targetDays,
+      confidence: weekAdaptationDecision.confidence,
+      triggerSource: weekAdaptationDecision.triggerSource,
+      loadStrategy: weekAdaptationDecision.loadStrategy,
+      firstWeekGovernor: weekAdaptationDecision.firstWeekGovernor,
+      doctrineConstraints: weekAdaptationDecision.doctrineConstraints,
+      evidence: weekAdaptationDecision.evidence,
+      decidedAt: weekAdaptationDecision.decidedAt,
+    }
     
     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Use the resolvedProgressions from earlier in the flow
     // (resolved before building canonicalProfileOverride, so builder gets conservative progressions)
@@ -826,6 +925,69 @@ export async function executeAuthoritativeGeneration(
 // ==========================================================================
 // HELPER: Create Fallback Ingestion (resilience path)
 // ==========================================================================
+
+function createFallbackWeekAdaptationDecision(
+  isFreshBaselineBuild: boolean
+): WeekAdaptationDecision {
+  console.log('[authoritative-generation-fallback-week-adaptation-created]', {
+    isFreshBaselineBuild,
+  })
+  
+  return {
+    phase: isFreshBaselineBuild ? 'initial_acclimation' : 'normal_progression',
+    confidence: 'low',
+    targetDays: 4,
+    dayCountReason: 'Fallback: default 4 days due to decision failure',
+    loadStrategy: {
+      volumeBias: 'reduced',
+      intensityBias: 'reduced',
+      densityBias: 'reduced',
+      finisherBias: 'limited',
+      straightArmExposureBias: 'protected',
+      connectiveTissueBias: 'protected',
+      restSpacingBias: 'increased',
+    },
+    firstWeekGovernor: {
+      active: isFreshBaselineBuild,
+      reasons: ['Fallback decision - using conservative defaults'],
+      reduceDays: false,
+      reduceSets: true,
+      reduceRepsOrHoldTargets: false,
+      reduceRPE: true,
+      suppressFinishers: true,
+      protectHighStressPatterns: true,
+    },
+    adherenceContext: {
+      recentMissedSessions: 0,
+      recentPartialSessions: 0,
+      consistencyStatus: 'stable',
+      usableSignalCount: 0,
+    },
+    recoveryContext: {
+      readinessState: 'unknown',
+      fatigueState: 'unknown',
+      sorenessRisk: 'moderate',
+      recoveryRisk: 'moderate',
+    },
+    complexityContext: {
+      onboardingComplexity: 'moderate',
+      goalComplexity: 'moderate',
+      styleComplexity: 'moderate',
+      skillDemandComplexity: 'moderate',
+      rawCounts: {
+        goals: 1,
+        styles: 1,
+        skills: 0,
+        jointCautions: 0,
+        straightArmSkills: 0,
+      },
+    },
+    doctrineConstraints: ['Fallback decision - conservative defaults applied'],
+    evidence: ['FALLBACK DECISION - week adaptation decision failed'],
+    triggerSource: isFreshBaselineBuild ? 'first_week_initial_generation' : 'regenerate_after_settings_change',
+    decidedAt: new Date().toISOString(),
+  }
+}
 
 function createFallbackIngestion(
   request: AuthoritativeGenerationRequest

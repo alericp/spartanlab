@@ -98,6 +98,123 @@ export interface SessionDistributionEntry {
   category: 'skill_primary' | 'strength_support' | 'mixed' | 'accessory' | 'recovery'
 }
 
+// =============================================================================
+// [WEEK-ADAPTATION-DECISION-CONTRACT] WEEK ADAPTATION DISPLAY TYPES
+// =============================================================================
+
+export interface WeekAdaptationDisplay {
+  /** Phase label e.g. "Acclimation Week", "Normal Progression" */
+  phaseLabel: string
+  /** Short description of current phase */
+  phaseDescription: string
+  /** Whether protective measures are active */
+  isProtective: boolean
+  /** Target days for this week */
+  targetDays: number
+  /** Load adjustment summary */
+  loadSummary: string
+  /** Active doctrine constraints (if any) */
+  doctrineConstraints: string[]
+  /** First-week governor active? */
+  isFirstWeekProtected: boolean
+  /** Evidence trail for UI display */
+  evidence: string[]
+  /** Source of this display data */
+  source: 'weekAdaptationDecision' | 'generationTruthSnapshot' | 'unavailable'
+}
+
+/**
+ * Extract week adaptation display from program
+ */
+export function getWeekAdaptationDisplay(program: AdaptiveProgram): WeekAdaptationDisplay {
+  const decision = program.weekAdaptationDecision
+  const snapshotAudit = program.generationTruthSnapshot?.weekAdaptationDecisionAudit
+  
+  // Try direct decision first
+  if (decision) {
+    const phaseLabels: Record<string, string> = {
+      'initial_acclimation': 'Acclimation Week',
+      'normal_progression': 'Normal Progression',
+      'recovery_constrained': 'Recovery Priority',
+      'rebuild_after_disruption': 'Rebuilding Phase',
+    }
+    
+    const phaseDescriptions: Record<string, string> = {
+      'initial_acclimation': 'Conservative dosage for new program adaptation',
+      'normal_progression': 'Standard training load',
+      'recovery_constrained': 'Reduced load to support recovery',
+      'rebuild_after_disruption': 'Ramping back up after training gap',
+    }
+    
+    const loadParts: string[] = []
+    if (decision.loadStrategy.volumeBias !== 'normal') {
+      loadParts.push(`Volume ${decision.loadStrategy.volumeBias}`)
+    }
+    if (decision.loadStrategy.intensityBias !== 'normal') {
+      loadParts.push(`Intensity ${decision.loadStrategy.intensityBias}`)
+    }
+    if (decision.loadStrategy.finisherBias === 'limited') {
+      loadParts.push('Finishers limited')
+    }
+    if (decision.loadStrategy.straightArmExposureBias === 'protected') {
+      loadParts.push('Straight-arm protected')
+    }
+    
+    return {
+      phaseLabel: phaseLabels[decision.phase] || decision.phase,
+      phaseDescription: phaseDescriptions[decision.phase] || '',
+      isProtective: 
+        decision.phase === 'initial_acclimation' ||
+        decision.phase === 'recovery_constrained' ||
+        decision.loadStrategy.volumeBias === 'reduced' ||
+        decision.loadStrategy.intensityBias === 'reduced',
+      targetDays: decision.targetDays,
+      loadSummary: loadParts.length > 0 ? loadParts.join(' • ') : 'Standard load',
+      doctrineConstraints: decision.doctrineConstraints,
+      isFirstWeekProtected: decision.firstWeekGovernor.active,
+      evidence: decision.evidence,
+      source: 'weekAdaptationDecision',
+    }
+  }
+  
+  // Fall back to snapshot audit
+  if (snapshotAudit) {
+    const phaseLabels: Record<string, string> = {
+      'initial_acclimation': 'Acclimation Week',
+      'normal_progression': 'Normal Progression',
+      'recovery_constrained': 'Recovery Priority',
+      'rebuild_after_disruption': 'Rebuilding Phase',
+    }
+    
+    return {
+      phaseLabel: phaseLabels[snapshotAudit.phase] || snapshotAudit.phase,
+      phaseDescription: snapshotAudit.summary || '',
+      isProtective: 
+        snapshotAudit.phase === 'initial_acclimation' ||
+        snapshotAudit.loadStrategy?.volumeBias === 'reduced',
+      targetDays: snapshotAudit.targetDays,
+      loadSummary: snapshotAudit.summary || 'Standard load',
+      doctrineConstraints: snapshotAudit.doctrineConstraints || [],
+      isFirstWeekProtected: snapshotAudit.firstWeekGovernor?.active || false,
+      evidence: snapshotAudit.evidence || [],
+      source: 'generationTruthSnapshot',
+    }
+  }
+  
+  // Unavailable
+  return {
+    phaseLabel: 'Unknown',
+    phaseDescription: 'Week adaptation decision not available',
+    isProtective: false,
+    targetDays: program.trainingDaysPerWeek || 4,
+    loadSummary: 'Standard load',
+    doctrineConstraints: [],
+    isFirstWeekProtected: false,
+    evidence: [],
+    source: 'unavailable',
+  }
+}
+
 export interface WeeklyDistributionDisplay {
   /** Total sessions this week */
   totalSessions: number

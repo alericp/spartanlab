@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { AdaptiveSession, AdaptiveExercise, TrainingMethodPreference } from '@/lib/adaptive-program-builder'
-import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell, Info } from 'lucide-react'
+import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell } from 'lucide-react'
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
 import { exerciseSupportsRPE } from '@/lib/rpe-adjustment-engine'
 import { useWorkoutSession } from '@/hooks/useWorkoutSession'
@@ -1482,152 +1482,119 @@ function ExerciseRow({
   // Display name - show adjusted name if progression was changed
   const displayName = adjustedName || card.displayTitle
 
-  const categoryColors: Record<string, string> = {
-    skill: 'text-[#E63946]',
-    strength: 'text-blue-400',
-    accessory: 'text-[#8A8A8A]',
-    core: 'text-purple-400',
-    warmup: 'text-green-400',
-    cooldown: 'text-green-400',
-  }
-
-  // Skipped state styling
+  // Skipped state - compact
   if (isSkipped) {
     return (
-      <div className="p-3 rounded-lg border bg-[#1A1A1A]/30 border-[#2A2A2A] opacity-60">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {index && (
-              <span className="text-xs text-[#6A6A6A] font-mono w-4">{index}.</span>
-            )}
-            <SkipForward className="w-4 h-4 text-[#6A6A6A]" />
-            <span className="text-sm text-[#6A6A6A] line-through">{card.displayTitle}</span>
-          </div>
-          <span className="text-xs text-[#6A6A6A]">Skipped</span>
+      <div className="py-2 px-3 rounded-lg border bg-[#141414] border-[#222] opacity-50">
+        <div className="flex items-center gap-2">
+          {index && <span className="text-[10px] text-[#4A4A4A] font-mono">{index}.</span>}
+          <SkipForward className="w-3 h-3 text-[#4A4A4A]" />
+          <span className="text-xs text-[#5A5A5A] line-through">{card.displayTitle}</span>
+          <span className="text-[9px] text-[#4A4A4A] ml-auto">skipped</span>
         </div>
       </div>
     )
   }
 
+  // Build compact prescription string with inline modifiers
+  const prescriptionParts: string[] = [card.prescriptionLine]
+  if (card.loadBadge) prescriptionParts.push(card.loadBadge)
+  if (hasRPE && card.intensityBadge) prescriptionParts.push(card.intensityBadge)
+  const compactPrescription = prescriptionParts.join(' · ')
+
   return (
-    <div className={`p-3 rounded-lg border transition-colors ${
+    <div className={`py-2.5 px-3 rounded-lg border transition-colors ${
       isWarmupCooldown 
-        ? 'bg-[#1A1A1A]/50 border-[#2A2A2A]' 
+        ? 'bg-[#161616] border-[#252525]' 
         : adjustedName 
-          ? 'bg-[#1A1A1A] border-[#4F6D8A]/30' 
-          : 'bg-[#1A1A1A] border-[#3A3A3A] hover:border-[#4A4A4A]'
+          ? 'bg-[#181818] border-[#4F6D8A]/20' 
+          : 'bg-[#181818] border-[#2A2A2A] hover:border-[#3A3A3A]'
     }`}>
-      {/* ROW 1: Identity + Actions */}
-      <div className="flex items-start justify-between gap-3">
+      {/* PRIMARY: Name + Prescription + Actions */}
+      <div className="flex items-center justify-between gap-2">
         <div className="flex-1 min-w-0">
-          {/* Category + Role badges */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {prefix ? (
-              <span className="text-xs text-[#4F6D8A] font-mono font-medium">{prefix}</span>
-            ) : index ? (
-              <span className="text-xs text-[#6A6A6A] font-mono">{index}.</span>
-            ) : null}
-            <span className={`text-[10px] uppercase tracking-wider font-medium ${categoryColors[card.displayCategory]}`}>
-              {card.displayCategory}
-            </span>
-            {card.roleLabel && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#7A7A7A]">
-                {card.roleLabel}
+          {/* Exercise Name with inline category indicator */}
+          <div className="flex items-center gap-2">
+            {(prefix || index) && (
+              <span className="text-[10px] text-[#5A5A5A] font-mono shrink-0">
+                {prefix || `${index}.`}
               </span>
             )}
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+              card.displayCategory === 'skill' ? 'bg-[#E63946]' :
+              card.displayCategory === 'strength' ? 'bg-blue-400' :
+              card.displayCategory === 'core' ? 'bg-purple-400' :
+              'bg-[#5A5A5A]'
+            }`} />
+            <p className="font-medium text-[#E5E5E5] text-sm truncate">{displayName}</p>
             {adjustedName && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4F6D8A]/20 text-[#4F6D8A]">
-                Adjusted
-              </span>
+              <span className="text-[9px] px-1 py-0.5 rounded bg-[#4F6D8A]/15 text-[#4F6D8A] shrink-0">adj</span>
             )}
           </div>
-          
-          {/* Exercise Name */}
-          <p className="font-medium text-[#E5E5E5] mt-1 leading-tight">{displayName}</p>
-          {adjustedName && (
-            <p className="text-[10px] text-[#5A5A5A] mt-0.5">was: {card.displayTitle}</p>
-          )}
         </div>
         
-        {/* Actions */}
-        <div className="flex items-center shrink-0">
-          {!isWarmupCooldown && exercise.isOverrideable && sessionId && onReplace && onSkip && onProgressionAdjust && (
-            <ExerciseActionMenu
-              exercise={exercise}
-              sessionId={sessionId}
-              onReplace={onReplace}
-              onSkip={onSkip}
-              onProgressionAdjust={onProgressionAdjust}
-            />
-          )}
-        </div>
+        {/* Actions - compact */}
+        {!isWarmupCooldown && exercise.isOverrideable && sessionId && onReplace && onSkip && onProgressionAdjust && (
+          <ExerciseActionMenu
+            exercise={exercise}
+            sessionId={sessionId}
+            onReplace={onReplace}
+            onSkip={onSkip}
+            onProgressionAdjust={onProgressionAdjust}
+          />
+        )}
       </div>
       
-      {/* ROW 2: Prescription Line - Unified, coherent */}
-      <div className="flex items-center gap-2 mt-2 flex-wrap">
-        {/* Sets × Reps - Primary prescription */}
-        <span className="text-sm text-[#B5B5B5] font-medium">
-          {card.prescriptionLine}
+      {/* PRESCRIPTION LINE: Compact, unified */}
+      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+        <span className="text-[13px] text-[#A5A5A5]">
+          {compactPrescription}
         </span>
-        
-        {/* Intensity Badge (RPE) */}
-        {hasRPE && card.intensityBadge && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#E63946]/10 text-[#E63946] font-medium">
-            {card.intensityBadge}
-          </span>
-        )}
-        
-        {/* Load Badge */}
-        {card.loadBadge && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4F6D8A]/10 text-[#4F6D8A] font-medium">
-            {card.loadBadge}
-          </span>
-        )}
-        
-        {/* Rest Guidance - only if meaningful */}
         {card.restGuidance && (
-          <span className="text-[10px] text-[#6A6A6A]">
-            rest {card.restGuidance}
+          <span className="text-[10px] text-[#5A5A5A]">
+            · {card.restGuidance} rest
           </span>
         )}
-        
-        {/* Constraint flag */}
         {card.constraintNote && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/8 text-amber-400/80">
             {card.constraintNote}
           </span>
         )}
+        {card.showLoadConfidence && card.loadConfidenceNote && (
+          <span className="text-[9px] text-[#4A4A4A]">({card.loadConfidenceNote})</span>
+        )}
       </div>
       
-      {/* Load confidence note - subtle inline */}
-      {card.showLoadConfidence && card.loadConfidenceNote && (
-        <p className="text-[10px] text-[#5A5A5A] mt-1">{card.loadConfidenceNote}</p>
-      )}
-      
-      {/* Exercise note if present */}
-      {exercise.note && (
-        <p className="text-xs text-[#6A6A6A] mt-1.5 italic">{exercise.note}</p>
-      )}
-      
-      {/* ROW 3: Why Line - Only if real selection reason exists */}
+      {/* SECONDARY: Why line - compressed, only if meaningful */}
       {!isWarmupCooldown && card.whyLine && (
-        <p className="text-xs text-[#7A7A7A] mt-2 leading-relaxed">
+        <p className="text-[11px] text-[#6A6A6A] mt-1.5 leading-snug line-clamp-1">
           {card.whyLine}
         </p>
       )}
       
-      {/* Knowledge expansion - only for main exercises with knowledge */}
+      {/* Exercise note - inline with why if both exist */}
+      {exercise.note && (
+        <p className="text-[10px] text-[#5A5A5A] mt-1 italic">{exercise.note}</p>
+      )}
+      
+      {/* TERTIARY: Knowledge - subtle trigger only */}
       {!isWarmupCooldown && hasKnowledge && (
-        <div className="mt-2">
-          <button
-            className="flex items-center gap-1 text-[10px] text-[#5A5A5A] hover:text-[#8A8A8A] transition-colors"
-            onClick={() => setShowDetails(!showDetails)}
-          >
-            <Info className="w-3 h-3" />
-            <span>{showDetails ? 'Hide details' : 'Learn more'}</span>
-          </button>
-          {showDetails && (
-            <div className="mt-2 pl-2 border-l-2 border-[#3A3A3A]">
+        <>
+          {!showDetails ? (
+            <button
+              className="mt-1.5 text-[9px] text-[#4A4A4A] hover:text-[#7A7A7A] transition-colors"
+              onClick={() => setShowDetails(true)}
+            >
+              + details
+            </button>
+          ) : (
+            <div className="mt-2 pt-2 border-t border-[#252525]">
+              <button
+                className="text-[9px] text-[#5A5A5A] hover:text-[#8A8A8A] mb-2"
+                onClick={() => setShowDetails(false)}
+              >
+                − hide
+              </button>
               <ExerciseKnowledgeBubble 
                 exerciseId={exerciseId}
                 showSkillCarryover
@@ -1635,7 +1602,7 @@ function ExerciseRow({
               />
             </div>
           )}
-        </div>
+        </>
       )}
     </div>
   )

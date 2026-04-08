@@ -145,9 +145,22 @@ export async function POST(request: Request) {
     })
     
     if (!result.success) {
+      // [PHASE 15E] Extract exact substep diagnostics from service result (now typed)
+      const { 
+        exactFailingSubstep, 
+        exactLastSafeSubstep, 
+        compactBuilderError, 
+        compactStackPreview, 
+        degradationAttempted 
+      } = result
+      
       console.log('[regenerate-route-generation-failed]', {
         error: result.error,
         failedStage: result.failedStage,
+        // [PHASE 15E] Exact substep diagnostic
+        exactFailingSubstep,
+        exactLastSafeSubstep,
+        degradationAttempted,
         timings: result.timings,
       })
       
@@ -155,12 +168,24 @@ export async function POST(request: Request) {
         success: false,
         error: result.error,
         failedStage: result.failedStage,
+        // [PHASE 15E] Include exact substep info in 500 response
+        exactFailingSubstep,
+        exactLastSafeSubstep,
+        compactBuilderError,
+        compactStackPreview,
+        degradationAttempted,
         timings: result.timings,
         diagnostics: {
           routeStage: 'authoritative_service_call',
           serviceStage: result.failedStage,
           generationIntent: 'regenerate',
           triggerSource: 'regenerate',
+          // Preserve exact Phase 15E failure info
+          phase15eDiagnostic: exactFailingSubstep ? {
+            exactFailingSubstep,
+            exactLastSafeSubstep,
+            degradationAttempted,
+          } : undefined,
         },
       }, { status: 500 })
     }

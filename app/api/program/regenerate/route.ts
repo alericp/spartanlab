@@ -162,13 +162,21 @@ export async function POST(request: Request) {
     
     if (!result.success) {
       // [PHASE 15E] Extract exact substep diagnostics from service result (now typed)
+      // [POST-TRUTH-CORRIDOR] Also extract corridor diagnostic fields
       const { 
         exactFailingSubstep, 
         exactLastSafeSubstep, 
         compactBuilderError, 
         compactStackPreview, 
-        degradationAttempted 
-      } = result
+        degradationAttempted,
+        exactBuilderCorridor,
+        exactLocalStep,
+        fallbackApplied,
+      } = result as typeof result & { 
+        exactBuilderCorridor?: string
+        exactLocalStep?: string
+        fallbackApplied?: boolean
+      }
       
       console.log('[regenerate-route-generation-failed]', {
         error: result.error,
@@ -177,6 +185,10 @@ export async function POST(request: Request) {
         exactFailingSubstep,
         exactLastSafeSubstep,
         degradationAttempted,
+        // [POST-TRUTH-CORRIDOR] Corridor diagnostic
+        exactBuilderCorridor,
+        exactLocalStep,
+        fallbackApplied,
         timings: result.timings,
       })
       
@@ -190,6 +202,10 @@ export async function POST(request: Request) {
         compactBuilderError,
         compactStackPreview,
         degradationAttempted,
+        // [POST-TRUTH-CORRIDOR] Include corridor diagnostic fields
+        exactBuilderCorridor,
+        exactLocalStep,
+        fallbackApplied,
         timings: result.timings,
         diagnostics: {
           routeStage: 'authoritative_service_call',
@@ -201,6 +217,12 @@ export async function POST(request: Request) {
             exactFailingSubstep,
             exactLastSafeSubstep,
             degradationAttempted,
+          } : undefined,
+          // [POST-TRUTH-CORRIDOR] Include corridor info in diagnostics
+          corridorDiagnostic: exactBuilderCorridor ? {
+            exactBuilderCorridor,
+            exactLocalStep,
+            fallbackApplied,
           } : undefined,
         },
       }, { status: 500 })

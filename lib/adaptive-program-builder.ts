@@ -7904,6 +7904,24 @@ async function generateAdaptiveProgramImpl(
       .map(([k]) => k),
   })
   
+  // ==========================================================================
+  // [POST-TRUTH-AUDIT-CORRIDOR] SINGLE AUTHORITATIVE CONTAINMENT BOUNDARY
+  // This tracker owns the entire corridor from truth-audit to structure selection.
+  // It consolidates scattered patches into one canonical owner.
+  // ==========================================================================
+  const postTruthCorridorTracker = {
+    corridorName: 'post_truth_audit_to_structure_selection',
+    exactLocalStep: 'corridor_entry',
+    lastSafeLocalStep: 'corridor_entry',
+    degraded: false,
+    degradedReason: null as string | null,
+    fallbackApplied: false,
+    fallbackContractName: null as string | null,
+    continuedPastBoundary: false,
+    stepsCompleted: [] as string[],
+    stepsFailed: [] as string[],
+  }
+  
   // Get duration-based configuration for exercise count and structure
   const baseDurationConfig = getDurationConfig(workoutDuration)
   
@@ -8531,6 +8549,9 @@ async function generateAdaptiveProgramImpl(
   // TASK 3: Pass hybrid path and multi-skill flags for expanded structure awareness
   // ISSUE A: Stage tracking for structure selection
   await setStage('structure_selection')
+  postTruthCorridorTracker.exactLocalStep = 'structure_selection_entry'
+  postTruthCorridorTracker.stepsCompleted.push('pre_structure_corridor_complete')
+  
   console.log('[program-generate] Selected skills passed to structure:', {
     selectedSkills: expandedContext.selectedSkills,
     secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || null,
@@ -8539,6 +8560,7 @@ async function generateAdaptiveProgramImpl(
   
   let structure: WeeklyStructure
   try {
+    postTruthCorridorTracker.exactLocalStep = 'structure_selection_call'
     structure = selectOptimalStructure({
     primaryGoal,
     trainingDays: effectiveTrainingDays,  // Uses resolved flexible frequency
@@ -8554,15 +8576,36 @@ async function generateAdaptiveProgramImpl(
     selectedSkills: expandedContext.selectedSkills,
     secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || null,
   })
+    postTruthCorridorTracker.lastSafeLocalStep = 'structure_selection_success'
+    postTruthCorridorTracker.stepsCompleted.push('structure_selection')
   } catch (err) {
+    postTruthCorridorTracker.stepsFailed.push('structure_selection')
+    postTruthCorridorTracker.degraded = true
+    postTruthCorridorTracker.degradedReason = `structure_selection_failed: ${err instanceof Error ? err.message : 'unknown'}`
+    
+    // Log the exact corridor failure for diagnostics
+    console.log('[post-truth-corridor-authoritative-failure]', {
+      ...postTruthCorridorTracker,
+      verdict: 'STRUCTURE_SELECTION_FATAL_CANNOT_CONTINUE',
+    })
+    
     throw new GenerationError(
       'structure_selection_failed',
       stageTracker.current,
       err instanceof Error ? err.message : 'Failed to select weekly structure',
-      { primaryGoal, trainingDays: effectiveTrainingDays, scheduleMode: inputScheduleMode }
+      { 
+        primaryGoal, 
+        trainingDays: effectiveTrainingDays, 
+        scheduleMode: inputScheduleMode,
+        // [PHASE 15E] Include corridor diagnostic info
+        exactBuilderCorridor: postTruthCorridorTracker.corridorName,
+        exactLocalStep: postTruthCorridorTracker.exactLocalStep,
+        exactLastSafeLocalStep: postTruthCorridorTracker.lastSafeLocalStep,
+      }
     )
   }
   
+  postTruthCorridorTracker.exactLocalStep = 'post_structure_selection'
   console.log('[program-generate] Structure selected:', structure.structureName)
   
   // ==========================================================================
@@ -8990,20 +9033,101 @@ async function generateAdaptiveProgramImpl(
   weekAdaptation: weekAdaptationInputForSession,
   }
     
-    const session = generateAdaptiveSession(
-      day,
-      primaryGoal,
-      experienceLevel,
-      equipment,
-      sessionLength,
-      constraintInsight.hasInsight ? constraintInsight.label : undefined,
-      sessionContext
-    )
+    // ==========================================================================
+    // [POST-TRUTH-CORRIDOR] Wrap session generation in try/catch for fallback
+    // ==========================================================================
+    let session: AdaptiveSession
+    let sessionGenerationFailed = false
+    try {
+      session = generateAdaptiveSession(
+        day,
+        primaryGoal,
+        experienceLevel,
+        equipment,
+        sessionLength,
+        constraintInsight.hasInsight ? constraintInsight.label : undefined,
+        sessionContext
+      )
+    } catch (sessionGenErr) {
+      const errorMessage = sessionGenErr instanceof Error ? sessionGenErr.message : String(sessionGenErr)
+      const matchedPattern = 
+        errorMessage.includes('session_generation_failed') ? 'session_generation_failed' :
+        errorMessage.includes('exercise_selection_returned_null') ? 'exercise_selection_returned_null' :
+        errorMessage.includes('session_middle_helper_failed') ? 'session_middle_helper_failed' :
+        'session_generation_unknown_error'
+      
+      console.error('[session-generation-contained-failure]', {
+        sessionIndex: index,
+        dayNumber: day.dayNumber,
+        focus: day.focus,
+        matchedPattern,
+        errorMessage: errorMessage.slice(0, 200),
+        verdict: 'CREATING_FALLBACK_SESSION_GENERATION_CONTINUES',
+      })
+      
+      // Track in corridor
+      postTruthCorridorTracker.degraded = true
+      postTruthCorridorTracker.degradedReason = `session_${index}_generation_failed: ${matchedPattern}`
+      postTruthCorridorTracker.fallbackApplied = true
+      postTruthCorridorTracker.fallbackContractName = 'minimal_fallback_session_generation_failed'
+      postTruthCorridorTracker.stepsFailed.push(`session_${index}_generation`)
+      
+      // Create fallback session
+      session = {
+        dayNumber: day.dayNumber,
+        focus: day.focus,
+        warmup: [],
+        exercises: [{
+          name: 'Rest & Recovery',
+          targetMuscles: ['recovery'] as any,
+          skillTargets: [],
+          sets: 1,
+          reps: '1',
+          restSeconds: 0,
+          notes: `Session generation failed. Take a rest day. (${matchedPattern})`,
+          rationale: 'Fallback due to session generation error',
+          isSuperset: false,
+          supersetGroup: null,
+          supersetPosition: null,
+          trainingMethodId: null,
+          progressionId: undefined,
+        }],
+        cooldown: [],
+        finisher: undefined,
+        variants: [{
+          duration: 15,
+          label: 'Recovery Session',
+          selection: {
+            main: [],
+            warmup: [],
+            cooldown: [],
+            totalEstimatedTime: 15,
+            skillExpressionResult: {
+              directlyExpressedSkills: [],
+              technicalSlotSkills: [],
+              supportSkillsInjected: [],
+            },
+          },
+          compressionLevel: 'none' as const,
+        }],
+        adaptationNotes: [`[FALLBACK] Generation failed: ${errorMessage.slice(0, 80)}`],
+        rationale: 'This session could not be generated. Please try regenerating your program.',
+        recoveryContext: {
+          isRecoveryDay: true,
+          recoveryRecommendation: 'Light activity or rest',
+          deloadPhase: false,
+        },
+        _degraded: true,
+        _degradedReason: matchedPattern,
+      } as AdaptiveSession & { _degraded?: boolean; _degradedReason?: string }
+      
+      sessionGenerationFailed = true
+    }
     
     // =========================================================================
     // STEP A: Post-session mutation zone tracking
     // =========================================================================
-    let postSessionStep = 'session_generated'
+    let postSessionStep = sessionGenerationFailed ? 'session_fallback_applied' : 'session_generated'
     const sessionExerciseCountAtStart = session.exercises?.length || 0
     
     console.log('[post-session-start]', {
@@ -9533,17 +9657,11 @@ async function generateAdaptiveProgramImpl(
   sessions.push(session)
   
   } catch (postSessionErr) {
-      // STEP C: Classify post-session failure
+      // STEP C: Classify post-session failure and create fallback session
       const errorMessage = postSessionErr instanceof Error ? postSessionErr.message : String(postSessionErr)
-      
-      // Check if it's already a classified error from inside the block
-      const isAlreadyClassified = errorMessage.includes('post_session_integrity_invalid') ||
-                                   errorMessage.includes('post_session_mutation_failed')
-      
-      if (isAlreadyClassified) {
-        // Rethrow as-is
-        throw postSessionErr
-      }
+      const matchedPattern = errorMessage.includes('post_session_integrity_invalid') ? 'post_session_integrity_invalid' :
+                            errorMessage.includes('post_session_mutation_failed') ? 'post_session_mutation_failed' :
+                            'post_session_error_unclassified'
       
       console.error('[post-session-failure]', {
         dayNumber: day.dayNumber,
@@ -9561,13 +9679,75 @@ async function generateAdaptiveProgramImpl(
         structureName: structure.structureName,
         sessionLength,
         equipmentCount: equipment.length,
+        verdict: 'CREATING_FALLBACK_SESSION_TO_CONTINUE',
       })
       
-      // Throw classified error
-      const safeReason = errorMessage.slice(0, 100).replace(/[^a-zA-Z0-9_\-\s]/g, '')
-      throw new Error(
-        `post_session_mutation_failed: step=${postSessionStep} day=${day.dayNumber} focus=${day.focus} goal=${primaryGoal} reason=${safeReason}`
-      )
+      // ==========================================================================
+      // [POST-TRUTH-CORRIDOR-FALLBACK] Create fallback session instead of throwing
+      // ==========================================================================
+      postTruthCorridorTracker.degraded = true
+      postTruthCorridorTracker.degradedReason = `session_${index}_post_mutation_failed: ${matchedPattern}`
+      postTruthCorridorTracker.fallbackApplied = true
+      postTruthCorridorTracker.fallbackContractName = 'minimal_fallback_session_post_mutation'
+      postTruthCorridorTracker.stepsFailed.push(`session_${index}_post_mutation`)
+      
+      const fallbackSession: AdaptiveSession = {
+        dayNumber: day.dayNumber,
+        focus: day.focus,
+        warmup: [],
+        exercises: [{
+          name: 'Recovery Activity',
+          targetMuscles: ['recovery'] as any,
+          skillTargets: [],
+          sets: 1,
+          reps: '1',
+          restSeconds: 0,
+          notes: `Session post-processing failed. Take a rest day or do light activity. (${matchedPattern})`,
+          rationale: 'Fallback session due to post-processing error',
+          isSuperset: false,
+          supersetGroup: null,
+          supersetPosition: null,
+          trainingMethodId: null,
+          progressionId: undefined,
+        }],
+        cooldown: [],
+        finisher: undefined,
+        variants: [{
+          duration: 15,
+          label: 'Recovery Session',
+          selection: {
+            main: [],
+            warmup: [],
+            cooldown: [],
+            totalEstimatedTime: 15,
+            skillExpressionResult: {
+              directlyExpressedSkills: [],
+              technicalSlotSkills: [],
+              supportSkillsInjected: [],
+            },
+          },
+          compressionLevel: 'none' as const,
+        }],
+        adaptationNotes: [`[FALLBACK] Post-mutation failed: ${errorMessage.slice(0, 100)}`],
+        rationale: `This session's post-processing encountered an error. Please try regenerating.`,
+        recoveryContext: {
+          isRecoveryDay: true,
+          recoveryRecommendation: 'Light activity or rest',
+          deloadPhase: false,
+        },
+        _degraded: true,
+        _degradedReason: matchedPattern,
+      } as AdaptiveSession & { _degraded?: boolean; _degradedReason?: string }
+      
+      sessions.push(fallbackSession)
+      
+      console.log('[post-session-fallback-applied]', {
+        sessionIndex: index,
+        matchedPattern,
+        verdict: 'SESSION_POST_MUTATION_FAILED_FALLBACK_APPLIED_CONTINUING',
+      })
+      
+      // Continue to next session - don't throw
     }
   } // [PHASE 16C] End of for loop (converted from map)
   } catch (err) {
@@ -9625,28 +9805,126 @@ async function generateAdaptiveProgramImpl(
       totalDays: structure?.days?.length,
     })
     
-    // TASK 1-B: Throw GenerationError with ALL structured fields for UI propagation
-    throw new GenerationError(
-      'session_assembly_failed',
-      stageTracker.current,
-      errorMessage,
-      { 
-        structureName: structure?.structureName, 
-        dayCount: structure?.days?.length,
-        // Structured subCode for page handlers to read directly
-        subCode: matchedPattern,
-        originalMessage: errorMessage,
-        classified: matchedPattern !== 'unclassified',
-        // TASK 1: Structured failure fields for end-to-end UI propagation
-        failureStep: parsedFailureStep,
-        failureMiddleStep: parsedFailureMiddleStep,
-        failureReason: parsedFailureReason,
-        failureGoal: parsedFailureGoal,
-        failureDayNumber: dayMatch ? Number(dayMatch[1]) : null,
-        failureFocus: focusMatch ? focusMatch[1] : null,
-      }
-    )
+    // ==========================================================================
+    // [POST-TRUTH-CORRIDOR-FALLBACK] CRITICAL: Create minimal fallback session
+    // This allows generation to continue even when a single session fails.
+    // The program can still be returned with degraded sessions marked.
+    // ==========================================================================
+    const sessionLoopIndex = sessions.length // Current session that failed
+    const failedDayInfo = structure?.days?.[sessionLoopIndex]
+    
+    // Track in corridor
+    postTruthCorridorTracker.degraded = true
+    postTruthCorridorTracker.degradedReason = `session_${sessionLoopIndex}_failed: ${matchedPattern}`
+    postTruthCorridorTracker.fallbackApplied = true
+    postTruthCorridorTracker.fallbackContractName = 'minimal_fallback_session'
+    postTruthCorridorTracker.stepsFailed.push(`session_${sessionLoopIndex}`)
+    
+    // Create minimal fallback session so generation can continue
+    const fallbackSession: AdaptiveSession = {
+      dayNumber: failedDayInfo?.dayNumber || sessionLoopIndex + 1,
+      focus: failedDayInfo?.focus || 'foundation',
+      warmup: [],
+      exercises: [
+        // Single safe fallback exercise 
+        {
+          name: 'Foundation Rest Day',
+          targetMuscles: ['recovery'] as any,
+          skillTargets: [],
+          sets: 1,
+          reps: '1',
+          restSeconds: 0,
+          notes: `Session generation encountered an issue. Take a rest day or do light active recovery. (Error: ${matchedPattern})`,
+          rationale: 'Fallback session generated due to builder error',
+          isSuperset: false,
+          supersetGroup: null,
+          supersetPosition: null,
+          trainingMethodId: null,
+          progressionId: undefined,
+        },
+      ],
+      cooldown: [],
+      finisher: undefined,
+      variants: [{
+        duration: 15,
+        label: 'Recovery Session',
+        selection: {
+          main: [],
+          warmup: [],
+          cooldown: [],
+          totalEstimatedTime: 15,
+          skillExpressionResult: {
+            directlyExpressedSkills: [],
+            technicalSlotSkills: [],
+            supportSkillsInjected: [],
+          },
+        },
+        compressionLevel: 'none' as const,
+      }],
+      adaptationNotes: [`[FALLBACK] Session failed to build: ${parsedFailureReason || matchedPattern}`],
+      rationale: `This session encountered a build error (${matchedPattern}). Please try regenerating your program.`,
+      recoveryContext: {
+        isRecoveryDay: true,
+        recoveryRecommendation: 'Light activity or rest',
+        deloadPhase: false,
+      },
+      // Mark as degraded
+      _degraded: true,
+      _degradedReason: matchedPattern,
+    } as AdaptiveSession & { _degraded?: boolean; _degradedReason?: string }
+    
+    // Push fallback session and continue
+    sessions.push(fallbackSession)
+    
+    console.log('[post-truth-corridor-session-fallback-applied]', {
+      sessionIndex: sessionLoopIndex,
+      matchedPattern,
+      corridorState: postTruthCorridorTracker,
+      verdict: 'SESSION_FAILED_BUT_FALLBACK_APPLIED_GENERATION_CONTINUES',
+    })
+    
+    // Continue to next session instead of throwing
+    // The sessions array will have a degraded session, but generation continues
   }
+  
+  // ==========================================================================
+  // [POST-TRUTH-AUDIT-CORRIDOR] CANONICAL SUMMARY - SINGLE ROOT-CAUSE LOG
+  // This is the ONE authoritative log for the entire post-truth corridor.
+  // ==========================================================================
+  postTruthCorridorTracker.exactLocalStep = 'session_assembly_complete'
+  postTruthCorridorTracker.continuedPastBoundary = true
+  postTruthCorridorTracker.stepsCompleted.push('session_assembly')
+  
+  // Count degraded sessions
+  const degradedSessionCount = sessions.filter(s => (s as any)._degraded).length
+  const validSessionCount = sessions.length - degradedSessionCount
+  
+  console.log('[post-truth-corridor-authoritative-summary]', {
+    corridorName: postTruthCorridorTracker.corridorName,
+    exactLocalStep: postTruthCorridorTracker.exactLocalStep,
+    exactLastSafeLocalStep: postTruthCorridorTracker.lastSafeLocalStep,
+    wasContained: !postTruthCorridorTracker.degraded || postTruthCorridorTracker.fallbackApplied,
+    fallbackApplied: postTruthCorridorTracker.fallbackApplied,
+    degraded: postTruthCorridorTracker.degraded,
+    degradedReason: postTruthCorridorTracker.degradedReason,
+    builderStage: stageTracker.current,
+    generationContinued: true,
+    structureSelectionReached: postTruthCorridorTracker.stepsCompleted.includes('structure_selection'),
+    sessionAssemblyReached: postTruthCorridorTracker.stepsCompleted.includes('session_assembly'),
+    validProgramProduced: validSessionCount > 0,
+    sessionStats: {
+      totalSessions: sessions.length,
+      validSessions: validSessionCount,
+      degradedSessions: degradedSessionCount,
+    },
+    stepsCompleted: postTruthCorridorTracker.stepsCompleted,
+    stepsFailed: postTruthCorridorTracker.stepsFailed,
+    verdict: postTruthCorridorTracker.degraded
+      ? validSessionCount > 0
+        ? 'CORRIDOR_DEGRADED_BUT_VALID_PROGRAM_PRODUCED'
+        : 'CORRIDOR_DEGRADED_PROGRAM_INVALID'
+      : 'CORRIDOR_SUCCESS_CLEAN',
+  })
   
   // [session-assembly] ISSUE D: Final validation of assembled sessions array
   const sessionExerciseCounts = sessions.map(s => s.exercises?.length || 0)

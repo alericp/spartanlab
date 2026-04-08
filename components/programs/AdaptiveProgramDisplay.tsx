@@ -10,6 +10,11 @@ import {
   CheckCircle2,
   RotateCcw,
   RefreshCw,
+  HelpCircle,
+  Target,
+  Calendar,
+  Dumbbell,
+  TrendingUp,
 } from 'lucide-react'
 import {
   Dialog,
@@ -49,6 +54,9 @@ export function AdaptiveProgramDisplay({
 }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
+  
+  // Why This Fits You - premium explanation sheet state
+  const [showWhySheet, setShowWhySheet] = useState(false)
   
   // [PHASE 13] Schedule change notice state
   const [scheduleNotice, setScheduleNotice] = useState<ScheduleChangeNotice | null>(null)
@@ -1104,83 +1112,74 @@ export function AdaptiveProgramDisplay({
           
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              {/* Title with stronger presence */}
+              {/* Truthful Program Title - reflects actual week content */}
               <div className="flex items-center gap-2.5 mb-1">
-                <h3 className="text-xl font-bold tracking-tight">{program.goalLabel}</h3>
+                <h3 className="text-xl font-bold tracking-tight">
+                  {/* Show primary + secondary if both exist, otherwise just goalLabel */}
+                  {program.secondaryGoal 
+                    ? `${program.goalLabel?.split(' ')[0] || program.primaryGoal?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} + ${program.secondaryGoal.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`
+                    : program.goalLabel}
+                </h3>
                 <span className="text-[10px] font-medium uppercase tracking-wider text-[#E63946]/70 px-2 py-0.5 bg-[#E63946]/10 rounded">
                   Active
                 </span>
               </div>
-              {/* Training spine - the main method */}
-              <p className="text-sm font-medium text-[#E63946]">
+              {/* Training method with structure clarity */}
+              <p className="text-sm text-[#8A8A8A]">
                 {dominantSpineResolution?.primarySpine 
-                  ? `${dominantSpineResolution.primarySpine.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Approach`
-                  : `${program.primaryGoal?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Custom'} Focus`}
-                {program.secondaryGoal && (
-                  <span className="text-[#7A7A7A] font-normal"> + {program.secondaryGoal.replace(/_/g, ' ')}</span>
-                )}
+                  ? `${dominantSpineResolution.primarySpine.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} · `
+                  : ''}
+                {validSessions.length} days/week · {program.sessionLength || 60}min sessions
               </p>
             </div>
-            {(onRestart || onDelete) && (
+            <div className="flex items-center gap-1">
+              {/* Why This Fits You - premium explanation trigger */}
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-[#5A5A5A] hover:text-amber-400 h-8 w-8 p-0 rounded-full hover:bg-[#333]"
-                onClick={() => setShowRestartConfirm(true)}
+                className="text-[#6A6A6A] hover:text-[#E63946] h-8 w-8 p-0 rounded-full hover:bg-[#E63946]/10"
+                onClick={() => setShowWhySheet(true)}
+                title="Why this program fits you"
               >
-                <RotateCcw className="w-4 h-4" />
+                <HelpCircle className="w-4 h-4" />
               </Button>
-            )}
+              {(onRestart || onDelete) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-[#5A5A5A] hover:text-amber-400 h-8 w-8 p-0 rounded-full hover:bg-[#333]"
+                  onClick={() => setShowRestartConfirm(true)}
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
           </div>
         </div>
         
-        {/* Why This Program - Traceable decision summary */}
-        <div className="px-4 py-3 bg-[#1E1E1E]/40 border-t border-[#333]/50">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-            {/* Your Goal */}
-            <div>
-              <span className="text-[#5A5A5A] block mb-0.5">Your Goal</span>
-              <span className="text-[#C8C8C8] font-medium">
-                {program.goalLabel || program.primaryGoal?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                {program.secondaryGoal && (
-                  <span className="text-[#7A7A7A] font-normal"> + {program.secondaryGoal.replace(/_/g, ' ')}</span>
-                )}
-              </span>
-            </div>
-            {/* Your Schedule */}
-            <div>
-              <span className="text-[#5A5A5A] block mb-0.5">Your Schedule</span>
-              <span className="text-[#C8C8C8] font-medium">
-                {validSessions.length} days × {program.sessionLength || 60}min
-              </span>
-            </div>
-            {/* Training Method */}
-            <div>
-              <span className="text-[#5A5A5A] block mb-0.5">Training Method</span>
-              <span className="text-[#C8C8C8] font-medium">
-                {dominantSpineResolution?.primarySpine 
-                  ? dominantSpineResolution.primarySpine.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-                  : program.scheduleMode === 'flexible' ? 'Adaptive Structure' : 'Fixed Structure'}
-              </span>
-            </div>
-            {/* Your Level */}
-            <div>
-              <span className="text-[#5A5A5A] block mb-0.5">Your Level</span>
+        {/* Compact Summary Strip - key facts at a glance */}
+        <div className="px-4 py-2.5 bg-[#1E1E1E]/40 border-t border-[#333]/50 flex items-center justify-between">
+          <div className="flex items-center gap-4 text-xs">
+            <div className="flex items-center gap-1.5">
+              <Target className="w-3 h-3 text-[#E63946]" />
               <span className="text-[#C8C8C8] font-medium capitalize">{program.experienceLevel}</span>
             </div>
+            <div className="w-px h-3 bg-[#3A3A3A]" />
+            <div className="flex items-center gap-1.5">
+              <Calendar className="w-3 h-3 text-[#6A6A6A]" />
+              <span className="text-[#9A9A9A]">{program.scheduleMode === 'flexible' ? 'Adaptive' : 'Fixed'} schedule</span>
+            </div>
           </div>
-          
-          {/* Why this structure - coach-like explanation */}
-          {(dominantSpineResolution?.spineRationale || safeSummaryTruth.truthfulHybridSummary || program.programRationale) && (
-            <p className="mt-3 pt-3 border-t border-[#333]/40 text-[12px] text-[#7A7A7A] leading-relaxed line-clamp-2">
-              {dominantSpineResolution?.spineRationale || 
-               safeSummaryTruth.truthfulHybridSummary || 
-               program.programRationale}
-            </p>
-          )}
+          {/* Learn more link */}
+          <button 
+            onClick={() => setShowWhySheet(true)}
+            className="text-[10px] text-[#E63946]/70 hover:text-[#E63946] font-medium uppercase tracking-wide"
+          >
+            Why this fits you
+          </button>
         </div>
         
-        {/* This Week Focus - Compact skill chips */}
+        {/* This Week Focus - Compact skill chips with context */}
         {safeSelectedSkills.length > 0 && sharedStrictRepresentedSkillsForChips.length > 0 && (
           <div className="px-4 py-2.5 border-t border-[#333]/30">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -1275,6 +1274,130 @@ export function AdaptiveProgramDisplay({
           </Card>
         )}
       </div>
+
+      {/* Why This Fits You - Premium explanation sheet */}
+      <Dialog open={showWhySheet} onOpenChange={setShowWhySheet}>
+        <DialogContent className="bg-[#1A1F26] border-[#2B313A] max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-[#E6E9EF] flex items-center gap-2">
+              <div className="w-6 h-6 rounded bg-[#E63946]/10 flex items-center justify-center">
+                <TrendingUp className="w-3.5 h-3.5 text-[#E63946]" />
+              </div>
+              Why This Program Fits You
+            </DialogTitle>
+            <DialogDescription className="text-[#A4ACB8] pt-1">
+              How your goals and preferences shaped this plan
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-2">
+            {/* Your Goal Section */}
+            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+              <div className="flex items-center gap-2 mb-2">
+                <Target className="w-4 h-4 text-[#E63946]" />
+                <h4 className="text-sm font-medium text-[#E6E9EF]">Your Training Goal</h4>
+              </div>
+              <p className="text-sm text-[#C8C8C8]">
+                {program.goalLabel || program.primaryGoal?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                {program.secondaryGoal && (
+                  <span className="text-[#8A8A8A]"> with {program.secondaryGoal.replace(/_/g, ' ')} integration</span>
+                )}
+              </p>
+              <p className="text-xs text-[#6A6A6A] mt-2">
+                {program.secondaryGoal 
+                  ? `Your sessions balance ${program.primaryGoal?.replace(/_/g, ' ')} as the primary focus with supporting ${program.secondaryGoal.replace(/_/g, ' ')} work.`
+                  : `All sessions are optimized for ${program.primaryGoal?.replace(/_/g, ' ')} development.`}
+              </p>
+            </div>
+            
+            {/* Training Method Section */}
+            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+              <div className="flex items-center gap-2 mb-2">
+                <Dumbbell className="w-4 h-4 text-[#E63946]" />
+                <h4 className="text-sm font-medium text-[#E6E9EF]">Training Method</h4>
+              </div>
+              <p className="text-sm text-[#C8C8C8]">
+                {dominantSpineResolution?.primarySpine 
+                  ? dominantSpineResolution.primarySpine.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+                  : 'Balanced Approach'}
+              </p>
+              <p className="text-xs text-[#6A6A6A] mt-2 leading-relaxed">
+                {dominantSpineResolution?.spineRationale || 
+                 safeSummaryTruth.truthfulHybridSummary || 
+                 program.programRationale ||
+                 'Exercises are selected to build the specific strength patterns and positions needed for your goals.'}
+              </p>
+            </div>
+            
+            {/* Schedule Section */}
+            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+              <div className="flex items-center gap-2 mb-2">
+                <Calendar className="w-4 h-4 text-[#E63946]" />
+                <h4 className="text-sm font-medium text-[#E6E9EF]">Your Schedule</h4>
+              </div>
+              <p className="text-sm text-[#C8C8C8]">
+                {validSessions.length} sessions per week · ~{program.sessionLength || 60} minutes each
+              </p>
+              <p className="text-xs text-[#6A6A6A] mt-2">
+                {program.scheduleMode === 'flexible' 
+                  ? 'Adaptive scheduling adjusts weekly session count based on your recovery and consistency.'
+                  : `Fixed ${validSessions.length}-day structure provides consistent training stimulus and recovery balance.`}
+              </p>
+            </div>
+            
+            {/* Experience Level Section */}
+            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp className="w-4 h-4 text-[#E63946]" />
+                <h4 className="text-sm font-medium text-[#E6E9EF]">Matched to Your Level</h4>
+              </div>
+              <p className="text-sm text-[#C8C8C8] capitalize">{program.experienceLevel}</p>
+              <p className="text-xs text-[#6A6A6A] mt-2">
+                {program.experienceLevel === 'beginner' && 'Exercise selection and volume are conservative to build foundations safely.'}
+                {program.experienceLevel === 'intermediate' && 'Progressive overload and skill-specific work match your current abilities.'}
+                {program.experienceLevel === 'advanced' && 'Higher intensity and specialized progressions match your training history.'}
+                {program.experienceLevel === 'elite' && 'Peak-level programming with nuanced periodization for continued progress.'}
+              </p>
+            </div>
+            
+            {/* This Week Skills */}
+            {sharedStrictRepresentedSkillsForChips.length > 0 && (
+              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Skills This Week</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {sharedStrictRepresentedSkillsForChips.map((skill) => {
+                    const chipState = getSharedChipState(skill)
+                    const isHeadline = chipState === 'headline_priority'
+                    return (
+                      <span 
+                        key={skill}
+                        className={`inline-flex items-center px-2 py-1 rounded text-xs ${
+                          isHeadline 
+                            ? 'bg-[#E63946]/15 text-[#E63946] border border-[#E63946]/25' 
+                            : 'bg-[#1A1A1A] text-[#8A8A8A] border border-[#333]'
+                        }`}
+                      >
+                        {skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                        {isHeadline && <span className="ml-1 text-[10px] opacity-70">Primary</span>}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowWhySheet(false)}
+              className="w-full border-[#3A3A3A] text-[#A4ACB8] hover:bg-[#2A2A2A]"
+            >
+              Got it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* TASK 4: Restart Program Confirmation Modal - clear semantics */}
       <Dialog open={showRestartConfirm} onOpenChange={setShowRestartConfirm}>

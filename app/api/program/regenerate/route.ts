@@ -144,6 +144,22 @@ export async function POST(request: Request) {
       parityVerdict: result.parityVerdict.verdict,
     })
     
+    // [PHASE 15E BABY AUDIT] Route response truth audit
+    console.log('[regenerate-route-response-truth-audit]', {
+      success: result.success,
+      failedStage: result.failedStage || null,
+      exactFailingSubstep: result.exactFailingSubstep || null,
+      exactLastSafeSubstep: result.exactLastSafeSubstep || null,
+      hasProgram: !!result.program,
+      sessionCount: result.program?.sessions?.length || 0,
+      statusReturned: result.success ? 200 : 500,
+      verdict: result.success && result.program && result.program.sessions?.length > 0
+        ? 'route_success_valid_program'
+        : result.success
+          ? 'route_success_but_invalid_program_shape'
+          : 'route_failure_confirmed',
+    })
+    
     if (!result.success) {
       // [PHASE 15E] Extract exact substep diagnostics from service result (now typed)
       const { 

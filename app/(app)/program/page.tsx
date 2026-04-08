@@ -3598,6 +3598,25 @@ export default function ProgramPage() {
   // Load last build result on mount - but clear stale failures if current program is newer
   useEffect(() => {
     const stored = getLastBuildAttemptResult()
+    
+    // [PHASE 15E BABY AUDIT] Hydration entry audit
+    console.log('[hydration-entry-audit]', {
+      storedExists: !!stored,
+      storedStatus: stored?.status || 'null',
+      storedRuntimeSessionId: stored?.runtimeSessionId || 'null',
+      storedHydratedFromStorage: stored?.hydratedFromStorage ?? 'not_yet_normalized',
+      storedAttemptedAt: stored?.attemptedAt || 'null',
+      currentRuntimeSessionId: runtimeSessionIdRef.current,
+      programExists: !!program,
+      programId: program?.id || 'null',
+      programCreatedAt: program?.createdAt || 'null',
+      verdict: !stored 
+        ? 'no_stored_result' 
+        : stored.status === 'success' 
+          ? 'stored_success' 
+          : 'stored_failure_will_be_evaluated',
+    })
+    
     if (stored) {
       // ==========================================================================
       // [post-build-truth] TASK C: Prevent stale failure persistence
@@ -7257,6 +7276,26 @@ export default function ProgramPage() {
         
         const serverResult = await serverResponse.json()
         
+        // [PHASE 15E BABY AUDIT] Client-side truth audit at exact decision point
+        console.log('[regenerate-client-truth-audit]', {
+          status: serverResponse.status,
+          ok: serverResponse.ok,
+          contentType,
+          serverSuccess: serverResult.success,
+          failedStage: serverResult.failedStage || null,
+          exactFailingSubstep: serverResult.exactFailingSubstep || null,
+          exactLastSafeSubstep: serverResult.exactLastSafeSubstep || null,
+          hasProgram: !!serverResult.program,
+          sessionCount: serverResult.program?.sessions?.length ?? 0,
+          previousLastBuildStatus: lastBuildResult?.status || 'none',
+          currentRuntimeSessionId: runtimeSessionIdRef.current,
+          verdict: !serverResponse.ok || !serverResult.success
+            ? 'server_failure_confirmed'
+            : serverResult.program && Array.isArray(serverResult.program.sessions) && serverResult.program.sessions.length > 0
+              ? 'server_success_payload_valid'
+              : 'response_shape_invalid',
+        })
+        
         if (!serverResponse.ok || !serverResult.success) {
           console.log('[phase18d-regenerate-server-error]', {
             status: serverResponse.status,
@@ -8162,6 +8201,18 @@ export default function ProgramPage() {
         setLastBuildResult(regenSuccessResultWithMetadata)
         saveLastBuildAttemptResult(regenSuccessResultWithMetadata)
         setGenerationError(null) // Clear any previous error
+        
+        // [PHASE 15E BABY AUDIT] Confirm stale banner is cleared on success
+        console.log('[regenerate-stale-banner-clearance-audit]', {
+          newBuildResultStatus: regenSuccessResultWithMetadata.status,
+          newBuildResultRuntimeSessionId: regenSuccessResultWithMetadata.runtimeSessionId,
+          currentRuntimeSessionId: runtimeSessionIdRef.current,
+          generationErrorCleared: true,
+          staleBannerShouldBeCleared: regenSuccessResultWithMetadata.status === 'success',
+          verdict: regenSuccessResultWithMetadata.status === 'success' 
+            ? 'stale_banner_replaced_with_success' 
+            : 'stale_banner_risk_detected',
+        })
         
         // =========================================================================
         // [post-rebuild-stale-clearance-audit] TASK 5: Post-rebuild staleness verification
@@ -12951,6 +13002,23 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           </div>
         ) : program && programModules.isRenderableProgram?.(program) ? (
           <div className="space-y-4">
+            {/* [PHASE 15E BABY AUDIT] Banner render truth verification */}
+            {(() => {
+              const shouldShowBanner = truthGatedBuildResult?.status === 'preserved_last_good' &&
+                truthGatedBuildResult?.hydratedFromStorage !== true &&
+                truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current
+              console.log('[banner-render-truth-verification]', {
+                truthGatedBuildResultExists: !!truthGatedBuildResult,
+                truthGatedBuildResultStatus: truthGatedBuildResult?.status || 'null',
+                truthGatedBuildResultHydratedFromStorage: truthGatedBuildResult?.hydratedFromStorage ?? 'null',
+                truthGatedBuildResultRuntimeSessionId: truthGatedBuildResult?.runtimeSessionId || 'null',
+                currentRuntimeSessionId: runtimeSessionIdRef.current,
+                runtimeSessionIdMatch: truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current,
+                shouldShowBanner,
+                verdict: shouldShowBanner ? 'BANNER_WILL_RENDER' : 'BANNER_BLOCKED',
+              })
+              return null
+            })()}
             {/* [program-rebuild-truth] ISSUE B/C: Show rebuild failed warning if last build failed */}
             {/* [PHASE 16S/16T] Use truth-gated result to prevent stale banner display */}
             {/* [PHASE 16T] STRICT: Only render if NOT hydrated and matches current runtime */}

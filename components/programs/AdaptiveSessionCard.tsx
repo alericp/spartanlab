@@ -10,11 +10,10 @@ import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, Check
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
 import { exerciseSupportsRPE } from '@/lib/rpe-adjustment-engine'
 import { useWorkoutSession } from '@/hooks/useWorkoutSession'
-import { 
-  SessionHeader, 
-  StartWorkoutPanel, 
+import {
+  SessionHeader,
   PausedOverlay,
-  FinishConfirmation 
+  FinishConfirmation,
 } from '@/components/workout/WorkoutSessionControls'
 import { WorkoutSessionSummary } from '@/components/workout/WorkoutSessionSummary'
 import { trackWorkoutStarted, trackWorkoutCompleted } from '@/lib/analytics'
@@ -589,44 +588,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
 
   return (
     <Card className="bg-[#2A2A2A] border-[#3A3A3A] overflow-hidden">
-      {/* Header */}
-      {/* [PHASE 15F TASK 6] Read resolved session identity fields from final assembly */}
-      {(() => {
-        // [PHASE 15F] Read resolved identity fields - display reads FINAL truth, not template
-        const resolvedIdentity = (session as any).resolvedSessionIdentity
-        const resolvedNarrative = (session as any).resolvedNarrativeReason
-        const truthfulExplanation = (session as any).truthfulSessionExplanation
-        const sessionCoherence = (session as any).sessionCoherenceScore
-        const identityMatches = (session as any).identityMatchesContent
-        
-        // Use resolved identity if available, otherwise fall back to original focusLabel
-        const displayFocusLabel = resolvedIdentity || session.focusLabel
-        
-        // Log the display reading resolved truth fields
-        console.log('[phase15f-display-reading-resolved-session-truth-audit]', {
-          dayNumber: session.dayNumber,
-          hasResolvedIdentity: !!resolvedIdentity,
-          resolvedIdentity,
-          originalFocusLabel: session.focusLabel,
-          displayingLabel: displayFocusLabel,
-          hasResolvedNarrative: !!resolvedNarrative,
-          hasTruthfulExplanation: !!truthfulExplanation,
-          sessionCoherence,
-          identityMatches,
-        })
-        
-        console.log('[phase15f-ui-vs-builder-session-identity-audit]', {
-          dayNumber: session.dayNumber,
-          builderResolvedIdentity: resolvedIdentity,
-          uiDisplayingIdentity: displayFocusLabel,
-          identitiesMatch: resolvedIdentity === displayFocusLabel || !resolvedIdentity,
-          verdict: resolvedIdentity 
-            ? 'ui_reading_builder_resolved_identity'
-            : 'ui_using_fallback_focus_label',
-        })
-        
-        return null // This IIFE is just for logging
-      })()}
+      {/* Header - Collapsible day summary */}
       <div
         className="p-4 cursor-pointer hover:bg-[#333333] transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
@@ -646,61 +608,15 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             <p className="text-sm text-[#E63946]">
               {(session as any).resolvedSessionIdentity || session.focusLabel}
             </p>
-            {/* [SESSION-ARCHITECTURE-VISIBLE-EXPRESSION] Render session role badge from compositionMetadata */}
-            {(() => {
-              const metadata = (session as any).compositionMetadata
-              const spineType = metadata?.spineSessionType
-              const spineMode = metadata?.spineMode
-              const sessionIntent = metadata?.sessionIntent
-              
-              // Map spine types to user-friendly labels and colors
-              const typeLabels: Record<string, { label: string; color: string }> = {
-                'direct_intensity': { label: 'Max Effort', color: 'bg-[#E63946]/20 text-[#E63946] border-[#E63946]/30' },
-                'technical_focus': { label: 'Technical', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-                'strength_support': { label: 'Strength', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
-                'mixed_balanced': { label: 'Mixed', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
-                'rotation_light': { label: 'Recovery', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
-              }
-              
-              const typeConfig = spineType ? typeLabels[spineType] : null
-              
-              // Log visibility of architecture truth
-              console.log('[SESSION-ARCHITECTURE-VISIBLE-AUDIT]', {
-                dayNumber: session.dayNumber,
-                hasCompositionMetadata: !!metadata,
-                spineSessionType: spineType,
-                spineMode,
-                sessionIntent,
-                willShowBadge: !!typeConfig,
-              })
-              
-              if (!typeConfig) return null
-              
-              return (
-                <div className="flex items-center gap-2 mt-1.5">
-                  <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded border ${typeConfig.color}`}>
-                    {typeConfig.label}
-                  </span>
-                  {sessionIntent && (
-                    <span className="text-[10px] text-[#6A6A6A] max-w-[200px] truncate" title={sessionIntent}>
-                      {sessionIntent.length > 40 ? sessionIntent.slice(0, 40) + '...' : sessionIntent}
-                    </span>
-                  )}
-                </div>
-              )
-            })()}
-            {/* [TASK 3 & 6] Use activeSessionView for header - ensures header matches body */}
-            <div className="flex items-center gap-3 mt-2 text-xs text-[#6A6A6A]">
+            {/* Compact meta line - time + exercise count only */}
+            <div className="flex items-center gap-3 mt-1 text-xs text-[#6A6A6A]">
               <span className="flex items-center gap-1">
                 <Clock className="w-3 h-3" />
-                ~{activeSessionView.estimatedMinutes} min
+                {activeSessionView.estimatedMinutes} min
               </span>
               <span>{activeSessionView.exerciseCount} exercises</span>
               {activeSessionView.isVariantSelected && (
                 <span className="text-[#E63946]/70">({activeSessionView.variantLabel})</span>
-              )}
-              {rpeExerciseCount > 0 && (
-                <span className="text-[#E63946]">{rpeExerciseCount} RPE tracked</span>
               )}
             </div>
           </div>
@@ -744,103 +660,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       {/* Expanded Content */}
       {isExpanded && (
         <div className="px-4 pb-4 space-y-4">
-          {/* [SESSION-DISPLAY-CONTRACT] Today at a Glance - Compact session summary */}
-          {!isCompleted && !isActive && !isPaused && (() => {
-            const sessionContract = buildSessionDisplayContract({
-              name: session.name,
-              dayLabel: session.dayLabel,
-              focus: session.focus,
-              focusLabel: session.focusLabel,
-              isPrimary: session.isPrimary,
-              rationale: session.rationale,
-              estimatedMinutes: activeSessionView.estimatedMinutes,
-              exercises: displayExercises,
-              compositionMetadata: (session as any).compositionMetadata,
-              skillExpressionMetadata: (session as any).skillExpressionMetadata,
-              styleMetadata: sessionStyleMetadata,
-              loadSummary: session.loadSummary,
-              timeOptimization: session.timeOptimization,
-            })
-            
-            const typeColors: Record<string, { bg: string; text: string; border: string }> = {
-              skill_dominant: { bg: 'bg-[#E63946]/10', text: 'text-[#E63946]', border: 'border-[#E63946]/20' },
-              strength_dominant: { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/20' },
-              mixed: { bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/20' },
-              support: { bg: 'bg-[#6A6A6A]/10', text: 'text-[#A5A5A5]', border: 'border-[#6A6A6A]/20' },
-              density: { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/20' },
-              recovery: { bg: 'bg-green-500/10', text: 'text-green-400', border: 'border-green-500/20' },
-            }
-            const colors = typeColors[sessionContract.sessionType] || typeColors.mixed
-            
-            const intensityIcons: Record<string, React.ReactNode> = {
-              high_effort: <Zap className="w-3 h-3" />,
-              technique_focused: <AlertCircle className="w-3 h-3" />,
-              volume_density: <Timer className="w-3 h-3" />,
-              recovery: <RefreshCw className="w-3 h-3" />,
-              moderate: <Dumbbell className="w-3 h-3" />,
-            }
-            
-            return (
-              <div className={`rounded-lg border ${colors.border} overflow-hidden`}>
-                {/* Header Row: Session Type + Duration + Method */}
-                <div className={`px-3 py-2 ${colors.bg} flex items-center justify-between`}>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs font-semibold uppercase tracking-wide ${colors.text}`}>
-                      {sessionContract.sessionType.replace(/_/g, ' ')}
-                    </span>
-                    {sessionContract.trainingMethod && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#8A8A8A]">
-                        {sessionContract.trainingMethod}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1 text-[10px] text-[#6A6A6A]">
-                    <Clock className="w-3 h-3" />
-                    <span>{sessionContract.estimatedMinutes} min</span>
-                  </div>
-                </div>
-                
-                {/* Main Content: Objective + Priority + Work Distribution */}
-                <div className="px-3 py-2.5 bg-[#1A1A1A] space-y-2">
-                  {/* Primary Objective */}
-                  <p className="text-sm text-[#E5E5E5] font-medium leading-snug">
-                    {sessionContract.primaryObjective}
-                  </p>
-                  
-                  {/* Work Distribution Row */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#2A2A2A] text-[#B5B5B5]">
-                      {sessionContract.primaryWorkLabel}
-                    </span>
-                    {sessionContract.supportWorkLabel && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#2A2A2A] text-[#8A8A8A]">
-                        {sessionContract.supportWorkLabel}
-                      </span>
-                    )}
-                  </div>
-                  
-                  {/* Intensity + Execution Priority */}
-                  <div className="flex items-center gap-2 pt-1 border-t border-[#2A2A2A]">
-                    <div className={`flex items-center gap-1 text-[10px] ${colors.text}`}>
-                      {intensityIcons[sessionContract.intensityProfile]}
-                      <span className="capitalize">{sessionContract.intensityProfile.replace(/_/g, ' ')}</span>
-                    </div>
-                    <span className="text-[#3A3A3A]">·</span>
-                    <span className="text-[10px] text-[#7A7A7A]">{sessionContract.executionPriority}</span>
-                  </div>
-                  
-                  {/* Caution Note (only if present) */}
-                  {sessionContract.cautionNote && (
-                    <div className="flex items-center gap-1.5 text-[10px] text-amber-400 pt-1">
-                      <AlertCircle className="w-3 h-3" />
-                      <span>{sessionContract.cautionNote}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })()}
-          
           {/* Session Completed - Show Summary */}
           {isCompleted ? (
             <WorkoutSessionSummary
@@ -852,10 +671,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               onReturnToProgram={handleReturnToProgram}
             />
           ) : (isActive || isPaused) ? (
-            /* [workout-route] UNIFIED: Active workouts now route to /workout/session
-             * This embedded execution path is kept for backward compatibility but
-             * should rarely be reached since handleStartWorkout now navigates away.
-             * If this renders, it means the user navigated back mid-workout. */
+            /* [workout-route] UNIFIED: Active workouts now route to /workout/session */
             <WorkoutExecutionCard
               session={session}
               onComplete={handleWorkoutComplete}
@@ -864,14 +680,84 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             />
           ) : (
             <>
-              {/* [TASK 6] Start Workout Panel - uses activeSessionView for truth */}
-              <StartWorkoutPanel
-                sessionName={session.dayLabel}
-                exerciseCount={activeSessionView.exerciseCount}
-                estimatedMinutes={activeSessionView.estimatedMinutes}
-                rpeExerciseCount={rpeExerciseCount}
-                onStart={handleStartWorkout}
-              />
+              {/* [COMPRESSED] Unified Session Summary + Start Action */}
+              {(() => {
+                const sessionContract = buildSessionDisplayContract({
+                  name: session.name,
+                  dayLabel: session.dayLabel,
+                  focus: session.focus,
+                  focusLabel: session.focusLabel,
+                  isPrimary: session.isPrimary,
+                  rationale: session.rationale,
+                  estimatedMinutes: activeSessionView.estimatedMinutes,
+                  exercises: displayExercises,
+                  compositionMetadata: (session as any).compositionMetadata,
+                  skillExpressionMetadata: (session as any).skillExpressionMetadata,
+                  styleMetadata: sessionStyleMetadata,
+                  loadSummary: session.loadSummary,
+                  timeOptimization: session.timeOptimization,
+                })
+                
+                const typeColors: Record<string, { accent: string; bg: string }> = {
+                  skill_dominant: { accent: 'text-[#E63946]', bg: 'bg-[#E63946]/5' },
+                  strength_dominant: { accent: 'text-blue-400', bg: 'bg-blue-500/5' },
+                  mixed: { accent: 'text-purple-400', bg: 'bg-purple-500/5' },
+                  support: { accent: 'text-[#8A8A8A]', bg: 'bg-[#3A3A3A]/20' },
+                  density: { accent: 'text-amber-400', bg: 'bg-amber-500/5' },
+                  recovery: { accent: 'text-green-400', bg: 'bg-green-500/5' },
+                }
+                const colors = typeColors[sessionContract.sessionType] || typeColors.mixed
+                
+                return (
+                  <div className={`rounded-lg ${colors.bg} border border-[#3A3A3A] p-3`}>
+                    {/* Top Row: Session Type + Work Distribution */}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-semibold uppercase tracking-wide ${colors.accent}`}>
+                          {sessionContract.sessionType.replace(/_/g, ' ')}
+                        </span>
+                        {sessionContract.trainingMethod && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#7A7A7A]">
+                            {sessionContract.trainingMethod}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[10px] text-[#6A6A6A]">
+                        <span>{sessionContract.primaryWorkLabel}</span>
+                        {sessionContract.supportWorkLabel && (
+                          <>
+                            <span className="text-[#3A3A3A]">·</span>
+                            <span>{sessionContract.supportWorkLabel}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Objective + Execution Priority - Single line */}
+                    <p className="text-sm text-[#C5C5C5] leading-snug mb-3">
+                      {sessionContract.primaryObjective}
+                      <span className="text-[#5A5A5A]"> — {sessionContract.executionPriority.toLowerCase()}</span>
+                    </p>
+                    
+                    {/* Caution if present */}
+                    {sessionContract.cautionNote && (
+                      <div className="flex items-center gap-1.5 text-[10px] text-amber-400 mb-3">
+                        <AlertCircle className="w-3 h-3" />
+                        <span>{sessionContract.cautionNote}</span>
+                      </div>
+                    )}
+                    
+                    {/* Start Button - Primary Action */}
+                    <Button
+                      onClick={handleStartWorkout}
+                      className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2 h-10"
+                    >
+                      <Play className="w-4 h-4" />
+                      Start Workout
+                    </Button>
+                  </div>
+                )
+              })()}
 
   {/* Session Variety Info - Justified Repetition */}
   {session.varietyInfo?.isIntentionalRepetition && session.varietyInfo.repetitionReason && (

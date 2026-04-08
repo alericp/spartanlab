@@ -597,7 +597,50 @@ export interface GenerationTruthSnapshot {
   sessionDurationMode: string | null
   sessionLengthMinutes: number | null
   equipment: string[]
-}
+  
+  // [AUTHORITATIVE-TRUTH-INGESTION-CONTRACT] Ingestion audit (added at runtime by authoritative generation)
+  authoritativeTruthIngestionAudit?: {
+    ingestedAt: string
+    overallQuality: string
+    domainQualities: Record<string, string>
+    profileSource: string
+    callerOverrides: string[]
+    recoveryRisk: string
+    consistencyStatus: string
+    doctrineInfluenceEligible: boolean
+    isFirstWeek: boolean
+    safeGenerationNotes: string[]
+  }
+  
+  // [WEEK-ADAPTATION-DECISION-CONTRACT] Week adaptation decision audit (added at runtime by authoritative generation)
+  weekAdaptationDecisionAudit?: {
+    phase: string
+    targetDays: number
+    confidence: string
+    triggerSource: string
+    loadStrategy: {
+      volumeBias: string
+      intensityBias: string
+      densityBias: string
+      finisherBias: string
+      straightArmExposureBias: string
+    }
+    firstWeekGovernor: {
+      active: boolean
+      reasons: string[]
+      reduceDays: boolean
+      reduceSets: boolean
+      reduceRPE: boolean
+      suppressFinishers: boolean
+    }
+    complexityLevel: string
+    recoveryRisk: string
+    adherenceStatus: string
+    doctrineConstraints: string[]
+    evidence: string[]
+    summary: string
+  }
+  }
 
 
 function validateSessionCandidate(
@@ -1106,6 +1149,37 @@ export interface AdaptiveProgram {
     resolvedAt: string
     anyConservativeStart: boolean
     anyHistoricalCeiling: boolean
+  }
+  // [WEEK-ADAPTATION-DECISION-CONTRACT] Week-level adaptation decision
+  // This is the AUTHORITATIVE source for week dosage decisions - NOT day count alone
+  // Controls volume, intensity, density, finishers, and connective tissue protection
+  weekAdaptationDecision?: {
+    phase: 'initial_acclimation' | 'normal_progression' | 'recovery_constrained' | 'rebuild_after_disruption'
+    targetDays: number
+    confidence: 'low' | 'moderate' | 'high'
+    triggerSource: 'first_week_initial_generation' | 'regenerate_after_settings_change' | 'weekly_adaptation_after_usage' | 'mid_week_adjustment'
+    loadStrategy: {
+      volumeBias: 'reduced' | 'normal' | 'elevated'
+      intensityBias: 'reduced' | 'normal' | 'elevated'
+      densityBias: 'reduced' | 'normal' | 'elevated'
+      finisherBias: 'limited' | 'normal' | 'expanded'
+      straightArmExposureBias: 'protected' | 'normal' | 'expanded'
+      connectiveTissueBias: 'protected' | 'normal'
+      restSpacingBias: 'increased' | 'normal'
+    }
+    firstWeekGovernor: {
+      active: boolean
+      reasons: string[]
+      reduceDays: boolean
+      reduceSets: boolean
+      reduceRepsOrHoldTargets: boolean
+      reduceRPE: boolean
+      suppressFinishers: boolean
+      protectHighStressPatterns: boolean
+    }
+    doctrineConstraints: string[]
+    evidence: string[]
+    decidedAt: string
   }
   constraintInsight: {
     hasInsight: boolean

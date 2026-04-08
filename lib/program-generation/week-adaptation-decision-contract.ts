@@ -41,6 +41,62 @@ export type ProtectionLevel = 'protected' | 'normal' | 'expanded'
 export type ConfidenceLevel = 'low' | 'moderate' | 'high'
 export type ComplexityLevel = 'low' | 'moderate' | 'high'
 
+// =============================================================================
+// ADHERENCE EVENT TYPES - For skip/partial/rest tracking
+// =============================================================================
+
+export type AdherenceEventType = 
+  | 'completed_session'
+  | 'partial_session_completed'
+  | 'skipped_session'
+  | 'rest_day_due_to_recovery'
+  | 'rest_day_due_to_schedule'
+  | 'rest_day_due_to_pain'
+  | 'rest_day_due_to_fatigue'
+  | 'rest_day_due_to_sleep'
+  | 'rest_day_due_to_soreness'
+
+export interface AdherenceEvent {
+  type: AdherenceEventType
+  sessionIndex: number
+  recordedAt: string
+  reason?: string
+  recoveryImpact: 'none' | 'minor' | 'moderate' | 'significant'
+}
+
+// =============================================================================
+// REMAINDER-OF-WEEK STRATEGY TYPES
+// =============================================================================
+
+export type RemainderStrategy = 
+  | 'continue_as_planned'
+  | 'compress_remaining_sessions'
+  | 'reduce_remaining_volume'
+  | 'reduce_remaining_intensity'
+  | 'reduce_accessories_only'
+  | 'convert_to_recovery_session'
+  | 'skip_remaining_finishers'
+  | 'redistribute_skill_exposure'
+
+export interface RemainderOfWeekDecision {
+  /** The chosen strategy for remaining sessions */
+  strategy: RemainderStrategy
+  /** Why this strategy was chosen */
+  reason: string
+  /** Specific sessions affected */
+  affectedSessions: number[]
+  /** Volume adjustment factor (1.0 = no change, 0.8 = 20% reduction) */
+  volumeAdjustmentFactor: number
+  /** Intensity adjustment factor */
+  intensityAdjustmentFactor: number
+  /** Whether finishers should be suppressed for remainder */
+  suppressFinishers: boolean
+  /** Whether accessories should be reduced */
+  reduceAccessories: boolean
+  /** Evidence that drove this decision */
+  evidence: string[]
+}
+
 export interface LoadStrategy {
   /** Volume bias - affects total sets across the week */
   volumeBias: BiasLevel
@@ -143,11 +199,17 @@ export interface WeekAdaptationDecision {
   /** Complexity context used in decision */
   complexityContext: ComplexityContext
   
+  /** Remainder-of-week strategy (populated when adherence events occur mid-week) */
+  remainderStrategy?: RemainderOfWeekDecision
+  
   /** Doctrine constraints that influenced this decision */
   doctrineConstraints: string[]
   
   /** Evidence trail - what inputs drove this decision */
   evidence: string[]
+  
+  /** Trigger source for this decision */
+  triggerSource: 'first_week_initial_generation' | 'regenerate_after_settings_change' | 'weekly_adaptation_after_usage' | 'mid_week_adjustment'
   
   /** Timestamp of decision */
   decidedAt: string
@@ -608,6 +670,104 @@ function calculateConfidence(
 }
 
 // =============================================================================
+// REMAINDER-OF-WEEK DECISION BUILDER
+// =============================================================================
+
+/**
+ * Build a remainder-of-week adjustment decision based on mid-week adherence events.
+ * Called when adherence signals indicate the week should be adjusted.
+ */
+export function buildRemainderOfWeekDecision(
+  adherenceEvents: AdherenceEvent[],
+  remainingSessions: number,
+  currentComplexity: ComplexityContext,
+  currentRecovery: RecoveryContext
+): RemainderOfWeekDecision {
+  const evidence: string[] = []
+  
+  // Count event types
+  const skipped = adherenceEvents.filter(e => e.type === 'skipped_session').length
+  const partial = adherenceEvents.filter(e => e.type === 'partial_session_completed').length
+  const recoveryRests = adherenceEvents.filter(e => 
+    e.type.startsWith('rest_day_due_to_')
+  ).length
+  
+  evidence.push(`Adherence events: ${skipped} skipped, ${partial} partial, ${recoveryRests} recovery rests`)
+  
+  // Default decision
+  let strategy: RemainderStrategy = 'continue_as_planned'
+  let volumeAdjustmentFactor = 1.0
+  let intensityAdjustmentFactor = 1.0
+  let suppressFinishers = false
+  let reduceAccessories = false
+  let reason = 'No significant adherence disruption detected'
+  
+  // Recovery-driven rest days signal fatigue
+  const hasFatigueSignal = adherenceEvents.some(e => 
+    e.type === 'rest_day_due_to_fatigue' || 
+    e.type === 'rest_day_due_to_sleep' ||
+    e.type === 'rest_day_due_to_soreness'
+  )
+  
+  const hasPainSignal = adherenceEvents.some(e => e.type === 'rest_day_due_to_pain')
+  
+  // Multiple skips or partials indicate consistency issues
+  if (skipped >= 2 || (skipped >= 1 && partial >= 1)) {
+    strategy = 'compress_remaining_sessions'
+    volumeAdjustmentFactor = 0.85
+    suppressFinishers = true
+    reason = 'Multiple missed/partial sessions - compressing remainder with reduced volume'
+    evidence.push('High disruption: compressing and reducing')
+  } else if (hasPainSignal) {
+    strategy = 'reduce_remaining_intensity'
+    intensityAdjustmentFactor = 0.85
+    reduceAccessories = true
+    reason = 'Pain signal detected - reducing intensity and accessories for remainder'
+    evidence.push('Pain signal: protecting via intensity reduction')
+  } else if (hasFatigueSignal) {
+    strategy = 'reduce_remaining_volume'
+    volumeAdjustmentFactor = 0.9
+    suppressFinishers = true
+    reason = 'Fatigue/soreness signal - reducing volume and skipping finishers'
+    evidence.push('Fatigue signal: volume reduction active')
+  } else if (skipped === 1 || partial >= 1) {
+    strategy = 'skip_remaining_finishers'
+    suppressFinishers = true
+    reason = 'Minor disruption - maintaining structure but skipping finishers'
+    evidence.push('Minor disruption: finisher suppression only')
+  } else if (recoveryRests >= 1) {
+    strategy = 'reduce_accessories_only'
+    reduceAccessories = true
+    reason = 'Recovery rest taken - reducing accessory burden for remainder'
+    evidence.push('Recovery rest: accessory reduction')
+  }
+  
+  // Additional protection for high complexity
+  if (currentComplexity.onboardingComplexity === 'high' && strategy !== 'continue_as_planned') {
+    volumeAdjustmentFactor = Math.min(volumeAdjustmentFactor, 0.85)
+    evidence.push('High complexity amplifies adjustment')
+  }
+  
+  // Additional protection for already-elevated recovery risk
+  if (currentRecovery.recoveryRisk === 'high') {
+    intensityAdjustmentFactor = Math.min(intensityAdjustmentFactor, 0.9)
+    suppressFinishers = true
+    evidence.push('Elevated recovery risk: additional protection applied')
+  }
+  
+  return {
+    strategy,
+    reason,
+    affectedSessions: Array.from({ length: remainingSessions }, (_, i) => i),
+    volumeAdjustmentFactor,
+    intensityAdjustmentFactor,
+    suppressFinishers,
+    reduceAccessories,
+    evidence,
+  }
+}
+
+// =============================================================================
 // MAIN BUILDER
 // =============================================================================
 
@@ -618,7 +778,8 @@ function calculateConfidence(
  * The generator MUST obey this contract.
  */
 export function buildWeekAdaptationDecision(
-  input: WeekAdaptationInput
+  input: WeekAdaptationInput,
+  adherenceEvents?: AdherenceEvent[]
 ): WeekAdaptationDecision {
   const evidence: string[] = []
   
@@ -665,6 +826,33 @@ export function buildWeekAdaptationDecision(
     doctrineConstraints.push('High-stress pattern suppression active')
   }
   
+  // Determine trigger source
+  let triggerSource: WeekAdaptationDecision['triggerSource'] = 'first_week_initial_generation'
+  if (adherenceEvents && adherenceEvents.length > 0) {
+    triggerSource = 'mid_week_adjustment'
+  } else if (input.generationIntent === 'regenerate' || input.generationIntent === 'rebuild_current') {
+    triggerSource = 'regenerate_after_settings_change'
+  } else if (input.weekNumber && input.weekNumber > 1) {
+    triggerSource = 'weekly_adaptation_after_usage'
+  } else if (governor.active) {
+    triggerSource = 'first_week_initial_generation'
+  }
+  
+  // Build remainder-of-week strategy if adherence events provided
+  let remainderStrategy: RemainderOfWeekDecision | undefined
+  if (adherenceEvents && adherenceEvents.length > 0) {
+    const remainingSessions = Math.max(0, targetDays - adherenceEvents.filter(e => 
+      e.type === 'completed_session' || e.type === 'partial_session_completed'
+    ).length)
+    remainderStrategy = buildRemainderOfWeekDecision(
+      adherenceEvents,
+      remainingSessions,
+      complexity,
+      recovery
+    )
+    evidence.push(`Remainder strategy: ${remainderStrategy.strategy}`)
+  }
+  
   return {
     phase,
     confidence,
@@ -675,8 +863,10 @@ export function buildWeekAdaptationDecision(
     adherenceContext: adherence,
     recoveryContext: recovery,
     complexityContext: complexity,
+    remainderStrategy,
     doctrineConstraints,
     evidence,
+    triggerSource,
     decidedAt: new Date().toISOString(),
   }
 }

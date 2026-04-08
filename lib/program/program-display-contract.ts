@@ -708,8 +708,23 @@ export function buildExerciseCardContract(
   // Build prescription line - sets × reps format
   const prescriptionLine = `${exercise.sets} × ${exercise.repsOrTime}`
   
-  // Intensity badge - only RPE if tracked
-  const intensityBadge = exercise.targetRPE ? `RPE ${exercise.targetRPE}` : null
+  // Intensity badge - RPE with contextual meaning
+  let intensityBadge: string | null = null
+  if (exercise.targetRPE) {
+    // Add context to make RPE meaningful
+    const rpe = exercise.targetRPE
+    if (rpe <= 6) {
+      intensityBadge = `RPE ${rpe} (technique focus)`
+    } else if (rpe === 7) {
+      intensityBadge = `RPE ${rpe} (controlled effort)`
+    } else if (rpe === 8) {
+      intensityBadge = `RPE ${rpe} (challenging)`
+    } else if (rpe >= 9) {
+      intensityBadge = `RPE ${rpe} (near-max)`
+    } else {
+      intensityBadge = `RPE ${rpe}`
+    }
+  }
   
   // Load badge - only if weighted
   const loadBadge = exercise.prescribedLoad?.load && exercise.prescribedLoad.load > 0 
@@ -738,16 +753,16 @@ export function buildExerciseCardContract(
     // If reason is generic, add intent-specific context
     if (refined.length < 20 || refined.toLowerCase().includes('selected for')) {
       const intentContext: Record<PrescriptionIntent, string> = {
-        max_strength: 'Building foundational strength',
-        strength_volume: 'Accumulating quality work',
-        skill_acquisition: 'Developing position control',
-        skill_intensity: 'Pushing skill limits',
-        explosive_power: 'Training power output',
-        hypertrophy: 'Building muscle capacity',
-        support_strength: 'Supporting primary movements',
-        technical_carryover: 'Transferring to target skills',
-        tissue_prep: 'Preparing tissues for work',
-        density_conditioning: 'Building work capacity',
+        max_strength: 'Building foundational strength for your goals',
+        strength_volume: 'Accumulating quality volume for adaptation',
+        skill_acquisition: 'Developing position control and awareness',
+        skill_intensity: 'Pushing your skill limits safely',
+        explosive_power: 'Training power output for dynamic movements',
+        hypertrophy: 'Building muscle capacity to support skill work',
+        support_strength: 'Balances joint health and movement quality',
+        technical_carryover: 'Transfers directly to your target skills',
+        tissue_prep: 'Preparing tissues for the work ahead',
+        density_conditioning: 'Building work capacity and recovery',
       }
       refined = intentContext[prescriptionIntent]
     }

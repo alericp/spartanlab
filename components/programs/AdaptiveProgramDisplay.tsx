@@ -1230,11 +1230,52 @@ export function AdaptiveProgramDisplay({
                 )
               })}
             </div>
-            {/* Doctrine-driven week strategy hint */}
-            {intelligenceContract?.weekDriver?.label && (
-              <p className="mt-2 text-[10px] text-[#6A6A6A] leading-relaxed">
-                <span className="text-[#8A8A8A]">Strategy:</span>{' '}
-                {intelligenceContract.weekDriver.reason || intelligenceContract.weekDriver.label}
+          </div>
+        )}
+        
+        {/* [MAIN-PAGE-AI-VISIBILITY] Weekly Intelligence Strip - visible without opening modal */}
+        {intelligenceContract && (
+          <div className="px-4 py-3 border-t border-[#333]/30 bg-[#1A1A1A]/30">
+            {/* Strategic sentence */}
+            {intelligenceContract.strategicSummary?.headline && (
+              <p className="text-xs text-[#A4ACB8] leading-relaxed mb-2.5">
+                {intelligenceContract.strategicSummary.headline}
+              </p>
+            )}
+            
+            {/* Weekly structure signals - compact row */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[10px]">
+              {/* Structure identity */}
+              {intelligenceContract.weeklyDecisionLogic?.structureIdentity && (
+                <div className="flex items-center gap-1.5">
+                  <Layers className="w-3 h-3 text-[#E63946]/60" />
+                  <span className="text-[#8A8A8A]">{intelligenceContract.weeklyDecisionLogic.structureIdentity}</span>
+                </div>
+              )}
+              
+              {/* Primary tradeoff */}
+              {intelligenceContract.tradeoffs?.[0] && (
+                <div className="flex items-center gap-1">
+                  <TrendingUp className="w-3 h-3 text-green-500/50" />
+                  <span className="text-[#7A7A7A]">{intelligenceContract.tradeoffs[0].prioritized}</span>
+                  <span className="text-[#4A4A4A]">/</span>
+                  <span className="text-[#5A5A5A]">{intelligenceContract.tradeoffs[0].limited}</span>
+                </div>
+              )}
+              
+              {/* Protected constraint */}
+              {intelligenceContract.protectedConstraints?.[0] && (
+                <div className="flex items-center gap-1.5">
+                  <Shield className="w-3 h-3 text-amber-500/50" />
+                  <span className="text-[#6A6A6A]">{intelligenceContract.protectedConstraints[0].label}</span>
+                </div>
+              )}
+            </div>
+            
+            {/* Key architectural decision (if any) */}
+            {intelligenceContract.weeklyDecisionLogic?.architecturalDecisions?.[0] && (
+              <p className="mt-2 text-[10px] text-[#5A5A5A] leading-relaxed">
+                {intelligenceContract.weeklyDecisionLogic.architecturalDecisions[0]}
               </p>
             )}
           </div>
@@ -1289,7 +1330,41 @@ export function AdaptiveProgramDisplay({
       )}
 
       <div className="space-y-3">
-        <h4 className="text-base font-semibold text-[#B5B5B5]">This Week</h4>
+        {/* [MAIN-PAGE-AI-VISIBILITY] Section header with session count and structure hint */}
+        <div className="flex items-center justify-between">
+          <h4 className="text-base font-semibold text-[#B5B5B5]">
+            Weekly Structure
+            <span className="ml-2 text-xs font-normal text-[#6A6A6A]">
+              {validSessions.length} sessions
+            </span>
+          </h4>
+          {intelligenceContract?.weeklyDecisionLogic?.frequencyReason && (
+            <span className="text-[10px] text-[#5A5A5A] max-w-[180px] text-right leading-tight">
+              {intelligenceContract.weeklyDecisionLogic.frequencyReason.split('.')[0]}
+            </span>
+          )}
+        </div>
+        
+        {/* [MAIN-PAGE-AI-VISIBILITY] Compact tradeoffs summary - visible without modal */}
+        {intelligenceContract?.tradeoffs && intelligenceContract.tradeoffs.length > 1 && (
+          <div className="p-2.5 bg-[#1A1A1A]/50 rounded-lg border border-[#2A2A2A]">
+            <div className="flex items-center gap-1.5 mb-2">
+              <Scale className="w-3 h-3 text-[#E63946]/50" />
+              <span className="text-[10px] text-[#7A7A7A] font-medium uppercase tracking-wide">Design Tradeoffs</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {intelligenceContract.tradeoffs.slice(0, 3).map((tradeoff, i) => (
+                <div key={i} className="flex items-center gap-1 text-[10px] bg-[#222]/60 px-2 py-1 rounded">
+                  <span className="text-green-500/70">+</span>
+                  <span className="text-[#8A8A8A]">{tradeoff.prioritized}</span>
+                  <span className="text-[#3A3A3A]">/</span>
+                  <span className="text-[#5A5A5A]">-{tradeoff.limited}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
         {validSessions.length > 0 ? (
           validSessions.map((session, sessionIndex) => {
             // Get day rationale for this session
@@ -1299,14 +1374,22 @@ export function AdaptiveProgramDisplay({
             
             return (
               <div key={`${program.id}-${session.dayNumber}-${session.name || session.focusLabel}`}>
-                {/* Day rationale - compact inline display */}
+                {/* [MAIN-PAGE-AI-VISIBILITY] Day rationale - enhanced visible display */}
                 {dayRationale && dayRationale.source !== 'unavailable' && (
-                  <div className="mb-1.5 px-1">
-                    <p className="text-[10px] text-[#5A5A5A] leading-relaxed">
-                      <span className="text-[#7A7A7A] font-medium">{dayRationale.weeklyRole}</span>
-                      <span className="mx-1.5 text-[#3A3A3A]">·</span>
-                      <span>{dayRationale.rationale}</span>
-                    </p>
+                  <div className="mb-2 px-2 py-1.5 bg-[#1A1A1A]/40 rounded-md border-l-2 border-[#E63946]/20">
+                    <div className="flex items-start gap-2">
+                      <div className="w-4 h-4 rounded bg-[#E63946]/10 flex items-center justify-center shrink-0 mt-0.5">
+                        <span className="text-[8px] font-bold text-[#E63946]/70">{dayRationale.dayNumber}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] text-[#9A9A9A] font-medium leading-snug">
+                          {dayRationale.weeklyRole}
+                        </p>
+                        <p className="text-[10px] text-[#6A6A6A] mt-0.5 leading-relaxed">
+                          {dayRationale.rationale}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 )}
                 <AdaptiveSessionCard

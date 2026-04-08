@@ -7951,9 +7951,11 @@ async function generateAdaptiveProgramImpl(
   // Single authoritative helper owns all calibration + audit logic
   // Helper NEVER throws - always returns valid contracts
   // ==========================================================================
+  // [PHASE 15E FIX] Pre-loop context - no session-specific values available yet
+  // Use placeholder values for the helper that will be refined per-session later
   const phase15ePostAudit = buildPhase15EPostAuditSafeContext({
-    sessionIndex,
-    dayFocus: day.focus,
+    sessionIndex: 0, // Pre-loop placeholder - actual session index set per-session
+    dayFocus: 'mixed', // Pre-loop placeholder - actual focus set per-session
     experienceLevel,
     sessionLength,
     selectedSkillsCount: expandedContext.selectedSkills.length,
@@ -7986,8 +7988,8 @@ async function generateAdaptiveProgramImpl(
   let phase15eSubstepDegradedReason = phase15ePostAudit.degradedReason
   
   console.log('[phase15e-exact-step-entry]', {
-    sessionIndex,
-    dayFocus: day.focus,
+    sessionIndex: 'pre_loop', // Pre-loop - no session yet
+    dayFocus: 'pre_loop', // Pre-loop - no day yet
     isAdvanced,
     isLongSession,
     hasMultiSkills,
@@ -8022,8 +8024,8 @@ async function generateAdaptiveProgramImpl(
     console.error('[phase15e-exact-step-failure]', {
       failingSubstep: 'program_calibration_adjustments',
       lastSafeSubstep: phase15eLastSafeStep,
-      sessionIndex,
-      dayFocus: day.focus,
+      sessionIndex: 'pre_loop', // Pre-loop - no session yet
+      dayFocus: 'pre_loop', // Pre-loop - no day yet
       primaryGoal,
       secondaryGoal,
       trainingPath,
@@ -8068,8 +8070,8 @@ async function generateAdaptiveProgramImpl(
     console.error('[phase15e-exact-step-failure]', {
       failingSubstep: 'outcome_training_style',
       lastSafeSubstep: phase15eLastSafeStep,
-      sessionIndex,
-      dayFocus: day.focus,
+      sessionIndex: 'pre_loop', // Pre-loop - no session yet
+      dayFocus: 'pre_loop', // Pre-loop - no day yet
       trainingOutcome,
       errorMessage: styleError instanceof Error ? styleError.message : String(styleError),
       stackPreview: styleError instanceof Error ? styleError.stack?.split('\n').slice(0, 3).join(' | ') : undefined,
@@ -8098,8 +8100,8 @@ async function generateAdaptiveProgramImpl(
     console.error('[phase15e-exact-step-failure]', {
       failingSubstep: 'compression_readiness',
       lastSafeSubstep: phase15eLastSafeStep,
-      sessionIndex,
-      dayFocus: day.focus,
+      sessionIndex: 'pre_loop', // Pre-loop - no session yet
+      dayFocus: 'pre_loop', // Pre-loop - no day yet
       errorMessage: compressionError instanceof Error ? compressionError.message : String(compressionError),
       stackPreview: compressionError instanceof Error ? compressionError.stack?.split('\n').slice(0, 3).join(' | ') : undefined,
       safeDegradationApplied: true,
@@ -8146,8 +8148,8 @@ async function generateAdaptiveProgramImpl(
     console.error('[phase15e-exact-step-failure]', {
       failingSubstep: 'compression_bias',
       lastSafeSubstep: phase15eLastSafeStep,
-      sessionIndex,
-      dayFocus: day.focus,
+      sessionIndex: 'pre_loop', // Pre-loop - no session yet
+      dayFocus: 'pre_loop', // Pre-loop - no day yet
       errorMessage: biasError instanceof Error ? biasError.message : String(biasError),
       stackPreview: biasError instanceof Error ? biasError.stack?.split('\n').slice(0, 3).join(' | ') : undefined,
       safeDegradationApplied: true,
@@ -8163,8 +8165,8 @@ async function generateAdaptiveProgramImpl(
   
   // Log successful post-audit setup completion
   console.log('[phase15e-exact-step-success]', {
-    sessionIndex,
-    dayFocus: day.focus,
+    sessionIndex: 'pre_loop', // Pre-loop - no session yet
+    dayFocus: 'pre_loop', // Pre-loop - no day yet
     exactStep: phase15eExactStep,
     lastSafeStep: phase15eLastSafeStep,
     substepDegraded: phase15eSubstepDegraded,
@@ -8362,8 +8364,8 @@ async function generateAdaptiveProgramImpl(
     finalPostHelperCorridorStep = 'corridor_complete'
     
     console.log('[final-post-helper-boundary-success]', {
-      sessionIndex,
-      dayFocus: day.focus,
+      sessionIndex: 'pre_loop', // Pre-loop - no session yet
+      dayFocus: 'pre_loop', // Pre-loop - no day yet
       currentStage: stageTracker.current,
       exactRemainingCorridor: 'weak_point_skill_intelligence_adjustments',
       rollbackUsed: false,
@@ -8375,8 +8377,8 @@ async function generateAdaptiveProgramImpl(
     finalPostHelperCorridorDegraded = true
     
     console.error('[final-post-helper-boundary-fallback]', {
-      sessionIndex,
-      dayFocus: day.focus,
+      sessionIndex: 'pre_loop', // Pre-loop - no session yet
+      dayFocus: 'pre_loop', // Pre-loop - no day yet
       currentStage: stageTracker.current,
       exactRemainingCorridor: 'weak_point_skill_intelligence_adjustments',
       failingStep: finalPostHelperCorridorStep,
@@ -8497,7 +8499,7 @@ async function generateAdaptiveProgramImpl(
   } catch (materialityLogError) {
     // Logging should never crash generation - silently continue
     console.error('[materiality-contract-log-error]', {
-      sessionIndex,
+      sessionIndex: 'pre_loop', // Pre-loop - no session yet
       error: materialityLogError instanceof Error ? materialityLogError.message : 'unknown',
     })
   }
@@ -18694,7 +18696,7 @@ function generateAdaptiveSession(
   //   1. selection.main         → raw selector output
   //   2. safeMain               → null-safe array
   //   3. rescuedMain            → rescue applied if safeMain was empty
-  //   4. adaptedMain.adapted    → equipment filtering applied
+  //   4. adaptedMain.adapted    �� equipment filtering applied
   //   5. effectiveMainForSession → recovery applied if adaptation zeroed out
   //   6. weekAdaptationAdjusted  → [WEEKLY-COMPOSITION-UPGRADE] Set reduction applied
   //   7. canonicalFinalMain     → THE ONE TRUE SOURCE for all downstream usage

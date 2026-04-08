@@ -1097,22 +1097,16 @@ export function AdaptiveProgramDisplay({
     <div className="space-y-4">
       {/* Compressed Program Header */}
       <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-4">
-        {/* Row 1: Title + Key Facts + Restart */}
-        <div className="flex items-start justify-between gap-3 mb-3">
+        {/* Row 1: Title + Restart */}
+        <div className="flex items-start justify-between gap-3 mb-2">
           <div className="flex-1 min-w-0">
             <h3 className="text-lg font-bold truncate">{program.goalLabel} Program</h3>
-            <div className="flex items-center gap-3 mt-1 text-xs text-[#6A6A6A]">
-              <span>{validSessions.length} sessions/week</span>
-              <span>·</span>
-              <span>~{program.sessionLength || 60} min</span>
-              <span>·</span>
+            <div className="flex items-center gap-2 mt-1 text-xs text-[#6A6A6A]">
+              <span>{validSessions.length}×/week</span>
+              <span className="text-[#4A4A4A]">·</span>
+              <span>~{program.sessionLength || 60}min</span>
+              <span className="text-[#4A4A4A]">·</span>
               <span className="capitalize">{program.experienceLevel}</span>
-              {program.secondaryGoal && (
-                <>
-                  <span>·</span>
-                  <span className="text-[#E63946]/70">+ {program.secondaryGoal.replace(/_/g, ' ')}</span>
-                </>
-              )}
             </div>
           </div>
           {(onRestart || onDelete) && (
@@ -1127,35 +1121,60 @@ export function AdaptiveProgramDisplay({
           )}
         </div>
         
-        {/* Row 2: Skills + Rationale Summary */}
-        <div className="flex flex-col gap-2">
-          {/* Skill chips inline */}
-          {safeSelectedSkills.length > 0 && sharedStrictRepresentedSkillsForChips.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1">
-              {sharedStrictRepresentedSkillsForChips.map((skill) => {
-                const chipState = getSharedChipState(skill)
-                const isHeadline = chipState === 'headline_priority'
-                return (
-                  <span 
-                    key={skill}
-                    className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] ${
-                      isHeadline 
-                        ? 'bg-[#E63946]/10 text-[#E63946] border border-[#E63946]/20' 
-                        : 'bg-[#1A1A1A] text-[#8A8A8A] border border-[#333]'
-                    }`}
-                  >
-                    {skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                  </span>
-                )
-              })}
-            </div>
-          )}
-          
-          {/* Compact rationale - 2 lines max */}
-          <p className="text-[13px] text-[#9A9A9A] leading-snug line-clamp-2">
-            {safeSummaryTruth.truthfulHybridSummary || program.programRationale}
+        {/* Row 2: Training Intent - explains what this program is built to do */}
+        <div className="mb-3 py-2 px-3 rounded-md bg-[#1E1E1E] border border-[#333]">
+          <div className="flex items-center gap-2 mb-1">
+            {/* Training spine badge */}
+            {dominantSpineResolution?.primarySpine ? (
+              <span className="text-xs font-medium text-[#E63946]">
+                {dominantSpineResolution.primarySpine
+                  .replace(/_/g, ' ')
+                  .replace(/\b\w/g, c => c.toUpperCase())} Approach
+              </span>
+            ) : (
+              <span className="text-xs font-medium text-[#E63946]">
+                {program.primaryGoal?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Custom'} Focus
+              </span>
+            )}
+            {/* Secondary goal indicator */}
+            {program.secondaryGoal && (
+              <>
+                <span className="text-[#4A4A4A]">+</span>
+                <span className="text-xs text-[#8A8A8A]">
+                  {program.secondaryGoal.replace(/_/g, ' ')}
+                </span>
+              </>
+            )}
+          </div>
+          {/* Short intent explanation */}
+          <p className="text-[12px] text-[#7A7A7A] leading-snug line-clamp-2">
+            {dominantSpineResolution?.spineRationale || 
+             safeSummaryTruth.truthfulHybridSummary || 
+             program.programRationale}
           </p>
         </div>
+        
+        {/* Row 3: Skill chips - what this week covers */}
+        {safeSelectedSkills.length > 0 && sharedStrictRepresentedSkillsForChips.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            {sharedStrictRepresentedSkillsForChips.map((skill) => {
+              const chipState = getSharedChipState(skill)
+              const isHeadline = chipState === 'headline_priority'
+              return (
+                <span 
+                  key={skill}
+                  className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] ${
+                    isHeadline 
+                      ? 'bg-[#E63946]/10 text-[#E63946] border border-[#E63946]/20' 
+                      : 'bg-[#1A1A1A] text-[#8A8A8A] border border-[#333]'
+                  }`}
+                >
+                  {skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                </span>
+              )
+            })}
+          </div>
+        )}
         
         {/* Quality notice - only show when significant */}
         {program.plannerTruthAudit?.shouldWarn && 

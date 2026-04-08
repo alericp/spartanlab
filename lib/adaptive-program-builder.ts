@@ -978,6 +978,7 @@ export interface AdaptiveSession {
       rpeReduced: boolean
       finisherSuppressed: boolean
       densityReduced: boolean
+      secondaryTrimmed: boolean
     }
     reductionReason: string | null
     loadStrategyApplied: {
@@ -17869,14 +17870,79 @@ function generateAdaptiveSession(
   // ==========================================================================
   // [WEEKLY-COMPOSITION-UPGRADE] Apply week-level volume/set reduction
   // This is where first-week protection and reduced volume bias actually reduce sets
-  // [PRESCRIPTION-PROPAGATION] Now also handles RPE reduction and tracks finisher suppression
+  // [PRESCRIPTION-PROPAGATION] Now also handles RPE reduction, secondary trimming, and finisher suppression
   // ==========================================================================
   let weekAdaptationAdjusted = effectiveMainForSession
   let setsReducedByWeekAdaptation = false
   let finisherSuppressedByWeekAdaptation = false
+  let secondaryExercisesTrimmed = false
   let weekAdaptationSetReductionReason = 'none'
   
   if (weekAdaptation) {
+    // ==========================================================================
+    // [PRESCRIPTION-PROPAGATION] PHASE 1: Reduce secondary/accessory exercise count
+    // When first-week protection is active, trim non-primary exercises first
+    // This preserves primary skill quality while reducing overall session burden
+    // ==========================================================================
+    const shouldReduceSecondary = 
+      weekAdaptation.firstWeekProtection?.active ||
+      weekAdaptation.adaptationPhase === 'recovery_constrained' ||
+      weekAdaptation.adaptationPhase === 'rebuild_after_disruption'
+    
+    if (shouldReduceSecondary && effectiveMainForSession.length > 3) {
+      // Identify primary vs non-primary exercises
+      const primaryExercises: typeof effectiveMainForSession = []
+      const secondaryExercises: typeof effectiveMainForSession = []
+      
+      for (const ex of effectiveMainForSession) {
+        const isPrimary = 
+          ex.exerciseRole === 'primary' ||
+          ex.exerciseRole === 'primary_skill' ||
+          ex.prescriptionStyle === 'primary' ||
+          ex.category === 'primary' ||
+          // Check if exercise targets the primary goal
+          (ex.exercise?.skillTags || []).some(tag => 
+            tag.toLowerCase().includes(primaryGoal.toLowerCase().split('_')[0])
+          )
+        
+        if (isPrimary) {
+          primaryExercises.push(ex)
+        } else {
+          secondaryExercises.push(ex)
+        }
+      }
+      
+      // Keep all primary exercises, trim secondary to max 2 (or 1 for aggressive protection)
+      const maxSecondary = weekAdaptation.firstWeekProtection?.active ? 1 : 2
+      const trimmedSecondary = secondaryExercises.slice(0, maxSecondary)
+      
+      if (trimmedSecondary.length < secondaryExercises.length) {
+        secondaryExercisesTrimmed = true
+        weekAdaptationAdjusted = [...primaryExercises, ...trimmedSecondary]
+        
+        console.log('[PRESCRIPTION-PROPAGATION-SECONDARY-TRIMMED]', {
+          sessionIndex,
+          dayFocus: day.focus,
+          originalTotal: effectiveMainForSession.length,
+          primaryCount: primaryExercises.length,
+          originalSecondaryCount: secondaryExercises.length,
+          trimmedSecondaryCount: trimmedSecondary.length,
+          removedExercises: secondaryExercises.slice(maxSecondary).map(e => e.exercise?.name || 'unknown'),
+          reason: weekAdaptation.firstWeekProtection?.active 
+            ? 'first_week_protection_secondary_trim'
+            : 'recovery_protection_secondary_trim',
+          adaptationPhase: weekAdaptation.adaptationPhase,
+          verdict: 'SECONDARY_EXERCISES_TRIMMED_TO_PRESERVE_PRIMARY',
+        })
+      }
+    }
+    
+    // Update the source for set/RPE reduction to use potentially trimmed list
+    const exercisesForDosageAdjustment = secondaryExercisesTrimmed ? weekAdaptationAdjusted : effectiveMainForSession
+    
+    // ==========================================================================
+    // [PRESCRIPTION-PROPAGATION] PHASE 2: Apply set and RPE reductions
+    // ==========================================================================
     const shouldReduceSets = 
       weekAdaptation.firstWeekProtection?.active && weekAdaptation.firstWeekProtection?.reduceSets ||
       weekAdaptation.loadStrategy?.volumeBias === 'reduced'
@@ -17892,7 +17958,7 @@ function generateAdaptiveSession(
         : 1.0
       const rpeReduction = shouldReduceRPE ? 1 : 0 // Reduce RPE by 1 point when active
       
-      weekAdaptationAdjusted = effectiveMainForSession.map(ex => {
+      weekAdaptationAdjusted = exercisesForDosageAdjustment.map(ex => {
         const currentSets = typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets)) || 3
         const reducedSets = shouldReduceSets 
           ? Math.max(2, Math.round(currentSets * setReductionFactor)) // Never below 2 sets
@@ -17938,14 +18004,17 @@ function generateAdaptiveSession(
         rpeReduction,
         shouldReduceSets,
         shouldReduceRPE,
+        secondaryExercisesTrimmed,
         reason: weekAdaptationSetReductionReason,
         firstWeekActive: weekAdaptation.firstWeekProtection?.active,
         volumeBias: weekAdaptation.loadStrategy?.volumeBias,
         intensityBias: weekAdaptation.loadStrategy?.intensityBias,
         exercisesAffected: weekAdaptationAdjusted.length,
-        originalSetsTotal: effectiveMainForSession.reduce((sum, ex) => sum + (typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets)) || 3), 0),
+        originalExerciseCount: effectiveMainForSession.length,
+        finalExerciseCount: weekAdaptationAdjusted.length,
+        originalSetsTotal: exercisesForDosageAdjustment.reduce((sum, ex) => sum + (typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets)) || 3), 0),
         reducedSetsTotal: weekAdaptationAdjusted.reduce((sum, ex) => sum + (typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets)) || 3), 0),
-        verdict: setsReducedByWeekAdaptation ? 'DOSAGE_REDUCED' : 'DOSAGE_ALREADY_MINIMAL',
+        verdict: setsReducedByWeekAdaptation || secondaryExercisesTrimmed ? 'DOSAGE_REDUCED' : 'DOSAGE_ALREADY_MINIMAL',
       })
     }
   }
@@ -18875,6 +18944,7 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
           rpeReduced: !!(weekAdaptation.firstWeekProtection?.reduceRPE || weekAdaptation.loadStrategy?.intensityBias === 'reduced'),
           finisherSuppressed: finisherSuppressedByWeekAdaptation,
           densityReduced: weekAdaptation.loadStrategy?.densityBias === 'reduced',
+          secondaryTrimmed: secondaryExercisesTrimmed,
         },
         reductionReason: weekAdaptationSetReductionReason !== 'none' ? weekAdaptationSetReductionReason : null,
         loadStrategyApplied: {
@@ -18882,7 +18952,7 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
           intensityBias: weekAdaptation.loadStrategy?.intensityBias || 'normal',
           finisherBias: weekAdaptation.loadStrategy?.finisherBias || 'normal',
         },
-        verdict: setsReducedByWeekAdaptation || finisherSuppressedByWeekAdaptation
+        verdict: setsReducedByWeekAdaptation || finisherSuppressedByWeekAdaptation || secondaryExercisesTrimmed
           ? 'PRESCRIPTION_MATERIALLY_CHANGED_BY_WEEK_ADAPTATION'
           : 'PRESCRIPTION_UNCHANGED_BY_WEEK_ADAPTATION',
       } : undefined,

@@ -26,6 +26,12 @@ import { generateAdaptiveProgram, type AdaptiveProgram, type AdaptiveProgramInpu
 import { attachTruthExplanation, extractProgramTruth, logMaterialInputPresence } from '@/lib/program-truth-extractor'
 import type { CanonicalProgrammingProfile } from '@/lib/canonical-profile-service'
 import { calibrateAthleteProfile, resolveCurrentWorkingProgressions, type CurrentWorkingProgressionsContract } from '@/lib/athlete-calibration'
+import { 
+  buildAuthoritativeGenerationTruthIngestion, 
+  getIngestionAuditLog,
+  type AuthoritativeGenerationTruthIngestion,
+  type IngestionInput
+} from './authoritative-generation-truth-ingestion'
 
 // ==========================================================================
 // TYPES: Generation Intent and Request Contract
@@ -88,6 +94,19 @@ export interface AuthoritativeGenerationResult {
   
   // Parity verification
   parityVerdict: GenerationParityVerdict
+  
+  // [AUTHORITATIVE-TRUTH-INGESTION-CONTRACT] Truth ingestion audit
+  truthIngestionAudit?: {
+    ingestedAt: string
+    overallQuality: string
+    domainQualities: Record<string, string>
+    callerOverrides: string[]
+    recoveryRisk: string
+    consistencyStatus: string
+    doctrineInfluenceEligible: boolean
+    isFirstWeek: boolean
+    safeGenerationNotes: string[]
+  }
   
   // Summary for consumers
   summary?: {
@@ -257,15 +276,64 @@ export async function executeAuthoritativeGeneration(
     archiveCurrentProgram: request.archiveCurrentProgram,
   })
   
+  // ==========================================================================
+  // [AUTHORITATIVE-TRUTH-INGESTION-CONTRACT] STAGE: Build truth ingestion
+  // This is the SINGLE authoritative source of all generation truth.
+  // Profile truth is fetched server-side from canonical store first.
+  // Caller overrides are explicitly tracked and labeled.
+  // ==========================================================================
+  markStage('truth_ingestion_start')
+  
+  let truthIngestion: AuthoritativeGenerationTruthIngestion
+  try {
+    const ingestionInput: IngestionInput = {
+      dbUserId: request.dbUserId,
+      generationIntent: request.generationIntent,
+      callerCanonicalProfile: request.canonicalProfile,
+      callerBuilderInputs: request.builderInputs,
+      existingProgramId: request.existingProgramId,
+      isFreshBaselineBuild: request.isFreshBaselineBuild,
+      // Training feedback will be populated from builder context when available
+      trainingFeedback: undefined,
+    }
+    
+    truthIngestion = await buildAuthoritativeGenerationTruthIngestion(ingestionInput)
+    
+    console.log('[authoritative-generation-truth-ingestion-complete]', {
+      generationIntent: request.generationIntent,
+      overallQuality: truthIngestion.signalAudit.overallQuality,
+      profileQuality: truthIngestion.profileTruth.quality,
+      callerOverrides: truthIngestion.profileTruth.callerOverriddenFields,
+      recoveryRisk: truthIngestion.recoveryTruth.recoveryRisk,
+      consistencyStatus: truthIngestion.adherenceTruth.consistencyStatus,
+      doctrineEligible: truthIngestion.doctrineTruth.influenceEligible,
+      safeNotes: truthIngestion.safeGenerationNotes.slice(0, 3),
+    })
+  } catch (ingestionError) {
+    console.log('[authoritative-generation-truth-ingestion-failed]', {
+      generationIntent: request.generationIntent,
+      error: String(ingestionError),
+    })
+    // Create a minimal fallback ingestion for resilience
+    // This should rarely happen but prevents generation from failing entirely
+    truthIngestion = createFallbackIngestion(request)
+  }
+  
+  markStage('truth_ingestion_complete')
+  
   try {
     // ==========================================================================
     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] STAGE: Resolve current working progressions
     // This must happen BEFORE building the canonical override
+    // NOW USES PROFILE TRUTH FROM INGESTION INSTEAD OF RAW CALLER INPUT
     // ==========================================================================
     markStage('progression_resolution_start')
     
-    const athleteCalibration = calibrateAthleteProfile(request.canonicalProfile)
-    const resolvedProgressions = resolveCurrentWorkingProgressions(request.canonicalProfile, athleteCalibration)
+    // [AUTHORITATIVE-TRUTH-INGESTION-CONTRACT] Use ingestion's canonical profile as the authoritative source
+    const authoritativeProfile = truthIngestion.profileTruth.canonicalProfile
+    
+    const athleteCalibration = calibrateAthleteProfile(authoritativeProfile)
+    const resolvedProgressions = resolveCurrentWorkingProgressions(authoritativeProfile, athleteCalibration)
     
     // [CANONICAL-PROFILE-SKILL-CALIBRATION-FIX] Log whether skill calibration was built successfully
     console.log('[CANONICAL-PROFILE-SKILL-CALIBRATION-AUDIT]', {
@@ -277,35 +345,43 @@ export async function executeAuthoritativeGeneration(
       frontLeverCalibrated: !!athleteCalibration.skillCalibration?.front_lever,
       frontLeverIsAssisted: athleteCalibration.skillCalibration?.front_lever?.isAssisted,
       frontLeverUseConservativeStart: athleteCalibration.skillCalibration?.front_lever?.useConservativeStart,
-      // Input data audit
-      inputHasFlatFields: 'plancheProgression' in request.canonicalProfile,
-      inputPlancheIsAssisted: (request.canonicalProfile as unknown as { plancheIsAssisted?: boolean }).plancheIsAssisted,
-      inputPlancheHighestEver: (request.canonicalProfile as unknown as { plancheHighestEver?: string }).plancheHighestEver,
+      // Input data audit - now from authoritative ingestion source
+      inputHasFlatFields: 'plancheProgression' in authoritativeProfile,
+      inputPlancheIsAssisted: (authoritativeProfile as unknown as { plancheIsAssisted?: boolean }).plancheIsAssisted,
+      inputPlancheHighestEver: (authoritativeProfile as unknown as { plancheHighestEver?: string }).plancheHighestEver,
+      // [AUTHORITATIVE-TRUTH-INGESTION-CONTRACT] Track profile source
+      profileSource: truthIngestion.profileTruth.source,
+      profileQuality: truthIngestion.profileTruth.quality,
+      callerOverrides: truthIngestion.profileTruth.callerOverriddenFields,
     })
     
     console.log('[authoritative-generation-progression-resolution]', {
       generationIntent: request.generationIntent,
-      plancheCanonical: request.canonicalProfile.plancheProgression,
+      // [AUTHORITATIVE-TRUTH-INGESTION-CONTRACT] Profile values from authoritative ingestion
+      plancheCanonical: authoritativeProfile.plancheProgression,
       plancheResolved: resolvedProgressions.planche.currentWorkingProgression,
       plancheSource: resolvedProgressions.planche.truthSource,
       plancheIsConservative: resolvedProgressions.planche.isConservative,
       plancheHistoricalCeiling: resolvedProgressions.planche.historicalCeiling,
-      frontLeverCanonical: request.canonicalProfile.frontLeverProgression,
+      frontLeverCanonical: authoritativeProfile.frontLeverProgression,
       frontLeverResolved: resolvedProgressions.frontLever.currentWorkingProgression,
       frontLeverSource: resolvedProgressions.frontLever.truthSource,
       frontLeverIsConservative: resolvedProgressions.frontLever.isConservative,
       anyConservativeStart: resolvedProgressions.anyConservativeStart,
+      // Truth ingestion audit
+      truthIngestionQuality: truthIngestion.signalAudit.overallQuality,
     })
     
     markStage('progression_resolution_done')
     
     // ==========================================================================
     // STAGE: Build canonical profile override
+    // [AUTHORITATIVE-TRUTH-INGESTION-CONTRACT] Use profile from authoritative ingestion
     // ==========================================================================
     markStage('canonical_override_construction')
     
     const canonicalProfileOverride = buildCanonicalProfileOverride(
-      request.canonicalProfile,
+      authoritativeProfile, // [AUTHORITATIVE-TRUTH-INGESTION-CONTRACT] From ingestion, not raw caller input
       request.builderInputs,
       request.generationIntent,
       resolvedProgressions // Pass resolved progressions to use in override
@@ -452,6 +528,20 @@ export async function executeAuthoritativeGeneration(
       generationIntent: request.generationIntent,
       triggerSource: request.triggerSource,
       isFreshBaselineBuild: request.isFreshBaselineBuild,
+      
+      // [AUTHORITATIVE-TRUTH-INGESTION-CONTRACT] Ingestion audit
+      authoritativeTruthIngestionAudit: {
+        ingestedAt: truthIngestion.ingestedAt,
+        overallQuality: truthIngestion.signalAudit.overallQuality,
+        domainQualities: truthIngestion.signalAudit.domainQualities,
+        profileSource: truthIngestion.profileTruth.source,
+        callerOverrides: truthIngestion.profileTruth.callerOverriddenFields,
+        recoveryRisk: truthIngestion.recoveryTruth.recoveryRisk,
+        consistencyStatus: truthIngestion.adherenceTruth.consistencyStatus,
+        doctrineInfluenceEligible: truthIngestion.doctrineTruth.influenceEligible,
+        isFirstWeek: truthIngestion.currentProgramContext.isFirstGeneratedWeek,
+        safeGenerationNotes: truthIngestion.safeGenerationNotes,
+      },
       
       // HIGH-PRIORITY: Training method preferences
       trainingMethodPreferences: canonicalProfileTyped.trainingMethodPreferences || [],
@@ -679,6 +769,9 @@ export async function executeAuthoritativeGeneration(
       secondaryGoal: program.secondaryGoal,
       scheduleMode: program.scheduleMode,
       totalElapsedMs: totalElapsed,
+      // [AUTHORITATIVE-TRUTH-INGESTION-CONTRACT] Include ingestion summary
+      truthIngestionQuality: truthIngestion.signalAudit.overallQuality,
+      callerOverridesApplied: truthIngestion.profileTruth.callerOverriddenFields.length,
     })
     
     return {
@@ -687,6 +780,18 @@ export async function executeAuthoritativeGeneration(
       timings: getTimings(),
       totalElapsedMs: totalElapsed,
       parityVerdict: buildParityVerdict(request, true),
+      // [AUTHORITATIVE-TRUTH-INGESTION-CONTRACT] Include ingestion audit in result
+      truthIngestionAudit: {
+        ingestedAt: truthIngestion.ingestedAt,
+        overallQuality: truthIngestion.signalAudit.overallQuality,
+        domainQualities: truthIngestion.signalAudit.domainQualities,
+        callerOverrides: truthIngestion.profileTruth.callerOverriddenFields,
+        recoveryRisk: truthIngestion.recoveryTruth.recoveryRisk,
+        consistencyStatus: truthIngestion.adherenceTruth.consistencyStatus,
+        doctrineInfluenceEligible: truthIngestion.doctrineTruth.influenceEligible,
+        isFirstWeek: truthIngestion.currentProgramContext.isFirstGeneratedWeek,
+        safeGenerationNotes: truthIngestion.safeGenerationNotes,
+      },
       summary: {
         sessionCount: program.sessions.length,
         primaryGoal: program.primaryGoal,
@@ -715,6 +820,122 @@ export async function executeAuthoritativeGeneration(
       totalElapsedMs: totalElapsed,
       parityVerdict: buildParityVerdict(request, false),
     }
+  }
+}
+
+// ==========================================================================
+// HELPER: Create Fallback Ingestion (resilience path)
+// ==========================================================================
+
+function createFallbackIngestion(
+  request: AuthoritativeGenerationRequest
+): AuthoritativeGenerationTruthIngestion {
+  // This fallback is used when ingestion fails unexpectedly
+  // It preserves the caller's profile to allow generation to proceed
+  console.log('[authoritative-generation-fallback-ingestion-created]', {
+    generationIntent: request.generationIntent,
+  })
+  
+  return {
+    ingestedAt: new Date().toISOString(),
+    ingestionVersion: '1.0.0',
+    profileTruth: {
+      source: 'canonical_profile_service',
+      quality: 'weak',
+      canonicalProfile: request.canonicalProfile as CanonicalProgrammingProfile,
+      fieldSources: {
+        primaryGoal: 'caller_override',
+        secondaryGoal: 'caller_override',
+        selectedSkills: 'caller_override',
+        scheduleMode: 'caller_override',
+        trainingDaysPerWeek: 'caller_override',
+        sessionLengthMinutes: 'caller_override',
+        experienceLevel: 'caller_override',
+        trainingPathType: 'caller_override',
+        jointCautions: 'caller_override',
+        equipment: 'caller_override',
+        trainingMethodPreferences: 'caller_override',
+      },
+      missingFields: [],
+      defaultedFields: [],
+      callerOverriddenFields: ['fallback_mode_all_fields_from_caller'],
+      evidence: ['Fallback ingestion - authoritative ingestion failed'],
+    },
+    recoveryTruth: {
+      quality: 'missing',
+      readinessState: null,
+      fatigueState: null,
+      recoveryRisk: 'unknown',
+      sorenessRisk: 'unknown',
+      rawAssessment: null,
+      evidence: ['Fallback ingestion - no recovery signals'],
+    },
+    adherenceTruth: {
+      quality: 'missing',
+      recentMissedSessions: 0,
+      recentPartialSessions: 0,
+      recentCompletedSessions: 0,
+      consistencyStatus: 'unknown',
+      totalSessionsLast7Days: 0,
+      totalSessionsLast14Days: 0,
+      expectedSessionsPerWeek: 4,
+      disruptionReason: null,
+      recoveryInterruptionFlag: false,
+      adherenceDisruptionFlag: false,
+      rawConsistencyStatus: null,
+      evidence: ['Fallback ingestion - no adherence signals'],
+    },
+    executionTruth: {
+      quality: 'missing',
+      recentSessionCount: 0,
+      usablePerformanceSignals: 0,
+      averageRecentRPE: null,
+      recentCompletionRate: null,
+      recentLoadToleranceSummary: null,
+      evidence: ['Fallback ingestion - no execution signals'],
+    },
+    doctrineTruth: {
+      quality: 'missing',
+      readinessVerdict: 'NOT_READY',
+      readinessExplanation: 'Fallback ingestion - doctrine not checked',
+      coverageSummary: [],
+      influenceEligible: false,
+      rawReadiness: null,
+      evidence: ['Fallback ingestion - doctrine not evaluated'],
+    },
+    currentProgramContext: {
+      quality: 'partial',
+      existingProgramId: request.existingProgramId || null,
+      currentWeekIndex: null,
+      activeProgramExists: !!request.existingProgramId,
+      recentGenerationIntent: request.generationIntent,
+      isFirstGeneratedWeek: request.isFreshBaselineBuild,
+      previousWeekCompleted: false,
+      evidence: ['Fallback ingestion - minimal context from request'],
+    },
+    signalAudit: {
+      totalSignalDomains: 6,
+      strongDomains: 0,
+      usableDomains: 0,
+      partialDomains: 1,
+      weakDomains: 1,
+      missingDomains: 4,
+      overallQuality: 'weak',
+      domainQualities: {
+        profile: 'weak',
+        recovery: 'missing',
+        adherence: 'missing',
+        execution: 'missing',
+        doctrine: 'missing',
+        programContext: 'partial',
+      },
+    },
+    safeGenerationNotes: [
+      'FALLBACK INGESTION - authoritative ingestion failed',
+      'Using caller-provided profile as fallback',
+      'No recovery/adherence/execution signals available',
+      'Conservative defaults should be applied',
+    ],
   }
 }
 

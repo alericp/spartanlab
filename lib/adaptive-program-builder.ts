@@ -7684,21 +7684,79 @@ async function generateAdaptiveProgramImpl(
   // [PHASE 15E] ADVANCED ATHLETE SESSION CONSTRUCTION CALIBRATION
   // Advanced athletes can handle richer, more intentional session architecture
   // ==========================================================================
-  const advancedAthleteCalibration = getAdvancedAthleteCalibration({
-    experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced' | 'elite',
-    sessionMinutes: sessionLength,
-    recoveryLevel: canonicalProfile.recoveryLevel as 'poor' | 'fair' | 'normal' | 'good' | undefined,
-    selectedSkillsCount: expandedContext.selectedSkills.length,
-    hasAllStylesSelected,
-  })
+  // [PHASE 15E LOCAL BOUNDARY] Wrap calibration corridor in non-fatal try/catch
+  // If calibration fails, use neutral fallbacks and continue generation
+  let phase15eCalibrationLocalStep = 'calibration_boundary_entry'
+  let advancedAthleteCalibration: ReturnType<typeof getAdvancedAthleteCalibration>
+  let calibratedVolumeConfig: ReturnType<typeof getCalibratedVolumeConfig>
+  let usedNeutralAdvancedCalibration = false
+  let usedNeutralVolumeConfig = false
   
-  const calibratedVolumeConfig = getCalibratedVolumeConfig({
-    sessionMinutes: sessionLength,
-    experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced' | 'elite',
-    recoveryLevel: canonicalProfile.recoveryLevel as 'poor' | 'fair' | 'normal' | 'good' | undefined,
-    selectedSkillsCount: expandedContext.selectedSkills.length,
-    hasAllStylesSelected,
-  })
+  // Neutral fallback for AdvancedAthleteCalibration
+  const neutralAdvancedCalibration: ReturnType<typeof getAdvancedAthleteCalibration> = {
+    sessionDensityMultiplier: 1.0,
+    mainWorkBonus: 0,
+    supportWorkBonus: 0,
+    accessorySlotBonus: 0,
+    mixedMethodFinisherAllowed: false,
+    primarySkillExpressionWeight: 0.5,
+    secondarySkillExpressionWeight: 0.3,
+    tertiarySkillMinExposure: 0,
+    carryoverThreshold: 0.3,
+    sequencingStrictness: 'loose',
+  }
+  
+  // Neutral fallback for CalibratedVolumeConfig (based on durationConfig)
+  const neutralVolumeConfig: ReturnType<typeof getCalibratedVolumeConfig> = {
+    warmupMinutes: durationConfig.warmupMinutes,
+    warmupExerciseCount: durationConfig.warmupExerciseCount,
+    mainExerciseCount: { min: durationConfig.minExercises, max: durationConfig.maxExercises },
+    accessoryCount: { min: 0, max: Math.max(0, durationConfig.accessorySlots || 0) },
+    cooldownMinutes: durationConfig.cooldownMinutes,
+    cooldownExerciseCount: durationConfig.cooldownExercises,
+    totalEstimatedMinutes: { min: sessionLength - 5, max: sessionLength },
+    calibration: neutralAdvancedCalibration,
+  }
+  
+  try {
+    phase15eCalibrationLocalStep = 'advanced_athlete_calibration_start'
+    advancedAthleteCalibration = getAdvancedAthleteCalibration({
+      experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced' | 'elite',
+      sessionMinutes: sessionLength,
+      recoveryLevel: canonicalProfile.recoveryLevel as 'poor' | 'fair' | 'normal' | 'good' | undefined,
+      selectedSkillsCount: expandedContext.selectedSkills.length,
+      hasAllStylesSelected,
+    })
+    phase15eCalibrationLocalStep = 'advanced_athlete_calibration_done'
+    
+    phase15eCalibrationLocalStep = 'calibrated_volume_config_start'
+    calibratedVolumeConfig = getCalibratedVolumeConfig({
+      sessionMinutes: sessionLength,
+      experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced' | 'elite',
+      recoveryLevel: canonicalProfile.recoveryLevel as 'poor' | 'fair' | 'normal' | 'good' | undefined,
+      selectedSkillsCount: expandedContext.selectedSkills.length,
+      hasAllStylesSelected,
+    })
+    phase15eCalibrationLocalStep = 'calibrated_volume_config_done'
+  } catch (calibrationLocalError) {
+    // [PHASE 15E LOCAL BOUNDARY FALLBACK] Use neutral calibrations and continue
+    console.error('[phase15e-post-audit-local-boundary-fallback]', {
+      sessionIndex,
+      dayFocus: day.focus,
+      failingLocalStep: phase15eCalibrationLocalStep,
+      errorMessage: calibrationLocalError instanceof Error ? calibrationLocalError.message : String(calibrationLocalError),
+      usedNeutralAdvancedCalibration: true,
+      usedNeutralVolumeConfig: true,
+      generationContinues: true,
+      verdict: 'phase15e_post_audit_degraded_continue',
+    })
+    
+    // Apply neutral fallbacks
+    advancedAthleteCalibration = neutralAdvancedCalibration
+    calibratedVolumeConfig = neutralVolumeConfig
+    usedNeutralAdvancedCalibration = true
+    usedNeutralVolumeConfig = true
+  }
   
   // [PHASE 15E TASK 1] SESSION CONSERVATISM AUDIT
   // Check if advanced athletes are getting beginner-safe session shapes
@@ -7708,6 +7766,7 @@ async function generateAdaptiveProgramImpl(
   const hasMultiSkills = expandedContext.selectedSkills.length >= 3
   
   try {
+    phase15eCalibrationLocalStep = 'session_conservatism_audit'
     console.log('[phase15e-session-conservatism-audit]', {
       experienceLevel,
       sessionLength,
@@ -7715,6 +7774,9 @@ async function generateAdaptiveProgramImpl(
       isAdvanced,
       isLongSession,
       hasMultiSkills,
+      // [PHASE 15E LOCAL BOUNDARY] Track if neutral fallbacks were used
+      usedNeutralAdvancedCalibration,
+      usedNeutralVolumeConfig,
       baseVolumeConfig: {
         mainMin: durationConfig.minExercises,
         mainMax: durationConfig.maxExercises,
@@ -7734,6 +7796,7 @@ async function generateAdaptiveProgramImpl(
     })
     
     // [PHASE 15E TASK 1] ADVANCED ATHLETE UNDEREXPRESSION AUDIT
+    phase15eCalibrationLocalStep = 'advanced_underexpression_audit'
     console.log('[phase15e-advanced-athlete-underexpression-audit]', {
       profileIndicatesAdvanced: isAdvanced,
       profileIndicatesMultiSkill: hasMultiSkills,
@@ -7756,6 +7819,7 @@ async function generateAdaptiveProgramImpl(
     })
     
     // [PHASE 15E TASK 1] PRIMARY/SECONDARY VISIBILITY AUDIT
+    phase15eCalibrationLocalStep = 'primary_secondary_visibility_audit'
     console.log('[phase15e-primary-secondary-visibility-audit]', {
       primaryGoal,
       secondaryGoal,
@@ -7771,9 +7835,17 @@ async function generateAdaptiveProgramImpl(
     // Audit logging should never crash generation - silently continue
     console.error('[phase15e-audit-log-error]', {
       sessionIndex,
+      dayFocus: day.focus,
+      failingLocalStep: phase15eCalibrationLocalStep,
       error: phase15eAuditError instanceof Error ? phase15eAuditError.message : 'unknown',
+      usedNeutralAdvancedCalibration,
+      usedNeutralVolumeConfig,
+      generationContinues: true,
     })
   }
+  
+  // Mark post-audit calibration boundary as complete
+  phase15eCalibrationLocalStep = 'post_audit_boundary_complete'
   
   // ==========================================================================
   // [PHASE 15E] POST-AUDIT SUBSTEP TRACKING

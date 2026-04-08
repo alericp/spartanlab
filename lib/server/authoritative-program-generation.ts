@@ -95,6 +95,14 @@ export interface AuthoritativeGenerationResult {
   error?: string
   failedStage?: string
   
+  // [PHASE 15E] Exact substep diagnostic fields
+  exactFailingSubstep?: string
+  exactLastSafeSubstep?: string
+  compactBuilderError?: string
+  compactStackPreview?: string
+  degradationAttempted?: boolean
+  degradationSucceeded?: boolean
+  
   // Timing metadata
   timings: Record<string, number>
   totalElapsedMs: number
@@ -500,10 +508,26 @@ export async function executeAuthoritativeGeneration(
                                errorStack?.includes('movement-intelligence') ||
                                errorStack?.includes('exercise-override-service')
       
+      // [PHASE 15E SUBSTEP DIAGNOSTIC] Extract exact failing substep from error message/stack
+      const isPhase15eCrash = errorStack?.includes('phase15e') || errorString.includes('phase15e')
+      const phase15eSubstepMatch = errorStack?.match(/phase15e-exact-step-failure.*failingSubstep['":\s]+([a-z_]+)/i)
+      const exactFailingSubstep = phase15eSubstepMatch?.[1] || 
+        (isPhase15eCrash ? 'phase15e_internal_unknown' : 'unknown')
+      const exactLastSafeSubstepMatch = errorStack?.match(/lastSafeSubstep['":\s]+([a-z_]+)/i)
+      const exactLastSafeSubstep = exactLastSafeSubstepMatch?.[1] || 'unknown'
+      
       console.log('[authoritative-generation-builder-error]', {
         generationIntent: request.generationIntent,
         error: errorString,
         elapsedMs: Date.now() - startTime,
+        // [PHASE 15E] Exact substep diagnostic
+        phase15eDiagnostic: {
+          isPhase15eCrash,
+          exactFailingSubstep,
+          exactLastSafeSubstep,
+          phase15eBoundaryReached: errorStack?.includes('phase15e-boundary-entry') || false,
+          phase15eDegradationAttempted: errorStack?.includes('phase15e-exact-step-failure') || false,
+        },
         // Crash corridor audit
         crashCorridorAudit: {
           isToLowerCaseCrash,
@@ -528,10 +552,23 @@ export async function executeAuthoritativeGeneration(
         },
       })
       
+      // Determine precise failed stage
+      const failedStage = isPhase15eCrash 
+        ? `phase15e_${exactFailingSubstep}`
+        : isSelectionCrash 
+          ? 'selecting_exercises' 
+          : 'builder_execution'
+      
       return {
         success: false,
         error: `Builder failed: ${errorString}`,
-        failedStage: isSelectionCrash ? 'selecting_exercises' : 'builder_execution',
+        failedStage,
+        // [PHASE 15E] Include exact substep info in result
+        exactFailingSubstep: isPhase15eCrash ? exactFailingSubstep : undefined,
+        exactLastSafeSubstep: isPhase15eCrash ? exactLastSafeSubstep : undefined,
+        compactBuilderError: errorString.substring(0, 200),
+        compactStackPreview: errorStack?.split('\n').slice(0, 5).join(' | '),
+        degradationAttempted: errorStack?.includes('safeDegradationApplied') || false,
         timings: getTimings(),
         totalElapsedMs: Date.now() - startTime,
         parityVerdict: buildParityVerdict(request, false),

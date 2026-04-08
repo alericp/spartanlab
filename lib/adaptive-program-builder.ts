@@ -7775,36 +7775,173 @@ async function generateAdaptiveProgramImpl(
     })
   }
   
-  // [PHASE 15E] Post-audit entry marker for rebuild tracing
-  console.log('[phase15e-post-audit-entry]', {
+  // ==========================================================================
+  // [PHASE 15E] POST-AUDIT SUBSTEP TRACKING
+  // Track exact failing substep for diagnostic precision
+  // ==========================================================================
+  let phase15eExactStep = 'post_audit_entry'
+  let phase15eLastSafeStep = 'phase15e_audit_logging_done'
+  let phase15eSubstepDegraded = false
+  let phase15eSubstepDegradedReason = ''
+  
+  console.log('[phase15e-exact-step-entry]', {
     sessionIndex,
     dayFocus: day.focus,
     isAdvanced,
     isLongSession,
     hasMultiSkills,
+    exactStep: phase15eExactStep,
+    lastSafeStep: phase15eLastSafeStep,
     stage: 'entering_post_audit_processing',
   })
   
   // Determine if skills should be prioritized based on training path
+  phase15eExactStep = 'should_prioritize_goal_flags'
   const shouldPrioritizeSkills = trainingPath === 'skill_progression' || 
     (trainingPath === 'hybrid' && trainingOutcome === 'skills')
   const shouldPrioritizeStrength = trainingPath === 'strength_endurance' ||
     trainingOutcome === 'strength' || trainingOutcome === 'max_reps' || trainingOutcome === 'military'
-    
-  const calibrationAdjustments = getProgramCalibrationAdjustments(
-    athleteCalibration,
-    onboardingProfile?.primaryGoal || null,
-    sessionLength
-  )
+  phase15eLastSafeStep = 'should_prioritize_goal_flags'
   
-  // Determine training style adjustments based on training outcome
-  // This affects rep ranges, rest periods, and exercise selection
-  const outcomeTrainingStyle = getTrainingStyleFromOutcome(trainingOutcome)
+  // ==========================================================================
+  // [PHASE 15E SUBSTEP] getProgramCalibrationAdjustments - with safe fallback
+  // ==========================================================================
+  phase15eExactStep = 'program_calibration_adjustments_start'
+  let calibrationAdjustments: ReturnType<typeof getProgramCalibrationAdjustments>
+  try {
+    calibrationAdjustments = getProgramCalibrationAdjustments(
+      athleteCalibration,
+      onboardingProfile?.primaryGoal || null,
+      sessionLength
+    )
+    phase15eLastSafeStep = 'program_calibration_adjustments_done'
+  } catch (calibrationError) {
+    console.error('[phase15e-exact-step-failure]', {
+      failingSubstep: 'program_calibration_adjustments',
+      lastSafeSubstep: phase15eLastSafeStep,
+      sessionIndex,
+      dayFocus: day.focus,
+      primaryGoal,
+      secondaryGoal,
+      trainingPath,
+      trainingOutcome,
+      sessionLength,
+      experienceLevel,
+      selectedSkillsCount: expandedContext.selectedSkills.length,
+      errorMessage: calibrationError instanceof Error ? calibrationError.message : String(calibrationError),
+      stackPreview: calibrationError instanceof Error ? calibrationError.stack?.split('\n').slice(0, 3).join(' | ') : undefined,
+      safeDegradationApplied: true,
+    })
+    phase15eSubstepDegraded = true
+    phase15eSubstepDegradedReason = 'program_calibration_adjustments_failed'
+    // Safe fallback: neutral calibration adjustments
+    calibrationAdjustments = {
+      restMultiplier: 1.0,
+      setBonus: 0,
+      intensityModifier: 0,
+      includeEnduranceFinisher: false,
+      volumeMultiplier: 1.0,
+    }
+  }
   
-  // Build calibration context for UI display
-// Get compression readiness for program generation
-  const compressionReadiness = getCompressionReadiness(onboardingProfile, athleteCalibration)
-  const biasTowardCompression = shouldBiasTowardCompression(compressionReadiness, primaryGoal)
+  // ==========================================================================
+  // [PHASE 15E SUBSTEP] getTrainingStyleFromOutcome - with safe fallback
+  // ==========================================================================
+  phase15eExactStep = 'outcome_training_style_start'
+  let outcomeTrainingStyle: ReturnType<typeof getTrainingStyleFromOutcome>
+  try {
+    outcomeTrainingStyle = getTrainingStyleFromOutcome(trainingOutcome)
+    phase15eLastSafeStep = 'outcome_training_style_done'
+  } catch (styleError) {
+    console.error('[phase15e-exact-step-failure]', {
+      failingSubstep: 'outcome_training_style',
+      lastSafeSubstep: phase15eLastSafeStep,
+      sessionIndex,
+      dayFocus: day.focus,
+      trainingOutcome,
+      errorMessage: styleError instanceof Error ? styleError.message : String(styleError),
+      stackPreview: styleError instanceof Error ? styleError.stack?.split('\n').slice(0, 3).join(' | ') : undefined,
+      safeDegradationApplied: true,
+    })
+    phase15eSubstepDegraded = true
+    phase15eSubstepDegradedReason = 'outcome_training_style_failed'
+    // Safe fallback: neutral training style
+    outcomeTrainingStyle = {
+      includeEnduranceWork: false,
+      includeDensityBlocks: false,
+      preferredRepRange: { min: 5, max: 12 },
+      restPeriodMultiplier: 1.0,
+    }
+  }
+  
+  // ==========================================================================
+  // [PHASE 15E SUBSTEP] getCompressionReadiness - with safe fallback
+  // ==========================================================================
+  phase15eExactStep = 'compression_readiness_start'
+  let compressionReadiness: ReturnType<typeof getCompressionReadiness>
+  try {
+    compressionReadiness = getCompressionReadiness(onboardingProfile, athleteCalibration)
+    phase15eLastSafeStep = 'compression_readiness_done'
+  } catch (compressionError) {
+    console.error('[phase15e-exact-step-failure]', {
+      failingSubstep: 'compression_readiness',
+      lastSafeSubstep: phase15eLastSafeStep,
+      sessionIndex,
+      dayFocus: day.focus,
+      errorMessage: compressionError instanceof Error ? compressionError.message : String(compressionError),
+      stackPreview: compressionError instanceof Error ? compressionError.stack?.split('\n').slice(0, 3).join(' | ') : undefined,
+      safeDegradationApplied: true,
+    })
+    phase15eSubstepDegraded = true
+    phase15eSubstepDegradedReason = 'compression_readiness_failed'
+    // Safe fallback: no compression readiness
+    compressionReadiness = {
+      isReady: false,
+      readinessScore: 0,
+      limitingFactors: [],
+      recommendations: [],
+    }
+  }
+  
+  // ==========================================================================
+  // [PHASE 15E SUBSTEP] shouldBiasTowardCompression - with safe fallback
+  // ==========================================================================
+  phase15eExactStep = 'compression_bias_start'
+  let biasTowardCompression: boolean
+  try {
+    biasTowardCompression = shouldBiasTowardCompression(compressionReadiness, primaryGoal)
+    phase15eLastSafeStep = 'compression_bias_done'
+  } catch (biasError) {
+    console.error('[phase15e-exact-step-failure]', {
+      failingSubstep: 'compression_bias',
+      lastSafeSubstep: phase15eLastSafeStep,
+      sessionIndex,
+      dayFocus: day.focus,
+      errorMessage: biasError instanceof Error ? biasError.message : String(biasError),
+      stackPreview: biasError instanceof Error ? biasError.stack?.split('\n').slice(0, 3).join(' | ') : undefined,
+      safeDegradationApplied: true,
+    })
+    phase15eSubstepDegraded = true
+    phase15eSubstepDegradedReason = 'compression_bias_failed'
+    // Safe fallback: no compression bias
+    biasTowardCompression = false
+  }
+  
+  phase15eExactStep = 'phase15e_post_audit_setup_complete'
+  phase15eLastSafeStep = 'phase15e_post_audit_setup_complete'
+  
+  // Log successful post-audit setup completion
+  console.log('[phase15e-exact-step-success]', {
+    sessionIndex,
+    dayFocus: day.focus,
+    exactStep: phase15eExactStep,
+    lastSafeStep: phase15eLastSafeStep,
+    substepDegraded: phase15eSubstepDegraded,
+    substepDegradedReason: phase15eSubstepDegradedReason || 'none',
+    verdict: phase15eSubstepDegraded 
+      ? 'PHASE15E_POST_AUDIT_SETUP_DEGRADED_BUT_SURVIVED'
+      : 'PHASE15E_POST_AUDIT_SETUP_COMPLETE',
+  })
   
   // Apply training outcome overrides to calibration
   const shouldIncludeEndurance = outcomeTrainingStyle.includeEnduranceWork || 
@@ -19169,10 +19306,17 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
     setsReduced: setsReducedByWeekAdaptation,
     phase15eBoundaryFailed,
     phase15eRollbackUsed: phase15eBoundaryFailed,
+    // [PHASE 15E SUBSTEP DIAGNOSTIC] Include substep degradation info
+    phase15eSubstepDegraded,
+    phase15eSubstepDegradedReason: phase15eSubstepDegradedReason || 'none',
+    phase15eExactStep,
+    phase15eLastSafeStep,
     postAuditStepsReached: 'all_steps_complete',
     verdict: phase15eBoundaryFailed 
       ? 'PHASE_15E_SESSION_GENERATION_SUCCESS_VIA_ROLLBACK'
-      : 'PHASE_15E_SESSION_GENERATION_SUCCESS',
+      : phase15eSubstepDegraded
+        ? 'PHASE_15E_SESSION_GENERATION_SUCCESS_VIA_SUBSTEP_DEGRADATION'
+        : 'PHASE_15E_SESSION_GENERATION_SUCCESS',
   })
 
   // ==========================================================================

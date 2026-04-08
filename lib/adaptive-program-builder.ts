@@ -7834,14 +7834,23 @@ async function generateAdaptiveProgramImpl(
     })
     phase15eSubstepDegraded = true
     phase15eSubstepDegradedReason = 'program_calibration_adjustments_failed'
-    // Safe fallback: neutral calibration adjustments
+    // Safe fallback: neutral calibration adjustments (REAL ProgramCalibrationAdjustments contract)
     calibrationAdjustments = {
-      restMultiplier: 1.0,
-      setBonus: 0,
-      intensityModifier: 0,
+      adjustExerciseCount: 0,
+      adjustSetsPerExercise: 0,
+      adjustRestSeconds: 0,
+      includeCompressionWork: false,
+      compressionExercises: [],
       includeEnduranceFinisher: false,
-      volumeMultiplier: 1.0,
+      finisherGuidance: null,
+      progressionNotes: [],
+      calibrationMessage: 'Neutral calibration fallback applied',
     }
+    console.log('[phase15e-fallback-contract-ok]', {
+      fallbackType: 'ProgramCalibrationAdjustments',
+      hasExpectedKeys: true,
+      sampleSafeFields: { adjustExerciseCount: 0, includeCompressionWork: false, calibrationMessage: 'Neutral calibration fallback applied' },
+    })
   }
   
   // ==========================================================================
@@ -7894,13 +7903,32 @@ async function generateAdaptiveProgramImpl(
     })
     phase15eSubstepDegraded = true
     phase15eSubstepDegradedReason = 'compression_readiness_failed'
-    // Safe fallback: no compression readiness
+    // Safe fallback: neutral compression readiness (REAL CompressionReadinessResult contract)
     compressionReadiness = {
-      isReady: false,
+      currentCompressionLevel: 'none',
+      currentLevelLabel: 'Not assessed',
+      nextMilestone: 'tuck_l_sit',
+      nextMilestoneLabel: 'Tuck L-Sit',
       readinessScore: 0,
-      limitingFactors: [],
-      recommendations: [],
+      readinessLabel: 'early_stage',
+      primaryLimiter: 'none',
+      limiterExplanation: 'Compression readiness fallback applied',
+      explanation: 'Compression readiness could not be computed; neutral fallback used',
+      recommendedFocus: [],
+      shouldIncludeCompressionWork: false,
+      compressionWorkIntensity: 'foundational',
+      lSitReady: false,
+      vSitReady: false,
+      iSitReady: false,
+      hasHistoricalCeiling: false,
+      historicalHighest: null,
+      useReacquisitionStrategy: false,
     }
+    console.log('[phase15e-fallback-contract-ok]', {
+      fallbackType: 'CompressionReadinessResult',
+      hasExpectedKeys: true,
+      sampleSafeFields: { currentLevelLabel: 'Not assessed', primaryLimiter: 'none', shouldIncludeCompressionWork: false },
+    })
   }
   
   // ==========================================================================

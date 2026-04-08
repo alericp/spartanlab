@@ -75,11 +75,28 @@ export async function POST(request: Request) {
       currentProgramId,
     } = body
     
+    // [ROOT-CAUSE-DIAGNOSTIC] Log request body structure for debugging
+    console.log('[regenerate-route-request-body-audit]', {
+      hasCanonicalProfile: !!canonicalProfile,
+      canonicalProfileKeys: canonicalProfile ? Object.keys(canonicalProfile).slice(0, 10) : [],
+      primaryGoal: canonicalProfile?.primaryGoal,
+      selectedSkillsCount: canonicalProfile?.selectedSkills?.length || 0,
+      scheduleMode: canonicalProfile?.scheduleMode,
+      hasProgramInputs: !!programInputs,
+      programInputsKeys: programInputs ? Object.keys(programInputs).slice(0, 10) : [],
+      hasCurrentProgramId: !!currentProgramId,
+      regenerationReason,
+    })
+    
     if (!canonicalProfile || !programInputs) {
       return NextResponse.json({
         success: false,
         error: 'Missing canonical profile or program inputs',
         failedStage: 'parse_request',
+        diagnostics: {
+          hasCanonicalProfile: !!canonicalProfile,
+          hasProgramInputs: !!programInputs,
+        },
       }, { status: 400 })
     }
     
@@ -128,11 +145,23 @@ export async function POST(request: Request) {
     })
     
     if (!result.success) {
+      console.log('[regenerate-route-generation-failed]', {
+        error: result.error,
+        failedStage: result.failedStage,
+        timings: result.timings,
+      })
+      
       return NextResponse.json({
         success: false,
         error: result.error,
         failedStage: result.failedStage,
         timings: result.timings,
+        diagnostics: {
+          routeStage: 'authoritative_service_call',
+          serviceStage: result.failedStage,
+          generationIntent: 'regenerate',
+          triggerSource: 'regenerate',
+        },
       }, { status: 500 })
     }
     
@@ -145,15 +174,26 @@ export async function POST(request: Request) {
     })
     
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const stackPreview = error instanceof Error ? error.stack?.split('\n').slice(0, 5).join('\n') : 'no stack'
+    
     console.log('[regenerate-route-thin-adapter-error]', {
-      error: String(error),
+      error: errorMessage,
+      stackPreview,
       totalElapsedMs: Date.now() - routeStartTime,
     })
     
     return NextResponse.json({
       success: false,
-      error: String(error),
+      error: errorMessage,
       failedStage: 'route_error',
+      diagnostics: {
+        routeStage: 'route_catch_block',
+        serviceStage: 'unknown',
+        stackPreview: stackPreview?.substring(0, 500),
+        generationIntent: 'regenerate',
+        triggerSource: 'regenerate',
+      },
     }, { status: 500 })
   }
 }

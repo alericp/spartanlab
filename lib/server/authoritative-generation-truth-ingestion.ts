@@ -280,10 +280,56 @@ function buildProfileTruthBlock(
   callerProfile: Partial<CanonicalProgrammingProfile> | undefined,
   callerInputs: Partial<AdaptiveProgramInputs> | undefined
 ): ProfileTruthBlock {
-  // Step 1: Fetch authoritative profile from server-side source
-  const authoritativeProfile = getCanonicalProfile()
+  // [SERVER-SIDE-ROOT-CAUSE-FIX] getCanonicalProfile() uses localStorage which is unavailable server-side.
+  // On the server, the caller-provided profile IS the authoritative source.
+  // The caller (route) must fetch profile data before calling the authoritative service.
   
-  // Step 2: Track which fields come from authoritative vs caller override
+  // Step 1: On server-side, use caller profile as the authoritative source
+  // (getCanonicalProfile() returns empty/default on server because localStorage is unavailable)
+  const isServerSide = typeof window === 'undefined'
+  
+  // If server-side and no caller profile provided, we cannot proceed with meaningful profile data
+  if (isServerSide && !callerProfile) {
+    console.log('[authoritative-truth-ingestion-profile-fallback]', {
+      reason: 'server_side_no_caller_profile',
+      isServerSide,
+    })
+    // Return a weak/partial profile block to indicate the problem
+    return {
+      source: 'canonical_profile_service',
+      quality: 'weak',
+      canonicalProfile: {
+        primaryGoal: 'skill_development',
+        scheduleMode: 'weekly',
+        trainingDaysPerWeek: 4,
+        experienceLevel: 'intermediate',
+      } as CanonicalProgrammingProfile,
+      fieldSources: {
+        primaryGoal: 'defaulted',
+        secondaryGoal: 'none',
+        selectedSkills: 'none',
+        scheduleMode: 'defaulted',
+        trainingDaysPerWeek: 'defaulted',
+        sessionLengthMinutes: 'none',
+        experienceLevel: 'defaulted',
+        trainingPathType: 'none',
+        jointCautions: 'none',
+        equipment: 'none',
+        trainingMethodPreferences: 'none',
+      },
+      missingFields: ['primaryGoal', 'selectedSkills', 'scheduleMode', 'experienceLevel'],
+      defaultedFields: ['all_fields_server_fallback'],
+      callerOverriddenFields: [],
+      evidence: ['Server-side ingestion with no caller profile - using fallback defaults'],
+    }
+  }
+  
+  // Step 2: Use caller profile as authoritative on server, or fetch client-side
+  const authoritativeProfile = isServerSide 
+    ? (callerProfile as CanonicalProgrammingProfile) 
+    : getCanonicalProfile()
+  
+  // Step 3: Track which fields come from authoritative vs caller override
   const fieldSources: ProfileTruthBlock['fieldSources'] = {
     primaryGoal: 'authoritative_profile',
     secondaryGoal: 'authoritative_profile',
@@ -417,7 +463,11 @@ function buildProfileTruthBlock(
   }
   
   // Build evidence
-  evidence.push(`Profile fetched from canonical_profile_service`)
+  if (isServerSide) {
+    evidence.push(`Server-side ingestion - using caller profile as authoritative source`)
+  } else {
+    evidence.push(`Profile fetched from canonical_profile_service (client-side localStorage)`)
+  }
   if (callerOverriddenFields.length > 0) {
     evidence.push(`Caller overrides applied: ${callerOverriddenFields.join(', ')}`)
   }

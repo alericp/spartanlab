@@ -228,6 +228,7 @@ export interface PrescriptionPropagationDisplay {
     rpeReduced: boolean
     finisherSuppressed: boolean
     densityReduced: boolean
+    secondaryTrimmed: boolean
   }
   /** Session-level prescription changes */
   sessionChanges: Array<{
@@ -255,6 +256,7 @@ export function getPrescriptionPropagationDisplay(program: AdaptiveProgram): Pre
   let anyRpeReduced = false
   let anyFinisherSuppressed = false
   let anyDensityReduced = false
+  let anySecondaryTrimmed = false
   
   for (let i = 0; i < sessions.length; i++) {
     const session = sessions[i] as { 
@@ -265,6 +267,7 @@ export function getPrescriptionPropagationDisplay(program: AdaptiveProgram): Pre
           rpeReduced?: boolean
           finisherSuppressed?: boolean
           densityReduced?: boolean
+          secondaryTrimmed?: boolean
         }
         verdict?: string
       }
@@ -291,6 +294,10 @@ export function getPrescriptionPropagationDisplay(program: AdaptiveProgram): Pre
       changes.push('Density reduced')
       anyDensityReduced = true
     }
+    if (audit.appliedReductions?.secondaryTrimmed) {
+      changes.push('Secondary work trimmed')
+      anySecondaryTrimmed = true
+    }
     
     if (changes.length > 0) {
       anyMateriallyChanged = true
@@ -310,6 +317,7 @@ export function getPrescriptionPropagationDisplay(program: AdaptiveProgram): Pre
     if (anyRpeReduced) parts.push('capped intensity')
     if (anyFinisherSuppressed) parts.push('limited finishers')
     if (anyDensityReduced) parts.push('reduced density')
+    if (anySecondaryTrimmed) parts.push('trimmed secondary')
     summary = `Conservative dosage: ${parts.join(', ')}`
   }
   
@@ -320,6 +328,7 @@ export function getPrescriptionPropagationDisplay(program: AdaptiveProgram): Pre
       rpeReduced: anyRpeReduced,
       finisherSuppressed: anyFinisherSuppressed,
       densityReduced: anyDensityReduced,
+      secondaryTrimmed: anySecondaryTrimmed,
     },
     sessionChanges,
     summary,
@@ -370,6 +379,9 @@ export function getProgramSurfaceSignals(program: AdaptiveProgram): ProgramSurfa
     }
     if (prescriptionDisplay.appliedChanges.densityReduced) {
       signals.push('Density reduced')
+    }
+    if (prescriptionDisplay.appliedChanges.secondaryTrimmed) {
+      signals.push('Secondary work simplified')
     }
     
     dosageMessage = prescriptionDisplay.summary
@@ -455,6 +467,7 @@ export function getSessionSurfaceSignals(
         rpeReduced?: boolean
         finisherSuppressed?: boolean
         densityReduced?: boolean
+        secondaryTrimmed?: boolean
       }
       adaptationPhase?: string
       verdict?: string
@@ -491,7 +504,7 @@ export function getSessionSurfaceSignals(
   // Check prescription audit first
   if (audit?.appliedReductions) {
     const reductions = audit.appliedReductions
-    if (reductions.setsReduced || reductions.rpeReduced || reductions.finisherSuppressed || reductions.densityReduced) {
+    if (reductions.setsReduced || reductions.rpeReduced || reductions.finisherSuppressed || reductions.densityReduced || reductions.secondaryTrimmed) {
       hasPrescriptionChanges = true
       source = 'prescription_audit'
       
@@ -505,6 +518,10 @@ export function getSessionSurfaceSignals(
       
       if (reductions.finisherSuppressed) {
         microSignals.push('Finisher omitted')
+      }
+      
+      if (reductions.secondaryTrimmed) {
+        microSignals.push('Focused on primary work')
       }
       
       // Build intent from adaptation phase

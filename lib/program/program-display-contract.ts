@@ -328,6 +328,243 @@ export function getPrescriptionPropagationDisplay(program: AdaptiveProgram): Pre
 }
 
 // =============================================================================
+// [SURFACE-SIGNALS] PROGRAM AND SESSION SURFACE INTELLIGENCE
+// Compact signals for main card and day card display without modal
+// =============================================================================
+
+export interface ProgramSurfaceSignals {
+  /** Compact signals for program card intelligence strip */
+  signals: string[]
+  /** Primary dosage message if protective week */
+  dosageMessage: string | null
+  /** Whether this week has conservative/protective measures */
+  isProtectiveWeek: boolean
+  /** Source of signals */
+  source: 'prescription_propagation' | 'week_adaptation' | 'generation_truth' | 'unavailable'
+}
+
+/**
+ * Get program-level surface signals for compact intelligence display
+ * Surfaces real generation decisions without needing to open the modal
+ */
+export function getProgramSurfaceSignals(program: AdaptiveProgram): ProgramSurfaceSignals {
+  const signals: string[] = []
+  let dosageMessage: string | null = null
+  let isProtectiveWeek = false
+  let source: ProgramSurfaceSignals['source'] = 'unavailable'
+  
+  // Check prescription propagation first (most authoritative)
+  const prescriptionDisplay = getPrescriptionPropagationDisplay(program)
+  if (prescriptionDisplay.materiallyChanged) {
+    source = 'prescription_propagation'
+    isProtectiveWeek = true
+    
+    if (prescriptionDisplay.appliedChanges.setsReduced) {
+      signals.push('Volume reduced for acclimation')
+    }
+    if (prescriptionDisplay.appliedChanges.rpeReduced) {
+      signals.push('Intensity capped')
+    }
+    if (prescriptionDisplay.appliedChanges.finisherSuppressed) {
+      signals.push('Finishers limited')
+    }
+    if (prescriptionDisplay.appliedChanges.densityReduced) {
+      signals.push('Density reduced')
+    }
+    
+    dosageMessage = prescriptionDisplay.summary
+  }
+  
+  // Fall back to week adaptation decision
+  const weekAdaptation = getWeekAdaptationDisplay(program)
+  if (weekAdaptation.source !== 'unavailable') {
+    if (source === 'unavailable') source = 'week_adaptation'
+    
+    if (weekAdaptation.isFirstWeekProtected && !signals.some(s => s.includes('acclimation'))) {
+      signals.push('First-week protection active')
+      isProtectiveWeek = true
+    }
+    
+    if (weekAdaptation.isProtective && !isProtectiveWeek) {
+      isProtectiveWeek = true
+      if (weekAdaptation.phaseLabel === 'Recovery Priority') {
+        signals.push('Recovery-protected workload')
+      } else if (weekAdaptation.phaseLabel === 'Rebuilding Phase') {
+        signals.push('Rebuilding after disruption')
+      }
+    }
+    
+    // Add doctrine constraints if present
+    if (weekAdaptation.doctrineConstraints.length > 0) {
+      const constraint = weekAdaptation.doctrineConstraints[0]
+      if (!signals.some(s => s.toLowerCase().includes(constraint.toLowerCase().split(' ')[0]))) {
+        signals.push(constraint)
+      }
+    }
+    
+    if (!dosageMessage && weekAdaptation.loadSummary && weekAdaptation.loadSummary !== 'Standard load') {
+      dosageMessage = weekAdaptation.loadSummary
+    }
+  }
+  
+  // Add generation truth signals if available
+  const genTruth = program.generationTruthSnapshot
+  if (genTruth?.weekAdaptationDecisionAudit) {
+    if (source === 'unavailable') source = 'generation_truth'
+    const audit = genTruth.weekAdaptationDecisionAudit
+    
+    if (audit.loadStrategy?.straightArmExposureBias === 'protected' && 
+        !signals.some(s => s.toLowerCase().includes('straight-arm'))) {
+      signals.push('Straight-arm stress managed')
+    }
+    
+    if (audit.loadStrategy?.finisherBias === 'limited' && 
+        !signals.some(s => s.toLowerCase().includes('finisher'))) {
+      signals.push('Finisher work limited')
+    }
+  }
+  
+  return {
+    signals: signals.slice(0, 4), // Max 4 signals for cleanliness
+    dosageMessage,
+    isProtectiveWeek,
+    source,
+  }
+}
+
+export interface SessionSurfaceSignals {
+  /** One-line session intent */
+  intentLine: string | null
+  /** Micro-signals (1-2 items) */
+  microSignals: string[]
+  /** Whether this session has prescription changes */
+  hasPrescriptionChanges: boolean
+  /** Source of signals */
+  source: 'prescription_audit' | 'composition_metadata' | 'inferred' | 'unavailable'
+}
+
+/**
+ * Get session-level surface signals for day card display
+ * Surfaces real session-specific generation decisions
+ */
+export function getSessionSurfaceSignals(
+  session: {
+    prescriptionPropagationAudit?: {
+      appliedReductions?: {
+        setsReduced?: boolean
+        rpeReduced?: boolean
+        finisherSuppressed?: boolean
+        densityReduced?: boolean
+      }
+      adaptationPhase?: string
+      verdict?: string
+    }
+    compositionMetadata?: {
+      sessionIntent?: string
+      workloadDistribution?: {
+        primaryWorkPercent?: number
+        supportWorkPercent?: number
+      }
+      methodEligibility?: {
+        finisher?: string
+        density?: string
+      }
+    }
+    skillExpressionMetadata?: {
+      sessionPurpose?: string
+      sessionIdentityReason?: string
+    }
+    isPrimary?: boolean
+    focus?: string
+    focusLabel?: string
+  }
+): SessionSurfaceSignals {
+  const microSignals: string[] = []
+  let intentLine: string | null = null
+  let hasPrescriptionChanges = false
+  let source: SessionSurfaceSignals['source'] = 'unavailable'
+  
+  const audit = session.prescriptionPropagationAudit
+  const comp = session.compositionMetadata
+  const skill = session.skillExpressionMetadata
+  
+  // Check prescription audit first
+  if (audit?.appliedReductions) {
+    const reductions = audit.appliedReductions
+    if (reductions.setsReduced || reductions.rpeReduced || reductions.finisherSuppressed || reductions.densityReduced) {
+      hasPrescriptionChanges = true
+      source = 'prescription_audit'
+      
+      if (reductions.setsReduced && reductions.rpeReduced) {
+        microSignals.push('Volume and intensity managed')
+      } else if (reductions.setsReduced) {
+        microSignals.push('Volume adjusted')
+      } else if (reductions.rpeReduced) {
+        microSignals.push('Intensity capped')
+      }
+      
+      if (reductions.finisherSuppressed) {
+        microSignals.push('Finisher omitted')
+      }
+      
+      // Build intent from adaptation phase
+      if (audit.adaptationPhase === 'initial_acclimation') {
+        intentLine = 'Conservative dosage for week 1 acclimation'
+      } else if (audit.adaptationPhase === 'recovery_constrained') {
+        intentLine = 'Recovery-protected session'
+      }
+    }
+  }
+  
+  // Fall back to composition metadata
+  if (!intentLine && comp) {
+    if (source === 'unavailable') source = 'composition_metadata'
+    
+    if (comp.sessionIntent) {
+      intentLine = comp.sessionIntent.split('.')[0]
+      if (intentLine.length > 60) {
+        intentLine = intentLine.substring(0, 57) + '...'
+      }
+    }
+    
+    // Add workload distribution insight
+    if (comp.workloadDistribution?.primaryWorkPercent && comp.workloadDistribution.primaryWorkPercent >= 70) {
+      if (!microSignals.some(s => s.includes('primary'))) {
+        microSignals.push('Primary focus preserved')
+      }
+    }
+    
+    // Add method eligibility insight
+    if (comp.methodEligibility?.finisher === 'blocked' && !microSignals.some(s => s.includes('Finisher'))) {
+      microSignals.push('Finisher blocked')
+    }
+  }
+  
+  // Fall back to skill expression metadata
+  if (!intentLine && skill?.sessionIdentityReason) {
+    if (source === 'unavailable') source = 'inferred'
+    intentLine = skill.sessionIdentityReason.split('.')[0]
+    if (intentLine.length > 60) {
+      intentLine = intentLine.substring(0, 57) + '...'
+    }
+  }
+  
+  // Final fallback to session focus
+  if (!intentLine && session.isPrimary) {
+    if (source === 'unavailable') source = 'inferred'
+    const focus = session.focusLabel || session.focus || ''
+    intentLine = focus ? `Primary ${focus.toLowerCase()} session` : 'Primary skill session'
+  }
+  
+  return {
+    intentLine,
+    microSignals: microSignals.slice(0, 2), // Max 2 micro-signals
+    hasPrescriptionChanges,
+    source,
+  }
+}
+
+// =============================================================================
 // [NEON-TRUTH-CONTRACT] SOURCE TRUTH DISPLAY TYPES
 // =============================================================================
 

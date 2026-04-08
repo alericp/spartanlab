@@ -599,6 +599,26 @@ export async function executeAuthoritativeGeneration(
         safeGenerationNotes: truthIngestion.safeGenerationNotes,
       },
       
+      // [NEON-TRUTH-CONTRACT] Generation source map
+      generationSourceMap: {
+        overallQuality: truthIngestion.sourceMap.overallQuality,
+        profileQuality: truthIngestion.sourceMap.profileQuality,
+        recoveryQuality: truthIngestion.sourceMap.recoveryQuality,
+        adherenceQuality: truthIngestion.sourceMap.adherenceQuality,
+        executionQuality: truthIngestion.sourceMap.executionQuality,
+        doctrineQuality: truthIngestion.sourceMap.doctrineQuality,
+        programContextQuality: truthIngestion.sourceMap.programContextQuality,
+        dbSignalsRead: truthIngestion.sourceMap.dbSignalsRead,
+        callerOverrideSignals: truthIngestion.sourceMap.callerOverrideSignals,
+        defaultedSignals: truthIngestion.sourceMap.defaultedSignals,
+        missingSignals: truthIngestion.sourceMap.missingSignals,
+        neonDbAvailable: truthIngestion.sourceMap.neonDbAvailable,
+        neonAvailableDomains: truthIngestion.sourceMap.neonAvailableDomains,
+        neonUnavailableDomains: truthIngestion.sourceMap.neonUnavailableDomains,
+        influenceSummary: truthIngestion.sourceMap.influenceSummary,
+        generatedAt: truthIngestion.sourceMap.generatedAt,
+      },
+      
       // [WEEK-ADAPTATION-DECISION-CONTRACT] Week adaptation decision audit
       weekAdaptationDecisionAudit: {
         phase: weekAdaptationDecision.phase,

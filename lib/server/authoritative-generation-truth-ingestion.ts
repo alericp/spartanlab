@@ -23,10 +23,17 @@ import { checkDoctrineRuntimeReadiness, type DoctrineRuntimeReadiness } from '@/
 import type { ReadinessAssessment } from '@/lib/recovery-fatigue-engine'
 import type { ConsistencyStatus, ConsistencyState } from '@/lib/consistency-momentum-engine'
 import type { AdaptiveProgramInputs } from '@/lib/adaptive-program-builder'
+import { 
+  fetchNeonTruthPackage, 
+  getNeonTruthSummary,
+  type NeonTruthPackage, 
+  type NeonSignalQuality 
+} from './neon-truth-reader'
 
 // Note: getReadinessAssessment and getConsistencyStatus are client-side only
-// and use localStorage. For server-side ingestion, we must work with
-// caller-provided training feedback or mark signals as unavailable.
+// and use localStorage. For server-side ingestion, we MUST read from Neon
+// when available, and only fall back to caller-provided training feedback
+// when DB data is unavailable.
 
 // ==========================================================================
 // TYPES: Quality Labels
@@ -35,11 +42,58 @@ import type { AdaptiveProgramInputs } from '@/lib/adaptive-program-builder'
 export type SignalQuality = 'strong' | 'usable' | 'partial' | 'weak' | 'missing'
 
 export type FieldSource = 
-  | 'authoritative_profile'    // From server-side canonical profile
+  | 'authoritative_db'         // Read directly from Neon database
+  | 'authoritative_profile'    // From server-side canonical profile (caller-provided)
   | 'caller_override'          // Explicitly provided by caller (tracked)
   | 'defaulted'                // Missing, using safe default
   | 'inferred'                 // Derived from other fields
   | 'none'                     // Not available
+
+// ==========================================================================
+// TYPES: Generation Source Map (NEW)
+// ==========================================================================
+
+export interface MaterialSignalRecord {
+  key: string
+  source: FieldSource
+  quality: SignalQuality
+  usedInGeneration: boolean
+  usedByWeekAdaptation: boolean
+  valueSummary: string
+  reason: string
+}
+
+export interface GenerationSourceMap {
+  // Summary
+  overallQuality: SignalQuality
+  profileQuality: SignalQuality
+  recoveryQuality: SignalQuality
+  adherenceQuality: SignalQuality
+  executionQuality: SignalQuality
+  doctrineQuality: SignalQuality
+  programContextQuality: SignalQuality
+  
+  // Material signals
+  materialSignals: MaterialSignalRecord[]
+  
+  // Categorized signals
+  dbSignalsRead: string[]
+  callerOverrideSignals: string[]
+  defaultedSignals: string[]
+  missingSignals: string[]
+  
+  // Influence summary
+  influenceSummary: string[]
+  doctrineEligibility: boolean
+  
+  // Neon-specific
+  neonDbAvailable: boolean
+  neonAvailableDomains: string[]
+  neonUnavailableDomains: string[]
+  
+  // Meta
+  generatedAt: string
+}
 
 // ==========================================================================
 // TYPES: Profile Truth Block
@@ -214,7 +268,7 @@ export interface SignalAuditSummary {
 export interface AuthoritativeGenerationTruthIngestion {
   // Metadata
   ingestedAt: string
-  ingestionVersion: '1.0.0'
+  ingestionVersion: '1.1.0'  // Updated for Neon integration
   
   // Truth blocks
   profileTruth: ProfileTruthBlock
@@ -226,6 +280,12 @@ export interface AuthoritativeGenerationTruthIngestion {
   
   // Overall audit
   signalAudit: SignalAuditSummary
+  
+  // [NEON-TRUTH-CONTRACT] Generation Source Map
+  sourceMap: GenerationSourceMap
+  
+  // [NEON-TRUTH-CONTRACT] Raw Neon package (for downstream inspection)
+  neonTruthPackage: NeonTruthPackage | null
   
   // Safe generation notes
   safeGenerationNotes: string[]
@@ -893,6 +953,251 @@ function buildSignalAuditSummary(
 }
 
 // ==========================================================================
+// HELPER: Build Generation Source Map
+// ==========================================================================
+
+function buildGenerationSourceMap(
+  neonPackage: NeonTruthPackage | null,
+  profileTruth: ProfileTruthBlock,
+  recoveryTruth: RecoveryTruthBlock,
+  adherenceTruth: AdherenceTruthBlock,
+  executionTruth: ExecutionTruthBlock,
+  doctrineTruth: DoctrineTruthBlock,
+  programContext: CurrentProgramContextBlock
+): GenerationSourceMap {
+  const materialSignals: MaterialSignalRecord[] = []
+  const dbSignalsRead: string[] = []
+  const callerOverrideSignals: string[] = []
+  const defaultedSignals: string[] = []
+  const missingSignals: string[] = []
+  const influenceSummary: string[] = []
+  
+  // Track profile signals
+  const profileFieldSources = profileTruth.fieldSources
+  for (const [key, source] of Object.entries(profileFieldSources)) {
+    if (source === 'authoritative_db') {
+      dbSignalsRead.push(key)
+    } else if (source === 'caller_override') {
+      callerOverrideSignals.push(key)
+    } else if (source === 'defaulted') {
+      defaultedSignals.push(key)
+    } else if (source === 'none') {
+      missingSignals.push(key)
+    }
+    
+    materialSignals.push({
+      key,
+      source: source as FieldSource,
+      quality: source === 'none' || source === 'defaulted' ? 'weak' : 'usable',
+      usedInGeneration: source !== 'none',
+      usedByWeekAdaptation: ['primaryGoal', 'selectedSkills', 'experienceLevel', 'jointCautions'].includes(key),
+      valueSummary: source === 'none' ? 'unavailable' : 'present',
+      reason: source === 'authoritative_db' ? 'Read from Neon' : source === 'caller_override' ? 'Provided by caller' : source,
+    })
+  }
+  
+  // Track Neon-specific signals
+  if (neonPackage?.dbAvailable) {
+    if (neonPackage.adherenceExecution.source === 'authoritative_db' && neonPackage.adherenceExecution.data) {
+      dbSignalsRead.push('completedSessionsLast7Days', 'skippedSessionsLast7Days', 'averageRPELast7Days')
+      influenceSummary.push(`Adherence: ${neonPackage.adherenceExecution.data.completedSessionsLast7Days} completed, ${neonPackage.adherenceExecution.data.skippedSessionsLast7Days} skipped (7d)`)
+    }
+    if (neonPackage.workoutHistory.source === 'authoritative_db' && neonPackage.workoutHistory.data) {
+      dbSignalsRead.push('totalWorkoutsLogged', 'recentWorkoutsLast7Days')
+      influenceSummary.push(`History: ${neonPackage.workoutHistory.data.totalWorkoutsLogged} total workouts`)
+    }
+    if (neonPackage.skillReadiness.source === 'authoritative_db' && neonPackage.skillReadiness.data) {
+      dbSignalsRead.push('skillReadiness')
+      influenceSummary.push(`Readiness: ${neonPackage.skillReadiness.data.skills.length} skills tracked`)
+    }
+    if (neonPackage.performanceEnvelopes.source === 'authoritative_db' && neonPackage.performanceEnvelopes.data?.hasUsableEnvelopes) {
+      dbSignalsRead.push('performanceEnvelopes')
+      influenceSummary.push(`Envelopes: ${neonPackage.performanceEnvelopes.data.totalEnvelopes} usable`)
+    }
+    if (neonPackage.constraintHistory.source === 'authoritative_db' && neonPackage.constraintHistory.data?.hasConstraints) {
+      dbSignalsRead.push('constraintHistory')
+      influenceSummary.push(`Constraints: ${neonPackage.constraintHistory.data.totalConstraintsRecorded} recorded`)
+    }
+  }
+  
+  // Build influence summary
+  if (doctrineTruth.influenceEligible) {
+    influenceSummary.push('Doctrine rules eligible for influence')
+  } else {
+    influenceSummary.push('Doctrine not available')
+  }
+  
+  if (programContext.isFirstGeneratedWeek) {
+    influenceSummary.push('First week - acclimation protection active')
+  }
+  
+  return {
+    overallQuality: neonPackage?.overallQuality || 'unavailable',
+    profileQuality: profileTruth.quality,
+    recoveryQuality: recoveryTruth.quality,
+    adherenceQuality: adherenceTruth.quality,
+    executionQuality: executionTruth.quality,
+    doctrineQuality: doctrineTruth.quality,
+    programContextQuality: programContext.quality,
+    materialSignals,
+    dbSignalsRead,
+    callerOverrideSignals,
+    defaultedSignals,
+    missingSignals,
+    influenceSummary,
+    doctrineEligibility: doctrineTruth.influenceEligible,
+    neonDbAvailable: neonPackage?.dbAvailable ?? false,
+    neonAvailableDomains: neonPackage?.availableDomains ?? [],
+    neonUnavailableDomains: neonPackage?.unavailableDomains ?? [],
+    generatedAt: new Date().toISOString(),
+  }
+}
+
+// ==========================================================================
+// HELPER: Enhance Truth Blocks with Neon Data
+// ==========================================================================
+
+function enhanceRecoveryTruthWithNeon(
+  baseTruth: RecoveryTruthBlock,
+  neonPackage: NeonTruthPackage | null
+): RecoveryTruthBlock {
+  if (!neonPackage?.adherenceExecution.data) {
+    return baseTruth
+  }
+  
+  const neonData = neonPackage.adherenceExecution.data
+  const evidence = [...baseTruth.evidence]
+  evidence.push('[NEON] Recovery derived from DB adherence/execution signals')
+  
+  // Enhance with real DB data
+  let recoveryRisk = baseTruth.recoveryRisk
+  let readinessState = baseTruth.readinessState
+  
+  if (neonData.sessionsWithHighFatigue > 3) {
+    recoveryRisk = 'high'
+    readinessState = 'recovery_focused'
+    evidence.push(`[NEON] ${neonData.sessionsWithHighFatigue} high-fatigue sessions detected`)
+  } else if (neonData.averageRPELast7Days && neonData.averageRPELast7Days > 8) {
+    recoveryRisk = 'high'
+    evidence.push(`[NEON] Avg RPE ${neonData.averageRPELast7Days.toFixed(1)} indicates high load`)
+  } else if (neonData.completionRateLast7Days && neonData.completionRateLast7Days < 0.5) {
+    recoveryRisk = 'moderate'
+    evidence.push(`[NEON] Low completion rate may indicate recovery issues`)
+  }
+  
+  // Improve quality if we have real data
+  const quality = neonData.totalSessionsLast7Days > 0 ? 'usable' : baseTruth.quality
+  
+  return {
+    ...baseTruth,
+    quality,
+    recoveryRisk,
+    readinessState,
+    evidence,
+  }
+}
+
+function enhanceAdherenceTruthWithNeon(
+  baseTruth: AdherenceTruthBlock,
+  neonPackage: NeonTruthPackage | null
+): AdherenceTruthBlock {
+  if (!neonPackage?.adherenceExecution.data) {
+    return baseTruth
+  }
+  
+  const neonData = neonPackage.adherenceExecution.data
+  const evidence = [...baseTruth.evidence]
+  evidence.push('[NEON] Adherence signals loaded from training_response_signals table')
+  
+  // Replace with real DB data
+  let consistencyStatus = baseTruth.consistencyStatus
+  if (neonData.completionRateLast7Days !== null) {
+    if (neonData.completionRateLast7Days >= 0.8) {
+      consistencyStatus = 'stable'
+    } else if (neonData.completionRateLast7Days >= 0.5) {
+      consistencyStatus = 'mixed'
+    } else {
+      consistencyStatus = 'disrupted'
+    }
+    evidence.push(`[NEON] Completion rate: ${(neonData.completionRateLast7Days * 100).toFixed(0)}%`)
+  }
+  
+  return {
+    ...baseTruth,
+    quality: neonData.totalSessionsLast7Days > 0 ? 'usable' : baseTruth.quality,
+    recentCompletedSessions: neonData.completedSessionsLast7Days,
+    recentMissedSessions: neonData.skippedSessionsLast7Days,
+    recentPartialSessions: neonData.partialSessionsLast7Days,
+    totalSessionsLast7Days: neonData.totalSessionsLast7Days,
+    totalSessionsLast14Days: neonData.totalSessionsLast14Days,
+    consistencyStatus,
+    adherenceDisruptionFlag: neonData.skippedSessionsLast7Days >= 2,
+    evidence,
+  }
+}
+
+function enhanceExecutionTruthWithNeon(
+  baseTruth: ExecutionTruthBlock,
+  neonPackage: NeonTruthPackage | null
+): ExecutionTruthBlock {
+  const workoutData = neonPackage?.workoutHistory.data
+  const adherenceData = neonPackage?.adherenceExecution.data
+  
+  if (!workoutData && !adherenceData) {
+    return baseTruth
+  }
+  
+  const evidence = [...baseTruth.evidence]
+  evidence.push('[NEON] Execution signals loaded from workout_logs and training_response_signals')
+  
+  const recentSessionCount = workoutData?.recentWorkoutsLast7Days ?? adherenceData?.totalSessionsLast7Days ?? baseTruth.recentSessionCount
+  const averageRecentRPE = adherenceData?.averageRPELast7Days ?? baseTruth.averageRecentRPE
+  const recentCompletionRate = adherenceData?.completionRateLast7Days ?? baseTruth.recentCompletionRate
+  
+  let usablePerformanceSignals = 0
+  if (recentSessionCount > 0) usablePerformanceSignals++
+  if (averageRecentRPE !== null) usablePerformanceSignals++
+  if (recentCompletionRate !== null) usablePerformanceSignals++
+  if (workoutData?.totalWorkoutsLogged && workoutData.totalWorkoutsLogged > 0) usablePerformanceSignals++
+  
+  if (workoutData) {
+    evidence.push(`[NEON] ${workoutData.totalWorkoutsLogged} total workouts, ${workoutData.recentWorkoutsLast7Days} in last 7 days`)
+  }
+  
+  return {
+    ...baseTruth,
+    quality: computeQuality(usablePerformanceSignals, 4),
+    recentSessionCount,
+    usablePerformanceSignals,
+    averageRecentRPE,
+    recentCompletionRate,
+    evidence,
+  }
+}
+
+function enhanceProgramContextWithNeon(
+  baseTruth: CurrentProgramContextBlock,
+  neonPackage: NeonTruthPackage | null
+): CurrentProgramContextBlock {
+  if (!neonPackage?.programContext.data) {
+    return baseTruth
+  }
+  
+  const neonData = neonPackage.programContext.data
+  const evidence = [...baseTruth.evidence]
+  evidence.push('[NEON] Program context loaded from programs table')
+  evidence.push(`[NEON] ${neonData.totalProgramsCreated} total programs created`)
+  
+  return {
+    ...baseTruth,
+    quality: 'strong',
+    existingProgramId: baseTruth.existingProgramId || neonData.activeProgramId,
+    activeProgramExists: neonData.hasActiveProgram || baseTruth.activeProgramExists,
+    evidence,
+  }
+}
+
+// ==========================================================================
 // MAIN: Build Authoritative Generation Truth Ingestion
 // ==========================================================================
 
@@ -910,17 +1215,65 @@ export async function buildAuthoritativeGenerationTruthIngestion(
     hasTrainingFeedback: !!input.trainingFeedback,
   })
   
-  // Build synchronous truth blocks
-  const profileTruth = buildProfileTruthBlock(input.callerCanonicalProfile, input.callerBuilderInputs)
-  const recoveryTruth = buildRecoveryTruthBlock(input.trainingFeedback)
-  const adherenceTruth = buildAdherenceTruthBlock(input.trainingFeedback)
-  const executionTruth = buildExecutionTruthBlock(input.trainingFeedback)
-  const currentProgramContext = buildCurrentProgramContextBlock(input)
+  // [NEON-TRUTH-CONTRACT] STEP 1: Fetch real truth from Neon FIRST
+  let neonTruthPackage: NeonTruthPackage | null = null
+  try {
+    neonTruthPackage = await fetchNeonTruthPackage(input.dbUserId)
+    console.log('[authoritative-truth-ingestion-neon] Neon truth fetched', {
+      dbAvailable: neonTruthPackage.dbAvailable,
+      overallQuality: neonTruthPackage.overallQuality,
+      availableDomains: neonTruthPackage.availableDomains,
+      unavailableDomains: neonTruthPackage.unavailableDomains,
+    })
+  } catch (error) {
+    console.log('[authoritative-truth-ingestion-neon] Neon fetch failed', {
+      error: String(error),
+    })
+  }
   
-  // Build async truth block (doctrine requires DB access)
+  // STEP 2: Build base truth blocks from caller-provided data
+  const baseProfileTruth = buildProfileTruthBlock(input.callerCanonicalProfile, input.callerBuilderInputs)
+  const baseRecoveryTruth = buildRecoveryTruthBlock(input.trainingFeedback)
+  const baseAdherenceTruth = buildAdherenceTruthBlock(input.trainingFeedback)
+  const baseExecutionTruth = buildExecutionTruthBlock(input.trainingFeedback)
+  const baseProgramContext = buildCurrentProgramContextBlock(input)
+  
+  // STEP 3: Enhance truth blocks with Neon data where available
+  const recoveryTruth = enhanceRecoveryTruthWithNeon(baseRecoveryTruth, neonTruthPackage)
+  const adherenceTruth = enhanceAdherenceTruthWithNeon(baseAdherenceTruth, neonTruthPackage)
+  const executionTruth = enhanceExecutionTruthWithNeon(baseExecutionTruth, neonTruthPackage)
+  const currentProgramContext = enhanceProgramContextWithNeon(baseProgramContext, neonTruthPackage)
+  
+  // STEP 4: Enhance profile truth with Neon data if DB profile is stronger
+  let profileTruth = baseProfileTruth
+  if (neonTruthPackage?.profile.source === 'authoritative_db' && neonTruthPackage.profile.data) {
+    const neonProfile = neonTruthPackage.profile.data
+    const evidence = [...baseProfileTruth.evidence, '[NEON] Profile data loaded from athlete_profiles table']
+    
+    // Update field sources to reflect DB origin
+    const fieldSources = { ...baseProfileTruth.fieldSources }
+    if (neonProfile.primaryGoal) fieldSources.primaryGoal = 'authoritative_db'
+    if (neonProfile.selectedSkills.length > 0) fieldSources.selectedSkills = 'authoritative_db'
+    if (neonProfile.scheduleMode) fieldSources.scheduleMode = 'authoritative_db'
+    if (neonProfile.trainingDaysPerWeek) fieldSources.trainingDaysPerWeek = 'authoritative_db'
+    if (neonProfile.experienceLevel) fieldSources.experienceLevel = 'authoritative_db'
+    if (neonProfile.equipment.length > 0) fieldSources.equipment = 'authoritative_db'
+    if (neonProfile.sessionLengthMinutes) fieldSources.sessionLengthMinutes = 'authoritative_db'
+    if (neonProfile.jointCautions.length > 0) fieldSources.jointCautions = 'authoritative_db'
+    if (neonProfile.trainingStyle) fieldSources.trainingPathType = 'authoritative_db'
+    
+    profileTruth = {
+      ...baseProfileTruth,
+      quality: neonTruthPackage.profile.quality === 'strong' ? 'strong' : baseProfileTruth.quality,
+      fieldSources,
+      evidence,
+    }
+  }
+  
+  // STEP 5: Build async doctrine truth block
   const doctrineTruth = await buildDoctrineTruthBlock()
   
-  // Build audit summary
+  // STEP 6: Build audit summary
   const signalAudit = buildSignalAuditSummary(
     profileTruth,
     recoveryTruth,
@@ -930,8 +1283,25 @@ export async function buildAuthoritativeGenerationTruthIngestion(
     currentProgramContext
   )
   
-  // Build safe generation notes
+  // STEP 7: Build generation source map
+  const sourceMap = buildGenerationSourceMap(
+    neonTruthPackage,
+    profileTruth,
+    recoveryTruth,
+    adherenceTruth,
+    executionTruth,
+    doctrineTruth,
+    currentProgramContext
+  )
+  
+  // STEP 8: Build safe generation notes
   const safeGenerationNotes: string[] = []
+  
+  if (neonTruthPackage?.dbAvailable) {
+    safeGenerationNotes.push(`Neon truth: ${neonTruthPackage.availableDomains.length}/7 domains loaded`)
+  } else {
+    safeGenerationNotes.push('Neon DB unavailable - using caller-provided truth only')
+  }
   
   if (signalAudit.overallQuality === 'weak' || signalAudit.overallQuality === 'missing') {
     safeGenerationNotes.push('Low signal quality - generation will use conservative defaults')
@@ -956,16 +1326,20 @@ export async function buildAuthoritativeGenerationTruthIngestion(
   
   console.log('[authoritative-truth-ingestion] Ingestion complete', {
     elapsedMs,
+    neonDbAvailable: neonTruthPackage?.dbAvailable,
+    neonOverallQuality: neonTruthPackage?.overallQuality,
     overallQuality: signalAudit.overallQuality,
     domainQualities: signalAudit.domainQualities,
     strongDomains: signalAudit.strongDomains,
     missingDomains: signalAudit.missingDomains,
+    dbSignalsRead: sourceMap.dbSignalsRead.length,
+    callerOverrideSignals: sourceMap.callerOverrideSignals.length,
     safeGenerationNotes: safeGenerationNotes.slice(0, 3),
   })
   
   return {
     ingestedAt: new Date().toISOString(),
-    ingestionVersion: '1.0.0',
+    ingestionVersion: '1.1.0',
     profileTruth,
     recoveryTruth,
     adherenceTruth,
@@ -973,6 +1347,8 @@ export async function buildAuthoritativeGenerationTruthIngestion(
     doctrineTruth,
     currentProgramContext,
     signalAudit,
+    sourceMap,
+    neonTruthPackage,
     safeGenerationNotes,
   }
 }
@@ -1000,5 +1376,45 @@ export function getIngestionAuditLog(ingestion: AuthoritativeGenerationTruthInge
     doctrineInfluenceEligible: ingestion.doctrineTruth.influenceEligible,
     isFirstWeek: ingestion.currentProgramContext.isFirstGeneratedWeek,
     safeGenerationNotes: ingestion.safeGenerationNotes,
+    // [NEON-TRUTH-CONTRACT] Source map audit
+    neonDbAvailable: ingestion.sourceMap.neonDbAvailable,
+    neonAvailableDomains: ingestion.sourceMap.neonAvailableDomains,
+    dbSignalsRead: ingestion.sourceMap.dbSignalsRead,
+    callerOverrideSignals: ingestion.sourceMap.callerOverrideSignals,
+    defaultedSignals: ingestion.sourceMap.defaultedSignals,
+    missingSignals: ingestion.sourceMap.missingSignals,
+    influenceSummary: ingestion.sourceMap.influenceSummary,
+  }
+}
+
+/**
+ * Get a compact source summary for UI display
+ */
+export function getSourceSummaryForDisplay(ingestion: AuthoritativeGenerationTruthIngestion): {
+  label: string
+  quality: SignalQuality
+  breakdown: string
+  availableCount: number
+  totalCount: number
+  influenceSummary: string[]
+} {
+  const sourceMap = ingestion.sourceMap
+  const neonSummary = ingestion.neonTruthPackage ? getNeonTruthSummary(ingestion.neonTruthPackage) : null
+  
+  const qualityLabels: Record<SignalQuality, string> = {
+    strong: 'Comprehensive Data',
+    usable: 'Good Data Coverage',
+    partial: 'Partial Data',
+    weak: 'Limited Data',
+    missing: 'Minimal Data',
+  }
+  
+  return {
+    label: qualityLabels[sourceMap.overallQuality] || 'Unknown',
+    quality: sourceMap.overallQuality,
+    breakdown: neonSummary?.breakdown || `${sourceMap.dbSignalsRead.length} DB signals`,
+    availableCount: sourceMap.neonAvailableDomains.length,
+    totalCount: 7,
+    influenceSummary: sourceMap.influenceSummary.slice(0, 4),
   }
 }

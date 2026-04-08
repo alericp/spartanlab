@@ -155,6 +155,32 @@ export type SessionCompositionReasonCode =
 // SESSION COMPOSITION CONTEXT
 // =============================================================================
 
+/**
+ * [WEEKLY-COMPOSITION-UPGRADE] Week-level load strategy from WeekAdaptationDecision
+ * This drives session-level volume/intensity/density/finisher decisions
+ */
+export interface WeeklyLoadStrategy {
+  volumeBias: 'reduced' | 'normal' | 'elevated'
+  intensityBias: 'reduced' | 'normal' | 'elevated'
+  densityBias: 'reduced' | 'normal' | 'elevated'
+  finisherBias: 'limited' | 'normal' | 'expanded'
+  straightArmExposureBias: 'protected' | 'normal' | 'expanded'
+  connectiveTissueBias: 'protected' | 'normal'
+  restSpacingBias: 'increased' | 'normal'
+}
+
+/**
+ * [WEEKLY-COMPOSITION-UPGRADE] First-week protection settings
+ */
+export interface FirstWeekProtection {
+  active: boolean
+  reduceSets: boolean
+  reduceRPE: boolean
+  suppressFinishers: boolean
+  protectHighStressPatterns: boolean
+  reasons: string[]
+}
+
 export interface SessionCompositionContext {
   // Day structure
   day: DayStructure
@@ -194,6 +220,17 @@ export interface SessionCompositionContext {
   
   // Recent history
   recentSessionShapes?: string[]
+  
+  // ==========================================================================
+  // [WEEKLY-COMPOSITION-UPGRADE] Week-level adaptation decisions
+  // These drive session-level dosage/complexity decisions
+  // ==========================================================================
+  weeklyLoadStrategy?: WeeklyLoadStrategy | null
+  firstWeekProtection?: FirstWeekProtection | null
+  
+  // Week-level complexity context
+  weeklyComplexity?: 'low' | 'moderate' | 'high'
+  adaptationPhase?: 'initial_acclimation' | 'normal_progression' | 'recovery_constrained' | 'rebuild_after_disruption'
 }
 
 // =============================================================================
@@ -300,7 +337,21 @@ const COMPLEXITY_BUDGETS: Record<'minimal' | 'standard' | 'comprehensive', Sessi
 // =============================================================================
 
 /**
+ * [WEEKLY-COMPOSITION-UPGRADE] Week-level adaptation input for session composition
+ * This connects the WeekAdaptationDecision to session-level decisions
+ */
+export interface WeekAdaptationInput {
+  loadStrategy?: WeeklyLoadStrategy | null
+  firstWeekProtection?: FirstWeekProtection | null
+  weeklyComplexity?: 'low' | 'moderate' | 'high'
+  adaptationPhase?: 'initial_acclimation' | 'normal_progression' | 'recovery_constrained' | 'rebuild_after_disruption'
+}
+
+/**
  * Build the canonical session composition context from available inputs
+ * 
+ * [WEEKLY-COMPOSITION-UPGRADE] Now accepts weekAdaptation parameter to connect
+ * week-level decisions to session composition
  */
 export function buildSessionCompositionContext(
   day: DayStructure,
@@ -318,7 +369,8 @@ export function buildSessionCompositionContext(
   sessionArchitectureTruth: SessionArchitectureTruthContract | null,
   doctrineRuntimeContract: DoctrineRuntimeContract | null,
   fatigueState?: 'fresh' | 'moderate' | 'accumulated' | 'needs_deload',
-  recentSessionShapes?: string[]
+  recentSessionShapes?: string[],
+  weekAdaptation?: WeekAdaptationInput | null
 ): SessionCompositionContext {
   // Determine training style from equipment and profile
   const hasWeightedEquipment = equipment.some(eq => 
@@ -330,12 +382,36 @@ export function buildSessionCompositionContext(
     !hasWeightedEquipment ? 'pure_skill' :
     equipment.length <= 4 ? 'hybrid' : 'weighted_integrated'
   
-  // Determine recovery capacity from experience and fatigue
-  const recoveryCapacity: 'high' | 'moderate' | 'limited' = 
+  // [WEEKLY-COMPOSITION-UPGRADE] Recovery capacity now also considers week-level protection
+  const isFirstWeekProtected = weekAdaptation?.firstWeekProtection?.active === true
+  const isRecoveryConstrained = weekAdaptation?.adaptationPhase === 'recovery_constrained'
+  
+  let recoveryCapacity: 'high' | 'moderate' | 'limited' = 
     fatigueState === 'needs_deload' ? 'limited' :
     fatigueState === 'accumulated' ? 'limited' :
     experienceLevel === 'beginner' ? 'limited' :
     experienceLevel === 'advanced' ? 'high' : 'moderate'
+  
+  // Apply week-level constraints to recovery capacity
+  if (isFirstWeekProtected || isRecoveryConstrained) {
+    recoveryCapacity = 'limited'
+  }
+  
+  // [WEEKLY-COMPOSITION-UPGRADE] Log week adaptation wiring
+  if (weekAdaptation) {
+    console.log('[session-composition-week-adaptation-wired]', {
+      sessionIndex,
+      dayFocus: day.focus,
+      hasLoadStrategy: !!weekAdaptation.loadStrategy,
+      hasFirstWeekProtection: !!weekAdaptation.firstWeekProtection,
+      firstWeekActive: weekAdaptation.firstWeekProtection?.active,
+      adaptationPhase: weekAdaptation.adaptationPhase,
+      weeklyComplexity: weekAdaptation.weeklyComplexity,
+      volumeBias: weekAdaptation.loadStrategy?.volumeBias,
+      finisherBias: weekAdaptation.loadStrategy?.finisherBias,
+      recoveryCapacityResult: recoveryCapacity,
+    })
+  }
   
   return {
     day,
@@ -356,15 +432,52 @@ export function buildSessionCompositionContext(
     sessionArchitectureTruth,
     doctrineRuntimeContract,
     recentSessionShapes,
+    // [WEEKLY-COMPOSITION-UPGRADE] Pass through week-level decisions
+    weeklyLoadStrategy: weekAdaptation?.loadStrategy || null,
+    firstWeekProtection: weekAdaptation?.firstWeekProtection || null,
+    weeklyComplexity: weekAdaptation?.weeklyComplexity,
+    adaptationPhase: weekAdaptation?.adaptationPhase,
   }
 }
 
 /**
  * Determine session complexity level based on context
+ * 
+ * [WEEKLY-COMPOSITION-UPGRADE] Now respects week-level load strategy and first-week protection
  */
 export function determineSessionComplexity(
   ctx: SessionCompositionContext
 ): 'minimal' | 'standard' | 'comprehensive' {
+  // ==========================================================================
+  // [WEEKLY-COMPOSITION-UPGRADE] First-week protection forces simpler sessions
+  // ==========================================================================
+  if (ctx.firstWeekProtection?.active) {
+    console.log('[session-complexity-first-week-governor]', {
+      sessionIndex: ctx.sessionIndex,
+      dayFocus: ctx.day.focus,
+      firstWeekActive: true,
+      reasons: ctx.firstWeekProtection.reasons.slice(0, 2),
+      verdict: 'COMPLEXITY_CAPPED_TO_MINIMAL_OR_STANDARD',
+    })
+    // First week caps at standard complexity, even for long sessions
+    if (ctx.sessionMinutes <= 45) return 'minimal'
+    return 'standard'
+  }
+  
+  // ==========================================================================
+  // [WEEKLY-COMPOSITION-UPGRADE] Volume bias affects complexity ceiling
+  // ==========================================================================
+  if (ctx.weeklyLoadStrategy?.volumeBias === 'reduced') {
+    // Reduced volume bias caps complexity one level down
+    if (ctx.sessionMinutes >= 75 && ctx.recoveryCapacity === 'high') {
+      return 'standard' // Would have been comprehensive
+    }
+    if (ctx.sessionMinutes >= 45) {
+      return 'minimal' // Would have been standard
+    }
+    return 'minimal'
+  }
+  
   // Recovery-limited = minimal complexity
   if (ctx.fatigueState === 'needs_deload' || ctx.recoveryCapacity === 'limited') {
     return 'minimal'
@@ -378,6 +491,14 @@ export function determineSessionComplexity(
   // Beginner = standard max
   if (ctx.experienceLevel === 'beginner') {
     return ctx.sessionMinutes >= 60 ? 'standard' : 'minimal'
+  }
+  
+  // ==========================================================================
+  // [WEEKLY-COMPOSITION-UPGRADE] Elevated volume bias can unlock comprehensive
+  // ==========================================================================
+  if (ctx.weeklyLoadStrategy?.volumeBias === 'elevated' && 
+      ctx.sessionMinutes >= 60 && ctx.recoveryCapacity !== 'limited') {
+    return 'comprehensive'
   }
   
   // Long sessions with good recovery = comprehensive
@@ -395,6 +516,8 @@ export function determineSessionComplexity(
 
 /**
  * Determine method eligibility based on context
+ * 
+ * [WEEKLY-COMPOSITION-UPGRADE] Now respects week-level load strategy biases
  */
 export function determineMethodEligibility(
   ctx: SessionCompositionContext
@@ -412,15 +535,49 @@ export function determineMethodEligibility(
   let density: MethodEligibility = 'discouraged'
   let finisher: MethodEligibility = 'discouraged'
   
-  // Check doctrine contract for method permissions
-  const doctrineMethods = ctx.doctrineRuntimeContract?.methodDoctrine
-  if (doctrineMethods) {
-    if (doctrineMethods.supersetsAllowed) supersets = 'allowed'
-    if (doctrineMethods.circuitsAllowed) circuits = 'allowed'
-    if (doctrineMethods.densityAllowed) density = 'allowed'
+  // ==========================================================================
+  // [WEEKLY-COMPOSITION-UPGRADE] First-week protection blocks high-stress methods
+  // ==========================================================================
+  if (ctx.firstWeekProtection?.active) {
+    if (ctx.firstWeekProtection.suppressFinishers) {
+      finisher = 'blocked'
+      reasons.push({ method: 'finisher', status: 'blocked', reason: 'first_week_suppression' })
+    }
+    if (ctx.firstWeekProtection.protectHighStressPatterns) {
+      circuits = 'blocked'
+      density = 'blocked'
+      reasons.push({ method: 'circuits', status: 'blocked', reason: 'first_week_high_stress_protection' })
+      reasons.push({ method: 'density', status: 'blocked', reason: 'first_week_high_stress_protection' })
+    }
   }
   
-  // Upgrade to "earned" based on context
+  // ==========================================================================
+  // [WEEKLY-COMPOSITION-UPGRADE] Week-level finisher bias
+  // ==========================================================================
+  const finisherBias = ctx.weeklyLoadStrategy?.finisherBias
+  if (finisherBias === 'limited' && finisher !== 'blocked') {
+    finisher = 'blocked'
+    reasons.push({ method: 'finisher', status: 'blocked', reason: 'week_finisher_bias_limited' })
+  }
+  
+  // ==========================================================================
+  // [WEEKLY-COMPOSITION-UPGRADE] Week-level density bias
+  // ==========================================================================
+  const densityBias = ctx.weeklyLoadStrategy?.densityBias
+  if (densityBias === 'reduced' && density !== 'blocked') {
+    density = 'discouraged'
+    reasons.push({ method: 'density', status: 'discouraged', reason: 'week_density_bias_reduced' })
+  }
+  
+  // Check doctrine contract for method permissions (if not already blocked)
+  const doctrineMethods = ctx.doctrineRuntimeContract?.methodDoctrine
+  if (doctrineMethods) {
+    if (doctrineMethods.supersetsAllowed && supersets !== 'blocked') supersets = 'allowed'
+    if (doctrineMethods.circuitsAllowed && circuits !== 'blocked') circuits = 'allowed'
+    if (doctrineMethods.densityAllowed && density !== 'blocked') density = 'allowed'
+  }
+  
+  // Upgrade to "earned" based on context (only if not already blocked)
   
   // Supersets: earned if moderate+ recovery, standard+ complexity, 45+ min session
   if (supersets !== 'blocked' && ctx.recoveryCapacity !== 'limited' && 
@@ -437,7 +594,7 @@ export function determineMethodEligibility(
   }
   
   // Density: earned if hybrid/weighted style, moderate+ recovery, 45+ min
-  if (density !== 'blocked' && 
+  if (density !== 'blocked' && density !== 'discouraged' &&
       (ctx.trainingStyle === 'hybrid' || ctx.trainingStyle === 'weighted_integrated') &&
       ctx.recoveryCapacity !== 'limited' && ctx.sessionMinutes >= 45) {
     density = 'earned'
@@ -445,10 +602,17 @@ export function determineMethodEligibility(
   }
   
   // Finisher: earned if standard+ complexity, fresh/moderate fatigue, 60+ min
+  // [WEEKLY-COMPOSITION-UPGRADE] Also check finisher bias allows it
   if (finisher !== 'blocked' && ctx.fatigueState !== 'needs_deload' && 
       ctx.fatigueState !== 'accumulated' && ctx.sessionMinutes >= 60) {
-    finisher = ctx.experienceLevel !== 'beginner' ? 'earned' : 'allowed'
-    reasons.push({ method: 'finisher', status: finisher, reason: 'recovery_allows_finisher' })
+    // Elevated finisher bias makes it easier to earn
+    if (finisherBias === 'expanded') {
+      finisher = 'earned'
+      reasons.push({ method: 'finisher', status: 'earned', reason: 'week_finisher_bias_expanded' })
+    } else {
+      finisher = ctx.experienceLevel !== 'beginner' ? 'earned' : 'allowed'
+      reasons.push({ method: 'finisher', status: finisher, reason: 'recovery_allows_finisher' })
+    }
   }
   
   // Downgrade all to blocked if recovery is severely limited
@@ -475,6 +639,10 @@ export function determineMethodEligibility(
     fatigueState: ctx.fatigueState,
     sessionMinutes: ctx.sessionMinutes,
     experienceLevel: ctx.experienceLevel,
+    // [WEEKLY-COMPOSITION-UPGRADE] Log week-level bias influence
+    weeklyFinisherBias: finisherBias,
+    weeklyDensityBias: densityBias,
+    firstWeekActive: ctx.firstWeekProtection?.active,
     eligibility: { supersets, circuits, density, finisher },
     reasons,
   })
@@ -874,6 +1042,45 @@ export function buildSessionCompositionBlueprint(
       description: `Session structure respects joint cautions: ${ctx.jointCautions.slice(0, 2).join(', ')}`,
       affectedBlocks: ['prehab_joint_care', 'accessory_targeted'],
       sourceField: 'jointCautions',
+    })
+  }
+  
+  // ==========================================================================
+  // [WEEKLY-COMPOSITION-UPGRADE] Week-level adaptation reasons
+  // ==========================================================================
+  if (ctx.firstWeekProtection?.active) {
+    compositionReasons.push({
+      code: 'recovery_limited_structure',
+      description: `First-week acclimation: ${ctx.firstWeekProtection.reasons.slice(0, 2).join(', ')}`,
+      affectedBlocks: ['method_density', 'finisher_conditioning', 'accessory_targeted'],
+      sourceField: 'firstWeekProtection',
+    })
+  }
+  
+  if (ctx.weeklyLoadStrategy?.volumeBias === 'reduced') {
+    compositionReasons.push({
+      code: 'recovery_limited_structure',
+      description: 'Reduced volume bias for recovery or acclimation',
+      affectedBlocks: ['accessory_targeted', 'method_density', 'finisher_conditioning'],
+      sourceField: 'weeklyLoadStrategy.volumeBias',
+    })
+  }
+  
+  if (ctx.weeklyLoadStrategy?.finisherBias === 'limited') {
+    compositionReasons.push({
+      code: 'finisher_omitted_for_quality',
+      description: 'Finishers suppressed for week-level recovery/quality',
+      affectedBlocks: ['finisher_conditioning', 'method_density'],
+      sourceField: 'weeklyLoadStrategy.finisherBias',
+    })
+  }
+  
+  if (ctx.adaptationPhase === 'initial_acclimation') {
+    compositionReasons.push({
+      code: 'recovery_limited_structure',
+      description: 'Session complexity capped for initial program acclimation',
+      affectedBlocks: ['method_density', 'method_superset', 'finisher_conditioning'],
+      sourceField: 'adaptationPhase',
     })
   }
   

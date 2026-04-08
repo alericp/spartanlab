@@ -135,6 +135,7 @@ import {
 } from './session-architecture-truth'
 
 // [SESSION-COMPOSITION-INTELLIGENCE] Canonical session structure decisions
+// [WEEKLY-COMPOSITION-UPGRADE] Added WeekAdaptationInput type for week-level decision wiring
 import {
   buildSessionCompositionContext,
   buildSessionCompositionBlueprint,
@@ -143,6 +144,7 @@ import {
   type SessionCompositionBlueprint,
   type SessionCompositionContext,
   type SessionBlockRole,
+  type WeekAdaptationInput,
 } from './program-generation/session-composition-intelligence'
 // [exercise-trace] TASK 8: Import comparison utilities for build-to-build traceability
 import {
@@ -805,6 +807,12 @@ type AdaptiveSessionContext = {
   sessionCompositionBlueprint?: SessionCompositionBlueprint | null
   // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] Canonical session spine for session type determination
   canonicalSessionSpine?: CanonicalSessionSpine | null
+  // ==========================================================================
+  // [WEEKLY-COMPOSITION-UPGRADE] Week-level adaptation decisions
+  // These are passed through from the WeekAdaptationDecision contract
+  // to enable session-level enforcement of week-level load strategy
+  // ==========================================================================
+  weekAdaptation?: WeekAdaptationInput | null
   }
 
 export interface AdaptiveProgramInputs {
@@ -8319,7 +8327,34 @@ async function generateAdaptiveProgramImpl(
       fatigueDecision?.decision === 'REDUCE_INTENSITY' ? 'accumulated' :
       fatigueDecision?.decision === 'REDUCE_VOLUME' ? 'moderate' : 'fresh'
     
+    // ==========================================================================
+    // [WEEKLY-COMPOSITION-UPGRADE] Build week adaptation input from decision
+    // This connects week-level load strategy and first-week protection to session
+    // ==========================================================================
+    const weekAdaptationInputForSession: WeekAdaptationInput = {
+      loadStrategy: weekAdaptationDecision ? {
+        volumeBias: weekAdaptationDecision.loadStrategy.volumeBias,
+        intensityBias: weekAdaptationDecision.loadStrategy.intensityBias,
+        densityBias: weekAdaptationDecision.loadStrategy.densityBias,
+        finisherBias: weekAdaptationDecision.loadStrategy.finisherBias,
+        straightArmExposureBias: weekAdaptationDecision.loadStrategy.straightArmExposureBias,
+        connectiveTissueBias: weekAdaptationDecision.loadStrategy.connectiveTissueBias,
+        restSpacingBias: weekAdaptationDecision.loadStrategy.restSpacingBias,
+      } : null,
+      firstWeekProtection: weekAdaptationDecision?.firstWeekGovernor ? {
+        active: weekAdaptationDecision.firstWeekGovernor.active,
+        reduceSets: weekAdaptationDecision.firstWeekGovernor.reduceSets,
+        reduceRPE: weekAdaptationDecision.firstWeekGovernor.reduceRPE,
+        suppressFinishers: weekAdaptationDecision.firstWeekGovernor.suppressFinishers,
+        protectHighStressPatterns: weekAdaptationDecision.firstWeekGovernor.protectHighStressPatterns,
+        reasons: weekAdaptationDecision.firstWeekGovernor.reasons,
+      } : null,
+      weeklyComplexity: weekAdaptationDecision?.complexityContext?.onboardingComplexity || undefined,
+      adaptationPhase: weekAdaptationDecision?.phase || undefined,
+    }
+    
     // Build composition context with all canonical truth
+    // [WEEKLY-COMPOSITION-UPGRADE] Now includes week-level adaptation decisions
     const compositionContext = buildSessionCompositionContext(
       day,
       index,
@@ -8335,7 +8370,9 @@ async function generateAdaptiveProgramImpl(
       multiSkillMaterialityContract?.currentWorkingProgressions || null,
       sessionArchitectureTruth || null,
       doctrineRuntimeContract || null,
-      fatigueStateForComposition
+      fatigueStateForComposition,
+      undefined, // recentSessionShapes
+      weekAdaptationInputForSession // [WEEKLY-COMPOSITION-UPGRADE] Pass week-level decisions
     )
     
     // Build the authoritative composition blueprint
@@ -8384,6 +8421,8 @@ async function generateAdaptiveProgramImpl(
   sessionCompositionBlueprint,
   // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] Pass canonical session spine
   canonicalSessionSpine,
+  // [WEEKLY-COMPOSITION-UPGRADE] Pass week-level adaptation decisions for session-level enforcement
+  weekAdaptation: weekAdaptationInputForSession,
   }
     
     const session = generateAdaptiveSession(
@@ -17285,7 +17324,39 @@ function generateAdaptiveSession(
   sessionCompositionBlueprint,
   // [SESSION-ARCHITECTURE-TRUTH-EXPRESSION] Extract canonical session spine
   canonicalSessionSpine,
+  // [WEEKLY-COMPOSITION-UPGRADE] Extract week-level adaptation decisions
+  weekAdaptation,
   } = context
+  
+  // ==========================================================================
+  // [WEEKLY-COMPOSITION-UPGRADE] Log week adaptation decisions for this session
+  // ==========================================================================
+  if (weekAdaptation) {
+    console.log('[session-assembly-week-adaptation-decision]', {
+      sessionIndex,
+      dayFocus: day.focus,
+      adaptationPhase: weekAdaptation.adaptationPhase,
+      weeklyComplexity: weekAdaptation.weeklyComplexity,
+      loadStrategy: {
+        volumeBias: weekAdaptation.loadStrategy?.volumeBias,
+        intensityBias: weekAdaptation.loadStrategy?.intensityBias,
+        densityBias: weekAdaptation.loadStrategy?.densityBias,
+        finisherBias: weekAdaptation.loadStrategy?.finisherBias,
+        straightArmBias: weekAdaptation.loadStrategy?.straightArmExposureBias,
+      },
+      firstWeekProtection: weekAdaptation.firstWeekProtection ? {
+        active: weekAdaptation.firstWeekProtection.active,
+        reduceSets: weekAdaptation.firstWeekProtection.reduceSets,
+        suppressFinishers: weekAdaptation.firstWeekProtection.suppressFinishers,
+        reasons: weekAdaptation.firstWeekProtection.reasons.slice(0, 2),
+      } : null,
+      verdict: weekAdaptation.firstWeekProtection?.active 
+        ? 'FIRST_WEEK_GOVERNOR_ACTIVE' 
+        : weekAdaptation.loadStrategy?.volumeBias === 'reduced' 
+          ? 'REDUCED_VOLUME_BIAS_ACTIVE'
+          : 'NORMAL_LOAD_STRATEGY',
+    })
+  }
   
   // [DOCTRINE RUNTIME CONTRACT] Log doctrine influence for this session
   if (doctrineRuntimeContract && doctrineRuntimeContract.available) {
@@ -17766,7 +17837,8 @@ function generateAdaptiveSession(
   //   3. rescuedMain            → rescue applied if safeMain was empty
   //   4. adaptedMain.adapted    → equipment filtering applied
   //   5. effectiveMainForSession → recovery applied if adaptation zeroed out
-  //   6. canonicalFinalMain     → THE ONE TRUE SOURCE for all downstream usage
+  //   6. weekAdaptationAdjusted  → [WEEKLY-COMPOSITION-UPGRADE] Set reduction applied
+  //   7. canonicalFinalMain     → THE ONE TRUE SOURCE for all downstream usage
   //
   // PREVIOUS BUG: Line used `rescuedMain` in non-recovery path, which is PRE-adaptation.
   // This threw away equipment-adapted exercises in the normal success path.
@@ -17775,7 +17847,62 @@ function generateAdaptiveSession(
   //   - adaptedMain.adapted in normal path
   //   - recovered exercises if recovery was triggered
   // ==========================================================================
-  const canonicalFinalMain = effectiveMainForSession
+  
+  // ==========================================================================
+  // [WEEKLY-COMPOSITION-UPGRADE] Apply week-level volume/set reduction
+  // This is where first-week protection and reduced volume bias actually reduce sets
+  // ==========================================================================
+  let weekAdaptationAdjusted = effectiveMainForSession
+  let setsReducedByWeekAdaptation = false
+  let weekAdaptationSetReductionReason = 'none'
+  
+  if (weekAdaptation) {
+    const shouldReduceSets = 
+      weekAdaptation.firstWeekProtection?.active && weekAdaptation.firstWeekProtection?.reduceSets ||
+      weekAdaptation.loadStrategy?.volumeBias === 'reduced'
+    
+    if (shouldReduceSets) {
+      const reductionFactor = weekAdaptation.firstWeekProtection?.active ? 0.75 : 0.85 // 25% reduction for first week, 15% for reduced bias
+      
+      weekAdaptationAdjusted = effectiveMainForSession.map(ex => {
+        const currentSets = typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets)) || 3
+        const reducedSets = Math.max(2, Math.round(currentSets * reductionFactor)) // Never below 2 sets
+        
+        if (reducedSets !== currentSets) {
+          setsReducedByWeekAdaptation = true
+        }
+        
+        return {
+          ...ex,
+          sets: reducedSets,
+          // Add note about reduction if significant
+          note: reducedSets < currentSets 
+            ? `${ex.note || ''} [Volume adjusted for ${weekAdaptation.adaptationPhase === 'initial_acclimation' ? 'first-week acclimation' : 'recovery'}]`.trim()
+            : ex.note,
+        }
+      })
+      
+      weekAdaptationSetReductionReason = weekAdaptation.firstWeekProtection?.active 
+        ? 'first_week_governor_reduce_sets' 
+        : 'reduced_volume_bias'
+      
+      console.log('[WEEKLY-COMPOSITION-UPGRADE-SET-REDUCTION]', {
+        sessionIndex,
+        dayFocus: day.focus,
+        reductionApplied: true,
+        reductionFactor,
+        reason: weekAdaptationSetReductionReason,
+        firstWeekActive: weekAdaptation.firstWeekProtection?.active,
+        volumeBias: weekAdaptation.loadStrategy?.volumeBias,
+        exercisesAffected: weekAdaptationAdjusted.length,
+        originalSetsTotal: effectiveMainForSession.reduce((sum, ex) => sum + (typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets)) || 3), 0),
+        reducedSetsTotal: weekAdaptationAdjusted.reduce((sum, ex) => sum + (typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets)) || 3), 0),
+        verdict: setsReducedByWeekAdaptation ? 'SETS_REDUCED' : 'SETS_ALREADY_MINIMAL',
+      })
+    }
+  }
+  
+  const canonicalFinalMain = weekAdaptationAdjusted
   const canonicalMainEstimatedTime = canonicalFinalMain.length * 5 // ~5 min per exercise estimate
   const canonicalTotalTime = canonicalMainEstimatedTime + 10 // Add warmup/cooldown buffer
   

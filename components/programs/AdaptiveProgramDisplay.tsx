@@ -1134,38 +1134,57 @@ export function AdaptiveProgramDisplay({
           </div>
         </div>
         
-        {/* Stats Strip - Key program facts with clear hierarchy */}
-        <div className="px-4 py-2.5 bg-[#1E1E1E]/60 border-t border-b border-[#333]/50 flex items-center justify-between">
-          <div className="flex items-center gap-4 text-xs">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[#5A5A5A]">Schedule</span>
-              <span className="font-semibold text-[#C8C8C8]">{validSessions.length}×/week</span>
+        {/* Why This Program - Traceable decision summary */}
+        <div className="px-4 py-3 bg-[#1E1E1E]/40 border-t border-[#333]/50">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+            {/* Your Goal */}
+            <div>
+              <span className="text-[#5A5A5A] block mb-0.5">Your Goal</span>
+              <span className="text-[#C8C8C8] font-medium">
+                {program.goalLabel || program.primaryGoal?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                {program.secondaryGoal && (
+                  <span className="text-[#7A7A7A] font-normal"> + {program.secondaryGoal.replace(/_/g, ' ')}</span>
+                )}
+              </span>
             </div>
-            <div className="w-px h-3 bg-[#3A3A3A]" />
-            <div className="flex items-center gap-1.5">
-              <span className="text-[#5A5A5A]">Sessions</span>
-              <span className="font-semibold text-[#C8C8C8]">~{program.sessionLength || 60}min</span>
+            {/* Your Schedule */}
+            <div>
+              <span className="text-[#5A5A5A] block mb-0.5">Your Schedule</span>
+              <span className="text-[#C8C8C8] font-medium">
+                {validSessions.length} days × {program.sessionLength || 60}min
+              </span>
             </div>
-            <div className="w-px h-3 bg-[#3A3A3A]" />
-            <div className="flex items-center gap-1.5">
-              <span className="text-[#5A5A5A]">Level</span>
-              <span className="font-semibold text-[#C8C8C8] capitalize">{program.experienceLevel}</span>
+            {/* Training Method */}
+            <div>
+              <span className="text-[#5A5A5A] block mb-0.5">Training Method</span>
+              <span className="text-[#C8C8C8] font-medium">
+                {dominantSpineResolution?.primarySpine 
+                  ? dominantSpineResolution.primarySpine.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+                  : program.scheduleMode === 'flexible' ? 'Adaptive Structure' : 'Fixed Structure'}
+              </span>
+            </div>
+            {/* Your Level */}
+            <div>
+              <span className="text-[#5A5A5A] block mb-0.5">Your Level</span>
+              <span className="text-[#C8C8C8] font-medium capitalize">{program.experienceLevel}</span>
             </div>
           </div>
+          
+          {/* Why this structure - coach-like explanation */}
+          {(dominantSpineResolution?.spineRationale || safeSummaryTruth.truthfulHybridSummary || program.programRationale) && (
+            <p className="mt-3 pt-3 border-t border-[#333]/40 text-[12px] text-[#7A7A7A] leading-relaxed line-clamp-2">
+              {dominantSpineResolution?.spineRationale || 
+               safeSummaryTruth.truthfulHybridSummary || 
+               program.programRationale}
+            </p>
+          )}
         </div>
         
-        {/* Intent Zone - Why this structure exists */}
-        <div className="px-4 py-3">
-          <p className="text-[13px] text-[#8A8A8A] leading-relaxed line-clamp-2">
-            {dominantSpineResolution?.spineRationale || 
-             safeSummaryTruth.truthfulHybridSummary || 
-             program.programRationale}
-          </p>
-          
-          {/* Skill Focus - Compact chips */}
-          {safeSelectedSkills.length > 0 && sharedStrictRepresentedSkillsForChips.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-[#333]/40">
-              <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wide mr-1">This Week</span>
+        {/* This Week Focus - Compact skill chips */}
+        {safeSelectedSkills.length > 0 && sharedStrictRepresentedSkillsForChips.length > 0 && (
+          <div className="px-4 py-2.5 border-t border-[#333]/30">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wide font-medium mr-1">This Week</span>
               {sharedStrictRepresentedSkillsForChips.map((skill) => {
                 const chipState = getSharedChipState(skill)
                 const isHeadline = chipState === 'headline_priority'
@@ -1183,8 +1202,8 @@ export function AdaptiveProgramDisplay({
                 )
               })}
             </div>
-          )}
-        </div>
+          </div>
+        )}
         
         {/* Quality notice - only show when significant */}
         {program.plannerTruthAudit?.shouldWarn && 

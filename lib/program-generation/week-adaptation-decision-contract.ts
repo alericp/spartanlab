@@ -24,6 +24,7 @@ import type { ExperienceLevel, TrainingDays } from '@/lib/program-service'
 import type { ReadinessAssessment, ReadinessState } from '@/lib/recovery-fatigue-engine'
 import type { ConsistencyStatus } from '@/lib/consistency-momentum-engine'
 import type { TrainingPathType, JointCaution } from '@/lib/athlete-profile'
+import type { AuthoritativeGenerationTruthIngestion } from '@/lib/server/authoritative-generation-truth-ingestion'
 
 // =============================================================================
 // TYPES
@@ -741,4 +742,96 @@ export function getAdaptationBiasSummary(decision: WeekAdaptationDecision): {
   }
   
   return { label, sublabel, isProtective }
+}
+
+// =============================================================================
+// [AUTHORITATIVE-TRUTH-INGESTION-CONTRACT] TRUTH INGESTION CONVERSION
+// =============================================================================
+
+/**
+ * Build a WeekAdaptationInput from an AuthoritativeGenerationTruthIngestion.
+ * This is the preferred way to feed the week adaptation contract from the
+ * authoritative generation service.
+ */
+export function buildWeekAdaptationInputFromIngestion(
+  ingestion: AuthoritativeGenerationTruthIngestion,
+  additionalContext?: {
+    generationIntent?: string
+    isFreshBaselineBuild?: boolean
+    weekNumber?: number
+    previousWeekAdaptation?: WeekAdaptationDecision | null
+  }
+): WeekAdaptationInput {
+  const profile = ingestion.profileTruth.canonicalProfile
+  
+  // Extract straight-arm skills from selected skills
+  const straightArmPatterns = ['planche', 'front_lever', 'back_lever', 'iron_cross', 'maltese']
+  const straightArmSkills = (profile.selectedSkills || []).filter(s =>
+    straightArmPatterns.some(p => s.toLowerCase().includes(p))
+  )
+  
+  return {
+    // Identity
+    generationIntent: additionalContext?.generationIntent || ingestion.currentProgramContext.recentGenerationIntent || 'unknown',
+    isFreshBaselineBuild: additionalContext?.isFreshBaselineBuild ?? ingestion.currentProgramContext.isFirstGeneratedWeek,
+    
+    // Profile truth from authoritative ingestion
+    experienceLevel: profile.experienceLevel as ExperienceLevel,
+    trainingDaysPerWeek: profile.trainingDaysPerWeek as TrainingDays | number | 'flexible' | undefined,
+    scheduleMode: profile.scheduleMode,
+    trainingPathType: profile.trainingPathType as TrainingPathType | undefined,
+    
+    // Goal complexity
+    primaryGoal: profile.primaryGoal || undefined,
+    secondaryGoal: profile.secondaryGoal,
+    additionalGoals: profile.goalCategories || undefined,
+    
+    // Skill complexity
+    selectedSkills: profile.selectedSkills,
+    straightArmSkills,
+    
+    // Style complexity
+    trainingStyles: profile.trainingMethodPreferences?.map(String) || [],
+    
+    // Constraints
+    jointCautions: profile.jointCautions as JointCaution[] | undefined,
+    equipmentLimitations: undefined, // Not tracked in current ingestion
+    
+    // Recovery/Readiness from ingestion
+    // Note: We don't have full ReadinessAssessment/ConsistencyStatus objects from server-side
+    // Instead we use the normalized signals
+    readinessAssessment: ingestion.recoveryTruth.rawAssessment || undefined,
+    consistencyStatus: ingestion.adherenceTruth.rawConsistencyStatus || undefined,
+    
+    // Adherence signals from ingestion
+    recentMissedSessions: ingestion.adherenceTruth.recentMissedSessions,
+    recentPartialSessions: ingestion.adherenceTruth.recentPartialSessions,
+    totalSessionsLast7Days: ingestion.adherenceTruth.totalSessionsLast7Days,
+    totalSessionsLast14Days: ingestion.adherenceTruth.totalSessionsLast14Days,
+    
+    // Program context from ingestion
+    isFirstGeneratedWeek: ingestion.currentProgramContext.isFirstGeneratedWeek,
+    weekNumber: additionalContext?.weekNumber,
+    previousWeekAdaptation: additionalContext?.previousWeekAdaptation || null,
+  }
+}
+
+/**
+ * Get adherence consistency status from ingestion truth.
+ * Helper for code that needs the string consistency label.
+ */
+export function getConsistencyStatusFromIngestion(
+  ingestion: AuthoritativeGenerationTruthIngestion
+): 'stable' | 'mixed' | 'disrupted' | 'unknown' {
+  return ingestion.adherenceTruth.consistencyStatus
+}
+
+/**
+ * Get recovery risk level from ingestion truth.
+ * Helper for code that needs the recovery risk label.
+ */
+export function getRecoveryRiskFromIngestion(
+  ingestion: AuthoritativeGenerationTruthIngestion
+): 'low' | 'moderate' | 'high' | 'unknown' {
+  return ingestion.recoveryTruth.recoveryRisk
 }

@@ -5692,34 +5692,42 @@ async function generateAdaptiveProgramImpl(
     limiterDrivenMods
   )
   
-  console.log('[materiality-contract] Contract built for generation:', {
-    identitySummary: {
-      primaryGoal: materialityContract.identity.primaryGoal,
-      primarySkills: materialityContract.identity.skillPriorities.primary,
-      experienceLevel: materialityContract.identity.experienceLevel,
-      scheduleMode: materialityContract.identity.scheduleMode,
-      sessionDuration: materialityContract.identity.sessionDurationMinutes,
-    },
-    historySummary: {
-      recentWorkouts: materialityContract.history.recentWorkoutCount,
-      isDetrained: materialityContract.history.isDetrainedState,
-      dataConfidence: materialityContract.history.dataConfidence,
-    },
-    leversSummary: {
-      weeklyStructureBias: materialityContract.levers.weeklyStructureBias.value,
-      supportAllocation: materialityContract.levers.supportAllocationBias.value,
-      weightedPlacement: materialityContract.levers.weightedPlacementPriority.value,
-      complexityAllowance: materialityContract.levers.complexityAllowance.value,
-      timeBudgetPressure: materialityContract.levers.timeBudgetCompressionPressure.value,
-    },
-    provenanceSummary: {
-      highConfidence: materialityContract.provenance.highConfidenceCount,
-      lowConfidence: materialityContract.provenance.lowConfidenceCount,
-      sparseAreas: materialityContract.provenance.sparseAreas,
-    },
-    isHighlyPersonalized: materialityContract.isHighlyPersonalized,
-    criticalLeverCount: materialityContract.criticalLeverCount,
-  })
+  // [PHASE 15E FIX] Wrapped in try-catch - logging should never crash generation
+  try {
+    console.log('[materiality-contract] Contract built for generation:', {
+      identitySummary: {
+        primaryGoal: materialityContract?.identity?.primaryGoal,
+        primarySkills: materialityContract?.identity?.skillPriorities?.primary,
+        experienceLevel: materialityContract?.identity?.experienceLevel,
+        scheduleMode: materialityContract?.identity?.scheduleMode,
+        sessionDuration: materialityContract?.identity?.sessionDurationMinutes,
+      },
+      historySummary: {
+        recentWorkouts: materialityContract?.history?.recentWorkoutCount,
+        isDetrained: materialityContract?.history?.isDetrainedState,
+        dataConfidence: materialityContract?.history?.dataConfidence,
+      },
+      leversSummary: {
+        weeklyStructureBias: materialityContract?.levers?.weeklyStructureBias?.value,
+        supportAllocation: materialityContract?.levers?.supportAllocationBias?.value,
+        weightedPlacement: materialityContract?.levers?.weightedPlacementPriority?.value,
+        complexityAllowance: materialityContract?.levers?.complexityAllowance?.value,
+        timeBudgetPressure: materialityContract?.levers?.timeBudgetCompressionPressure?.value,
+      },
+      provenanceSummary: {
+        highConfidence: materialityContract?.provenance?.highConfidenceCount,
+        lowConfidence: materialityContract?.provenance?.lowConfidenceCount,
+        sparseAreas: materialityContract?.provenance?.sparseAreas,
+      },
+      isHighlyPersonalized: materialityContract?.isHighlyPersonalized,
+      criticalLeverCount: materialityContract?.criticalLeverCount,
+    })
+  } catch (materialityBuildLogError) {
+    // Logging should never crash generation - silently continue
+    console.error('[materiality-contract-build-log-error]', {
+      error: materialityBuildLogError instanceof Error ? materialityBuildLogError.message : 'unknown',
+    })
+  }
   
   // ==========================================================================
   // [WEEK-ADAPTATION-CONTRACT] BUILD CANONICAL WEEK ADAPTATION DECISION
@@ -7767,6 +7775,16 @@ async function generateAdaptiveProgramImpl(
     })
   }
   
+  // [PHASE 15E] Post-audit entry marker for rebuild tracing
+  console.log('[phase15e-post-audit-entry]', {
+    sessionIndex,
+    dayFocus: day.focus,
+    isAdvanced,
+    isLongSession,
+    hasMultiSkills,
+    stage: 'entering_post_audit_processing',
+  })
+  
   // Determine if skills should be prioritized based on training path
   const shouldPrioritizeSkills = trainingPath === 'skill_progression' || 
     (trainingPath === 'hybrid' && trainingOutcome === 'skills')
@@ -7794,7 +7812,8 @@ async function generateAdaptiveProgramImpl(
   const shouldIncludeDensity = outcomeTrainingStyle.includeDensityBlocks
   
   // Extract skill calibration insights for programming
-  const skillCalibration = athleteCalibration.skillCalibration
+  // [PHASE 15E FIX] Guard against null athleteCalibration
+  const skillCalibration = athleteCalibration?.skillCalibration
   const hasAssistedHolds = !!(
     skillCalibration?.front_lever?.isAssisted || 
     skillCalibration?.planche?.isAssisted ||
@@ -7828,7 +7847,8 @@ async function generateAdaptiveProgramImpl(
     skillCalibrationNotes.push('Conservative progression start for measured re-entry')
   }
   
-  const calibrationContext = athleteCalibration.calibrationComplete ? {
+  // [PHASE 15E FIX] Guard against null athleteCalibration
+  const calibrationContext = athleteCalibration?.calibrationComplete ? {
   isCalibrated: true,
   message: calibrationAdjustments.calibrationMessage,
   notes: [...calibrationAdjustments.progressionNotes, ...skillCalibrationNotes],
@@ -7956,7 +7976,7 @@ async function generateAdaptiveProgramImpl(
        primarySkillIntel.confidence.components.tendonAdaptationScore >= 55 ? 'moderate_high' :
        primarySkillIntel.confidence.components.tendonAdaptationScore >= 40 ? 'moderate' :
        primarySkillIntel.confidence.components.tendonAdaptationScore >= 25 ? 'low_moderate' : 'low')
-    : (athleteCalibration.tendonAdaptation?.[primaryGoal as keyof typeof athleteCalibration.tendonAdaptation] ?? 'low')
+    : (athleteCalibration?.tendonAdaptation?.[primaryGoal as keyof typeof athleteCalibration.tendonAdaptation] ?? 'low')
 
   // Select training method profiles via Principles Engine
   // Adjust goal type based on training outcome for non-skill focused users
@@ -7988,23 +8008,32 @@ async function generateAdaptiveProgramImpl(
   // ==========================================================================
   // [PHASE 1] MATERIALITY CONTRACT - METHOD ELIGIBILITY ENFORCEMENT
   // Apply contract levers to filter/adjust method eligibility
+  // [PHASE 15E FIX] Wrapped in try-catch - logging should never crash generation
   // ==========================================================================
-  console.log('[materiality-contract] Method eligibility enforcement:', {
-    contractMethodLevers: materialityContract.levers.methodEligibility,
-    contractComplexityAllowance: materialityContract.levers.complexityAllowance.value,
-    contractDensityAllowance: materialityContract.levers.densityAllowance.value,
-    selectedPrimaryMethod: selectedMethods.primary?.id,
-    selectedSecondaryMethod: selectedMethods.secondary?.id,
-    methodAlignmentVerdict: {
-      supersetsAllowed: materialityContract.levers.methodEligibility.supersets,
-      circuitsAllowed: materialityContract.levers.methodEligibility.circuits,
-      densityBlocksAllowed: materialityContract.levers.methodEligibility.densityBlocks,
-      clusterSetsAllowed: materialityContract.levers.methodEligibility.clusterSets,
-    },
-    materialityInfluenceVerdict: materialityContract.levers.complexityAllowance.confidence === 'high'
-      ? 'METHOD_ELIGIBILITY_ENFORCED_BY_CONTRACT'
-      : 'METHOD_ELIGIBILITY_USING_DEFAULTS',
-  })
+  try {
+    console.log('[materiality-contract] Method eligibility enforcement:', {
+      contractMethodLevers: materialityContract?.levers?.methodEligibility,
+      contractComplexityAllowance: materialityContract?.levers?.complexityAllowance?.value,
+      contractDensityAllowance: materialityContract?.levers?.densityAllowance?.value,
+      selectedPrimaryMethod: selectedMethods.primary?.id,
+      selectedSecondaryMethod: selectedMethods.secondary?.id,
+      methodAlignmentVerdict: {
+        supersetsAllowed: materialityContract?.levers?.methodEligibility?.supersets,
+        circuitsAllowed: materialityContract?.levers?.methodEligibility?.circuits,
+        densityBlocksAllowed: materialityContract?.levers?.methodEligibility?.densityBlocks,
+        clusterSetsAllowed: materialityContract?.levers?.methodEligibility?.clusterSets,
+      },
+      materialityInfluenceVerdict: materialityContract?.levers?.complexityAllowance?.confidence === 'high'
+        ? 'METHOD_ELIGIBILITY_ENFORCED_BY_CONTRACT'
+        : 'METHOD_ELIGIBILITY_USING_DEFAULTS',
+    })
+  } catch (materialityLogError) {
+    // Logging should never crash generation - silently continue
+    console.error('[materiality-contract-log-error]', {
+      sessionIndex,
+      error: materialityLogError instanceof Error ? materialityLogError.message : 'unknown',
+    })
+  }
   
   // Build training emphasis for UI
   const trainingEmphasis = {
@@ -8068,22 +8097,30 @@ async function generateAdaptiveProgramImpl(
   // ==========================================================================
   // [PHASE 1] MATERIALITY CONTRACT - STRUCTURE INFLUENCE AUDIT
   // Log how the materiality contract levers influenced structure selection
+  // [PHASE 15E FIX] Wrapped in try-catch - logging should never crash generation
   // ==========================================================================
-  console.log('[materiality-contract] Structure selection influenced by:', {
-    weeklyStructureBiasLever: materialityContract.levers.weeklyStructureBias.value,
-    weeklyStructureBiasConfidence: materialityContract.levers.weeklyStructureBias.confidence,
-    structureSelected: structure.structureName,
-    skillAllocationLevers: {
-      mainEmphasis: materialityContract.levers.mainSkillEmphasis.value,
-      secondaryAllowance: materialityContract.levers.secondarySkillAllowance.value,
-      tertiaryAllowance: materialityContract.levers.tertiarySkillAllowance.value,
-    },
-    supportAllocationLever: materialityContract.levers.supportAllocationBias.value,
-    recoveryConservatism: materialityContract.levers.recoveryConservatism.value,
-    materialityInfluenceVerdict: materialityContract.isHighlyPersonalized 
-      ? 'STRUCTURE_INFLUENCED_BY_HIGH_CONFIDENCE_LEVERS'
-      : 'STRUCTURE_USED_DEFAULT_LEVERS',
-  })
+  try {
+    console.log('[materiality-contract] Structure selection influenced by:', {
+      weeklyStructureBiasLever: materialityContract?.levers?.weeklyStructureBias?.value,
+      weeklyStructureBiasConfidence: materialityContract?.levers?.weeklyStructureBias?.confidence,
+      structureSelected: structure.structureName,
+      skillAllocationLevers: {
+        mainEmphasis: materialityContract?.levers?.mainSkillEmphasis?.value,
+        secondaryAllowance: materialityContract?.levers?.secondarySkillAllowance?.value,
+        tertiaryAllowance: materialityContract?.levers?.tertiarySkillAllowance?.value,
+      },
+      supportAllocationLever: materialityContract?.levers?.supportAllocationBias?.value,
+      recoveryConservatism: materialityContract?.levers?.recoveryConservatism?.value,
+      materialityInfluenceVerdict: materialityContract?.isHighlyPersonalized 
+        ? 'STRUCTURE_INFLUENCED_BY_HIGH_CONFIDENCE_LEVERS'
+        : 'STRUCTURE_USED_DEFAULT_LEVERS',
+    })
+  } catch (materialityStructureLogError) {
+    // Logging should never crash generation - silently continue
+    console.error('[materiality-contract-structure-log-error]', {
+      error: materialityStructureLogError instanceof Error ? materialityStructureLogError.message : 'unknown',
+    })
+  }
   
   // [TASK 6] HIGH-FREQUENCY STRUCTURE AUDIT - Verify 6-7 day support
   const templatePoolSize = structure.days?.length || 0
@@ -18234,23 +18271,24 @@ function generateAdaptiveSession(
     // ==========================================================================
     // [PHASE 6A TASK 1] SESSION IDENTITY AUDIT BEFORE COMPRESSION
     // Captures the truth of the full session BEFORE variants are generated
+    // [PHASE 15E FIX] Added null guards for exercise property access
     // ==========================================================================
     const mainExercises = effectiveSelection.main || []
     const skillExpressions = mainExercises
-      .filter(e => e.exercise.category === 'skill' || 
-                   e.selectionReason?.toLowerCase().includes('skill progression'))
-      .map(e => e.exercise.name)
+      .filter(e => e?.exercise?.category === 'skill' || 
+                   e?.selectionReason?.toLowerCase().includes('skill progression'))
+      .map(e => e?.exercise?.name || 'unknown')
     const strengthSupport = mainExercises
-      .filter(e => e.exercise.category === 'strength' &&
-                   (e.selectionReason?.toLowerCase().includes('support') ||
-                    e.selectionReason?.toLowerCase().includes('hybrid')))
-      .map(e => e.exercise.name)
+      .filter(e => e?.exercise?.category === 'strength' &&
+                   (e?.selectionReason?.toLowerCase().includes('support') ||
+                    e?.selectionReason?.toLowerCase().includes('hybrid')))
+      .map(e => e?.exercise?.name || 'unknown')
     const genericCount = mainExercises.filter(e => 
-      (e.exercise.category === 'accessory' || e.exercise.category === 'core') &&
-      !e.selectionReason?.toLowerCase().includes('skill')
+      (e?.exercise?.category === 'accessory' || e?.exercise?.category === 'core') &&
+      !e?.selectionReason?.toLowerCase().includes('skill')
     ).length
     const rationaleCount = mainExercises.filter(e => 
-      e.selectionReason && e.selectionReason.length > 10
+      e?.selectionReason && e.selectionReason.length > 10
     ).length
     
     console.log('[session-identity-before-variants-audit]', {
@@ -18259,7 +18297,7 @@ function generateAdaptiveSession(
       primaryGoal,
       sessionPrimarySkillExpressions: skillExpressions,
       sessionStrengthSupport: strengthSupport,
-      mainExerciseNames: mainExercises.map(e => e.exercise.name),
+      mainExerciseNames: mainExercises.map(e => e?.exercise?.name || 'unknown'),
       genericSupportCount: genericCount,
       rationaleCoverage: `${rationaleCount}/${mainExercises.length}`,
       verdict: skillExpressions.length > 0 
@@ -19049,6 +19087,19 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       } : undefined,
     }
   
+  // [PHASE 15E] Compact completion summary for rebuild tracing
+  console.log('[phase15e-session-generation-complete]', {
+    sessionIndex,
+    dayFocus: day.focus,
+    mainExerciseCount: canonicalFinalMain.length,
+    firstWeekProtectionActive: weekAdaptation?.firstWeekProtection?.active || false,
+    finishersSuppressed: finisherSuppressedByWeekAdaptation,
+    secondaryTrimmed: secondaryExercisesTrimmed,
+    setsReduced: setsReducedByWeekAdaptation,
+    postAuditStepsReached: 'all_steps_complete',
+    verdict: 'PHASE_15E_SESSION_GENERATION_SUCCESS',
+  })
+
   // ==========================================================================
   // STEP B/D: Outer catch for entire generateAdaptiveSession lifecycle
   // ==========================================================================

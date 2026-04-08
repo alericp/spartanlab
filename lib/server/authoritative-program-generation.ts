@@ -516,6 +516,15 @@ export async function executeAuthoritativeGeneration(
       const exactLastSafeSubstepMatch = errorStack?.match(/lastSafeSubstep['":\s]+([a-z_]+)/i)
       const exactLastSafeSubstep = exactLastSafeSubstepMatch?.[1] || 'unknown'
       
+      // [POST-TRUTH-CORRIDOR] Extract corridor info from GenerationError context
+      const isCorridorError = errorString.includes('exactBuilderCorridor') || 
+                              errorString.includes('post_truth_audit_to_structure_selection')
+      const corridorMatch = errorString.match(/exactBuilderCorridor['":\s]+([a-z_]+)/i)
+      const exactBuilderCorridor = corridorMatch?.[1] || 
+        (errorString.includes('structure_selection') ? 'post_truth_audit_to_structure_selection' : 'unknown')
+      const localStepMatch = errorString.match(/exactLocalStep['":\s]+([a-z_]+)/i)
+      const exactLocalStep = localStepMatch?.[1] || 'unknown'
+      
       console.log('[authoritative-generation-builder-error]', {
         generationIntent: request.generationIntent,
         error: errorString,
@@ -566,9 +575,13 @@ export async function executeAuthoritativeGeneration(
         // [PHASE 15E] Include exact substep info in result
         exactFailingSubstep: isPhase15eCrash ? exactFailingSubstep : undefined,
         exactLastSafeSubstep: isPhase15eCrash ? exactLastSafeSubstep : undefined,
+        // [POST-TRUTH-CORRIDOR] Include corridor diagnostic info
+        exactBuilderCorridor,
+        exactLocalStep,
         compactBuilderError: errorString.substring(0, 200),
         compactStackPreview: errorStack?.split('\n').slice(0, 5).join(' | '),
         degradationAttempted: errorStack?.includes('safeDegradationApplied') || false,
+        fallbackApplied: errorStack?.includes('fallbackApplied') || errorString.includes('fallback'),
         timings: getTimings(),
         totalElapsedMs: Date.now() - startTime,
         parityVerdict: buildParityVerdict(request, false),

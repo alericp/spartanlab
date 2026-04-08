@@ -969,6 +969,24 @@ export interface AdaptiveSession {
       templateEscaped: boolean
     }
   }
+  // [PRESCRIPTION-PROPAGATION] Track what week adaptation actually changed in this session
+  prescriptionPropagationAudit?: {
+    adaptationPhase: string
+    firstWeekProtectionActive: boolean
+    appliedReductions: {
+      setsReduced: boolean
+      rpeReduced: boolean
+      finisherSuppressed: boolean
+      densityReduced: boolean
+    }
+    reductionReason: string | null
+    loadStrategyApplied: {
+      volumeBias: 'reduced' | 'normal' | 'elevated'
+      intensityBias: 'reduced' | 'normal' | 'elevated'
+      finisherBias: 'limited' | 'normal' | 'expanded'
+    }
+    verdict: 'PRESCRIPTION_MATERIALLY_CHANGED_BY_WEEK_ADAPTATION' | 'PRESCRIPTION_UNCHANGED_BY_WEEK_ADAPTATION'
+  }
 }
 
 export interface AdaptiveExercise {
@@ -17851,9 +17869,11 @@ function generateAdaptiveSession(
   // ==========================================================================
   // [WEEKLY-COMPOSITION-UPGRADE] Apply week-level volume/set reduction
   // This is where first-week protection and reduced volume bias actually reduce sets
+  // [PRESCRIPTION-PROPAGATION] Now also handles RPE reduction and tracks finisher suppression
   // ==========================================================================
   let weekAdaptationAdjusted = effectiveMainForSession
   let setsReducedByWeekAdaptation = false
+  let finisherSuppressedByWeekAdaptation = false
   let weekAdaptationSetReductionReason = 'none'
   
   if (weekAdaptation) {
@@ -17861,43 +17881,71 @@ function generateAdaptiveSession(
       weekAdaptation.firstWeekProtection?.active && weekAdaptation.firstWeekProtection?.reduceSets ||
       weekAdaptation.loadStrategy?.volumeBias === 'reduced'
     
-    if (shouldReduceSets) {
-      const reductionFactor = weekAdaptation.firstWeekProtection?.active ? 0.75 : 0.85 // 25% reduction for first week, 15% for reduced bias
+    // [PRESCRIPTION-PROPAGATION] Check if RPE should be reduced
+    const shouldReduceRPE = 
+      weekAdaptation.firstWeekProtection?.active && weekAdaptation.firstWeekProtection?.reduceRPE ||
+      weekAdaptation.loadStrategy?.intensityBias === 'reduced'
+    
+    if (shouldReduceSets || shouldReduceRPE) {
+      const setReductionFactor = shouldReduceSets 
+        ? (weekAdaptation.firstWeekProtection?.active ? 0.75 : 0.85) // 25% reduction for first week, 15% for reduced bias
+        : 1.0
+      const rpeReduction = shouldReduceRPE ? 1 : 0 // Reduce RPE by 1 point when active
       
       weekAdaptationAdjusted = effectiveMainForSession.map(ex => {
         const currentSets = typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets)) || 3
-        const reducedSets = Math.max(2, Math.round(currentSets * reductionFactor)) // Never below 2 sets
+        const reducedSets = shouldReduceSets 
+          ? Math.max(2, Math.round(currentSets * setReductionFactor)) // Never below 2 sets
+          : currentSets
         
-        if (reducedSets !== currentSets) {
+        // [PRESCRIPTION-PROPAGATION] Reduce targetRPE when intensity bias is reduced
+        const currentRPE = typeof ex.targetRPE === 'number' ? ex.targetRPE : 8
+        const reducedRPE = shouldReduceRPE 
+          ? Math.max(5, currentRPE - rpeReduction) // Never below RPE 5
+          : ex.targetRPE
+        
+        if (reducedSets !== currentSets || (shouldReduceRPE && reducedRPE !== currentRPE)) {
           setsReducedByWeekAdaptation = true
+        }
+        
+        // Build note components
+        const noteComponents: string[] = []
+        if (ex.note) noteComponents.push(ex.note)
+        if (reducedSets < currentSets) {
+          noteComponents.push(`[Volume adjusted for ${weekAdaptation.adaptationPhase === 'initial_acclimation' ? 'first-week acclimation' : 'recovery'}]`)
+        }
+        if (shouldReduceRPE && reducedRPE !== ex.targetRPE) {
+          noteComponents.push(`[Intensity capped for ${weekAdaptation.adaptationPhase === 'initial_acclimation' ? 'acclimation' : 'recovery'}]`)
         }
         
         return {
           ...ex,
           sets: reducedSets,
-          // Add note about reduction if significant
-          note: reducedSets < currentSets 
-            ? `${ex.note || ''} [Volume adjusted for ${weekAdaptation.adaptationPhase === 'initial_acclimation' ? 'first-week acclimation' : 'recovery'}]`.trim()
-            : ex.note,
+          targetRPE: reducedRPE,
+          note: noteComponents.join(' ').trim() || ex.note,
         }
       })
       
       weekAdaptationSetReductionReason = weekAdaptation.firstWeekProtection?.active 
-        ? 'first_week_governor_reduce_sets' 
-        : 'reduced_volume_bias'
+        ? 'first_week_governor_reduce_sets_and_rpe' 
+        : 'reduced_volume_or_intensity_bias'
       
-      console.log('[WEEKLY-COMPOSITION-UPGRADE-SET-REDUCTION]', {
+      console.log('[PRESCRIPTION-PROPAGATION-DOSAGE-REDUCTION]', {
         sessionIndex,
         dayFocus: day.focus,
         reductionApplied: true,
-        reductionFactor,
+        setReductionFactor,
+        rpeReduction,
+        shouldReduceSets,
+        shouldReduceRPE,
         reason: weekAdaptationSetReductionReason,
         firstWeekActive: weekAdaptation.firstWeekProtection?.active,
         volumeBias: weekAdaptation.loadStrategy?.volumeBias,
+        intensityBias: weekAdaptation.loadStrategy?.intensityBias,
         exercisesAffected: weekAdaptationAdjusted.length,
         originalSetsTotal: effectiveMainForSession.reduce((sum, ex) => sum + (typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets)) || 3), 0),
         reducedSetsTotal: weekAdaptationAdjusted.reduce((sum, ex) => sum + (typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets)) || 3), 0),
-        verdict: setsReducedByWeekAdaptation ? 'SETS_REDUCED' : 'SETS_ALREADY_MINIMAL',
+        verdict: setsReducedByWeekAdaptation ? 'DOSAGE_REDUCED' : 'DOSAGE_ALREADY_MINIMAL',
       })
     }
   }
@@ -18164,8 +18212,31 @@ function generateAdaptiveSession(
     })
     middleStep = 'endurance_block_selected'
 
-    // Generate the finisher if needed
-    if (enduranceResult.shouldIncludeEndurance && enduranceResult.blockType) {
+    // ==========================================================================
+    // [PRESCRIPTION-PROPAGATION] Check week adaptation finisher suppression
+    // This is the authoritative gate for finisher inclusion
+    // ==========================================================================
+    const shouldSuppressFinisher = 
+      weekAdaptation?.firstWeekProtection?.active && weekAdaptation?.firstWeekProtection?.suppressFinishers ||
+      weekAdaptation?.loadStrategy?.finisherBias === 'limited' ||
+      sessionCompositionBlueprint?.methodEligibility?.finisher === 'blocked'
+    
+    if (shouldSuppressFinisher) {
+      finisherSuppressedByWeekAdaptation = true
+      console.log('[PRESCRIPTION-PROPAGATION-FINISHER-SUPPRESSED]', {
+        sessionIndex,
+        dayFocus: day.focus,
+        reason: weekAdaptation?.firstWeekProtection?.suppressFinishers 
+          ? 'first_week_governor_suppress_finishers'
+          : weekAdaptation?.loadStrategy?.finisherBias === 'limited'
+            ? 'week_finisher_bias_limited'
+            : 'composition_blueprint_blocked',
+        adaptationPhase: weekAdaptation?.adaptationPhase,
+        verdict: 'FINISHER_OMITTED_BY_WEEK_ADAPTATION',
+      })
+      middleStep = 'finisher_suppressed_by_week_adaptation'
+    } else if (enduranceResult.shouldIncludeEndurance && enduranceResult.blockType) {
+      // Generate the finisher if needed and NOT suppressed
       middleStep = 'fatigue_adjustment_resolving'
       const fatigueAdjustment = adjustBlockForFatigue(
         enduranceResult.duration,
@@ -18794,6 +18865,26 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
           description: r.description,
         })),
         audit: sessionCompositionBlueprint.audit,
+      } : undefined,
+      // [PRESCRIPTION-PROPAGATION] Track what week adaptation actually changed in this session
+      prescriptionPropagationAudit: weekAdaptation ? {
+        adaptationPhase: weekAdaptation.adaptationPhase || 'normal_progression',
+        firstWeekProtectionActive: weekAdaptation.firstWeekProtection?.active || false,
+        appliedReductions: {
+          setsReduced: setsReducedByWeekAdaptation,
+          rpeReduced: !!(weekAdaptation.firstWeekProtection?.reduceRPE || weekAdaptation.loadStrategy?.intensityBias === 'reduced'),
+          finisherSuppressed: finisherSuppressedByWeekAdaptation,
+          densityReduced: weekAdaptation.loadStrategy?.densityBias === 'reduced',
+        },
+        reductionReason: weekAdaptationSetReductionReason !== 'none' ? weekAdaptationSetReductionReason : null,
+        loadStrategyApplied: {
+          volumeBias: weekAdaptation.loadStrategy?.volumeBias || 'normal',
+          intensityBias: weekAdaptation.loadStrategy?.intensityBias || 'normal',
+          finisherBias: weekAdaptation.loadStrategy?.finisherBias || 'normal',
+        },
+        verdict: setsReducedByWeekAdaptation || finisherSuppressedByWeekAdaptation
+          ? 'PRESCRIPTION_MATERIALLY_CHANGED_BY_WEEK_ADAPTATION'
+          : 'PRESCRIPTION_UNCHANGED_BY_WEEK_ADAPTATION',
       } : undefined,
     }
   

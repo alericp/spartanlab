@@ -216,6 +216,118 @@ export function getWeekAdaptationDisplay(program: AdaptiveProgram): WeekAdaptati
 }
 
 // =============================================================================
+// [PRESCRIPTION-PROPAGATION] PRESCRIPTION PROPAGATION DISPLAY TYPES
+// =============================================================================
+
+export interface PrescriptionPropagationDisplay {
+  /** Was prescription materially changed by week adaptation? */
+  materiallyChanged: boolean
+  /** What was applied */
+  appliedChanges: {
+    setsReduced: boolean
+    rpeReduced: boolean
+    finisherSuppressed: boolean
+    densityReduced: boolean
+  }
+  /** Session-level prescription changes */
+  sessionChanges: Array<{
+    sessionIndex: number
+    dayLabel: string
+    changesApplied: string[]
+  }>
+  /** Human-readable summary */
+  summary: string
+  /** Source of this data */
+  source: 'session_audit' | 'week_adaptation' | 'unavailable'
+}
+
+/**
+ * Extract prescription propagation display from program sessions
+ * This reflects what was ACTUALLY changed in generation, not just planned
+ */
+export function getPrescriptionPropagationDisplay(program: AdaptiveProgram): PrescriptionPropagationDisplay {
+  const sessions = program.sessions || []
+  
+  // Check if any sessions have prescription propagation audit
+  const sessionChanges: PrescriptionPropagationDisplay['sessionChanges'] = []
+  let anyMateriallyChanged = false
+  let anySetsReduced = false
+  let anyRpeReduced = false
+  let anyFinisherSuppressed = false
+  let anyDensityReduced = false
+  
+  for (let i = 0; i < sessions.length; i++) {
+    const session = sessions[i] as { 
+      dayLabel?: string
+      prescriptionPropagationAudit?: {
+        appliedReductions?: {
+          setsReduced?: boolean
+          rpeReduced?: boolean
+          finisherSuppressed?: boolean
+          densityReduced?: boolean
+        }
+        verdict?: string
+      }
+    }
+    
+    const audit = session.prescriptionPropagationAudit
+    if (!audit) continue
+    
+    const changes: string[] = []
+    
+    if (audit.appliedReductions?.setsReduced) {
+      changes.push('Sets reduced')
+      anySetsReduced = true
+    }
+    if (audit.appliedReductions?.rpeReduced) {
+      changes.push('RPE capped')
+      anyRpeReduced = true
+    }
+    if (audit.appliedReductions?.finisherSuppressed) {
+      changes.push('Finisher omitted')
+      anyFinisherSuppressed = true
+    }
+    if (audit.appliedReductions?.densityReduced) {
+      changes.push('Density reduced')
+      anyDensityReduced = true
+    }
+    
+    if (changes.length > 0) {
+      anyMateriallyChanged = true
+      sessionChanges.push({
+        sessionIndex: i,
+        dayLabel: session.dayLabel || `Day ${i + 1}`,
+        changesApplied: changes,
+      })
+    }
+  }
+  
+  // Build summary
+  let summary = 'Standard prescription applied'
+  if (anyMateriallyChanged) {
+    const parts: string[] = []
+    if (anySetsReduced) parts.push('reduced sets')
+    if (anyRpeReduced) parts.push('capped intensity')
+    if (anyFinisherSuppressed) parts.push('limited finishers')
+    if (anyDensityReduced) parts.push('reduced density')
+    summary = `Conservative dosage: ${parts.join(', ')}`
+  }
+  
+  return {
+    materiallyChanged: anyMateriallyChanged,
+    appliedChanges: {
+      setsReduced: anySetsReduced,
+      rpeReduced: anyRpeReduced,
+      finisherSuppressed: anyFinisherSuppressed,
+      densityReduced: anyDensityReduced,
+    },
+    sessionChanges,
+    summary,
+    source: sessionChanges.length > 0 ? 'session_audit' : 'unavailable',
+  }
+}
+
+// =============================================================================
 // [NEON-TRUTH-CONTRACT] SOURCE TRUTH DISPLAY TYPES
 // =============================================================================
 

@@ -7694,69 +7694,78 @@ async function generateAdaptiveProgramImpl(
   
   // [PHASE 15E TASK 1] SESSION CONSERVATISM AUDIT
   // Check if advanced athletes are getting beginner-safe session shapes
+  // [PHASE 15E DIAGNOSTIC] Wrapped in try-catch - audit logging should never crash generation
   const isAdvanced = experienceLevel === 'advanced'
   const isLongSession = sessionLength >= 60
   const hasMultiSkills = expandedContext.selectedSkills.length >= 3
   
-  console.log('[phase15e-session-conservatism-audit]', {
-    experienceLevel,
-    sessionLength,
-    selectedSkillsCount: expandedContext.selectedSkills.length,
-    isAdvanced,
-    isLongSession,
-    hasMultiSkills,
-    baseVolumeConfig: {
-      mainMin: durationConfig.minExercises,
-      mainMax: durationConfig.maxExercises,
-    },
-    calibratedVolumeConfig: {
-      mainMin: calibratedVolumeConfig.mainExerciseCount.min,
-      mainMax: calibratedVolumeConfig.mainExerciseCount.max,
-      accessoryMax: calibratedVolumeConfig.accessoryCount.max,
-    },
-    advancedAthleteCalibration,
-    conservatismAssessment: {
-      isAdvancedGettingBeginnerSafe: isAdvanced && durationConfig.maxExercises <= 5 && sessionLength >= 60,
-      primaryGoalInfluenceWeak: false, // Will audit after session generation
-      secondaryGoalInfluenceWeak: false, // Will audit after session generation
-      sessionDensityTooLow: isAdvanced && isLongSession && durationConfig.maxExercises < 6,
-    },
-  })
-  
-  // [PHASE 15E TASK 1] ADVANCED ATHLETE UNDEREXPRESSION AUDIT
-  console.log('[phase15e-advanced-athlete-underexpression-audit]', {
-    profileIndicatesAdvanced: isAdvanced,
-    profileIndicatesMultiSkill: hasMultiSkills,
-    profileIndicatesLongSession: isLongSession,
-    expectedRicherConstruction: isAdvanced && (hasMultiSkills || isLongSession),
-    calibrationApplied: {
-      sessionDensityMultiplier: advancedAthleteCalibration.sessionDensityMultiplier,
-      mainWorkBonus: advancedAthleteCalibration.mainWorkBonus,
-      supportWorkBonus: advancedAthleteCalibration.supportWorkBonus,
-      accessorySlotBonus: advancedAthleteCalibration.accessorySlotBonus,
-      mixedMethodFinisherAllowed: advancedAthleteCalibration.mixedMethodFinisherAllowed,
-      primarySkillExpressionWeight: advancedAthleteCalibration.primarySkillExpressionWeight,
-      secondarySkillExpressionWeight: advancedAthleteCalibration.secondarySkillExpressionWeight,
-      carryoverThreshold: advancedAthleteCalibration.carryoverThreshold,
-      sequencingStrictness: advancedAthleteCalibration.sequencingStrictness,
-    },
-    verdict: isAdvanced 
-      ? 'advanced_calibration_applied'
-      : 'standard_calibration_used',
-  })
-  
-  // [PHASE 15E TASK 1] PRIMARY/SECONDARY VISIBILITY AUDIT
-  console.log('[phase15e-primary-secondary-visibility-audit]', {
-    primaryGoal,
-    secondaryGoal,
-    primarySkillExpressionWeight: advancedAthleteCalibration.primarySkillExpressionWeight,
-    secondarySkillExpressionWeight: advancedAthleteCalibration.secondarySkillExpressionWeight,
-    tertiarySkillMinExposure: advancedAthleteCalibration.tertiarySkillMinExposure,
-    allSelectedSkills: expandedContext.selectedSkills,
-    tertiarySkills: expandedContext.selectedSkills.filter(s => s !== primaryGoal && s !== secondaryGoal),
-    expectedPrimaryVisibility: advancedAthleteCalibration.primarySkillExpressionWeight >= 0.5 ? 'strong' : 'moderate',
-    expectedSecondaryVisibility: advancedAthleteCalibration.secondarySkillExpressionWeight >= 0.35 ? 'meaningful' : 'minimal',
-  })
+  try {
+    console.log('[phase15e-session-conservatism-audit]', {
+      experienceLevel,
+      sessionLength,
+      selectedSkillsCount: expandedContext.selectedSkills.length,
+      isAdvanced,
+      isLongSession,
+      hasMultiSkills,
+      baseVolumeConfig: {
+        mainMin: durationConfig.minExercises,
+        mainMax: durationConfig.maxExercises,
+      },
+      calibratedVolumeConfig: {
+        mainMin: calibratedVolumeConfig?.mainExerciseCount?.min ?? 'unknown',
+        mainMax: calibratedVolumeConfig?.mainExerciseCount?.max ?? 'unknown',
+        accessoryMax: calibratedVolumeConfig?.accessoryCount?.max ?? 'unknown',
+      },
+      advancedAthleteCalibration,
+      conservatismAssessment: {
+        isAdvancedGettingBeginnerSafe: isAdvanced && durationConfig.maxExercises <= 5 && sessionLength >= 60,
+        primaryGoalInfluenceWeak: false, // Will audit after session generation
+        secondaryGoalInfluenceWeak: false, // Will audit after session generation
+        sessionDensityTooLow: isAdvanced && isLongSession && durationConfig.maxExercises < 6,
+      },
+    })
+    
+    // [PHASE 15E TASK 1] ADVANCED ATHLETE UNDEREXPRESSION AUDIT
+    console.log('[phase15e-advanced-athlete-underexpression-audit]', {
+      profileIndicatesAdvanced: isAdvanced,
+      profileIndicatesMultiSkill: hasMultiSkills,
+      profileIndicatesLongSession: isLongSession,
+      expectedRicherConstruction: isAdvanced && (hasMultiSkills || isLongSession),
+      calibrationApplied: {
+        sessionDensityMultiplier: advancedAthleteCalibration?.sessionDensityMultiplier ?? 1.0,
+        mainWorkBonus: advancedAthleteCalibration?.mainWorkBonus ?? 0,
+        supportWorkBonus: advancedAthleteCalibration?.supportWorkBonus ?? 0,
+        accessorySlotBonus: advancedAthleteCalibration?.accessorySlotBonus ?? 0,
+        mixedMethodFinisherAllowed: advancedAthleteCalibration?.mixedMethodFinisherAllowed ?? false,
+        primarySkillExpressionWeight: advancedAthleteCalibration?.primarySkillExpressionWeight ?? 0.5,
+        secondarySkillExpressionWeight: advancedAthleteCalibration?.secondarySkillExpressionWeight ?? 0.3,
+        carryoverThreshold: advancedAthleteCalibration?.carryoverThreshold ?? 0.3,
+        sequencingStrictness: advancedAthleteCalibration?.sequencingStrictness ?? 'loose',
+      },
+      verdict: isAdvanced 
+        ? 'advanced_calibration_applied'
+        : 'standard_calibration_used',
+    })
+    
+    // [PHASE 15E TASK 1] PRIMARY/SECONDARY VISIBILITY AUDIT
+    console.log('[phase15e-primary-secondary-visibility-audit]', {
+      primaryGoal,
+      secondaryGoal,
+      primarySkillExpressionWeight: advancedAthleteCalibration?.primarySkillExpressionWeight ?? 0.5,
+      secondarySkillExpressionWeight: advancedAthleteCalibration?.secondarySkillExpressionWeight ?? 0.3,
+      tertiarySkillMinExposure: advancedAthleteCalibration?.tertiarySkillMinExposure ?? 0,
+      allSelectedSkills: expandedContext.selectedSkills,
+      tertiarySkills: expandedContext.selectedSkills.filter(s => s !== primaryGoal && s !== secondaryGoal),
+      expectedPrimaryVisibility: (advancedAthleteCalibration?.primarySkillExpressionWeight ?? 0.5) >= 0.5 ? 'strong' : 'moderate',
+      expectedSecondaryVisibility: (advancedAthleteCalibration?.secondarySkillExpressionWeight ?? 0.3) >= 0.35 ? 'meaningful' : 'minimal',
+    })
+  } catch (phase15eAuditError) {
+    // Audit logging should never crash generation - silently continue
+    console.error('[phase15e-audit-log-error]', {
+      sessionIndex,
+      error: phase15eAuditError instanceof Error ? phase15eAuditError.message : 'unknown',
+    })
+  }
   
   // Determine if skills should be prioritized based on training path
   const shouldPrioritizeSkills = trainingPath === 'skill_progression' || 
@@ -17378,32 +17387,41 @@ function generateAdaptiveSession(
   
   // ==========================================================================
   // [WEEKLY-COMPOSITION-UPGRADE] Log week adaptation decisions for this session
+  // [PHASE 15E DIAGNOSTIC] Wrapped in try-catch - logging should never crash generation
   // ==========================================================================
   if (weekAdaptation) {
-    console.log('[session-assembly-week-adaptation-decision]', {
-      sessionIndex,
-      dayFocus: day.focus,
-      adaptationPhase: weekAdaptation.adaptationPhase,
-      weeklyComplexity: weekAdaptation.weeklyComplexity,
-      loadStrategy: {
-        volumeBias: weekAdaptation.loadStrategy?.volumeBias,
-        intensityBias: weekAdaptation.loadStrategy?.intensityBias,
-        densityBias: weekAdaptation.loadStrategy?.densityBias,
-        finisherBias: weekAdaptation.loadStrategy?.finisherBias,
-        straightArmBias: weekAdaptation.loadStrategy?.straightArmExposureBias,
-      },
-      firstWeekProtection: weekAdaptation.firstWeekProtection ? {
-        active: weekAdaptation.firstWeekProtection.active,
-        reduceSets: weekAdaptation.firstWeekProtection.reduceSets,
-        suppressFinishers: weekAdaptation.firstWeekProtection.suppressFinishers,
-        reasons: weekAdaptation.firstWeekProtection.reasons.slice(0, 2),
-      } : null,
-      verdict: weekAdaptation.firstWeekProtection?.active 
-        ? 'FIRST_WEEK_GOVERNOR_ACTIVE' 
-        : weekAdaptation.loadStrategy?.volumeBias === 'reduced' 
-          ? 'REDUCED_VOLUME_BIAS_ACTIVE'
-          : 'NORMAL_LOAD_STRATEGY',
-    })
+    try {
+      console.log('[session-assembly-week-adaptation-decision]', {
+        sessionIndex,
+        dayFocus: day.focus,
+        adaptationPhase: weekAdaptation.adaptationPhase,
+        weeklyComplexity: weekAdaptation.weeklyComplexity,
+        loadStrategy: {
+          volumeBias: weekAdaptation.loadStrategy?.volumeBias,
+          intensityBias: weekAdaptation.loadStrategy?.intensityBias,
+          densityBias: weekAdaptation.loadStrategy?.densityBias,
+          finisherBias: weekAdaptation.loadStrategy?.finisherBias,
+          straightArmBias: weekAdaptation.loadStrategy?.straightArmExposureBias,
+        },
+        firstWeekProtection: weekAdaptation.firstWeekProtection ? {
+          active: weekAdaptation.firstWeekProtection.active,
+          reduceSets: weekAdaptation.firstWeekProtection.reduceSets,
+          suppressFinishers: weekAdaptation.firstWeekProtection.suppressFinishers,
+          reasons: (weekAdaptation.firstWeekProtection.reasons || []).slice(0, 2),
+        } : null,
+        verdict: weekAdaptation.firstWeekProtection?.active 
+          ? 'FIRST_WEEK_GOVERNOR_ACTIVE' 
+          : weekAdaptation.loadStrategy?.volumeBias === 'reduced' 
+            ? 'REDUCED_VOLUME_BIAS_ACTIVE'
+            : 'NORMAL_LOAD_STRATEGY',
+      })
+    } catch (weekAdaptationLogError) {
+      // Logging should never crash generation - silently continue
+      console.error('[session-assembly-week-adaptation-log-error]', {
+        sessionIndex,
+        error: weekAdaptationLogError instanceof Error ? weekAdaptationLogError.message : 'unknown',
+      })
+    }
   }
   
   // [DOCTRINE RUNTIME CONTRACT] Log doctrine influence for this session
@@ -17995,80 +18013,100 @@ function generateAdaptiveSession(
     
     // ==========================================================================
     // [PRESCRIPTION-PROPAGATION] PHASE 2: Apply set and RPE reductions
+    // [PHASE 15E DIAGNOSTIC] Wrapped in try-catch for soft-degradation
     // ==========================================================================
-    const shouldReduceSets = 
-      weekAdaptation.firstWeekProtection?.active && weekAdaptation.firstWeekProtection?.reduceSets ||
-      weekAdaptation.loadStrategy?.volumeBias === 'reduced'
-    
-    // [PRESCRIPTION-PROPAGATION] Check if RPE should be reduced
-    const shouldReduceRPE = 
-      weekAdaptation.firstWeekProtection?.active && weekAdaptation.firstWeekProtection?.reduceRPE ||
-      weekAdaptation.loadStrategy?.intensityBias === 'reduced'
-    
-    if (shouldReduceSets || shouldReduceRPE) {
-      const setReductionFactor = shouldReduceSets 
-        ? (weekAdaptation.firstWeekProtection?.active ? 0.75 : 0.85) // 25% reduction for first week, 15% for reduced bias
-        : 1.0
-      const rpeReduction = shouldReduceRPE ? 1 : 0 // Reduce RPE by 1 point when active
+    try {
+      const shouldReduceSets = 
+        weekAdaptation.firstWeekProtection?.active && weekAdaptation.firstWeekProtection?.reduceSets ||
+        weekAdaptation.loadStrategy?.volumeBias === 'reduced'
       
-      weekAdaptationAdjusted = exercisesForDosageAdjustment.map(ex => {
-        const currentSets = typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets)) || 3
-        const reducedSets = shouldReduceSets 
-          ? Math.max(2, Math.round(currentSets * setReductionFactor)) // Never below 2 sets
-          : currentSets
-        
-        // [PRESCRIPTION-PROPAGATION] Reduce targetRPE when intensity bias is reduced
-        const currentRPE = typeof ex.targetRPE === 'number' ? ex.targetRPE : 8
-        const reducedRPE = shouldReduceRPE 
-          ? Math.max(5, currentRPE - rpeReduction) // Never below RPE 5
-          : ex.targetRPE
-        
-        if (reducedSets !== currentSets || (shouldReduceRPE && reducedRPE !== currentRPE)) {
-          setsReducedByWeekAdaptation = true
-        }
-        
-        // Build note components
-        const noteComponents: string[] = []
-        if (ex.note) noteComponents.push(ex.note)
-        if (reducedSets < currentSets) {
-          noteComponents.push(`[Volume adjusted for ${weekAdaptation.adaptationPhase === 'initial_acclimation' ? 'first-week acclimation' : 'recovery'}]`)
-        }
-        if (shouldReduceRPE && reducedRPE !== ex.targetRPE) {
-          noteComponents.push(`[Intensity capped for ${weekAdaptation.adaptationPhase === 'initial_acclimation' ? 'acclimation' : 'recovery'}]`)
-        }
-        
-        return {
-          ...ex,
-          sets: reducedSets,
-          targetRPE: reducedRPE,
-          note: noteComponents.join(' ').trim() || ex.note,
-        }
-      })
+      // [PRESCRIPTION-PROPAGATION] Check if RPE should be reduced
+      const shouldReduceRPE = 
+        weekAdaptation.firstWeekProtection?.active && weekAdaptation.firstWeekProtection?.reduceRPE ||
+        weekAdaptation.loadStrategy?.intensityBias === 'reduced'
       
-      weekAdaptationSetReductionReason = weekAdaptation.firstWeekProtection?.active 
-        ? 'first_week_governor_reduce_sets_and_rpe' 
-        : 'reduced_volume_or_intensity_bias'
-      
-      console.log('[PRESCRIPTION-PROPAGATION-DOSAGE-REDUCTION]', {
+      if (shouldReduceSets || shouldReduceRPE) {
+        const setReductionFactor = shouldReduceSets 
+          ? (weekAdaptation.firstWeekProtection?.active ? 0.75 : 0.85) // 25% reduction for first week, 15% for reduced bias
+          : 1.0
+        const rpeReduction = shouldReduceRPE ? 1 : 0 // Reduce RPE by 1 point when active
+        
+        weekAdaptationAdjusted = exercisesForDosageAdjustment.map(ex => {
+          const currentSets = typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets)) || 3
+          const reducedSets = shouldReduceSets 
+            ? Math.max(2, Math.round(currentSets * setReductionFactor)) // Never below 2 sets
+            : currentSets
+          
+          // [PRESCRIPTION-PROPAGATION] Reduce targetRPE when intensity bias is reduced
+          const currentRPE = typeof ex.targetRPE === 'number' ? ex.targetRPE : 8
+          const reducedRPE = shouldReduceRPE 
+            ? Math.max(5, currentRPE - rpeReduction) // Never below RPE 5
+            : ex.targetRPE
+          
+          if (reducedSets !== currentSets || (shouldReduceRPE && reducedRPE !== currentRPE)) {
+            setsReducedByWeekAdaptation = true
+          }
+          
+          // Build note components
+          const noteComponents: string[] = []
+          if (ex.note) noteComponents.push(ex.note)
+          if (reducedSets < currentSets) {
+            noteComponents.push(`[Volume adjusted for ${weekAdaptation.adaptationPhase === 'initial_acclimation' ? 'first-week acclimation' : 'recovery'}]`)
+          }
+          if (shouldReduceRPE && reducedRPE !== ex.targetRPE) {
+            noteComponents.push(`[Intensity capped for ${weekAdaptation.adaptationPhase === 'initial_acclimation' ? 'acclimation' : 'recovery'}]`)
+          }
+          
+          return {
+            ...ex,
+            sets: reducedSets,
+            targetRPE: reducedRPE,
+            note: noteComponents.join(' ').trim() || ex.note,
+          }
+        })
+        
+        weekAdaptationSetReductionReason = weekAdaptation.firstWeekProtection?.active 
+          ? 'first_week_governor_reduce_sets_and_rpe' 
+          : 'reduced_volume_or_intensity_bias'
+        
+        console.log('[PRESCRIPTION-PROPAGATION-DOSAGE-REDUCTION]', {
+          sessionIndex,
+          dayFocus: day.focus,
+          reductionApplied: true,
+          setReductionFactor,
+          rpeReduction,
+          shouldReduceSets,
+          shouldReduceRPE,
+          secondaryExercisesTrimmed,
+          reason: weekAdaptationSetReductionReason,
+          firstWeekActive: weekAdaptation.firstWeekProtection?.active,
+          volumeBias: weekAdaptation.loadStrategy?.volumeBias,
+          intensityBias: weekAdaptation.loadStrategy?.intensityBias,
+          exercisesAffected: weekAdaptationAdjusted.length,
+          originalExerciseCount: effectiveMainForSession.length,
+          finalExerciseCount: weekAdaptationAdjusted.length,
+          originalSetsTotal: exercisesForDosageAdjustment.reduce((sum, ex) => sum + (typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets)) || 3), 0),
+          reducedSetsTotal: weekAdaptationAdjusted.reduce((sum, ex) => sum + (typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets)) || 3), 0),
+          verdict: setsReducedByWeekAdaptation || secondaryExercisesTrimmed ? 'DOSAGE_REDUCED' : 'DOSAGE_ALREADY_MINIMAL',
+        })
+      }
+    } catch (phase15eDosageError) {
+      // [PHASE 15E DIAGNOSTIC] Log detailed failure info but don't crash the session
+      console.error('[PHASE-15E-DOSAGE-REDUCTION-FAILURE]', {
+        diagnostic_stage: 'prescription_propagation_phase2',
+        diagnostic_source: 'set_rpe_reduction',
+        diagnostic_contract: 'SessionWeekAdaptation',
         sessionIndex,
         dayFocus: day.focus,
-        reductionApplied: true,
-        setReductionFactor,
-        rpeReduction,
-        shouldReduceSets,
-        shouldReduceRPE,
-        secondaryExercisesTrimmed,
-        reason: weekAdaptationSetReductionReason,
-        firstWeekActive: weekAdaptation.firstWeekProtection?.active,
-        volumeBias: weekAdaptation.loadStrategy?.volumeBias,
-        intensityBias: weekAdaptation.loadStrategy?.intensityBias,
-        exercisesAffected: weekAdaptationAdjusted.length,
-        originalExerciseCount: effectiveMainForSession.length,
-        finalExerciseCount: weekAdaptationAdjusted.length,
-        originalSetsTotal: exercisesForDosageAdjustment.reduce((sum, ex) => sum + (typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets)) || 3), 0),
-        reducedSetsTotal: weekAdaptationAdjusted.reduce((sum, ex) => sum + (typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets)) || 3), 0),
-        verdict: setsReducedByWeekAdaptation || secondaryExercisesTrimmed ? 'DOSAGE_REDUCED' : 'DOSAGE_ALREADY_MINIMAL',
+        exercisesForDosageAdjustmentCount: exercisesForDosageAdjustment?.length ?? 'undefined',
+        weekAdaptationShape: weekAdaptation ? Object.keys(weekAdaptation) : 'null',
+        loadStrategyShape: weekAdaptation?.loadStrategy ? Object.keys(weekAdaptation.loadStrategy) : 'null',
+        firstWeekProtectionShape: weekAdaptation?.firstWeekProtection ? Object.keys(weekAdaptation.firstWeekProtection) : 'null',
+        error: phase15eDosageError instanceof Error ? phase15eDosageError.message : String(phase15eDosageError),
+        stack: phase15eDosageError instanceof Error ? phase15eDosageError.stack?.split('\n').slice(0, 3).join(' | ') : undefined,
+        verdict: 'PHASE_15E_DOSAGE_REDUCTION_BYPASSED_DUE_TO_ERROR',
       })
+      // Continue without dosage reduction - preserve session generation with original exercises
     }
   }
   
@@ -19028,6 +19066,11 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       'session_variant_generation_failed',
       'finisher_helper_failed',
       'session_has_no_exercises',
+      // [PHASE 15E] Phase 15E error patterns for proper classification
+      'phase15e_optional_enrichment_failure',
+      'phase15e_session_shape_failure',
+      'phase15e_dosage_propagation_failure',
+      'phase15e_calibration_contract_failure',
     ]
     
     const isAlreadyClassified = alreadyClassifiedPatterns.some(p => errorMessage.includes(p))

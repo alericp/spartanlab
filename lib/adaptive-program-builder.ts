@@ -8286,39 +8286,104 @@ async function generateAdaptiveProgramImpl(
     }
   }
   
-  // Weak point detection for automatic focus area identification
-  const weakPointSummary = detectWeakPoints()
-  const volumeDistribution = getVolumeDistribution(weakPointSummary)
-  
-  // Get training behavior analysis for adaptive adjustments
+  // ==========================================================================
+  // [FINAL-POST-HELPER-ESCAPE-CORRIDOR] 
+  // Weak point detection, skill intelligence, and training adjustments
+  // These can throw if underlying data is malformed - wrap in containment boundary
+  // ==========================================================================
+  let weakPointSummary: ReturnType<typeof detectWeakPoints> | null = null
+  let volumeDistribution: ReturnType<typeof getVolumeDistribution> | null = null
   let trainingBehavior: TrainingBehaviorResult | null = null
   let adaptiveVolumeModifier = 1.0
-  try {
-    if (typeof window !== 'undefined') {
-      trainingBehavior = evaluateTrainingBehavior()
-      adaptiveVolumeModifier = trainingBehavior.volumeAnalysis.recommendedVolumeModifier
-    }
-  } catch {
-    // Training behavior analysis may fail with no workout logs
+  let skillIntelligence: ReturnType<typeof getUnifiedSkillIntelligence> | null = null
+  let intelligenceAdjustments: ReturnType<typeof generateTrainingAdjustments> | null = null
+  let finalPostHelperCorridorDegraded = false
+  let finalPostHelperCorridorStep = 'entry'
+  
+  // Stable snapshot for rollback if this corridor fails
+  const preFinalAssemblyStableSnapshot = {
+    calibrationContext,
+    shouldIncludeEndurance,
+    shouldIncludeDensity,
+    fatigueDecision,
+    deloadRecommendation,
   }
   
-  // Get unified skill intelligence for program prioritization
-  // This aggregates readiness, support strength, tendon adaptation, and calibration
-  // [PHASE 23A] TASK 5 - Use material identity skills, NOT stale onboarding
-  const skillIntelligence = getUnifiedSkillIntelligence(
-    [], // Sessions loaded separately if needed
-    [], // Strength records loaded separately
-    profile?.bodyweight || null,
-    materialIdentity.selectedSkills as Parameters<typeof getUnifiedSkillIntelligence>[3]
-  )
-  
-  // Get training adjustments based on skill intelligence weak points
-  const intelligenceAdjustments = generateTrainingAdjustments(skillIntelligence)
+  try {
+    finalPostHelperCorridorStep = 'weak_point_detection'
+    weakPointSummary = detectWeakPoints()
+    
+    finalPostHelperCorridorStep = 'volume_distribution'
+    volumeDistribution = getVolumeDistribution(weakPointSummary)
+    
+    finalPostHelperCorridorStep = 'training_behavior'
+    try {
+      if (typeof window !== 'undefined') {
+        trainingBehavior = evaluateTrainingBehavior()
+        adaptiveVolumeModifier = trainingBehavior.volumeAnalysis.recommendedVolumeModifier
+      }
+    } catch {
+      // Training behavior analysis may fail with no workout logs - continue
+    }
+    
+    finalPostHelperCorridorStep = 'skill_intelligence'
+    // Get unified skill intelligence for program prioritization
+    // This aggregates readiness, support strength, tendon adaptation, and calibration
+    // [PHASE 23A] TASK 5 - Use material identity skills, NOT stale onboarding
+    skillIntelligence = getUnifiedSkillIntelligence(
+      [], // Sessions loaded separately if needed
+      [], // Strength records loaded separately
+      profile?.bodyweight || null,
+      materialIdentity.selectedSkills as Parameters<typeof getUnifiedSkillIntelligence>[3]
+    )
+    
+    finalPostHelperCorridorStep = 'intelligence_adjustments'
+    // Get training adjustments based on skill intelligence weak points
+    intelligenceAdjustments = generateTrainingAdjustments(skillIntelligence)
+    
+    finalPostHelperCorridorStep = 'corridor_complete'
+    
+    console.log('[final-post-helper-boundary-success]', {
+      sessionIndex,
+      dayFocus: day.focus,
+      currentStage: stageTracker.current,
+      exactRemainingCorridor: 'weak_point_skill_intelligence_adjustments',
+      rollbackUsed: false,
+      generationContinues: true,
+      verdict: 'final_post_helper_corridor_survived',
+    })
+  } catch (finalCorridorError) {
+    // [FINAL-POST-HELPER-ESCAPE-CORRIDOR] Containment - restore stable snapshot and continue
+    finalPostHelperCorridorDegraded = true
+    
+    console.error('[final-post-helper-boundary-fallback]', {
+      sessionIndex,
+      dayFocus: day.focus,
+      currentStage: stageTracker.current,
+      exactRemainingCorridor: 'weak_point_skill_intelligence_adjustments',
+      failingStep: finalPostHelperCorridorStep,
+      rollbackRestored: true,
+      snapshotKind: 'preFinalAssemblyStableSnapshot',
+      errorMessage: finalCorridorError instanceof Error ? finalCorridorError.message : String(finalCorridorError),
+      stackPreview: finalCorridorError instanceof Error ? finalCorridorError.stack?.slice(0, 200) : null,
+      generationContinues: true,
+      verdict: 'final_post_helper_failure_contained_continue',
+    })
+    
+    // Use neutral defaults for failed analyses
+    weakPointSummary = null
+    volumeDistribution = null
+    trainingBehavior = null
+    adaptiveVolumeModifier = 1.0
+    skillIntelligence = null
+    intelligenceAdjustments = null
+  }
   
   // Use skill intelligence to potentially refine emphasis
   // If the primary goal has a critical limiter, consider adjusting approach
-  const primarySkillIntel = skillIntelligence.skills[primaryGoal as keyof typeof skillIntelligence.skills]
-  const hasSkillLimiter = primarySkillIntel?.weakPoints.hasCriticalLimiter ?? false
+  // [FINAL-POST-HELPER-ESCAPE-CORRIDOR] Guard against null skillIntelligence
+  const primarySkillIntel = skillIntelligence?.skills?.[primaryGoal as keyof typeof skillIntelligence.skills] ?? null
+  const hasSkillLimiter = primarySkillIntel?.weakPoints?.hasCriticalLimiter ?? false
   
   // Get tendon adaptation for the primary goal skill (from intelligence or calibration)
   const tendonAdaptationForGoal = primarySkillIntel?.confidence.components.tendonAdaptationScore 
@@ -12770,13 +12835,19 @@ fatigueDecision: fatigueDecision ? {
     trainingEmphasis,
     // [post-validation-step] Step 8: Skill intelligence
     // Unified Skill Intelligence Layer
+    // [FINAL-POST-HELPER-ESCAPE-CORRIDOR] Guard against null skillIntelligence
     skillIntelligence: (() => {
       postValidationStep = 'finalize_skill_intelligence'
-      return {
+      return skillIntelligence ? {
       prioritization: skillIntelligence.prioritization,
       globalLimiters: skillIntelligence.globalLimiters,
       dataQuality: skillIntelligence.dataQuality,
       adjustments: intelligenceAdjustments?.slice(0, 3) || [], // Top 3 adjustments
+      } : {
+      prioritization: [],
+      globalLimiters: [],
+      dataQuality: 'insufficient' as const,
+      adjustments: [],
       }
     })(),
     // [post-validation-step] Step 9: Progression insights
@@ -12822,16 +12893,17 @@ fatigueDecision: fatigueDecision ? {
     })(),
     // [post-validation-step] Step 12: Weak point detection
     // Weak Point Detection - automatic focus identification
+    // [FINAL-POST-HELPER-ESCAPE-CORRIDOR] Guard against null weakPointSummary
     weakPointDetection: (() => {
       postValidationStep = 'finalize_weak_point_detection'
-      return weakPointSummary?.confidenceLevel !== 'low' ? {
+      return weakPointSummary && weakPointSummary.confidenceLevel !== 'low' ? {
       primaryFocus: weakPointSummary.primaryFocus,
       primaryFocusLabel: weakPointSummary.primaryFocusLabel,
       primaryFocusReason: weakPointSummary.primaryFocusReason,
       secondaryFocus: weakPointSummary.secondaryFocusLabel,
       mobilityEmphasis: weakPointSummary.mobilityEmphasis,
       volumeModifier: weakPointSummary.volumeModifier,
-      confidenceLevel: weakPointSummary?.confidenceLevel,
+      confidenceLevel: weakPointSummary.confidenceLevel,
       } : undefined
     })(),
     // [post-validation-step] Step 13: Training behavior analysis
@@ -12959,11 +13031,11 @@ fatigueDecision: fatigueDecision ? {
             frameworkId: trainingEmphasis.primaryMethod,
             frameworkName: trainingEmphasis.primaryMethod,
           } : null,
-          skillIntelligence.dataQuality !== 'insufficient' ? {
+          skillIntelligence && skillIntelligence.dataQuality !== 'insufficient' ? {
             confidence: skillIntelligence.dataQuality === 'excellent' ? 0.9
               : skillIntelligence.dataQuality === 'good' ? 0.7
               : 0.4,
-            adaptations: intelligenceAdjustments.slice(0, 3).map(a => a.reason),
+            adaptations: intelligenceAdjustments?.slice(0, 3).map(a => a.reason) || [],
           } : null,
           sessionType,
           firstSessionExercises

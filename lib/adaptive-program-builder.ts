@@ -460,10 +460,36 @@ import {
   type WeekLoadBalance,
 } from './engine-quality-contract'
 import { yieldToMainThread, createGenerationContext, assertNotAborted, type GenerationContext } from './utils/yield-control'
+// [WEEK-ADAPTATION-CONTRACT] Canonical week-level adaptation decision authority
+import {
+  buildWeekAdaptationDecision,
+  getAdaptationSummary,
+  getAdaptationBiasSummary,
+  type WeekAdaptationDecision,
+  type WeekAdaptationInput,
+  type AdaptationPhase,
+  type LoadStrategy,
+  type FirstWeekGovernor,
+  type ComplexityContext,
+} from './program-generation/week-adaptation-decision-contract'
 
 // Re-export schedule types for consumers
 export type { ScheduleMode, DayStressLevel } from './flexible-schedule-engine'
 export type { GenerationMode, ProfileSnapshot } from './program-state-contract'
+// [WEEK-ADAPTATION-CONTRACT] Re-export week adaptation types for consumers
+export type { 
+  WeekAdaptationDecision, 
+  WeekAdaptationInput, 
+  AdaptationPhase,
+  LoadStrategy,
+  FirstWeekGovernor,
+  ComplexityContext,
+} from './program-generation/week-adaptation-decision-contract'
+export { 
+  buildWeekAdaptationDecision, 
+  getAdaptationSummary, 
+  getAdaptationBiasSummary,
+} from './program-generation/week-adaptation-decision-contract'
 // [PHASE 7B] Re-export training method preference type for UI components
 export type { TrainingMethodPreference } from './training-methods'
 // [program-profile-validate] Re-export validation types
@@ -1761,6 +1787,46 @@ exerciseExplanations?: {
       visibleAuditSkillCount: number
       visiblyExpressedCount: number
     }
+  }
+  // ==========================================================================
+  // [WEEK-ADAPTATION-CONTRACT] Canonical Week-Level Adaptation Decision
+  // The SINGLE authoritative source for week-level adaptation decisions.
+  // This determines: target days, load strategy, first-week protection, etc.
+  // ==========================================================================
+  weekAdaptationDecision?: {
+    phase: AdaptationPhase
+    confidence: 'low' | 'moderate' | 'high'
+    targetDays: number
+    dayCountReason: string
+    loadStrategy: {
+      volumeBias: 'reduced' | 'normal' | 'elevated'
+      intensityBias: 'reduced' | 'normal' | 'elevated'
+      densityBias: 'reduced' | 'normal' | 'elevated'
+      finisherBias: 'limited' | 'normal' | 'expanded'
+      straightArmExposureBias: 'protected' | 'normal' | 'expanded'
+      connectiveTissueBias: 'protected' | 'normal'
+      restSpacingBias: 'increased' | 'normal'
+    }
+    firstWeekGovernor: {
+      active: boolean
+      reasons: string[]
+      reduceDays: boolean
+      reduceSets: boolean
+      reduceRPE: boolean
+      suppressFinishers: boolean
+      protectHighStressPatterns: boolean
+    }
+    complexityContext: {
+      onboardingComplexity: 'low' | 'moderate' | 'high'
+      goalComplexity: 'low' | 'moderate' | 'high'
+      rawCounts: {
+        goals: number
+        styles: number
+        skills: number
+      }
+    }
+    adaptationSummary: string
+    decidedAt: string
   }
 }
 
@@ -5504,6 +5570,129 @@ async function generateAdaptiveProgramImpl(
     },
     isHighlyPersonalized: materialityContract.isHighlyPersonalized,
     criticalLeverCount: materialityContract.criticalLeverCount,
+  })
+  
+  // ==========================================================================
+  // [WEEK-ADAPTATION-CONTRACT] BUILD CANONICAL WEEK ADAPTATION DECISION
+  // This is the SINGLE AUTHORITATIVE source for week-level adaptation decisions.
+  // Built ONCE here, consumed by all downstream frequency/load/dosage decisions.
+  // The generator MUST obey this contract - no parallel heuristics allowed.
+  // ==========================================================================
+  const isFreshBaselineBuildForContract = serverOptions?.isFreshBaselineBuild ?? false
+  const isFirstGeneratedWeekForContract = isFreshBaselineBuildForContract || 
+    inputs.generationIntent === 'onboarding_first_build' || 
+    !trainingFeedback.trustedWorkoutCount
+  
+  // Detect straight-arm skills for connective tissue protection
+  const straightArmPatterns = ['planche', 'front_lever', 'back_lever', 'iron_cross', 'maltese']
+  const detectedStraightArmSkills = (canonicalProfile.selectedSkills || []).filter(s =>
+    straightArmPatterns.some(p => s.toLowerCase().includes(p))
+  )
+  
+  // Build readiness assessment if available
+  let readinessForContract: ReadinessAssessment | null = null
+  try {
+    readinessForContract = await getReadinessAssessment({
+      recentWorkoutCount: trainingFeedback.totalSessionsLast7Days,
+      averageSessionRPE: trainingFeedback.averageRecentRPE,
+      recentCompletionRate: trainingFeedback.recentCompletionRate,
+    })
+  } catch {
+    // Readiness assessment failed - continue with null
+    console.log('[week-adaptation-contract] Readiness assessment unavailable, continuing with null')
+  }
+  
+  // Build consistency status if available  
+  let consistencyForContract: ConsistencyStatus | null = null
+  try {
+    consistencyForContract = getConsistencyStatus()
+  } catch {
+    // Consistency status failed - continue with null
+    console.log('[week-adaptation-contract] Consistency status unavailable, continuing with null')
+  }
+  
+  const weekAdaptationInput: WeekAdaptationInput = {
+    // Generation context
+    generationIntent: serverOptions?.isFreshBaselineBuild ? 'onboarding_first_build' : (inputs as { generationIntent?: string }).generationIntent || 'fresh_main_build',
+    isFreshBaselineBuild: isFreshBaselineBuildForContract,
+    
+    // Profile truth
+    experienceLevel: canonicalProfile.experienceLevel || experienceLevel,
+    trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek ?? trainingDaysPerWeek,
+    scheduleMode: inputScheduleMode,
+    trainingPathType: canonicalProfile.trainingPathType || inputs.trainingPathType,
+    
+    // Goal complexity
+    primaryGoal: canonicalProfile.primaryGoal || primaryGoal,
+    secondaryGoal: canonicalProfile.secondaryGoal,
+    additionalGoals: (canonicalProfile as unknown as { additionalGoals?: string[] }).additionalGoals,
+    
+    // Skill complexity
+    selectedSkills: canonicalProfile.selectedSkills || inputs.selectedSkills,
+    straightArmSkills: detectedStraightArmSkills,
+    
+    // Style complexity
+    trainingStyles: canonicalProfile.trainingMethodPreferences,
+    
+    // Constraints
+    jointCautions: canonicalProfile.jointCautions,
+    
+    // Recovery/Readiness
+    readinessAssessment: readinessForContract,
+    consistencyStatus: consistencyForContract,
+    
+    // Adherence signals
+    recentMissedSessions: trainingFeedback.totalSessionsLast7Days < (trainingFeedback.expectedSessionsPerWeek || 4) 
+      ? (trainingFeedback.expectedSessionsPerWeek || 4) - trainingFeedback.totalSessionsLast7Days 
+      : 0,
+    recentPartialSessions: 0, // Not tracked yet - will be wired when partial session tracking is added
+    totalSessionsLast7Days: trainingFeedback.totalSessionsLast7Days,
+    totalSessionsLast14Days: trainingFeedback.totalSessionsLast14Days,
+    
+    // Program context
+    isFirstGeneratedWeek: isFirstGeneratedWeekForContract,
+    weekNumber: 1, // Will be incremented on rebuild
+    previousWeekAdaptation: null, // Will be passed from previous program on rebuild
+  }
+  
+  const weekAdaptationDecision = buildWeekAdaptationDecision(weekAdaptationInput)
+  
+  console.log('[week-adaptation-contract] AUTHORITATIVE DECISION BUILT:', {
+    phase: weekAdaptationDecision.phase,
+    confidence: weekAdaptationDecision.confidence,
+    targetDays: weekAdaptationDecision.targetDays,
+    dayCountReason: weekAdaptationDecision.dayCountReason,
+    loadStrategy: {
+      volumeBias: weekAdaptationDecision.loadStrategy.volumeBias,
+      intensityBias: weekAdaptationDecision.loadStrategy.intensityBias,
+      densityBias: weekAdaptationDecision.loadStrategy.densityBias,
+      finisherBias: weekAdaptationDecision.loadStrategy.finisherBias,
+      straightArmBias: weekAdaptationDecision.loadStrategy.straightArmExposureBias,
+    },
+    firstWeekGovernor: {
+      active: weekAdaptationDecision.firstWeekGovernor.active,
+      reasons: weekAdaptationDecision.firstWeekGovernor.reasons.slice(0, 3),
+      reduceDays: weekAdaptationDecision.firstWeekGovernor.reduceDays,
+      reduceSets: weekAdaptationDecision.firstWeekGovernor.reduceSets,
+      suppressFinishers: weekAdaptationDecision.firstWeekGovernor.suppressFinishers,
+    },
+    complexityContext: {
+      overall: weekAdaptationDecision.complexityContext.onboardingComplexity,
+      goals: weekAdaptationDecision.complexityContext.rawCounts.goals,
+      skills: weekAdaptationDecision.complexityContext.rawCounts.skills,
+      styles: weekAdaptationDecision.complexityContext.rawCounts.styles,
+    },
+    adherenceContext: {
+      status: weekAdaptationDecision.adherenceContext.consistencyStatus,
+      missedSessions: weekAdaptationDecision.adherenceContext.recentMissedSessions,
+      signalCount: weekAdaptationDecision.adherenceContext.usableSignalCount,
+    },
+    recoveryContext: {
+      readinessState: weekAdaptationDecision.recoveryContext.readinessState,
+      recoveryRisk: weekAdaptationDecision.recoveryContext.recoveryRisk,
+    },
+    evidence: weekAdaptationDecision.evidence.slice(0, 5),
+    adaptationSummary: getAdaptationSummary(weekAdaptationDecision),
   })
   
   // Resolve flexible frequency if applicable
@@ -13098,6 +13287,45 @@ return explanations.length > 0 ? explanations : undefined
         }
       }
     })(),
+    // ==========================================================================
+    // [WEEK-ADAPTATION-CONTRACT] Canonical Week-Level Adaptation Decision
+    // This is the AUTHORITATIVE source for week-level dosage decisions.
+    // ==========================================================================
+    weekAdaptationDecision: {
+      phase: weekAdaptationDecision.phase,
+      confidence: weekAdaptationDecision.confidence,
+      targetDays: weekAdaptationDecision.targetDays,
+      dayCountReason: weekAdaptationDecision.dayCountReason,
+      loadStrategy: {
+        volumeBias: weekAdaptationDecision.loadStrategy.volumeBias,
+        intensityBias: weekAdaptationDecision.loadStrategy.intensityBias,
+        densityBias: weekAdaptationDecision.loadStrategy.densityBias,
+        finisherBias: weekAdaptationDecision.loadStrategy.finisherBias,
+        straightArmExposureBias: weekAdaptationDecision.loadStrategy.straightArmExposureBias,
+        connectiveTissueBias: weekAdaptationDecision.loadStrategy.connectiveTissueBias,
+        restSpacingBias: weekAdaptationDecision.loadStrategy.restSpacingBias,
+      },
+      firstWeekGovernor: {
+        active: weekAdaptationDecision.firstWeekGovernor.active,
+        reasons: weekAdaptationDecision.firstWeekGovernor.reasons,
+        reduceDays: weekAdaptationDecision.firstWeekGovernor.reduceDays,
+        reduceSets: weekAdaptationDecision.firstWeekGovernor.reduceSets,
+        reduceRPE: weekAdaptationDecision.firstWeekGovernor.reduceRPE,
+        suppressFinishers: weekAdaptationDecision.firstWeekGovernor.suppressFinishers,
+        protectHighStressPatterns: weekAdaptationDecision.firstWeekGovernor.protectHighStressPatterns,
+      },
+      complexityContext: {
+        onboardingComplexity: weekAdaptationDecision.complexityContext.onboardingComplexity,
+        goalComplexity: weekAdaptationDecision.complexityContext.goalComplexity,
+        rawCounts: {
+          goals: weekAdaptationDecision.complexityContext.rawCounts.goals,
+          styles: weekAdaptationDecision.complexityContext.rawCounts.styles,
+          skills: weekAdaptationDecision.complexityContext.rawCounts.skills,
+        },
+      },
+      adaptationSummary: getAdaptationSummary(weekAdaptationDecision),
+      decidedAt: weekAdaptationDecision.decidedAt,
+    },
   }
   
   // ==========================================================================

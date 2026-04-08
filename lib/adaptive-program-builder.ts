@@ -17961,8 +17961,33 @@ function generateAdaptiveSession(
   let finisherSuppressedByWeekAdaptation = false
   let secondaryExercisesTrimmed = false
   let weekAdaptationSetReductionReason = 'none'
+  let phase15eBoundaryFailed = false
+  
+  // ==========================================================================
+  // [PHASE 15E AUTHORITATIVE BOUNDARY] Create rollback snapshot BEFORE any enhancement
+  // This is the last stable pre-15E session state that we can restore if Phase 15E fails
+  // ==========================================================================
+  const phase15eRollbackSnapshot = {
+    exercises: [...effectiveMainForSession], // Deep copy of exercise array
+    exerciseCount: effectiveMainForSession.length,
+    snapshotReason: 'pre_phase15e_enhancement_stable_state',
+  }
+  
+  console.log('[phase15e-boundary-entry]', {
+    sessionIndex,
+    dayFocus: day.focus,
+    rollbackSnapshotExerciseCount: phase15eRollbackSnapshot.exerciseCount,
+    weekAdaptationPresent: !!weekAdaptation,
+    firstWeekProtectionActive: weekAdaptation?.firstWeekProtection?.active || false,
+    stage: 'entering_phase15e_enhancement_boundary',
+  })
   
   if (weekAdaptation) {
+    // ==========================================================================
+    // [PHASE 15E AUTHORITATIVE BOUNDARY] Wrap ALL Phase 15E enhancement in one try-catch
+    // If ANYTHING inside fails, we restore to the rollback snapshot and continue
+    // ==========================================================================
+    try {
     // ==========================================================================
     // [PRESCRIPTION-PROPAGATION] PHASE 1: Reduce secondary/accessory exercise count
     // When first-week protection is active, trim non-primary exercises first
@@ -18145,6 +18170,48 @@ function generateAdaptiveSession(
       })
       // Continue without dosage reduction - preserve session generation with original exercises
     }
+    
+    // ==========================================================================
+    // [PHASE 15E AUTHORITATIVE BOUNDARY] Success - Phase 15E completed without fatal error
+    // ==========================================================================
+    console.log('[phase15e-boundary-success]', {
+      sessionIndex,
+      dayFocus: day.focus,
+      finalExerciseCount: weekAdaptationAdjusted.length,
+      rollbackSnapshotExerciseCount: phase15eRollbackSnapshot.exerciseCount,
+      secondaryTrimmed: secondaryExercisesTrimmed,
+      setsReduced: setsReducedByWeekAdaptation,
+      verdict: 'PHASE15E_APPLIED_SUCCESSFULLY',
+    })
+    
+    } catch (phase15eBoundaryError) {
+      // ==========================================================================
+      // [PHASE 15E AUTHORITATIVE BOUNDARY] FALLBACK - Restore pre-15E stable session
+      // This is the ONE place where Phase 15E failure is contained and recovered
+      // ==========================================================================
+      phase15eBoundaryFailed = true
+      
+      // Restore to the rollback snapshot
+      weekAdaptationAdjusted = phase15eRollbackSnapshot.exercises
+      setsReducedByWeekAdaptation = false
+      finisherSuppressedByWeekAdaptation = false
+      secondaryExercisesTrimmed = false
+      weekAdaptationSetReductionReason = 'phase15e_boundary_fallback'
+      
+      console.error('[phase15e-boundary-fallback]', {
+        sessionIndex,
+        dayFocus: day.focus,
+        failingSubstep: 'unknown_phase15e_internal_step',
+        errorMessage: phase15eBoundaryError instanceof Error ? phase15eBoundaryError.message : String(phase15eBoundaryError),
+        stackPreview: phase15eBoundaryError instanceof Error ? phase15eBoundaryError.stack?.split('\n').slice(0, 4).join(' | ') : undefined,
+        rollbackSnapshotRestored: true,
+        restoredExerciseCount: phase15eRollbackSnapshot.exerciseCount,
+        originalRollbackReason: phase15eRollbackSnapshot.snapshotReason,
+        verdict: 'PHASE15E_FAILED_USING_PRE15E_STABLE_SESSION',
+      })
+      
+      // DO NOT rethrow - Phase 15E failure is contained, generation continues with pre-15E session
+    }
   }
   
   const canonicalFinalMain = weekAdaptationAdjusted
@@ -18158,12 +18225,16 @@ function generateAdaptiveSession(
     canonicalMainNames: canonicalFinalMain.map(e => e.exercise?.name || 'unknown').slice(0, 8),
     wasRecovered: wasRecoveredFromInvalidation,
     wasRescued: sessionWasRescued,
+    phase15eBoundaryFailed, // Track whether Phase 15E rollback was used
+    phase15eRollbackUsed: phase15eBoundaryFailed,
     // Show what would have been used under old buggy logic
     oldBuggySourceWouldHaveUsed: wasRecoveredFromInvalidation ? 'effectiveMainForSession' : 'rescuedMain',
     rescuedMainCount: rescuedMain.length,
     adaptedMainCount: adaptedMain.adapted.length,
     effectiveMainForSessionCount: effectiveMainForSession.length,
-    verdict: 'CANONICAL_FINAL_MAIN_IS_AUTHORITATIVE',
+    verdict: phase15eBoundaryFailed 
+      ? 'CANONICAL_FINAL_MAIN_FROM_PHASE15E_ROLLBACK'
+      : 'CANONICAL_FINAL_MAIN_IS_AUTHORITATIVE',
   })
   
   const effectiveSelection = {
@@ -19096,8 +19167,12 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
     finishersSuppressed: finisherSuppressedByWeekAdaptation,
     secondaryTrimmed: secondaryExercisesTrimmed,
     setsReduced: setsReducedByWeekAdaptation,
+    phase15eBoundaryFailed,
+    phase15eRollbackUsed: phase15eBoundaryFailed,
     postAuditStepsReached: 'all_steps_complete',
-    verdict: 'PHASE_15E_SESSION_GENERATION_SUCCESS',
+    verdict: phase15eBoundaryFailed 
+      ? 'PHASE_15E_SESSION_GENERATION_SUCCESS_VIA_ROLLBACK'
+      : 'PHASE_15E_SESSION_GENERATION_SUCCESS',
   })
 
   // ==========================================================================
@@ -19122,6 +19197,7 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       'phase15e_session_shape_failure',
       'phase15e_dosage_propagation_failure',
       'phase15e_calibration_contract_failure',
+      'phase15e_boundary_fallback', // Authoritative boundary fallback (should never appear - boundary contains it)
     ]
     
     const isAlreadyClassified = alreadyClassifiedPatterns.some(p => errorMessage.includes(p))

@@ -8418,7 +8418,41 @@ async function generateAdaptiveProgramImpl(
     wantsHypertrophy: trainingOutcome === 'strength' || profile?.goalCategory === 'strength',
     tendonAdaptationLevel: tendonAdaptationForGoal as 'low' | 'low_moderate' | 'moderate' | 'moderate_high' | 'high',
   }
-  const selectedMethods = selectMethodProfiles(selectionContext)
+  
+  // [CURRENT-LIVE-REGENERATE-THROW-SITE] selectMethodProfiles can throw if context is malformed
+  // Wrap in try/catch to contain and continue with safe defaults
+  let selectedMethods: ReturnType<typeof selectMethodProfiles>
+  try {
+    selectedMethods = selectMethodProfiles(selectionContext)
+  } catch (methodSelectionError) {
+    console.error('[current-live-throw-contained]', {
+      stage: stageTracker.current,
+      exactFunction: 'selectMethodProfiles',
+      exactLineRegion: 'post_final_corridor_method_selection',
+      failureKind: 'method_profile_selection_error',
+      wasInsidePreviousCorridor: false,
+      continuedSafely: true,
+      errorMessage: methodSelectionError instanceof Error ? methodSelectionError.message : String(methodSelectionError),
+      verdict: 'post_helper_method_selection_contained',
+    })
+    // Provide safe default method profiles - use 'hybrid_skill_strength' as it exists in getCoachingMessage
+    selectedMethods = {
+      primary: {
+        id: 'hybrid_skill_strength',
+        publicLabel: 'Hybrid Skill Strength',
+        internalLabel: 'hybrid_skill_strength',
+        description: 'Balanced skill and strength work',
+        applicableGoals: ['general_fitness'],
+        fatigueImpact: 'moderate',
+        recoveryDemand: 'moderate',
+        timeEfficiency: 'moderate',
+        skillTransfer: 'high',
+        bestFor: ['strength', 'skill'],
+      },
+      secondary: null,
+      explanation: 'Default method selection applied due to selection error',
+    }
+  }
   
   // ==========================================================================
   // [PHASE 1] MATERIALITY CONTRACT - METHOD ELIGIBILITY ENFORCEMENT
@@ -8451,11 +8485,33 @@ async function generateAdaptiveProgramImpl(
   }
   
   // Build training emphasis for UI
-  const trainingEmphasis = {
-    primaryMethod: selectedMethods.primary.publicLabel,
-    secondaryMethod: selectedMethods.secondary?.publicLabel,
-    explanation: selectedMethods.explanation,
-    coachingTip: getCoachingMessage(selectedMethods),
+  // [CURRENT-LIVE-REGENERATE-THROW-SITE] getCoachingMessage can crash if method id not in messages
+  let trainingEmphasis: { primaryMethod: string; secondaryMethod: string | undefined; explanation: string; coachingTip: string }
+  try {
+    trainingEmphasis = {
+      primaryMethod: selectedMethods.primary.publicLabel,
+      secondaryMethod: selectedMethods.secondary?.publicLabel,
+      explanation: selectedMethods.explanation,
+      coachingTip: getCoachingMessage(selectedMethods),
+    }
+  } catch (emphasisError) {
+    console.error('[current-live-throw-contained]', {
+      stage: stageTracker.current,
+      exactFunction: 'getCoachingMessage/trainingEmphasis',
+      exactLineRegion: 'post_method_selection_emphasis_build',
+      failureKind: 'coaching_message_or_emphasis_error',
+      wasInsidePreviousCorridor: false,
+      continuedSafely: true,
+      errorMessage: emphasisError instanceof Error ? emphasisError.message : String(emphasisError),
+      verdict: 'emphasis_build_contained',
+    })
+    // Safe fallback emphasis
+    trainingEmphasis = {
+      primaryMethod: selectedMethods.primary?.publicLabel || 'Strength Training',
+      secondaryMethod: selectedMethods.secondary?.publicLabel,
+      explanation: selectedMethods.explanation || 'Balanced approach',
+      coachingTip: 'Focus on quality reps with good form.',
+    }
   }
   
   // TASK 2: Determine if secondary goal is pull or push dominant

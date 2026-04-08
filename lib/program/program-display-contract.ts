@@ -496,6 +496,22 @@ export function buildSessionDisplayContract(
 // =============================================================================
 
 /**
+ * Prescription intent categories for doctrine-driven display.
+ * Determines how dosage should be interpreted and displayed.
+ */
+export type PrescriptionIntent = 
+  | 'max_strength'        // Heavy loading, low reps, full recovery
+  | 'strength_volume'     // Moderate loading, moderate reps, building work capacity
+  | 'skill_acquisition'   // Position practice, quality focus, not to failure
+  | 'skill_intensity'     // Pushing skill limits, high effort holds/reps
+  | 'explosive_power'     // Speed/power focus, low reps, full recovery
+  | 'hypertrophy'         // Moderate load, higher reps, controlled tempo
+  | 'support_strength'    // Accessory work, moderate effort, building base
+  | 'technical_carryover' // Movement quality, skill transfer, controlled
+  | 'tissue_prep'         // Warm-up, activation, low intensity
+  | 'density_conditioning' // Time-based work, minimal rest, work capacity
+
+/**
  * Strict exercise card display contract.
  * Defines exactly what each exercise card should show in what order.
  * Prevents noisy/duplicate display by owning each display field explicitly.
@@ -504,16 +520,21 @@ export interface ExerciseCardDisplayContract {
   // IDENTITY - What is this exercise
   displayTitle: string
   displayCategory: 'skill' | 'strength' | 'accessory' | 'core' | 'warmup' | 'cooldown'
-  roleLabel: string | null  // 'primary_driver' | 'support' | 'technical' | null
+  roleLabel: string | null  // Doctrine-specific role
+  
+  // PRESCRIPTION INTENT - Why this dosage
+  prescriptionIntent: PrescriptionIntent
+  intentLabel: string  // Human-readable intent: "Strength Volume" or "Skill Intensity"
   
   // PRESCRIPTION - What to do (single coherent line)
   prescriptionLine: string   // "4 × 5s holds" or "3 × 8-12"
+  prescriptionContext: string | null  // "quality focus" or "push to near-failure" or null
   intensityBadge: string | null  // "RPE 8" or null
   loadBadge: string | null  // "+35 lb" or null
   restGuidance: string | null  // "90-120s" or null
   
-  // WHY - Why this exercise (one line, no fallback generic)
-  whyLine: string | null  // Selection reason, trimmed, or null
+  // WHY - Why this exercise (role-specific, not generic)
+  whyLine: string | null  // Selection reason, refined by intent
   
   // FLAGS - Only when meaningful
   isWeighted: boolean
@@ -552,16 +573,26 @@ export function buildExerciseCardContract(
     }
   }
 ): ExerciseCardDisplayContract {
-  // Determine exercise type
+  const nameLower = exercise.name.toLowerCase()
   const repsLower = exercise.repsOrTime?.toLowerCase() || ''
+  const reasonLower = (exercise.selectionReason || '').toLowerCase()
+  const expressionMode = exercise.coachingMeta?.expressionMode?.toLowerCase() || ''
+  const intensityBand = exercise.prescribedLoad?.intensityBand?.toLowerCase() || ''
+  
+  // Determine exercise type with better detection
   let exerciseType: ExerciseCardDisplayContract['exerciseType'] = 'reps_based'
-  if (repsLower.includes('s hold') || repsLower.includes('sec') || repsLower.includes('second')) {
-    exerciseType = 'isometric_hold'
-  } else if (repsLower.includes('min') || repsLower.includes(':')) {
-    exerciseType = 'timed'
-  } else if (exercise.prescribedLoad?.load && exercise.prescribedLoad.load > 0) {
-    exerciseType = 'weighted_lift'
-  }
+  const isHold = repsLower.includes('s hold') || repsLower.includes('sec') || repsLower.includes('second')
+  const isTimed = repsLower.includes('min') || repsLower.includes(':')
+  const isExplosive = nameLower.includes('explosive') || nameLower.includes('jump') || 
+    nameLower.includes('plyo') || nameLower.includes('muscle up') || nameLower.includes('kipping') ||
+    reasonLower.includes('explosive') || reasonLower.includes('power')
+  const hasLoad = exercise.prescribedLoad?.load && exercise.prescribedLoad.load > 0
+  
+  if (isHold) exerciseType = 'isometric_hold'
+  else if (isTimed) exerciseType = 'timed'
+  else if (isExplosive) exerciseType = 'explosive'
+  else if (hasLoad) exerciseType = 'weighted_lift'
+  else exerciseType = 'bodyweight'
   
   // Determine category
   const categoryLower = (exercise.category || 'accessory').toLowerCase()
@@ -571,6 +602,108 @@ export function buildExerciseCardContract(
   else if (categoryLower === 'core') displayCategory = 'core'
   else if (categoryLower === 'warmup') displayCategory = 'warmup'
   else if (categoryLower === 'cooldown') displayCategory = 'cooldown'
+  
+  // Parse rep range for intent detection
+  const repMatch = repsLower.match(/(\d+)(?:\s*-\s*(\d+))?/)
+  const minReps = repMatch ? parseInt(repMatch[1]) : 8
+  const maxReps = repMatch && repMatch[2] ? parseInt(repMatch[2]) : minReps
+  const avgReps = (minReps + maxReps) / 2
+  
+  // Parse hold time for skill intent
+  const holdMatch = repsLower.match(/(\d+)\s*s/)
+  const holdSeconds = holdMatch ? parseInt(holdMatch[1]) : 0
+  
+  // Determine prescription intent based on exercise signals
+  let prescriptionIntent: PrescriptionIntent = 'support_strength'
+  
+  if (displayCategory === 'warmup') {
+    prescriptionIntent = 'tissue_prep'
+  } else if (displayCategory === 'cooldown') {
+    prescriptionIntent = 'tissue_prep'
+  } else if (isExplosive) {
+    prescriptionIntent = 'explosive_power'
+  } else if (displayCategory === 'skill') {
+    // Skill exercises: differentiate acquisition vs intensity
+    if (expressionMode.includes('direct') || expressionMode.includes('intensity')) {
+      prescriptionIntent = 'skill_intensity'
+    } else if (expressionMode.includes('technical') || holdSeconds <= 10) {
+      prescriptionIntent = 'skill_acquisition'
+    } else if (holdSeconds >= 20 || (exercise.targetRPE && exercise.targetRPE >= 8)) {
+      prescriptionIntent = 'skill_intensity'
+    } else {
+      prescriptionIntent = 'skill_acquisition'
+    }
+  } else if (displayCategory === 'strength' || hasLoad) {
+    // Strength exercises: differentiate max vs volume vs hypertrophy
+    if (intensityBand.includes('heavy') || avgReps <= 5) {
+      prescriptionIntent = 'max_strength'
+    } else if (avgReps >= 10 || intensityBand.includes('moderate')) {
+      prescriptionIntent = 'hypertrophy'
+    } else {
+      prescriptionIntent = 'strength_volume'
+    }
+  } else if (expressionMode.includes('carryover') || expressionMode.includes('technical')) {
+    prescriptionIntent = 'technical_carryover'
+  } else if (reasonLower.includes('density') || reasonLower.includes('conditioning')) {
+    prescriptionIntent = 'density_conditioning'
+  } else if (displayCategory === 'accessory' || displayCategory === 'core') {
+    prescriptionIntent = 'support_strength'
+  }
+  
+  // Intent labels - human-readable
+  const intentLabels: Record<PrescriptionIntent, string> = {
+    max_strength: 'Max Strength',
+    strength_volume: 'Strength Volume',
+    skill_acquisition: 'Skill Practice',
+    skill_intensity: 'Skill Intensity',
+    explosive_power: 'Power',
+    hypertrophy: 'Hypertrophy',
+    support_strength: 'Support',
+    technical_carryover: 'Technical',
+    tissue_prep: 'Prep',
+    density_conditioning: 'Density',
+  }
+  const intentLabel = intentLabels[prescriptionIntent]
+  
+  // Prescription context - brief execution cue based on intent
+  let prescriptionContext: string | null = null
+  switch (prescriptionIntent) {
+    case 'max_strength':
+      prescriptionContext = 'full recovery between sets'
+      break
+    case 'skill_acquisition':
+      prescriptionContext = 'quality over quantity'
+      break
+    case 'skill_intensity':
+      prescriptionContext = 'push to near-max'
+      break
+    case 'explosive_power':
+      prescriptionContext = 'maximal speed/height'
+      break
+    case 'hypertrophy':
+      prescriptionContext = 'controlled tempo'
+      break
+    case 'technical_carryover':
+      prescriptionContext = 'movement quality focus'
+      break
+    case 'density_conditioning':
+      prescriptionContext = 'maintain pace'
+      break
+    default:
+      prescriptionContext = null
+  }
+  
+  // Role label from expression mode - more doctrine-specific
+  let roleLabel: string | null = null
+  if (expressionMode.includes('direct') || expressionMode.includes('primary')) {
+    roleLabel = displayCategory === 'skill' ? 'Primary Skill' : 'Primary'
+  } else if (expressionMode.includes('technical')) {
+    roleLabel = 'Technical Slot'
+  } else if (expressionMode.includes('carryover')) {
+    roleLabel = 'Carryover'
+  } else if (expressionMode.includes('support')) {
+    roleLabel = 'Support'
+  }
   
   // Build prescription line - sets × reps format
   const prescriptionLine = `${exercise.sets} × ${exercise.repsOrTime}`
@@ -595,30 +728,37 @@ export function buildExerciseCardContract(
     }
   }
   
-  // Role label from expression mode
-  let roleLabel: string | null = null
-  const expressionMode = exercise.coachingMeta?.expressionMode?.toLowerCase() || ''
-  if (expressionMode.includes('direct') || expressionMode.includes('primary')) {
-    roleLabel = 'Primary'
-  } else if (expressionMode.includes('technical')) {
-    roleLabel = 'Technical'
-  } else if (expressionMode.includes('support') || expressionMode.includes('carryover')) {
-    roleLabel = 'Support'
-  }
-  
-  // Why line - trimmed selection reason, first sentence only
+  // Why line - refined by prescription intent, not just first sentence
   let whyLine: string | null = null
   if (exercise.selectionReason) {
-    const firstSentence = exercise.selectionReason.split('.')[0]
-    whyLine = firstSentence.length > 100 
-      ? firstSentence.substring(0, 97) + '...' 
-      : firstSentence
+    // Extract most relevant part based on intent
+    const reason = exercise.selectionReason
+    let refined = reason.split('.')[0]
+    
+    // If reason is generic, add intent-specific context
+    if (refined.length < 20 || refined.toLowerCase().includes('selected for')) {
+      const intentContext: Record<PrescriptionIntent, string> = {
+        max_strength: 'Building foundational strength',
+        strength_volume: 'Accumulating quality work',
+        skill_acquisition: 'Developing position control',
+        skill_intensity: 'Pushing skill limits',
+        explosive_power: 'Training power output',
+        hypertrophy: 'Building muscle capacity',
+        support_strength: 'Supporting primary movements',
+        technical_carryover: 'Transferring to target skills',
+        tissue_prep: 'Preparing tissues for work',
+        density_conditioning: 'Building work capacity',
+      }
+      refined = intentContext[prescriptionIntent]
+    }
+    
+    whyLine = refined.length > 80 ? refined.substring(0, 77) + '...' : refined
   }
   
   // Constraint detection
-  const isConstrained = (exercise.selectionReason || '').toLowerCase().includes('limited') ||
-    (exercise.selectionReason || '').toLowerCase().includes('capped') ||
-    (exercise.selectionReason || '').toLowerCase().includes('constrained')
+  const isConstrained = reasonLower.includes('limited') ||
+    reasonLower.includes('capped') ||
+    reasonLower.includes('constrained')
   
   const constraintNote = isConstrained ? 'Volume managed' : null
   
@@ -638,7 +778,10 @@ export function buildExerciseCardContract(
     displayTitle: exercise.name,
     displayCategory,
     roleLabel,
+    prescriptionIntent,
+    intentLabel,
     prescriptionLine,
+    prescriptionContext,
     intensityBadge,
     loadBadge,
     restGuidance,

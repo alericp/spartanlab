@@ -1501,6 +1501,20 @@ function ExerciseRow({
   if (card.loadBadge) prescriptionParts.push(card.loadBadge)
   if (hasRPE && card.intensityBadge) prescriptionParts.push(card.intensityBadge)
   const compactPrescription = prescriptionParts.join(' · ')
+  
+  // Intent-specific colors
+  const intentColors: Record<string, string> = {
+    max_strength: 'text-blue-400',
+    strength_volume: 'text-blue-300',
+    skill_acquisition: 'text-[#E63946]',
+    skill_intensity: 'text-[#FF6B6B]',
+    explosive_power: 'text-amber-400',
+    hypertrophy: 'text-purple-400',
+    support_strength: 'text-[#7A7A7A]',
+    technical_carryover: 'text-teal-400',
+    tissue_prep: 'text-green-400',
+    density_conditioning: 'text-orange-400',
+  }
 
   return (
     <div className={`py-2.5 px-3 rounded-lg border transition-colors ${
@@ -1510,10 +1524,10 @@ function ExerciseRow({
           ? 'bg-[#181818] border-[#4F6D8A]/20' 
           : 'bg-[#181818] border-[#2A2A2A] hover:border-[#3A3A3A]'
     }`}>
-      {/* PRIMARY: Name + Prescription + Actions */}
+      {/* PRIMARY: Name + Intent + Actions */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex-1 min-w-0">
-          {/* Exercise Name with inline category indicator */}
+          {/* Exercise Name with intent indicator */}
           <div className="flex items-center gap-2">
             {(prefix || index) && (
               <span className="text-[10px] text-[#5A5A5A] font-mono shrink-0">
@@ -1527,6 +1541,12 @@ function ExerciseRow({
               'bg-[#5A5A5A]'
             }`} />
             <p className="font-medium text-[#E5E5E5] text-sm truncate">{displayName}</p>
+            {/* Intent label - doctrine-specific */}
+            {!isWarmupCooldown && (
+              <span className={`text-[9px] shrink-0 ${intentColors[card.prescriptionIntent] || 'text-[#6A6A6A]'}`}>
+                {card.intentLabel}
+              </span>
+            )}
             {adjustedName && (
               <span className="text-[9px] px-1 py-0.5 rounded bg-[#4F6D8A]/15 text-[#4F6D8A] shrink-0">adj</span>
             )}
@@ -1555,6 +1575,12 @@ function ExerciseRow({
             · {card.restGuidance} rest
           </span>
         )}
+        {/* Prescription context - execution cue */}
+        {!isWarmupCooldown && card.prescriptionContext && (
+          <span className="text-[9px] text-[#5A5A5A] italic">
+            — {card.prescriptionContext}
+          </span>
+        )}
         {card.constraintNote && (
           <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/8 text-amber-400/80">
             {card.constraintNote}
@@ -1565,7 +1591,7 @@ function ExerciseRow({
         )}
       </div>
       
-      {/* SECONDARY: Why line - compressed, only if meaningful */}
+      {/* SECONDARY: Why line - intent-aware, only if meaningful */}
       {!isWarmupCooldown && card.whyLine && (
         <p className="text-[11px] text-[#6A6A6A] mt-1.5 leading-snug line-clamp-1">
           {card.whyLine}

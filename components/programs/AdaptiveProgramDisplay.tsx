@@ -1095,86 +1095,96 @@ export function AdaptiveProgramDisplay({
 
   return (
     <div className="space-y-4">
-      {/* Compressed Program Header */}
-      <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-4">
-        {/* Row 1: Title + Restart */}
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-bold truncate">{program.goalLabel} Program</h3>
-            <div className="flex items-center gap-2 mt-1 text-xs text-[#6A6A6A]">
-              <span>{validSessions.length}×/week</span>
-              <span className="text-[#4A4A4A]">·</span>
-              <span>~{program.sessionLength || 60}min</span>
-              <span className="text-[#4A4A4A]">·</span>
-              <span className="capitalize">{program.experienceLevel}</span>
+      {/* Program Command Header - Premium coaching dashboard */}
+      <Card className="bg-gradient-to-b from-[#2A2A2A] to-[#252525] border-[#3A3A3A] overflow-hidden">
+        {/* Hero Zone - Program Identity */}
+        <div className="relative px-4 pt-4 pb-3">
+          {/* Subtle accent line at top */}
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#E63946]/40 to-transparent" />
+          
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              {/* Title with stronger presence */}
+              <div className="flex items-center gap-2.5 mb-1">
+                <h3 className="text-xl font-bold tracking-tight">{program.goalLabel}</h3>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-[#E63946]/70 px-2 py-0.5 bg-[#E63946]/10 rounded">
+                  Active
+                </span>
+              </div>
+              {/* Training spine - the main method */}
+              <p className="text-sm font-medium text-[#E63946]">
+                {dominantSpineResolution?.primarySpine 
+                  ? `${dominantSpineResolution.primarySpine.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Approach`
+                  : `${program.primaryGoal?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Custom'} Focus`}
+                {program.secondaryGoal && (
+                  <span className="text-[#7A7A7A] font-normal"> + {program.secondaryGoal.replace(/_/g, ' ')}</span>
+                )}
+              </p>
             </div>
+            {(onRestart || onDelete) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-[#5A5A5A] hover:text-amber-400 h-8 w-8 p-0 rounded-full hover:bg-[#333]"
+                onClick={() => setShowRestartConfirm(true)}
+              >
+                <RotateCcw className="w-4 h-4" />
+              </Button>
+            )}
           </div>
-          {(onRestart || onDelete) && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-[#5A5A5A] hover:text-amber-400 h-7 px-2"
-              onClick={() => setShowRestartConfirm(true)}
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </Button>
-          )}
         </div>
         
-        {/* Row 2: Training Intent - explains what this program is built to do */}
-        <div className="mb-3 py-2 px-3 rounded-md bg-[#1E1E1E] border border-[#333]">
-          <div className="flex items-center gap-2 mb-1">
-            {/* Training spine badge */}
-            {dominantSpineResolution?.primarySpine ? (
-              <span className="text-xs font-medium text-[#E63946]">
-                {dominantSpineResolution.primarySpine
-                  .replace(/_/g, ' ')
-                  .replace(/\b\w/g, c => c.toUpperCase())} Approach
-              </span>
-            ) : (
-              <span className="text-xs font-medium text-[#E63946]">
-                {program.primaryGoal?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Custom'} Focus
-              </span>
-            )}
-            {/* Secondary goal indicator */}
-            {program.secondaryGoal && (
-              <>
-                <span className="text-[#4A4A4A]">+</span>
-                <span className="text-xs text-[#8A8A8A]">
-                  {program.secondaryGoal.replace(/_/g, ' ')}
-                </span>
-              </>
-            )}
+        {/* Stats Strip - Key program facts with clear hierarchy */}
+        <div className="px-4 py-2.5 bg-[#1E1E1E]/60 border-t border-b border-[#333]/50 flex items-center justify-between">
+          <div className="flex items-center gap-4 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[#5A5A5A]">Schedule</span>
+              <span className="font-semibold text-[#C8C8C8]">{validSessions.length}×/week</span>
+            </div>
+            <div className="w-px h-3 bg-[#3A3A3A]" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-[#5A5A5A]">Sessions</span>
+              <span className="font-semibold text-[#C8C8C8]">~{program.sessionLength || 60}min</span>
+            </div>
+            <div className="w-px h-3 bg-[#3A3A3A]" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-[#5A5A5A]">Level</span>
+              <span className="font-semibold text-[#C8C8C8] capitalize">{program.experienceLevel}</span>
+            </div>
           </div>
-          {/* Short intent explanation */}
-          <p className="text-[12px] text-[#7A7A7A] leading-snug line-clamp-2">
+        </div>
+        
+        {/* Intent Zone - Why this structure exists */}
+        <div className="px-4 py-3">
+          <p className="text-[13px] text-[#8A8A8A] leading-relaxed line-clamp-2">
             {dominantSpineResolution?.spineRationale || 
              safeSummaryTruth.truthfulHybridSummary || 
              program.programRationale}
           </p>
+          
+          {/* Skill Focus - Compact chips */}
+          {safeSelectedSkills.length > 0 && sharedStrictRepresentedSkillsForChips.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-[#333]/40">
+              <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wide mr-1">This Week</span>
+              {sharedStrictRepresentedSkillsForChips.map((skill) => {
+                const chipState = getSharedChipState(skill)
+                const isHeadline = chipState === 'headline_priority'
+                return (
+                  <span 
+                    key={skill}
+                    className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${
+                      isHeadline 
+                        ? 'bg-[#E63946]/15 text-[#E63946] border border-[#E63946]/25' 
+                        : 'bg-[#1A1A1A] text-[#8A8A8A] border border-[#333]'
+                    }`}
+                  >
+                    {skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                  </span>
+                )
+              })}
+            </div>
+          )}
         </div>
-        
-        {/* Row 3: Skill chips - what this week covers */}
-        {safeSelectedSkills.length > 0 && sharedStrictRepresentedSkillsForChips.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1">
-            {sharedStrictRepresentedSkillsForChips.map((skill) => {
-              const chipState = getSharedChipState(skill)
-              const isHeadline = chipState === 'headline_priority'
-              return (
-                <span 
-                  key={skill}
-                  className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] ${
-                    isHeadline 
-                      ? 'bg-[#E63946]/10 text-[#E63946] border border-[#E63946]/20' 
-                      : 'bg-[#1A1A1A] text-[#8A8A8A] border border-[#333]'
-                  }`}
-                >
-                  {skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                </span>
-              )
-            })}
-          </div>
-        )}
         
         {/* Quality notice - only show when significant */}
         {program.plannerTruthAudit?.shouldWarn && 
@@ -1182,7 +1192,7 @@ export function AdaptiveProgramDisplay({
          program.plannerTruthAudit.topIssueReason !== 'none' &&
          program.plannerTruthAudit.overallScore !== undefined &&
          program.plannerTruthAudit.overallScore < 70 && (
-          <div className="mt-3 px-3 py-2 rounded-md bg-amber-500/5 border border-amber-500/20 flex items-center gap-2">
+          <div className="mx-4 mb-3 px-3 py-2 rounded-md bg-amber-500/5 border border-amber-500/20 flex items-center gap-2">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
             <p className="text-xs text-amber-400/90 line-clamp-1">
               {program.plannerTruthAudit.topIssueDescription || 'Some preferences may not be fully reflected'}

@@ -726,7 +726,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                         <span>{sessionContract.primaryWorkLabel}</span>
                         {sessionContract.supportWorkLabel && (
                           <>
-                            <span className="text-[#3A3A3A]">·</span>
+                            <span className="text-[#3A3A3A]">��</span>
                             <span>{sessionContract.supportWorkLabel}</span>
                           </>
                         )}
@@ -1382,64 +1382,62 @@ function ExerciseRow({
     )
   }
 
-  // Build compact prescription string with inline modifiers
+  // Build unified prescription line - clean, scannable
   const prescriptionParts: string[] = [card.prescriptionLine]
   if (card.loadBadge) prescriptionParts.push(card.loadBadge)
   if (hasRPE && card.intensityBadge) prescriptionParts.push(card.intensityBadge)
-  const compactPrescription = prescriptionParts.join(' · ')
+  if (card.restGuidance) prescriptionParts.push(card.restGuidance)
+  const unifiedPrescription = prescriptionParts.join(' · ')
   
-  // Intent-specific colors
-  const intentColors: Record<string, string> = {
+  // Intent determines accent color
+  const intentAccent: Record<string, string> = {
     max_strength: 'text-blue-400',
     strength_volume: 'text-blue-300',
     skill_acquisition: 'text-[#E63946]',
-    skill_intensity: 'text-[#FF6B6B]',
+    skill_intensity: 'text-[#E63946]',
     explosive_power: 'text-amber-400',
     hypertrophy: 'text-purple-400',
-    support_strength: 'text-[#7A7A7A]',
+    support_strength: 'text-[#6A6A6A]',
     technical_carryover: 'text-teal-400',
-    tissue_prep: 'text-green-400',
+    tissue_prep: 'text-[#6A6A6A]',
     density_conditioning: 'text-orange-400',
   }
+  
+  // Only show why line for non-support, non-prep exercises
+  const showWhyLine = !isWarmupCooldown && card.whyLine && 
+    card.prescriptionIntent !== 'support_strength' && 
+    card.prescriptionIntent !== 'tissue_prep'
+  
+  // Only show context cue for primary work
+  const showContextCue = !isWarmupCooldown && card.prescriptionContext &&
+    (card.prescriptionIntent === 'skill_intensity' || 
+     card.prescriptionIntent === 'max_strength' || 
+     card.prescriptionIntent === 'explosive_power')
 
   return (
-    <div className={`py-2.5 px-3 rounded-lg border transition-colors ${
+    <div className={`py-2 px-3 rounded-lg border transition-colors ${
       isWarmupCooldown 
-        ? 'bg-[#161616] border-[#252525]' 
+        ? 'bg-[#151515] border-[#222]' 
         : adjustedName 
-          ? 'bg-[#181818] border-[#4F6D8A]/20' 
-          : 'bg-[#181818] border-[#2A2A2A] hover:border-[#3A3A3A]'
+          ? 'bg-[#171717] border-[#4F6D8A]/20' 
+          : 'bg-[#171717] border-[#282828] hover:border-[#3A3A3A]'
     }`}>
-      {/* PRIMARY: Name + Intent + Actions */}
+      {/* ROW 1: Name + Intent + Actions */}
       <div className="flex items-center justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          {/* Exercise Name with intent indicator */}
-          <div className="flex items-center gap-2">
-            {(prefix || index) && (
-              <span className="text-[10px] text-[#5A5A5A] font-mono shrink-0">
-                {prefix || `${index}.`}
-              </span>
-            )}
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-              card.displayCategory === 'skill' ? 'bg-[#E63946]' :
-              card.displayCategory === 'strength' ? 'bg-blue-400' :
-              card.displayCategory === 'core' ? 'bg-purple-400' :
-              'bg-[#5A5A5A]'
-            }`} />
-            <p className="font-medium text-[#E5E5E5] text-sm truncate">{displayName}</p>
-            {/* Intent label - doctrine-specific */}
-            {!isWarmupCooldown && (
-              <span className={`text-[9px] shrink-0 ${intentColors[card.prescriptionIntent] || 'text-[#6A6A6A]'}`}>
-                {card.intentLabel}
-              </span>
-            )}
-            {adjustedName && (
-              <span className="text-[9px] px-1 py-0.5 rounded bg-[#4F6D8A]/15 text-[#4F6D8A] shrink-0">adj</span>
-            )}
-          </div>
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          {(prefix || index) && (
+            <span className="text-[10px] text-[#4A4A4A] font-mono shrink-0">{prefix || `${index}.`}</span>
+          )}
+          <p className="font-medium text-[#E5E5E5] text-[13px] truncate">{displayName}</p>
+          {!isWarmupCooldown && (
+            <span className={`text-[9px] shrink-0 ${intentAccent[card.prescriptionIntent] || 'text-[#5A5A5A]'}`}>
+              {card.intentLabel}
+            </span>
+          )}
+          {adjustedName && (
+            <span className="text-[8px] px-1 rounded bg-[#4F6D8A]/10 text-[#4F6D8A] shrink-0">adj</span>
+          )}
         </div>
-        
-        {/* Actions - compact */}
         {!isWarmupCooldown && exercise.isOverrideable && sessionId && onReplace && onSkip && onProgressionAdjust && (
           <ExerciseActionMenu
             exercise={exercise}
@@ -1451,70 +1449,44 @@ function ExerciseRow({
         )}
       </div>
       
-      {/* PRESCRIPTION LINE: Compact, unified */}
-      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-        <span className="text-[13px] text-[#A5A5A5]">
-          {compactPrescription}
-        </span>
-        {card.restGuidance && (
-          <span className="text-[10px] text-[#5A5A5A]">
-            · {card.restGuidance} rest
-          </span>
-        )}
-        {/* Prescription context - execution cue */}
-        {!isWarmupCooldown && card.prescriptionContext && (
-          <span className="text-[9px] text-[#5A5A5A] italic">
-            — {card.prescriptionContext}
-          </span>
-        )}
-        {card.constraintNote && (
-          <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/8 text-amber-400/80">
-            {card.constraintNote}
-          </span>
-        )}
+      {/* ROW 2: Unified prescription */}
+      <p className="text-[12px] text-[#9A9A9A] mt-1">
+        {unifiedPrescription}
+        {showContextCue && <span className="text-[#5A5A5A] italic"> — {card.prescriptionContext}</span>}
         {card.showLoadConfidence && card.loadConfidenceNote && (
-          <span className="text-[9px] text-[#4A4A4A]">({card.loadConfidenceNote})</span>
+          <span className="text-[#4A4A4A]"> ({card.loadConfidenceNote})</span>
         )}
-      </div>
+      </p>
       
-      {/* SECONDARY: Why line - intent-aware, only if meaningful */}
-      {!isWarmupCooldown && card.whyLine && (
-        <p className="text-[11px] text-[#6A6A6A] mt-1.5 leading-snug line-clamp-1">
-          {card.whyLine}
-        </p>
+      {/* ROW 3: Why line - only for primary/skill work */}
+      {showWhyLine && (
+        <p className="text-[11px] text-[#5A5A5A] mt-1 line-clamp-1">{card.whyLine}</p>
       )}
       
-      {/* Exercise note - inline with why if both exist */}
+      {/* Constraint note inline if present */}
+      {card.constraintNote && (
+        <p className="text-[10px] text-amber-400/70 mt-1">{card.constraintNote}</p>
+      )}
+      
+      {/* Exercise-specific note */}
       {exercise.note && (
         <p className="text-[10px] text-[#5A5A5A] mt-1 italic">{exercise.note}</p>
       )}
       
-      {/* TERTIARY: Knowledge - subtle trigger only */}
+      {/* Knowledge expansion - only for main exercises with knowledge */}
       {!isWarmupCooldown && hasKnowledge && (
-        <>
-          {!showDetails ? (
-            <button
-              className="mt-1.5 text-[9px] text-[#4A4A4A] hover:text-[#7A7A7A] transition-colors"
-              onClick={() => setShowDetails(true)}
-            >
-              + details
+        showDetails ? (
+          <div className="mt-1.5 pt-1.5 border-t border-[#222]">
+            <button className="text-[9px] text-[#5A5A5A] hover:text-[#7A7A7A] mb-1.5" onClick={() => setShowDetails(false)}>
+              − hide
             </button>
-          ) : (
-            <div className="mt-2 pt-2 border-t border-[#252525]">
-              <button
-                className="text-[9px] text-[#5A5A5A] hover:text-[#8A8A8A] mb-2"
-                onClick={() => setShowDetails(false)}
-              >
-                − hide
-              </button>
-              <ExerciseKnowledgeBubble 
-                exerciseId={exerciseId}
-                showSkillCarryover
-                showSafetyNote
-              />
-            </div>
-          )}
-        </>
+            <ExerciseKnowledgeBubble exerciseId={exerciseId} showSkillCarryover showSafetyNote />
+          </div>
+        ) : (
+          <button className="mt-1 text-[9px] text-[#3A3A3A] hover:text-[#6A6A6A]" onClick={() => setShowDetails(true)}>
+            + info
+          </button>
+        )
       )}
     </div>
   )

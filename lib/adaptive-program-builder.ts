@@ -640,7 +640,27 @@ export interface GenerationTruthSnapshot {
     evidence: string[]
     summary: string
   }
+  
+  // [NEON-TRUTH-CONTRACT] Generation Source Map (added at runtime by authoritative generation)
+  generationSourceMap?: {
+    overallQuality: string
+    profileQuality: string
+    recoveryQuality: string
+    adherenceQuality: string
+    executionQuality: string
+    doctrineQuality: string
+    programContextQuality: string
+    dbSignalsRead: string[]
+    callerOverrideSignals: string[]
+    defaultedSignals: string[]
+    missingSignals: string[]
+    neonDbAvailable: boolean
+    neonAvailableDomains: string[]
+    neonUnavailableDomains: string[]
+    influenceSummary: string[]
+    generatedAt: string
   }
+}
 
 
 function validateSessionCandidate(

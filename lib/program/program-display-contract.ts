@@ -215,6 +215,87 @@ export function getWeekAdaptationDisplay(program: AdaptiveProgram): WeekAdaptati
   }
 }
 
+// =============================================================================
+// [NEON-TRUTH-CONTRACT] SOURCE TRUTH DISPLAY TYPES
+// =============================================================================
+
+export interface SourceTruthDisplay {
+  /** Quality label e.g. "Comprehensive Data", "Good Data Coverage" */
+  qualityLabel: string
+  /** Quality level */
+  quality: 'strong' | 'usable' | 'partial' | 'weak' | 'unavailable'
+  /** Breakdown string e.g. "5/7 data sources" */
+  breakdown: string
+  /** Available domain count */
+  availableCount: number
+  /** Total domain count */
+  totalCount: number
+  /** Key influence summaries */
+  influenceSummary: string[]
+  /** Was Neon DB available */
+  dbAvailable: boolean
+  /** Source of this data */
+  source: 'generationTruthSnapshot' | 'unavailable'
+}
+
+/**
+ * Extract source truth display from program
+ */
+export function getSourceTruthDisplay(program: AdaptiveProgram): SourceTruthDisplay {
+  const snapshot = program.generationTruthSnapshot
+  
+  // Try to get from authoritativeTruthIngestionAudit
+  const audit = snapshot?.authoritativeTruthIngestionAudit
+  
+  if (audit) {
+    const qualityLabels: Record<string, string> = {
+      strong: 'Comprehensive Data',
+      usable: 'Good Data Coverage',
+      partial: 'Partial Data',
+      weak: 'Limited Data',
+      missing: 'Minimal Data',
+    }
+    
+    // Build influence summary from available audit data
+    const influenceSummary: string[] = []
+    if (audit.isFirstWeek) {
+      influenceSummary.push('First week - acclimation protection')
+    }
+    if (audit.doctrineInfluenceEligible) {
+      influenceSummary.push('Doctrine rules active')
+    }
+    if (audit.recoveryRisk === 'high') {
+      influenceSummary.push('High recovery risk detected')
+    }
+    if (audit.consistencyStatus === 'disrupted') {
+      influenceSummary.push('Disrupted adherence pattern')
+    }
+    
+    return {
+      qualityLabel: qualityLabels[audit.overallQuality] || 'Unknown',
+      quality: (audit.overallQuality as SourceTruthDisplay['quality']) || 'unavailable',
+      breakdown: `${audit.domainQualities ? Object.values(audit.domainQualities).filter(q => q !== 'missing').length : 0}/6 signal domains`,
+      availableCount: audit.domainQualities ? Object.values(audit.domainQualities).filter(q => q !== 'missing').length : 0,
+      totalCount: 6,
+      influenceSummary,
+      dbAvailable: true, // If we have audit data, DB was available
+      source: 'generationTruthSnapshot',
+    }
+  }
+  
+  // Unavailable
+  return {
+    qualityLabel: 'Unknown',
+    quality: 'unavailable',
+    breakdown: 'Source data not available',
+    availableCount: 0,
+    totalCount: 6,
+    influenceSummary: [],
+    dbAvailable: false,
+    source: 'unavailable',
+  }
+}
+
 export interface WeeklyDistributionDisplay {
   /** Total sessions this week */
   totalSessions: number
@@ -2169,5 +2250,115 @@ export function buildProgramIntelligenceContract(
       truthFieldsTotal,
       confidence,
     },
+  }
+}
+
+// =============================================================================
+// [NEON-TRUTH-CONTRACT] GENERATION SOURCE MAP DISPLAY
+// =============================================================================
+
+export interface GenerationSourceMapDisplay {
+  /** Overall data quality label */
+  qualityLabel: string
+  /** Quality level */
+  quality: 'strong' | 'usable' | 'partial' | 'weak' | 'unavailable'
+  /** Human-readable breakdown */
+  breakdown: string
+  /** Whether Neon DB was used */
+  neonDbUsed: boolean
+  /** Available data sources count */
+  availableCount: number
+  /** Total possible sources */
+  totalCount: number
+  /** Key influence factors from the data */
+  influenceSummary: string[]
+  /** Signals read from DB */
+  dbSignalsCount: number
+  /** Signals defaulted (not from real data) */
+  defaultedCount: number
+  /** Signals that were missing */
+  missingCount: number
+  /** Domain quality breakdown for developers/advanced users */
+  domainBreakdown: {
+    profile: string
+    recovery: string
+    adherence: string
+    execution: string
+    doctrine: string
+    programContext: string
+  }
+  /** Source of this display */
+  source: 'generationTruthSnapshot' | 'unavailable'
+}
+
+/**
+ * Extract generation source map display from program.
+ * Shows how much real data vs defaults were used in generation.
+ */
+export function getGenerationSourceMapDisplay(program: AdaptiveProgram): GenerationSourceMapDisplay {
+  const sourceMap = program.generationTruthSnapshot?.generationSourceMap
+  
+  if (!sourceMap) {
+    return {
+      qualityLabel: 'Data Unavailable',
+      quality: 'unavailable',
+      breakdown: 'Source map not captured',
+      neonDbUsed: false,
+      availableCount: 0,
+      totalCount: 7,
+      influenceSummary: [],
+      dbSignalsCount: 0,
+      defaultedCount: 0,
+      missingCount: 0,
+      domainBreakdown: {
+        profile: 'unavailable',
+        recovery: 'unavailable',
+        adherence: 'unavailable',
+        execution: 'unavailable',
+        doctrine: 'unavailable',
+        programContext: 'unavailable',
+      },
+      source: 'unavailable',
+    }
+  }
+  
+  const qualityLabels: Record<string, string> = {
+    strong: 'Comprehensive Data',
+    usable: 'Good Data Coverage',
+    partial: 'Partial Data',
+    weak: 'Limited Data',
+    unavailable: 'Minimal Data',
+  }
+  
+  const quality = (sourceMap.overallQuality || 'unavailable') as GenerationSourceMapDisplay['quality']
+  const availableCount = sourceMap.neonAvailableDomains?.length || 0
+  const dbSignalsCount = sourceMap.dbSignalsRead?.length || 0
+  const defaultedCount = sourceMap.defaultedSignals?.length || 0
+  const missingCount = sourceMap.missingSignals?.length || 0
+  
+  const breakdown = sourceMap.neonDbAvailable
+    ? `${availableCount}/7 data sources from database`
+    : 'Using profile-only data'
+  
+  return {
+    qualityLabel: qualityLabels[quality] || 'Unknown',
+    quality,
+    breakdown,
+    neonDbUsed: sourceMap.neonDbAvailable,
+    availableCount,
+    totalCount: 7,
+    influenceSummary: sourceMap.influenceSummary || [],
+    dbSignalsCount,
+    defaultedCount,
+    missingCount,
+    domainBreakdown: {
+      profile: sourceMap.profileQuality || 'unavailable',
+      recovery: sourceMap.recoveryQuality || 'unavailable',
+      adherence: sourceMap.adherenceQuality || 'unavailable',
+      execution: sourceMap.executionQuality || 'unavailable',
+      doctrine: sourceMap.doctrineQuality || 'unavailable',
+      programContext: sourceMap.programContextQuality || 'unavailable',
+    },
+    source: 'generationTruthSnapshot',
   }
 }

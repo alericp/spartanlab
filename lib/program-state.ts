@@ -274,6 +274,10 @@ export type BuildAttemptSubCode =
   | 'builder_result_unresolved_promise'
   | 'generation_entry_failed'
   | 'fresh_input_invalid'
+  // [404-DIAGNOSTIC] Route-level failure subcodes
+  | 'route_not_found'
+  | 'non_json_server_response'
+  | 'server_regenerate_failed'
   | 'none'
 
 /**

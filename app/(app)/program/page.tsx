@@ -169,6 +169,10 @@ type PageValidationSubCode =
   | 'builder_result_unresolved_promise'
   | 'generation_entry_failed'
   | 'fresh_input_invalid'
+  // [404-DIAGNOSTIC] Route-level failure subcodes
+  | 'route_not_found'
+  | 'non_json_server_response'
+  | 'server_regenerate_failed'
 
 /**
  * Structured error for page-side validation failures.
@@ -5831,6 +5835,25 @@ export default function ProgramPage() {
         }),
       })
       
+      // [404-DIAGNOSTIC] Check for non-JSON responses (404 pages, server errors)
+      const contentType = serverResponse.headers.get('content-type') || ''
+      if (!contentType.includes('application/json')) {
+        const responseText = await serverResponse.text()
+        console.error('[modify-non-json-response]', {
+          status: serverResponse.status,
+          statusText: serverResponse.statusText,
+          contentType,
+          responsePreview: responseText.substring(0, 500),
+          diagnostic_stage: 'modify_server_response_content_type_check',
+          diagnostic_source: 'modify_route_call',
+          diagnostic_request_path: '/api/program/regenerate',
+          diagnostic_status: serverResponse.status,
+          diagnostic_reason: 'non_json_response_received',
+          verdict: 'MODIFY_ROUTE_RETURNED_NON_JSON_RESPONSE',
+        })
+        throw new Error(`Server returned ${serverResponse.status} with non-JSON response`)
+      }
+      
       const serverResult = await serverResponse.json()
       
       if (!serverResponse.ok || !serverResult.success) {
@@ -5838,6 +5861,11 @@ export default function ProgramPage() {
           status: serverResponse.status,
           error: serverResult.error,
           failedStage: serverResult.failedStage,
+          diagnostic_stage: 'modify_server_result_validation',
+          diagnostic_source: 'modify_route_call',
+          diagnostic_request_path: '/api/program/regenerate',
+          diagnostic_status: serverResponse.status,
+          diagnostic_reason: serverResult.failedStage || 'server_returned_failure',
         })
         throw new Error(serverResult.error || 'Server regenerate failed for modify')
       }
@@ -7198,6 +7226,35 @@ export default function ProgramPage() {
           }),
         })
         
+        // [404-DIAGNOSTIC] Check for non-JSON responses (404 pages, server errors)
+        const contentType = serverResponse.headers.get('content-type') || ''
+        if (!contentType.includes('application/json')) {
+          const responseText = await serverResponse.text()
+          console.error('[regenerate-non-json-response]', {
+            status: serverResponse.status,
+            statusText: serverResponse.statusText,
+            contentType,
+            responsePreview: responseText.substring(0, 500),
+            diagnostic_stage: 'server_response_content_type_check',
+            diagnostic_source: 'regenerate_route_call',
+            diagnostic_request_path: '/api/program/regenerate',
+            diagnostic_status: serverResponse.status,
+            diagnostic_reason: 'non_json_response_received',
+            verdict: 'ROUTE_RETURNED_NON_JSON_RESPONSE',
+          })
+          throw new ProgramPageValidationError(
+            'orchestration_failed',
+            regenerateStage,
+            serverResponse.status === 404 ? 'route_not_found' : 'non_json_server_response',
+            `Server returned ${serverResponse.status} with non-JSON response`,
+            { 
+              status: serverResponse.status,
+              contentType,
+              responsePreview: responseText.substring(0, 200),
+            }
+          )
+        }
+        
         const serverResult = await serverResponse.json()
         
         if (!serverResponse.ok || !serverResult.success) {
@@ -7205,6 +7262,11 @@ export default function ProgramPage() {
             status: serverResponse.status,
             error: serverResult.error,
             failedStage: serverResult.failedStage,
+            diagnostic_stage: 'server_result_validation',
+            diagnostic_source: 'regenerate_route_call',
+            diagnostic_request_path: '/api/program/regenerate',
+            diagnostic_status: serverResponse.status,
+            diagnostic_reason: serverResult.failedStage || 'server_returned_failure',
           })
           throw new ProgramPageValidationError(
             'orchestration_failed',
@@ -8478,7 +8540,12 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         if (isBuilderError) {
           regenFailureSource = 'builder_threw_generation_error'
         } else if (isPageValidationError) {
-          if (err.stage === 'validating_shape') {
+          // [404-DIAGNOSTIC] Capture route-level failures distinctly
+          if (err.subCode === 'route_not_found') {
+            regenFailureSource = 'regenerate_route_404_not_found'
+          } else if (err.subCode === 'non_json_server_response') {
+            regenFailureSource = 'regenerate_route_non_json_response'
+          } else if (err.stage === 'validating_shape') {
             regenFailureSource = 'program_page_shape_validation_failure'
           } else if (err.stage === 'validating_sessions') {
             regenFailureSource = 'program_page_session_validation_failure'
@@ -8492,6 +8559,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             regenFailureSource = 'program_page_orchestration_failure'
           } else if (err.subCode === 'builder_result_unresolved_promise') {
             regenFailureSource = 'program_page_async_contract_failure'
+          } else if (err.subCode === 'server_regenerate_failed') {
+            regenFailureSource = 'server_regenerate_route_returned_failure'
           } else {
             regenFailureSource = 'program_page_shape_validation_failure'
           }
@@ -8520,6 +8589,14 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             message: errorMessage,
             stack: errorStack,
             regenerateStage,
+            // [404-DIAGNOSTIC] Additional diagnostic fields for tracing
+            diagnostic_stage: 'catch_block_unclassified',
+            diagnostic_source: 'handleRegenerate',
+            diagnostic_request_path: '/api/program/regenerate',
+            diagnostic_call_type: 'server_route_fetch',
+            diagnostic_reason: 'error_not_page_validation_or_builder_error',
+            diagnostic_upstream_phase: regenerateStage,
+            verdict: 'REQUIRES_MANUAL_ROOT_CAUSE_ANALYSIS',
           })
         }
         

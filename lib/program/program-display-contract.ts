@@ -919,12 +919,31 @@ export interface ProgramIntelligenceContract {
   /** Week session map - canonical session structure at a glance */
   weekSessionMap: WeekSessionMapDisplay
   
-  /** Contract quality */
+  /** Decision inputs - what truth the engine used */
+  decisionInputs: DecisionInputDisplay[]
+  
+  /** Evidence strength - premium confidence indicator */
+  evidenceStrength: {
+    label: string
+    sublabel: string
+    confidence: 'high' | 'moderate' | 'low'
+    signalsUsed: number
+    signalsTotal: number
+  }
+  
+  /** Contract quality (legacy - kept for compatibility) */
   quality: {
     truthFieldsAvailable: number
     truthFieldsTotal: number
     confidence: 'high' | 'moderate' | 'low'
   }
+}
+
+/** Decision input display - what the engine responded to */
+export interface DecisionInputDisplay {
+  label: string
+  value: string
+  category: 'goal' | 'schedule' | 'level' | 'constraint' | 'preference'
 }
 
 // =============================================================================
@@ -1923,12 +1942,95 @@ export function buildProgramIntelligenceContract(
   }
   
   // ==========================================================================
-  // BUILD CONTRACT
+  // DECISION INPUTS - What the engine responded to
+  // ==========================================================================
+  const decisionInputs: DecisionInputDisplay[] = []
+  
+  // Primary goal
+  if (program.primaryGoal) {
+    decisionInputs.push({
+      label: 'Primary Focus',
+      value: formatSkillName(program.primaryGoal),
+      category: 'goal',
+    })
+  }
+  
+  // Secondary goal
+  if (program.secondaryGoal) {
+    decisionInputs.push({
+      label: 'Secondary Focus',
+      value: formatSkillName(program.secondaryGoal),
+      category: 'goal',
+    })
+  }
+  
+  // Schedule mode
+  decisionInputs.push({
+    label: 'Schedule',
+    value: scheduleMode === 'flexible' 
+      ? `Adaptive ${sessionCount} sessions/week`
+      : `Fixed ${trainingDaysPerWeek || sessionCount} days/week`,
+    category: 'schedule',
+  })
+  
+  // Session duration
+  const sessionLength = program.sessionLength || 60
+  decisionInputs.push({
+    label: 'Session Target',
+    value: `~${sessionLength} minutes`,
+    category: 'schedule',
+  })
+  
+  // Experience level
+  if (program.experienceLevel) {
+    decisionInputs.push({
+      label: 'Level',
+      value: formatSkillName(program.experienceLevel),
+      category: 'level',
+    })
+  }
+  
+  // Training path type
+  if (trainingPathType) {
+    decisionInputs.push({
+      label: 'Training Method',
+      value: trainingPathType === 'skill_progression' ? 'Skill Progression' :
+             trainingPathType === 'strength_endurance' ? 'Strength Endurance' :
+             trainingPathType === 'hybrid' ? 'Hybrid Balance' : 
+             formatSkillName(trainingPathType),
+      category: 'preference',
+    })
+  }
+  
+  // Joint cautions
+  if (jointCautions && jointCautions.length > 0) {
+    decisionInputs.push({
+      label: 'Protected Areas',
+      value: jointCautions.map(j => formatSkillName(j)).join(', '),
+      category: 'constraint',
+    })
+  }
+  
+  // ==========================================================================
+  // EVIDENCE STRENGTH - Premium confidence indicator
   // ==========================================================================
   const confidence: 'high' | 'moderate' | 'low' = 
     truthFieldsAvailable >= 5 ? 'high' :
     truthFieldsAvailable >= 3 ? 'moderate' : 'low'
   
+  const evidenceStrength = {
+    label: confidence === 'high' ? 'Decision Confidence: Strong' :
+           confidence === 'moderate' ? 'Decision Confidence: Good' :
+           'Decision Confidence: Basic',
+    sublabel: `Built from ${truthFieldsAvailable} active decision signals`,
+    confidence,
+    signalsUsed: truthFieldsAvailable,
+    signalsTotal: truthFieldsTotal,
+  }
+  
+  // ==========================================================================
+  // BUILD CONTRACT
+  // ==========================================================================
   return {
     programId: program.id,
     trainingSpine,
@@ -1943,6 +2045,8 @@ export function buildProgramIntelligenceContract(
     weeklyDecisionSummary,
     exercisePrescription,
     weekSessionMap,
+    decisionInputs,
+    evidenceStrength,
     quality: {
       truthFieldsAvailable,
       truthFieldsTotal,

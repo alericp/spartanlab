@@ -1403,11 +1403,18 @@ export function AdaptiveProgramDisplay({
                   <Shield className="w-4 h-4 text-[#E63946]" />
                   <h4 className="text-sm font-medium text-[#E6E9EF]">Protected Priorities</h4>
                 </div>
-                <ul className="space-y-1.5">
-                  {intelligenceContract.protectedConstraints.slice(0, 3).map((constraint, i) => (
-                    <li key={i} className="text-xs text-[#8A8A8A] flex items-start gap-2">
-                      <span className="text-[#E63946] shrink-0">✓</span>
-                      <span>{constraint.label}</span>
+                <ul className="space-y-2">
+                  {intelligenceContract.protectedConstraints.slice(0, 4).map((constraint, i) => (
+                    <li key={i} className="text-xs">
+                      <div className="flex items-start gap-2 text-[#A4ACB8]">
+                        <span className="text-green-500/80 shrink-0 mt-0.5">✓</span>
+                        <span>{constraint.label}</span>
+                      </div>
+                      {constraint.reason && (
+                        <p className="mt-0.5 ml-4 text-[10px] text-[#5A5A5A]">
+                          {constraint.reason}
+                        </p>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -1421,10 +1428,21 @@ export function AdaptiveProgramDisplay({
                   <Scale className="w-4 h-4 text-[#E63946]" />
                   <h4 className="text-sm font-medium text-[#E6E9EF]">Balanced Tradeoffs</h4>
                 </div>
-                <ul className="space-y-1.5">
-                  {intelligenceContract.tradeoffs.slice(0, 2).map((tradeoff, i) => (
-                    <li key={i} className="text-xs text-[#8A8A8A]">
-                      {tradeoff.description}
+                <ul className="space-y-2.5">
+                  {intelligenceContract.tradeoffs.slice(0, 3).map((tradeoff, i) => (
+                    <li key={i} className="text-xs">
+                      <div className="flex items-center gap-2 text-[#A4ACB8]">
+                        <span className="text-green-500/80">↑</span>
+                        <span>{tradeoff.prioritized}</span>
+                        <span className="text-[#5A5A5A]">vs</span>
+                        <span className="text-amber-500/60">↓</span>
+                        <span className="text-[#6A6A6A]">{tradeoff.limited}</span>
+                      </div>
+                      {tradeoff.reason && (
+                        <p className="mt-1 ml-4 text-[10px] text-[#5A5A5A] leading-relaxed">
+                          {tradeoff.reason}
+                        </p>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -1449,19 +1467,44 @@ export function AdaptiveProgramDisplay({
               </div>
             )}
             
-            {/* Contract Quality Indicator */}
-            {intelligenceContract?.quality && (
-              <div className="flex items-center justify-between px-2 pt-2 border-t border-[#2B313A]">
-                <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wide">
-                  Intelligence Depth
-                </span>
-                <span className={`text-[10px] font-medium ${
-                  intelligenceContract.quality.confidence === 'high' ? 'text-green-500' :
-                  intelligenceContract.quality.confidence === 'moderate' ? 'text-amber-500' :
-                  'text-[#6A6A6A]'
-                }`}>
-                  {intelligenceContract.quality.truthFieldsAvailable}/{intelligenceContract.quality.truthFieldsTotal} signals
-                </span>
+            {/* Decision Inputs Used - What truth the engine responded to */}
+            {intelligenceContract?.decisionInputs && intelligenceContract.decisionInputs.length > 0 && (
+              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                <div className="flex items-center gap-2 mb-2">
+                  <Info className="w-4 h-4 text-[#E63946]" />
+                  <h4 className="text-sm font-medium text-[#E6E9EF]">Decision Inputs</h4>
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                  {intelligenceContract.decisionInputs.slice(0, 8).map((input, i) => (
+                    <div key={i} className="flex flex-col">
+                      <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wide">{input.label}</span>
+                      <span className="text-xs text-[#A4ACB8]">{input.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Evidence Strength - Premium confidence indicator */}
+            {intelligenceContract?.evidenceStrength && (
+              <div className="flex items-center justify-between px-3 py-2.5 bg-[#0F1115]/50 rounded-lg border border-[#2B313A]/50">
+                <div className="flex flex-col">
+                  <span className={`text-xs font-medium ${
+                    intelligenceContract.evidenceStrength.confidence === 'high' ? 'text-green-400' :
+                    intelligenceContract.evidenceStrength.confidence === 'moderate' ? 'text-amber-400' :
+                    'text-[#8A8A8A]'
+                  }`}>
+                    {intelligenceContract.evidenceStrength.label}
+                  </span>
+                  <span className="text-[10px] text-[#5A5A5A]">
+                    {intelligenceContract.evidenceStrength.sublabel}
+                  </span>
+                </div>
+                <div className={`w-2 h-2 rounded-full ${
+                  intelligenceContract.evidenceStrength.confidence === 'high' ? 'bg-green-500' :
+                  intelligenceContract.evidenceStrength.confidence === 'moderate' ? 'bg-amber-500' :
+                  'bg-[#5A5A5A]'
+                }`} />
               </div>
             )}
           </div>

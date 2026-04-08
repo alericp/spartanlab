@@ -33,7 +33,12 @@ import {
   type ScheduleChangeNotice,
 } from '@/lib/active-week-mutation-service'
 import { runAdaptiveDisplayParityAudit } from '@/lib/adaptive-display-contract'
-import { buildProgramIntelligenceContract, type ProgramIntelligenceContract } from '@/lib/program/program-display-contract'
+import { 
+  buildProgramIntelligenceContract, 
+  getProgramSurfaceSignals,
+  getSessionSurfaceSignals,
+  type ProgramIntelligenceContract 
+} from '@/lib/program/program-display-contract'
 import { Info, Sparkles, Shield, Scale, Layers } from 'lucide-react'
 
 interface AdaptiveProgramDisplayProps {
@@ -67,6 +72,9 @@ export function AdaptiveProgramDisplay({
   const intelligenceContract: ProgramIntelligenceContract | null = program 
     ? buildProgramIntelligenceContract(program) 
     : null
+  
+  // [SURFACE-SIGNALS] Compact surface signals for main card display
+  const programSurfaceSignals = program ? getProgramSurfaceSignals(program) : null
   
   // ==========================================================================
   // [PHASE 15A-HOTFIX] SAFE DISPLAY VIEW-MODEL - MOVED ABOVE useEffects
@@ -1236,6 +1244,27 @@ export function AdaptiveProgramDisplay({
         {/* [MAIN-PAGE-AI-VISIBILITY] Weekly Intelligence Strip - visible without opening modal */}
         {intelligenceContract && (
           <div className="px-4 py-3 border-t border-[#333]/30 bg-[#1A1A1A]/30">
+            {/* [SURFACE-SIGNALS] Protective week dosage banner - only when real prescription changes applied */}
+            {programSurfaceSignals?.isProtectiveWeek && programSurfaceSignals.signals.length > 0 && (
+              <div className="mb-2.5 flex items-start gap-2 p-2 rounded-md bg-[#E63946]/5 border border-[#E63946]/15">
+                <Shield className="w-3.5 h-3.5 text-[#E63946]/70 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  {programSurfaceSignals.dosageMessage && (
+                    <p className="text-[11px] text-[#E63946]/90 font-medium leading-snug">
+                      {programSurfaceSignals.dosageMessage}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                    {programSurfaceSignals.signals.map((signal, i) => (
+                      <span key={i} className="text-[10px] text-[#9A9A9A]">
+                        {signal}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            
             {/* Strategic sentence */}
             {intelligenceContract.strategicSummary?.headline && (
               <p className="text-xs text-[#A4ACB8] leading-relaxed mb-2.5">
@@ -1272,8 +1301,9 @@ export function AdaptiveProgramDisplay({
               )}
             </div>
             
-            {/* Key architectural decision (if any) */}
-            {intelligenceContract.weeklyDecisionLogic?.architecturalDecisions?.[0] && (
+            {/* Key architectural decision (if any) - skip if already showing in surface signals */}
+            {intelligenceContract.weeklyDecisionLogic?.architecturalDecisions?.[0] && 
+             !programSurfaceSignals?.isProtectiveWeek && (
               <p className="mt-2 text-[10px] text-[#5A5A5A] leading-relaxed">
                 {intelligenceContract.weeklyDecisionLogic.architecturalDecisions[0]}
               </p>
@@ -1372,26 +1402,63 @@ export function AdaptiveProgramDisplay({
               r => r.dayNumber === session.dayNumber
             )
             
+            // [SURFACE-SIGNALS] Get session-level surface signals
+            const sessionSurfaceSignals = getSessionSurfaceSignals(session as Parameters<typeof getSessionSurfaceSignals>[0])
+            
             return (
               <div key={`${program.id}-${session.dayNumber}-${session.name || session.focusLabel}`}>
                 {/* [MAIN-PAGE-AI-VISIBILITY] Day rationale - enhanced visible display */}
-                {dayRationale && dayRationale.source !== 'unavailable' && (
-                  <div className="mb-2 px-2 py-1.5 bg-[#1A1A1A]/40 rounded-md border-l-2 border-[#E63946]/20">
+                {(dayRationale && dayRationale.source !== 'unavailable') || sessionSurfaceSignals.hasPrescriptionChanges ? (
+                  <div className={`mb-2 px-2 py-1.5 bg-[#1A1A1A]/40 rounded-md border-l-2 ${
+                    sessionSurfaceSignals.hasPrescriptionChanges 
+                      ? 'border-[#E63946]/40' 
+                      : 'border-[#E63946]/20'
+                  }`}>
                     <div className="flex items-start gap-2">
-                      <div className="w-4 h-4 rounded bg-[#E63946]/10 flex items-center justify-center shrink-0 mt-0.5">
-                        <span className="text-[8px] font-bold text-[#E63946]/70">{dayRationale.dayNumber}</span>
+                      <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 mt-0.5 ${
+                        sessionSurfaceSignals.hasPrescriptionChanges 
+                          ? 'bg-[#E63946]/15' 
+                          : 'bg-[#E63946]/10'
+                      }`}>
+                        <span className={`text-[8px] font-bold ${
+                          sessionSurfaceSignals.hasPrescriptionChanges 
+                            ? 'text-[#E63946]/90' 
+                            : 'text-[#E63946]/70'
+                        }`}>{session.dayNumber}</span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[11px] text-[#9A9A9A] font-medium leading-snug">
-                          {dayRationale.weeklyRole}
-                        </p>
-                        <p className="text-[10px] text-[#6A6A6A] mt-0.5 leading-relaxed">
-                          {dayRationale.rationale}
-                        </p>
+                        {/* Session intent line - from surface signals or day rationale */}
+                        {sessionSurfaceSignals.intentLine ? (
+                          <p className="text-[11px] text-[#9A9A9A] font-medium leading-snug">
+                            {sessionSurfaceSignals.intentLine}
+                          </p>
+                        ) : dayRationale?.weeklyRole && (
+                          <p className="text-[11px] text-[#9A9A9A] font-medium leading-snug">
+                            {dayRationale.weeklyRole}
+                          </p>
+                        )}
+                        
+                        {/* Micro-signals for prescription changes */}
+                        {sessionSurfaceSignals.microSignals.length > 0 && (
+                          <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
+                            {sessionSurfaceSignals.microSignals.map((signal, i) => (
+                              <span key={i} className="text-[9px] text-[#E63946]/70 font-medium">
+                                {signal}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {/* Day rationale if no prescription changes dominating */}
+                        {!sessionSurfaceSignals.hasPrescriptionChanges && dayRationale?.rationale && (
+                          <p className="text-[10px] text-[#6A6A6A] mt-0.5 leading-relaxed">
+                            {dayRationale.rationale}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
-                )}
+                ) : null}
                 <AdaptiveSessionCard
                   session={session}
                   programId={program.id}

@@ -33,6 +33,8 @@ import {
   type ScheduleChangeNotice,
 } from '@/lib/active-week-mutation-service'
 import { runAdaptiveDisplayParityAudit } from '@/lib/adaptive-display-contract'
+import { buildProgramIntelligenceContract, type ProgramIntelligenceContract } from '@/lib/program/program-display-contract'
+import { Info, Sparkles, Shield, Scale, Layers } from 'lucide-react'
 
 interface AdaptiveProgramDisplayProps {
   program: AdaptiveProgram
@@ -60,6 +62,11 @@ export function AdaptiveProgramDisplay({
   
   // [PHASE 13] Schedule change notice state
   const [scheduleNotice, setScheduleNotice] = useState<ScheduleChangeNotice | null>(null)
+  
+  // Premium explanation contract - doctrine-driven intelligence
+  const intelligenceContract: ProgramIntelligenceContract | null = program 
+    ? buildProgramIntelligenceContract(program) 
+    : null
   
   // ==========================================================================
   // [PHASE 15A-HOTFIX] SAFE DISPLAY VIEW-MODEL - MOVED ABOVE useEffects
@@ -1124,11 +1131,13 @@ export function AdaptiveProgramDisplay({
                   Active
                 </span>
               </div>
-              {/* Training method with structure clarity */}
+              {/* Training architecture with doctrine clarity */}
               <p className="text-sm text-[#8A8A8A]">
-                {dominantSpineResolution?.primarySpine 
-                  ? `${dominantSpineResolution.primarySpine.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} · `
-                  : ''}
+                {intelligenceContract?.trainingSpine.label 
+                  ? `${intelligenceContract.trainingSpine.label} · `
+                  : dominantSpineResolution?.primarySpine 
+                    ? `${dominantSpineResolution.primarySpine.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} · `
+                    : ''}
                 {validSessions.length} days/week · {program.sessionLength || 60}min sessions
               </p>
             </div>
@@ -1201,6 +1210,14 @@ export function AdaptiveProgramDisplay({
                 )
               })}
             </div>
+            {/* Doctrine-driven week strategy hint */}
+            {intelligenceContract?.weekDriver && intelligenceContract.weekDriver.driver !== 'unavailable' && (
+              <p className="mt-2 text-[10px] text-[#6A6A6A] leading-relaxed">
+                <span className="text-[#8A8A8A]">Strategy:</span>{' '}
+                {intelligenceContract.weekDriver.rationale || 
+                 `Prioritizing ${intelligenceContract.weekDriver.driver.replace(/_/g, ' ')} development this week.`}
+              </p>
+            )}
           </div>
         )}
         
@@ -1275,114 +1292,166 @@ export function AdaptiveProgramDisplay({
         )}
       </div>
 
-      {/* Why This Fits You - Premium explanation sheet */}
+      {/* Why This Fits You - Premium doctrine-driven explanation sheet */}
       <Dialog open={showWhySheet} onOpenChange={setShowWhySheet}>
         <DialogContent className="bg-[#1A1F26] border-[#2B313A] max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-[#E6E9EF] flex items-center gap-2">
               <div className="w-6 h-6 rounded bg-[#E63946]/10 flex items-center justify-center">
-                <TrendingUp className="w-3.5 h-3.5 text-[#E63946]" />
+                <Sparkles className="w-3.5 h-3.5 text-[#E63946]" />
               </div>
-              Why This Program Fits You
+              Program Intelligence
             </DialogTitle>
             <DialogDescription className="text-[#A4ACB8] pt-1">
-              How your goals and preferences shaped this plan
+              How your training doctrine shapes this plan
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4 py-2">
-            {/* Your Goal Section */}
-            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-              <div className="flex items-center gap-2 mb-2">
-                <Target className="w-4 h-4 text-[#E63946]" />
-                <h4 className="text-sm font-medium text-[#E6E9EF]">Your Training Goal</h4>
-              </div>
-              <p className="text-sm text-[#C8C8C8]">
-                {program.goalLabel || program.primaryGoal?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                {program.secondaryGoal && (
-                  <span className="text-[#8A8A8A]"> with {program.secondaryGoal.replace(/_/g, ' ')} integration</span>
+          <div className="space-y-3 py-2">
+            {/* Plan Headline - Doctrine-driven summary */}
+            {intelligenceContract?.planExplanation && (
+              <div className="p-3 bg-gradient-to-br from-[#E63946]/5 to-[#0F1115] rounded-lg border border-[#E63946]/20">
+                <p className="text-sm text-[#E6E9EF] font-medium leading-relaxed">
+                  {intelligenceContract.planExplanation.headline}
+                </p>
+                {intelligenceContract.planExplanation.details.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {intelligenceContract.planExplanation.details.slice(0, 3).map((detail, i) => (
+                      <li key={i} className="text-xs text-[#8A8A8A] flex items-start gap-1.5">
+                        <span className="text-[#E63946] mt-0.5">·</span>
+                        {detail}
+                      </li>
+                    ))}
+                  </ul>
                 )}
-              </p>
-              <p className="text-xs text-[#6A6A6A] mt-2">
-                {program.secondaryGoal 
-                  ? `Your sessions balance ${program.primaryGoal?.replace(/_/g, ' ')} as the primary focus with supporting ${program.secondaryGoal.replace(/_/g, ' ')} work.`
-                  : `All sessions are optimized for ${program.primaryGoal?.replace(/_/g, ' ')} development.`}
-              </p>
-            </div>
+              </div>
+            )}
             
-            {/* Training Method Section */}
+            {/* Training Spine - Method architecture */}
             <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
               <div className="flex items-center gap-2 mb-2">
-                <Dumbbell className="w-4 h-4 text-[#E63946]" />
-                <h4 className="text-sm font-medium text-[#E6E9EF]">Training Method</h4>
+                <Layers className="w-4 h-4 text-[#E63946]" />
+                <h4 className="text-sm font-medium text-[#E6E9EF]">Training Architecture</h4>
               </div>
               <p className="text-sm text-[#C8C8C8]">
-                {dominantSpineResolution?.primarySpine 
-                  ? dominantSpineResolution.primarySpine.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-                  : 'Balanced Approach'}
+                {intelligenceContract?.trainingSpine.label || 'Adaptive Structure'}
               </p>
-              <p className="text-xs text-[#6A6A6A] mt-2 leading-relaxed">
-                {dominantSpineResolution?.spineRationale || 
-                 safeSummaryTruth.truthfulHybridSummary || 
-                 program.programRationale ||
-                 'Exercises are selected to build the specific strength patterns and positions needed for your goals.'}
-              </p>
-            </div>
-            
-            {/* Schedule Section */}
-            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-              <div className="flex items-center gap-2 mb-2">
-                <Calendar className="w-4 h-4 text-[#E63946]" />
-                <h4 className="text-sm font-medium text-[#E6E9EF]">Your Schedule</h4>
-              </div>
-              <p className="text-sm text-[#C8C8C8]">
-                {validSessions.length} sessions per week · ~{program.sessionLength || 60} minutes each
-              </p>
-              <p className="text-xs text-[#6A6A6A] mt-2">
-                {program.scheduleMode === 'flexible' 
-                  ? 'Adaptive scheduling adjusts weekly session count based on your recovery and consistency.'
-                  : `Fixed ${validSessions.length}-day structure provides consistent training stimulus and recovery balance.`}
-              </p>
-            </div>
-            
-            {/* Experience Level Section */}
-            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="w-4 h-4 text-[#E63946]" />
-                <h4 className="text-sm font-medium text-[#E6E9EF]">Matched to Your Level</h4>
-              </div>
-              <p className="text-sm text-[#C8C8C8] capitalize">{program.experienceLevel}</p>
-              <p className="text-xs text-[#6A6A6A] mt-2">
-                {program.experienceLevel === 'beginner' && 'Exercise selection and volume are conservative to build foundations safely.'}
-                {program.experienceLevel === 'intermediate' && 'Progressive overload and skill-specific work match your current abilities.'}
-                {program.experienceLevel === 'advanced' && 'Higher intensity and specialized progressions match your training history.'}
-                {program.experienceLevel === 'elite' && 'Peak-level programming with nuanced periodization for continued progress.'}
-              </p>
-            </div>
-            
-            {/* This Week Skills */}
-            {sharedStrictRepresentedSkillsForChips.length > 0 && (
-              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-                <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Skills This Week</h4>
-                <div className="flex flex-wrap gap-1.5">
-                  {sharedStrictRepresentedSkillsForChips.map((skill) => {
-                    const chipState = getSharedChipState(skill)
-                    const isHeadline = chipState === 'headline_priority'
-                    return (
-                      <span 
-                        key={skill}
-                        className={`inline-flex items-center px-2 py-1 rounded text-xs ${
-                          isHeadline 
-                            ? 'bg-[#E63946]/15 text-[#E63946] border border-[#E63946]/25' 
-                            : 'bg-[#1A1A1A] text-[#8A8A8A] border border-[#333]'
-                        }`}
-                      >
-                        {skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                        {isHeadline && <span className="ml-1 text-[10px] opacity-70">Primary</span>}
-                      </span>
-                    )
-                  })}
+              {intelligenceContract?.trainingSpine.rationale && (
+                <p className="text-xs text-[#6A6A6A] mt-2 leading-relaxed">
+                  {intelligenceContract.trainingSpine.rationale}
+                </p>
+              )}
+              {intelligenceContract?.trainingSpine.secondaryInfluences && 
+               intelligenceContract.trainingSpine.secondaryInfluences.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {intelligenceContract.trainingSpine.secondaryInfluences.map((influence, i) => (
+                    <span key={i} className="text-[10px] px-1.5 py-0.5 bg-[#2A2A2A] text-[#8A8A8A] rounded">
+                      +{influence.replace(/_/g, ' ')}
+                    </span>
+                  ))}
                 </div>
+              )}
+            </div>
+            
+            {/* Weekly Decision Summary - Why this week looks like this */}
+            {intelligenceContract?.weeklyDecisionSummary && (
+              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                <div className="flex items-center gap-2 mb-2">
+                  <Calendar className="w-4 h-4 text-[#E63946]" />
+                  <h4 className="text-sm font-medium text-[#E6E9EF]">Weekly Structure</h4>
+                </div>
+                <p className="text-sm text-[#C8C8C8]">
+                  {intelligenceContract.weeklyDecisionSummary.frequencyRationale}
+                </p>
+                {intelligenceContract.weeklyDecisionSummary.distributionLogic && (
+                  <p className="text-xs text-[#6A6A6A] mt-2 leading-relaxed">
+                    {intelligenceContract.weeklyDecisionSummary.distributionLogic}
+                  </p>
+                )}
+              </div>
+            )}
+            
+            {/* Week Driver - What this week is pushing */}
+            {intelligenceContract?.weekDriver && intelligenceContract.weekDriver.driver !== 'unavailable' && (
+              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                <div className="flex items-center gap-2 mb-2">
+                  <Target className="w-4 h-4 text-[#E63946]" />
+                  <h4 className="text-sm font-medium text-[#E6E9EF]">This Week&apos;s Focus</h4>
+                </div>
+                <p className="text-sm text-[#C8C8C8]">
+                  {intelligenceContract.weekDriver.driver.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                </p>
+                {intelligenceContract.weekDriver.rationale && (
+                  <p className="text-xs text-[#6A6A6A] mt-2 leading-relaxed">
+                    {intelligenceContract.weekDriver.rationale}
+                  </p>
+                )}
+              </div>
+            )}
+            
+            {/* Protected Constraints - What doctrine protects */}
+            {intelligenceContract?.protectedConstraints && intelligenceContract.protectedConstraints.length > 0 && (
+              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="w-4 h-4 text-[#E63946]" />
+                  <h4 className="text-sm font-medium text-[#E6E9EF]">Protected Priorities</h4>
+                </div>
+                <ul className="space-y-1.5">
+                  {intelligenceContract.protectedConstraints.slice(0, 3).map((constraint, i) => (
+                    <li key={i} className="text-xs text-[#8A8A8A] flex items-start gap-2">
+                      <span className="text-[#E63946] shrink-0">✓</span>
+                      <span>{constraint.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {/* Tradeoffs - What was balanced */}
+            {intelligenceContract?.tradeoffs && intelligenceContract.tradeoffs.length > 0 && (
+              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                <div className="flex items-center gap-2 mb-2">
+                  <Scale className="w-4 h-4 text-[#E63946]" />
+                  <h4 className="text-sm font-medium text-[#E6E9EF]">Balanced Tradeoffs</h4>
+                </div>
+                <ul className="space-y-1.5">
+                  {intelligenceContract.tradeoffs.slice(0, 2).map((tradeoff, i) => (
+                    <li key={i} className="text-xs text-[#8A8A8A]">
+                      {tradeoff.description}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {/* Secondary Skill Handling */}
+            {intelligenceContract?.secondarySkillHandling && 
+             intelligenceContract.secondarySkillHandling.strategy !== 'none' && (
+              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                <div className="flex items-center gap-2 mb-2">
+                  <Dumbbell className="w-4 h-4 text-[#E63946]" />
+                  <h4 className="text-sm font-medium text-[#E6E9EF]">Secondary Integration</h4>
+                </div>
+                <p className="text-xs text-[#8A8A8A] leading-relaxed">
+                  {intelligenceContract.secondarySkillHandling.rationale || 
+                   `${intelligenceContract.secondarySkillHandling.strategy.replace(/_/g, ' ')} approach preserves secondary skill exposure without compromising primary progression.`}
+                </p>
+              </div>
+            )}
+            
+            {/* Contract Quality Indicator */}
+            {intelligenceContract?.quality && (
+              <div className="flex items-center justify-between px-2 pt-2 border-t border-[#2B313A]">
+                <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wide">
+                  Intelligence Depth
+                </span>
+                <span className={`text-[10px] font-medium ${
+                  intelligenceContract.quality.confidence === 'high' ? 'text-green-500' :
+                  intelligenceContract.quality.confidence === 'moderate' ? 'text-amber-500' :
+                  'text-[#6A6A6A]'
+                }`}>
+                  {intelligenceContract.quality.truthFieldsAvailable}/{intelligenceContract.quality.truthFieldsTotal} signals
+                </span>
               </div>
             )}
           </div>

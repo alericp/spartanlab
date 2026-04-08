@@ -665,29 +665,38 @@ export function buildExerciseCardContract(
   }
   const intentLabel = intentLabels[prescriptionIntent]
   
-  // Prescription context - brief execution cue based on intent
+  // Prescription context - brief doctrine-driven execution cue
   let prescriptionContext: string | null = null
   switch (prescriptionIntent) {
     case 'max_strength':
       prescriptionContext = 'full recovery between sets'
       break
+    case 'strength_volume':
+      prescriptionContext = 'moderate rest, accumulate volume'
+      break
     case 'skill_acquisition':
       prescriptionContext = 'quality over quantity'
       break
     case 'skill_intensity':
-      prescriptionContext = 'push to near-max'
+      prescriptionContext = 'push to near-max, stop if form breaks'
       break
     case 'explosive_power':
-      prescriptionContext = 'maximal speed/height'
+      prescriptionContext = 'maximal intent, full rest'
       break
     case 'hypertrophy':
-      prescriptionContext = 'controlled tempo'
+      prescriptionContext = 'controlled tempo, feel the contraction'
+      break
+    case 'support_strength':
+      prescriptionContext = 'steady effort, protect joints'
       break
     case 'technical_carryover':
       prescriptionContext = 'movement quality focus'
       break
+    case 'tissue_prep':
+      prescriptionContext = 'build bloodflow, avoid fatigue'
+      break
     case 'density_conditioning':
-      prescriptionContext = 'maintain pace'
+      prescriptionContext = 'maintain pace, manage fatigue'
       break
     default:
       prescriptionContext = null
@@ -708,21 +717,48 @@ export function buildExerciseCardContract(
   // Build prescription line - sets × reps format
   const prescriptionLine = `${exercise.sets} × ${exercise.repsOrTime}`
   
-  // Intensity badge - RPE with contextual meaning
+  // Intensity badge - RPE with intent-specific coaching context
   let intensityBadge: string | null = null
   if (exercise.targetRPE) {
-    // Add context to make RPE meaningful
     const rpe = exercise.targetRPE
-    if (rpe <= 6) {
-      intensityBadge = `RPE ${rpe} (technique focus)`
-    } else if (rpe === 7) {
-      intensityBadge = `RPE ${rpe} (controlled effort)`
-    } else if (rpe === 8) {
-      intensityBadge = `RPE ${rpe} (challenging)`
-    } else if (rpe >= 9) {
-      intensityBadge = `RPE ${rpe} (near-max)`
+    
+    // Context varies based on what we're trying to achieve
+    if (prescriptionIntent === 'skill_acquisition' || prescriptionIntent === 'skill_intensity') {
+      // Skill work: RPE guards technique, not just effort
+      if (rpe <= 7) {
+        intensityBadge = `RPE ${rpe} · technique ceiling`
+      } else if (rpe === 8) {
+        intensityBadge = `RPE ${rpe} · controlled challenge`
+      } else {
+        intensityBadge = `RPE ${rpe} · near-limit testing`
+      }
+    } else if (prescriptionIntent === 'max_strength') {
+      // Max strength: RPE is about neural readiness
+      if (rpe <= 7) {
+        intensityBadge = `RPE ${rpe} · building stimulus`
+      } else if (rpe === 8) {
+        intensityBadge = `RPE ${rpe} · effective dose`
+      } else {
+        intensityBadge = `RPE ${rpe} · peak intent`
+      }
+    } else if (prescriptionIntent === 'support_strength' || prescriptionIntent === 'hypertrophy') {
+      // Support/hypertrophy: RPE manages fatigue
+      if (rpe <= 7) {
+        intensityBadge = `RPE ${rpe} · recovery-safe`
+      } else {
+        intensityBadge = `RPE ${rpe} · fatiguing`
+      }
     } else {
-      intensityBadge = `RPE ${rpe}`
+      // Default fallback
+      if (rpe <= 6) {
+        intensityBadge = `RPE ${rpe} (light)`
+      } else if (rpe === 7) {
+        intensityBadge = `RPE ${rpe} (moderate)`
+      } else if (rpe === 8) {
+        intensityBadge = `RPE ${rpe} (hard)`
+      } else {
+        intensityBadge = `RPE ${rpe} (max effort)`
+      }
     }
   }
   
@@ -750,21 +786,38 @@ export function buildExerciseCardContract(
     const reason = exercise.selectionReason
     let refined = reason.split('.')[0]
     
-    // If reason is generic, add intent-specific context
+    // If reason is generic, add intent-specific doctrine context
     if (refined.length < 20 || refined.toLowerCase().includes('selected for')) {
+      // Doctrine-driven intent explanations - specific job descriptions
       const intentContext: Record<PrescriptionIntent, string> = {
-        max_strength: 'Building foundational strength for your goals',
-        strength_volume: 'Accumulating quality volume for adaptation',
-        skill_acquisition: 'Developing position control and awareness',
-        skill_intensity: 'Pushing your skill limits safely',
-        explosive_power: 'Training power output for dynamic movements',
-        hypertrophy: 'Building muscle capacity to support skill work',
-        support_strength: 'Balances joint health and movement quality',
-        technical_carryover: 'Transfers directly to your target skills',
-        tissue_prep: 'Preparing tissues for the work ahead',
-        density_conditioning: 'Building work capacity and recovery',
+        max_strength: 'Peak neural drive for strength adaptation',
+        strength_volume: 'Controlled volume accumulates structural adaptation',
+        skill_acquisition: 'Greasing the groove for position mastery',
+        skill_intensity: 'Testing ceiling while protecting technique',
+        explosive_power: 'Training rate of force development',
+        hypertrophy: 'Building the muscle substrate that powers skill',
+        support_strength: 'Structural balance protects joints under load',
+        technical_carryover: 'Direct transfer to target skill mechanics',
+        tissue_prep: 'Readies connective tissue for main work',
+        density_conditioning: 'Fatigue tolerance without intensity cost',
       }
       refined = intentContext[prescriptionIntent]
+    }
+    
+    // Further refine support work based on exercise characteristics
+    if (prescriptionIntent === 'support_strength' && reason) {
+      const reasonLowerCheck = reason.toLowerCase()
+      if (reasonLowerCheck.includes('scap') || reasonLowerCheck.includes('shoulder')) {
+        refined = 'Scapular stability underpins overhead positions'
+      } else if (reasonLowerCheck.includes('rear delt') || reasonLowerCheck.includes('face pull')) {
+        refined = 'Posterior shoulder balance counters pressing bias'
+      } else if (reasonLowerCheck.includes('core') || reasonLowerCheck.includes('trunk') || reasonLowerCheck.includes('compression')) {
+        refined = 'Trunk rigidity transfers force to limbs'
+      } else if (reasonLowerCheck.includes('grip') || reasonLowerCheck.includes('hang')) {
+        refined = 'Grip endurance extends effective working sets'
+      } else if (reasonLowerCheck.includes('hip') || reasonLowerCheck.includes('glute')) {
+        refined = 'Hip stability anchors full-body tension'
+      }
     }
     
     whyLine = refined.length > 80 ? refined.substring(0, 77) + '...' : refined

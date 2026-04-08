@@ -1133,7 +1133,7 @@ export function AdaptiveProgramDisplay({
               </div>
               {/* Training architecture with doctrine clarity */}
               <p className="text-sm text-[#8A8A8A]">
-                {intelligenceContract?.trainingSpine.label 
+                {intelligenceContract?.trainingSpine?.label 
                   ? `${intelligenceContract.trainingSpine.label} · `
                   : dominantSpineResolution?.primarySpine 
                     ? `${dominantSpineResolution.primarySpine.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} · `
@@ -1211,11 +1211,10 @@ export function AdaptiveProgramDisplay({
               })}
             </div>
             {/* Doctrine-driven week strategy hint */}
-            {intelligenceContract?.weekDriver && intelligenceContract.weekDriver.driver !== 'unavailable' && (
+            {intelligenceContract?.weekDriver?.label && (
               <p className="mt-2 text-[10px] text-[#6A6A6A] leading-relaxed">
                 <span className="text-[#8A8A8A]">Strategy:</span>{' '}
-                {intelligenceContract.weekDriver.rationale || 
-                 `Prioritizing ${intelligenceContract.weekDriver.driver.replace(/_/g, ' ')} development this week.`}
+                {intelligenceContract.weekDriver.reason || intelligenceContract.weekDriver.label}
               </p>
             )}
           </div>
@@ -1328,30 +1327,33 @@ export function AdaptiveProgramDisplay({
             )}
             
             {/* Training Spine - Method architecture */}
-            <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-              <div className="flex items-center gap-2 mb-2">
-                <Layers className="w-4 h-4 text-[#E63946]" />
-                <h4 className="text-sm font-medium text-[#E6E9EF]">Training Architecture</h4>
-              </div>
-              <p className="text-sm text-[#C8C8C8]">
-                {intelligenceContract?.trainingSpine.label || 'Adaptive Structure'}
-              </p>
-              {intelligenceContract?.trainingSpine.rationale && (
-                <p className="text-xs text-[#6A6A6A] mt-2 leading-relaxed">
-                  {intelligenceContract.trainingSpine.rationale}
-                </p>
-              )}
-              {intelligenceContract?.trainingSpine.secondaryInfluences && 
-               intelligenceContract.trainingSpine.secondaryInfluences.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {intelligenceContract.trainingSpine.secondaryInfluences.map((influence, i) => (
-                    <span key={i} className="text-[10px] px-1.5 py-0.5 bg-[#2A2A2A] text-[#8A8A8A] rounded">
-                      +{influence.replace(/_/g, ' ')}
-                    </span>
-                  ))}
+            {/* Training Spine - Method architecture */}
+            {intelligenceContract?.trainingSpine && (
+              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
+                <div className="flex items-center gap-2 mb-2">
+                  <Layers className="w-4 h-4 text-[#E63946]" />
+                  <h4 className="text-sm font-medium text-[#E6E9EF]">Training Architecture</h4>
                 </div>
-              )}
-            </div>
+                <p className="text-sm text-[#C8C8C8]">
+                  {intelligenceContract.trainingSpine.label || 'Adaptive Structure'}
+                </p>
+                {intelligenceContract.trainingSpine.rationale && (
+                  <p className="text-xs text-[#6A6A6A] mt-2 leading-relaxed">
+                    {intelligenceContract.trainingSpine.rationale}
+                  </p>
+                )}
+                {intelligenceContract.trainingSpine.secondaryInfluences && 
+                 intelligenceContract.trainingSpine.secondaryInfluences.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {intelligenceContract.trainingSpine.secondaryInfluences.map((influence, i) => (
+                      <span key={i} className="text-[10px] px-1.5 py-0.5 bg-[#2A2A2A] text-[#8A8A8A] rounded">
+                        +{influence.replace(/_/g, ' ')}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             
             {/* Weekly Decision Summary - Why this week looks like this */}
             {intelligenceContract?.weeklyDecisionSummary && (
@@ -1361,29 +1363,34 @@ export function AdaptiveProgramDisplay({
                   <h4 className="text-sm font-medium text-[#E6E9EF]">Weekly Structure</h4>
                 </div>
                 <p className="text-sm text-[#C8C8C8]">
-                  {intelligenceContract.weeklyDecisionSummary.frequencyRationale}
+                  {intelligenceContract.weeklyDecisionSummary.headline}
                 </p>
-                {intelligenceContract.weeklyDecisionSummary.distributionLogic && (
-                  <p className="text-xs text-[#6A6A6A] mt-2 leading-relaxed">
-                    {intelligenceContract.weeklyDecisionSummary.distributionLogic}
-                  </p>
+                {intelligenceContract.weeklyDecisionSummary.decisions?.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {intelligenceContract.weeklyDecisionSummary.decisions.slice(0, 2).map((decision, i) => (
+                      <li key={i} className="text-xs text-[#6A6A6A] flex items-start gap-1.5">
+                        <span className="text-[#E63946] mt-0.5">·</span>
+                        {decision}
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
             )}
             
             {/* Week Driver - What this week is pushing */}
-            {intelligenceContract?.weekDriver && intelligenceContract.weekDriver.driver !== 'unavailable' && (
+            {intelligenceContract?.weekDriver?.label && (
               <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
                 <div className="flex items-center gap-2 mb-2">
                   <Target className="w-4 h-4 text-[#E63946]" />
                   <h4 className="text-sm font-medium text-[#E6E9EF]">This Week&apos;s Focus</h4>
                 </div>
                 <p className="text-sm text-[#C8C8C8]">
-                  {intelligenceContract.weekDriver.driver.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                  {intelligenceContract.weekDriver.label}
                 </p>
-                {intelligenceContract.weekDriver.rationale && (
+                {intelligenceContract.weekDriver.reason && (
                   <p className="text-xs text-[#6A6A6A] mt-2 leading-relaxed">
-                    {intelligenceContract.weekDriver.rationale}
+                    {intelligenceContract.weekDriver.reason}
                   </p>
                 )}
               </div>
@@ -1426,6 +1433,7 @@ export function AdaptiveProgramDisplay({
             
             {/* Secondary Skill Handling */}
             {intelligenceContract?.secondarySkillHandling && 
+             intelligenceContract.secondarySkillHandling.strategy && 
              intelligenceContract.secondarySkillHandling.strategy !== 'none' && (
               <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
                 <div className="flex items-center gap-2 mb-2">
@@ -1433,8 +1441,10 @@ export function AdaptiveProgramDisplay({
                   <h4 className="text-sm font-medium text-[#E6E9EF]">Secondary Integration</h4>
                 </div>
                 <p className="text-xs text-[#8A8A8A] leading-relaxed">
-                  {intelligenceContract.secondarySkillHandling.rationale || 
-                   `${intelligenceContract.secondarySkillHandling.strategy.replace(/_/g, ' ')} approach preserves secondary skill exposure without compromising primary progression.`}
+                  {intelligenceContract.secondarySkillHandling.strategy.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} approach
+                  {intelligenceContract.secondarySkillHandling.skills?.length > 0 && (
+                    <span> for {intelligenceContract.secondarySkillHandling.skills.join(', ').replace(/_/g, ' ')}</span>
+                  )}
                 </p>
               </div>
             )}

@@ -450,6 +450,416 @@ export interface WeekSessionMapDisplay {
 }
 
 // =============================================================================
+// [DECISION-EVIDENCE-DISPLAY-CONTRACT] DAY RATIONALE TYPES
+// =============================================================================
+
+export interface DayRationaleDisplay {
+  /** Day number (1-7) */
+  dayNumber: number
+  /** Day label (e.g. "Day 1", "Session A") */
+  dayLabel: string
+  /** Primary role in weekly architecture */
+  weeklyRole: string
+  /** Why this day exists in the plan */
+  rationale: string
+  /** What this day prioritizes */
+  prioritizes: string[]
+  /** What this day protects/limits */
+  protectsOrLimits: string[]
+  /** Source of rationale */
+  source: 'session_metadata' | 'weekly_architecture' | 'inferred' | 'unavailable'
+}
+
+/**
+ * Build day rationale from session and weekly context
+ */
+export function buildDayRationale(
+  session: {
+    dayNumber: number
+    dayLabel?: string
+    rationale?: string
+    focus?: string
+    focusLabel?: string
+    isPrimary?: boolean
+    skillExpressionMetadata?: {
+      directlyExpressedSkills?: string[]
+      technicalSlotSkills?: string[]
+    }
+  },
+  weekContext: {
+    totalSessions: number
+    primaryGoal: string
+    secondaryGoal?: string | null
+    trainingSpine?: string
+  }
+): DayRationaleDisplay {
+  const dayNumber = session.dayNumber
+  const dayLabel = session.dayLabel || `Day ${dayNumber}`
+  const isPrimary = session.isPrimary ?? false
+  const focusLabel = session.focusLabel || session.focus || ''
+  const skillMeta = session.skillExpressionMetadata
+  
+  // Build weekly role based on position and type
+  let weeklyRole = 'Training support'
+  if (isPrimary && dayNumber === 1) {
+    weeklyRole = 'Week opener: primary skill emphasis'
+  } else if (isPrimary && dayNumber <= 2) {
+    weeklyRole = 'Early-week skill driver'
+  } else if (isPrimary) {
+    weeklyRole = 'Mid/late-week skill reinforcement'
+  } else if (focusLabel.toLowerCase().includes('support') || focusLabel.toLowerCase().includes('strength')) {
+    weeklyRole = 'Strength and recovery support'
+  } else if (focusLabel.toLowerCase().includes('density') || focusLabel.toLowerCase().includes('conditioning')) {
+    weeklyRole = 'Conditioning and work capacity'
+  } else {
+    weeklyRole = 'Balanced training support'
+  }
+  
+  // Build rationale
+  let rationale = session.rationale || ''
+  if (!rationale) {
+    if (isPrimary && dayNumber <= 2) {
+      rationale = `Drives ${weekContext.primaryGoal?.replace(/_/g, ' ')} progression when recovery is highest.`
+    } else if (isPrimary) {
+      rationale = `Reinforces ${weekContext.primaryGoal?.replace(/_/g, ' ')} skill work with accumulated fatigue management.`
+    } else if (weekContext.secondaryGoal) {
+      rationale = `Maintains ${weekContext.secondaryGoal?.replace(/_/g, ' ')} exposure without interfering with primary focus.`
+    } else {
+      rationale = `Supports overall strength development and connective tissue tolerance.`
+    }
+  }
+  
+  // Build prioritizes list
+  const prioritizes: string[] = []
+  if (skillMeta?.directlyExpressedSkills?.length) {
+    prioritizes.push(...skillMeta.directlyExpressedSkills.map(s => s.replace(/_/g, ' ')))
+  } else if (isPrimary && weekContext.primaryGoal) {
+    prioritizes.push(weekContext.primaryGoal.replace(/_/g, ' '))
+  }
+  if (focusLabel.toLowerCase().includes('strength')) {
+    prioritizes.push('foundational strength')
+  }
+  
+  // Build protects list
+  const protectsOrLimits: string[] = []
+  if (!isPrimary && weekContext.primaryGoal) {
+    protectsOrLimits.push(`recovery for ${weekContext.primaryGoal.replace(/_/g, ' ')}`)
+  }
+  if (dayNumber > 4) {
+    protectsOrLimits.push('late-week fatigue accumulation')
+  }
+  
+  return {
+    dayNumber,
+    dayLabel,
+    weeklyRole,
+    rationale: rationale.split('.')[0] + '.',
+    prioritizes: prioritizes.slice(0, 2),
+    protectsOrLimits: protectsOrLimits.slice(0, 2),
+    source: session.rationale ? 'session_metadata' : 'inferred',
+  }
+}
+
+// =============================================================================
+// [DECISION-EVIDENCE-DISPLAY-CONTRACT] STRATEGIC SUMMARY TYPES
+// =============================================================================
+
+export interface StrategicSummaryDisplay {
+  /** Strategic headline - the core decision */
+  headline: string
+  /** Architecture label (cleaner than "Spine Spine") */
+  architectureLabel: string
+  /** Primary outcome being optimized */
+  primaryOutcome: string
+  /** Why this architecture fits the user */
+  fitReason: string
+  /** Decision confidence label */
+  confidenceLabel: string
+  /** Source of this summary */
+  source: string
+}
+
+/**
+ * Build strategic summary from program intelligence
+ */
+export function buildStrategicSummary(program: AdaptiveProgram): StrategicSummaryDisplay {
+  const dominantSpine = (program as unknown as { dominantSpineResolution?: {
+    primarySpine?: string
+    spineRationale?: string
+  } }).dominantSpineResolution
+  
+  const trainingPathType = (program as unknown as { trainingPathType?: string }).trainingPathType
+  const primaryGoal = program.primaryGoal
+  const secondaryGoal = program.secondaryGoal
+  const sessionCount = program.sessions?.length || 4
+  const experienceLevel = program.experienceLevel
+  
+  // Build architecture label (avoid "Spine Spine" repetition)
+  let architectureLabel = 'Adaptive Training'
+  if (dominantSpine?.primarySpine) {
+    const spineBase = dominantSpine.primarySpine
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, c => c.toUpperCase())
+    // Avoid "Skill Strength Spine Spine"
+    if (spineBase.toLowerCase().includes('spine')) {
+      architectureLabel = spineBase
+    } else {
+      architectureLabel = `${spineBase} Architecture`
+    }
+  } else if (trainingPathType) {
+    architectureLabel = trainingPathType === 'skill_progression' 
+      ? 'Skill-First Architecture'
+      : trainingPathType === 'strength_endurance'
+      ? 'Strength-Endurance Architecture'
+      : 'Hybrid Architecture'
+  }
+  
+  // Build headline
+  const primaryName = primaryGoal?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'your goals'
+  const headline = secondaryGoal
+    ? `Engineered for ${primaryName} mastery with ${secondaryGoal.replace(/_/g, ' ')} integration`
+    : `Engineered for ${primaryName} mastery`
+  
+  // Build primary outcome
+  let primaryOutcome = `Progressive ${primaryName} development`
+  if (trainingPathType === 'skill_progression') {
+    primaryOutcome = `Skill acquisition through deliberate ${primaryName} practice`
+  } else if (trainingPathType === 'strength_endurance') {
+    primaryOutcome = `Strength-endurance foundation supporting ${primaryName}`
+  }
+  
+  // Build fit reason
+  let fitReason = `${sessionCount}-day structure optimized for ${experienceLevel || 'your'} level`
+  if (dominantSpine?.spineRationale) {
+    fitReason = dominantSpine.spineRationale.split('.')[0]
+  }
+  
+  // Confidence label
+  const sourceMap = program.generationTruthSnapshot?.generationSourceMap
+  let confidenceLabel = 'Standard confidence'
+  if (sourceMap?.overallQuality === 'strong') {
+    confidenceLabel = 'High confidence'
+  } else if (sourceMap?.overallQuality === 'usable') {
+    confidenceLabel = 'Good confidence'
+  } else if (sourceMap?.overallQuality === 'partial') {
+    confidenceLabel = 'Moderate confidence'
+  } else if (sourceMap?.overallQuality === 'weak') {
+    confidenceLabel = 'Conservative defaults applied'
+  }
+  
+  return {
+    headline,
+    architectureLabel,
+    primaryOutcome,
+    fitReason,
+    confidenceLabel,
+    source: dominantSpine ? 'dominantSpineResolution' : 'inferred',
+  }
+}
+
+// =============================================================================
+// [DECISION-EVIDENCE-DISPLAY-CONTRACT] WEEKLY DECISION LOGIC
+// =============================================================================
+
+export interface WeeklyDecisionLogicDisplay {
+  /** Why this frequency was chosen */
+  frequencyReason: string
+  /** Why session target landed where it did */
+  sessionTargetReason: string
+  /** Structure identity (skill-biased, recovery-aware, etc.) */
+  structureIdentity: string
+  /** Key architectural decisions */
+  architecturalDecisions: string[]
+  /** What was explicitly NOT done and why */
+  explicitExclusions: string[]
+  /** Source */
+  source: string
+}
+
+/**
+ * Build weekly decision logic from program
+ */
+export function buildWeeklyDecisionLogic(program: AdaptiveProgram): WeeklyDecisionLogicDisplay {
+  const flexibleRootCause = (program as unknown as { flexibleFrequencyRootCause?: {
+    humanReadableReason?: string
+    finalReasonCategory?: string
+    staticDaysSelected?: number
+  } }).flexibleFrequencyRootCause
+  
+  const scheduleMode = program.scheduleMode
+  const sessionCount = program.sessions?.length || 4
+  const sessionLength = (program as unknown as { sessionLength?: number }).sessionLength || 60
+  const trainingPathType = (program as unknown as { trainingPathType?: string }).trainingPathType
+  const weekAdaptation = program.weekAdaptationDecision
+  
+  // Frequency reason
+  let frequencyReason = `${sessionCount} sessions selected to balance training stimulus with recovery`
+  if (flexibleRootCause?.humanReadableReason) {
+    frequencyReason = flexibleRootCause.humanReadableReason
+  } else if (scheduleMode === 'flexible') {
+    frequencyReason = 'Adaptive frequency responds to your recovery and consistency'
+  }
+  
+  // Session target reason
+  let sessionTargetReason = `~${sessionLength} minutes per session fits your time availability`
+  if (sessionLength <= 45) {
+    sessionTargetReason = `Compact ${sessionLength}-minute sessions prioritize efficiency over volume`
+  } else if (sessionLength >= 75) {
+    sessionTargetReason = `Extended ${sessionLength}-minute sessions allow thorough skill work and strength development`
+  }
+  
+  // Structure identity
+  let structureIdentity = 'Balanced skill and strength development'
+  if (trainingPathType === 'skill_progression') {
+    structureIdentity = 'Skill-acquisition biased with strength support'
+  } else if (trainingPathType === 'strength_endurance') {
+    structureIdentity = 'Strength-endurance foundation with skill integration'
+  } else if (weekAdaptation?.phase === 'initial_acclimation') {
+    structureIdentity = 'Acclimation-protected conservative dosage'
+  } else if (weekAdaptation?.phase === 'recovery_constrained') {
+    structureIdentity = 'Recovery-aware reduced volume'
+  }
+  
+  // Architectural decisions
+  const architecturalDecisions: string[] = []
+  if (weekAdaptation?.firstWeekGovernor?.active) {
+    architecturalDecisions.push('First-week protection limits volume and intensity')
+  }
+  if (weekAdaptation?.loadStrategy?.finisherBias === 'limited') {
+    architecturalDecisions.push('Finisher work limited to preserve skill quality')
+  }
+  if (weekAdaptation?.loadStrategy?.straightArmExposureBias === 'protected') {
+    architecturalDecisions.push('Straight-arm volume managed for connective tissue')
+  }
+  if (sessionCount >= 5) {
+    architecturalDecisions.push('High frequency enables more skill exposure')
+  }
+  if (sessionCount <= 3) {
+    architecturalDecisions.push('Lower frequency concentrates training stimulus')
+  }
+  
+  // Explicit exclusions
+  const explicitExclusions: string[] = []
+  if (weekAdaptation?.firstWeekGovernor?.suppressFinishers) {
+    explicitExclusions.push('Finisher circuits suppressed during acclimation')
+  }
+  if (weekAdaptation?.loadStrategy?.volumeBias === 'reduced') {
+    explicitExclusions.push('Volume intentionally reduced for recovery')
+  }
+  
+  return {
+    frequencyReason,
+    sessionTargetReason,
+    structureIdentity,
+    architecturalDecisions: architecturalDecisions.slice(0, 4),
+    explicitExclusions: explicitExclusions.slice(0, 2),
+    source: flexibleRootCause ? 'flexibleFrequencyRootCause' : 'inferred',
+  }
+}
+
+// =============================================================================
+// [DECISION-EVIDENCE-DISPLAY-CONTRACT] CONFIDENCE BLOCK
+// =============================================================================
+
+export interface PremiumConfidenceDisplay {
+  /** Main confidence label */
+  label: string
+  /** Sub-label describing source depth */
+  sublabel: string
+  /** Confidence level */
+  level: 'high' | 'moderate' | 'limited'
+  /** What signals are strong */
+  strongSignals: string[]
+  /** What signals are limited */
+  limitedSignals: string[]
+  /** Source coverage description */
+  sourceCoverage: string
+}
+
+/**
+ * Build premium confidence display from source map
+ */
+export function buildPremiumConfidence(program: AdaptiveProgram): PremiumConfidenceDisplay {
+  const sourceMap = program.generationTruthSnapshot?.generationSourceMap
+  const audit = program.generationTruthSnapshot?.authoritativeTruthIngestionAudit
+  
+  if (!sourceMap && !audit) {
+    return {
+      label: 'Standard Confidence',
+      sublabel: 'Built from profile data',
+      level: 'moderate',
+      strongSignals: ['profile settings'],
+      limitedSignals: ['execution history', 'recovery data'],
+      sourceCoverage: 'Profile-based generation',
+    }
+  }
+  
+  const strongSignals: string[] = []
+  const limitedSignals: string[] = []
+  
+  // Analyze source map quality
+  if (sourceMap) {
+    if (sourceMap.profileQuality === 'strong') strongSignals.push('profile data')
+    else if (sourceMap.profileQuality === 'weak') limitedSignals.push('profile data')
+    
+    if (sourceMap.recoveryQuality === 'strong' || sourceMap.recoveryQuality === 'usable') {
+      strongSignals.push('recovery signals')
+    } else {
+      limitedSignals.push('recovery history')
+    }
+    
+    if (sourceMap.adherenceQuality === 'strong' || sourceMap.adherenceQuality === 'usable') {
+      strongSignals.push('adherence patterns')
+    } else {
+      limitedSignals.push('adherence history')
+    }
+    
+    if (sourceMap.executionQuality === 'strong' || sourceMap.executionQuality === 'usable') {
+      strongSignals.push('execution data')
+    } else {
+      limitedSignals.push('execution history')
+    }
+  }
+  
+  // Determine level
+  let level: PremiumConfidenceDisplay['level'] = 'moderate'
+  let label = 'Good Confidence'
+  let sublabel = 'Built from available signals'
+  
+  if (strongSignals.length >= 3) {
+    level = 'high'
+    label = 'High Confidence'
+    sublabel = 'Rich signal coverage informs decisions'
+  } else if (strongSignals.length <= 1) {
+    level = 'limited'
+    label = 'Building Confidence'
+    sublabel = 'More training data will refine future programs'
+  }
+  
+  // Add first week note
+  if (audit?.isFirstWeek) {
+    sublabel = 'First week - conservative dosage applied'
+  }
+  
+  // Source coverage
+  const dbSignals = sourceMap?.dbSignalsRead?.length || 0
+  const sourceCoverage = dbSignals > 5 
+    ? 'Built from stored profile, history, and doctrine'
+    : dbSignals > 0
+    ? 'Built from profile and available history'
+    : 'Built from profile settings'
+  
+  return {
+    label,
+    sublabel,
+    level,
+    strongSignals: strongSignals.slice(0, 3),
+    limitedSignals: limitedSignals.slice(0, 2),
+    sourceCoverage,
+  }
+}
+
+// =============================================================================
 // SESSION DISPLAY CONTRACT
 // =============================================================================
 
@@ -1089,6 +1499,22 @@ export interface ProgramIntelligenceContract {
     details: string[]
     source: string
   }
+  
+  // ==========================================================================
+  // [DECISION-EVIDENCE-DISPLAY-CONTRACT] PREMIUM DISPLAYS
+  // ==========================================================================
+  
+  /** Strategic summary - the core decision architecture */
+  strategicSummary: StrategicSummaryDisplay
+  
+  /** Weekly decision logic - why this frequency and structure */
+  weeklyDecisionLogic: WeeklyDecisionLogicDisplay
+  
+  /** Premium confidence - evidence-backed confidence display */
+  premiumConfidence: PremiumConfidenceDisplay
+  
+  /** Day rationales - why each day exists */
+  dayRationales: DayRationaleDisplay[]
   
   // ==========================================================================
   // WEEKLY DECISION OUTPUTS
@@ -2227,6 +2653,37 @@ export function buildProgramIntelligenceContract(
   }
   
   // ==========================================================================
+  // [DECISION-EVIDENCE-DISPLAY-CONTRACT] BUILD PREMIUM DISPLAYS
+  // ==========================================================================
+  const strategicSummary = buildStrategicSummary(program)
+  const weeklyDecisionLogic = buildWeeklyDecisionLogic(program)
+  const premiumConfidence = buildPremiumConfidence(program)
+  
+  // Build day rationales
+  const dayRationales: DayRationaleDisplay[] = sessions.map(session => 
+    buildDayRationale(
+      {
+        dayNumber: session.dayNumber,
+        dayLabel: session.dayLabel,
+        rationale: session.rationale,
+        focus: session.focus,
+        focusLabel: session.focusLabel,
+        isPrimary: session.isPrimary,
+        skillExpressionMetadata: session.skillExpressionMetadata as {
+          directlyExpressedSkills?: string[]
+          technicalSlotSkills?: string[]
+        },
+      },
+      {
+        totalSessions: sessions.length,
+        primaryGoal: program.primaryGoal,
+        secondaryGoal: program.secondaryGoal,
+        trainingSpine: trainingSpine.label,
+      }
+    )
+  )
+  
+  // ==========================================================================
   // BUILD CONTRACT
   // ==========================================================================
   return {
@@ -2238,6 +2695,10 @@ export function buildProgramIntelligenceContract(
     weekDriver,
     secondarySkillHandling,
     planExplanation,
+    strategicSummary,
+    weeklyDecisionLogic,
+    premiumConfidence,
+    dayRationales,
     weeklyDistribution,
     weeklyProtection,
     weeklyDecisionSummary,

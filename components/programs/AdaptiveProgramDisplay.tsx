@@ -1131,12 +1131,12 @@ export function AdaptiveProgramDisplay({
                   Active
                 </span>
               </div>
-              {/* Training architecture with doctrine clarity */}
+              {/* Training architecture with decision clarity */}
               <p className="text-sm text-[#8A8A8A]">
-                {intelligenceContract?.trainingSpine?.label 
-                  ? `${intelligenceContract.trainingSpine.label} · `
-                  : dominantSpineResolution?.primarySpine 
-                    ? `${dominantSpineResolution.primarySpine.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} · `
+                {intelligenceContract?.strategicSummary?.architectureLabel 
+                  ? `${intelligenceContract.strategicSummary.architectureLabel} · `
+                  : intelligenceContract?.trainingSpine?.label 
+                    ? `${intelligenceContract.trainingSpine.label} · `
                     : ''}
                 {validSessions.length} days/week · {program.sessionLength || 60}min sessions
               </p>
@@ -1167,25 +1167,45 @@ export function AdaptiveProgramDisplay({
         </div>
         
         {/* Compact Summary Strip - key facts at a glance */}
-        <div className="px-4 py-2.5 bg-[#1E1E1E]/40 border-t border-[#333]/50 flex items-center justify-between">
-          <div className="flex items-center gap-4 text-xs">
-            <div className="flex items-center gap-1.5">
-              <Target className="w-3 h-3 text-[#E63946]" />
-              <span className="text-[#C8C8C8] font-medium capitalize">{program.experienceLevel}</span>
+        <div className="px-4 py-2.5 bg-[#1E1E1E]/40 border-t border-[#333]/50">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4 text-xs">
+              <div className="flex items-center gap-1.5">
+                <Target className="w-3 h-3 text-[#E63946]" />
+                <span className="text-[#C8C8C8] font-medium capitalize">{program.experienceLevel}</span>
+              </div>
+              <div className="w-px h-3 bg-[#3A3A3A]" />
+              <div className="flex items-center gap-1.5">
+                <Calendar className="w-3 h-3 text-[#6A6A6A]" />
+                <span className="text-[#9A9A9A]">{program.scheduleMode === 'flexible' ? 'Adaptive' : 'Fixed'} schedule</span>
+              </div>
+              {/* Premium confidence indicator */}
+              {intelligenceContract?.premiumConfidence && (
+                <>
+                  <div className="w-px h-3 bg-[#3A3A3A]" />
+                  <div className="flex items-center gap-1.5">
+                    <div className={`w-1.5 h-1.5 rounded-full ${
+                      intelligenceContract.premiumConfidence.level === 'high' ? 'bg-green-500' :
+                      intelligenceContract.premiumConfidence.level === 'moderate' ? 'bg-amber-500' :
+                      'bg-[#5A5A5A]'
+                    }`} />
+                    <span className="text-[#6A6A6A] text-[10px]">
+                      {intelligenceContract.premiumConfidence.level === 'high' ? 'High confidence' :
+                       intelligenceContract.premiumConfidence.level === 'moderate' ? 'Good confidence' :
+                       'Building confidence'}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
-            <div className="w-px h-3 bg-[#3A3A3A]" />
-            <div className="flex items-center gap-1.5">
-              <Calendar className="w-3 h-3 text-[#6A6A6A]" />
-              <span className="text-[#9A9A9A]">{program.scheduleMode === 'flexible' ? 'Adaptive' : 'Fixed'} schedule</span>
-            </div>
+            {/* Learn more link */}
+            <button 
+              onClick={() => setShowWhySheet(true)}
+              className="text-[10px] text-[#E63946]/70 hover:text-[#E63946] font-medium uppercase tracking-wide"
+            >
+              View decisions
+            </button>
           </div>
-          {/* Learn more link */}
-          <button 
-            onClick={() => setShowWhySheet(true)}
-            className="text-[10px] text-[#E63946]/70 hover:text-[#E63946] font-medium uppercase tracking-wide"
-          >
-            Why this fits you
-          </button>
         </div>
         
         {/* This Week Focus - Compact skill chips with context */}
@@ -1271,19 +1291,37 @@ export function AdaptiveProgramDisplay({
       <div className="space-y-3">
         <h4 className="text-base font-semibold text-[#B5B5B5]">This Week</h4>
         {validSessions.length > 0 ? (
-          validSessions.map((session, sessionIndex) => (
-            <AdaptiveSessionCard
-              key={`${program.id}-${session.dayNumber}-${session.name || session.focusLabel}`}
-              session={session}
-              programId={program.id}
-              defaultExpanded={sessionIndex === 0}
-              onExerciseReplace={
-                onExerciseReplace 
-                  ? (exerciseId) => onExerciseReplace(session.dayNumber, exerciseId)
-                  : undefined
-              }
-            />
-          ))
+          validSessions.map((session, sessionIndex) => {
+            // Get day rationale for this session
+            const dayRationale = intelligenceContract?.dayRationales?.find(
+              r => r.dayNumber === session.dayNumber
+            )
+            
+            return (
+              <div key={`${program.id}-${session.dayNumber}-${session.name || session.focusLabel}`}>
+                {/* Day rationale - compact inline display */}
+                {dayRationale && dayRationale.source !== 'unavailable' && (
+                  <div className="mb-1.5 px-1">
+                    <p className="text-[10px] text-[#5A5A5A] leading-relaxed">
+                      <span className="text-[#7A7A7A] font-medium">{dayRationale.weeklyRole}</span>
+                      <span className="mx-1.5 text-[#3A3A3A]">·</span>
+                      <span>{dayRationale.rationale}</span>
+                    </p>
+                  </div>
+                )}
+                <AdaptiveSessionCard
+                  session={session}
+                  programId={program.id}
+                  defaultExpanded={sessionIndex === 0}
+                  onExerciseReplace={
+                    onExerciseReplace 
+                      ? (exerciseId) => onExerciseReplace(session.dayNumber, exerciseId)
+                      : undefined
+                  }
+                />
+              </div>
+            )
+          })
         ) : (
           <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-6 text-center">
             <p className="text-sm text-[#6A6A6A]">No training sessions available</p>
@@ -1291,7 +1329,7 @@ export function AdaptiveProgramDisplay({
         )}
       </div>
 
-      {/* Why This Fits You - Premium doctrine-driven explanation sheet */}
+      {/* Why This Fits You - Premium evidence-driven explanation sheet */}
       <Dialog open={showWhySheet} onOpenChange={setShowWhySheet}>
         <DialogContent className="bg-[#1A1F26] border-[#2B313A] max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -1302,97 +1340,53 @@ export function AdaptiveProgramDisplay({
               Program Intelligence
             </DialogTitle>
             <DialogDescription className="text-[#A4ACB8] pt-1">
-              How your training doctrine shapes this plan
+              Decision evidence for your engineered training plan
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-3 py-2">
-            {/* Plan Headline - Doctrine-driven summary */}
-            {intelligenceContract?.planExplanation && (
+            {/* [DECISION-EVIDENCE] Strategic Summary - Core decision architecture */}
+            {intelligenceContract?.strategicSummary && (
               <div className="p-3 bg-gradient-to-br from-[#E63946]/5 to-[#0F1115] rounded-lg border border-[#E63946]/20">
                 <p className="text-sm text-[#E6E9EF] font-medium leading-relaxed">
-                  {intelligenceContract.planExplanation.headline}
+                  {intelligenceContract.strategicSummary.headline}
                 </p>
-                {intelligenceContract.planExplanation.details.length > 0 && (
-                  <ul className="mt-2 space-y-1">
-                    {intelligenceContract.planExplanation.details.slice(0, 3).map((detail, i) => (
-                      <li key={i} className="text-xs text-[#8A8A8A] flex items-start gap-1.5">
-                        <span className="text-[#E63946] mt-0.5">·</span>
-                        {detail}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-            
-            {/* Training Spine - Method architecture */}
-            {/* Training Spine - Method architecture */}
-            {intelligenceContract?.trainingSpine && (
-              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-                <div className="flex items-center gap-2 mb-2">
-                  <Layers className="w-4 h-4 text-[#E63946]" />
-                  <h4 className="text-sm font-medium text-[#E6E9EF]">Training Architecture</h4>
-                </div>
-                <p className="text-sm text-[#C8C8C8]">
-                  {intelligenceContract.trainingSpine.label || 'Adaptive Structure'}
-                </p>
-                {intelligenceContract.trainingSpine.rationale && (
-                  <p className="text-xs text-[#6A6A6A] mt-2 leading-relaxed">
-                    {intelligenceContract.trainingSpine.rationale}
+                <div className="mt-2 space-y-1.5">
+                  <p className="text-xs text-[#A4ACB8]">
+                    <span className="text-[#E63946]">Architecture:</span> {intelligenceContract.strategicSummary.architectureLabel}
                   </p>
-                )}
-                {intelligenceContract.trainingSpine.secondaryInfluences && 
-                 intelligenceContract.trainingSpine.secondaryInfluences.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {intelligenceContract.trainingSpine.secondaryInfluences.map((influence, i) => (
-                      <span key={i} className="text-[10px] px-1.5 py-0.5 bg-[#2A2A2A] text-[#8A8A8A] rounded">
-                        +{influence.replace(/_/g, ' ')}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                  <p className="text-xs text-[#8A8A8A]">
+                    {intelligenceContract.strategicSummary.fitReason}
+                  </p>
+                </div>
               </div>
             )}
             
-            {/* Weekly Decision Summary - Why this week looks like this */}
-            {intelligenceContract?.weeklyDecisionSummary && (
+            {/* [DECISION-EVIDENCE] Weekly Decision Logic - Why this frequency/structure */}
+            {intelligenceContract?.weeklyDecisionLogic && (
               <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
                 <div className="flex items-center gap-2 mb-2">
                   <Calendar className="w-4 h-4 text-[#E63946]" />
-                  <h4 className="text-sm font-medium text-[#E6E9EF]">Weekly Structure</h4>
+                  <h4 className="text-sm font-medium text-[#E6E9EF]">Weekly Decision Logic</h4>
                 </div>
-                <p className="text-sm text-[#C8C8C8]">
-                  {intelligenceContract.weeklyDecisionSummary.headline}
-                </p>
-                {intelligenceContract.weeklyDecisionSummary.decisions?.length > 0 && (
-                  <ul className="mt-2 space-y-1">
-                    {intelligenceContract.weeklyDecisionSummary.decisions.slice(0, 2).map((decision, i) => (
-                      <li key={i} className="text-xs text-[#6A6A6A] flex items-start gap-1.5">
-                        <span className="text-[#E63946] mt-0.5">·</span>
-                        {decision}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-            
-            {/* Week Driver - What this week is pushing */}
-            {intelligenceContract?.weekDriver?.label && (
-              <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
-                <div className="flex items-center gap-2 mb-2">
-                  <Target className="w-4 h-4 text-[#E63946]" />
-                  <h4 className="text-sm font-medium text-[#E6E9EF]">This Week&apos;s Focus</h4>
-                </div>
-                <p className="text-sm text-[#C8C8C8]">
-                  {intelligenceContract.weekDriver.label}
-                </p>
-                {intelligenceContract.weekDriver.reason && (
-                  <p className="text-xs text-[#6A6A6A] mt-2 leading-relaxed">
-                    {intelligenceContract.weekDriver.reason}
+                <div className="space-y-2">
+                  <p className="text-xs text-[#C8C8C8]">
+                    {intelligenceContract.weeklyDecisionLogic.structureIdentity}
                   </p>
-                )}
+                  <p className="text-xs text-[#8A8A8A]">
+                    {intelligenceContract.weeklyDecisionLogic.frequencyReason}
+                  </p>
+                  {intelligenceContract.weeklyDecisionLogic.architecturalDecisions.length > 0 && (
+                    <ul className="mt-1.5 space-y-1">
+                      {intelligenceContract.weeklyDecisionLogic.architecturalDecisions.slice(0, 3).map((decision, i) => (
+                        <li key={i} className="text-[11px] text-[#6A6A6A] flex items-start gap-1.5">
+                          <span className="text-[#E63946] mt-0.5">·</span>
+                          {decision}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
             )}
             
@@ -1401,20 +1395,18 @@ export function AdaptiveProgramDisplay({
               <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
                 <div className="flex items-center gap-2 mb-2">
                   <Shield className="w-4 h-4 text-[#E63946]" />
-                  <h4 className="text-sm font-medium text-[#E6E9EF]">Protected Priorities</h4>
+                  <h4 className="text-sm font-medium text-[#E6E9EF]">Protected Constraints</h4>
                 </div>
-                <ul className="space-y-2">
+                <ul className="space-y-1.5">
                   {intelligenceContract.protectedConstraints.slice(0, 4).map((constraint, i) => (
-                    <li key={i} className="text-xs">
-                      <div className="flex items-start gap-2 text-[#A4ACB8]">
-                        <span className="text-green-500/80 shrink-0 mt-0.5">✓</span>
-                        <span>{constraint.label}</span>
+                    <li key={i} className="text-xs flex items-start gap-2">
+                      <span className="text-green-500/80 shrink-0 mt-0.5">✓</span>
+                      <div>
+                        <span className="text-[#A4ACB8]">{constraint.label}</span>
+                        {constraint.reason && (
+                          <span className="text-[#5A5A5A]"> - {constraint.reason}</span>
+                        )}
                       </div>
-                      {constraint.reason && (
-                        <p className="mt-0.5 ml-4 text-[10px] text-[#5A5A5A]">
-                          {constraint.reason}
-                        </p>
-                      )}
                     </li>
                   ))}
                 </ul>
@@ -1426,20 +1418,20 @@ export function AdaptiveProgramDisplay({
               <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
                 <div className="flex items-center gap-2 mb-2">
                   <Scale className="w-4 h-4 text-[#E63946]" />
-                  <h4 className="text-sm font-medium text-[#E6E9EF]">Balanced Tradeoffs</h4>
+                  <h4 className="text-sm font-medium text-[#E6E9EF]">Tradeoff Decisions</h4>
                 </div>
-                <ul className="space-y-2.5">
+                <ul className="space-y-2">
                   {intelligenceContract.tradeoffs.slice(0, 3).map((tradeoff, i) => (
                     <li key={i} className="text-xs">
-                      <div className="flex items-center gap-2 text-[#A4ACB8]">
-                        <span className="text-green-500/80">↑</span>
+                      <div className="flex items-center gap-1.5 text-[#A4ACB8]">
+                        <span className="text-green-500/80">+</span>
                         <span>{tradeoff.prioritized}</span>
-                        <span className="text-[#5A5A5A]">vs</span>
-                        <span className="text-amber-500/60">↓</span>
+                        <span className="text-[#3A3A3A]">/</span>
+                        <span className="text-amber-500/60">-</span>
                         <span className="text-[#6A6A6A]">{tradeoff.limited}</span>
                       </div>
                       {tradeoff.reason && (
-                        <p className="mt-1 ml-4 text-[10px] text-[#5A5A5A] leading-relaxed">
+                        <p className="mt-0.5 ml-3.5 text-[10px] text-[#5A5A5A]">
                           {tradeoff.reason}
                         </p>
                       )}
@@ -1449,7 +1441,7 @@ export function AdaptiveProgramDisplay({
               </div>
             )}
             
-            {/* Secondary Skill Handling */}
+            {/* Secondary Skill Integration */}
             {intelligenceContract?.secondarySkillHandling && 
              intelligenceContract.secondarySkillHandling.strategy && 
              intelligenceContract.secondarySkillHandling.strategy !== 'none' && (
@@ -1461,20 +1453,20 @@ export function AdaptiveProgramDisplay({
                 <p className="text-xs text-[#8A8A8A] leading-relaxed">
                   {intelligenceContract.secondarySkillHandling.strategy.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} approach
                   {intelligenceContract.secondarySkillHandling.skills?.length > 0 && (
-                    <span> for {intelligenceContract.secondarySkillHandling.skills.join(', ').replace(/_/g, ' ')}</span>
+                    <span className="text-[#A4ACB8]"> for {intelligenceContract.secondarySkillHandling.skills.map(s => s.replace(/_/g, ' ')).join(', ')}</span>
                   )}
                 </p>
               </div>
             )}
             
-            {/* Decision Inputs Used - What truth the engine responded to */}
+            {/* Decision Inputs - What truth the engine used */}
             {intelligenceContract?.decisionInputs && intelligenceContract.decisionInputs.length > 0 && (
               <div className="p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]">
                 <div className="flex items-center gap-2 mb-2">
                   <Info className="w-4 h-4 text-[#E63946]" />
                   <h4 className="text-sm font-medium text-[#E6E9EF]">Decision Inputs</h4>
                 </div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                   {intelligenceContract.decisionInputs.slice(0, 8).map((input, i) => (
                     <div key={i} className="flex flex-col">
                       <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wide">{input.label}</span>
@@ -1485,26 +1477,41 @@ export function AdaptiveProgramDisplay({
               </div>
             )}
             
-            {/* Evidence Strength - Premium confidence indicator */}
-            {intelligenceContract?.evidenceStrength && (
-              <div className="flex items-center justify-between px-3 py-2.5 bg-[#0F1115]/50 rounded-lg border border-[#2B313A]/50">
-                <div className="flex flex-col">
-                  <span className={`text-xs font-medium ${
-                    intelligenceContract.evidenceStrength.confidence === 'high' ? 'text-green-400' :
-                    intelligenceContract.evidenceStrength.confidence === 'moderate' ? 'text-amber-400' :
+            {/* [DECISION-EVIDENCE] Premium Confidence Block - Evidence-backed */}
+            {intelligenceContract?.premiumConfidence && (
+              <div className="p-3 bg-[#0F1115]/70 rounded-lg border border-[#2B313A]/50">
+                <div className="flex items-center justify-between mb-2">
+                  <span className={`text-xs font-semibold ${
+                    intelligenceContract.premiumConfidence.level === 'high' ? 'text-green-400' :
+                    intelligenceContract.premiumConfidence.level === 'moderate' ? 'text-amber-400' :
                     'text-[#8A8A8A]'
                   }`}>
-                    {intelligenceContract.evidenceStrength.label}
+                    {intelligenceContract.premiumConfidence.label}
                   </span>
-                  <span className="text-[10px] text-[#5A5A5A]">
-                    {intelligenceContract.evidenceStrength.sublabel}
-                  </span>
+                  <div className={`w-2 h-2 rounded-full ${
+                    intelligenceContract.premiumConfidence.level === 'high' ? 'bg-green-500' :
+                    intelligenceContract.premiumConfidence.level === 'moderate' ? 'bg-amber-500' :
+                    'bg-[#5A5A5A]'
+                  }`} />
                 </div>
-                <div className={`w-2 h-2 rounded-full ${
-                  intelligenceContract.evidenceStrength.confidence === 'high' ? 'bg-green-500' :
-                  intelligenceContract.evidenceStrength.confidence === 'moderate' ? 'bg-amber-500' :
-                  'bg-[#5A5A5A]'
-                }`} />
+                <p className="text-[11px] text-[#6A6A6A] mb-2">
+                  {intelligenceContract.premiumConfidence.sublabel}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {intelligenceContract.premiumConfidence.strongSignals.map((signal, i) => (
+                    <span key={i} className="text-[10px] px-1.5 py-0.5 bg-green-500/10 text-green-400/80 rounded border border-green-500/20">
+                      {signal}
+                    </span>
+                  ))}
+                  {intelligenceContract.premiumConfidence.limitedSignals.map((signal, i) => (
+                    <span key={i} className="text-[10px] px-1.5 py-0.5 bg-[#2A2A2A] text-[#6A6A6A] rounded border border-[#333]">
+                      {signal} (building)
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-2 text-[10px] text-[#5A5A5A]">
+                  {intelligenceContract.premiumConfidence.sourceCoverage}
+                </p>
               </div>
             )}
           </div>

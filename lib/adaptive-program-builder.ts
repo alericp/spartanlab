@@ -767,6 +767,33 @@ function logConstraintResolution(
   })
 }
 
+// =============================================================================
+// [PHASE 15E CONTRACT FIX] Session-level week adaptation type
+// This is the NORMALIZED shape passed from generateAdaptiveProgram to generateAdaptiveSession
+// It maps from WeekAdaptationDecision → session-consumable fields
+// =============================================================================
+type SessionWeekAdaptation = {
+  loadStrategy: {
+    volumeBias: 'reduced' | 'normal' | 'expanded'
+    intensityBias: 'reduced' | 'normal' | 'expanded'
+    densityBias: 'reduced' | 'normal' | 'expanded'
+    finisherBias: 'limited' | 'normal' | 'expanded'
+    straightArmExposureBias?: 'protected' | 'normal'
+    connectiveTissueBias?: 'protected' | 'normal'
+    restSpacingBias?: 'increased' | 'normal'
+  } | null
+  firstWeekProtection: {
+    active: boolean
+    reduceSets?: boolean
+    reduceRPE?: boolean
+    suppressFinishers?: boolean
+    protectHighStressPatterns?: boolean
+    reasons?: string[]
+  } | null
+  weeklyComplexity?: 'low' | 'moderate' | 'high'
+  adaptationPhase?: string
+}
+
 // Context for explicit dependency passing to session generation (fixes scope bug)
 type AdaptiveSessionContext = {
   athleteCalibration: ReturnType<typeof getAthleteCalibration>
@@ -811,8 +838,9 @@ type AdaptiveSessionContext = {
   // [WEEKLY-COMPOSITION-UPGRADE] Week-level adaptation decisions
   // These are passed through from the WeekAdaptationDecision contract
   // to enable session-level enforcement of week-level load strategy
+  // [PHASE 15E CONTRACT FIX] Now properly typed as SessionWeekAdaptation (not WeekAdaptationInput)
   // ==========================================================================
-  weekAdaptation?: WeekAdaptationInput | null
+  weekAdaptation?: SessionWeekAdaptation | null
   }
 
 export interface AdaptiveProgramInputs {
@@ -8349,8 +8377,9 @@ async function generateAdaptiveProgramImpl(
     // ==========================================================================
     // [WEEKLY-COMPOSITION-UPGRADE] Build week adaptation input from decision
     // This connects week-level load strategy and first-week protection to session
+    // [PHASE 15E CONTRACT FIX] Now properly typed as SessionWeekAdaptation
     // ==========================================================================
-    const weekAdaptationInputForSession: WeekAdaptationInput = {
+    const weekAdaptationInputForSession: SessionWeekAdaptation = {
       loadStrategy: weekAdaptationDecision ? {
         volumeBias: weekAdaptationDecision.loadStrategy.volumeBias,
         intensityBias: weekAdaptationDecision.loadStrategy.intensityBias,
@@ -17883,58 +17912,82 @@ function generateAdaptiveSession(
     // [PRESCRIPTION-PROPAGATION] PHASE 1: Reduce secondary/accessory exercise count
     // When first-week protection is active, trim non-primary exercises first
     // This preserves primary skill quality while reducing overall session burden
+    // [PHASE 15E DIAGNOSTIC] Wrapped in try-catch for detailed failure diagnostics
     // ==========================================================================
-    const shouldReduceSecondary = 
-      weekAdaptation.firstWeekProtection?.active ||
-      weekAdaptation.adaptationPhase === 'recovery_constrained' ||
-      weekAdaptation.adaptationPhase === 'rebuild_after_disruption'
-    
-    if (shouldReduceSecondary && effectiveMainForSession.length > 3) {
-      // Identify primary vs non-primary exercises
-      const primaryExercises: typeof effectiveMainForSession = []
-      const secondaryExercises: typeof effectiveMainForSession = []
+    try {
+      const shouldReduceSecondary = 
+        weekAdaptation.firstWeekProtection?.active ||
+        weekAdaptation.adaptationPhase === 'recovery_constrained' ||
+        weekAdaptation.adaptationPhase === 'rebuild_after_disruption'
       
-      for (const ex of effectiveMainForSession) {
-        const isPrimary = 
-          ex.exerciseRole === 'primary' ||
-          ex.exerciseRole === 'primary_skill' ||
-          ex.prescriptionStyle === 'primary' ||
-          ex.category === 'primary' ||
-          // Check if exercise targets the primary goal
-          (ex.exercise?.skillTags || []).some(tag => 
-            tag.toLowerCase().includes(primaryGoal.toLowerCase().split('_')[0])
-          )
+      if (shouldReduceSecondary && effectiveMainForSession.length > 3) {
+        // Identify primary vs non-primary exercises
+        const primaryExercises: typeof effectiveMainForSession = []
+        const secondaryExercises: typeof effectiveMainForSession = []
         
-        if (isPrimary) {
-          primaryExercises.push(ex)
-        } else {
-          secondaryExercises.push(ex)
+        for (const ex of effectiveMainForSession) {
+          // [PRESCRIPTION-PROPAGATION-FIX] Safe check for primary goal match
+          const primaryGoalLower = primaryGoal?.toLowerCase()?.split('_')[0] || ''
+          const isPrimary = 
+            ex.exerciseRole === 'primary' ||
+            ex.exerciseRole === 'primary_skill' ||
+            ex.prescriptionStyle === 'primary' ||
+            ex.category === 'primary' ||
+            // Check if exercise targets the primary goal (only if primaryGoal exists)
+            (primaryGoalLower && (ex.exercise?.skillTags || []).some(tag => 
+              tag.toLowerCase().includes(primaryGoalLower)
+            ))
+          
+          if (isPrimary) {
+            primaryExercises.push(ex)
+          } else {
+            secondaryExercises.push(ex)
+          }
+        }
+        
+        // Keep all primary exercises, trim secondary to max 2 (or 1 for aggressive protection)
+        const maxSecondary = weekAdaptation.firstWeekProtection?.active ? 1 : 2
+        const trimmedSecondary = secondaryExercises.slice(0, maxSecondary)
+        
+        if (trimmedSecondary.length < secondaryExercises.length) {
+          secondaryExercisesTrimmed = true
+          weekAdaptationAdjusted = [...primaryExercises, ...trimmedSecondary]
+          
+          console.log('[PRESCRIPTION-PROPAGATION-SECONDARY-TRIMMED]', {
+            sessionIndex,
+            dayFocus: day.focus,
+            originalTotal: effectiveMainForSession.length,
+            primaryCount: primaryExercises.length,
+            originalSecondaryCount: secondaryExercises.length,
+            trimmedSecondaryCount: trimmedSecondary.length,
+            removedExercises: secondaryExercises.slice(maxSecondary).map(e => e.exercise?.name || 'unknown'),
+            reason: weekAdaptation.firstWeekProtection?.active 
+              ? 'first_week_protection_secondary_trim'
+              : 'recovery_protection_secondary_trim',
+            adaptationPhase: weekAdaptation.adaptationPhase,
+            verdict: 'SECONDARY_EXERCISES_TRIMMED_TO_PRESERVE_PRIMARY',
+          })
         }
       }
-      
-      // Keep all primary exercises, trim secondary to max 2 (or 1 for aggressive protection)
-      const maxSecondary = weekAdaptation.firstWeekProtection?.active ? 1 : 2
-      const trimmedSecondary = secondaryExercises.slice(0, maxSecondary)
-      
-      if (trimmedSecondary.length < secondaryExercises.length) {
-        secondaryExercisesTrimmed = true
-        weekAdaptationAdjusted = [...primaryExercises, ...trimmedSecondary]
-        
-        console.log('[PRESCRIPTION-PROPAGATION-SECONDARY-TRIMMED]', {
-          sessionIndex,
-          dayFocus: day.focus,
-          originalTotal: effectiveMainForSession.length,
-          primaryCount: primaryExercises.length,
-          originalSecondaryCount: secondaryExercises.length,
-          trimmedSecondaryCount: trimmedSecondary.length,
-          removedExercises: secondaryExercises.slice(maxSecondary).map(e => e.exercise?.name || 'unknown'),
-          reason: weekAdaptation.firstWeekProtection?.active 
-            ? 'first_week_protection_secondary_trim'
-            : 'recovery_protection_secondary_trim',
-          adaptationPhase: weekAdaptation.adaptationPhase,
-          verdict: 'SECONDARY_EXERCISES_TRIMMED_TO_PRESERVE_PRIMARY',
-        })
-      }
+    } catch (phase15eSecondaryTrimError) {
+      // [PHASE 15E DIAGNOSTIC] Log detailed failure info but don't crash the session
+      console.error('[PHASE-15E-SECONDARY-TRIM-FAILURE]', {
+        diagnostic_stage: 'prescription_propagation_phase1',
+        diagnostic_source: 'secondary_exercise_trimming',
+        diagnostic_contract: 'SessionWeekAdaptation',
+        sessionIndex,
+        dayFocus: day.focus,
+        primaryGoalValue: primaryGoal,
+        primaryGoalType: typeof primaryGoal,
+        effectiveMainCount: effectiveMainForSession?.length ?? 'undefined',
+        weekAdaptationShape: weekAdaptation ? Object.keys(weekAdaptation) : 'null',
+        firstWeekProtectionActive: weekAdaptation?.firstWeekProtection?.active ?? 'undefined',
+        adaptationPhase: weekAdaptation?.adaptationPhase ?? 'undefined',
+        error: phase15eSecondaryTrimError instanceof Error ? phase15eSecondaryTrimError.message : String(phase15eSecondaryTrimError),
+        stack: phase15eSecondaryTrimError instanceof Error ? phase15eSecondaryTrimError.stack?.split('\n').slice(0, 3).join(' | ') : undefined,
+        verdict: 'PHASE_15E_SECONDARY_TRIM_BYPASSED_DUE_TO_ERROR',
+      })
+      // Continue without secondary trimming - preserve session generation
     }
     
     // Update the source for set/RPE reduction to use potentially trimmed list

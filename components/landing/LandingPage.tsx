@@ -90,7 +90,7 @@ function HeroSection() {
           </Button>
         </div>
         
-        <p className="text-sm text-[#6B7280] mt-4">Free to start. Built from real training methodologies.</p>
+        <p className="text-sm text-[#6B7280] mt-4">Free to start. Built from real training methodologies. Training intelligence, refined.</p>
       </div>
     </section>
   )

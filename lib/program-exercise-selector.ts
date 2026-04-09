@@ -5626,6 +5626,44 @@ export function buildFallbackSelectionForSession(
     skills: availableSkills.length,
   })
   
+  // ==========================================================================
+  // [PHASE15E-RESCUE-CORRIDOR-INPUT-TRUTH] Normalize all rescue candidate pools
+  // All rescue filtering/matching logic MUST use these normalized pools
+  // This eliminates mixed raw/normalized read crashes in the rescue corridor
+  // ==========================================================================
+  const normRescueStrength = normalizeExercisePool(availableStrength)
+  const normRescueAccessory = normalizeExercisePool(availableAccessory)
+  const normRescueCore = normalizeExercisePool(availableCore)
+  const normRescueSkills = normalizeExercisePool(availableSkills)
+  
+  // Create lookup map from raw exercise ID to normalized candidate
+  const rescueNormalizedById = new Map<string, NormalizedExerciseCandidate>()
+  for (const c of [...normRescueStrength, ...normRescueAccessory, ...normRescueCore, ...normRescueSkills]) {
+    rescueNormalizedById.set(c.id, c)
+  }
+  
+  // Track malformed candidates skipped during rescue
+  let malformedSkippedCount = 0
+  
+  // Helper to get normalized candidate for a raw exercise
+  const getRescueNormalized = (exercise: Exercise): NormalizedExerciseCandidate | null => {
+    const id = safeLower(exercise.id)
+    const norm = rescueNormalizedById.get(id)
+    if (!norm) {
+      malformedSkippedCount++
+      return null
+    }
+    return norm
+  }
+  
+  console.log('[PHASE15E-RESCUE-CORRIDOR-INPUT-TRUTH] Rescue pools normalized:', {
+    normRescueStrength: normRescueStrength.length,
+    normRescueAccessory: normRescueAccessory.length,
+    normRescueCore: normRescueCore.length,
+    normRescueSkills: normRescueSkills.length,
+    totalNormalized: rescueNormalizedById.size,
+  })
+  
   // STEP H: Helper to convert Exercise to SelectedExercise with ALL required fields
   // This ensures rescued exercises have complete metadata for downstream mapping/validation
   // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
@@ -5710,12 +5748,17 @@ export function buildFallbackSelectionForSession(
   const targetTags = goalFocusMap[primaryGoal] || ['compound', 'strength', 'core']
   
   // Try to find exercises matching goal focus
-  // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
+  // [PHASE15E-RESCUE-CORRIDOR-INPUT-TRUTH] Use normalized candidates for goal matching
   const goalMatchingExercises = [...availableStrength, ...availableAccessory].filter(ex => {
+    const norm = getRescueNormalized(ex)
+    if (!norm) return false // Skip malformed candidates
+    
+    // Use normalized fields for matching
     const exTags = [
-      safeExerciseCategory(ex),
-      safeLower(ex.movementFamily),
-      ...(ex.tags || []).map(t => safeLower(t))
+      norm.category,
+      norm.movementFamily,
+      norm.movementPattern,
+      ...norm.tags
     ].filter(Boolean)
     return targetTags.some(tag => exTags.some(et => et.includes(tag)))
   })
@@ -5731,14 +5774,18 @@ export function buildFallbackSelectionForSession(
   }
   
   // RESCUE PATH 2: Day focus compatible work
-  // [PHASE15E-EXERCISE-SELECTION-FIX] Guard against undefined dayFocus
+  // [PHASE15E-RESCUE-CORRIDOR-INPUT-TRUTH] Use normalized candidates for focus compatibility
   const safeDayFocus = dayFocus || 'mixed_upper'
   if (rescueResult.length < 2) {
     const focusCompatible = availableStrength.filter(ex => {
-      if (safeDayFocus.includes('push')) return ex.category === 'push' || ex.movementFamily === 'push'
-      if (safeDayFocus.includes('pull')) return ex.category === 'pull' || ex.movementFamily === 'pull'
+      const norm = getRescueNormalized(ex)
+      if (!norm) return false // Skip malformed candidates
+      
+      // Use normalized fields and derived flags for compatibility checks
+      if (safeDayFocus.includes('push')) return norm.isPushMovement || norm.category === 'push' || norm.movementFamily.includes('push')
+      if (safeDayFocus.includes('pull')) return norm.isPullMovement || norm.category === 'pull' || norm.movementFamily.includes('pull')
       if (safeDayFocus.includes('skill')) return true // Any strength work supports skill days
-      if (safeDayFocus === 'support_recovery') return ex.intensity !== 'high'
+      if (safeDayFocus === 'support_recovery') return norm.intensity !== 'high'
       return true
     })
     
@@ -5752,21 +5799,38 @@ export function buildFallbackSelectionForSession(
   }
   
   // RESCUE PATH 3: General strength/accessory fallback
+  // [PHASE15E-RESCUE-CORRIDOR-INPUT-TRUTH] Use normalized candidates for carryover sorting
   if (rescueResult.length < 2) {
     rescuePath = 'general_strength'
     const generalExercises = [...availableStrength, ...availableAccessory]
-      .filter(ex => !rescueResult.some(r => r.exercise.id === ex.id))
-      .sort((a, b) => (b.carryover || 0) - (a.carryover || 0))
+      .filter(ex => {
+        const norm = getRescueNormalized(ex)
+        if (!norm) return false // Skip malformed candidates
+        return !rescueResult.some(r => r.exercise.id === ex.id)
+      })
+      .sort((a, b) => {
+        const normA = getRescueNormalized(a)
+        const normB = getRescueNormalized(b)
+        // Use normalized carryover values with safe fallbacks
+        const carryoverA = normA?.carryover ?? 0
+        const carryoverB = normB?.carryover ?? 0
+        return carryoverB - carryoverA
+      })
       .slice(0, Math.max(0, 4 - rescueResult.length))
     
     rescueResult.push(...generalExercises.map(ex => toSelectedExercise(ex, 'General strength fallback')))
   }
   
   // RESCUE PATH 4: Core work as minimum viable session
+  // [PHASE15E-RESCUE-CORRIDOR-INPUT-TRUTH] Use normalized candidates for core identification
   if (rescueResult.length < 2 && availableCore.length > 0) {
     rescuePath = 'core_minimum'
     const coreExercises = availableCore
-      .filter(ex => !rescueResult.some(r => r.exercise.id === ex.id))
+      .filter(ex => {
+        const norm = getRescueNormalized(ex)
+        if (!norm) return false // Skip malformed candidates
+        return !rescueResult.some(r => r.exercise.id === ex.id)
+      })
       .slice(0, Math.max(0, 3 - rescueResult.length))
     
     rescueResult.push(...coreExercises.map(ex => toSelectedExercise(ex, 'Core fallback')))
@@ -5820,6 +5884,24 @@ export function buildFallbackSelectionForSession(
     finalMainCount: validatedResult.length,
     equipmentCount: equipment.length,
     exercises: validatedResult.map(e => e.exercise.name),
+  })
+  
+  // ==========================================================================
+  // [PHASE15E-RESCUE-CORRIDOR-INPUT-TRUTH] Compact rescue corridor summary
+  // This proves the rescue corridor is now using normalized truth
+  // ==========================================================================
+  const totalCandidatesConsidered = availableStrength.length + availableAccessory.length + availableCore.length + availableSkills.length
+  console.log('[RESCUE_CORRIDOR_NORMALIZED_SUMMARY]', {
+    marker: 'RESCUE_CORRIDOR_NORMALIZED_SUMMARY',
+    totalCandidatesConsidered,
+    rescuePath,
+    rescuedCount: validatedResult.length,
+    malformedSkippedCount,
+    verdict: validatedResult.length > 0 
+      ? 'RESCUE_SUCCESS_NORMALIZED'
+      : totalCandidatesConsidered === 0
+        ? 'RESCUE_NO_COMPATIBLE_CANDIDATES'
+        : 'RESCUE_EMPTY_AFTER_NORMALIZATION',
   })
   
   return { main: validatedResult, rescuePath, wasRescued }

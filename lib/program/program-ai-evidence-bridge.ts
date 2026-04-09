@@ -1787,6 +1787,161 @@ export function buildVisibleSessionRoutineSurface(
 }
 
 // =============================================================================
+// FULL VISIBLE ROUTINE EXERCISES ADAPTER
+// Converts fullRoutineSurface.routineItems to displayExercises-compatible format
+// for MainExercisesRenderer - includes ALL non-warmup/non-cooldown exercises
+// =============================================================================
+
+export interface FullRoutineExercise {
+  id: string
+  name: string
+  category: string
+  sets?: number
+  repsOrTime?: string
+  hold?: string
+  targetRPE?: number
+  rest?: string
+  restSeconds?: number
+  loading?: string
+  assistanceLevel?: string
+  prescribedLoad?: { load?: number; unit?: string }
+  selectionReason?: string
+  isOverrideable?: boolean
+  note?: string
+  // Family tracking for section headers
+  routineFamily: RoutineItemFamily
+}
+
+/**
+ * Build FULL VISIBLE ROUTINE EXERCISES from fullRoutineSurface.
+ * This is the authoritative input for MainExercisesRenderer.
+ * Includes ALL non-warmup/non-cooldown exercises (main + support + accessory + core + mobility + finisher).
+ * 
+ * @param fullRoutineSurface - The authoritative full routine surface
+ * @param sessionExercises - Original session exercises for hydration with full prescription data
+ * @param variantSelection - Optional variant selection for prescription overrides
+ */
+export function buildFullVisibleRoutineExercises(
+  fullRoutineSurface: FullSessionRoutineSurface,
+  sessionExercises: Array<{
+    id: string
+    name: string
+    category?: string
+    sets?: number
+    reps?: string | number
+    repsOrTime?: string
+    hold?: string
+    targetRPE?: number
+    rest?: string
+    restSeconds?: number
+    loading?: string
+    assistanceLevel?: string
+    prescribedLoad?: { load?: number; unit?: string }
+    selectionReason?: string
+    isOverrideable?: boolean
+    note?: string
+  }>,
+  variantSelection?: {
+    main?: Array<{
+      exercise: { id: string; name: string; category?: string }
+      sets?: number
+      repsOrTime?: string
+      hold?: string
+      targetRPE?: number
+      restSeconds?: number
+      prescribedLoad?: { load?: number; unit?: string }
+      selectionReason?: string
+      isOverrideable?: boolean
+      note?: string
+    }>
+  } | null
+): FullRoutineExercise[] {
+  const result: FullRoutineExercise[] = []
+  
+  // Build lookup maps for hydration
+  const sessionExerciseMap = new Map<string, typeof sessionExercises[0]>()
+  sessionExercises.forEach(e => {
+    sessionExerciseMap.set(e.id, e)
+    sessionExerciseMap.set(e.name.toLowerCase(), e)
+  })
+  
+  // Build variant lookup if available
+  const variantExerciseMap = new Map<string, NonNullable<typeof variantSelection>['main'][0]>()
+  if (variantSelection?.main) {
+    variantSelection.main.forEach(v => {
+      variantExerciseMap.set(v.exercise.id, v)
+      variantExerciseMap.set(v.exercise.name.toLowerCase(), v)
+    })
+  }
+  
+  // Filter to non-warmup/non-cooldown and build full exercise objects
+  for (const item of fullRoutineSurface.routineItems) {
+    // Skip warmup and cooldown - they have separate UI
+    if (item.family === 'warmup' || item.family === 'cooldown') {
+      continue
+    }
+    
+    // Try to find full exercise data from session or variant
+    const variantEx = variantExerciseMap.get(item.id) || variantExerciseMap.get(item.displayName.toLowerCase())
+    const sessionEx = sessionExerciseMap.get(item.id) || sessionExerciseMap.get(item.displayName.toLowerCase())
+    
+    // Build category from family
+    const category = item.family === 'primary' ? 'skill'
+      : item.family === 'secondary' ? 'strength'
+      : item.family === 'accessory' ? 'accessory'
+      : item.family === 'support' ? 'support'
+      : item.family === 'core' ? 'core'
+      : item.family === 'mobility' ? 'mobility'
+      : item.family === 'finisher' ? 'finisher'
+      : sessionEx?.category || 'other'
+    
+    // Parse prescription line for sets/reps if not available from source
+    let sets: number | undefined
+    let repsOrTime: string | undefined
+    let hold: string | undefined
+    
+    // Priority: variant > session > parsed from prescription line
+    if (variantEx) {
+      sets = variantEx.sets
+      repsOrTime = variantEx.repsOrTime
+      hold = variantEx.hold
+    } else if (sessionEx) {
+      sets = sessionEx.sets
+      repsOrTime = sessionEx.repsOrTime || (sessionEx.reps ? String(sessionEx.reps) : undefined)
+      hold = sessionEx.hold
+    } else {
+      // Parse from prescription line (e.g. "3x8-12 @7")
+      const prescMatch = item.prescriptionLine.match(/^(\d+)x(.+?)(?:\s|$)/)
+      if (prescMatch) {
+        sets = parseInt(prescMatch[1], 10)
+        repsOrTime = prescMatch[2]
+      }
+    }
+    
+    result.push({
+      id: item.id,
+      name: item.displayName,
+      category,
+      sets,
+      repsOrTime,
+      hold,
+      targetRPE: variantEx?.targetRPE || sessionEx?.targetRPE,
+      rest: sessionEx?.rest,
+      restSeconds: variantEx?.restSeconds || sessionEx?.restSeconds,
+      loading: sessionEx?.loading,
+      assistanceLevel: sessionEx?.assistanceLevel,
+      prescribedLoad: variantEx?.prescribedLoad || sessionEx?.prescribedLoad,
+      selectionReason: variantEx?.selectionReason || sessionEx?.selectionReason || (item.source === 'authoritative' ? 'AI-selected' : undefined),
+      isOverrideable: variantEx?.isOverrideable ?? sessionEx?.isOverrideable ?? true,
+      note: variantEx?.note || sessionEx?.note,
+      routineFamily: item.family,
+    })
+  }
+  
+  return result
+}
+
+// =============================================================================
 // PROGRAM-LEVEL EVIDENCE MODEL
 // =============================================================================
 

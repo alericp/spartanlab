@@ -19058,6 +19058,32 @@ function generateAdaptiveSession(
     // ==========================================================================
     try {
     // ==========================================================================
+    // [v0] PRE-TRIM AUDIT - Prove what families exist BEFORE any protection trim
+    // ==========================================================================
+    const preTrimFamilyBreakdown = effectiveMainForSession.reduce((acc, ex) => {
+      const cat = ex.category?.toLowerCase() || ex.exercise?.category?.toLowerCase() || 'unknown'
+      const role = ex.exerciseRole?.toLowerCase() || ''
+      const family = cat === 'skill' || cat === 'primary' ? 'primary'
+        : cat === 'strength' || role.includes('strength') ? 'strength'
+        : cat === 'support' || role.includes('support') ? 'support'
+        : cat === 'accessory' || role.includes('accessory') ? 'accessory'
+        : cat === 'core' || role.includes('core') ? 'core'
+        : cat === 'mobility' || cat === 'flexibility' ? 'mobility'
+        : cat === 'finisher' || role.includes('finisher') ? 'finisher'
+        : 'other'
+      acc[family] = (acc[family] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+    
+    console.log('[v0] PRE-TRIM-AUDIT Day', day.dayNumber, {
+      effectiveMainCount: effectiveMainForSession.length,
+      preTrimFamilyBreakdown,
+      exerciseNames: effectiveMainForSession.map(e => `${e.exercise?.name}[${e.category || e.exercise?.category || '?'}]`).slice(0, 12),
+      firstWeekProtectionActive: weekAdaptation.firstWeekProtection?.active,
+      adaptationPhase: weekAdaptation.adaptationPhase,
+    })
+    
+    // ==========================================================================
     // [PRESCRIPTION-PROPAGATION] PHASE 1: Reduce secondary/accessory exercise count
     // When first-week protection is active, trim non-primary exercises first
     // This preserves primary skill quality while reducing overall session burden
@@ -19070,9 +19096,23 @@ function generateAdaptiveSession(
         weekAdaptation.adaptationPhase === 'rebuild_after_disruption'
       
       if (shouldReduceSecondary && effectiveMainForSession.length > 3) {
-        // Identify primary vs non-primary exercises
+        // ==========================================================================
+        // [TRUTH-PRESERVING PROTECTION] PHASE 1: Categorize exercises by family
+        // NEW RULE: Preserve session composition, reduce dosage - NOT destructive deletion
+        // Keep at least one representative from each non-primary family that exists
+        // ==========================================================================
         const primaryExercises: typeof effectiveMainForSession = []
-        const secondaryExercises: typeof effectiveMainForSession = []
+        
+        // Group secondary exercises by family/category for truth-preserving trim
+        const secondaryByFamily: Record<string, typeof effectiveMainForSession> = {
+          strength: [],
+          support: [],
+          accessory: [],
+          core: [],
+          mobility: [],
+          finisher: [],
+          other: [],
+        }
         
         for (const ex of effectiveMainForSession) {
           // [PRESCRIPTION-PROPAGATION-FIX] Safe check for primary goal match
@@ -19082,6 +19122,7 @@ function generateAdaptiveSession(
             ex.exerciseRole === 'primary_skill' ||
             ex.prescriptionStyle === 'primary' ||
             ex.category === 'primary' ||
+            ex.category === 'skill' ||
             // Check if exercise targets the primary goal (only if primaryGoal exists)
             (primaryGoalLower && (ex.exercise?.skillTags || []).some(tag => 
               tag.toLowerCase().includes(primaryGoalLower)
@@ -19090,31 +19131,115 @@ function generateAdaptiveSession(
           if (isPrimary) {
             primaryExercises.push(ex)
           } else {
-            secondaryExercises.push(ex)
+            // Categorize by family for truth-preserving selection
+            const category = ex.category?.toLowerCase() || ex.exercise?.category?.toLowerCase() || 'other'
+            const role = ex.exerciseRole?.toLowerCase() || ''
+            
+            if (category === 'strength' || role.includes('strength')) {
+              secondaryByFamily.strength.push(ex)
+            } else if (category === 'support' || role.includes('support')) {
+              secondaryByFamily.support.push(ex)
+            } else if (category === 'accessory' || role.includes('accessory')) {
+              secondaryByFamily.accessory.push(ex)
+            } else if (category === 'core' || role.includes('core')) {
+              secondaryByFamily.core.push(ex)
+            } else if (category === 'mobility' || category === 'flexibility' || role.includes('mobility')) {
+              secondaryByFamily.mobility.push(ex)
+            } else if (category === 'finisher' || role.includes('finisher')) {
+              secondaryByFamily.finisher.push(ex)
+            } else {
+              secondaryByFamily.other.push(ex)
+            }
           }
         }
         
-        // Keep all primary exercises, trim secondary to max 2 (or 1 for aggressive protection)
-        const maxSecondary = weekAdaptation.firstWeekProtection?.active ? 1 : 2
-        const trimmedSecondary = secondaryExercises.slice(0, maxSecondary)
+        // ==========================================================================
+        // [TRUTH-PRESERVING PROTECTION] NEW RULE: Preserve family composition
+        // Keep at least ONE representative from each non-empty family
+        // Priority order: strength > support > accessory > core > mobility > finisher > other
+        // ==========================================================================
+        const familyPriority = ['strength', 'support', 'accessory', 'core', 'mobility', 'finisher', 'other']
+        const preservedSecondary: typeof effectiveMainForSession = []
+        const removedExercises: string[] = []
         
-        if (trimmedSecondary.length < secondaryExercises.length) {
+        // Max exercises per family for first-week protection (preserve composition)
+        const maxPerFamily = weekAdaptation.firstWeekProtection?.active ? 1 : 2
+        
+        for (const family of familyPriority) {
+          const familyExercises = secondaryByFamily[family]
+          if (familyExercises.length > 0) {
+            // Keep up to maxPerFamily from each family
+            const kept = familyExercises.slice(0, maxPerFamily)
+            const removed = familyExercises.slice(maxPerFamily)
+            
+            preservedSecondary.push(...kept)
+            removedExercises.push(...removed.map(e => `${e.exercise?.name || 'unknown'}[${family}]`))
+          }
+        }
+        
+        // Build the family breakdown for logging
+        const originalFamilyBreakdown = Object.fromEntries(
+          Object.entries(secondaryByFamily).filter(([_, arr]) => arr.length > 0).map(([k, v]) => [k, v.length])
+        )
+        const preservedFamilyBreakdown = Object.fromEntries(
+          familyPriority.filter(f => secondaryByFamily[f].length > 0).map(f => [f, Math.min(secondaryByFamily[f].length, maxPerFamily)])
+        )
+        
+        // Count total secondary before/after
+        const totalSecondaryBefore = Object.values(secondaryByFamily).flat().length
+        const totalSecondaryAfter = preservedSecondary.length
+        
+        if (totalSecondaryAfter < totalSecondaryBefore) {
           secondaryExercisesTrimmed = true
-          weekAdaptationAdjusted = [...primaryExercises, ...trimmedSecondary]
+          weekAdaptationAdjusted = [...primaryExercises, ...preservedSecondary]
           
-          console.log('[PRESCRIPTION-PROPAGATION-SECONDARY-TRIMMED]', {
+          console.log('[TRUTH-PRESERVING-PROTECTION] Secondary exercises trimmed with family preservation', {
             sessionIndex,
             dayFocus: day.focus,
             originalTotal: effectiveMainForSession.length,
             primaryCount: primaryExercises.length,
-            originalSecondaryCount: secondaryExercises.length,
-            trimmedSecondaryCount: trimmedSecondary.length,
-            removedExercises: secondaryExercises.slice(maxSecondary).map(e => e.exercise?.name || 'unknown'),
+            originalSecondaryCount: totalSecondaryBefore,
+            preservedSecondaryCount: totalSecondaryAfter,
+            originalFamilyBreakdown,
+            preservedFamilyBreakdown,
+            maxPerFamily,
+            removedExercises,
             reason: weekAdaptation.firstWeekProtection?.active 
-              ? 'first_week_protection_secondary_trim'
-              : 'recovery_protection_secondary_trim',
+              ? 'first_week_protection_family_preserving_trim'
+              : 'recovery_protection_family_preserving_trim',
             adaptationPhase: weekAdaptation.adaptationPhase,
-            verdict: 'SECONDARY_EXERCISES_TRIMMED_TO_PRESERVE_PRIMARY',
+            verdict: 'SECONDARY_TRIMMED_WITH_FAMILY_PRESERVATION',
+          })
+        } else {
+          // No trim needed - preserve all
+          weekAdaptationAdjusted = [...primaryExercises, ...preservedSecondary]
+          
+          console.log('[TRUTH-PRESERVING-PROTECTION] No secondary trim needed', {
+            sessionIndex,
+            dayFocus: day.focus,
+            primaryCount: primaryExercises.length,
+            secondaryCount: totalSecondaryAfter,
+            familyBreakdown: originalFamilyBreakdown,
+            verdict: 'SECONDARY_PRESERVED_NO_TRIM_NEEDED',
+          })
+        }
+        
+        // ==========================================================================
+        // [UNDERBUILT-COLLAPSE-GUARD] Prevent session from becoming too minimal
+        // If we started with multiple families and ended up with just 1-2 exercises, warn
+        // ==========================================================================
+        const nonEmptyFamiliesBefore = Object.values(secondaryByFamily).filter(arr => arr.length > 0).length
+        const finalExerciseCount = primaryExercises.length + preservedSecondary.length
+        
+        if (nonEmptyFamiliesBefore >= 2 && finalExerciseCount <= 2 && primaryExercises.length <= 1) {
+          console.warn('[UNDERBUILT-COLLAPSE-WARNING] Session may be too minimal after protection', {
+            sessionIndex,
+            dayFocus: day.focus,
+            originalFamilyCount: nonEmptyFamiliesBefore,
+            finalExerciseCount,
+            primaryCount: primaryExercises.length,
+            preservedSecondaryCount: preservedSecondary.length,
+            verdict: 'UNDERBUILT_FIRST_WEEK_COLLAPSE_DETECTED',
           })
         }
       }
@@ -19239,6 +19364,32 @@ function generateAdaptiveSession(
       })
       // Continue without dosage reduction - preserve session generation with original exercises
     }
+    
+    // ==========================================================================
+    // [v0] POST-TRIM AUDIT - Prove what families SURVIVED after protection trim
+    // ==========================================================================
+    const postTrimFamilyBreakdown = weekAdaptationAdjusted.reduce((acc, ex) => {
+      const cat = ex.category?.toLowerCase() || ex.exercise?.category?.toLowerCase() || 'unknown'
+      const role = ex.exerciseRole?.toLowerCase() || ''
+      const family = cat === 'skill' || cat === 'primary' ? 'primary'
+        : cat === 'strength' || role.includes('strength') ? 'strength'
+        : cat === 'support' || role.includes('support') ? 'support'
+        : cat === 'accessory' || role.includes('accessory') ? 'accessory'
+        : cat === 'core' || role.includes('core') ? 'core'
+        : cat === 'mobility' || cat === 'flexibility' ? 'mobility'
+        : cat === 'finisher' || role.includes('finisher') ? 'finisher'
+        : 'other'
+      acc[family] = (acc[family] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+    
+    console.log('[v0] POST-TRIM-AUDIT Day', day.dayNumber, {
+      weekAdaptationAdjustedCount: weekAdaptationAdjusted.length,
+      postTrimFamilyBreakdown,
+      exerciseNames: weekAdaptationAdjusted.map(e => `${e.exercise?.name}[${e.category || e.exercise?.category || '?'}]`).slice(0, 12),
+      secondaryTrimmed: secondaryExercisesTrimmed,
+      setsReduced: setsReducedByWeekAdaptation,
+    })
     
     // ==========================================================================
     // [PHASE 15E AUTHORITATIVE BOUNDARY] Success - Phase 15E completed without fatal error

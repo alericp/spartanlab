@@ -7316,6 +7316,100 @@ export default function ProgramPage() {
           )
         }
         
+        // ==========================================================================
+        // [PHASE15E-DEGRADED-SUCCESS-HANDOFF] Check for degraded success
+        // A response with success=true but totalDegraded>0 must NOT be treated as healthy
+        // ==========================================================================
+        const rebuildFailureSummary = serverResult.rebuildFailureSummary ?? null
+        const hasDegradedSessions = (rebuildFailureSummary?.totalDegraded ?? 0) > 0
+        const isHealthyRegenerate = serverResult.success === true && !hasDegradedSessions
+        const isDegradedRegenerate = serverResult.success === true && hasDegradedSessions
+        
+        // [regenerate-degraded-truth-verdict] Audit log for degraded success detection
+        console.log('[regenerate-degraded-truth-verdict]', {
+          hasRebuildFailureSummary: !!rebuildFailureSummary,
+          totalDegraded: rebuildFailureSummary?.totalDegraded ?? 0,
+          totalAttempted: rebuildFailureSummary?.totalAttempted ?? 0,
+          totalSucceeded: rebuildFailureSummary?.totalSucceeded ?? 0,
+          firstFailedCheckpoint: rebuildFailureSummary?.firstFailedCheckpoint ?? null,
+          firstFailedFocus: rebuildFailureSummary?.firstFailedFocus ?? null,
+          actionRequired: rebuildFailureSummary?.actionRequired ?? null,
+          failureVerdict: rebuildFailureSummary?.failureVerdict ?? null,
+          isHealthyRegenerate,
+          isDegradedRegenerate,
+          promotedAsHealthySuccess: isHealthyRegenerate,
+          preservedLastGood: isDegradedRegenerate,
+          verdict: isDegradedRegenerate 
+            ? 'degraded_success_preserved_last_good' 
+            : isHealthyRegenerate 
+              ? 'healthy_success_will_promote'
+              : 'unexpected_state',
+        })
+        
+        // If degraded, DO NOT promote the rebuild - preserve last good program
+        if (isDegradedRegenerate) {
+          console.log('[phase15e-degraded-success-handled]', {
+            message: 'Regenerate returned degraded sessions - preserving last good program',
+            totalDegraded: rebuildFailureSummary?.totalDegraded,
+            firstFailedCheckpoint: rebuildFailureSummary?.firstFailedCheckpoint,
+            actionRequired: rebuildFailureSummary?.actionRequired,
+          })
+          
+          // Build a compact failure reason from the server summary
+          const failureReasonParts = [
+            rebuildFailureSummary?.firstFailedErrorName,
+            rebuildFailureSummary?.firstFailedErrorMessage,
+            rebuildFailureSummary?.failureVerdict,
+          ].filter(Boolean)
+          const compactFailureReason = failureReasonParts.join(' - ').slice(0, 200) || 'Session generation degraded'
+          
+          // Create a failed result using the existing preserved_last_good mechanism
+          const degradedFailedResult = createFailedBuildResult(
+            'session_building_failure' as GenerationErrorCode,
+            'degraded_regenerate',
+            'generation_degraded' as BuildAttemptSubCode,
+            createProfileSignature(freshRebuildInput),
+            program?.id || null,
+            'Your rebuild returned degraded sessions, so your last good program was preserved.',
+            {
+              failureStep: rebuildFailureSummary?.firstFailedCheckpoint ?? 'degraded_regenerate',
+              failureMiddleStep: null,
+              failureFocus: rebuildFailureSummary?.firstFailedFocus ?? null,
+              failureReason: compactFailureReason,
+              failureDayNumber: rebuildFailureSummary?.firstFailedIndex ?? null,
+              failureGoal: freshRebuildInput.primaryGoal || null,
+              actionRequired: rebuildFailureSummary?.actionRequired ?? null,
+            }
+          )
+          
+          // Add runtime session metadata
+          const degradedResultWithMetadata: BuildAttemptResult = {
+            ...degradedFailedResult,
+            runtimeSessionId: runtimeSessionIdRef.current,
+            pageFlow: 'regeneration',
+            dispatchStartedAt: regenDispatchStartTime,
+            requestDispatched: true,
+            responseReceived: true,
+            hydratedFromStorage: false,
+          }
+          
+          // Save the failure state - DO NOT save the degraded program
+          setLastBuildResult(degradedResultWithMetadata)
+          saveLastBuildAttemptResult(degradedResultWithMetadata)
+          
+          // Release builder lock
+          if (modifyBuilderLockRef.current) {
+            modifyBuilderLockRef.current = false
+          }
+          modifyBuilderEntryRef.current = null
+          setModifyBuilderEntry(null)
+          setShowBuilder(false)
+          setIsRegenerating(false)
+          
+          // Exit early - do not continue to success promotion
+          return
+        }
+        
         // [PHASE 18D] TASK 6D - Client result audit
         console.log('[phase18d-regenerate-client-result-audit]', {
           triggerPath: 'handleRegenerate',

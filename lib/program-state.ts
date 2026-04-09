@@ -278,6 +278,8 @@ export type BuildAttemptSubCode =
   | 'route_not_found'
   | 'non_json_server_response'
   | 'server_regenerate_failed'
+  // [PHASE15E-DEGRADED-SUCCESS-HANDOFF] Degraded success subcode
+  | 'generation_degraded'
   | 'none'
 
 /**
@@ -328,6 +330,8 @@ export interface BuildAttemptResult {
   failureFocus: string | null
   /** Goal at time of failure */
   failureGoal: string | null
+  // [PHASE15E-DEGRADED-SUCCESS-HANDOFF] Server-provided action required
+  actionRequired?: string | null
   // ==========================================================================
   // [PHASE 16S] Attempt-truth metadata for stale banner suppression
   // ==========================================================================
@@ -726,6 +730,8 @@ export interface FailureDiagnostics {
   failureDayNumber?: number | null
   failureFocus?: string | null
   failureGoal?: string | null
+  // [PHASE15E-DEGRADED-SUCCESS-HANDOFF] Server-provided action required for surgical debugging
+  actionRequired?: string | null
 }
 
 /**
@@ -772,6 +778,8 @@ export function createFailedBuildResult(
     failureDayNumber: diagnostics?.failureDayNumber ?? null,
     failureFocus: diagnostics?.failureFocus ?? null,
     failureGoal: diagnostics?.failureGoal ?? null,
+    // [PHASE15E-DEGRADED-SUCCESS-HANDOFF]
+    actionRequired: diagnostics?.actionRequired ?? null,
   }
   
   // [rebuild-error-state] Log for debugging with searchable prefix

@@ -20,7 +20,7 @@ import { trackWorkoutStarted, trackWorkoutCompleted } from '@/lib/analytics'
 import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
-import { buildExerciseCardContract, buildSessionDisplayContract, buildExerciseRowSurface, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
+import { buildExerciseCardContract, buildSessionDisplayContract, buildExerciseRowSurface, getBestRowSublabel, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { 
@@ -891,7 +891,10 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               <div className="space-y-2 mb-3">
                 {session.finisher.exercises.map((ex, idx) => (
                   <div key={idx} className="flex items-center justify-between text-sm">
-                    <span className="text-[#E6E9EF]">{ex.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[#E6E9EF]">{ex.name}</span>
+                      <span className="text-[8px] px-1 py-0.5 rounded bg-[#E63946]/10 text-[#E63946]/60">Finisher</span>
+                    </div>
                     <span className="text-[#A5A5A5]">{ex.reps}</span>
                   </div>
                 ))}
@@ -1512,10 +1515,13 @@ function ExerciseRow({
       </p>
       
       {/* [EXERCISE-ROW-SURFACE] ROW 2.5: Intent + Chips row - authoritative surface display */}
-      {rowSurface && rowSurface.source === 'authoritative' && (
+      {/* Show when we have any useful content: labels, chips, or non-fallback emphasis */}
+      {rowSurface && (getBestRowSublabel(rowSurface) || rowSurface.rowChips.length > 0 || rowSurface.emphasisKind !== 'fallback_minimal') && (() => {
+        const bestSublabel = getBestRowSublabel(rowSurface)
+        return (
         <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-          {/* Intent/support reason label */}
-          {(rowSurface.intentLabel || rowSurface.supportReasonLabel) && (
+          {/* Best sublabel using centralized priority */}
+          {bestSublabel && (
             <span className={`text-[10px] ${
               rowSurface.emphasisKind === 'primary' 
                 ? 'text-[#E63946]/80' 
@@ -1525,13 +1531,13 @@ function ExerciseRow({
                     ? 'text-amber-400/70'
                     : 'text-[#6A6A6A]'
             }`}>
-              {rowSurface.intentLabel || rowSurface.supportReasonLabel}
+              {bestSublabel}
             </span>
           )}
           {/* Row chips */}
           {rowSurface.rowChips.length > 0 && (
             <>
-              {(rowSurface.intentLabel || rowSurface.supportReasonLabel) && (
+              {bestSublabel && (
                 <span className="text-[#3A3A3A]">·</span>
               )}
               {rowSurface.rowChips.map((chip, i) => (
@@ -1554,12 +1560,15 @@ function ExerciseRow({
               ))}
             </>
           )}
-          {/* Protection label if not covered by chips */}
-          {rowSurface.protectionLabel && !rowSurface.rowChips.some(c => c.includes('Protected') || c.includes('Conservative')) && (
-            <span className="text-[9px] text-amber-400/60">{rowSurface.protectionLabel}</span>
+          {/* Fallback chip for support emphasis with no chips yet */}
+          {rowSurface.rowChips.length === 0 && rowSurface.emphasisKind === 'support' && !bestSublabel && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#7A7A7A]">
+              Support
+            </span>
           )}
         </div>
-      )}
+        )
+      })()}
       
       {/* ROW 3: Why line - only for primary/skill work */}
       {showWhyLine && (

@@ -279,6 +279,13 @@ export async function executeAuthoritativeGeneration(
   const startTime = Date.now()
   const { markStage, getTimings, getCurrentStage } = createStageTracker(startTime)
   
+  // [PHASE15E_LIVE_PROOF] Definitive deployment marker
+  console.log('[PHASE15E_LIVE_PROOF]', {
+    marker: 'PHASE15E_LIVE_PROOF_V1_2026_04_09',
+    checkpoint: 'authoritative_service_entry',
+    timestamp: new Date().toISOString(),
+  })
+  
   // Entry audit
   console.log('[authoritative-generation-entry]', {
     timestamp: new Date().toISOString(),
@@ -497,8 +504,16 @@ export async function executeAuthoritativeGeneration(
         }
       )
     } catch (builderError) {
-      // [SELECTION-CRASH-CORRIDOR-AUDIT] Enhanced diagnostics for exercise selection crashes
+      // [PHASE15E_LIVE_PROOF] Service catch marker
       const errorString = String(builderError)
+      console.error('[PHASE15E_LIVE_PROOF]', {
+        marker: 'PHASE15E_LIVE_PROOF_V1_2026_04_09',
+        checkpoint: 'authoritative_service_catch',
+        error: errorString.slice(0, 200),
+        timestamp: new Date().toISOString(),
+      })
+      
+      // [SELECTION-CRASH-CORRIDOR-AUDIT] Enhanced diagnostics for exercise selection crashes
       const errorStack = builderError instanceof Error ? builderError.stack : undefined
       
       // Parse error to identify crash corridor

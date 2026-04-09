@@ -4653,6 +4653,18 @@ export async function generateAdaptiveProgram(
       ? (isReferenceError ? 'internal_builder_reference_error' : 'internal_builder_type_error')
       : (matchedPattern || 'unclassified')
     
+    // [PHASE15E_LIVE_PROOF] Top-level catch marker
+    console.error('[PHASE15E_LIVE_PROOF]', {
+      marker: 'PHASE15E_LIVE_PROOF_V1_2026_04_09',
+      checkpoint: 'top_level_catch',
+      stage: stageTracker.current,
+      code: effectiveCode,
+      subCode: matchedPattern || 'unclassified',
+      message: errorMessage.slice(0, 200),
+      originalName: errorName,
+      timestamp: new Date().toISOString(),
+    })
+    
     // Log root cause summary for diagnosis
     console.error('[program-root-cause-summary] Error in generateAdaptiveProgram:', {
       source: 'generate',
@@ -4755,11 +4767,11 @@ async function generateAdaptiveProgramImpl(
   genContext: GenerationContext,
   serverOptions?: ServerGenerationOptions  // [PHASE 16K] FIX: Pass server options explicitly
 ): Promise<AdaptiveProgram> {
-  // [PHASE 15E RUNTIME VERSION MARKER] Confirms fixed code is deployed
-  console.log('[phase15e-impl-version-marker]', {
-    version: 'SESSIONINDEX_FIX_2026_04_09',
+  // [PHASE15E_LIVE_PROOF] Definitive deployment marker
+  console.log('[PHASE15E_LIVE_PROOF]', {
+    marker: 'PHASE15E_LIVE_PROOF_V1_2026_04_09',
+    checkpoint: 'builder_impl_entry',
     timestamp: new Date().toISOString(),
-    confirms: 'all_pre_loop_sessionIndex_refs_use_literals',
   })
   // [PHASE 16K] Impl function entry - serverOptions now in scope
   console.log('[phase16k-impl-canonical-receipt-audit]', {
@@ -7959,13 +7971,12 @@ async function generateAdaptiveProgramImpl(
   // ==========================================================================
   // [PHASE 15E FIX] Pre-loop context - no session-specific values available yet
   // Use placeholder values for the helper that will be refined per-session later
-  // [PHASE 15E RUNTIME MARKER] Proves sessionIndex fix is deployed
-  console.log('[phase15e-sessionIndex-fix-runtime-marker]', {
-    marker: 'SESSIONINDEX_FIX_DEPLOYED_2026_04_09',
+  // [PHASE15E_LIVE_PROOF] Pre-calibration corridor marker
+  console.log('[PHASE15E_LIVE_PROOF]', {
+    marker: 'PHASE15E_LIVE_PROOF_V1_2026_04_09',
+    checkpoint: 'pre_calibration_corridor',
     stage: stageTracker.current,
-    aboutToCallHelper: 'buildPhase15EPostAuditSafeContext',
-    sessionIndexWillBe: 0,
-    dayFocusWillBe: 'mixed',
+    timestamp: new Date().toISOString(),
   })
   const phase15ePostAudit = buildPhase15EPostAuditSafeContext({
     sessionIndex: 0, // Pre-loop placeholder - actual session index set per-session
@@ -8905,6 +8916,15 @@ async function generateAdaptiveProgramImpl(
   })
   
   const sessions: AdaptiveSession[] = []
+  
+  // [PHASE15E_LIVE_PROOF] Session assembly loop start marker
+  console.log('[PHASE15E_LIVE_PROOF]', {
+    marker: 'PHASE15E_LIVE_PROOF_V1_2026_04_09',
+    checkpoint: 'session_assembly_loop_start',
+    totalDays: structure.days.length,
+    timestamp: new Date().toISOString(),
+  })
+  
   try {
     // [PHASE 16C TASK 4] Convert to async for loop with yields inside
     for (let index = 0; index < structure.days.length; index++) {
@@ -10038,6 +10058,14 @@ async function generateAdaptiveProgramImpl(
       originalErrorType: diagnosticErr instanceof Error ? diagnosticErr.name : 'Unknown',
     })
   }
+  
+  // [PHASE15E_LIVE_PROOF] All sessions assembled marker
+  console.log('[PHASE15E_LIVE_PROOF]', {
+    marker: 'PHASE15E_LIVE_PROOF_V1_2026_04_09',
+    checkpoint: 'all_sessions_assembled',
+    sessionCount: sessions.length,
+    timestamp: new Date().toISOString(),
+  })
   
   console.log('[session-assembly] Final session validation:', {
     totalSessions: sessions.length,

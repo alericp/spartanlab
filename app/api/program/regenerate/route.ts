@@ -26,6 +26,13 @@ export const maxDuration = 30
 export async function POST(request: Request) {
   const routeStartTime = Date.now()
   
+  // [PHASE15E_LIVE_PROOF] Definitive deployment marker
+  console.log('[PHASE15E_LIVE_PROOF]', {
+    marker: 'PHASE15E_LIVE_PROOF_V1_2026_04_09',
+    checkpoint: 'route_entry',
+    timestamp: new Date().toISOString(),
+  })
+  
   console.log('[regenerate-route-thin-adapter-entry]', {
     timestamp: new Date().toISOString(),
     route: '/api/program/regenerate',

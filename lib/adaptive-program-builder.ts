@@ -14574,6 +14574,27 @@ return explanations.length > 0 ? explanations : undefined
       adaptationSummary: getAdaptationSummary(weekAdaptationDecision),
       decidedAt: weekAdaptationDecision.decidedAt,
     },
+    // ==========================================================================
+    // [PHASE15E-FAILURE-SUMMARY-PROMOTION] Authoritative Rebuild Failure Summary
+    // This exposes the session failure tracker data in the return value so the
+    // regenerate route can include it in the API response for surgical debugging.
+    // ==========================================================================
+    rebuildFailureSummary: {
+      totalAttempted: sessionFailureTracker.totalAttempted,
+      totalSucceeded: sessionFailureTracker.totalSucceeded,
+      totalDegraded: sessionFailureTracker.totalDegraded,
+      firstFailedIndex: sessionFailureTracker.firstFailedIndex,
+      firstFailedFocus: sessionFailureTracker.firstFailedFocus,
+      firstFailedCheckpoint: sessionFailureTracker.firstFailedCheckpoint,
+      firstFailedErrorName: sessionFailureTracker.firstFailedErrorName,
+      firstFailedErrorMessage: sessionFailureTracker.firstFailedErrorMessage?.slice(0, 200) || null,
+      failureVerdict,
+      actionRequired: failureVerdict === 'all_sessions_ok' 
+        ? 'NONE' 
+        : failureVerdict === 'single_shared_helper_failure'
+          ? `FIX_HELPER_AT_CHECKPOINT:${sessionFailureTracker.firstFailedCheckpoint}`
+          : `INVESTIGATE_FIRST_FAILURE:session_${sessionFailureTracker.firstFailedIndex}_${sessionFailureTracker.firstFailedFocus}`,
+    },
   }
   
   // ==========================================================================

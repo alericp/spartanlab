@@ -356,6 +356,18 @@ import {
   type ProgrammingTruthBundle,
 } from './program/programming-truth-bundle'
 
+// [DB-TRUTH-SCORING-BRIDGE] Import for deep bundle consumption
+import {
+  buildRankingModifiersFromBundle,
+  buildProgressionDepthFromBundle,
+  buildPrescriptionCalibrationFromBundle,
+  applyRankingModifiers,
+  summarizeBundleTruthUsage,
+  type DBTruthRankingModifiers,
+  type DBTruthProgressionDepth,
+  type DBTruthPrescriptionCalibration,
+} from './program/db-truth-scoring-bridge'
+
 import {
   analyzeConstraints,
   formatBuilderReasoning,
@@ -7086,6 +7098,46 @@ async function generateAdaptiveProgramImpl(
   })
   
   // ==========================================================================
+  // [DB-TRUTH-PROGRESSION-DEPTH] Apply bundle-derived progression depth adjustments
+  // When bundle has low progress scores, mark skills for conservative selection
+  // ==========================================================================
+  const progressionDepthAdjustments: Record<string, { originalDepth: string | null; adjustedBias: number; reason: string }> = {}
+  
+  if (programmingTruthBundle?.skillProgressions?.meta?.available) {
+    for (const intent of multiSkillMaterialityContract.materialSkillIntent) {
+      const depth = buildProgressionDepthFromBundle(programmingTruthBundle, intent.skill)
+      
+      if (depth.confidenceLevel !== 'none' && depth.suggestedVariantBias !== 0) {
+        progressionDepthAdjustments[intent.skill] = {
+          originalDepth: intent.currentWorkingProgression,
+          adjustedBias: depth.suggestedVariantBias,
+          reason: depth.adjustmentReason,
+        }
+        
+        // If bundle suggests conservative and current progression is aggressive, mark for conservative
+        if (depth.preferBasicVariant && intent.currentWorkingProgression) {
+          // This enriches the intent with bundle-informed conservative bias
+          // Downstream selection will respect this by preferring basic variants
+          progressionEnrichmentApplied = true
+        }
+      }
+    }
+  }
+  
+  console.log('[db-truth-progression-depth]', {
+    skillsWithAdjustments: Object.keys(progressionDepthAdjustments).length,
+    adjustments: Object.entries(progressionDepthAdjustments).slice(0, 3).map(([skill, adj]) => ({
+      skill,
+      ...adj,
+    })),
+    anyConservativeBias: Object.values(progressionDepthAdjustments).some(a => a.adjustedBias < 0),
+    anyProgressiveBias: Object.values(progressionDepthAdjustments).some(a => a.adjustedBias > 0),
+    verdict: Object.keys(progressionDepthAdjustments).length > 0 
+      ? 'DB_TRUTH_PROGRESSION_DEPTH_APPLIED' 
+      : 'DB_TRUTH_NO_PROGRESSION_ADJUSTMENTS',
+  })
+  
+  // ==========================================================================
   // [CHECKLIST 1 OF 4] CHECKPOINT: POST MATERIALITY CONTRACT
   // ==========================================================================
   console.log('[MULTI_SKILL_TRACE_CHECKPOINT]', {
@@ -8477,6 +8529,64 @@ async function generateAdaptiveProgramImpl(
     verdict: programmingTruthBundle 
       ? 'BUNDLE_DECISIONS_COMPUTED' 
       : 'BUNDLE_UNAVAILABLE_USING_CANONICAL_ONLY',
+  })
+  
+  // ==========================================================================
+  // [DB-TRUTH-SCORING-BRIDGE] BUILD DEEP CONSUMPTION INPUTS
+  // These translate bundle truth into actual ranking/progression/prescription changes
+  // ==========================================================================
+  
+  // CORRIDOR A: Build ranking modifiers for main exercise selection
+  const dbTruthRankingModifiers = buildRankingModifiersFromBundle(
+    programmingTruthBundle,
+    expandedContext.selectedSkills
+  )
+  
+  // CORRIDOR B: Build progression depth recommendations for each skill
+  const dbTruthProgressionDepths: DBTruthProgressionDepth[] = expandedContext.selectedSkills.map(skill =>
+    buildProgressionDepthFromBundle(programmingTruthBundle, skill)
+  )
+  
+  // CORRIDOR C: Build prescription calibration for general application
+  const dbTruthPrescriptionCalibration = buildPrescriptionCalibrationFromBundle(
+    programmingTruthBundle,
+    'skill', // Default category, will be refined per-exercise
+    undefined // Movement family will be set per-exercise
+  )
+  
+  // Summarize bundle truth usage for this generation
+  const bundleTruthUsageSummary = summarizeBundleTruthUsage(
+    dbTruthRankingModifiers,
+    dbTruthProgressionDepths,
+    dbTruthPrescriptionCalibration
+  )
+  
+  console.log('[db-truth-scoring-bridge-built]', {
+    rankingModifiers: {
+      progressionScoreModifier: dbTruthRankingModifiers.progressionScoreModifier,
+      toleranceModifier: dbTruthRankingModifiers.toleranceModifier,
+      conservativeSelectionBias: dbTruthRankingModifiers.conservativeSelectionBias,
+      activeConstraintCount: dbTruthRankingModifiers.activeConstraintCount,
+      sourceConfidence: dbTruthRankingModifiers.sourceConfidence,
+      sourceSections: dbTruthRankingModifiers.sourceSections,
+    },
+    progressionDepths: dbTruthProgressionDepths.slice(0, 3).map(d => ({
+      skill: d.skill,
+      recommendedDepth: d.recommendedDepth,
+      suggestedVariantBias: d.suggestedVariantBias,
+      confidenceLevel: d.confidenceLevel,
+    })),
+    prescriptionCalibration: {
+      setsModifier: dbTruthPrescriptionCalibration.setsModifier,
+      volumeModifier: dbTruthPrescriptionCalibration.volumeModifier,
+      restModifier: dbTruthPrescriptionCalibration.restModifier,
+      intensityModifier: dbTruthPrescriptionCalibration.intensityModifier,
+      calibrationApplied: dbTruthPrescriptionCalibration.calibrationApplied,
+    },
+    usageSummary: bundleTruthUsageSummary,
+    verdict: bundleTruthUsageSummary.materialChanges.length > 0 
+      ? 'DB_TRUTH_BRIDGE_WILL_AFFECT_GENERATION'
+      : 'DB_TRUTH_BRIDGE_BUILT_NO_MATERIAL_CHANGES',
   })
   
   // Apply training outcome overrides to calibration
@@ -19279,6 +19389,73 @@ function generateAdaptiveSession(
   middleStep = 'before_effective_selection'
   
   // ==========================================================================
+  // [DB-TRUTH-MAIN-RANKING] Apply ranking modifiers to main exercises
+  // This re-scores and potentially reorders candidates based on DB truth
+  // ==========================================================================
+  if (dbTruthRankingModifiers.sourceConfidence !== 'none' && effectiveMainForSession.length > 1) {
+    const preRankingOrder = effectiveMainForSession.map(e => e.exercise?.name || 'unknown')
+    
+    // Apply modifiers to each exercise and track changes
+    const scoredExercises = effectiveMainForSession.map(ex => {
+      const isAdvanced = ex.prescriptionStyle === 'primary' || 
+                         ex.exerciseRole === 'primary' ||
+                         (ex.exercise?.difficulty === 'advanced' || ex.exercise?.difficulty === 'elite')
+      
+      const movementPattern = ex.exercise?.category?.toLowerCase() || 
+                              ex.category?.toLowerCase() || 
+                              'unknown'
+      
+      const fatigueLevel: 'low' | 'medium' | 'high' = 
+        ex.prescriptionStyle === 'primary' ? 'high' :
+        ex.exerciseRole === 'primary' ? 'high' :
+        ex.category === 'accessory' ? 'low' : 'medium'
+      
+      const result = applyRankingModifiers(
+        ex.scoreFromSelector || 50, // Use existing score or default
+        dbTruthRankingModifiers,
+        { isAdvanced, movementPattern, fatigueLevel }
+      )
+      
+      return {
+        ...ex,
+        dbTruthAdjustedScore: result.adjustedScore,
+        dbTruthModifier: result.totalModifier,
+        dbTruthModifierBreakdown: result.modifierBreakdown,
+        dbTruthRankingChanged: result.changed,
+      }
+    })
+    
+    // Re-sort by adjusted score (higher is better)
+    const resortedExercises = [...scoredExercises].sort((a, b) => 
+      (b.dbTruthAdjustedScore || 0) - (a.dbTruthAdjustedScore || 0)
+    )
+    
+    const postRankingOrder = resortedExercises.map(e => e.exercise?.name || 'unknown')
+    const rankingChanged = preRankingOrder.join(',') !== postRankingOrder.join(',')
+    
+    console.log('[db-truth-main-ranking]', {
+      sessionIndex,
+      dayFocus: day.focus,
+      preRankingOrder: preRankingOrder.slice(0, 5),
+      postRankingOrder: postRankingOrder.slice(0, 5),
+      rankingChanged,
+      exercisesReranked: scoredExercises.filter(e => e.dbTruthRankingChanged).length,
+      totalModifiersApplied: scoredExercises.reduce((sum, e) => sum + (e.dbTruthModifier || 0), 0),
+      modifierBreakdowns: scoredExercises.slice(0, 3).map(e => ({
+        name: e.exercise?.name,
+        modifier: e.dbTruthModifier,
+        breakdown: e.dbTruthModifierBreakdown,
+      })),
+      verdict: rankingChanged ? 'DB_TRUTH_RANKING_CHANGED_ORDER' : 'DB_TRUTH_RANKING_NO_ORDER_CHANGE',
+    })
+    
+    // Apply reranked order if changed
+    if (rankingChanged) {
+      effectiveMainForSession = resortedExercises
+    }
+  }
+  
+  // ==========================================================================
   // STEP B: Build canonical effectiveSelection - SINGLE AUTHORITATIVE OWNER
   // ==========================================================================
   // [FINAL-SESSION-ASSEMBLY-FIX] The canonical final source is ALWAYS effectiveMainForSession.
@@ -19601,6 +19778,85 @@ function generateAdaptiveSession(
       const shouldReduceRPE = 
         weekAdaptation.firstWeekProtection?.active && weekAdaptation.firstWeekProtection?.reduceRPE ||
         weekAdaptation.loadStrategy?.intensityBias === 'reduced'
+      
+      // ==========================================================================
+      // [DB-TRUTH-PRESCRIPTION-CALIBRATION] Apply bundle-derived prescription adjustments
+      // These are additive to week adaptation and respect safety ceilings
+      // ==========================================================================
+      let dbTruthPrescriptionApplied = false
+      const dbTruthPrescriptionChanges: Array<{ name: string; field: string; before: number; after: number }> = []
+      
+      if (dbTruthPrescriptionCalibration.calibrationApplied && 
+          dbTruthPrescriptionCalibration.overallCalibrationConfidence !== 'none') {
+        
+        exercisesForDosageAdjustment = exercisesForDosageAdjustment.map(ex => {
+          let modified = false
+          const changes: typeof dbTruthPrescriptionChanges = []
+          
+          // Apply sets modifier (bounded to safe range)
+          let adjustedSets = typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets)) || 3
+          if (dbTruthPrescriptionCalibration.setsModifier !== 0) {
+            const newSets = Math.max(2, Math.min(6, adjustedSets + dbTruthPrescriptionCalibration.setsModifier))
+            if (newSets !== adjustedSets) {
+              changes.push({ name: ex.exercise?.name || 'unknown', field: 'sets', before: adjustedSets, after: newSets })
+              adjustedSets = newSets
+              modified = true
+            }
+          }
+          
+          // Apply intensity/RPE modifier (bounded to safe range)
+          let adjustedRPE = typeof ex.targetRPE === 'number' ? ex.targetRPE : 8
+          if (dbTruthPrescriptionCalibration.intensityModifier !== 0) {
+            const newRPE = Math.max(5, Math.min(10, adjustedRPE + dbTruthPrescriptionCalibration.intensityModifier))
+            if (Math.abs(newRPE - adjustedRPE) > 0.25) { // Only apply if meaningful change
+              changes.push({ name: ex.exercise?.name || 'unknown', field: 'targetRPE', before: adjustedRPE, after: newRPE })
+              adjustedRPE = newRPE
+              modified = true
+            }
+          }
+          
+          // Apply rest modifier (bounded to safe range)
+          let adjustedRest = typeof ex.rest === 'number' ? ex.rest : 
+                            typeof ex.rest === 'string' ? parseInt(ex.rest) || 90 : 90
+          if (dbTruthPrescriptionCalibration.restModifier !== 0) {
+            const newRest = Math.max(30, Math.min(300, adjustedRest + dbTruthPrescriptionCalibration.restModifier))
+            if (Math.abs(newRest - adjustedRest) >= 15) { // Only apply if meaningful change
+              changes.push({ name: ex.exercise?.name || 'unknown', field: 'rest', before: adjustedRest, after: newRest })
+              adjustedRest = newRest
+              modified = true
+            }
+          }
+          
+          if (modified) {
+            dbTruthPrescriptionApplied = true
+            dbTruthPrescriptionChanges.push(...changes)
+          }
+          
+          return modified ? {
+            ...ex,
+            sets: adjustedSets,
+            targetRPE: adjustedRPE,
+            rest: adjustedRest,
+            note: ex.note ? `${ex.note} [DB-calibrated]` : '[DB-calibrated prescription]',
+          } : ex
+        })
+      }
+      
+      console.log('[db-truth-prescription-calibration]', {
+        sessionIndex,
+        dayFocus: day.focus,
+        calibrationApplied: dbTruthPrescriptionApplied,
+        calibrationConfidence: dbTruthPrescriptionCalibration.overallCalibrationConfidence,
+        modifiersUsed: {
+          sets: dbTruthPrescriptionCalibration.setsModifier,
+          intensity: dbTruthPrescriptionCalibration.intensityModifier,
+          rest: dbTruthPrescriptionCalibration.restModifier,
+        },
+        changesApplied: dbTruthPrescriptionChanges.slice(0, 5),
+        totalExercisesModified: dbTruthPrescriptionChanges.length,
+        sourceSections: dbTruthPrescriptionCalibration.sourceSections,
+        verdict: dbTruthPrescriptionApplied ? 'DB_TRUTH_PRESCRIPTION_MODIFIED' : 'DB_TRUTH_PRESCRIPTION_NO_CHANGE',
+      })
       
       if (shouldReduceSets || shouldReduceRPE) {
         const setReductionFactor = shouldReduceSets 

@@ -314,6 +314,143 @@ function exerciseMatchesSkillByName(
   return idLower.includes(skillLower) || nameLower.includes(skillLower)
 }
 
+// =============================================================================
+// [PHASE15E-SELECTOR-INPUT-TRUTH] Normalized Exercise Candidate Shape
+// This interface defines the AUTHORITATIVE normalized shape for exercise
+// candidates inside selector logic. All filtering/scoring/fill logic MUST
+// consume this shape instead of raw optional fields to prevent mixed-read crashes.
+// =============================================================================
+
+interface NormalizedExerciseCandidate {
+  /** Original exercise object (preserved for return values) */
+  raw: Exercise
+  /** Safe normalized string fields */
+  id: string
+  name: string
+  category: string
+  movementFamily: string
+  movementPattern: string
+  progressionLadder: string
+  intensity: string
+  /** Safe normalized array fields */
+  transferTo: string[]
+  tags: string[]
+  primarySkills: string[]
+  targetMuscles: string[]
+  /** Safe numeric fields with fallback defaults */
+  fatigueCost: number
+  carryover: number
+  neuralDemand: number
+  /** Derived flags for fast checks */
+  isPushMovement: boolean
+  isPullMovement: boolean
+  isSkillExercise: boolean
+  isStrengthExercise: boolean
+}
+
+/**
+ * [PHASE15E-SELECTOR-INPUT-TRUTH] Normalize a raw exercise into authoritative shape.
+ * This function MUST be called once at pool assembly to create normalized candidates.
+ * All downstream selector logic MUST consume normalized candidates, not raw exercises.
+ */
+function normalizeExerciseCandidate(exercise: Exercise): NormalizedExerciseCandidate {
+  const id = safeLower(exercise.id)
+  const name = safeLower(exercise.name)
+  const category = safeLower(exercise.category)
+  const movementFamily = safeLower((exercise as any).movementFamily)
+  const movementPattern = safeLower((exercise as any).movementPattern)
+  const progressionLadder = safeLower((exercise as any).progressionLadder)
+  const intensity = safeLower((exercise as any).intensity)
+  
+  // Normalize array fields - filter out null/undefined entries
+  const transferTo = safeTransferTargets((exercise as any).transferTo)
+  const tags = Array.isArray((exercise as any).tags) 
+    ? ((exercise as any).tags as any[]).filter((t): t is string => typeof t === 'string').map(t => safeLower(t))
+    : []
+  const primarySkills = Array.isArray((exercise as any).primarySkills)
+    ? ((exercise as any).primarySkills as any[]).filter((s): s is string => typeof s === 'string').map(s => safeLower(s))
+    : []
+  const targetMuscles = Array.isArray((exercise as any).targetMuscles)
+    ? ((exercise as any).targetMuscles as any[]).filter((m): m is string => typeof m === 'string').map(m => safeLower(m))
+    : []
+  
+  // Normalize numeric fields with fallback defaults
+  const fatigueCost = typeof (exercise as any).fatigueCost === 'number' ? (exercise as any).fatigueCost : 5
+  const carryover = typeof (exercise as any).carryover === 'number' ? (exercise as any).carryover : 0
+  const neuralDemand = typeof (exercise as any).neuralDemand === 'number' ? (exercise as any).neuralDemand : 5
+  
+  // Derive fast check flags
+  const isPushMovement = movementPattern.includes('push') || movementFamily.includes('push') || 
+                         category.includes('push') || transferTo.some(t => t.includes('planche') || t.includes('hspu') || t.includes('dip'))
+  const isPullMovement = movementPattern.includes('pull') || movementFamily.includes('pull') ||
+                         category.includes('pull') || transferTo.some(t => t.includes('front_lever') || t.includes('pull') || t.includes('row'))
+  const isSkillExercise = category === 'skill' || intensity === 'skill' || tags.includes('skill')
+  const isStrengthExercise = category === 'strength' || intensity === 'strength' || tags.includes('strength')
+  
+  return {
+    raw: exercise,
+    id,
+    name,
+    category,
+    movementFamily,
+    movementPattern,
+    progressionLadder,
+    intensity,
+    transferTo,
+    tags,
+    primarySkills,
+    targetMuscles,
+    fatigueCost,
+    carryover,
+    neuralDemand,
+    isPushMovement,
+    isPullMovement,
+    isSkillExercise,
+    isStrengthExercise,
+  }
+}
+
+/**
+ * [PHASE15E-SELECTOR-INPUT-TRUTH] Normalize an entire pool of exercises.
+ * Use this at pool assembly to create authoritative normalized candidates.
+ */
+function normalizeExercisePool(exercises: Exercise[]): NormalizedExerciseCandidate[] {
+  return exercises.map(normalizeExerciseCandidate)
+}
+
+/**
+ * [PHASE15E-SELECTOR-INPUT-TRUTH] Safe transfer check on normalized candidate.
+ * Uses pre-normalized transferTo array - no risk of undefined.includes() crash.
+ */
+function normalizedTransfersTo(candidate: NormalizedExerciseCandidate, skill: string): boolean {
+  if (!skill) return false
+  const skillLower = safeLower(skill)
+  return candidate.transferTo.some(t => t.includes(skillLower) || skillLower.includes(t))
+}
+
+/**
+ * [PHASE15E-SELECTOR-INPUT-TRUTH] Safe movement pattern check on normalized candidate.
+ * Uses pre-normalized movementPattern - no risk of undefined.includes() crash.
+ */
+function normalizedMatchesMovement(candidate: NormalizedExerciseCandidate, pattern: string): boolean {
+  if (!pattern) return false
+  const patternLower = safeLower(pattern)
+  return candidate.movementPattern.includes(patternLower) || candidate.movementFamily.includes(patternLower)
+}
+
+/**
+ * [PHASE15E-SELECTOR-INPUT-TRUTH] Safe tag check on normalized candidate.
+ */
+function normalizedHasTag(candidate: NormalizedExerciseCandidate, tag: string): boolean {
+  if (!tag) return false
+  const tagLower = safeLower(tag)
+  return candidate.tags.some(t => t.includes(tagLower))
+}
+
+// =============================================================================
+// End of Normalized Exercise Candidate infrastructure
+// =============================================================================
+
 /**
  * Validate session skill allocation array.
  * Filters out entries with missing/invalid skill keys.
@@ -935,6 +1072,26 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     accessory: availableAccessory.length,
     core: availableCore.length,
     goalSpecific: goalExercises.length,
+  })
+  
+  // ==========================================================================
+  // [PHASE15E-SELECTOR-INPUT-TRUTH] Normalize all candidate pools ONCE at entry
+  // All downstream selection logic MUST use these normalized pools instead of raw pools
+  // This eliminates mixed raw/normalized read crashes in the selector corridor
+  // ==========================================================================
+  const normalizedSkills = normalizeExercisePool(availableSkills)
+  const normalizedStrength = normalizeExercisePool(availableStrength)
+  const normalizedAccessory = normalizeExercisePool(availableAccessory)
+  const normalizedCore = normalizeExercisePool(availableCore)
+  const normalizedGoalExercises = normalizeExercisePool(goalExercises)
+  
+  console.log('[PHASE15E-SELECTOR-INPUT-TRUTH] Normalized pools ready:', {
+    normalizedSkills: normalizedSkills.length,
+    normalizedStrength: normalizedStrength.length,
+    normalizedAccessory: normalizedAccessory.length,
+    normalizedCore: normalizedCore.length,
+    normalizedGoalExercises: normalizedGoalExercises.length,
+    verdict: 'NORMALIZED_POOLS_CREATED',
   })
   
   // [PHASE 3] Equipment collapse truth audit
@@ -1710,6 +1867,39 @@ function selectMainExercises(
     })
     markCheckpoint('push_session_entry')
   }
+  
+  // ==========================================================================
+  // [PHASE15E-SELECTOR-INPUT-TRUTH] Create normalized exercise pools for this function
+  // All filtering/scoring/fill logic below MUST use these normalized pools
+  // This eliminates mixed raw/normalized read crashes
+  // ==========================================================================
+  const normSkills = normalizeExercisePool(availableSkills)
+  const normStrength = normalizeExercisePool(availableStrength)
+  const normAccessory = normalizeExercisePool(availableAccessory)
+  const normCore = normalizeExercisePool(availableCore)
+  const normGoalExercises = normalizeExercisePool(goalExercises)
+  
+  // Create lookup maps for fast normalized candidate retrieval by ID
+  const normalizedById = new Map<string, NormalizedExerciseCandidate>()
+  for (const c of [...normSkills, ...normStrength, ...normAccessory, ...normCore]) {
+    normalizedById.set(c.id, c)
+  }
+  
+  // Helper to get normalized candidate for a raw exercise (for corridors that still receive raw)
+  const getNormalized = (exercise: Exercise): NormalizedExerciseCandidate | null => {
+    const id = safeLower(exercise.id)
+    return normalizedById.get(id) || null
+  }
+  
+  console.log('[PHASE15E-SELECTOR-INPUT-TRUTH] selectMainExercises pools normalized:', {
+    normSkills: normSkills.length,
+    normStrength: normStrength.length,
+    normAccessory: normAccessory.length,
+    normCore: normCore.length,
+    normGoalExercises: normGoalExercises.length,
+    totalNormalized: normalizedById.size,
+    verdict: 'SELECTION_POOLS_NORMALIZED',
+  })
   
   // ==========================================================================
   // [PHASE-MATERIALITY] TASK 3: LOG CURRENT WORKING PROGRESSIONS VS HISTORICAL
@@ -3538,10 +3728,16 @@ function applyMaterialityScoreAdjustments(
     
     // Fallback to generic goal-based strength if no doctrine match
     // [EXERCISE-SELECTION-MATERIALITY] Use materiality-aware selection for support
+    // [PHASE15E-SELECTOR-INPUT-TRUTH] Use normalized pool for transfer check
     if (!strengthPicked) {
       const primaryStrength = goalExercises.filter(e => e.category === 'strength')
-      const strengthCandidates = [...primaryStrength, ...availableStrength.filter(e => e.transferTo?.includes(primaryGoal))]
-        .filter(e => !usedIds.has(e.id))
+      const strengthCandidates = [
+        ...primaryStrength, 
+        ...availableStrength.filter(e => {
+          const norm = getNormalized(e)
+          return norm ? normalizedTransfersTo(norm, primaryGoal) : false
+        })
+      ].filter(e => !usedIds.has(e.id))
       
       if (strengthCandidates.length > 0) {
         // Apply materiality ranking for support slot
@@ -3775,9 +3971,12 @@ function applyMaterialityScoreAdjustments(
     const allAccessory = [...availableAccessory, ...availableStrength.filter(e => e.fatigueCost <= 3)]
     
     // Find push work that aligns with session skills
-    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
+    // [PHASE15E-SELECTOR-INPUT-TRUTH] Use normalized movement pattern check
     const pushCandidates = allAccessory
-      .filter(e => e.movementPattern?.includes('push') || e.movementPattern === 'horizontal_push' || e.movementPattern === 'vertical_push')
+      .filter(e => {
+        const norm = getNormalized(e)
+        return norm ? normalizedMatchesMovement(norm, 'push') || norm.movementPattern === 'horizontal_push' || norm.movementPattern === 'vertical_push' : false
+      })
       .map(e => ({
         exercise: e,
         score: scoreExerciseForSession(e, sessionSkillsForMixed, day.focus, hasWeightedEquipment),
@@ -3818,9 +4017,12 @@ function applyMaterialityScoreAdjustments(
     }
     
     // Find pull work that aligns with session skills
-    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
+    // [PHASE15E-SELECTOR-INPUT-TRUTH] Use normalized movement pattern check
     const pullCandidates = allAccessory
-      .filter(e => e.movementPattern?.includes('pull') || e.movementPattern === 'horizontal_pull' || e.movementPattern === 'vertical_pull')
+      .filter(e => {
+        const norm = getNormalized(e)
+        return norm ? normalizedMatchesMovement(norm, 'pull') || norm.movementPattern === 'horizontal_pull' || norm.movementPattern === 'vertical_pull' : false
+      })
       .filter(e => !usedIds.has(e.id))
       .map(e => ({
         exercise: e,
@@ -3884,10 +4086,13 @@ function applyMaterialityScoreAdjustments(
   
   // 4. TRANSITION DAYS (for muscle-up goals)
   if (day.focus === 'transition_work') {
-    // [PHASE15E-POST-PUSH-HARDENING] Guard transferTo against undefined
-    const transitionExercises = [...availableSkills, ...availableStrength].filter(
-      e => e.movementPattern === 'transition' || (e.transferTo || []).includes('muscle_up')
-    )
+    // [PHASE15E-SELECTOR-INPUT-TRUTH] Use normalized candidates for transition filter
+    const transitionExercises = [...availableSkills, ...availableStrength].filter(e => {
+      const norm = getNormalized(e)
+      return norm 
+        ? norm.movementPattern === 'transition' || normalizedTransfersTo(norm, 'muscle_up')
+        : false
+    })
     
     transitionExercises.slice(0, 2).forEach(e => {
       addExercise(e, 'Transition pattern development')
@@ -3916,22 +4121,22 @@ function applyMaterialityScoreAdjustments(
     if (rangeTrainingMode === 'flexibility' || rangeTrainingMode === 'hybrid') {
       // FLEXIBILITY MODE: 15s holds, 3 rounds, low fatigue
       const availableFlexibility = FLEXIBILITY_EXERCISES.filter(e => hasRequiredEquipment(e, equipment))
-      // [PHASE15E-POST-PUSH-HARDENING] Guard transferTo against undefined
+      // [PHASE15E-SELECTOR-INPUT-TRUTH] Use safe transfer check helper
       const goalFlexibility = availableFlexibility.filter(e => 
-        (e.transferTo || []).includes(primaryGoal) || e.progressionLadder === primaryGoal
+        exerciseTransfersToSkill(e, primaryGoal) || (e as any).progressionLadder === primaryGoal
       )
       
       const flexPool = primaryGoal === 'flexibility' 
         ? availableFlexibility 
         : goalFlexibility.length > 0 ? goalFlexibility : availableFlexibility
       
-      // [PHASE15E-POST-PUSH-HARDENING] Guard transferTo against undefined in sort
+      // [PHASE15E-SELECTOR-INPUT-TRUTH] Use safe transfer check in sort
       const sortedFlexExercises = flexPool.sort((a, b) => {
-        const aTransfer = (a.transferTo || []).includes(primaryGoal) ? 1 : 0
-        const bTransfer = (b.transferTo || []).includes(primaryGoal) ? 1 : 0
+        const aTransfer = exerciseTransfersToSkill(a, primaryGoal) ? 1 : 0
+        const bTransfer = exerciseTransfersToSkill(b, primaryGoal) ? 1 : 0
         if (aTransfer !== bTransfer) return bTransfer - aTransfer
-        const aLadder = a.progressionLadder === primaryGoal ? 1 : 0
-        const bLadder = b.progressionLadder === primaryGoal ? 1 : 0
+        const aLadder = (a as any).progressionLadder === primaryGoal ? 1 : 0
+        const bLadder = (b as any).progressionLadder === primaryGoal ? 1 : 0
         return bLadder - aLadder
       })
       
@@ -3982,11 +4187,14 @@ function applyMaterialityScoreAdjustments(
     }
     
     // Add light core/compression if room
-    // [PHASE15E-POST-PUSH-HARDENING] Guard transferTo against undefined
+    // [PHASE15E-SELECTOR-INPUT-TRUTH] Use normalized candidate check
     if (selected.length < maxExercises) {
-      const compressionCore = availableCore.find(e => 
-        e.movementPattern === 'compression' || (e.transferTo || []).includes('l_sit')
-      )
+      const compressionCore = availableCore.find(e => {
+        const norm = getNormalized(e)
+        return norm 
+          ? norm.movementPattern === 'compression' || normalizedTransfersTo(norm, 'l_sit')
+          : false
+      })
       if (compressionCore && !usedIds.has(compressionCore.id)) {
         addExercise(compressionCore, 'Active compression support', 3, '15s')
       }
@@ -4052,13 +4260,13 @@ function applyMaterialityScoreAdjustments(
         }
         
         // Fallback to transfer-based lookup
-        // [PHASE15E-POST-PUSH-HARDENING] Guard transferTo against undefined
+        // [PHASE15E-SELECTOR-INPUT-TRUTH] Use normalized transfer check
         if (!skillExercise) {
-          skillExercise = [...availableSkills, ...availableStrength].find(e => 
-            !usedIds.has(e.id) && 
-            (e.transferTo || []).includes(allocation.skill) &&
-            canAddMore(e)
-          )
+          skillExercise = [...availableSkills, ...availableStrength].find(e => {
+            if (usedIds.has(e.id)) return false
+            const norm = getNormalized(e)
+            return norm && normalizedTransfersTo(norm, allocation.skill) && canAddMore(e)
+          })
           if (skillExercise) {
             exerciseReason = `${allocation.skill} skill development`
           }
@@ -4090,13 +4298,13 @@ function applyMaterialityScoreAdjustments(
         }
         
         // Fallback to transfer-based lookup for accessories
-        // [PHASE15E-POST-PUSH-HARDENING] Guard transferTo against undefined
+        // [PHASE15E-SELECTOR-INPUT-TRUTH] Use normalized transfer check
         if (!skillExercise) {
-          skillExercise = availableAccessory.find(e => 
-            !usedIds.has(e.id) && 
-            (e.transferTo || []).includes(allocation.skill) &&
-            canAddMore(e)
-          )
+          skillExercise = availableAccessory.find(e => {
+            if (usedIds.has(e.id)) return false
+            const norm = getNormalized(e)
+            return norm && normalizedTransfersTo(norm, allocation.skill) && canAddMore(e)
+          })
           if (skillExercise) {
             exerciseReason = `${allocation.skill} support work`
           }
@@ -4687,11 +4895,17 @@ function applyMaterialityScoreAdjustments(
   // Add accessory work (after support skill injection)
   if (selected.length < maxExercises - 1) {
     // Add movement-appropriate accessory
-    // [PHASE15E-POST-PUSH-HARDENING] Guard movementPattern against undefined
+    // [PHASE15E-SELECTOR-INPUT-TRUTH] Use normalized movement pattern check
     const accessoryPool = day.movementEmphasis === 'push'
-      ? availableAccessory.filter(e => e.movementPattern?.includes('push'))
+      ? availableAccessory.filter(e => {
+          const norm = getNormalized(e)
+          return norm ? normalizedMatchesMovement(norm, 'push') : false
+        })
       : day.movementEmphasis === 'pull'
-        ? availableAccessory.filter(e => e.movementPattern?.includes('pull'))
+        ? availableAccessory.filter(e => {
+            const norm = getNormalized(e)
+            return norm ? normalizedMatchesMovement(norm, 'pull') : false
+          })
         : availableAccessory
     
     const unusedAccessory = accessoryPool.filter(e => !usedIds.has(e.id))
@@ -4747,10 +4961,12 @@ function applyMaterialityScoreAdjustments(
       coreReason = 'Anti-extension strength for body position control'
     } else {
       // Default: find core that transfers to goal
-      // [PHASE15E-POST-PUSH-HARDENING] Guard transferTo against undefined
-      corePick = availableCore.find(e => 
-        !usedIds.has(e.id) && (e.transferTo || []).includes(primaryGoal)
-      ) || availableCore.find(e => !usedIds.has(e.id))
+      // [PHASE15E-SELECTOR-INPUT-TRUTH] Use normalized transfer check
+      corePick = availableCore.find(e => {
+        if (usedIds.has(e.id)) return false
+        const norm = getNormalized(e)
+        return norm ? normalizedTransfersTo(norm, primaryGoal) : false
+      }) || availableCore.find(e => !usedIds.has(e.id))
       coreReason = `Core work supporting ${primaryGoal}`
     }
     

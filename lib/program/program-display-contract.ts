@@ -2168,6 +2168,339 @@ export function buildExerciseCardContract(
   }
 }
 
+// =============================================================================
+// [EXERCISE-ROW-SURFACE] AUTHORITATIVE EXERCISE ROW DISPLAY CONTRACT
+// Single owner of visible exercise row intelligence
+// =============================================================================
+
+export interface ExerciseRowSurface {
+  /** Exercise ID for keying */
+  exerciseId: string
+  /** Clean display name */
+  displayName: string
+  /** Compact prescription line e.g. "4 x 8-10" */
+  prescriptionLine: string
+  /** Intent/purpose label e.g. "Primary skill exposure" */
+  intentLabel: string | null
+  /** Method label e.g. "Superset" */
+  methodLabel: string | null
+  /** Protection label e.g. "Volume capped" */
+  protectionLabel: string | null
+  /** Support reason e.g. "Scapular stability" */
+  supportReasonLabel: string | null
+  /** Progression evidence e.g. "Based on Week 1 performance" */
+  progressionEvidenceLabel: string | null
+  /** 0-2 compact chips for visual differentiation */
+  rowChips: string[]
+  /** Emphasis kind for styling */
+  emphasisKind: 'primary' | 'secondary' | 'support' | 'protection' | 'fallback_minimal'
+  /** Source marker */
+  source: 'authoritative' | 'fallback_minimal'
+}
+
+/**
+ * Build an authoritative exercise row surface from exercise data + session context.
+ * This is the SINGLE owner of per-exercise-row display intelligence.
+ */
+export function buildExerciseRowSurface(
+  exercise: {
+    id?: string
+    name: string
+    category?: string
+    sets?: number
+    repsOrTime?: string
+    targetRPE?: number
+    restSeconds?: number
+    selectionReason?: string
+    isProtected?: boolean
+    isPrimary?: boolean
+    prescribedLoad?: {
+      load?: number
+      unit?: string
+      confidenceLevel?: string
+    }
+    coachingMeta?: {
+      expressionMode?: string
+      loadDecisionSummary?: string
+      roleInSession?: string
+      progressionEvidence?: string
+    }
+    constraintApplied?: string
+    groupId?: string
+  },
+  sessionContext?: {
+    sessionFocus?: string
+    isPrimarySession?: boolean
+    prescriptionPropagationAudit?: {
+      appliedReductions?: {
+        setsReduced?: boolean
+        rpeReduced?: boolean
+      }
+    }
+    styleMetadata?: {
+      primaryStyle?: string
+      hasSupersetsApplied?: boolean
+      hasDensityApplied?: boolean
+    }
+  }
+): ExerciseRowSurface {
+  const rowChips: string[] = []
+  let source: ExerciseRowSurface['source'] = 'fallback_minimal'
+  let emphasisKind: ExerciseRowSurface['emphasisKind'] = 'fallback_minimal'
+  
+  // ==========================================================================
+  // A. Build display name - clean and consistent
+  // ==========================================================================
+  const displayName = exercise.name || 'Exercise'
+  const exerciseId = exercise.id || displayName.toLowerCase().replace(/[\s-]+/g, '_')
+  
+  // ==========================================================================
+  // B. Build prescription line from sets/reps
+  // ==========================================================================
+  const sets = exercise.sets ?? 3
+  const repsOrTime = exercise.repsOrTime || '8-12'
+  const prescriptionLine = `${sets} x ${repsOrTime}`
+  
+  // ==========================================================================
+  // C. Determine emphasis kind from category + context
+  // ==========================================================================
+  const categoryLower = (exercise.category || 'accessory').toLowerCase()
+  const reasonLower = (exercise.selectionReason || '').toLowerCase()
+  const expressionMode = (exercise.coachingMeta?.expressionMode || '').toLowerCase()
+  const roleInSession = (exercise.coachingMeta?.roleInSession || '').toLowerCase()
+  
+  if (exercise.isPrimary || categoryLower === 'skill' || expressionMode.includes('direct')) {
+    emphasisKind = 'primary'
+    source = 'authoritative'
+  } else if (categoryLower === 'strength' || expressionMode.includes('strength')) {
+    emphasisKind = 'secondary'
+    source = 'authoritative'
+  } else if (exercise.isProtected || exercise.constraintApplied) {
+    emphasisKind = 'protection'
+    source = 'authoritative'
+  } else if (categoryLower === 'accessory' || categoryLower === 'core') {
+    emphasisKind = 'support'
+    source = 'authoritative'
+  }
+  
+  // ==========================================================================
+  // D. Build intent label from expression mode + role
+  // ==========================================================================
+  let intentLabel: string | null = null
+  
+  if (expressionMode.includes('direct') || expressionMode.includes('intensity')) {
+    intentLabel = 'Primary skill exposure'
+    source = 'authoritative'
+  } else if (expressionMode.includes('technical') || expressionMode.includes('carryover')) {
+    intentLabel = 'Technical carryover'
+    source = 'authoritative'
+  } else if (roleInSession.includes('primary')) {
+    intentLabel = 'Primary driver'
+    source = 'authoritative'
+  } else if (roleInSession.includes('support') || roleInSession.includes('accessory')) {
+    intentLabel = 'Support integration'
+    source = 'authoritative'
+  } else if (categoryLower === 'skill') {
+    intentLabel = 'Skill work'
+    source = 'authoritative'
+  } else if (categoryLower === 'strength') {
+    intentLabel = 'Strength building'
+    source = 'authoritative'
+  }
+  
+  // Override based on selection reason keywords
+  if (reasonLower.includes('volume build')) {
+    intentLabel = 'Volume builder'
+    source = 'authoritative'
+  } else if (reasonLower.includes('technique') || reasonLower.includes('form')) {
+    intentLabel = 'Technique reinforcement'
+    source = 'authoritative'
+  } else if (reasonLower.includes('recovery') || reasonLower.includes('prep')) {
+    intentLabel = 'Recovery-compatible'
+    source = 'authoritative'
+  }
+  
+  // ==========================================================================
+  // E. Build method label from session style metadata
+  // ==========================================================================
+  let methodLabel: string | null = null
+  
+  if (exercise.groupId && sessionContext?.styleMetadata?.hasSupersetsApplied) {
+    methodLabel = 'Superset'
+    source = 'authoritative'
+  } else if (sessionContext?.styleMetadata?.hasDensityApplied && reasonLower.includes('density')) {
+    methodLabel = 'Density'
+    source = 'authoritative'
+  }
+  
+  // ==========================================================================
+  // F. Build protection label from constraints + prescription audit
+  // ==========================================================================
+  let protectionLabel: string | null = null
+  
+  if (exercise.constraintApplied) {
+    protectionLabel = exercise.constraintApplied
+    source = 'authoritative'
+  } else if (exercise.isProtected) {
+    protectionLabel = 'Protected load'
+    source = 'authoritative'
+  } else if (sessionContext?.prescriptionPropagationAudit?.appliedReductions) {
+    const reductions = sessionContext.prescriptionPropagationAudit.appliedReductions
+    if (reductions.setsReduced && reductions.rpeReduced) {
+      protectionLabel = 'Conservative dosage'
+      source = 'authoritative'
+    } else if (reductions.setsReduced) {
+      protectionLabel = 'Volume reduced'
+      source = 'authoritative'
+    } else if (reductions.rpeReduced) {
+      protectionLabel = 'Intensity capped'
+      source = 'authoritative'
+    }
+  }
+  
+  // ==========================================================================
+  // G. Build support reason label for accessory work
+  // ==========================================================================
+  let supportReasonLabel: string | null = null
+  
+  if (emphasisKind === 'support' && exercise.selectionReason) {
+    const reason = exercise.selectionReason
+    if (reasonLower.includes('scap') || reasonLower.includes('shoulder')) {
+      supportReasonLabel = 'Scapular stability'
+      source = 'authoritative'
+    } else if (reasonLower.includes('rear delt') || reasonLower.includes('face pull')) {
+      supportReasonLabel = 'Posterior balance'
+      source = 'authoritative'
+    } else if (reasonLower.includes('core') || reasonLower.includes('trunk')) {
+      supportReasonLabel = 'Trunk rigidity'
+      source = 'authoritative'
+    } else if (reasonLower.includes('grip') || reasonLower.includes('hang')) {
+      supportReasonLabel = 'Grip endurance'
+      source = 'authoritative'
+    } else if (reasonLower.includes('hip') || reasonLower.includes('glute')) {
+      supportReasonLabel = 'Hip stability'
+      source = 'authoritative'
+    } else if (reasonLower.includes('straight-arm') || reasonLower.includes('straight arm')) {
+      supportReasonLabel = 'Straight-arm prep'
+      source = 'authoritative'
+    } else if (reason.length < 40) {
+      // Use short selection reasons directly
+      supportReasonLabel = reason.split('.')[0]
+      source = 'authoritative'
+    }
+  }
+  
+  // ==========================================================================
+  // H. Build progression evidence label
+  // ==========================================================================
+  let progressionEvidenceLabel: string | null = null
+  
+  if (exercise.coachingMeta?.progressionEvidence) {
+    progressionEvidenceLabel = exercise.coachingMeta.progressionEvidence.slice(0, 50)
+    source = 'authoritative'
+  } else if (exercise.prescribedLoad?.confidenceLevel === 'high') {
+    progressionEvidenceLabel = 'Based on recent performance'
+    source = 'authoritative'
+  }
+  
+  // ==========================================================================
+  // I. Build row chips (max 2)
+  // ==========================================================================
+  
+  // Chip 1: Emphasis/role chip
+  if (emphasisKind === 'primary') {
+    rowChips.push('Primary')
+  } else if (emphasisKind === 'secondary') {
+    rowChips.push('Strength')
+  } else if (emphasisKind === 'protection') {
+    rowChips.push('Protected')
+  } else if (emphasisKind === 'support' && categoryLower === 'accessory') {
+    rowChips.push('Accessory')
+  } else if (emphasisKind === 'support' && categoryLower === 'core') {
+    rowChips.push('Core')
+  }
+  
+  // Chip 2: Method or constraint chip
+  if (methodLabel === 'Superset' && rowChips.length < 2) {
+    rowChips.push('Superset')
+  } else if (methodLabel === 'Density' && rowChips.length < 2) {
+    rowChips.push('Density')
+  } else if (protectionLabel && rowChips.length < 2) {
+    if (protectionLabel.includes('Conservative') || protectionLabel.includes('Volume')) {
+      rowChips.push('Conservative')
+    }
+  } else if (exercise.targetRPE && exercise.targetRPE >= 8 && rowChips.length < 2) {
+    rowChips.push('High effort')
+  }
+  
+  return {
+    exerciseId,
+    displayName,
+    prescriptionLine,
+    intentLabel,
+    methodLabel,
+    protectionLabel,
+    supportReasonLabel,
+    progressionEvidenceLabel,
+    rowChips: rowChips.slice(0, 2),
+    emphasisKind,
+    source,
+  }
+}
+
+/**
+ * Build exercise row surfaces for all exercises in a session.
+ * Handles differentiation when multiple exercises would look identical.
+ */
+export function buildSessionExerciseRowSurfaces(
+  exercises: Array<Parameters<typeof buildExerciseRowSurface>[0]>,
+  sessionContext?: Parameters<typeof buildExerciseRowSurface>[1]
+): ExerciseRowSurface[] {
+  const surfaces = exercises.map(ex => buildExerciseRowSurface(ex, sessionContext))
+  
+  // Detect surfaces with same intentLabel and emphasisKind, differentiate them
+  const surfaceKeys = new Map<string, number[]>()
+  surfaces.forEach((surface, idx) => {
+    const key = `${surface.emphasisKind}|${surface.intentLabel || 'none'}`
+    if (!surfaceKeys.has(key)) {
+      surfaceKeys.set(key, [])
+    }
+    surfaceKeys.get(key)!.push(idx)
+  })
+  
+  // For groups with duplicates, try to add differentiating details
+  surfaceKeys.forEach((indices) => {
+    if (indices.length > 1) {
+      indices.forEach((idx) => {
+        const surface = surfaces[idx]
+        const exercise = exercises[idx]
+        
+        // If we have support reason but no intent label, promote it
+        if (!surface.intentLabel && surface.supportReasonLabel) {
+          surface.intentLabel = surface.supportReasonLabel
+          surface.supportReasonLabel = null
+        }
+        
+        // Try to add a differentiating chip from exercise-specific data
+        if (surface.rowChips.length < 2) {
+          const repsLower = (exercise.repsOrTime || '').toLowerCase()
+          if (repsLower.includes('hold') || repsLower.includes('sec')) {
+            if (!surface.rowChips.includes('Isometric')) {
+              surface.rowChips.push('Isometric')
+            }
+          } else if (exercise.prescribedLoad?.load && exercise.prescribedLoad.load > 0) {
+            if (!surface.rowChips.includes('Weighted')) {
+              surface.rowChips.push('Weighted')
+            }
+          }
+        }
+      })
+    }
+  })
+  
+  return surfaces
+}
+
 export interface ProgramIntelligenceContract {
   /** Program ID for verification */
   programId: string

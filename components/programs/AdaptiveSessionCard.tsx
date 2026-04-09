@@ -20,7 +20,7 @@ import { trackWorkoutStarted, trackWorkoutCompleted } from '@/lib/analytics'
 import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
-import { buildExerciseCardContract, buildSessionDisplayContract } from '@/lib/program/program-display-contract'
+import { buildExerciseCardContract, buildSessionDisplayContract, buildExerciseRowSurface, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { 
@@ -726,7 +726,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                         <span>{sessionContract.primaryWorkLabel}</span>
                         {sessionContract.supportWorkLabel && (
                           <>
-                            <span className="text-[#3A3A3A]">��</span>
+                            <span className="text-[#3A3A3A]">����</span>
                             <span>{sessionContract.supportWorkLabel}</span>
                           </>
                         )}
@@ -974,6 +974,18 @@ function MainExercisesRenderer({
   const styleMetadata = (session as AdaptiveSession & { styleMetadata?: SessionStyleMetadata }).styleMetadata
   const styledGroups = styleMetadata?.styledGroups || []
   
+  // [EXERCISE-ROW-SURFACE] Build session context for exercise row surfaces
+  const sessionContextForRows = {
+    sessionFocus: session.focusLabel || session.focus || '',
+    isPrimarySession: session.isPrimary || false,
+    prescriptionPropagationAudit: (session as unknown as { prescriptionPropagationAudit?: { appliedReductions?: { setsReduced?: boolean; rpeReduced?: boolean } } }).prescriptionPropagationAudit,
+    styleMetadata: styleMetadata ? {
+      primaryStyle: styleMetadata.primaryStyle,
+      hasSupersetsApplied: styleMetadata.hasSupersetsApplied,
+      hasDensityApplied: styleMetadata.hasDensityApplied,
+    } : undefined,
+  }
+  
   // Determine render mode - use groups only if they actually have meaningful structure
   const hasNonStraightGroups = styledGroups.some(g => g.groupType !== 'straight')
   const useGroupedRender = styledGroups.length > 0 && hasNonStraightGroups
@@ -1076,6 +1088,7 @@ function MainExercisesRenderer({
                 sessionId={sessionId}
                 isSkipped={skippedExercises.has(exercise.id)}
                 adjustedName={adjustedExercises.get(exercise.id)}
+                sessionContext={sessionContextForRows}
                 onReplace={onReplace}
                 onSkip={onSkip}
                 onProgressionAdjust={onProgressionAdjust}
@@ -1189,6 +1202,7 @@ function MainExercisesRenderer({
               sessionId={sessionId}
               isSkipped={skippedExercises.has(block.exercise.id)}
               adjustedName={adjustedExercises.get(block.exercise.id)}
+              sessionContext={sessionContextForRows}
               onReplace={onReplace}
               onSkip={onSkip}
               onProgressionAdjust={onProgressionAdjust}
@@ -1297,6 +1311,7 @@ function MainExercisesRenderer({
                     sessionId={sessionId}
                     isSkipped={skippedExercises.has(fullExercise.id)}
                     adjustedName={adjustedExercises.get(fullExercise.id)}
+                    sessionContext={sessionContextForRows}
                     onReplace={onReplace}
                     onSkip={onSkip}
                     onProgressionAdjust={onProgressionAdjust}
@@ -1323,6 +1338,22 @@ interface ExerciseRowProps {
   sessionId?: string
   isSkipped?: boolean
   adjustedName?: string
+  // [EXERCISE-ROW-SURFACE] Session context for building authoritative row surface
+  sessionContext?: {
+    sessionFocus?: string
+    isPrimarySession?: boolean
+    prescriptionPropagationAudit?: {
+      appliedReductions?: {
+        setsReduced?: boolean
+        rpeReduced?: boolean
+      }
+    }
+    styleMetadata?: {
+      primaryStyle?: string
+      hasSupersetsApplied?: boolean
+      hasDensityApplied?: boolean
+    }
+  }
   onReplace?: (exerciseId: string, exerciseName: string) => void
   onSkip?: (exerciseId: string, exerciseName: string) => void
   onProgressionAdjust?: (exerciseId: string, newProgression: string, direction: 'up' | 'down') => void
@@ -1336,6 +1367,7 @@ function ExerciseRow({
   sessionId,
   isSkipped,
   adjustedName,
+  sessionContext, // [EXERCISE-ROW-SURFACE] Session context for row surface
   onReplace,
   onSkip,
   onProgressionAdjust,
@@ -1360,6 +1392,27 @@ function ExerciseRow({
     prescribedLoad: exercise.prescribedLoad as Parameters<typeof buildExerciseCardContract>[0]['prescribedLoad'],
     coachingMeta: exercise.coachingMeta as Parameters<typeof buildExerciseCardContract>[0]['coachingMeta'],
   })
+  
+  // [EXERCISE-ROW-SURFACE] Build authoritative row surface for enhanced display
+  const rowSurface = !isWarmupCooldown ? buildExerciseRowSurface(
+    {
+      id: exercise.id,
+      name: exercise.name || 'Exercise',
+      category: exercise.category || 'accessory',
+      sets: exercise.sets ?? 3,
+      repsOrTime: exercise.repsOrTime || '8-12',
+      targetRPE: exercise.targetRPE,
+      restSeconds: exercise.restSeconds,
+      selectionReason: exercise.selectionReason,
+      isProtected: (exercise as unknown as { isProtected?: boolean }).isProtected,
+      isPrimary: (exercise as unknown as { isPrimary?: boolean }).isPrimary,
+      prescribedLoad: exercise.prescribedLoad as Parameters<typeof buildExerciseRowSurface>[0]['prescribedLoad'],
+      coachingMeta: exercise.coachingMeta as Parameters<typeof buildExerciseRowSurface>[0]['coachingMeta'],
+      constraintApplied: (exercise as unknown as { constraintApplied?: string }).constraintApplied,
+      groupId: (exercise as unknown as { groupId?: string }).groupId,
+    },
+    sessionContext
+  ) : null
   
   const hasRPE = !isWarmupCooldown && exerciseSupportsRPE(card.displayTitle)
   const exerciseId = card.displayTitle.toLowerCase().replace(/[\s-]+/g, '_')
@@ -1457,6 +1510,56 @@ function ExerciseRow({
           <span className="text-[#4A4A4A]"> ({card.loadConfidenceNote})</span>
         )}
       </p>
+      
+      {/* [EXERCISE-ROW-SURFACE] ROW 2.5: Intent + Chips row - authoritative surface display */}
+      {rowSurface && rowSurface.source === 'authoritative' && (
+        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+          {/* Intent/support reason label */}
+          {(rowSurface.intentLabel || rowSurface.supportReasonLabel) && (
+            <span className={`text-[10px] ${
+              rowSurface.emphasisKind === 'primary' 
+                ? 'text-[#E63946]/80' 
+                : rowSurface.emphasisKind === 'secondary'
+                  ? 'text-blue-400/70'
+                  : rowSurface.emphasisKind === 'protection'
+                    ? 'text-amber-400/70'
+                    : 'text-[#6A6A6A]'
+            }`}>
+              {rowSurface.intentLabel || rowSurface.supportReasonLabel}
+            </span>
+          )}
+          {/* Row chips */}
+          {rowSurface.rowChips.length > 0 && (
+            <>
+              {(rowSurface.intentLabel || rowSurface.supportReasonLabel) && (
+                <span className="text-[#3A3A3A]">·</span>
+              )}
+              {rowSurface.rowChips.map((chip, i) => (
+                <span 
+                  key={`chip-${i}`}
+                  className={`text-[9px] px-1.5 py-0.5 rounded ${
+                    chip === 'Primary' || chip === 'Skill' 
+                      ? 'bg-[#E63946]/8 text-[#E63946]/70'
+                      : chip === 'Strength' || chip === 'Weighted'
+                        ? 'bg-blue-500/8 text-blue-400/70'
+                        : chip === 'Protected' || chip === 'Conservative'
+                          ? 'bg-amber-500/8 text-amber-400/70'
+                          : chip === 'Superset' || chip === 'Density'
+                            ? 'bg-purple-500/8 text-purple-400/70'
+                            : 'bg-[#2A2A2A] text-[#7A7A7A]'
+                  }`}
+                >
+                  {chip}
+                </span>
+              ))}
+            </>
+          )}
+          {/* Protection label if not covered by chips */}
+          {rowSurface.protectionLabel && !rowSurface.rowChips.some(c => c.includes('Protected') || c.includes('Conservative')) && (
+            <span className="text-[9px] text-amber-400/60">{rowSurface.protectionLabel}</span>
+          )}
+        </div>
+      )}
       
       {/* ROW 3: Why line - only for primary/skill work */}
       {showWhyLine && (

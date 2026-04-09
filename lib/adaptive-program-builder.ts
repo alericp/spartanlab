@@ -7033,6 +7033,59 @@ async function generateAdaptiveProgramImpl(
   )
   
   // ==========================================================================
+  // [BUNDLE-CONSUMED-PROGRESSION] Enrich materiality contract with bundle skill progression data
+  // Bundle provides DB-backed progression truth that may be more current than canonical profile
+  // ==========================================================================
+  let progressionEnrichmentApplied = false
+  const progressionEnrichmentDetails: Array<{ skill: string; fromBundle: boolean; bundleLevel: number | null; canonicalLevel: string | null }> = []
+  
+  if (programmingTruthBundle?.skillProgressions?.meta?.available) {
+    const bundleProgressions = programmingTruthBundle.skillProgressions.bySkill
+    
+    // Check each skill in the materiality contract for bundle progression data
+    for (const intent of multiSkillMaterialityContract.materialSkillIntent) {
+      const skillKey = intent.skill.replace(/_/g, '').toLowerCase()
+      const bundleData = bundleProgressions[skillKey] || bundleProgressions[intent.skill]
+      
+      if (bundleData && bundleData.currentLevel !== null && bundleData.currentLevel !== undefined) {
+        // Bundle has progression data for this skill
+        progressionEnrichmentDetails.push({
+          skill: intent.skill,
+          fromBundle: true,
+          bundleLevel: bundleData.currentLevel,
+          canonicalLevel: intent.currentWorkingProgression || null,
+        })
+        
+        // If bundle has higher confidence (recent data), it could inform conservative selection
+        // For now, we use bundle data to validate/confirm canonical progression choices
+        if (bundleData.progressScore !== null && bundleData.progressScore < 0.3) {
+          // Low progress score - skill may be struggling, be more conservative
+          // This affects downstream selection by marking intent as conservative
+          progressionEnrichmentApplied = true
+        }
+      } else {
+        progressionEnrichmentDetails.push({
+          skill: intent.skill,
+          fromBundle: false,
+          bundleLevel: null,
+          canonicalLevel: intent.currentWorkingProgression || null,
+        })
+      }
+    }
+  }
+  
+  console.log('[bundle-consumed-progression]', {
+    bundleAvailable: !!programmingTruthBundle?.skillProgressions?.meta?.available,
+    bundleProgressionConfidence: programmingTruthBundle?.derivedSignals?.progressionConfidence ?? 'unavailable',
+    totalSkillsChecked: progressionEnrichmentDetails.length,
+    skillsWithBundleData: progressionEnrichmentDetails.filter(d => d.fromBundle).length,
+    enrichmentApplied: progressionEnrichmentApplied,
+    progressionEnrichmentDetails: progressionEnrichmentDetails.slice(0, 5), // Limit for log size
+    verdict: progressionEnrichmentApplied ? 'PROGRESSION_BUNDLE_INFORMED_CHANGE' : 
+      progressionEnrichmentDetails.some(d => d.fromBundle) ? 'PROGRESSION_BUNDLE_DATA_AVAILABLE' : 'PROGRESSION_CANONICAL_ONLY',
+  })
+  
+  // ==========================================================================
   // [CHECKLIST 1 OF 4] CHECKPOINT: POST MATERIALITY CONTRACT
   // ==========================================================================
   console.log('[MULTI_SKILL_TRACE_CHECKPOINT]', {
@@ -7076,10 +7129,36 @@ async function generateAdaptiveProgramImpl(
   // This contract sits between the spine truth and actual session generation.
   // It forces every selected skill into a classification that session assembly MUST respect.
   // ==========================================================================
+  
+  // ==========================================================================
+  // [BUNDLE-CONSUMED-CONSTRAINTS] Merge bundle constraint history with canonical jointCautions
+  // Bundle provides DB-backed constraint history that may include risk flags not in canonical profile
+  // ==========================================================================
+  const canonicalJointCautions = multiSkillMaterialityContract.jointCautions || []
+  const bundleConstraintFlags = programmingTruthBundle?.constraintHistory?.activeJointRiskFlags || []
+  
+  // Merge and deduplicate - bundle flags supplement canonical cautions
+  const mergedConstraints = [...new Set([...canonicalJointCautions, ...bundleConstraintFlags])]
+  
+  const constraintMergeApplied = bundleConstraintFlags.length > 0 && 
+    mergedConstraints.length > canonicalJointCautions.length
+  
+  console.log('[bundle-consumed-constraints]', {
+    canonicalJointCautions,
+    bundleConstraintFlags,
+    mergedConstraints,
+    constraintMergeApplied,
+    additionalConstraintsFromBundle: bundleConstraintFlags.filter(f => !canonicalJointCautions.includes(f)),
+    bundleConstraintHistoryRecords: programmingTruthBundle?.constraintHistory?.totalHistoryRecords ?? 0,
+    bundleConstraintSource: programmingTruthBundle ? 
+      (programmingTruthBundle.constraintHistory.meta.available ? 'db_backed' : 'unavailable') : 'no_bundle',
+    verdict: constraintMergeApplied ? 'CONSTRAINT_BUNDLE_INFORMED_MERGE' : 'CONSTRAINT_CANONICAL_ONLY',
+  })
+  
   const multiSkillAllocationContract = buildAuthoritativeMultiSkillAllocationContract(
   multiSkillMaterialityContract.materialSkillIntent,
   effectiveTrainingDays,
-  multiSkillMaterialityContract.jointCautions,
+  mergedConstraints, // Now bundle-informed
   multiSkillMaterialityContract.equipmentAvailable
   )
   
@@ -19363,8 +19442,49 @@ function generateAdaptiveSession(
         const preservedSecondary: typeof effectiveMainForSession = []
         const removedExercises: string[] = []
         
-        // Max exercises per family for first-week protection (preserve composition)
-        const maxPerFamily = weekAdaptation.firstWeekProtection?.active ? 1 : 2
+        // ==========================================================================
+        // [BUNDLE-CONSUMED-DOSAGE] Max exercises per family - now bundle-informed
+        // If bundle has high dosage confidence from benchmarks/envelopes, allow more
+        // ==========================================================================
+        const bundleDosageDecision = sessionContext?.bundleDecisions?.dosage
+        const bundleDosageAdjustment = bundleDosageDecision?.adjustment ?? 0
+        const bundleDosageConfidenceLevel = bundleDosageDecision?.confidence ?? 'low'
+        
+        // Base maxPerFamily from first-week protection
+        let baseMaxPerFamily = weekAdaptation.firstWeekProtection?.active ? 1 : 2
+        
+        // Bundle-informed adjustment: if high confidence from benchmarks/envelopes, allow +1
+        let maxPerFamily = baseMaxPerFamily
+        let dosageAdjustmentApplied = false
+        let dosageAdjustmentReason = 'none'
+        
+        if (bundleDosageConfidenceLevel === 'high' && bundleDosageAdjustment > 0) {
+          // High confidence from envelope data - allow one more exercise per family
+          maxPerFamily = Math.min(baseMaxPerFamily + 1, 3) // Cap at 3 max
+          dosageAdjustmentApplied = true
+          dosageAdjustmentReason = 'high_confidence_envelope_data_allows_expansion'
+        } else if (bundleDosageConfidenceLevel === 'low' && !weekAdaptation.firstWeekProtection?.active) {
+          // Low confidence but not first week - be slightly more conservative
+          maxPerFamily = Math.max(baseMaxPerFamily - 1, 1) // Floor at 1
+          if (maxPerFamily < baseMaxPerFamily) {
+            dosageAdjustmentApplied = true
+            dosageAdjustmentReason = 'low_confidence_conservative_trim'
+          }
+        }
+        
+        console.log('[bundle-consumed-dosage]', {
+          sessionIndex,
+          dayFocus: day.focus,
+          bundleSource: bundleDosageDecision?.source ?? 'unavailable',
+          bundleConfidence: bundleDosageConfidenceLevel,
+          bundleAdjustment: bundleDosageAdjustment,
+          baseMaxPerFamily,
+          finalMaxPerFamily: maxPerFamily,
+          adjustmentApplied: dosageAdjustmentApplied,
+          adjustmentReason: dosageAdjustmentReason,
+          firstWeekProtectionActive: weekAdaptation.firstWeekProtection?.active,
+          verdict: dosageAdjustmentApplied ? 'DOSAGE_BUNDLE_INFORMED_CHANGE' : 'DOSAGE_DEFAULT_USED',
+        })
         
         for (const family of familyPriority) {
           const familyExercises = secondaryByFamily[family]

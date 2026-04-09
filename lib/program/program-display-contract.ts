@@ -2190,6 +2190,8 @@ export interface ExerciseRowSurface {
   supportReasonLabel: string | null
   /** Progression evidence e.g. "Based on Week 1 performance" */
   progressionEvidenceLabel: string | null
+  /** Session-aware purpose explanation e.g. "Trunk stability for line control" */
+  purposeLine: string | null
   /** 0-2 compact chips for visual differentiation */
   rowChips: string[]
   /** Emphasis kind for styling */
@@ -2201,15 +2203,219 @@ export interface ExerciseRowSurface {
 /**
  * Get the best sublabel from an ExerciseRowSurface in priority order.
  * This centralizes the display priority logic so all render paths use the same order.
- * Priority: intentLabel > supportReasonLabel > protectionLabel > methodLabel > progressionEvidenceLabel
+ * Priority: purposeLine > intentLabel > supportReasonLabel > protectionLabel > methodLabel > progressionEvidenceLabel
+ * purposeLine is preferred when available as it provides session-aware context.
  */
 export function getBestRowSublabel(surface: ExerciseRowSurface): string | null {
+  // purposeLine provides richer session-aware context when available
+  // But avoid showing both purposeLine and intentLabel if they're too similar
+  if (surface.purposeLine) {
+    // If purposeLine exists and is meaningfully different from intentLabel, prefer it
+    const purposeLower = surface.purposeLine.toLowerCase()
+    const intentLower = (surface.intentLabel || '').toLowerCase()
+    // Only use purposeLine if it adds new context
+    if (!intentLower || !purposeLower.includes(intentLower.split(' ')[0])) {
+      return surface.purposeLine
+    }
+  }
   return surface.intentLabel 
     ?? surface.supportReasonLabel 
+    ?? surface.purposeLine // Fallback to purposeLine if nothing else
     ?? surface.protectionLabel 
     ?? surface.methodLabel 
     ?? surface.progressionEvidenceLabel 
     ?? null
+}
+
+/**
+ * Build a session-aware purpose line for an exercise row.
+ * This is the SINGLE owner of "why this exercise exists in this session" display.
+ * Priority: skill intent > carryover > protection > support role > accessory > core > mobility > finisher > null
+ */
+export function buildExercisePurposeLine(
+  exercise: {
+    name: string
+    category?: string
+    selectionReason?: string
+    isPrimary?: boolean
+    isProtected?: boolean
+    coachingMeta?: {
+      expressionMode?: string
+      roleInSession?: string
+    }
+  },
+  sessionContext?: {
+    sessionFocus?: string
+    isPrimarySession?: boolean
+    primaryGoal?: string
+    compositionMetadata?: {
+      spineSessionType?: string
+      sessionIntent?: string
+    }
+  },
+  emphasisKind?: ExerciseRowSurface['emphasisKind']
+): string | null {
+  const categoryLower = (exercise.category || '').toLowerCase()
+  const reasonLower = (exercise.selectionReason || '').toLowerCase()
+  const expressionMode = (exercise.coachingMeta?.expressionMode || '').toLowerCase()
+  const roleInSession = (exercise.coachingMeta?.roleInSession || '').toLowerCase()
+  const sessionFocusLower = (sessionContext?.sessionFocus || '').toLowerCase()
+  const primaryGoalLower = (sessionContext?.primaryGoal || '').replace(/_/g, ' ').toLowerCase()
+  const spineType = (sessionContext?.compositionMetadata?.spineSessionType || '').toLowerCase()
+  
+  // ==========================================================================
+  // PRIORITY 1: Primary skill/direct progression role
+  // ==========================================================================
+  if (emphasisKind === 'primary' || exercise.isPrimary) {
+    if (expressionMode.includes('direct') || expressionMode.includes('intensity')) {
+      if (primaryGoalLower.includes('planche')) {
+        return 'Direct planche patterning'
+      } else if (primaryGoalLower.includes('lever')) {
+        return 'Direct lever progression'
+      } else if (primaryGoalLower.includes('handstand')) {
+        return 'Direct handstand development'
+      } else if (primaryGoalLower.includes('muscle')) {
+        return 'Primary muscle-up work'
+      }
+      return 'Primary skill progression'
+    }
+    if (spineType.includes('direct')) {
+      return 'Primary skill driver'
+    }
+    return null // Let intentLabel handle primary without extra line
+  }
+  
+  // ==========================================================================
+  // PRIORITY 2: Secondary integration / carryover support
+  // ==========================================================================
+  if (emphasisKind === 'secondary' || categoryLower === 'strength') {
+    if (expressionMode.includes('carryover') || expressionMode.includes('technical')) {
+      if (primaryGoalLower.includes('planche')) {
+        return 'Carryover strength for planche'
+      } else if (primaryGoalLower.includes('lever')) {
+        return 'Carryover strength for lever'
+      }
+      return 'Technical carryover support'
+    }
+    if (roleInSession.includes('support')) {
+      return 'Secondary strength integration'
+    }
+    if (sessionFocusLower.includes('push') && categoryLower === 'strength') {
+      return 'Push strength builder'
+    } else if (sessionFocusLower.includes('pull') && categoryLower === 'strength') {
+      return 'Pull strength builder'
+    }
+    return 'Foundational strength support'
+  }
+  
+  // ==========================================================================
+  // PRIORITY 3: Protection / tissue-management role
+  // ==========================================================================
+  if (emphasisKind === 'protection' || exercise.isProtected) {
+    if (reasonLower.includes('straight-arm') || reasonLower.includes('straight arm')) {
+      return 'Straight-arm tissue protection'
+    }
+    if (reasonLower.includes('shoulder') || reasonLower.includes('scap')) {
+      return 'Shoulder tissue management'
+    }
+    if (reasonLower.includes('elbow') || reasonLower.includes('tendon')) {
+      return 'Connective tissue protection'
+    }
+    return 'Tissue-protective support'
+  }
+  
+  // ==========================================================================
+  // PRIORITY 4: Accessory hypertrophy / strength support role
+  // ==========================================================================
+  if (categoryLower === 'accessory') {
+    if (reasonLower.includes('hypertrophy') || reasonLower.includes('size')) {
+      return 'Accessory hypertrophy support'
+    }
+    if (reasonLower.includes('scap') || reasonLower.includes('shoulder')) {
+      return 'Scapular stability accessory'
+    }
+    if (reasonLower.includes('rear delt') || reasonLower.includes('posterior')) {
+      return 'Posterior chain balance'
+    }
+    if (reasonLower.includes('push') || reasonLower.includes('press')) {
+      return 'Pressing accessory support'
+    }
+    if (reasonLower.includes('pull') || reasonLower.includes('row')) {
+      return 'Pulling accessory support'
+    }
+    if (sessionFocusLower.includes('push')) {
+      return 'Push session accessory'
+    } else if (sessionFocusLower.includes('pull')) {
+      return 'Pull session accessory'
+    }
+    return 'Accessory support work'
+  }
+  
+  // ==========================================================================
+  // PRIORITY 5: Core / trunk / position-support role
+  // ==========================================================================
+  if (categoryLower === 'core') {
+    if (primaryGoalLower.includes('planche') || primaryGoalLower.includes('lever')) {
+      return 'Trunk stability for line control'
+    }
+    if (primaryGoalLower.includes('handstand')) {
+      return 'Core for handstand alignment'
+    }
+    if (reasonLower.includes('hollow') || reasonLower.includes('anti-extension')) {
+      return 'Anti-extension core pattern'
+    }
+    if (reasonLower.includes('rotation') || reasonLower.includes('pallof')) {
+      return 'Anti-rotation stability'
+    }
+    return 'Position-support core work'
+  }
+  
+  // ==========================================================================
+  // PRIORITY 6: Mobility / prep / range-support role
+  // ==========================================================================
+  if (categoryLower === 'mobility' || categoryLower === 'flexibility') {
+    if (reasonLower.includes('shoulder') || reasonLower.includes('overhead')) {
+      return 'Shoulder range support'
+    }
+    if (reasonLower.includes('hip') || reasonLower.includes('split')) {
+      return 'Hip mobility development'
+    }
+    if (reasonLower.includes('thoracic') || reasonLower.includes('spine')) {
+      return 'Thoracic mobility prep'
+    }
+    if (reasonLower.includes('wrist') || reasonLower.includes('forearm')) {
+      return 'Wrist prep for loading'
+    }
+    return 'Range-support mobility'
+  }
+  
+  // ==========================================================================
+  // PRIORITY 7: Finisher / density / work-capacity role
+  // ==========================================================================
+  if (reasonLower.includes('finisher') || reasonLower.includes('density')) {
+    if (sessionFocusLower.includes('push')) {
+      return 'Push density finisher'
+    } else if (sessionFocusLower.includes('pull')) {
+      return 'Pull density finisher'
+    }
+    return 'Work-capacity finisher'
+  }
+  
+  // ==========================================================================
+  // PRIORITY 8: Generic support with session context
+  // ==========================================================================
+  if (emphasisKind === 'support') {
+    if (sessionFocusLower.includes('push')) {
+      return 'Push session support'
+    } else if (sessionFocusLower.includes('pull')) {
+      return 'Pull session support'
+    } else if (sessionFocusLower.includes('skill')) {
+      return 'Skill session support'
+    }
+    return null // Let intentLabel handle generic support
+  }
+  
+  return null
 }
 
 /**
@@ -2245,6 +2451,7 @@ export function buildExerciseRowSurface(
   sessionContext?: {
     sessionFocus?: string
     isPrimarySession?: boolean
+    primaryGoal?: string
     prescriptionPropagationAudit?: {
       appliedReductions?: {
         setsReduced?: boolean
@@ -2255,6 +2462,10 @@ export function buildExerciseRowSurface(
       primaryStyle?: string
       hasSupersetsApplied?: boolean
       hasDensityApplied?: boolean
+    }
+    compositionMetadata?: {
+      spineSessionType?: string
+      sessionIntent?: string
     }
   }
 ): ExerciseRowSurface {
@@ -2467,6 +2678,22 @@ export function buildExerciseRowSurface(
     rowChips.push('High effort')
   }
   
+  // ==========================================================================
+  // J. Build session-aware purpose line
+  // ==========================================================================
+  const purposeLine = buildExercisePurposeLine(
+    {
+      name: exercise.name,
+      category: exercise.category,
+      selectionReason: exercise.selectionReason,
+      isPrimary: exercise.isPrimary,
+      isProtected: exercise.isProtected,
+      coachingMeta: exercise.coachingMeta,
+    },
+    sessionContext,
+    emphasisKind
+  )
+  
   return {
     exerciseId,
     displayName,
@@ -2476,6 +2703,7 @@ export function buildExerciseRowSurface(
     protectionLabel,
     supportReasonLabel,
     progressionEvidenceLabel,
+    purposeLine,
     rowChips: rowChips.slice(0, 2),
     emphasisKind,
     source,

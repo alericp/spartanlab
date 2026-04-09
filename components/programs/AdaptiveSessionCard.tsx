@@ -38,6 +38,8 @@ interface AdaptiveSessionCardProps {
   onExerciseOverride?: (override: ExerciseOverride) => void
   // [TASK 4] Program ID for variant state reset when program changes
   programId?: string
+  // [EXERCISE-ROW-SURFACE] Primary goal for session-aware purpose lines
+  primaryGoal?: string
   // [UI-CLEANUP-FIX] Control initial expanded state - defaults to false for cleaner list view
   // Today's workout should pass true, all others should pass false or omit
   defaultExpanded?: boolean
@@ -154,7 +156,7 @@ function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
   }
 }
 
-export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, defaultExpanded = false }: AdaptiveSessionCardProps) {
+export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, defaultExpanded = false }: AdaptiveSessionCardProps) {
   // PHASE 3: Normalize session immediately to prevent crashes
   const session = normalizeSessionForDisplay(rawSession)
   
@@ -875,6 +877,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     sessionId={sessionId}
     skippedExercises={skippedExercises}
     adjustedExercises={adjustedExercises}
+    primaryGoal={primaryGoal}
     onReplace={handleExerciseReplace}
     onSkip={handleExerciseSkip}
     onProgressionAdjust={handleProgressionAdjust}
@@ -958,6 +961,8 @@ interface MainExercisesRendererProps {
   sessionId: string
   skippedExercises: Set<string>
   adjustedExercises: Map<string, string>
+  // [EXERCISE-ROW-SURFACE] Primary goal for session-aware purpose lines
+  primaryGoal?: string
   onReplace: (exerciseId: string, exerciseName: string) => void
   onSkip: (exerciseId: string, exerciseName: string) => void
   onProgressionAdjust: (exerciseId: string, newProgression: string, direction: 'up' | 'down') => void
@@ -969,6 +974,7 @@ function MainExercisesRenderer({
   sessionId,
   skippedExercises,
   adjustedExercises,
+  primaryGoal,
   onReplace,
   onSkip,
   onProgressionAdjust,
@@ -978,14 +984,21 @@ function MainExercisesRenderer({
   const styledGroups = styleMetadata?.styledGroups || []
   
   // [EXERCISE-ROW-SURFACE] Build session context for exercise row surfaces
+  const compositionMeta = (session as unknown as { compositionMetadata?: { spineSessionType?: string; sessionIntent?: string } }).compositionMetadata
   const sessionContextForRows = {
     sessionFocus: session.focusLabel || session.focus || '',
     isPrimarySession: session.isPrimary || false,
+    // Use passed primaryGoal or try to extract from session
+    primaryGoal: primaryGoal || (session as unknown as { primaryGoal?: string }).primaryGoal || undefined,
     prescriptionPropagationAudit: (session as unknown as { prescriptionPropagationAudit?: { appliedReductions?: { setsReduced?: boolean; rpeReduced?: boolean } } }).prescriptionPropagationAudit,
     styleMetadata: styleMetadata ? {
       primaryStyle: styleMetadata.primaryStyle,
       hasSupersetsApplied: styleMetadata.hasSupersetsApplied,
       hasDensityApplied: styleMetadata.hasDensityApplied,
+    } : undefined,
+    compositionMetadata: compositionMeta ? {
+      spineSessionType: compositionMeta.spineSessionType,
+      sessionIntent: compositionMeta.sessionIntent,
     } : undefined,
   }
   

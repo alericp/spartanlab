@@ -235,12 +235,23 @@ export async function POST(request: Request) {
       }, { status: 500 })
     }
     
+    // [PHASE15E-FAILURE-SUMMARY-PROMOTION] Log attached summary for debugging
+    const rebuildFailureSummary = result.rebuildFailureSummary
+    console.log('[REGENERATE_RESPONSE_FAILURE_SUMMARY_ATTACHED]', {
+      hasSummary: !!rebuildFailureSummary,
+      totalDegraded: rebuildFailureSummary?.totalDegraded ?? 0,
+      firstFailedCheckpoint: rebuildFailureSummary?.firstFailedCheckpoint ?? null,
+      failureVerdict: rebuildFailureSummary?.failureVerdict ?? 'unknown',
+    })
+    
     return NextResponse.json({
       success: true,
       program: result.program,
       timings: result.timings,
       summary: result.summary,
       parityVerdict: result.parityVerdict,
+      // [PHASE15E-FAILURE-SUMMARY-PROMOTION] Expose authoritative rebuild failure summary
+      rebuildFailureSummary,
     })
     
   } catch (error) {

@@ -132,6 +132,21 @@ export interface AuthoritativeGenerationResult {
     scheduleMode: string
     goalLabel?: string
   }
+  
+  // [PHASE15E-FAILURE-SUMMARY-PROMOTION] Authoritative rebuild failure summary
+  // Exposed so regenerate route can return it in the API response for surgical debugging
+  rebuildFailureSummary?: {
+    totalAttempted: number
+    totalSucceeded: number
+    totalDegraded: number
+    firstFailedIndex: number | null
+    firstFailedFocus: string | null
+    firstFailedCheckpoint: string | null
+    firstFailedErrorName: string | null
+    firstFailedErrorMessage: string | null
+    failureVerdict: string
+    actionRequired: string
+  }
 }
 
 export interface GenerationParityVerdict {
@@ -984,6 +999,8 @@ export async function executeAuthoritativeGeneration(
         scheduleMode: program.scheduleMode,
         goalLabel: program.goalLabel,
       },
+      // [PHASE15E-FAILURE-SUMMARY-PROMOTION] Propagate rebuild failure summary from program
+      rebuildFailureSummary: program.rebuildFailureSummary,
     }
     
   } catch (error) {

@@ -890,6 +890,25 @@ export function buildFullSessionRoutineSurface(
   } | null,
   sessionEvidence?: SessionAiEvidenceSurface
 ): FullSessionRoutineSurface {
+  // ==========================================================================
+  // [v0] BRIDGE INPUT AUDIT - Log exactly what session data arrives at the bridge
+  // ==========================================================================
+  const sessionCategoryBreakdown = session.exercises?.reduce((acc, ex) => {
+    const cat = ex.category || 'unknown'
+    acc[cat] = (acc[cat] || 0) + 1
+    return acc
+  }, {} as Record<string, number>) || {}
+  
+  console.log('[v0] BRIDGE-INPUT-AUDIT Day', session.dayNumber, {
+    sessionExerciseCount: session.exercises?.length || 0,
+    sessionCategoryBreakdown,
+    exerciseNames: session.exercises?.map(e => `${e.name}[${e.category || '?'}]`).slice(0, 10) || [],
+    warmupCount: session.warmup?.length || 0,
+    cooldownCount: session.cooldown?.length || 0,
+    variantProvided: !!variant,
+    variantMainCount: variant?.selection?.main?.length || 0,
+  })
+  
   const routineItems: RoutineItem[] = []
   const familyCounts: Record<RoutineItemFamily, number> = {
     warmup: 0, primary: 0, secondary: 0, support: 0, accessory: 0,
@@ -1120,6 +1139,16 @@ export function buildFullSessionRoutineSurface(
   } else if (session.focus) {
     focusBadge = session.focus.charAt(0).toUpperCase() + session.focus.slice(1)
   }
+  
+  // ==========================================================================
+  // [v0] BRIDGE OUTPUT AUDIT - Confirm what gets returned from the bridge
+  // ==========================================================================
+  console.log('[v0] BRIDGE-OUTPUT-AUDIT Day', session.dayNumber, {
+    totalRoutineItems: routineItems.length,
+    familyCounts,
+    routineItemNames: routineItems.map(r => `${r.displayName}[${r.family}]`).slice(0, 12),
+    source: routineItems.some(r => r.source === 'authoritative') ? 'authoritative' : 'fallback_minimal',
+  })
   
   return {
     dayLabel: session.dayLabel || `Day ${session.dayNumber}`,

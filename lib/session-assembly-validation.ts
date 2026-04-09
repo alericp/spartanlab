@@ -102,30 +102,56 @@ function getExerciseSortPriority(exercise: AdaptiveExercise): number {
 /**
  * Normalize exercise name for comparison.
  * Handles variations like "Light Planche Leans" vs "Planche Lean Activation".
+ * 
+ * [PHASE15E-VALIDATION-SURVIVAL] Preserve semantic differences between
+ * warmup activation variants and main work to reduce false duplicate matches.
  */
-function normalizeExerciseName(name: string): string {
-  return name
+function normalizeExerciseName(name: string, preserveWorkVariant: boolean = false): string {
+  let normalized = name
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '')
-    .replace(/light|activation|warmup|prep|hold|s$/g, '')
-    .trim()
+  
+  // For same-section dedupe, aggressive normalization is fine
+  // For cross-section comparison, preserve work/activation distinction
+  if (!preserveWorkVariant) {
+    normalized = normalized.replace(/light|activation|warmup|prep|hold|s$/g, '')
+  } else {
+    // Only strip trailing 's' for pluralization, keep work-type indicators
+    normalized = normalized.replace(/s$/g, '')
+  }
+  
+  return normalized.trim()
 }
 
 /**
  * Check if two exercises are effectively the same.
+ * 
+ * [PHASE15E-VALIDATION-SURVIVAL] Added crossSection parameter to use stricter
+ * comparison for warmup/main duplicate detection, reducing false positives.
  */
-function areExercisesDuplicates(a: AdaptiveExercise, b: AdaptiveExercise): boolean {
+function areExercisesDuplicates(
+  a: AdaptiveExercise, 
+  b: AdaptiveExercise,
+  crossSection: boolean = false
+): boolean {
   // Same ID is definitely a duplicate
   if (a.id === b.id) return true
   
-  // Check normalized names
-  const normalizedA = normalizeExerciseName(a.name)
-  const normalizedB = normalizeExerciseName(b.name)
+  // Check normalized names - use stricter comparison for cross-section
+  const normalizedA = normalizeExerciseName(a.name, crossSection)
+  const normalizedB = normalizeExerciseName(b.name, crossSection)
   
   // Exact match after normalization
   if (normalizedA === normalizedB) return true
   
-  // Check for common duplicates
+  // For cross-section comparison, require stricter matching
+  // Don't treat "Planche Lean" warmup as duplicate of "Planche Push-up" main work
+  if (crossSection) {
+    // Only same-ID or exact normalized match counts as duplicate for cross-section
+    return false
+  }
+  
+  // Check for common duplicates (same-section only)
   const duplicatePairs = [
     ['planchelean', 'plancheleanlean'],
     ['scappushup', 'scappushupspecific'],
@@ -241,6 +267,9 @@ export function validateAndFixOrdering(
 /**
  * Check for duplicates between warmup and main exercises.
  * Warm-up activation exercises should not repeat in main work.
+ * 
+ * [PHASE15E-VALIDATION-SURVIVAL] Added survival guard to NEVER zero the main block.
+ * If cross-section duplicate removal would empty main exercises, preserve the original.
  */
 export function checkCrossSectionDuplicates(
   warmup: AdaptiveExercise[],
@@ -248,12 +277,17 @@ export function checkCrossSectionDuplicates(
 ): { issues: ValidationIssue[]; mainFiltered: AdaptiveExercise[] } {
   const issues: ValidationIssue[] = []
   
+  // Track which main exercises would be removed
+  const removalCandidates: Set<string> = new Set()
+  
   const mainFiltered = main.filter(mainEx => {
-    const warmupDuplicate = warmup.find(warmupEx => areExercisesDuplicates(mainEx, warmupEx))
+    // Use cross-section mode for stricter comparison
+    const warmupDuplicate = warmup.find(warmupEx => areExercisesDuplicates(mainEx, warmupEx, true))
     
     if (warmupDuplicate) {
       // Only flag if it's not intentional (same category suggests intent)
       if (warmupDuplicate.category !== mainEx.category) {
+        removalCandidates.add(mainEx.id)
         issues.push({
           type: 'duplicate',
           severity: 'warning',
@@ -267,6 +301,26 @@ export function checkCrossSectionDuplicates(
     
     return true
   })
+  
+  // [PHASE15E-VALIDATION-SURVIVAL] CRITICAL SURVIVAL GUARD
+  // If cross-section cleanup would zero a non-empty main block, preserve original main
+  if (mainFiltered.length === 0 && main.length > 0) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[session-validation] SURVIVAL GUARD: Cross-section cleanup would zero main block, preserving original', {
+        originalMainCount: main.length,
+        removalCandidatesCount: removalCandidates.size,
+        exerciseNames: main.map(e => e.name),
+      })
+    }
+    // Record a warning instead of zeroing
+    issues.push({
+      type: 'duplicate',
+      severity: 'warning',
+      description: `Cross-section cleanup preserved ${main.length} main exercises to prevent session zeroing`,
+    })
+    // Return original main exercises instead of empty array
+    return { issues, mainFiltered: main }
+  }
   
   return { issues, mainFiltered }
 }

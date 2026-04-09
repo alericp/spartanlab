@@ -545,6 +545,27 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   )
   
   // ==========================================================================
+  // [v0] AUTHORITATIVE ROUTINE OWNERSHIP AUDIT
+  // Verify full routine truth is flowing through correctly
+  // ==========================================================================
+  if (process.env.NODE_ENV === 'development') {
+    const familyBreakdown = fullVisibleExercises.reduce((acc, ex) => {
+      acc[ex.routineFamily] = (acc[ex.routineFamily] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+    
+    console.log('[v0] Full Visible Routine Audit - Day', session.dayNumber, {
+      totalSessionExercises: safeExercises.length,
+      totalRoutineItems: fullRoutineSurface.routineItems.length,
+      totalVisibleExercises: fullVisibleExercises.length,
+      familyCounts: fullRoutineSurface.familyCounts,
+      visibleFamilyBreakdown: familyBreakdown,
+      isVariantMode: !!selectedVariantData,
+      variantMainCount: selectedVariantData?.selection?.main?.length || 0,
+    })
+  }
+  
+  // ==========================================================================
   // [TASK 5] VARIANT TRUTH AUDIT
   // Log whether 45 and 30 variants are actually different or collapsing together
   // ==========================================================================

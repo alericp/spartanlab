@@ -936,8 +936,16 @@ export function buildFullSessionRoutineSurface(
   
   // Use variant if provided, otherwise use full session
   if (variant?.selection) {
-    // VARIANT MODE: Use variant's complete selection
+    // ==========================================================================
+    // VARIANT MODE: Use variant's main selection + PRESERVE session's non-main exercises
+    // FIX: Variant selection only contains main/warmup/cooldown - we must still include
+    // support/accessory/core/mobility from the full session to avoid losing them
+    // ==========================================================================
     const sel = variant.selection
+    
+    // Track IDs in variant main to avoid duplicates
+    const variantMainIds = new Set(sel.main.map(m => m.exercise.id))
+    const variantMainNames = new Set(sel.main.map(m => m.exercise.name.toLowerCase()))
     
     // Warmup from variant
     if (sel.warmup?.length) {
@@ -985,6 +993,32 @@ export function buildFullSessionRoutineSurface(
         loadCue,
         restCue,
         source: m.selectionReason ? 'authoritative' : 'fallback_minimal',
+      })
+      familyCounts[family]++
+    })
+    
+    // ==========================================================================
+    // CRITICAL FIX: Include session exercises NOT in variant main
+    // This preserves support/accessory/core/mobility exercises that variant doesn't own
+    // ==========================================================================
+    session.exercises?.forEach(ex => {
+      // Skip if already in variant main (by ID or name)
+      if (variantMainIds.has(ex.id) || variantMainNames.has(ex.name.toLowerCase())) {
+        return
+      }
+      
+      const family = determineFamily(ex.category, ex.prescriptionIntent, ex.selectionReason)
+      const loadCue = ex.loading || ex.assistanceLevel || null
+      const restCue = ex.rest || null
+      
+      routineItems.push({
+        id: ex.id,
+        displayName: ex.name,
+        family,
+        prescriptionLine: buildPrescription(ex),
+        loadCue,
+        restCue,
+        source: ex.selectionReason ? 'authoritative' : 'fallback_minimal',
       })
       familyCounts[family]++
     })

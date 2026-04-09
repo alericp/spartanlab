@@ -8917,6 +8917,20 @@ async function generateAdaptiveProgramImpl(
   
   const sessions: AdaptiveSession[] = []
   
+  // [PHASE15E-SESSION-ROOT-CAUSE] First failure tracker for precise isolation
+  const sessionFailureTracker = {
+    firstFailedIndex: null as number | null,
+    firstFailedFocus: null as string | null,
+    firstFailedCheckpoint: null as string | null,
+    firstFailedErrorName: null as string | null,
+    firstFailedErrorMessage: null as string | null,
+    totalAttempted: 0,
+    totalSucceeded: 0,
+    totalDegraded: 0,
+    failedIndexes: [] as number[],
+    degradedReasons: [] as string[],
+  }
+  
   // [PHASE15E_LIVE_PROOF] Session assembly loop start marker
   console.log('[PHASE15E_LIVE_PROOF]', {
     marker: 'PHASE15E_LIVE_PROOF_V1_2026_04_09',
@@ -8951,6 +8965,26 @@ async function generateAdaptiveProgramImpl(
       focus: day.focus,
       isPrimary: day.isPrimary,
       sessionIndex: index,
+    })
+    
+    // [PHASE15E-SESSION-ROOT-CAUSE] Session loop entry checkpoint
+    console.log('[phase15e-session-root-cause-v1]', {
+      marker: 'SESSION_LOOP_ENTRY',
+      sessionIndex: index,
+      dayNumber: day.dayNumber,
+      focus: day.focus,
+      totalSessions: structure.days.length,
+      primaryGoal,
+      secondaryGoal: secondaryGoal || null,
+      targetIntensity: day.targetIntensity || 'moderate',
+      inputTruthFingerprint: {
+        hasIntent: !!sessionIntents[index],
+        equipmentCount: equipment.length,
+        selectedSkillsCount: canonicalProfile?.selectedSkills?.length || 0,
+        hasWeekAdaptation: !!weekAdaptationDecision,
+        hasFatigueDecision: !!fatigueDecision,
+        hasAuthoritativeSpine: !!authoritativeSpineContract,
+      },
     })
     
     const intent = sessionIntents[index]
@@ -9086,11 +9120,54 @@ async function generateAdaptiveProgramImpl(
       )
     } catch (sessionGenErr) {
       const errorMessage = sessionGenErr instanceof Error ? sessionGenErr.message : String(sessionGenErr)
+      const errorName = sessionGenErr instanceof Error ? sessionGenErr.name : 'Unknown'
       const matchedPattern = 
         errorMessage.includes('session_generation_failed') ? 'session_generation_failed' :
         errorMessage.includes('exercise_selection_returned_null') ? 'exercise_selection_returned_null' :
         errorMessage.includes('session_middle_helper_failed') ? 'session_middle_helper_failed' :
         'session_generation_unknown_error'
+      
+      // [PHASE15E-SESSION-ROOT-CAUSE] Extract checkpoint from error message if present
+      const stepMatch = errorMessage.match(/step=([a-z_]+)/)
+      const middleStepMatch = errorMessage.match(/middleStep=([a-z_]+)/)
+      const extractedCheckpoint = stepMatch ? stepMatch[1] : 'unknown'
+      const extractedMiddleStep = middleStepMatch ? middleStepMatch[1] : 'none'
+      
+      // [PHASE15E-SESSION-ROOT-CAUSE] Track first failure precisely
+      if (sessionFailureTracker.firstFailedIndex === null) {
+        sessionFailureTracker.firstFailedIndex = index
+        sessionFailureTracker.firstFailedFocus = day.focus
+        sessionFailureTracker.firstFailedCheckpoint = `${extractedCheckpoint}/${extractedMiddleStep}`
+        sessionFailureTracker.firstFailedErrorName = errorName
+        sessionFailureTracker.firstFailedErrorMessage = errorMessage.slice(0, 300)
+      }
+      sessionFailureTracker.failedIndexes.push(index)
+      sessionFailureTracker.degradedReasons.push(`${index}:${matchedPattern}:${extractedCheckpoint}`)
+      sessionFailureTracker.totalDegraded++
+      
+      // [PHASE15E-SESSION-ROOT-CAUSE] Authoritative first-failure log
+      console.error('[phase15e-session-root-cause-v1]', {
+        marker: 'SESSION_FAILURE_ISOLATED',
+        isFirstFailure: sessionFailureTracker.firstFailedIndex === index,
+        sessionIndex: index,
+        dayNumber: day.dayNumber,
+        focus: day.focus,
+        checkpoint: extractedCheckpoint,
+        middleStep: extractedMiddleStep,
+        errorName,
+        errorMessage: errorMessage.slice(0, 300),
+        stack: sessionGenErr instanceof Error ? sessionGenErr.stack?.split('\n').slice(0, 5).join(' | ') : undefined,
+        matchedPattern,
+        inputFingerprint: {
+          hasDay: !!day,
+          hasPrimaryGoal: !!primaryGoal,
+          hasEquipment: equipment.length > 0,
+          hasSessionContext: !!sessionContext,
+          hasWeekAdaptation: !!sessionContext?.weekAdaptation,
+          hasCompositionBlueprint: !!sessionContext?.sessionCompositionBlueprint,
+        },
+        verdict: 'FALLBACK_SESSION_WILL_BE_CREATED',
+      })
       
       console.error('[session-generation-contained-failure]', {
         sessionIndex: index,
@@ -9692,6 +9769,19 @@ async function generateAdaptiveProgramImpl(
   // [PHASE 16C] Push to sessions array instead of return (converted from map to for loop)
   sessions.push(session)
   
+  // [PHASE15E-SESSION-ROOT-CAUSE] Track successful session
+  if (!(session as any)._degraded) {
+    sessionFailureTracker.totalSucceeded++
+    console.log('[phase15e-session-root-cause-v1]', {
+      marker: 'SESSION_SUCCESS',
+      sessionIndex: index,
+      dayNumber: day.dayNumber,
+      focus: day.focus,
+      exerciseCount: session.exercises?.length || 0,
+      variantCount: session.variants?.length || 0,
+    })
+  }
+  
   } catch (postSessionErr) {
       // STEP C: Classify post-session failure and create fallback session
       const errorMessage = postSessionErr instanceof Error ? postSessionErr.message : String(postSessionErr)
@@ -9721,6 +9811,34 @@ async function generateAdaptiveProgramImpl(
       // ==========================================================================
       // [POST-TRUTH-CORRIDOR-FALLBACK] Create fallback session instead of throwing
       // ==========================================================================
+      
+      // [PHASE15E-SESSION-ROOT-CAUSE] Track post-session failure
+      const errorName = postSessionErr instanceof Error ? postSessionErr.name : 'Unknown'
+      if (sessionFailureTracker.firstFailedIndex === null) {
+        sessionFailureTracker.firstFailedIndex = index
+        sessionFailureTracker.firstFailedFocus = day.focus
+        sessionFailureTracker.firstFailedCheckpoint = `post_session/${postSessionStep}`
+        sessionFailureTracker.firstFailedErrorName = errorName
+        sessionFailureTracker.firstFailedErrorMessage = errorMessage.slice(0, 300)
+      }
+      sessionFailureTracker.failedIndexes.push(index)
+      sessionFailureTracker.degradedReasons.push(`${index}:post_session:${postSessionStep}`)
+      sessionFailureTracker.totalDegraded++
+      
+      // [PHASE15E-SESSION-ROOT-CAUSE] Log post-session failure
+      console.error('[phase15e-session-root-cause-v1]', {
+        marker: 'POST_SESSION_FAILURE_ISOLATED',
+        isFirstFailure: sessionFailureTracker.firstFailedIndex === index,
+        sessionIndex: index,
+        dayNumber: day.dayNumber,
+        focus: day.focus,
+        postSessionStep,
+        errorName,
+        errorMessage: errorMessage.slice(0, 300),
+        matchedPattern,
+        verdict: 'POST_SESSION_FALLBACK_WILL_BE_CREATED',
+      })
+      
       postTruthCorridorTracker.degraded = true
       postTruthCorridorTracker.degradedReason = `session_${index}_post_mutation_failed: ${matchedPattern}`
       postTruthCorridorTracker.fallbackApplied = true
@@ -9848,6 +9966,35 @@ async function generateAdaptiveProgramImpl(
     // ==========================================================================
     const sessionLoopIndex = sessions.length // Current session that failed
     const failedDayInfo = structure?.days?.[sessionLoopIndex]
+    
+    // [PHASE15E-SESSION-ROOT-CAUSE] Track outer catch failure
+    const outerErrorName = sessionAssemblyErr instanceof Error ? sessionAssemblyErr.name : 'Unknown'
+    if (sessionFailureTracker.firstFailedIndex === null) {
+      sessionFailureTracker.firstFailedIndex = sessionLoopIndex
+      sessionFailureTracker.firstFailedFocus = failedDayInfo?.focus || 'unknown'
+      sessionFailureTracker.firstFailedCheckpoint = `outer_catch/${parsedFailureStep || 'unknown'}/${parsedFailureMiddleStep || 'none'}`
+      sessionFailureTracker.firstFailedErrorName = outerErrorName
+      sessionFailureTracker.firstFailedErrorMessage = errorMessage.slice(0, 300)
+    }
+    sessionFailureTracker.failedIndexes.push(sessionLoopIndex)
+    sessionFailureTracker.degradedReasons.push(`${sessionLoopIndex}:outer:${parsedFailureStep || 'unknown'}`)
+    sessionFailureTracker.totalDegraded++
+    
+    // [PHASE15E-SESSION-ROOT-CAUSE] Log outer catch failure
+    console.error('[phase15e-session-root-cause-v1]', {
+      marker: 'OUTER_CATCH_FAILURE_ISOLATED',
+      isFirstFailure: sessionFailureTracker.firstFailedIndex === sessionLoopIndex,
+      sessionLoopIndex,
+      dayNumber: failedDayInfo?.dayNumber,
+      focus: failedDayInfo?.focus,
+      parsedStep: parsedFailureStep,
+      parsedMiddleStep: parsedFailureMiddleStep,
+      parsedReason: parsedFailureReason,
+      errorName: outerErrorName,
+      errorMessage: errorMessage.slice(0, 300),
+      matchedPattern,
+      verdict: 'OUTER_FALLBACK_WILL_BE_CREATED',
+    })
     
     // Track in corridor
     postTruthCorridorTracker.degraded = true
@@ -10064,6 +10211,45 @@ async function generateAdaptiveProgramImpl(
     marker: 'PHASE15E_LIVE_PROOF_V1_2026_04_09',
     checkpoint: 'all_sessions_assembled',
     sessionCount: sessions.length,
+    timestamp: new Date().toISOString(),
+  })
+  
+  // ==========================================================================
+  // [PHASE15E-SESSION-ROOT-CAUSE] REBUILD-LEVEL SESSION FAILURE SUMMARY
+  // This is the ONE authoritative summary for per-session failure isolation
+  // ==========================================================================
+  sessionFailureTracker.totalAttempted = structure.days.length
+  sessionFailureTracker.totalSucceeded = sessions.filter(s => !(s as any)._degraded).length
+  
+  // Classify the failure pattern
+  const failureVerdict = 
+    sessionFailureTracker.totalDegraded === 0 ? 'all_sessions_ok' :
+    sessionFailureTracker.totalDegraded === sessionFailureTracker.totalAttempted ? 'all_sessions_failed' :
+    sessionFailureTracker.failedIndexes.length === 1 ? 'single_session_failure' :
+    // Check if all failures share the same checkpoint
+    sessionFailureTracker.degradedReasons.every(r => 
+      r.includes(sessionFailureTracker.firstFailedCheckpoint || '')
+    ) ? 'single_shared_helper_failure' :
+    'multiple_distinct_session_failures'
+  
+  console.log('[phase15e-session-root-cause-v1]', {
+    marker: 'REBUILD_SESSION_SUMMARY',
+    totalAttempted: sessionFailureTracker.totalAttempted,
+    totalSucceeded: sessionFailureTracker.totalSucceeded,
+    totalDegraded: sessionFailureTracker.totalDegraded,
+    firstFailedIndex: sessionFailureTracker.firstFailedIndex,
+    firstFailedFocus: sessionFailureTracker.firstFailedFocus,
+    firstFailedCheckpoint: sessionFailureTracker.firstFailedCheckpoint,
+    firstFailedErrorName: sessionFailureTracker.firstFailedErrorName,
+    firstFailedErrorMessage: sessionFailureTracker.firstFailedErrorMessage?.slice(0, 200),
+    failedIndexes: sessionFailureTracker.failedIndexes,
+    degradedReasons: sessionFailureTracker.degradedReasons.slice(0, 5), // First 5 reasons
+    failureVerdict,
+    actionRequired: failureVerdict === 'all_sessions_ok' 
+      ? 'NONE' 
+      : failureVerdict === 'single_shared_helper_failure'
+        ? `FIX_HELPER_AT_CHECKPOINT:${sessionFailureTracker.firstFailedCheckpoint}`
+        : `INVESTIGATE_FIRST_FAILURE:session_${sessionFailureTracker.firstFailedIndex}_${sessionFailureTracker.firstFailedFocus}`,
     timestamp: new Date().toISOString(),
   })
   

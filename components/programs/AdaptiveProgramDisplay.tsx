@@ -1533,6 +1533,7 @@ export function AdaptiveProgramDisplay({
                 <AdaptiveSessionCard
                   session={session}
                   programId={program.id}
+                  primaryGoal={program.primaryGoal}
                   defaultExpanded={sessionIndex === 0}
                   onExerciseReplace={
                     onExerciseReplace 

@@ -21,7 +21,7 @@ import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
 import { buildExerciseCardContract, buildExerciseRowSurface, getBestRowSublabel, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
-import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, type SessionAiEvidenceSurface, type FullSessionRoutineSurface } from '@/lib/program/program-ai-evidence-bridge'
+import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, buildSessionMainPreviewSurface, type SessionAiEvidenceSurface, type FullSessionRoutineSurface, type SessionMainPreviewSurface } from '@/lib/program/program-ai-evidence-bridge'
 import { getExerciseRowVisibility, shouldShowRowIntelligence, deduplicateRowDisplay, DEFAULT_DENSITY_MODE } from '@/lib/program/program-display-priority'
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
@@ -528,6 +528,12 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   )
   
   // ==========================================================================
+  // [SESSION-MAIN-PREVIEW] Build display-priority preview (main workout first)
+  // This reorders items so warmup/cooldown don't lead the compact card view
+  // ==========================================================================
+  const mainPreview: SessionMainPreviewSurface = buildSessionMainPreviewSurface(fullRoutineSurface)
+  
+  // ==========================================================================
   // [TASK 5] VARIANT TRUTH AUDIT
   // Log whether 45 and 30 variants are actually different or collapsing together
   // ==========================================================================
@@ -734,14 +740,14 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   ================================================================= */}
               <div className="space-y-3">
                 {/* =============================================================
-                    [FULL-SESSION-ROUTINE] COMPLETE DAY ROUTINE - ALL FAMILIES
-                    This shows the FULL authoritative routine, not a narrowed subset
+                    [SESSION-MAIN-PREVIEW] MAIN WORKOUT FIRST - Display priority
+                    Shows main exercises first, warmup/cooldown as secondary summary
                     ============================================================= */}
                 <div className="bg-[#1A1A1A] rounded-lg border border-[#2A2A2A] overflow-hidden">
-                  {/* Header with total count and focus badge */}
+                  {/* Header with main exercise count and focus badge */}
                   <div className="px-3 py-2 border-b border-[#2A2A2A] flex items-center justify-between">
                     <span className="text-xs font-medium text-[#A5A5A5]">
-                      {fullRoutineSurface.routineItems.length} exercises
+                      {mainPreview.mainExerciseCount} exercises
                     </span>
                     {fullRoutineSurface.focusBadge && (
                       <span className={`text-[9px] px-1.5 py-0.5 rounded ${
@@ -752,35 +758,27 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                     )}
                   </div>
                   
-                  {/* Compact FULL routine list - scannable prescription */}
+                  {/* Main workout list - priority ordered (main first, no warmup/cooldown) */}
                   <div className="divide-y divide-[#2A2A2A]">
-                    {fullRoutineSurface.routineItems.slice(0, 8).map((item, idx) => (
+                    {mainPreview.previewItems.slice(0, 8).map((item, idx) => (
                       <div key={item.id} className="px-3 py-1.5 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-[10px] text-[#5A5A5A] w-4 shrink-0">{idx + 1}</span>
                           <span className={`text-sm truncate ${
-                            item.family === 'primary' ? 'text-[#E6E9EF]' 
-                              : item.family === 'warmup' || item.family === 'cooldown' ? 'text-[#6A6A6A]'
-                              : 'text-[#A5A5A5]'
+                            item.family === 'primary' ? 'text-[#E6E9EF]' : 'text-[#A5A5A5]'
                           }`}>
                             {item.displayName}
                           </span>
-                          {/* Compact family badge */}
-                          {item.family !== 'other' && (
+                          {/* Compact family badge - only for non-primary main items */}
+                          {item.family !== 'primary' && item.family !== 'other' && (
                             <span className={`text-[8px] px-1 py-0.5 rounded shrink-0 ${
-                              item.family === 'primary' ? 'bg-[#E63946]/10 text-[#E63946]/60'
-                                : item.family === 'secondary' ? 'bg-blue-500/10 text-blue-400/60'
-                                : item.family === 'warmup' ? 'bg-[#4F6D8A]/10 text-[#4F6D8A]/60'
-                                : item.family === 'cooldown' ? 'bg-green-500/10 text-green-400/60'
+                              item.family === 'secondary' ? 'bg-blue-500/10 text-blue-400/60'
                                 : item.family === 'accessory' || item.family === 'support' ? 'bg-[#2A2A2A] text-[#7A7A7A]'
                                 : item.family === 'core' ? 'bg-amber-500/10 text-amber-400/60'
                                 : item.family === 'mobility' ? 'bg-purple-500/10 text-purple-400/60'
                                 : 'bg-[#2A2A2A] text-[#6A6A6A]'
                             }`}>
-                              {item.family === 'primary' ? 'Main' 
-                                : item.family === 'secondary' ? 'Sec'
-                                : item.family === 'warmup' ? 'W'
-                                : item.family === 'cooldown' ? 'C'
+                              {item.family === 'secondary' ? 'Sec'
                                 : item.family === 'accessory' || item.family === 'support' ? 'Acc'
                                 : item.family === 'core' ? 'Core'
                                 : item.family === 'mobility' ? 'Mob'
@@ -793,21 +791,21 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                         </span>
                       </div>
                     ))}
-                    {fullRoutineSurface.routineItems.length > 8 && (
+                    {mainPreview.previewItems.length > 8 && (
                       <div className="px-3 py-1.5 text-[10px] text-[#5A5A5A] text-center">
-                        +{fullRoutineSurface.routineItems.length - 8} more below
+                        +{mainPreview.previewItems.length - 8} more below
                       </div>
                     )}
                   </div>
                   
-                  {/* Summary footer with family counts */}
+                  {/* Secondary summary: warmup/cooldown/finisher (demoted from main list) */}
                   <div className="px-3 py-2 border-t border-[#2A2A2A] flex items-center justify-between text-[10px] text-[#6A6A6A]">
                     <span>
-                      {fullRoutineSurface.familyCounts.warmup > 0 && `${fullRoutineSurface.familyCounts.warmup} warmup`}
-                      {fullRoutineSurface.familyCounts.warmup > 0 && fullRoutineSurface.familyCounts.cooldown > 0 && ' · '}
-                      {fullRoutineSurface.familyCounts.cooldown > 0 && `${fullRoutineSurface.familyCounts.cooldown} cooldown`}
+                      {mainPreview.hasWarmup && `${mainPreview.warmupCount} warmup`}
+                      {mainPreview.hasWarmup && mainPreview.hasCooldown && ' · '}
+                      {mainPreview.hasCooldown && `${mainPreview.cooldownCount} cooldown`}
                     </span>
-                    {fullRoutineSurface.hasFinisher && (
+                    {mainPreview.hasFinisher && (
                       <span className="text-[#E63946]/60">+ Finisher</span>
                     )}
                   </div>

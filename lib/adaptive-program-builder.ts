@@ -10262,6 +10262,32 @@ async function generateAdaptiveProgramImpl(
     timestamp: new Date().toISOString(),
   })
   
+  // [PHASE15E-MICRO-CORRIDOR-AUDIT] Push session corridor summary
+  const pushSessions = sessions.filter(s => s?.dayFocus?.includes('push'))
+  const pushSessionsWithExercises = pushSessions.filter(s => (s?.exercises?.length || 0) > 0)
+  const pushSessionsEmpty = pushSessions.filter(s => (s?.exercises?.length || 0) === 0)
+  
+  if (pushSessions.length > 0) {
+    console.log('[PHASE15E-MICRO-CORRIDOR-AUDIT] Push corridor summary:', {
+      marker: 'PUSH_CORRIDOR_FINAL_SUMMARY',
+      totalPushSessions: pushSessions.length,
+      pushSessionsWithExercises: pushSessionsWithExercises.length,
+      pushSessionsEmpty: pushSessionsEmpty.length,
+      emptyPushDayNumbers: pushSessionsEmpty.map(s => s?.dayNumber || 'unknown'),
+      pushSessionFocuses: pushSessions.map(s => s?.dayFocus || 'unknown'),
+      // Track if the first failed session was a push session
+      firstFailedWasPush: sessionFailureTracker.firstFailedFocus?.includes('push') || false,
+      verdict: pushSessionsEmpty.length === 0
+        ? 'PUSH_CORRIDOR_ALL_OK'
+        : pushSessionsWithExercises.length === 0
+          ? 'PUSH_CORRIDOR_TOTAL_FAILURE'
+          : 'PUSH_CORRIDOR_PARTIAL_FAILURE',
+      nextAction: pushSessionsEmpty.length > 0
+        ? 'INVESTIGATE_PUSH_EXERCISE_SELECTION_LOGS'
+        : 'PUSH_CORRIDOR_CLEAR_MOVE_TO_NEXT',
+    })
+  }
+  
   console.log('[session-assembly] Final session validation:', {
     totalSessions: sessions.length,
     expectedSessions: structure.days?.length || 0,
@@ -18630,6 +18656,18 @@ function generateAdaptiveSession(
     verdict: 'TRUTH_CONTRACT_VALIDATED_BEFORE_SELECTION',
   })
   
+  // [PHASE15E-MICRO-CORRIDOR-AUDIT] Check if this is a push session for error capture
+  const isPushSessionForAudit = day?.focus?.includes('push')
+  if (isPushSessionForAudit) {
+    console.log('[PHASE15E-MICRO-CORRIDOR-AUDIT] Entering push session exercise selection:', {
+      marker: 'BUILDER_PUSH_SESSION_ENTRY',
+      dayFocus: day.focus,
+      dayNumber: day.dayNumber,
+      sessionIndex,
+      primaryGoal,
+    })
+  }
+  
   const selection = selectExercisesForSession({
   day,
   primaryGoal,
@@ -18684,6 +18722,21 @@ function generateAdaptiveSession(
   const safeMain = Array.isArray(selection?.main) ? selection.main : []
   const safeWarmup = Array.isArray(selection?.warmup) ? selection.warmup : []
   const safeCooldown = Array.isArray(selection?.cooldown) ? selection.cooldown : []
+  
+  // [PHASE15E-MICRO-CORRIDOR-AUDIT] Post-selection checkpoint for push sessions
+  if (isPushSessionForAudit) {
+    console.log('[PHASE15E-MICRO-CORRIDOR-AUDIT] Push session selection complete:', {
+      marker: 'BUILDER_PUSH_SESSION_EXIT',
+      dayFocus: day.focus,
+      dayNumber: day.dayNumber,
+      mainCount: safeMain.length,
+      warmupCount: safeWarmup.length,
+      cooldownCount: safeCooldown.length,
+      verdict: safeMain.length === 0 
+        ? 'PUSH_SESSION_RETURNED_ZERO_MAIN_EXERCISES'
+        : 'PUSH_SESSION_SELECTION_OK',
+    })
+  }
   
   sessionStep = 'safe_selection_normalized'
   

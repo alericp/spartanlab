@@ -21,7 +21,7 @@ import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
 import { buildExerciseCardContract, buildExerciseRowSurface, getBestRowSublabel, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
-import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, buildSessionMainPreviewSurface, type SessionAiEvidenceSurface, type FullSessionRoutineSurface, type SessionMainPreviewSurface } from '@/lib/program/program-ai-evidence-bridge'
+import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, buildSessionMainPreviewSurface, buildSessionPrimaryPrescriptionSurface, type SessionAiEvidenceSurface, type FullSessionRoutineSurface, type SessionMainPreviewSurface, type SessionPrimaryPrescriptionSurface } from '@/lib/program/program-ai-evidence-bridge'
 import { getExerciseRowVisibility, shouldShowRowIntelligence, deduplicateRowDisplay, DEFAULT_DENSITY_MODE } from '@/lib/program/program-display-priority'
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
@@ -528,10 +528,21 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   )
   
   // ==========================================================================
-  // [SESSION-MAIN-PREVIEW] Build display-priority preview (main workout first)
-  // This reorders items so warmup/cooldown don't lead the compact card view
+  // [SESSION-MAIN-PREVIEW] Build display-priority preview (secondary context)
+  // This provides warmup/cooldown counts and finisher presence for footer
   // ==========================================================================
   const mainPreview: SessionMainPreviewSurface = buildSessionMainPreviewSurface(fullRoutineSurface)
+  
+  // ==========================================================================
+  // [SESSION-PRIMARY-PRESCRIPTION] Build canonical main workout display owner
+  // This is the AUTHORITATIVE owner of the first-visible numbered workout list
+  // Uses displayExercises (canonical workout order), NOT family-based reordering
+  // ==========================================================================
+  const primaryPrescription: SessionPrimaryPrescriptionSurface = buildSessionPrimaryPrescriptionSurface(
+    displayExercises,
+    sessionEvidence,
+    fullRoutineSurface
+  )
   
   // ==========================================================================
   // [TASK 5] VARIANT TRUTH AUDIT
@@ -740,14 +751,14 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   ================================================================= */}
               <div className="space-y-3">
                 {/* =============================================================
-                    [SESSION-MAIN-PREVIEW] MAIN WORKOUT FIRST - Display priority
-                    Shows main exercises first, warmup/cooldown as secondary summary
+                    [SESSION-PRIMARY-PRESCRIPTION] CANONICAL MAIN WORKOUT OWNER
+                    Shows actual main exercises in canonical order - no family badges
                     ============================================================= */}
                 <div className="bg-[#1A1A1A] rounded-lg border border-[#2A2A2A] overflow-hidden">
-                  {/* Header with main exercise count and focus badge */}
+                  {/* Header with exercise count and focus badge */}
                   <div className="px-3 py-2 border-b border-[#2A2A2A] flex items-center justify-between">
                     <span className="text-xs font-medium text-[#A5A5A5]">
-                      {mainPreview.mainExerciseCount} exercises
+                      {primaryPrescription.exerciseCount} exercises
                     </span>
                     {fullRoutineSurface.focusBadge && (
                       <span className={`text-[9px] px-1.5 py-0.5 rounded ${
@@ -758,52 +769,36 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                     )}
                   </div>
                   
-                  {/* Main workout list - priority ordered (main first, no warmup/cooldown) */}
+                  {/* Main workout list - canonical order, clean display */}
                   <div className="divide-y divide-[#2A2A2A]">
-                    {mainPreview.previewItems.slice(0, 8).map((item, idx) => (
+                    {primaryPrescription.items.slice(0, 8).map((item, idx) => (
                       <div key={item.id} className="px-3 py-1.5 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-[10px] text-[#5A5A5A] w-4 shrink-0">{idx + 1}</span>
-                          <span className={`text-sm truncate ${
-                            item.family === 'primary' ? 'text-[#E6E9EF]' : 'text-[#A5A5A5]'
-                          }`}>
+                          <span className="text-sm text-[#E6E9EF] truncate">
                             {item.displayName}
                           </span>
-                          {/* Compact family badge - only for non-primary main items */}
-                          {item.family !== 'primary' && item.family !== 'other' && (
-                            <span className={`text-[8px] px-1 py-0.5 rounded shrink-0 ${
-                              item.family === 'secondary' ? 'bg-blue-500/10 text-blue-400/60'
-                                : item.family === 'accessory' || item.family === 'support' ? 'bg-[#2A2A2A] text-[#7A7A7A]'
-                                : item.family === 'core' ? 'bg-amber-500/10 text-amber-400/60'
-                                : item.family === 'mobility' ? 'bg-purple-500/10 text-purple-400/60'
-                                : 'bg-[#2A2A2A] text-[#6A6A6A]'
-                            }`}>
-                              {item.family === 'secondary' ? 'Sec'
-                                : item.family === 'accessory' || item.family === 'support' ? 'Acc'
-                                : item.family === 'core' ? 'Core'
-                                : item.family === 'mobility' ? 'Mob'
-                                : item.family}
-                            </span>
-                          )}
                         </div>
                         <span className="text-xs text-[#7A7A7A] font-mono shrink-0">
                           {item.prescriptionLine}
                         </span>
                       </div>
                     ))}
-                    {mainPreview.previewItems.length > 8 && (
+                    {primaryPrescription.items.length > 8 && (
                       <div className="px-3 py-1.5 text-[10px] text-[#5A5A5A] text-center">
-                        +{mainPreview.previewItems.length - 8} more below
+                        +{primaryPrescription.items.length - 8} more
                       </div>
                     )}
                   </div>
                   
-                  {/* Secondary summary: warmup/cooldown/finisher (demoted from main list) */}
+                  {/* Secondary summary: warmup/cooldown/support (demoted from main list) */}
                   <div className="px-3 py-2 border-t border-[#2A2A2A] flex items-center justify-between text-[10px] text-[#6A6A6A]">
                     <span>
                       {mainPreview.hasWarmup && `${mainPreview.warmupCount} warmup`}
                       {mainPreview.hasWarmup && mainPreview.hasCooldown && ' · '}
                       {mainPreview.hasCooldown && `${mainPreview.cooldownCount} cooldown`}
+                      {primaryPrescription.supportsAvailable && (mainPreview.hasWarmup || mainPreview.hasCooldown) && ' · '}
+                      {primaryPrescription.supportsAvailable && 'Support work'}
                     </span>
                     {mainPreview.hasFinisher && (
                       <span className="text-[#E63946]/60">+ Finisher</span>

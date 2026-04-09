@@ -1177,6 +1177,136 @@ export function buildSessionMainPreviewSurface(
 }
 
 // =============================================================================
+// SESSION PRIMARY PRESCRIPTION SURFACE - Canonical main workout display owner
+// =============================================================================
+
+export interface PrimaryPrescriptionItem {
+  id: string
+  displayName: string
+  /** Compact prescription e.g. "3x5-8 @7" */
+  prescriptionLine: string
+  /** Optional load cue */
+  loadCue: string | null
+  /** Optional rest cue */
+  restCue: string | null
+  /** Source tracking */
+  source: 'authoritative' | 'fallback_minimal'
+}
+
+export interface SessionPrimaryPrescriptionSurface {
+  /** Ordered canonical main exercises for the visible workout list */
+  items: PrimaryPrescriptionItem[]
+  /** Total count */
+  exerciseCount: number
+  /** Count hidden if list is truncated */
+  hiddenCount: number
+  /** Compact section label e.g. "Main Workout" */
+  sectionLabel: string
+  /** Source tracking */
+  source: 'authoritative' | 'fallback_minimal'
+  /** Whether secondary support work exists (for footer) */
+  supportsAvailable: boolean
+}
+
+/**
+ * Build PRIMARY PRESCRIPTION surface from canonical main exercises (displayExercises).
+ * This is the AUTHORITATIVE owner of the first-visible numbered workout list.
+ * It uses the canonical workout order, NOT family-based reordering.
+ * 
+ * @param displayExercises - The canonical main exercises (variant selection.main or session.exercises)
+ * @param sessionEvidence - Optional session evidence for enrichment
+ */
+export function buildSessionPrimaryPrescriptionSurface(
+  displayExercises: Array<{
+    id: string
+    name: string
+    category?: string
+    sets?: number
+    reps?: string | number
+    repsOrTime?: string
+    hold?: string
+    targetRPE?: number
+    rest?: string
+    restSeconds?: number
+    loading?: string
+    assistanceLevel?: string
+    prescribedLoad?: { load?: number; unit?: string }
+    selectionReason?: string
+  }>,
+  sessionEvidence?: SessionAiEvidenceSurface,
+  fullRoutineSurface?: FullSessionRoutineSurface
+): SessionPrimaryPrescriptionSurface {
+  // Build prescription items from canonical displayExercises in ORIGINAL order
+  const items: PrimaryPrescriptionItem[] = displayExercises.map(ex => {
+    // Build prescription line
+    let prescriptionLine = ''
+    const reps = ex.repsOrTime || ex.reps
+    if (ex.sets) {
+      if (ex.hold) {
+        prescriptionLine = `${ex.sets}x${ex.hold}`
+      } else if (reps) {
+        prescriptionLine = `${ex.sets}x${reps}`
+      } else {
+        prescriptionLine = `${ex.sets} sets`
+      }
+    } else if (ex.hold) {
+      prescriptionLine = ex.hold
+    } else if (reps) {
+      prescriptionLine = String(reps)
+    }
+    
+    // Add RPE if present
+    if (ex.targetRPE) {
+      prescriptionLine += ` @${ex.targetRPE}`
+    }
+    
+    // Build load cue
+    let loadCue: string | null = null
+    if (ex.prescribedLoad?.load) {
+      loadCue = `${ex.prescribedLoad.load}${ex.prescribedLoad.unit || 'kg'}`
+    } else if (ex.loading) {
+      loadCue = ex.loading
+    } else if (ex.assistanceLevel) {
+      loadCue = ex.assistanceLevel
+    }
+    
+    // Build rest cue
+    let restCue: string | null = null
+    if (ex.restSeconds) {
+      restCue = ex.restSeconds >= 60 ? `${Math.round(ex.restSeconds / 60)}min` : `${ex.restSeconds}s`
+    } else if (ex.rest) {
+      restCue = ex.rest
+    }
+    
+    return {
+      id: ex.id,
+      displayName: ex.name,
+      prescriptionLine: prescriptionLine || '—',
+      loadCue,
+      restCue,
+      source: ex.selectionReason ? 'authoritative' : 'fallback_minimal',
+    }
+  })
+  
+  // Check if secondary support work exists (from full routine if available)
+  const supportsAvailable = fullRoutineSurface 
+    ? (fullRoutineSurface.familyCounts.accessory > 0 || 
+       fullRoutineSurface.familyCounts.support > 0 ||
+       fullRoutineSurface.familyCounts.core > 0 ||
+       fullRoutineSurface.familyCounts.mobility > 0)
+    : false
+  
+  return {
+    items,
+    exerciseCount: items.length,
+    hiddenCount: 0, // Component decides truncation
+    sectionLabel: 'Main Workout',
+    source: items.some(i => i.source === 'authoritative') ? 'authoritative' : 'fallback_minimal',
+    supportsAvailable,
+  }
+}
+
+// =============================================================================
 // PROGRAM-LEVEL EVIDENCE MODEL
 // =============================================================================
 

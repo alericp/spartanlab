@@ -632,12 +632,14 @@ function buildSessionArchitectureContract(
   const isMediumSession = sessionMinutes <= 45
   const complexity = isShortSession ? 'minimal' : isMediumSession ? 'standard' : 'comprehensive'
   
-  const isPushFocus = day.focus.includes('push')
-  const isPullFocus = day.focus.includes('pull')
-  const isSkillFocus = day.focus.includes('skill')
+  // [PHASE15E-EXERCISE-SELECTION-FIX] Guard against undefined day.focus
+  const safeFocus = day?.focus || 'mixed_upper'
+  const isPushFocus = safeFocus.includes('push')
+  const isPullFocus = safeFocus.includes('pull')
+  const isSkillFocus = safeFocus.includes('skill')
   
   return {
-    sessionIntent: `${day.focus} session for ${primaryGoal}`,
+    sessionIntent: `${safeFocus} session for ${primaryGoal}`,
     sessionComplexity: complexity,
     slotAllocation: {
       primaryWork: isShortSession ? 2 : 3,
@@ -812,6 +814,16 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   // Validate and normalize all skill allocations BEFORE any matching logic
   // This prevents undefined.toLowerCase() crashes in the selection corridor
   // ==========================================================================
+  
+  // [PHASE15E-EXERCISE-SELECTION-FIX] Defensive check for malformed day input
+  // The builder should normalize day before calling, but log if it doesn't
+  if (!day?.focus) {
+    console.warn('[PHASE15E-EXERCISE-SELECTION-FIX] Day missing focus - should have been normalized by builder:', {
+      originalFocus: day?.focus,
+      originalDayNumber: day?.dayNumber,
+    })
+  }
+  
   const validatedSkillsForSession = validateSessionSkills(skillsForSession)
   const validatedMaterialSkillIntent = validateMaterialSkillIntent(materialSkillIntent)
   
@@ -1432,6 +1444,9 @@ function getAdvancedSkillExercises(
     return []
   }
 
+  // [PHASE15E-EXERCISE-SELECTION-FIX] Guard against undefined dayFocus
+  const safeDayFocus = dayFocus || 'mixed_upper'
+
   const recommendations: { exerciseId: string; reason: string; priority: number }[] = []
   
   for (const allocation of skillsForSession) {
@@ -1446,7 +1461,7 @@ function getAdvancedSkillExercises(
     // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
     if (skill === 'hspu') {
       // HSPU should influence vertical push selection
-      if (dayFocus.includes('push') || dayFocus.includes('skill') || dayFocus.includes('vertical')) {
+      if (safeDayFocus.includes('push') || safeDayFocus.includes('skill') || safeDayFocus.includes('vertical')) {
         const hspuProgressions = advancedFamily.directProgressions
         for (const exId of hspuProgressions) {
           if (!exId) continue // Skip undefined exercise IDs
@@ -2385,11 +2400,16 @@ function selectMainExercises(
       )
       
       // Infer exercise role from selection context
+      // [PHASE15E-EXERCISE-SELECTION-FIX] Guard against null/undefined reason or primaryGoal
+      const safeReason = reason || ''
+      const safePrimaryGoal = primaryGoal || ''
+      const isPrimaryGoalMatch = finalExercise.primarySkill === primaryGoal || 
+        (safeReason && safePrimaryGoal && safeReason.toLowerCase().includes(safePrimaryGoal.toLowerCase()))
       const exerciseRole = inferExerciseRole(
         finalExercise.category,
         reason,
         selectionTrace.sessionRole,
-        finalExercise.primarySkill === primaryGoal || reason.toLowerCase().includes(primaryGoal.toLowerCase())
+        isPrimaryGoalMatch
       )
       
       // Build truth context for prescription resolution
@@ -3077,10 +3097,13 @@ function applyMaterialityScoreAdjustments(
     ? (equipment.length <= 3 ? 'hybrid' : 'weighted_integrated')
     : (equipment.length <= 2 ? 'minimalist' : 'pure_skill')
   
+  // [PHASE15E-EXERCISE-SELECTION-FIX] Guard against undefined day.focus
+  const safeDayFocusMain = day?.focus || 'mixed_upper'
+  
   // Determine session complexity from day focus and constraint
   const sessionComplexityBudget: 'low' | 'medium' | 'high' = 
-    mustDowngradeToSupport || day.focus.includes('recovery') ? 'low' :
-    day.focus.includes('density') || day.focus.includes('mixed') ? 'medium' : 'high'
+    mustDowngradeToSupport || safeDayFocusMain.includes('recovery') ? 'low' :
+    safeDayFocusMain.includes('density') || safeDayFocusMain.includes('mixed') ? 'medium' : 'high'
   
   // Transform currentWorkingProgressions into format expected by materiality engine
   const materialityProgressions: Record<string, {
@@ -5355,12 +5378,14 @@ export function buildFallbackSelectionForSession(
   }
   
   // RESCUE PATH 2: Day focus compatible work
+  // [PHASE15E-EXERCISE-SELECTION-FIX] Guard against undefined dayFocus
+  const safeDayFocus = dayFocus || 'mixed_upper'
   if (rescueResult.length < 2) {
     const focusCompatible = availableStrength.filter(ex => {
-      if (dayFocus.includes('push')) return ex.category === 'push' || ex.movementFamily === 'push'
-      if (dayFocus.includes('pull')) return ex.category === 'pull' || ex.movementFamily === 'pull'
-      if (dayFocus.includes('skill')) return true // Any strength work supports skill days
-      if (dayFocus === 'support_recovery') return ex.intensity !== 'high'
+      if (safeDayFocus.includes('push')) return ex.category === 'push' || ex.movementFamily === 'push'
+      if (safeDayFocus.includes('pull')) return ex.category === 'pull' || ex.movementFamily === 'pull'
+      if (safeDayFocus.includes('skill')) return true // Any strength work supports skill days
+      if (safeDayFocus === 'support_recovery') return ex.intensity !== 'high'
       return true
     })
     
@@ -5369,7 +5394,7 @@ export function buildFallbackSelectionForSession(
       const additional = focusCompatible
         .filter(ex => !rescueResult.some(r => r.exercise.id === ex.id))
         .slice(0, Math.max(0, 4 - rescueResult.length))
-      rescueResult.push(...additional.map(ex => toSelectedExercise(ex, `Focus-compatible ${dayFocus}`)))
+      rescueResult.push(...additional.map(ex => toSelectedExercise(ex, `Focus-compatible ${safeDayFocus}`)))
     }
   }
   

@@ -55,7 +55,7 @@ import type { EquipmentType } from './adaptive-exercise-pool'
 // [LIVE-EXECUTION-TRUTH] Import band types for execution truth contract
 import type { ResistanceBandColor } from './band-progression-engine'
 import type { RecoveryLevel } from './recovery-engine'
-import type { WeeklyStructure, DayStructure } from './program-structure-engine'
+import type { WeeklyStructure, DayStructure, DayFocus } from './program-structure-engine'
 import type { ExerciseSelection, SelectedExercise } from './program-exercise-selector'
 import type { WeightedBenchmark, WeightedPRBenchmark } from './prescription-contract'
 import type { ProtocolRecommendation } from './protocols/joint-integrity-protocol'
@@ -8942,7 +8942,16 @@ async function generateAdaptiveProgramImpl(
   try {
     // [PHASE 16C TASK 4] Convert to async for loop with yields inside
     for (let index = 0; index < structure.days.length; index++) {
-    const day = structure.days[index]
+    const rawDay = structure.days[index]
+    
+    // [PHASE15E-EXERCISE-SELECTION-FIX] Normalize day structure to prevent undefined.includes() crashes
+    const day: DayStructure = {
+      ...rawDay,
+      focus: rawDay?.focus || 'mixed_upper' as DayFocus,
+      dayNumber: rawDay?.dayNumber ?? (index + 1),
+      targetIntensity: rawDay?.targetIntensity || 'moderate',
+      movementEmphasis: rawDay?.movementEmphasis || 'mixed',
+    }
     
     // [PHASE 16C] Yield between sessions to let UI update
     if (index > 0) {

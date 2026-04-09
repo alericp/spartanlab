@@ -345,6 +345,17 @@ import {
   type CanonicalReadinessResult,
   type LimitingFactor,
 } from './readiness/canonical-readiness-engine'
+// [PROGRAMMING-TRUTH-BUNDLE] Import for upstream generation intelligence
+import {
+  buildProgrammingTruthBundle,
+  hasMeaningfulBenchmarks,
+  hasPerformanceEnvelopeData,
+  hasEarnedTrainingHistory,
+  getBundleConfidenceLevel,
+  isSectionAvailable,
+  type ProgrammingTruthBundle,
+} from './program/programming-truth-bundle'
+
 import {
   analyzeConstraints,
   formatBuilderReasoning,
@@ -841,6 +852,27 @@ type AdaptiveSessionContext = {
   // [PHASE 15E CONTRACT FIX] Now properly typed as SessionWeekAdaptation (not WeekAdaptationInput)
   // ==========================================================================
   weekAdaptation?: SessionWeekAdaptation | null
+  // ==========================================================================
+  // [PROGRAMMING-TRUTH-BUNDLE] Bundle-derived decision signals
+  // These inform dosage/load, progression, and constraint-aware selection
+  // ==========================================================================
+  bundleDecisions?: {
+    dosage: {
+      source: string
+      confidence: 'none' | 'low' | 'medium' | 'high'
+      adjustment: number
+    }
+    progression: {
+      source: string
+      confidence: 'none' | 'low' | 'medium' | 'high'
+      skillsInformed: number
+    }
+    constraint: {
+      source: string
+      activeConstraints: number
+      informed: boolean
+    }
+  } | null
   }
 
 export interface AdaptiveProgramInputs {
@@ -5135,6 +5167,53 @@ async function generateAdaptiveProgramImpl(
     experienceLevel: canonicalProfile.experienceLevel,
   })
   
+  // ==========================================================================
+  // [PROGRAMMING-TRUTH-BUNDLE] BUILD UPSTREAM INTELLIGENCE BUNDLE
+  // This is the SINGLE authoritative pre-generation intelligence aggregator.
+  // It merges canonical profile with Neon-backed truth (benchmarks, skill
+  // progressions, performance envelopes, constraint history, training response).
+  // Built ONCE here, consumed by all downstream dosage/load/progression decisions.
+  // ==========================================================================
+  let programmingTruthBundle: ProgrammingTruthBundle | null = null
+  try {
+    // Resolve athlete ID for bundle building - use canonical profile userId
+    const bundleUserId = canonicalProfile.userId || 'unknown'
+    
+    // Build the truth bundle - this fetches from Neon in parallel
+    programmingTruthBundle = await buildProgrammingTruthBundle(
+      bundleUserId,
+      canonicalProfile as unknown as import('./canonical-profile-service').CanonicalProgrammingProfile
+    )
+    
+    // Log bundle diagnostics for dev verification
+    console.log('[programming-truth-bundle-built]', {
+      bundleVersion: programmingTruthBundle.version,
+      sectionsAvailable: programmingTruthBundle.diagnostics.sectionsAvailable,
+      sectionsUnavailable: programmingTruthBundle.diagnostics.sectionsUnavailable,
+      totalDataPoints: programmingTruthBundle.diagnostics.totalDataPointsAcrossSections,
+      buildDurationMs: programmingTruthBundle.diagnostics.buildDurationMs,
+      derivedSignals: {
+        dosageConfidence: programmingTruthBundle.derivedSignals.dosageConfidence,
+        progressionConfidence: programmingTruthBundle.derivedSignals.progressionConfidence,
+        loadingConfidence: programmingTruthBundle.derivedSignals.loadingConfidence,
+        hasActiveConstraints: programmingTruthBundle.derivedSignals.hasActiveConstraints,
+        constraintInformedSelection: programmingTruthBundle.derivedSignals.constraintInformedSelection,
+      },
+      hasMeaningfulBenchmarks: hasMeaningfulBenchmarks(programmingTruthBundle),
+      hasPerformanceEnvelopes: hasPerformanceEnvelopeData(programmingTruthBundle),
+      hasEarnedHistory: hasEarnedTrainingHistory(programmingTruthBundle),
+      bundleConfidenceLevel: getBundleConfidenceLevel(programmingTruthBundle),
+      verdict: 'PROGRAMMING_TRUTH_BUNDLE_BUILT_SUCCESSFULLY',
+    })
+  } catch (bundleErr) {
+    // Non-fatal: If bundle fails, generation continues with canonical profile only
+    console.warn('[programming-truth-bundle-build-failed]', {
+      error: bundleErr instanceof Error ? bundleErr.message : 'Unknown error',
+      fallbackBehavior: 'GENERATION_CONTINUES_WITH_CANONICAL_PROFILE_ONLY',
+    })
+    programmingTruthBundle = null
+  }
+  
   // TASK 6: Log schedule/duration truth consumption
   console.log('[program-generate] TASK 6: Schedule/Duration truth consumed:', {
   scheduleMode: canonicalProfile.scheduleMode,
@@ -8201,6 +8280,126 @@ async function generateAdaptiveProgramImpl(
       : 'PHASE15E_POST_AUDIT_SETUP_COMPLETE',
   })
   
+  // ==========================================================================
+  // [PROGRAMMING-TRUTH-BUNDLE] BUNDLE-INFORMED DECISION CONTEXT
+  // This block computes bundle-derived adjustments for three high-materiality areas:
+  // A. Dosage/Load decisions (benchmark + envelope informed)
+  // B. Progression decisions (skill progressions informed)
+  // C. Constraint-aware selection (constraint history informed)
+  // ==========================================================================
+  
+  // A. DOSAGE/LOAD CONFIDENCE FROM BUNDLE
+  let bundleDosageConfidence: 'none' | 'low' | 'medium' | 'high' = 'low'
+  let bundleLoadingConfidence: 'none' | 'low' | 'medium' | 'high' = 'low'
+  let bundleInformedDosageAdjustment = 0  // Positive = more confident dosage, negative = conservative
+  let bundleDosageSource = 'canonical_only'
+  
+  if (programmingTruthBundle && isSectionAvailable(programmingTruthBundle.benchmarks.meta)) {
+    bundleDosageConfidence = programmingTruthBundle.derivedSignals.dosageConfidence
+    bundleLoadingConfidence = programmingTruthBundle.derivedSignals.loadingConfidence
+    
+    // If we have high-confidence envelope data, allow slightly more volume
+    if (hasPerformanceEnvelopeData(programmingTruthBundle) && bundleDosageConfidence === 'high') {
+      bundleInformedDosageAdjustment = 1  // Allow +1 exercise in main work
+      bundleDosageSource = 'benchmark_and_envelope_informed'
+    } else if (hasMeaningfulBenchmarks(programmingTruthBundle)) {
+      bundleDosageSource = 'benchmark_informed'
+      // Benchmarks present but no envelope - stay conservative
+    }
+  }
+  
+  console.log('[programming-truth-bundle-dosage-decision]', {
+    bundleDosageConfidence,
+    bundleLoadingConfidence,
+    bundleInformedDosageAdjustment,
+    bundleDosageSource,
+    hasBenchmarks: programmingTruthBundle ? hasMeaningfulBenchmarks(programmingTruthBundle) : false,
+    hasEnvelopes: programmingTruthBundle ? hasPerformanceEnvelopeData(programmingTruthBundle) : false,
+    verdict: bundleDosageSource !== 'canonical_only' ? 'DOSAGE_BENCHMARK_OR_ENVELOPE_INFORMED' : 'DOSAGE_CANONICAL_ONLY',
+  })
+  
+  // B. PROGRESSION CONFIDENCE FROM BUNDLE
+  let bundleProgressionConfidence: 'none' | 'low' | 'medium' | 'high' = 'low'
+  let bundleProgressionSource = 'canonical_only'
+  let bundleSkillProgressionData: Record<string, { level: number | null; progressScore: number | null }> = {}
+  
+  if (programmingTruthBundle && isSectionAvailable(programmingTruthBundle.skillProgressions.meta)) {
+    bundleProgressionConfidence = programmingTruthBundle.derivedSignals.progressionConfidence
+    bundleProgressionSource = 'skill_progressions_informed'
+    
+    // Extract progression data for selected skills
+    for (const skill of expandedContext.selectedSkills) {
+      const progressionData = programmingTruthBundle.skillProgressions.bySkill[skill]
+      if (progressionData) {
+        bundleSkillProgressionData[skill] = {
+          level: progressionData.currentLevel ?? null,
+          progressScore: progressionData.progressScore ?? null,
+        }
+      }
+    }
+  }
+  
+  console.log('[programming-truth-bundle-progression-decision]', {
+    bundleProgressionConfidence,
+    bundleProgressionSource,
+    skillsWithProgressionData: Object.keys(bundleSkillProgressionData).length,
+    selectedSkillsCount: expandedContext.selectedSkills.length,
+    verdict: bundleProgressionSource !== 'canonical_only' ? 'PROGRESSION_SKILL_DATA_INFORMED' : 'PROGRESSION_CANONICAL_ONLY',
+  })
+  
+  // C. CONSTRAINT-AWARE SELECTION FROM BUNDLE
+  let bundleConstraintInformed = false
+  let bundleActiveConstraints: string[] = []
+  let bundleConstraintSource = 'canonical_only'
+  
+  if (programmingTruthBundle && isSectionAvailable(programmingTruthBundle.constraintHistory.meta)) {
+    bundleConstraintInformed = programmingTruthBundle.derivedSignals.constraintInformedSelection
+    bundleActiveConstraints = programmingTruthBundle.constraintHistory.activeJointRiskFlags
+    
+    if (programmingTruthBundle.constraintHistory.totalHistoryRecords > 0) {
+      bundleConstraintSource = 'constraint_history_informed'
+    } else if (bundleActiveConstraints.length > 0) {
+      bundleConstraintSource = 'canonical_constraints_only'
+    }
+  }
+  
+  console.log('[programming-truth-bundle-constraint-decision]', {
+    bundleConstraintInformed,
+    bundleActiveConstraints,
+    bundleConstraintSource,
+    totalConstraintHistoryRecords: programmingTruthBundle?.constraintHistory.totalHistoryRecords ?? 0,
+    hasActiveConstraints: bundleActiveConstraints.length > 0,
+    verdict: bundleConstraintSource !== 'canonical_only' ? 'CONSTRAINT_HISTORY_OR_PROFILE_INFORMED' : 'CONSTRAINT_NO_DATA',
+  })
+  
+  // BUNDLE DECISION SUMMARY
+  const bundleDecisionSummary = {
+    dosage: {
+      source: bundleDosageSource,
+      confidence: bundleDosageConfidence,
+      adjustment: bundleInformedDosageAdjustment,
+    },
+    progression: {
+      source: bundleProgressionSource,
+      confidence: bundleProgressionConfidence,
+      skillsInformed: Object.keys(bundleSkillProgressionData).length,
+    },
+    constraint: {
+      source: bundleConstraintSource,
+      activeConstraints: bundleActiveConstraints.length,
+      informed: bundleConstraintInformed,
+    },
+  }
+  
+  console.log('[programming-truth-bundle-decision-summary]', {
+    ...bundleDecisionSummary,
+    bundleBuiltSuccessfully: !!programmingTruthBundle,
+    bundleOverallConfidence: programmingTruthBundle ? getBundleConfidenceLevel(programmingTruthBundle) : 'none',
+    verdict: programmingTruthBundle 
+      ? 'BUNDLE_DECISIONS_COMPUTED' 
+      : 'BUNDLE_UNAVAILABLE_USING_CANONICAL_ONLY',
+  })
+  
   // Apply training outcome overrides to calibration
   const shouldIncludeEndurance = outcomeTrainingStyle.includeEnduranceWork || 
     calibrationAdjustments.includeEnduranceFinisher
@@ -9110,6 +9309,8 @@ async function generateAdaptiveProgramImpl(
   canonicalSessionSpine,
   // [WEEKLY-COMPOSITION-UPGRADE] Pass week-level adaptation decisions for session-level enforcement
   weekAdaptation: weekAdaptationInputForSession,
+  // [PROGRAMMING-TRUTH-BUNDLE] Pass bundle-derived decisions for dosage/progression/constraint
+  bundleDecisions: bundleDecisionSummary || null,
   }
     
     // ==========================================================================

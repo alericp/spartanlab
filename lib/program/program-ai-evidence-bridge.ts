@@ -1307,6 +1307,107 @@ export function buildSessionPrimaryPrescriptionSurface(
 }
 
 // =============================================================================
+// SESSION SECONDARY EXERCISE SECTIONS - Remaining visible workout (non-warmup/cooldown)
+// =============================================================================
+
+export interface SecondaryExerciseItem {
+  id: string
+  displayName: string
+  prescriptionLine: string
+  family: RoutineItemFamily
+  source: 'authoritative' | 'fallback_minimal'
+}
+
+export interface SecondaryExerciseSection {
+  family: RoutineItemFamily
+  label: string
+  items: SecondaryExerciseItem[]
+}
+
+export interface SessionSecondaryExerciseSectionsSurface {
+  /** Grouped sections for remaining visible exercises */
+  sections: SecondaryExerciseSection[]
+  /** Total count of secondary exercises */
+  totalCount: number
+  /** Whether any secondary exercises exist */
+  hasSecondaryExercises: boolean
+  /** Source tracking */
+  source: 'authoritative' | 'fallback_minimal'
+}
+
+/** Human-readable labels for secondary families */
+const SECONDARY_FAMILY_LABELS: Partial<Record<RoutineItemFamily, string>> = {
+  support: 'Support Work',
+  accessory: 'Accessory Work',
+  core: 'Core',
+  mobility: 'Mobility',
+  finisher: 'Finisher',
+  secondary: 'Secondary',
+  other: 'Additional',
+}
+
+/**
+ * Build SECONDARY EXERCISE SECTIONS from full routine, excluding warmup/cooldown
+ * and items already shown in primary prescription.
+ * 
+ * @param fullRoutine - The authoritative full routine surface
+ * @param primaryPrescription - The primary prescription to deduplicate against
+ */
+export function buildSessionSecondaryExerciseSectionsSurface(
+  fullRoutine: FullSessionRoutineSurface,
+  primaryPrescription: SessionPrimaryPrescriptionSurface
+): SessionSecondaryExerciseSectionsSurface {
+  // Get primary item IDs for deduplication
+  const primaryIds = new Set(primaryPrescription.items.map(i => i.id))
+  
+  // Filter to non-warmup/cooldown items NOT already in primary list
+  const secondaryItems = fullRoutine.routineItems.filter(item => 
+    item.family !== 'warmup' && 
+    item.family !== 'cooldown' &&
+    !primaryIds.has(item.id)
+  )
+  
+  // Group by family
+  const familyGroups = new Map<RoutineItemFamily, SecondaryExerciseItem[]>()
+  
+  for (const item of secondaryItems) {
+    const existing = familyGroups.get(item.family) || []
+    existing.push({
+      id: item.id,
+      displayName: item.displayName,
+      prescriptionLine: item.prescriptionLine,
+      family: item.family,
+      source: item.source,
+    })
+    familyGroups.set(item.family, existing)
+  }
+  
+  // Build sections in display order
+  const familyOrder: RoutineItemFamily[] = ['secondary', 'support', 'accessory', 'core', 'mobility', 'finisher', 'other']
+  const sections: SecondaryExerciseSection[] = []
+  
+  for (const family of familyOrder) {
+    const items = familyGroups.get(family)
+    if (items && items.length > 0) {
+      sections.push({
+        family,
+        label: SECONDARY_FAMILY_LABELS[family] || family,
+        items,
+      })
+    }
+  }
+  
+  const totalCount = secondaryItems.length
+  
+  return {
+    sections,
+    totalCount,
+    hasSecondaryExercises: totalCount > 0,
+    source: secondaryItems.some(i => i.source === 'authoritative') ? 'authoritative' : 'fallback_minimal',
+  }
+}
+
+// =============================================================================
 // PROGRAM-LEVEL EVIDENCE MODEL
 // =============================================================================
 

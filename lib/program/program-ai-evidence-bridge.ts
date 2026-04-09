@@ -773,6 +773,335 @@ export function buildSessionPrescriptionSurface(
 }
 
 // =============================================================================
+// FULL SESSION ROUTINE SURFACE - Complete day routine from ALL exercise families
+// =============================================================================
+
+export type RoutineItemFamily = 'warmup' | 'primary' | 'secondary' | 'support' | 'accessory' | 'core' | 'mobility' | 'finisher' | 'cooldown' | 'other'
+
+export interface RoutineItem {
+  id: string
+  displayName: string
+  family: RoutineItemFamily
+  /** Compact prescription e.g. "3x5-8" */
+  prescriptionLine: string
+  /** Load/rest cues */
+  loadCue: string | null
+  restCue: string | null
+  /** Source tracking */
+  source: 'authoritative' | 'fallback_minimal'
+}
+
+export interface FullSessionRoutineSurface {
+  /** Day identity */
+  dayLabel: string
+  dayNumber: number
+  sessionHeadline: string
+  focusBadge: string | null
+  estimatedMinutes: number | null
+  /** FULL ordered routine - all families */
+  routineItems: RoutineItem[]
+  /** Summary counts by family */
+  familyCounts: Record<RoutineItemFamily, number>
+  /** Whether finisher is included */
+  hasFinisher: boolean
+  finisherName: string | null
+  /** Source tracking */
+  source: 'authoritative' | 'fallback_minimal'
+}
+
+/**
+ * Build FULL session routine surface from ALL authoritative exercise families.
+ * This is the COMPLETE display contract for showing the entire day routine.
+ * 
+ * @param session - Full authoritative session with all exercise arrays
+ * @param variant - Optional variant selection (if null, uses full session)
+ */
+export function buildFullSessionRoutineSurface(
+  session: {
+    dayNumber: number
+    dayLabel?: string
+    name?: string
+    focus?: string
+    focusLabel?: string
+    isPrimary?: boolean
+    estimatedMinutes?: number
+    exercises?: Array<{
+      id: string
+      name: string
+      category?: string
+      sets?: number
+      reps?: string | number
+      hold?: string
+      targetRPE?: number
+      rest?: string
+      loading?: string
+      assistanceLevel?: string
+      selectionReason?: string
+      prescriptionIntent?: string
+    }>
+    warmup?: Array<{
+      id: string
+      name: string
+      sets?: number
+      reps?: string | number
+      hold?: string
+      selectionReason?: string
+    }>
+    cooldown?: Array<{
+      id: string
+      name: string
+      sets?: number
+      reps?: string | number
+      hold?: string
+      selectionReason?: string
+    }>
+    finisher?: {
+      name: string
+      durationMinutes?: number
+      exercises?: Array<{ name: string }>
+    } | null
+    finisherIncluded?: boolean
+  },
+  variant?: {
+    selection: {
+      main: Array<{
+        exercise: { id: string; name: string; category?: string }
+        sets?: number
+        repsOrTime?: string
+        prescribedLoad?: { load?: number; unit?: string }
+        targetRPE?: number
+        restSeconds?: number
+        selectionReason?: string
+      }>
+      warmup?: Array<{
+        exercise: { id: string; name: string }
+        sets?: number
+        repsOrTime?: string
+        selectionReason?: string
+      }>
+      cooldown?: Array<{
+        exercise: { id: string; name: string }
+        sets?: number
+        repsOrTime?: string
+        selectionReason?: string
+      }>
+    }
+    duration?: number
+  } | null,
+  sessionEvidence?: SessionAiEvidenceSurface
+): FullSessionRoutineSurface {
+  const routineItems: RoutineItem[] = []
+  const familyCounts: Record<RoutineItemFamily, number> = {
+    warmup: 0, primary: 0, secondary: 0, support: 0, accessory: 0,
+    core: 0, mobility: 0, finisher: 0, cooldown: 0, other: 0
+  }
+  
+  // Helper to build prescription line
+  const buildPrescription = (item: { sets?: number; reps?: string | number; hold?: string; repsOrTime?: string; targetRPE?: number }): string => {
+    let line = ''
+    const reps = item.repsOrTime || item.reps
+    if (item.sets) {
+      if (item.hold) {
+        line = `${item.sets}x${item.hold}`
+      } else if (reps) {
+        line = `${item.sets}x${reps}`
+      } else {
+        line = `${item.sets} sets`
+      }
+    } else if (item.hold) {
+      line = item.hold
+    } else if (reps) {
+      line = String(reps)
+    }
+    if (item.targetRPE) {
+      line += ` @${item.targetRPE}`
+    }
+    return line || '—'
+  }
+  
+  // Helper to determine family from category/intent
+  const determineFamily = (category?: string, intent?: string, reason?: string): RoutineItemFamily => {
+    const cat = (category || '').toLowerCase()
+    const i = (intent || '').toLowerCase()
+    const r = (reason || '').toLowerCase()
+    
+    if (cat === 'skill' || i.includes('primary') || r.includes('primary')) return 'primary'
+    if (i.includes('secondary') || r.includes('integration')) return 'secondary'
+    if (cat === 'accessory' || i.includes('support') || r.includes('support')) return 'accessory'
+    if (cat === 'core') return 'core'
+    if (cat === 'mobility' || cat === 'flexibility') return 'mobility'
+    if (cat === 'strength') return 'secondary'
+    return 'other'
+  }
+  
+  // Use variant if provided, otherwise use full session
+  if (variant?.selection) {
+    // VARIANT MODE: Use variant's complete selection
+    const sel = variant.selection
+    
+    // Warmup from variant
+    if (sel.warmup?.length) {
+      sel.warmup.forEach(w => {
+        routineItems.push({
+          id: w.exercise.id,
+          displayName: w.exercise.name,
+          family: 'warmup',
+          prescriptionLine: buildPrescription(w),
+          loadCue: null,
+          restCue: null,
+          source: w.selectionReason ? 'authoritative' : 'fallback_minimal',
+        })
+        familyCounts.warmup++
+      })
+    } else if (session.warmup?.length) {
+      // Fallback to session warmup if variant doesn't have it
+      session.warmup.forEach(w => {
+        routineItems.push({
+          id: w.id,
+          displayName: w.name,
+          family: 'warmup',
+          prescriptionLine: buildPrescription(w),
+          loadCue: null,
+          restCue: null,
+          source: w.selectionReason ? 'authoritative' : 'fallback_minimal',
+        })
+        familyCounts.warmup++
+      })
+    }
+    
+    // Main exercises from variant - determine families
+    sel.main.forEach(m => {
+      const family = determineFamily(m.exercise.category, undefined, m.selectionReason)
+      const loadCue = m.prescribedLoad?.load 
+        ? `${m.prescribedLoad.load}${m.prescribedLoad.unit || 'kg'}`
+        : null
+      const restCue = m.restSeconds ? `${Math.round(m.restSeconds / 60)}min` : null
+      
+      routineItems.push({
+        id: m.exercise.id,
+        displayName: m.exercise.name,
+        family,
+        prescriptionLine: buildPrescription(m),
+        loadCue,
+        restCue,
+        source: m.selectionReason ? 'authoritative' : 'fallback_minimal',
+      })
+      familyCounts[family]++
+    })
+    
+    // Cooldown from variant
+    if (sel.cooldown?.length) {
+      sel.cooldown.forEach(c => {
+        routineItems.push({
+          id: c.exercise.id,
+          displayName: c.exercise.name,
+          family: 'cooldown',
+          prescriptionLine: buildPrescription(c),
+          loadCue: null,
+          restCue: null,
+          source: c.selectionReason ? 'authoritative' : 'fallback_minimal',
+        })
+        familyCounts.cooldown++
+      })
+    } else if (session.cooldown?.length) {
+      session.cooldown.forEach(c => {
+        routineItems.push({
+          id: c.id,
+          displayName: c.name,
+          family: 'cooldown',
+          prescriptionLine: buildPrescription(c),
+          loadCue: null,
+          restCue: null,
+          source: c.selectionReason ? 'authoritative' : 'fallback_minimal',
+        })
+        familyCounts.cooldown++
+      })
+    }
+  } else {
+    // FULL SESSION MODE: Use all session arrays
+    
+    // Warmup
+    session.warmup?.forEach(w => {
+      routineItems.push({
+        id: w.id,
+        displayName: w.name,
+        family: 'warmup',
+        prescriptionLine: buildPrescription(w),
+        loadCue: null,
+        restCue: null,
+        source: w.selectionReason ? 'authoritative' : 'fallback_minimal',
+      })
+      familyCounts.warmup++
+    })
+    
+    // Main exercises - determine families from category/intent
+    session.exercises?.forEach(ex => {
+      const family = determineFamily(ex.category, ex.prescriptionIntent, ex.selectionReason)
+      const loadCue = ex.loading || ex.assistanceLevel || null
+      const restCue = ex.rest || null
+      
+      routineItems.push({
+        id: ex.id,
+        displayName: ex.name,
+        family,
+        prescriptionLine: buildPrescription(ex),
+        loadCue,
+        restCue,
+        source: ex.selectionReason ? 'authoritative' : 'fallback_minimal',
+      })
+      familyCounts[family]++
+    })
+    
+    // Cooldown
+    session.cooldown?.forEach(c => {
+      routineItems.push({
+        id: c.id,
+        displayName: c.name,
+        family: 'cooldown',
+        prescriptionLine: buildPrescription(c),
+        loadCue: null,
+        restCue: null,
+        source: c.selectionReason ? 'authoritative' : 'fallback_minimal',
+      })
+      familyCounts.cooldown++
+    })
+  }
+  
+  // Add finisher if present
+  const hasFinisher = !!(session.finisher && session.finisherIncluded)
+  if (hasFinisher && session.finisher) {
+    familyCounts.finisher = session.finisher.exercises?.length || 1
+  }
+  
+  // Build headline
+  let sessionHeadline = session.name || session.focusLabel || `Day ${session.dayNumber}`
+  if (sessionEvidence?.sessionHeadline && sessionEvidence.source === 'authoritative') {
+    sessionHeadline = sessionEvidence.sessionHeadline
+  }
+  
+  // Focus badge
+  let focusBadge: string | null = null
+  if (session.isPrimary) {
+    focusBadge = session.focus === 'skill' ? 'Skill Focus' : 'Strength Focus'
+  } else if (session.focus) {
+    focusBadge = session.focus.charAt(0).toUpperCase() + session.focus.slice(1)
+  }
+  
+  return {
+    dayLabel: session.dayLabel || `Day ${session.dayNumber}`,
+    dayNumber: session.dayNumber,
+    sessionHeadline,
+    focusBadge,
+    estimatedMinutes: variant?.duration || session.estimatedMinutes || null,
+    routineItems,
+    familyCounts,
+    hasFinisher,
+    finisherName: hasFinisher ? session.finisher?.name || null : null,
+    source: routineItems.some(r => r.source === 'authoritative') ? 'authoritative' : 'fallback_minimal',
+  }
+}
+
+// =============================================================================
 // PROGRAM-LEVEL EVIDENCE MODEL
 // =============================================================================
 

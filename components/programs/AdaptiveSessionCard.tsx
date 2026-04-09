@@ -21,7 +21,7 @@ import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
 import { buildExerciseCardContract, buildExerciseRowSurface, getBestRowSublabel, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
-import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildSessionPrescriptionSurface, type SessionAiEvidenceSurface, type SessionPrescriptionSurface, type ExercisePrescriptionItem } from '@/lib/program/program-ai-evidence-bridge'
+import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, type SessionAiEvidenceSurface, type FullSessionRoutineSurface } from '@/lib/program/program-ai-evidence-bridge'
 import { getExerciseRowVisibility, shouldShowRowIntelligence, deduplicateRowDisplay, DEFAULT_DENSITY_MODE } from '@/lib/program/program-display-priority'
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
@@ -500,10 +500,15 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   }
   
   // ==========================================================================
-  // [SESSION-PRESCRIPTION-SURFACE] Build compact prescription display
-  // This is the PRIMARY output for prescription-first display
+  // [FULL-SESSION-ROUTINE-SURFACE] Build COMPLETE day routine from ALL families
+  // This is the PRIMARY authoritative output for prescription-first display
+  // Replaces narrowed displayExercises with full session truth
   // ==========================================================================
-  const prescriptionSurface: SessionPrescriptionSurface = buildSessionPrescriptionSurface(
+  const selectedVariantData = selectedVariant !== null && session.variants?.[selectedVariant]
+    ? session.variants[selectedVariant]
+    : null
+    
+  const fullRoutineSurface: FullSessionRoutineSurface = buildFullSessionRoutineSurface(
     {
       dayNumber: session.dayNumber,
       dayLabel: session.dayLabel,
@@ -511,13 +516,14 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       focus: session.focus,
       focusLabel: session.focusLabel,
       isPrimary: session.isPrimary,
-      estimatedMinutes: activeSessionView.estimatedMinutes,
+      estimatedMinutes: session.estimatedMinutes,
+      exercises: safeExercises, // Use FULL exercises, not narrowed displayExercises
       warmup: session.warmup,
       cooldown: session.cooldown,
       finisher: session.finisher,
       finisherIncluded: session.finisherIncluded,
     },
-    displayExercises,
+    selectedVariantData, // Pass variant for variant-aware routine building
     sessionEvidence
   )
   
@@ -727,36 +733,58 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   Primary display: actual routine. Secondary: AI explanation.
                   ================================================================= */}
               <div className="space-y-3">
-                {/* Compact Prescription List - THE PRIMARY OUTPUT */}
+                {/* =============================================================
+                    [FULL-SESSION-ROUTINE] COMPLETE DAY ROUTINE - ALL FAMILIES
+                    This shows the FULL authoritative routine, not a narrowed subset
+                    ============================================================= */}
                 <div className="bg-[#1A1A1A] rounded-lg border border-[#2A2A2A] overflow-hidden">
-                  {/* Header with focus badge */}
+                  {/* Header with total count and focus badge */}
                   <div className="px-3 py-2 border-b border-[#2A2A2A] flex items-center justify-between">
                     <span className="text-xs font-medium text-[#A5A5A5]">
-                      {prescriptionSurface.exercises.length} exercises
+                      {fullRoutineSurface.routineItems.length} exercises
                     </span>
-                    {prescriptionSurface.focusBadge && (
+                    {fullRoutineSurface.focusBadge && (
                       <span className={`text-[9px] px-1.5 py-0.5 rounded ${
                         session.focus === 'skill' ? 'bg-[#E63946]/10 text-[#E63946]/80' : 'bg-blue-500/10 text-blue-400/80'
                       }`}>
-                        {prescriptionSurface.focusBadge}
+                        {fullRoutineSurface.focusBadge}
                       </span>
                     )}
                   </div>
                   
-                  {/* Compact exercise list - scannable prescription */}
+                  {/* Compact FULL routine list - scannable prescription */}
                   <div className="divide-y divide-[#2A2A2A]">
-                    {prescriptionSurface.exercises.slice(0, 6).map((item, idx) => (
-                      <div key={item.id} className="px-3 py-2 flex items-center justify-between gap-2">
+                    {fullRoutineSurface.routineItems.slice(0, 8).map((item, idx) => (
+                      <div key={item.id} className="px-3 py-1.5 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-[10px] text-[#5A5A5A] w-4 shrink-0">{idx + 1}</span>
                           <span className={`text-sm truncate ${
-                            item.emphasis === 'primary' ? 'text-[#E6E9EF]' : 'text-[#A5A5A5]'
+                            item.family === 'primary' ? 'text-[#E6E9EF]' 
+                              : item.family === 'warmup' || item.family === 'cooldown' ? 'text-[#6A6A6A]'
+                              : 'text-[#A5A5A5]'
                           }`}>
                             {item.displayName}
                           </span>
-                          {item.emphasis === 'primary' && (
-                            <span className="text-[8px] px-1 py-0.5 rounded bg-[#E63946]/10 text-[#E63946]/60 shrink-0">
-                              Main
+                          {/* Compact family badge */}
+                          {item.family !== 'other' && (
+                            <span className={`text-[8px] px-1 py-0.5 rounded shrink-0 ${
+                              item.family === 'primary' ? 'bg-[#E63946]/10 text-[#E63946]/60'
+                                : item.family === 'secondary' ? 'bg-blue-500/10 text-blue-400/60'
+                                : item.family === 'warmup' ? 'bg-[#4F6D8A]/10 text-[#4F6D8A]/60'
+                                : item.family === 'cooldown' ? 'bg-green-500/10 text-green-400/60'
+                                : item.family === 'accessory' || item.family === 'support' ? 'bg-[#2A2A2A] text-[#7A7A7A]'
+                                : item.family === 'core' ? 'bg-amber-500/10 text-amber-400/60'
+                                : item.family === 'mobility' ? 'bg-purple-500/10 text-purple-400/60'
+                                : 'bg-[#2A2A2A] text-[#6A6A6A]'
+                            }`}>
+                              {item.family === 'primary' ? 'Main' 
+                                : item.family === 'secondary' ? 'Sec'
+                                : item.family === 'warmup' ? 'W'
+                                : item.family === 'cooldown' ? 'C'
+                                : item.family === 'accessory' || item.family === 'support' ? 'Acc'
+                                : item.family === 'core' ? 'Core'
+                                : item.family === 'mobility' ? 'Mob'
+                                : item.family}
                             </span>
                           )}
                         </div>
@@ -765,17 +793,21 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                         </span>
                       </div>
                     ))}
-                    {prescriptionSurface.exercises.length > 6 && (
+                    {fullRoutineSurface.routineItems.length > 8 && (
                       <div className="px-3 py-1.5 text-[10px] text-[#5A5A5A] text-center">
-                        +{prescriptionSurface.exercises.length - 6} more exercises below
+                        +{fullRoutineSurface.routineItems.length - 8} more below
                       </div>
                     )}
                   </div>
                   
-                  {/* Summary footer */}
+                  {/* Summary footer with family counts */}
                   <div className="px-3 py-2 border-t border-[#2A2A2A] flex items-center justify-between text-[10px] text-[#6A6A6A]">
-                    <span>{prescriptionSurface.warmupCount} warmup · {prescriptionSurface.cooldownCount} cooldown</span>
-                    {prescriptionSurface.finisherSummary && (
+                    <span>
+                      {fullRoutineSurface.familyCounts.warmup > 0 && `${fullRoutineSurface.familyCounts.warmup} warmup`}
+                      {fullRoutineSurface.familyCounts.warmup > 0 && fullRoutineSurface.familyCounts.cooldown > 0 && ' · '}
+                      {fullRoutineSurface.familyCounts.cooldown > 0 && `${fullRoutineSurface.familyCounts.cooldown} cooldown`}
+                    </span>
+                    {fullRoutineSurface.hasFinisher && (
                       <span className="text-[#E63946]/60">+ Finisher</span>
                     )}
                   </div>

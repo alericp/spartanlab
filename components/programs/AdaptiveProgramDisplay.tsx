@@ -37,7 +37,9 @@ import {
   buildProgramIntelligenceContract, 
   getProgramSurfaceSignals,
   getSessionSurfaceSignals,
-  type ProgramIntelligenceContract 
+  buildAllSessionCardSurfaces,
+  type ProgramIntelligenceContract,
+  type SessionCardSurface,
 } from '@/lib/program/program-display-contract'
 import { Info, Sparkles, Shield, Scale, Layers } from 'lucide-react'
 
@@ -246,6 +248,23 @@ export function AdaptiveProgramDisplay({
   // [phase15a-hotfix-render-local-order-audit]: All safe locals now declared before useEffects
   // [phase15a-hotfix-derived-local-dependency-graph-audit]: No forward references
   // [phase15a-hotfix-no-self-reference-scan]: Each safe local derives from raw* or program.*
+  
+  // ==========================================================================
+  // [SESSION-CARD-SURFACE] Build authoritative per-card display surfaces
+  // This is the SINGLE owner of differentiated day card identity
+  // ==========================================================================
+  const sessionCardSurfaces: SessionCardSurface[] = validSessions.length > 0
+    ? buildAllSessionCardSurfaces(
+        validSessions as Parameters<typeof buildAllSessionCardSurfaces>[0],
+        {
+          isFirstWeek: program.weekAdaptationDecision?.firstWeekGovernor?.active ?? false,
+          adaptationPhase: program.weekAdaptationDecision?.phase,
+          totalSessions: validSessions.length,
+          primaryGoal: program.primaryGoal,
+          secondaryGoal: program.secondaryGoal,
+        }
+      )
+    : []
   
   // ==========================================================================
   // [PHASE 15C-HOTFIX] ROOT CAUSE AND RENDER SCOPE AUDITS
@@ -1397,49 +1416,103 @@ export function AdaptiveProgramDisplay({
         
         {validSessions.length > 0 ? (
           validSessions.map((session, sessionIndex) => {
-            // Get day rationale for this session
+            // [SESSION-CARD-SURFACE] Get authoritative card surface for this session
+            const cardSurface = sessionCardSurfaces[sessionIndex]
+            
+            // Get day rationale for this session (fallback/supplementary)
             const dayRationale = intelligenceContract?.dayRationales?.find(
               r => r.dayNumber === session.dayNumber
             )
             
-            // [SURFACE-SIGNALS] Get session-level surface signals
+            // [SURFACE-SIGNALS] Get session-level surface signals for prescription changes
             const sessionSurfaceSignals = getSessionSurfaceSignals(session as Parameters<typeof getSessionSurfaceSignals>[0])
+            
+            // Determine if we have authoritative card surface to show
+            const hasAuthoritativeSurface = cardSurface && cardSurface.source === 'authoritative'
+            const hasAnyChips = cardSurface && (
+              cardSurface.primaryIntentChips.length > 0 || 
+              cardSurface.protectionSignals.length > 0 ||
+              cardSurface.methodSignals.length > 0
+            )
             
             return (
               <div key={`${program.id}-${session.dayNumber}-${session.name || session.focusLabel}`}>
-                {/* [MAIN-PAGE-AI-VISIBILITY] Day rationale - enhanced visible display */}
-                {(dayRationale && dayRationale.source !== 'unavailable') || sessionSurfaceSignals.hasPrescriptionChanges ? (
+                {/* [SESSION-CARD-SURFACE] Authoritative per-card identity display */}
+                {(hasAuthoritativeSurface || hasAnyChips || sessionSurfaceSignals.hasPrescriptionChanges || (dayRationale && dayRationale.source !== 'unavailable')) ? (
                   <div className={`mb-2 px-2 py-1.5 bg-[#1A1A1A]/40 rounded-md border-l-2 ${
-                    sessionSurfaceSignals.hasPrescriptionChanges 
+                    cardSurface?.protectionSignals.length 
                       ? 'border-[#E63946]/40' 
-                      : 'border-[#E63946]/20'
+                      : hasAuthoritativeSurface
+                        ? 'border-[#E63946]/30'
+                        : 'border-[#E63946]/20'
                   }`}>
                     <div className="flex items-start gap-2">
                       <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 mt-0.5 ${
-                        sessionSurfaceSignals.hasPrescriptionChanges 
+                        cardSurface?.protectionSignals.length 
                           ? 'bg-[#E63946]/15' 
                           : 'bg-[#E63946]/10'
                       }`}>
                         <span className={`text-[8px] font-bold ${
-                          sessionSurfaceSignals.hasPrescriptionChanges 
+                          cardSurface?.protectionSignals.length 
                             ? 'text-[#E63946]/90' 
                             : 'text-[#E63946]/70'
                         }`}>{session.dayNumber}</span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        {/* Session intent line - from surface signals or day rationale */}
-                        {sessionSurfaceSignals.intentLine ? (
+                        {/* A. Session headline - authoritative identity line */}
+                        {cardSurface?.sessionHeadline && (
                           <p className="text-[11px] text-[#9A9A9A] font-medium leading-snug">
-                            {sessionSurfaceSignals.intentLine}
+                            {cardSurface.sessionHeadline}
                           </p>
-                        ) : dayRationale?.weeklyRole && (
+                        )}
+                        
+                        {/* B. Truth chips row - primary intent + protection + method signals */}
+                        {hasAnyChips && (
+                          <div className="flex flex-wrap gap-x-1.5 gap-y-1 mt-1">
+                            {/* Primary intent chips */}
+                            {cardSurface.primaryIntentChips.map((chip, i) => (
+                              <span 
+                                key={`intent-${i}`} 
+                                className="text-[9px] px-1.5 py-0.5 rounded bg-[#E63946]/8 text-[#C8C8C8] font-medium"
+                              >
+                                {chip}
+                              </span>
+                            ))}
+                            {/* Protection signals */}
+                            {cardSurface.protectionSignals.map((chip, i) => (
+                              <span 
+                                key={`protect-${i}`} 
+                                className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400/80 font-medium"
+                              >
+                                {chip}
+                              </span>
+                            ))}
+                            {/* Method signals */}
+                            {cardSurface.methodSignals.map((chip, i) => (
+                              <span 
+                                key={`method-${i}`} 
+                                className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400/70 font-medium"
+                              >
+                                {chip}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {/* C. Evidence label */}
+                        {cardSurface?.evidenceLabel && (
+                          <p className="text-[10px] text-[#6A6A6A] mt-1 leading-relaxed">
+                            {cardSurface.evidenceLabel}
+                          </p>
+                        )}
+                        
+                        {/* D. Fallback to day rationale if no authoritative surface */}
+                        {!cardSurface?.sessionHeadline && dayRationale?.weeklyRole && (
                           <p className="text-[11px] text-[#9A9A9A] font-medium leading-snug">
                             {dayRationale.weeklyRole}
                           </p>
                         )}
-                        
-                        {/* Micro-signals for prescription changes */}
-                        {sessionSurfaceSignals.microSignals.length > 0 && (
+                        {!hasAnyChips && sessionSurfaceSignals.microSignals.length > 0 && (
                           <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
                             {sessionSurfaceSignals.microSignals.map((signal, i) => (
                               <span key={i} className="text-[9px] text-[#E63946]/70 font-medium">
@@ -1448,9 +1521,7 @@ export function AdaptiveProgramDisplay({
                             ))}
                           </div>
                         )}
-                        
-                        {/* Day rationale if no prescription changes dominating */}
-                        {!sessionSurfaceSignals.hasPrescriptionChanges && dayRationale?.rationale && (
+                        {!cardSurface?.evidenceLabel && !sessionSurfaceSignals.hasPrescriptionChanges && dayRationale?.rationale && (
                           <p className="text-[10px] text-[#6A6A6A] mt-0.5 leading-relaxed">
                             {dayRationale.rationale}
                           </p>

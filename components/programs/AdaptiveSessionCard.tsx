@@ -21,7 +21,7 @@ import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
 import { buildExerciseCardContract, buildExerciseRowSurface, getBestRowSublabel, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
-import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, buildSessionMainPreviewSurface, type SessionAiEvidenceSurface, type FullSessionRoutineSurface, type SessionMainPreviewSurface } from '@/lib/program/program-ai-evidence-bridge'
+import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, buildSessionMainPreviewSurface, buildFullVisibleRoutineExercises, type SessionAiEvidenceSurface, type FullSessionRoutineSurface, type SessionMainPreviewSurface, type FullRoutineExercise } from '@/lib/program/program-ai-evidence-bridge'
 import { getExerciseRowVisibility, shouldShowRowIntelligence, deduplicateRowDisplay, DEFAULT_DENSITY_MODE } from '@/lib/program/program-display-priority'
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
@@ -534,6 +534,17 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const mainPreview: SessionMainPreviewSurface = buildSessionMainPreviewSurface(fullRoutineSurface)
   
   // ==========================================================================
+  // [FULL-VISIBLE-ROUTINE-EXERCISES] Build card body exercises from FULL routine
+  // This replaces narrowed displayExercises as the live card body owner
+  // Includes ALL non-warmup/non-cooldown exercises (main + secondary + accessory + core + mobility + finisher)
+  // ==========================================================================
+  const fullVisibleExercises: FullRoutineExercise[] = buildFullVisibleRoutineExercises(
+    fullRoutineSurface,
+    safeExercises,
+    selectedVariantData?.selection || null
+  )
+  
+  // ==========================================================================
   // [TASK 5] VARIANT TRUTH AUDIT
   // Log whether 45 and 30 variants are actually different or collapsing together
   // ==========================================================================
@@ -668,7 +679,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 <Clock className="w-3 h-3" />
                 {activeSessionView.estimatedMinutes} min
               </span>
-              <span>{activeSessionView.exerciseCount} exercises</span>
+              <span>{fullVisibleExercises.length} exercises</span>
               {activeSessionView.isVariantSelected && (
                 <span className="text-[#E63946]/70">({activeSessionView.variantLabel})</span>
               )}
@@ -818,10 +829,10 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     )}
   </div>
 
-{/* Main Exercises - [PHASE 7B] With styled group support */}
+{/* Main Exercises - [FULL-VISIBLE-ROUTINE] Uses full routine truth, not narrowed displayExercises */}
   <MainExercisesRenderer
     session={session}
-    displayExercises={displayExercises}
+    displayExercises={fullVisibleExercises}
     sessionId={sessionId}
     skippedExercises={skippedExercises}
     adjustedExercises={adjustedExercises}
@@ -907,7 +918,8 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
 
 interface MainExercisesRendererProps {
   session: AdaptiveSession
-  displayExercises: AdaptiveExercise[]
+  // [FULL-VISIBLE-ROUTINE] Now accepts full routine exercises (all non-warmup/cooldown)
+  displayExercises: (AdaptiveExercise | FullRoutineExercise)[]
   sessionId: string
   skippedExercises: Set<string>
   adjustedExercises: Map<string, string>

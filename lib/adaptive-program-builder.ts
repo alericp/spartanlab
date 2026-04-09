@@ -4755,6 +4755,12 @@ async function generateAdaptiveProgramImpl(
   genContext: GenerationContext,
   serverOptions?: ServerGenerationOptions  // [PHASE 16K] FIX: Pass server options explicitly
 ): Promise<AdaptiveProgram> {
+  // [PHASE 15E RUNTIME VERSION MARKER] Confirms fixed code is deployed
+  console.log('[phase15e-impl-version-marker]', {
+    version: 'SESSIONINDEX_FIX_2026_04_09',
+    timestamp: new Date().toISOString(),
+    confirms: 'all_pre_loop_sessionIndex_refs_use_literals',
+  })
   // [PHASE 16K] Impl function entry - serverOptions now in scope
   console.log('[phase16k-impl-canonical-receipt-audit]', {
     hasServerOptions: !!serverOptions,
@@ -7953,6 +7959,14 @@ async function generateAdaptiveProgramImpl(
   // ==========================================================================
   // [PHASE 15E FIX] Pre-loop context - no session-specific values available yet
   // Use placeholder values for the helper that will be refined per-session later
+  // [PHASE 15E RUNTIME MARKER] Proves sessionIndex fix is deployed
+  console.log('[phase15e-sessionIndex-fix-runtime-marker]', {
+    marker: 'SESSIONINDEX_FIX_DEPLOYED_2026_04_09',
+    stage: stageTracker.current,
+    aboutToCallHelper: 'buildPhase15EPostAuditSafeContext',
+    sessionIndexWillBe: 0,
+    dayFocusWillBe: 'mixed',
+  })
   const phase15ePostAudit = buildPhase15EPostAuditSafeContext({
     sessionIndex: 0, // Pre-loop placeholder - actual session index set per-session
     dayFocus: 'mixed', // Pre-loop placeholder - actual focus set per-session

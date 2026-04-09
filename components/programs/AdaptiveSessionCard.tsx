@@ -21,7 +21,7 @@ import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
 import { buildExerciseCardContract, buildExerciseRowSurface, getBestRowSublabel, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
-import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, buildSessionMainPreviewSurface, buildSessionPrimaryPrescriptionSurface, type SessionAiEvidenceSurface, type FullSessionRoutineSurface, type SessionMainPreviewSurface, type SessionPrimaryPrescriptionSurface } from '@/lib/program/program-ai-evidence-bridge'
+import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, buildSessionMainPreviewSurface, buildSessionPrimaryPrescriptionSurface, buildSessionSecondaryExerciseSectionsSurface, type SessionAiEvidenceSurface, type FullSessionRoutineSurface, type SessionMainPreviewSurface, type SessionPrimaryPrescriptionSurface, type SessionSecondaryExerciseSectionsSurface } from '@/lib/program/program-ai-evidence-bridge'
 import { getExerciseRowVisibility, shouldShowRowIntelligence, deduplicateRowDisplay, DEFAULT_DENSITY_MODE } from '@/lib/program/program-display-priority'
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
@@ -545,6 +545,15 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   )
   
   // ==========================================================================
+  // [SESSION-SECONDARY-SECTIONS] Build remaining visible non-warmup/cooldown exercises
+  // These appear BELOW the primary list - support/accessory/core/mobility/finisher
+  // ==========================================================================
+  const secondarySections: SessionSecondaryExerciseSectionsSurface = buildSessionSecondaryExerciseSectionsSurface(
+    fullRoutineSurface,
+    primaryPrescription
+  )
+  
+  // ==========================================================================
   // [TASK 5] VARIANT TRUTH AUDIT
   // Log whether 45 and 30 variants are actually different or collapsing together
   // ==========================================================================
@@ -791,20 +800,50 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                     )}
                   </div>
                   
-                  {/* Secondary summary: warmup/cooldown/support (demoted from main list) */}
+                  {/* Secondary summary: warmup/cooldown (demoted from main list) */}
                   <div className="px-3 py-2 border-t border-[#2A2A2A] flex items-center justify-between text-[10px] text-[#6A6A6A]">
                     <span>
                       {mainPreview.hasWarmup && `${mainPreview.warmupCount} warmup`}
                       {mainPreview.hasWarmup && mainPreview.hasCooldown && ' · '}
                       {mainPreview.hasCooldown && `${mainPreview.cooldownCount} cooldown`}
-                      {primaryPrescription.supportsAvailable && (mainPreview.hasWarmup || mainPreview.hasCooldown) && ' · '}
-                      {primaryPrescription.supportsAvailable && 'Support work'}
                     </span>
                     {mainPreview.hasFinisher && (
                       <span className="text-[#E63946]/60">+ Finisher</span>
                     )}
                   </div>
                 </div>
+                
+                {/* =============================================================
+                    [SESSION-SECONDARY-SECTIONS] Remaining workout exercises
+                    Support/accessory/core/mobility - visually separated rows
+                    ============================================================= */}
+                {secondarySections.hasSecondaryExercises && (
+                  <div className="space-y-2">
+                    {secondarySections.sections.map((section) => (
+                      <div key={section.family} className="bg-[#1A1A1A] rounded-lg border border-[#2A2A2A] overflow-hidden">
+                        {/* Section header */}
+                        <div className="px-3 py-1.5 border-b border-[#2A2A2A]">
+                          <span className="text-[10px] font-medium text-[#6A6A6A] uppercase tracking-wide">
+                            {section.label}
+                          </span>
+                        </div>
+                        {/* Section exercises - visually separated */}
+                        <div className="divide-y divide-[#2A2A2A]">
+                          {section.items.map((item) => (
+                            <div key={item.id} className="px-3 py-1.5 flex items-center justify-between gap-2">
+                              <span className="text-sm text-[#A5A5A5] truncate flex-1">
+                                {item.displayName}
+                              </span>
+                              <span className="text-xs text-[#7A7A7A] font-mono shrink-0">
+                                {item.prescriptionLine}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 
                 {/* Start Button - Primary Action */}
                 <Button

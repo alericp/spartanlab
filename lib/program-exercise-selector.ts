@@ -1647,6 +1647,71 @@ function selectMainExercises(
   })
   
   // ==========================================================================
+  // [PHASE15E-MICRO-CORRIDOR-AUDIT] First failure tracker for push exercise selection
+  // This captures the FIRST failing checkpoint without spamming logs
+  // ==========================================================================
+  const isPushSession = day?.focus?.includes('push')
+  const microCorridorAudit = {
+    sessionFocus: day?.focus || 'unknown',
+    isPushSession,
+    primaryGoal,
+    checkpointsReached: [] as string[],
+    firstFailedCheckpoint: null as string | null,
+    firstFailedHelper: null as string | null,
+    firstErrorMessage: null as string | null,
+    firstErrorName: null as string | null,
+    poolsAtFailure: null as Record<string, number> | null,
+    inputsAtFailure: null as Record<string, any> | null,
+  }
+  
+  // Helper to mark checkpoint success
+  const markCheckpoint = (checkpoint: string) => {
+    if (!microCorridorAudit.firstFailedCheckpoint) {
+      microCorridorAudit.checkpointsReached.push(checkpoint)
+    }
+  }
+  
+  // Helper to mark first failure (only captures first)
+  const markFirstFailure = (
+    checkpoint: string,
+    helper: string,
+    error: Error | string,
+    pools?: Record<string, number>,
+    inputs?: Record<string, any>
+  ) => {
+    if (microCorridorAudit.firstFailedCheckpoint) return // Already captured
+    microCorridorAudit.firstFailedCheckpoint = checkpoint
+    microCorridorAudit.firstFailedHelper = helper
+    microCorridorAudit.firstErrorMessage = typeof error === 'string' ? error : error.message
+    microCorridorAudit.firstErrorName = typeof error === 'string' ? 'StringError' : error.name
+    microCorridorAudit.poolsAtFailure = pools || null
+    microCorridorAudit.inputsAtFailure = inputs || null
+  }
+  
+  // Log entry checkpoint for push sessions only (to reduce noise)
+  if (isPushSession) {
+    console.log('[PHASE15E-MICRO-CORRIDOR-AUDIT] Push session entry:', {
+      marker: 'PUSH_SESSION_ENTRY',
+      dayFocus: day?.focus,
+      dayNumber: day?.dayNumber,
+      primaryGoal,
+      experienceLevel,
+      maxExercises,
+      poolCounts: {
+        goalExercises: goalExercises?.length || 0,
+        availableSkills: availableSkills?.length || 0,
+        availableStrength: availableStrength?.length || 0,
+        availableAccessory: availableAccessory?.length || 0,
+        availableCore: availableCore?.length || 0,
+      },
+      hasSkillsForSession: !!skillsForSession && skillsForSession.length > 0,
+      hasEquipment: !!equipment && equipment.length > 0,
+      hasArchitectureContract: !!sessionArchitectureContract,
+    })
+    markCheckpoint('push_session_entry')
+  }
+  
+  // ==========================================================================
   // [PHASE-MATERIALITY] TASK 3: LOG CURRENT WORKING PROGRESSIONS VS HISTORICAL
   // ==========================================================================
   if (currentWorkingProgressions) {
@@ -3284,6 +3349,16 @@ function applyMaterialityScoreAdjustments(
   // [selection-compression-fix] ISSUE A/B: Now uses skillsForSession for ranking
   // TASK 1-D: If mustDowngradeToSupport, convert to support session path
   if ((day.focus === 'push_skill' || day.focus === 'pull_skill' || day.focus === 'skill_density') && !mustDowngradeToSupport) {
+    // [PHASE15E-MICRO-CORRIDOR-AUDIT] Push skill day checkpoint
+    if (isPushSession) {
+      markCheckpoint('push_skill_day_entry')
+      console.log('[PHASE15E-MICRO-CORRIDOR-AUDIT] Push skill day entry:', {
+        marker: 'PUSH_SKILL_DAY_ENTRY',
+        dayFocus: day.focus,
+        hasSkillsForSession: !!(skillsForSession && skillsForSession.length > 0),
+        skillsCount: skillsForSession?.length || 0,
+      })
+    }
     
     // [selection-compression-fix] ISSUE B: Find exercises for ALL skills in session allocation
     const sessionSkillsToExpress = skillsForSession && skillsForSession.length > 0
@@ -3508,6 +3583,16 @@ function applyMaterialityScoreAdjustments(
   // [exercise-trace] TASK 2/3: Thread weighted decision trace
   // [selection-compression-fix] ISSUE D/E: Improved weighted movement win conditions
   if (day.focus === 'push_strength' || day.focus === 'pull_strength') {
+    // [PHASE15E-MICRO-CORRIDOR-AUDIT] Push strength day checkpoint
+    if (day.focus === 'push_strength') {
+      markCheckpoint('push_strength_day_entry')
+      console.log('[PHASE15E-MICRO-CORRIDOR-AUDIT] Push strength day entry:', {
+        marker: 'PUSH_STRENGTH_DAY_ENTRY',
+        dayFocus: day.focus,
+        hasWeightedEquipment,
+        hasWeightedBenchmarks: !!(weightedBenchmarks && weightedBenchmarks.weightedDip),
+      })
+    }
     const isPush = day.focus === 'push_strength'
     const isHeavyDay = day.targetIntensity === 'high'
     
@@ -5068,6 +5153,50 @@ function applyMaterialityScoreAdjustments(
     materialityVerdict: materializationVerdict,
     materialityIssues: issues,
   })
+  
+  // ==========================================================================
+  // [PHASE15E-MICRO-CORRIDOR-AUDIT] Final push session summary
+  // This is the first-failure-only summary for diagnostics
+  // ==========================================================================
+  if (isPushSession) {
+    markCheckpoint('push_session_finalize')
+    
+    // Mark failure if zero exercises were produced
+    if (finalExercises.length === 0) {
+      markFirstFailure(
+        'push_session_finalize',
+        'selectMainExercises',
+        'Zero exercises produced for push session',
+        {
+          goalExercises: goalExercises?.length || 0,
+          availableSkills: availableSkills?.length || 0,
+          availableStrength: availableStrength?.length || 0,
+        },
+        {
+          dayFocus: day?.focus,
+          primaryGoal,
+          experienceLevel,
+        }
+      )
+    }
+    
+    console.log('[PHASE15E-MICRO-CORRIDOR-AUDIT] Push session summary:', {
+      marker: 'PUSH_SESSION_FINALIZE',
+      dayFocus: day?.focus,
+      primaryGoal,
+      exerciseCount: finalExercises.length,
+      checkpointsReached: microCorridorAudit.checkpointsReached,
+      firstFailedCheckpoint: microCorridorAudit.firstFailedCheckpoint,
+      firstFailedHelper: microCorridorAudit.firstFailedHelper,
+      firstErrorMessage: microCorridorAudit.firstErrorMessage,
+      poolsAtFailure: microCorridorAudit.poolsAtFailure,
+      verdict: microCorridorAudit.firstFailedCheckpoint 
+        ? 'PUSH_EXERCISE_SELECTION_FAILURE_IDENTIFIED'
+        : finalExercises.length === 0
+          ? 'PUSH_EXERCISE_SELECTION_PRODUCED_ZERO'
+          : 'PUSH_EXERCISE_SELECTION_SUCCESS',
+    })
+  }
   
   return finalExercises
 }

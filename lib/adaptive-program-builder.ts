@@ -19287,6 +19287,25 @@ function generateAdaptiveSession(
   const canonicalMainEstimatedTime = canonicalFinalMain.length * 5 // ~5 min per exercise estimate
   const canonicalTotalTime = canonicalMainEstimatedTime + 10 // Add warmup/cooldown buffer
   
+  // ==========================================================================
+  // [v0] UPSTREAM SESSION TRUTH AUDIT - Prove what families exist before return
+  // ==========================================================================
+  const categoryBreakdown = canonicalFinalMain.reduce((acc, e) => {
+    const cat = e.exercise?.category || 'unknown'
+    acc[cat] = (acc[cat] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+  
+  console.log('[v0] UPSTREAM-SESSION-TRUTH-AUDIT Day', day.dayNumber, {
+    dayFocus: day.focus,
+    canonicalFinalMainCount: canonicalFinalMain.length,
+    categoryBreakdown,
+    exerciseNames: canonicalFinalMain.map(e => `${e.exercise?.name}[${e.exercise?.category || '?'}]`).slice(0, 12),
+    warmupCount: safeWarmup.length,
+    cooldownCount: safeCooldown.length,
+    verdict: canonicalFinalMain.length > 0 ? 'EXERCISES_PRESENT_IN_CANONICAL_SOURCE' : 'NO_EXERCISES_IN_CANONICAL_SOURCE',
+  })
+  
   // Audit log to prove canonical ownership
   console.log('[CANONICAL-FINAL-MAIN-AUDIT]', {
     phase: 'final_assembly',

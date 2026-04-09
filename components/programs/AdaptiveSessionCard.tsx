@@ -21,6 +21,7 @@ import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
 import { buildExerciseCardContract, buildSessionDisplayContract, buildExerciseRowSurface, getBestRowSublabel, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
+import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, type SessionAiEvidenceSurface } from '@/lib/program/program-ai-evidence-bridge'
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { 
@@ -40,6 +41,10 @@ interface AdaptiveSessionCardProps {
   programId?: string
   // [EXERCISE-ROW-SURFACE] Primary goal for session-aware purpose lines
   primaryGoal?: string
+  // [AI-EVIDENCE-BRIDGE] Secondary goal for row alignment
+  secondaryGoal?: string | null
+  // [AI-EVIDENCE-BRIDGE] Pre-built session evidence for unified display
+  sessionEvidence?: SessionAiEvidenceSurface
   // [UI-CLEANUP-FIX] Control initial expanded state - defaults to false for cleaner list view
   // Today's workout should pass true, all others should pass false or omit
   defaultExpanded?: boolean
@@ -156,7 +161,7 @@ function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
   }
 }
 
-export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, defaultExpanded = false }: AdaptiveSessionCardProps) {
+export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false }: AdaptiveSessionCardProps) {
   // PHASE 3: Normalize session immediately to prevent crashes
   const session = normalizeSessionForDisplay(rawSession)
   
@@ -167,6 +172,34 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const sessionStyleMetadata = (rawSession as AdaptiveSession & { styleMetadata?: SessionStyleMetadata }).styleMetadata
   const builderHasStyledGroups = !!(sessionStyleMetadata?.styledGroups && sessionStyleMetadata.styledGroups.length > 0)
   const hasNonStraightGroups = sessionStyleMetadata?.styledGroups?.some(g => g.groupType !== 'straight') ?? false
+  
+  // ==========================================================================
+  // [AI-EVIDENCE-BRIDGE] Build unified session evidence surface
+  // Single source of truth for session-level AI reasoning display
+  // ==========================================================================
+  const sessionEvidence: SessionAiEvidenceSurface = providedEvidence || (() => {
+    const rawEvidence = buildSessionAiEvidenceSurface(
+      {
+        dayNumber: session.dayNumber,
+        name: session.name,
+        dayLabel: session.dayLabel,
+        focus: session.focus,
+        focusLabel: session.focusLabel,
+        isPrimary: session.isPrimary,
+        rationale: session.rationale,
+        prescriptionPropagationAudit: (rawSession as any).prescriptionPropagationAudit,
+        compositionMetadata: (rawSession as any).compositionMetadata,
+        skillExpressionMetadata: (rawSession as any).skillExpressionMetadata,
+        styleMetadata: sessionStyleMetadata,
+      },
+      {
+        primaryGoal: primaryGoal || 'training',
+        secondaryGoal: secondaryGoal,
+        isFirstWeek: false,
+      }
+    )
+    return deduplicateSessionEvidence(rawEvidence)
+  })()
   
   console.log('[phase7b-style-output-contract-audit]', {
     sessionId: `day_${session.dayNumber}`,
@@ -749,6 +782,30 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                       </div>
                     )}
                     
+                    {/* [AI-EVIDENCE-BRIDGE] Session evidence signals - unified truth display */}
+                    {sessionEvidence.source === 'authoritative' && (
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {/* Protection signals from bridge */}
+                        {sessionEvidence.protectionLabels.slice(0, 2).map((label, i) => (
+                          <span key={`prot-${i}`} className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400/70">
+                            {label}
+                          </span>
+                        ))}
+                        {/* Secondary intent when present */}
+                        {sessionEvidence.secondaryIntentLabel && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400/70">
+                            {sessionEvidence.secondaryIntentLabel}
+                          </span>
+                        )}
+                        {/* Support strategy when present */}
+                        {sessionEvidence.supportStrategyLabel && !sessionEvidence.secondaryIntentLabel && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#7A7A7A]">
+                            {sessionEvidence.supportStrategyLabel}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    
                     {/* Start Button - Primary Action */}
                     <Button
                       onClick={handleStartWorkout}
@@ -878,6 +935,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     skippedExercises={skippedExercises}
     adjustedExercises={adjustedExercises}
     primaryGoal={primaryGoal}
+    sessionEvidence={sessionEvidence}
     onReplace={handleExerciseReplace}
     onSkip={handleExerciseSkip}
     onProgressionAdjust={handleProgressionAdjust}
@@ -963,6 +1021,8 @@ interface MainExercisesRendererProps {
   adjustedExercises: Map<string, string>
   // [EXERCISE-ROW-SURFACE] Primary goal for session-aware purpose lines
   primaryGoal?: string
+  // [AI-EVIDENCE-BRIDGE] Session evidence for row alignment
+  sessionEvidence?: SessionAiEvidenceSurface
   onReplace: (exerciseId: string, exerciseName: string) => void
   onSkip: (exerciseId: string, exerciseName: string) => void
   onProgressionAdjust: (exerciseId: string, newProgression: string, direction: 'up' | 'down') => void
@@ -975,6 +1035,7 @@ function MainExercisesRenderer({
   skippedExercises,
   adjustedExercises,
   primaryGoal,
+  sessionEvidence,
   onReplace,
   onSkip,
   onProgressionAdjust,
@@ -1105,6 +1166,7 @@ function MainExercisesRenderer({
                 isSkipped={skippedExercises.has(exercise.id)}
                 adjustedName={adjustedExercises.get(exercise.id)}
                 sessionContext={sessionContextForRows}
+                sessionEvidence={sessionEvidence}
                 onReplace={onReplace}
                 onSkip={onSkip}
                 onProgressionAdjust={onProgressionAdjust}
@@ -1219,6 +1281,7 @@ function MainExercisesRenderer({
               isSkipped={skippedExercises.has(block.exercise.id)}
               adjustedName={adjustedExercises.get(block.exercise.id)}
               sessionContext={sessionContextForRows}
+              sessionEvidence={sessionEvidence}
               onReplace={onReplace}
               onSkip={onSkip}
               onProgressionAdjust={onProgressionAdjust}
@@ -1328,6 +1391,7 @@ function MainExercisesRenderer({
                     isSkipped={skippedExercises.has(fullExercise.id)}
                     adjustedName={adjustedExercises.get(fullExercise.id)}
                     sessionContext={sessionContextForRows}
+                    sessionEvidence={sessionEvidence}
                     onReplace={onReplace}
                     onSkip={onSkip}
                     onProgressionAdjust={onProgressionAdjust}
@@ -1370,6 +1434,8 @@ interface ExerciseRowProps {
       hasDensityApplied?: boolean
     }
   }
+  // [AI-EVIDENCE-BRIDGE] Session evidence for row alignment
+  sessionEvidence?: SessionAiEvidenceSurface
   onReplace?: (exerciseId: string, exerciseName: string) => void
   onSkip?: (exerciseId: string, exerciseName: string) => void
   onProgressionAdjust?: (exerciseId: string, newProgression: string, direction: 'up' | 'down') => void
@@ -1384,6 +1450,7 @@ function ExerciseRow({
   isSkipped,
   adjustedName,
   sessionContext, // [EXERCISE-ROW-SURFACE] Session context for row surface
+  sessionEvidence, // [AI-EVIDENCE-BRIDGE] For row alignment
   onReplace,
   onSkip,
   onProgressionAdjust,
@@ -1429,6 +1496,11 @@ function ExerciseRow({
     },
     sessionContext
   ) : null
+  
+  // [AI-EVIDENCE-BRIDGE] Align row surface with session evidence for consistency
+  const alignedRowSurface = rowSurface && sessionEvidence 
+    ? alignRowWithSessionEvidence(rowSurface, sessionEvidence)
+    : rowSurface
   
   const hasRPE = !isWarmupCooldown && exerciseSupportsRPE(card.displayTitle)
   const exerciseId = card.displayTitle.toLowerCase().replace(/[\s-]+/g, '_')
@@ -1529,18 +1601,18 @@ function ExerciseRow({
       
       {/* [EXERCISE-ROW-SURFACE] ROW 2.5: Intent + Chips row - authoritative surface display */}
       {/* Show when we have any useful content: labels, chips, or non-fallback emphasis */}
-      {rowSurface && (getBestRowSublabel(rowSurface) || rowSurface.rowChips.length > 0 || rowSurface.emphasisKind !== 'fallback_minimal') && (() => {
-        const bestSublabel = getBestRowSublabel(rowSurface)
+      {alignedRowSurface && (getBestRowSublabel(alignedRowSurface) || alignedRowSurface.rowChips.length > 0 || alignedRowSurface.emphasisKind !== 'fallback_minimal') && (() => {
+        const bestSublabel = getBestRowSublabel(alignedRowSurface)
         return (
         <div className="flex items-center gap-1.5 mt-1 flex-wrap">
           {/* Best sublabel using centralized priority */}
           {bestSublabel && (
             <span className={`text-[10px] ${
-              rowSurface.emphasisKind === 'primary' 
+              alignedRowSurface.emphasisKind === 'primary' 
                 ? 'text-[#E63946]/80' 
-                : rowSurface.emphasisKind === 'secondary'
+                : alignedRowSurface.emphasisKind === 'secondary'
                   ? 'text-blue-400/70'
-                  : rowSurface.emphasisKind === 'protection'
+                  : alignedRowSurface.emphasisKind === 'protection'
                     ? 'text-amber-400/70'
                     : 'text-[#6A6A6A]'
             }`}>
@@ -1548,12 +1620,12 @@ function ExerciseRow({
             </span>
           )}
           {/* Row chips */}
-          {rowSurface.rowChips.length > 0 && (
+          {alignedRowSurface.rowChips.length > 0 && (
             <>
               {bestSublabel && (
                 <span className="text-[#3A3A3A]">·</span>
               )}
-              {rowSurface.rowChips.map((chip, i) => (
+              {alignedRowSurface.rowChips.map((chip, i) => (
                 <span 
                   key={`chip-${i}`}
                   className={`text-[9px] px-1.5 py-0.5 rounded ${
@@ -1574,7 +1646,7 @@ function ExerciseRow({
             </>
           )}
           {/* Fallback chip for support emphasis with no chips yet */}
-          {rowSurface.rowChips.length === 0 && rowSurface.emphasisKind === 'support' && !bestSublabel && (
+          {alignedRowSurface.rowChips.length === 0 && alignedRowSurface.emphasisKind === 'support' && !bestSublabel && (
             <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#7A7A7A]">
               Support
             </span>

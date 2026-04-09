@@ -1534,6 +1534,7 @@ export function AdaptiveProgramDisplay({
                   session={session}
                   programId={program.id}
                   primaryGoal={program.primaryGoal}
+                  secondaryGoal={program.secondaryGoal}
                   defaultExpanded={sessionIndex === 0}
                   onExerciseReplace={
                     onExerciseReplace 

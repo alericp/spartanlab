@@ -2199,6 +2199,20 @@ export interface ExerciseRowSurface {
 }
 
 /**
+ * Get the best sublabel from an ExerciseRowSurface in priority order.
+ * This centralizes the display priority logic so all render paths use the same order.
+ * Priority: intentLabel > supportReasonLabel > protectionLabel > methodLabel > progressionEvidenceLabel
+ */
+export function getBestRowSublabel(surface: ExerciseRowSurface): string | null {
+  return surface.intentLabel 
+    ?? surface.supportReasonLabel 
+    ?? surface.protectionLabel 
+    ?? surface.methodLabel 
+    ?? surface.progressionEvidenceLabel 
+    ?? null
+}
+
+/**
  * Build an authoritative exercise row surface from exercise data + session context.
  * This is the SINGLE owner of per-exercise-row display intelligence.
  */
@@ -2278,9 +2292,12 @@ export function buildExerciseRowSurface(
   } else if (exercise.isProtected || exercise.constraintApplied) {
     emphasisKind = 'protection'
     source = 'authoritative'
-  } else if (categoryLower === 'accessory' || categoryLower === 'core') {
+  } else if (categoryLower === 'accessory' || categoryLower === 'core' || categoryLower === 'mobility' || categoryLower === 'flexibility') {
     emphasisKind = 'support'
     source = 'authoritative'
+  } else if (categoryLower === 'warmup' || categoryLower === 'activation') {
+    emphasisKind = 'support'
+    // Keep source as fallback_minimal for warmup unless we have richer metadata
   }
   
   // ==========================================================================
@@ -2305,6 +2322,15 @@ export function buildExerciseRowSurface(
     source = 'authoritative'
   } else if (categoryLower === 'strength') {
     intentLabel = 'Strength building'
+    source = 'authoritative'
+  } else if (categoryLower === 'core') {
+    intentLabel = 'Core stability'
+    source = 'authoritative'
+  } else if (categoryLower === 'accessory') {
+    intentLabel = 'Support work'
+    source = 'authoritative'
+  } else if (categoryLower === 'mobility' || categoryLower === 'flexibility') {
+    intentLabel = 'Mobility prep'
     source = 'authoritative'
   }
   
@@ -2414,10 +2440,18 @@ export function buildExerciseRowSurface(
     rowChips.push('Strength')
   } else if (emphasisKind === 'protection') {
     rowChips.push('Protected')
-  } else if (emphasisKind === 'support' && categoryLower === 'accessory') {
-    rowChips.push('Accessory')
-  } else if (emphasisKind === 'support' && categoryLower === 'core') {
-    rowChips.push('Core')
+  } else if (emphasisKind === 'support') {
+    // Differentiate support chips by category
+    if (categoryLower === 'accessory') {
+      rowChips.push('Accessory')
+    } else if (categoryLower === 'core') {
+      rowChips.push('Core')
+    } else if (categoryLower === 'mobility' || categoryLower === 'flexibility') {
+      rowChips.push('Mobility')
+    } else {
+      // Fallback for generic support
+      rowChips.push('Support')
+    }
   }
   
   // Chip 2: Method or constraint chip

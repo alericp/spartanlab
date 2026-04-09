@@ -1102,6 +1102,81 @@ export function buildFullSessionRoutineSurface(
 }
 
 // =============================================================================
+// SESSION MAIN PREVIEW SURFACE - Display-priority reordering for compact cards
+// =============================================================================
+
+/** Priority order for display (lower = appears first in compact preview) */
+const FAMILY_DISPLAY_PRIORITY: Record<RoutineItemFamily, number> = {
+  primary: 1,
+  secondary: 2,
+  support: 3,
+  accessory: 4,
+  core: 5,
+  mobility: 6,
+  finisher: 7,
+  other: 8,
+  warmup: 9,
+  cooldown: 10,
+}
+
+export interface SessionMainPreviewSurface {
+  /** Reordered items for compact preview display (main work first) */
+  previewItems: RoutineItem[]
+  /** Count of main workout items (non-warmup/cooldown) */
+  mainExerciseCount: number
+  /** Hidden warmup count (not in preview) */
+  warmupCount: number
+  /** Hidden cooldown count (not in preview) */
+  cooldownCount: number
+  /** Flags */
+  hasWarmup: boolean
+  hasCooldown: boolean
+  hasFinisher: boolean
+  finisherName: string | null
+  /** Source tracking */
+  source: 'authoritative' | 'fallback_minimal'
+}
+
+/**
+ * Build DISPLAY-PRIORITY preview surface from full routine.
+ * This reorders items so main workout appears first in compact card preview.
+ * Warmup/cooldown are demoted to secondary summary, not lead rows.
+ * 
+ * @param fullRoutine - The authoritative full routine surface
+ */
+export function buildSessionMainPreviewSurface(
+  fullRoutine: FullSessionRoutineSurface
+): SessionMainPreviewSurface {
+  // Separate warmup/cooldown from main workout items
+  const warmupItems = fullRoutine.routineItems.filter(r => r.family === 'warmup')
+  const cooldownItems = fullRoutine.routineItems.filter(r => r.family === 'cooldown')
+  const mainItems = fullRoutine.routineItems.filter(r => r.family !== 'warmup' && r.family !== 'cooldown')
+  
+  // Sort main items by display priority
+  const sortedMainItems = [...mainItems].sort((a, b) => {
+    return FAMILY_DISPLAY_PRIORITY[a.family] - FAMILY_DISPLAY_PRIORITY[b.family]
+  })
+  
+  // Preview items = main items first (warmup/cooldown excluded from numbered list)
+  // If no main items exist, fall back to showing warmup/cooldown
+  const previewItems = sortedMainItems.length > 0 
+    ? sortedMainItems 
+    : [...warmupItems, ...cooldownItems]
+  
+  return {
+    previewItems,
+    mainExerciseCount: mainItems.length,
+    warmupCount: warmupItems.length,
+    cooldownCount: cooldownItems.length,
+    hasWarmup: warmupItems.length > 0,
+    hasCooldown: cooldownItems.length > 0,
+    hasFinisher: fullRoutine.hasFinisher,
+    finisherName: fullRoutine.finisherName,
+    source: fullRoutine.source,
+  }
+}
+
+// =============================================================================
 // PROGRAM-LEVEL EVIDENCE MODEL
 // =============================================================================
 

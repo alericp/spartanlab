@@ -7404,7 +7404,6 @@ export default function ProgramPage() {
           modifyBuilderEntryRef.current = null
           setModifyBuilderEntry(null)
           setShowBuilder(false)
-          setIsRegenerating(false)
           
           // Exit early - do not continue to success promotion
           return

@@ -3884,8 +3884,9 @@ function applyMaterialityScoreAdjustments(
   
   // 4. TRANSITION DAYS (for muscle-up goals)
   if (day.focus === 'transition_work') {
+    // [PHASE15E-POST-PUSH-HARDENING] Guard transferTo against undefined
     const transitionExercises = [...availableSkills, ...availableStrength].filter(
-      e => e.movementPattern === 'transition' || e.transferTo.includes('muscle_up')
+      e => e.movementPattern === 'transition' || (e.transferTo || []).includes('muscle_up')
     )
     
     transitionExercises.slice(0, 2).forEach(e => {
@@ -3915,17 +3916,19 @@ function applyMaterialityScoreAdjustments(
     if (rangeTrainingMode === 'flexibility' || rangeTrainingMode === 'hybrid') {
       // FLEXIBILITY MODE: 15s holds, 3 rounds, low fatigue
       const availableFlexibility = FLEXIBILITY_EXERCISES.filter(e => hasRequiredEquipment(e, equipment))
+      // [PHASE15E-POST-PUSH-HARDENING] Guard transferTo against undefined
       const goalFlexibility = availableFlexibility.filter(e => 
-        e.transferTo.includes(primaryGoal) || e.progressionLadder === primaryGoal
+        (e.transferTo || []).includes(primaryGoal) || e.progressionLadder === primaryGoal
       )
       
       const flexPool = primaryGoal === 'flexibility' 
         ? availableFlexibility 
         : goalFlexibility.length > 0 ? goalFlexibility : availableFlexibility
       
+      // [PHASE15E-POST-PUSH-HARDENING] Guard transferTo against undefined in sort
       const sortedFlexExercises = flexPool.sort((a, b) => {
-        const aTransfer = a.transferTo.includes(primaryGoal) ? 1 : 0
-        const bTransfer = b.transferTo.includes(primaryGoal) ? 1 : 0
+        const aTransfer = (a.transferTo || []).includes(primaryGoal) ? 1 : 0
+        const bTransfer = (b.transferTo || []).includes(primaryGoal) ? 1 : 0
         if (aTransfer !== bTransfer) return bTransfer - aTransfer
         const aLadder = a.progressionLadder === primaryGoal ? 1 : 0
         const bLadder = b.progressionLadder === primaryGoal ? 1 : 0
@@ -3979,9 +3982,10 @@ function applyMaterialityScoreAdjustments(
     }
     
     // Add light core/compression if room
+    // [PHASE15E-POST-PUSH-HARDENING] Guard transferTo against undefined
     if (selected.length < maxExercises) {
       const compressionCore = availableCore.find(e => 
-        e.movementPattern === 'compression' || e.transferTo.includes('l_sit')
+        e.movementPattern === 'compression' || (e.transferTo || []).includes('l_sit')
       )
       if (compressionCore && !usedIds.has(compressionCore.id)) {
         addExercise(compressionCore, 'Active compression support', 3, '15s')
@@ -4048,10 +4052,11 @@ function applyMaterialityScoreAdjustments(
         }
         
         // Fallback to transfer-based lookup
+        // [PHASE15E-POST-PUSH-HARDENING] Guard transferTo against undefined
         if (!skillExercise) {
           skillExercise = [...availableSkills, ...availableStrength].find(e => 
             !usedIds.has(e.id) && 
-            e.transferTo.includes(allocation.skill) &&
+            (e.transferTo || []).includes(allocation.skill) &&
             canAddMore(e)
           )
           if (skillExercise) {
@@ -4085,10 +4090,11 @@ function applyMaterialityScoreAdjustments(
         }
         
         // Fallback to transfer-based lookup for accessories
+        // [PHASE15E-POST-PUSH-HARDENING] Guard transferTo against undefined
         if (!skillExercise) {
           skillExercise = availableAccessory.find(e => 
             !usedIds.has(e.id) && 
-            e.transferTo.includes(allocation.skill) &&
+            (e.transferTo || []).includes(allocation.skill) &&
             canAddMore(e)
           )
           if (skillExercise) {
@@ -4681,10 +4687,11 @@ function applyMaterialityScoreAdjustments(
   // Add accessory work (after support skill injection)
   if (selected.length < maxExercises - 1) {
     // Add movement-appropriate accessory
+    // [PHASE15E-POST-PUSH-HARDENING] Guard movementPattern against undefined
     const accessoryPool = day.movementEmphasis === 'push'
-      ? availableAccessory.filter(e => e.movementPattern.includes('push'))
+      ? availableAccessory.filter(e => e.movementPattern?.includes('push'))
       : day.movementEmphasis === 'pull'
-        ? availableAccessory.filter(e => e.movementPattern.includes('pull'))
+        ? availableAccessory.filter(e => e.movementPattern?.includes('pull'))
         : availableAccessory
     
     const unusedAccessory = accessoryPool.filter(e => !usedIds.has(e.id))
@@ -4740,8 +4747,9 @@ function applyMaterialityScoreAdjustments(
       coreReason = 'Anti-extension strength for body position control'
     } else {
       // Default: find core that transfers to goal
+      // [PHASE15E-POST-PUSH-HARDENING] Guard transferTo against undefined
       corePick = availableCore.find(e => 
-        !usedIds.has(e.id) && e.transferTo.includes(primaryGoal)
+        !usedIds.has(e.id) && (e.transferTo || []).includes(primaryGoal)
       ) || availableCore.find(e => !usedIds.has(e.id))
       coreReason = `Core work supporting ${primaryGoal}`
     }

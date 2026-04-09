@@ -488,6 +488,118 @@ export interface ProgramAiEvidenceModel {
   source: 'authoritative' | 'fallback_minimal'
 }
 
+// =============================================================================
+// CATEGORY DISPLAY CONTRACT - Centralized category labeling
+// =============================================================================
+
+export interface CategoryDisplayContract {
+  label: string
+  color: string
+  description: string
+  source: 'authoritative' | 'fallback_minimal'
+}
+
+/**
+ * Get centralized category display contract.
+ * This is the SINGLE owner of category labeling - components must NOT hardcode these.
+ * 
+ * @param category - The exercise category
+ * @param sessionEvidence - Optional session evidence for context-aware descriptions
+ */
+export function getCategoryDisplayContract(
+  category: string | undefined,
+  sessionEvidence?: SessionAiEvidenceSurface
+): CategoryDisplayContract {
+  const cat = (category || '').toLowerCase()
+  
+  // Context-aware descriptions when session evidence is available
+  if (sessionEvidence?.source === 'authoritative') {
+    if (cat === 'skill') {
+      return {
+        label: 'Skill Work',
+        color: 'text-[#E63946]',
+        description: sessionEvidence.primaryIntentLabel || 'Movement mastery',
+        source: 'authoritative',
+      }
+    }
+    if (cat === 'strength') {
+      return {
+        label: 'Strength',
+        color: 'text-blue-400',
+        description: sessionEvidence.supportStrategyLabel || 'Building power',
+        source: 'authoritative',
+      }
+    }
+    if (cat === 'accessory') {
+      return {
+        label: 'Accessory',
+        color: 'text-[#A5A5A5]',
+        description: 'Support & balance',
+        source: 'authoritative',
+      }
+    }
+  }
+  
+  // Fallback minimal descriptions
+  if (cat === 'skill') {
+    return { label: 'Skill Work', color: 'text-[#E63946]', description: 'Movement mastery', source: 'fallback_minimal' }
+  }
+  if (cat === 'strength') {
+    return { label: 'Strength', color: 'text-blue-400', description: 'Building power', source: 'fallback_minimal' }
+  }
+  if (cat === 'accessory') {
+    return { label: 'Accessory', color: 'text-[#A5A5A5]', description: 'Support & balance', source: 'fallback_minimal' }
+  }
+  if (cat === 'core') {
+    return { label: 'Core', color: 'text-amber-400', description: 'Trunk stability', source: 'fallback_minimal' }
+  }
+  if (cat === 'mobility') {
+    return { label: 'Mobility', color: 'text-green-400', description: 'Range support', source: 'fallback_minimal' }
+  }
+  
+  return { label: 'Additional', color: 'text-[#6A6A6A]', description: '', source: 'fallback_minimal' }
+}
+
+// =============================================================================
+// STRICT SOURCE ENFORCEMENT
+// =============================================================================
+
+/**
+ * Enforce that authoritative evidence always wins over fallback.
+ * Use this to prevent fallback text from masquerading as authoritative.
+ */
+export function enforceSourcePriority<T extends { source: 'authoritative' | 'fallback_minimal' }>(
+  authoritative: T | null,
+  fallback: T
+): T {
+  if (authoritative && authoritative.source === 'authoritative') {
+    return authoritative
+  }
+  return fallback
+}
+
+/**
+ * Select the best display value with source tracking.
+ * Priority: authoritative value > fallback value > null
+ */
+export function selectWithSourceTracking(
+  authoritativeValue: string | null,
+  fallbackValue: string | null,
+  hasAuthoritativeSource: boolean
+): { value: string | null; source: 'authoritative' | 'fallback_minimal' } {
+  if (authoritativeValue && hasAuthoritativeSource) {
+    return { value: authoritativeValue, source: 'authoritative' }
+  }
+  if (fallbackValue) {
+    return { value: fallbackValue, source: 'fallback_minimal' }
+  }
+  return { value: null, source: 'fallback_minimal' }
+}
+
+// =============================================================================
+// PROGRAM-LEVEL EVIDENCE MODEL
+// =============================================================================
+
 /**
  * Build complete program-level evidence model for all sessions.
  * This provides the full bridge for consistent display.

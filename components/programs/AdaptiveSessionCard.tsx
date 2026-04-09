@@ -21,7 +21,8 @@ import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
 import { buildExerciseCardContract, buildSessionDisplayContract, buildExerciseRowSurface, getBestRowSublabel, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
-import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, type SessionAiEvidenceSurface } from '@/lib/program/program-ai-evidence-bridge'
+import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, type SessionAiEvidenceSurface } from '@/lib/program/program-ai-evidence-bridge'
+import { getSessionCardVisibility, getExerciseRowVisibility, shouldShowRowIntelligence, deduplicateRowDisplay, DEFAULT_DENSITY_MODE } from '@/lib/program/program-display-priority'
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { 
@@ -743,66 +744,32 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 }
                 const colors = typeColors[sessionContract.sessionType] || typeColors.mixed
                 
+                // [DISPLAY-PRIORITY] Get visibility policy for prescription-first display
+                const cardVisibility = getSessionCardVisibility(DEFAULT_DENSITY_MODE)
+                
                 return (
                   <div className={`rounded-lg ${colors.bg} border border-[#3A3A3A] p-3`}>
-                    {/* Top Row: Session Type + Work Distribution */}
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
+                    {/* Top Row: Session Type badge only - compact */}
+                    {cardVisibility.showSessionTypeBadge && (
+                      <div className="flex items-center justify-between mb-2">
                         <span className={`text-[10px] font-semibold uppercase tracking-wide ${colors.accent}`}>
                           {sessionContract.sessionType.replace(/_/g, ' ')}
                         </span>
-                        {sessionContract.trainingMethod && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#7A7A7A]">
-                            {sessionContract.trainingMethod}
-                          </span>
-                        )}
                       </div>
-                      <div className="flex items-center gap-1.5 text-[10px] text-[#6A6A6A]">
-                        <span>{sessionContract.primaryWorkLabel}</span>
-                        {sessionContract.supportWorkLabel && (
-                          <>
-                            <span className="text-[#3A3A3A]">����</span>
-                            <span>{sessionContract.supportWorkLabel}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
+                    )}
                     
-                    {/* Objective + Execution Priority - Single line */}
-                    <p className="text-sm text-[#C5C5C5] leading-snug mb-3">
-                      {sessionContract.primaryObjective}
-                      <span className="text-[#5A5A5A]"> — {sessionContract.executionPriority.toLowerCase()}</span>
-                    </p>
+                    {/* Objective only - no execution priority suffix for compactness */}
+                    {cardVisibility.showPrimaryObjective && (
+                      <p className="text-sm text-[#C5C5C5] leading-snug mb-3">
+                        {sessionContract.primaryObjective}
+                      </p>
+                    )}
                     
                     {/* Caution if present */}
                     {sessionContract.cautionNote && (
                       <div className="flex items-center gap-1.5 text-[10px] text-amber-400 mb-3">
                         <AlertCircle className="w-3 h-3" />
                         <span>{sessionContract.cautionNote}</span>
-                      </div>
-                    )}
-                    
-                    {/* [AI-EVIDENCE-BRIDGE] Session evidence signals - unified truth display */}
-                    {sessionEvidence.source === 'authoritative' && (
-                      <div className="flex flex-wrap gap-1.5 mb-3">
-                        {/* Protection signals from bridge */}
-                        {sessionEvidence.protectionLabels.slice(0, 2).map((label, i) => (
-                          <span key={`prot-${i}`} className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400/70">
-                            {label}
-                          </span>
-                        ))}
-                        {/* Secondary intent when present */}
-                        {sessionEvidence.secondaryIntentLabel && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400/70">
-                            {sessionEvidence.secondaryIntentLabel}
-                          </span>
-                        )}
-                        {/* Support strategy when present */}
-                        {sessionEvidence.supportStrategyLabel && !sessionEvidence.secondaryIntentLabel && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#7A7A7A]">
-                            {sessionEvidence.supportStrategyLabel}
-                          </span>
-                        )}
                       </div>
                     )}
                     
@@ -818,46 +785,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 )
               })()}
 
-  {/* Session Variety Info - Justified Repetition */}
-  {session.varietyInfo?.isIntentionalRepetition && session.varietyInfo.repetitionReason && (
-    <div className="p-3 bg-[#4F6D8A]/10 rounded-lg border border-[#4F6D8A]/20">
-      <div className="flex items-start gap-2">
-        <Repeat className="w-4 h-4 text-[#4F6D8A] mt-0.5 shrink-0" />
-        <div className="text-sm">
-          <p className="text-[#4F6D8A]/90 font-medium">Intentional Structure</p>
-          <p className="text-[#4F6D8A]/70 text-xs mt-1">{session.varietyInfo.repetitionReason}</p>
-        </div>
-      </div>
-    </div>
-  )}
-  
-          {/* Adaptation Notes - STEP A FIX: Pre-filter to avoid blank amber box */}
-          {(() => {
-            // Compute visible notes BEFORE rendering to avoid empty container
-            const visibleAdaptationNotes = (session.adaptationNotes || [])
-              .filter(note => 
-                !note.toLowerCase().includes('removed') && 
-                !note.toLowerCase().includes('compression') &&
-                !note.toLowerCase().includes('duplicate') &&
-                !note.toLowerCase().includes('internal')
-              )
-            
-            // Only render if there are actual visible notes
-            if (visibleAdaptationNotes.length === 0) return null
-            
-            return (
-              <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                  <div className="text-sm">
-                    {visibleAdaptationNotes.map((note, idx) => (
-                      <p key={idx} className="text-amber-500/80">{note}</p>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )
-          })()}
+  {/* [DISPLAY-PRIORITY] Variety info and adaptation notes suppressed - available in modal */}
 
           {/* [TASK 4] Time Variants - Improved toggle behavior
               - Full Session = null or 0 (explicitly reset to full)
@@ -915,6 +843,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       <div className="mt-2 space-y-2">
         {/* Structure explanation for warmup protocols */}
         <StructureKnowledgeBubble structureType="protocol_warmup" />
+        {/* [TRUTH-ENFORCEMENT] selectionReason is authoritative builder output - safe direct access */}
         {session.warmup[0]?.selectionReason && (
           <p className="text-xs text-[#6A6A6A] italic pl-2 border-l-2 border-[#4F6D8A]/30">
             {session.warmup[0].selectionReason}
@@ -977,6 +906,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             </button>
             {showCooldown && (
               <div className="mt-2 space-y-2">
+                {/* [TRUTH-ENFORCEMENT] selectionReason is authoritative builder output - safe direct access */}
                 {session.cooldown[0]?.selectionReason && (
                   <p className="text-xs text-[#6A6A6A] italic mb-2 pl-2 border-l-2 border-green-500/30">
                     {session.cooldown[0].selectionReason}
@@ -1136,23 +1066,26 @@ function MainExercisesRenderer({
     
     let globalIdx = 0
     
+    // [TRUTH-ENFORCEMENT] Use centralized category contract instead of hardcoded values
     const renderCategorySection = (
       exercises: typeof displayExercises, 
-      categoryLabel: string, 
-      categoryColor: string,
-      categoryDescription: string
+      category: string
     ) => {
       if (exercises.length === 0) return null
+      // Get centralized contract - components are renderers, not reasoners
+      const contract = getCategoryDisplayContract(category, sessionEvidence)
       return (
         <div className="space-y-2">
-          {/* Category header - subtle but clear */}
+          {/* Category header from centralized contract */}
           <div className="flex items-center gap-2 pt-1">
-            <span className={`text-[10px] uppercase tracking-wider font-semibold ${categoryColor}`}>
-              {categoryLabel}
+            <span className={`text-[10px] uppercase tracking-wider font-semibold ${contract.color}`}>
+              {contract.label}
             </span>
-            <span className="text-[10px] text-[#6A6A6A]">
-              {categoryDescription}
-            </span>
+            {contract.description && (
+              <span className="text-[10px] text-[#6A6A6A]">
+                {contract.description}
+              </span>
+            )}
             <div className="flex-1 h-px bg-[#2A2A2A]" />
           </div>
           {exercises.map((exercise) => {
@@ -1179,10 +1112,10 @@ function MainExercisesRenderer({
     
     return (
       <div className="space-y-4">
-        {renderCategorySection(skillExercises, 'Skill Work', 'text-[#E63946]', 'Movement mastery')}
-        {renderCategorySection(strengthExercises, 'Strength', 'text-blue-400', 'Building power')}
-        {renderCategorySection(accessoryExercises, 'Accessory', 'text-[#A5A5A5]', 'Support & balance')}
-        {renderCategorySection(otherExercises, 'Additional', 'text-[#6A6A6A]', '')}
+        {renderCategorySection(skillExercises, 'skill')}
+        {renderCategorySection(strengthExercises, 'strength')}
+        {renderCategorySection(accessoryExercises, 'accessory')}
+        {renderCategorySection(otherExercises, 'other')}
       </div>
     )
   }
@@ -1544,10 +1477,7 @@ function ExerciseRow({
     density_conditioning: 'text-orange-400',
   }
   
-  // Only show why line for non-support, non-prep exercises
-  const showWhyLine = !isWarmupCooldown && card.whyLine && 
-    card.prescriptionIntent !== 'support_strength' && 
-    card.prescriptionIntent !== 'tissue_prep'
+  // [DISPLAY-PRIORITY] WhyLine suppressed in prescription-first mode
   
   // Only show context cue for primary work
   const showContextCue = !isWarmupCooldown && card.prescriptionContext &&
@@ -1599,66 +1529,35 @@ function ExerciseRow({
         )}
       </p>
       
-      {/* [EXERCISE-ROW-SURFACE] ROW 2.5: Intent + Chips row - authoritative surface display */}
-      {/* Show when we have any useful content: labels, chips, or non-fallback emphasis */}
-      {alignedRowSurface && (getBestRowSublabel(alignedRowSurface) || alignedRowSurface.rowChips.length > 0 || alignedRowSurface.emphasisKind !== 'fallback_minimal') && (() => {
-        const bestSublabel = getBestRowSublabel(alignedRowSurface)
+      {/* [DISPLAY-PRIORITY] ROW 2.5: Compact intelligence - prescription-first policy */}
+      {/* Only show for primary exercises to keep rows tight */}
+      {alignedRowSurface && shouldShowRowIntelligence(alignedRowSurface.emphasisKind, DEFAULT_DENSITY_MODE) && (() => {
+        const rowVisibility = getExerciseRowVisibility(DEFAULT_DENSITY_MODE)
+        const { showSublabel, showChips, chips } = deduplicateRowDisplay(alignedRowSurface, rowVisibility)
+        const bestSublabel = showSublabel ? getBestRowSublabel(alignedRowSurface) : null
+        
+        if (!bestSublabel && !showChips) return null
+        
         return (
-        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-          {/* Best sublabel using centralized priority */}
+        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+          {/* Single compact sublabel for primary only */}
           {bestSublabel && (
-            <span className={`text-[10px] ${
-              alignedRowSurface.emphasisKind === 'primary' 
-                ? 'text-[#E63946]/80' 
-                : alignedRowSurface.emphasisKind === 'secondary'
-                  ? 'text-blue-400/70'
-                  : alignedRowSurface.emphasisKind === 'protection'
-                    ? 'text-amber-400/70'
-                    : 'text-[#6A6A6A]'
-            }`}>
+            <span className="text-[10px] text-[#E63946]/80">
               {bestSublabel}
             </span>
           )}
-          {/* Row chips */}
-          {alignedRowSurface.rowChips.length > 0 && (
-            <>
-              {bestSublabel && (
-                <span className="text-[#3A3A3A]">·</span>
-              )}
-              {alignedRowSurface.rowChips.map((chip, i) => (
-                <span 
-                  key={`chip-${i}`}
-                  className={`text-[9px] px-1.5 py-0.5 rounded ${
-                    chip === 'Primary' || chip === 'Skill' 
-                      ? 'bg-[#E63946]/8 text-[#E63946]/70'
-                      : chip === 'Strength' || chip === 'Weighted'
-                        ? 'bg-blue-500/8 text-blue-400/70'
-                        : chip === 'Protected' || chip === 'Conservative'
-                          ? 'bg-amber-500/8 text-amber-400/70'
-                          : chip === 'Superset' || chip === 'Density'
-                            ? 'bg-purple-500/8 text-purple-400/70'
-                            : 'bg-[#2A2A2A] text-[#7A7A7A]'
-                  }`}
-                >
-                  {chip}
-                </span>
-              ))}
-            </>
-          )}
-          {/* Fallback chip for support emphasis with no chips yet */}
-          {alignedRowSurface.rowChips.length === 0 && alignedRowSurface.emphasisKind === 'support' && !bestSublabel && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#7A7A7A]">
-              Support
+          {/* Single chip max in prescription-first mode */}
+          {showChips && chips.slice(0, 1).map((chip, i) => (
+            <span 
+              key={`chip-${i}`}
+              className="text-[9px] px-1.5 py-0.5 rounded bg-[#E63946]/8 text-[#E63946]/70"
+            >
+              {chip}
             </span>
-          )}
+          ))}
         </div>
         )
       })()}
-      
-      {/* ROW 3: Why line - only for primary/skill work */}
-      {showWhyLine && (
-        <p className="text-[11px] text-[#5A5A5A] mt-1 line-clamp-1">{card.whyLine}</p>
-      )}
       
       {/* Constraint note inline if present */}
       {card.constraintNote && (

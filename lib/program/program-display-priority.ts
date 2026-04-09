@@ -14,6 +14,17 @@
  * 3. Essential session identity (ALWAYS VISIBLE)
  * 4. Secondary AI explanation (COMPACT - max 1 line)
  * 5. Optional deeper evidence (COLLAPSED - modal only)
+ * 
+ * =============================================================================
+ * TRUTH ENFORCEMENT RULES
+ * =============================================================================
+ * 
+ * 1. All display decisions must be derived from centralized contracts
+ * 2. Components are RENDERERS, not REASONERS - no local AI logic
+ * 3. Authoritative evidence ALWAYS wins over fallback text
+ * 4. Every label/chip must trace to one centralized source
+ * 5. Fallback is only allowed when authoritative truth is absent
+ * 6. Source markers must be preserved through the render path
  */
 
 import type { SessionAiEvidenceSurface } from './program-ai-evidence-bridge'

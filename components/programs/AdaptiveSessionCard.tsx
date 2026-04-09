@@ -21,7 +21,7 @@ import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
 import { buildExerciseCardContract, buildSessionDisplayContract, buildExerciseRowSurface, getBestRowSublabel, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
-import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, type SessionAiEvidenceSurface } from '@/lib/program/program-ai-evidence-bridge'
+import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, type SessionAiEvidenceSurface } from '@/lib/program/program-ai-evidence-bridge'
 import { getSessionCardVisibility, getExerciseRowVisibility, shouldShowRowIntelligence, deduplicateRowDisplay, DEFAULT_DENSITY_MODE } from '@/lib/program/program-display-priority'
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
@@ -843,6 +843,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       <div className="mt-2 space-y-2">
         {/* Structure explanation for warmup protocols */}
         <StructureKnowledgeBubble structureType="protocol_warmup" />
+        {/* [TRUTH-ENFORCEMENT] selectionReason is authoritative builder output - safe direct access */}
         {session.warmup[0]?.selectionReason && (
           <p className="text-xs text-[#6A6A6A] italic pl-2 border-l-2 border-[#4F6D8A]/30">
             {session.warmup[0].selectionReason}
@@ -905,6 +906,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             </button>
             {showCooldown && (
               <div className="mt-2 space-y-2">
+                {/* [TRUTH-ENFORCEMENT] selectionReason is authoritative builder output - safe direct access */}
                 {session.cooldown[0]?.selectionReason && (
                   <p className="text-xs text-[#6A6A6A] italic mb-2 pl-2 border-l-2 border-green-500/30">
                     {session.cooldown[0].selectionReason}
@@ -1064,23 +1066,26 @@ function MainExercisesRenderer({
     
     let globalIdx = 0
     
+    // [TRUTH-ENFORCEMENT] Use centralized category contract instead of hardcoded values
     const renderCategorySection = (
       exercises: typeof displayExercises, 
-      categoryLabel: string, 
-      categoryColor: string,
-      categoryDescription: string
+      category: string
     ) => {
       if (exercises.length === 0) return null
+      // Get centralized contract - components are renderers, not reasoners
+      const contract = getCategoryDisplayContract(category, sessionEvidence)
       return (
         <div className="space-y-2">
-          {/* Category header - subtle but clear */}
+          {/* Category header from centralized contract */}
           <div className="flex items-center gap-2 pt-1">
-            <span className={`text-[10px] uppercase tracking-wider font-semibold ${categoryColor}`}>
-              {categoryLabel}
+            <span className={`text-[10px] uppercase tracking-wider font-semibold ${contract.color}`}>
+              {contract.label}
             </span>
-            <span className="text-[10px] text-[#6A6A6A]">
-              {categoryDescription}
-            </span>
+            {contract.description && (
+              <span className="text-[10px] text-[#6A6A6A]">
+                {contract.description}
+              </span>
+            )}
             <div className="flex-1 h-px bg-[#2A2A2A]" />
           </div>
           {exercises.map((exercise) => {
@@ -1107,10 +1112,10 @@ function MainExercisesRenderer({
     
     return (
       <div className="space-y-4">
-        {renderCategorySection(skillExercises, 'Skill Work', 'text-[#E63946]', 'Movement mastery')}
-        {renderCategorySection(strengthExercises, 'Strength', 'text-blue-400', 'Building power')}
-        {renderCategorySection(accessoryExercises, 'Accessory', 'text-[#A5A5A5]', 'Support & balance')}
-        {renderCategorySection(otherExercises, 'Additional', 'text-[#6A6A6A]', '')}
+        {renderCategorySection(skillExercises, 'skill')}
+        {renderCategorySection(strengthExercises, 'strength')}
+        {renderCategorySection(accessoryExercises, 'accessory')}
+        {renderCategorySection(otherExercises, 'other')}
       </div>
     )
   }

@@ -337,6 +337,337 @@ export function getPrescriptionPropagationDisplay(program: AdaptiveProgram): Pre
 }
 
 // =============================================================================
+// [SESSION-CARD-SURFACE] AUTHORITATIVE PER-CARD DISPLAY CONTRACT
+// One compact shape that feeds the day card UI with differentiated identity
+// Prevents all cards from looking identical when session metadata differs
+// =============================================================================
+
+export interface SessionCardSurface {
+  /** One clear session identity headline e.g. "Planche volume build" */
+  sessionHeadline: string
+  /** Optional subheadline for additional context */
+  sessionSubheadline: string | null
+  /** 1-3 small truth chips pulled from real metadata only */
+  primaryIntentChips: string[]
+  /** Protection/constraint signals if active */
+  protectionSignals: string[]
+  /** Method signals (density, supersets, etc) */
+  methodSignals: string[]
+  /** One short evidence/support line when available */
+  evidenceLabel: string | null
+  /** Key for detecting near-duplicate card surfaces */
+  repetitionKey: string
+  /** Source marker for debugging */
+  source: 'authoritative' | 'fallback_minimal'
+}
+
+/**
+ * Build a compact session card surface from session metadata.
+ * This is the SINGLE owner of per-card identity display.
+ * Uses authoritative metadata first, minimal fallbacks only when unavailable.
+ */
+export function buildSessionCardSurface(
+  session: {
+    dayNumber: number
+    name?: string
+    dayLabel?: string
+    focus?: string
+    focusLabel?: string
+    isPrimary?: boolean
+    rationale?: string
+    prescriptionPropagationAudit?: {
+      appliedReductions?: {
+        setsReduced?: boolean
+        rpeReduced?: boolean
+        finisherSuppressed?: boolean
+        densityReduced?: boolean
+        secondaryTrimmed?: boolean
+      }
+      adaptationPhase?: string
+      verdict?: string
+    }
+    compositionMetadata?: {
+      sessionIntent?: string
+      sessionComplexity?: string
+      spineSessionType?: string
+      spineMode?: string
+      workloadDistribution?: {
+        primaryWorkPercent?: number
+        supportWorkPercent?: number
+      }
+      methodEligibility?: {
+        finisher?: string
+        density?: string
+      }
+    }
+    skillExpressionMetadata?: {
+      directlyExpressedSkills?: string[]
+      technicalSlotSkills?: string[]
+      sessionPurpose?: string
+      sessionIdentityReason?: string
+    }
+    styleMetadata?: {
+      primaryStyle?: string
+      hasSupersetsApplied?: boolean
+      hasCircuitsApplied?: boolean
+      hasDensityApplied?: boolean
+      structureDescription?: string
+    }
+  },
+  weekContext: {
+    isFirstWeek?: boolean
+    adaptationPhase?: string
+    totalSessions: number
+    primaryGoal: string
+    secondaryGoal?: string | null
+  }
+): SessionCardSurface {
+  const prescriptionAudit = session.prescriptionPropagationAudit
+  const composition = session.compositionMetadata
+  const skillMeta = session.skillExpressionMetadata
+  const styleMeta = session.styleMetadata
+  
+  const primaryIntentChips: string[] = []
+  const protectionSignals: string[] = []
+  const methodSignals: string[] = []
+  let evidenceLabel: string | null = null
+  let source: SessionCardSurface['source'] = 'fallback_minimal'
+  
+  // ==========================================================================
+  // A. Build session headline from authoritative metadata
+  // ==========================================================================
+  let sessionHeadline = ''
+  let sessionSubheadline: string | null = null
+  
+  // Priority 1: skillExpressionMetadata.sessionIdentityReason (most specific)
+  if (skillMeta?.sessionIdentityReason) {
+    sessionHeadline = skillMeta.sessionIdentityReason.split('.')[0]
+    if (sessionHeadline.length > 45) {
+      sessionHeadline = sessionHeadline.substring(0, 42) + '...'
+    }
+    source = 'authoritative'
+  }
+  // Priority 2: compositionMetadata.sessionIntent
+  else if (composition?.sessionIntent) {
+    sessionHeadline = composition.sessionIntent.split('.')[0]
+    if (sessionHeadline.length > 45) {
+      sessionHeadline = sessionHeadline.substring(0, 42) + '...'
+    }
+    source = 'authoritative'
+  }
+  // Priority 3: session.rationale
+  else if (session.rationale) {
+    sessionHeadline = session.rationale.split('.')[0]
+    source = 'authoritative'
+  }
+  // Priority 4: Build from focus + goal context
+  else if (session.focusLabel || session.focus) {
+    const focusBase = (session.focusLabel || session.focus || '').toLowerCase()
+    const primaryGoalName = weekContext.primaryGoal?.replace(/_/g, ' ') || 'skill'
+    
+    if (focusBase.includes('push') && weekContext.primaryGoal?.includes('planche')) {
+      sessionHeadline = 'Planche-focused push session'
+    } else if (focusBase.includes('pull') && weekContext.primaryGoal?.includes('lever')) {
+      sessionHeadline = 'Lever-focused pull session'
+    } else if (focusBase.includes('push')) {
+      sessionHeadline = `Push emphasis with ${primaryGoalName} support`
+    } else if (focusBase.includes('pull')) {
+      sessionHeadline = `Pull emphasis with ${primaryGoalName} support`
+    } else if (focusBase.includes('skill')) {
+      sessionHeadline = `${primaryGoalName.charAt(0).toUpperCase() + primaryGoalName.slice(1)} skill work`
+    } else if (focusBase.includes('strength')) {
+      sessionHeadline = 'Foundational strength session'
+    } else if (focusBase.includes('support') || focusBase.includes('recovery')) {
+      sessionHeadline = 'Recovery-integrated support session'
+    } else if (session.isPrimary) {
+      sessionHeadline = `Primary ${primaryGoalName} session`
+    } else {
+      sessionHeadline = session.focusLabel || session.focus || 'Training session'
+    }
+  }
+  // Priority 5: Minimal fallback
+  else {
+    sessionHeadline = session.isPrimary 
+      ? `Primary session (Day ${session.dayNumber})`
+      : `Support session (Day ${session.dayNumber})`
+  }
+  
+  // ==========================================================================
+  // B. Build primary intent chips from real metadata
+  // ==========================================================================
+  
+  // From compositionMetadata.workloadDistribution
+  if (composition?.workloadDistribution?.primaryWorkPercent) {
+    if (composition.workloadDistribution.primaryWorkPercent >= 70) {
+      primaryIntentChips.push('Primary focus preserved')
+      source = 'authoritative'
+    } else if (composition.workloadDistribution.primaryWorkPercent >= 50) {
+      primaryIntentChips.push('Balanced distribution')
+    }
+  }
+  
+  // From spineSessionType (skill expression mode)
+  if (composition?.spineSessionType === 'direct_intensity') {
+    primaryIntentChips.push('Direct intensity')
+    source = 'authoritative'
+  } else if (composition?.spineSessionType === 'technical_focus') {
+    primaryIntentChips.push('Technical focus')
+    source = 'authoritative'
+  } else if (composition?.spineSessionType === 'strength_support') {
+    primaryIntentChips.push('Strength support')
+    source = 'authoritative'
+  }
+  
+  // From directly expressed skills
+  if (skillMeta?.directlyExpressedSkills?.length) {
+    const primarySkill = skillMeta.directlyExpressedSkills[0]?.replace(/_/g, ' ')
+    if (primarySkill && !primaryIntentChips.some(c => c.toLowerCase().includes(primarySkill.toLowerCase()))) {
+      primaryIntentChips.push(`${primarySkill.charAt(0).toUpperCase() + primarySkill.slice(1)} expressed`)
+      source = 'authoritative'
+    }
+  }
+  
+  // ==========================================================================
+  // C. Build protection signals from prescription propagation audit
+  // ==========================================================================
+  if (prescriptionAudit?.appliedReductions) {
+    const reductions = prescriptionAudit.appliedReductions
+    
+    if (reductions.finisherSuppressed) {
+      protectionSignals.push('Finisher blocked')
+      source = 'authoritative'
+    }
+    if (reductions.rpeReduced) {
+      protectionSignals.push('Intensity capped')
+      source = 'authoritative'
+    }
+    if (reductions.setsReduced) {
+      protectionSignals.push('Volume reduced')
+      source = 'authoritative'
+    }
+    if (reductions.secondaryTrimmed) {
+      protectionSignals.push('Secondary trimmed')
+      source = 'authoritative'
+    }
+    if (reductions.densityReduced) {
+      protectionSignals.push('Density limited')
+      source = 'authoritative'
+    }
+  }
+  
+  // From method eligibility (blocked methods)
+  if (composition?.methodEligibility?.finisher === 'blocked' && !protectionSignals.includes('Finisher blocked')) {
+    protectionSignals.push('Finisher blocked')
+    source = 'authoritative'
+  }
+  if (composition?.methodEligibility?.density === 'blocked') {
+    protectionSignals.push('Density blocked')
+    source = 'authoritative'
+  }
+  
+  // ==========================================================================
+  // D. Build method signals from style metadata
+  // ==========================================================================
+  if (styleMeta?.hasDensityApplied) {
+    methodSignals.push('Density applied')
+    source = 'authoritative'
+  }
+  if (styleMeta?.hasSupersetsApplied) {
+    methodSignals.push('Supersets active')
+    source = 'authoritative'
+  }
+  if (styleMeta?.hasCircuitsApplied) {
+    methodSignals.push('Circuits active')
+    source = 'authoritative'
+  }
+  
+  // ==========================================================================
+  // E. Build evidence label from week context
+  // ==========================================================================
+  if (weekContext.isFirstWeek || prescriptionAudit?.adaptationPhase === 'initial_acclimation') {
+    evidenceLabel = 'Week-1 conservative dosage applied'
+    source = 'authoritative'
+  } else if (prescriptionAudit?.adaptationPhase === 'recovery_constrained') {
+    evidenceLabel = 'Recovery-protected structure'
+  } else if (source === 'authoritative' && protectionSignals.length === 0) {
+    evidenceLabel = 'Built from profile + doctrine'
+  }
+  
+  // ==========================================================================
+  // F. Build repetition key for duplicate detection
+  // ==========================================================================
+  const repetitionKey = [
+    sessionHeadline.toLowerCase().substring(0, 20),
+    primaryIntentChips.slice(0, 2).join('-'),
+    protectionSignals.slice(0, 1).join('-'),
+    session.dayNumber,
+  ].filter(Boolean).join('|')
+  
+  return {
+    sessionHeadline,
+    sessionSubheadline,
+    primaryIntentChips: primaryIntentChips.slice(0, 3),
+    protectionSignals: protectionSignals.slice(0, 3),
+    methodSignals: methodSignals.slice(0, 2),
+    evidenceLabel,
+    repetitionKey,
+    source,
+  }
+}
+
+/**
+ * Build session card surfaces for all sessions in a program.
+ * Handles deduplication by adding differentiating context when cards would look identical.
+ */
+export function buildAllSessionCardSurfaces(
+  sessions: Array<Parameters<typeof buildSessionCardSurface>[0]>,
+  weekContext: Parameters<typeof buildSessionCardSurface>[1]
+): SessionCardSurface[] {
+  const surfaces = sessions.map(session => buildSessionCardSurface(session, weekContext))
+  
+  // Detect near-duplicate surfaces and differentiate them
+  const keyGroups = new Map<string, number[]>()
+  surfaces.forEach((surface, idx) => {
+    const baseKey = surface.repetitionKey.split('|').slice(0, 2).join('|')
+    if (!keyGroups.has(baseKey)) {
+      keyGroups.set(baseKey, [])
+    }
+    keyGroups.get(baseKey)!.push(idx)
+  })
+  
+  // For groups with duplicates, add differentiating context
+  keyGroups.forEach((indices) => {
+    if (indices.length > 1) {
+      indices.forEach((idx, groupPosition) => {
+        const session = sessions[idx]
+        const surface = surfaces[idx]
+        
+        // Add day position context to subheadline
+        if (!surface.sessionSubheadline) {
+          const dayContext = session.isPrimary
+            ? `Primary session #${groupPosition + 1}`
+            : `Support session (Day ${session.dayNumber})`
+          surface.sessionSubheadline = dayContext
+        }
+        
+        // Try to add a differentiating chip from available metadata
+        if (surface.primaryIntentChips.length < 3) {
+          const skillMeta = session.skillExpressionMetadata
+          if (skillMeta?.technicalSlotSkills?.length) {
+            const techSlot = skillMeta.technicalSlotSkills[0]?.replace(/_/g, ' ')
+            if (techSlot && !surface.primaryIntentChips.some(c => c.toLowerCase().includes(techSlot.toLowerCase()))) {
+              surface.primaryIntentChips.push(`${techSlot} slot`)
+            }
+          }
+        }
+      })
+    }
+  })
+  
+  return surfaces
+}
+
+// =============================================================================
 // [SURFACE-SIGNALS] PROGRAM AND SESSION SURFACE INTELLIGENCE
 // Compact signals for main card and day card display without modal
 // =============================================================================

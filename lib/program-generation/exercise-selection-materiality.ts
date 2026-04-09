@@ -224,7 +224,11 @@ export function scoreExerciseMateriality(
   const exerciseCategory = exercise.category || 'accessory'
   
   // Direct skill match
-  if (exerciseTransfers.some(t => normalizeSkillKey(t) === primaryGoalNorm)) {
+  // [PHASE15E-PUSH-SESSION-FIX] Guard: skip if primaryGoalNorm is empty (invalid input)
+  if (primaryGoalNorm && exerciseTransfers.some(t => {
+    const tNorm = normalizeSkillKey(t)
+    return tNorm && tNorm === primaryGoalNorm
+  })) {
     breakdown.primaryGoalAlignment = 30
     reasonCodes.push('direct_primary_progression')
     auditNotes.push(`Direct transfer to ${context.primaryGoal}`)
@@ -259,7 +263,11 @@ export function scoreExerciseMateriality(
   // =========================================================================
   if (context.secondaryGoal) {
     const secondaryNorm = normalizeSkillKey(context.secondaryGoal)
-    if (exerciseTransfers.some(t => normalizeSkillKey(t) === secondaryNorm)) {
+    // [PHASE15E-PUSH-SESSION-FIX] Guard: skip if secondaryNorm is empty (invalid input)
+    if (secondaryNorm && exerciseTransfers.some(t => {
+      const tNorm = normalizeSkillKey(t)
+      return tNorm && tNorm === secondaryNorm
+    })) {
       breakdown.secondaryGoalSupport = 15
       reasonCodes.push('direct_secondary_progression')
       auditNotes.push(`Direct transfer to secondary goal ${context.secondaryGoal}`)
@@ -279,8 +287,10 @@ export function scoreExerciseMateriality(
   // =========================================================================
   if (context.selectedSkills && context.selectedSkills.length > 0) {
     // Filter out primary and secondary to get truly "additional" skills
+    // [PHASE15E-PUSH-SESSION-FIX] Also filter out entries that normalize to empty string
     const additionalSkills = context.selectedSkills.filter(skill => {
       const skillNorm = normalizeSkillKey(skill)
+      if (!skillNorm) return false // Skip invalid/empty skill keys
       return skillNorm !== primaryGoalNorm && 
              skillNorm !== (context.secondaryGoal ? normalizeSkillKey(context.secondaryGoal) : '')
     })
@@ -291,9 +301,14 @@ export function scoreExerciseMateriality(
       
       for (const additionalSkill of additionalSkills) {
         const additionalNorm = normalizeSkillKey(additionalSkill)
+        if (!additionalNorm) continue // [PHASE15E-PUSH-SESSION-FIX] Skip invalid skill keys
         
         // Direct transfer to an additional skill
-        if (exerciseTransfers.some(t => normalizeSkillKey(t) === additionalNorm)) {
+        // [PHASE15E-PUSH-SESSION-FIX] Guard against null/undefined in transferTo array
+        if (exerciseTransfers.some(t => {
+          const tNorm = normalizeSkillKey(t)
+          return tNorm && tNorm === additionalNorm
+        })) {
           additionalScore = Math.max(additionalScore, 12)
           matchedAdditionalSkills.push(additionalSkill)
           reasonCodes.push('support_for_skill_component')
@@ -309,8 +324,9 @@ export function scoreExerciseMateriality(
           matchedAdditionalSkills.push(additionalSkill)
         }
         // Name-based match for additional skill
-        else if (exercise.name.toLowerCase().includes(additionalNorm) || 
-                 exercise.id.toLowerCase().includes(additionalNorm)) {
+        // [PHASE15E-PUSH-SESSION-FIX] Skip name-based match if additionalNorm is empty
+        else if (additionalNorm && (exercise.name.toLowerCase().includes(additionalNorm) || 
+                 exercise.id.toLowerCase().includes(additionalNorm))) {
           additionalScore = Math.max(additionalScore, 8)
           matchedAdditionalSkills.push(additionalSkill)
         }
@@ -567,7 +583,12 @@ export function selectBestExerciseForSlot(
 // HELPER SCORING FUNCTIONS
 // =============================================================================
 
-function normalizeSkillKey(skill: string): string {
+/**
+ * Safely normalize a skill key to lowercase with special chars removed.
+ * [PHASE15E-PUSH-SESSION-FIX] Now guards against null/undefined input.
+ */
+function normalizeSkillKey(skill: string | null | undefined): string {
+  if (!skill || typeof skill !== 'string') return ''
   return skill.toLowerCase().replace(/_/g, '').replace(/-/g, '').replace(/\s+/g, '')
 }
 
@@ -612,10 +633,13 @@ function hasIndirectCarryover(exercise: Exercise, skill: string): boolean {
     ...(supportMapping.accessorySupportExercises || []),
   ]
   
-  return allSupport.some(s => 
-    exercise.id.toLowerCase().includes(s.toLowerCase()) ||
-    exercise.name.toLowerCase().includes(s.toLowerCase())
-  )
+  // [PHASE15E-PUSH-SESSION-FIX] Guard against null/undefined entries in support arrays
+  return allSupport.some(s => {
+    if (!s || typeof s !== 'string') return false
+    const sLower = s.toLowerCase()
+    return exercise.id.toLowerCase().includes(sLower) ||
+           exercise.name.toLowerCase().includes(sLower)
+  })
 }
 
 function scoreProgressionFit(
@@ -645,14 +669,16 @@ function scoreProgressionFit(
     const exerciseIdNorm = normalizeSkillKey(exercise.id)
     const currentLevelNorm = normalizeSkillKey(currentLevel)
     
-    if (exerciseIdNorm.includes(currentLevelNorm)) {
+    // [PHASE15E-PUSH-SESSION-FIX] Guard against empty string false matches
+    if (currentLevelNorm && exerciseIdNorm.includes(currentLevelNorm)) {
       score = 25
       notes.push(`Matches current progression: ${currentLevel}`)
     } 
     // Check if we're being conservative (current != historical)
     else if (historicalLevel && currentLevel !== historicalLevel) {
       const historicalNorm = normalizeSkillKey(historicalLevel)
-      if (exerciseIdNorm.includes(historicalNorm)) {
+      // [PHASE15E-PUSH-SESSION-FIX] Guard against empty string false matches
+      if (historicalNorm && exerciseIdNorm.includes(historicalNorm)) {
         // Exercise is at historical level but we should be at current
         score = 8
         notes.push(`At historical (${historicalLevel}) not current (${currentLevel}) - penalized`)
@@ -769,9 +795,13 @@ function scoreCarryoverValue(
   let score = 5 // Base carryover
   
   // Check skill support mappings
+  // [PHASE15E-PUSH-SESSION-FIX] Guard against null/undefined entries in directSupport arrays
   for (const skill of context.selectedSkills) {
     const directSupport = getDirectSupportExercises(skill as any)
-    if (directSupport.some(s => exercise.id.toLowerCase().includes(s.toLowerCase()))) {
+    if (directSupport.some(s => {
+      if (!s || typeof s !== 'string') return false
+      return exercise.id.toLowerCase().includes(s.toLowerCase())
+    })) {
       score = 15
       notes.push(`Direct support for ${skill}`)
       return { score, notes }
@@ -791,13 +821,19 @@ function scoreCarryoverValue(
   }
   
   // Check transferTo
+  // [PHASE15E-PUSH-SESSION-FIX] Guard against null/undefined in transferTo array
   if (exercise.transferTo) {
-    const matchingTransfers = exercise.transferTo.filter(t => 
-      context.selectedSkills.some(s => normalizeSkillKey(s) === normalizeSkillKey(t))
-    )
+    const matchingTransfers = exercise.transferTo.filter(t => {
+      const tNorm = normalizeSkillKey(t)
+      if (!tNorm) return false // Skip null/undefined/empty transfer targets
+      return context.selectedSkills.some(s => {
+        const sNorm = normalizeSkillKey(s)
+        return sNorm && sNorm === tNorm
+      })
+    })
     if (matchingTransfers.length > 0) {
       score = Math.max(score, 10 + matchingTransfers.length * 2)
-      notes.push(`Transfers to: ${matchingTransfers.join(', ')}`)
+      notes.push(`Transfers to: ${matchingTransfers.filter(t => t).join(', ')}`)
     }
   }
   
@@ -913,22 +949,24 @@ function scoreDoctrinePreference(
   }
   
   // Check direct support exercises from support mapping
+  // [PHASE15E-PUSH-SESSION-FIX] Guard against empty string false matches
   const primarySupport = getDirectSupportExercises(context.primaryGoal as any)
-  if (primarySupport.some(s => 
-    exerciseIdNorm.includes(normalizeSkillKey(s)) ||
-    exerciseNameNorm.includes(normalizeSkillKey(s))
-  )) {
+  if (primarySupport.some(s => {
+    const sNorm = normalizeSkillKey(s)
+    return sNorm && (exerciseIdNorm.includes(sNorm) || exerciseNameNorm.includes(sNorm))
+  })) {
     score += 10
     notes.push('In direct support list for primary goal')
   }
   
   // Check carryover rules if provided
+  // [PHASE15E-PUSH-SESSION-FIX] Guard against empty string false matches
   if (context.doctrineCarryoverRules) {
     for (const rule of context.doctrineCarryoverRules) {
-      if (rule.preferredExercises.some(e => 
-        exerciseIdNorm.includes(normalizeSkillKey(e)) ||
-        exerciseNameNorm.includes(normalizeSkillKey(e))
-      )) {
+      if (rule.preferredExercises.some(e => {
+        const eNorm = normalizeSkillKey(e)
+        return eNorm && (exerciseIdNorm.includes(eNorm) || exerciseNameNorm.includes(eNorm))
+      })) {
         const boost = rule.carryoverType === 'direct' ? 10 : 
                       rule.carryoverType === 'prerequisite' ? 8 : 5
         score += boost
@@ -938,12 +976,13 @@ function scoreDoctrinePreference(
   }
   
   // Secondary skill doctrine support
+  // [PHASE15E-PUSH-SESSION-FIX] Guard against empty string false matches
   if (context.secondaryGoal) {
     const secondarySupport = getDirectSupportExercises(context.secondaryGoal as any)
-    if (secondarySupport.some(s => 
-      exerciseIdNorm.includes(normalizeSkillKey(s)) ||
-      exerciseNameNorm.includes(normalizeSkillKey(s))
-    )) {
+    if (secondarySupport.some(s => {
+      const sNorm = normalizeSkillKey(s)
+      return sNorm && (exerciseIdNorm.includes(sNorm) || exerciseNameNorm.includes(sNorm))
+    })) {
       score += 6
       notes.push('Support for secondary goal via doctrine')
     }

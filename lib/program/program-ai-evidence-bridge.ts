@@ -1408,6 +1408,385 @@ export function buildSessionSecondaryExerciseSectionsSurface(
 }
 
 // =============================================================================
+// VISIBLE SESSION ROUTINE SURFACE - UNIFIED SINGLE OWNER for card body display
+// =============================================================================
+
+export type VisibleBlockType = 'straight' | 'superset' | 'circuit' | 'density_block' | 'cluster'
+
+export interface VisibleExerciseItem {
+  id: string
+  displayName: string
+  prescriptionLine: string
+  loadCue: string | null
+  restCue: string | null
+  category: string | null
+  source: 'authoritative' | 'fallback_minimal'
+}
+
+export interface VisibleRoutineBlock {
+  blockId: string
+  blockType: VisibleBlockType
+  blockLabel: string | null
+  exercises: VisibleExerciseItem[]
+  instruction: string | null
+  restProtocol: string | null
+}
+
+export interface VisibleSessionRoutineSurface {
+  /** Main workout blocks - first visible area */
+  mainBlocks: VisibleRoutineBlock[]
+  /** Secondary blocks (support/accessory/core/mobility/finisher) */
+  secondaryBlocks: VisibleRoutineBlock[]
+  /** Warmup summary */
+  warmupSummary: { count: number; names: string[] }
+  /** Cooldown summary */
+  cooldownSummary: { count: number; names: string[] }
+  /** Finisher summary */
+  finisherSummary: { hasFinisher: boolean; name: string | null }
+  /** Total main exercise count */
+  mainExerciseCount: number
+  /** Total secondary exercise count */
+  secondaryExerciseCount: number
+  /** Source tracking */
+  source: 'authoritative' | 'fallback_minimal'
+  /** Whether grouped truth was used */
+  usedGroupedTruth: boolean
+  /** Focus badge */
+  focusBadge: string | null
+}
+
+/** Build prescription line from exercise data */
+function buildExercisePrescription(ex: {
+  sets?: number
+  reps?: string | number
+  repsOrTime?: string
+  hold?: string
+  targetRPE?: number
+}): string {
+  let line = ''
+  const reps = ex.repsOrTime || ex.reps
+  if (ex.sets) {
+    if (ex.hold) {
+      line = `${ex.sets}x${ex.hold}`
+    } else if (reps) {
+      line = `${ex.sets}x${reps}`
+    } else {
+      line = `${ex.sets} sets`
+    }
+  } else if (ex.hold) {
+    line = ex.hold
+  } else if (reps) {
+    line = String(reps)
+  }
+  if (ex.targetRPE) {
+    line += ` @${ex.targetRPE}`
+  }
+  return line || '—'
+}
+
+/** Categories considered "main" work */
+const MAIN_CATEGORIES = new Set(['skill', 'strength', 'primary'])
+/** Categories considered "secondary" work */
+const SECONDARY_CATEGORIES = new Set(['accessory', 'support', 'core', 'mobility', 'flexibility', 'finisher'])
+
+/**
+ * Build UNIFIED VISIBLE ROUTINE SURFACE - the SINGLE owner for card body display.
+ * 
+ * Priority 1: Use styledGroups when available (grouped truth)
+ * Priority 2: Fall back to flat canonical exercises
+ * 
+ * This replaces split ownership from primaryPrescription + secondarySections.
+ */
+export function buildVisibleSessionRoutineSurface(
+  session: {
+    dayNumber: number
+    focus?: string
+    isPrimary?: boolean
+    exercises?: Array<{
+      id: string
+      name: string
+      category?: string
+      sets?: number
+      reps?: string | number
+      repsOrTime?: string
+      hold?: string
+      targetRPE?: number
+      rest?: string
+      restSeconds?: number
+      loading?: string
+      assistanceLevel?: string
+      prescribedLoad?: { load?: number; unit?: string }
+      selectionReason?: string
+    }>
+    warmup?: Array<{ id: string; name: string }>
+    cooldown?: Array<{ id: string; name: string }>
+    finisher?: { name: string } | null
+    finisherIncluded?: boolean
+    styleMetadata?: {
+      styledGroups?: Array<{
+        id?: string
+        groupType: 'straight' | 'superset' | 'circuit' | 'density_block' | 'cluster'
+        exercises: Array<{
+          id: string
+          name: string
+          sets?: number
+          reps?: string
+          hold?: string
+        }>
+        instruction?: string
+        restProtocol?: string
+      }>
+    }
+  },
+  displayExercises: Array<{
+    id: string
+    name: string
+    category?: string
+    sets?: number
+    reps?: string | number
+    repsOrTime?: string
+    hold?: string
+    targetRPE?: number
+    rest?: string
+    restSeconds?: number
+    loading?: string
+    assistanceLevel?: string
+    prescribedLoad?: { load?: number; unit?: string }
+    selectionReason?: string
+  }>
+): VisibleSessionRoutineSurface {
+  const mainBlocks: VisibleRoutineBlock[] = []
+  const secondaryBlocks: VisibleRoutineBlock[] = []
+  let usedGroupedTruth = false
+  let mainExerciseCount = 0
+  let secondaryExerciseCount = 0
+  
+  // Build exercise lookup map by ID and name
+  const exerciseMap = new Map<string, typeof displayExercises[0]>()
+  displayExercises.forEach(e => {
+    exerciseMap.set(e.id, e)
+    exerciseMap.set(e.name.toLowerCase(), e)
+  })
+  
+  // Helper to build VisibleExerciseItem
+  const toVisibleItem = (ex: typeof displayExercises[0]): VisibleExerciseItem => {
+    let loadCue: string | null = null
+    if (ex.prescribedLoad?.load) {
+      loadCue = `${ex.prescribedLoad.load}${ex.prescribedLoad.unit || 'kg'}`
+    } else if (ex.loading) {
+      loadCue = ex.loading
+    } else if (ex.assistanceLevel) {
+      loadCue = ex.assistanceLevel
+    }
+    
+    let restCue: string | null = null
+    if (ex.restSeconds) {
+      restCue = ex.restSeconds >= 60 ? `${Math.round(ex.restSeconds / 60)}min` : `${ex.restSeconds}s`
+    } else if (ex.rest) {
+      restCue = ex.rest
+    }
+    
+    return {
+      id: ex.id,
+      displayName: ex.name,
+      prescriptionLine: buildExercisePrescription(ex),
+      loadCue,
+      restCue,
+      category: ex.category || null,
+      source: ex.selectionReason ? 'authoritative' : 'fallback_minimal',
+    }
+  }
+  
+  // Check if styledGroups exist and are valid
+  const styledGroups = session.styleMetadata?.styledGroups
+  const hasValidGroups = styledGroups && styledGroups.length > 0
+  
+  if (hasValidGroups) {
+    // =======================================================================
+    // PRIORITY 1: Use styledGroups as structural truth
+    // =======================================================================
+    usedGroupedTruth = true
+    
+    // Track which exercises are in groups
+    const groupedIds = new Set<string>()
+    styledGroups.forEach(g => g.exercises.forEach(e => {
+      groupedIds.add(e.id)
+      groupedIds.add(e.name.toLowerCase())
+    }))
+    
+    // Process each group
+    styledGroups.forEach((group, idx) => {
+      const blockExercises: VisibleExerciseItem[] = []
+      let isSecondary = false
+      
+      group.exercises.forEach(groupEx => {
+        // Hydrate with canonical data
+        const canonical = exerciseMap.get(groupEx.id) || exerciseMap.get(groupEx.name.toLowerCase())
+        
+        if (canonical) {
+          blockExercises.push(toVisibleItem(canonical))
+          // Check if this is secondary work
+          if (canonical.category && SECONDARY_CATEGORIES.has(canonical.category.toLowerCase())) {
+            isSecondary = true
+          }
+        } else {
+          // Fallback - use group exercise data directly
+          blockExercises.push({
+            id: groupEx.id,
+            displayName: groupEx.name,
+            prescriptionLine: buildExercisePrescription(groupEx),
+            loadCue: null,
+            restCue: null,
+            category: null,
+            source: 'fallback_minimal',
+          })
+        }
+      })
+      
+      const block: VisibleRoutineBlock = {
+        blockId: group.id || `group-${idx}`,
+        blockType: group.groupType,
+        blockLabel: group.groupType !== 'straight' ? group.groupType.replace('_', ' ') : null,
+        exercises: blockExercises,
+        instruction: group.instruction || null,
+        restProtocol: group.restProtocol || null,
+      }
+      
+      if (isSecondary) {
+        secondaryBlocks.push(block)
+        secondaryExerciseCount += blockExercises.length
+      } else {
+        mainBlocks.push(block)
+        mainExerciseCount += blockExercises.length
+      }
+    })
+    
+    // Add ungrouped exercises that aren't in any group
+    const ungroupedMain: VisibleExerciseItem[] = []
+    const ungroupedSecondary: VisibleExerciseItem[] = []
+    
+    displayExercises.forEach(ex => {
+      if (!groupedIds.has(ex.id) && !groupedIds.has(ex.name.toLowerCase())) {
+        const item = toVisibleItem(ex)
+        if (ex.category && SECONDARY_CATEGORIES.has(ex.category.toLowerCase())) {
+          ungroupedSecondary.push(item)
+        } else {
+          ungroupedMain.push(item)
+        }
+      }
+    })
+    
+    // Add ungrouped main as a straight block if any exist
+    if (ungroupedMain.length > 0) {
+      mainBlocks.push({
+        blockId: 'ungrouped-main',
+        blockType: 'straight',
+        blockLabel: null,
+        exercises: ungroupedMain,
+        instruction: null,
+        restProtocol: null,
+      })
+      mainExerciseCount += ungroupedMain.length
+    }
+    
+    // Add ungrouped secondary as a straight block if any exist
+    if (ungroupedSecondary.length > 0) {
+      secondaryBlocks.push({
+        blockId: 'ungrouped-secondary',
+        blockType: 'straight',
+        blockLabel: null,
+        exercises: ungroupedSecondary,
+        instruction: null,
+        restProtocol: null,
+      })
+      secondaryExerciseCount += ungroupedSecondary.length
+    }
+    
+  } else {
+    // =======================================================================
+    // PRIORITY 2: Fall back to flat canonical exercises
+    // =======================================================================
+    const mainItems: VisibleExerciseItem[] = []
+    const secondaryItems: VisibleExerciseItem[] = []
+    
+    displayExercises.forEach(ex => {
+      const item = toVisibleItem(ex)
+      if (ex.category && SECONDARY_CATEGORIES.has(ex.category.toLowerCase())) {
+        secondaryItems.push(item)
+      } else {
+        mainItems.push(item)
+      }
+    })
+    
+    // Create single blocks for flat layout
+    if (mainItems.length > 0) {
+      mainBlocks.push({
+        blockId: 'main-flat',
+        blockType: 'straight',
+        blockLabel: null,
+        exercises: mainItems,
+        instruction: null,
+        restProtocol: null,
+      })
+      mainExerciseCount = mainItems.length
+    }
+    
+    if (secondaryItems.length > 0) {
+      secondaryBlocks.push({
+        blockId: 'secondary-flat',
+        blockType: 'straight',
+        blockLabel: null,
+        exercises: secondaryItems,
+        instruction: null,
+        restProtocol: null,
+      })
+      secondaryExerciseCount = secondaryItems.length
+    }
+  }
+  
+  // Build warmup/cooldown summaries
+  const warmupSummary = {
+    count: session.warmup?.length || 0,
+    names: (session.warmup || []).slice(0, 3).map(w => w.name),
+  }
+  
+  const cooldownSummary = {
+    count: session.cooldown?.length || 0,
+    names: (session.cooldown || []).slice(0, 3).map(c => c.name),
+  }
+  
+  const finisherSummary = {
+    hasFinisher: !!(session.finisher && session.finisherIncluded),
+    name: session.finisher?.name || null,
+  }
+  
+  // Build focus badge
+  let focusBadge: string | null = null
+  if (session.isPrimary) {
+    focusBadge = session.focus === 'skill' ? 'Skill Focus' : 'Strength Focus'
+  } else if (session.focus) {
+    focusBadge = session.focus.charAt(0).toUpperCase() + session.focus.slice(1)
+  }
+  
+  // Determine overall source
+  const allExercises = [...mainBlocks.flatMap(b => b.exercises), ...secondaryBlocks.flatMap(b => b.exercises)]
+  const source = allExercises.some(e => e.source === 'authoritative') ? 'authoritative' : 'fallback_minimal'
+  
+  return {
+    mainBlocks,
+    secondaryBlocks,
+    warmupSummary,
+    cooldownSummary,
+    finisherSummary,
+    mainExerciseCount,
+    secondaryExerciseCount,
+    source,
+    usedGroupedTruth,
+    focusBadge,
+  }
+}
+
+// =============================================================================
 // PROGRAM-LEVEL EVIDENCE MODEL
 // =============================================================================
 

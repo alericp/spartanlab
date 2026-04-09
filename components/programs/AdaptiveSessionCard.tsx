@@ -21,7 +21,7 @@ import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
 import { buildExerciseCardContract, buildExerciseRowSurface, getBestRowSublabel, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
-import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, buildSessionMainPreviewSurface, buildSessionPrimaryPrescriptionSurface, buildSessionSecondaryExerciseSectionsSurface, type SessionAiEvidenceSurface, type FullSessionRoutineSurface, type SessionMainPreviewSurface, type SessionPrimaryPrescriptionSurface, type SessionSecondaryExerciseSectionsSurface } from '@/lib/program/program-ai-evidence-bridge'
+import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, buildSessionMainPreviewSurface, buildVisibleSessionRoutineSurface, type SessionAiEvidenceSurface, type FullSessionRoutineSurface, type SessionMainPreviewSurface, type VisibleSessionRoutineSurface } from '@/lib/program/program-ai-evidence-bridge'
 import { getExerciseRowVisibility, shouldShowRowIntelligence, deduplicateRowDisplay, DEFAULT_DENSITY_MODE } from '@/lib/program/program-display-priority'
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
@@ -534,23 +534,24 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const mainPreview: SessionMainPreviewSurface = buildSessionMainPreviewSurface(fullRoutineSurface)
   
   // ==========================================================================
-  // [SESSION-PRIMARY-PRESCRIPTION] Build canonical main workout display owner
-  // This is the AUTHORITATIVE owner of the first-visible numbered workout list
-  // Uses displayExercises (canonical workout order), NOT family-based reordering
+  // [VISIBLE-SESSION-ROUTINE] UNIFIED SINGLE OWNER for card body display
+  // This replaces split ownership from primaryPrescription + secondarySections
+  // Priority 1: Uses styledGroups when available (grouped truth)
+  // Priority 2: Falls back to flat canonical exercises
   // ==========================================================================
-  const primaryPrescription: SessionPrimaryPrescriptionSurface = buildSessionPrimaryPrescriptionSurface(
-    displayExercises,
-    sessionEvidence,
-    fullRoutineSurface
-  )
-  
-  // ==========================================================================
-  // [SESSION-SECONDARY-SECTIONS] Build remaining visible non-warmup/cooldown exercises
-  // These appear BELOW the primary list - support/accessory/core/mobility/finisher
-  // ==========================================================================
-  const secondarySections: SessionSecondaryExerciseSectionsSurface = buildSessionSecondaryExerciseSectionsSurface(
-    fullRoutineSurface,
-    primaryPrescription
+  const visibleRoutine: VisibleSessionRoutineSurface = buildVisibleSessionRoutineSurface(
+    {
+      dayNumber: session.dayNumber,
+      focus: session.focus,
+      isPrimary: session.isPrimary,
+      exercises: safeExercises,
+      warmup: session.warmup,
+      cooldown: session.cooldown,
+      finisher: session.finisher,
+      finisherIncluded: session.finisherIncluded,
+      styleMetadata: sessionStyleMetadata,
+    },
+    displayExercises
   )
   
   // ==========================================================================
@@ -760,42 +761,61 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   ================================================================= */}
               <div className="space-y-3">
                 {/* =============================================================
-                    [SESSION-PRIMARY-PRESCRIPTION] CANONICAL MAIN WORKOUT OWNER
-                    Shows actual main exercises in canonical order - no family badges
+                    [VISIBLE-SESSION-ROUTINE] UNIFIED SINGLE OWNER - Main Blocks
+                    Shows actual main workout with grouped structure when available
                     ============================================================= */}
                 <div className="bg-[#1A1A1A] rounded-lg border border-[#2A2A2A] overflow-hidden">
                   {/* Header with exercise count and focus badge */}
                   <div className="px-3 py-2 border-b border-[#2A2A2A] flex items-center justify-between">
                     <span className="text-xs font-medium text-[#A5A5A5]">
-                      {primaryPrescription.exerciseCount} exercises
+                      {visibleRoutine.mainExerciseCount} exercises
                     </span>
-                    {fullRoutineSurface.focusBadge && (
+                    {visibleRoutine.focusBadge && (
                       <span className={`text-[9px] px-1.5 py-0.5 rounded ${
                         session.focus === 'skill' ? 'bg-[#E63946]/10 text-[#E63946]/80' : 'bg-blue-500/10 text-blue-400/80'
                       }`}>
-                        {fullRoutineSurface.focusBadge}
+                        {visibleRoutine.focusBadge}
                       </span>
                     )}
                   </div>
                   
-                  {/* Main workout list - canonical order, clean display */}
+                  {/* Main workout blocks - preserves grouped structure */}
                   <div className="divide-y divide-[#2A2A2A]">
-                    {primaryPrescription.items.slice(0, 8).map((item, idx) => (
-                      <div key={item.id} className="px-3 py-1.5 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span className="text-[10px] text-[#5A5A5A] w-4 shrink-0">{idx + 1}</span>
-                          <span className="text-sm text-[#E6E9EF] truncate">
-                            {item.displayName}
-                          </span>
+                    {(() => {
+                      let exerciseIndex = 0
+                      return visibleRoutine.mainBlocks.map((block) => (
+                        <div key={block.blockId}>
+                          {/* Block label for special groups (superset/circuit/etc) */}
+                          {block.blockLabel && (
+                            <div className="px-3 py-1 bg-[#0F0F0F] border-b border-[#2A2A2A]">
+                              <span className="text-[10px] font-medium text-[#7A7A7A] uppercase tracking-wide">
+                                {block.blockLabel}
+                              </span>
+                            </div>
+                          )}
+                          {/* Exercises in this block */}
+                          {block.exercises.slice(0, 8 - exerciseIndex).map((item) => {
+                            exerciseIndex++
+                            return (
+                              <div key={item.id} className="px-3 py-1.5 flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  <span className="text-[10px] text-[#5A5A5A] w-4 shrink-0">{exerciseIndex}</span>
+                                  <span className="text-sm text-[#E6E9EF] truncate">
+                                    {item.displayName}
+                                  </span>
+                                </div>
+                                <span className="text-xs text-[#7A7A7A] font-mono shrink-0">
+                                  {item.prescriptionLine}
+                                </span>
+                              </div>
+                            )
+                          })}
                         </div>
-                        <span className="text-xs text-[#7A7A7A] font-mono shrink-0">
-                          {item.prescriptionLine}
-                        </span>
-                      </div>
-                    ))}
-                    {primaryPrescription.items.length > 8 && (
+                      ))
+                    })()}
+                    {visibleRoutine.mainExerciseCount > 8 && (
                       <div className="px-3 py-1.5 text-[10px] text-[#5A5A5A] text-center">
-                        +{primaryPrescription.items.length - 8} more
+                        +{visibleRoutine.mainExerciseCount - 8} more
                       </div>
                     )}
                   </div>
@@ -803,33 +823,35 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   {/* Secondary summary: warmup/cooldown (demoted from main list) */}
                   <div className="px-3 py-2 border-t border-[#2A2A2A] flex items-center justify-between text-[10px] text-[#6A6A6A]">
                     <span>
-                      {mainPreview.hasWarmup && `${mainPreview.warmupCount} warmup`}
-                      {mainPreview.hasWarmup && mainPreview.hasCooldown && ' · '}
-                      {mainPreview.hasCooldown && `${mainPreview.cooldownCount} cooldown`}
+                      {visibleRoutine.warmupSummary.count > 0 && `${visibleRoutine.warmupSummary.count} warmup`}
+                      {visibleRoutine.warmupSummary.count > 0 && visibleRoutine.cooldownSummary.count > 0 && ' · '}
+                      {visibleRoutine.cooldownSummary.count > 0 && `${visibleRoutine.cooldownSummary.count} cooldown`}
                     </span>
-                    {mainPreview.hasFinisher && (
+                    {visibleRoutine.finisherSummary.hasFinisher && (
                       <span className="text-[#E63946]/60">+ Finisher</span>
                     )}
                   </div>
                 </div>
                 
                 {/* =============================================================
-                    [SESSION-SECONDARY-SECTIONS] Remaining workout exercises
-                    Support/accessory/core/mobility - visually separated rows
+                    [VISIBLE-SESSION-ROUTINE] Secondary Blocks
+                    Support/accessory/core/mobility - visually separated
                     ============================================================= */}
-                {secondarySections.hasSecondaryExercises && (
+                {visibleRoutine.secondaryBlocks.length > 0 && (
                   <div className="space-y-2">
-                    {secondarySections.sections.map((section) => (
-                      <div key={section.family} className="bg-[#1A1A1A] rounded-lg border border-[#2A2A2A] overflow-hidden">
-                        {/* Section header */}
-                        <div className="px-3 py-1.5 border-b border-[#2A2A2A]">
-                          <span className="text-[10px] font-medium text-[#6A6A6A] uppercase tracking-wide">
-                            {section.label}
-                          </span>
-                        </div>
-                        {/* Section exercises - visually separated */}
+                    {visibleRoutine.secondaryBlocks.map((block) => (
+                      <div key={block.blockId} className="bg-[#1A1A1A] rounded-lg border border-[#2A2A2A] overflow-hidden">
+                        {/* Block header */}
+                        {block.blockLabel && (
+                          <div className="px-3 py-1.5 border-b border-[#2A2A2A]">
+                            <span className="text-[10px] font-medium text-[#6A6A6A] uppercase tracking-wide">
+                              {block.blockLabel}
+                            </span>
+                          </div>
+                        )}
+                        {/* Block exercises - visually separated */}
                         <div className="divide-y divide-[#2A2A2A]">
-                          {section.items.map((item) => (
+                          {block.exercises.map((item) => (
                             <div key={item.id} className="px-3 py-1.5 flex items-center justify-between gap-2">
                               <span className="text-sm text-[#A5A5A5] truncate flex-1">
                                 {item.displayName}

@@ -600,6 +600,182 @@ export function selectWithSourceTracking(
 // PROGRAM-LEVEL EVIDENCE MODEL
 // =============================================================================
 
+// =============================================================================
+// SESSION PRESCRIPTION SURFACE - Compact routine-first display contract
+// =============================================================================
+
+export interface ExercisePrescriptionItem {
+  id: string
+  displayName: string
+  category: 'skill' | 'strength' | 'accessory' | 'core' | 'mobility' | 'other'
+  /** Compact prescription line e.g. "3x5-8" or "3x30s" */
+  prescriptionLine: string
+  /** Load/assistance cue if available e.g. "BW+10kg" or "Band assist" */
+  loadCue: string | null
+  /** Rest prescription if available e.g. "90s" */
+  restCue: string | null
+  /** Compact emphasis marker: 'primary' | 'secondary' | 'support' | 'finisher' | null */
+  emphasis: 'primary' | 'secondary' | 'support' | 'finisher' | null
+  /** Source tracking */
+  source: 'authoritative' | 'fallback_minimal'
+}
+
+export interface SessionPrescriptionSurface {
+  /** Day label e.g. "Day 1" */
+  dayLabel: string
+  /** Session headline e.g. "Planche + Front Lever" */
+  sessionHeadline: string
+  /** Compact focus badge e.g. "Skill Focus" */
+  focusBadge: string | null
+  /** Estimated session duration */
+  estimatedMinutes: number | null
+  /** Warmup count (not full details) */
+  warmupCount: number
+  /** Cooldown count (not full details) */
+  cooldownCount: number
+  /** Ordered list of main exercises with compact prescriptions */
+  exercises: ExercisePrescriptionItem[]
+  /** Optional finisher summary */
+  finisherSummary: string | null
+  /** Source tracking */
+  source: 'authoritative' | 'fallback_minimal'
+}
+
+/**
+ * Build compact prescription surface from authoritative session data.
+ * This is the PRIMARY display contract for showing the actual routine.
+ * 
+ * @param session - Authoritative session data
+ * @param exercises - The display exercises for this session
+ */
+export function buildSessionPrescriptionSurface(
+  session: {
+    dayNumber: number
+    dayLabel?: string
+    name?: string
+    focus?: string
+    focusLabel?: string
+    isPrimary?: boolean
+    estimatedMinutes?: number
+    warmup?: Array<{ id: string }>
+    cooldown?: Array<{ id: string }>
+    finisher?: { name: string; durationMinutes?: number } | null
+    finisherIncluded?: boolean
+  },
+  exercises: Array<{
+    id: string
+    name: string
+    category?: string
+    sets?: number
+    reps?: string | number
+    hold?: string
+    targetRPE?: number
+    rest?: string
+    loading?: string
+    assistanceLevel?: string
+    selectionReason?: string
+    prescriptionIntent?: string
+  }>,
+  sessionEvidence?: SessionAiEvidenceSurface
+): SessionPrescriptionSurface {
+  // Build exercise prescription items
+  const prescriptionItems: ExercisePrescriptionItem[] = exercises.map(ex => {
+    // Build prescription line
+    let prescriptionLine = ''
+    if (ex.sets) {
+      if (ex.hold) {
+        prescriptionLine = `${ex.sets}x${ex.hold}`
+      } else if (ex.reps) {
+        prescriptionLine = `${ex.sets}x${ex.reps}`
+      } else {
+        prescriptionLine = `${ex.sets} sets`
+      }
+    } else if (ex.hold) {
+      prescriptionLine = ex.hold
+    } else if (ex.reps) {
+      prescriptionLine = String(ex.reps)
+    }
+    
+    // Add RPE if present
+    if (ex.targetRPE) {
+      prescriptionLine += ` @${ex.targetRPE}`
+    }
+    
+    // Determine load cue
+    let loadCue: string | null = null
+    if (ex.loading) {
+      loadCue = ex.loading
+    } else if (ex.assistanceLevel) {
+      loadCue = ex.assistanceLevel
+    }
+    
+    // Determine emphasis from prescription intent or selection reason
+    let emphasis: ExercisePrescriptionItem['emphasis'] = null
+    const intent = ex.prescriptionIntent?.toLowerCase() || ''
+    const reason = ex.selectionReason?.toLowerCase() || ''
+    const cat = (ex.category || '').toLowerCase()
+    
+    if (intent.includes('primary') || reason.includes('primary') || cat === 'skill') {
+      emphasis = 'primary'
+    } else if (intent.includes('secondary') || reason.includes('integration')) {
+      emphasis = 'secondary'
+    } else if (intent.includes('support') || cat === 'accessory') {
+      emphasis = 'support'
+    }
+    
+    return {
+      id: ex.id,
+      displayName: ex.name,
+      category: (['skill', 'strength', 'accessory', 'core', 'mobility'].includes(cat) ? cat : 'other') as ExercisePrescriptionItem['category'],
+      prescriptionLine: prescriptionLine || '—',
+      loadCue,
+      restCue: ex.rest || null,
+      emphasis,
+      source: ex.selectionReason ? 'authoritative' : 'fallback_minimal',
+    }
+  })
+  
+  // Build session headline
+  let sessionHeadline = session.name || session.focusLabel || `Day ${session.dayNumber}`
+  
+  // If we have session evidence with a better headline, use it
+  if (sessionEvidence?.sessionHeadline && sessionEvidence.source === 'authoritative') {
+    sessionHeadline = sessionEvidence.sessionHeadline
+  }
+  
+  // Build focus badge
+  let focusBadge: string | null = null
+  if (session.isPrimary) {
+    focusBadge = session.focus === 'skill' ? 'Skill Focus' : 'Strength Focus'
+  } else if (session.focus) {
+    focusBadge = session.focus.charAt(0).toUpperCase() + session.focus.slice(1)
+  }
+  
+  // Finisher summary
+  let finisherSummary: string | null = null
+  if (session.finisher && session.finisherIncluded) {
+    finisherSummary = session.finisher.durationMinutes 
+      ? `${session.finisher.name} (${session.finisher.durationMinutes}min)`
+      : session.finisher.name
+  }
+  
+  return {
+    dayLabel: session.dayLabel || `Day ${session.dayNumber}`,
+    sessionHeadline,
+    focusBadge,
+    estimatedMinutes: session.estimatedMinutes || null,
+    warmupCount: session.warmup?.length || 0,
+    cooldownCount: session.cooldown?.length || 0,
+    exercises: prescriptionItems,
+    finisherSummary,
+    source: prescriptionItems.some(p => p.source === 'authoritative') ? 'authoritative' : 'fallback_minimal',
+  }
+}
+
+// =============================================================================
+// PROGRAM-LEVEL EVIDENCE MODEL
+// =============================================================================
+
 /**
  * Build complete program-level evidence model for all sessions.
  * This provides the full bridge for consistent display.

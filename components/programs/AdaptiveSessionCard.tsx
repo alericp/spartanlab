@@ -20,9 +20,9 @@ import { trackWorkoutStarted, trackWorkoutCompleted } from '@/lib/analytics'
 import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
-import { buildExerciseCardContract, buildSessionDisplayContract, buildExerciseRowSurface, getBestRowSublabel, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
-import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, type SessionAiEvidenceSurface } from '@/lib/program/program-ai-evidence-bridge'
-import { getSessionCardVisibility, getExerciseRowVisibility, shouldShowRowIntelligence, deduplicateRowDisplay, DEFAULT_DENSITY_MODE } from '@/lib/program/program-display-priority'
+import { buildExerciseCardContract, buildExerciseRowSurface, getBestRowSublabel, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
+import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildSessionPrescriptionSurface, type SessionAiEvidenceSurface, type SessionPrescriptionSurface, type ExercisePrescriptionItem } from '@/lib/program/program-ai-evidence-bridge'
+import { getExerciseRowVisibility, shouldShowRowIntelligence, deduplicateRowDisplay, DEFAULT_DENSITY_MODE } from '@/lib/program/program-display-priority'
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { 
@@ -202,23 +202,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     return deduplicateSessionEvidence(rawEvidence)
   })()
   
-  console.log('[phase7b-style-output-contract-audit]', {
-    sessionId: `day_${session.dayNumber}`,
-    builderHasStyledGroups,
-    styledGroupsLocation: builderHasStyledGroups ? 'session.styleMetadata.styledGroups' : 'not_present',
-    sessionHasRenderableStyledGroups: builderHasStyledGroups && hasNonStraightGroups,
-    componentReceivesStyledGroups: builderHasStyledGroups,
-    componentUsesStyledGroupsForRender: builderHasStyledGroups && hasNonStraightGroups,
-    componentFallsBackToFlatExercises: !builderHasStyledGroups || !hasNonStraightGroups,
-    firstRenderCollapsePoint: !builderHasStyledGroups 
-      ? 'builder_did_not_attach_styled_groups'
-      : !hasNonStraightGroups
-        ? 'all_groups_are_straight_sets'
-        : 'no_collapse',
-    finalVerdict: builderHasStyledGroups && hasNonStraightGroups
-      ? 'style_truth_will_render_grouped'
-      : 'style_truth_will_render_flat',
-  })
+
   
   // ==========================================================================
   // [PHASE 7B TASK 2] DISPLAY COLLAPSE POINT AUDIT
@@ -516,6 +500,28 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   }
   
   // ==========================================================================
+  // [SESSION-PRESCRIPTION-SURFACE] Build compact prescription display
+  // This is the PRIMARY output for prescription-first display
+  // ==========================================================================
+  const prescriptionSurface: SessionPrescriptionSurface = buildSessionPrescriptionSurface(
+    {
+      dayNumber: session.dayNumber,
+      dayLabel: session.dayLabel,
+      name: session.name,
+      focus: session.focus,
+      focusLabel: session.focusLabel,
+      isPrimary: session.isPrimary,
+      estimatedMinutes: activeSessionView.estimatedMinutes,
+      warmup: session.warmup,
+      cooldown: session.cooldown,
+      finisher: session.finisher,
+      finisherIncluded: session.finisherIncluded,
+    },
+    displayExercises,
+    sessionEvidence
+  )
+  
+  // ==========================================================================
   // [TASK 5] VARIANT TRUTH AUDIT
   // Log whether 45 and 30 variants are actually different or collapsing together
   // ==========================================================================
@@ -716,76 +722,74 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             />
           ) : (
             <>
-              {/* [COMPRESSED] Unified Session Summary + Start Action */}
-              {(() => {
-                const sessionContract = buildSessionDisplayContract({
-                  name: session.name,
-                  dayLabel: session.dayLabel,
-                  focus: session.focus,
-                  focusLabel: session.focusLabel,
-                  isPrimary: session.isPrimary,
-                  rationale: session.rationale,
-                  estimatedMinutes: activeSessionView.estimatedMinutes,
-                  exercises: displayExercises,
-                  compositionMetadata: (session as any).compositionMetadata,
-                  skillExpressionMetadata: (session as any).skillExpressionMetadata,
-                  styleMetadata: sessionStyleMetadata,
-                  loadSummary: session.loadSummary,
-                  timeOptimization: session.timeOptimization,
-                })
-                
-                const typeColors: Record<string, { accent: string; bg: string }> = {
-                  skill_dominant: { accent: 'text-[#E63946]', bg: 'bg-[#E63946]/5' },
-                  strength_dominant: { accent: 'text-blue-400', bg: 'bg-blue-500/5' },
-                  mixed: { accent: 'text-purple-400', bg: 'bg-purple-500/5' },
-                  support: { accent: 'text-[#8A8A8A]', bg: 'bg-[#3A3A3A]/20' },
-                  density: { accent: 'text-amber-400', bg: 'bg-amber-500/5' },
-                  recovery: { accent: 'text-green-400', bg: 'bg-green-500/5' },
-                }
-                const colors = typeColors[sessionContract.sessionType] || typeColors.mixed
-                
-                // [DISPLAY-PRIORITY] Get visibility policy for prescription-first display
-                const cardVisibility = getSessionCardVisibility(DEFAULT_DENSITY_MODE)
-                
-                return (
-                  <div className={`rounded-lg ${colors.bg} border border-[#3A3A3A] p-3`}>
-                    {/* Top Row: Session Type badge only - compact */}
-                    {cardVisibility.showSessionTypeBadge && (
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`text-[10px] font-semibold uppercase tracking-wide ${colors.accent}`}>
-                          {sessionContract.sessionType.replace(/_/g, ' ')}
+              {/* =================================================================
+                  [SESSION-PRESCRIPTION-SURFACE] PRESCRIPTION-FIRST COMPACT VIEW
+                  Primary display: actual routine. Secondary: AI explanation.
+                  ================================================================= */}
+              <div className="space-y-3">
+                {/* Compact Prescription List - THE PRIMARY OUTPUT */}
+                <div className="bg-[#1A1A1A] rounded-lg border border-[#2A2A2A] overflow-hidden">
+                  {/* Header with focus badge */}
+                  <div className="px-3 py-2 border-b border-[#2A2A2A] flex items-center justify-between">
+                    <span className="text-xs font-medium text-[#A5A5A5]">
+                      {prescriptionSurface.exercises.length} exercises
+                    </span>
+                    {prescriptionSurface.focusBadge && (
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded ${
+                        session.focus === 'skill' ? 'bg-[#E63946]/10 text-[#E63946]/80' : 'bg-blue-500/10 text-blue-400/80'
+                      }`}>
+                        {prescriptionSurface.focusBadge}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Compact exercise list - scannable prescription */}
+                  <div className="divide-y divide-[#2A2A2A]">
+                    {prescriptionSurface.exercises.slice(0, 6).map((item, idx) => (
+                      <div key={item.id} className="px-3 py-2 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="text-[10px] text-[#5A5A5A] w-4 shrink-0">{idx + 1}</span>
+                          <span className={`text-sm truncate ${
+                            item.emphasis === 'primary' ? 'text-[#E6E9EF]' : 'text-[#A5A5A5]'
+                          }`}>
+                            {item.displayName}
+                          </span>
+                          {item.emphasis === 'primary' && (
+                            <span className="text-[8px] px-1 py-0.5 rounded bg-[#E63946]/10 text-[#E63946]/60 shrink-0">
+                              Main
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-[#7A7A7A] font-mono shrink-0">
+                          {item.prescriptionLine}
                         </span>
                       </div>
-                    )}
-                    
-                    {/* Objective only - no execution priority suffix for compactness */}
-                    {cardVisibility.showPrimaryObjective && (
-                      <p className="text-sm text-[#C5C5C5] leading-snug mb-3">
-                        {sessionContract.primaryObjective}
-                      </p>
-                    )}
-                    
-                    {/* Caution if present */}
-                    {sessionContract.cautionNote && (
-                      <div className="flex items-center gap-1.5 text-[10px] text-amber-400 mb-3">
-                        <AlertCircle className="w-3 h-3" />
-                        <span>{sessionContract.cautionNote}</span>
+                    ))}
+                    {prescriptionSurface.exercises.length > 6 && (
+                      <div className="px-3 py-1.5 text-[10px] text-[#5A5A5A] text-center">
+                        +{prescriptionSurface.exercises.length - 6} more exercises below
                       </div>
                     )}
-                    
-                    {/* Start Button - Primary Action */}
-                    <Button
-                      onClick={handleStartWorkout}
-                      className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2 h-10"
-                    >
-                      <Play className="w-4 h-4" />
-                      Start Workout
-                    </Button>
                   </div>
-                )
-              })()}
-
-  {/* [DISPLAY-PRIORITY] Variety info and adaptation notes suppressed - available in modal */}
+                  
+                  {/* Summary footer */}
+                  <div className="px-3 py-2 border-t border-[#2A2A2A] flex items-center justify-between text-[10px] text-[#6A6A6A]">
+                    <span>{prescriptionSurface.warmupCount} warmup · {prescriptionSurface.cooldownCount} cooldown</span>
+                    {prescriptionSurface.finisherSummary && (
+                      <span className="text-[#E63946]/60">+ Finisher</span>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Start Button - Primary Action */}
+                <Button
+                  onClick={handleStartWorkout}
+                  className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2 h-10"
+                >
+                  <Play className="w-4 h-4" />
+                  Start Workout
+                </Button>
+              </div>
 
           {/* [TASK 4] Time Variants - Improved toggle behavior
               - Full Session = null or 0 (explicitly reset to full)

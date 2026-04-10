@@ -20115,6 +20115,62 @@ function generateAdaptiveSession(
     return fallback
   }
   
+  // ==========================================================================
+  // [SAFE SNAPSHOT HELPER] Build safe snapshot from potentially malformed input
+  // This helper NEVER throws - it sanitizes malformed entries before any spread
+  // ==========================================================================
+  const buildSafeEffectiveMainSnapshot = (input: unknown): {
+    safeArray: any[]
+    safeSnapshot: any[]
+    safeNames: string[]
+    invalidCount: number
+    droppedIndexes: number[]
+    hadMalformedEntries: boolean
+  } => {
+    // If input is not an array, return empty safe structures
+    if (!Array.isArray(input)) {
+      return {
+        safeArray: [],
+        safeSnapshot: [],
+        safeNames: [],
+        invalidCount: 0,
+        droppedIndexes: [],
+        hadMalformedEntries: false,
+      }
+    }
+    
+    const safeArray: any[] = []
+    const safeSnapshot: any[] = []
+    const safeNames: string[] = []
+    const droppedIndexes: number[] = []
+    
+    for (let i = 0; i < input.length; i++) {
+      const candidate = input[i]
+      
+      // Only include candidates that are non-null objects (safe to spread)
+      if (candidate !== null && candidate !== undefined && typeof candidate === 'object' && !Array.isArray(candidate)) {
+        // Safe to spread - this is a valid object
+        safeArray.push(candidate)
+        safeSnapshot.push({ ...candidate })
+        // Safely extract name with optional chaining only
+        const name = candidate?.exercise?.name ?? candidate?.name ?? 'unknown'
+        safeNames.push(typeof name === 'string' ? name : 'unknown')
+      } else {
+        // Invalid candidate - drop and record
+        droppedIndexes.push(i)
+      }
+    }
+    
+    return {
+      safeArray,
+      safeSnapshot,
+      safeNames,
+      invalidCount: droppedIndexes.length,
+      droppedIndexes,
+      hadMalformedEntries: droppedIndexes.length > 0,
+    }
+  }
+  
   // [DB-TRUTH-MAIN-RANKING-ENTER] Log entry into corridor
   console.log('[db-truth-main-ranking-enter]', {
     candidateCount: effectiveMainForSession?.length ?? 0,
@@ -20147,6 +20203,29 @@ function generateAdaptiveSession(
   // - Rerank failure must NEVER degrade or preserve-last-good the rebuild by itself
   // ==========================================================================
   
+  // ==========================================================================
+  // [PRE-TRY SANITIZATION] Sanitize input BEFORE any operations that could throw
+  // This is the fail-open boundary - everything after this uses sanitized data
+  // ==========================================================================
+  const preRerankSafe = buildSafeEffectiveMainSnapshot(effectiveMainForSession)
+  
+  // Log sanitization results
+  console.log('[db-truth-main-ranking-pretry-sanitization]', {
+    sessionIndex,
+    dayFocus: day?.focus ?? 'unknown',
+    rawWasArray: Array.isArray(effectiveMainForSession),
+    rawCount: Array.isArray(effectiveMainForSession) ? effectiveMainForSession.length : 0,
+    safeCount: preRerankSafe.safeArray.length,
+    invalidCount: preRerankSafe.invalidCount,
+    droppedIndexes: preRerankSafe.droppedIndexes.slice(0, 10),
+    hadMalformedEntries: preRerankSafe.hadMalformedEntries,
+    verdict: 'PRETRY_SANITIZATION_COMPLETE',
+  })
+  
+  // Replace effectiveMainForSession with sanitized version
+  // This makes sanitized array the authoritative baseline for this corridor
+  effectiveMainForSession = preRerankSafe.safeArray
+  
   // Track non-fatal audit for this optional enhancement corridor
   let dbTruthMainRankingAudit: {
     attempted: boolean
@@ -20159,6 +20238,8 @@ function generateAdaptiveSession(
     exactErrorMessage: string | null
     preservedCandidateCount: number
     preservedExerciseNames: string[]
+    invalidCountAtBoundary: number
+    droppedIndexes: number[]
   } = {
     attempted: false,
     succeeded: false,
@@ -20168,37 +20249,41 @@ function generateAdaptiveSession(
     exactCheckpoint: null,
     exactErrorName: null,
     exactErrorMessage: null,
-    preservedCandidateCount: effectiveMainForSession.length,
-    preservedExerciseNames: effectiveMainForSession.slice(0, 5).map(e => e?.exercise?.name || 'unknown'),
+    preservedCandidateCount: preRerankSafe.safeArray.length,
+    preservedExerciseNames: preRerankSafe.safeNames.slice(0, 5),
+    invalidCountAtBoundary: preRerankSafe.invalidCount,
+    droppedIndexes: preRerankSafe.droppedIndexes,
   }
   
-  // [HARD GUARD] All conditions must be true to attempt rerank
+  // [HARD GUARD] All conditions must be true to attempt rerank - uses SANITIZED input
   const rerankEligible = 
-    Array.isArray(effectiveMainForSession) &&
-    effectiveMainForSession.length > 1 &&
+    preRerankSafe.safeArray.length > 1 &&
     !!dbTruthRankingModifiers &&
     dbTruthRankingModifiers.sourceConfidence !== 'none'
   
   if (!rerankEligible) {
     // Skip rerank cleanly - do NOT create degraded state
     dbTruthMainRankingAudit.skipped = true
-    dbTruthMainRankingAudit.skipReason = !Array.isArray(effectiveMainForSession) 
-      ? 'effectiveMainForSession_not_array'
-      : effectiveMainForSession.length <= 1
-        ? 'insufficient_candidates'
+    dbTruthMainRankingAudit.skipReason = preRerankSafe.safeArray.length === 0
+      ? 'no_valid_candidates_after_sanitization'
+      : preRerankSafe.safeArray.length <= 1
+        ? 'insufficient_candidates_after_sanitization'
         : !dbTruthRankingModifiers
           ? 'no_ranking_modifiers'
           : 'source_confidence_none'
     
-    console.log('[db-truth-main-ranking-skipped]', {
+    // [DB-TRUTH-MAIN-RANKING-PRETRY-SKIP] Log skip with sanitization context
+    console.log('[db-truth-main-ranking-pretry-skip]', {
       sessionIndex,
       focus: day?.focus ?? 'unknown',
       reason: dbTruthMainRankingAudit.skipReason,
-      candidateCount: effectiveMainForSession?.length ?? 0,
-      verdict: 'SKIPPED_CLEANLY_NO_DEGRADED_STATE',
+      safeCount: preRerankSafe.safeArray.length,
+      invalidCount: preRerankSafe.invalidCount,
+      hadMalformedEntries: preRerankSafe.hadMalformedEntries,
+      verdict: 'PASS_RERANK_SKIPPED_AFTER_SANITIZATION',
     })
     
-    // [DB-TRUTH-MAIN-RANKING-FINAL-VERDICT] Corridor skipped - not eligible
+    // [DB-TRUTH-MAIN-RANKING-FINAL-VERDICT] Corridor skipped - not eligible after sanitization
     console.log('[db-truth-main-ranking-final-verdict]', {
       sessionIndex,
       dayFocus: day?.focus ?? 'unknown',
@@ -20206,7 +20291,8 @@ function generateAdaptiveSession(
       candidatesProcessed: 0,
       rankingApplied: false,
       shapeCrash: false,
-      verdict: 'PASS_RERANK_SKIPPED',
+      invalidCountAtBoundary: preRerankSafe.invalidCount,
+      verdict: 'PASS_RERANK_SKIPPED_AFTER_SANITIZATION',
     })
   }
   
@@ -20215,16 +20301,20 @@ function generateAdaptiveSession(
     dbTruthMainRankingAudit.attempted = true
     
     // ==========================================================================
-    // [IMMUTABLE ROLLBACK SNAPSHOT] Capture pre-rerank state for fail-open recovery
-    // This is the authoritative baseline if any enhancement logic fails
+    // [SAFE ROLLBACK BASELINE] Use pre-sanitized snapshot for fail-open recovery
+    // This was created BEFORE any operations that could throw
+    // The safeSnapshot is the authoritative baseline if any enhancement logic fails
     // ==========================================================================
-    const preRerankSnapshot = effectiveMainForSession.map(ex => ({ ...ex }))
-    const preRerankNames = preRerankSnapshot.map(e => e?.exercise?.name || 'unknown')
+    const preRerankSnapshot = preRerankSafe.safeSnapshot
+    const preRerankNames = preRerankSafe.safeNames
     
     // Local checkpoint tracker for precise failure diagnosis
     let localCheckpoint = 'corridor_entered'
     
-    // Wrap entire corridor in try-catch for FAIL-OPEN behavior
+    // ==========================================================================
+    // [FAIL-OPEN TRY/CATCH] Everything inside this block is non-fatal
+    // If ANY operation fails, we restore preRerankSnapshot and continue
+    // ==========================================================================
     try {
       // [CHECKPOINT] before_shape_audit
       localCheckpoint = 'before_shape_audit'
@@ -20519,7 +20609,7 @@ function generateAdaptiveSession(
       dbTruthMainRankingAudit.exactErrorName = errorName
       dbTruthMainRankingAudit.exactErrorMessage = errorMessage
       
-      // [DB-TRUTH-MAIN-RANKING-NONFATAL-FAILURE] Log exact failure point
+      // [DB-TRUTH-MAIN-RANKING-NONFATAL-FAILURE] Log exact failure point with sanitization context
       console.log('[db-truth-main-ranking-nonfatal-failure]', {
         exactCheckpoint: localCheckpoint,
         sessionIndex,
@@ -20528,6 +20618,9 @@ function generateAdaptiveSession(
         candidateCountAfterRollback: preRerankSnapshot.length,
         firstFewNamesBeforeRollback: effectiveMainForSession?.slice?.(0, 3)?.map?.(e => e?.exercise?.name || 'unknown') ?? [],
         firstFewNamesAfterRollback: preRerankNames.slice(0, 3),
+        invalidCountAtBoundary: preRerankSafe.invalidCount,
+        droppedIndexes: preRerankSafe.droppedIndexes.slice(0, 10),
+        rollbackSource: 'SAFE_PRETRY_SNAPSHOT',
         errorName,
         errorMessage,
         stack: corridorErr instanceof Error ? corridorErr.stack?.split('\n').slice(0, 5).join('\n') : '',

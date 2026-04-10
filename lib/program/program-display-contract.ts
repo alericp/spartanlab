@@ -2571,28 +2571,24 @@ export function buildExercisePurposeLine(
       return 'Raises your pressing ceiling — stronger foundation means faster skill progress.'
     }
     
-    // Pull strength with specific decision context
+    // Pull strength — LOCAL FUNCTION FIRST, skill carryover second
     if (categoryLower === 'pull' || (categoryLower === 'strength' && (sessionFocusLower.includes('pull') || exerciseNameLower.includes('row') || exerciseNameLower.includes('pull')))) {
-      if (isExerciseType(['row', 'front lever row', 'fl row'])) {
-        if (primaryGoalLower.includes('front lever')) {
-          return 'Rows in this position build the exact pulling strength your front lever needs.'
+      if (isExerciseType(['row', 'front lever row', 'fl row', 'inverted row', 'ring row'])) {
+        // Horizontal pulling - state the pulling function first
+        if (isExerciseType(['front lever row', 'fl row'])) {
+          return 'Horizontal pulling in lever position — builds scap retraction and lat strength under straight-arm demand.'
         }
-        return 'Horizontal pulling that directly transfers into lever work — high carryover choice.'
+        return 'Horizontal pulling slot — develops scap control and mid-back strength that transfers into skill positions.'
       }
-      if (isExerciseType(['pull-up', 'pullup', 'chin'])) {
-        if (primaryGoalLower.includes('front lever')) {
-          return 'Vertical pulling builds the lat strength front lever depends on — foundational work.'
-        } else if (primaryGoalLower.includes('muscle')) {
-          return 'Pull-up strength is the foundation muscle-up is built on — stronger here, easier transition.'
-        }
-        return 'Vertical pulling that raises your pulling ceiling for skill work.'
+      if (isExerciseType(['pull-up', 'pullup', 'chin', 'weighted pull'])) {
+        // Vertical pulling - state the pulling function first
+        return 'Vertical pulling slot — builds lat and grip strength; the foundation pulling skills require.'
       }
-      if (primaryGoalLower.includes('front lever')) {
-        return 'Pulling strength that transfers into front lever without the skill fatigue cost.'
-      } else if (primaryGoalLower.includes('muscle')) {
-        return 'Builds the pulling foundation your muscle-up transition depends on.'
+      if (isExerciseType(['muscle-up', 'transition'])) {
+        return 'Transition pattern slot — trains the pull-to-push coordination the muscle-up depends on.'
       }
-      return 'Pulling work that raises your ceiling — stronger foundation, faster skill progress.'
+      // Generic pull - state local function
+      return 'Pulling strength slot — builds the back and grip foundation your skill work is built on.'
     }
     
     // Generic strength with session context
@@ -2671,31 +2667,42 @@ export function buildExercisePurposeLine(
   }
   
   // ==========================================================================
-  // PRIORITY 5: Core / trunk — WHY THIS SLOT EXISTS
+  // PRIORITY 5: Core / trunk — LOCAL TRUNK FUNCTION FIRST
   // ==========================================================================
   if (categoryLower === 'core') {
-    if (primaryGoalLower.includes('planche')) {
-      if (isExerciseType(['hollow', 'dish'])) {
-        return 'Hollow position is your planche position — weak here means weak planche line.'
-      }
-      return 'Core slot — planche demands trunk compression; this is where that ceiling is built.'
+    // State the LOCAL trunk function first, then connect to skill if relevant
+    if (isExerciseType(['hollow', 'dish', 'hollow body', 'hollow hold'])) {
+      return 'Hollow pattern slot — builds trunk compression and anti-extension; the body position straight-arm skills require.'
     }
-    if (primaryGoalLower.includes('lever')) {
-      if (isExerciseType(['hollow', 'dish'])) {
-        return 'Hollow tension is your lever tension — this directly transfers to your hold.'
-      }
-      return 'Core slot — lever holds demand full-body tension; this is where that ceiling is built.'
+    if (isExerciseType(['deadbug', 'dead bug'])) {
+      return 'Anti-extension control slot — teaches trunk stability while limbs move; transfers to loaded positions.'
     }
-    if (primaryGoalLower.includes('handstand')) {
-      return 'Core slot — handstand line depends on midline stability; weak core means broken line.'
+    if (isExerciseType(['pallof', 'anti-rotation'])) {
+      return 'Anti-rotation slot — builds rotational stiffness for better body control under load.'
     }
-    if (reasonLower.includes('hollow') || reasonLower.includes('anti-extension') || isExerciseType(['hollow', 'dish', 'deadbug'])) {
-      return 'Hollow pattern slot — transfers directly to your skill positions.'
+    if (isExerciseType(['plank', 'front plank', 'rkc'])) {
+      return 'Anti-extension hold slot — builds the midline stiffness loaded positions demand.'
     }
-    if (reasonLower.includes('rotation') || reasonLower.includes('pallof') || isExerciseType(['pallof', 'anti-rotation'])) {
-      return 'Anti-rotation slot — improves body control under load.'
+    if (isExerciseType(['l-sit', 'l sit', 'lsit'])) {
+      return 'Compression slot — builds hip flexor and trunk strength for tucked and compressed positions.'
     }
-    return 'Core slot — trunk stability is a ceiling for skill expression.'
+    if (isExerciseType(['leg raise', 'hanging leg', 'toes to bar'])) {
+      return 'Compression strength slot — builds the hip flexor and ab strength skill holds require.'
+    }
+    if (isExerciseType(['side plank', 'copenhagen'])) {
+      return 'Lateral stability slot — builds oblique control for better line under load.'
+    }
+    if (isExerciseType(['reverse hyper', 'back extension', 'superman'])) {
+      return 'Posterior chain slot — builds lower-back and glute endurance for position control.'
+    }
+    // Generic core fallback - still state local function
+    if (reasonLower.includes('compression') || reasonLower.includes('hollow')) {
+      return 'Trunk compression slot — builds the midline stiffness your skill positions require.'
+    }
+    if (reasonLower.includes('anti-extension')) {
+      return 'Anti-extension slot — trains the trunk not to collapse under load.'
+    }
+    return 'Trunk stability slot — midline strength is a ceiling for skill expression.'
   }
   
   // ==========================================================================
@@ -2730,39 +2737,41 @@ export function buildExercisePurposeLine(
   }
   
   // ==========================================================================
-  // PRIORITY 8: Program-calibrated fallbacks — NO EMPTY RETURNS
+  // PRIORITY 8: Support fallbacks — LOCAL FUNCTION FIRST
   // ==========================================================================
   
-  // Support with goal context
+  // Support with role context - describe LOCAL role, not just goal
   if (emphasisKind === 'support') {
-    if (primaryGoalLower) {
-      return `Support slot for ${goalName()} — raises usable strength without stealing skill recovery.`
-    }
-    // Even without goal, explain the role
     if (roleInSession.includes('accessory')) {
-      return 'Accessory slot — targeted volume that feeds your main work without high fatigue cost.'
+      return 'Accessory slot — targeted volume that builds capacity without high fatigue cost.'
     }
-    return 'Support slot — builds capacity that transfers to your priority work.'
+    if (sessionFocusLower.includes('push')) {
+      return 'Support pressing slot — builds capacity for your pressing work without skill fatigue.'
+    }
+    if (sessionFocusLower.includes('pull')) {
+      return 'Support pulling slot — builds capacity for your pulling work without skill fatigue.'
+    }
+    return 'Support slot — builds foundational capacity your main work depends on.'
   }
   
   // ==========================================================================
-  // PRIORITY 9: Ultimate fallback — ALWAYS explain something meaningful
+  // PRIORITY 9: Ultimate fallback — LOCAL FUNCTION, NOT GOAL-LABELED
   // ==========================================================================
   
-  // Try to derive from session role/expression mode
+  // Expression mode fallback - describe what it does
   if (expressionMode.includes('support') || expressionMode.includes('accessory')) {
-    if (primaryGoalLower) {
-      return `Placed here to support ${goalName()} without competing for skill recovery.`
-    }
-    return 'Support volume — builds the foundation your priority work depends on.'
+    return 'Support volume — builds the foundation your priority work is built on.'
   }
   
-  // Category + goal combination
-  if (categoryLower === 'strength' || categoryLower === 'push' || categoryLower === 'pull') {
-    if (primaryGoalLower) {
-      return `Strength slot that transfers into ${goalName()} — raises your ceiling.`
-    }
-    return 'Strength slot — this builds the base your skill work depends on.'
+  // Category fallback - describe local function
+  if (categoryLower === 'strength') {
+    return 'Strength slot — builds the force output foundation your skill work requires.'
+  }
+  if (categoryLower === 'push') {
+    return 'Pressing strength slot — builds the pressing foundation your overhead and horizontal work needs.'
+  }
+  if (categoryLower === 'pull') {
+    return 'Pulling strength slot — builds the back and grip strength your pulling skills need.'
   }
   
   // Warmup/activation
@@ -2770,12 +2779,8 @@ export function buildExercisePurposeLine(
     return 'Prep slot — primes the patterns you need ready before main work.'
   }
   
-  // Absolute fallback with whatever context we have
-  if (primaryGoalLower) {
-    return `Included to support ${goalName()} progression — complements your priority work.`
-  }
-  
-  return 'Selected to complement your session — builds capacity for your main goals.'
+  // Absolute fallback - still describe function, not just "supports goal"
+  return 'Capacity slot — builds strength that transfers into your main work.'
 }
 
 // =============================================================================
@@ -3030,39 +3035,32 @@ export function buildExerciseRowSurface(
   }
   
   // ==========================================================================
-  // D. Build intent label from expression mode + role — PROGRAM-CALIBRATED
+  // D. Build intent label — LOCAL FUNCTION FIRST, not goal-labeled
   // ==========================================================================
   let intentLabel: string | null = null
   const sessionIntent = (sessionContext?.compositionMetadata?.sessionIntent || '').toLowerCase()
-  const primaryGoalLower = (sessionContext?.primaryGoal || '').replace(/_/g, ' ').toLowerCase()
   
-  // Helper: derive goal name for phrasing
-  const goalName = (): string => {
-    if (primaryGoalLower.includes('planche')) return 'planche'
-    if (primaryGoalLower.includes('front lever')) return 'front lever'
-    if (primaryGoalLower.includes('back lever')) return 'back lever'
-    if (primaryGoalLower.includes('handstand')) return 'handstand'
-    if (primaryGoalLower.includes('muscle up') || primaryGoalLower.includes('muscle-up')) return 'muscle-up'
-    return 'skill'
-  }
-  
-  // PRIORITY 1: Expression mode signals (most specific)
+  // PRIORITY 1: Expression mode signals (for direct skill work only)
   if (expressionMode.includes('direct') || expressionMode.includes('intensity')) {
-    intentLabel = primaryGoalLower ? `Primary ${goalName()} exposure` : 'Primary skill exposure'
+    // Only skill work should be goal-labeled
+    intentLabel = 'Primary skill exposure'
     source = 'authoritative'
   } else if (expressionMode.includes('technical') || expressionMode.includes('carryover')) {
-    intentLabel = primaryGoalLower ? `Transfers into ${goalName()}` : 'Technical carryover'
+    intentLabel = 'Technical carryover'
     source = 'authoritative'
   } else if (expressionMode.includes('support') || expressionMode.includes('strength_support')) {
-    intentLabel = primaryGoalLower ? `Strength base for ${goalName()}` : 'Foundation builder'
+    intentLabel = 'Strength foundation'
     source = 'authoritative'
   }
-  // PRIORITY 2: Role in session signals
+  // PRIORITY 2: Role in session signals — LOCAL function labels
   else if (roleInSession.includes('primary') || roleInSession.includes('main')) {
-    intentLabel = 'Main driver today'
+    intentLabel = 'Main driver'
     source = 'authoritative'
-  } else if (roleInSession.includes('support') || roleInSession.includes('accessory')) {
-    intentLabel = primaryGoalLower ? `Support for ${goalName()}` : 'Capacity builder'
+  } else if (roleInSession.includes('support')) {
+    intentLabel = 'Support volume'
+    source = 'authoritative'
+  } else if (roleInSession.includes('accessory')) {
+    intentLabel = 'Accessory work'
     source = 'authoritative'
   } else if (roleInSession.includes('overload')) {
     intentLabel = 'Overload slot'
@@ -3071,59 +3069,82 @@ export function buildExerciseRowSurface(
     intentLabel = 'Technique slot'
     source = 'authoritative'
   }
-  // PRIORITY 3: Category with goal context (NOT generic category alone)
+  // PRIORITY 3: Category — LOCAL function labels, NOT goal-labeled
   else if (categoryLower === 'skill') {
-    intentLabel = primaryGoalLower ? `${goalName()} work` : 'Skill work'
+    intentLabel = 'Skill work'
     source = 'authoritative'
-  } else if (categoryLower === 'strength' || categoryLower === 'push' || categoryLower === 'pull') {
-    // Derive from session intent when available
+  } else if (categoryLower === 'push') {
+    // State the pressing function
+    if (sessionIntent.includes('overload') || sessionIntent.includes('strength')) {
+      intentLabel = 'Pressing overload'
+    } else if (sessionIntent.includes('volume')) {
+      intentLabel = 'Pressing volume'
+    } else {
+      intentLabel = 'Pressing strength'
+    }
+    source = 'authoritative'
+  } else if (categoryLower === 'pull') {
+    // State the pulling function
+    if (sessionIntent.includes('overload') || sessionIntent.includes('strength')) {
+      intentLabel = 'Pulling overload'
+    } else if (sessionIntent.includes('volume')) {
+      intentLabel = 'Pulling volume'
+    } else {
+      intentLabel = 'Pulling strength'
+    }
+    source = 'authoritative'
+  } else if (categoryLower === 'strength') {
     if (sessionIntent.includes('overload') || sessionIntent.includes('strength')) {
       intentLabel = 'Strength overload'
     } else if (sessionIntent.includes('volume')) {
       intentLabel = 'Strength volume'
-    } else if (primaryGoalLower) {
-      intentLabel = `Strength for ${goalName()}`
     } else {
       intentLabel = 'Strength builder'
     }
     source = 'authoritative'
   } else if (categoryLower === 'core') {
-    intentLabel = primaryGoalLower ? `Core for ${goalName()}` : 'Trunk stability'
+    // State trunk function, not goal
+    intentLabel = 'Trunk stability'
     source = 'authoritative'
   } else if (categoryLower === 'accessory') {
+    // State local accessory function
     if (reasonLower.includes('scap') || reasonLower.includes('shoulder')) {
-      intentLabel = 'Scap stability'
+      intentLabel = 'Scap control'
     } else if (reasonLower.includes('posterior') || reasonLower.includes('rear')) {
-      intentLabel = 'Posterior balance'
-    } else if (primaryGoalLower) {
-      intentLabel = `Accessory for ${goalName()}`
+      intentLabel = 'Posterior chain'
+    } else if (reasonLower.includes('push') || reasonLower.includes('press')) {
+      intentLabel = 'Press accessory'
+    } else if (reasonLower.includes('pull') || reasonLower.includes('row')) {
+      intentLabel = 'Pull accessory'
     } else {
-      intentLabel = 'Targeted support'
+      intentLabel = 'Targeted accessory'
     }
     source = 'authoritative'
   } else if (categoryLower === 'mobility' || categoryLower === 'flexibility') {
     if (reasonLower.includes('shoulder') || reasonLower.includes('overhead')) {
-      intentLabel = 'Shoulder range'
+      intentLabel = 'Shoulder mobility'
     } else if (reasonLower.includes('hip') || reasonLower.includes('pike')) {
-      intentLabel = 'Hip range'
+      intentLabel = 'Hip mobility'
+    } else if (reasonLower.includes('wrist')) {
+      intentLabel = 'Wrist prep'
     } else {
-      intentLabel = 'Range unlocking'
+      intentLabel = 'Range work'
     }
     source = 'authoritative'
   }
   
   // PRIORITY 4: Selection reason keywords for specificity override
   if (reasonLower.includes('volume build') || reasonLower.includes('accumulation')) {
-    intentLabel = 'Volume accumulation'
+    intentLabel = 'Volume slot'
     source = 'authoritative'
   } else if (reasonLower.includes('technique') || reasonLower.includes('form') || reasonLower.includes('quality')) {
-    intentLabel = 'Technique quality'
+    intentLabel = 'Technique slot'
     source = 'authoritative'
   } else if (reasonLower.includes('recovery') || reasonLower.includes('deload')) {
     intentLabel = 'Recovery-aware'
     source = 'authoritative'
   } else if (reasonLower.includes('overload') || reasonLower.includes('max')) {
-    intentLabel = 'Overload intent'
+    intentLabel = 'Overload slot'
     source = 'authoritative'
   } else if (reasonLower.includes('tissue') || reasonLower.includes('protect')) {
     intentLabel = 'Tissue-managed'

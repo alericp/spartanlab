@@ -2305,6 +2305,251 @@ export function buildExercisePurposeLine(
     return 'your skill'
   }
   
+  // Helper: check if exercise is a specific type by name
+  const isExerciseType = (keywords: string[]): boolean => {
+    return keywords.some(kw => exerciseNameLower.includes(kw))
+  }
+  
+  // ==========================================================================
+  // PRIORITY 1: Primary skill/direct progression — WHY THIS CHOICE WON
+  // ==========================================================================
+  if (emphasisKind === 'primary' || exercise.isPrimary || categoryLower === 'skill') {
+    if (expressionMode.includes('direct') || expressionMode.includes('intensity') || spineType.includes('direct')) {
+      if (primaryGoalLower.includes('planche')) {
+        if (isExerciseType(['lean', 'planche lean'])) {
+          return 'This builds the forward lean tolerance your planche needs — harder progressions require this foundation first.'
+        }
+        if (isExerciseType(['tuck', 'adv tuck', 'straddle'])) {
+          return 'Placed here to accumulate quality time in position — planche improves through controlled exposure, not grinding.'
+        }
+        return 'Your primary straight-arm driver today — this is where planche strength actually gets built.'
+      } else if (primaryGoalLower.includes('front lever')) {
+        if (isExerciseType(['tuck', 'adv tuck', 'straddle'])) {
+          return 'Placed here for quality pulling tension — front lever grows from controlled holds, not max attempts.'
+        }
+        return 'Your primary horizontal pull driver — this directly builds the strength front lever requires.'
+      } else if (primaryGoalLower.includes('back lever')) {
+        return 'Your primary straight-arm driver — builds the shoulder extension control back lever demands.'
+      } else if (primaryGoalLower.includes('handstand')) {
+        return 'Your primary overhead driver — handstand pressing strength comes from quality work here.'
+      } else if (primaryGoalLower.includes('muscle')) {
+        return 'Your primary transition driver — this builds the explosive pull-to-push your muscle-up needs.'
+      }
+      return 'Your primary skill driver today — this is where real progress happens.'
+    }
+    if (categoryLower === 'skill') {
+      if (primaryGoalLower.includes('planche')) {
+        return 'Direct planche exposure with managed fatigue — pattern quality matters more than grinding.'
+      } else if (primaryGoalLower.includes('lever')) {
+        return 'Direct lever exposure — builds the movement pattern without burning recovery for strength work.'
+      }
+      return 'Direct skill exposure — reinforces movement quality without excessive fatigue cost.'
+    }
+    return null
+  }
+  
+  // ==========================================================================
+  // PRIORITY 2: Strength / carryover — WHY THIS TRANSFERS
+  // ==========================================================================
+  if (emphasisKind === 'secondary' || categoryLower === 'strength' || categoryLower === 'push' || categoryLower === 'pull') {
+    // Carryover/technical expression
+    if (expressionMode.includes('carryover') || expressionMode.includes('technical')) {
+      return `Transfers directly into ${goalName()} with lower fatigue cost than skill work — efficient strength building.`
+    }
+    
+    // Push strength with specific decision context
+    if (categoryLower === 'push' || (categoryLower === 'strength' && (sessionFocusLower.includes('push') || exerciseNameLower.includes('dip') || exerciseNameLower.includes('push')))) {
+      if (isExerciseType(['dip', 'ring dip', 'weighted dip'])) {
+        if (primaryGoalLower.includes('planche')) {
+          return 'Dips build the pressing foundation planche needs — stronger here means easier progression later.'
+        }
+        return 'Dips raise your pressing ceiling — this transfers into skill work without the skill fatigue.'
+      }
+      if (isExerciseType(['push-up', 'pushup', 'pppu', 'pseudo'])) {
+        if (primaryGoalLower.includes('planche')) {
+          return 'Builds pressing endurance in a planche-relevant position — high carryover, lower joint cost.'
+        }
+        return 'Pressing work that transfers into your skill positions without excessive joint stress.'
+      }
+      if (primaryGoalLower.includes('planche')) {
+        return 'Raises your pressing output — stronger push means easier planche progression.'
+      } else if (primaryGoalLower.includes('handstand')) {
+        return 'Builds the overhead pressing strength your handstand work depends on.'
+      }
+      return 'Raises your pressing ceiling — stronger foundation means faster skill progress.'
+    }
+    
+    // Pull strength with specific decision context
+    if (categoryLower === 'pull' || (categoryLower === 'strength' && (sessionFocusLower.includes('pull') || exerciseNameLower.includes('row') || exerciseNameLower.includes('pull')))) {
+      if (isExerciseType(['row', 'front lever row', 'fl row'])) {
+        if (primaryGoalLower.includes('front lever')) {
+          return 'Rows in this position build the exact pulling strength your front lever needs.'
+        }
+        return 'Horizontal pulling that directly transfers into lever work — high carryover choice.'
+      }
+      if (isExerciseType(['pull-up', 'pullup', 'chin'])) {
+        if (primaryGoalLower.includes('front lever')) {
+          return 'Vertical pulling builds the lat strength front lever depends on — foundational work.'
+        } else if (primaryGoalLower.includes('muscle')) {
+          return 'Pull-up strength is the foundation muscle-up is built on — stronger here, easier transition.'
+        }
+        return 'Vertical pulling that raises your pulling ceiling for skill work.'
+      }
+      if (primaryGoalLower.includes('front lever')) {
+        return 'Pulling strength that transfers into front lever without the skill fatigue cost.'
+      } else if (primaryGoalLower.includes('muscle')) {
+        return 'Builds the pulling foundation your muscle-up transition depends on.'
+      }
+      return 'Pulling work that raises your ceiling — stronger foundation, faster skill progress.'
+    }
+    
+    // Generic strength with session context
+    if (roleInSession.includes('support')) {
+      return `Builds capacity for ${goalName()} without competing for skill recovery — efficient volume.`
+    }
+    
+    return `Foundational strength that ${goalName()} progression depends on — raises your ceiling.`
+  }
+  
+  // ==========================================================================
+  // PRIORITY 3: Protection / tissue-management — WHY THIS DOSAGE
+  // ==========================================================================
+  if (emphasisKind === 'protection' || exercise.isProtected) {
+    if (reasonLower.includes('straight-arm') || reasonLower.includes('straight arm')) {
+      return 'Protects straight-arm tissue while maintaining exposure — tendons adapt slower than muscles.'
+    }
+    if (reasonLower.includes('shoulder') || reasonLower.includes('scap')) {
+      return 'Keeps you training while protecting shoulder tissue — sustainable progress requires managed load.'
+    }
+    if (reasonLower.includes('elbow') || reasonLower.includes('tendon')) {
+      return 'Manages connective tissue load — pushing too fast here causes setbacks that cost weeks.'
+    }
+    return 'Tissue management — keeps you progressing without accumulating the injury risk that stalls progress.'
+  }
+  
+  // ==========================================================================
+  // PRIORITY 4: Accessory — WHY THIS INSTEAD OF MORE MAIN WORK
+  // ==========================================================================
+  if (categoryLower === 'accessory') {
+    // Scapular/shoulder stability
+    if (reasonLower.includes('scap') || reasonLower.includes('shoulder') || isExerciseType(['face pull', 'y raise', 'i raise', 'cuban'])) {
+      if (primaryGoalLower.includes('planche') || primaryGoalLower.includes('lever')) {
+        return 'Scapular control directly improves your skill positions — this is prep work, not filler.'
+      }
+      return 'Builds the scapular stability your pressing and pulling depend on — not optional.'
+    }
+    
+    // Posterior chain / rear delt
+    if (reasonLower.includes('rear delt') || reasonLower.includes('posterior') || isExerciseType(['rear delt', 'reverse fly'])) {
+      return 'Balances your anterior work — keeps shoulders healthy as pressing volume increases.'
+    }
+    
+    // Hypertrophy intent
+    if (reasonLower.includes('hypertrophy') || reasonLower.includes('size')) {
+      return 'Adds muscle where your skill progress needs it — targeted hypertrophy, not random volume.'
+    }
+    
+    // Tricep work
+    if (isExerciseType(['tricep', 'pushdown', 'extension', 'skull'])) {
+      if (primaryGoalLower.includes('planche') || primaryGoalLower.includes('handstand')) {
+        return 'Tricep strength supports your pressing — builds capacity without skill fatigue.'
+      }
+      return 'Tricep work that supports your pressing goals without competing for recovery.'
+    }
+    
+    // Bicep/curl work
+    if (isExerciseType(['bicep', 'curl'])) {
+      if (primaryGoalLower.includes('lever') || primaryGoalLower.includes('muscle')) {
+        return 'Bicep strength supports your pulling — builds capacity without skill fatigue.'
+      }
+      return 'Pulling support that builds capacity without competing for recovery.'
+    }
+    
+    // Push accessory
+    if (reasonLower.includes('push') || reasonLower.includes('press') || sessionFocusLower.includes('push')) {
+      return 'Adds pressing volume without overloading skill fatigue — efficient capacity building.'
+    }
+    
+    // Pull accessory
+    if (reasonLower.includes('pull') || reasonLower.includes('row') || sessionFocusLower.includes('pull')) {
+      return 'Adds pulling volume without overloading skill fatigue — efficient capacity building.'
+    }
+    
+    return 'Supports your main work without competing for recovery — volume where it counts.'
+  }
+  
+  // ==========================================================================
+  // PRIORITY 5: Core / trunk — WHY THIS IS NOT OPTIONAL
+  // ==========================================================================
+  if (categoryLower === 'core') {
+    if (primaryGoalLower.includes('planche')) {
+      if (isExerciseType(['hollow', 'dish'])) {
+        return 'Hollow position is your planche position — weak here means weak planche line.'
+      }
+      return 'Planche demands trunk compression under load — this is limiting for most, not filler.'
+    }
+    if (primaryGoalLower.includes('lever')) {
+      if (isExerciseType(['hollow', 'dish'])) {
+        return 'Hollow tension is your lever tension — this directly transfers to your hold.'
+      }
+      return 'Lever holds demand full-body tension — core is often the weak link.'
+    }
+    if (primaryGoalLower.includes('handstand')) {
+      return 'Handstand line depends on midline stability — weak core means broken line.'
+    }
+    if (reasonLower.includes('hollow') || reasonLower.includes('anti-extension') || isExerciseType(['hollow', 'dish', 'deadbug'])) {
+      return 'Hollow position transfers directly to your skill positions — fundamental pattern.'
+    }
+    if (reasonLower.includes('rotation') || reasonLower.includes('pallof') || isExerciseType(['pallof', 'anti-rotation'])) {
+      return 'Anti-rotation strength improves body control under load — often undertrained.'
+    }
+    return 'Trunk stability limits skill expression for most — this is foundational, not filler.'
+  }
+  
+  // ==========================================================================
+  // PRIORITY 6: Mobility / prep — WHY THIS UNLOCKS PROGRESS
+  // ==========================================================================
+  if (categoryLower === 'mobility' || categoryLower === 'flexibility') {
+    if (reasonLower.includes('shoulder') || reasonLower.includes('overhead') || isExerciseType(['shoulder', 'pec', 'lat stretch'])) {
+      return 'Limited shoulder range blocks skill progression — this unlocks positions you cannot currently access.'
+    }
+    if (reasonLower.includes('hip') || reasonLower.includes('split') || isExerciseType(['hip', 'pike', 'pancake'])) {
+      return 'Hip mobility affects skill expression more than most realize — often a hidden limiter.'
+    }
+    if (reasonLower.includes('thoracic') || reasonLower.includes('spine') || isExerciseType(['thoracic', 't-spine'])) {
+      return 'Thoracic mobility limits overhead positions — opening this unlocks better shapes.'
+    }
+    if (reasonLower.includes('wrist') || reasonLower.includes('forearm') || isExerciseType(['wrist'])) {
+      return 'Wrist prep for loading — injury here costs weeks, prevention costs minutes.'
+    }
+    return 'Mobility often limits skill expression before strength does — this removes blockers.'
+  }
+  
+  // ==========================================================================
+  // PRIORITY 7: Finisher / density — WHY THIS PLACEMENT
+  // ==========================================================================
+  if (reasonLower.includes('finisher') || reasonLower.includes('density')) {
+    if (sessionFocusLower.includes('push')) {
+      return 'Finisher — captures remaining work capacity for growth after primary work is done.'
+    } else if (sessionFocusLower.includes('pull')) {
+      return 'Finisher — uses remaining pulling capacity for growth, not wasted.'
+    }
+    return 'Captures remaining work capacity — volume for growth without overspending recovery.'
+  }
+  
+  // ==========================================================================
+  // PRIORITY 8: Generic support — CONCISE FALLBACK
+  // ==========================================================================
+  if (emphasisKind === 'support') {
+    if (primaryGoalLower) {
+      return `Supports ${goalName()} training without competing for primary recovery.`
+    }
+    return null
+  }
+  
+  return null
+}
+  
   // ==========================================================================
   // PRIORITY 1: Primary skill/direct progression role — AI DECISION EVIDENCE
   // ==========================================================================

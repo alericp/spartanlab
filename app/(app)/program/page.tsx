@@ -7324,6 +7324,23 @@ export default function ProgramPage() {
         // - Whether to clear persisted failure state
         // ==========================================================================
         const rebuildFailureSummary = serverResult.rebuildFailureSummary ?? null
+        
+        // [PAGE-RESPONSE-TRUTH-AUDIT] Log exactly what the page received from the route
+        console.log('[page-response-truth-audit]', {
+          httpOk: serverResponse.ok,
+          serverResultSuccess: serverResult.success,
+          hasProgram: !!serverResult.program,
+          sessionCount: serverResult.program?.sessions?.length ?? 0,
+          hasSummary: !!rebuildFailureSummary,
+          totalDegraded: rebuildFailureSummary?.totalDegraded ?? 0,
+          totalAttempted: rebuildFailureSummary?.totalAttempted ?? 0,
+          totalSucceeded: rebuildFailureSummary?.totalSucceeded ?? 0,
+          firstFailedCheckpoint: rebuildFailureSummary?.firstFailedCheckpoint ?? null,
+          firstFailedFocus: rebuildFailureSummary?.firstFailedFocus ?? null,
+          firstFailedIndex: rebuildFailureSummary?.firstFailedIndex ?? null,
+          uiWillClassifyAs: (rebuildFailureSummary?.totalDegraded ?? 0) > 0 ? 'DEGRADED_SUCCESS' : 'HEALTHY_SUCCESS',
+          verdict: 'PAGE_RECEIVED_ROUTE_RESPONSE',
+        })
         const totalDegraded = rebuildFailureSummary?.totalDegraded ?? 0
         const hasDegradedSessions = totalDegraded > 0
         const isHealthyRegenerate = serverResult.success === true && !hasDegradedSessions

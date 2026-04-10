@@ -244,6 +244,33 @@ export async function POST(request: Request) {
       failureVerdict: rebuildFailureSummary?.failureVerdict ?? 'unknown',
     })
     
+    // [ROUTE-RESPONSE-TRUTH-AUDIT] Final authoritative route response classification
+    const routeClassification = {
+      httpStatus: 200,
+      successField: true,
+      hasProgramWithSessions: !!(result.program && result.program.sessions?.length > 0),
+      sessionCount: result.program?.sessions?.length ?? 0,
+      totalDegraded: rebuildFailureSummary?.totalDegraded ?? 0,
+      totalAttempted: rebuildFailureSummary?.totalAttempted ?? 0,
+      totalSucceeded: rebuildFailureSummary?.totalSucceeded ?? 0,
+      firstFailedCheckpoint: rebuildFailureSummary?.firstFailedCheckpoint ?? null,
+      firstFailedFocus: rebuildFailureSummary?.firstFailedFocus ?? null,
+      firstFailedIndex: rebuildFailureSummary?.firstFailedIndex ?? null,
+    }
+    
+    const routeOutcomeType = 
+      routeClassification.totalDegraded === 0 && routeClassification.hasProgramWithSessions
+        ? 'HEALTHY_SUCCESS'
+        : routeClassification.totalDegraded > 0 && routeClassification.hasProgramWithSessions
+          ? 'DEGRADED_SUCCESS_WITH_PARTIAL_PROGRAM'
+          : 'UNEXPECTED_STATE'
+    
+    console.log('[route-response-truth-audit]', {
+      routeOutcomeType,
+      ...routeClassification,
+      verdict: routeOutcomeType,
+    })
+    
     return NextResponse.json({
       success: true,
       program: result.program,

@@ -2434,76 +2434,76 @@ export function buildExercisePurposeLine(
     // Scapular/shoulder stability
     if (reasonLower.includes('scap') || reasonLower.includes('shoulder') || isExerciseType(['face pull', 'y raise', 'i raise', 'cuban'])) {
       if (primaryGoalLower.includes('planche') || primaryGoalLower.includes('lever')) {
-        return 'Scapular control directly improves your skill positions — this is prep work, not filler.'
+        return 'Scap control slot — directly improves your skill positions under load.'
       }
-      return 'Builds the scapular stability your pressing and pulling depend on — not optional.'
+      return 'Scap stability slot — your pressing and pulling quality depends on this.'
     }
     
     // Posterior chain / rear delt
     if (reasonLower.includes('rear delt') || reasonLower.includes('posterior') || isExerciseType(['rear delt', 'reverse fly'])) {
-      return 'Balances your anterior work — keeps shoulders healthy as pressing volume increases.'
+      return 'Posterior balance slot — protects shoulders as pressing volume accumulates.'
     }
     
     // Hypertrophy intent
     if (reasonLower.includes('hypertrophy') || reasonLower.includes('size')) {
-      return 'Adds muscle where your skill progress needs it — targeted hypertrophy, not random volume.'
+      return 'Hypertrophy slot — targeted muscle where your skill progress needs it most.'
     }
     
     // Tricep work
     if (isExerciseType(['tricep', 'pushdown', 'extension', 'skull'])) {
       if (primaryGoalLower.includes('planche') || primaryGoalLower.includes('handstand')) {
-        return 'Tricep strength supports your pressing — builds capacity without skill fatigue.'
+        return 'Tricep slot — lockout strength for your pressing without skill fatigue cost.'
       }
-      return 'Tricep work that supports your pressing goals without competing for recovery.'
+      return 'Tricep slot — pressing lockout strength without skill fatigue cost.'
     }
     
     // Bicep/curl work
     if (isExerciseType(['bicep', 'curl'])) {
       if (primaryGoalLower.includes('lever') || primaryGoalLower.includes('muscle')) {
-        return 'Bicep strength supports your pulling — builds capacity without skill fatigue.'
+        return 'Bicep slot — pulling support strength without skill fatigue cost.'
       }
-      return 'Pulling support that builds capacity without competing for recovery.'
+      return 'Bicep slot — pulling support without skill fatigue cost.'
     }
     
     // Push accessory
     if (reasonLower.includes('push') || reasonLower.includes('press') || sessionFocusLower.includes('push')) {
-      return 'Adds pressing volume without overloading skill fatigue — efficient capacity building.'
+      return 'Push accessory slot — pressing volume without skill fatigue cost.'
     }
     
     // Pull accessory
     if (reasonLower.includes('pull') || reasonLower.includes('row') || sessionFocusLower.includes('pull')) {
-      return 'Adds pulling volume without overloading skill fatigue — efficient capacity building.'
+      return 'Pull accessory slot — pulling volume without skill fatigue cost.'
     }
     
-    return 'Supports your main work without competing for recovery — volume where it counts.'
+    return 'Accessory slot — targeted volume that feeds your main work.'
   }
   
   // ==========================================================================
-  // PRIORITY 5: Core / trunk — WHY THIS IS NOT OPTIONAL
+  // PRIORITY 5: Core / trunk — WHY THIS SLOT EXISTS
   // ==========================================================================
   if (categoryLower === 'core') {
     if (primaryGoalLower.includes('planche')) {
       if (isExerciseType(['hollow', 'dish'])) {
         return 'Hollow position is your planche position — weak here means weak planche line.'
       }
-      return 'Planche demands trunk compression under load — this is limiting for most, not filler.'
+      return 'Core slot — planche demands trunk compression; this is where that ceiling is built.'
     }
     if (primaryGoalLower.includes('lever')) {
       if (isExerciseType(['hollow', 'dish'])) {
         return 'Hollow tension is your lever tension — this directly transfers to your hold.'
       }
-      return 'Lever holds demand full-body tension — core is often the weak link.'
+      return 'Core slot — lever holds demand full-body tension; this is where that ceiling is built.'
     }
     if (primaryGoalLower.includes('handstand')) {
-      return 'Handstand line depends on midline stability — weak core means broken line.'
+      return 'Core slot — handstand line depends on midline stability; weak core means broken line.'
     }
     if (reasonLower.includes('hollow') || reasonLower.includes('anti-extension') || isExerciseType(['hollow', 'dish', 'deadbug'])) {
-      return 'Hollow position transfers directly to your skill positions — fundamental pattern.'
+      return 'Hollow pattern slot — transfers directly to your skill positions.'
     }
     if (reasonLower.includes('rotation') || reasonLower.includes('pallof') || isExerciseType(['pallof', 'anti-rotation'])) {
-      return 'Anti-rotation strength improves body control under load — often undertrained.'
+      return 'Anti-rotation slot — improves body control under load.'
     }
-    return 'Trunk stability limits skill expression for most — this is foundational, not filler.'
+    return 'Core slot — trunk stability is a ceiling for skill expression.'
   }
   
   // ==========================================================================
@@ -2511,18 +2511,18 @@ export function buildExercisePurposeLine(
   // ==========================================================================
   if (categoryLower === 'mobility' || categoryLower === 'flexibility') {
     if (reasonLower.includes('shoulder') || reasonLower.includes('overhead') || isExerciseType(['shoulder', 'pec', 'lat stretch'])) {
-      return 'Limited shoulder range blocks skill progression — this unlocks positions you cannot currently access.'
+      return 'Shoulder mobility slot — unlocks positions your current range blocks.'
     }
     if (reasonLower.includes('hip') || reasonLower.includes('split') || isExerciseType(['hip', 'pike', 'pancake'])) {
-      return 'Hip mobility affects skill expression more than most realize — often a hidden limiter.'
+      return 'Hip mobility slot — affects skill positions more than most expect.'
     }
     if (reasonLower.includes('thoracic') || reasonLower.includes('spine') || isExerciseType(['thoracic', 't-spine'])) {
-      return 'Thoracic mobility limits overhead positions — opening this unlocks better shapes.'
+      return 'Thoracic mobility slot — opens overhead positions for better shapes.'
     }
     if (reasonLower.includes('wrist') || reasonLower.includes('forearm') || isExerciseType(['wrist'])) {
-      return 'Wrist prep for loading — injury here costs weeks, prevention costs minutes.'
+      return 'Wrist prep slot — injury here costs weeks; prevention costs minutes.'
     }
-    return 'Mobility often limits skill expression before strength does — this removes blockers.'
+    return 'Mobility slot — range limits skill expression before strength does.'
   }
   
   // ==========================================================================
@@ -2530,11 +2530,11 @@ export function buildExercisePurposeLine(
   // ==========================================================================
   if (reasonLower.includes('finisher') || reasonLower.includes('density')) {
     if (sessionFocusLower.includes('push')) {
-      return 'Finisher — captures remaining work capacity for growth after primary work is done.'
+      return 'Push finisher — captures remaining capacity for growth after main work.'
     } else if (sessionFocusLower.includes('pull')) {
-      return 'Finisher — uses remaining pulling capacity for growth, not wasted.'
+      return 'Pull finisher — captures remaining pulling capacity for growth.'
     }
-    return 'Captures remaining work capacity — volume for growth without overspending recovery.'
+    return 'Finisher slot — captures remaining work capacity for growth.'
   }
   
   // ==========================================================================
@@ -2542,7 +2542,7 @@ export function buildExercisePurposeLine(
   // ==========================================================================
   if (emphasisKind === 'support') {
     if (primaryGoalLower) {
-      return `Supports ${goalName()} training without competing for primary recovery.`
+      return `Support slot for ${goalName()} — raises usable strength without stealing skill recovery.`
     }
     return null
   }

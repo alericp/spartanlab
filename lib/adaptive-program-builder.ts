@@ -368,10 +368,17 @@ import {
   applySkillSpecificRankingModifier,
   buildPatternSpecificPrescription,
   getSmartSubstitution,
+  // [EXPOSURE-READINESS] Exposure/adaptation readiness gating
+  resolveAllSkillReadiness,
+  getReadinessForFamily,
+  gateProgressionByReadiness,
+  gatePrescriptionByReadiness,
+  shouldBlockAdvancedVariant,
   type DBTruthRankingModifiers,
   type DBTruthProgressionDepth,
   type DBTruthPrescriptionCalibration,
   type SkillFamily,
+  type FamilyReadinessContract,
 } from './program/db-truth-scoring-bridge'
 
 import {
@@ -7104,11 +7111,64 @@ async function generateAdaptiveProgramImpl(
   })
   
   // ==========================================================================
+  // [DB-TRUTH-EXPOSURE-READINESS] RESOLVE EXPOSURE/ADAPTATION READINESS
+  // This layer enforces: ADAPTATION READINESS CAN CAP CURRENT-PERFORMANCE OPTIMISM
+  // 
+  // Key distinction:
+  // - "Can perform it now" (current response)
+  // - "Has earned it" (accumulated exposure)
+  // - "Is adapted enough to progress it repeatedly" (adaptation readiness)
+  // ==========================================================================
+  const allSelectedSkills = multiSkillMaterialityContract.selectedSkills || []
+  const exposureReadinessMap = resolveAllSkillReadiness(programmingTruthBundle, allSelectedSkills)
+  
+  // Log exposure readiness for all skill families
+  const exposureReadinessEntries = Array.from(exposureReadinessMap.entries())
+  const readinessCappedFamilies = exposureReadinessEntries.filter(([, r]) => r.cappedDueToReadiness)
+  
+  console.log('[db-truth-exposure-readiness]', {
+    totalFamiliesResolved: exposureReadinessEntries.length,
+    familiesWithData: exposureReadinessEntries.filter(([, r]) => r.readinessConfidence !== 'none').length,
+    readinessDistribution: {
+      unready: exposureReadinessEntries.filter(([, r]) => r.adaptationReadiness === 'unready').length,
+      building: exposureReadinessEntries.filter(([, r]) => r.adaptationReadiness === 'building').length,
+      ready: exposureReadinessEntries.filter(([, r]) => r.adaptationReadiness === 'ready').length,
+      highly_ready: exposureReadinessEntries.filter(([, r]) => r.adaptationReadiness === 'highly_ready').length,
+    },
+    exposureDistribution: {
+      none: exposureReadinessEntries.filter(([, r]) => r.recentExposureLevel === 'none').length,
+      low: exposureReadinessEntries.filter(([, r]) => r.recentExposureLevel === 'low').length,
+      moderate: exposureReadinessEntries.filter(([, r]) => r.recentExposureLevel === 'moderate').length,
+      high: exposureReadinessEntries.filter(([, r]) => r.recentExposureLevel === 'high').length,
+    },
+    cappedByReadiness: readinessCappedFamilies.length,
+    cappedFamilies: readinessCappedFamilies.map(([family, r]) => ({
+      family,
+      reason: r.readinessReason,
+      currentResponse: r.currentResponseSignal,
+      adaptationReadiness: r.adaptationReadiness,
+    })),
+    progressionPermissions: exposureReadinessEntries.map(([family, r]) => ({
+      family,
+      permission: r.progressionPermission,
+      methodPermission: r.methodPermission,
+      advancedVariantPermission: r.advancedVariantPermission,
+    })),
+    verdict: readinessCappedFamilies.length > 0 
+      ? 'EXPOSURE_READINESS_GATING_ACTIVE' 
+      : exposureReadinessEntries.length > 0 
+        ? 'EXPOSURE_READINESS_RESOLVED_NO_CAPS' 
+        : 'EXPOSURE_READINESS_NO_DATA',
+  })
+  
+  // ==========================================================================
   // [DB-TRUTH-PROGRESSION-DEPTH] Apply bundle-derived progression depth adjustments
   // When bundle has low progress scores, mark skills for conservative selection
   // 
   // [SKILL-SPECIFIC UPGRADE] Now uses skill-family-specific resolution with
   // CURRENT > RESPONSE > HISTORICAL > DEFAULT precedence
+  // 
+  // [EXPOSURE-READINESS UPGRADE] Progression depth is now GATED by readiness
   // ==========================================================================
   const progressionDepthAdjustments: Record<string, { 
     originalDepth: string | null
@@ -7118,16 +7178,24 @@ async function generateAdaptiveProgramImpl(
     currentScore: number | null
     historicalLevel: number | null
     currentBeatsHistorical: boolean
+    // [EXPOSURE-READINESS] New fields for readiness gating
+    readinessGated: boolean
+    readinessPermission: string
+    preGateBias: number
   }> = {}
   
   // Import skill-specific resolution
-  const { resolveSkillFamilyTruth } = await import('./program/skill-specific-truth-resolution')
+  const { resolveSkillFamilyTruth, mapSkillToFamily } = await import('./program/skill-specific-truth-resolution')
   
   if (programmingTruthBundle?.skillProgressions?.meta?.available) {
     for (const intent of multiSkillMaterialityContract.materialSkillIntent) {
       // Use skill-specific resolution instead of generic depth builder
       const skillTruth = resolveSkillFamilyTruth(programmingTruthBundle, intent.skill)
       const depth = buildProgressionDepthFromBundle(programmingTruthBundle, intent.skill)
+      
+      // [EXPOSURE-READINESS] Get readiness for this skill's family
+      const skillFamily = mapSkillToFamily(intent.skill)
+      const familyReadiness = getReadinessForFamily(exposureReadinessMap, skillFamily)
       
       // Determine if current earned state beats historical ceiling
       const currentScore = skillTruth.currentEarnedState.progressScore
@@ -7138,25 +7206,66 @@ async function generateAdaptiveProgramImpl(
       )
       
       if (skillTruth.dataAvailable || (depth.confidenceLevel !== 'none' && depth.suggestedVariantBias !== 0)) {
-        // Use skill-specific resolved bias when available, else fall back to depth builder
-        const effectiveBias = skillTruth.dataAvailable 
+        // Calculate pre-gate bias from skill truth
+        const preGateBias = skillTruth.dataAvailable 
           ? (skillTruth.resolved.progressionDepth === 'conservative' ? -1 :
              skillTruth.resolved.progressionDepth === 'progressive' ? 1 : 0)
           : depth.suggestedVariantBias
         
+        // [EXPOSURE-READINESS] GATE progression by readiness
+        let effectiveBias = preGateBias
+        let readinessGated = false
+        let readinessPermission = familyReadiness?.progressionPermission || 'allow_full_step'
+        
+        if (familyReadiness) {
+          // Apply readiness gating - this is the KEY enforcement
+          const suggestedDepth: 'conservative' | 'moderate' | 'progressive' = 
+            preGateBias < 0 ? 'conservative' : preGateBias > 0 ? 'progressive' : 'moderate'
+          
+          const gateResult = gateProgressionByReadiness(suggestedDepth, familyReadiness)
+          
+          if (gateResult.wasGated) {
+            readinessGated = true
+            // Convert gated depth back to bias
+            effectiveBias = gateResult.gatedDepth === 'conservative' ? -1 :
+                           gateResult.gatedDepth === 'progressive' ? 1 : 0
+            
+            console.log('[db-truth-progression-permission]', {
+              skill: intent.skill,
+              family: skillFamily,
+              preGateBias,
+              postGateBias: effectiveBias,
+              preGateDepth: suggestedDepth,
+              postGateDepth: gateResult.gatedDepth,
+              gateReason: gateResult.reason,
+              readinessPermission: familyReadiness.progressionPermission,
+              adaptationReadiness: familyReadiness.adaptationReadiness,
+              exposureLevel: familyReadiness.recentExposureLevel,
+              currentResponse: familyReadiness.currentResponseSignal,
+              verdict: 'PROGRESSION_CAPPED_BY_READINESS',
+            })
+          }
+        }
+        
         progressionDepthAdjustments[intent.skill] = {
           originalDepth: intent.currentWorkingProgression,
           adjustedBias: effectiveBias,
-          reason: skillTruth.dataAvailable ? skillTruth.resolved.resolutionReason : depth.adjustmentReason,
-          precedenceUsed: skillTruth.resolved.precedenceUsed,
+          reason: readinessGated 
+            ? `readiness_gated:${familyReadiness?.readinessReason}`
+            : (skillTruth.dataAvailable ? skillTruth.resolved.resolutionReason : depth.adjustmentReason),
+          precedenceUsed: readinessGated ? 'readiness_gate' : skillTruth.resolved.precedenceUsed,
           currentScore,
           historicalLevel,
           currentBeatsHistorical,
+          readinessGated,
+          readinessPermission,
+          preGateBias,
         }
         
         // If bundle suggests conservative and current progression is aggressive, mark for conservative
         if (skillTruth.resolved.progressionDepth === 'conservative' || 
-            (depth.preferBasicVariant && intent.currentWorkingProgression)) {
+            (depth.preferBasicVariant && intent.currentWorkingProgression) ||
+            readinessGated) {
           // This enriches the intent with bundle-informed conservative bias
           // Downstream selection will respect this by preferring basic variants
           progressionEnrichmentApplied = true
@@ -7208,6 +7317,73 @@ async function generateAdaptiveProgramImpl(
     verdict: Object.keys(progressionDepthAdjustments).length > 0 
       ? 'DB_TRUTH_PROGRESSION_DEPTH_APPLIED' 
       : 'DB_TRUTH_NO_PROGRESSION_ADJUSTMENTS',
+  })
+  
+  // ==========================================================================
+  // [DB-TRUTH-ADVANCED-VARIANT-GATE] ADVANCED VARIANT UNLOCK RESTRAINT
+  // This enforces: "Having done it once doesn't mean you're ready to hammer it"
+  // Skills with low exposure / poor readiness have advanced variants blocked
+  // ==========================================================================
+  const advancedVariantGates: Array<{
+    skill: string
+    family: string
+    advancedVariantPermission: string
+    blocked: boolean
+    reason: string
+  }> = []
+  
+  for (const [family, readiness] of exposureReadinessMap.entries()) {
+    // Get all skills in this family from the material intent
+    const familySkills = multiSkillMaterialityContract.materialSkillIntent
+      .filter(intent => {
+        try {
+          const { mapSkillToFamily } = require('./program/skill-specific-truth-resolution')
+          return mapSkillToFamily(intent.skill) === family
+        } catch {
+          return false
+        }
+      })
+      .map(intent => intent.skill)
+    
+    for (const skill of familySkills) {
+      const blocked = shouldBlockAdvancedVariant(readiness)
+      advancedVariantGates.push({
+        skill,
+        family,
+        advancedVariantPermission: readiness.advancedVariantPermission,
+        blocked,
+        reason: blocked ? `insufficient_readiness:${readiness.readinessReason}` : 'readiness_permits_advanced',
+      })
+    }
+  }
+  
+  const blockedVariantCount = advancedVariantGates.filter(g => g.blocked).length
+  
+  console.log('[db-truth-advanced-variant-gate]', {
+    totalSkillsEvaluated: advancedVariantGates.length,
+    advancedVariantsBlocked: blockedVariantCount,
+    advancedVariantsPermitted: advancedVariantGates.length - blockedVariantCount,
+    blockedSkills: advancedVariantGates
+      .filter(g => g.blocked)
+      .slice(0, 5)
+      .map(g => ({
+        skill: g.skill,
+        family: g.family,
+        reason: g.reason,
+      })),
+    permittedSkills: advancedVariantGates
+      .filter(g => !g.blocked)
+      .slice(0, 5)
+      .map(g => ({
+        skill: g.skill,
+        family: g.family,
+        permission: g.advancedVariantPermission,
+      })),
+    verdict: blockedVariantCount > 0 
+      ? 'SOME_ADVANCED_VARIANTS_BLOCKED_BY_READINESS'
+      : advancedVariantGates.length > 0 
+        ? 'ALL_ADVANCED_VARIANTS_PERMITTED'
+        : 'NO_SKILLS_EVALUATED',
   })
   
   // ==========================================================================
@@ -9028,6 +9204,60 @@ async function generateAdaptiveProgramImpl(
     console.error('[materiality-contract-log-error]', {
       sessionIndex: 'pre_loop', // Pre-loop - no session yet
       error: materialityLogError instanceof Error ? materialityLogError.message : 'unknown',
+    })
+  }
+  
+  // ==========================================================================
+  // [DB-TRUTH-METHOD-PERMISSION] METHOD AGGRESSIVENESS GATING BY READINESS
+  // Readiness-based method permission enforcement
+  // Low readiness families should use straight sets / simpler structures
+  // ==========================================================================
+  const methodReadinessGating: Array<{
+    family: string
+    methodPermission: string
+    suggestedStructure: string
+    readinessReason: string
+    gatedFromComplex: boolean
+  }> = []
+  
+  try {
+    for (const [family, readiness] of exposureReadinessMap.entries()) {
+      const suggestedStructure = 
+        readiness.methodPermission === 'straight_sets_only' ? 'straight_sets' :
+        readiness.methodPermission === 'light_grouping_ok' ? 'light_supersets' :
+        'full_method_flexibility'
+      
+      const gatedFromComplex = readiness.methodPermission !== 'full_method_ok'
+      
+      if (gatedFromComplex) {
+        methodReadinessGating.push({
+          family,
+          methodPermission: readiness.methodPermission,
+          suggestedStructure,
+          readinessReason: readiness.readinessReason,
+          gatedFromComplex,
+        })
+      }
+    }
+    
+    if (methodReadinessGating.length > 0) {
+      console.log('[db-truth-method-permission]', {
+        familiesGated: methodReadinessGating.length,
+        gatedFamilies: methodReadinessGating.map(g => ({
+          family: g.family,
+          permission: g.methodPermission,
+          structure: g.suggestedStructure,
+        })),
+        globalMethodRestriction: methodReadinessGating.some(g => g.methodPermission === 'straight_sets_only')
+          ? 'SOME_FAMILIES_REQUIRE_STRAIGHT_SETS'
+          : 'LIGHT_GROUPING_PERMITTED',
+        verdict: 'METHOD_AGGRESSIVENESS_GATED_BY_READINESS',
+      })
+    }
+  } catch (methodReadinessError) {
+    console.warn('[db-truth-method-permission-error]', {
+      error: methodReadinessError instanceof Error ? methodReadinessError.message : 'unknown',
+      continuedSafely: true,
     })
   }
   
@@ -20155,6 +20385,127 @@ function generateAdaptiveSession(
           ? 'PATTERN_SPECIFIC_PRESCRIPTION_APPLIED'
           : 'NO_PATTERN_SPECIFIC_CHANGES',
       })
+      
+      // ==========================================================================
+      // [DB-TRUTH-DENSITY-LOAD-GATE] APPLY READINESS GATING TO PRESCRIPTIONS
+      // Readiness can CAP density increases and load pushing
+      // ==========================================================================
+      const readinessGatedPrescriptions: Array<{
+        exerciseName: string
+        family: string
+        field: string
+        preSuggestedValue: number
+        gatedValue: number
+        reason: string
+      }> = []
+      
+      try {
+        // Get the mapSkillToFamily function dynamically
+        const { mapSkillToFamily: mapFamily } = await import('./program/skill-specific-truth-resolution')
+        
+        exercisesForDosageAdjustment = exercisesForDosageAdjustment.map(ex => {
+          const exerciseSkill = ex.skill || ex.exercise?.skill
+          if (!exerciseSkill) return ex
+          
+          const family = mapFamily(exerciseSkill)
+          const readiness = getReadinessForFamily(exposureReadinessMap, family)
+          if (!readiness) return ex
+          
+          let wasGated = false
+          const modifiedEx = { ...ex }
+          
+          // Gate density (sets)
+          if (readiness.densityPermission === 'reduce' && typeof modifiedEx.sets === 'number') {
+            const currentSets = modifiedEx.sets
+            if (currentSets > 3) {
+              const gatedSets = Math.max(2, currentSets - 1)
+              readinessGatedPrescriptions.push({
+                exerciseName: ex.exercise?.name || 'unknown',
+                family,
+                field: 'sets',
+                preSuggestedValue: currentSets,
+                gatedValue: gatedSets,
+                reason: `density_reduce:${readiness.readinessReason}`,
+              })
+              modifiedEx.sets = gatedSets
+              wasGated = true
+            }
+          } else if (readiness.densityPermission === 'maintain' && typeof modifiedEx.sets === 'number') {
+            // Prevent density increases for families with maintain permission
+            const originalSets = typeof ex.sets === 'number' ? ex.sets : 3
+            if (modifiedEx.sets > originalSets + 1) {
+              readinessGatedPrescriptions.push({
+                exerciseName: ex.exercise?.name || 'unknown',
+                family,
+                field: 'sets',
+                preSuggestedValue: modifiedEx.sets,
+                gatedValue: originalSets,
+                reason: `density_maintain_cap:${readiness.readinessReason}`,
+              })
+              modifiedEx.sets = originalSets
+              wasGated = true
+            }
+          }
+          
+          // Gate load (intensity/RPE)
+          if (readiness.loadPermission === 'soften' && typeof modifiedEx.targetRPE === 'number') {
+            const currentRPE = modifiedEx.targetRPE
+            if (currentRPE >= 8) {
+              const gatedRPE = Math.max(6, currentRPE - 1)
+              readinessGatedPrescriptions.push({
+                exerciseName: ex.exercise?.name || 'unknown',
+                family,
+                field: 'targetRPE',
+                preSuggestedValue: currentRPE,
+                gatedValue: gatedRPE,
+                reason: `load_soften:${readiness.readinessReason}`,
+              })
+              modifiedEx.targetRPE = gatedRPE
+              wasGated = true
+            }
+          } else if (readiness.loadPermission === 'maintain' && typeof modifiedEx.targetRPE === 'number') {
+            // Prevent load pushes for families with maintain permission
+            if (modifiedEx.targetRPE > 8.5) {
+              readinessGatedPrescriptions.push({
+                exerciseName: ex.exercise?.name || 'unknown',
+                family,
+                field: 'targetRPE',
+                preSuggestedValue: modifiedEx.targetRPE,
+                gatedValue: 8,
+                reason: `load_maintain_cap:${readiness.readinessReason}`,
+              })
+              modifiedEx.targetRPE = 8
+              wasGated = true
+            }
+          }
+          
+          if (wasGated) {
+            modifiedEx.note = modifiedEx.note 
+              ? `${modifiedEx.note} [readiness-gated]` 
+              : '[readiness-gated]'
+          }
+          
+          return modifiedEx
+        })
+        
+        if (readinessGatedPrescriptions.length > 0) {
+          console.log('[db-truth-density-load-gate]', {
+            sessionIndex,
+            totalGated: readinessGatedPrescriptions.length,
+            densityGates: readinessGatedPrescriptions.filter(g => g.field === 'sets').length,
+            loadGates: readinessGatedPrescriptions.filter(g => g.field === 'targetRPE').length,
+            gatedExercises: readinessGatedPrescriptions.slice(0, 5),
+            familiesAffected: [...new Set(readinessGatedPrescriptions.map(g => g.family))],
+            verdict: 'PRESCRIPTION_GATED_BY_READINESS',
+          })
+        }
+      } catch (readinessGateError) {
+        console.warn('[db-truth-density-load-gate-error]', {
+          sessionIndex,
+          error: readinessGateError instanceof Error ? readinessGateError.message : 'unknown',
+          continuedSafely: true,
+        })
+      }
       
       console.log('[db-truth-prescription-calibration]', {
         sessionIndex,

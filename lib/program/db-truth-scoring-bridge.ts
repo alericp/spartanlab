@@ -938,3 +938,25 @@ function inferPatternFromExercise(exercise: {
 
 // Re-export types for convenience
 export type { SkillFamily, SkillFamilyTruth, PatternResponse, SubstitutionRecommendation }
+
+// =============================================================================
+// EXPOSURE/ADAPTATION READINESS RE-EXPORTS
+// =============================================================================
+// These are the key readiness gating functions that enforce adaptation runway
+
+export {
+  resolveExposureReadiness,
+  resolveAllSkillReadiness,
+  getReadinessForFamily,
+  gateProgressionByReadiness,
+  gatePrescriptionByReadiness,
+  shouldBlockAdvancedVariant,
+  type FamilyReadinessContract,
+  type ExposureLevel,
+  type AdaptationReadiness,
+  type ProgressionPermission,
+  type DensityPermission,
+  type LoadPermission,
+  type MethodPermission,
+  type AdvancedVariantPermission,
+} from './exposure-adaptation-readiness'

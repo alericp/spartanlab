@@ -1535,17 +1535,17 @@ function ExerciseRow({
         
         return (
         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-          {/* Single compact sublabel for primary only */}
+          {/* Single compact sublabel - subtle gray supporting text */}
           {bestSublabel && (
-            <span className="text-[10px] text-[#E63946]/80">
+            <span className="text-[10px] text-[#7A7A7A]">
               {bestSublabel}
             </span>
           )}
-          {/* Single chip max in prescription-first mode */}
+          {/* Single chip max in prescription-first mode - subtle styling */}
           {showChips && chips.slice(0, 1).map((chip, i) => (
             <span 
               key={`chip-${i}`}
-              className="text-[9px] px-1.5 py-0.5 rounded bg-[#E63946]/8 text-[#E63946]/70"
+              className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#6A6A6A]"
             >
               {chip}
             </span>

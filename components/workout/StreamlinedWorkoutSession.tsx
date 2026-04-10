@@ -4990,9 +4990,8 @@ if (shouldShowLocalFallback) {
               )}
             </div>
             {/* [GROUPED-PLAN-FIX] Render grouped structure in Today's Plan */}
-              {/* [JSX-STABILIZED] Precomputed rows for stable JSX ownership */}
-              {renderTodayPlanRows()}
-            </div>
+            {/* [JSX-STABILIZED] Precomputed rows for stable JSX ownership */}
+            {renderTodayPlanRows()}
           </Card>
           
           {/* Why This Workout - Only for adaptive/pro users */}

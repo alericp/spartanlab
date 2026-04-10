@@ -21,8 +21,9 @@ import {
   Dumbbell,
 } from 'lucide-react'
 import Link from 'next/link'
-import { type AdaptiveSession, type AdaptiveExercise } from '@/lib/adaptive-program-builder'
+import { type AdaptiveSession, type AdaptiveExercise, type AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import { getProgramState } from '@/lib/program-state'
+import { getWeekAdaptationDisplay } from '@/lib/program/program-display-contract'
 import {
   calculateSessionAdjustment,
   inferWellnessFromRecovery,
@@ -39,6 +40,8 @@ export default function TodaySessionPage() {
   const [adjustment, setAdjustment] = useState<SessionAdjustment | null>(null)
   const [deloadAssessment, setDeloadAssessment] = useState<DeloadAssessment | null>(null)
   const [weekStatus, setWeekStatus] = useState<QuickWeekStatus | null>(null)
+  const [acclimationNote, setAcclimationNote] = useState<string | null>(null)
+  const [adaptiveProgram, setAdaptiveProgram] = useState<AdaptiveProgram | null>(null)
   
   // User inputs
   const [wellnessState, setWellnessState] = useState<WellnessState>('normal')
@@ -51,12 +54,14 @@ export default function TodaySessionPage() {
 
   const loadData = useCallback(() => {
     // Use safe unified program state
-    const { adaptiveProgram, hasUsableWorkoutProgram } = getProgramState()
-    if (!hasUsableWorkoutProgram || !adaptiveProgram) {
+    const { adaptiveProgram: program, hasUsableWorkoutProgram } = getProgramState()
+    if (!hasUsableWorkoutProgram || !program) {
       setCurrentSession(null)
+      setAdaptiveProgram(null)
+      setAcclimationNote(null)
       return
     }
-    const program = adaptiveProgram
+    setAdaptiveProgram(program)
     
     // Safety: Ensure sessions array exists and has valid length
     if (!Array.isArray(program.sessions) || program.sessions.length === 0) {
@@ -85,6 +90,16 @@ export default function TodaySessionPage() {
     }
     
     setCurrentSession(session)
+    
+    // Check for first-week acclimation protection
+    const weekAdaptation = getWeekAdaptationDisplay(program)
+    if (weekAdaptation.isFirstWeekProtected) {
+      setAcclimationNote('Week 1 — Volume and intensity conservatively managed for adaptation.')
+    } else if (weekAdaptation.isProtective && weekAdaptation.phaseLabel !== 'Normal Progression') {
+      setAcclimationNote(`${weekAdaptation.phaseLabel} — ${weekAdaptation.loadSummary || 'Adjusted dosage applied'}.`)
+    } else {
+      setAcclimationNote(null)
+    }
     
     // Calculate adjustment with safe defaults
     const plannedMinutes = typeof session.estimatedMinutes === 'number' ? session.estimatedMinutes : 45
@@ -400,17 +415,21 @@ export default function TodaySessionPage() {
                 </button>
                 
                 {showExercises && Array.isArray(activeSession.exercises) && (
-                  <div className="px-4 pb-4 space-y-2">
-                    {activeSession.exercises.map((exercise, idx) => (
-                      <ExerciseRow
-                        key={exercise.id}
-                        exercise={exercise}
-                        index={idx + 1}
-                        wasRemoved={adjustment.whatToCut.includes(exercise.name)}
-                      />
-                    ))}
-                  </div>
+                  <SessionExerciseList 
+                    session={activeSession}
+                    adjustment={adjustment}
+                  />
                 )}
+              </Card>
+            )}
+            
+            {/* First-Week Acclimation Note */}
+            {acclimationNote && (
+              <Card className="bg-[#1A1A1A] border-[#2A2A2A] p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-4 h-4 text-amber-400/70 mt-0.5 shrink-0" />
+                  <p className="text-sm text-[#A5A5A5]">{acclimationNote}</p>
+                </div>
               </Card>
             )}
 
@@ -482,45 +501,216 @@ function getAdjustmentColor(type: string): string {
   }
 }
 
+// =============================================================================
+// SESSION EXERCISE LIST - Grouped Truth Surface
+// =============================================================================
+
+interface SessionExerciseListProps {
+  session: AdaptiveSession
+  adjustment: SessionAdjustment
+}
+
+function SessionExerciseList({ session, adjustment }: SessionExerciseListProps) {
+  const styledGroups = session.styleMetadata?.styledGroups
+  const hasGroupedBlocks = styledGroups && styledGroups.some(g => g.groupType !== 'straight')
+  
+  // Build exercise data map for lookup
+  const exerciseMap = new Map<string, AdaptiveExercise>()
+  session.exercises.forEach(ex => {
+    exerciseMap.set(ex.id, ex)
+    exerciseMap.set(ex.name.toLowerCase(), ex)
+  })
+  
+  // Use grouped render if authoritative grouped truth exists
+  if (hasGroupedBlocks && styledGroups) {
+    let globalIndex = 0
+    
+    return (
+      <div className="px-4 pb-4 space-y-3">
+        {styledGroups.map((group, groupIdx) => {
+          const isGrouped = group.groupType !== 'straight'
+          
+          if (isGrouped) {
+            // Render grouped block with header and visual grouping
+            const groupInfo = getGroupTypeInfo(group.groupType)
+            
+            return (
+              <div key={group.id || `group-${groupIdx}`} className="space-y-1">
+                {/* Group header */}
+                <div className="flex items-center gap-2 px-2 py-1.5 rounded-t bg-[#222] border-l-2" style={{ borderColor: groupInfo.color }}>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: groupInfo.color + '20', color: groupInfo.color }}>
+                    {groupInfo.abbreviation}
+                  </span>
+                  <span className="text-xs text-[#A5A5A5] font-medium">{groupInfo.label}</span>
+                  <span className="text-[10px] text-[#6A6A6A]">{group.exercises.length} exercises</span>
+                </div>
+                
+                {/* Grouped exercises with visual bracket */}
+                <div className="pl-3 border-l-2 space-y-1.5" style={{ borderColor: groupInfo.color + '40' }}>
+                  {group.exercises.map((groupEx, exIdx) => {
+                    globalIndex++
+                    const fullExercise = exerciseMap.get(groupEx.id) || exerciseMap.get(groupEx.name.toLowerCase())
+                    if (!fullExercise) return null
+                    
+                    return (
+                      <ExerciseRow
+                        key={fullExercise.id}
+                        exercise={fullExercise}
+                        prefix={groupEx.prefix || (group.groupType === 'superset' ? `A${exIdx + 1}` : `${exIdx + 1}`)}
+                        wasRemoved={adjustment.whatToCut.includes(fullExercise.name)}
+                      />
+                    )
+                  })}
+                </div>
+                
+                {/* Rest protocol if available */}
+                {group.restProtocol && (
+                  <p className="text-[10px] text-[#6A6A6A] px-2 py-1">
+                    Rest: {group.restProtocol}
+                  </p>
+                )}
+              </div>
+            )
+          } else {
+            // Single exercise (straight set)
+            return group.exercises.map((groupEx) => {
+              globalIndex++
+              const fullExercise = exerciseMap.get(groupEx.id) || exerciseMap.get(groupEx.name.toLowerCase())
+              if (!fullExercise) return null
+              
+              return (
+                <ExerciseRow
+                  key={fullExercise.id}
+                  exercise={fullExercise}
+                  index={globalIndex}
+                  wasRemoved={adjustment.whatToCut.includes(fullExercise.name)}
+                />
+              )
+            })
+          }
+        })}
+      </div>
+    )
+  }
+  
+  // Fallback: flat list render
+  return (
+    <div className="px-4 pb-4 space-y-2">
+      {session.exercises.map((exercise, idx) => (
+        <ExerciseRow
+          key={exercise.id}
+          exercise={exercise}
+          index={idx + 1}
+          wasRemoved={adjustment.whatToCut.includes(exercise.name)}
+        />
+      ))}
+    </div>
+  )
+}
+
+function getGroupTypeInfo(groupType: string): { label: string; abbreviation: string; color: string } {
+  switch (groupType) {
+    case 'superset':
+      return { label: 'Superset', abbreviation: 'SS', color: '#4F6D8A' }
+    case 'circuit':
+      return { label: 'Circuit', abbreviation: 'CR', color: '#E63946' }
+    case 'cluster':
+      return { label: 'Cluster Set', abbreviation: 'CL', color: '#7C3AED' }
+    case 'density_block':
+      return { label: 'Density Block', abbreviation: 'DB', color: '#F97316' }
+    default:
+      return { label: 'Block', abbreviation: 'BL', color: '#6A6A6A' }
+  }
+}
+
+// =============================================================================
+// EXERCISE ROW - Enhanced with microcopy
+// =============================================================================
+
 interface ExerciseRowProps {
   exercise: AdaptiveExercise
-  index: number
+  index?: number
+  prefix?: string
   wasRemoved?: boolean
 }
 
-function ExerciseRow({ exercise, index, wasRemoved }: ExerciseRowProps) {
+function ExerciseRow({ exercise, index, prefix, wasRemoved }: ExerciseRowProps) {
   const categoryColors: Record<string, string> = {
     skill: 'text-[#E63946]',
     strength: 'text-blue-400',
+    pull: 'text-blue-400',
+    push: 'text-cyan-400',
     accessory: 'text-[#A5A5A5]',
     core: 'text-purple-400',
+    mobility: 'text-green-400',
   }
+  
+  // Build concise microcopy from authoritative fields
+  const microcopy = buildExerciseMicrocopy(exercise)
 
   return (
     <div className={`p-3 rounded-lg bg-[#1A1A1A] border border-[#3A3A3A] ${
       wasRemoved ? 'opacity-50 line-through' : ''
     }`}>
       <div className="flex items-start justify-between gap-3">
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-[#6A6A6A] font-mono w-4">{index}.</span>
-            <span className={`text-xs uppercase tracking-wider ${categoryColors[exercise.category] || 'text-[#6A6A6A]'}`}>
+            <span className="text-xs text-[#6A6A6A] font-mono shrink-0">{prefix || (index ? `${index}.` : '')}</span>
+            <span className={`text-[10px] uppercase tracking-wider shrink-0 ${categoryColors[exercise.category] || 'text-[#6A6A6A]'}`}>
               {exercise.category}
             </span>
             {exercise.wasAdapted && (
-              <Badge variant="outline" className="text-xs text-yellow-400 border-yellow-400/30">
-                Adjusted
+              <Badge variant="outline" className="text-[10px] text-yellow-400 border-yellow-400/30 px-1 py-0">
+                Adj
               </Badge>
             )}
           </div>
-          <p className="font-medium mt-1">{exercise.name}</p>
+          <p className="font-medium mt-1 text-[14px] truncate">{exercise.name}</p>
+          {/* Concise microcopy line */}
+          {microcopy && (
+            <p className="text-[11px] text-[#7A7A7A] mt-0.5">{microcopy}</p>
+          )}
         </div>
         <div className="text-right shrink-0">
           <p className="text-sm text-[#A5A5A5]">
             {exercise.sets} x {exercise.repsOrTime}
           </p>
+          {/* RPE target if available */}
+          {exercise.targetRPE && (
+            <p className="text-[10px] text-[#6A6A6A]">RPE {exercise.targetRPE}</p>
+          )}
         </div>
       </div>
     </div>
   )
+}
+
+/**
+ * Build concise, useful microcopy from authoritative exercise fields.
+ * Priority: selectionReason > coachingMeta.loadDecisionSummary > restSeconds guidance
+ */
+function buildExerciseMicrocopy(exercise: AdaptiveExercise): string | null {
+  const parts: string[] = []
+  
+  // 1. Selection reason (why this exercise was chosen)
+  if (exercise.selectionReason && exercise.selectionReason.length > 0 && exercise.selectionReason.length < 60) {
+    // Use short selection reasons directly
+    parts.push(exercise.selectionReason)
+  } else if (exercise.coachingMeta?.loadDecisionSummary) {
+    // Fallback to coaching load decision
+    parts.push(exercise.coachingMeta.loadDecisionSummary)
+  }
+  
+  // 2. Rest guidance if relevant (only for strength/skill categories)
+  if (exercise.restSeconds && exercise.restSeconds >= 90 && (exercise.category === 'skill' || exercise.category === 'strength' || exercise.category === 'pull' || exercise.category === 'push')) {
+    const restMin = Math.floor(exercise.restSeconds / 60)
+    const restSec = exercise.restSeconds % 60
+    const restStr = restSec > 0 ? `${restMin}:${restSec.toString().padStart(2, '0')}` : `${restMin}min`
+    if (parts.length === 0) {
+      parts.push(`Rest ${restStr} between sets`)
+    }
+  }
+  
+  if (parts.length === 0) return null
+  return parts[0] // Return only the first/most useful piece
 }

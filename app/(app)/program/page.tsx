@@ -12734,16 +12734,17 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                         : 'Your inputs are preserved. Try again when ready.'}
                     </p>
                     {/* TASK 1-D: Structured diagnostic display */}
+                    {/* [CORRIDOR-STABILIZATION] Text overflow fix for mobile */}
                     {truthGatedBuildResult && truthGatedBuildResult.status !== 'success' && (
-                      <div className="mt-2 space-y-0.5">
+                      <div className="mt-2 space-y-0.5 overflow-hidden max-w-full">
                         {/* Line 1: Stage and Code */}
-                        <p className="text-[10px] text-[#6A6A6A] font-mono">
+                        <p className="text-[10px] text-[#6A6A6A] font-mono break-all max-w-full" style={{ overflowWrap: 'anywhere' }}>
                           Stage: {truthGatedBuildResult.stage} | Code: {truthGatedBuildResult.errorCode || 'unknown'}
                           {truthGatedBuildResult.subCode !== 'none' && ` (${truthGatedBuildResult.subCode})`}
                         </p>
                         {/* Line 2: Step, Middle, Day, Focus - only if any exist */}
                         {(truthGatedBuildResult.failureStep || truthGatedBuildResult.failureDayNumber || truthGatedBuildResult.failureFocus) && (
-                          <p className="text-[10px] text-[#5A5A5A] font-mono">
+                          <p className="text-[10px] text-[#5A5A5A] font-mono break-all max-w-full" style={{ overflowWrap: 'anywhere' }}>
                             Step: {truthGatedBuildResult.failureStep || 'none'}
                             {truthGatedBuildResult.failureMiddleStep && ` | Middle: ${truthGatedBuildResult.failureMiddleStep}`}
                             {truthGatedBuildResult.failureDayNumber !== null && ` | Day: ${truthGatedBuildResult.failureDayNumber}`}
@@ -12752,13 +12753,13 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                         )}
                         {/* Line 3: Reason - only if exists */}
                         {truthGatedBuildResult.failureReason && (
-                          <p className="text-[10px] text-[#5A5A5A] font-mono truncate max-w-full">
+                          <p className="text-[10px] text-[#5A5A5A] font-mono break-all max-w-full" style={{ overflowWrap: 'anywhere' }}>
                             Reason: {truthGatedBuildResult.failureReason.slice(0, 100)}
                           </p>
                         )}
                         {/* TASK 1-E: Defensive fallback when no structured fields exist */}
                         {!truthGatedBuildResult.failureStep && !truthGatedBuildResult.failureDayNumber && !truthGatedBuildResult.failureReason && (
-                          <p className="text-[10px] text-[#5A5A5A] font-mono">
+                          <p className="text-[10px] text-[#5A5A5A] font-mono break-all max-w-full">
                             Step: unavailable | Reason: unavailable
                           </p>
                         )}
@@ -13194,16 +13195,16 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   This is your previous plan. Your latest settings were not applied.
   </p>
   {/* TASK 1-D: Structured diagnostic display for red card */}
-  {/* [REGENERATE-OUTCOME-AUTHORITY] Text overflow fix: break-words + overflow-wrap for long diagnostic text */}
-  <div className="mt-2 space-y-0.5 overflow-hidden">
+  {/* [CORRIDOR-STABILIZATION] Text overflow fix: break-all + max-w-full for mobile safety */}
+  <div className="mt-2 space-y-0.5 overflow-hidden max-w-full">
     {/* Line 1: Stage and Code */}
-    <p className="text-[10px] text-[#5A5A5A] font-mono break-words overflow-wrap-anywhere">
+    <p className="text-[10px] text-[#5A5A5A] font-mono break-all max-w-full" style={{ overflowWrap: 'anywhere' }}>
       Stage: {truthGatedBuildResult.stage} | Code: {truthGatedBuildResult.errorCode || 'unknown'}
       {truthGatedBuildResult.subCode !== 'none' && ` (${truthGatedBuildResult.subCode})`}
     </p>
     {/* Line 2: Step, Middle, Day, Focus - only if any exist */}
     {(truthGatedBuildResult.failureStep || truthGatedBuildResult.failureDayNumber || truthGatedBuildResult.failureFocus) && (
-      <p className="text-[10px] text-[#4A4A4A] font-mono break-words overflow-wrap-anywhere">
+      <p className="text-[10px] text-[#4A4A4A] font-mono break-all max-w-full" style={{ overflowWrap: 'anywhere' }}>
         Step: {truthGatedBuildResult.failureStep || 'none'}
         {truthGatedBuildResult.failureMiddleStep && ` | Middle: ${truthGatedBuildResult.failureMiddleStep}`}
         {truthGatedBuildResult.failureDayNumber !== null && ` | Day: ${truthGatedBuildResult.failureDayNumber}`}
@@ -13211,15 +13212,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       </p>
     )}
     {/* Line 3: Reason - only if exists */}
-    {/* [REGENERATE-OUTCOME-AUTHORITY] Use break-words instead of truncate to prevent horizontal overflow */}
+    {/* [CORRIDOR-STABILIZATION] Use break-all instead of truncate to prevent horizontal overflow */}
     {truthGatedBuildResult.failureReason && (
-      <p className="text-[10px] text-[#4A4A4A] font-mono break-words overflow-wrap-anywhere">
+      <p className="text-[10px] text-[#4A4A4A] font-mono break-all max-w-full" style={{ overflowWrap: 'anywhere' }}>
         Reason: {truthGatedBuildResult.failureReason.slice(0, 150)}
       </p>
     )}
     {/* TASK 1-E: Defensive fallback when no structured fields exist */}
     {!truthGatedBuildResult.failureStep && !truthGatedBuildResult.failureDayNumber && !truthGatedBuildResult.failureReason && (
-      <p className="text-[10px] text-[#4A4A4A] font-mono break-words">
+      <p className="text-[10px] text-[#4A4A4A] font-mono break-all max-w-full">
         Step: unavailable | Reason: unavailable
       </p>
     )}

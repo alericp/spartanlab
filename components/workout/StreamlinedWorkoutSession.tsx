@@ -28,6 +28,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
+import { buildExercisePurposeLine } from '@/lib/program/program-display-contract'
 import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-builder'
 // [LIVE-WORKOUT-CORRIDOR-FIX] getLatestAdaptiveProgram loaded dynamically - post-completion only
 // The adaptive-program-builder is a MASSIVE file (18,000+ lines) that can crash module evaluation
@@ -6342,10 +6343,31 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
               </div>
             </div>
             <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight">{exerciseName}</h2>
-            {/* [PHASE-MICROCOPY] Concise selection reason when available */}
-            {safeCurrentExercise?.selectionReason && safeCurrentExercise.selectionReason.length > 0 && safeCurrentExercise.selectionReason.length < 80 && (
-              <p className="text-[11px] text-[#6B7280] mt-0.5 leading-snug">{safeCurrentExercise.selectionReason}</p>
-            )}
+            {/* [PHASE-MICROCOPY] Reason-first microcopy using authoritative buildExercisePurposeLine */}
+            {(() => {
+              const purposeLine = safeCurrentExercise ? buildExercisePurposeLine(
+                {
+                  name: safeCurrentExercise.name,
+                  category: exerciseCategory,
+                  selectionReason: safeCurrentExercise.selectionReason || undefined,
+                  isPrimary: exerciseCategory === 'skill',
+                  coachingMeta: safeCurrentExercise.coachingMeta,
+                },
+                {
+                  sessionFocus: safeSession?.focus || safeSession?.styleMetadata?.primaryStyle,
+                  primaryGoal: safeSession?.compositionMetadata?.sessionIntent || safeSession?.styleMetadata?.primaryStyle,
+                }
+              ) : null
+              
+              // Fallback to loadDecisionSummary or short selectionReason
+              const displayText = purposeLine 
+                || safeCurrentExercise?.coachingMeta?.loadDecisionSummary
+                || (safeCurrentExercise?.selectionReason && safeCurrentExercise.selectionReason.length < 50 ? safeCurrentExercise.selectionReason : null)
+              
+              return displayText ? (
+                <p className="text-[11px] text-[#6B7280] mt-0.5 leading-snug">{displayText}</p>
+              ) : null
+            })()}
             <div className="flex items-center gap-2 mt-1.5 text-sm">
               <span className="text-[#A4ACB8]">Target:</span>
               <span className="text-[#E6E9EF] font-medium">{exerciseRepsOrTime}</span>

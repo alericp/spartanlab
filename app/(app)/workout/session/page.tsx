@@ -685,8 +685,46 @@ function WorkoutSessionContent() {
         demoMode,
       })
       
+      // [PHASE-VARIANT-TRUTH] Apply variant selection if specified
+      // This ensures Today page's selected variant (Full/45/30) flows through to live workout
+      let finalSession = result.session
+      if (variantIndex > 0 && result.session.variants && result.session.variants[variantIndex]) {
+        const variant = result.session.variants[variantIndex]
+        if (variant.selection?.main) {
+          console.log('[PHASE-VARIANT-TRUTH] Applying variant selection', {
+            variantIndex,
+            variantLabel: variant.label,
+            variantDuration: variant.duration,
+            originalExerciseCount: result.session.exercises.length,
+            variantExerciseCount: variant.selection.main.length,
+          })
+          
+          // Map variant selection to exercises format
+          const variantExercises = variant.selection.main.map((sel, idx) => ({
+            id: `variant-${variantIndex}-${idx}`,
+            name: sel.name,
+            category: sel.category || 'general',
+            sets: sel.sets,
+            repsOrTime: sel.repsOrTime,
+            note: sel.note || '',
+            isOverrideable: true,
+            selectionReason: sel.selectionReason || '',
+            targetRPE: sel.targetRPE,
+            restSeconds: sel.restSeconds,
+            wasAdapted: sel.wasAdapted,
+            coachingMeta: sel.coachingMeta,
+          }))
+          
+          finalSession = {
+            ...result.session,
+            exercises: variantExercises,
+            estimatedMinutes: variant.duration,
+          }
+        }
+      }
+      
       // Set session and meta - GUARANTEED to have valid session
-      setSession(result.session)
+      setSession(finalSession)
       setSessionMeta(result.meta)
       
       // [workout-init] Log normalized session data for debugging

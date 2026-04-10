@@ -20106,36 +20106,99 @@ function generateAdaptiveSession(
   
   if (dbTruthRankingModifiers.sourceConfidence !== 'none' && effectiveMainForSession.length > 1) {
     middleStep = 'inside_db_truth_main_ranking'
+    
+    // ==========================================================================
+    // [RUNTIME-HARDENING] Safe string normalizer for category/pattern fields
+    // These can be objects, arrays, null, undefined, or legacy shapes at runtime
+    // ==========================================================================
+    const safeLowerString = (value: unknown, fallback = 'unknown'): string => {
+      if (value === null || value === undefined) return fallback
+      if (typeof value === 'string') {
+        const trimmed = value.trim()
+        return trimmed !== '' ? trimmed.toLowerCase() : fallback
+      }
+      return fallback
+    }
+    
+    // [DB-TRUTH-MAIN-RANKING-SHAPE-AUDIT] Log candidate shapes for debugging
+    console.log('[db-truth-main-ranking-shape-audit]', {
+      sessionIndex,
+      dayFocus: day.focus,
+      candidateCount: effectiveMainForSession.length,
+      firstFewShapes: effectiveMainForSession.slice(0, 3).map(ex => ({
+        exerciseName: ex.exercise?.name || ex.name || 'unknown',
+        categoryType: typeof ex.category,
+        categoryIsArray: Array.isArray(ex.category),
+        categoryCtor: ex.category?.constructor?.name || 'none',
+        exerciseCategoryType: typeof ex.exercise?.category,
+        exerciseCategoryIsArray: Array.isArray(ex.exercise?.category),
+        exerciseCategoryCtor: ex.exercise?.category?.constructor?.name || 'none',
+        movementPatternType: typeof ex.movementPattern,
+        movementPatternPreview: typeof ex.movementPattern === 'string' ? ex.movementPattern.slice(0, 20) : String(ex.movementPattern),
+      })),
+      verdict: 'SHAPE_AUDIT_LOGGED',
+    })
+    
     const preRankingOrder = effectiveMainForSession.map(e => e.exercise?.name || 'unknown')
     
     // Apply modifiers to each exercise and track changes
     const scoredExercises = effectiveMainForSession.map(ex => {
-      const isAdvanced = ex.prescriptionStyle === 'primary' || 
-                         ex.exerciseRole === 'primary' ||
+      // [RUNTIME-HARDENING] Safe string extraction for all fields
+      const rawPrescriptionStyle = ex.prescriptionStyle
+      const safePrescriptionStyle = typeof rawPrescriptionStyle === 'string' ? rawPrescriptionStyle : ''
+      const rawExerciseRole = ex.exerciseRole
+      const safeExerciseRole = typeof rawExerciseRole === 'string' ? rawExerciseRole : ''
+      
+      const isAdvanced = safePrescriptionStyle === 'primary' || 
+                         safeExerciseRole === 'primary' ||
                          (ex.exercise?.difficulty === 'advanced' || ex.exercise?.difficulty === 'elite')
       
-      const movementPattern = ex.exercise?.category?.toLowerCase() || 
-                              ex.category?.toLowerCase() || 
-                              'unknown'
+      // [RUNTIME-HARDENING] Safe movement pattern extraction - NEVER call toLowerCase on unknown
+      const rawExerciseCategory = ex.exercise?.category
+      const rawCategory = ex.category
+      const rawMovementPattern = ex.movementPattern
       
+      const movementPattern = safeLowerString(rawMovementPattern) !== 'unknown' 
+        ? safeLowerString(rawMovementPattern)
+        : safeLowerString(rawExerciseCategory) !== 'unknown'
+          ? safeLowerString(rawExerciseCategory)
+          : safeLowerString(rawCategory)
+      
+      // [RUNTIME-HARDENING] Safe fatigue level - handle non-string category
+      const safeCategoryForFatigue = safeLowerString(rawCategory, '')
       const fatigueLevel: 'low' | 'medium' | 'high' = 
-        ex.prescriptionStyle === 'primary' ? 'high' :
-        ex.exerciseRole === 'primary' ? 'high' :
-        ex.category === 'accessory' ? 'low' : 'medium'
+        safePrescriptionStyle === 'primary' ? 'high' :
+        safeExerciseRole === 'primary' ? 'high' :
+        safeCategoryForFatigue === 'accessory' ? 'low' : 'medium'
       
       // Extract skill hint for skill-family-specific modifier lookup
       // [RUNTIME-HARDENING] Ensure skillHint is always a string, not null/undefined/object/array
-      const rawSkill = ex.skill ?? ex.exercise?.skill ?? ex.skillFamily ?? ex.category ?? ''
+      const rawSkill = ex.skill ?? ex.exercise?.skill ?? ex.skillFamily ?? rawCategory ?? ''
       const skillHint = typeof rawSkill === 'string' ? rawSkill : ''
       
+      // Log safe normalization for first few
+      if (effectiveMainForSession.indexOf(ex) < 3) {
+        console.log('[db-truth-main-ranking-safe-normalization]', {
+          exerciseName: ex.exercise?.name || 'unknown',
+          rawCategoryPreview: typeof rawCategory === 'string' ? rawCategory.slice(0, 20) : String(typeof rawCategory),
+          rawExerciseCategoryPreview: typeof rawExerciseCategory === 'string' ? rawExerciseCategory.slice(0, 20) : String(typeof rawExerciseCategory),
+          rawMovementPatternPreview: typeof rawMovementPattern === 'string' ? rawMovementPattern.slice(0, 20) : String(typeof rawMovementPattern),
+          normalizedMovementPattern: movementPattern,
+          normalizedSkillHint: skillHint,
+          usedFallback: movementPattern === 'unknown' || skillHint === '',
+          verdict: 'SAFE_NORMALIZATION_COMPLETE',
+        })
+      }
+      
       // [SKILL-SPECIFIC] Use skill-family-specific modifier instead of global
+      // [RUNTIME-HARDENING] Pass safe normalized strings to prevent downstream crashes
       const result = applySkillSpecificRankingModifier(
         ex.scoreFromSelector || 50, // Use existing score or default
         {
-          name: ex.exercise?.name,
-          category: ex.category,
+          name: typeof ex.exercise?.name === 'string' ? ex.exercise.name : 'unknown',
+          category: safeLowerString(rawCategory, ''),
           skill: skillHint,
-          skillFamily: ex.skillFamily,
+          skillFamily: typeof ex.skillFamily === 'string' ? ex.skillFamily : '',
           movementPattern,
           isAdvanced,
           fatigueLevel,
@@ -20193,6 +20256,19 @@ function generateAdaptiveSession(
     if (rankingChanged) {
       effectiveMainForSession = resortedExercises
     }
+    
+    // [DB-TRUTH-MAIN-RANKING-FINAL-VERDICT] Confirm corridor completed without shape crash
+    console.log('[db-truth-main-ranking-final-verdict]', {
+      sessionIndex,
+      dayFocus: day.focus,
+      middleStep: 'inside_db_truth_main_ranking',
+      candidatesProcessed: scoredExercises.length,
+      rankingApplied: rankingChanged,
+      shapeCrash: false,
+      verdict: 'PASS',
+    })
+    
+    middleStep = 'after_db_truth_main_ranking'
     
     // ==========================================================================
     // [SMART SUBSTITUTION] Check for exercises that should be substituted based on
@@ -20358,9 +20434,12 @@ function generateAdaptiveSession(
     // ==========================================================================
     // [v0] PRE-TRIM AUDIT - Prove what families exist BEFORE any protection trim
     // ==========================================================================
+    // [RUNTIME-HARDENING] Local safe lower helper for audit
+    const auditSafeLower = (v: unknown): string => typeof v === 'string' ? v.toLowerCase() : 'unknown'
+    
     const preTrimFamilyBreakdown = effectiveMainForSession.reduce((acc, ex) => {
-      const cat = ex.category?.toLowerCase() || ex.exercise?.category?.toLowerCase() || 'unknown'
-      const role = ex.exerciseRole?.toLowerCase() || ''
+      const cat = auditSafeLower(ex.category) !== 'unknown' ? auditSafeLower(ex.category) : auditSafeLower(ex.exercise?.category)
+      const role = auditSafeLower(ex.exerciseRole) !== 'unknown' ? auditSafeLower(ex.exerciseRole) : ''
       const family = cat === 'skill' || cat === 'primary' ? 'primary'
         : cat === 'strength' || role.includes('strength') ? 'strength'
         : cat === 'support' || role.includes('support') ? 'support'
@@ -20430,8 +20509,9 @@ function generateAdaptiveSession(
             primaryExercises.push(ex)
           } else {
             // Categorize by family for truth-preserving selection
-            const category = ex.category?.toLowerCase() || ex.exercise?.category?.toLowerCase() || 'other'
-            const role = ex.exerciseRole?.toLowerCase() || ''
+            // [RUNTIME-HARDENING] Safe toLowerCase for runtime shapes
+            const category = auditSafeLower(ex.category) !== 'unknown' ? auditSafeLower(ex.category) : auditSafeLower(ex.exercise?.category) !== 'unknown' ? auditSafeLower(ex.exercise?.category) : 'other'
+            const role = auditSafeLower(ex.exerciseRole) !== 'unknown' ? auditSafeLower(ex.exerciseRole) : ''
             
             if (category === 'strength' || role.includes('strength')) {
               secondaryByFamily.strength.push(ex)
@@ -21010,9 +21090,10 @@ function generateAdaptiveSession(
     // ==========================================================================
     // [v0] POST-TRIM AUDIT - Prove what families SURVIVED after protection trim
     // ==========================================================================
+    // [RUNTIME-HARDENING] Reuse auditSafeLower for safe category extraction
     const postTrimFamilyBreakdown = weekAdaptationAdjusted.reduce((acc, ex) => {
-      const cat = ex.category?.toLowerCase() || ex.exercise?.category?.toLowerCase() || 'unknown'
-      const role = ex.exerciseRole?.toLowerCase() || ''
+      const cat = auditSafeLower(ex.category) !== 'unknown' ? auditSafeLower(ex.category) : auditSafeLower(ex.exercise?.category)
+      const role = auditSafeLower(ex.exerciseRole) !== 'unknown' ? auditSafeLower(ex.exerciseRole) : ''
       const family = cat === 'skill' || cat === 'primary' ? 'primary'
         : cat === 'strength' || role.includes('strength') ? 'strength'
         : cat === 'support' || role.includes('support') ? 'support'

@@ -6332,19 +6332,27 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                 <p className="text-[11px] text-[#6B7280] mt-0.5 leading-snug">{displayText}</p>
               ) : null
             })()}
+            {/* Target prescription with meaningful framing */}
             <div className="flex items-center gap-2 mt-1.5 text-sm">
               <span className="text-[#A4ACB8]">Target:</span>
               <span className="text-[#E6E9EF] font-medium">{exerciseRepsOrTime}</span>
               <span className="text-[#6B7280]">·</span>
-              <span className="text-[#A4ACB8]">RPE {contractTargetRPE}</span>
-              {/* [PHASE-MICROCOPY] Rest guidance for skill/strength when significant */}
-              {safeCurrentExercise?.restSeconds && safeCurrentExercise.restSeconds >= 90 && (exerciseCategory === 'skill' || exerciseCategory === 'strength' || exerciseCategory === 'pull' || exerciseCategory === 'push') && (
-                <>
-                  <span className="text-[#6B7280]">·</span>
-                  <span className="text-[#6B7280]">Rest {Math.floor(safeCurrentExercise.restSeconds / 60)}:{String(safeCurrentExercise.restSeconds % 60).padStart(2, '0')}</span>
-                </>
-              )}
+              {/* RPE with purpose context */}
+              <span className="text-[#A4ACB8]">
+                {contractTargetRPE <= 7 ? 'Quality focus' : contractTargetRPE >= 9 ? 'Push effort' : 'Moderate effort'} @ RPE {contractTargetRPE}
+              </span>
             </div>
+            {/* [PHASE-MICROCOPY] Rest guidance as supporting line only when meaningful */}
+            {safeCurrentExercise?.restSeconds && safeCurrentExercise.restSeconds >= 90 && (exerciseCategory === 'skill' || exerciseCategory === 'strength' || exerciseCategory === 'pull' || exerciseCategory === 'push') && (
+              <p className="text-[10px] text-[#6B7280]/80 mt-1">
+                {safeCurrentExercise.restSeconds >= 180 
+                  ? `Rest ${Math.floor(safeCurrentExercise.restSeconds / 60)}+ min to preserve output quality`
+                  : safeCurrentExercise.restSeconds >= 120
+                  ? `Rest ${Math.floor(safeCurrentExercise.restSeconds / 60)} min for quality recovery`
+                  : `Rest ${Math.floor(safeCurrentExercise.restSeconds / 60)}:${String(safeCurrentExercise.restSeconds % 60).padStart(2, '0')} between sets`
+                }
+              </p>
+            )}
             {/* Set progress for grouped: shows round progress instead of linear sets */}
             <div className="flex items-center gap-3 mt-3">
               <div className="flex items-center gap-1.5 flex-1">

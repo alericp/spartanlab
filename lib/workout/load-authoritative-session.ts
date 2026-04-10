@@ -137,6 +137,13 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
     result.styleMetadata = session.styleMetadata as AdaptiveSession['styleMetadata']
   }
   
+  // [PHASE-VARIANT-TRUTH] Preserve session.variants for Full/45/30 variant selection
+  // This is the authoritative variant source computed by session-compression-engine
+  // Without this, Today page and Live Workout cannot access variant-selected exercises
+  if (Array.isArray(session.variants) && session.variants.length > 0) {
+    result.variants = session.variants as AdaptiveSession['variants']
+  }
+  
   return result
 }
 

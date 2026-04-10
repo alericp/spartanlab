@@ -50,6 +50,9 @@ export default function TodaySessionPage() {
   const [showExercises, setShowExercises] = useState(true)
   const [useAdjusted, setUseAdjusted] = useState<boolean | null>(null)
   
+  // [PHASE-VARIANT-TRUTH] Variant selection state for Full/45/30
+  const [selectedVariant, setSelectedVariant] = useState<number>(0) // 0 = Full by default
+  
   const [mounted, setMounted] = useState(false)
 
   const loadData = useCallback(() => {
@@ -153,12 +156,53 @@ export default function TodaySessionPage() {
     setUseAdjusted(null)
   }
 
+  // [PHASE-VARIANT-TRUTH] Get variant-aware active session
+  // This incorporates both adjustment decisions AND variant selection
   const getActiveSession = (): AdaptiveSession | null => {
-    if (!adjustment) return currentSession
-    if (useAdjusted === true) return adjustment.adjusted
-    if (useAdjusted === false) return adjustment.original
-    return adjustment.wasAdjusted ? adjustment.adjusted : adjustment.original
+    const baseSession = (() => {
+      if (!adjustment) return currentSession
+      if (useAdjusted === true) return adjustment.adjusted
+      if (useAdjusted === false) return adjustment.original
+      return adjustment.wasAdjusted ? adjustment.adjusted : adjustment.original
+    })()
+    
+    if (!baseSession) return null
+    
+    // If variants exist and a non-default variant is selected, merge variant exercises
+    const variants = baseSession.variants
+    if (variants && variants.length > 1 && selectedVariant > 0 && selectedVariant < variants.length) {
+      const variant = variants[selectedVariant]
+      if (variant?.selection?.main) {
+        // Map variant selection to exercises format
+        const variantExercises = variant.selection.main.map((sel, idx) => ({
+          id: `variant-${selectedVariant}-${idx}`,
+          name: sel.name,
+          category: sel.category || 'general',
+          sets: sel.sets,
+          repsOrTime: sel.repsOrTime,
+          note: sel.note || '',
+          isOverrideable: true,
+          selectionReason: sel.selectionReason || '',
+          targetRPE: sel.targetRPE,
+          restSeconds: sel.restSeconds,
+          wasAdapted: sel.wasAdapted,
+          coachingMeta: sel.coachingMeta,
+        }))
+        
+        return {
+          ...baseSession,
+          exercises: variantExercises,
+          estimatedMinutes: variant.duration,
+        }
+      }
+    }
+    
+    return baseSession
   }
+  
+  // Get session variants info for UI
+  const sessionVariants = currentSession?.variants || []
+  const hasVariants = sessionVariants.length > 1
 
   if (!mounted) {
     return (
@@ -297,6 +341,42 @@ export default function TodaySessionPage() {
                 {adjustment.explanation}
               </p>
               
+              {/* [PHASE-VARIANT-TRUTH] Session duration variant selector */}
+              {hasVariants && (
+                <div className="mb-4">
+                  <p className="text-xs text-[#6A6A6A] uppercase tracking-wider mb-2">Session Length</p>
+                  <div className="flex gap-2">
+                    {sessionVariants.map((variant, idx) => {
+                      const isSelected = selectedVariant === idx
+                      const exerciseCount = variant.selection?.main?.length ?? 0
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => setSelectedVariant(idx)}
+                          className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            isSelected 
+                              ? 'bg-[#E63946] text-white' 
+                              : 'bg-[#1A1A1A] text-[#A5A5A5] hover:bg-[#333] border border-[#3A3A3A]'
+                          }`}
+                        >
+                          <span className="block">{variant.label}</span>
+                          <span className="block text-[10px] opacity-70">{variant.duration}min · {exerciseCount} ex</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {selectedVariant > 0 && sessionVariants[selectedVariant]?.compressionLevel && (
+                    <p className="text-[10px] text-[#6A6A6A] mt-1">
+                      {sessionVariants[selectedVariant].compressionLevel === 'moderate' 
+                        ? 'Lower-priority exercises trimmed to fit time.' 
+                        : sessionVariants[selectedVariant].compressionLevel === 'aggressive'
+                        ? 'Significant trimming applied. Skill work preserved.'
+                        : ''}
+                    </p>
+                  )}
+                </div>
+              )}
+              
               {/* [trust-polish] ISSUE A: Simplified adjustment summary - less internal-feeling */}
               {adjustment.wasAdjusted && (
                 <div className="flex gap-4 mb-4">
@@ -339,10 +419,13 @@ export default function TodaySessionPage() {
               )}
               
               {(!adjustment.wasAdjusted || useAdjusted !== null) && (
-                <Link href="/workout/session" className="block">
+                <Link 
+                  href={`/workout/session${hasVariants && selectedVariant > 0 ? `?variant=${selectedVariant}` : ''}`} 
+                  className="block"
+                >
                   <Button className="w-full bg-green-600 hover:bg-green-700">
                     <Play className="w-4 h-4 mr-2" />
-                    Start Session
+                    Start Session{hasVariants && selectedVariant > 0 ? ` (${sessionVariants[selectedVariant]?.label})` : ''}
                   </Button>
                 </Link>
               )}

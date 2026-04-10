@@ -2271,6 +2271,8 @@ export function buildExercisePurposeLine(
     coachingMeta?: {
       expressionMode?: string
       roleInSession?: string
+      loadDecisionSummary?: string
+      progressionIntent?: string
     }
   },
   sessionContext?: {
@@ -2291,50 +2293,83 @@ export function buildExercisePurposeLine(
   const sessionFocusLower = (sessionContext?.sessionFocus || '').toLowerCase()
   const primaryGoalLower = (sessionContext?.primaryGoal || '').replace(/_/g, ' ').toLowerCase()
   const spineType = (sessionContext?.compositionMetadata?.spineSessionType || '').toLowerCase()
+  const exerciseNameLower = exercise.name.toLowerCase()
+  
+  // Helper: derive goal-specific carryover phrase
+  const goalCarryoverPhrase = (): string => {
+    if (primaryGoalLower.includes('planche')) return 'planche pressing demands'
+    if (primaryGoalLower.includes('front lever')) return 'front lever pulling strength'
+    if (primaryGoalLower.includes('back lever')) return 'back lever straight-arm control'
+    if (primaryGoalLower.includes('handstand')) return 'handstand line control'
+    if (primaryGoalLower.includes('muscle up') || primaryGoalLower.includes('muscle-up')) return 'muscle-up transition power'
+    return 'skill progression'
+  }
   
   // ==========================================================================
   // PRIORITY 1: Primary skill/direct progression role
   // ==========================================================================
-  if (emphasisKind === 'primary' || exercise.isPrimary) {
-    if (expressionMode.includes('direct') || expressionMode.includes('intensity')) {
+  if (emphasisKind === 'primary' || exercise.isPrimary || categoryLower === 'skill') {
+    if (expressionMode.includes('direct') || expressionMode.includes('intensity') || spineType.includes('direct')) {
       if (primaryGoalLower.includes('planche')) {
-        return 'Direct planche patterning'
-      } else if (primaryGoalLower.includes('lever')) {
-        return 'Direct lever progression'
+        return 'Builds the straight-arm pressing strength your planche needs'
+      } else if (primaryGoalLower.includes('front lever')) {
+        return 'Develops the pulling strength your front lever requires'
+      } else if (primaryGoalLower.includes('back lever')) {
+        return 'Trains the straight-arm control back lever demands'
       } else if (primaryGoalLower.includes('handstand')) {
-        return 'Direct handstand development'
+        return 'Develops the overhead strength and control for handstand'
       } else if (primaryGoalLower.includes('muscle')) {
-        return 'Primary muscle-up work'
+        return 'Builds the transition power your muscle-up needs'
       }
-      return 'Primary skill progression'
+      return 'Primary skill driver for your goal'
     }
-    if (spineType.includes('direct')) {
-      return 'Primary skill driver'
+    // Skill category but not direct expression
+    if (categoryLower === 'skill') {
+      if (primaryGoalLower.includes('planche')) {
+        return 'Direct planche skill exposure'
+      } else if (primaryGoalLower.includes('lever')) {
+        return 'Direct lever skill exposure'
+      }
+      return 'Primary skill work for your progression'
     }
     return null // Let intentLabel handle primary without extra line
   }
   
   // ==========================================================================
-  // PRIORITY 2: Secondary integration / carryover support
+  // PRIORITY 2: Secondary integration / carryover strength
   // ==========================================================================
-  if (emphasisKind === 'secondary' || categoryLower === 'strength') {
+  if (emphasisKind === 'secondary' || categoryLower === 'strength' || categoryLower === 'push' || categoryLower === 'pull') {
+    // Check for carryover/technical expression
     if (expressionMode.includes('carryover') || expressionMode.includes('technical')) {
+      return `Builds carryover strength that transfers into ${goalCarryoverPhrase()}`
+    }
+    
+    // Push strength with goal context
+    if (categoryLower === 'push' || categoryLower === 'strength' && (sessionFocusLower.includes('push') || exerciseNameLower.includes('dip') || exerciseNameLower.includes('push'))) {
       if (primaryGoalLower.includes('planche')) {
-        return 'Carryover strength for planche'
-      } else if (primaryGoalLower.includes('lever')) {
-        return 'Carryover strength for lever'
+        return 'Builds pressing strength that carries into planche'
+      } else if (primaryGoalLower.includes('handstand')) {
+        return 'Develops pressing power for handstand pushup progression'
       }
-      return 'Technical carryover support'
+      return 'Builds pushing strength that supports your skill goals'
     }
+    
+    // Pull strength with goal context
+    if (categoryLower === 'pull' || categoryLower === 'strength' && (sessionFocusLower.includes('pull') || exerciseNameLower.includes('row') || exerciseNameLower.includes('pull'))) {
+      if (primaryGoalLower.includes('front lever')) {
+        return 'Develops pulling strength your front lever needs'
+      } else if (primaryGoalLower.includes('muscle')) {
+        return 'Builds the pulling power for muscle-up'
+      }
+      return 'Builds pulling strength that supports your skill goals'
+    }
+    
+    // Generic strength with session context
     if (roleInSession.includes('support')) {
-      return 'Secondary strength integration'
+      return `Supports your ${goalCarryoverPhrase()} with foundational strength`
     }
-    if (sessionFocusLower.includes('push') && categoryLower === 'strength') {
-      return 'Push strength builder'
-    } else if (sessionFocusLower.includes('pull') && categoryLower === 'strength') {
-      return 'Pull strength builder'
-    }
-    return 'Foundational strength support'
+    
+    return `Builds foundational strength for ${goalCarryoverPhrase()}`
   }
   
   // ==========================================================================
@@ -2342,80 +2377,91 @@ export function buildExercisePurposeLine(
   // ==========================================================================
   if (emphasisKind === 'protection' || exercise.isProtected) {
     if (reasonLower.includes('straight-arm') || reasonLower.includes('straight arm')) {
-      return 'Straight-arm tissue protection'
+      return 'Protects straight-arm tissue while building capacity'
     }
     if (reasonLower.includes('shoulder') || reasonLower.includes('scap')) {
-      return 'Shoulder tissue management'
+      return 'Protects shoulder tissue while maintaining training exposure'
     }
     if (reasonLower.includes('elbow') || reasonLower.includes('tendon')) {
-      return 'Connective tissue protection'
+      return 'Protects connective tissue for sustainable progress'
     }
-    return 'Tissue-protective support'
+    return 'Included for tissue protection while maintaining exposure'
   }
   
   // ==========================================================================
   // PRIORITY 4: Accessory hypertrophy / strength support role
   // ==========================================================================
   if (categoryLower === 'accessory') {
+    // Scapular/shoulder stability
+    if (reasonLower.includes('scap') || reasonLower.includes('shoulder') || exerciseNameLower.includes('face pull') || exerciseNameLower.includes('y raise')) {
+      if (primaryGoalLower.includes('planche') || primaryGoalLower.includes('lever')) {
+        return 'Builds scapular stability for better skill positions'
+      }
+      return 'Develops shoulder stability for injury prevention'
+    }
+    
+    // Posterior chain / rear delt
+    if (reasonLower.includes('rear delt') || reasonLower.includes('posterior') || exerciseNameLower.includes('rear delt')) {
+      return 'Balances pushing with posterior chain work for shoulder health'
+    }
+    
+    // Hypertrophy intent
     if (reasonLower.includes('hypertrophy') || reasonLower.includes('size')) {
-      return 'Accessory hypertrophy support'
+      return 'Adds muscle where it supports your skill goals'
     }
-    if (reasonLower.includes('scap') || reasonLower.includes('shoulder')) {
-      return 'Scapular stability accessory'
+    
+    // Push accessory
+    if (reasonLower.includes('push') || reasonLower.includes('press') || sessionFocusLower.includes('push')) {
+      return 'Supports pressing strength without overloading recovery'
     }
-    if (reasonLower.includes('rear delt') || reasonLower.includes('posterior')) {
-      return 'Posterior chain balance'
+    
+    // Pull accessory
+    if (reasonLower.includes('pull') || reasonLower.includes('row') || sessionFocusLower.includes('pull')) {
+      return 'Supports pulling strength without overloading recovery'
     }
-    if (reasonLower.includes('push') || reasonLower.includes('press')) {
-      return 'Pressing accessory support'
-    }
-    if (reasonLower.includes('pull') || reasonLower.includes('row')) {
-      return 'Pulling accessory support'
-    }
-    if (sessionFocusLower.includes('push')) {
-      return 'Push session accessory'
-    } else if (sessionFocusLower.includes('pull')) {
-      return 'Pull session accessory'
-    }
-    return 'Accessory support work'
+    
+    return 'Supports your main work without overloading recovery'
   }
   
   // ==========================================================================
   // PRIORITY 5: Core / trunk / position-support role
   // ==========================================================================
   if (categoryLower === 'core') {
-    if (primaryGoalLower.includes('planche') || primaryGoalLower.includes('lever')) {
-      return 'Trunk stability for line control'
+    if (primaryGoalLower.includes('planche')) {
+      return 'Builds the trunk strength your planche line needs'
+    }
+    if (primaryGoalLower.includes('lever')) {
+      return 'Develops the core tension your lever position requires'
     }
     if (primaryGoalLower.includes('handstand')) {
-      return 'Core for handstand alignment'
+      return 'Builds the midline stability your handstand needs'
     }
-    if (reasonLower.includes('hollow') || reasonLower.includes('anti-extension')) {
-      return 'Anti-extension core pattern'
+    if (reasonLower.includes('hollow') || reasonLower.includes('anti-extension') || exerciseNameLower.includes('hollow')) {
+      return 'Trains the hollow position that transfers to your skills'
     }
     if (reasonLower.includes('rotation') || reasonLower.includes('pallof')) {
-      return 'Anti-rotation stability'
+      return 'Builds rotational stability for better body control'
     }
-    return 'Position-support core work'
+    return 'Develops trunk stability for your skill positions'
   }
   
   // ==========================================================================
   // PRIORITY 6: Mobility / prep / range-support role
   // ==========================================================================
   if (categoryLower === 'mobility' || categoryLower === 'flexibility') {
-    if (reasonLower.includes('shoulder') || reasonLower.includes('overhead')) {
-      return 'Shoulder range support'
+    if (reasonLower.includes('shoulder') || reasonLower.includes('overhead') || exerciseNameLower.includes('shoulder')) {
+      return 'Opens shoulder range needed for your skill positions'
     }
     if (reasonLower.includes('hip') || reasonLower.includes('split')) {
-      return 'Hip mobility development'
+      return 'Develops hip mobility for better skill expression'
     }
     if (reasonLower.includes('thoracic') || reasonLower.includes('spine')) {
-      return 'Thoracic mobility prep'
+      return 'Improves thoracic mobility for better overhead positions'
     }
-    if (reasonLower.includes('wrist') || reasonLower.includes('forearm')) {
-      return 'Wrist prep for loading'
+    if (reasonLower.includes('wrist') || reasonLower.includes('forearm') || exerciseNameLower.includes('wrist')) {
+      return 'Prepares wrists for the loading your skills demand'
     }
-    return 'Range-support mobility'
+    return 'Develops the range your skill positions need'
   }
   
   // ==========================================================================
@@ -2423,23 +2469,19 @@ export function buildExercisePurposeLine(
   // ==========================================================================
   if (reasonLower.includes('finisher') || reasonLower.includes('density')) {
     if (sessionFocusLower.includes('push')) {
-      return 'Push density finisher'
+      return 'Finishes the push session with volume for growth'
     } else if (sessionFocusLower.includes('pull')) {
-      return 'Pull density finisher'
+      return 'Finishes the pull session with volume for growth'
     }
-    return 'Work-capacity finisher'
+    return 'Adds work capacity without overloading recovery'
   }
   
   // ==========================================================================
   // PRIORITY 8: Generic support with session context
   // ==========================================================================
   if (emphasisKind === 'support') {
-    if (sessionFocusLower.includes('push')) {
-      return 'Push session support'
-    } else if (sessionFocusLower.includes('pull')) {
-      return 'Pull session support'
-    } else if (sessionFocusLower.includes('skill')) {
-      return 'Skill session support'
+    if (primaryGoalLower) {
+      return `Supports your ${goalCarryoverPhrase()} training`
     }
     return null // Let intentLabel handle generic support
   }

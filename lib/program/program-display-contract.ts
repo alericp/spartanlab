@@ -2730,16 +2730,52 @@ export function buildExercisePurposeLine(
   }
   
   // ==========================================================================
-  // PRIORITY 8: Generic support — CONCISE FALLBACK
+  // PRIORITY 8: Program-calibrated fallbacks — NO EMPTY RETURNS
   // ==========================================================================
+  
+  // Support with goal context
   if (emphasisKind === 'support') {
     if (primaryGoalLower) {
       return `Support slot for ${goalName()} — raises usable strength without stealing skill recovery.`
     }
-    return null
+    // Even without goal, explain the role
+    if (roleInSession.includes('accessory')) {
+      return 'Accessory slot — targeted volume that feeds your main work without high fatigue cost.'
+    }
+    return 'Support slot — builds capacity that transfers to your priority work.'
   }
   
-  return null
+  // ==========================================================================
+  // PRIORITY 9: Ultimate fallback — ALWAYS explain something meaningful
+  // ==========================================================================
+  
+  // Try to derive from session role/expression mode
+  if (expressionMode.includes('support') || expressionMode.includes('accessory')) {
+    if (primaryGoalLower) {
+      return `Placed here to support ${goalName()} without competing for skill recovery.`
+    }
+    return 'Support volume — builds the foundation your priority work depends on.'
+  }
+  
+  // Category + goal combination
+  if (categoryLower === 'strength' || categoryLower === 'push' || categoryLower === 'pull') {
+    if (primaryGoalLower) {
+      return `Strength slot that transfers into ${goalName()} — raises your ceiling.`
+    }
+    return 'Strength slot — this builds the base your skill work depends on.'
+  }
+  
+  // Warmup/activation
+  if (categoryLower === 'warmup' || categoryLower === 'activation') {
+    return 'Prep slot — primes the patterns you need ready before main work.'
+  }
+  
+  // Absolute fallback with whatever context we have
+  if (primaryGoalLower) {
+    return `Included to support ${goalName()} progression — complements your priority work.`
+  }
+  
+  return 'Selected to complement your session — builds capacity for your main goals.'
 }
 
 // =============================================================================
@@ -2994,48 +3030,103 @@ export function buildExerciseRowSurface(
   }
   
   // ==========================================================================
-  // D. Build intent label from expression mode + role
+  // D. Build intent label from expression mode + role — PROGRAM-CALIBRATED
   // ==========================================================================
   let intentLabel: string | null = null
+  const sessionIntent = (sessionContext?.compositionMetadata?.sessionIntent || '').toLowerCase()
+  const primaryGoalLower = (sessionContext?.primaryGoal || '').replace(/_/g, ' ').toLowerCase()
   
+  // Helper: derive goal name for phrasing
+  const goalName = (): string => {
+    if (primaryGoalLower.includes('planche')) return 'planche'
+    if (primaryGoalLower.includes('front lever')) return 'front lever'
+    if (primaryGoalLower.includes('back lever')) return 'back lever'
+    if (primaryGoalLower.includes('handstand')) return 'handstand'
+    if (primaryGoalLower.includes('muscle up') || primaryGoalLower.includes('muscle-up')) return 'muscle-up'
+    return 'skill'
+  }
+  
+  // PRIORITY 1: Expression mode signals (most specific)
   if (expressionMode.includes('direct') || expressionMode.includes('intensity')) {
-    intentLabel = 'Primary skill exposure'
+    intentLabel = primaryGoalLower ? `Primary ${goalName()} exposure` : 'Primary skill exposure'
     source = 'authoritative'
   } else if (expressionMode.includes('technical') || expressionMode.includes('carryover')) {
-    intentLabel = 'Technical carryover'
+    intentLabel = primaryGoalLower ? `Transfers into ${goalName()}` : 'Technical carryover'
     source = 'authoritative'
-  } else if (roleInSession.includes('primary')) {
-    intentLabel = 'Primary driver'
+  } else if (expressionMode.includes('support') || expressionMode.includes('strength_support')) {
+    intentLabel = primaryGoalLower ? `Strength base for ${goalName()}` : 'Foundation builder'
+    source = 'authoritative'
+  }
+  // PRIORITY 2: Role in session signals
+  else if (roleInSession.includes('primary') || roleInSession.includes('main')) {
+    intentLabel = 'Main driver today'
     source = 'authoritative'
   } else if (roleInSession.includes('support') || roleInSession.includes('accessory')) {
-    intentLabel = 'Support integration'
+    intentLabel = primaryGoalLower ? `Support for ${goalName()}` : 'Capacity builder'
     source = 'authoritative'
-  } else if (categoryLower === 'skill') {
-    intentLabel = 'Skill work'
+  } else if (roleInSession.includes('overload')) {
+    intentLabel = 'Overload slot'
     source = 'authoritative'
-  } else if (categoryLower === 'strength') {
-    intentLabel = 'Strength building'
+  } else if (roleInSession.includes('technique') || roleInSession.includes('quality')) {
+    intentLabel = 'Technique slot'
+    source = 'authoritative'
+  }
+  // PRIORITY 3: Category with goal context (NOT generic category alone)
+  else if (categoryLower === 'skill') {
+    intentLabel = primaryGoalLower ? `${goalName()} work` : 'Skill work'
+    source = 'authoritative'
+  } else if (categoryLower === 'strength' || categoryLower === 'push' || categoryLower === 'pull') {
+    // Derive from session intent when available
+    if (sessionIntent.includes('overload') || sessionIntent.includes('strength')) {
+      intentLabel = 'Strength overload'
+    } else if (sessionIntent.includes('volume')) {
+      intentLabel = 'Strength volume'
+    } else if (primaryGoalLower) {
+      intentLabel = `Strength for ${goalName()}`
+    } else {
+      intentLabel = 'Strength builder'
+    }
     source = 'authoritative'
   } else if (categoryLower === 'core') {
-    intentLabel = 'Core stability'
+    intentLabel = primaryGoalLower ? `Core for ${goalName()}` : 'Trunk stability'
     source = 'authoritative'
   } else if (categoryLower === 'accessory') {
-    intentLabel = 'Support work'
+    if (reasonLower.includes('scap') || reasonLower.includes('shoulder')) {
+      intentLabel = 'Scap stability'
+    } else if (reasonLower.includes('posterior') || reasonLower.includes('rear')) {
+      intentLabel = 'Posterior balance'
+    } else if (primaryGoalLower) {
+      intentLabel = `Accessory for ${goalName()}`
+    } else {
+      intentLabel = 'Targeted support'
+    }
     source = 'authoritative'
   } else if (categoryLower === 'mobility' || categoryLower === 'flexibility') {
-    intentLabel = 'Mobility prep'
+    if (reasonLower.includes('shoulder') || reasonLower.includes('overhead')) {
+      intentLabel = 'Shoulder range'
+    } else if (reasonLower.includes('hip') || reasonLower.includes('pike')) {
+      intentLabel = 'Hip range'
+    } else {
+      intentLabel = 'Range unlocking'
+    }
     source = 'authoritative'
   }
   
-  // Override based on selection reason keywords
-  if (reasonLower.includes('volume build')) {
-    intentLabel = 'Volume builder'
+  // PRIORITY 4: Selection reason keywords for specificity override
+  if (reasonLower.includes('volume build') || reasonLower.includes('accumulation')) {
+    intentLabel = 'Volume accumulation'
     source = 'authoritative'
-  } else if (reasonLower.includes('technique') || reasonLower.includes('form')) {
-    intentLabel = 'Technique reinforcement'
+  } else if (reasonLower.includes('technique') || reasonLower.includes('form') || reasonLower.includes('quality')) {
+    intentLabel = 'Technique quality'
     source = 'authoritative'
-  } else if (reasonLower.includes('recovery') || reasonLower.includes('prep')) {
-    intentLabel = 'Recovery-compatible'
+  } else if (reasonLower.includes('recovery') || reasonLower.includes('deload')) {
+    intentLabel = 'Recovery-aware'
+    source = 'authoritative'
+  } else if (reasonLower.includes('overload') || reasonLower.includes('max')) {
+    intentLabel = 'Overload intent'
+    source = 'authoritative'
+  } else if (reasonLower.includes('tissue') || reasonLower.includes('protect')) {
+    intentLabel = 'Tissue-managed'
     source = 'authoritative'
   }
   

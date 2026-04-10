@@ -20197,6 +20197,17 @@ function generateAdaptiveSession(
       candidateCount: effectiveMainForSession?.length ?? 0,
       verdict: 'SKIPPED_CLEANLY_NO_DEGRADED_STATE',
     })
+    
+    // [DB-TRUTH-MAIN-RANKING-FINAL-VERDICT] Corridor skipped - not eligible
+    console.log('[db-truth-main-ranking-final-verdict]', {
+      sessionIndex,
+      dayFocus: day?.focus ?? 'unknown',
+      middleStep: 'before_db_truth_main_ranking',
+      candidatesProcessed: 0,
+      rankingApplied: false,
+      shapeCrash: false,
+      verdict: 'PASS_RERANK_SKIPPED',
+    })
   }
   
   if (rerankEligible) {
@@ -20364,6 +20375,10 @@ function generateAdaptiveSession(
             dbTruthRankingModifiers
           )
         } catch (modifierErr) {
+          // ==========================================================================
+          // [FAIL-OPEN] Modifier failure is NON-FATAL - use safe fallback result
+          // DO NOT RETHROW - this is an enhancement corridor, not authoritative
+          // ==========================================================================
           console.log('[db-truth-main-ranking-modifier-failure]', {
             exerciseName: normalized.name,
             exerciseIndex: exIndex,
@@ -20373,10 +20388,18 @@ function generateAdaptiveSession(
             errorName: modifierErr instanceof Error ? modifierErr.name : 'unknown',
             errorMessage: modifierErr instanceof Error ? modifierErr.message : String(modifierErr),
             stack: modifierErr instanceof Error ? modifierErr.stack?.split('\n').slice(0, 5).join('\n') : '',
-            verdict: 'MODIFIER_CALL_FAILED',
+            verdict: 'MODIFIER_FAILED_USING_SAFE_FALLBACK',
           })
-          // Re-throw to be caught by outer try-catch
-          throw modifierErr
+          
+          // Return safe fallback result - keep original score, no modification
+          result = {
+            adjustedScore: normalized.baseScore,
+            totalModifier: 0,
+            modifierBreakdown: { fallbackUsed: true, reason: 'modifier_call_failed' },
+            changed: false,
+            skillFamilyUsed: null,
+            precedenceUsed: 'none',
+          }
         }
         
         // [CHECKPOINT] inside_score_map_after_modifier
@@ -20470,7 +20493,7 @@ function generateAdaptiveSession(
         candidatesProcessed: scoredExercises.length,
         rankingApplied: rankingChanged,
         shapeCrash: false,
-        verdict: 'PASS',
+        verdict: rankingChanged ? 'PASS_RERANK_APPLIED' : 'PASS_RERANK_NO_CHANGE',
       })
       
       // [CHECKPOINT] after_final_verdict
@@ -20527,6 +20550,18 @@ function generateAdaptiveSession(
         preservedOrder: true,
         restoredNames: preRerankNames.slice(0, 5),
         verdict: 'SESSION_CONTINUES_WITH_PRE_RERANK_ORDER',
+      })
+      
+      // [DB-TRUTH-MAIN-RANKING-FINAL-VERDICT] Non-fatal rollback applied
+      console.log('[db-truth-main-ranking-final-verdict]', {
+        sessionIndex,
+        dayFocus: day?.focus ?? 'unknown',
+        middleStep: localCheckpoint,
+        candidatesProcessed: preRerankSnapshot.length,
+        rankingApplied: false,
+        shapeCrash: false,
+        rolledBack: true,
+        verdict: 'PASS_NON_FATAL_ROLLBACK_APPLIED',
       })
       
       // DO NOT RETHROW - This is fail-open behavior

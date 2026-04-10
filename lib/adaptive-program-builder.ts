@@ -13591,6 +13591,245 @@ async function generateAdaptiveProgramImpl(
   }
   
   // ==========================================================================
+  // [VISIBLE-WEEK-EXPRESSION-AUDIT] FINAL VISIBLE WEEK CONTRACT VERIFICATION
+  // This audit compares the upstream allocator contract to actual visible output
+  // and enforces: no selected skill may silently disappear
+  // ==========================================================================
+  try {
+    const selectedSkillsForAudit = multiSkillMaterialityContract.selectedSkills || []
+    const primaryGoalForAudit = multiSkillMaterialityContract.primaryGoal || ''
+    const secondaryGoalForAudit = multiSkillMaterialityContract.secondaryGoal || null
+    
+    // Count actual skill expressions in final sessions
+    const actualSkillExpressionCounts: Record<string, { direct: number; technical: number; carryover: number }> = {}
+    for (const skill of selectedSkillsForAudit) {
+      actualSkillExpressionCounts[skill] = { direct: 0, technical: 0, carryover: 0 }
+    }
+    
+    // Analyze each session for skill expression
+    for (const session of sessions) {
+      const sessionExercises = session.exercises || []
+      for (const skill of selectedSkillsForAudit) {
+        const skillLower = skill.replace(/_/g, ' ')
+        const skillMatches = sessionExercises.filter(ex => {
+          const exName = (ex.exercise?.name || ex.name || '').toLowerCase()
+          const exId = (ex.id || '').toLowerCase()
+          return exName.includes(skillLower) || exName.includes(skill) || 
+                 exId.includes(skillLower) || exId.includes(skill) ||
+                 (skill === 'front_lever' && (exName.includes('lever') || exName.includes('front'))) ||
+                 (skill === 'back_lever' && exName.includes('back') && exName.includes('lever')) ||
+                 (skill === 'planche' && exName.includes('planche')) ||
+                 (skill === 'hspu' && (exName.includes('handstand') && exName.includes('push'))) ||
+                 (skill === 'muscle_up' && exName.includes('muscle'))
+        })
+        
+        // Classify as direct (main slot) vs technical/carryover (accessory/warmup)
+        for (const match of skillMatches) {
+          const isMainSlot = sessionExercises.indexOf(match) < 4 // First 4 exercises are typically main
+          if (isMainSlot) {
+            actualSkillExpressionCounts[skill].direct++
+          } else {
+            actualSkillExpressionCounts[skill].technical++
+          }
+        }
+      }
+    }
+    
+    // Build per-skill disposition audit
+    const perSkillDispositions: Array<{
+      skill: string
+      priorityTier: string
+      allocatorDisposition: string
+      actualDirectCount: number
+      actualTechnicalCount: number
+      actualCarryoverCount: number
+      visibleOwnership: 'direct' | 'technical' | 'carryover' | 'deferred'
+      deferReason: string | null
+      silentDisappearance: boolean
+    }> = []
+    
+    let silentDisappearanceCount = 0
+    let backLeverAuditEntry = null
+    
+    for (const skill of selectedSkillsForAudit) {
+      const allocatorDecision = weeklyExpressionAllocatorContract?.decisions?.find(d => d.skill === skill)
+      const counts = actualSkillExpressionCounts[skill]
+      const totalExpression = counts.direct + counts.technical + counts.carryover
+      
+      // Determine priority tier
+      const priorityTier = skill === primaryGoalForAudit ? 'primary' 
+        : skill === secondaryGoalForAudit ? 'secondary' : 'additional'
+      
+      // Determine visible ownership from actual counts
+      let visibleOwnership: 'direct' | 'technical' | 'carryover' | 'deferred' = 'deferred'
+      if (counts.direct >= 1) {
+        visibleOwnership = 'direct'
+      } else if (counts.technical >= 1) {
+        visibleOwnership = 'technical'
+      } else if (counts.carryover >= 1) {
+        visibleOwnership = 'carryover'
+      }
+      
+      // Check for silent disappearance
+      const silentDisappearance = totalExpression === 0 && !allocatorDecision?.readinessConstraintReason
+      if (silentDisappearance) {
+        silentDisappearanceCount++
+      }
+      
+      const entry = {
+        skill,
+        priorityTier,
+        allocatorDisposition: allocatorDecision?.doctrineDisposition || 'unknown',
+        actualDirectCount: counts.direct,
+        actualTechnicalCount: counts.technical,
+        actualCarryoverCount: counts.carryover,
+        visibleOwnership,
+        deferReason: totalExpression === 0 
+          ? (allocatorDecision?.readinessConstraintReason || allocatorDecision?.tissueConstraintReason || 'no_explicit_reason')
+          : null,
+        silentDisappearance,
+      }
+      
+      perSkillDispositions.push(entry)
+      
+      // Special back lever tracking
+      if (skill === 'back_lever') {
+        backLeverAuditEntry = entry
+      }
+    }
+    
+    // Log 1: [visible-week-expression-audit]
+    console.log('[visible-week-expression-audit]', {
+      totalSelectedSkills: selectedSkillsForAudit.length,
+      perSkillDispositions: perSkillDispositions.map(d => ({
+        skill: d.skill,
+        priorityTier: d.priorityTier,
+        allocatorDisposition: d.allocatorDisposition,
+        directCount: d.actualDirectCount,
+        technicalCount: d.actualTechnicalCount,
+        carryoverCount: d.actualCarryoverCount,
+        visibleOwnership: d.visibleOwnership,
+        deferReason: d.deferReason,
+      })),
+      silentDisappearanceCount,
+      verdict: silentDisappearanceCount === 0 ? 'NO_SILENT_DISAPPEARANCES' : 'SILENT_DISAPPEARANCES_DETECTED',
+    })
+    
+    // Log 2: [visible-week-method-audit]
+    const methodAuditEntries = sessions.map((session, idx) => {
+      const hasSuperset = session.styleMetadata?.hasSupersetsApplied || false
+      const hasCircuit = session.styleMetadata?.hasCircuitsApplied || false
+      const appliedMethods = session.styleMetadata?.appliedMethods || ['straight_sets']
+      const globalPermission = weeklyExpressionAllocatorContract?.globalMethodPermission || 'unknown'
+      
+      return {
+        sessionIndex: idx,
+        sessionFocus: session.focus,
+        supersetsApplied: hasSuperset,
+        circuitsApplied: hasCircuit,
+        appliedMethods,
+        globalPermission,
+        supersetsBlocked: !hasSuperset && canonicalProfile.trainingMethodPreferences?.includes('supersets'),
+        circuitsBlocked: !hasCircuit && canonicalProfile.trainingMethodPreferences?.includes('circuits'),
+        blockReason: globalPermission === 'straight_only' ? 'readiness_or_skill_quality_protection' : null,
+      }
+    })
+    
+    console.log('[visible-week-method-audit]', {
+      userMethodPreferences: canonicalProfile.trainingMethodPreferences || [],
+      globalMethodPermission: weeklyExpressionAllocatorContract?.globalMethodPermission || 'unknown',
+      perSessionMethods: methodAuditEntries,
+      supersetsUsedInWeek: methodAuditEntries.some(e => e.supersetsApplied),
+      circuitsUsedInWeek: methodAuditEntries.some(e => e.circuitsApplied),
+      methodOwnershipVerdict: 
+        (canonicalProfile.trainingMethodPreferences?.includes('supersets') && !methodAuditEntries.some(e => e.supersetsApplied))
+          ? 'SUPERSETS_PREFERENCE_NOT_EXPRESSED'
+          : (canonicalProfile.trainingMethodPreferences?.includes('circuits') && !methodAuditEntries.some(e => e.circuitsApplied))
+            ? 'CIRCUITS_PREFERENCE_NOT_EXPRESSED'
+            : 'METHOD_PREFERENCES_HONORED_OR_BLOCKED_WITH_REASON',
+    })
+    
+    // Log 3: [visible-week-back-lever-audit]
+    if (backLeverAuditEntry) {
+      console.log('[visible-week-back-lever-audit]', {
+        selected: true,
+        priorityTier: backLeverAuditEntry.priorityTier,
+        allocatorDisposition: backLeverAuditEntry.allocatorDisposition,
+        actualDirectCount: backLeverAuditEntry.actualDirectCount,
+        actualTechnicalCount: backLeverAuditEntry.actualTechnicalCount,
+        actualCarryoverCount: backLeverAuditEntry.actualCarryoverCount,
+        visibleOwnership: backLeverAuditEntry.visibleOwnership,
+        deferReason: backLeverAuditEntry.deferReason,
+        silentDisappearance: backLeverAuditEntry.silentDisappearance,
+        verdict: backLeverAuditEntry.silentDisappearance 
+          ? 'BACK_LEVER_SILENTLY_DISAPPEARED' 
+          : `BACK_LEVER_VISIBLE_AS_${backLeverAuditEntry.visibleOwnership.toUpperCase()}`,
+      })
+    } else {
+      const backLeverSelected = selectedSkillsForAudit.includes('back_lever')
+      console.log('[visible-week-back-lever-audit]', {
+        selected: backLeverSelected,
+        reason: backLeverSelected ? 'audit_entry_not_found' : 'not_in_selected_skills',
+      })
+    }
+    
+    // Log 4: [visible-week-defer-audit]
+    const deferredSkills = perSkillDispositions.filter(d => d.visibleOwnership === 'deferred')
+    console.log('[visible-week-defer-audit]', {
+      totalDeferred: deferredSkills.length,
+      deferredSkills: deferredSkills.map(d => ({
+        skill: d.skill,
+        priorityTier: d.priorityTier,
+        reason: d.deferReason,
+        doctrineJustified: d.deferReason !== 'no_explicit_reason',
+      })),
+      verdict: deferredSkills.every(d => d.deferReason !== 'no_explicit_reason')
+        ? 'ALL_DEFERRALS_DOCTRINE_JUSTIFIED'
+        : 'SOME_DEFERRALS_LACK_EXPLICIT_REASON',
+    })
+    
+    // Log 5: [visible-week-final-verdict]
+    const directExpressionCount = perSkillDispositions.filter(d => d.visibleOwnership === 'direct').length
+    const technicalExpressionCount = perSkillDispositions.filter(d => d.visibleOwnership === 'technical').length
+    const carryoverExpressionCount = perSkillDispositions.filter(d => d.visibleOwnership === 'carryover').length
+    const deferredCount = perSkillDispositions.filter(d => d.visibleOwnership === 'deferred').length
+    
+    const visibleWeekHonestlyReflectsOnboarding = 
+      silentDisappearanceCount === 0 &&
+      (directExpressionCount + technicalExpressionCount) >= Math.min(2, selectedSkillsForAudit.length) &&
+      deferredSkills.every(d => d.deferReason !== 'no_explicit_reason')
+    
+    console.log('[visible-week-final-verdict]', {
+      totalSelectedSkills: selectedSkillsForAudit.length,
+      directExpression: directExpressionCount,
+      technicalExpression: technicalExpressionCount,
+      carryoverExpression: carryoverExpressionCount,
+      deferredWithReason: deferredCount,
+      silentDisappearances: silentDisappearanceCount,
+      backLeverHandled: backLeverAuditEntry ? !backLeverAuditEntry.silentDisappearance : 'not_selected',
+      methodPreferencesHonored: methodAuditEntries.every(e => !e.supersetsBlocked && !e.circuitsBlocked) || 
+                                weeklyExpressionAllocatorContract?.globalMethodPermission === 'straight_only',
+      visibleWeekHonestlyReflectsOnboarding,
+      verdict: visibleWeekHonestlyReflectsOnboarding 
+        ? 'PASS_VISIBLE_WEEK_REFLECTS_ONBOARDING'
+        : 'FAIL_VISIBLE_WEEK_UNDER_EXPRESSES_ONBOARDING',
+    })
+    
+    // Store audit on program
+    ;(program as { visibleWeekExpressionAudit?: unknown }).visibleWeekExpressionAudit = {
+      perSkillDispositions,
+      methodAuditEntries,
+      backLeverAuditEntry,
+      silentDisappearanceCount,
+      visibleWeekHonestlyReflectsOnboarding,
+    }
+    
+  } catch (visibleWeekAuditErr) {
+    console.error('[visible-week-audit-error] Audit failed but program continues:', 
+      visibleWeekAuditErr instanceof Error ? visibleWeekAuditErr.message : 'unknown')
+  }
+  
+  // ==========================================================================
   // [TASK 4] AUDIT SAFETY BOUNDARY VERDICT
   // Confirms that all audit/debug code has completed without crashing generation
   // ==========================================================================

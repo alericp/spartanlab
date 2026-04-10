@@ -76,6 +76,11 @@ import {
   type WeeklyExpressionAllocationContract,
   type WeeklySkillExpressionDecision,
 } from './program/weekly-skill-expression-allocator'
+// [SKILL-FAMILY-TRUTH] Static import for skill-to-family mapping (replaces dynamic imports)
+import {
+  resolveSkillFamilyTruth,
+  mapSkillToFamily,
+} from './program/skill-specific-truth-resolution'
 import { 
   getCanonicalProfile, 
   logCanonicalProfileState, 
@@ -7198,8 +7203,8 @@ async function generateAdaptiveProgramImpl(
     preGateBias: number
   }> = {}
   
-  // Import skill-specific resolution
-  const { resolveSkillFamilyTruth, mapSkillToFamily } = await import('./program/skill-specific-truth-resolution')
+  // [SKILL-FAMILY-TRUTH] Use statically imported helpers (no dynamic import)
+  // resolveSkillFamilyTruth and mapSkillToFamily are now imported at top of file
   
   if (programmingTruthBundle?.skillProgressions?.meta?.available) {
     for (const intent of multiSkillMaterialityContract.materialSkillIntent) {
@@ -20570,7 +20575,8 @@ function generateAdaptiveSession(
     }
     
     // Update the source for set/RPE reduction to use potentially trimmed list
-    const exercisesForDosageAdjustment = secondaryExercisesTrimmed ? weekAdaptationAdjusted : effectiveMainForSession
+    // [DOSAGE-OWNERSHIP-FIX] Using 'let' since this list is transformed by readiness gating
+    let exercisesForDosageAdjustment = secondaryExercisesTrimmed ? weekAdaptationAdjusted : effectiveMainForSession
     
     // ==========================================================================
     // [PRESCRIPTION-PROPAGATION] PHASE 2: Apply set and RPE reductions
@@ -20742,14 +20748,12 @@ function generateAdaptiveSession(
       }> = []
       
       try {
-        // Get the mapSkillToFamily function dynamically
-        const { mapSkillToFamily: mapFamily } = await import('./program/skill-specific-truth-resolution')
-        
+        // [SKILL-FAMILY-TRUTH] Use statically imported mapSkillToFamily (no dynamic import)
         exercisesForDosageAdjustment = exercisesForDosageAdjustment.map(ex => {
           const exerciseSkill = ex.skill || ex.exercise?.skill
           if (!exerciseSkill) return ex
           
-          const family = mapFamily(exerciseSkill)
+          const family = mapSkillToFamily(exerciseSkill)
           const readiness = getReadinessForFamily(exposureReadinessMap, family)
           if (!readiness) return ex
           

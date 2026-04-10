@@ -150,14 +150,14 @@ export function getExerciseRowVisibility(
   switch (mode) {
     case 'prescription_first':
       return {
-        showSublabel: true, // Keep but only for primary
+        showSublabel: true, // Show for all exercises to explain purpose + dosage
         showChips: true,
         maxChips: 1, // Limit to 1 chip
         showWhyLine: false, // Suppress - verbose
         showConstraintNote: true, // Keep - safety critical
         showExerciseNote: true, // Keep - user-facing
         showKnowledgeExpansion: true, // Keep - optional drill-in
-        sublabelPrimaryOnly: true, // Only primary exercises get sublabel
+        sublabelPrimaryOnly: false, // [UPDATED] All exercises get sublabel explanation
       }
     case 'balanced':
       return {
@@ -285,6 +285,7 @@ export function getCompactSessionSummary(
 
 /**
  * Determine if an exercise row should show any AI intelligence layer
+ * [UPDATED] All exercises now show explanation to answer "why this exercise + why this dosage"
  */
 export function shouldShowRowIntelligence(
   emphasisKind: ExerciseRowSurface['emphasisKind'],
@@ -292,6 +293,7 @@ export function shouldShowRowIntelligence(
 ): boolean {
   if (mode === 'evidence_rich') return true
   if (mode === 'balanced') return emphasisKind !== 'fallback_minimal'
-  // prescription_first: only primary exercises get visible intelligence
-  return emphasisKind === 'primary'
+  // prescription_first: ALL exercises show explanation (not just primary)
+  // This ensures support/accessory/strength rows also explain purpose + dosage
+  return emphasisKind !== 'fallback_minimal'
 }

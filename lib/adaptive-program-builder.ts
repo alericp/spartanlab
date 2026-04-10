@@ -20104,169 +20104,319 @@ function generateAdaptiveSession(
   // ==========================================================================
   middleStep = 'before_db_truth_main_ranking'
   
-  if (dbTruthRankingModifiers.sourceConfidence !== 'none' && effectiveMainForSession.length > 1) {
+  // [RUNTIME-HARDENING] Safe string normalizer for category/pattern fields - defined BEFORE try block
+  // These can be objects, arrays, null, undefined, or legacy shapes at runtime
+  const safeLowerString = (value: unknown, fallback = 'unknown'): string => {
+    if (value === null || value === undefined) return fallback
+    if (typeof value === 'string') {
+      const trimmed = value.trim()
+      return trimmed !== '' ? trimmed.toLowerCase() : fallback
+    }
+    return fallback
+  }
+  
+  // [DB-TRUTH-MAIN-RANKING-ENTER] Log entry into corridor
+  console.log('[db-truth-main-ranking-enter]', {
+    candidateCount: effectiveMainForSession?.length ?? 0,
+    sourceConfidence: dbTruthRankingModifiers?.sourceConfidence ?? 'unknown',
+    sessionIndex,
+    focus: day?.focus ?? 'unknown',
+    effectiveMainIsArray: Array.isArray(effectiveMainForSession),
+    dbTruthModifiersExists: !!dbTruthRankingModifiers,
+    verdict: 'ENTERED',
+  })
+  
+  // Guard: Ensure effectiveMainForSession is a valid array
+  if (!Array.isArray(effectiveMainForSession)) {
+    console.log('[db-truth-main-ranking-runtime-failure]', {
+      checkpoint: 'before_db_truth_main_ranking',
+      sessionIndex,
+      focus: day?.focus ?? 'unknown',
+      errorName: 'InvalidInputError',
+      errorMessage: 'effectiveMainForSession is not an array',
+      rawType: typeof effectiveMainForSession,
+      verdict: 'FAIL',
+    })
+    effectiveMainForSession = []
+  }
+  
+  if (dbTruthRankingModifiers?.sourceConfidence !== 'none' && effectiveMainForSession.length > 1) {
     middleStep = 'inside_db_truth_main_ranking'
     
-    // ==========================================================================
-    // [RUNTIME-HARDENING] Safe string normalizer for category/pattern fields
-    // These can be objects, arrays, null, undefined, or legacy shapes at runtime
-    // ==========================================================================
-    const safeLowerString = (value: unknown, fallback = 'unknown'): string => {
-      if (value === null || value === undefined) return fallback
-      if (typeof value === 'string') {
-        const trimmed = value.trim()
-        return trimmed !== '' ? trimmed.toLowerCase() : fallback
-      }
-      return fallback
-    }
-    
-    // [DB-TRUTH-MAIN-RANKING-SHAPE-AUDIT] Log candidate shapes for debugging
-    console.log('[db-truth-main-ranking-shape-audit]', {
-      sessionIndex,
-      dayFocus: day.focus,
-      candidateCount: effectiveMainForSession.length,
-      firstFewShapes: effectiveMainForSession.slice(0, 3).map(ex => ({
-        exerciseName: ex.exercise?.name || ex.name || 'unknown',
-        categoryType: typeof ex.category,
-        categoryIsArray: Array.isArray(ex.category),
-        categoryCtor: ex.category?.constructor?.name || 'none',
-        exerciseCategoryType: typeof ex.exercise?.category,
-        exerciseCategoryIsArray: Array.isArray(ex.exercise?.category),
-        exerciseCategoryCtor: ex.exercise?.category?.constructor?.name || 'none',
-        movementPatternType: typeof ex.movementPattern,
-        movementPatternPreview: typeof ex.movementPattern === 'string' ? ex.movementPattern.slice(0, 20) : String(ex.movementPattern),
-      })),
-      verdict: 'SHAPE_AUDIT_LOGGED',
-    })
-    
-    const preRankingOrder = effectiveMainForSession.map(e => e.exercise?.name || 'unknown')
-    
-    // Apply modifiers to each exercise and track changes
-    const scoredExercises = effectiveMainForSession.map(ex => {
-      // [RUNTIME-HARDENING] Safe string extraction for all fields
-      const rawPrescriptionStyle = ex.prescriptionStyle
-      const safePrescriptionStyle = typeof rawPrescriptionStyle === 'string' ? rawPrescriptionStyle : ''
-      const rawExerciseRole = ex.exerciseRole
-      const safeExerciseRole = typeof rawExerciseRole === 'string' ? rawExerciseRole : ''
+    // Wrap entire corridor in try-catch to capture exact failure point
+    try {
+      // [CHECKPOINT] before_shape_audit
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'before_shape_audit', sessionIndex })
       
-      const isAdvanced = safePrescriptionStyle === 'primary' || 
-                         safeExerciseRole === 'primary' ||
-                         (ex.exercise?.difficulty === 'advanced' || ex.exercise?.difficulty === 'elite')
+      // [DB-TRUTH-MAIN-RANKING-SHAPE-AUDIT] Log candidate shapes for debugging
+      console.log('[db-truth-main-ranking-shape-audit]', {
+        sessionIndex,
+        dayFocus: day.focus,
+        candidateCount: effectiveMainForSession.length,
+        firstFewShapes: effectiveMainForSession.slice(0, 3).map(ex => ({
+          exerciseName: ex?.exercise?.name || ex?.name || 'unknown',
+          categoryType: typeof ex?.category,
+          categoryIsArray: Array.isArray(ex?.category),
+          categoryCtor: ex?.category?.constructor?.name || 'none',
+          exerciseCategoryType: typeof ex?.exercise?.category,
+          exerciseCategoryIsArray: Array.isArray(ex?.exercise?.category),
+          exerciseCategoryCtor: ex?.exercise?.category?.constructor?.name || 'none',
+          movementPatternType: typeof ex?.movementPattern,
+          movementPatternPreview: typeof ex?.movementPattern === 'string' ? ex.movementPattern.slice(0, 20) : String(ex?.movementPattern),
+        })),
+        verdict: 'SHAPE_AUDIT_LOGGED',
+      })
       
-      // [RUNTIME-HARDENING] Safe movement pattern extraction - NEVER call toLowerCase on unknown
-      const rawExerciseCategory = ex.exercise?.category
-      const rawCategory = ex.category
-      const rawMovementPattern = ex.movementPattern
+      // [CHECKPOINT] after_shape_audit
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'after_shape_audit', sessionIndex })
       
-      const movementPattern = safeLowerString(rawMovementPattern) !== 'unknown' 
-        ? safeLowerString(rawMovementPattern)
-        : safeLowerString(rawExerciseCategory) !== 'unknown'
-          ? safeLowerString(rawExerciseCategory)
-          : safeLowerString(rawCategory)
+      const preRankingOrder = effectiveMainForSession.map(e => e?.exercise?.name || 'unknown')
       
-      // [RUNTIME-HARDENING] Safe fatigue level - handle non-string category
-      const safeCategoryForFatigue = safeLowerString(rawCategory, '')
-      const fatigueLevel: 'low' | 'medium' | 'high' = 
-        safePrescriptionStyle === 'primary' ? 'high' :
-        safeExerciseRole === 'primary' ? 'high' :
-        safeCategoryForFatigue === 'accessory' ? 'low' : 'medium'
+      // [CHECKPOINT] before_score_map
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'before_score_map', sessionIndex })
       
-      // Extract skill hint for skill-family-specific modifier lookup
-      // [RUNTIME-HARDENING] Ensure skillHint is always a string, not null/undefined/object/array
-      const rawSkill = ex.skill ?? ex.exercise?.skill ?? ex.skillFamily ?? rawCategory ?? ''
-      const skillHint = typeof rawSkill === 'string' ? rawSkill : ''
+      // Apply modifiers to each exercise and track changes
+      const scoredExercises = effectiveMainForSession.map((ex, exIndex) => {
+        // [CHECKPOINT] inside_score_map_before_normalization
+        if (exIndex < 3) {
+          console.log('[db-truth-main-ranking-checkpoint]', { 
+            checkpoint: 'inside_score_map_before_normalization', 
+            sessionIndex,
+            exerciseIndex: exIndex,
+            exerciseName: ex?.exercise?.name || ex?.name || 'unknown',
+          })
+        }
+        
+        // Build normalized object ONCE for this exercise - use only these fields going forward
+        const normalized = {
+          name: typeof ex?.exercise?.name === 'string' ? ex.exercise.name : (typeof ex?.name === 'string' ? ex.name : 'unknown'),
+          category: safeLowerString(ex?.category, ''),
+          exerciseCategory: safeLowerString(ex?.exercise?.category, ''),
+          movementPattern: safeLowerString(ex?.movementPattern, ''),
+          skillHint: '',
+          skillFamily: typeof ex?.skillFamily === 'string' ? ex.skillFamily : '',
+          exerciseRole: typeof ex?.exerciseRole === 'string' ? ex.exerciseRole.toLowerCase() : '',
+          prescriptionStyle: typeof ex?.prescriptionStyle === 'string' ? ex.prescriptionStyle.toLowerCase() : '',
+          difficulty: typeof ex?.exercise?.difficulty === 'string' ? ex.exercise.difficulty : '',
+          baseScore: typeof ex?.scoreFromSelector === 'number' ? ex.scoreFromSelector : 50,
+        }
+        
+        // Derive composite fields from normalized base
+        normalized.movementPattern = normalized.movementPattern !== '' 
+          ? normalized.movementPattern
+          : normalized.exerciseCategory !== ''
+            ? normalized.exerciseCategory
+            : normalized.category !== ''
+              ? normalized.category
+              : 'unknown'
+        
+        // Safe skill hint extraction
+        const rawSkill = ex?.skill ?? ex?.exercise?.skill ?? ex?.skillFamily ?? ex?.category ?? ''
+        normalized.skillHint = typeof rawSkill === 'string' ? rawSkill : ''
+        
+        // [CHECKPOINT] inside_score_map_after_normalization
+        if (exIndex < 3) {
+          console.log('[db-truth-main-ranking-checkpoint]', { 
+            checkpoint: 'inside_score_map_after_normalization', 
+            sessionIndex,
+            exerciseIndex: exIndex,
+            normalizedFields: normalized,
+          })
+        }
+        
+        const isAdvanced = normalized.prescriptionStyle === 'primary' || 
+                           normalized.exerciseRole === 'primary' ||
+                           normalized.difficulty === 'advanced' || 
+                           normalized.difficulty === 'elite'
+        
+        const fatigueLevel: 'low' | 'medium' | 'high' = 
+          normalized.prescriptionStyle === 'primary' ? 'high' :
+          normalized.exerciseRole === 'primary' ? 'high' :
+          normalized.category === 'accessory' ? 'low' : 'medium'
+        
+        // Log safe normalization for first few
+        if (exIndex < 3) {
+          console.log('[db-truth-main-ranking-safe-normalization]', {
+            exerciseName: normalized.name,
+            rawCategoryPreview: typeof ex?.category === 'string' ? ex.category.slice(0, 20) : String(typeof ex?.category),
+            rawExerciseCategoryPreview: typeof ex?.exercise?.category === 'string' ? ex.exercise.category.slice(0, 20) : String(typeof ex?.exercise?.category),
+            rawMovementPatternPreview: typeof ex?.movementPattern === 'string' ? ex.movementPattern.slice(0, 20) : String(typeof ex?.movementPattern),
+            normalizedMovementPattern: normalized.movementPattern,
+            normalizedSkillHint: normalized.skillHint,
+            usedFallback: normalized.movementPattern === 'unknown' || normalized.skillHint === '',
+            verdict: 'SAFE_NORMALIZATION_COMPLETE',
+          })
+        }
+        
+        // [CHECKPOINT] inside_score_map_before_modifier
+        if (exIndex < 3) {
+          console.log('[db-truth-main-ranking-checkpoint]', { 
+            checkpoint: 'inside_score_map_before_modifier', 
+            sessionIndex,
+            exerciseIndex: exIndex,
+          })
+          
+          // Log exact modifier input
+          console.log('[db-truth-main-ranking-modifier-input]', {
+            exerciseName: normalized.name,
+            baseScore: normalized.baseScore,
+            category: normalized.category,
+            skill: normalized.skillHint,
+            skillFamily: normalized.skillFamily,
+            movementPattern: normalized.movementPattern,
+            isAdvanced,
+            fatigueLevel,
+            constraintPenaltyMapExists: !!dbTruthRankingModifiers?.constraintPenalties,
+            skillModifierFamilyCount: skillSpecificModifiers?.byFamily?.size ?? 0,
+            verdict: 'READY_FOR_MODIFIER',
+          })
+        }
+        
+        // [SKILL-SPECIFIC] Use skill-family-specific modifier instead of global
+        // Wrap modifier call in try-catch for precise failure tracking
+        let result: ReturnType<typeof applySkillSpecificRankingModifier>
+        try {
+          result = applySkillSpecificRankingModifier(
+            normalized.baseScore,
+            {
+              name: normalized.name,
+              category: normalized.category,
+              skill: normalized.skillHint,
+              skillFamily: normalized.skillFamily,
+              movementPattern: normalized.movementPattern,
+              isAdvanced,
+              fatigueLevel,
+            },
+            skillSpecificModifiers,
+            dbTruthRankingModifiers
+          )
+        } catch (modifierErr) {
+          console.log('[db-truth-main-ranking-modifier-failure]', {
+            exerciseName: normalized.name,
+            exerciseIndex: exIndex,
+            normalizedFields: normalized,
+            isAdvanced,
+            fatigueLevel,
+            errorName: modifierErr instanceof Error ? modifierErr.name : 'unknown',
+            errorMessage: modifierErr instanceof Error ? modifierErr.message : String(modifierErr),
+            stack: modifierErr instanceof Error ? modifierErr.stack?.split('\n').slice(0, 5).join('\n') : '',
+            verdict: 'MODIFIER_CALL_FAILED',
+          })
+          // Re-throw to be caught by outer try-catch
+          throw modifierErr
+        }
+        
+        // [CHECKPOINT] inside_score_map_after_modifier
+        if (exIndex < 3) {
+          console.log('[db-truth-main-ranking-checkpoint]', { 
+            checkpoint: 'inside_score_map_after_modifier', 
+            sessionIndex,
+            exerciseIndex: exIndex,
+            adjustedScore: result.adjustedScore,
+          })
+        }
+        
+        return {
+          ...ex,
+          dbTruthAdjustedScore: result.adjustedScore,
+          dbTruthModifier: result.totalModifier,
+          dbTruthModifierBreakdown: result.modifierBreakdown,
+          dbTruthRankingChanged: result.changed,
+          dbTruthSkillFamily: result.skillFamilyUsed,
+          dbTruthPrecedenceUsed: result.precedenceUsed,
+        }
+      })
       
-      // Log safe normalization for first few
-      if (effectiveMainForSession.indexOf(ex) < 3) {
-        console.log('[db-truth-main-ranking-safe-normalization]', {
-          exerciseName: ex.exercise?.name || 'unknown',
-          rawCategoryPreview: typeof rawCategory === 'string' ? rawCategory.slice(0, 20) : String(typeof rawCategory),
-          rawExerciseCategoryPreview: typeof rawExerciseCategory === 'string' ? rawExerciseCategory.slice(0, 20) : String(typeof rawExerciseCategory),
-          rawMovementPatternPreview: typeof rawMovementPattern === 'string' ? rawMovementPattern.slice(0, 20) : String(typeof rawMovementPattern),
-          normalizedMovementPattern: movementPattern,
-          normalizedSkillHint: skillHint,
-          usedFallback: movementPattern === 'unknown' || skillHint === '',
-          verdict: 'SAFE_NORMALIZATION_COMPLETE',
-        })
-      }
+      // [CHECKPOINT] after_score_map
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'after_score_map', sessionIndex, scoredCount: scoredExercises.length })
       
-      // [SKILL-SPECIFIC] Use skill-family-specific modifier instead of global
-      // [RUNTIME-HARDENING] Pass safe normalized strings to prevent downstream crashes
-      const result = applySkillSpecificRankingModifier(
-        ex.scoreFromSelector || 50, // Use existing score or default
-        {
-          name: typeof ex.exercise?.name === 'string' ? ex.exercise.name : 'unknown',
-          category: safeLowerString(rawCategory, ''),
-          skill: skillHint,
-          skillFamily: typeof ex.skillFamily === 'string' ? ex.skillFamily : '',
-          movementPattern,
-          isAdvanced,
-          fatigueLevel,
-        },
-        skillSpecificModifiers,
-        dbTruthRankingModifiers
+      // [CHECKPOINT] before_resort
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'before_resort', sessionIndex })
+      
+      // Re-sort by adjusted score (higher is better)
+      const resortedExercises = [...scoredExercises].sort((a, b) => 
+        (b.dbTruthAdjustedScore || 0) - (a.dbTruthAdjustedScore || 0)
       )
       
-      return {
-        ...ex,
-        dbTruthAdjustedScore: result.adjustedScore,
-        dbTruthModifier: result.totalModifier,
-        dbTruthModifierBreakdown: result.modifierBreakdown,
-        dbTruthRankingChanged: result.changed,
-        dbTruthSkillFamily: result.skillFamilyUsed,
-        dbTruthPrecedenceUsed: result.precedenceUsed,
+      // [CHECKPOINT] after_resort
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'after_resort', sessionIndex })
+      
+      const postRankingOrder = resortedExercises.map(e => e?.exercise?.name || 'unknown')
+      const rankingChanged = preRankingOrder.join(',') !== postRankingOrder.join(',')
+      
+      // Count skill-family-specific vs global modifications
+      const skillFamilyModCount = scoredExercises.filter(e => e.dbTruthSkillFamily).length
+      const globalFallbackCount = scoredExercises.filter(e => !e.dbTruthSkillFamily && e.dbTruthRankingChanged).length
+      
+      console.log('[db-truth-main-ranking]', {
+        sessionIndex,
+        dayFocus: day.focus,
+        preRankingOrder: preRankingOrder.slice(0, 5),
+        postRankingOrder: postRankingOrder.slice(0, 5),
+        rankingChanged,
+        exercisesReranked: scoredExercises.filter(e => e.dbTruthRankingChanged).length,
+        skillFamilySpecificMods: skillFamilyModCount,
+        globalFallbackMods: globalFallbackCount,
+        totalModifiersApplied: scoredExercises.reduce((sum, e) => sum + (e.dbTruthModifier || 0), 0),
+        modifierBreakdowns: scoredExercises.slice(0, 3).map(e => ({
+          name: e?.exercise?.name,
+          skillFamily: e.dbTruthSkillFamily,
+          precedence: e.dbTruthPrecedenceUsed,
+          modifier: e.dbTruthModifier,
+          breakdown: e.dbTruthModifierBreakdown,
+        })),
+        verdict: rankingChanged 
+          ? (skillFamilyModCount > 0 ? 'DB_TRUTH_SKILL_SPECIFIC_RANKING_CHANGED' : 'DB_TRUTH_GLOBAL_RANKING_CHANGED')
+          : 'DB_TRUTH_RANKING_NO_ORDER_CHANGE',
+      })
+      
+      // [CHECKPOINT] before_apply_rerank
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'before_apply_rerank', sessionIndex })
+      
+      // Apply reranked order if changed
+      if (rankingChanged) {
+        effectiveMainForSession = resortedExercises
       }
-    })
-    
-    // Re-sort by adjusted score (higher is better)
-    const resortedExercises = [...scoredExercises].sort((a, b) => 
-      (b.dbTruthAdjustedScore || 0) - (a.dbTruthAdjustedScore || 0)
-    )
-    
-    const postRankingOrder = resortedExercises.map(e => e.exercise?.name || 'unknown')
-    const rankingChanged = preRankingOrder.join(',') !== postRankingOrder.join(',')
-    
-    // Count skill-family-specific vs global modifications
-    const skillFamilyModCount = scoredExercises.filter(e => e.dbTruthSkillFamily).length
-    const globalFallbackCount = scoredExercises.filter(e => !e.dbTruthSkillFamily && e.dbTruthRankingChanged).length
-    
-    console.log('[db-truth-main-ranking]', {
-      sessionIndex,
-      dayFocus: day.focus,
-      preRankingOrder: preRankingOrder.slice(0, 5),
-      postRankingOrder: postRankingOrder.slice(0, 5),
-      rankingChanged,
-      exercisesReranked: scoredExercises.filter(e => e.dbTruthRankingChanged).length,
-      skillFamilySpecificMods: skillFamilyModCount,
-      globalFallbackMods: globalFallbackCount,
-      totalModifiersApplied: scoredExercises.reduce((sum, e) => sum + (e.dbTruthModifier || 0), 0),
-      modifierBreakdowns: scoredExercises.slice(0, 3).map(e => ({
-        name: e.exercise?.name,
-        skillFamily: e.dbTruthSkillFamily,
-        precedence: e.dbTruthPrecedenceUsed,
-        modifier: e.dbTruthModifier,
-        breakdown: e.dbTruthModifierBreakdown,
-      })),
-      verdict: rankingChanged 
-        ? (skillFamilyModCount > 0 ? 'DB_TRUTH_SKILL_SPECIFIC_RANKING_CHANGED' : 'DB_TRUTH_GLOBAL_RANKING_CHANGED')
-        : 'DB_TRUTH_RANKING_NO_ORDER_CHANGE',
-    })
-    
-    // Apply reranked order if changed
-    if (rankingChanged) {
-      effectiveMainForSession = resortedExercises
+      
+      // [CHECKPOINT] after_apply_rerank
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'after_apply_rerank', sessionIndex })
+      
+      // [CHECKPOINT] before_final_verdict
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'before_final_verdict', sessionIndex })
+      
+      // [DB-TRUTH-MAIN-RANKING-FINAL-VERDICT] Confirm corridor completed without shape crash
+      console.log('[db-truth-main-ranking-final-verdict]', {
+        sessionIndex,
+        dayFocus: day.focus,
+        middleStep: 'inside_db_truth_main_ranking',
+        candidatesProcessed: scoredExercises.length,
+        rankingApplied: rankingChanged,
+        shapeCrash: false,
+        verdict: 'PASS',
+      })
+      
+      // [CHECKPOINT] after_final_verdict
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'after_final_verdict', sessionIndex })
+      
+    } catch (corridorErr) {
+      // [DB-TRUTH-MAIN-RANKING-RUNTIME-FAILURE] Capture exact failure point
+      console.log('[db-truth-main-ranking-runtime-failure]', {
+        checkpoint: middleStep,
+        sessionIndex,
+        focus: day?.focus ?? 'unknown',
+        exerciseIndex: 'unknown',
+        exerciseName: 'unknown',
+        candidateCount: effectiveMainForSession?.length ?? 0,
+        firstFewNames: effectiveMainForSession?.slice?.(0, 3)?.map?.(e => e?.exercise?.name || 'unknown') ?? [],
+        errorName: corridorErr instanceof Error ? corridorErr.name : 'unknown',
+        errorMessage: corridorErr instanceof Error ? corridorErr.message : String(corridorErr),
+        stack: corridorErr instanceof Error ? corridorErr.stack?.split('\n').slice(0, 5).join('\n') : '',
+        verdict: 'FAIL',
+      })
+      
+      // Re-throw to preserve existing error handling pipeline
+      throw corridorErr
     }
-    
-    // [DB-TRUTH-MAIN-RANKING-FINAL-VERDICT] Confirm corridor completed without shape crash
-    console.log('[db-truth-main-ranking-final-verdict]', {
-      sessionIndex,
-      dayFocus: day.focus,
-      middleStep: 'inside_db_truth_main_ranking',
-      candidatesProcessed: scoredExercises.length,
-      rankingApplied: rankingChanged,
-      shapeCrash: false,
-      verdict: 'PASS',
-    })
     
     middleStep = 'after_db_truth_main_ranking'
     

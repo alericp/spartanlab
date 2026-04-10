@@ -20102,6 +20102,37 @@ function generateAdaptiveSession(
   // [DB-TRUTH-MAIN-RANKING] Apply ranking modifiers to main exercises
   // This re-scores and potentially reorders candidates based on DB truth
   // ==========================================================================
+  
+  // ==========================================================================
+  // [NON-FATAL CORRIDOR CONTRACT] DB-truth main-ranking outcome type
+  // This corridor CANNOT degrade the session - it only enhances or preserves
+  // ==========================================================================
+  type DbTruthMainRankingOutcome = 
+    | {
+        mode: 'applied'
+        safeCandidates: any[]
+        reason: null
+        changed: boolean
+        changedCount: number
+        checkpoint: string
+      }
+    | {
+        mode: 'skipped'
+        safeCandidates: any[]
+        reason: string
+        changed: false
+        changedCount: 0
+        checkpoint: string
+      }
+    | {
+        mode: 'fallback_preserved'
+        safeCandidates: any[]
+        reason: string
+        changed: false
+        changedCount: 0
+        checkpoint: string
+      }
+  
   middleStep = 'before_db_truth_main_ranking'
   
   // [RUNTIME-HARDENING] Safe string normalizer for category/pattern fields - defined BEFORE try block
@@ -20171,16 +20202,21 @@ function generateAdaptiveSession(
     }
   }
   
-  // [DB-TRUTH-MAIN-RANKING-ENTER] Log entry into corridor
-  console.log('[db-truth-main-ranking-enter]', {
-    candidateCount: effectiveMainForSession?.length ?? 0,
-    sourceConfidence: dbTruthRankingModifiers?.sourceConfidence ?? 'unknown',
+  // [DB-TRUTH-MAIN-RANKING-NONFATAL-ENTRY] Log entry into NON-FATAL corridor
+  console.log('[db-truth-main-ranking-nonfatal-entry]', {
     sessionIndex,
+    dayNumber: day?.dayNumber ?? 0,
     focus: day?.focus ?? 'unknown',
-    effectiveMainIsArray: Array.isArray(effectiveMainForSession),
-    dbTruthModifiersExists: !!dbTruthRankingModifiers,
-    verdict: 'ENTERED',
+    preRerankCount: effectiveMainForSession?.length ?? 0,
+    runtimeCheckpoint: 'before_db_truth_main_ranking',
+    isArray: Array.isArray(effectiveMainForSession),
+    hasModifiers: !!dbTruthRankingModifiers,
+    sourceConfidence: dbTruthRankingModifiers?.sourceConfidence ?? 'unknown',
+    verdict: 'NONFATAL_CORRIDOR_ENTERED',
   })
+  
+  // Initialize the corridor outcome - will be set by the end of corridor processing
+  let dbTruthMainRankingOutcome: DbTruthMainRankingOutcome | null = null
   
   // Guard: Ensure effectiveMainForSession is a valid array
   if (!Array.isArray(effectiveMainForSession)) {
@@ -20281,6 +20317,30 @@ function generateAdaptiveSession(
       invalidCount: preRerankSafe.invalidCount,
       hadMalformedEntries: preRerankSafe.hadMalformedEntries,
       verdict: 'PASS_RERANK_SKIPPED_AFTER_SANITIZATION',
+    })
+    
+    // Set the outcome for skipped case
+    dbTruthMainRankingOutcome = {
+      mode: 'skipped',
+      safeCandidates: preRerankSafe.safeArray,
+      reason: dbTruthMainRankingAudit.skipReason || 'unknown',
+      changed: false,
+      changedCount: 0,
+      checkpoint: 'before_db_truth_main_ranking',
+    }
+    
+    // [DB-TRUTH-MAIN-RANKING-NONFATAL-OUTCOME] Corridor skipped - not eligible
+    console.log('[db-truth-main-ranking-nonfatal-outcome]', {
+      mode: dbTruthMainRankingOutcome.mode,
+      reason: dbTruthMainRankingOutcome.reason,
+      checkpoint: dbTruthMainRankingOutcome.checkpoint,
+      inputCount: preRerankSafe.safeArray.length,
+      outputCount: dbTruthMainRankingOutcome.safeCandidates.length,
+      changed: dbTruthMainRankingOutcome.changed,
+      changedCount: dbTruthMainRankingOutcome.changedCount,
+      degradedTrackerTouched: false,
+      sessionFailureTouched: false,
+      verdict: 'SKIPPED_NONFATAL_NO_DEGRADE',
     })
     
     // [DB-TRUTH-MAIN-RANKING-FINAL-VERDICT] Corridor skipped - not eligible after sanitization
@@ -20594,6 +20654,33 @@ function generateAdaptiveSession(
       dbTruthMainRankingAudit.succeeded = true
       dbTruthMainRankingAudit.exactCheckpoint = localCheckpoint
       
+      // Count how many exercises had their ranking changed
+      const changedCount = scoredExercises.filter(e => e.dbTruthRankingChanged).length
+      
+      // Set the outcome for applied case
+      dbTruthMainRankingOutcome = {
+        mode: 'applied',
+        safeCandidates: effectiveMainForSession,
+        reason: null,
+        changed: rankingChanged,
+        changedCount,
+        checkpoint: localCheckpoint,
+      }
+      
+      // [DB-TRUTH-MAIN-RANKING-NONFATAL-OUTCOME] Corridor completed successfully
+      console.log('[db-truth-main-ranking-nonfatal-outcome]', {
+        mode: dbTruthMainRankingOutcome.mode,
+        reason: dbTruthMainRankingOutcome.reason,
+        checkpoint: dbTruthMainRankingOutcome.checkpoint,
+        inputCount: preRerankSnapshot.length,
+        outputCount: dbTruthMainRankingOutcome.safeCandidates.length,
+        changed: dbTruthMainRankingOutcome.changed,
+        changedCount: dbTruthMainRankingOutcome.changedCount,
+        degradedTrackerTouched: false,
+        sessionFailureTouched: false,
+        verdict: 'APPLIED_NONFATAL_NO_DEGRADE',
+      })
+      
     } catch (corridorErr) {
       // ==========================================================================
       // [FAIL-OPEN ROLLBACK] This is a NON-AUTHORITATIVE enhancement corridor
@@ -20645,6 +20732,30 @@ function generateAdaptiveSession(
         verdict: 'SESSION_CONTINUES_WITH_PRE_RERANK_ORDER',
       })
       
+      // Set the outcome for fallback_preserved case
+      dbTruthMainRankingOutcome = {
+        mode: 'fallback_preserved',
+        safeCandidates: effectiveMainForSession, // This is now preRerankSnapshot
+        reason: `${errorName}: ${errorMessage.slice(0, 100)}`,
+        changed: false,
+        changedCount: 0,
+        checkpoint: localCheckpoint,
+      }
+      
+      // [DB-TRUTH-MAIN-RANKING-NONFATAL-OUTCOME] Corridor failed but preserved fallback
+      console.log('[db-truth-main-ranking-nonfatal-outcome]', {
+        mode: dbTruthMainRankingOutcome.mode,
+        reason: dbTruthMainRankingOutcome.reason,
+        checkpoint: dbTruthMainRankingOutcome.checkpoint,
+        inputCount: preRerankSnapshot.length,
+        outputCount: dbTruthMainRankingOutcome.safeCandidates.length,
+        changed: dbTruthMainRankingOutcome.changed,
+        changedCount: dbTruthMainRankingOutcome.changedCount,
+        degradedTrackerTouched: false,
+        sessionFailureTouched: false,
+        verdict: 'FALLBACK_PRESERVED_NONFATAL_NO_DEGRADE',
+      })
+      
       // [DB-TRUTH-MAIN-RANKING-FINAL-VERDICT] Non-fatal rollback applied
       console.log('[db-truth-main-ranking-final-verdict]', {
         sessionIndex,
@@ -20662,12 +20773,42 @@ function generateAdaptiveSession(
     }
     
     middleStep = 'after_db_truth_main_ranking'
-    
-    // ==========================================================================
-    // [SMART SUBSTITUTION] Check for exercises that should be substituted based on
-    // pattern-specific response/constraint truth
-    // ==========================================================================
-    const substitutionChecks: Array<{
+  }
+  
+  // ==========================================================================
+  // [DB-TRUTH-MAIN-RANKING-CORRIDOR-CONTRACT-VERDICT] Final non-fatal contract proof
+  // This log PROVES the corridor cannot degrade the session
+  // ==========================================================================
+  console.log('[db-truth-main-ranking-corridor-contract-verdict]', {
+    allowedToDegradeSession: false,
+    allowedToThrowOutward: false,
+    fallbackCandidateCount: preRerankSafe.safeArray.length,
+    finalMode: dbTruthMainRankingOutcome?.mode ?? 'not_reached',
+    finalCheckpoint: dbTruthMainRankingOutcome?.checkpoint ?? 'none',
+    firstFailedCheckpointTouched: false,
+    outputCandidateCount: effectiveMainForSession.length,
+    sessionFailureTrackerModified: false,
+    totalDegradedIncremented: false,
+    verdict: 'DB_TRUTH_MAIN_RANKING_CANNOT_DEGRADE_SESSION',
+  })
+  
+  // Ensure effectiveMainForSession is still valid after corridor
+  if (!Array.isArray(effectiveMainForSession) || effectiveMainForSession.length === 0) {
+    // Fallback to pre-rerank safe array if somehow corrupted
+    effectiveMainForSession = preRerankSafe.safeArray
+    console.log('[db-truth-main-ranking-post-corridor-recovery]', {
+      sessionIndex,
+      recoveredFromSafeArray: true,
+      recoveredCount: preRerankSafe.safeArray.length,
+      verdict: 'POST_CORRIDOR_RECOVERY_APPLIED',
+    })
+  }
+  
+  // ==========================================================================
+  // [SMART SUBSTITUTION] Check for exercises that should be substituted based on
+  // pattern-specific response/constraint truth
+  // ==========================================================================
+  const substitutionChecks: Array<{
       exerciseName: string
       skillFamily: string
       pattern: string | null

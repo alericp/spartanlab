@@ -20904,7 +20904,6 @@ function generateAdaptiveSession(
           ? 'SUBSTITUTION_RECOMMENDED_NOT_APPLIED'
           : 'NO_SUBSTITUTION_NEEDED',
     })
-  }
   
   // ==========================================================================
   // STEP B: Build canonical effectiveSelection - SINGLE AUTHORITATIVE OWNER

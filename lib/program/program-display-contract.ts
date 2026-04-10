@@ -2194,47 +2194,69 @@ export function buildExerciseCardContract(
   // Build prescription line - sets × reps format
   const prescriptionLine = `${exercise.sets} × ${exercise.repsOrTime}`
   
-  // Intensity badge - RPE with intent-specific coaching context
+  // [AUTHORITATIVE] Intensity badge - compact effort reasoning from single source of truth
   let intensityBadge: string | null = null
   if (exercise.targetRPE) {
     const rpe = exercise.targetRPE
+    const catLower = categoryLower
+    const exprMode = expressionMode
+    const roleSession = (exercise.coachingMeta?.roleInSession || '').toLowerCase()
+    const isProtected = (exercise.selectionReason || '').toLowerCase().includes('protect')
     
-    // Context varies based on what we're trying to achieve
-    if (prescriptionIntent === 'skill_acquisition' || prescriptionIntent === 'skill_intensity') {
-      // Skill work: RPE guards technique, not just effort
+    // PRIORITY 1: Protection / tissue management
+    if (isProtected || prescriptionIntent === 'protection') {
+      intensityBadge = rpe <= 7 
+        ? `RPE ${rpe} · tissue-safe load`
+        : `RPE ${rpe} · managed for longevity`
+    }
+    // PRIORITY 2: Skill / primary work - technique-gated
+    else if (prescriptionIntent === 'skill_acquisition' || prescriptionIntent === 'skill_intensity' || catLower === 'skill' || exprMode.includes('direct') || exprMode.includes('primary')) {
       if (rpe <= 7) {
-        intensityBadge = `RPE ${rpe} · technique ceiling`
-      } else if (rpe === 8) {
-        intensityBadge = `RPE ${rpe} · controlled challenge`
+        intensityBadge = `RPE ${rpe} · clean reps over grind`
+      } else if (rpe >= 9) {
+        intensityBadge = `RPE ${rpe} · ceiling test`
       } else {
-        intensityBadge = `RPE ${rpe} · near-limit testing`
+        intensityBadge = `RPE ${rpe} · quality challenge`
       }
-    } else if (prescriptionIntent === 'max_strength') {
-      // Max strength: RPE is about neural readiness
+    }
+    // PRIORITY 3: Strength / overload slots
+    else if (prescriptionIntent === 'max_strength' || catLower === 'strength' || catLower === 'push' || catLower === 'pull') {
+      if (rpe >= 9) {
+        intensityBadge = `RPE ${rpe} · main overload`
+      } else if (rpe <= 7) {
+        intensityBadge = `RPE ${rpe} · repeatable output`
+      } else {
+        intensityBadge = `RPE ${rpe} · strength stimulus`
+      }
+    }
+    // PRIORITY 4: Support / accessory - fatigue-managed
+    else if (prescriptionIntent === 'support_strength' || prescriptionIntent === 'hypertrophy' || catLower === 'accessory' || exprMode.includes('support') || roleSession.includes('support')) {
       if (rpe <= 7) {
-        intensityBadge = `RPE ${rpe} · building stimulus`
-      } else if (rpe === 8) {
-        intensityBadge = `RPE ${rpe} · effective dose`
+        intensityBadge = `RPE ${rpe} · capacity without fatigue debt`
       } else {
-        intensityBadge = `RPE ${rpe} · peak intent`
+        intensityBadge = `RPE ${rpe} · volume for growth`
       }
-    } else if (prescriptionIntent === 'support_strength' || prescriptionIntent === 'hypertrophy') {
-      // Support/hypertrophy: RPE manages fatigue
-      if (rpe <= 7) {
-        intensityBadge = `RPE ${rpe} · recovery-safe`
-      } else {
-        intensityBadge = `RPE ${rpe} · fatiguing`
-      }
-    } else {
-      // Default fallback
+    }
+    // PRIORITY 5: Core
+    else if (catLower === 'core') {
+      intensityBadge = rpe <= 7 
+        ? `RPE ${rpe} · trunk quality focus`
+        : `RPE ${rpe} · midline challenge`
+    }
+    // PRIORITY 6: Mobility
+    else if (catLower === 'mobility' || catLower === 'flexibility') {
+      intensityBadge = `position quality focus`
+    }
+    // FALLBACK: Still meaningful, not generic "(moderate)"
+    else {
       if (rpe <= 6) {
-        intensityBadge = `RPE ${rpe} (light)`
+        intensityBadge = `RPE ${rpe} · controlled effort`
       } else if (rpe === 7) {
-        intensityBadge = `RPE ${rpe} (moderate)`
+        intensityBadge = `RPE ${rpe} · sustainable challenge`
       } else if (rpe === 8) {
-        intensityBadge = `RPE ${rpe} (hard)`
+        intensityBadge = `RPE ${rpe} · productive intensity`
       } else {
-        intensityBadge = `RPE ${rpe} (max effort)`
+        intensityBadge = `RPE ${rpe} · near-limit intent`
       }
     }
   }

@@ -4763,6 +4763,17 @@ if (shouldShowLocalFallback) {
                   </>
                 )}
             </div>
+            {/* [PHASE-OMISSION-TRUTH] Acclimation/protection explanation when applicable */}
+            {safeSession.prescriptionPropagationAudit?.adaptationPhase === 'initial_acclimation' && (
+              <p className="text-[11px] text-amber-400/80 mt-2 px-4 text-center">
+                Week 1 — Volume conservatively managed for adaptation.
+              </p>
+            )}
+            {safeSession.prescriptionPropagationAudit?.adaptationPhase === 'recovery_constrained' && (
+              <p className="text-[11px] text-amber-400/80 mt-2 px-4 text-center">
+                Recovery focus — Intensity reduced this week.
+              </p>
+            )}
           </div>
           
           {/* Session Overview Card - Compact */}
@@ -6292,11 +6303,22 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
               </div>
             </div>
             <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight">{exerciseName}</h2>
+            {/* [PHASE-MICROCOPY] Concise selection reason when available */}
+            {safeCurrentExercise?.selectionReason && safeCurrentExercise.selectionReason.length > 0 && safeCurrentExercise.selectionReason.length < 80 && (
+              <p className="text-[11px] text-[#6B7280] mt-0.5 leading-snug">{safeCurrentExercise.selectionReason}</p>
+            )}
             <div className="flex items-center gap-2 mt-1.5 text-sm">
               <span className="text-[#A4ACB8]">Target:</span>
               <span className="text-[#E6E9EF] font-medium">{exerciseRepsOrTime}</span>
               <span className="text-[#6B7280]">·</span>
               <span className="text-[#A4ACB8]">RPE {contractTargetRPE}</span>
+              {/* [PHASE-MICROCOPY] Rest guidance for skill/strength when significant */}
+              {safeCurrentExercise?.restSeconds && safeCurrentExercise.restSeconds >= 90 && (exerciseCategory === 'skill' || exerciseCategory === 'strength' || exerciseCategory === 'pull' || exerciseCategory === 'push') && (
+                <>
+                  <span className="text-[#6B7280]">·</span>
+                  <span className="text-[#6B7280]">Rest {Math.floor(safeCurrentExercise.restSeconds / 60)}:{String(safeCurrentExercise.restSeconds % 60).padStart(2, '0')}</span>
+                </>
+              )}
             </div>
             {/* Set progress for grouped: shows round progress instead of linear sets */}
             <div className="flex items-center gap-3 mt-3">

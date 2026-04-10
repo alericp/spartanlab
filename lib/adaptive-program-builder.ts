@@ -62,6 +62,12 @@ import type { ProtocolRecommendation } from './protocols/joint-integrity-protoco
 import type { ConstraintResult, ConstraintIntervention } from './constraint-detection-engine'
 
 import { getAthleteProfile } from './data-service'
+// [ONBOARDING-TRUTH-AUDIT] Import for onboarding truth expression tracing
+import { 
+  buildOnboardingTruthExpressionAudit, 
+  logOnboardingTruthExpressionAudit,
+  type OnboardingTruthExpressionAudit 
+} from './program/onboarding-truth-expression-audit'
 import { 
   getCanonicalProfile, 
   logCanonicalProfileState, 
@@ -13485,6 +13491,53 @@ async function generateAdaptiveProgramImpl(
     
   } catch (auditErr) {
     console.error('[hybrid-audit-safety] Audit failed but program continues:', auditErr instanceof Error ? auditErr.message : 'unknown')
+  }
+  
+  // ==========================================================================
+  // [ONBOARDING-TRUTH-EXPRESSION-AUDIT] Complete end-to-end truth trace
+  // This audit proves per onboarding field whether it was:
+  // A. ingested B. materially classified C. allocated D. assembled E. visibly expressed
+  // ==========================================================================
+  try {
+    // Collect all exercise info across sessions
+    const allSessionExercises: Array<{ skill?: string; name?: string }> = []
+    for (const session of sessions) {
+      for (const ex of session.exercises || []) {
+        allSessionExercises.push({
+          skill: ex.skill || ex.selectionTrace?.influencingSkills?.[0]?.skillId,
+          name: ex.name || ex.exercise?.name,
+        })
+      }
+    }
+    
+    // Collect session style metadatas
+    const sessionStyleMetadatas = sessions.map(s => ({
+      hasSupersetsApplied: s.styleMetadata?.hasSupersetsApplied || false,
+      hasCircuitsApplied: s.styleMetadata?.hasCircuitsApplied || false,
+      hasDensityApplied: s.styleMetadata?.hasDensityApplied || false,
+      appliedMethods: s.styleMetadata?.appliedMethods || ['straight_sets'],
+    }))
+    
+    // Build the audit
+    const onboardingTruthAudit = buildOnboardingTruthExpressionAudit(
+      canonicalProfile,
+      multiSkillMaterialityContract.materialSkillIntent,
+      visibleWeekExpressionContract || null,
+      allSessionExercises,
+      materialityContract?.levers?.methodEligibility || null,
+      sessionStyleMetadatas,
+      methodReadinessGating || null
+    )
+    
+    // Log the comprehensive audit
+    logOnboardingTruthExpressionAudit(onboardingTruthAudit)
+    
+    // Store audit on program for display contract consumption
+    ;(program as { onboardingTruthExpressionAudit?: OnboardingTruthExpressionAudit }).onboardingTruthExpressionAudit = onboardingTruthAudit
+    
+  } catch (onboardingAuditErr) {
+    console.error('[onboarding-truth-audit-error] Audit failed but program continues:', 
+      onboardingAuditErr instanceof Error ? onboardingAuditErr.message : 'unknown')
   }
   
   // ==========================================================================

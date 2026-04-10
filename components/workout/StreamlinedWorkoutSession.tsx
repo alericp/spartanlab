@@ -28,7 +28,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
-import { buildExercisePurposeLine } from '@/lib/program/program-display-contract'
+import { buildExercisePurposeLine, buildExerciseEffortReasonLine } from '@/lib/program/program-display-contract'
 import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-builder'
 // [LIVE-WORKOUT-CORRIDOR-FIX] getLatestAdaptiveProgram loaded dynamically - post-completion only
 // The adaptive-program-builder is a MASSIVE file (18,000+ lines) that can crash module evaluation
@@ -6336,12 +6336,25 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
             <div className="flex items-center gap-2 mt-1.5 text-sm">
               <span className="text-[#A4ACB8]">Target:</span>
               <span className="text-[#E6E9EF] font-medium">{exerciseRepsOrTime}</span>
-              <span className="text-[#6B7280]">·</span>
-              {/* RPE with purpose context */}
-              <span className="text-[#A4ACB8]">
-                {contractTargetRPE <= 7 ? 'Quality focus' : contractTargetRPE >= 9 ? 'Push effort' : 'Moderate effort'} @ RPE {contractTargetRPE}
-              </span>
             </div>
+            {/* [EFFORT-REASON-LINE] Authoritative RPE/dosage explanation */}
+            <p className="text-[10px] text-[#6B7280] mt-1 leading-snug">
+              {buildExerciseEffortReasonLine(
+                {
+                  name: safeCurrentExercise?.name,
+                  category: exerciseCategory,
+                  targetRPE: contractTargetRPE,
+                  selectionReason: safeCurrentExercise?.selectionReason || undefined,
+                  isPrimary: exerciseCategory === 'skill',
+                  isProtected: (safeCurrentExercise as AdaptiveExercise)?.isProtected,
+                  coachingMeta: safeCurrentExercise?.coachingMeta,
+                },
+                {
+                  sessionFocus: safeSession?.focus || safeSession?.styleMetadata?.primaryStyle,
+                  primaryGoal: safeSession?.compositionMetadata?.sessionIntent || safeSession?.styleMetadata?.primaryStyle,
+                }
+              )}
+            </p>
             {/* [PHASE-MICROCOPY] Rest guidance as supporting line only when meaningful */}
             {safeCurrentExercise?.restSeconds && safeCurrentExercise.restSeconds >= 90 && (exerciseCategory === 'skill' || exerciseCategory === 'strength' || exerciseCategory === 'pull' || exerciseCategory === 'push') && (
               <p className="text-[10px] text-[#6B7280]/80 mt-1">

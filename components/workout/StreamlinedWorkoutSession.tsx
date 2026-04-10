@@ -4859,9 +4859,6 @@ if (shouldShowLocalFallback) {
                           <span className="text-xs font-medium text-[#C1121F]">
                             {baseLabel}{blockLetter ? ` ${blockLetter}` : ''}
                           </span>
-                          <span className="text-xs font-medium text-[#C1121F]">
-                            {group.groupType === 'superset' ? 'Superset' : group.groupType === 'circuit' ? 'Circuit' : group.groupType === 'cluster' ? 'Cluster Set' : 'Density Block'}
-                          </span>
                           {/* [GROUPED-INFO] Tiny info text explaining the method */}
                           <span className="text-[9px] text-[#6B7280]/70 italic hidden sm:inline">
                             {groupMethodInfo}

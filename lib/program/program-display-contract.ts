@@ -581,6 +581,28 @@ export function buildSessionCardSurface(
     source = 'authoritative'
   }
   
+  // [PHASE-RECONNECT] Surface straight-sets structure when no special methods applied
+  // This ensures every session has visible structural identity, not just those with supersets/circuits
+  if (styleMeta && methodSignals.length === 0) {
+    // Check if there's a structure description that tells us something useful
+    const structureDesc = styleMeta.structureDescription || ''
+    if (structureDesc.includes('straight sets') || styleMeta.primaryStyle === 'straight_sets') {
+      methodSignals.push('Straight sets')
+    } else if (structureDesc.includes('cluster')) {
+      methodSignals.push('Cluster sets')
+    } else if (structureDesc) {
+      // Use the structure description if available
+      const shortDesc = structureDesc.split(',')[0].trim()
+      if (shortDesc && shortDesc.length <= 25) {
+        methodSignals.push(shortDesc.charAt(0).toUpperCase() + shortDesc.slice(1))
+      }
+    }
+    // Mark as authoritative since we have styleMetadata
+    if (methodSignals.length > 0) {
+      source = 'authoritative'
+    }
+  }
+  
   // ==========================================================================
   // E. Build evidence label from week context
   // ==========================================================================
@@ -590,6 +612,13 @@ export function buildSessionCardSurface(
   } else if (prescriptionAudit?.adaptationPhase === 'recovery_constrained') {
     evidenceLabel = 'Recovery-protected structure'
   } else if (source === 'authoritative' && protectionSignals.length === 0) {
+    evidenceLabel = 'Built from profile + doctrine'
+  }
+  
+  // [PHASE-RECONNECT] Ensure evidence label shows even for standard sessions
+  // If we have authoritative session metadata but no special conditions, still show baseline evidence
+  if (!evidenceLabel && (composition || skillMeta || styleMeta)) {
+    source = 'authoritative'
     evidenceLabel = 'Built from profile + doctrine'
   }
   

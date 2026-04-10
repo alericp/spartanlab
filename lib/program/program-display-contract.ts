@@ -2693,6 +2693,164 @@ export function buildExercisePurposeLine(
   return null
 }
 
+// =============================================================================
+// [EFFORT-REASON-LINE] AUTHORITATIVE RPE/DOSAGE EXPLANATION
+// Single owner of "why this effort level today" microcopy for live workout
+// =============================================================================
+
+/**
+ * Build a concise explanation of WHY this effort level / RPE / dosage was chosen.
+ * Returns a short sentence explaining the decision, not just the number.
+ * 
+ * This is the SINGLE authoritative resolver for effort-level explanations.
+ */
+export function buildExerciseEffortReasonLine(
+  exercise: {
+    name?: string
+    category?: string
+    targetRPE?: number
+    selectionReason?: string
+    isPrimary?: boolean
+    isProtected?: boolean
+    coachingMeta?: {
+      expressionMode?: string
+      roleInSession?: string
+      loadDecisionSummary?: string
+      progressionIntent?: string
+    }
+  },
+  sessionContext?: {
+    sessionFocus?: string
+    primaryGoal?: string
+    isFirstWeek?: boolean
+    isRecoveryConstrained?: boolean
+  }
+): string {
+  const targetRPE = exercise.targetRPE ?? 8
+  const categoryLower = (exercise.category || '').toLowerCase()
+  const expressionMode = (exercise.coachingMeta?.expressionMode || '').toLowerCase()
+  const roleInSession = (exercise.coachingMeta?.roleInSession || '').toLowerCase()
+  const reasonLower = (exercise.selectionReason || '').toLowerCase()
+  const primaryGoalLower = (sessionContext?.primaryGoal || '').toLowerCase()
+  const sessionFocusLower = (sessionContext?.sessionFocus || '').toLowerCase()
+  
+  // Helper for goal name
+  const goalName = (): string => {
+    if (primaryGoalLower.includes('planche')) return 'planche'
+    if (primaryGoalLower.includes('front lever')) return 'front lever'
+    if (primaryGoalLower.includes('back lever')) return 'back lever'
+    if (primaryGoalLower.includes('handstand')) return 'handstand'
+    if (primaryGoalLower.includes('muscle')) return 'muscle-up'
+    return 'skill'
+  }
+  
+  // ==========================================================================
+  // PRIORITY 1: First-week / recovery protection overrides
+  // ==========================================================================
+  if (sessionContext?.isFirstWeek) {
+    if (targetRPE <= 7) {
+      return `Held at RPE ${targetRPE} — Week 1 builds pattern quality before intensity.`
+    }
+    return `Set at RPE ${targetRPE} — conservative start to establish baseline.`
+  }
+  
+  if (sessionContext?.isRecoveryConstrained) {
+    if (targetRPE <= 7) {
+      return `Moderated to RPE ${targetRPE} — recovery-aware dosage to protect adaptation.`
+    }
+    return `Capped at RPE ${targetRPE} — manages load while recovery catches up.`
+  }
+  
+  // ==========================================================================
+  // PRIORITY 2: Skill work / primary drivers — high technical demand
+  // ==========================================================================
+  if (categoryLower === 'skill' || exercise.isPrimary || expressionMode.includes('direct') || expressionMode.includes('primary')) {
+    if (targetRPE <= 7) {
+      return `Held at RPE ${targetRPE} — keeps mechanics clean while building groove.`
+    }
+    if (targetRPE >= 9) {
+      return `Pushed to RPE ${targetRPE} — this is the ceiling test for ${goalName()} today.`
+    }
+    return `Set at RPE ${targetRPE} — technical work that builds quality reps without collapse.`
+  }
+  
+  // ==========================================================================
+  // PRIORITY 3: Strength work — force output slots
+  // ==========================================================================
+  if (categoryLower === 'strength' || categoryLower === 'push' || categoryLower === 'pull') {
+    if (targetRPE >= 9) {
+      return `Pushed to RPE ${targetRPE} — main strength driver where overload matters most.`
+    }
+    if (targetRPE <= 7) {
+      return `Held at RPE ${targetRPE} — builds repeatable quality across all sets.`
+    }
+    // Check if session already has skill stress
+    if (sessionFocusLower.includes('skill') || expressionMode.includes('support') || expressionMode.includes('carryover')) {
+      return `Set at RPE ${targetRPE} — strength transfer without stealing skill recovery.`
+    }
+    return `Set at RPE ${targetRPE} — drives strength gains while preserving output quality.`
+  }
+  
+  // ==========================================================================
+  // PRIORITY 4: Protection / tissue management
+  // ==========================================================================
+  if (exercise.isProtected || reasonLower.includes('protect') || reasonLower.includes('tissue') || reasonLower.includes('tendon')) {
+    if (targetRPE <= 7) {
+      return `Capped at RPE ${targetRPE} — protects connective tissue while maintaining exposure.`
+    }
+    return `Set at RPE ${targetRPE} — managed load to keep tendons healthy long-term.`
+  }
+  
+  // ==========================================================================
+  // PRIORITY 5: Accessory / support work
+  // ==========================================================================
+  if (categoryLower === 'accessory' || expressionMode.includes('support') || roleInSession.includes('support')) {
+    if (targetRPE <= 7) {
+      return `Kept at RPE ${targetRPE} — support volume without competing for recovery.`
+    }
+    if (targetRPE >= 9) {
+      return `Pushed to RPE ${targetRPE} — accessory slot carries extra volume today.`
+    }
+    return `Set at RPE ${targetRPE} — builds capacity without overloading main work.`
+  }
+  
+  // ==========================================================================
+  // PRIORITY 6: Core / stability
+  // ==========================================================================
+  if (categoryLower === 'core') {
+    if (targetRPE <= 7) {
+      return `Held at RPE ${targetRPE} — trunk quality over trunk fatigue.`
+    }
+    return `Set at RPE ${targetRPE} — builds the midline stability your skills depend on.`
+  }
+  
+  // ==========================================================================
+  // PRIORITY 7: Mobility / prep
+  // ==========================================================================
+  if (categoryLower === 'mobility' || categoryLower === 'flexibility') {
+    return `Effort focus on position quality rather than intensity.`
+  }
+  
+  // ==========================================================================
+  // PRIORITY 8: RPE-based fallback with meaningful context
+  // ==========================================================================
+  if (targetRPE <= 6) {
+    return `Held at RPE ${targetRPE} — controlled effort keeps quality high across sets.`
+  }
+  if (targetRPE === 7) {
+    return `Set at RPE ${targetRPE} — quality-focused effort with room to maintain form.`
+  }
+  if (targetRPE === 8) {
+    return `Set at RPE ${targetRPE} — productive intensity without grinding into fatigue.`
+  }
+  if (targetRPE >= 9) {
+    return `Pushed to RPE ${targetRPE} — near-limit effort to drive adaptation.`
+  }
+  
+  // Minimal fallback - still meaningful
+  return `Set at RPE ${targetRPE} — calibrated effort for today's session.`
+}
+
 /**
  * Build an authoritative exercise row surface from exercise data + session context.
  * This is the SINGLE owner of per-exercise-row display intelligence.

@@ -9933,6 +9933,21 @@ async function generateAdaptiveProgramImpl(
         errorMessage.includes('session_middle_helper_failed') ? 'session_middle_helper_failed' :
         'session_generation_unknown_error'
       
+      // [ROOT-CAUSE-DIAGNOSTIC] Log EXACTLY which session failed and why
+      console.error('[v0-root-cause-session-failure]', {
+        sessionIndex: index,
+        dayNumber: day.dayNumber,
+        dayFocus: day.focus,
+        errorName,
+        errorMessage: errorMessage.slice(0, 500),
+        matchedPattern,
+        stackPreview: sessionGenErr instanceof Error ? sessionGenErr.stack?.split('\n').slice(0, 8).join(' | ') : 'no_stack',
+        totalDegradedBefore: sessionFailureTracker.totalDegraded,
+        totalDegradedAfter: sessionFailureTracker.totalDegraded + 1,
+        willIncrementDegraded: true,
+        verdict: 'SESSION_GENERATION_CAUGHT_ERROR_WILL_INCREMENT_TOTAL_DEGRADED',
+      })
+      
       // [PHASE15E-SESSION-ROOT-CAUSE] Extract checkpoint from error message if present
       const stepMatch = errorMessage.match(/step=([a-z_]+)/)
       const middleStepMatch = errorMessage.match(/middleStep=([a-z_]+)/)
@@ -20106,32 +20121,16 @@ function generateAdaptiveSession(
   // ==========================================================================
   // [NON-FATAL CORRIDOR CONTRACT] DB-truth main-ranking outcome type
   // This corridor CANNOT degrade the session - it only enhances or preserves
+  // Using interface object instead of type union to avoid in-function type issues
   // ==========================================================================
-  type DbTruthMainRankingOutcome = 
-    | {
-        mode: 'applied'
-        safeCandidates: any[]
-        reason: null
-        changed: boolean
-        changedCount: number
-        checkpoint: string
-      }
-    | {
-        mode: 'skipped'
-        safeCandidates: any[]
-        reason: string
-        changed: false
-        changedCount: 0
-        checkpoint: string
-      }
-    | {
-        mode: 'fallback_preserved'
-        safeCandidates: any[]
-        reason: string
-        changed: false
-        changedCount: 0
-        checkpoint: string
-      }
+  interface DbTruthMainRankingOutcomeBase {
+    mode: 'applied' | 'skipped' | 'fallback_preserved'
+    safeCandidates: any[]
+    reason: string | null
+    changed: boolean
+    changedCount: number
+    checkpoint: string
+  }
   
   middleStep = 'before_db_truth_main_ranking'
   
@@ -20176,18 +20175,33 @@ function generateAdaptiveSession(
     const droppedIndexes: number[] = []
     
     for (let i = 0; i < input.length; i++) {
-      const candidate = input[i]
-      
-      // Only include candidates that are non-null objects (safe to spread)
-      if (candidate !== null && candidate !== undefined && typeof candidate === 'object' && !Array.isArray(candidate)) {
-        // Safe to spread - this is a valid object
-        safeArray.push(candidate)
-        safeSnapshot.push({ ...candidate })
-        // Safely extract name with optional chaining only
-        const name = candidate?.exercise?.name ?? candidate?.name ?? 'unknown'
-        safeNames.push(typeof name === 'string' ? name : 'unknown')
-      } else {
-        // Invalid candidate - drop and record
+      try {
+        const candidate = input[i]
+        
+        // Only include candidates that are non-null objects (safe to spread)
+        if (candidate !== null && candidate !== undefined && typeof candidate === 'object' && !Array.isArray(candidate)) {
+          // Safe to spread - this is a valid object
+          safeArray.push(candidate)
+          // Use Object.assign instead of spread to avoid potential getter issues
+          const snapshot: Record<string, unknown> = {}
+          try {
+            Object.assign(snapshot, candidate)
+          } catch {
+            // If assign fails, just use the reference
+            Object.keys(candidate).forEach(k => {
+              try { snapshot[k] = (candidate as any)[k] } catch { /* skip problematic key */ }
+            })
+          }
+          safeSnapshot.push(snapshot)
+          // Safely extract name with optional chaining only
+          const name = candidate?.exercise?.name ?? candidate?.name ?? 'unknown'
+          safeNames.push(typeof name === 'string' ? name : 'unknown')
+        } else {
+          // Invalid candidate - drop and record
+          droppedIndexes.push(i)
+        }
+      } catch {
+        // If anything fails for this candidate, drop it and continue
         droppedIndexes.push(i)
       }
     }
@@ -20202,6 +20216,13 @@ function generateAdaptiveSession(
     }
   }
   
+  // ==========================================================================
+  // [MASTER FAIL-OPEN BOUNDARY] Entire DB-truth corridor wrapped for total containment
+  // This ensures NOTHING from the corridor can escape to the lifecycle catch
+  // ==========================================================================
+  const preCorridorBaseline = Array.isArray(effectiveMainForSession) ? [...effectiveMainForSession] : []
+  
+  try {
   // [DB-TRUTH-MAIN-RANKING-NONFATAL-ENTRY] Log entry into NON-FATAL corridor
   console.log('[db-truth-main-ranking-nonfatal-entry]', {
     sessionIndex,
@@ -20216,7 +20237,7 @@ function generateAdaptiveSession(
   })
   
   // Initialize the corridor outcome - will be set by the end of corridor processing
-  let dbTruthMainRankingOutcome: DbTruthMainRankingOutcome | null = null
+  let dbTruthMainRankingOutcome: DbTruthMainRankingOutcomeBase | null = null
   
   // Guard: Ensure effectiveMainForSession is a valid array
   if (!Array.isArray(effectiveMainForSession)) {
@@ -20802,6 +20823,27 @@ function generateAdaptiveSession(
       recoveredCount: preRerankSafe.safeArray.length,
       verdict: 'POST_CORRIDOR_RECOVERY_APPLIED',
     })
+  }
+  
+  } catch (masterCorridorErr) {
+    // ==========================================================================
+    // [MASTER FAIL-OPEN CATCH] Corridor COMPLETELY contained - restore pre-corridor baseline
+    // This catch handles ANY failure in the entire DB-truth corridor setup/execution
+    // ==========================================================================
+    const errorMessage = masterCorridorErr instanceof Error ? masterCorridorErr.message : String(masterCorridorErr)
+    console.error('[db-truth-master-corridor-failopen]', {
+      sessionIndex,
+      dayFocus: day?.focus ?? 'unknown',
+      errorMessage: errorMessage.slice(0, 200),
+      restoredFromBaseline: true,
+      baselineCount: preCorridorBaseline.length,
+      verdict: 'MASTER_CORRIDOR_CATCH_RESTORED_BASELINE_SESSION_CONTINUES',
+    })
+    
+    // Restore pre-corridor baseline - DO NOT let this escape to lifecycle catch
+    effectiveMainForSession = preCorridorBaseline
+    
+    // DO NOT rethrow - session generation continues with pre-corridor state
   }
   
   // ==========================================================================

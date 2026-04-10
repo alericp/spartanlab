@@ -144,6 +144,12 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
     result.variants = session.variants as AdaptiveSession['variants']
   }
   
+  // [PHASE-OMISSION-TRUTH] Preserve prescriptionPropagationAudit for acclimation/protection explanation
+  // This contains adaptationPhase (initial_acclimation, recovery_constrained, etc.) for user-facing explanation
+  if (session.prescriptionPropagationAudit && typeof session.prescriptionPropagationAudit === 'object') {
+    result.prescriptionPropagationAudit = session.prescriptionPropagationAudit as AdaptiveSession['prescriptionPropagationAudit']
+  }
+  
   return result
 }
 

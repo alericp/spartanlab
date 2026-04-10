@@ -23,7 +23,7 @@ import {
 import Link from 'next/link'
 import { type AdaptiveSession, type AdaptiveExercise, type AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import { getProgramState } from '@/lib/program-state'
-import { getWeekAdaptationDisplay } from '@/lib/program/program-display-contract'
+import { getWeekAdaptationDisplay, buildExercisePurposeLine } from '@/lib/program/program-display-contract'
 import {
   calculateSessionAdjustment,
   inferWellnessFromRecovery,
@@ -597,6 +597,12 @@ function SessionExerciseList({ session, adjustment }: SessionExerciseListProps) 
   const styledGroups = session.styleMetadata?.styledGroups
   const hasGroupedBlocks = styledGroups && styledGroups.some(g => g.groupType !== 'straight')
   
+  // Extract session context for reason-first microcopy
+  const sessionContext = {
+    sessionFocus: session.focus || session.styleMetadata?.primaryStyle,
+    primaryGoal: session.compositionMetadata?.sessionIntent || session.styleMetadata?.primaryStyle,
+  }
+  
   // Build exercise data map for lookup
   const exerciseMap = new Map<string, AdaptiveExercise>()
   session.exercises.forEach(ex => {
@@ -641,6 +647,7 @@ function SessionExerciseList({ session, adjustment }: SessionExerciseListProps) 
                         exercise={fullExercise}
                         prefix={groupEx.prefix || (group.groupType === 'superset' ? `A${exIdx + 1}` : `${exIdx + 1}`)}
                         wasRemoved={adjustment.whatToCut.includes(fullExercise.name)}
+                        sessionContext={sessionContext}
                       />
                     )
                   })}
@@ -667,6 +674,7 @@ function SessionExerciseList({ session, adjustment }: SessionExerciseListProps) 
                   exercise={fullExercise}
                   index={globalIndex}
                   wasRemoved={adjustment.whatToCut.includes(fullExercise.name)}
+                  sessionContext={sessionContext}
                 />
               )
             })
@@ -685,6 +693,7 @@ function SessionExerciseList({ session, adjustment }: SessionExerciseListProps) 
           exercise={exercise}
           index={idx + 1}
           wasRemoved={adjustment.whatToCut.includes(exercise.name)}
+          sessionContext={sessionContext}
         />
       ))}
     </div>
@@ -715,9 +724,10 @@ interface ExerciseRowProps {
   index?: number
   prefix?: string
   wasRemoved?: boolean
+  sessionContext?: { sessionFocus?: string; primaryGoal?: string }
 }
 
-function ExerciseRow({ exercise, index, prefix, wasRemoved }: ExerciseRowProps) {
+function ExerciseRow({ exercise, index, prefix, wasRemoved, sessionContext }: ExerciseRowProps) {
   const categoryColors: Record<string, string> = {
     skill: 'text-[#E63946]',
     strength: 'text-blue-400',
@@ -728,8 +738,8 @@ function ExerciseRow({ exercise, index, prefix, wasRemoved }: ExerciseRowProps) 
     mobility: 'text-green-400',
   }
   
-  // Build concise microcopy from authoritative fields
-  const microcopy = buildExerciseMicrocopy(exercise)
+  // Build reason-first microcopy from authoritative fields + session context
+  const microcopy = buildExerciseMicrocopy(exercise, sessionContext)
 
   return (
     <div className={`p-3 rounded-lg bg-[#1A1A1A] border border-[#3A3A3A] ${
@@ -769,31 +779,41 @@ function ExerciseRow({ exercise, index, prefix, wasRemoved }: ExerciseRowProps) 
 }
 
 /**
- * Build concise, useful microcopy from authoritative exercise fields.
- * Priority: selectionReason > coachingMeta.loadDecisionSummary > restSeconds guidance
+ * Build concise, reason-first microcopy from authoritative exercise fields.
+ * Uses the shared buildExercisePurposeLine from program-display-contract for consistency
+ * across Today page, Program page, and Live Workout.
  */
-function buildExerciseMicrocopy(exercise: AdaptiveExercise): string | null {
-  const parts: string[] = []
+function buildExerciseMicrocopy(
+  exercise: AdaptiveExercise, 
+  sessionContext?: { sessionFocus?: string; primaryGoal?: string }
+): string | null {
+  // Use the authoritative reason-first microcopy builder from display contract
+  const purposeLine = buildExercisePurposeLine(
+    {
+      name: exercise.name,
+      category: exercise.category,
+      selectionReason: exercise.selectionReason,
+      isPrimary: exercise.category === 'skill',
+      isProtected: false,
+      coachingMeta: exercise.coachingMeta,
+    },
+    sessionContext ? {
+      sessionFocus: sessionContext.sessionFocus,
+      primaryGoal: sessionContext.primaryGoal,
+    } : undefined
+  )
   
-  // 1. Selection reason (why this exercise was chosen)
-  if (exercise.selectionReason && exercise.selectionReason.length > 0 && exercise.selectionReason.length < 60) {
-    // Use short selection reasons directly
-    parts.push(exercise.selectionReason)
-  } else if (exercise.coachingMeta?.loadDecisionSummary) {
-    // Fallback to coaching load decision
-    parts.push(exercise.coachingMeta.loadDecisionSummary)
+  if (purposeLine) return purposeLine
+  
+  // Fallback: use loadDecisionSummary if available
+  if (exercise.coachingMeta?.loadDecisionSummary) {
+    return exercise.coachingMeta.loadDecisionSummary
   }
   
-  // 2. Rest guidance if relevant (only for strength/skill categories)
-  if (exercise.restSeconds && exercise.restSeconds >= 90 && (exercise.category === 'skill' || exercise.category === 'strength' || exercise.category === 'pull' || exercise.category === 'push')) {
-    const restMin = Math.floor(exercise.restSeconds / 60)
-    const restSec = exercise.restSeconds % 60
-    const restStr = restSec > 0 ? `${restMin}:${restSec.toString().padStart(2, '0')}` : `${restMin}min`
-    if (parts.length === 0) {
-      parts.push(`Rest ${restStr} between sets`)
-    }
+  // Final fallback: short selectionReason if concise and meaningful
+  if (exercise.selectionReason && exercise.selectionReason.length > 0 && exercise.selectionReason.length < 50) {
+    return exercise.selectionReason
   }
   
-  if (parts.length === 0) return null
-  return parts[0] // Return only the first/most useful piece
+  return null
 }

@@ -20140,13 +20140,84 @@ function generateAdaptiveSession(
     effectiveMainForSession = []
   }
   
-  if (dbTruthRankingModifiers?.sourceConfidence !== 'none' && effectiveMainForSession.length > 1) {
-    middleStep = 'inside_db_truth_main_ranking'
+  // ==========================================================================
+  // [FAIL-OPEN CONTRACT] DB-truth main-ranking is a NON-AUTHORITATIVE enhancement pass
+  // - Raw/main selection remains authoritative
+  // - effectiveMainForSession BEFORE rerank is the rollback baseline
+  // - Rerank failure must NEVER degrade or preserve-last-good the rebuild by itself
+  // ==========================================================================
+  
+  // Track non-fatal audit for this optional enhancement corridor
+  let dbTruthMainRankingAudit: {
+    attempted: boolean
+    succeeded: boolean
+    rolledBack: boolean
+    skipped: boolean
+    skipReason: string | null
+    exactCheckpoint: string | null
+    exactErrorName: string | null
+    exactErrorMessage: string | null
+    preservedCandidateCount: number
+    preservedExerciseNames: string[]
+  } = {
+    attempted: false,
+    succeeded: false,
+    rolledBack: false,
+    skipped: false,
+    skipReason: null,
+    exactCheckpoint: null,
+    exactErrorName: null,
+    exactErrorMessage: null,
+    preservedCandidateCount: effectiveMainForSession.length,
+    preservedExerciseNames: effectiveMainForSession.slice(0, 5).map(e => e?.exercise?.name || 'unknown'),
+  }
+  
+  // [HARD GUARD] All conditions must be true to attempt rerank
+  const rerankEligible = 
+    Array.isArray(effectiveMainForSession) &&
+    effectiveMainForSession.length > 1 &&
+    !!dbTruthRankingModifiers &&
+    dbTruthRankingModifiers.sourceConfidence !== 'none'
+  
+  if (!rerankEligible) {
+    // Skip rerank cleanly - do NOT create degraded state
+    dbTruthMainRankingAudit.skipped = true
+    dbTruthMainRankingAudit.skipReason = !Array.isArray(effectiveMainForSession) 
+      ? 'effectiveMainForSession_not_array'
+      : effectiveMainForSession.length <= 1
+        ? 'insufficient_candidates'
+        : !dbTruthRankingModifiers
+          ? 'no_ranking_modifiers'
+          : 'source_confidence_none'
     
-    // Wrap entire corridor in try-catch to capture exact failure point
+    console.log('[db-truth-main-ranking-skipped]', {
+      sessionIndex,
+      focus: day?.focus ?? 'unknown',
+      reason: dbTruthMainRankingAudit.skipReason,
+      candidateCount: effectiveMainForSession?.length ?? 0,
+      verdict: 'SKIPPED_CLEANLY_NO_DEGRADED_STATE',
+    })
+  }
+  
+  if (rerankEligible) {
+    middleStep = 'inside_db_truth_main_ranking'
+    dbTruthMainRankingAudit.attempted = true
+    
+    // ==========================================================================
+    // [IMMUTABLE ROLLBACK SNAPSHOT] Capture pre-rerank state for fail-open recovery
+    // This is the authoritative baseline if any enhancement logic fails
+    // ==========================================================================
+    const preRerankSnapshot = effectiveMainForSession.map(ex => ({ ...ex }))
+    const preRerankNames = preRerankSnapshot.map(e => e?.exercise?.name || 'unknown')
+    
+    // Local checkpoint tracker for precise failure diagnosis
+    let localCheckpoint = 'corridor_entered'
+    
+    // Wrap entire corridor in try-catch for FAIL-OPEN behavior
     try {
       // [CHECKPOINT] before_shape_audit
-      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'before_shape_audit', sessionIndex })
+      localCheckpoint = 'before_shape_audit'
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: localCheckpoint, sessionIndex })
       
       // [DB-TRUTH-MAIN-RANKING-SHAPE-AUDIT] Log candidate shapes for debugging
       console.log('[db-truth-main-ranking-shape-audit]', {
@@ -20168,12 +20239,14 @@ function generateAdaptiveSession(
       })
       
       // [CHECKPOINT] after_shape_audit
-      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'after_shape_audit', sessionIndex })
+      localCheckpoint = 'after_shape_audit'
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: localCheckpoint, sessionIndex })
       
       const preRankingOrder = effectiveMainForSession.map(e => e?.exercise?.name || 'unknown')
       
       // [CHECKPOINT] before_score_map
-      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'before_score_map', sessionIndex })
+      localCheckpoint = 'before_score_map'
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: localCheckpoint, sessionIndex })
       
       // Apply modifiers to each exercise and track changes
       const scoredExercises = effectiveMainForSession.map((ex, exIndex) => {
@@ -20328,10 +20401,12 @@ function generateAdaptiveSession(
       })
       
       // [CHECKPOINT] after_score_map
-      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'after_score_map', sessionIndex, scoredCount: scoredExercises.length })
+      localCheckpoint = 'after_score_map'
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: localCheckpoint, sessionIndex, scoredCount: scoredExercises.length })
       
       // [CHECKPOINT] before_resort
-      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'before_resort', sessionIndex })
+      localCheckpoint = 'before_resort'
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: localCheckpoint, sessionIndex })
       
       // Re-sort by adjusted score (higher is better)
       const resortedExercises = [...scoredExercises].sort((a, b) => 
@@ -20339,7 +20414,8 @@ function generateAdaptiveSession(
       )
       
       // [CHECKPOINT] after_resort
-      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'after_resort', sessionIndex })
+      localCheckpoint = 'after_resort'
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: localCheckpoint, sessionIndex })
       
       const postRankingOrder = resortedExercises.map(e => e?.exercise?.name || 'unknown')
       const rankingChanged = preRankingOrder.join(',') !== postRankingOrder.join(',')
@@ -20371,7 +20447,8 @@ function generateAdaptiveSession(
       })
       
       // [CHECKPOINT] before_apply_rerank
-      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'before_apply_rerank', sessionIndex })
+      localCheckpoint = 'before_apply_rerank'
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: localCheckpoint, sessionIndex })
       
       // Apply reranked order if changed
       if (rankingChanged) {
@@ -20379,10 +20456,11 @@ function generateAdaptiveSession(
       }
       
       // [CHECKPOINT] after_apply_rerank
-      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'after_apply_rerank', sessionIndex })
+      localCheckpoint = 'after_apply_rerank'
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: localCheckpoint, sessionIndex })
       
       // [CHECKPOINT] before_final_verdict
-      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'before_final_verdict', sessionIndex })
+      localCheckpoint = 'before_final_verdict'
       
       // [DB-TRUTH-MAIN-RANKING-FINAL-VERDICT] Confirm corridor completed without shape crash
       console.log('[db-truth-main-ranking-final-verdict]', {
@@ -20396,26 +20474,63 @@ function generateAdaptiveSession(
       })
       
       // [CHECKPOINT] after_final_verdict
-      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: 'after_final_verdict', sessionIndex })
+      localCheckpoint = 'after_final_verdict'
+      console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: localCheckpoint, sessionIndex })
+      
+      // Mark enhancement as succeeded
+      dbTruthMainRankingAudit.succeeded = true
+      dbTruthMainRankingAudit.exactCheckpoint = localCheckpoint
       
     } catch (corridorErr) {
-      // [DB-TRUTH-MAIN-RANKING-RUNTIME-FAILURE] Capture exact failure point
-      console.log('[db-truth-main-ranking-runtime-failure]', {
-        checkpoint: middleStep,
+      // ==========================================================================
+      // [FAIL-OPEN ROLLBACK] This is a NON-AUTHORITATIVE enhancement corridor
+      // Failure here must NOT degrade the entire session/program rebuild
+      // ==========================================================================
+      
+      const errorName = corridorErr instanceof Error ? corridorErr.name : 'unknown'
+      const errorMessage = corridorErr instanceof Error ? corridorErr.message : String(corridorErr)
+      
+      // Update audit with failure details
+      dbTruthMainRankingAudit.succeeded = false
+      dbTruthMainRankingAudit.exactCheckpoint = localCheckpoint
+      dbTruthMainRankingAudit.exactErrorName = errorName
+      dbTruthMainRankingAudit.exactErrorMessage = errorMessage
+      
+      // [DB-TRUTH-MAIN-RANKING-NONFATAL-FAILURE] Log exact failure point
+      console.log('[db-truth-main-ranking-nonfatal-failure]', {
+        exactCheckpoint: localCheckpoint,
         sessionIndex,
-        focus: day?.focus ?? 'unknown',
-        exerciseIndex: 'unknown',
-        exerciseName: 'unknown',
-        candidateCount: effectiveMainForSession?.length ?? 0,
-        firstFewNames: effectiveMainForSession?.slice?.(0, 3)?.map?.(e => e?.exercise?.name || 'unknown') ?? [],
-        errorName: corridorErr instanceof Error ? corridorErr.name : 'unknown',
-        errorMessage: corridorErr instanceof Error ? corridorErr.message : String(corridorErr),
+        dayFocus: day?.focus ?? 'unknown',
+        candidateCountBeforeRollback: effectiveMainForSession?.length ?? 0,
+        candidateCountAfterRollback: preRerankSnapshot.length,
+        firstFewNamesBeforeRollback: effectiveMainForSession?.slice?.(0, 3)?.map?.(e => e?.exercise?.name || 'unknown') ?? [],
+        firstFewNamesAfterRollback: preRerankNames.slice(0, 3),
+        errorName,
+        errorMessage,
         stack: corridorErr instanceof Error ? corridorErr.stack?.split('\n').slice(0, 5).join('\n') : '',
-        verdict: 'FAIL',
+        verdict: 'NON_FATAL_ROLLBACK_APPLIED',
       })
       
-      // Re-throw to preserve existing error handling pipeline
-      throw corridorErr
+      // ==========================================================================
+      // [RESTORE PRE-RERANK STATE] Apply fail-open rollback
+      // The session continues with the authoritative pre-rerank exercise order
+      // ==========================================================================
+      effectiveMainForSession = preRerankSnapshot
+      dbTruthMainRankingAudit.rolledBack = true
+      dbTruthMainRankingAudit.preservedCandidateCount = preRerankSnapshot.length
+      dbTruthMainRankingAudit.preservedExerciseNames = preRerankNames.slice(0, 5)
+      
+      // [DB-TRUTH-MAIN-RANKING-NONFATAL-ROLLBACK-SUCCESS] Confirm rollback succeeded
+      console.log('[db-truth-main-ranking-nonfatal-rollback-success]', {
+        sessionIndex,
+        restoredCandidateCount: preRerankSnapshot.length,
+        preservedOrder: true,
+        restoredNames: preRerankNames.slice(0, 5),
+        verdict: 'SESSION_CONTINUES_WITH_PRE_RERANK_ORDER',
+      })
+      
+      // DO NOT RETHROW - This is fail-open behavior
+      // Session generation continues with pre-rerank exercise order
     }
     
     middleStep = 'after_db_truth_main_ranking'

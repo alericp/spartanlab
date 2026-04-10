@@ -20807,7 +20807,12 @@ function generateAdaptiveSession(
   // ==========================================================================
   // [SMART SUBSTITUTION] Check for exercises that should be substituted based on
   // pattern-specific response/constraint truth
+  // This is a NON-FATAL enhancement - failures preserve the current candidate array
   // ==========================================================================
+  
+  // Capture pre-substitution baseline for fail-open recovery
+  const preSubstitutionCandidates = effectiveMainForSession.slice()
+  
   const substitutionChecks: Array<{
       exerciseName: string
       skillFamily: string
@@ -20819,8 +20824,10 @@ function generateAdaptiveSession(
       applied: boolean
     }> = []
     
-    middleStep = 'before_smart_substitution'
-    
+  middleStep = 'before_smart_substitution'
+  
+  // [FAIL-OPEN] Wrap smart substitution in try/catch - this is an enhancement, not required
+  try {
     effectiveMainForSession = effectiveMainForSession.map(ex => {
       // [RUNTIME-HARDENING] Ensure skillHint and pattern are always strings
       const rawSkill = ex.skill ?? ex.exercise?.skill ?? ex.skillFamily ?? ex.category ?? ''
@@ -20904,6 +20911,27 @@ function generateAdaptiveSession(
           ? 'SUBSTITUTION_RECOMMENDED_NOT_APPLIED'
           : 'NO_SUBSTITUTION_NEEDED',
     })
+  } catch (smartSubErr) {
+    // [FAIL-OPEN] Smart substitution failed - preserve pre-substitution candidates
+    const errName = smartSubErr instanceof Error ? smartSubErr.name : 'UnknownError'
+    const errMsg = smartSubErr instanceof Error ? smartSubErr.message : String(smartSubErr)
+    
+    console.log('[smart-substitution-nonfatal-failure]', {
+      sessionIndex,
+      dayFocus: day?.focus ?? 'unknown',
+      middleStep: 'before_smart_substitution',
+      errorName: errName,
+      errorMessage: errMsg.slice(0, 200),
+      preSubstitutionCount: preSubstitutionCandidates.length,
+      restoredFromBaseline: true,
+      verdict: 'NONFATAL_PRESERVED_PRE_SUBSTITUTION_CANDIDATES',
+    })
+    
+    // Restore pre-substitution candidates - DO NOT degrade the session
+    effectiveMainForSession = preSubstitutionCandidates
+  }
+  
+  middleStep = 'after_smart_substitution'
   
   // ==========================================================================
   // STEP B: Build canonical effectiveSelection - SINGLE AUTHORITATIVE OWNER

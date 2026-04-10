@@ -68,6 +68,14 @@ import {
   logOnboardingTruthExpressionAudit,
   type OnboardingTruthExpressionAudit 
 } from './program/onboarding-truth-expression-audit'
+// [WEEKLY-EXPRESSION-ALLOCATOR] Authoritative upstream weekly planning contract
+import {
+  buildWeeklyExpressionAllocationContract,
+  shouldReceiveDirectProgression,
+  areGroupedMethodsAllowed,
+  type WeeklyExpressionAllocationContract,
+  type WeeklySkillExpressionDecision,
+} from './program/weekly-skill-expression-allocator'
 import { 
   getCanonicalProfile, 
   logCanonicalProfileState, 
@@ -7523,6 +7531,48 @@ async function generateAdaptiveProgramImpl(
     canonicalProfile.secondaryGoal || null,
     multiSkillMaterialityContract.selectedSkills || [],
     'buildAuthoritativeMultiSkillAllocationContract'
+  ))
+  
+  // ==========================================================================
+  // [WEEKLY-EXPRESSION-ALLOCATOR] AUTHORITATIVE UPSTREAM WEEKLY PLANNING CONTRACT
+  // ==========================================================================
+  // This allocator is the SINGLE SOURCE OF TRUTH for how onboarding-selected skills
+  // are expressed across the weekly program BEFORE session assembly.
+  // 
+  // It enforces:
+  // 1. Selected skills cannot silently disappear
+  // 2. Primary skills dominate direct high-intensity work
+  // 3. Secondary/tertiary does not mean invisible
+  // 4. Overlap-aware tissue allocation
+  // 5. Grouped methods are contract-based decisions
+  // 6. Current > Response > History precedence
+  // ==========================================================================
+  const weeklyExpressionAllocatorContract = buildWeeklyExpressionAllocationContract({
+    selectedSkills: multiSkillMaterialityContract.selectedSkills || [],
+    primaryGoal: multiSkillMaterialityContract.primaryGoal || '',
+    secondaryGoal: multiSkillMaterialityContract.secondaryGoal || null,
+    effectiveTrainingDays,
+    readinessMap: exposureReadinessMap,
+    methodPreferences: {
+      supersets: canonicalProfile.trainingMethodPreferences?.includes('supersets') || false,
+      circuits: canonicalProfile.trainingMethodPreferences?.includes('circuits') || false,
+      straightSets: canonicalProfile.trainingMethodPreferences?.includes('straight_sets') || 
+                    (!canonicalProfile.trainingMethodPreferences || canonicalProfile.trainingMethodPreferences.length === 0),
+    },
+    jointCautions: multiSkillMaterialityContract.jointCautions || [],
+    equipmentAvailable: multiSkillMaterialityContract.equipmentAvailable || [],
+    experienceLevel: String(multiSkillMaterialityContract.experienceLevel || 'intermediate'),
+  })
+  
+  // Layer 6: Weekly Expression Allocator (NEW)
+  const allocatorSkills = weeklyExpressionAllocatorContract.decisions.map(d => d.skill)
+  breadthAuditLayers.push(logBreadthAuditLayer(
+    'WEEKLY_ALLOCATOR',
+    allocatorSkills,
+    canonicalProfile.primaryGoal || null,
+    canonicalProfile.secondaryGoal || null,
+    multiSkillMaterialityContract.selectedSkills || [],
+    'buildWeeklyExpressionAllocationContract'
   ))
   
   // ==========================================================================

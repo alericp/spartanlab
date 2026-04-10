@@ -23,7 +23,7 @@ import {
 import Link from 'next/link'
 import { type AdaptiveSession, type AdaptiveExercise, type AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import { getProgramState } from '@/lib/program-state'
-import { getWeekAdaptationDisplay, buildExercisePurposeLine } from '@/lib/program/program-display-contract'
+import { getWeekAdaptationDisplay, getOmittedSkillDisplay, buildExercisePurposeLine } from '@/lib/program/program-display-contract'
 import {
   calculateSessionAdjustment,
   inferWellnessFromRecovery,
@@ -41,6 +41,7 @@ export default function TodaySessionPage() {
   const [deloadAssessment, setDeloadAssessment] = useState<DeloadAssessment | null>(null)
   const [weekStatus, setWeekStatus] = useState<QuickWeekStatus | null>(null)
   const [acclimationNote, setAcclimationNote] = useState<string | null>(null)
+  const [omittedSkillNote, setOmittedSkillNote] = useState<string | null>(null)
   const [adaptiveProgram, setAdaptiveProgram] = useState<AdaptiveProgram | null>(null)
   
   // User inputs
@@ -102,6 +103,19 @@ export default function TodaySessionPage() {
       setAcclimationNote(`${weekAdaptation.phaseLabel} — ${weekAdaptation.loadSummary || 'Adjusted dosage applied'}.`)
     } else {
       setAcclimationNote(null)
+    }
+    
+    // Check for omitted/deferred skill explanation
+    const omittedSkill = getOmittedSkillDisplay(program)
+    if (omittedSkill.hasOmissions && omittedSkill.explanationLine) {
+      // Don't duplicate if acclimation note already covers the same reason
+      if (omittedSkill.reasonCategory === 'acclimation' && weekAdaptation.isFirstWeekProtected) {
+        setOmittedSkillNote(null) // Already covered by acclimation note
+      } else {
+        setOmittedSkillNote(omittedSkill.explanationLine)
+      }
+    } else {
+      setOmittedSkillNote(null)
     }
     
     // Calculate adjustment with safe defaults
@@ -512,6 +526,16 @@ export default function TodaySessionPage() {
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="w-4 h-4 text-amber-400/70 mt-0.5 shrink-0" />
                   <p className="text-sm text-[#A5A5A5]">{acclimationNote}</p>
+                </div>
+              </Card>
+            )}
+            
+            {/* Omitted Skill Explanation - separate from acclimation note */}
+            {omittedSkillNote && !acclimationNote && (
+              <Card className="bg-[#1A1A1A] border-[#2A2A2A] p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-4 h-4 text-blue-400/70 mt-0.5 shrink-0" />
+                  <p className="text-sm text-[#A5A5A5]">{omittedSkillNote}</p>
                 </div>
               </Card>
             )}

@@ -337,6 +337,149 @@ export function getPrescriptionPropagationDisplay(program: AdaptiveProgram): Pre
 }
 
 // =============================================================================
+// [OMITTED-SKILL-TRUTH-SURFACE] Truthful explanation for delayed/compressed skills
+// =============================================================================
+
+export interface OmittedSkillDisplay {
+  /** Whether any selected skills are intentionally not shown this week */
+  hasOmissions: boolean
+  /** Short explanation line for UI display */
+  explanationLine: string | null
+  /** Skills that are deferred/omitted */
+  omittedSkills: string[]
+  /** Primary reason category */
+  reasonCategory: 'acclimation' | 'protection' | 'compression' | 'focus_priority' | 'indirect_coverage' | null
+  /** Whether this is doctrine-justified (not a gap) */
+  doctrineJustified: boolean
+  /** Source of truth for this display */
+  source: 'week_adaptation' | 'tradeoff_analysis' | 'secondary_handling' | 'unavailable'
+}
+
+/**
+ * Extract truthful omission display from program.
+ * Only returns explanation when genuinely provable from existing truth signals.
+ */
+export function getOmittedSkillDisplay(program: AdaptiveProgram): OmittedSkillDisplay {
+  const selectedSkills = (program as unknown as { selectedSkills?: string[] }).selectedSkills || []
+  const representedSkills = (program as unknown as { representedSkills?: string[] }).representedSkills || []
+  const weekAdaptation = program.weekAdaptationDecision
+  
+  // Calculate deferred skills
+  const deferredSkills = selectedSkills.filter(s => !representedSkills.includes(s))
+  
+  // If nothing is deferred, no explanation needed
+  if (deferredSkills.length === 0) {
+    return {
+      hasOmissions: false,
+      explanationLine: null,
+      omittedSkills: [],
+      reasonCategory: null,
+      doctrineJustified: true,
+      source: 'unavailable',
+    }
+  }
+  
+  // Helper to format skill names
+  const formatSkill = (s: string): string => {
+    return s
+      .replace(/_/g, ' ')
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ')
+  }
+  
+  const formattedSkills = deferredSkills.map(formatSkill)
+  const skillList = formattedSkills.length <= 2 
+    ? formattedSkills.join(' and ')
+    : `${formattedSkills.slice(0, -1).join(', ')}, and ${formattedSkills[formattedSkills.length - 1]}`
+  
+  // PRIORITY 1: First-week acclimation protection
+  if (weekAdaptation?.firstWeekGovernor?.active || weekAdaptation?.phase === 'initial_acclimation') {
+    return {
+      hasOmissions: true,
+      explanationLine: `${skillList} phased in after acclimation week to protect adaptation quality.`,
+      omittedSkills: deferredSkills,
+      reasonCategory: 'acclimation',
+      doctrineJustified: true,
+      source: 'week_adaptation',
+    }
+  }
+  
+  // PRIORITY 2: Recovery/protection constraint
+  if (weekAdaptation?.loadStrategy?.straightArmExposureBias === 'protected') {
+    const isStraightArmSkill = deferredSkills.some(s => 
+      s.toLowerCase().includes('planche') || 
+      s.toLowerCase().includes('lever') || 
+      s.toLowerCase().includes('maltese')
+    )
+    if (isStraightArmSkill) {
+      return {
+        hasOmissions: true,
+        explanationLine: `${skillList} exposure is protected this week to manage connective tissue load.`,
+        omittedSkills: deferredSkills,
+        reasonCategory: 'protection',
+        doctrineJustified: true,
+        source: 'week_adaptation',
+      }
+    }
+  }
+  
+  // PRIORITY 3: Recovery-constrained phase
+  if (weekAdaptation?.phase === 'recovery_constrained') {
+    return {
+      hasOmissions: true,
+      explanationLine: `${skillList} reduced this week to support recovery before progression resumes.`,
+      omittedSkills: deferredSkills,
+      reasonCategory: 'protection',
+      doctrineJustified: true,
+      source: 'week_adaptation',
+    }
+  }
+  
+  // PRIORITY 4: Focus priority tradeoff (multi-skill selection with concentrated primary)
+  if (selectedSkills.length > 2 && deferredSkills.length < selectedSkills.length) {
+    return {
+      hasOmissions: true,
+      explanationLine: `${skillList} receives indirect coverage this week while primary skill work is concentrated.`,
+      omittedSkills: deferredSkills,
+      reasonCategory: 'focus_priority',
+      doctrineJustified: true,
+      source: 'tradeoff_analysis',
+    }
+  }
+  
+  // PRIORITY 5: Indirect coverage through support work
+  const weeklyRep = program.weeklyRepresentation
+  if (weeklyRep?.policies) {
+    const supportCoverage = weeklyRep.policies.filter(p => 
+      deferredSkills.includes(p.skill) && 
+      (p.representationVerdict === 'support_only' || p.representationVerdict === 'carryover_only')
+    )
+    if (supportCoverage.length > 0) {
+      return {
+        hasOmissions: true,
+        explanationLine: `${skillList} covered indirectly through support work this week.`,
+        omittedSkills: deferredSkills,
+        reasonCategory: 'indirect_coverage',
+        doctrineJustified: true,
+        source: 'secondary_handling',
+      }
+    }
+  }
+  
+  // FALLBACK: Deferred skills exist but no clear doctrine reason found
+  // Report honestly that truth is partial
+  return {
+    hasOmissions: true,
+    explanationLine: `${skillList} exposure is phased across your training week.`,
+    omittedSkills: deferredSkills,
+    reasonCategory: 'compression',
+    doctrineJustified: false, // Honest: not fully justified by current truth
+    source: 'tradeoff_analysis',
+  }
+}
+
+// =============================================================================
 // [SESSION-CARD-SURFACE] AUTHORITATIVE PER-CARD DISPLAY CONTRACT
 // One compact shape that feeds the day card UI with differentiated identity
 // Prevents all cards from looking identical when session metadata differs

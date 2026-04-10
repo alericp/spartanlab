@@ -4740,6 +4740,184 @@ if (shouldShowLocalFallback) {
   // [PHASE LW3] Boot stage calls moved to effects - render is pure
   // ==========================================================================
   
+  // [JSX-STABILIZED] Precomputed render function for Today's Plan rows
+  // Extracted from inline JSX to prevent ownership drift in complex ternary branches
+  const renderTodayPlanRows = (): React.ReactNode => {
+    // Priority 1: Authoritative styleMetadata grouped render
+    if (safeSession.styleMetadata?.styledGroups && safeSession.styleMetadata.styledGroups.length > 0) {
+      const previewGroupCounters: Record<string, number> = { superset: 0, circuit: 0, cluster: 0, density_block: 0 }
+      
+      return safeSession.styleMetadata.styledGroups.map((group, groupIdx) => {
+        const isGrouped = group.groupType !== 'straight'
+        
+        let blockLetter = ''
+        if (isGrouped && group.groupType && previewGroupCounters[group.groupType] !== undefined) {
+          blockLetter = String.fromCharCode(65 + previewGroupCounters[group.groupType])
+          previewGroupCounters[group.groupType]++
+        }
+        
+        if (isGrouped) {
+          const groupMethodInfo = group.groupType === 'superset' 
+            ? 'Alternate between exercises with minimal rest'
+            : group.groupType === 'circuit' 
+            ? 'Complete all exercises in sequence, then rest'
+            : group.groupType === 'cluster' 
+            ? 'Short rest between reps for heavier loads'
+            : 'High-intensity timed block'
+          
+          const baseLabel = group.groupType === 'superset' ? 'Superset'
+            : group.groupType === 'circuit' ? 'Circuit'
+            : group.groupType === 'cluster' ? 'Cluster Set'
+            : 'Density Block'
+          
+          return (
+            <div key={group.id} className="py-1.5 relative">
+              <div className="absolute left-1 top-9 bottom-2 w-0.5 bg-gradient-to-b from-[#C1121F]/60 via-[#C1121F]/40 to-[#C1121F]/20 rounded-full" />
+              <div className="flex items-center gap-2 py-1.5 mb-0.5">
+                <span className="w-5 h-5 rounded bg-[#C1121F]/20 text-[#C1121F] text-[9px] flex items-center justify-center font-bold">
+                  {group.groupType === 'superset' ? 'SS' : group.groupType === 'circuit' ? 'CR' : group.groupType === 'cluster' ? 'CL' : 'DB'}{blockLetter}
+                </span>
+                <span className="text-xs font-medium text-[#C1121F]">
+                  {baseLabel}{blockLetter ? ` ${blockLetter}` : ''}
+                </span>
+                <span className="text-[9px] text-[#6B7280]/70 italic hidden sm:inline">{groupMethodInfo}</span>
+                {group.instruction && <span className="text-[10px] text-[#6B7280] ml-auto">{group.instruction}</span>}
+              </div>
+              <div className="pl-3 space-y-0">
+                {group.exercises.map((exInfo, memberIdx) => {
+                  const fullEx = exercises.find(e => e.id === exInfo.id)
+                  return (
+                    <div key={exInfo.id} className="flex items-center justify-between py-1.5 pl-4 border-b border-[#2B313A]/15 last:border-0">
+                      <div className="flex items-center gap-2">
+                        <span className="w-4 h-4 rounded-full bg-[#C1121F]/10 text-[#C1121F] text-[9px] flex items-center justify-center font-semibold border border-[#C1121F]/30">
+                          {exInfo.prefix || String.fromCharCode(65 + memberIdx)}
+                        </span>
+                        <span className="text-sm text-[#E6E9EF]">{exInfo.name}</span>
+                      </div>
+                      <span className="text-[11px] text-[#6B7280] tabular-nums">
+                        {fullEx?.sets || 3}×{fullEx?.repsOrTime || '8-12 reps'}
+                        {fullEx?.prescribedLoad && fullEx.prescribedLoad.load > 0 && (
+                          <span className="ml-1 text-[#C1121F] font-medium">@ +{fullEx.prescribedLoad.load}{fullEx.prescribedLoad.unit}</span>
+                        )}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        } else {
+          const exInfo = group.exercises[0]
+          const fullEx = exercises.find(e => e.id === exInfo?.id)
+          const globalIndex = safeSession.styleMetadata!.styledGroups
+            .slice(0, groupIdx)
+            .reduce((sum, g) => sum + g.exercises.length, 0) + 1
+          
+          if (!exInfo || !fullEx) return null
+          
+          return (
+            <div key={group.id} className="flex items-center justify-between py-1.5 border-b border-[#2B313A]/30 last:border-0">
+              <div className="flex items-center gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-[#2B313A] text-[#6B7280] text-[10px] flex items-center justify-center font-medium">{globalIndex}</span>
+                <span className="text-sm text-[#E6E9EF]">{exInfo.name}</span>
+              </div>
+              <span className="text-[11px] text-[#6B7280] tabular-nums">
+                {fullEx.sets}×{fullEx.repsOrTime}
+                {fullEx.prescribedLoad && fullEx.prescribedLoad.load > 0 && (
+                  <span className="ml-1 text-[#C1121F] font-medium">@ +{fullEx.prescribedLoad.load}{fullEx.prescribedLoad.unit}</span>
+                )}
+              </span>
+            </div>
+          )
+        }
+      })
+    }
+    
+    // Priority 2: Fallback executionPlan grouped render
+    if (executionPlan.hasGroupedBlocks) {
+      return executionPlan.blocks.map((block, blockIdx) => {
+        const isGrouped = block.groupType !== null
+        
+        if (isGrouped) {
+          const groupMethodInfo = block.groupType === 'superset' 
+            ? 'Alternate between exercises with minimal rest'
+            : block.groupType === 'circuit' 
+            ? 'Complete all exercises in sequence, then rest'
+            : block.groupType === 'density_block'
+            ? 'High-intensity timed block'
+            : 'Short rest between reps for heavier loads'
+          
+          return (
+            <div key={block.blockId} className="py-1.5 relative">
+              <div className="absolute left-1 top-9 bottom-2 w-0.5 bg-gradient-to-b from-[#C1121F]/60 via-[#C1121F]/40 to-[#C1121F]/20 rounded-full" />
+              <div className="flex items-center gap-2 py-1.5 mb-0.5">
+                <span className="w-5 h-5 rounded bg-[#C1121F]/20 text-[#C1121F] text-[9px] flex items-center justify-center font-bold">
+                  {block.groupType === 'superset' ? 'SS' : block.groupType === 'circuit' ? 'CR' : block.groupType === 'density_block' ? 'DB' : 'CL'}
+                </span>
+                <span className="text-xs font-medium text-[#C1121F]">{block.blockLabel}</span>
+                <span className="text-[9px] text-[#6B7280]/70 italic hidden sm:inline">{groupMethodInfo}</span>
+                <span className="text-[10px] text-[#6B7280] ml-auto">{block.targetRounds} rounds</span>
+              </div>
+              <div className="pl-3 space-y-0">
+                {block.memberExercises.map((ex, memberIdx) => (
+                  <div key={ex.id} className="flex items-center justify-between py-1.5 pl-4 border-b border-[#2B313A]/15 last:border-0">
+                    <div className="flex items-center gap-2">
+                      <span className="w-4 h-4 rounded-full bg-[#C1121F]/10 text-[#C1121F] text-[9px] flex items-center justify-center font-semibold border border-[#C1121F]/30">
+                        {String.fromCharCode(65 + memberIdx)}
+                      </span>
+                      <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
+                    </div>
+                    <span className="text-[11px] text-[#6B7280] tabular-nums">
+                      {ex.sets}×{ex.repsOrTime}
+                      {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
+                        <span className="ml-1 text-[#C1121F] font-medium">@ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}</span>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        } else {
+          const ex = block.memberExercises[0]
+          const globalIndex = executionPlan.blocks
+            .slice(0, blockIdx)
+            .reduce((sum, b) => sum + b.memberExercises.length, 0) + 1
+          return (
+            <div key={block.blockId} className="flex items-center justify-between py-1.5 border-b border-[#2B313A]/30 last:border-0">
+              <div className="flex items-center gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-[#2B313A] text-[#6B7280] text-[10px] flex items-center justify-center font-medium">{globalIndex}</span>
+                <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
+              </div>
+              <span className="text-[11px] text-[#6B7280] tabular-nums">
+                {ex.sets}×{ex.repsOrTime}
+                {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
+                  <span className="ml-1 text-[#C1121F] font-medium">@ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}</span>
+                )}
+              </span>
+            </div>
+          )
+        }
+      })
+    }
+    
+    // Priority 3: Flat render - no grouped blocks
+    return exercises.map((ex, i) => (
+      <div key={i} className="flex items-center justify-between py-1.5 border-b border-[#2B313A]/30 last:border-0">
+        <div className="flex items-center gap-2.5">
+          <span className="w-5 h-5 rounded-full bg-[#2B313A] text-[#6B7280] text-[10px] flex items-center justify-center font-medium">{i + 1}</span>
+          <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
+        </div>
+        <span className="text-[11px] text-[#6B7280] tabular-nums">
+          {ex.sets}×{ex.repsOrTime}
+          {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
+            <span className="ml-1 text-[#C1121F] font-medium">@ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}</span>
+          )}
+        </span>
+      </div>
+    ))
+  }
+  
   // [LIVE-WORKOUT-MACHINE] Use safeStatus from machine
   if (safeStatus === 'ready') {
     // [LIVE-PHASE-ASSERTION] Guard against ready render during live execution
@@ -4812,223 +4990,8 @@ if (shouldShowLocalFallback) {
               )}
             </div>
             {/* [GROUPED-PLAN-FIX] Render grouped structure in Today's Plan */}
-{/* [GROUPED-TRUTH-UNIFY] Use styleMetadata.styledGroups as authoritative source when available */}
-              {/* This ensures the workout preview matches Program screen and Today's Plan exactly */}
-              {safeSession.styleMetadata?.styledGroups && safeSession.styleMetadata.styledGroups.length > 0 ? (
-                <>
-                {/* AUTHORITATIVE GROUPED RENDER - Use styleMetadata from program builder */}
-                {(() => {
-                  // [GROUPED-IDENTITY] Track counters to assign block letters (A, B, C...)
-                  const previewGroupCounters: Record<string, number> = { superset: 0, circuit: 0, cluster: 0, density_block: 0 }
-                  
-                  return safeSession.styleMetadata!.styledGroups.map((group, groupIdx) => {
-                  const isGrouped = group.groupType !== 'straight'
-                  
-                  // Compute block letter for identity
-                  let blockLetter = ''
-                  if (isGrouped && group.groupType && previewGroupCounters[group.groupType] !== undefined) {
-                    blockLetter = String.fromCharCode(65 + previewGroupCounters[group.groupType])
-                    previewGroupCounters[group.groupType]++
-                  }
-                  
-                  if (isGrouped) {
-                    // Grouped block from styleMetadata - show header + nested members with visual bracket
-                    const groupMethodInfo = group.groupType === 'superset' 
-                      ? 'Alternate between exercises with minimal rest'
-                      : group.groupType === 'circuit' 
-                      ? 'Complete all exercises in sequence, then rest'
-                      : group.groupType === 'cluster' 
-                      ? 'Short rest between reps for heavier loads'
-                      : 'High-intensity timed block'
-                    
-                    const baseLabel = group.groupType === 'superset' ? 'Superset'
-                      : group.groupType === 'circuit' ? 'Circuit'
-                      : group.groupType === 'cluster' ? 'Cluster Set'
-                      : 'Density Block'
-                    
-                    return (
-                      <div key={group.id} className="py-1.5 relative">
-                        {/* [GROUPED-VISUAL] Red vertical bracket/connector for grouped exercises */}
-                        <div className="absolute left-1 top-9 bottom-2 w-0.5 bg-gradient-to-b from-[#C1121F]/60 via-[#C1121F]/40 to-[#C1121F]/20 rounded-full" />
-                        
-                        {/* Group Header with info affordance */}
-                        <div className="flex items-center gap-2 py-1.5 mb-0.5">
-                          <span className="w-5 h-5 rounded bg-[#C1121F]/20 text-[#C1121F] text-[9px] flex items-center justify-center font-bold">
-                            {group.groupType === 'superset' ? 'SS' : group.groupType === 'circuit' ? 'CR' : group.groupType === 'cluster' ? 'CL' : 'DB'}{blockLetter}
-                          </span>
-                          <span className="text-xs font-medium text-[#C1121F]">
-                            {baseLabel}{blockLetter ? ` ${blockLetter}` : ''}
-                          </span>
-                          {/* [GROUPED-INFO] Tiny info text explaining the method */}
-                          <span className="text-[9px] text-[#6B7280]/70 italic hidden sm:inline">
-                            {groupMethodInfo}
-                          </span>
-                          {group.instruction && (
-                            <span className="text-[10px] text-[#6B7280] ml-auto">{group.instruction}</span>
-                          )}
-                        </div>
-                        {/* Member exercises - nested with visual connection */}
-                        <div className="pl-3 space-y-0">
-                          {group.exercises.map((exInfo, memberIdx) => {
-                            // Find actual exercise from main exercises array for full details
-                            const fullEx = exercises.find(e => e.id === exInfo.id)
-                            return (
-                              <div key={exInfo.id} className="flex items-center justify-between py-1.5 pl-4 border-b border-[#2B313A]/15 last:border-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="w-4 h-4 rounded-full bg-[#C1121F]/10 text-[#C1121F] text-[9px] flex items-center justify-center font-semibold border border-[#C1121F]/30">
-                                    {exInfo.prefix || String.fromCharCode(65 + memberIdx)}
-                                  </span>
-                                  <span className="text-sm text-[#E6E9EF]">{exInfo.name}</span>
-                                </div>
-                                <span className="text-[11px] text-[#6B7280] tabular-nums">
-                                  {fullEx?.sets || 3}×{fullEx?.repsOrTime || '8-12 reps'}
-                                  {fullEx?.prescribedLoad && fullEx.prescribedLoad.load > 0 && (
-                                    <span className="ml-1 text-[#C1121F] font-medium">
-                                      @ +{fullEx.prescribedLoad.load}{fullEx.prescribedLoad.unit}
-                                    </span>
-                                  )}
-                                </span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  } else {
-                    // Single exercise from styleMetadata
-                    const exInfo = group.exercises[0]
-                    const fullEx = exercises.find(e => e.id === exInfo?.id)
-                    const globalIndex = safeSession.styleMetadata!.styledGroups
-                      .slice(0, groupIdx)
-                      .reduce((sum, g) => sum + g.exercises.length, 0) + 1
-                    
-                    if (!exInfo || !fullEx) return null
-                    
-                    return (
-                      <div key={group.id} className="flex items-center justify-between py-1.5 border-b border-[#2B313A]/30 last:border-0">
-                        <div className="flex items-center gap-2.5">
-                          <span className="w-5 h-5 rounded-full bg-[#2B313A] text-[#6B7280] text-[10px] flex items-center justify-center font-medium">
-                            {globalIndex}
-                          </span>
-                          <span className="text-sm text-[#E6E9EF]">{exInfo.name}</span>
-                        </div>
-                        <span className="text-[11px] text-[#6B7280] tabular-nums">
-                          {fullEx.sets}×{fullEx.repsOrTime}
-                          {fullEx.prescribedLoad && fullEx.prescribedLoad.load > 0 && (
-                            <span className="ml-1 text-[#C1121F] font-medium">
-                              @ +{fullEx.prescribedLoad.load}{fullEx.prescribedLoad.unit}
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                    )
-                  }
-                })
-                })()}
-                </>
-              ) : executionPlan.hasGroupedBlocks ? (
-                // FALLBACK GROUPED RENDER - Use executionPlan if styleMetadata is absent
-                executionPlan.blocks.map((block, blockIdx) => {
-                  const isGrouped = block.groupType !== null
-                  
-                  if (isGrouped) {
-                    // Grouped block - show header + nested members with visual bracket
-                    // [GROUPED-CONTRACT-ALIGN] Support all group types including density_block
-                    const groupMethodInfo = block.groupType === 'superset' 
-                      ? 'Alternate between exercises with minimal rest'
-                      : block.groupType === 'circuit' 
-                      ? 'Complete all exercises in sequence, then rest'
-                      : block.groupType === 'density_block'
-                      ? 'High-intensity timed block'
-                      : 'Short rest between reps for heavier loads'
-                    
-                    return (
-                      <div key={block.blockId} className="py-1.5 relative">
-                        {/* [GROUPED-VISUAL] Red vertical bracket/connector for grouped exercises */}
-                        <div className="absolute left-1 top-9 bottom-2 w-0.5 bg-gradient-to-b from-[#C1121F]/60 via-[#C1121F]/40 to-[#C1121F]/20 rounded-full" />
-                        
-                        {/* Group Header with info affordance */}
-                        <div className="flex items-center gap-2 py-1.5 mb-0.5">
-                          <span className="w-5 h-5 rounded bg-[#C1121F]/20 text-[#C1121F] text-[9px] flex items-center justify-center font-bold">
-                            {block.groupType === 'superset' ? 'SS' : block.groupType === 'circuit' ? 'CR' : block.groupType === 'density_block' ? 'DB' : 'CL'}
-                          </span>
-                          <span className="text-xs font-medium text-[#C1121F]">{block.blockLabel}</span>
-                          {/* [GROUPED-INFO] Tiny info text explaining the method */}
-                          <span className="text-[9px] text-[#6B7280]/70 italic hidden sm:inline">
-                            {groupMethodInfo}
-                          </span>
-                          <span className="text-[10px] text-[#6B7280] ml-auto">{block.targetRounds} rounds</span>
-                        </div>
-                        {/* Member exercises - nested with visual connection */}
-                        <div className="pl-3 space-y-0">
-                          {block.memberExercises.map((ex, memberIdx) => (
-                            <div key={ex.id} className="flex items-center justify-between py-1.5 pl-4 border-b border-[#2B313A]/15 last:border-0">
-                              <div className="flex items-center gap-2">
-                                <span className="w-4 h-4 rounded-full bg-[#C1121F]/10 text-[#C1121F] text-[9px] flex items-center justify-center font-semibold border border-[#C1121F]/30">
-                                  {String.fromCharCode(65 + memberIdx)}
-                                </span>
-                                <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
-                              </div>
-                              <span className="text-[11px] text-[#6B7280] tabular-nums">
-                                {ex.sets}×{ex.repsOrTime}
-                                {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
-                                  <span className="ml-1 text-[#C1121F] font-medium">
-                                    @ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}
-                                  </span>
-                                )}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  } else {
-                    // Single exercise - flat row
-                    const ex = block.memberExercises[0]
-                    const globalIndex = executionPlan.blocks
-                      .slice(0, blockIdx)
-                      .reduce((sum, b) => sum + b.memberExercises.length, 0) + 1
-                    return (
-                      <div key={block.blockId} className="flex items-center justify-between py-1.5 border-b border-[#2B313A]/30 last:border-0">
-                        <div className="flex items-center gap-2.5">
-                          <span className="w-5 h-5 rounded-full bg-[#2B313A] text-[#6B7280] text-[10px] flex items-center justify-center font-medium">
-                            {globalIndex}
-                          </span>
-                          <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
-                        </div>
-                        <span className="text-[11px] text-[#6B7280] tabular-nums">
-                          {ex.sets}×{ex.repsOrTime}
-                          {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
-                            <span className="ml-1 text-[#C1121F] font-medium">
-                              @ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                    )
-                  }
-                })
-              ) : (
-                // FLAT RENDER - No grouped blocks, simple numbered list
-                exercises.map((ex, i) => (
-                  <div key={i} className="flex items-center justify-between py-1.5 border-b border-[#2B313A]/30 last:border-0">
-                    <div className="flex items-center gap-2.5">
-                      <span className="w-5 h-5 rounded-full bg-[#2B313A] text-[#6B7280] text-[10px] flex items-center justify-center font-medium">
-                        {i + 1}
-                      </span>
-                      <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
-                    </div>
-                    <span className="text-[11px] text-[#6B7280] tabular-nums">
-                      {ex.sets}×{ex.repsOrTime}
-                      {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
-                        <span className="ml-1 text-[#C1121F] font-medium">
-                          @ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                ))
-              )}
+              {/* [JSX-STABILIZED] Precomputed rows for stable JSX ownership */}
+              {renderTodayPlanRows()}
             </div>
           </Card>
           

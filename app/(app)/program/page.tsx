@@ -7317,42 +7317,74 @@ export default function ProgramPage() {
         }
         
         // ==========================================================================
-        // [PHASE15E-DEGRADED-SUCCESS-HANDOFF] Check for degraded success
-        // A response with success=true but totalDegraded>0 must NOT be treated as healthy
+        // [REGENERATE-OUTCOME-AUTHORITY] Single Source of Truth for Regenerate Outcome
+        // This is THE ONLY authoritative regenerate outcome object used to decide:
+        // - Whether to promote new program vs preserve last good
+        // - Whether to show preserved_last_good banner
+        // - Whether to clear persisted failure state
         // ==========================================================================
         const rebuildFailureSummary = serverResult.rebuildFailureSummary ?? null
-        const hasDegradedSessions = (rebuildFailureSummary?.totalDegraded ?? 0) > 0
+        const totalDegraded = rebuildFailureSummary?.totalDegraded ?? 0
+        const hasDegradedSessions = totalDegraded > 0
         const isHealthyRegenerate = serverResult.success === true && !hasDegradedSessions
         const isDegradedRegenerate = serverResult.success === true && hasDegradedSessions
         
-        // [regenerate-degraded-truth-verdict] Audit log for degraded success detection
-        console.log('[regenerate-degraded-truth-verdict]', {
-          hasRebuildFailureSummary: !!rebuildFailureSummary,
-          totalDegraded: rebuildFailureSummary?.totalDegraded ?? 0,
-          totalAttempted: rebuildFailureSummary?.totalAttempted ?? 0,
-          totalSucceeded: rebuildFailureSummary?.totalSucceeded ?? 0,
+        // Build the authoritative regenerate outcome object
+        const regenerateOutcome: {
+          mode: 'healthy_success' | 'degraded_success' | 'hard_failure'
+          totalDegraded: number
+          firstFailedCheckpoint: string | null
+          firstFailedFocus: string | null
+          firstFailedIndex: number | null
+          actionRequired: string | null
+          compactFailureReason: string | null
+          runtimeSessionId: string
+          attemptId: string
+          responseTimestamp: string
+        } = {
+          mode: isHealthyRegenerate ? 'healthy_success' 
+            : isDegradedRegenerate ? 'degraded_success' 
+            : 'hard_failure',
+          totalDegraded,
           firstFailedCheckpoint: rebuildFailureSummary?.firstFailedCheckpoint ?? null,
           firstFailedFocus: rebuildFailureSummary?.firstFailedFocus ?? null,
+          firstFailedIndex: rebuildFailureSummary?.firstFailedIndex ?? null,
           actionRequired: rebuildFailureSummary?.actionRequired ?? null,
-          failureVerdict: rebuildFailureSummary?.failureVerdict ?? null,
-          isHealthyRegenerate,
-          isDegradedRegenerate,
-          promotedAsHealthySuccess: isHealthyRegenerate,
-          preservedLastGood: isDegradedRegenerate,
-          verdict: isDegradedRegenerate 
-            ? 'degraded_success_preserved_last_good' 
-            : isHealthyRegenerate 
-              ? 'healthy_success_will_promote'
-              : 'unexpected_state',
+          compactFailureReason: rebuildFailureSummary?.failureVerdict ?? null,
+          runtimeSessionId: runtimeSessionIdRef.current,
+          attemptId: `regen_${Date.now()}`,
+          responseTimestamp: new Date().toISOString(),
+        }
+        
+        // [regenerate-outcome-authority] Authoritative outcome log
+        console.log('[regenerate-outcome-authority]', {
+          mode: regenerateOutcome.mode,
+          totalDegraded: regenerateOutcome.totalDegraded,
+          previousLastBuildStatus: lastBuildResult?.status ?? 'none',
+          previousRuntimeSessionId: lastBuildResult?.runtimeSessionId ?? 'none',
+          currentRuntimeSessionId: regenerateOutcome.runtimeSessionId,
+          promotedProgramId: isHealthyRegenerate ? serverResult.program?.id : null,
+          clearedPersistedFailureState: isHealthyRegenerate,
+          bannerShouldRender: isDegradedRegenerate,
+          verdict: isHealthyRegenerate 
+            ? 'HEALTHY_SUCCESS_REPLACED_ALL_STALE_FAILURE_TRUTH'
+            : isDegradedRegenerate 
+              ? 'DEGRADED_SUCCESS_PRESERVED_LAST_GOOD'
+              : 'HARD_FAILURE_NO_PROMOTION',
         })
         
         // If degraded, DO NOT promote the rebuild - preserve last good program
-        if (isDegradedRegenerate) {
-          console.log('[phase15e-degraded-success-handled]', {
-            message: 'Regenerate returned degraded sessions - preserving last good program',
-            totalDegraded: rebuildFailureSummary?.totalDegraded,
-            firstFailedCheckpoint: rebuildFailureSummary?.firstFailedCheckpoint,
-            actionRequired: rebuildFailureSummary?.actionRequired,
+        if (regenerateOutcome.mode === 'degraded_success') {
+          // [regenerate-degraded-authority] Authoritative degraded outcome log
+          console.log('[regenerate-degraded-authority]', {
+            mode: regenerateOutcome.mode,
+            totalDegraded: regenerateOutcome.totalDegraded,
+            firstFailedCheckpoint: regenerateOutcome.firstFailedCheckpoint,
+            firstFailedFocus: regenerateOutcome.firstFailedFocus,
+            firstFailedIndex: regenerateOutcome.firstFailedIndex,
+            actionRequired: regenerateOutcome.actionRequired,
+            preservedLastGood: true,
+            verdict: 'DEGRADED_SUCCESS_PRESERVED_LAST_GOOD',
           })
           
           // Build a compact failure reason from the server summary
@@ -7396,6 +7428,17 @@ export default function ProgramPage() {
           // Save the failure state - DO NOT save the degraded program
           setLastBuildResult(degradedResultWithMetadata)
           saveLastBuildAttemptResult(degradedResultWithMetadata)
+          
+          // [regenerate-final-ui-truth] Final authoritative UI truth audit for degraded
+          console.log('[regenerate-final-ui-truth]', {
+            latestMode: 'degraded_success',
+            bannerRendered: true,
+            promotedAsHealthy: false,
+            preservedLastGood: true,
+            persistedFailureStateExistsAfterHandling: true,
+            runtimeSessionIdMatch: degradedResultWithMetadata.runtimeSessionId === runtimeSessionIdRef.current,
+            verdict: 'FINAL_UI_TRUTH_DEGRADED',
+          })
           
           // Release builder lock
           if (modifyBuilderLockRef.current) {
@@ -8291,9 +8334,29 @@ export default function ProgramPage() {
           verdict: 'response_received_success',
         })
         
+        // ==========================================================================
+        // [REGENERATE-OUTCOME-AUTHORITY] HEALTHY SUCCESS - Clear ALL stale failure truth
+        // This is the single authoritative point where healthy success clears old state
+        // ==========================================================================
+        
+        // CRITICAL: Clear persisted failure state BEFORE setting new success state
+        // This ensures no stale preserved_last_good can resurface on page refresh
+        clearLastBuildAttemptResult()
+        
         setLastBuildResult(regenSuccessResultWithMetadata)
         saveLastBuildAttemptResult(regenSuccessResultWithMetadata)
         setGenerationError(null) // Clear any previous error
+        
+        // [regenerate-final-ui-truth] Final authoritative UI truth audit
+        console.log('[regenerate-final-ui-truth]', {
+          latestMode: 'healthy_success',
+          bannerRendered: false,
+          promotedAsHealthy: true,
+          preservedLastGood: false,
+          persistedFailureStateExistsAfterHandling: false,
+          runtimeSessionIdMatch: regenSuccessResultWithMetadata.runtimeSessionId === runtimeSessionIdRef.current,
+          verdict: 'FINAL_UI_TRUTH_HEALTHY',
+        })
         
         // [PHASE 15E BABY AUDIT] Confirm stale banner is cleared on success
         console.log('[regenerate-stale-banner-clearance-audit]', {
@@ -8301,9 +8364,10 @@ export default function ProgramPage() {
           newBuildResultRuntimeSessionId: regenSuccessResultWithMetadata.runtimeSessionId,
           currentRuntimeSessionId: runtimeSessionIdRef.current,
           generationErrorCleared: true,
+          clearedPersistedFailureState: true,
           staleBannerShouldBeCleared: regenSuccessResultWithMetadata.status === 'success',
           verdict: regenSuccessResultWithMetadata.status === 'success' 
-            ? 'stale_banner_replaced_with_success' 
+            ? 'stale_banner_replaced_with_success_and_persisted_cleared' 
             : 'stale_banner_risk_detected',
         })
         
@@ -13130,15 +13194,16 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   This is your previous plan. Your latest settings were not applied.
   </p>
   {/* TASK 1-D: Structured diagnostic display for red card */}
-  <div className="mt-2 space-y-0.5">
+  {/* [REGENERATE-OUTCOME-AUTHORITY] Text overflow fix: break-words + overflow-wrap for long diagnostic text */}
+  <div className="mt-2 space-y-0.5 overflow-hidden">
     {/* Line 1: Stage and Code */}
-    <p className="text-[10px] text-[#5A5A5A] font-mono">
+    <p className="text-[10px] text-[#5A5A5A] font-mono break-words overflow-wrap-anywhere">
       Stage: {truthGatedBuildResult.stage} | Code: {truthGatedBuildResult.errorCode || 'unknown'}
       {truthGatedBuildResult.subCode !== 'none' && ` (${truthGatedBuildResult.subCode})`}
     </p>
     {/* Line 2: Step, Middle, Day, Focus - only if any exist */}
     {(truthGatedBuildResult.failureStep || truthGatedBuildResult.failureDayNumber || truthGatedBuildResult.failureFocus) && (
-      <p className="text-[10px] text-[#4A4A4A] font-mono">
+      <p className="text-[10px] text-[#4A4A4A] font-mono break-words overflow-wrap-anywhere">
         Step: {truthGatedBuildResult.failureStep || 'none'}
         {truthGatedBuildResult.failureMiddleStep && ` | Middle: ${truthGatedBuildResult.failureMiddleStep}`}
         {truthGatedBuildResult.failureDayNumber !== null && ` | Day: ${truthGatedBuildResult.failureDayNumber}`}
@@ -13146,14 +13211,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       </p>
     )}
     {/* Line 3: Reason - only if exists */}
+    {/* [REGENERATE-OUTCOME-AUTHORITY] Use break-words instead of truncate to prevent horizontal overflow */}
     {truthGatedBuildResult.failureReason && (
-      <p className="text-[10px] text-[#4A4A4A] font-mono truncate max-w-full">
-        Reason: {truthGatedBuildResult.failureReason.slice(0, 100)}
+      <p className="text-[10px] text-[#4A4A4A] font-mono break-words overflow-wrap-anywhere">
+        Reason: {truthGatedBuildResult.failureReason.slice(0, 150)}
       </p>
     )}
     {/* TASK 1-E: Defensive fallback when no structured fields exist */}
     {!truthGatedBuildResult.failureStep && !truthGatedBuildResult.failureDayNumber && !truthGatedBuildResult.failureReason && (
-      <p className="text-[10px] text-[#4A4A4A] font-mono">
+      <p className="text-[10px] text-[#4A4A4A] font-mono break-words">
         Step: unavailable | Reason: unavailable
       </p>
     )}

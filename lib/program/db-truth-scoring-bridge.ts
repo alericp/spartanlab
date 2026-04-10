@@ -12,6 +12,17 @@
  */
 
 import type { ProgrammingTruthBundle, TruthConfidence } from './programming-truth-bundle-contract'
+import {
+  resolveSkillFamilyTruth,
+  resolvePatternResponse,
+  getSubstitutionRecommendation,
+  buildSkillFamilyRankingModifiers,
+  mapSkillToFamily,
+  type SkillFamily,
+  type SkillFamilyTruth,
+  type PatternResponse,
+  type SubstitutionRecommendation,
+} from './skill-specific-truth-resolution'
 
 // =============================================================================
 // TYPES
@@ -634,3 +645,296 @@ export function summarizeBundleTruthUsage(
     materialChanges,
   }
 }
+
+// =============================================================================
+// SKILL-SPECIFIC TRUTH FUNCTIONS (NEW)
+// =============================================================================
+
+/**
+ * Build skill-family-specific ranking modifiers instead of global averages
+ * This is the KEY UPGRADE from global to skill-specific ranking
+ */
+export function buildSkillSpecificRankingModifiers(
+  bundle: ProgrammingTruthBundle | null,
+  targetSkills: string[]
+): {
+  byFamily: Map<SkillFamily, {
+    modifier: number
+    depth: 'conservative' | 'moderate' | 'progressive'
+    prescriptionBias: 'soften' | 'maintain' | 'push'
+    substitutePreference: 'prefer_safer' | 'normal' | 'allow_challenging'
+    precedenceUsed: string
+    reason: string
+    confidence: TruthConfidence
+  }>
+  globalFallback: number
+  skillsResolved: number
+  skillsWithData: number
+} {
+  const result = {
+    byFamily: new Map<SkillFamily, {
+      modifier: number
+      depth: 'conservative' | 'moderate' | 'progressive'
+      prescriptionBias: 'soften' | 'maintain' | 'push'
+      substitutePreference: 'prefer_safer' | 'normal' | 'allow_challenging'
+      precedenceUsed: string
+      reason: string
+      confidence: TruthConfidence
+    }>(),
+    globalFallback: 0,
+    skillsResolved: 0,
+    skillsWithData: 0,
+  }
+  
+  if (!bundle) {
+    return result
+  }
+  
+  for (const skill of targetSkills) {
+    const truth = resolveSkillFamilyTruth(bundle, skill)
+    result.skillsResolved++
+    
+    if (truth.dataAvailable) {
+      result.skillsWithData++
+      result.byFamily.set(truth.family, {
+        modifier: truth.resolved.rankingModifier,
+        depth: truth.resolved.progressionDepth,
+        prescriptionBias: truth.resolved.prescriptionBias,
+        substitutePreference: truth.resolved.substitutePreference,
+        precedenceUsed: truth.resolved.precedenceUsed,
+        reason: truth.resolved.resolutionReason,
+        confidence: truth.overallConfidence,
+      })
+    }
+  }
+  
+  // Calculate global fallback as average of resolved modifiers
+  if (result.byFamily.size > 0) {
+    let total = 0
+    result.byFamily.forEach(v => total += v.modifier)
+    result.globalFallback = Math.round(total / result.byFamily.size)
+  }
+  
+  return result
+}
+
+/**
+ * Apply skill-family-specific ranking modifier to an exercise
+ * Uses the exercise's skill family to get the RIGHT modifier
+ */
+export function applySkillSpecificRankingModifier(
+  baseScore: number,
+  exercise: {
+    name?: string
+    category?: string
+    skill?: string
+    skillFamily?: string
+    movementPattern?: string
+    isAdvanced?: boolean
+    fatigueLevel?: 'low' | 'medium' | 'high'
+  },
+  skillModifiers: ReturnType<typeof buildSkillSpecificRankingModifiers>,
+  globalModifiers: DBTruthRankingModifiers
+): {
+  adjustedScore: number
+  totalModifier: number
+  modifierBreakdown: string[]
+  skillFamilyUsed: SkillFamily | null
+  precedenceUsed: string
+  changed: boolean
+} {
+  let totalModifier = 0
+  const breakdown: string[] = []
+  let skillFamilyUsed: SkillFamily | null = null
+  let precedenceUsed = 'global'
+  
+  // 1. Try to find skill-family-specific modifier
+  const skillHint = exercise.skill || exercise.skillFamily || exercise.category || ''
+  const family = mapSkillToFamily(skillHint)
+  
+  if (family !== 'unknown' && skillModifiers.byFamily.has(family)) {
+    const familyMod = skillModifiers.byFamily.get(family)!
+    totalModifier += familyMod.modifier
+    breakdown.push(`skill_family_${family}:${familyMod.modifier > 0 ? '+' : ''}${familyMod.modifier}`)
+    skillFamilyUsed = family
+    precedenceUsed = familyMod.precedenceUsed
+  } else {
+    // Fall back to global modifier with advanced penalty
+    const globalMod = exercise.isAdvanced 
+      ? globalModifiers.progressionScoreModifier 
+      : globalModifiers.progressionScoreModifier * 0.5
+    if (globalMod !== 0) {
+      totalModifier += globalMod
+      breakdown.push(`global_progression:${globalMod > 0 ? '+' : ''}${globalMod}`)
+    }
+  }
+  
+  // 2. Apply envelope tolerance (still global for now)
+  if (globalModifiers.toleranceModifier !== 0) {
+    totalModifier += globalModifiers.toleranceModifier
+    breakdown.push(`envelope:${globalModifiers.toleranceModifier > 0 ? '+' : ''}${globalModifiers.toleranceModifier}`)
+  }
+  
+  // 3. Apply constraint penalties (pattern-specific)
+  if (exercise.movementPattern && globalModifiers.constraintPenalties.has(exercise.movementPattern)) {
+    const penalty = globalModifiers.constraintPenalties.get(exercise.movementPattern)!
+    totalModifier += penalty
+    breakdown.push(`constraint_${exercise.movementPattern}:${penalty}`)
+  }
+  
+  // 4. Apply fatigue modifier for high-fatigue exercises
+  if (globalModifiers.fatigueRiskModifier !== 0 && exercise.fatigueLevel === 'high') {
+    totalModifier += globalModifiers.fatigueRiskModifier
+    breakdown.push(`fatigue_risk:${globalModifiers.fatigueRiskModifier > 0 ? '+' : ''}${globalModifiers.fatigueRiskModifier}`)
+  }
+  
+  // Clamp to bounds
+  totalModifier = Math.max(-30, Math.min(30, totalModifier))
+  
+  return {
+    adjustedScore: baseScore + totalModifier,
+    totalModifier,
+    modifierBreakdown: breakdown,
+    skillFamilyUsed,
+    precedenceUsed,
+    changed: totalModifier !== 0,
+  }
+}
+
+/**
+ * Build pattern-specific prescription calibration
+ * Uses pattern response data for targeted prescription changes
+ */
+export function buildPatternSpecificPrescription(
+  bundle: ProgrammingTruthBundle | null,
+  exercise: {
+    name?: string
+    category?: string
+    skill?: string
+    movementPattern?: string
+  }
+): DBTruthPrescriptionCalibration & {
+  patternSpecific: boolean
+  patternUsed: string | null
+  actionRecommended: 'push' | 'maintain' | 'soften' | 'substitute'
+} {
+  const baseCal = buildPrescriptionCalibrationFromBundle(bundle, exercise.category || 'skill', exercise.movementPattern)
+  
+  const result = {
+    ...baseCal,
+    patternSpecific: false,
+    patternUsed: null as string | null,
+    actionRecommended: 'maintain' as 'push' | 'maintain' | 'soften' | 'substitute',
+  }
+  
+  if (!bundle) {
+    return result
+  }
+  
+  // Try to get pattern-specific response
+  const pattern = exercise.movementPattern || inferPatternFromExercise(exercise)
+  if (pattern) {
+    const response = resolvePatternResponse(bundle, pattern)
+    
+    if (response.confidence !== 'none') {
+      result.patternSpecific = true
+      result.patternUsed = pattern
+      result.actionRecommended = response.recommendedAction
+      
+      // Override calibration with pattern-specific values
+      if (response.dosageModifier !== 0) {
+        result.setsModifier = response.dosageModifier
+        result.setsReason = `pattern_${pattern}_response`
+        result.setsConfidence = response.confidence
+      }
+      
+      if (response.intensityModifier !== 0) {
+        result.intensityModifier = response.intensityModifier
+        result.intensityReason = `pattern_${pattern}_tolerance`
+        result.intensityConfidence = response.confidence
+      }
+      
+      if (response.restModifier !== 0) {
+        result.restModifier = response.restModifier
+        result.restReason = `pattern_${pattern}_recovery`
+        result.restConfidence = response.confidence
+      }
+      
+      // Update overall confidence if pattern data is strong
+      if (response.confidence === 'medium' || response.confidence === 'high') {
+        result.overallCalibrationConfidence = response.confidence
+        result.calibrationApplied = true
+        result.sourceSections = [...result.sourceSections, `pattern_response_${pattern}`]
+      }
+    }
+  }
+  
+  return result
+}
+
+/**
+ * Get smart substitution recommendation for an exercise
+ */
+export function getSmartSubstitution(
+  bundle: ProgrammingTruthBundle | null,
+  exercise: {
+    name?: string
+    category?: string
+    skill?: string
+    movementPattern?: string
+  }
+): SubstitutionRecommendation {
+  const skillHint = exercise.skill || exercise.category || ''
+  const family = mapSkillToFamily(skillHint)
+  const pattern = exercise.movementPattern || inferPatternFromExercise(exercise)
+  
+  return getSubstitutionRecommendation(bundle, pattern || 'unknown', family)
+}
+
+// Helper to infer pattern from exercise metadata
+function inferPatternFromExercise(exercise: {
+  name?: string
+  category?: string
+  skill?: string
+}): string | null {
+  const name = (exercise.name || '').toLowerCase()
+  const category = (exercise.category || '').toLowerCase()
+  const skill = (exercise.skill || '').toLowerCase()
+  
+  // Infer from name/category
+  if (name.includes('push') || name.includes('press') || name.includes('dip')) {
+    if (name.includes('pike') || name.includes('hspu') || name.includes('handstand')) {
+      return 'vertical_push'
+    }
+    return 'horizontal_push'
+  }
+  
+  if (name.includes('pull') || name.includes('row') || name.includes('chin')) {
+    if (name.includes('front_lever') || name.includes('horizontal')) {
+      return 'horizontal_pull'
+    }
+    return 'vertical_pull'
+  }
+  
+  if (name.includes('lever') || skill.includes('lever')) {
+    if (name.includes('front') || skill.includes('front')) return 'horizontal_pull'
+    if (name.includes('back') || skill.includes('back')) return 'straight_arm_pull'
+  }
+  
+  if (name.includes('planche') || skill.includes('planche')) {
+    return 'straight_arm_press'
+  }
+  
+  if (name.includes('l_sit') || name.includes('v_sit') || skill.includes('compression')) {
+    return 'compression'
+  }
+  
+  if (name.includes('handstand') || skill.includes('handstand')) {
+    return 'balance'
+  }
+  
+  return null
+}
+
+// Re-export types for convenience
+export type { SkillFamily, SkillFamilyTruth, PatternResponse, SubstitutionRecommendation }

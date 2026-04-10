@@ -363,9 +363,15 @@ import {
   buildPrescriptionCalibrationFromBundle,
   applyRankingModifiers,
   summarizeBundleTruthUsage,
+  // [SKILL-SPECIFIC] New skill-family-specific functions
+  buildSkillSpecificRankingModifiers,
+  applySkillSpecificRankingModifier,
+  buildPatternSpecificPrescription,
+  getSmartSubstitution,
   type DBTruthRankingModifiers,
   type DBTruthProgressionDepth,
   type DBTruthPrescriptionCalibration,
+  type SkillFamily,
 } from './program/db-truth-scoring-bridge'
 
 import {
@@ -7100,22 +7106,57 @@ async function generateAdaptiveProgramImpl(
   // ==========================================================================
   // [DB-TRUTH-PROGRESSION-DEPTH] Apply bundle-derived progression depth adjustments
   // When bundle has low progress scores, mark skills for conservative selection
+  // 
+  // [SKILL-SPECIFIC UPGRADE] Now uses skill-family-specific resolution with
+  // CURRENT > RESPONSE > HISTORICAL > DEFAULT precedence
   // ==========================================================================
-  const progressionDepthAdjustments: Record<string, { originalDepth: string | null; adjustedBias: number; reason: string }> = {}
+  const progressionDepthAdjustments: Record<string, { 
+    originalDepth: string | null
+    adjustedBias: number
+    reason: string
+    precedenceUsed: string
+    currentScore: number | null
+    historicalLevel: number | null
+    currentBeatsHistorical: boolean
+  }> = {}
+  
+  // Import skill-specific resolution
+  const { resolveSkillFamilyTruth } = await import('./program/skill-specific-truth-resolution')
   
   if (programmingTruthBundle?.skillProgressions?.meta?.available) {
     for (const intent of multiSkillMaterialityContract.materialSkillIntent) {
+      // Use skill-specific resolution instead of generic depth builder
+      const skillTruth = resolveSkillFamilyTruth(programmingTruthBundle, intent.skill)
       const depth = buildProgressionDepthFromBundle(programmingTruthBundle, intent.skill)
       
-      if (depth.confidenceLevel !== 'none' && depth.suggestedVariantBias !== 0) {
+      // Determine if current earned state beats historical ceiling
+      const currentScore = skillTruth.currentEarnedState.progressScore
+      const historicalLevel = skillTruth.historicalContext.priorBestLevel
+      const currentBeatsHistorical = currentScore !== null && (
+        historicalLevel === null || // No historical ceiling
+        (currentScore > 0.6 && skillTruth.recentResponse.toleranceSignal !== 'poor') // Current is strong
+      )
+      
+      if (skillTruth.dataAvailable || (depth.confidenceLevel !== 'none' && depth.suggestedVariantBias !== 0)) {
+        // Use skill-specific resolved bias when available, else fall back to depth builder
+        const effectiveBias = skillTruth.dataAvailable 
+          ? (skillTruth.resolved.progressionDepth === 'conservative' ? -1 :
+             skillTruth.resolved.progressionDepth === 'progressive' ? 1 : 0)
+          : depth.suggestedVariantBias
+        
         progressionDepthAdjustments[intent.skill] = {
           originalDepth: intent.currentWorkingProgression,
-          adjustedBias: depth.suggestedVariantBias,
-          reason: depth.adjustmentReason,
+          adjustedBias: effectiveBias,
+          reason: skillTruth.dataAvailable ? skillTruth.resolved.resolutionReason : depth.adjustmentReason,
+          precedenceUsed: skillTruth.resolved.precedenceUsed,
+          currentScore,
+          historicalLevel,
+          currentBeatsHistorical,
         }
         
         // If bundle suggests conservative and current progression is aggressive, mark for conservative
-        if (depth.preferBasicVariant && intent.currentWorkingProgression) {
+        if (skillTruth.resolved.progressionDepth === 'conservative' || 
+            (depth.preferBasicVariant && intent.currentWorkingProgression)) {
           // This enriches the intent with bundle-informed conservative bias
           // Downstream selection will respect this by preferring basic variants
           progressionEnrichmentApplied = true
@@ -7124,11 +7165,43 @@ async function generateAdaptiveProgramImpl(
     }
   }
   
+  // Log current-vs-historical precedence resolution
+  const currentVsHistoryStats = {
+    skillsWithCurrentData: Object.values(progressionDepthAdjustments).filter(a => a.currentScore !== null).length,
+    skillsWithHistoricalData: Object.values(progressionDepthAdjustments).filter(a => a.historicalLevel !== null).length,
+    currentBeatsHistoricalCount: Object.values(progressionDepthAdjustments).filter(a => a.currentBeatsHistorical).length,
+    precedenceBreakdown: {
+      current: Object.values(progressionDepthAdjustments).filter(a => a.precedenceUsed === 'current').length,
+      response: Object.values(progressionDepthAdjustments).filter(a => a.precedenceUsed === 'response').length,
+      historical: Object.values(progressionDepthAdjustments).filter(a => a.precedenceUsed === 'historical').length,
+      default: Object.values(progressionDepthAdjustments).filter(a => a.precedenceUsed === 'default').length,
+    },
+  }
+  
+  console.log('[db-truth-current-vs-history]', {
+    ...currentVsHistoryStats,
+    details: Object.entries(progressionDepthAdjustments).slice(0, 3).map(([skill, adj]) => ({
+      skill,
+      currentScore: adj.currentScore,
+      historicalLevel: adj.historicalLevel,
+      currentBeatsHistorical: adj.currentBeatsHistorical,
+      precedence: adj.precedenceUsed,
+      adjustedBias: adj.adjustedBias,
+    })),
+    verdict: currentVsHistoryStats.currentBeatsHistoricalCount > 0 
+      ? 'CURRENT_WORKING_STATE_OVERRIDES_HISTORICAL'
+      : currentVsHistoryStats.skillsWithCurrentData > 0 
+        ? 'CURRENT_DATA_AVAILABLE_NO_CONFLICT'
+        : 'NO_CURRENT_DATA_AVAILABLE',
+  })
+  
   console.log('[db-truth-progression-depth]', {
     skillsWithAdjustments: Object.keys(progressionDepthAdjustments).length,
     adjustments: Object.entries(progressionDepthAdjustments).slice(0, 3).map(([skill, adj]) => ({
       skill,
-      ...adj,
+      bias: adj.adjustedBias,
+      reason: adj.reason,
+      precedence: adj.precedenceUsed,
     })),
     anyConservativeBias: Object.values(progressionDepthAdjustments).some(a => a.adjustedBias < 0),
     anyProgressiveBias: Object.values(progressionDepthAdjustments).some(a => a.adjustedBias > 0),
@@ -8553,6 +8626,47 @@ async function generateAdaptiveProgramImpl(
     'skill', // Default category, will be refined per-exercise
     undefined // Movement family will be set per-exercise
   )
+  
+  // ==========================================================================
+  // [SKILL-SPECIFIC TRUTH RESOLUTION] Build skill-family-specific modifiers
+  // This is the KEY UPGRADE from global averages to per-skill-family truth
+  // ==========================================================================
+  const skillSpecificModifiers = buildSkillSpecificRankingModifiers(
+    programmingTruthBundle,
+    expandedContext.selectedSkills
+  )
+  
+  // Log skill-specific resolution details
+  const skillFamilyDetails: Array<{
+    family: string
+    modifier: number
+    depth: string
+    bias: string
+    precedence: string
+    reason: string
+  }> = []
+  
+  skillSpecificModifiers.byFamily.forEach((data, family) => {
+    skillFamilyDetails.push({
+      family,
+      modifier: data.modifier,
+      depth: data.depth,
+      bias: data.prescriptionBias,
+      precedence: data.precedenceUsed,
+      reason: data.reason,
+    })
+  })
+  
+  console.log('[db-truth-skill-ranking]', {
+    skillsResolved: skillSpecificModifiers.skillsResolved,
+    skillsWithData: skillSpecificModifiers.skillsWithData,
+    globalFallback: skillSpecificModifiers.globalFallback,
+    byFamilyCount: skillSpecificModifiers.byFamily.size,
+    familyDetails: skillFamilyDetails.slice(0, 5),
+    verdict: skillSpecificModifiers.skillsWithData > 0 
+      ? 'SKILL_SPECIFIC_MODIFIERS_ACTIVE'
+      : 'SKILL_SPECIFIC_NO_DATA_USING_GLOBAL',
+  })
   
   // Summarize bundle truth usage for this generation
   const bundleTruthUsageSummary = summarizeBundleTruthUsage(
@@ -19410,10 +19524,23 @@ function generateAdaptiveSession(
         ex.exerciseRole === 'primary' ? 'high' :
         ex.category === 'accessory' ? 'low' : 'medium'
       
-      const result = applyRankingModifiers(
+      // Extract skill hint for skill-family-specific modifier lookup
+      const skillHint = ex.skill || ex.exercise?.skill || ex.skillFamily || ex.category || ''
+      
+      // [SKILL-SPECIFIC] Use skill-family-specific modifier instead of global
+      const result = applySkillSpecificRankingModifier(
         ex.scoreFromSelector || 50, // Use existing score or default
-        dbTruthRankingModifiers,
-        { isAdvanced, movementPattern, fatigueLevel }
+        {
+          name: ex.exercise?.name,
+          category: ex.category,
+          skill: skillHint,
+          skillFamily: ex.skillFamily,
+          movementPattern,
+          isAdvanced,
+          fatigueLevel,
+        },
+        skillSpecificModifiers,
+        dbTruthRankingModifiers
       )
       
       return {
@@ -19422,6 +19549,8 @@ function generateAdaptiveSession(
         dbTruthModifier: result.totalModifier,
         dbTruthModifierBreakdown: result.modifierBreakdown,
         dbTruthRankingChanged: result.changed,
+        dbTruthSkillFamily: result.skillFamilyUsed,
+        dbTruthPrecedenceUsed: result.precedenceUsed,
       }
     })
     
@@ -19433,6 +19562,10 @@ function generateAdaptiveSession(
     const postRankingOrder = resortedExercises.map(e => e.exercise?.name || 'unknown')
     const rankingChanged = preRankingOrder.join(',') !== postRankingOrder.join(',')
     
+    // Count skill-family-specific vs global modifications
+    const skillFamilyModCount = scoredExercises.filter(e => e.dbTruthSkillFamily).length
+    const globalFallbackCount = scoredExercises.filter(e => !e.dbTruthSkillFamily && e.dbTruthRankingChanged).length
+    
     console.log('[db-truth-main-ranking]', {
       sessionIndex,
       dayFocus: day.focus,
@@ -19440,19 +19573,121 @@ function generateAdaptiveSession(
       postRankingOrder: postRankingOrder.slice(0, 5),
       rankingChanged,
       exercisesReranked: scoredExercises.filter(e => e.dbTruthRankingChanged).length,
+      skillFamilySpecificMods: skillFamilyModCount,
+      globalFallbackMods: globalFallbackCount,
       totalModifiersApplied: scoredExercises.reduce((sum, e) => sum + (e.dbTruthModifier || 0), 0),
       modifierBreakdowns: scoredExercises.slice(0, 3).map(e => ({
         name: e.exercise?.name,
+        skillFamily: e.dbTruthSkillFamily,
+        precedence: e.dbTruthPrecedenceUsed,
         modifier: e.dbTruthModifier,
         breakdown: e.dbTruthModifierBreakdown,
       })),
-      verdict: rankingChanged ? 'DB_TRUTH_RANKING_CHANGED_ORDER' : 'DB_TRUTH_RANKING_NO_ORDER_CHANGE',
+      verdict: rankingChanged 
+        ? (skillFamilyModCount > 0 ? 'DB_TRUTH_SKILL_SPECIFIC_RANKING_CHANGED' : 'DB_TRUTH_GLOBAL_RANKING_CHANGED')
+        : 'DB_TRUTH_RANKING_NO_ORDER_CHANGE',
     })
     
     // Apply reranked order if changed
     if (rankingChanged) {
       effectiveMainForSession = resortedExercises
     }
+    
+    // ==========================================================================
+    // [SMART SUBSTITUTION] Check for exercises that should be substituted based on
+    // pattern-specific response/constraint truth
+    // ==========================================================================
+    const substitutionChecks: Array<{
+      exerciseName: string
+      skillFamily: string
+      pattern: string | null
+      shouldSubstitute: boolean
+      reason: string
+      preferredAlternatives: string[]
+      intensityReduction: number
+      applied: boolean
+    }> = []
+    
+    effectiveMainForSession = effectiveMainForSession.map(ex => {
+      const skillHint = ex.skill || ex.exercise?.skill || ex.skillFamily || ex.category || ''
+      const pattern = ex.movementPattern || ex.exercise?.category || ''
+      
+      const substitution = getSmartSubstitution(
+        programmingTruthBundle,
+        {
+          name: ex.exercise?.name,
+          category: ex.category,
+          skill: skillHint,
+          movementPattern: pattern,
+        }
+      )
+      
+      const check = {
+        exerciseName: ex.exercise?.name || 'unknown',
+        skillFamily: skillHint,
+        pattern,
+        shouldSubstitute: substitution.shouldSubstitute,
+        reason: substitution.reason,
+        preferredAlternatives: substitution.substitutePreference,
+        intensityReduction: substitution.intensityReduction,
+        applied: false,
+      }
+      
+      // If substitution is recommended, apply intensity/leverage reduction instead of swapping
+      // (actual exercise swap would require more complex logic with exercise pool)
+      if (substitution.shouldSubstitute && substitution.intensityReduction > 0) {
+        const currentRPE = typeof ex.targetRPE === 'number' ? ex.targetRPE : 8
+        const reducedRPE = Math.max(5, currentRPE - (substitution.intensityReduction / 10))
+        
+        const currentSets = typeof ex.sets === 'number' ? ex.sets : 3
+        const reducedSets = substitution.leverageReduction === 'significant' 
+          ? Math.max(2, currentSets - 1) 
+          : currentSets
+        
+        check.applied = reducedRPE !== currentRPE || reducedSets !== currentSets
+        substitutionChecks.push(check)
+        
+        if (check.applied) {
+          return {
+            ...ex,
+            sets: reducedSets,
+            targetRPE: reducedRPE,
+            note: ex.note 
+              ? `${ex.note} [Softened: ${substitution.reason}]` 
+              : `[Softened: ${substitution.reason}]`,
+            dbTruthSubstitutionApplied: true,
+            dbTruthSubstitutionReason: substitution.reason,
+          }
+        }
+      } else {
+        substitutionChecks.push(check)
+      }
+      
+      return ex
+    })
+    
+    const substitutionsApplied = substitutionChecks.filter(s => s.applied).length
+    const substitutionsRecommended = substitutionChecks.filter(s => s.shouldSubstitute).length
+    
+    console.log('[db-truth-smart-substitution]', {
+      sessionIndex,
+      dayFocus: day.focus,
+      exercisesChecked: substitutionChecks.length,
+      substitutionsRecommended,
+      substitutionsApplied,
+      checks: substitutionChecks.filter(s => s.shouldSubstitute).slice(0, 3).map(s => ({
+        exercise: s.exerciseName,
+        reason: s.reason,
+        alternatives: s.preferredAlternatives.slice(0, 2),
+        intensityReduction: s.intensityReduction,
+        applied: s.applied,
+      })),
+      verdict: substitutionsApplied > 0 
+        ? 'SMART_SUBSTITUTION_APPLIED'
+        : substitutionsRecommended > 0 
+          ? 'SUBSTITUTION_RECOMMENDED_NOT_APPLIED'
+          : 'NO_SUBSTITUTION_NEEDED',
+    })
   }
   
   // ==========================================================================
@@ -19786,6 +20021,16 @@ function generateAdaptiveSession(
       let dbTruthPrescriptionApplied = false
       const dbTruthPrescriptionChanges: Array<{ name: string; field: string; before: number; after: number }> = []
       
+      // [PATTERN-SPECIFIC] Track pattern-specific prescription changes
+      const patternSpecificChanges: Array<{
+        name: string
+        pattern: string | null
+        action: string
+        field: string
+        before: number
+        after: number
+      }> = []
+      
       if (dbTruthPrescriptionCalibration.calibrationApplied && 
           dbTruthPrescriptionCalibration.overallCalibrationConfidence !== 'none') {
         
@@ -19793,12 +20038,44 @@ function generateAdaptiveSession(
           let modified = false
           const changes: typeof dbTruthPrescriptionChanges = []
           
+          // [PATTERN-SPECIFIC] Get pattern-specific prescription for THIS exercise
+          const patternPrescription = buildPatternSpecificPrescription(
+            programmingTruthBundle,
+            {
+              name: ex.exercise?.name,
+              category: ex.category,
+              skill: ex.skill || ex.exercise?.skill,
+              movementPattern: ex.movementPattern || ex.exercise?.category,
+            }
+          )
+          
+          // Determine which modifiers to use: pattern-specific if available, else global
+          const effectiveSetsModifier = patternPrescription.patternSpecific 
+            ? patternPrescription.setsModifier 
+            : dbTruthPrescriptionCalibration.setsModifier
+          const effectiveIntensityModifier = patternPrescription.patternSpecific 
+            ? patternPrescription.intensityModifier 
+            : dbTruthPrescriptionCalibration.intensityModifier
+          const effectiveRestModifier = patternPrescription.patternSpecific 
+            ? patternPrescription.restModifier 
+            : dbTruthPrescriptionCalibration.restModifier
+          
           // Apply sets modifier (bounded to safe range)
           let adjustedSets = typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets)) || 3
-          if (dbTruthPrescriptionCalibration.setsModifier !== 0) {
-            const newSets = Math.max(2, Math.min(6, adjustedSets + dbTruthPrescriptionCalibration.setsModifier))
+          if (effectiveSetsModifier !== 0) {
+            const newSets = Math.max(2, Math.min(6, adjustedSets + effectiveSetsModifier))
             if (newSets !== adjustedSets) {
               changes.push({ name: ex.exercise?.name || 'unknown', field: 'sets', before: adjustedSets, after: newSets })
+              if (patternPrescription.patternSpecific) {
+                patternSpecificChanges.push({
+                  name: ex.exercise?.name || 'unknown',
+                  pattern: patternPrescription.patternUsed,
+                  action: patternPrescription.actionRecommended,
+                  field: 'sets',
+                  before: adjustedSets,
+                  after: newSets,
+                })
+              }
               adjustedSets = newSets
               modified = true
             }
@@ -19806,10 +20083,20 @@ function generateAdaptiveSession(
           
           // Apply intensity/RPE modifier (bounded to safe range)
           let adjustedRPE = typeof ex.targetRPE === 'number' ? ex.targetRPE : 8
-          if (dbTruthPrescriptionCalibration.intensityModifier !== 0) {
-            const newRPE = Math.max(5, Math.min(10, adjustedRPE + dbTruthPrescriptionCalibration.intensityModifier))
+          if (effectiveIntensityModifier !== 0) {
+            const newRPE = Math.max(5, Math.min(10, adjustedRPE + effectiveIntensityModifier))
             if (Math.abs(newRPE - adjustedRPE) > 0.25) { // Only apply if meaningful change
               changes.push({ name: ex.exercise?.name || 'unknown', field: 'targetRPE', before: adjustedRPE, after: newRPE })
+              if (patternPrescription.patternSpecific) {
+                patternSpecificChanges.push({
+                  name: ex.exercise?.name || 'unknown',
+                  pattern: patternPrescription.patternUsed,
+                  action: patternPrescription.actionRecommended,
+                  field: 'targetRPE',
+                  before: adjustedRPE,
+                  after: newRPE,
+                })
+              }
               adjustedRPE = newRPE
               modified = true
             }
@@ -19818,10 +20105,20 @@ function generateAdaptiveSession(
           // Apply rest modifier (bounded to safe range)
           let adjustedRest = typeof ex.rest === 'number' ? ex.rest : 
                             typeof ex.rest === 'string' ? parseInt(ex.rest) || 90 : 90
-          if (dbTruthPrescriptionCalibration.restModifier !== 0) {
-            const newRest = Math.max(30, Math.min(300, adjustedRest + dbTruthPrescriptionCalibration.restModifier))
+          if (effectiveRestModifier !== 0) {
+            const newRest = Math.max(30, Math.min(300, adjustedRest + effectiveRestModifier))
             if (Math.abs(newRest - adjustedRest) >= 15) { // Only apply if meaningful change
               changes.push({ name: ex.exercise?.name || 'unknown', field: 'rest', before: adjustedRest, after: newRest })
+              if (patternPrescription.patternSpecific) {
+                patternSpecificChanges.push({
+                  name: ex.exercise?.name || 'unknown',
+                  pattern: patternPrescription.patternUsed,
+                  action: patternPrescription.actionRecommended,
+                  field: 'rest',
+                  before: adjustedRest,
+                  after: newRest,
+                })
+              }
               adjustedRest = newRest
               modified = true
             }
@@ -19832,30 +20129,50 @@ function generateAdaptiveSession(
             dbTruthPrescriptionChanges.push(...changes)
           }
           
+          // Build calibration note
+          const calibrationSource = patternPrescription.patternSpecific 
+            ? `pattern:${patternPrescription.patternUsed}:${patternPrescription.actionRecommended}`
+            : 'global'
+          
           return modified ? {
             ...ex,
             sets: adjustedSets,
             targetRPE: adjustedRPE,
             rest: adjustedRest,
-            note: ex.note ? `${ex.note} [DB-calibrated]` : '[DB-calibrated prescription]',
+            note: ex.note ? `${ex.note} [DB-calibrated:${calibrationSource}]` : `[DB-calibrated:${calibrationSource}]`,
           } : ex
         })
       }
+      
+      // Log pattern-specific response data
+      console.log('[db-truth-pattern-response]', {
+        sessionIndex,
+        patternSpecificChangesCount: patternSpecificChanges.length,
+        patterns: [...new Set(patternSpecificChanges.map(c => c.pattern))],
+        actions: [...new Set(patternSpecificChanges.map(c => c.action))],
+        changes: patternSpecificChanges.slice(0, 5),
+        verdict: patternSpecificChanges.length > 0 
+          ? 'PATTERN_SPECIFIC_PRESCRIPTION_APPLIED'
+          : 'NO_PATTERN_SPECIFIC_CHANGES',
+      })
       
       console.log('[db-truth-prescription-calibration]', {
         sessionIndex,
         dayFocus: day.focus,
         calibrationApplied: dbTruthPrescriptionApplied,
         calibrationConfidence: dbTruthPrescriptionCalibration.overallCalibrationConfidence,
-        modifiersUsed: {
+        globalModifiersUsed: {
           sets: dbTruthPrescriptionCalibration.setsModifier,
           intensity: dbTruthPrescriptionCalibration.intensityModifier,
           rest: dbTruthPrescriptionCalibration.restModifier,
         },
+        patternSpecificOverrides: patternSpecificChanges.length,
         changesApplied: dbTruthPrescriptionChanges.slice(0, 5),
         totalExercisesModified: dbTruthPrescriptionChanges.length,
         sourceSections: dbTruthPrescriptionCalibration.sourceSections,
-        verdict: dbTruthPrescriptionApplied ? 'DB_TRUTH_PRESCRIPTION_MODIFIED' : 'DB_TRUTH_PRESCRIPTION_NO_CHANGE',
+        verdict: dbTruthPrescriptionApplied 
+          ? (patternSpecificChanges.length > 0 ? 'DB_TRUTH_PATTERN_SPECIFIC_MODIFIED' : 'DB_TRUTH_GLOBAL_PRESCRIPTION_MODIFIED')
+          : 'DB_TRUTH_PRESCRIPTION_NO_CHANGE',
       })
       
       if (shouldReduceSets || shouldReduceRPE) {

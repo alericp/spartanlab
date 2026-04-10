@@ -1999,12 +1999,20 @@ export function StreamlinedWorkoutSession({
     
     let executionPlan: ExecutionPlan
     
-    if (styledGroups && styledGroups.length > 0) {
+if (styledGroups && styledGroups.length > 0) {
       // AUTHORITATIVE PATH: Convert styledGroups to ExecutionPlan
-      // This ensures live session uses SAME grouped structure as Program screen
-      const blocks: ExecutionBlock[] = []
-      let hasGroupedBlocks = false
-      let totalSets = 0
+      console.log('[v0] [execution_plan_from_styled_groups]', {
+        styledGroupCount: styledGroups.length,
+        groups: styledGroups.map(g => ({ id: g.id, type: g.groupType, exerciseCount: g.exercises.length }))
+      })
+      
+      // [GROUPED-IDENTITY] Track how many of each group type we've seen to assign letters (A, B, C...)
+      const groupTypeCounters: Record<string, number> = {
+        superset: 0,
+        circuit: 0,
+        cluster: 0,
+        density_block: 0,
+      }
       
       for (const group of styledGroups) {
         // [GROUPED-CONTRACT-ALIGN] Map ALL styledGroup.groupType values to ExecutionBlock.groupType
@@ -2036,12 +2044,22 @@ export function StreamlinedWorkoutSession({
           }
         }
         
-        // Get label matching Program screen convention - must match AdaptiveSessionCard display
-        const blockLabel = groupType === 'superset' ? 'Superset'
+        // [GROUPED-IDENTITY] Compute block letter (A, B, C...) based on how many of this type we've seen
+        let blockLetter = ''
+        if (groupType && groupTypeCounters[groupType] !== undefined) {
+          blockLetter = String.fromCharCode(65 + groupTypeCounters[groupType]) // A, B, C...
+          groupTypeCounters[groupType]++
+        }
+        
+        // Get label with identity letter when multiple blocks of same type exist
+        const baseLabel = groupType === 'superset' ? 'Superset'
           : groupType === 'circuit' ? 'Circuit'
           : groupType === 'cluster' ? 'Cluster Set'
           : groupType === 'density_block' ? 'Density Block'
           : memberExercises[0]?.name || 'Exercise'
+        
+        // Include letter only if we have or will have multiple blocks of the same type
+        const blockLabel = (groupType && blockLetter) ? `${baseLabel} ${blockLetter}` : baseLabel
         
         // [GROUPED-CONTRACT-ALIGN] Rest timing per group type matching Program screen expectations
         const intraBlockRest = groupType === 'superset' ? 0 
@@ -4793,13 +4811,24 @@ if (shouldShowLocalFallback) {
               )}
             </div>
             {/* [GROUPED-PLAN-FIX] Render grouped structure in Today's Plan */}
-            {/* [GROUPED-TRUTH-UNIFY] Use styleMetadata.styledGroups as authoritative source when available */}
-            {/* Falls back to executionPlan if styleMetadata is not present */}
-            <div className="space-y-0">
+{/* [GROUPED-TRUTH-UNIFY] Use styleMetadata.styledGroups as authoritative source when available */}
+              {/* This ensures the workout preview matches Program screen and Today's Plan exactly */}
               {safeSession.styleMetadata?.styledGroups && safeSession.styleMetadata.styledGroups.length > 0 ? (
-                // AUTHORITATIVE GROUPED RENDER - Use styleMetadata from program builder
-                safeSession.styleMetadata.styledGroups.map((group, groupIdx) => {
+                <>
+                {/* AUTHORITATIVE GROUPED RENDER - Use styleMetadata from program builder */}
+                {(() => {
+                  // [GROUPED-IDENTITY] Track counters to assign block letters (A, B, C...)
+                  const previewGroupCounters: Record<string, number> = { superset: 0, circuit: 0, cluster: 0, density_block: 0 }
+                  
+                  return safeSession.styleMetadata!.styledGroups.map((group, groupIdx) => {
                   const isGrouped = group.groupType !== 'straight'
+                  
+                  // Compute block letter for identity
+                  let blockLetter = ''
+                  if (isGrouped && group.groupType && previewGroupCounters[group.groupType] !== undefined) {
+                    blockLetter = String.fromCharCode(65 + previewGroupCounters[group.groupType])
+                    previewGroupCounters[group.groupType]++
+                  }
                   
                   if (isGrouped) {
                     // Grouped block from styleMetadata - show header + nested members with visual bracket
@@ -4811,6 +4840,11 @@ if (shouldShowLocalFallback) {
                       ? 'Short rest between reps for heavier loads'
                       : 'High-intensity timed block'
                     
+                    const baseLabel = group.groupType === 'superset' ? 'Superset'
+                      : group.groupType === 'circuit' ? 'Circuit'
+                      : group.groupType === 'cluster' ? 'Cluster Set'
+                      : 'Density Block'
+                    
                     return (
                       <div key={group.id} className="py-1.5 relative">
                         {/* [GROUPED-VISUAL] Red vertical bracket/connector for grouped exercises */}
@@ -4819,7 +4853,10 @@ if (shouldShowLocalFallback) {
                         {/* Group Header with info affordance */}
                         <div className="flex items-center gap-2 py-1.5 mb-0.5">
                           <span className="w-5 h-5 rounded bg-[#C1121F]/20 text-[#C1121F] text-[9px] flex items-center justify-center font-bold">
-                            {group.groupType === 'superset' ? 'SS' : group.groupType === 'circuit' ? 'CR' : group.groupType === 'cluster' ? 'CL' : 'DB'}
+                            {group.groupType === 'superset' ? 'SS' : group.groupType === 'circuit' ? 'CR' : group.groupType === 'cluster' ? 'CL' : 'DB'}{blockLetter}
+                          </span>
+                          <span className="text-xs font-medium text-[#C1121F]">
+                            {baseLabel}{blockLetter ? ` ${blockLetter}` : ''}
                           </span>
                           <span className="text-xs font-medium text-[#C1121F]">
                             {group.groupType === 'superset' ? 'Superset' : group.groupType === 'circuit' ? 'Circuit' : group.groupType === 'cluster' ? 'Cluster Set' : 'Density Block'}
@@ -4889,6 +4926,8 @@ if (shouldShowLocalFallback) {
                     )
                   }
                 })
+                })()}
+                </>
               ) : executionPlan.hasGroupedBlocks ? (
                 // FALLBACK GROUPED RENDER - Use executionPlan if styleMetadata is absent
                 executionPlan.blocks.map((block, blockIdx) => {

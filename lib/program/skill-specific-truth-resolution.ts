@@ -211,14 +211,17 @@ const PATTERN_TO_FAMILIES: Record<string, SkillFamily[]> = {
 
 /**
  * Resolve skill-family truth with strict precedence
+ * [RUNTIME-HARDENING] Accepts unknown skill type and normalizes safely
  */
 export function resolveSkillFamilyTruth(
   bundle: ProgrammingTruthBundle | null,
-  skill: string,
+  skill: unknown,
   canonicalHistoricalCeiling?: number | null
 ): SkillFamilyTruth {
-  const family = mapSkillToFamily(skill)
-  const normalizedSkill = skill.replace(/_/g, '').toLowerCase()
+  // [RUNTIME-HARDENING] Normalize skill to safe string before any operations
+  const safeSkill = typeof skill === 'string' && skill.trim() !== '' ? skill : ''
+  const family = mapSkillToFamily(safeSkill)
+  const normalizedSkill = safeSkill.replace(/_/g, '').toLowerCase()
   
   // Default empty truth
   const defaultTruth: SkillFamilyTruth = {
@@ -494,7 +497,33 @@ export function buildSkillFamilyRankingModifiers(
 // HELPER FUNCTIONS
 // =============================================================================
 
-function mapSkillToFamily(skill: string): SkillFamily {
+/**
+ * [RUNTIME-HARDENING] Maps a skill to its family with safe input handling
+ * Accepts unknown input types and returns 'unknown' for malformed/missing values
+ */
+function mapSkillToFamily(skill: unknown): SkillFamily {
+  // [RUNTIME-HARDENING] Guard against null, undefined, non-string, empty string
+  if (skill === null || skill === undefined) {
+    return 'unknown'
+  }
+  
+  if (typeof skill !== 'string') {
+    // Log malformed input for debugging (but don't throw)
+    console.log('[effective-selection-shape-audit]', {
+      exerciseName: 'unknown',
+      rawSkillType: typeof skill,
+      isArray: Array.isArray(skill),
+      constructorName: skill?.constructor?.name || 'unknown',
+      fallbackApplied: true,
+      verdict: 'MALFORMED_SKILL_INPUT_SAFE_FALLBACK',
+    })
+    return 'unknown'
+  }
+  
+  if (skill.trim() === '') {
+    return 'unknown'
+  }
+  
   const normalized = skill.toLowerCase().replace(/[-\s]/g, '_')
   return SKILL_TO_FAMILY[normalized] || SKILL_TO_FAMILY[skill] || 'unknown'
 }

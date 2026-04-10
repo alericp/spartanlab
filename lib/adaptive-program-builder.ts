@@ -7353,11 +7353,13 @@ async function generateAdaptiveProgramImpl(
   
   for (const [family, readiness] of exposureReadinessMap.entries()) {
     // Get all skills in this family from the material intent
+    // [RUNTIME-HARDENING] Use statically imported mapSkillToFamily with safe skill extraction
     const familySkills = multiSkillMaterialityContract.materialSkillIntent
       .filter(intent => {
         try {
-          const { mapSkillToFamily } = require('./program/skill-specific-truth-resolution')
-          return mapSkillToFamily(intent.skill) === family
+          // [RUNTIME-HARDENING] Ensure intent.skill is a string before mapping
+          const safeSkill = typeof intent.skill === 'string' ? intent.skill : ''
+          return mapSkillToFamily(safeSkill) === family
         } catch {
           return false
         }
@@ -20080,10 +20082,30 @@ function generateAdaptiveSession(
   middleStep = 'before_effective_selection'
   
   // ==========================================================================
+  // [EFFECTIVE-SELECTION-SUBSTEP-AUDIT] Log entry into the corridor with candidate shapes
+  // ==========================================================================
+  console.log('[effective-selection-substep-audit]', {
+    middleStep: 'before_effective_selection',
+    sessionIndex,
+    candidateCount: effectiveMainForSession.length,
+    candidateShapes: effectiveMainForSession.slice(0, 3).map(ex => ({
+      name: ex.exercise?.name || ex.name || 'unknown',
+      skillType: typeof ex.skill,
+      skillValue: typeof ex.skill === 'string' ? ex.skill.slice(0, 30) : String(ex.skill),
+      hasExerciseSkill: typeof ex.exercise?.skill,
+      categoryType: typeof ex.category,
+    })),
+    verdict: 'PASS',
+  })
+  
+  // ==========================================================================
   // [DB-TRUTH-MAIN-RANKING] Apply ranking modifiers to main exercises
   // This re-scores and potentially reorders candidates based on DB truth
   // ==========================================================================
+  middleStep = 'before_db_truth_main_ranking'
+  
   if (dbTruthRankingModifiers.sourceConfidence !== 'none' && effectiveMainForSession.length > 1) {
+    middleStep = 'inside_db_truth_main_ranking'
     const preRankingOrder = effectiveMainForSession.map(e => e.exercise?.name || 'unknown')
     
     // Apply modifiers to each exercise and track changes
@@ -20102,7 +20124,9 @@ function generateAdaptiveSession(
         ex.category === 'accessory' ? 'low' : 'medium'
       
       // Extract skill hint for skill-family-specific modifier lookup
-      const skillHint = ex.skill || ex.exercise?.skill || ex.skillFamily || ex.category || ''
+      // [RUNTIME-HARDENING] Ensure skillHint is always a string, not null/undefined/object/array
+      const rawSkill = ex.skill ?? ex.exercise?.skill ?? ex.skillFamily ?? ex.category ?? ''
+      const skillHint = typeof rawSkill === 'string' ? rawSkill : ''
       
       // [SKILL-SPECIFIC] Use skill-family-specific modifier instead of global
       const result = applySkillSpecificRankingModifier(
@@ -20185,9 +20209,14 @@ function generateAdaptiveSession(
       applied: boolean
     }> = []
     
+    middleStep = 'before_smart_substitution'
+    
     effectiveMainForSession = effectiveMainForSession.map(ex => {
-      const skillHint = ex.skill || ex.exercise?.skill || ex.skillFamily || ex.category || ''
-      const pattern = ex.movementPattern || ex.exercise?.category || ''
+      // [RUNTIME-HARDENING] Ensure skillHint and pattern are always strings
+      const rawSkill = ex.skill ?? ex.exercise?.skill ?? ex.skillFamily ?? ex.category ?? ''
+      const skillHint = typeof rawSkill === 'string' ? rawSkill : ''
+      const rawPattern = ex.movementPattern ?? ex.exercise?.category ?? ''
+      const pattern = typeof rawPattern === 'string' ? rawPattern : ''
       
       const substitution = getSmartSubstitution(
         programmingTruthBundle,
@@ -20747,10 +20776,32 @@ function generateAdaptiveSession(
         reason: string
       }> = []
       
+      middleStep = 'before_dosage_readiness_gating'
+      
       try {
+        middleStep = 'inside_dosage_readiness_gating'
+        
         // [SKILL-FAMILY-TRUTH] Use statically imported mapSkillToFamily (no dynamic import)
         exercisesForDosageAdjustment = exercisesForDosageAdjustment.map(ex => {
-          const exerciseSkill = ex.skill || ex.exercise?.skill
+          // [RUNTIME-HARDENING] Safely extract exercise skill with type checking
+          const rawExerciseSkill = ex.skill ?? ex.exercise?.skill
+          
+          // Skip if no skill or not a string
+          if (rawExerciseSkill === null || rawExerciseSkill === undefined) return ex
+          if (typeof rawExerciseSkill !== 'string') {
+            // Log malformed skill shape but don't throw
+            console.log('[effective-selection-shape-audit]', {
+              exerciseName: ex.exercise?.name || ex.name || 'unknown',
+              rawSkillType: typeof rawExerciseSkill,
+              isArray: Array.isArray(rawExerciseSkill),
+              constructorName: rawExerciseSkill?.constructor?.name || 'unknown',
+              fallbackApplied: true,
+              verdict: 'MALFORMED_EXERCISE_SKILL_SKIPPED',
+            })
+            return ex
+          }
+          
+          const exerciseSkill = rawExerciseSkill.trim()
           if (!exerciseSkill) return ex
           
           const family = mapSkillToFamily(exerciseSkill)
@@ -21076,6 +21127,22 @@ function generateAdaptiveSession(
   }
   
   middleStep = 'effective_selection_built'
+  
+  // ==========================================================================
+  // [EFFECTIVE-SELECTION-FINAL-VERDICT] Log completion of corridor
+  // ==========================================================================
+  console.log('[effective-selection-final-verdict]', {
+    sessionIndex,
+    dayFocus: day.focus,
+    middleStep: 'effective_selection_built',
+    candidateCount: effectiveSelection.main.length,
+    candidateNames: effectiveSelection.main.slice(0, 5).map(e => e.exercise?.name || 'unknown'),
+    skillShapesValid: effectiveSelection.main.every(e => 
+      typeof e.skill === 'string' || typeof e.exercise?.skill === 'string' || e.skill === undefined
+    ),
+    verdict: 'PASS',
+  })
+  
   sessionStep = 'effective_selection_validating'
   
   // ==========================================================================

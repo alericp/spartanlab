@@ -2266,13 +2266,40 @@ export function buildExerciseCardContract(
     ? `+${exercise.prescribedLoad.load} ${exercise.prescribedLoad.unit}` 
     : null
   
-  // Rest guidance - prefer coachingMeta.restLabel, else derive from restSeconds
+  // [AUTHORITATIVE] Rest guidance - explain WHY this rest, not just the duration
   let restGuidance: string | null = null
   if (exercise.coachingMeta?.restLabel) {
     restGuidance = exercise.coachingMeta.restLabel
   } else if (exercise.restSeconds) {
-    if (exercise.restSeconds >= 120) {
-      restGuidance = `${Math.round(exercise.restSeconds / 60)}-${Math.round(exercise.restSeconds / 60) + 1} min`
+    const mins = Math.round(exercise.restSeconds / 60)
+    // Derive rest reasoning from prescription intent + duration
+    if (exercise.restSeconds >= 180) {
+      // Long rest = output/power/skill quality
+      if (prescriptionIntent === 'max_strength' || prescriptionIntent === 'explosive_power') {
+        restGuidance = `${mins}+ min — full recovery for output`
+      } else if (prescriptionIntent === 'skill_intensity' || prescriptionIntent === 'skill_acquisition') {
+        restGuidance = `${mins}+ min — clean reps require fresh attempts`
+      } else {
+        restGuidance = `${mins}+ min rest`
+      }
+    } else if (exercise.restSeconds >= 120) {
+      // Medium-long rest
+      if (prescriptionIntent === 'max_strength' || prescriptionIntent === 'strength_volume') {
+        restGuidance = `${mins}-${mins + 1} min — keeps sets productive`
+      } else if (prescriptionIntent === 'technical_carryover') {
+        restGuidance = `${mins}-${mins + 1} min — quality over fatigue`
+      } else {
+        restGuidance = `${mins}-${mins + 1} min`
+      }
+    } else if (exercise.restSeconds >= 60) {
+      // Shorter rest
+      if (prescriptionIntent === 'hypertrophy') {
+        restGuidance = `${exercise.restSeconds}s — metabolic tension`
+      } else if (prescriptionIntent === 'support_strength') {
+        restGuidance = `${exercise.restSeconds}s — efficient volume`
+      } else {
+        restGuidance = `${exercise.restSeconds}s rest`
+      }
     } else {
       restGuidance = `${exercise.restSeconds}s`
     }

@@ -2015,6 +2015,11 @@ if (styledGroups && styledGroups.length > 0) {
         density_block: 0,
       }
       
+      // Mutable accumulators for building the execution plan
+      const blocks: ExecutionBlock[] = []
+      let hasGroupedBlocks = false
+      let totalSets = 0
+      
       for (const group of styledGroups) {
         // [GROUPED-CONTRACT-ALIGN] Map ALL styledGroup.groupType values to ExecutionBlock.groupType
         // This ensures Program screen and live runtime use identical grouped identity

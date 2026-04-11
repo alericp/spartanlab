@@ -970,11 +970,12 @@ function MainExercisesRenderer({
   const styledGroups = styleMetadata?.styledGroups || []
   
   // [EXERCISE-ROW-SURFACE] Build session context for exercise row surfaces
+  // [EXPLAIN-OWNER-LOCK] Ensure primaryGoal (program's skill) is passed to explanation engine
   const compositionMeta = (session as unknown as { compositionMetadata?: { spineSessionType?: string; sessionIntent?: string } }).compositionMetadata
   const sessionContextForRows = {
     sessionFocus: session.focusLabel || session.focus || '',
     isPrimarySession: session.isPrimary || false,
-    // Use passed primaryGoal or try to extract from session
+    // [EXPLAIN-OWNER-LOCK] Use passed primaryGoal (program's skill) - this is the AUTHORITATIVE goal
     primaryGoal: primaryGoal || (session as unknown as { primaryGoal?: string }).primaryGoal || undefined,
     prescriptionPropagationAudit: (session as unknown as { prescriptionPropagationAudit?: { appliedReductions?: { setsReduced?: boolean; rpeReduced?: boolean } } }).prescriptionPropagationAudit,
     styleMetadata: styleMetadata ? {
@@ -982,6 +983,8 @@ function MainExercisesRenderer({
       hasSupersetsApplied: styleMetadata.hasSupersetsApplied,
       hasDensityApplied: styleMetadata.hasDensityApplied,
     } : undefined,
+    // [EXPLAIN-OWNER-LOCK] Pass compositionMetadata for full explanation context
+    compositionMetadata: compositionMeta,
     compositionMetadata: compositionMeta ? {
       spineSessionType: compositionMeta.spineSessionType,
       sessionIntent: compositionMeta.sessionIntent,

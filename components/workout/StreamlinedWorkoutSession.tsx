@@ -6295,6 +6295,14 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           )}
           
           {/* Current Exercise Card */}
+          {/* [EXPLAIN-OWNER-LOCK] Extract programPrimaryGoal ONCE at card level for all explanation lines */}
+          {(() => {
+            // Extract programPrimaryGoal from compositionMetadata - this is the PROGRAM's skill goal
+            // NOT the sessionIntent. Used by BOTH purpose line AND effort line.
+            const programPrimaryGoal = (safeSession?.compositionMetadata as Record<string, unknown> | undefined)?.programPrimaryGoal as string | undefined
+            const resolvedPrimaryGoal = programPrimaryGoal || safeSession?.compositionMetadata?.sessionIntent || safeSession?.styleMetadata?.primaryStyle
+            
+            return (
           <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -6319,7 +6327,9 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                 },
                 {
                   sessionFocus: safeSession?.focus || safeSession?.styleMetadata?.primaryStyle,
-                  primaryGoal: safeSession?.compositionMetadata?.sessionIntent || safeSession?.styleMetadata?.primaryStyle,
+                  // [EXPLAIN-OWNER-LOCK] Use programPrimaryGoal (the actual skill goal) for context-aware explanation
+                  primaryGoal: resolvedPrimaryGoal,
+                  compositionMetadata: safeSession?.compositionMetadata,
                 }
               ) : null
               
@@ -6351,7 +6361,8 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                 },
                 {
                   sessionFocus: safeSession?.focus || safeSession?.styleMetadata?.primaryStyle,
-                  primaryGoal: safeSession?.compositionMetadata?.sessionIntent || safeSession?.styleMetadata?.primaryStyle,
+                  // [EXPLAIN-OWNER-LOCK] Use resolvedPrimaryGoal for goal-aware effort explanations
+                  primaryGoal: resolvedPrimaryGoal,
                 }
               )}
             </p>
@@ -6389,6 +6400,8 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
               </span>
             </div>
           </Card>
+            )
+          })()}
         </>
       )
     } catch (err) {

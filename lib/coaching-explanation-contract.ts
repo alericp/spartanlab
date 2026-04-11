@@ -22,6 +22,10 @@
  */
 
 import type { AdaptiveProgram, AdaptiveSession, AdaptiveExercise } from './adaptive-program-builder'
+import { 
+  buildExercisePurposeLine as buildPurposeLineFromDisplayContract,
+  buildExerciseEffortReasonLine as buildEffortReasonFromDisplayContract,
+} from './program/program-display-contract'
 
 // =============================================================================
 // NORMALIZED EXPLANATION INPUT CONTRACT
@@ -795,23 +799,102 @@ export function buildExerciseExplanation(
   }
 }
 
+/**
+ * Build exercise role explanation using the sophisticated reasoning engine from program-display-contract.
+ * 
+ * This delegates to buildExercisePurposeLine which has:
+ * - 15+ reason family classifications (direct_skill_exposure, force_base_building, explosive_power, etc.)
+ * - 7+ modifiers (low_fatigue, high_quality, bridging, speed_preserving, etc.)
+ * - 20+ local payoff types (lean_tolerance, trunk_compression, scapular_control, etc.)
+ * - Day stress profile awareness (push/pull dominant, skill focused, etc.)
+ * - Dosage profile awareness (volume intent, fatigue impact, quality emphasis, etc.)
+ * - Movement family contradiction guards
+ * - Anti-generic quality filters
+ */
 function buildExerciseRoleExplanation(
   exercise: NormalizedExerciseInput,
   sessionContext: NormalizedSessionInput,
   programContext: { primaryGoal: string; primaryGoalLabel: string }
 ): string {
+  // ==========================================================================
+  // [COACHING-EXPLANATION-CONTRACT] DELEGATE TO SOPHISTICATED REASONING ENGINE
+  // ==========================================================================
+  // The buildExercisePurposeLine function in program-display-contract.ts has
+  // the full reasoning engine with:
+  // - deriveReasonFamily (15+ categories)
+  // - deriveModifiers (7+ types)
+  // - deriveLocalPayoff (20+ payoffs)
+  // - deriveDayStressProfile (7 dimensions)
+  // - deriveDosageProfile (5 dimensions)
+  // - composeExplanationFromReason (intelligent wording composer)
+  // ==========================================================================
+  
+  // Build session context for the purpose line builder
+  const sessionContextForPurposeLine = {
+    sessionFocus: sessionContext.sessionIntent || sessionContext.dayLabel,
+    isPrimarySession: sessionContext.isPrimary,
+    primaryGoal: programContext.primaryGoal,
+    compositionMetadata: {
+      spineSessionType: sessionContext.spineSessionType,
+      sessionIntent: sessionContext.sessionIntent,
+    },
+  }
+  
+  // Build exercise object for the purpose line builder
+  const exerciseForPurposeLine = {
+    name: exercise.name,
+    category: exercise.category,
+    selectionReason: exercise.selectionReason,
+    isPrimary: exercise.isPrimary,
+    isProtected: exercise.isProtected,
+    coachingMeta: {
+      expressionMode: exercise.expressionMode,
+      roleInSession: exercise.roleInSession,
+      loadDecisionSummary: exercise.loadDecisionSummary || undefined,
+      progressionIntent: exercise.progressionIntent,
+    },
+  }
+  
+  // Derive emphasis kind based on role
+  let emphasisKind: 'primary_skill' | 'strength_output' | 'support' | 'accessory' | undefined
   const role = exercise.roleInSession.toLowerCase()
   const expression = exercise.expressionMode.toLowerCase()
-  const family = exercise.movementFamily
+  
+  if (role.includes('main') || role.includes('primary') || expression.includes('direct')) {
+    emphasisKind = 'primary_skill'
+  } else if (role.includes('strength') || role.includes('force') || role.includes('foundation')) {
+    emphasisKind = 'strength_output'
+  } else if (role.includes('support') || role.includes('bridge')) {
+    emphasisKind = 'support'
+  } else {
+    emphasisKind = 'accessory'
+  }
+  
+  // Call the sophisticated reasoning engine
+  const purposeLine = buildPurposeLineFromDisplayContract(
+    exerciseForPurposeLine,
+    sessionContextForPurposeLine,
+    emphasisKind
+  )
+  
+  // Return the result, with a fallback if the engine returns null
+  if (purposeLine) {
+    return purposeLine
+  }
+  
+  // ==========================================================================
+  // FALLBACK: Simple but still context-aware explanation
+  // ==========================================================================
   const { primaryGoalLabel } = programContext
+  const family = exercise.movementFamily
   
   // Primary/direct skill work
   if (role.includes('main') || role.includes('primary') || expression.includes('direct')) {
     if (exercise.skillSupportTargets.length > 0) {
       const targetLabel = formatGoalLabel(exercise.skillSupportTargets[0])
-      return `Primary ${targetLabel} exposure. Direct skill practice at your current progression.`
+      return `Primary ${targetLabel} exposure — direct skill practice at your current progression.`
     }
-    return `Main driver for today. Quality output here matters most.`
+    return `Main driver for today — quality output here matters most.`
   }
   
   // Strength foundation
@@ -821,23 +904,23 @@ function buildExerciseRoleExplanation(
   
   // Bridge/progression work
   if (role.includes('bridge') || expression.includes('bridge')) {
-    return `Bridge progression matching your current level. Builds toward harder variations.`
+    return `Bridge progression matching your current level — builds toward harder variations.`
   }
   
   // Balance/counterstress
   if (role.includes('balance') || role.includes('counter')) {
     if (family === 'pull') {
-      return `Pulling work to balance pressing stress. Keeps shoulders healthy.`
+      return `Pulling work to balance pressing stress — keeps shoulders healthy.`
     }
     if (family === 'push') {
-      return `Pressing work to balance pulling demands. Maintains joint health.`
+      return `Pressing work to balance pulling demands — maintains joint health.`
     }
-    return `Balance work offsetting the session's primary stress.`
+    return `Balance work offsetting the session's primary stress pattern.`
   }
   
   // Tissue/joint conditioning
   if (role.includes('tissue') || role.includes('joint') || role.includes('conditioning')) {
-    return `Conditions tissue for the demands of your main work. Not fatiguing, but necessary.`
+    return `Conditions tissue for the demands of your main work — not fatiguing, but necessary.`
   }
   
   // Trunk/core work
@@ -864,18 +947,18 @@ function buildExerciseRoleExplanation(
   
   // Finisher
   if (role.includes('finisher') || role.includes('density')) {
-    return `End-of-session volume. Captures additional stimulus efficiently.`
+    return `End-of-session volume — captures additional stimulus efficiently.`
   }
   
-  // Default based on movement family
+  // Default based on movement family with goal context
   if (family === 'pull') {
-    return `Pulling strength supporting your training goals.`
+    return `Pulling strength that supports your ${primaryGoalLabel} progression.`
   }
   if (family === 'push') {
-    return `Pressing strength supporting your training goals.`
+    return `Pressing strength that supports your ${primaryGoalLabel} progression.`
   }
   
-  return `Supports overall program goals.`
+  return `Supports your ${primaryGoalLabel} goals.`
 }
 
 function buildExerciseSessionContext(
@@ -924,11 +1007,64 @@ function buildExerciseProgramContext(
   return null
 }
 
+/**
+ * Build exercise dosage reason using the sophisticated effort reason engine from program-display-contract.
+ * 
+ * This delegates to buildExerciseEffortReasonLine which explains WHY this effort level was chosen,
+ * not just WHAT the effort level is.
+ */
 function buildExerciseDosageReason(
   exercise: NormalizedExerciseInput,
   sessionContext: NormalizedSessionInput,
   programContext: { isFirstWeek: boolean }
 ): string | null {
+  // ==========================================================================
+  // [COACHING-EXPLANATION-CONTRACT] DELEGATE TO SOPHISTICATED EFFORT REASON ENGINE
+  // ==========================================================================
+  
+  // Build exercise object for the effort reason builder
+  const exerciseForEffortReason = {
+    name: exercise.name,
+    category: exercise.category,
+    targetRPE: exercise.targetRPE ?? undefined,
+    selectionReason: exercise.selectionReason,
+    isPrimary: exercise.isPrimary,
+    isProtected: exercise.isProtected,
+    coachingMeta: {
+      expressionMode: exercise.expressionMode,
+      roleInSession: exercise.roleInSession,
+      loadDecisionSummary: exercise.loadDecisionSummary || undefined,
+      progressionIntent: exercise.progressionIntent,
+    },
+  }
+  
+  // Build session context for the effort reason builder
+  const sessionContextForEffortReason = {
+    sessionFocus: sessionContext.sessionIntent || sessionContext.dayLabel,
+    isPrimarySession: sessionContext.isPrimary,
+    prescriptionPropagationAudit: sessionContext.isProtectionConstrained ? {
+      appliedReductions: {
+        setsReduced: true,
+        rpeReduced: true,
+      },
+      adaptationPhase: programContext.isFirstWeek ? 'initial_acclimation' : 'recovery_constrained',
+    } : undefined,
+  }
+  
+  // Call the sophisticated effort reason engine
+  const effortReason = buildEffortReasonFromDisplayContract(
+    exerciseForEffortReason,
+    sessionContextForEffortReason
+  )
+  
+  // Return the result if available
+  if (effortReason) {
+    return effortReason
+  }
+  
+  // ==========================================================================
+  // FALLBACK: Context-aware dosage explanation
+  // ==========================================================================
   const rpe = exercise.targetRPE
   const role = exercise.roleInSession.toLowerCase()
   
@@ -942,19 +1078,19 @@ function buildExerciseDosageReason(
     return `Moderated dosage this session for recovery support.`
   }
   
-  // RPE-based reasoning
+  // RPE-based reasoning with context
   if (rpe !== null) {
     if (rpe >= 9) {
       if (role.includes('main') || role.includes('primary')) {
-        return `Higher effort here — this is the main output slot.`
+        return `Higher effort here — this is the main output slot where adaptation happens.`
       }
-      return `Pushed harder here to maximize stimulus.`
+      return `Pushed harder here to maximize stimulus within recoverable limits.`
     }
     if (rpe <= 6) {
       return `Conservative effort to preserve recovery for priority work.`
     }
     if (rpe <= 7) {
-      return `Moderate effort — stimulus without recovery debt.`
+      return `Moderate effort — quality stimulus without accumulating recovery debt.`
     }
   }
   

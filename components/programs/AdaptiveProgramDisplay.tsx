@@ -1530,18 +1530,20 @@ export function AdaptiveProgramDisplay({
                     </div>
                   </div>
                 ) : null}
-                <AdaptiveSessionCard
-                  session={session}
-                  programId={program.id}
-                  primaryGoal={program.primaryGoal}
-                  secondaryGoal={program.secondaryGoal}
-                  defaultExpanded={sessionIndex === 0}
-                  onExerciseReplace={
-                    onExerciseReplace 
-                      ? (exerciseId) => onExerciseReplace(session.dayNumber, exerciseId)
-                      : undefined
-                  }
-                />
+<AdaptiveSessionCard
+  session={session}
+  programId={program.id}
+  primaryGoal={program.primaryGoal}
+  secondaryGoal={program.secondaryGoal}
+  defaultExpanded={sessionIndex === 0}
+  onExerciseReplace={
+  onExerciseReplace
+  ? (exerciseId) => onExerciseReplace(session.dayNumber, exerciseId)
+  : undefined
+  }
+  // [COACHING-EXPLANATION-CONTRACT] Pass authoritative coaching explanation surface
+  coachingExplanation={intelligenceContract?.coachingExplanation || null}
+  />
               </div>
             )
           })

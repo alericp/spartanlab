@@ -2453,6 +2453,718 @@ export function getBestRowSublabel(surface: ExerciseRowSurface): string | null {
  * This is the SINGLE owner of "why this exercise exists in this session" display.
  * Priority: skill intent > carryover > protection > support role > accessory > core > mobility > finisher > null
  */
+// =============================================================================
+// EXPLANATION REASONING ENGINE - ONTOLOGY & REASON FAMILIES
+// =============================================================================
+
+/**
+ * REASON FAMILY ONTOLOGY
+ * The system's internal classification of WHY a row exists in the program.
+ * Each row must map to exactly one dominant reason family.
+ */
+type ReasonFamily =
+  | 'direct_skill_exposure'      // Primary skill practice: planche leans, lever holds, handstand work
+  | 'force_base_building'        // Core strength that skills depend on: dips, pull-ups, rows
+  | 'explosive_power'            // Speed/power expression: explosive pull-ups, clapping push-ups
+  | 'line_control'               // Bodyline/trunk stability: hollow, compression, anti-extension
+  | 'positional_strength'        // Position-specific strength: lever rows, PPPU, pike work
+  | 'balance_counterstress'      // Opposing stress pattern: pulls in push day, rear delts
+  | 'joint_stability'            // Joint health/control: scap work, face pulls, rotator cuff
+  | 'progression_bridge'         // Intermediate step: current best owned progression
+  | 'weak_link_reinforcement'    // Targeting a bottleneck: triceps, grip, specific weakness
+  | 'tissue_tolerance'           // Connective tissue conditioning: straight-arm prep, tendon work
+  | 'fatigue_managed_support'    // Support without recovery cost: low-fatigue accessory
+  | 'recovery_protective'        // Deload/protective: reduced load for adaptation
+  | 'coordination_refinement'    // Pattern quality: transition work, bar path drills
+  | 'capacity_building'          // General work capacity: volume accumulation
+  | 'mobility_range'             // Range of motion work: shoulder, hip, wrist mobility
+  | 'warmup_activation'          // Pattern priming: activation drills, warmup sets
+  | 'finisher_density'           // End-of-session density: finisher circuits, EMOM
+
+/**
+ * SECONDARY MODIFIERS
+ * Additional context that shapes the explanation's character.
+ */
+type ReasonModifier =
+  | 'low_fatigue'        // Chosen for minimal recovery cost
+  | 'high_quality'       // Quality reps over grind
+  | 'conservative'       // Protective/careful dosage
+  | 'bridging'           // Stepping stone to harder work
+  | 'speed_preserving'   // Maintains explosive intent
+  | 'output_preserving'  // Protects main work quality
+  | 'pattern_cleaning'   // Improves movement quality
+  | 'structural'         // Builds tissue/joint capacity
+  | 'density_friendly'   // Works well in condensed format
+  | 'non_interfering'    // Doesn't compete for recovery
+
+/**
+ * LOCAL PAYOFF TYPES
+ * The specific benefit the movement provides.
+ */
+type LocalPayoff =
+  | 'vertical_pull_speed'
+  | 'horizontal_pull_strength'
+  | 'pressing_lockout'
+  | 'pressing_endurance'
+  | 'scapular_control'
+  | 'scapular_depression'
+  | 'trunk_compression'
+  | 'trunk_anti_extension'
+  | 'hip_compression'
+  | 'posterior_chain_support'
+  | 'overhead_stability'
+  | 'bodyline_integrity'
+  | 'grip_endurance'
+  | 'wrist_conditioning'
+  | 'elbow_tolerance'
+  | 'shoulder_balance'
+  | 'transition_coordination'
+  | 'lean_tolerance'
+  | 'hold_duration'
+  | 'force_output'
+  | 'position_control'
+
+/**
+ * EXPLANATION CONTEXT PACKAGE
+ * All inputs the reasoning engine needs to generate truthful explanations.
+ */
+interface ExplanationContext {
+  // Movement identity (contradiction guard)
+  movementFamily: 'pull' | 'push' | 'core' | 'scap' | 'unknown'
+  isPullMovement: boolean
+  isPushMovement: boolean
+  isCoreMovement: boolean
+  isScapMovement: boolean
+  exerciseNameLower: string
+  
+  // Program/day context
+  primaryGoal: string
+  sessionFocus: string
+  sessionIntent: string
+  spineType: string
+  
+  // Row context
+  category: string
+  selectionReason: string
+  expressionMode: string
+  roleInSession: string
+  isPrimary: boolean
+  isProtected: boolean
+  emphasisKind: string
+  
+  // Derived reason classification
+  dominantReasonFamily: ReasonFamily
+  modifiers: ReasonModifier[]
+  localPayoff: LocalPayoff | null
+}
+
+/**
+ * DERIVE DOMINANT REASON FAMILY
+ * Classifies the row's primary purpose based on all available context.
+ */
+function deriveReasonFamily(ctx: ExplanationContext): ReasonFamily {
+  const { expressionMode, roleInSession, category, selectionReason, isPrimary, isProtected, movementFamily, exerciseNameLower } = ctx
+  const reasonLower = selectionReason.toLowerCase()
+  
+  // Direct skill exposure takes precedence
+  if (isPrimary || category === 'skill' || expressionMode.includes('direct') || expressionMode.includes('intensity')) {
+    return 'direct_skill_exposure'
+  }
+  
+  // Protected/recovery work
+  if (isProtected || reasonLower.includes('protect') || reasonLower.includes('tissue') || reasonLower.includes('tendon')) {
+    return 'tissue_tolerance'
+  }
+  
+  // Explosive/power work
+  if (reasonLower.includes('explosive') || reasonLower.includes('power') || reasonLower.includes('speed') ||
+      exerciseNameLower.includes('explosive') || exerciseNameLower.includes('clap') || exerciseNameLower.includes('plyometric')) {
+    return 'explosive_power'
+  }
+  
+  // Balance/counterstress
+  if (reasonLower.includes('balance') || reasonLower.includes('antagonist') || reasonLower.includes('counterstress') ||
+      reasonLower.includes('opposing')) {
+    return 'balance_counterstress'
+  }
+  
+  // Weak link reinforcement
+  if (reasonLower.includes('weak') || reasonLower.includes('bottleneck') || reasonLower.includes('limiting')) {
+    return 'weak_link_reinforcement'
+  }
+  
+  // Progression bridge
+  if (reasonLower.includes('bridge') || reasonLower.includes('progression') || reasonLower.includes('current best') ||
+      expressionMode.includes('bridge')) {
+    return 'progression_bridge'
+  }
+  
+  // Core/trunk = line control
+  if (category === 'core' || movementFamily === 'core') {
+    return 'line_control'
+  }
+  
+  // Scap/joint work
+  if (movementFamily === 'scap' || reasonLower.includes('scap') || reasonLower.includes('shoulder') ||
+      reasonLower.includes('rear delt') || reasonLower.includes('rotator')) {
+    return 'joint_stability'
+  }
+  
+  // Positional strength (carryover work)
+  if (expressionMode.includes('carryover') || expressionMode.includes('technical') ||
+      reasonLower.includes('position') || reasonLower.includes('specific')) {
+    return 'positional_strength'
+  }
+  
+  // Force base building (main strength work)
+  if (category === 'strength' || category === 'push' || category === 'pull') {
+    return 'force_base_building'
+  }
+  
+  // Mobility/flexibility work
+  if (category === 'mobility' || category === 'flexibility' || 
+      reasonLower.includes('mobility') || reasonLower.includes('range') || reasonLower.includes('stretch')) {
+    return 'mobility_range'
+  }
+  
+  // Warmup/activation work
+  if (category === 'warmup' || category === 'activation' ||
+      reasonLower.includes('warmup') || reasonLower.includes('warm-up') || reasonLower.includes('activation')) {
+    return 'warmup_activation'
+  }
+  
+  // Finisher/density work
+  if (reasonLower.includes('finisher') || reasonLower.includes('density') || 
+      reasonLower.includes('emom') || reasonLower.includes('circuit')) {
+    return 'finisher_density'
+  }
+  
+  // Fatigue-managed support
+  if (roleInSession.includes('support') || roleInSession.includes('accessory') ||
+      expressionMode.includes('support') || category === 'accessory') {
+    return 'fatigue_managed_support'
+  }
+  
+  // Default to capacity building
+  return 'capacity_building'
+}
+
+/**
+ * DERIVE MODIFIERS
+ * Extracts secondary modifiers from context.
+ */
+function deriveModifiers(ctx: ExplanationContext): ReasonModifier[] {
+  const modifiers: ReasonModifier[] = []
+  const reasonLower = ctx.selectionReason.toLowerCase()
+  
+  if (reasonLower.includes('low fatigue') || reasonLower.includes('low-fatigue') || reasonLower.includes('minimal fatigue')) {
+    modifiers.push('low_fatigue')
+  }
+  if (reasonLower.includes('quality') || reasonLower.includes('technique') || reasonLower.includes('form')) {
+    modifiers.push('high_quality')
+  }
+  if (ctx.isProtected || reasonLower.includes('conservative') || reasonLower.includes('protect')) {
+    modifiers.push('conservative')
+  }
+  if (reasonLower.includes('bridge') || reasonLower.includes('step') || reasonLower.includes('progression')) {
+    modifiers.push('bridging')
+  }
+  if (reasonLower.includes('speed') || reasonLower.includes('explosive') || reasonLower.includes('power')) {
+    modifiers.push('speed_preserving')
+  }
+  if (reasonLower.includes('preserve') || reasonLower.includes('maintain') || reasonLower.includes('protect')) {
+    modifiers.push('output_preserving')
+  }
+  if (reasonLower.includes('structural') || reasonLower.includes('tissue') || reasonLower.includes('tendon')) {
+    modifiers.push('structural')
+  }
+  
+  return modifiers
+}
+
+/**
+ * DERIVE LOCAL PAYOFF
+ * Determines the specific benefit this movement provides.
+ */
+function deriveLocalPayoff(ctx: ExplanationContext): LocalPayoff | null {
+  const { exerciseNameLower, movementFamily, category, selectionReason } = ctx
+  const reasonLower = selectionReason.toLowerCase()
+  
+  // Pull movements
+  if (movementFamily === 'pull') {
+    if (exerciseNameLower.includes('explosive') || reasonLower.includes('speed') || reasonLower.includes('power')) {
+      return 'vertical_pull_speed'
+    }
+    if (exerciseNameLower.includes('row') || exerciseNameLower.includes('horizontal')) {
+      return 'horizontal_pull_strength'
+    }
+    if (exerciseNameLower.includes('transition') || exerciseNameLower.includes('muscle-up')) {
+      return 'transition_coordination'
+    }
+    return 'force_output'
+  }
+  
+  // Push movements
+  if (movementFamily === 'push') {
+    if (exerciseNameLower.includes('dip') || exerciseNameLower.includes('lockout') || reasonLower.includes('lockout')) {
+      return 'pressing_lockout'
+    }
+    if (exerciseNameLower.includes('lean') || exerciseNameLower.includes('planche')) {
+      return 'lean_tolerance'
+    }
+    if (exerciseNameLower.includes('pike') || exerciseNameLower.includes('hspu') || exerciseNameLower.includes('handstand')) {
+      return 'overhead_stability'
+    }
+    return 'pressing_endurance'
+  }
+  
+  // Core movements
+  if (movementFamily === 'core' || category === 'core') {
+    if (exerciseNameLower.includes('hollow') || exerciseNameLower.includes('dish') || reasonLower.includes('compression')) {
+      return 'trunk_compression'
+    }
+    if (exerciseNameLower.includes('l-sit') || exerciseNameLower.includes('lsit') || exerciseNameLower.includes('leg raise')) {
+      return 'hip_compression'
+    }
+    if (exerciseNameLower.includes('plank') || exerciseNameLower.includes('deadbug') || reasonLower.includes('anti-extension')) {
+      return 'trunk_anti_extension'
+    }
+    if (exerciseNameLower.includes('back extension') || exerciseNameLower.includes('reverse hyper')) {
+      return 'posterior_chain_support'
+    }
+    return 'bodyline_integrity'
+  }
+  
+  // Scap/shoulder movements
+  if (movementFamily === 'scap') {
+    if (exerciseNameLower.includes('face pull') || exerciseNameLower.includes('rear delt')) {
+      return 'shoulder_balance'
+    }
+    if (exerciseNameLower.includes('depression') || reasonLower.includes('depression')) {
+      return 'scapular_depression'
+    }
+    return 'scapular_control'
+  }
+  
+  // Check for specific keywords
+  if (reasonLower.includes('grip') || exerciseNameLower.includes('hang') || exerciseNameLower.includes('grip')) {
+    return 'grip_endurance'
+  }
+  if (reasonLower.includes('wrist') || exerciseNameLower.includes('wrist')) {
+    return 'wrist_conditioning'
+  }
+  if (reasonLower.includes('elbow') || exerciseNameLower.includes('elbow')) {
+    return 'elbow_tolerance'
+  }
+  
+  return null
+}
+
+/**
+ * BUILD EXPLANATION CONTEXT
+ * Assembles all context needed for explanation generation.
+ */
+function buildExplanationContext(
+  exercise: {
+    name: string
+    category?: string
+    selectionReason?: string
+    isPrimary?: boolean
+    isProtected?: boolean
+    coachingMeta?: {
+      expressionMode?: string
+      roleInSession?: string
+      loadDecisionSummary?: string
+      progressionIntent?: string
+    }
+  },
+  sessionContext?: {
+    sessionFocus?: string
+    isPrimarySession?: boolean
+    primaryGoal?: string
+    compositionMetadata?: {
+      spineSessionType?: string
+      sessionIntent?: string
+    }
+  },
+  emphasisKind?: string
+): ExplanationContext {
+  const exerciseNameLower = exercise.name.toLowerCase()
+  const categoryLower = (exercise.category || '').toLowerCase()
+  
+  // Movement family detection (contradiction guard)
+  const pullKeywords = ['pull', 'row', 'chin', 'lat', 'bicep', 'curl', 'lever row', 'front lever', 'back lever', 'muscle-up', 'muscle up', 'transition']
+  const pushKeywords = ['push', 'dip', 'press', 'planche', 'handstand', 'pike', 'tricep', 'extension', 'pppu', 'pseudo', 'hspu']
+  const coreKeywords = ['hollow', 'plank', 'dead bug', 'deadbug', 'l-sit', 'lsit', 'leg raise', 'pallof', 'anti-rotation', 'compression', 'side plank', 'copenhagen']
+  const scapKeywords = ['face pull', 'y raise', 'i raise', 'cuban', 'band pull', 'pull-apart', 'rear delt', 'reverse fly', 'serratus']
+  
+  const isPullMovement = pullKeywords.some(kw => exerciseNameLower.includes(kw)) || categoryLower === 'pull'
+  const isPushMovement = pushKeywords.some(kw => exerciseNameLower.includes(kw)) || categoryLower === 'push'
+  const isCoreMovement = coreKeywords.some(kw => exerciseNameLower.includes(kw)) || categoryLower === 'core'
+  const isScapMovement = scapKeywords.some(kw => exerciseNameLower.includes(kw))
+  
+  let movementFamily: 'pull' | 'push' | 'core' | 'scap' | 'unknown' = 'unknown'
+  if (isPullMovement && !isPushMovement) movementFamily = 'pull'
+  else if (isPushMovement && !isPullMovement) movementFamily = 'push'
+  else if (isCoreMovement) movementFamily = 'core'
+  else if (isScapMovement) movementFamily = 'scap'
+  
+  const ctx: ExplanationContext = {
+    movementFamily,
+    isPullMovement,
+    isPushMovement,
+    isCoreMovement,
+    isScapMovement,
+    exerciseNameLower,
+    primaryGoal: (sessionContext?.primaryGoal || '').replace(/_/g, ' ').toLowerCase(),
+    sessionFocus: (sessionContext?.sessionFocus || '').toLowerCase(),
+    sessionIntent: (sessionContext?.compositionMetadata?.sessionIntent || '').toLowerCase(),
+    spineType: (sessionContext?.compositionMetadata?.spineSessionType || '').toLowerCase(),
+    category: categoryLower,
+    selectionReason: exercise.selectionReason || '',
+    expressionMode: (exercise.coachingMeta?.expressionMode || '').toLowerCase(),
+    roleInSession: (exercise.coachingMeta?.roleInSession || '').toLowerCase(),
+    isPrimary: exercise.isPrimary || false,
+    isProtected: exercise.isProtected || false,
+    emphasisKind: emphasisKind || '',
+    dominantReasonFamily: 'capacity_building', // Will be set below
+    modifiers: [],
+    localPayoff: null
+  }
+  
+  // Derive reason classification
+  ctx.dominantReasonFamily = deriveReasonFamily(ctx)
+  ctx.modifiers = deriveModifiers(ctx)
+  ctx.localPayoff = deriveLocalPayoff(ctx)
+  
+  return ctx
+}
+
+/**
+ * COMPOSE EXPLANATION FROM REASON FAMILY
+ * Generates the final sentence based on classified reason and context.
+ */
+function composeExplanationFromReason(ctx: ExplanationContext): string {
+  const { dominantReasonFamily, modifiers, localPayoff, movementFamily, exerciseNameLower, primaryGoal, sessionFocus } = ctx
+  const hasLowFatigue = modifiers.includes('low_fatigue')
+  const hasHighQuality = modifiers.includes('high_quality')
+  const hasBridging = modifiers.includes('bridging')
+  const hasSpeedPreserving = modifiers.includes('speed_preserving')
+  
+  // Goal name helper
+  const goalName = (): string => {
+    if (primaryGoal.includes('planche')) return 'planche'
+    if (primaryGoal.includes('front lever')) return 'front lever'
+    if (primaryGoal.includes('back lever')) return 'back lever'
+    if (primaryGoal.includes('handstand')) return 'handstand'
+    if (primaryGoal.includes('muscle up') || primaryGoal.includes('muscle-up')) return 'muscle-up'
+    return 'your skill'
+  }
+  
+  // Helper: check if exercise is a specific type
+  const isType = (keywords: string[]): boolean => {
+    return keywords.some(kw => exerciseNameLower.includes(kw))
+  }
+  
+  switch (dominantReasonFamily) {
+    // ========================================================================
+    // DIRECT SKILL EXPOSURE
+    // ========================================================================
+    case 'direct_skill_exposure':
+      if (primaryGoal.includes('planche')) {
+        if (isType(['lean', 'planche lean'])) {
+          return 'Builds the forward lean tolerance your planche needs — harder progressions require this foundation first.'
+        }
+        if (isType(['tuck', 'adv tuck', 'straddle'])) {
+          return 'Accumulates quality time in position — planche improves through controlled exposure, not grinding.'
+        }
+        return 'Primary straight-arm driver today — this is where planche strength actually gets built.'
+      }
+      if (primaryGoal.includes('front lever')) {
+        if (isType(['tuck', 'adv tuck', 'straddle'])) {
+          return 'Quality pulling tension practice — front lever grows from controlled holds, not max attempts.'
+        }
+        return 'Primary horizontal pull driver — directly builds the strength front lever requires.'
+      }
+      if (primaryGoal.includes('handstand')) {
+        return 'Primary overhead driver — handstand pressing strength comes from quality work here.'
+      }
+      if (primaryGoal.includes('muscle')) {
+        return 'Primary transition driver — builds the explosive pull-to-push your muscle-up needs.'
+      }
+      if (hasHighQuality) {
+        return 'Direct skill exposure with managed fatigue — pattern quality matters more than grinding.'
+      }
+      return 'Primary skill driver today — this is where real progress happens.'
+    
+    // ========================================================================
+    // FORCE BASE BUILDING
+    // ========================================================================
+    case 'force_base_building':
+      if (movementFamily === 'push') {
+        if (isType(['dip', 'weighted dip', 'ring dip'])) {
+          if (primaryGoal.includes('planche')) {
+            return 'Builds the pressing foundation planche needs — stronger dips mean easier progression later.'
+          }
+          return 'Raises your pressing ceiling — this transfers into skill work without the skill fatigue cost.'
+        }
+        if (isType(['push-up', 'pushup', 'pppu', 'pseudo'])) {
+          if (primaryGoal.includes('planche')) {
+            return 'Builds pressing endurance in a planche-relevant position — high carryover, lower joint cost.'
+          }
+          return 'Pressing work that transfers into your skill positions without excessive joint stress.'
+        }
+        if (primaryGoal.includes('planche') || primaryGoal.includes('handstand')) {
+          return 'Raises your pressing output — stronger foundation means faster skill progression.'
+        }
+        return 'Builds the pressing strength your skill work draws from — raises your ceiling.'
+      }
+      if (movementFamily === 'pull') {
+        if (isType(['row', 'inverted row', 'ring row'])) {
+          return 'Develops scap control and mid-back strength — transfers into lever and pulling positions.'
+        }
+        if (isType(['pull-up', 'pullup', 'chin', 'weighted pull'])) {
+          return 'Builds lat and grip strength — the pulling foundation your skill work is built on.'
+        }
+        return 'Pulling strength that raises your ceiling — stronger back means more reliable positions.'
+      }
+      // Generic strength
+      if (hasLowFatigue) {
+        return 'Builds force capacity without competing for skill recovery — efficient strength transfer.'
+      }
+      return 'Foundational strength your skill progression depends on — raises your ceiling.'
+    
+    // ========================================================================
+    // EXPLOSIVE POWER
+    // ========================================================================
+    case 'explosive_power':
+      if (movementFamily === 'pull') {
+        if (isType(['explosive', 'chest-to-bar', 'chest to bar', 'high pull'])) {
+          return 'Sharpens vertical pull speed and high-force bar intent without adding grindy fatigue.'
+        }
+        if (isType(['muscle-up', 'transition'])) {
+          return 'Trains the explosive pull-to-push transition — speed and timing, not slow grinding.'
+        }
+        return 'Preserves pulling explosiveness — speed here transfers to skill transitions.'
+      }
+      if (movementFamily === 'push') {
+        if (isType(['clap', 'plyo', 'explosive'])) {
+          return 'Builds pressing power and speed — transfers to faster, more controlled skill positions.'
+        }
+        return 'Develops pressing explosiveness without heavy load fatigue.'
+      }
+      if (hasSpeedPreserving) {
+        return 'Power expression slot — dosed for speed and intent, not grindy volume.'
+      }
+      return 'Develops explosive output — speed and power without grinding fatigue.'
+    
+    // ========================================================================
+    // LINE CONTROL (TRUNK/CORE)
+    // ========================================================================
+    case 'line_control':
+      if (isType(['hollow', 'dish', 'hollow body', 'hollow hold'])) {
+        return 'Builds trunk compression and anti-extension — the body position straight-arm skills require.'
+      }
+      if (isType(['deadbug', 'dead bug'])) {
+        return 'Teaches trunk stability while limbs move — transfers to loaded skill positions.'
+      }
+      if (isType(['l-sit', 'l sit', 'lsit'])) {
+        return 'Builds hip flexor and trunk compression — essential for tucked and compressed positions.'
+      }
+      if (isType(['leg raise', 'hanging leg', 'toes to bar'])) {
+        return 'Builds the hip flexor and ab strength your skill holds require.'
+      }
+      if (isType(['plank', 'front plank', 'rkc'])) {
+        return 'Builds the midline stiffness loaded skill positions demand.'
+      }
+      if (isType(['reverse hyper', 'back extension', 'superman'])) {
+        return 'Strengthens the posterior chain that keeps body lines and tension reliable.'
+      }
+      if (isType(['pallof', 'anti-rotation'])) {
+        return 'Builds rotational stiffness for better body control under asymmetric load.'
+      }
+      return 'Reinforces trunk stiffness so your line stays stronger when harder skill exposures arrive.'
+    
+    // ========================================================================
+    // BALANCE / COUNTERSTRESS
+    // ========================================================================
+    case 'balance_counterstress':
+      if (movementFamily === 'pull' && sessionFocus.includes('push')) {
+        return 'Balances the day\'s pressing bias so shoulders and scaps don\'t drift into one-sided stress.'
+      }
+      if (movementFamily === 'push' && sessionFocus.includes('pull')) {
+        return 'Balances the day\'s pulling emphasis so pressing patterns stay fresh.'
+      }
+      if (movementFamily === 'scap') {
+        return 'Balances the main loading pattern so progress comes without losing positional control.'
+      }
+      return 'Placed here to balance the day\'s dominant stress pattern — keeps output cleaner overall.'
+    
+    // ========================================================================
+    // JOINT STABILITY (SCAP/SHOULDER)
+    // ========================================================================
+    case 'joint_stability':
+      if (isType(['face pull', 'band pull', 'pull-apart'])) {
+        return 'Builds scapular control so pressing and pulling positions stay cleaner when fatigue rises.'
+      }
+      if (isType(['rear delt', 'reverse fly'])) {
+        return 'Reinforces the back of the shoulder so heavy pressing doesn\'t pull joint balance out of position.'
+      }
+      if (isType(['y raise', 'i raise', 'cuban'])) {
+        return 'Builds rotator cuff and scap stability — protects the shoulder under demanding positions.'
+      }
+      return 'Improves joint stability so your pressing and pulling can stay strong under fatigue.'
+    
+    // ========================================================================
+    // PROGRESSION BRIDGE
+    // ========================================================================
+    case 'progression_bridge':
+      if (hasBridging) {
+        return 'Chosen as the strongest progression you can own cleanly right now — keeps progress moving without fake difficulty.'
+      }
+      return 'Used here as a bridge — enough specific carryover to move progression forward without jumping past current control.'
+    
+    // ========================================================================
+    // WEAK LINK REINFORCEMENT
+    // ========================================================================
+    case 'weak_link_reinforcement':
+      if (isType(['tricep', 'pushdown', 'extension', 'skull'])) {
+        return 'Targets tricep lockout strength — addresses the weak link that limits pressing output.'
+      }
+      if (isType(['bicep', 'curl'])) {
+        return 'Builds bicep and elbow flexor durability — strengthens a common weak link in pulling.'
+      }
+      if (isType(['grip', 'hang', 'forearm'])) {
+        return 'Addresses grip as a limiting factor — stronger grip means more reliable skill holds.'
+      }
+      return 'Targets a specific weak link — strengthening this bottleneck unlocks progress elsewhere.'
+    
+    // ========================================================================
+    // TISSUE TOLERANCE
+    // ========================================================================
+    case 'tissue_tolerance':
+      if (ctx.selectionReason.toLowerCase().includes('straight-arm') || ctx.selectionReason.toLowerCase().includes('straight arm')) {
+        return 'Conditions straight-arm tissue while maintaining exposure — tendons adapt slower than muscles.'
+      }
+      if (ctx.selectionReason.toLowerCase().includes('elbow') || ctx.selectionReason.toLowerCase().includes('tendon')) {
+        return 'Manages connective tissue load — pushing too fast here causes setbacks that cost weeks.'
+      }
+      return 'Tissue conditioning — builds durability without accumulating injury risk.'
+    
+    // ========================================================================
+    // FATIGUE-MANAGED SUPPORT
+    // ========================================================================
+    case 'fatigue_managed_support':
+      if (movementFamily === 'pull') {
+        return 'Adds pulling volume in a lower-fatigue format so your main pulling quality stays high.'
+      }
+      if (movementFamily === 'push') {
+        return 'Adds pressing volume in a lower-fatigue format so your main pressing output stays high.'
+      }
+      if (movementFamily === 'core') {
+        return 'Builds trunk stability without competing for recovery from main skill work.'
+      }
+      if (movementFamily === 'scap') {
+        return 'Reinforces scap control in a lower-fatigue slot — keeps the rest of the session cleaner.'
+      }
+      if (hasLowFatigue) {
+        return 'Placed here to build capacity without stealing energy from the main work.'
+      }
+      return 'Reinforces a supporting quality without competing for recovery — keeps main work progressing.'
+    
+    // ========================================================================
+    // RECOVERY PROTECTIVE
+    // ========================================================================
+    case 'recovery_protective':
+      return 'Dosed conservatively to protect adaptation — sustainable progress requires managed load.'
+    
+    // ========================================================================
+    // COORDINATION REFINEMENT
+    // ========================================================================
+    case 'coordination_refinement':
+      if (isType(['transition', 'muscle-up'])) {
+        return 'Trains the pull-to-push coordination pattern — technique and timing over raw strength.'
+      }
+      return 'Refines movement coordination — pattern quality improves skill expression.'
+    
+    // ========================================================================
+    // MOBILITY / RANGE WORK
+    // ========================================================================
+    case 'mobility_range':
+      if (isType(['shoulder', 'pec', 'lat stretch', 'overhead'])) {
+        return 'Shoulder mobility work — unlocks positions your current range blocks.'
+      }
+      if (isType(['hip', 'pike', 'pancake', 'split'])) {
+        return 'Hip mobility work — affects skill positions more than most expect.'
+      }
+      if (isType(['thoracic', 't-spine'])) {
+        return 'Thoracic mobility work — opens overhead positions for better shapes.'
+      }
+      if (isType(['wrist'])) {
+        return 'Wrist prep — injury here costs weeks; prevention costs minutes.'
+      }
+      return 'Mobility work — range limits skill expression before strength does.'
+    
+    // ========================================================================
+    // WARMUP / ACTIVATION
+    // ========================================================================
+    case 'warmup_activation':
+      if (isType(['scap', 'shoulder'])) {
+        return 'Primes scapular and shoulder patterns — main work performs better when these are awake.'
+      }
+      if (isType(['band', 'activation'])) {
+        return 'Activation work — wakes up the patterns main work needs ready.'
+      }
+      return 'Primes the joints and patterns that main work needs ready — reduces injury risk and improves output quality.'
+    
+    // ========================================================================
+    // FINISHER / DENSITY
+    // ========================================================================
+    case 'finisher_density':
+      if (movementFamily === 'push' || sessionFocus.includes('push')) {
+        return 'Push finisher — captures remaining pressing capacity for growth after main work.'
+      }
+      if (movementFamily === 'pull' || sessionFocus.includes('pull')) {
+        return 'Pull finisher — captures remaining pulling capacity for growth after main work.'
+      }
+      return 'Finisher slot — captures remaining work capacity for growth without needing fresh energy.'
+    
+    // ========================================================================
+    // POSITIONAL STRENGTH
+    // ========================================================================
+    case 'positional_strength':
+      if (isType(['fl row', 'front lever row', 'lever row'])) {
+        return 'Horizontal pulling in lever position — builds scap retraction and lat strength under straight-arm demand.'
+      }
+      if (isType(['pppu', 'pseudo', 'planche push'])) {
+        return 'Position-specific pressing — builds strength in the exact lean angle your planche uses.'
+      }
+      if (isType(['pike', 'pike push', 'decline pike'])) {
+        return 'Pike pressing position — builds overhead strength at angles your handstand needs.'
+      }
+      if (hasHighQuality) {
+        return 'Position-specific strength — transfers directly into skill positions with lower fatigue cost.'
+      }
+      return 'Builds strength in a skill-specific position — direct carryover with manageable load.'
+    
+    // ========================================================================
+    // CAPACITY BUILDING (DEFAULT)
+    // ========================================================================
+    case 'capacity_building':
+    default:
+      if (movementFamily === 'pull') {
+        return 'Builds pulling capacity your skill work draws from — a stronger back means more reliable positions.'
+      }
+      if (movementFamily === 'push') {
+        return 'Builds pressing capacity your overhead and horizontal work draws from — raises your ceiling.'
+      }
+      if (movementFamily === 'core') {
+        return 'Builds trunk capacity — midline strength is a ceiling for skill expression.'
+      }
+      return 'Builds capacity that transfers into your main work — raises the ceiling without excessive recovery cost.'
+  }
+}
+
 export function buildExercisePurposeLine(
   exercise: {
     name: string
@@ -2478,372 +3190,42 @@ export function buildExercisePurposeLine(
   },
   emphasisKind?: ExerciseRowSurface['emphasisKind']
 ): string | null {
-  const categoryLower = (exercise.category || '').toLowerCase()
-  const reasonLower = (exercise.selectionReason || '').toLowerCase()
-  const expressionMode = (exercise.coachingMeta?.expressionMode || '').toLowerCase()
-  const roleInSession = (exercise.coachingMeta?.roleInSession || '').toLowerCase()
-  const sessionFocusLower = (sessionContext?.sessionFocus || '').toLowerCase()
-  const primaryGoalLower = (sessionContext?.primaryGoal || '').replace(/_/g, ' ').toLowerCase()
-  const spineType = (sessionContext?.compositionMetadata?.spineSessionType || '').toLowerCase()
-  const exerciseNameLower = exercise.name.toLowerCase()
+  // ==========================================================================
+  // EXPLANATION REASONING ENGINE - MAIN ENTRY POINT
+  // ==========================================================================
   
-  // Helper: derive goal name for phrasing
-  const goalName = (): string => {
-    if (primaryGoalLower.includes('planche')) return 'planche'
-    if (primaryGoalLower.includes('front lever')) return 'front lever'
-    if (primaryGoalLower.includes('back lever')) return 'back lever'
-    if (primaryGoalLower.includes('handstand')) return 'handstand'
-    if (primaryGoalLower.includes('muscle up') || primaryGoalLower.includes('muscle-up')) return 'muscle-up'
-    return 'your skill'
+  // Stage A: Build full explanation context
+  const ctx = buildExplanationContext(exercise, sessionContext, emphasisKind)
+  
+  // Stage B: Contradiction guard - ensure movement family is respected
+  // This prevents wrong cross-pattern claims (e.g., pull exercise getting press language)
+  const { movementFamily, isPullMovement, isPushMovement, isCoreMovement, isScapMovement } = ctx
+  
+  // Stage C: Generate explanation from reason family
+  const explanation = composeExplanationFromReason(ctx)
+  
+  // Stage D: Final contradiction check - reject if explanation contradicts movement family
+  if (explanation && movementFamily !== 'unknown') {
+    const explanationLower = explanation.toLowerCase()
+    
+    // Pull movement should not mention pressing as the primary benefit
+    if (movementFamily === 'pull' && 
+        (explanationLower.includes('pressing output') || explanationLower.includes('pressing capacity')) &&
+        !explanationLower.includes('pull')) {
+      // Contradiction detected - use movement-family-safe fallback
+      return 'Builds pulling capacity your skill work draws from — a stronger back means more reliable positions.'
+    }
+    
+    // Push movement should not mention pulling as the primary benefit
+    if (movementFamily === 'push' &&
+        (explanationLower.includes('pulling output') || explanationLower.includes('pulling capacity')) &&
+        !explanationLower.includes('press')) {
+      // Contradiction detected - use movement-family-safe fallback
+      return 'Builds pressing capacity your overhead and horizontal work draws from — raises your ceiling.'
+    }
   }
   
-  // Helper: check if exercise is a specific type by name
-  const isExerciseType = (keywords: string[]): boolean => {
-    return keywords.some(kw => exerciseNameLower.includes(kw))
-  }
-  
-  // ==========================================================================
-  // CONTRADICTION GUARD: Derive the exercise's TRUE movement family
-  // This prevents session-focus or category-fallback from overriding reality
-  // ==========================================================================
-  const pullKeywords = ['pull', 'row', 'chin', 'lat', 'bicep', 'curl', 'lever row', 'front lever', 'back lever', 'muscle-up', 'muscle up', 'transition']
-  const pushKeywords = ['push', 'dip', 'press', 'planche', 'handstand', 'pike', 'tricep', 'extension', 'pppu', 'pseudo', 'hspu']
-  const coreKeywords = ['hollow', 'plank', 'dead bug', 'deadbug', 'l-sit', 'lsit', 'leg raise', 'pallof', 'anti-rotation', 'compression', 'side plank', 'copenhagen']
-  const scapKeywords = ['face pull', 'y raise', 'i raise', 'cuban', 'band pull', 'pull-apart', 'rear delt', 'reverse fly', 'serratus']
-  
-  const isPullMovement = pullKeywords.some(kw => exerciseNameLower.includes(kw)) || categoryLower === 'pull'
-  const isPushMovement = pushKeywords.some(kw => exerciseNameLower.includes(kw)) || categoryLower === 'push'
-  const isCoreMovement = coreKeywords.some(kw => exerciseNameLower.includes(kw)) || categoryLower === 'core'
-  const isScapMovement = scapKeywords.some(kw => exerciseNameLower.includes(kw))
-  
-  // Determine the exercise's dominant movement family
-  type MovementFamily = 'pull' | 'push' | 'core' | 'scap' | 'unknown'
-  let movementFamily: MovementFamily = 'unknown'
-  if (isPullMovement && !isPushMovement) movementFamily = 'pull'
-  else if (isPushMovement && !isPullMovement) movementFamily = 'push'
-  else if (isCoreMovement) movementFamily = 'core'
-  else if (isScapMovement) movementFamily = 'scap'
-  
-  // ==========================================================================
-  // PRIORITY 1: Primary skill/direct progression — WHY THIS CHOICE WON
-  // ==========================================================================
-  if (emphasisKind === 'primary' || exercise.isPrimary || categoryLower === 'skill') {
-    if (expressionMode.includes('direct') || expressionMode.includes('intensity') || spineType.includes('direct')) {
-      if (primaryGoalLower.includes('planche')) {
-        if (isExerciseType(['lean', 'planche lean'])) {
-          return 'This builds the forward lean tolerance your planche needs — harder progressions require this foundation first.'
-        }
-        if (isExerciseType(['tuck', 'adv tuck', 'straddle'])) {
-          return 'Placed here to accumulate quality time in position — planche improves through controlled exposure, not grinding.'
-        }
-        return 'Your primary straight-arm driver today — this is where planche strength actually gets built.'
-      } else if (primaryGoalLower.includes('front lever')) {
-        if (isExerciseType(['tuck', 'adv tuck', 'straddle'])) {
-          return 'Placed here for quality pulling tension — front lever grows from controlled holds, not max attempts.'
-        }
-        return 'Your primary horizontal pull driver — this directly builds the strength front lever requires.'
-      } else if (primaryGoalLower.includes('back lever')) {
-        return 'Your primary straight-arm driver — builds the shoulder extension control back lever demands.'
-      } else if (primaryGoalLower.includes('handstand')) {
-        return 'Your primary overhead driver — handstand pressing strength comes from quality work here.'
-      } else if (primaryGoalLower.includes('muscle')) {
-        return 'Your primary transition driver — this builds the explosive pull-to-push your muscle-up needs.'
-      }
-      return 'Your primary skill driver today — this is where real progress happens.'
-    }
-    if (categoryLower === 'skill') {
-      if (primaryGoalLower.includes('planche')) {
-        return 'Direct planche exposure with managed fatigue — pattern quality matters more than grinding.'
-      } else if (primaryGoalLower.includes('lever')) {
-        return 'Direct lever exposure — builds the movement pattern without burning recovery for strength work.'
-      }
-      return 'Direct skill exposure — reinforces movement quality without excessive fatigue cost.'
-    }
-    return null
-  }
-  
-  // ==========================================================================
-  // PRIORITY 2: Strength / carryover — WHY THIS TRANSFERS
-  // ==========================================================================
-  if (emphasisKind === 'secondary' || categoryLower === 'strength' || categoryLower === 'push' || categoryLower === 'pull') {
-    // Carryover/technical expression
-    if (expressionMode.includes('carryover') || expressionMode.includes('technical')) {
-      return `Transfers directly into ${goalName()} with lower fatigue cost than skill work — efficient strength building.`
-    }
-    
-    // Push strength with specific decision context
-    if (categoryLower === 'push' || (categoryLower === 'strength' && (sessionFocusLower.includes('push') || exerciseNameLower.includes('dip') || exerciseNameLower.includes('push')))) {
-      if (isExerciseType(['dip', 'ring dip', 'weighted dip'])) {
-        if (primaryGoalLower.includes('planche')) {
-          return 'Dips build the pressing foundation planche needs — stronger here means easier progression later.'
-        }
-        return 'Dips raise your pressing ceiling — this transfers into skill work without the skill fatigue.'
-      }
-      if (isExerciseType(['push-up', 'pushup', 'pppu', 'pseudo'])) {
-        if (primaryGoalLower.includes('planche')) {
-          return 'Builds pressing endurance in a planche-relevant position — high carryover, lower joint cost.'
-        }
-        return 'Pressing work that transfers into your skill positions without excessive joint stress.'
-      }
-      if (primaryGoalLower.includes('planche')) {
-        return 'Raises your pressing output — stronger push means easier planche progression.'
-      } else if (primaryGoalLower.includes('handstand')) {
-        return 'Builds the overhead pressing strength your handstand work depends on.'
-      }
-      return 'Raises your pressing ceiling — stronger foundation means faster skill progress.'
-    }
-    
-    // Pull strength — LOCAL FUNCTION FIRST, skill carryover second
-    if (categoryLower === 'pull' || (categoryLower === 'strength' && (sessionFocusLower.includes('pull') || exerciseNameLower.includes('row') || exerciseNameLower.includes('pull')))) {
-      if (isExerciseType(['row', 'front lever row', 'fl row', 'inverted row', 'ring row'])) {
-        // Horizontal pulling - state the pulling function first
-        if (isExerciseType(['front lever row', 'fl row'])) {
-          return 'Horizontal pulling in lever position — builds scap retraction and lat strength under straight-arm demand.'
-        }
-        return 'Horizontal pulling slot — develops scap control and mid-back strength that transfers into skill positions.'
-      }
-      if (isExerciseType(['pull-up', 'pullup', 'chin', 'weighted pull'])) {
-        // Vertical pulling - state the pulling function first
-        return 'Vertical pulling slot — builds lat and grip strength; the foundation pulling skills require.'
-      }
-      if (isExerciseType(['muscle-up', 'transition'])) {
-        return 'Transition pattern slot — trains the pull-to-push coordination the muscle-up depends on.'
-      }
-      // Generic pull - state local function
-      return 'Pulling strength slot — builds the back and grip foundation your skill work is built on.'
-    }
-    
-    // Generic strength with session context
-    if (roleInSession.includes('support')) {
-      return `Builds capacity for ${goalName()} without competing for skill recovery — efficient volume.`
-    }
-    
-    return `Foundational strength that ${goalName()} progression depends on — raises your ceiling.`
-  }
-  
-  // ==========================================================================
-  // PRIORITY 3: Protection / tissue-management — WHY THIS DOSAGE
-  // ==========================================================================
-  if (emphasisKind === 'protection' || exercise.isProtected) {
-    if (reasonLower.includes('straight-arm') || reasonLower.includes('straight arm')) {
-      return 'Protects straight-arm tissue while maintaining exposure — tendons adapt slower than muscles.'
-    }
-    if (reasonLower.includes('shoulder') || reasonLower.includes('scap')) {
-      return 'Keeps you training while protecting shoulder tissue — sustainable progress requires managed load.'
-    }
-    if (reasonLower.includes('elbow') || reasonLower.includes('tendon')) {
-      return 'Manages connective tissue load — pushing too fast here causes setbacks that cost weeks.'
-    }
-    return 'Tissue management — keeps you progressing without accumulating the injury risk that stalls progress.'
-  }
-  
-  // ==========================================================================
-  // PRIORITY 4: Accessory — BENEFIT-DRIVEN, not category-labeled
-  // ==========================================================================
-  if (categoryLower === 'accessory') {
-    // Scapular/shoulder stability
-    if (reasonLower.includes('scap') || reasonLower.includes('shoulder') || isExerciseType(['face pull', 'y raise', 'i raise', 'cuban', 'band pull apart', 'pull-apart'])) {
-      return 'Builds scapular control so pressing and pulling positions stay cleaner when fatigue rises.'
-    }
-    
-    // Posterior chain / rear delt
-    if (reasonLower.includes('rear delt') || reasonLower.includes('posterior') || isExerciseType(['rear delt', 'reverse fly', 'reverse fly', 'face pull'])) {
-      return 'Reinforces the back of the shoulder so heavy pressing does not pull joint balance out of position.'
-    }
-    
-    // Wrist / forearm conditioning
-    if (reasonLower.includes('wrist') || reasonLower.includes('forearm') || isExerciseType(['wrist', 'forearm', 'rice bucket'])) {
-      return 'Conditions the wrist and forearm tissue that straight-arm and pressing loads stress most.'
-    }
-    
-    // Hypertrophy intent
-    if (reasonLower.includes('hypertrophy') || reasonLower.includes('size')) {
-      return 'Adds targeted muscle in a pattern your main work trains but does not fully develop — raises your structural ceiling.'
-    }
-    
-    // Tricep work
-    if (isExerciseType(['tricep', 'pushdown', 'extension', 'skull', 'overhead ext', 'jm press'])) {
-      return 'Builds tricep lockout strength so pressing stays forceful instead of stalling at the top of range.'
-    }
-    
-    // Bicep/curl work
-    if (isExerciseType(['bicep', 'curl', 'hammer curl', 'preacher'])) {
-      return 'Builds bicep and elbow flexor strength that makes your pulling more tolerant and durable under load.'
-    }
-    
-    // Lat / serratus
-    if (reasonLower.includes('lat') || reasonLower.includes('serratus') || isExerciseType(['pullover', 'straight arm pulldown', 'serratus'])) {
-      return 'Develops lat and serratus activation so overhead and pulling positions feel more locked-in.'
-    }
-    
-    // ==========================================================================
-    // CONTRADICTION-GUARDED: Use movement family, NOT just session focus
-    // ==========================================================================
-    
-    // Pull accessory — MUST be a pull movement, not just in a pull session
-    if (movementFamily === 'pull' || (reasonLower.includes('pull') && !isPushMovement)) {
-      return 'Adds pulling volume in a lower-fatigue format so your main pulling quality stays high.'
-    }
-    
-    // Push accessory — MUST be a push movement, not just in a push session
-    if (movementFamily === 'push' || (reasonLower.includes('push') && !isPullMovement)) {
-      return 'Adds pressing volume in a lower-fatigue format so your main pressing output stays high.'
-    }
-    
-    // Scap accessory — detected by movement family
-    if (movementFamily === 'scap') {
-      return 'Reinforces scapular control so pressing and pulling positions stay stable under load.'
-    }
-    
-    // Generic accessory — describe benefit based on what it actually is
-    if (isPullMovement) {
-      return 'Builds pulling capacity without competing for recovery from your main pull work.'
-    }
-    if (isPushMovement) {
-      return 'Builds pressing capacity without competing for recovery from your main press work.'
-    }
-    
-    return 'Reinforces a supporting quality your main work relies on — keeps output clean instead of letting fatigue turn technique sloppy.'
-  }
-  
-  // ==========================================================================
-  // PRIORITY 5: Core / trunk — LOCAL TRUNK FUNCTION FIRST
-  // ==========================================================================
-  if (categoryLower === 'core') {
-    // State the LOCAL trunk function first, then connect to skill if relevant
-    if (isExerciseType(['hollow', 'dish', 'hollow body', 'hollow hold'])) {
-      return 'Hollow pattern slot — builds trunk compression and anti-extension; the body position straight-arm skills require.'
-    }
-    if (isExerciseType(['deadbug', 'dead bug'])) {
-      return 'Anti-extension control slot — teaches trunk stability while limbs move; transfers to loaded positions.'
-    }
-    if (isExerciseType(['pallof', 'anti-rotation'])) {
-      return 'Anti-rotation slot — builds rotational stiffness for better body control under load.'
-    }
-    if (isExerciseType(['plank', 'front plank', 'rkc'])) {
-      return 'Anti-extension hold slot — builds the midline stiffness loaded positions demand.'
-    }
-    if (isExerciseType(['l-sit', 'l sit', 'lsit'])) {
-      return 'Compression slot — builds hip flexor and trunk strength for tucked and compressed positions.'
-    }
-    if (isExerciseType(['leg raise', 'hanging leg', 'toes to bar'])) {
-      return 'Compression strength slot — builds the hip flexor and ab strength skill holds require.'
-    }
-    if (isExerciseType(['side plank', 'copenhagen'])) {
-      return 'Lateral stability slot — builds oblique control for better line under load.'
-    }
-    if (isExerciseType(['reverse hyper', 'back extension', 'superman'])) {
-      return 'Posterior chain slot — builds lower-back and glute endurance for position control.'
-    }
-    // Generic core fallback - still state local function
-    if (reasonLower.includes('compression') || reasonLower.includes('hollow')) {
-      return 'Trunk compression slot — builds the midline stiffness your skill positions require.'
-    }
-    if (reasonLower.includes('anti-extension')) {
-      return 'Anti-extension slot — trains the trunk not to collapse under load.'
-    }
-    return 'Trunk stability slot — midline strength is a ceiling for skill expression.'
-  }
-  
-  // ==========================================================================
-  // PRIORITY 6: Mobility / prep — WHY THIS UNLOCKS PROGRESS
-  // ==========================================================================
-  if (categoryLower === 'mobility' || categoryLower === 'flexibility') {
-    if (reasonLower.includes('shoulder') || reasonLower.includes('overhead') || isExerciseType(['shoulder', 'pec', 'lat stretch'])) {
-      return 'Shoulder mobility slot — unlocks positions your current range blocks.'
-    }
-    if (reasonLower.includes('hip') || reasonLower.includes('split') || isExerciseType(['hip', 'pike', 'pancake'])) {
-      return 'Hip mobility slot — affects skill positions more than most expect.'
-    }
-    if (reasonLower.includes('thoracic') || reasonLower.includes('spine') || isExerciseType(['thoracic', 't-spine'])) {
-      return 'Thoracic mobility slot — opens overhead positions for better shapes.'
-    }
-    if (reasonLower.includes('wrist') || reasonLower.includes('forearm') || isExerciseType(['wrist'])) {
-      return 'Wrist prep slot — injury here costs weeks; prevention costs minutes.'
-    }
-    return 'Mobility slot — range limits skill expression before strength does.'
-  }
-  
-  // ==========================================================================
-  // PRIORITY 7: Finisher / density — WHY THIS PLACEMENT
-  // ==========================================================================
-  if (reasonLower.includes('finisher') || reasonLower.includes('density')) {
-    if (sessionFocusLower.includes('push')) {
-      return 'Push finisher — captures remaining capacity for growth after main work.'
-    } else if (sessionFocusLower.includes('pull')) {
-      return 'Pull finisher — captures remaining pulling capacity for growth.'
-    }
-    return 'Finisher slot — captures remaining work capacity for growth.'
-  }
-  
-  // ==========================================================================
-  // PRIORITY 8: Support fallbacks — CONTRADICTION-GUARDED, BENEFIT-DRIVEN
-  // ==========================================================================
-  if (emphasisKind === 'support') {
-    if (roleInSession.includes('accessory')) {
-      return 'Reinforces a supporting quality your main work depends on — without the fatigue cost of more skill work.'
-    }
-    
-    // CONTRADICTION-GUARDED: Use movement family, not session focus
-    // A pull exercise in a push session should say "pulling", not "pressing"
-    if (movementFamily === 'pull' || isPullMovement) {
-      return 'Builds pulling capacity in a lower-demand format so your main pulling quality stays intact.'
-    }
-    if (movementFamily === 'push' || isPushMovement) {
-      return 'Builds pressing capacity in a lower-demand format so your main pressing quality stays intact.'
-    }
-    if (movementFamily === 'core' || isCoreMovement) {
-      return 'Builds trunk stability so your line stays stronger under the loads main work demands.'
-    }
-    if (movementFamily === 'scap' || isScapMovement) {
-      return 'Reinforces scapular control so pressing and pulling positions stay reliable under fatigue.'
-    }
-    
-    // Check for recovery/balance purpose from reason
-    if (reasonLower.includes('balance') || reasonLower.includes('antagonist')) {
-      return 'Balances the main loading pattern so progress does not come with a loss of positional control.'
-    }
-    if (reasonLower.includes('tissue') || reasonLower.includes('tendon') || reasonLower.includes('conditioning')) {
-      return 'Conditions the connective tissue that high-demand work stresses most — makes your training more durable.'
-    }
-    return 'Builds a supporting quality without competing for recovery — keeps your main work from hitting a structural ceiling.'
-  }
-  
-  // ==========================================================================
-  // PRIORITY 9: Ultimate fallback — CONTRADICTION-GUARDED, BENEFIT-DRIVEN
-  // ==========================================================================
-  
-  // Expression mode fallback
-  if (expressionMode.includes('support') || expressionMode.includes('accessory')) {
-    // Even here, use movement family to stay truthful
-    if (movementFamily === 'pull' || isPullMovement) {
-      return 'Builds pulling support your priority work depends on — without adding meaningful fatigue.'
-    }
-    if (movementFamily === 'push' || isPushMovement) {
-      return 'Builds pressing support your priority work depends on — without adding meaningful fatigue.'
-    }
-    return 'Builds a supporting quality your priority work is built on — without adding meaningful fatigue.'
-  }
-  
-  // Category fallback — describe benefit, not just slot type
-  // CONTRADICTION-GUARDED: Movement family takes precedence over category
-  if (movementFamily === 'pull' || categoryLower === 'pull') {
-    return 'Builds pulling strength your skill work draws from — a stronger back means more reliable positions.'
-  }
-  if (movementFamily === 'push' || categoryLower === 'push') {
-    return 'Builds pressing strength your overhead and horizontal work draws from — raises your ceiling.'
-  }
-  if (categoryLower === 'strength') {
-    return 'Raises the force output your skill work depends on — stronger here means easier progress there.'
-  }
-  
-  // Warmup/activation
-  if (categoryLower === 'warmup' || categoryLower === 'activation') {
-    return 'Primes the joints and patterns that main work needs ready — reduces injury risk and improves output quality.'
-  }
-  
-  // Absolute final fallback — still benefit-driven
-  return 'Builds a supporting quality your main goals depend on — raises the ceiling without adding recovery cost.'
+  return explanation
 }
 
 // =============================================================================

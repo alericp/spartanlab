@@ -374,6 +374,194 @@ function buildCanonicalProgramDisplayTruth(program: AdaptiveProgram): CanonicalP
   }
 }
 
+// ==========================================================================
+// [PROGRAM-DECISION-SUMMARY] Extract displayable doctrine truth from program
+// This reads ONLY from authoritative truth attached to the program object
+// ==========================================================================
+interface ProgramDecisionSummaryData {
+  available: boolean
+  dominantSpine: string | null
+  sessionCharacter: string | null
+  intensityBias: string | null
+  volumeBias: string | null
+  stressPattern: string | null
+  integrationMode: string | null
+}
+
+function extractProgramDecisionSummary(program: AdaptiveProgram): ProgramDecisionSummaryData {
+  // Extract unifiedDoctrineDecision from program if attached
+  const doctrine = (program as unknown as { 
+    unifiedDoctrineDecision?: {
+      dominantSpine?: { 
+        type?: string
+        expectedSessionCharacter?: string 
+      }
+      dosageRules?: { 
+        intensityBias?: string
+        volumeBias?: string 
+      }
+      weeklyDistribution?: { 
+        stressDistributionPattern?: string 
+      }
+      integrationConstraints?: { 
+        mode?: string 
+      }
+    } 
+  }).unifiedDoctrineDecision
+  
+  if (!doctrine) {
+    return { 
+      available: false, 
+      dominantSpine: null, 
+      sessionCharacter: null,
+      intensityBias: null, 
+      volumeBias: null,
+      stressPattern: null,
+      integrationMode: null
+    }
+  }
+  
+  return {
+    available: true,
+    dominantSpine: doctrine.dominantSpine?.type || null,
+    sessionCharacter: doctrine.dominantSpine?.expectedSessionCharacter || null,
+    intensityBias: doctrine.dosageRules?.intensityBias || null,
+    volumeBias: doctrine.dosageRules?.volumeBias || null,
+    stressPattern: doctrine.weeklyDistribution?.stressDistributionPattern || null,
+    integrationMode: doctrine.integrationConstraints?.mode || null,
+  }
+}
+
+// Format spine type for display
+function formatSpineLabel(spine: string | null): string {
+  if (!spine) return 'Balanced'
+  const labels: Record<string, string> = {
+    'static_skill_mastery': 'Static Skill Focus',
+    'weighted_strength': 'Weighted Strength',
+    'dynamic_skill': 'Dynamic Skill Focus',
+    'hybrid_balanced': 'Hybrid Balanced',
+    'endurance_density': 'Work Capacity',
+    'foundation_building': 'Foundation Building',
+  }
+  return labels[spine] || spine.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+// Format intensity/volume bias for display
+function formatBiasLabel(bias: string | null): string {
+  if (!bias) return 'Moderate'
+  return bias.charAt(0).toUpperCase() + bias.slice(1)
+}
+
+// Format stress pattern for display
+function formatStressPattern(pattern: string | null): string {
+  if (!pattern) return 'Even'
+  const labels: Record<string, string> = {
+    'front_loaded': 'Front Loaded',
+    'back_loaded': 'Back Loaded',
+    'even': 'Even',
+    'undulating': 'Undulating',
+  }
+  return labels[pattern] || pattern.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+// ==========================================================================
+// [PROGRAM-DECISION-SUMMARY] Compact UI component
+// ==========================================================================
+function ProgramDecisionSummary({ program }: { program: AdaptiveProgram }) {
+  const summary = extractProgramDecisionSummary(program)
+  
+  // Log for corridor verification
+  console.log('[PROGRAM-DECISION-SUMMARY-RENDER]', {
+    programId: program.id,
+    doctrineAvailable: summary.available,
+    dominantSpine: summary.dominantSpine,
+    intensityBias: summary.intensityBias,
+    volumeBias: summary.volumeBias,
+    stressPattern: summary.stressPattern,
+    verdict: summary.available 
+      ? 'DOCTRINE_TRUTH_VISIBLE_IN_SUMMARY' 
+      : 'DOCTRINE_NOT_ATTACHED_USING_DEFAULTS',
+  })
+  
+  // Only render if doctrine truth is available
+  if (!summary.available) {
+    return null
+  }
+  
+  // Build compact decision chips
+  const chips: Array<{ label: string; value: string; color: string }> = []
+  
+  if (summary.dominantSpine) {
+    chips.push({
+      label: 'Focus',
+      value: formatSpineLabel(summary.dominantSpine),
+      color: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20'
+    })
+  }
+  
+  if (summary.intensityBias) {
+    const intensityColor = summary.intensityBias === 'aggressive' 
+      ? 'text-red-400 bg-red-400/10 border-red-400/20'
+      : summary.intensityBias === 'conservative'
+      ? 'text-green-400 bg-green-400/10 border-green-400/20'
+      : 'text-amber-400 bg-amber-400/10 border-amber-400/20'
+    chips.push({
+      label: 'Intensity',
+      value: formatBiasLabel(summary.intensityBias),
+      color: intensityColor
+    })
+  }
+  
+  if (summary.volumeBias) {
+    const volumeColor = summary.volumeBias === 'high' 
+      ? 'text-purple-400 bg-purple-400/10 border-purple-400/20'
+      : summary.volumeBias === 'low'
+      ? 'text-blue-400 bg-blue-400/10 border-blue-400/20'
+      : 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20'
+    chips.push({
+      label: 'Volume',
+      value: formatBiasLabel(summary.volumeBias),
+      color: volumeColor
+    })
+  }
+  
+  if (summary.stressPattern) {
+    chips.push({
+      label: 'Weekly',
+      value: formatStressPattern(summary.stressPattern),
+      color: 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20'
+    })
+  }
+  
+  if (chips.length === 0) return null
+  
+  return (
+    <div className="mb-4 p-3 bg-zinc-900/50 border border-zinc-800/60 rounded-lg">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">
+          Program Decisions
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {chips.map((chip, idx) => (
+          <div 
+            key={idx}
+            className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs ${chip.color}`}
+          >
+            <span className="text-zinc-500">{chip.label}:</span>
+            <span className="font-medium">{chip.value}</span>
+          </div>
+        ))}
+      </div>
+      {summary.sessionCharacter && (
+        <p className="mt-2 text-xs text-zinc-500 italic">
+          {summary.sessionCharacter}
+        </p>
+      )}
+    </div>
+  )
+}
+
 // TASK 1: Error boundary wrapper for AdaptiveProgramDisplay
 // [PHASE 9] Now uses true React ErrorBoundary - NO setState in render catch
 // [PHASE 10C] Enhanced with exact error capture and display in fallback
@@ -475,18 +663,23 @@ function ProgramDisplayWrapper({
   
   // [PHASE 9] Safe error handling via proper ErrorBoundary
   return (
-    <ErrorBoundary
-      fallback={renderFallback()}
-      onError={handleDisplayError}
-    >
-      <AdaptiveProgramDisplay
-        program={program}
-        onDelete={onDelete}
-        onRestart={onRestart}
-        onRegenerate={onRegenerate}
-        unifiedStaleness={unifiedStaleness}
-      />
-    </ErrorBoundary>
+    <div>
+      {/* [PROGRAM-DECISION-SUMMARY] Display doctrine-driven decisions above the program */}
+      <ProgramDecisionSummary program={program} />
+      
+      <ErrorBoundary
+        fallback={renderFallback()}
+        onError={handleDisplayError}
+      >
+        <AdaptiveProgramDisplay
+          program={program}
+          onDelete={onDelete}
+          onRestart={onRestart}
+          onRegenerate={onRegenerate}
+          unifiedStaleness={unifiedStaleness}
+        />
+      </ErrorBoundary>
+    </div>
   )
 }
 

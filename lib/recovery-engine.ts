@@ -1,8 +1,13 @@
 // Recovery Engine service for training readiness estimation
 // Simple deterministic recovery signal based on training patterns
+// 
+// [PROFILE-TRUTH-CONSUMPTION] UPGRADED: Now incorporates canonical profile
+// recovery data (sleepQuality, energyLevel, stressLevel, recoveryConfidence)
+// alongside workout-derived signals.
 
 import { getWorkoutsLastNDays, calculateWeeklyVolume } from './volume-analyzer'
 import { getLatestWorkout } from './workout-log-service'
+import { getCanonicalProfile } from './canonical-profile-service'
 
 export type RecoveryLevel = 'HIGH' | 'MODERATE' | 'LOW'
 
@@ -14,6 +19,8 @@ export interface RecoverySignal {
     volumeLoad: 'low' | 'moderate' | 'high'
     trainingFrequency: 'low' | 'moderate' | 'high'
     recencyGap: 'optimal' | 'short' | 'long'
+    /** [PROFILE-TRUTH-CONSUMPTION] Profile-derived recovery modifier */
+    profileRecoveryModifier?: 'good' | 'normal' | 'poor' | null
   }
 }
 
@@ -28,11 +35,63 @@ function getDaysSinceLastWorkout(): number {
   return Math.floor(diffMs / (1000 * 60 * 60 * 24))
 }
 
+/**
+ * [PROFILE-TRUTH-CONSUMPTION] Get recovery modifier from canonical profile.
+ * Uses athlete's self-reported recovery context to adjust training recommendations.
+ */
+function getProfileRecoveryModifier(): { modifier: number; quality: 'good' | 'normal' | 'poor' | null } {
+  try {
+    const profile = getCanonicalProfile()
+    const recoveryQuality = profile.recoveryQuality
+    const recoveryRaw = profile.recoveryRaw
+    
+    // If we have raw recovery data, compute from that
+    if (recoveryRaw) {
+      const values = [
+        recoveryRaw.sleepQuality,
+        recoveryRaw.energyLevel,
+        recoveryRaw.stressLevel,  // 'good' = low stress
+        recoveryRaw.recoveryConfidence,
+      ].filter(Boolean) as Array<'good' | 'normal' | 'poor'>
+      
+      if (values.length >= 2) {
+        const poorCount = values.filter(v => v === 'poor').length
+        const goodCount = values.filter(v => v === 'good').length
+        
+        if (poorCount >= 2) {
+          console.log('[profile-truth-consumption] Recovery profile indicates poor recovery:', recoveryRaw)
+          return { modifier: -15, quality: 'poor' }
+        }
+        if (goodCount >= 3) {
+          console.log('[profile-truth-consumption] Recovery profile indicates good recovery:', recoveryRaw)
+          return { modifier: 10, quality: 'good' }
+        }
+        return { modifier: 0, quality: 'normal' }
+      }
+    }
+    
+    // Fall back to derived recoveryQuality
+    if (recoveryQuality === 'poor') {
+      return { modifier: -15, quality: 'poor' }
+    }
+    if (recoveryQuality === 'good') {
+      return { modifier: 10, quality: 'good' }
+    }
+    
+    return { modifier: 0, quality: null }
+  } catch {
+    return { modifier: 0, quality: null }
+  }
+}
+
 // Calculate recovery signal based on training patterns
 export function calculateRecoverySignal(): RecoverySignal {
   const weeklyVolume = calculateWeeklyVolume()
   const last7Days = getWorkoutsLastNDays(7)
   const daysSinceWorkout = getDaysSinceLastWorkout()
+  
+  // [PROFILE-TRUTH-CONSUMPTION] Get profile-based recovery adjustment
+  const profileRecovery = getProfileRecoveryModifier()
   
   // Base score starts at 70 (neutral)
   let score = 70
@@ -78,6 +137,13 @@ export function calculateRecoverySignal(): RecoverySignal {
     recencyGap = 'optimal'
   }
   
+  // ==========================================================================
+  // [PROFILE-TRUTH-CONSUMPTION] Factor 4: Profile-based recovery context
+  // ==========================================================================
+  // Apply modifier from athlete's self-reported recovery profile
+  // This ensures user-reported sleep/stress/energy affects program construction
+  score += profileRecovery.modifier
+  
   // Clamp score between 0 and 100
   score = Math.max(0, Math.min(100, score))
   
@@ -111,6 +177,7 @@ export function calculateRecoverySignal(): RecoverySignal {
       volumeLoad,
       trainingFrequency,
       recencyGap,
+      profileRecoveryModifier: profileRecovery.quality,
     },
   }
 }

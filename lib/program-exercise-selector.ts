@@ -240,6 +240,186 @@ function safeLower(value: unknown): string {
   return value.toLowerCase().trim()
 }
 
+// =============================================================================
+// [DOCTRINE-MATERIALIZATION-ENGINE] DOSAGE TRANSFORMATION HELPERS
+// These functions transform prescriptions based on doctrine decisions
+// =============================================================================
+
+/**
+ * Transform reps/time for quality emphasis (fewer reps, higher precision)
+ */
+function transformRepsForQuality(repsOrTime: string): string {
+  // Handle rep ranges like "8-12" -> "5-8"
+  const repRangeMatch = repsOrTime.match(/^(\d+)-(\d+)$/)
+  if (repRangeMatch) {
+    const low = Math.max(3, Math.floor(parseInt(repRangeMatch[1]) * 0.7))
+    const high = Math.max(5, Math.floor(parseInt(repRangeMatch[2]) * 0.7))
+    return `${low}-${high}`
+  }
+  // Handle single rep count like "10" -> "6-8"
+  const singleRepMatch = repsOrTime.match(/^(\d+)$/)
+  if (singleRepMatch) {
+    const base = parseInt(singleRepMatch[1])
+    const reduced = Math.max(4, Math.floor(base * 0.7))
+    return `${reduced}-${reduced + 2}`
+  }
+  // Handle time-based like "30s" -> unchanged (quality already implied)
+  return repsOrTime
+}
+
+/**
+ * Transform reps/time for recovery emphasis (lower overall stress)
+ */
+function transformRepsForRecovery(repsOrTime: string): string {
+  // Handle rep ranges like "8-12" -> "6-10"
+  const repRangeMatch = repsOrTime.match(/^(\d+)-(\d+)$/)
+  if (repRangeMatch) {
+    const low = Math.max(4, parseInt(repRangeMatch[1]) - 2)
+    const high = Math.max(6, parseInt(repRangeMatch[2]) - 2)
+    return `${low}-${high}`
+  }
+  // Handle time-based like "30s" -> "20-25s"
+  const timeMatch = repsOrTime.match(/^(\d+)s?$/)
+  if (timeMatch && repsOrTime.includes('s')) {
+    const seconds = parseInt(timeMatch[1])
+    const reduced = Math.max(10, Math.floor(seconds * 0.75))
+    return `${reduced}s`
+  }
+  return repsOrTime
+}
+
+/**
+ * Transform to hold-time emphasis for static skill work
+ */
+function transformToHoldEmphasis(repsOrTime: string, intensityBias: string): string {
+  // If already time-based, adjust based on intensity
+  const timeMatch = repsOrTime.match(/^(\d+)s?$/)
+  if (timeMatch && repsOrTime.includes('s')) {
+    const seconds = parseInt(timeMatch[1])
+    if (intensityBias === 'conservative') {
+      return `${Math.max(10, Math.floor(seconds * 0.8))}s`
+    } else if (intensityBias === 'aggressive') {
+      return `${Math.min(45, Math.ceil(seconds * 1.2))}s`
+    }
+    return repsOrTime
+  }
+  // Convert rep-based to hold emphasis for static work
+  const repRangeMatch = repsOrTime.match(/^(\d+)-(\d+)$/)
+  if (repRangeMatch) {
+    // Convert reps to reasonable hold durations (e.g., "5-8" reps -> "15-25s" holds)
+    const low = parseInt(repRangeMatch[1])
+    if (intensityBias === 'conservative') {
+      return `${Math.max(10, low * 3)}s`
+    } else if (intensityBias === 'aggressive') {
+      return `${Math.min(35, low * 5)}s`
+    }
+    return `${low * 4}s`
+  }
+  return repsOrTime
+}
+
+/**
+ * Apply spine-specific dosage transformations
+ * Different training spines get fundamentally different prescription characters
+ */
+function applySpineDosageTransform(
+  dominantSpine: string | null,
+  repsOrTime: string,
+  exercise: { category?: string; isIsometric?: boolean; name?: string; id?: string },
+  intensityBias: string
+): { modified: boolean; repsOrTime: string; noteAddition?: string } {
+  if (!dominantSpine) return { modified: false, repsOrTime }
+  
+  const exName = safeLower(exercise.name || '')
+  const exId = safeLower(exercise.id || '')
+  const category = exercise.category || ''
+  
+  switch (dominantSpine) {
+    case 'static_skill_mastery': {
+      // Static skills: shorter sets, quality holds, more rest implied
+      const isStaticRelevant = category === 'skill' || category === 'hold' ||
+        exName.includes('lever') || exName.includes('planche') || exName.includes('handstand') ||
+        exName.includes('l-sit') || exName.includes('hold')
+      if (isStaticRelevant) {
+        // Ensure hold-style prescriptions
+        if (!repsOrTime.includes('s') && !repsOrTime.includes('hold')) {
+          const repMatch = repsOrTime.match(/^(\d+)/)
+          if (repMatch) {
+            const baseReps = parseInt(repMatch[1])
+            const holdTime = intensityBias === 'conservative' ? baseReps * 3 : 
+                            intensityBias === 'aggressive' ? baseReps * 5 : baseReps * 4
+            return {
+              modified: true,
+              repsOrTime: `${Math.max(10, Math.min(30, holdTime))}s`,
+              noteAddition: 'Static skill focus: prioritize hold quality'
+            }
+          }
+        }
+      }
+      return { modified: false, repsOrTime }
+    }
+    
+    case 'weighted_strength': {
+      // Weighted strength: lower reps, higher intensity implied
+      const isStrengthRelevant = category === 'strength' || category === 'compound' ||
+        exName.includes('weighted') || exName.includes('dip') || exName.includes('pull')
+      if (isStrengthRelevant) {
+        const repRangeMatch = repsOrTime.match(/^(\d+)-(\d+)$/)
+        if (repRangeMatch) {
+          const low = parseInt(repRangeMatch[1])
+          const high = parseInt(repRangeMatch[2])
+          // Shift to strength rep ranges
+          if (high > 8) {
+            const newLow = Math.max(3, low - 2)
+            const newHigh = Math.max(6, high - 3)
+            return {
+              modified: true,
+              repsOrTime: `${newLow}-${newHigh}`,
+              noteAddition: 'Strength focus: controlled tempo, full ROM'
+            }
+          }
+        }
+      }
+      return { modified: false, repsOrTime }
+    }
+    
+    case 'dynamic_skill': {
+      // Dynamic skills: moderate reps, explosive intent
+      const isDynamicRelevant = category === 'skill' || category === 'power' ||
+        exName.includes('muscle') || exName.includes('explosive') || exName.includes('kip')
+      if (isDynamicRelevant) {
+        return {
+          modified: true,
+          repsOrTime: repsOrTime,
+          noteAddition: 'Dynamic skill focus: explosive intent, full recovery between sets'
+        }
+      }
+      return { modified: false, repsOrTime }
+    }
+    
+    case 'foundation_building': {
+      // Foundation: moderate volume, emphasis on form
+      const repRangeMatch = repsOrTime.match(/^(\d+)-(\d+)$/)
+      if (repRangeMatch) {
+        const low = parseInt(repRangeMatch[1])
+        const high = parseInt(repRangeMatch[2])
+        // Keep in moderate hypertrophy/skill range
+        if (low < 6) {
+          return {
+            modified: true,
+            repsOrTime: `${low + 2}-${high + 2}`,
+            noteAddition: 'Foundation phase: prioritize form and volume tolerance'
+          }
+        }
+      }
+      return { modified: false, repsOrTime }
+    }
+    
+    default:
+      return { modified: false, repsOrTime }
+  }
+}
+
 /**
  * Safely extract skill key from various skill allocation shapes.
  * Handles missing/malformed skill fields gracefully.
@@ -965,18 +1145,43 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     preferWeighted: unifiedDoctrineDecision?.exerciseSelectionRules.preferWeightedVariants ?? false,
     preferStatic: unifiedDoctrineDecision?.exerciseSelectionRules.preferStaticVariants ?? false,
     genericFillerBlocked: unifiedDoctrineDecision?.exerciseSelectionRules.genericFillerBlocked ?? [],
+    // ==========================================================================
+    // [DOCTRINE-MATERIALIZATION-ENGINE] Full dosage rules for real prescription impact
+    // ==========================================================================
+    volumeBias: unifiedDoctrineDecision?.dosageRules.volumeBias ?? 'moderate',
+    skillQualityOverQuantity: unifiedDoctrineDecision?.dosageRules.skillQualityOverQuantity ?? false,
+    holdTimeEmphasis: unifiedDoctrineDecision?.dosageRules.holdTimeEmphasis ?? false,
+    recoveryConstrainedDosage: unifiedDoctrineDecision?.dosageRules.recoveryConstrainedDosage ?? false,
+    // Session structure for role-based dosage
+    skillBlockMandatory: unifiedDoctrineDecision?.sessionStructureRules.skillBlockMandatory ?? false,
+    strengthBlockMandatory: unifiedDoctrineDecision?.sessionStructureRules.strengthBlockMandatory ?? false,
+    // Expected session character for intent-driven prescriptions
+    expectedSessionCharacter: unifiedDoctrineDecision?.dominantSpine.expectedSessionCharacter ?? null,
+    primaryMethodEmphasis: unifiedDoctrineDecision?.dominantSpine.primaryMethodEmphasis ?? [],
+    // Anti-flattening
+    minimumSpineVisibility: unifiedDoctrineDecision?.antiFlatteningRules.minimumSpineVisibility ?? 0.5,
   }
   
   if (unifiedDoctrineDecision) {
-    console.log('[UNIFIED-DOCTRINE-ENFORCEMENT-ACTIVE]', {
+    console.log('[UNIFIED-DOCTRINE-MATERIALIZATION-ACTIVE]', {
       dayFocus: day?.focus,
       dominantSpine: doctrineEnforcement.dominantSpine,
       integrationMode: doctrineEnforcement.integrationMode,
       maxExercises: doctrineEnforcement.maxExercises,
+      // Dosage materialization fields
       intensityBias: doctrineEnforcement.intensityBias,
+      volumeBias: doctrineEnforcement.volumeBias,
+      skillQualityOverQuantity: doctrineEnforcement.skillQualityOverQuantity,
+      holdTimeEmphasis: doctrineEnforcement.holdTimeEmphasis,
+      recoveryConstrainedDosage: doctrineEnforcement.recoveryConstrainedDosage,
+      // Exercise selection
       preventGenericFiller: doctrineEnforcement.preventGenericFiller,
       blockedMethods: doctrineEnforcement.blockedMethods,
-      verdict: 'DOCTRINE_ENFORCED_ON_SELECTION',
+      preferWeighted: doctrineEnforcement.preferWeighted,
+      preferStatic: doctrineEnforcement.preferStatic,
+      // Session character
+      expectedSessionCharacter: doctrineEnforcement.expectedSessionCharacter,
+      verdict: 'DOCTRINE_MATERIALIZATION_ENGINE_ACTIVE',
     })
   }
   
@@ -2794,33 +2999,127 @@ function selectMainExercises(
     }
     
     // ==========================================================================
-    // [DOCTRINE-DRIVEN-DOSAGE] Apply doctrine intensity bias to sets
-    // This is where doctrine ACTUALLY influences the prescription, not just logging it
+    // [DOCTRINE-MATERIALIZATION-ENGINE] Full doctrine-driven dosage transformation
+    // This is where doctrine ACTUALLY and VISIBLY influences prescriptions
     // ==========================================================================
     let doctrineFinalSets = canonicalSets ?? finalExercise.defaultSets ?? 3
-    if (doctrineEnforcement.active && typeof doctrineFinalSets === 'number') {
-      const intensityBias = doctrineEnforcement.intensityBias
-      const originalSets = doctrineFinalSets
+    let doctrineFinalRepsOrTime = canonicalRepsOrTime ?? finalExercise.defaultRepsOrTime ?? '8-12'
+    let doctrineFinalNote = canonicalNote ?? finalExercise.notes ?? ''
+    
+    if (doctrineEnforcement.active) {
+      const originalSets = typeof doctrineFinalSets === 'number' ? doctrineFinalSets : 3
+      const originalRepsOrTime = doctrineFinalRepsOrTime
       
-      // Apply doctrine-driven set adjustment based on intensity bias
-      if (intensityBias === 'conservative') {
-        // Conservative: reduce sets slightly for recovery/skill focus
-        doctrineFinalSets = Math.max(2, Math.floor(doctrineFinalSets * 0.85))
-      } else if (intensityBias === 'aggressive') {
-        // Aggressive: increase sets for volume accumulation
-        doctrineFinalSets = Math.min(6, Math.ceil(doctrineFinalSets * 1.2))
+      // ========================================================================
+      // STEP 1: Apply INTENSITY BIAS to sets
+      // ========================================================================
+      if (typeof doctrineFinalSets === 'number') {
+        if (doctrineEnforcement.intensityBias === 'conservative') {
+          doctrineFinalSets = Math.max(2, Math.floor(doctrineFinalSets * 0.8))
+        } else if (doctrineEnforcement.intensityBias === 'aggressive') {
+          doctrineFinalSets = Math.min(6, Math.ceil(doctrineFinalSets * 1.25))
+        }
       }
-      // 'moderate' = no change
       
-      if (doctrineFinalSets !== originalSets) {
-        console.log('[DOCTRINE-DOSAGE-APPLIED]', {
+      // ========================================================================
+      // STEP 2: Apply VOLUME BIAS to sets (compounds with intensity)
+      // ========================================================================
+      if (typeof doctrineFinalSets === 'number') {
+        if (doctrineEnforcement.volumeBias === 'low') {
+          doctrineFinalSets = Math.max(2, doctrineFinalSets - 1)
+        } else if (doctrineEnforcement.volumeBias === 'high') {
+          doctrineFinalSets = Math.min(6, doctrineFinalSets + 1)
+        }
+      }
+      
+      // ========================================================================
+      // STEP 3: Apply SKILL QUALITY emphasis to reps/time
+      // When skillQualityOverQuantity is true, reduce volume for quality focus
+      // ========================================================================
+      if (doctrineEnforcement.skillQualityOverQuantity) {
+        const isSkillExercise = finalExercise.category === 'skill' || 
+          safeLower(reason).includes('skill') ||
+          safeLower(finalExercise.id || '').includes('progression')
+        
+        if (isSkillExercise) {
+          // Reduce reps/holds for quality emphasis
+          doctrineFinalRepsOrTime = transformRepsForQuality(doctrineFinalRepsOrTime)
+          if (!doctrineFinalNote.includes('quality')) {
+            doctrineFinalNote = doctrineFinalNote 
+              ? `${doctrineFinalNote} | Quality focus: fewer reps, higher precision`
+              : 'Quality focus: fewer reps, higher precision'
+          }
+        }
+      }
+      
+      // ========================================================================
+      // STEP 4: Apply HOLD TIME EMPHASIS for static skill spines
+      // Transform rep-based prescriptions to hold-based for isometric work
+      // ========================================================================
+      if (doctrineEnforcement.holdTimeEmphasis && doctrineEnforcement.dominantSpine === 'static_skill_mastery') {
+        const isStaticExercise = finalExercise.isIsometric || 
+          safeLower(finalExercise.name || '').includes('hold') ||
+          safeLower(finalExercise.name || '').includes('lever') ||
+          safeLower(finalExercise.name || '').includes('planche') ||
+          finalExercise.category === 'hold' ||
+          finalExercise.category === 'skill'
+        
+        if (isStaticExercise) {
+          doctrineFinalRepsOrTime = transformToHoldEmphasis(doctrineFinalRepsOrTime, doctrineEnforcement.intensityBias)
+        }
+      }
+      
+      // ========================================================================
+      // STEP 5: Apply RECOVERY CONSTRAINED dosage
+      // Conservative dosage when recovery is limited
+      // ========================================================================
+      if (doctrineEnforcement.recoveryConstrainedDosage) {
+        if (typeof doctrineFinalSets === 'number') {
+          doctrineFinalSets = Math.max(2, doctrineFinalSets - 1)
+        }
+        doctrineFinalRepsOrTime = transformRepsForRecovery(doctrineFinalRepsOrTime)
+        if (!doctrineFinalNote.includes('recovery')) {
+          doctrineFinalNote = doctrineFinalNote
+            ? `${doctrineFinalNote} | Recovery-managed volume`
+            : 'Recovery-managed volume'
+        }
+      }
+      
+      // ========================================================================
+      // STEP 6: Apply SPINE-SPECIFIC dosage transformations
+      // Different spines get fundamentally different prescription patterns
+      // ========================================================================
+      const spineTransform = applySpineDosageTransform(
+        doctrineEnforcement.dominantSpine,
+        doctrineFinalRepsOrTime,
+        finalExercise,
+        doctrineEnforcement.intensityBias
+      )
+      if (spineTransform.modified) {
+        doctrineFinalRepsOrTime = spineTransform.repsOrTime
+        if (spineTransform.noteAddition && !doctrineFinalNote.includes(spineTransform.noteAddition)) {
+          doctrineFinalNote = doctrineFinalNote
+            ? `${doctrineFinalNote} | ${spineTransform.noteAddition}`
+            : spineTransform.noteAddition
+        }
+      }
+      
+      // Log if anything actually changed
+      const setsChanged = originalSets !== doctrineFinalSets
+      const repsChanged = originalRepsOrTime !== doctrineFinalRepsOrTime
+      if (setsChanged || repsChanged) {
+        console.log('[DOCTRINE-MATERIALIZATION-APPLIED]', {
           exerciseId: finalExercise.id,
           exerciseName: finalExercise.name,
-          intensityBias,
-          originalSets,
-          doctrineFinalSets,
           dominantSpine: doctrineEnforcement.dominantSpine,
-          verdict: 'DOCTRINE_MODIFIED_DOSAGE',
+          intensityBias: doctrineEnforcement.intensityBias,
+          volumeBias: doctrineEnforcement.volumeBias,
+          skillQuality: doctrineEnforcement.skillQualityOverQuantity,
+          holdEmphasis: doctrineEnforcement.holdTimeEmphasis,
+          recoveryConstrained: doctrineEnforcement.recoveryConstrainedDosage,
+          original: { sets: originalSets, repsOrTime: originalRepsOrTime },
+          final: { sets: doctrineFinalSets, repsOrTime: doctrineFinalRepsOrTime },
+          verdict: 'DOCTRINE_MATERIALLY_TRANSFORMED_DOSAGE',
         })
       }
     }
@@ -2828,10 +3127,10 @@ function selectMainExercises(
     selected.push({
       exercise: finalExercise,
       sets: doctrineFinalSets,
-      repsOrTime: canonicalRepsOrTime ?? finalExercise.defaultRepsOrTime ?? '8-12',
+      repsOrTime: doctrineFinalRepsOrTime,
       note: wasSubstituted 
         ? `Substituted from ${exercise.name} - ${gateResult.recommendedSubstitute?.reason || 'Prerequisites not met'}`
-        : canonicalNote ?? finalExercise.notes,
+        : doctrineFinalNote || finalExercise.notes,
       isOverrideable: finalExercise.category !== 'skill', // Skills are harder to replace
       selectionReason: wasSubstituted 
         ? `${reason} (safe progression substitute)`

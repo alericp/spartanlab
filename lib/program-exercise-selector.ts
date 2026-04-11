@@ -2372,6 +2372,30 @@ function selectMainExercises(
     if (usedIds.has(exercise.id)) return false
     if (selected.length >= maxExercises) return false
     
+    // ==========================================================================
+    // [DOCTRINE-DRIVEN-BLOCKING] Block generic filler exercises when doctrine active
+    // This is where doctrine ACTUALLY filters exercise choices, not just logs
+    // ==========================================================================
+    if (doctrineEnforcement.active && doctrineEnforcement.preventGenericFiller) {
+      const exNameLower = safeLower(exercise.name || '')
+      const exIdLower = safeLower(exercise.id || '')
+      
+      for (const blockedPattern of doctrineEnforcement.genericFillerBlocked) {
+        const patternLower = blockedPattern.toLowerCase().replace(/_/g, ' ')
+        if (exNameLower.includes(patternLower) || exIdLower.includes(patternLower.replace(/ /g, '_'))) {
+          console.log('[DOCTRINE-BLOCKED-EXERCISE]', {
+            exerciseId: exercise.id,
+            exerciseName: exercise.name,
+            blockedPattern,
+            dominantSpine: doctrineEnforcement.dominantSpine,
+            reason: `Generic filler blocked for ${doctrineEnforcement.dominantSpine} spine`,
+            verdict: 'DOCTRINE_BLOCKED_GENERIC_FILLER',
+          })
+          return false
+        }
+      }
+    }
+    
     // Check load limits before adding
     if (!canAddMore(exercise, deliveryStyle)) return false
     
@@ -2769,9 +2793,41 @@ function selectMainExercises(
       })
     }
     
+    // ==========================================================================
+    // [DOCTRINE-DRIVEN-DOSAGE] Apply doctrine intensity bias to sets
+    // This is where doctrine ACTUALLY influences the prescription, not just logging it
+    // ==========================================================================
+    let doctrineFinalSets = canonicalSets ?? finalExercise.defaultSets ?? 3
+    if (doctrineEnforcement.active && typeof doctrineFinalSets === 'number') {
+      const intensityBias = doctrineEnforcement.intensityBias
+      const originalSets = doctrineFinalSets
+      
+      // Apply doctrine-driven set adjustment based on intensity bias
+      if (intensityBias === 'conservative') {
+        // Conservative: reduce sets slightly for recovery/skill focus
+        doctrineFinalSets = Math.max(2, Math.floor(doctrineFinalSets * 0.85))
+      } else if (intensityBias === 'aggressive') {
+        // Aggressive: increase sets for volume accumulation
+        doctrineFinalSets = Math.min(6, Math.ceil(doctrineFinalSets * 1.2))
+      }
+      // 'moderate' = no change
+      
+      if (doctrineFinalSets !== originalSets) {
+        console.log('[DOCTRINE-DOSAGE-APPLIED]', {
+          exerciseId: finalExercise.id,
+          exerciseName: finalExercise.name,
+          intensityBias,
+          originalSets,
+          doctrineFinalSets,
+          dominantSpine: doctrineEnforcement.dominantSpine,
+          verdict: 'DOCTRINE_MODIFIED_DOSAGE',
+        })
+      }
+    }
+    
     selected.push({
       exercise: finalExercise,
-      sets: canonicalSets ?? finalExercise.defaultSets ?? 3,
+      sets: doctrineFinalSets,
       repsOrTime: canonicalRepsOrTime ?? finalExercise.defaultRepsOrTime ?? '8-12',
       note: wasSubstituted 
         ? `Substituted from ${exercise.name} - ${gateResult.recommendedSubstitute?.reason || 'Prerequisites not met'}`
@@ -3505,12 +3561,35 @@ function applyMaterialityScoreAdjustments(
     const doctrineBoost = materialityScore.breakdown.doctrineBoost >= 10 ? 12 :
                           materialityScore.breakdown.doctrineBoost >= 5 ? 6 : 0
     
+    // ==========================================================================
+    // [DOCTRINE-DRIVEN-VARIANT-PREFERENCE] Boost exercises matching spine preference
+    // This makes doctrine preferWeighted/preferStatic actually influence selection
+    // ==========================================================================
+    let doctrineVariantBoost = 0
+    if (doctrineEnforcement.active) {
+      const exNameLower = safeLower(exercise.name || '')
+      const exIdLower = safeLower(exercise.id || '')
+      const isWeightedExercise = exNameLower.includes('weighted') || exIdLower.includes('weighted')
+      const isStaticExercise = exercise.isIsometric || 
+        exNameLower.includes('hold') || 
+        exNameLower.includes('isometric') ||
+        exercise.category === 'hold' ||
+        exercise.category === 'skill'
+      
+      if (doctrineEnforcement.preferWeighted && isWeightedExercise) {
+        doctrineVariantBoost = 15 // Significant boost for weighted variants
+      } else if (doctrineEnforcement.preferStatic && isStaticExercise) {
+        doctrineVariantBoost = 15 // Significant boost for static variants
+      }
+    }
+    
     // Combine with slot-specific ratio + truth boosts
     const combinedScore = Math.round(
       baseScore * ratio.base + 
       materialityScore.totalScore * ratio.materiality +
       progressionBoost +
-      doctrineBoost
+      doctrineBoost +
+      doctrineVariantBoost
     )
     
     return {

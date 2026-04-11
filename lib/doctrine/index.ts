@@ -47,3 +47,15 @@ export {
   type DragonFlagCoverageStatus,
   type MethodProfileCoverageStatus,
 } from './coverage-validator'
+
+// Unified Doctrine Decision Model
+export {
+  buildUnifiedDoctrineDecision,
+  isExerciseAllowedByDoctrine,
+  getDoctrineMaxExercises,
+  getDoctrineDosageModifier,
+  isSessionStructureDoctrineCompliant,
+  type UnifiedDoctrineDecision,
+  type DominantSpineType,
+  type IntegrationMode,
+} from './unified-doctrine-decision-model'

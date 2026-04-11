@@ -132,11 +132,19 @@ import { prefetchDoctrineRules, getDoctrineInfluenceSummary, getCachedDoctrineRu
 // [DOCTRINE RUNTIME CONTRACT] Authoritative doctrine contract for upstream generation influence
 import { buildDoctrineRuntimeContract, type DoctrineRuntimeContract } from './doctrine-runtime-contract'
 // [SHADOW INTEGRATION] Doctrine Influence Contract - bridges doctrine DB → generator
-import { 
-  buildDoctrineInfluenceContract, 
-  generateDoctrineInfluenceAuditSummary,
-  type DoctrineInfluenceContract 
+import {
+buildDoctrineInfluenceContract,
+generateDoctrineInfluenceAuditSummary,
+type DoctrineInfluenceContract
 } from './doctrine/doctrine-influence-contract'
+// [UNIFIED DOCTRINE DECISION] Authoritative decision model for doctrine-shaped output
+import {
+  buildUnifiedDoctrineDecision,
+  isExerciseAllowedByDoctrine,
+  getDoctrineMaxExercises,
+  getDoctrineDosageModifier,
+  type UnifiedDoctrineDecision,
+} from './doctrine/unified-doctrine-decision-model'
 // [PHASE 2] Canonical skill materiality scoring - consumes doctrine influence contract
 import {
   computeCanonicalMaterialityRanking,
@@ -879,10 +887,14 @@ type AdaptiveSessionContext = {
   multiSkillAllocation?: MultiSkillSessionAllocationContract | null
   // [DOCTRINE RUNTIME CONTRACT] Authoritative doctrine contract for upstream generation influence
   doctrineRuntimeContract?: DoctrineRuntimeContract | null
-  // [SHADOW INTEGRATION] Doctrine influence contract - bridges doctrine DB → generator
+  // [DOCTRINE INFLUENCE] Doctrine influence contract - bridges doctrine DB → generator
   // This contract explicitly separates athleteTruth, doctrineDbTruth, codeDoctrineFallbackTruth,
   // mergedInfluence, sourceAttribution, and readinessState for audit visibility.
   doctrineInfluenceContract?: DoctrineInfluenceContract | null
+  // [UNIFIED DOCTRINE DECISION] Authoritative decision model for doctrine-shaped output
+  // This is THE unified decision that shapes: dominant spine, integration constraints,
+  // session structure, exercise selection, dosage, and anti-flattening rules.
+  unifiedDoctrineDecision?: UnifiedDoctrineDecision | null
   // [SESSION ARCHITECTURE TRUTH] Authoritative contract for generation enforcement
   sessionArchitectureTruth?: SessionArchitectureTruthContract | null
   // [SESSION-COMPOSITION-INTELLIGENCE] Session composition blueprint for structure decisions
@@ -7051,14 +7063,56 @@ async function generateAdaptiveProgramImpl(
       fallbackActive: doctrineInfluenceContract.safetyFlags.fallbackActive,
       sourceAttribution: doctrineInfluenceContract.sourceAttribution,
       readinessVerdict: doctrineInfluenceContract.readinessState.readinessVerdict,
-      verdict: 'DOCTRINE_INFLUENCE_READY_FOR_MATERIALITY',
+  verdict: 'DOCTRINE_INFLUENCE_READY_FOR_MATERIALITY',
+  })
+  } catch (err) {
+  console.log('[PHASE2-DOCTRINE-INFLUENCE-CONTRACT-EARLY-FALLBACK]', {
+  error: String(err),
+  verdict: 'MATERIALITY_WILL_USE_LEGACY_SCORING',
+  })
+  // Continue with null - materiality scoring will use legacy behavior
+  }
+  
+  // ==========================================================================
+  // [UNIFIED DOCTRINE DECISION] Build authoritative doctrine-driven generation constraints
+  // ==========================================================================
+  // PURPOSE: This is THE unified decision model that shapes the program output.
+  // It translates doctrine + athlete truth into concrete generation rules:
+  // - DOMINANT SPINE: What is the week's primary character?
+  // - INTEGRATION CONSTRAINTS: How can secondary work enter?
+  // - SESSION STRUCTURE: What session shapes are allowed?
+  // - EXERCISE SELECTION: What exercises are doctrine-appropriate?
+  // - DOSAGE: How should intensity/volume be biased?
+  // - ANTI-FLATTENING: What generic patterns must be prevented?
+  // ==========================================================================
+  let unifiedDoctrineDecision: UnifiedDoctrineDecision | null = null
+  try {
+    unifiedDoctrineDecision = buildUnifiedDoctrineDecision(
+      doctrineInfluenceContract,
+      canonicalProfile.primaryGoal || null,
+      canonicalProfile.secondaryGoal || null,
+      canonicalProfile.selectedSkills || [],
+      canonicalProfile.experienceLevel || null,
+      effectiveTrainingDays,
+      canonicalProfile.recoveryQuality || null,
+      canonicalProfile.jointCautions || []
+    )
+    
+    console.log('[UNIFIED-DOCTRINE-DECISION-BUILT-FOR-GENERATION]', {
+      decisionId: unifiedDoctrineDecision.decisionId,
+      dominantSpine: unifiedDoctrineDecision.dominantSpine.type,
+      integrationMode: unifiedDoctrineDecision.integrationConstraints.mode,
+      maxExercisesPerSession: unifiedDoctrineDecision.sessionStructureRules.maxTotalExercisesPerSession,
+      antiFlatteningEnabled: unifiedDoctrineDecision.antiFlatteningRules.preventGenericSplits,
+      primaryDoctrineId: unifiedDoctrineDecision.sourceAttribution.primaryDoctrineId,
+      verdict: 'UNIFIED_DOCTRINE_DECISION_READY',
     })
   } catch (err) {
-    console.log('[PHASE2-DOCTRINE-INFLUENCE-CONTRACT-EARLY-FALLBACK]', {
+    console.log('[UNIFIED-DOCTRINE-DECISION-FALLBACK]', {
       error: String(err),
-      verdict: 'MATERIALITY_WILL_USE_LEGACY_SCORING',
+      verdict: 'GENERATION_WILL_USE_STANDARD_LOGIC',
     })
-    // Continue with null - materiality scoring will use legacy behavior
+    // Continue with null - generation will use standard logic without doctrine enforcement
   }
   
   // ==========================================================================
@@ -16574,8 +16628,7 @@ return explanations.length > 0 ? explanations : undefined
   })
   }
   
-  // [SHADOW INTEGRATION] Store doctrine influence contract for audit visibility
-  // This is shadow mode - contract is stored but does not change visible behavior
+  // [DOCTRINE INFLUENCE] Store doctrine influence contract for audit visibility
   if (doctrineInfluenceContract) {
     finalProgram.doctrineInfluenceContract = doctrineInfluenceContract
     console.log('[DOCTRINE-INFLUENCE-CONTRACT-ATTACHED]', {
@@ -16585,7 +16638,24 @@ return explanations.length > 0 ? explanations : undefined
       fallbackActive: doctrineInfluenceContract.safetyFlags.fallbackActive,
       sourceAttribution: doctrineInfluenceContract.sourceAttribution,
       readinessVerdict: doctrineInfluenceContract.readinessState.readinessVerdict,
-      verdict: 'DOCTRINE_INFLUENCE_SHADOW_ATTACHED',
+      verdict: 'DOCTRINE_INFLUENCE_ATTACHED',
+    })
+  }
+  
+  // [UNIFIED DOCTRINE DECISION] Store authoritative doctrine decision for audit + downstream
+  if (unifiedDoctrineDecision) {
+    finalProgram.unifiedDoctrineDecision = unifiedDoctrineDecision
+    console.log('[UNIFIED-DOCTRINE-DECISION-ATTACHED]', {
+      decisionId: unifiedDoctrineDecision.decisionId,
+      dominantSpine: unifiedDoctrineDecision.dominantSpine.type,
+      dominantSpineRationale: unifiedDoctrineDecision.dominantSpine.rationale,
+      integrationMode: unifiedDoctrineDecision.integrationConstraints.mode,
+      intensityBias: unifiedDoctrineDecision.dosageRules.intensityBias,
+      volumeBias: unifiedDoctrineDecision.dosageRules.volumeBias,
+      antiFlatteningEnabled: unifiedDoctrineDecision.antiFlatteningRules.preventGenericSplits,
+      minimumSpineVisibility: unifiedDoctrineDecision.antiFlatteningRules.minimumSpineVisibility,
+      primaryDoctrineId: unifiedDoctrineDecision.sourceAttribution.primaryDoctrineId,
+      verdict: 'UNIFIED_DOCTRINE_DECISION_ATTACHED',
     })
   }
   
@@ -19811,6 +19881,8 @@ function generateAdaptiveSession(
   })) || [],
   // [SESSION-ARCHITECTURE-OWNERSHIP] Pass composition blueprint for structure enforcement
   sessionCompositionBlueprint,
+  // [UNIFIED DOCTRINE DECISION] Pass authoritative doctrine-driven generation constraints
+  unifiedDoctrineDecision,
   })
   
   sessionStep = 'selection_received'

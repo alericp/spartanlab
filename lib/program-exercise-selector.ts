@@ -903,6 +903,8 @@ interface ExerciseSelectionInputs {
   }>
   // [SESSION-ARCHITECTURE-OWNERSHIP] Session composition blueprint for structure enforcement
   sessionCompositionBlueprint?: import('./program-generation/session-composition-intelligence').SessionCompositionBlueprint | null
+  // [UNIFIED DOCTRINE DECISION] Authoritative doctrine-driven generation constraints
+  unifiedDoctrineDecision?: import('./doctrine/unified-doctrine-decision-model').UnifiedDoctrineDecision | null
   }
 
 // =============================================================================
@@ -944,7 +946,39 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   materialSkillIntent,
   // [SESSION-ARCHITECTURE-OWNERSHIP] Extract composition blueprint
   sessionCompositionBlueprint,
+  // [UNIFIED DOCTRINE DECISION] Extract doctrine-driven generation constraints
+  unifiedDoctrineDecision,
   } = inputs
+  
+  // ==========================================================================
+  // [UNIFIED DOCTRINE DECISION] Enforce doctrine-driven constraints on selection
+  // This determines: max exercises, intensity bias, blocked patterns, and more
+  // ==========================================================================
+  const doctrineEnforcement = {
+    active: !!unifiedDoctrineDecision,
+    maxExercises: unifiedDoctrineDecision?.sessionStructureRules.maxTotalExercisesPerSession ?? 8,
+    intensityBias: unifiedDoctrineDecision?.dosageRules.intensityBias ?? 'moderate',
+    preventGenericFiller: unifiedDoctrineDecision?.antiFlatteningRules.preventFillerAccessories ?? false,
+    dominantSpine: unifiedDoctrineDecision?.dominantSpine.type ?? null,
+    integrationMode: unifiedDoctrineDecision?.integrationConstraints.mode ?? null,
+    blockedMethods: unifiedDoctrineDecision?.integrationConstraints.blockedMethods ?? [],
+    preferWeighted: unifiedDoctrineDecision?.exerciseSelectionRules.preferWeightedVariants ?? false,
+    preferStatic: unifiedDoctrineDecision?.exerciseSelectionRules.preferStaticVariants ?? false,
+    genericFillerBlocked: unifiedDoctrineDecision?.exerciseSelectionRules.genericFillerBlocked ?? [],
+  }
+  
+  if (unifiedDoctrineDecision) {
+    console.log('[UNIFIED-DOCTRINE-ENFORCEMENT-ACTIVE]', {
+      dayFocus: day?.focus,
+      dominantSpine: doctrineEnforcement.dominantSpine,
+      integrationMode: doctrineEnforcement.integrationMode,
+      maxExercises: doctrineEnforcement.maxExercises,
+      intensityBias: doctrineEnforcement.intensityBias,
+      preventGenericFiller: doctrineEnforcement.preventGenericFiller,
+      blockedMethods: doctrineEnforcement.blockedMethods,
+      verdict: 'DOCTRINE_ENFORCED_ON_SELECTION',
+    })
+  }
   
   // ==========================================================================
   // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] PHASE 1: Input validation
@@ -1027,12 +1061,31 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   const budget = {
     ...baseBudget,
     // Override main exercises based on architecture contract when available
-    mainExercises: sessionArchitectureContract.templateEscaped
-      ? sessionArchitectureContract.slotAllocation.primaryWork + 
-        sessionArchitectureContract.slotAllocation.secondaryWork +
-        sessionArchitectureContract.slotAllocation.supportWork +
-        sessionArchitectureContract.slotAllocation.accessoryWork
-      : baseBudget.mainExercises,
+    // [UNIFIED DOCTRINE DECISION] Apply doctrine max exercises cap if stricter
+    mainExercises: Math.min(
+      sessionArchitectureContract.templateEscaped
+        ? sessionArchitectureContract.slotAllocation.primaryWork + 
+          sessionArchitectureContract.slotAllocation.secondaryWork +
+          sessionArchitectureContract.slotAllocation.supportWork +
+          sessionArchitectureContract.slotAllocation.accessoryWork
+        : baseBudget.mainExercises,
+      doctrineEnforcement.maxExercises // Doctrine enforces max cap
+    ),
+  }
+  
+  // [UNIFIED DOCTRINE DECISION] Log doctrine enforcement on exercise budget
+  if (doctrineEnforcement.active) {
+    console.log('[UNIFIED-DOCTRINE-BUDGET-ENFORCED]', {
+      dayFocus: day?.focus,
+      baseBudget: baseBudget.mainExercises,
+      architectureBudget: sessionArchitectureContract.templateEscaped 
+        ? sessionArchitectureContract.slotAllocation.primaryWork + sessionArchitectureContract.slotAllocation.secondaryWork + sessionArchitectureContract.slotAllocation.supportWork + sessionArchitectureContract.slotAllocation.accessoryWork
+        : null,
+      doctrineMaxExercises: doctrineEnforcement.maxExercises,
+      finalBudget: budget.mainExercises,
+      dominantSpine: doctrineEnforcement.dominantSpine,
+      verdict: 'DOCTRINE_BUDGET_CAP_APPLIED',
+    })
   }
   
   // Get principle rules if methods are selected

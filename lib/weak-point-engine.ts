@@ -1386,6 +1386,10 @@ export function detectWeakPointsFromInput(input: DetectionInput): DetectedWeakPo
 /**
  * Combine detection results with onboarding profile.
  * Convenience function for use in program builder.
+ * 
+ * [PROFILE-TRUTH-CONSUMPTION] UPGRADED: Now incorporates athlete's self-reported
+ * weakestArea and primaryLimitation from onboarding, elevating user truth
+ * alongside benchmark-derived detection.
  */
 export function detectWeakPointsForProfile(
   profile: OnboardingProfile | null,
@@ -1410,7 +1414,103 @@ export function detectWeakPointsForProfile(
     experienceLevel: calibration?.fitnessLevel as 'beginner' | 'intermediate' | 'advanced' || 'intermediate',
   }
   
-  return detectWeakPointsFromInput(input)
+  // Get benchmark-derived weak points
+  const detected = detectWeakPointsFromInput(input)
+  
+  // ==========================================================================
+  // [PROFILE-TRUTH-CONSUMPTION] INCORPORATE ATHLETE SELF-REPORTED WEAK AREAS
+  // ==========================================================================
+  // The athlete's explicit weakestArea and primaryLimitation from onboarding
+  // represent direct user truth that should influence program construction.
+  // These are elevated to primary consideration when provided.
+  
+  const profileWeakAreas = mapProfileDiagnosticsToWeakPoints(
+    profile.weakestArea,
+    profile.primaryLimitation
+  )
+  
+  // Merge profile-reported weak areas with detected ones
+  // Profile truth gets elevated - user-reported weaknesses are primary
+  const mergedPrimary = [...new Set([
+    ...profileWeakAreas.primary,
+    ...detected.primary,
+  ])]
+  
+  const mergedSecondary = [...new Set([
+    ...profileWeakAreas.secondary,
+    ...detected.secondary.filter(s => !mergedPrimary.includes(s)),
+  ])]
+  
+  // Log profile truth consumption for audit
+  if (profile.weakestArea || profile.primaryLimitation) {
+    console.log('[profile-truth-consumption] Weak point detection includes profile diagnostics:', {
+      weakestArea: profile.weakestArea,
+      primaryLimitation: profile.primaryLimitation,
+      profileWeakAreas,
+      benchmarkDetected: detected,
+      merged: { primary: mergedPrimary, secondary: mergedSecondary },
+    })
+  }
+  
+  return {
+    primary: mergedPrimary,
+    secondary: mergedSecondary,
+  }
+}
+
+/**
+ * Map athlete's self-reported weakestArea and primaryLimitation to WeakPointType.
+ * 
+ * [PROFILE-TRUTH-CONSUMPTION] This bridges onboarding diagnostics to
+ * the weak-point engine, ensuring user-reported limitations materially
+ * affect program construction.
+ */
+function mapProfileDiagnosticsToWeakPoints(
+  weakestArea: string | null | undefined,
+  primaryLimitation: string | null | undefined
+): { primary: WeakPointType[]; secondary: WeakPointType[] } {
+  const primary: WeakPointType[] = []
+  const secondary: WeakPointType[] = []
+  
+  // Map weakestArea to WeakPointType
+  // These come from OnboardingProfile.weakestArea
+  if (weakestArea) {
+    const weakAreaMapping: Record<string, WeakPointType> = {
+      'pulling_strength': 'pull_strength',
+      'pushing_strength': 'push_strength',
+      'core_strength': 'core_compression',
+      'shoulder_stability': 'shoulder_stability',
+      'hip_mobility': 'mobility',
+      'hamstring_flexibility': 'mobility',
+    }
+    const mapped = weakAreaMapping[weakestArea]
+    if (mapped) {
+      primary.push(mapped)
+    }
+  }
+  
+  // Map primaryLimitation to WeakPointType
+  // These come from OnboardingProfile.primaryLimitation
+  if (primaryLimitation) {
+    const limitationMapping: Record<string, WeakPointType> = {
+      'strength': 'pull_strength', // Default to pull as more common limiter
+      'flexibility': 'mobility',
+      'skill_coordination': 'scapular_control',
+      'recovery': 'recovery_capacity',
+      'consistency': 'work_capacity',
+    }
+    const mapped = limitationMapping[primaryLimitation]
+    if (mapped && !primary.includes(mapped)) {
+      // Add to secondary if primary already has a different weakness
+      if (primary.length > 0) {
+        secondary.push(mapped)
+      } else {
+        primary.push(mapped)
+      }
+    }
+  }
+  
+  return { primary, secondary }
 }
 
 // =============================================================================

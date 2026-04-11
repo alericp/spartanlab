@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { AdaptiveSession, AdaptiveExercise, TrainingMethodPreference } from '@/lib/adaptive-program-builder'
-import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell } from 'lucide-react'
+import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell, Info } from 'lucide-react'
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
 import { exerciseSupportsRPE } from '@/lib/rpe-adjustment-engine'
 import { useWorkoutSession } from '@/hooks/useWorkoutSession'
@@ -1551,46 +1552,51 @@ function ExerciseRow({
         // This delegates to the sophisticated reasoning engine in program-display-contract.ts
         const coachingExpl = coachingExplanation ? getCompactExerciseExplanation(coachingExplanation, exercise.id) : null
         
-        // Use coaching explanation as primary source, fall back to row surface sublabel
-        const bestSublabel = coachingExpl?.role || (showSublabel ? getBestRowSublabel(alignedRowSurface) : null)
-        const isCoachingSource = !!coachingExpl?.role
+        // Use bestPrimary for smart prioritization - picks the single best explanation line
+        // Falls back to role, then row surface sublabel
+        const bestSublabel = coachingExpl?.bestPrimary || coachingExpl?.role || (showSublabel ? getBestRowSublabel(alignedRowSurface) : null)
+        const isCoachingSource = !!coachingExpl?.bestPrimary || !!coachingExpl?.role
         
-        // [COMPARATIVE-COACH-INTELLIGENCE] Secondary explanation adds decision-intelligence
-        // Shows why THIS choice over alternatives, or why THIS intensity HERE
-        const secondaryExplanation = coachingExpl?.bestSecondary
-        // Only show secondary if it's meaningfully different from primary
-        const showSecondary = secondaryExplanation && 
-          secondaryExplanation !== coachingExpl?.role &&
-          secondaryExplanation.length > 20 // Avoid very short generic fallbacks
+        // [PREMIUM-INFO-BUBBLE] Secondary detail goes into tooltip, not stacked on card
+        // This keeps cards clean while preserving depth
+        const secondaryDetail = coachingExpl?.secondaryDetail
+        const hasUsefulSecondary = coachingExpl?.hasUsefulSecondary
         
         if (!bestSublabel && !showChips) return null
         
         return (
-        <div className="flex flex-col gap-0.5 mt-0.5">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {/* [COACHING-EXPLANATION-CONTRACT] Primary role explanation from authoritative source */}
-            {/* Coaching explanations get slightly stronger styling as they are authoritative */}
-            {bestSublabel && (
-              <span className={`text-[10px] ${isCoachingSource ? 'text-[#9A9A9A]' : 'text-[#7A7A7A]'}`}>
-                {bestSublabel}
-              </span>
-            )}
-            {/* Single chip max in prescription-first mode - subtle styling */}
-            {showChips && chips.slice(0, 1).map((chip, i) => (
-              <span 
-                key={`chip-${i}`}
-                className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#6A6A6A]"
-              >
-                {chip}
-              </span>
-            ))}
-          </div>
-          {/* [COMPARATIVE-COACH-INTELLIGENCE] Secondary line shows decision reasoning */}
-          {showSecondary && (
-            <span className="text-[9px] text-[#6A6A6A] italic">
-              {secondaryExplanation}
+        <div className="flex items-center gap-1 mt-0.5">
+          {/* [COACHING-EXPLANATION-CONTRACT] Single clean primary explanation line */}
+          {bestSublabel && (
+            <span className={`text-[10px] ${isCoachingSource ? 'text-[#9A9A9A]' : 'text-[#7A7A7A]'}`}>
+              {bestSublabel}
             </span>
           )}
+          {/* [PREMIUM-INFO-BUBBLE] Compact info icon with tooltip for secondary detail */}
+          {hasUsefulSecondary && secondaryDetail && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button className="flex-shrink-0 p-0.5 -my-0.5 text-[#4A4A4A] hover:text-[#7A7A7A] transition-colors">
+                  <Info className="w-3 h-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent 
+                side="top" 
+                className="max-w-[260px] bg-[#1A1A1A] border-[#333] text-[#AAA] text-[10px] leading-relaxed px-2.5 py-1.5"
+              >
+                {secondaryDetail}
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {/* Single chip max in prescription-first mode - subtle styling */}
+          {showChips && chips.slice(0, 1).map((chip, i) => (
+            <span 
+              key={`chip-${i}`}
+              className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#6A6A6A] ml-1"
+            >
+              {chip}
+            </span>
+          ))}
         </div>
         )
       })()}

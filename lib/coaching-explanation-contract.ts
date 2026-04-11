@@ -1637,13 +1637,17 @@ export function getCompactSessionExplanation(
 /**
  * Get compact exercise explanation for UI display.
  * 
- * Returns the best available explanation with comparative intelligence when available.
- * Priority order:
- * 1. Role explanation (always present, the primary WHY)
- * 2. Comparative choice explanation (premium "why this over that" reasoning)
- * 3. Intensity contrast explanation (premium "why this effort here" reasoning)
- * 4. Week context explanation (how this fits the week structure)
- * 5. Dosage reason (effort-level reasoning)
+ * Returns the best available explanation with smart prioritization.
+ * The main visible line should be the STRONGEST single explanation.
+ * Secondary detail goes into info-bubble (not stacked on card).
+ * 
+ * Priority for main line:
+ * 1. Comparative choice (if substantive) - "why this over alternatives" is highest value
+ * 2. Role explanation - the core "what this does" reasoning
+ * 3. Intensity contrast - when effort placement is the key insight
+ * 
+ * The "bestPrimary" field contains the single best line to show.
+ * The "secondaryDetail" field contains supporting info for the bubble.
  */
 export function getCompactExerciseExplanation(
   surface: ProgramExplanationSurface,
@@ -1659,12 +1663,67 @@ export function getCompactExerciseExplanation(
   weekContext: string | null
   /** Best secondary explanation (comparative > intensity > week > dosage) */
   bestSecondary: string | null
+  /** BEST single primary line to display (smart prioritization) */
+  bestPrimary: string
+  /** Secondary detail for info-bubble (not the main line) */
+  secondaryDetail: string | null
+  /** Whether secondary detail adds meaningful value */
+  hasUsefulSecondary: boolean
 } | null {
   const exercise = surface.exercises.get(exerciseId)
   if (!exercise) return null
   
-  // Select the best secondary explanation with priority:
-  // comparative > intensityContrast > weekContext > dosage
+  // ==========================================================================
+  // SMART PRIORITIZATION FOR MAIN VISIBLE LINE
+  // ==========================================================================
+  // The goal: show the SINGLE most valuable explanation as the main line.
+  // Comparative reasoning is highest value when available and substantive.
+  // Role explanation is the reliable fallback.
+  
+  const comparative = exercise.comparativeChoiceExplanation
+  const role = exercise.roleExplanation
+  const intensity = exercise.intensityContrastExplanation
+  const week = exercise.weekContextExplanation
+  const dosage = exercise.dosageReason
+  
+  // Check if comparative is substantive (not too short, not generic)
+  const comparativeIsSubstantive = comparative && 
+    comparative.length > 40 && 
+    !comparative.toLowerCase().includes('lower-fatigue option selected') // avoid generic
+  
+  // Check if intensity contrast is substantive
+  const intensityIsSubstantive = intensity &&
+    intensity.length > 35 &&
+    !intensity.toLowerCase().includes('conservative effort')
+  
+  // Pick the BEST primary line with this priority:
+  // 1. Substantive comparative (why this over alternatives)
+  // 2. Role explanation (always available, core reasoning)
+  // 3. Substantive intensity (when effort is the key insight)
+  let bestPrimary: string
+  let secondaryDetail: string | null = null
+  
+  if (comparativeIsSubstantive) {
+    // Comparative is best - use it as primary, role becomes secondary
+    bestPrimary = comparative
+    secondaryDetail = role !== comparative ? role : intensity || week || dosage || null
+  } else if (role) {
+    // Role is primary
+    bestPrimary = role
+    // Pick best secondary from remaining options
+    secondaryDetail = comparative || intensity || week || dosage || null
+  } else {
+    // Fallback
+    bestPrimary = intensity || dosage || 'Supporting movement for this session.'
+    secondaryDetail = week || null
+  }
+  
+  // Only mark secondary as useful if it's different from primary and substantive
+  const hasUsefulSecondary = !!(secondaryDetail && 
+    secondaryDetail !== bestPrimary && 
+    secondaryDetail.length > 25)
+  
+  // Legacy bestSecondary for backward compatibility
   const bestSecondary = 
     exercise.comparativeChoiceExplanation ||
     exercise.intensityContrastExplanation ||
@@ -1679,5 +1738,8 @@ export function getCompactExerciseExplanation(
     intensityContrast: exercise.intensityContrastExplanation,
     weekContext: exercise.weekContextExplanation,
     bestSecondary,
+    bestPrimary,
+    secondaryDetail,
+    hasUsefulSecondary,
   }
 }

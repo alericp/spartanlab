@@ -23047,6 +23047,8 @@ function buildExerciseCoachingMetaFromSelection(
   return {
     expressionMode: meta.expressionMode,
     progressionIntent: meta.progressionIntent,
+    // [EXPLAIN-OWNER-LOCK] Pass roleInSession for explanation engine
+    roleInSession: meta.roleInSession,
     skillSupportTargets: meta.skillSupportTargets,
     loadDecisionSummary: meta.loadDecision.summary,
     restLabel,

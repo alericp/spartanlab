@@ -149,6 +149,7 @@ function normalizeProgressionDecision(raw: unknown): WorkoutExerciseContract['pr
 
 /**
  * Normalize coaching metadata
+ * [EXPLAIN-OWNER-LOCK] Preserves roleInSession for explanation engine
  */
 function normalizeCoachingMeta(raw: unknown): WorkoutExerciseContract['coachingMeta'] {
   if (!raw || typeof raw !== 'object') return undefined
@@ -156,6 +157,9 @@ function normalizeCoachingMeta(raw: unknown): WorkoutExerciseContract['coachingM
   const cm = raw as Record<string, unknown>
   return {
     expressionMode: typeof cm.expressionMode === 'string' ? cm.expressionMode : undefined,
+    // [EXPLAIN-OWNER-LOCK] Preserve roleInSession for explanation engine
+    roleInSession: typeof cm.roleInSession === 'string' ? cm.roleInSession : undefined,
+    progressionIntent: typeof cm.progressionIntent === 'string' ? cm.progressionIntent : undefined,
     loadDecisionSummary: typeof cm.loadDecisionSummary === 'string' ? cm.loadDecisionSummary : undefined,
     adaptationNote: typeof cm.adaptationNote === 'string' ? cm.adaptationNote : undefined,
   }

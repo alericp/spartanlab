@@ -811,6 +811,23 @@ export type LoadDecisionReason =
   | 'exercise_not_loadable'      // Exercise doesn't support external load
 
 /**
+ * Role in session - describes the exercise's function within this specific session
+ * [EXPLAIN-OWNER-LOCK] This field drives explanation engine reason classification
+ */
+export type RoleInSession =
+  | 'main_driver'          // Primary work toward today's goal
+  | 'secondary_driver'     // Second-priority work toward goal
+  | 'bridge_work'          // Connects skill gap to main work
+  | 'strength_foundation'  // Force capacity building
+  | 'accessory_support'    // Lower-priority support volume
+  | 'balance_counterstress'// Balances opposing movement pattern
+  | 'tissue_conditioning'  // Connective tissue / prehab
+  | 'trunk_line_control'   // Core / bodyline work
+  | 'joint_stability'      // Scap / shoulder / mobility
+  | 'warmup_activation'    // Pre-main work activation
+  | 'finisher_density'     // End-of-session volume capture
+
+/**
  * Canonical coaching metadata for each exercise
  * This must survive from exercise selection through render
  */
@@ -818,6 +835,9 @@ export interface ExerciseCoachingMeta {
   // Core expression truth
   expressionMode: ExerciseExpressionMode
   progressionIntent: ProgressionIntent
+  
+  // [EXPLAIN-OWNER-LOCK] Role within this session - drives explanation engine
+  roleInSession?: RoleInSession
   
   // What this exercise supports
   skillSupportTargets: string[]  // Skills this exercise helps (e.g., ['planche', 'hspu'])
@@ -863,6 +883,8 @@ export function buildExerciseCoachingMeta(params: {
   restSeconds?: number
   skillTargets?: string[]
   isRecoveryDay?: boolean
+  // [EXPLAIN-OWNER-LOCK] Optional explicit role override
+  explicitRole?: RoleInSession
 }): ExerciseCoachingMeta {
   // Determine expression mode from category and context
   const expressionMode = mapCategoryToExpressionMode(
@@ -875,6 +897,14 @@ export function buildExerciseCoachingMeta(params: {
   const progressionIntent = mapToProgressionIntent(
     params.exerciseCategory,
     params.prescriptionMode,
+    params.isRecoveryDay
+  )
+  
+  // [EXPLAIN-OWNER-LOCK] Derive roleInSession from category, reason, and mode
+  const roleInSession = params.explicitRole || deriveRoleInSession(
+    params.exerciseCategory,
+    params.selectionReason,
+    expressionMode,
     params.isRecoveryDay
   )
   
@@ -898,6 +928,7 @@ export function buildExerciseCoachingMeta(params: {
   console.log('[coach-layer] Built coaching meta:', {
     expressionMode,
     progressionIntent,
+    roleInSession,
     loadDecision: loadDecision.summary,
     targetRPE: params.targetRPE,
     skillTargets: params.skillTargets,
@@ -906,6 +937,7 @@ export function buildExerciseCoachingMeta(params: {
   return {
     expressionMode,
     progressionIntent,
+    roleInSession,
     skillSupportTargets: params.skillTargets || [],
     selectionReasonSummary: params.selectionReason,
     loadDecision,
@@ -913,6 +945,68 @@ export function buildExerciseCoachingMeta(params: {
     restGuidance,
     confidenceLevel: params.hasBenchmarkData ? 'high' : 'moderate',
   }
+}
+
+/**
+ * [EXPLAIN-OWNER-LOCK] Derive roleInSession from available context
+ * This is a core input for the explanation engine
+ */
+function deriveRoleInSession(
+  category: string,
+  selectionReason: string,
+  expressionMode: ExerciseExpressionMode,
+  isRecoveryDay?: boolean
+): RoleInSession {
+  const reasonLower = selectionReason.toLowerCase()
+  const categoryLower = category.toLowerCase()
+  
+  // Recovery day = accessory support
+  if (isRecoveryDay) return 'accessory_support'
+  
+  // Direct skill work = main driver
+  if (expressionMode === 'direct' || categoryLower === 'skill') {
+    return 'main_driver'
+  }
+  
+  // Technical work = secondary driver
+  if (expressionMode === 'technical') {
+    return 'secondary_driver'
+  }
+  
+  // Check selection reason for specific roles
+  if (reasonLower.includes('bridge') || reasonLower.includes('progression')) {
+    return 'bridge_work'
+  }
+  if (reasonLower.includes('balance') || reasonLower.includes('antagonist') || reasonLower.includes('opposing')) {
+    return 'balance_counterstress'
+  }
+  if (reasonLower.includes('tissue') || reasonLower.includes('tendon') || reasonLower.includes('prehab') || reasonLower.includes('protect')) {
+    return 'tissue_conditioning'
+  }
+  if (reasonLower.includes('warm') || reasonLower.includes('activation') || reasonLower.includes('prep')) {
+    return 'warmup_activation'
+  }
+  if (reasonLower.includes('finisher') || reasonLower.includes('density') || reasonLower.includes('emom')) {
+    return 'finisher_density'
+  }
+  
+  // Core / trunk work
+  if (categoryLower === 'core' || expressionMode === 'trunk_support') {
+    return 'trunk_line_control'
+  }
+  
+  // Mobility / scap work
+  if (categoryLower === 'mobility' || categoryLower === 'flexibility' || expressionMode === 'mobility_support') {
+    return 'joint_stability'
+  }
+  
+  // Strength work = foundation
+  if (categoryLower === 'strength' || expressionMode === 'strength_support') {
+    return 'strength_foundation'
+  }
+  
+  // Default to accessory support
+  return 'accessory_support'
 }
 
 function mapCategoryToExpressionMode(

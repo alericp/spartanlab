@@ -122,12 +122,17 @@ export interface ProgressionDecisionContract {
 }
 
 /**
- * Coaching metadata contract
- */
+* Coaching metadata contract
+* [EXPLAIN-OWNER-LOCK] roleInSession is critical for explanation engine
+*/
 export interface CoachingMetaContract {
   expressionMode?: string
   loadDecisionSummary?: string
   adaptationNote?: string
+  /** Role of this exercise in the session (primary, secondary, finisher, etc.) */
+  roleInSession?: string
+  /** Progression intent for this exercise (maintain, push, deload, etc.) */
+  progressionIntent?: string
 }
 
 /**

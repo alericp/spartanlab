@@ -2592,92 +2592,156 @@ interface ExplanationContext {
 
 /**
  * DERIVE DOMINANT REASON FAMILY
- * Classifies the row's primary purpose based on all available context.
+ * [EXPLAIN-OWNER-LOCK] Classifies the row's primary purpose based on all available context.
+ * Priority: roleInSession > expressionMode > selectionReason keywords > category > fallback
  */
 function deriveReasonFamily(ctx: ExplanationContext): ReasonFamily {
   const { expressionMode, roleInSession, category, selectionReason, isPrimary, isProtected, movementFamily, exerciseNameLower } = ctx
   const reasonLower = selectionReason.toLowerCase()
   
-  // Direct skill exposure takes precedence
+  // ==========================================================================
+  // PRIORITY 1: roleInSession - most authoritative when present
+  // [EXPLAIN-OWNER-LOCK] This field comes from upstream program composition
+  // ==========================================================================
+  if (roleInSession) {
+    switch (roleInSession) {
+      case 'main_driver':
+        return 'direct_skill_exposure'
+      case 'secondary_driver':
+        return isPrimary ? 'direct_skill_exposure' : 'positional_strength'
+      case 'bridge_work':
+        return 'progression_bridge'
+      case 'strength_foundation':
+        return 'force_base_building'
+      case 'balance_counterstress':
+        return 'balance_counterstress'
+      case 'tissue_conditioning':
+        return 'tissue_tolerance'
+      case 'trunk_line_control':
+        return 'line_control'
+      case 'joint_stability':
+        return 'joint_stability'
+      case 'warmup_activation':
+        return 'warmup_activation'
+      case 'finisher_density':
+        return 'finisher_density'
+      case 'accessory_support':
+        // Fall through to further classification
+        break
+    }
+  }
+  
+  // ==========================================================================
+  // PRIORITY 2: Direct skill exposure from category/mode
+  // ==========================================================================
   if (isPrimary || category === 'skill' || expressionMode.includes('direct') || expressionMode.includes('intensity')) {
     return 'direct_skill_exposure'
   }
   
-  // Protected/recovery work
+  // ==========================================================================
+  // PRIORITY 3: Protected/tissue work
+  // ==========================================================================
   if (isProtected || reasonLower.includes('protect') || reasonLower.includes('tissue') || reasonLower.includes('tendon')) {
     return 'tissue_tolerance'
   }
   
-  // Explosive/power work
+  // ==========================================================================
+  // PRIORITY 4: Explosive/power work - detected from name or reason
+  // ==========================================================================
   if (reasonLower.includes('explosive') || reasonLower.includes('power') || reasonLower.includes('speed') ||
-      exerciseNameLower.includes('explosive') || exerciseNameLower.includes('clap') || exerciseNameLower.includes('plyometric')) {
+      exerciseNameLower.includes('explosive') || exerciseNameLower.includes('clap') || exerciseNameLower.includes('plyometric') ||
+      exerciseNameLower.includes('high pull') || exerciseNameLower.includes('chest-to-bar') || exerciseNameLower.includes('chest to bar')) {
     return 'explosive_power'
   }
   
-  // Balance/counterstress
+  // ==========================================================================
+  // PRIORITY 5: Balance/counterstress
+  // ==========================================================================
   if (reasonLower.includes('balance') || reasonLower.includes('antagonist') || reasonLower.includes('counterstress') ||
-      reasonLower.includes('opposing')) {
+      reasonLower.includes('opposing') || reasonLower.includes('offset')) {
     return 'balance_counterstress'
   }
   
-  // Weak link reinforcement
+  // ==========================================================================
+  // PRIORITY 6: Weak link reinforcement
+  // ==========================================================================
   if (reasonLower.includes('weak') || reasonLower.includes('bottleneck') || reasonLower.includes('limiting')) {
     return 'weak_link_reinforcement'
   }
   
-  // Progression bridge
+  // ==========================================================================
+  // PRIORITY 7: Progression bridge
+  // ==========================================================================
   if (reasonLower.includes('bridge') || reasonLower.includes('progression') || reasonLower.includes('current best') ||
       expressionMode.includes('bridge')) {
     return 'progression_bridge'
   }
   
-  // Core/trunk = line control
+  // ==========================================================================
+  // PRIORITY 8: Core/trunk = line control
+  // ==========================================================================
   if (category === 'core' || movementFamily === 'core') {
     return 'line_control'
   }
   
-  // Scap/joint work
+  // ==========================================================================
+  // PRIORITY 9: Scap/joint work
+  // ==========================================================================
   if (movementFamily === 'scap' || reasonLower.includes('scap') || reasonLower.includes('shoulder') ||
       reasonLower.includes('rear delt') || reasonLower.includes('rotator')) {
     return 'joint_stability'
   }
   
-  // Positional strength (carryover work)
+  // ==========================================================================
+  // PRIORITY 10: Positional strength (carryover work)
+  // ==========================================================================
   if (expressionMode.includes('carryover') || expressionMode.includes('technical') ||
-      reasonLower.includes('position') || reasonLower.includes('specific')) {
+      reasonLower.includes('position') || reasonLower.includes('specific') || reasonLower.includes('carryover')) {
     return 'positional_strength'
   }
   
-  // Force base building (main strength work)
+  // ==========================================================================
+  // PRIORITY 11: Force base building (main strength work)
+  // ==========================================================================
   if (category === 'strength' || category === 'push' || category === 'pull') {
     return 'force_base_building'
   }
   
-  // Mobility/flexibility work
+  // ==========================================================================
+  // PRIORITY 12: Mobility/flexibility work
+  // ==========================================================================
   if (category === 'mobility' || category === 'flexibility' || 
       reasonLower.includes('mobility') || reasonLower.includes('range') || reasonLower.includes('stretch')) {
     return 'mobility_range'
   }
   
-  // Warmup/activation work
+  // ==========================================================================
+  // PRIORITY 13: Warmup/activation work
+  // ==========================================================================
   if (category === 'warmup' || category === 'activation' ||
       reasonLower.includes('warmup') || reasonLower.includes('warm-up') || reasonLower.includes('activation')) {
     return 'warmup_activation'
   }
   
-  // Finisher/density work
+  // ==========================================================================
+  // PRIORITY 14: Finisher/density work
+  // ==========================================================================
   if (reasonLower.includes('finisher') || reasonLower.includes('density') || 
       reasonLower.includes('emom') || reasonLower.includes('circuit')) {
     return 'finisher_density'
   }
   
-  // Fatigue-managed support
-  if (roleInSession.includes('support') || roleInSession.includes('accessory') ||
+  // ==========================================================================
+  // PRIORITY 15: Fatigue-managed support (accessory-like work)
+  // ==========================================================================
+  if (roleInSession?.includes('support') || roleInSession?.includes('accessory') ||
       expressionMode.includes('support') || category === 'accessory') {
     return 'fatigue_managed_support'
   }
   
-  // Default to capacity building
+  // ==========================================================================
+  // FALLBACK: Capacity building based on movement family
+  // ==========================================================================
   return 'capacity_building'
 }
 

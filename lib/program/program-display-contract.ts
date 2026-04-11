@@ -2616,54 +2616,56 @@ export function buildExercisePurposeLine(
   }
   
   // ==========================================================================
-  // PRIORITY 4: Accessory — WHY THIS INSTEAD OF MORE MAIN WORK
+  // PRIORITY 4: Accessory — BENEFIT-DRIVEN, not category-labeled
   // ==========================================================================
   if (categoryLower === 'accessory') {
     // Scapular/shoulder stability
-    if (reasonLower.includes('scap') || reasonLower.includes('shoulder') || isExerciseType(['face pull', 'y raise', 'i raise', 'cuban'])) {
-      if (primaryGoalLower.includes('planche') || primaryGoalLower.includes('lever')) {
-        return 'Scap control slot — directly improves your skill positions under load.'
-      }
-      return 'Scap stability slot — your pressing and pulling quality depends on this.'
+    if (reasonLower.includes('scap') || reasonLower.includes('shoulder') || isExerciseType(['face pull', 'y raise', 'i raise', 'cuban', 'band pull apart', 'pull-apart'])) {
+      return 'Builds scapular control so pressing and pulling positions stay cleaner when fatigue rises.'
     }
     
     // Posterior chain / rear delt
-    if (reasonLower.includes('rear delt') || reasonLower.includes('posterior') || isExerciseType(['rear delt', 'reverse fly'])) {
-      return 'Posterior balance slot — protects shoulders as pressing volume accumulates.'
+    if (reasonLower.includes('rear delt') || reasonLower.includes('posterior') || isExerciseType(['rear delt', 'reverse fly', 'reverse fly', 'face pull'])) {
+      return 'Reinforces the back of the shoulder so heavy pressing does not pull joint balance out of position.'
+    }
+    
+    // Wrist / forearm conditioning
+    if (reasonLower.includes('wrist') || reasonLower.includes('forearm') || isExerciseType(['wrist', 'forearm', 'rice bucket'])) {
+      return 'Conditions the wrist and forearm tissue that straight-arm and pressing loads stress most.'
     }
     
     // Hypertrophy intent
     if (reasonLower.includes('hypertrophy') || reasonLower.includes('size')) {
-      return 'Hypertrophy slot — targeted muscle where your skill progress needs it most.'
+      return 'Adds targeted muscle in a pattern your main work trains but does not fully develop — raises your structural ceiling.'
     }
     
     // Tricep work
-    if (isExerciseType(['tricep', 'pushdown', 'extension', 'skull'])) {
-      if (primaryGoalLower.includes('planche') || primaryGoalLower.includes('handstand')) {
-        return 'Tricep slot — lockout strength for your pressing without skill fatigue cost.'
-      }
-      return 'Tricep slot — pressing lockout strength without skill fatigue cost.'
+    if (isExerciseType(['tricep', 'pushdown', 'extension', 'skull', 'overhead ext', 'jm press'])) {
+      return 'Builds tricep lockout strength so pressing stays forceful instead of stalling at the top of range.'
     }
     
     // Bicep/curl work
-    if (isExerciseType(['bicep', 'curl'])) {
-      if (primaryGoalLower.includes('lever') || primaryGoalLower.includes('muscle')) {
-        return 'Bicep slot — pulling support strength without skill fatigue cost.'
-      }
-      return 'Bicep slot — pulling support without skill fatigue cost.'
+    if (isExerciseType(['bicep', 'curl', 'hammer curl', 'preacher'])) {
+      return 'Builds bicep and elbow flexor strength that makes your pulling more tolerant and durable under load.'
+    }
+    
+    // Lat / serratus
+    if (reasonLower.includes('lat') || reasonLower.includes('serratus') || isExerciseType(['pullover', 'straight arm pulldown', 'serratus'])) {
+      return 'Develops lat and serratus activation so overhead and pulling positions feel more locked-in.'
     }
     
     // Push accessory
     if (reasonLower.includes('push') || reasonLower.includes('press') || sessionFocusLower.includes('push')) {
-      return 'Push accessory slot — pressing volume without skill fatigue cost.'
+      return 'Adds pressing volume in a lower-fatigue format so your main pressing output stays high.'
     }
     
     // Pull accessory
     if (reasonLower.includes('pull') || reasonLower.includes('row') || sessionFocusLower.includes('pull')) {
-      return 'Pull accessory slot — pulling volume without skill fatigue cost.'
+      return 'Adds pulling volume in a lower-fatigue format so your main pulling quality stays high.'
     }
     
-    return 'Accessory slot — targeted volume that feeds your main work.'
+    // Generic accessory — still benefit-driven
+    return 'Reinforces a supporting quality your main work relies on — keeps output clean instead of letting fatigue turn technique sloppy.'
   }
   
   // ==========================================================================
@@ -2737,50 +2739,55 @@ export function buildExercisePurposeLine(
   }
   
   // ==========================================================================
-  // PRIORITY 8: Support fallbacks — LOCAL FUNCTION FIRST
+  // PRIORITY 8: Support fallbacks — BENEFIT-DRIVEN, not category-labeled
   // ==========================================================================
-  
-  // Support with role context - describe LOCAL role, not just goal
   if (emphasisKind === 'support') {
     if (roleInSession.includes('accessory')) {
-      return 'Accessory slot — targeted volume that builds capacity without high fatigue cost.'
+      return 'Reinforces a supporting quality your main work depends on — without the fatigue cost of more skill work.'
     }
     if (sessionFocusLower.includes('push')) {
-      return 'Support pressing slot — builds capacity for your pressing work without skill fatigue.'
+      return 'Builds pressing capacity in a lower-demand format so earlier skill and strength quality stays intact.'
     }
     if (sessionFocusLower.includes('pull')) {
-      return 'Support pulling slot — builds capacity for your pulling work without skill fatigue.'
+      return 'Builds pulling capacity in a lower-demand format so earlier skill and strength quality stays intact.'
     }
-    return 'Support slot — builds foundational capacity your main work depends on.'
+    // Check for recovery/balance purpose from reason
+    if (reasonLower.includes('balance') || reasonLower.includes('antagonist')) {
+      return 'Balances the main loading pattern so progress does not come with a loss of positional control.'
+    }
+    if (reasonLower.includes('tissue') || reasonLower.includes('tendon') || reasonLower.includes('conditioning')) {
+      return 'Conditions the connective tissue that high-demand work stresses most — makes your training more durable.'
+    }
+    return 'Builds a supporting quality without competing for recovery — keeps your main work from hitting a structural ceiling.'
   }
   
   // ==========================================================================
-  // PRIORITY 9: Ultimate fallback — LOCAL FUNCTION, NOT GOAL-LABELED
+  // PRIORITY 9: Ultimate fallback — BENEFIT-DRIVEN, not category-labeled
   // ==========================================================================
   
-  // Expression mode fallback - describe what it does
+  // Expression mode fallback
   if (expressionMode.includes('support') || expressionMode.includes('accessory')) {
-    return 'Support volume — builds the foundation your priority work is built on.'
+    return 'Builds a supporting quality your priority work is built on — without adding meaningful fatigue.'
   }
   
-  // Category fallback - describe local function
+  // Category fallback — describe benefit, not just slot type
   if (categoryLower === 'strength') {
-    return 'Strength slot — builds the force output foundation your skill work requires.'
+    return 'Raises the force output your skill work depends on — stronger here means easier progress there.'
   }
   if (categoryLower === 'push') {
-    return 'Pressing strength slot — builds the pressing foundation your overhead and horizontal work needs.'
+    return 'Builds pressing strength your overhead and horizontal work draws from — raises your ceiling.'
   }
   if (categoryLower === 'pull') {
-    return 'Pulling strength slot — builds the back and grip strength your pulling skills need.'
+    return 'Builds pulling strength your skill work draws from — a stronger back means more reliable positions.'
   }
   
   // Warmup/activation
   if (categoryLower === 'warmup' || categoryLower === 'activation') {
-    return 'Prep slot — primes the patterns you need ready before main work.'
+    return 'Primes the joints and patterns that main work needs ready — reduces injury risk and improves output quality.'
   }
   
-  // Absolute fallback - still describe function, not just "supports goal"
-  return 'Capacity slot — builds strength that transfers into your main work.'
+  // Absolute final fallback — still benefit-driven
+  return 'Builds a supporting quality your main goals depend on — raises the ceiling without adding recovery cost.'
 }
 
 // =============================================================================
@@ -3107,17 +3114,25 @@ export function buildExerciseRowSurface(
     intentLabel = 'Trunk stability'
     source = 'authoritative'
   } else if (categoryLower === 'accessory') {
-    // State local accessory function
+    // State local accessory BENEFIT, not just category
     if (reasonLower.includes('scap') || reasonLower.includes('shoulder')) {
-      intentLabel = 'Scap control'
-    } else if (reasonLower.includes('posterior') || reasonLower.includes('rear')) {
-      intentLabel = 'Posterior chain'
+      intentLabel = 'Shoulder stability'
+    } else if (reasonLower.includes('posterior') || reasonLower.includes('rear delt')) {
+      intentLabel = 'Posterior balance'
+    } else if (reasonLower.includes('wrist') || reasonLower.includes('forearm')) {
+      intentLabel = 'Joint conditioning'
+    } else if (reasonLower.includes('tricep') || reasonLower.includes('lockout')) {
+      intentLabel = 'Lockout strength'
+    } else if (reasonLower.includes('bicep') || reasonLower.includes('curl')) {
+      intentLabel = 'Pull durability'
+    } else if (reasonLower.includes('lat') || reasonLower.includes('serratus')) {
+      intentLabel = 'Lat activation'
     } else if (reasonLower.includes('push') || reasonLower.includes('press')) {
-      intentLabel = 'Press accessory'
+      intentLabel = 'Press support'
     } else if (reasonLower.includes('pull') || reasonLower.includes('row')) {
-      intentLabel = 'Pull accessory'
+      intentLabel = 'Pull support'
     } else {
-      intentLabel = 'Targeted accessory'
+      intentLabel = 'Structural support'
     }
     source = 'authoritative'
   } else if (categoryLower === 'mobility' || categoryLower === 'flexibility') {
@@ -3197,22 +3212,31 @@ export function buildExerciseRowSurface(
   if (emphasisKind === 'support' && exercise.selectionReason) {
     const reason = exercise.selectionReason
     if (reasonLower.includes('scap') || reasonLower.includes('shoulder')) {
-      supportReasonLabel = 'Scapular stability'
+      supportReasonLabel = 'Keeps pressing positions cleaner'
       source = 'authoritative'
-    } else if (reasonLower.includes('rear delt') || reasonLower.includes('face pull')) {
-      supportReasonLabel = 'Posterior balance'
+    } else if (reasonLower.includes('rear delt') || reasonLower.includes('face pull') || reasonLower.includes('posterior')) {
+      supportReasonLabel = 'Balances pressing load on the joint'
       source = 'authoritative'
-    } else if (reasonLower.includes('core') || reasonLower.includes('trunk')) {
-      supportReasonLabel = 'Trunk rigidity'
+    } else if (reasonLower.includes('core') || reasonLower.includes('trunk') || reasonLower.includes('compression')) {
+      supportReasonLabel = 'Stops line from collapsing under load'
       source = 'authoritative'
-    } else if (reasonLower.includes('grip') || reasonLower.includes('hang')) {
-      supportReasonLabel = 'Grip endurance'
+    } else if (reasonLower.includes('grip') || reasonLower.includes('hang') || reasonLower.includes('forearm')) {
+      supportReasonLabel = 'Keeps grip reliable under fatigue'
       source = 'authoritative'
-    } else if (reasonLower.includes('hip') || reasonLower.includes('glute')) {
-      supportReasonLabel = 'Hip stability'
+    } else if (reasonLower.includes('hip') || reasonLower.includes('glute') || reasonLower.includes('posterior chain')) {
+      supportReasonLabel = 'Supports body-line tension'
       source = 'authoritative'
-    } else if (reasonLower.includes('straight-arm') || reasonLower.includes('straight arm')) {
-      supportReasonLabel = 'Straight-arm prep'
+    } else if (reasonLower.includes('straight-arm') || reasonLower.includes('straight arm') || reasonLower.includes('tendon')) {
+      supportReasonLabel = 'Conditions tissue for straight-arm load'
+      source = 'authoritative'
+    } else if (reasonLower.includes('wrist')) {
+      supportReasonLabel = 'Protects wrist under press load'
+      source = 'authoritative'
+    } else if (reasonLower.includes('tricep') || reasonLower.includes('lockout')) {
+      supportReasonLabel = 'Improves pressing lockout'
+      source = 'authoritative'
+    } else if (reasonLower.includes('bicep') || reasonLower.includes('elbow')) {
+      supportReasonLabel = 'Supports pulling durability'
       source = 'authoritative'
     } else if (reason.length < 40) {
       // Use short selection reasons directly

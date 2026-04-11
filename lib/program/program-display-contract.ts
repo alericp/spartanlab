@@ -2503,6 +2503,28 @@ export function buildExercisePurposeLine(
   }
   
   // ==========================================================================
+  // CONTRADICTION GUARD: Derive the exercise's TRUE movement family
+  // This prevents session-focus or category-fallback from overriding reality
+  // ==========================================================================
+  const pullKeywords = ['pull', 'row', 'chin', 'lat', 'bicep', 'curl', 'lever row', 'front lever', 'back lever', 'muscle-up', 'muscle up', 'transition']
+  const pushKeywords = ['push', 'dip', 'press', 'planche', 'handstand', 'pike', 'tricep', 'extension', 'pppu', 'pseudo', 'hspu']
+  const coreKeywords = ['hollow', 'plank', 'dead bug', 'deadbug', 'l-sit', 'lsit', 'leg raise', 'pallof', 'anti-rotation', 'compression', 'side plank', 'copenhagen']
+  const scapKeywords = ['face pull', 'y raise', 'i raise', 'cuban', 'band pull', 'pull-apart', 'rear delt', 'reverse fly', 'serratus']
+  
+  const isPullMovement = pullKeywords.some(kw => exerciseNameLower.includes(kw)) || categoryLower === 'pull'
+  const isPushMovement = pushKeywords.some(kw => exerciseNameLower.includes(kw)) || categoryLower === 'push'
+  const isCoreMovement = coreKeywords.some(kw => exerciseNameLower.includes(kw)) || categoryLower === 'core'
+  const isScapMovement = scapKeywords.some(kw => exerciseNameLower.includes(kw))
+  
+  // Determine the exercise's dominant movement family
+  type MovementFamily = 'pull' | 'push' | 'core' | 'scap' | 'unknown'
+  let movementFamily: MovementFamily = 'unknown'
+  if (isPullMovement && !isPushMovement) movementFamily = 'pull'
+  else if (isPushMovement && !isPullMovement) movementFamily = 'push'
+  else if (isCoreMovement) movementFamily = 'core'
+  else if (isScapMovement) movementFamily = 'scap'
+  
+  // ==========================================================================
   // PRIORITY 1: Primary skill/direct progression — WHY THIS CHOICE WON
   // ==========================================================================
   if (emphasisKind === 'primary' || exercise.isPrimary || categoryLower === 'skill') {
@@ -2654,17 +2676,33 @@ export function buildExercisePurposeLine(
       return 'Develops lat and serratus activation so overhead and pulling positions feel more locked-in.'
     }
     
-    // Push accessory
-    if (reasonLower.includes('push') || reasonLower.includes('press') || sessionFocusLower.includes('push')) {
-      return 'Adds pressing volume in a lower-fatigue format so your main pressing output stays high.'
-    }
+    // ==========================================================================
+    // CONTRADICTION-GUARDED: Use movement family, NOT just session focus
+    // ==========================================================================
     
-    // Pull accessory
-    if (reasonLower.includes('pull') || reasonLower.includes('row') || sessionFocusLower.includes('pull')) {
+    // Pull accessory — MUST be a pull movement, not just in a pull session
+    if (movementFamily === 'pull' || (reasonLower.includes('pull') && !isPushMovement)) {
       return 'Adds pulling volume in a lower-fatigue format so your main pulling quality stays high.'
     }
     
-    // Generic accessory — still benefit-driven
+    // Push accessory — MUST be a push movement, not just in a push session
+    if (movementFamily === 'push' || (reasonLower.includes('push') && !isPullMovement)) {
+      return 'Adds pressing volume in a lower-fatigue format so your main pressing output stays high.'
+    }
+    
+    // Scap accessory — detected by movement family
+    if (movementFamily === 'scap') {
+      return 'Reinforces scapular control so pressing and pulling positions stay stable under load.'
+    }
+    
+    // Generic accessory — describe benefit based on what it actually is
+    if (isPullMovement) {
+      return 'Builds pulling capacity without competing for recovery from your main pull work.'
+    }
+    if (isPushMovement) {
+      return 'Builds pressing capacity without competing for recovery from your main press work.'
+    }
+    
     return 'Reinforces a supporting quality your main work relies on — keeps output clean instead of letting fatigue turn technique sloppy.'
   }
   
@@ -2739,18 +2777,28 @@ export function buildExercisePurposeLine(
   }
   
   // ==========================================================================
-  // PRIORITY 8: Support fallbacks — BENEFIT-DRIVEN, not category-labeled
+  // PRIORITY 8: Support fallbacks — CONTRADICTION-GUARDED, BENEFIT-DRIVEN
   // ==========================================================================
   if (emphasisKind === 'support') {
     if (roleInSession.includes('accessory')) {
       return 'Reinforces a supporting quality your main work depends on — without the fatigue cost of more skill work.'
     }
-    if (sessionFocusLower.includes('push')) {
-      return 'Builds pressing capacity in a lower-demand format so earlier skill and strength quality stays intact.'
+    
+    // CONTRADICTION-GUARDED: Use movement family, not session focus
+    // A pull exercise in a push session should say "pulling", not "pressing"
+    if (movementFamily === 'pull' || isPullMovement) {
+      return 'Builds pulling capacity in a lower-demand format so your main pulling quality stays intact.'
     }
-    if (sessionFocusLower.includes('pull')) {
-      return 'Builds pulling capacity in a lower-demand format so earlier skill and strength quality stays intact.'
+    if (movementFamily === 'push' || isPushMovement) {
+      return 'Builds pressing capacity in a lower-demand format so your main pressing quality stays intact.'
     }
+    if (movementFamily === 'core' || isCoreMovement) {
+      return 'Builds trunk stability so your line stays stronger under the loads main work demands.'
+    }
+    if (movementFamily === 'scap' || isScapMovement) {
+      return 'Reinforces scapular control so pressing and pulling positions stay reliable under fatigue.'
+    }
+    
     // Check for recovery/balance purpose from reason
     if (reasonLower.includes('balance') || reasonLower.includes('antagonist')) {
       return 'Balances the main loading pattern so progress does not come with a loss of positional control.'
@@ -2762,23 +2810,31 @@ export function buildExercisePurposeLine(
   }
   
   // ==========================================================================
-  // PRIORITY 9: Ultimate fallback — BENEFIT-DRIVEN, not category-labeled
+  // PRIORITY 9: Ultimate fallback — CONTRADICTION-GUARDED, BENEFIT-DRIVEN
   // ==========================================================================
   
   // Expression mode fallback
   if (expressionMode.includes('support') || expressionMode.includes('accessory')) {
+    // Even here, use movement family to stay truthful
+    if (movementFamily === 'pull' || isPullMovement) {
+      return 'Builds pulling support your priority work depends on — without adding meaningful fatigue.'
+    }
+    if (movementFamily === 'push' || isPushMovement) {
+      return 'Builds pressing support your priority work depends on — without adding meaningful fatigue.'
+    }
     return 'Builds a supporting quality your priority work is built on — without adding meaningful fatigue.'
   }
   
   // Category fallback — describe benefit, not just slot type
-  if (categoryLower === 'strength') {
-    return 'Raises the force output your skill work depends on — stronger here means easier progress there.'
+  // CONTRADICTION-GUARDED: Movement family takes precedence over category
+  if (movementFamily === 'pull' || categoryLower === 'pull') {
+    return 'Builds pulling strength your skill work draws from — a stronger back means more reliable positions.'
   }
-  if (categoryLower === 'push') {
+  if (movementFamily === 'push' || categoryLower === 'push') {
     return 'Builds pressing strength your overhead and horizontal work draws from — raises your ceiling.'
   }
-  if (categoryLower === 'pull') {
-    return 'Builds pulling strength your skill work draws from — a stronger back means more reliable positions.'
+  if (categoryLower === 'strength') {
+    return 'Raises the force output your skill work depends on — stronger here means easier progress there.'
   }
   
   // Warmup/activation
@@ -3008,6 +3064,28 @@ export function buildExerciseRowSurface(
   // ==========================================================================
   const displayName = exercise.name || 'Exercise'
   const exerciseId = exercise.id || displayName.toLowerCase().replace(/[\s-]+/g, '_')
+  const exerciseNameLower = displayName.toLowerCase()
+  
+  // ==========================================================================
+  // CONTRADICTION GUARD: Derive the exercise's TRUE movement family
+  // This prevents session-focus or category-fallback from overriding reality
+  // ==========================================================================
+  const pullKeywords = ['pull', 'row', 'chin', 'lat', 'bicep', 'curl', 'lever row', 'front lever', 'back lever', 'muscle-up', 'muscle up', 'transition']
+  const pushKeywords = ['push', 'dip', 'press', 'planche', 'handstand', 'pike', 'tricep', 'extension', 'pppu', 'pseudo', 'hspu']
+  const coreKeywords = ['hollow', 'plank', 'dead bug', 'deadbug', 'l-sit', 'lsit', 'leg raise', 'pallof', 'anti-rotation', 'compression', 'side plank', 'copenhagen']
+  const scapKeywords = ['face pull', 'y raise', 'i raise', 'cuban', 'band pull', 'pull-apart', 'rear delt', 'reverse fly', 'serratus']
+  
+  const isPullMovement = pullKeywords.some(kw => exerciseNameLower.includes(kw))
+  const isPushMovement = pushKeywords.some(kw => exerciseNameLower.includes(kw))
+  const isCoreMovement = coreKeywords.some(kw => exerciseNameLower.includes(kw))
+  const isScapMovement = scapKeywords.some(kw => exerciseNameLower.includes(kw))
+  
+  type MovementFamily = 'pull' | 'push' | 'core' | 'scap' | 'unknown'
+  let movementFamily: MovementFamily = 'unknown'
+  if (isPullMovement && !isPushMovement) movementFamily = 'pull'
+  else if (isPushMovement && !isPullMovement) movementFamily = 'push'
+  else if (isCoreMovement) movementFamily = 'core'
+  else if (isScapMovement) movementFamily = 'scap'
   
   // ==========================================================================
   // B. Build prescription line from sets/reps
@@ -3076,12 +3154,23 @@ export function buildExerciseRowSurface(
     intentLabel = 'Technique slot'
     source = 'authoritative'
   }
-  // PRIORITY 3: Category — LOCAL function labels, NOT goal-labeled
+  // PRIORITY 3: Movement family + Category — CONTRADICTION-GUARDED
+  // Use movement family to ensure pull exercises say "pulling", not "pressing"
   else if (categoryLower === 'skill') {
     intentLabel = 'Skill work'
     source = 'authoritative'
-  } else if (categoryLower === 'push') {
-    // State the pressing function
+  } else if (movementFamily === 'pull' || categoryLower === 'pull') {
+    // Pull movement — always say pulling, regardless of session focus
+    if (sessionIntent.includes('overload') || sessionIntent.includes('strength') || sessionIntent.includes('power')) {
+      intentLabel = 'Pulling power'
+    } else if (sessionIntent.includes('volume')) {
+      intentLabel = 'Pulling volume'
+    } else {
+      intentLabel = 'Pulling strength'
+    }
+    source = 'authoritative'
+  } else if (movementFamily === 'push' || categoryLower === 'push') {
+    // Push movement — always say pressing, regardless of session focus
     if (sessionIntent.includes('overload') || sessionIntent.includes('strength')) {
       intentLabel = 'Pressing overload'
     } else if (sessionIntent.includes('volume')) {
@@ -3090,18 +3179,13 @@ export function buildExerciseRowSurface(
       intentLabel = 'Pressing strength'
     }
     source = 'authoritative'
-  } else if (categoryLower === 'pull') {
-    // State the pulling function
-    if (sessionIntent.includes('overload') || sessionIntent.includes('strength')) {
-      intentLabel = 'Pulling overload'
-    } else if (sessionIntent.includes('volume')) {
-      intentLabel = 'Pulling volume'
-    } else {
-      intentLabel = 'Pulling strength'
-    }
-    source = 'authoritative'
   } else if (categoryLower === 'strength') {
-    if (sessionIntent.includes('overload') || sessionIntent.includes('strength')) {
+    // Generic strength — use movement family if available
+    if (movementFamily === 'pull') {
+      intentLabel = 'Pulling strength'
+    } else if (movementFamily === 'push') {
+      intentLabel = 'Pressing strength'
+    } else if (sessionIntent.includes('overload') || sessionIntent.includes('strength')) {
       intentLabel = 'Strength overload'
     } else if (sessionIntent.includes('volume')) {
       intentLabel = 'Strength volume'
@@ -3109,9 +3193,13 @@ export function buildExerciseRowSurface(
       intentLabel = 'Strength builder'
     }
     source = 'authoritative'
-  } else if (categoryLower === 'core') {
-    // State trunk function, not goal
+  } else if (movementFamily === 'core' || categoryLower === 'core') {
+    // Core movement — state trunk function
     intentLabel = 'Trunk stability'
+    source = 'authoritative'
+  } else if (movementFamily === 'scap') {
+    // Scap movement — state scap function
+    intentLabel = 'Scap control'
     source = 'authoritative'
   } else if (categoryLower === 'accessory') {
     // State local accessory BENEFIT, not just category

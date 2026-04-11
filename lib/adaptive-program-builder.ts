@@ -9961,6 +9961,11 @@ async function generateAdaptiveProgramImpl(
   weekAdaptation: weekAdaptationInputForSession,
   // [PROGRAMMING-TRUTH-BUNDLE] Pass bundle-derived decisions for dosage/progression/constraint
   bundleDecisions: bundleDecisionSummary || null,
+  // [UNIFIED DOCTRINE DECISION] Pass doctrine decision for exercise selection enforcement
+  // CRITICAL: This must be explicitly passed - do NOT rely on outer scope closure
+  unifiedDoctrineDecision: unifiedDoctrineDecision || null,
+  // [DOCTRINE INFLUENCE] Pass doctrine influence contract for audit visibility
+  doctrineInfluenceContract: doctrineInfluenceContract || null,
   }
     
     // ==========================================================================
@@ -19630,6 +19635,9 @@ function generateAdaptiveSession(
   canonicalSessionSpine,
   // [WEEKLY-COMPOSITION-UPGRADE] Extract week-level adaptation decisions
   weekAdaptation,
+  // [UNIFIED DOCTRINE DECISION] Extract doctrine decision for exercise selection
+  // CRITICAL: Must be extracted from context, NOT referenced from outer closure scope
+  unifiedDoctrineDecision,
   } = context
   
   // ==========================================================================

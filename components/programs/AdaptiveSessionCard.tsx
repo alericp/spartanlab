@@ -1552,14 +1552,16 @@ function ExerciseRow({
         
         // Use coaching explanation as primary source, fall back to row surface sublabel
         const bestSublabel = coachingExpl?.role || (showSublabel ? getBestRowSublabel(alignedRowSurface) : null)
+        const isCoachingSource = !!coachingExpl?.role
         
         if (!bestSublabel && !showChips) return null
         
         return (
         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
           {/* [COACHING-EXPLANATION-CONTRACT] Single compact sublabel from authoritative source */}
+          {/* Coaching explanations get slightly stronger styling as they are authoritative */}
           {bestSublabel && (
-            <span className="text-[10px] text-[#7A7A7A]">
+            <span className={`text-[10px] ${isCoachingSource ? 'text-[#9A9A9A]' : 'text-[#7A7A7A]'}`}>
               {bestSublabel}
             </span>
           )}

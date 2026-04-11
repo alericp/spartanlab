@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import { AdaptiveSessionCard } from './AdaptiveSessionCard'
+import { WhyThisPlanBlock } from './WhyThisWorkoutBlock'
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
   AlertTriangle,
@@ -41,6 +42,7 @@ import {
   type ProgramIntelligenceContract,
   type SessionCardSurface,
 } from '@/lib/program/program-display-contract'
+import { getCompactSessionExplanation } from '@/lib/coaching-explanation-contract'
 import { Info, Sparkles, Shield, Scale, Layers } from 'lucide-react'
 
 interface AdaptiveProgramDisplayProps {
@@ -1284,8 +1286,14 @@ export function AdaptiveProgramDisplay({
               </div>
             )}
             
-            {/* Strategic sentence */}
-            {intelligenceContract.strategicSummary?.headline && (
+            {/* [COACHING-EXPLANATION-CONTRACT] PRIMARY VISIBLE IMPACT: Coach-style headline */}
+            {/* Priority 1: Use authoritative coaching headline */}
+            {/* Priority 2: Fall back to strategic summary if coaching unavailable */}
+            {intelligenceContract.coachingExplanation?.program?.headline ? (
+              <p className="text-[13px] text-[#C8C8C8] font-medium leading-relaxed mb-2.5">
+                {intelligenceContract.coachingExplanation.program.headline}
+              </p>
+            ) : intelligenceContract.strategicSummary?.headline && (
               <p className="text-xs text-[#A4ACB8] leading-relaxed mb-2.5">
                 {intelligenceContract.strategicSummary.headline}
               </p>
@@ -1427,6 +1435,11 @@ export function AdaptiveProgramDisplay({
             // [SURFACE-SIGNALS] Get session-level surface signals for prescription changes
             const sessionSurfaceSignals = getSessionSurfaceSignals(session as Parameters<typeof getSessionSurfaceSignals>[0])
             
+            // [COACHING-EXPLANATION-CONTRACT] Get authoritative session explanation
+            const coachingSessionExpl = intelligenceContract?.coachingExplanation 
+              ? getCompactSessionExplanation(intelligenceContract.coachingExplanation, session.dayNumber) 
+              : null
+            
             // Determine if we have authoritative card surface to show
             const hasAuthoritativeSurface = cardSurface && cardSurface.source === 'authoritative'
             const hasAnyChips = cardSurface && (
@@ -1434,11 +1447,13 @@ export function AdaptiveProgramDisplay({
               cardSurface.protectionSignals.length > 0 ||
               cardSurface.methodSignals.length > 0
             )
+            const hasCoachingExplanation = !!coachingSessionExpl?.purpose
             
             return (
               <div key={`${program.id}-${session.dayNumber}-${session.name || session.focusLabel}`}>
                 {/* [SESSION-CARD-SURFACE] Authoritative per-card identity display */}
-                {(hasAuthoritativeSurface || hasAnyChips || sessionSurfaceSignals.hasPrescriptionChanges || (dayRationale && dayRationale.source !== 'unavailable')) ? (
+                {/* [COACHING-EXPLANATION-CONTRACT] Show header when we have coaching explanation */}
+                {(hasAuthoritativeSurface || hasAnyChips || hasCoachingExplanation || sessionSurfaceSignals.hasPrescriptionChanges || (dayRationale && dayRationale.source !== 'unavailable')) ? (
                   <div className={`mb-2 px-2 py-1.5 bg-[#1A1A1A]/40 rounded-md border-l-2 ${
                     cardSurface?.protectionSignals.length 
                       ? 'border-[#E63946]/40' 
@@ -1499,15 +1514,22 @@ export function AdaptiveProgramDisplay({
                           </div>
                         )}
                         
-                        {/* C. Evidence label */}
-                        {cardSurface?.evidenceLabel && (
+                        {/* [COACHING-EXPLANATION-CONTRACT] Session purpose - prefer coaching explanation */}
+                        {coachingSessionExpl?.purpose && (
+                          <p className="text-[10px] text-[#8A8A8A] mt-1 leading-relaxed">
+                            {coachingSessionExpl.purpose}
+                          </p>
+                        )}
+                        
+                        {/* C. Evidence label - only show if no coaching purpose */}
+                        {!coachingSessionExpl?.purpose && cardSurface?.evidenceLabel && (
                           <p className="text-[10px] text-[#6A6A6A] mt-1 leading-relaxed">
                             {cardSurface.evidenceLabel}
                           </p>
                         )}
                         
                         {/* D. Fallback to day rationale if no authoritative surface */}
-                        {!cardSurface?.sessionHeadline && dayRationale?.weeklyRole && (
+                        {!cardSurface?.sessionHeadline && !coachingSessionExpl?.purpose && dayRationale?.weeklyRole && (
                           <p className="text-[11px] text-[#9A9A9A] font-medium leading-snug">
                             {dayRationale.weeklyRole}
                           </p>
@@ -1521,7 +1543,8 @@ export function AdaptiveProgramDisplay({
                             ))}
                           </div>
                         )}
-                        {!cardSurface?.evidenceLabel && !sessionSurfaceSignals.hasPrescriptionChanges && dayRationale?.rationale && (
+                        {/* [COACHING-EXPLANATION-CONTRACT] Only show day rationale as last fallback */}
+                        {!coachingSessionExpl?.purpose && !cardSurface?.evidenceLabel && !sessionSurfaceSignals.hasPrescriptionChanges && dayRationale?.rationale && (
                           <p className="text-[10px] text-[#6A6A6A] mt-0.5 leading-relaxed">
                             {dayRationale.rationale}
                           </p>
@@ -1570,8 +1593,63 @@ export function AdaptiveProgramDisplay({
           </DialogHeader>
           
           <div className="space-y-3 py-2">
-            {/* [DECISION-EVIDENCE] Strategic Summary - Core decision architecture */}
-            {intelligenceContract?.strategicSummary && (
+            {/* [COACHING-EXPLANATION-CONTRACT] PRIMARY: Coach-style program fit explanation */}
+            {intelligenceContract?.coachingExplanation?.program && (
+              <div className="p-4 bg-gradient-to-br from-[#E63946]/8 to-[#0F1115] rounded-lg border border-[#E63946]/25">
+                <p className="text-sm text-[#F5F5F5] font-medium leading-relaxed mb-3">
+                  {intelligenceContract.coachingExplanation.program.headline}
+                </p>
+                
+                {/* Primary coaching explanations */}
+                <ul className="space-y-1.5 mb-3">
+                  {/* Goal fit explanation - the main "why this fits you" */}
+                  {intelligenceContract.coachingExplanation.program.goalFitExplanation && (
+                    <li className="text-xs text-[#A5A5A5] flex items-start gap-2">
+                      <span className="text-[#E63946] mt-0.5 shrink-0">·</span>
+                      {intelligenceContract.coachingExplanation.program.goalFitExplanation}
+                    </li>
+                  )}
+                  {/* Week focus insight */}
+                  {intelligenceContract.coachingExplanation.program.weekFocusInsight && (
+                    <li className="text-xs text-[#A5A5A5] flex items-start gap-2">
+                      <span className="text-[#E63946] mt-0.5 shrink-0">·</span>
+                      {intelligenceContract.coachingExplanation.program.weekFocusInsight}
+                    </li>
+                  )}
+                  {/* Structure fit explanation */}
+                  {intelligenceContract.coachingExplanation.program.structureFitExplanation && (
+                    <li className="text-xs text-[#A5A5A5] flex items-start gap-2">
+                      <span className="text-[#E63946] mt-0.5 shrink-0">·</span>
+                      {intelligenceContract.coachingExplanation.program.structureFitExplanation}
+                    </li>
+                  )}
+                  {/* First tradeoff if meaningful */}
+                  {intelligenceContract.coachingExplanation.program.tradeoffExplanations?.[0] && (
+                    <li className="text-xs text-[#8A8A8A] flex items-start gap-2">
+                      <span className="text-amber-500/70 mt-0.5 shrink-0">·</span>
+                      {intelligenceContract.coachingExplanation.program.tradeoffExplanations[0]}
+                    </li>
+                  )}
+                </ul>
+                
+                {/* Schedule fit */}
+                {intelligenceContract.coachingExplanation.program.scheduleFitExplanation && (
+                  <p className="text-xs text-[#8A8A8A] border-l-2 border-[#E63946]/30 pl-2">
+                    {intelligenceContract.coachingExplanation.program.scheduleFitExplanation}
+                  </p>
+                )}
+                
+                {/* Progression insight */}
+                {intelligenceContract.coachingExplanation.program.progressionInsight && (
+                  <p className="text-[11px] text-[#6A6A6A] italic mt-2">
+                    {intelligenceContract.coachingExplanation.program.progressionInsight}
+                  </p>
+                )}
+              </div>
+            )}
+            
+            {/* [DECISION-EVIDENCE] Strategic Summary - Core decision architecture (fallback if no coaching explanation) */}
+            {!intelligenceContract?.coachingExplanation?.program && intelligenceContract?.strategicSummary && (
               <div className="p-3 bg-gradient-to-br from-[#E63946]/5 to-[#0F1115] rounded-lg border border-[#E63946]/20">
                 <p className="text-sm text-[#E6E9EF] font-medium leading-relaxed">
                   {intelligenceContract.strategicSummary.headline}

@@ -150,6 +150,12 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
     result.prescriptionPropagationAudit = session.prescriptionPropagationAudit as AdaptiveSession['prescriptionPropagationAudit']
   }
   
+  // [EXPLAIN-OWNER-LOCK] Preserve compositionMetadata for explanation engine context
+  // This includes spineSessionType, sessionIntent, and other context needed for buildExercisePurposeLine
+  if (session.compositionMetadata && typeof session.compositionMetadata === 'object') {
+    result.compositionMetadata = session.compositionMetadata as AdaptiveSession['compositionMetadata']
+  }
+  
   return result
 }
 
@@ -466,6 +472,19 @@ export async function loadAuthoritativeSession(
       }
     }
     
+    // [EXPLAIN-OWNER-LOCK] Inject program-level primaryGoal into session for explanation engine
+    // This is the PROGRAM's skill goal (planche, front_lever, etc.) - NOT the session's intent
+    // Without this, buildExercisePurposeLine cannot generate goal-aware explanations
+    const programPrimaryGoal = (adaptiveProgram as unknown as { primaryGoal?: string }).primaryGoal
+    if (programPrimaryGoal) {
+      // Add to compositionMetadata for downstream consumption by explanation engine
+      if (!normalizedSession.compositionMetadata) {
+        normalizedSession.compositionMetadata = {} as AdaptiveSession['compositionMetadata']
+      }
+      // Store as programPrimaryGoal to distinguish from sessionIntent
+      ;(normalizedSession.compositionMetadata as Record<string, unknown>).programPrimaryGoal = programPrimaryGoal
+    }
+    
     // SUCCESS - Return the valid session
     logSessionLoad('SESSION_LOAD_SUCCESS', {
       dayLabel: normalizedSession.dayLabel,
@@ -475,6 +494,7 @@ export async function loadAuthoritativeSession(
       actualSessionCount: adaptiveProgram.sessions.length,
       resolvedSessionIndex: clampedIndex,
       requestedDayParam: dayParam ?? null,
+      programPrimaryGoal: programPrimaryGoal ?? 'not_found',
     })
     
     return {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Info, Lightbulb, AlertTriangle, Target, Zap, BookOpen, ChevronDown, ChevronUp, Shield } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -160,10 +160,54 @@ interface InfoBubbleProps {
 
 export function InfoBubble({ content, className }: InfoBubbleProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const bubbleRef = useRef<HTMLDivElement>(null)
+  
+  // Viewport-aware positioning: calculates safe position on open
+  useEffect(() => {
+    if (!isOpen || !buttonRef.current || !bubbleRef.current) return
+    
+    const button = buttonRef.current.getBoundingClientRect()
+    const bubble = bubbleRef.current
+    const bubbleRect = bubble.getBoundingClientRect()
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    const padding = 12
+    
+    // Reset positioning to calculate natural position
+    bubble.style.left = ''
+    bubble.style.right = ''
+    bubble.style.top = ''
+    bubble.style.bottom = ''
+    bubble.style.transform = ''
+    
+    // Calculate horizontal position - center on button but clamp to viewport
+    let left = button.left + button.width / 2 - bubbleRect.width / 2
+    if (left < padding) {
+      left = padding
+    } else if (left + bubbleRect.width > viewportWidth - padding) {
+      left = viewportWidth - bubbleRect.width - padding
+    }
+    
+    // Calculate vertical position - prefer above, fall back to below
+    const spaceAbove = button.top
+    const spaceBelow = viewportHeight - button.bottom
+    const preferAbove = spaceAbove >= bubbleRect.height + padding
+    
+    bubble.style.position = 'fixed'
+    bubble.style.left = `${left}px`
+    
+    if (preferAbove) {
+      bubble.style.bottom = `${viewportHeight - button.top + 8}px`
+    } else {
+      bubble.style.top = `${button.bottom + 8}px`
+    }
+  }, [isOpen])
   
   return (
     <div className={cn('relative inline-flex', className)}>
       <button
+        ref={buttonRef}
         type="button"
         onClick={(e) => {
           e.stopPropagation()
@@ -182,13 +226,12 @@ export function InfoBubble({ content, className }: InfoBubbleProps) {
             className="fixed inset-0 z-40"
             onClick={() => setIsOpen(false)}
           />
-          {/* Tooltip */}
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-56 p-2.5 rounded-lg bg-[#1A1A1A] border border-[#2B313A] shadow-lg">
+          {/* Tooltip - positioned via useEffect for viewport awareness */}
+          <div 
+            ref={bubbleRef}
+            className="fixed z-50 w-64 max-w-[calc(100vw-24px)] p-2.5 rounded-lg bg-[#1A1A1A] border border-[#2B313A] shadow-lg"
+          >
             <p className="text-xs text-[#A4ACB8] leading-relaxed">{content}</p>
-            {/* Arrow */}
-            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
-              <div className="border-4 border-transparent border-t-[#2B313A]" />
-            </div>
           </div>
         </>
       )}
@@ -443,8 +486,51 @@ export function MethodInfoBubble({
   className,
 }: MethodInfoBubbleProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const bubbleRef = useRef<HTMLDivElement>(null)
   
   const knowledge = getStructureKnowledge(methodType)
+  
+  // Viewport-aware positioning for icon variant
+  useEffect(() => {
+    if (!isOpen || !buttonRef.current || !bubbleRef.current) return
+    
+    const button = buttonRef.current.getBoundingClientRect()
+    const bubble = bubbleRef.current
+    const bubbleRect = bubble.getBoundingClientRect()
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    const padding = 12
+    
+    // Reset positioning
+    bubble.style.left = ''
+    bubble.style.right = ''
+    bubble.style.top = ''
+    bubble.style.bottom = ''
+    bubble.style.transform = ''
+    
+    // Calculate horizontal position - center on button but clamp to viewport
+    let left = button.left + button.width / 2 - bubbleRect.width / 2
+    if (left < padding) {
+      left = padding
+    } else if (left + bubbleRect.width > viewportWidth - padding) {
+      left = viewportWidth - bubbleRect.width - padding
+    }
+    
+    // Calculate vertical position - prefer above, fall back to below
+    const spaceAbove = button.top
+    const preferAbove = spaceAbove >= bubbleRect.height + padding
+    
+    bubble.style.position = 'fixed'
+    bubble.style.left = `${left}px`
+    
+    if (preferAbove) {
+      bubble.style.bottom = `${viewportHeight - button.top + 8}px`
+    } else {
+      bubble.style.top = `${button.bottom + 8}px`
+    }
+  }, [isOpen])
+  
   if (!knowledge) return null
   
   // Icon-only variant with tooltip
@@ -452,6 +538,7 @@ export function MethodInfoBubble({
     return (
       <div className={cn('relative inline-flex', className)}>
         <button
+          ref={buttonRef}
           type="button"
           onClick={(e) => {
             e.stopPropagation()
@@ -469,16 +556,16 @@ export function MethodInfoBubble({
               className="fixed inset-0 z-40"
               onClick={() => setIsOpen(false)}
             />
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-64 p-2.5 rounded-lg bg-[#1A1A1A] border border-[#2B313A] shadow-lg">
+            <div 
+              ref={bubbleRef}
+              className="fixed z-50 w-64 max-w-[calc(100vw-24px)] p-2.5 rounded-lg bg-[#1A1A1A] border border-[#2B313A] shadow-lg"
+            >
               <p className="text-xs font-medium text-[#E6E9EF] mb-1 capitalize">{methodType.replace(/_/g, ' ')}</p>
               <p className="text-xs text-[#A4ACB8] leading-relaxed">{knowledge.reason}</p>
               <p className="text-xs text-[#6B7280] mt-1.5 leading-relaxed">{knowledge.benefit}</p>
               {context && (
                 <p className="text-xs text-[#4F6D8A] mt-1.5 italic">{context}</p>
               )}
-              <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
-                <div className="border-4 border-transparent border-t-[#2B313A]" />
-              </div>
             </div>
           </>
         )}

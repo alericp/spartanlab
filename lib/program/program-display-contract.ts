@@ -2570,6 +2570,14 @@ interface ExplanationContext {
   isScapMovement: boolean
   exerciseNameLower: string
   
+  // Arm type classification (bent-arm vs straight-arm)
+  // Critical for correct role labeling - HSPU is bent-arm push, planche is straight-arm push
+  armType: 'bent_arm' | 'straight_arm' | 'mixed' | 'unknown'
+  isBentArmPush: boolean
+  isStraightArmPush: boolean
+  isBentArmPull: boolean
+  isStraightArmPull: boolean
+  
   // Program/day context
   primaryGoal: string
   sessionFocus: string
@@ -3006,6 +3014,47 @@ function buildExplanationContext(
   else if (isCoreMovement) movementFamily = 'core'
   else if (isScapMovement) movementFamily = 'scap'
   
+  // ==========================================================================
+  // ARM-TYPE CLASSIFICATION
+  // Critical for correct semantic labeling: HSPU is bent-arm push, planche is straight-arm push
+  // ==========================================================================
+  const bentArmPushKeywords = [
+    'dip', 'hspu', 'handstand push', 'pike push', 'wall push', 'push-up', 'pushup', 'push up',
+    'bench', 'press', 'overhead press', 'tricep', 'ring dip', 'bar dip', 'weighted dip',
+    'decline push', 'diamond push', 'archer push', 'one arm push', 'explosive push', 'clap push'
+  ]
+  const straightArmPushKeywords = [
+    'planche', 'lean', 'planche lean', 'tuck planche', 'straddle planche', 'full planche',
+    'maltese', 'iron cross', 'support hold', 'rto support', 'ring support', 'l-sit', 'lsit',
+    'v-sit', 'vsit', 'manna', 'shoulder stand'
+  ]
+  const bentArmPullKeywords = [
+    'pull-up', 'pullup', 'pull up', 'chin-up', 'chinup', 'chin up', 'row', 'bicep', 'curl',
+    'lat pulldown', 'cable row', 'inverted row', 'ring row', 'australian', 'archer pull',
+    'typewriter pull', 'muscle-up', 'muscle up', 'weighted pull'
+  ]
+  const straightArmPullKeywords = [
+    'front lever', 'back lever', 'ice cream maker', 'skin the cat', 'german hang',
+    'lever row', 'lever hold', 'tuck lever', 'straddle lever', 'full lever',
+    'straight arm pulldown', 'lat raise', 'iron cross'
+  ]
+  
+  const isBentArmPush = isPushMovement && bentArmPushKeywords.some(kw => exerciseNameLower.includes(kw))
+  const isStraightArmPush = isPushMovement && straightArmPushKeywords.some(kw => exerciseNameLower.includes(kw))
+  const isBentArmPull = isPullMovement && bentArmPullKeywords.some(kw => exerciseNameLower.includes(kw))
+  const isStraightArmPull = isPullMovement && straightArmPullKeywords.some(kw => exerciseNameLower.includes(kw))
+  
+  // Determine overall arm type - prioritize explicit matches, default to bent-arm for typical exercises
+  let armType: 'bent_arm' | 'straight_arm' | 'mixed' | 'unknown' = 'unknown'
+  if (isStraightArmPush || isStraightArmPull) {
+    armType = 'straight_arm'
+  } else if (isBentArmPush || isBentArmPull) {
+    armType = 'bent_arm'
+  } else if (isPushMovement || isPullMovement) {
+    // Default most push/pull to bent-arm unless explicitly straight-arm
+    armType = 'bent_arm'
+  }
+  
   // Build session context strings
   const sessionFocus = (sessionContext?.sessionFocus || '').toLowerCase()
   const sessionIntent = (sessionContext?.compositionMetadata?.sessionIntent || '').toLowerCase()
@@ -3022,6 +3071,11 @@ function buildExplanationContext(
     isCoreMovement,
     isScapMovement,
     exerciseNameLower,
+    armType,
+    isBentArmPush,
+    isStraightArmPush,
+    isBentArmPull,
+    isStraightArmPull,
     primaryGoal: (sessionContext?.primaryGoal || '').replace(/_/g, ' ').toLowerCase(),
     sessionFocus,
     sessionIntent,
@@ -3121,30 +3175,73 @@ function composeExplanationFromReason(ctx: ExplanationContext): string {
     return base
   }
   
+  // Extract arm type from context for semantic correctness
+  const { armType, isBentArmPush, isStraightArmPush, isBentArmPull, isStraightArmPull } = ctx
+  
   switch (dominantReasonFamily) {
     // ========================================================================
     // DIRECT SKILL EXPOSURE
     // ========================================================================
     case 'direct_skill_exposure':
       if (primaryGoal.includes('planche')) {
+        // Only give straight-arm labeling to actual straight-arm planche work
         if (isType(['lean', 'planche lean'])) {
           return 'Builds the forward lean tolerance your planche needs — harder progressions require this foundation first.'
         }
-        if (isType(['tuck', 'adv tuck', 'straddle'])) {
+        if (isType(['tuck', 'adv tuck', 'straddle']) || isType(['planche'])) {
           return 'Accumulates quality time in position — planche improves through controlled exposure, not grinding.'
         }
-        return 'Primary straight-arm driver today — this is where planche strength actually gets built.'
+        // Check if this is bent-arm work supporting planche (like dips, HSPU, push-ups)
+        if (isBentArmPush) {
+          if (isType(['hspu', 'handstand push', 'pike push', 'wall push'])) {
+            return 'Primary vertical pressing driver — builds the overhead strength planche work relies on.'
+          }
+          if (isType(['dip'])) {
+            return 'Primary pressing driver — builds the lockout strength your planche transition needs.'
+          }
+          return 'Primary bent-arm pressing driver — builds the force base your planche work stands on.'
+        }
+        // Only actual planche work gets straight-arm labeling
+        if (isStraightArmPush) {
+          return 'Primary straight-arm driver today — this is where planche strength actually gets built.'
+        }
+        return 'Primary skill driver today — this is where planche progress happens.'
       }
       if (primaryGoal.includes('front lever')) {
-        if (isType(['tuck', 'adv tuck', 'straddle'])) {
+        if (isType(['tuck', 'adv tuck', 'straddle']) || isType(['lever'])) {
           return 'Quality pulling tension practice — front lever grows from controlled holds, not max attempts.'
+        }
+        // Check if this is bent-arm pull work supporting front lever
+        if (isBentArmPull) {
+          if (isType(['row'])) {
+            return 'Primary horizontal pulling driver — builds the scapular control front lever requires.'
+          }
+          if (isType(['pull-up', 'pullup', 'chin'])) {
+            return 'Primary vertical pulling driver — builds the lat strength front lever depends on.'
+          }
+          return 'Primary pulling driver — builds the strength base front lever relies on.'
+        }
+        if (isStraightArmPull) {
+          return 'Primary straight-arm pull driver — directly builds front lever strength and control.'
         }
         return 'Primary horizontal pull driver — directly builds the strength front lever requires.'
       }
-      if (primaryGoal.includes('handstand')) {
+      if (primaryGoal.includes('handstand') || primaryGoal.includes('hspu')) {
+        if (isType(['hspu', 'handstand push', 'pike push', 'wall push', 'partial', 'negative'])) {
+          return 'Primary vertical pressing driver — directly builds the strength your handstand push-up requires.'
+        }
+        if (isType(['handstand', 'balance', 'hold'])) {
+          return 'Primary overhead control driver — builds the balance and stability for handstand work.'
+        }
         return 'Primary overhead driver — handstand pressing strength comes from quality work here.'
       }
       if (primaryGoal.includes('muscle')) {
+        if (isBentArmPull) {
+          return 'Primary pulling driver — builds the explosive pull height your muscle-up needs.'
+        }
+        if (isBentArmPush) {
+          return 'Primary pressing driver — builds the transition lockout your muscle-up depends on.'
+        }
         return 'Primary transition driver — builds the explosive pull-to-push your muscle-up needs.'
       }
       if (hasHighQuality) {
@@ -3201,29 +3298,74 @@ function composeExplanationFromReason(ctx: ExplanationContext): string {
       if (movementFamily === 'pull') {
         if (isType(['row', 'inverted row', 'ring row'])) {
           if (primaryGoal.includes('front lever')) {
-            return 'Builds mid-back and scap strength with direct front lever carryover.'
+            if (isType(['lever row', 'front lever row'])) {
+              return 'Direct front lever strength work — builds pulling power in lever position.'
+            }
+            if (isType(['ring', 'rings'])) {
+              return 'Builds horizontal pulling with scapular depression — direct front lever carryover.'
+            }
+            if (isType(['inverted', 'australian'])) {
+              return 'Builds mid-back retraction strength — supports the scapular control front lever needs.'
+            }
+            return 'Develops horizontal pulling in lever-relevant positions — strong scap control transfers.'
+          }
+          if (primaryGoal.includes('muscle')) {
+            return 'Builds horizontal pulling balance — keeps scaps healthy under transition stress.'
+          }
+          if (primaryGoal.includes('planche')) {
+            return 'Balances pressing stress with pulling — keeps shoulders healthy for planche work.'
           }
           if (dayIsPushDominant) {
-            return 'Balances today\'s pressing with horizontal pulling — keeps shoulders and scaps balanced.'
+            return 'Balances today\'s pressing volume with horizontal pulling — maintains shoulder health.'
           }
-          return 'Develops scap control and mid-back strength — transfers into lever and pulling positions.'
+          if (isType(['ring', 'rings'])) {
+            return 'Builds scap control on unstable surface — transfers to ring strength positions.'
+          }
+          if (isType(['weighted', 'barbell'])) {
+            return 'Develops max horizontal pulling force — strong mid-back supports skill positions.'
+          }
+          return 'Develops scapular retraction and mid-back strength — foundation for pulling positions.'
         }
         if (isType(['pull-up', 'pullup', 'chin', 'weighted pull'])) {
           if (primaryGoal.includes('muscle')) {
-            return 'Builds the pulling strength your muscle-up depends on — stronger pulls mean higher bar.'
+            if (isType(['weighted', 'weight'])) {
+              return 'Builds max pulling force — the explosive bar height your muscle-up transition needs.'
+            }
+            if (isType(['chin', 'supinated'])) {
+              return 'Builds pulling power with bicep emphasis — transfers to high pull height.'
+            }
+            return 'Builds vertical pulling force — stronger pulls mean the bar comes higher.'
           }
           if (primaryGoal.includes('front lever')) {
-            return 'Builds lat and grip strength that directly supports front lever control.'
+            if (isType(['weighted', 'weight'])) {
+              return 'Builds max scapular depression force — directly supports front lever entry control.'
+            }
+            if (isType(['wide', 'archer'])) {
+              return 'Develops lat width and lever-arm strength — transfers to wider lever progressions.'
+            }
+            return 'Builds scapular depression and lat engagement — the control front lever requires.'
+          }
+          if (primaryGoal.includes('one arm') || primaryGoal.includes('oap')) {
+            if (isType(['archer', 'typewriter'])) {
+              return 'Builds unilateral pulling bias — the asymmetric strength one-arm work needs.'
+            }
+            return 'Builds pulling strength ceiling — higher max means one-arm work becomes accessible.'
           }
           if (isHighVolume) {
-            return 'Accumulates pulling volume to raise your strength ceiling over time.'
+            return 'Accumulates vertical pulling volume — building work capacity for harder progressions.'
           }
-          return 'Builds lat and grip strength — the pulling foundation your skill work is built on.'
+          if (isLowFatigueDose) {
+            return 'Maintains pulling strength without recovery cost — keeps capacity fresh for skill work.'
+          }
+          return 'Builds vertical pulling strength — foundation for skill positions and transitions.'
+        }
+        if (isType(['explosive', 'high pull', 'chest-to'])) {
+          return 'Develops explosive pull height — the bar aggression transitions depend on.'
         }
         if (primaryGoal.includes('front lever') || primaryGoal.includes('muscle')) {
-          return 'Builds the pulling strength your skill progression depends on.'
+          return 'Builds the pulling base your skill progression stands on — more strength means cleaner positions.'
         }
-        return 'Pulling strength that raises your ceiling — stronger back means more reliable positions.'
+        return 'Develops pulling capacity — stronger back means more reliable skill positions.'
       }
       // Generic strength
       if (isLowFatigueDose) {

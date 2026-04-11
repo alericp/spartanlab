@@ -294,9 +294,16 @@ export async function executeAuthoritativeGeneration(
   const startTime = Date.now()
   const { markStage, getTimings, getCurrentStage } = createStageTracker(startTime)
   
-  // [PHASE15E_LIVE_PROOF] Definitive deployment marker
-  console.log('[PHASE15E_LIVE_PROOF]', {
-    marker: 'PHASE15E_LIVE_PROOF_V1_2026_04_09',
+  // ==========================================================================
+  // [CANONICAL-SERVICE-LIVE] Authoritative runtime proof chain marker
+  // ==========================================================================
+  console.log('[CANONICAL-SERVICE-LIVE]', {
+    serviceFile: 'lib/server/authoritative-program-generation.ts',
+    functionName: 'executeAuthoritativeGeneration',
+    builderImport: '@/lib/adaptive-program-builder',
+    version: 'DOCTRINE-MATERIALIZATION-2026-04-11-V1',
+    generationIntent: request.generationIntent,
+    triggerSource: request.triggerSource,
     checkpoint: 'authoritative_service_entry',
     timestamp: new Date().toISOString(),
   })

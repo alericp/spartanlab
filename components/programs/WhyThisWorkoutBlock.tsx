@@ -19,6 +19,8 @@ import {
   getCompactWorkoutExplanation,
   getCompactChangeExplanation,
 } from '@/lib/explanation-resolver'
+import type { ProgramExplanationSurface } from '@/lib/coaching-explanation-contract'
+import { getCompactProgramFitExplanation, getCompactSessionExplanation } from '@/lib/coaching-explanation-contract'
 
 // =============================================================================
 // WHY THIS PLAN BLOCK - Program-level explanation
@@ -27,11 +29,58 @@ import {
 interface WhyThisPlanBlockProps {
   explanationMetadata?: ProgramExplanationMetadata
   className?: string
+  /** [COACHING-EXPLANATION-CONTRACT] New authoritative coaching surface */
+  coachingSurface?: ProgramExplanationSurface | null
 }
 
-export function WhyThisPlanBlock({ explanationMetadata, className = '' }: WhyThisPlanBlockProps) {
+export function WhyThisPlanBlock({ explanationMetadata, className = '', coachingSurface }: WhyThisPlanBlockProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   
+  // [COACHING-EXPLANATION-CONTRACT] Prefer new coaching surface when available
+  if (coachingSurface) {
+    const coachingCompact = getCompactProgramFitExplanation(coachingSurface)
+    
+    return (
+      <div className={`p-3 bg-[#1A1A1A] rounded-lg border border-[#2A2A2A] ${className}`}>
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="w-full flex items-center justify-between text-left"
+        >
+          <div className="flex items-center gap-2">
+            <Lightbulb className="w-4 h-4 text-[#E63946]" />
+            <span className="text-sm font-medium text-[#F5F5F5]">Why This Plan Fits You</span>
+          </div>
+          {isExpanded ? (
+            <ChevronUp className="w-4 h-4 text-[#6A6A6A]" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-[#6A6A6A]" />
+          )}
+        </button>
+        
+        {isExpanded && (
+          <div className="mt-3 space-y-2">
+            <p className="text-sm text-[#A5A5A5] font-medium pl-6">
+              {coachingCompact.headline}
+            </p>
+            {coachingCompact.bullets.map((bullet, idx) => (
+              <p key={idx} className="text-sm text-[#6A6A6A] pl-6">
+                {bullet}
+              </p>
+            ))}
+            
+            {/* Progression insight if available */}
+            {coachingSurface.program.progressionInsight && (
+              <p className="text-xs text-[#4A4A4A] pl-6 mt-2 italic">
+                {coachingSurface.program.progressionInsight}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+  
+  // Fallback to legacy explanation metadata
   // Don't render if no explanation metadata available
   if (!explanationMetadata) {
     return null
@@ -110,6 +159,8 @@ interface WhyThisSessionBlockProps {
   // [PHASE 15F] Direct session-level truthful explanation from final assembly
   truthfulSessionExplanation?: string
   resolvedNarrativeReason?: string
+  /** [COACHING-EXPLANATION-CONTRACT] New authoritative coaching surface */
+  coachingSurface?: ProgramExplanationSurface | null
 }
 
 export function WhyThisSessionBlock({ 
@@ -118,8 +169,48 @@ export function WhyThisSessionBlock({
   className = '',
   truthfulSessionExplanation,
   resolvedNarrativeReason,
+  coachingSurface,
 }: WhyThisSessionBlockProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  
+  // [COACHING-EXPLANATION-CONTRACT] Prefer new coaching surface when available
+  if (coachingSurface) {
+    const sessionExplanation = getCompactSessionExplanation(coachingSurface, dayNumber)
+    
+    if (sessionExplanation) {
+      return (
+        <div className={`p-3 bg-[#1A1A1A]/50 rounded-lg border border-[#2A2A2A]/50 ${className}`}>
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="w-full flex items-center justify-between text-left"
+          >
+            <div className="flex items-center gap-2">
+              <Lightbulb className="w-3.5 h-3.5 text-[#4F6D8A]" />
+              <span className="text-xs font-medium text-[#A5A5A5]">Why This Workout</span>
+            </div>
+            {isExpanded ? (
+              <ChevronUp className="w-3.5 h-3.5 text-[#6A6A6A]" />
+            ) : (
+              <ChevronDown className="w-3.5 h-3.5 text-[#6A6A6A]" />
+            )}
+          </button>
+          
+          {isExpanded && (
+            <div className="mt-2 space-y-1 pl-5">
+              <p className="text-xs text-[#A5A5A5]">
+                {sessionExplanation.purpose}
+              </p>
+              {sessionExplanation.note && (
+                <p className="text-xs text-[#6A6A6A] italic">
+                  {sessionExplanation.note}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )
+    }
+  }
   
   // [PHASE 15F TASK 2] Prefer truthful session explanation from final assembly
   // This reads from final session truth, NOT template-level assumptions

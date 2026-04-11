@@ -1555,26 +1555,42 @@ function ExerciseRow({
         const bestSublabel = coachingExpl?.role || (showSublabel ? getBestRowSublabel(alignedRowSurface) : null)
         const isCoachingSource = !!coachingExpl?.role
         
+        // [COMPARATIVE-COACH-INTELLIGENCE] Secondary explanation adds decision-intelligence
+        // Shows why THIS choice over alternatives, or why THIS intensity HERE
+        const secondaryExplanation = coachingExpl?.bestSecondary
+        // Only show secondary if it's meaningfully different from primary
+        const showSecondary = secondaryExplanation && 
+          secondaryExplanation !== coachingExpl?.role &&
+          secondaryExplanation.length > 20 // Avoid very short generic fallbacks
+        
         if (!bestSublabel && !showChips) return null
         
         return (
-        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-          {/* [COACHING-EXPLANATION-CONTRACT] Single compact sublabel from authoritative source */}
-          {/* Coaching explanations get slightly stronger styling as they are authoritative */}
-          {bestSublabel && (
-            <span className={`text-[10px] ${isCoachingSource ? 'text-[#9A9A9A]' : 'text-[#7A7A7A]'}`}>
-              {bestSublabel}
+        <div className="flex flex-col gap-0.5 mt-0.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* [COACHING-EXPLANATION-CONTRACT] Primary role explanation from authoritative source */}
+            {/* Coaching explanations get slightly stronger styling as they are authoritative */}
+            {bestSublabel && (
+              <span className={`text-[10px] ${isCoachingSource ? 'text-[#9A9A9A]' : 'text-[#7A7A7A]'}`}>
+                {bestSublabel}
+              </span>
+            )}
+            {/* Single chip max in prescription-first mode - subtle styling */}
+            {showChips && chips.slice(0, 1).map((chip, i) => (
+              <span 
+                key={`chip-${i}`}
+                className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#6A6A6A]"
+              >
+                {chip}
+              </span>
+            ))}
+          </div>
+          {/* [COMPARATIVE-COACH-INTELLIGENCE] Secondary line shows decision reasoning */}
+          {showSecondary && (
+            <span className="text-[9px] text-[#6A6A6A] italic">
+              {secondaryExplanation}
             </span>
           )}
-          {/* Single chip max in prescription-first mode - subtle styling */}
-          {showChips && chips.slice(0, 1).map((chip, i) => (
-            <span 
-              key={`chip-${i}`}
-              className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#6A6A6A]"
-            >
-              {chip}
-            </span>
-          ))}
         </div>
         )
       })()}

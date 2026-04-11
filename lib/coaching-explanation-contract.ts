@@ -193,6 +193,23 @@ export interface ExerciseExplanationBundle {
   // Primary explanation - the WHY
   roleExplanation: string
   
+  // ==========================================================================
+  // COMPARATIVE COACH INTELLIGENCE LAYER
+  // ==========================================================================
+  // These fields provide premium decision-intelligence explanations:
+  // - Why THIS choice instead of alternatives
+  // - Why THIS intensity/dosage HERE instead of another slot
+  // - How this choice fits the week structure
+  
+  /** Why this exercise was chosen over likely alternatives for this athlete/session */
+  comparativeChoiceExplanation: string | null
+  
+  /** Why this intensity/dosage is placed here instead of harder/lighter elsewhere */
+  intensityContrastExplanation: string | null
+  
+  /** How this choice protects or supports the week structure */
+  weekContextExplanation: string | null
+  
   // Context explanation
   sessionContextNote: string | null
   programContextNote: string | null
@@ -779,6 +796,14 @@ export function buildExerciseExplanation(
   // Build role explanation - the primary WHY
   const roleExplanation = buildExerciseRoleExplanation(exercise, sessionContext, programContext)
   
+  // ==========================================================================
+  // COMPARATIVE COACH INTELLIGENCE LAYER
+  // ==========================================================================
+  // Build premium decision-intelligence explanations
+  const comparativeChoiceExplanation = buildComparativeChoiceExplanation(exercise, sessionContext, programContext)
+  const intensityContrastExplanation = buildIntensityContrastExplanation(exercise, sessionContext, programContext)
+  const weekContextExplanation = buildWeekContextExplanation(exercise, sessionContext, programContext)
+  
   // Build session context note
   const sessionContextNote = buildExerciseSessionContext(exercise, sessionContext)
   
@@ -791,6 +816,9 @@ export function buildExerciseExplanation(
   return {
     exerciseId: exercise.id,
     roleExplanation,
+    comparativeChoiceExplanation,
+    intensityContrastExplanation,
+    weekContextExplanation,
     sessionContextNote,
     programContextNote,
     dosageReason,
@@ -1103,6 +1131,299 @@ function buildExerciseDosageReason(
 }
 
 // =============================================================================
+// COMPARATIVE COACH INTELLIGENCE LAYER BUILDERS
+// =============================================================================
+
+/**
+ * Build comparative choice explanation.
+ * Explains why THIS exercise was chosen over likely alternatives.
+ * 
+ * This is the premium "why this instead of that" reasoning that separates
+ * expert coaching from generic programming.
+ */
+function buildComparativeChoiceExplanation(
+  exercise: NormalizedExerciseInput,
+  sessionContext: NormalizedSessionInput,
+  programContext: { primaryGoal: string; primaryGoalLabel: string; isFirstWeek: boolean }
+): string | null {
+  const role = exercise.roleInSession.toLowerCase()
+  const expression = exercise.expressionMode.toLowerCase()
+  const progression = exercise.progressionIntent.toLowerCase()
+  const reason = exercise.selectionReason.toLowerCase()
+  const family = exercise.movementFamily
+  const nameLower = exercise.name.toLowerCase()
+  const goalLower = programContext.primaryGoal.toLowerCase()
+  const isFirstWeek = programContext.isFirstWeek
+  
+  // ==========================================================================
+  // PATTERN 1: Stage-appropriate progression choice
+  // ==========================================================================
+  if (progression.includes('bridge') || reason.includes('bridge') || reason.includes('stepping stone')) {
+    if (goalLower.includes('planche')) {
+      if (nameLower.includes('lean') || nameLower.includes('planche lean')) {
+        return `Chosen over harder holds because lean tolerance must be owned before load tolerance matters.`
+      }
+      if (nameLower.includes('tuck')) {
+        return `Tuck position chosen to build control before extending leverage — harder variations would compromise form.`
+      }
+    }
+    if (goalLower.includes('lever')) {
+      if (nameLower.includes('tuck')) {
+        return `Tuck version chosen to build lat engagement without overloading the lever arm your body isn't ready for yet.`
+      }
+    }
+    if (goalLower.includes('muscle') || goalLower.includes('muscle_up')) {
+      return `Bridge movement chosen because it builds the specific transition strength harder variations assume you already have.`
+    }
+    return `Progression-appropriate for your current level — harder variations would cost more recovery than they would build right now.`
+  }
+  
+  // ==========================================================================
+  // PATTERN 2: Low-fatigue strategic choice
+  // ==========================================================================
+  if (reason.includes('low fatigue') || reason.includes('low-fatigue') || reason.includes('minimal fatigue')) {
+    if (exercise.isPrimary) {
+      return `Selected for efficient skill exposure — gives the needed practice without depleting capacity for other days.`
+    }
+    if (family === 'pull') {
+      return `Pulling option chosen to support skill work without accumulating grip or lat fatigue that would cost you later.`
+    }
+    if (family === 'push') {
+      return `Pressing option chosen to build strength without taxing the same tissues your main skill work requires.`
+    }
+    return `Lower-fatigue option selected so you get the benefit without stealing recovery from priority work.`
+  }
+  
+  // ==========================================================================
+  // PATTERN 3: Technical pattern reinforcement choice
+  // ==========================================================================
+  if (expression.includes('technical') || reason.includes('pattern') || reason.includes('technique')) {
+    if (nameLower.includes('partial') || nameLower.includes('negative') || nameLower.includes('eccentric')) {
+      return `Partial/negative chosen because owning this range builds the control harder variations require.`
+    }
+    if (nameLower.includes('hollow') || nameLower.includes('arch') || nameLower.includes('hold')) {
+      return `Position hold chosen to reinforce the line quality that makes skill work efficient.`
+    }
+    return `Technical variant selected because pattern ownership matters more than load right now.`
+  }
+  
+  // ==========================================================================
+  // PATTERN 4: Direct skill carryover choice
+  // ==========================================================================
+  if (expression.includes('direct') || role.includes('main') || role.includes('primary')) {
+    if (exercise.skillSupportTargets.length > 0) {
+      const targetSkill = formatGoalLabel(exercise.skillSupportTargets[0])
+      return `Selected for direct ${targetSkill} carryover — builds exactly what your skill work needs, not general fitness.`
+    }
+    return `Chosen because it directly advances your main goal rather than building general capacity.`
+  }
+  
+  // ==========================================================================
+  // PATTERN 5: Structural balance / counterbalance choice
+  // ==========================================================================
+  if (role.includes('balance') || role.includes('counter') || reason.includes('balance')) {
+    if (family === 'pull' && (goalLower.includes('planche') || goalLower.includes('hspu'))) {
+      return `Pulling work selected to offset pressing demands — prevents the shoulder imbalances that stall progress.`
+    }
+    if (family === 'push' && (goalLower.includes('lever') || goalLower.includes('muscle'))) {
+      return `Pressing work selected to balance pulling demands — keeps joints healthy under asymmetric loading.`
+    }
+    return `Counterstress movement chosen because balanced tissues tolerate training better than overtrained ones.`
+  }
+  
+  // ==========================================================================
+  // PATTERN 6: Force base building choice
+  // ==========================================================================
+  if (role.includes('strength') || role.includes('force') || role.includes('foundation')) {
+    if (nameLower.includes('weighted') || exercise.isWeighted) {
+      return `Weighted version chosen because adding external load builds force faster than bodyweight alone at your level.`
+    }
+    if (nameLower.includes('dip') && goalLower.includes('planche')) {
+      return `Dips selected over other pressing because they build the lockout strength planche transitions actually use.`
+    }
+    if (nameLower.includes('row') && goalLower.includes('lever')) {
+      return `Rows selected because they train the scapular depression you need without the full lever demand.`
+    }
+    return `Strength builder selected to raise your force ceiling — harder skills require stronger foundations.`
+  }
+  
+  // ==========================================================================
+  // PATTERN 7: First week conservative choice
+  // ==========================================================================
+  if (isFirstWeek) {
+    return `Accessible version selected for week one — establishes baseline without risking overreach on new program.`
+  }
+  
+  // ==========================================================================
+  // PATTERN 8: Protection / recovery priority choice
+  // ==========================================================================
+  if (exercise.isProtected || reason.includes('protect') || reason.includes('recovery')) {
+    return `Conservative option selected this week to prioritize recovery without losing exposure.`
+  }
+  
+  // No strong comparative signal available
+  return null
+}
+
+/**
+ * Build intensity contrast explanation.
+ * Explains why THIS intensity/dosage is placed HERE instead of harder/lighter elsewhere.
+ */
+function buildIntensityContrastExplanation(
+  exercise: NormalizedExerciseInput,
+  sessionContext: NormalizedSessionInput,
+  programContext: { primaryGoal: string; isFirstWeek: boolean }
+): string | null {
+  const role = exercise.roleInSession.toLowerCase()
+  const rpe = exercise.targetRPE
+  const isPrimary = exercise.isPrimary
+  const isProtected = exercise.isProtected
+  const sessionIsPrimary = sessionContext.isPrimary
+  const isProtectionConstrained = sessionContext.isProtectionConstrained
+  const dayNumber = sessionContext.dayNumber
+  
+  // ==========================================================================
+  // PATTERN 1: Primary skill session — explain why output goes here
+  // ==========================================================================
+  if (isPrimary && sessionIsPrimary) {
+    if (rpe && rpe >= 8) {
+      return `Effort pushed here because this is your primary skill day — the best slot for quality output.`
+    }
+    if (rpe && rpe >= 7) {
+      return `Moderate-high effort here — this session owns the main adaptation demand for your goal.`
+    }
+  }
+  
+  // ==========================================================================
+  // PATTERN 2: Support work in primary session — explain why capped
+  // ==========================================================================
+  if (!isPrimary && sessionIsPrimary) {
+    if (rpe && rpe <= 7) {
+      return `Kept submaximal so you have capacity left for the primary work that drives adaptation.`
+    }
+    return `Dosage capped here — this supports the main work but shouldn't compete with it.`
+  }
+  
+  // ==========================================================================
+  // PATTERN 3: Secondary session — explain balanced allocation
+  // ==========================================================================
+  if (!sessionIsPrimary && !isProtectionConstrained) {
+    if (rpe && rpe >= 8) {
+      return `Pushed harder in this secondary slot because the main session owns a different stress type.`
+    }
+    if (rpe && rpe <= 7) {
+      return `Kept moderate here — this session supports weekly structure without overloading any corridor.`
+    }
+  }
+  
+  // ==========================================================================
+  // PATTERN 4: Protection-constrained session
+  // ==========================================================================
+  if (isProtectionConstrained || isProtected) {
+    return `Dosage reduced this session to protect recovery — intensity returns when adaptation supports it.`
+  }
+  
+  // ==========================================================================
+  // PATTERN 5: First week acclimation
+  // ==========================================================================
+  if (programContext.isFirstWeek) {
+    return `Conservative effort this week to establish baseline — intensity ramps as your body adapts to the program.`
+  }
+  
+  // ==========================================================================
+  // PATTERN 6: High RPE explanation
+  // ==========================================================================
+  if (rpe && rpe >= 9) {
+    if (isPrimary) {
+      return `Near-max effort here because this is the main output slot — the safest place to push hard.`
+    }
+    return `Higher effort here to maximize adaptation within recoverable limits.`
+  }
+  
+  // ==========================================================================
+  // PATTERN 7: Low RPE explanation
+  // ==========================================================================
+  if (rpe && rpe <= 6) {
+    if (role.includes('support') || role.includes('accessory')) {
+      return `Low effort because the job here is tissue health and movement quality, not output.`
+    }
+    return `Kept light to preserve capacity for higher-priority work elsewhere in the week.`
+  }
+  
+  // No strong intensity contrast signal
+  return null
+}
+
+/**
+ * Build week context explanation.
+ * Explains how this choice protects or supports the week structure.
+ */
+function buildWeekContextExplanation(
+  exercise: NormalizedExerciseInput,
+  sessionContext: NormalizedSessionInput,
+  programContext: { primaryGoal: string; primaryGoalLabel: string }
+): string | null {
+  const family = exercise.movementFamily
+  const role = exercise.roleInSession.toLowerCase()
+  const isPrimary = exercise.isPrimary
+  const sessionIsPrimary = sessionContext.isPrimary
+  const dayNumber = sessionContext.dayNumber
+  const totalExercises = sessionContext.exerciseCount
+  const hasDensity = sessionContext.hasDensityApplied
+  const goalLower = programContext.primaryGoal.toLowerCase()
+  
+  // ==========================================================================
+  // PATTERN 1: Primary session primary movement — explain week ownership
+  // ==========================================================================
+  if (isPrimary && sessionIsPrimary) {
+    if (dayNumber === 1 || dayNumber === 2) {
+      return `Early-week slot for main skill work — freshest capacity goes to highest-return output.`
+    }
+    if (dayNumber >= 4) {
+      return `Later-week placement preserves recovery between high-demand sessions.`
+    }
+  }
+  
+  // ==========================================================================
+  // PATTERN 2: Balance work in skill-focused program
+  // ==========================================================================
+  if (role.includes('balance') || role.includes('counter')) {
+    if (family === 'pull' && (goalLower.includes('planche') || goalLower.includes('hspu'))) {
+      return `Weekly pulling frequency maintained to prevent pressing-dominant imbalance.`
+    }
+    if (family === 'push' && (goalLower.includes('lever') || goalLower.includes('muscle'))) {
+      return `Weekly pressing maintained to keep shoulders balanced against pulling demands.`
+    }
+  }
+  
+  // ==========================================================================
+  // PATTERN 3: Density-optimized session
+  // ==========================================================================
+  if (hasDensity && totalExercises >= 6) {
+    if (role.includes('support') || role.includes('accessory')) {
+      return `Paired/superset to fit necessary volume without extending session length.`
+    }
+  }
+  
+  // ==========================================================================
+  // PATTERN 4: Support work protecting skill work
+  // ==========================================================================
+  if (!isPrimary && family === 'core') {
+    return `Core work distributed to support skill positions without concentrating fatigue.`
+  }
+  
+  // ==========================================================================
+  // PATTERN 5: Frequency maintenance without overload
+  // ==========================================================================
+  if (role.includes('maintain') || role.includes('frequency')) {
+    return `Included to maintain movement frequency without adding recovery cost.`
+  }
+  
+  // No strong week context signal
+  return null
+}
+
+// =============================================================================
 // WARMUP EXPLANATION BUILDER
 // =============================================================================
 
@@ -1315,16 +1636,48 @@ export function getCompactSessionExplanation(
 
 /**
  * Get compact exercise explanation for UI display.
+ * 
+ * Returns the best available explanation with comparative intelligence when available.
+ * Priority order:
+ * 1. Role explanation (always present, the primary WHY)
+ * 2. Comparative choice explanation (premium "why this over that" reasoning)
+ * 3. Intensity contrast explanation (premium "why this effort here" reasoning)
+ * 4. Week context explanation (how this fits the week structure)
+ * 5. Dosage reason (effort-level reasoning)
  */
 export function getCompactExerciseExplanation(
   surface: ProgramExplanationSurface,
   exerciseId: string
-): { role: string; dosage: string | null } | null {
+): { 
+  role: string
+  dosage: string | null
+  /** Premium comparative reasoning - why this choice over alternatives */
+  comparative: string | null
+  /** Premium intensity reasoning - why this effort here */
+  intensityContrast: string | null
+  /** Week structure reasoning */
+  weekContext: string | null
+  /** Best secondary explanation (comparative > intensity > week > dosage) */
+  bestSecondary: string | null
+} | null {
   const exercise = surface.exercises.get(exerciseId)
   if (!exercise) return null
+  
+  // Select the best secondary explanation with priority:
+  // comparative > intensityContrast > weekContext > dosage
+  const bestSecondary = 
+    exercise.comparativeChoiceExplanation ||
+    exercise.intensityContrastExplanation ||
+    exercise.weekContextExplanation ||
+    exercise.dosageReason ||
+    null
   
   return {
     role: exercise.roleExplanation,
     dosage: exercise.dosageReason,
+    comparative: exercise.comparativeChoiceExplanation,
+    intensityContrast: exercise.intensityContrastExplanation,
+    weekContext: exercise.weekContextExplanation,
+    bestSecondary,
   }
 }

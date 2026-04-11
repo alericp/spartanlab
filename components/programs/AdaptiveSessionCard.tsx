@@ -1106,6 +1106,7 @@ function MainExercisesRenderer({
                 adjustedName={adjustedExercises.get(exercise.id)}
                 sessionContext={sessionContextForRows}
                 sessionEvidence={sessionEvidence}
+                coachingExplanation={coachingExplanation}
                 onReplace={onReplace}
                 onSkip={onSkip}
                 onProgressionAdjust={onProgressionAdjust}

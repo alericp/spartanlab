@@ -5,9 +5,8 @@ import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { AdaptiveSession, AdaptiveExercise, TrainingMethodPreference } from '@/lib/adaptive-program-builder'
-import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell, Info } from 'lucide-react'
+import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell } from 'lucide-react'
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
 import { exerciseSupportsRPE } from '@/lib/rpe-adjustment-engine'
 import { useWorkoutSession } from '@/hooks/useWorkoutSession'
@@ -1572,21 +1571,9 @@ function ExerciseRow({
               {bestSublabel}
             </span>
           )}
-          {/* [PREMIUM-INFO-BUBBLE] Compact info icon with tooltip for secondary detail */}
+          {/* [MOBILE-INFO-BUBBLE-FIX] Controlled tap-to-toggle bubble for secondary detail */}
           {hasUsefulSecondary && secondaryDetail && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button className="flex-shrink-0 p-0.5 -my-0.5 text-[#4A4A4A] hover:text-[#7A7A7A] transition-colors">
-                  <Info className="w-3 h-3" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent 
-                side="top" 
-                className="max-w-[260px] bg-[#1A1A1A] border-[#333] text-[#AAA] text-[10px] leading-relaxed px-2.5 py-1.5"
-              >
-                {secondaryDetail}
-              </TooltipContent>
-            </Tooltip>
+            <InfoBubble content={secondaryDetail} />
           )}
           {/* Single chip max in prescription-first mode - subtle styling */}
           {showChips && chips.slice(0, 1).map((chip, i) => (

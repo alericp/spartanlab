@@ -20,6 +20,13 @@
  */
 
 import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
+import {
+  buildProgramExplanationSurface,
+  getCompactProgramFitExplanation,
+  getCompactSessionExplanation,
+  getCompactExerciseExplanation,
+  type ProgramExplanationSurface,
+} from '@/lib/coaching-explanation-contract'
 
 // =============================================================================
 // TYPES
@@ -4408,6 +4415,13 @@ export interface ProgramIntelligenceContract {
     truthFieldsTotal: number
     confidence: 'high' | 'moderate' | 'low'
   }
+  
+  // ==========================================================================
+  // [COACHING-EXPLANATION-CONTRACT] AUTHORITATIVE AI COACHING EXPLANATIONS
+  // ==========================================================================
+  
+  /** Coaching explanation surface - authoritative doctrine-driven explanations */
+  coachingExplanation: ProgramExplanationSurface | null
 }
 
 /** Decision input display - what the engine responded to */
@@ -5533,6 +5547,23 @@ export function buildProgramIntelligenceContract(
   // ==========================================================================
   // BUILD CONTRACT
   // ==========================================================================
+  
+  // [COACHING-EXPLANATION-CONTRACT] Build authoritative coaching explanation surface
+  let coachingExplanation: ProgramExplanationSurface | null = null
+  try {
+    coachingExplanation = buildProgramExplanationSurface(program)
+    console.log('[coaching-explanation-contract] Built coaching explanation surface:', {
+      programId: program.id,
+      hasProgram: !!coachingExplanation.program,
+      sessionCount: coachingExplanation.sessions.length,
+      exerciseCount: coachingExplanation.exercises.size,
+      source: coachingExplanation.inputTruthSource,
+    })
+  } catch (err) {
+    console.error('[coaching-explanation-contract] Failed to build coaching explanation:', err)
+    // Fail gracefully - explanation is optional enhancement
+  }
+  
   return {
     programId: program.id,
     trainingSpine,
@@ -5558,6 +5589,7 @@ export function buildProgramIntelligenceContract(
       truthFieldsTotal,
       confidence,
     },
+    coachingExplanation,
   }
 }
 

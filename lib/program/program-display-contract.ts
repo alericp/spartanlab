@@ -2525,6 +2525,32 @@ type LocalPayoff =
   | 'position_control'
 
 /**
+ * DOSAGE PROFILE
+ * Structured interpretation of sets/reps/RPE to inform explanation.
+ */
+interface DosageProfile {
+  volumeIntent: 'low' | 'moderate' | 'high'
+  intensityIntent: 'low' | 'moderate' | 'high' | 'explosive'
+  fatigueImpact: 'minimal' | 'moderate' | 'significant'
+  qualityEmphasis: boolean
+  powerEmphasis: boolean
+}
+
+/**
+ * DAY STRESS PROFILE
+ * Characterizes what this day is trying to accomplish.
+ */
+interface DayStressProfile {
+  isHighNeural: boolean
+  isLowFatigue: boolean
+  isPushDominant: boolean
+  isPullDominant: boolean
+  isSkillFocused: boolean
+  isStrengthFocused: boolean
+  isRecoveryBiased: boolean
+}
+
+/**
  * EXPLANATION CONTEXT PACKAGE
  * All inputs the reasoning engine needs to generate truthful explanations.
  */
@@ -2542,6 +2568,7 @@ interface ExplanationContext {
   sessionFocus: string
   sessionIntent: string
   spineType: string
+  dayStressProfile: DayStressProfile
   
   // Row context
   category: string
@@ -2551,6 +2578,11 @@ interface ExplanationContext {
   isPrimary: boolean
   isProtected: boolean
   emphasisKind: string
+  
+  // Dosage context (when available)
+  dosageProfile: DosageProfile | null
+  loadDecisionSummary: string
+  progressionIntent: string
   
   // Derived reason classification
   dominantReasonFamily: ReasonFamily
@@ -2761,6 +2793,83 @@ function deriveLocalPayoff(ctx: ExplanationContext): LocalPayoff | null {
 }
 
 /**
+ * DERIVE DAY STRESS PROFILE
+ * Characterizes what the day is trying to accomplish based on session context.
+ */
+function deriveDayStressProfile(sessionFocus: string, sessionIntent: string, spineType: string): DayStressProfile {
+  const focusLower = sessionFocus.toLowerCase()
+  const intentLower = sessionIntent.toLowerCase()
+  const spineLower = spineType.toLowerCase()
+  
+  return {
+    isHighNeural: intentLower.includes('neural') || intentLower.includes('skill') || spineLower.includes('direct') || spineLower.includes('intensity'),
+    isLowFatigue: intentLower.includes('low') || intentLower.includes('recovery') || intentLower.includes('light'),
+    isPushDominant: focusLower.includes('push') || focusLower.includes('press') || focusLower.includes('planche') || focusLower.includes('handstand'),
+    isPullDominant: focusLower.includes('pull') || focusLower.includes('lever') || focusLower.includes('muscle-up') || focusLower.includes('row'),
+    isSkillFocused: intentLower.includes('skill') || spineLower.includes('skill') || focusLower.includes('skill'),
+    isStrengthFocused: intentLower.includes('strength') || spineLower.includes('strength') || focusLower.includes('strength'),
+    isRecoveryBiased: intentLower.includes('recovery') || intentLower.includes('deload') || focusLower.includes('recovery'),
+  }
+}
+
+/**
+ * DERIVE DOSAGE PROFILE
+ * Interprets load decision summary to inform explanation.
+ */
+function deriveDosageProfile(loadDecisionSummary: string, progressionIntent: string, selectionReason: string): DosageProfile | null {
+  const loadLower = loadDecisionSummary.toLowerCase()
+  const progressLower = progressionIntent.toLowerCase()
+  const reasonLower = selectionReason.toLowerCase()
+  
+  // If no dosage info, return null
+  if (!loadDecisionSummary && !progressionIntent) {
+    return null
+  }
+  
+  // Volume intent
+  let volumeIntent: 'low' | 'moderate' | 'high' = 'moderate'
+  if (loadLower.includes('low volume') || loadLower.includes('reduced') || loadLower.includes('minimal') || reasonLower.includes('low volume')) {
+    volumeIntent = 'low'
+  } else if (loadLower.includes('high volume') || loadLower.includes('accumulation') || loadLower.includes('density')) {
+    volumeIntent = 'high'
+  }
+  
+  // Intensity intent
+  let intensityIntent: 'low' | 'moderate' | 'high' | 'explosive' = 'moderate'
+  if (loadLower.includes('explosive') || loadLower.includes('power') || loadLower.includes('speed') || reasonLower.includes('explosive')) {
+    intensityIntent = 'explosive'
+  } else if (loadLower.includes('high intensity') || loadLower.includes('heavy') || loadLower.includes('max')) {
+    intensityIntent = 'high'
+  } else if (loadLower.includes('low intensity') || loadLower.includes('light') || loadLower.includes('easy')) {
+    intensityIntent = 'low'
+  }
+  
+  // Fatigue impact
+  let fatigueImpact: 'minimal' | 'moderate' | 'significant' = 'moderate'
+  if (loadLower.includes('low fatigue') || loadLower.includes('minimal fatigue') || reasonLower.includes('low-fatigue')) {
+    fatigueImpact = 'minimal'
+  } else if (loadLower.includes('high fatigue') || loadLower.includes('demanding') || loadLower.includes('grinding')) {
+    fatigueImpact = 'significant'
+  }
+  
+  // Quality emphasis
+  const qualityEmphasis = loadLower.includes('quality') || loadLower.includes('technique') || loadLower.includes('form') || 
+                          progressLower.includes('quality') || reasonLower.includes('quality')
+  
+  // Power emphasis  
+  const powerEmphasis = loadLower.includes('power') || loadLower.includes('explosive') || loadLower.includes('speed') ||
+                        reasonLower.includes('power') || reasonLower.includes('explosive')
+  
+  return {
+    volumeIntent,
+    intensityIntent,
+    fatigueImpact,
+    qualityEmphasis,
+    powerEmphasis,
+  }
+}
+
+/**
  * BUILD EXPLANATION CONTEXT
  * Assembles all context needed for explanation generation.
  */
@@ -2792,11 +2901,28 @@ function buildExplanationContext(
   const exerciseNameLower = exercise.name.toLowerCase()
   const categoryLower = (exercise.category || '').toLowerCase()
   
-  // Movement family detection (contradiction guard)
-  const pullKeywords = ['pull', 'row', 'chin', 'lat', 'bicep', 'curl', 'lever row', 'front lever', 'back lever', 'muscle-up', 'muscle up', 'transition']
-  const pushKeywords = ['push', 'dip', 'press', 'planche', 'handstand', 'pike', 'tricep', 'extension', 'pppu', 'pseudo', 'hspu']
-  const coreKeywords = ['hollow', 'plank', 'dead bug', 'deadbug', 'l-sit', 'lsit', 'leg raise', 'pallof', 'anti-rotation', 'compression', 'side plank', 'copenhagen']
-  const scapKeywords = ['face pull', 'y raise', 'i raise', 'cuban', 'band pull', 'pull-apart', 'rear delt', 'reverse fly', 'serratus']
+  // Movement family detection (contradiction guard) - EXPANDED KEYWORDS
+  const pullKeywords = [
+    'pull', 'row', 'chin', 'lat', 'bicep', 'curl', 'lever row', 'front lever', 'back lever', 
+    'muscle-up', 'muscle up', 'transition', 'chest-to-bar', 'chest to bar', 'high pull',
+    'inverted row', 'ring row', 'australian', 'horizontal pull', 'vertical pull', 'archer pull'
+  ]
+  const pushKeywords = [
+    'push', 'dip', 'press', 'planche', 'handstand', 'pike', 'tricep', 'extension', 'pppu', 
+    'pseudo', 'hspu', 'lean', 'ring push', 'wall push', 'archer push', 'diamond push',
+    'decline push', 'weighted push', 'bench', 'overhead press'
+  ]
+  const coreKeywords = [
+    'hollow', 'plank', 'dead bug', 'deadbug', 'l-sit', 'lsit', 'leg raise', 'pallof', 
+    'anti-rotation', 'compression', 'side plank', 'copenhagen', 'dragon flag', 'ab wheel',
+    'hanging knee', 'toes to bar', 'v-up', 'crunch', 'reverse hyper', 'back extension',
+    'superman', 'arch', 'glute bridge', 'hip thrust'
+  ]
+  const scapKeywords = [
+    'face pull', 'y raise', 'i raise', 'cuban', 'band pull', 'pull-apart', 'rear delt', 
+    'reverse fly', 'serratus', 'scap push', 'scap pull', 'protraction', 'retraction',
+    'external rotation', 'internal rotation', 'rotator cuff'
+  ]
   
   const isPullMovement = pullKeywords.some(kw => exerciseNameLower.includes(kw)) || categoryLower === 'pull'
   const isPushMovement = pushKeywords.some(kw => exerciseNameLower.includes(kw)) || categoryLower === 'push'
@@ -2809,6 +2935,15 @@ function buildExplanationContext(
   else if (isCoreMovement) movementFamily = 'core'
   else if (isScapMovement) movementFamily = 'scap'
   
+  // Build session context strings
+  const sessionFocus = (sessionContext?.sessionFocus || '').toLowerCase()
+  const sessionIntent = (sessionContext?.compositionMetadata?.sessionIntent || '').toLowerCase()
+  const spineType = (sessionContext?.compositionMetadata?.spineSessionType || '').toLowerCase()
+  
+  // Build load/progression strings
+  const loadDecisionSummary = (exercise.coachingMeta?.loadDecisionSummary || '').toLowerCase()
+  const progressionIntent = (exercise.coachingMeta?.progressionIntent || '').toLowerCase()
+  
   const ctx: ExplanationContext = {
     movementFamily,
     isPullMovement,
@@ -2817,9 +2952,10 @@ function buildExplanationContext(
     isScapMovement,
     exerciseNameLower,
     primaryGoal: (sessionContext?.primaryGoal || '').replace(/_/g, ' ').toLowerCase(),
-    sessionFocus: (sessionContext?.sessionFocus || '').toLowerCase(),
-    sessionIntent: (sessionContext?.compositionMetadata?.sessionIntent || '').toLowerCase(),
-    spineType: (sessionContext?.compositionMetadata?.spineSessionType || '').toLowerCase(),
+    sessionFocus,
+    sessionIntent,
+    spineType,
+    dayStressProfile: deriveDayStressProfile(sessionFocus, sessionIntent, spineType),
     category: categoryLower,
     selectionReason: exercise.selectionReason || '',
     expressionMode: (exercise.coachingMeta?.expressionMode || '').toLowerCase(),
@@ -2827,6 +2963,9 @@ function buildExplanationContext(
     isPrimary: exercise.isPrimary || false,
     isProtected: exercise.isProtected || false,
     emphasisKind: emphasisKind || '',
+    dosageProfile: deriveDosageProfile(loadDecisionSummary, progressionIntent, exercise.selectionReason || ''),
+    loadDecisionSummary,
+    progressionIntent,
     dominantReasonFamily: 'capacity_building', // Will be set below
     modifiers: [],
     localPayoff: null
@@ -2843,13 +2982,39 @@ function buildExplanationContext(
 /**
  * COMPOSE EXPLANATION FROM REASON FAMILY
  * Generates the final sentence based on classified reason and context.
+ * 
+ * DESIGN PRINCIPLES:
+ * 1. Explain WHY this exercise is here FOR THIS ATHLETE, THIS DAY, THIS PROGRAM
+ * 2. Use dosage to inform the explanation when relevant
+ * 3. Reference day stress profile to explain placement
+ * 4. Never output generic category labels as the primary explanation
+ * 5. Movement family must be respected in all explanations
  */
 function composeExplanationFromReason(ctx: ExplanationContext): string {
-  const { dominantReasonFamily, modifiers, localPayoff, movementFamily, exerciseNameLower, primaryGoal, sessionFocus } = ctx
+  const { 
+    dominantReasonFamily, modifiers, localPayoff, movementFamily, exerciseNameLower, 
+    primaryGoal, sessionFocus, dayStressProfile, dosageProfile, selectionReason
+  } = ctx
   const hasLowFatigue = modifiers.includes('low_fatigue')
   const hasHighQuality = modifiers.includes('high_quality')
   const hasBridging = modifiers.includes('bridging')
   const hasSpeedPreserving = modifiers.includes('speed_preserving')
+  const hasConservative = modifiers.includes('conservative')
+  const hasOutputPreserving = modifiers.includes('output_preserving')
+  
+  // Dosage-aware helpers
+  const isLowFatigueDose = dosageProfile?.fatigueImpact === 'minimal' || hasLowFatigue
+  const isQualityFocused = dosageProfile?.qualityEmphasis || hasHighQuality
+  const isPowerFocused = dosageProfile?.powerEmphasis || hasSpeedPreserving
+  const isHighVolume = dosageProfile?.volumeIntent === 'high'
+  const isLowVolume = dosageProfile?.volumeIntent === 'low'
+  
+  // Day context helpers
+  const dayIsPushDominant = dayStressProfile.isPushDominant
+  const dayIsPullDominant = dayStressProfile.isPullDominant
+  const dayIsHighNeural = dayStressProfile.isHighNeural
+  const dayIsLowFatigue = dayStressProfile.isLowFatigue
+  const dayIsSkillFocused = dayStressProfile.isSkillFocused
   
   // Goal name helper
   const goalName = (): string => {
@@ -2858,12 +3023,31 @@ function composeExplanationFromReason(ctx: ExplanationContext): string {
     if (primaryGoal.includes('back lever')) return 'back lever'
     if (primaryGoal.includes('handstand')) return 'handstand'
     if (primaryGoal.includes('muscle up') || primaryGoal.includes('muscle-up')) return 'muscle-up'
+    if (primaryGoal.includes('iron cross')) return 'iron cross'
+    if (primaryGoal.includes('l-sit') || primaryGoal.includes('l sit')) return 'L-sit'
+    if (primaryGoal.includes('v-sit') || primaryGoal.includes('v sit')) return 'V-sit'
     return 'your skill'
   }
   
   // Helper: check if exercise is a specific type
   const isType = (keywords: string[]): boolean => {
     return keywords.some(kw => exerciseNameLower.includes(kw))
+  }
+  
+  // Helper: add dosage context to explanation when relevant
+  const withDosageContext = (base: string): string => {
+    if (isLowFatigueDose && !base.includes('fatigue') && !base.includes('recovery')) {
+      // Only add if it adds value
+      if (base.length < 80) {
+        return base.replace(/\.$/, '') + ' — dosed to minimize fatigue cost.'
+      }
+    }
+    if (isQualityFocused && !base.includes('quality') && !base.includes('technique')) {
+      if (base.length < 80) {
+        return base.replace(/\.$/, '') + ' — quality over grinding.'
+      }
+    }
+    return base
   }
   
   switch (dominantReasonFamily) {
@@ -2904,33 +3088,78 @@ function composeExplanationFromReason(ctx: ExplanationContext): string {
       if (movementFamily === 'push') {
         if (isType(['dip', 'weighted dip', 'ring dip'])) {
           if (primaryGoal.includes('planche')) {
+            if (isLowFatigueDose) {
+              return 'Builds planche-supporting pressing strength while preserving recovery for skill work.'
+            }
             return 'Builds the pressing foundation planche needs — stronger dips mean easier progression later.'
+          }
+          if (primaryGoal.includes('muscle')) {
+            return 'Builds the lockout strength your muscle-up transition depends on.'
+          }
+          if (dayIsSkillFocused) {
+            return 'Placed after skill work to build pressing capacity without stealing from main output.'
           }
           return 'Raises your pressing ceiling — this transfers into skill work without the skill fatigue cost.'
         }
         if (isType(['push-up', 'pushup', 'pppu', 'pseudo'])) {
           if (primaryGoal.includes('planche')) {
+            if (isType(['pppu', 'pseudo'])) {
+              return 'Builds pressing endurance in planche-lean position — direct carryover, lower joint cost than full skill work.'
+            }
             return 'Builds pressing endurance in a planche-relevant position — high carryover, lower joint cost.'
+          }
+          if (isType(['ring'])) {
+            return 'Builds pressing stability on rings — the control that makes ring dips and skills more reliable.'
           }
           return 'Pressing work that transfers into your skill positions without excessive joint stress.'
         }
+        if (isType(['pike', 'hspu', 'wall'])) {
+          if (primaryGoal.includes('handstand')) {
+            return 'Builds the overhead pressing strength your handstand work is built on.'
+          }
+          return 'Develops vertical pressing capacity — foundation for overhead skill work.'
+        }
         if (primaryGoal.includes('planche') || primaryGoal.includes('handstand')) {
+          if (isLowFatigueDose) {
+            return 'Raises pressing output efficiently — builds foundation without excessive recovery cost.'
+          }
           return 'Raises your pressing output — stronger foundation means faster skill progression.'
         }
         return 'Builds the pressing strength your skill work draws from — raises your ceiling.'
       }
       if (movementFamily === 'pull') {
         if (isType(['row', 'inverted row', 'ring row'])) {
+          if (primaryGoal.includes('front lever')) {
+            return 'Builds mid-back and scap strength with direct front lever carryover.'
+          }
+          if (dayIsPushDominant) {
+            return 'Balances today\'s pressing with horizontal pulling — keeps shoulders and scaps balanced.'
+          }
           return 'Develops scap control and mid-back strength — transfers into lever and pulling positions.'
         }
         if (isType(['pull-up', 'pullup', 'chin', 'weighted pull'])) {
+          if (primaryGoal.includes('muscle')) {
+            return 'Builds the pulling strength your muscle-up depends on — stronger pulls mean higher bar.'
+          }
+          if (primaryGoal.includes('front lever')) {
+            return 'Builds lat and grip strength that directly supports front lever control.'
+          }
+          if (isHighVolume) {
+            return 'Accumulates pulling volume to raise your strength ceiling over time.'
+          }
           return 'Builds lat and grip strength — the pulling foundation your skill work is built on.'
+        }
+        if (primaryGoal.includes('front lever') || primaryGoal.includes('muscle')) {
+          return 'Builds the pulling strength your skill progression depends on.'
         }
         return 'Pulling strength that raises your ceiling — stronger back means more reliable positions.'
       }
       // Generic strength
-      if (hasLowFatigue) {
+      if (isLowFatigueDose) {
         return 'Builds force capacity without competing for skill recovery — efficient strength transfer.'
+      }
+      if (isQualityFocused) {
+        return 'Builds strength with quality emphasis — better movement patterns transfer better.'
       }
       return 'Foundational strength your skill progression depends on — raises your ceiling.'
     
@@ -2940,20 +3169,34 @@ function composeExplanationFromReason(ctx: ExplanationContext): string {
     case 'explosive_power':
       if (movementFamily === 'pull') {
         if (isType(['explosive', 'chest-to-bar', 'chest to bar', 'high pull'])) {
-          return 'Sharpens vertical pull speed and high-force bar intent without adding grindy fatigue.'
+          // Context: This is a PULL movement - never mention pressing as primary benefit
+          if (primaryGoal.includes('muscle')) {
+            return 'Builds the high-pull power your muscle-up transition depends on — bar height comes from here.'
+          }
+          if (dayIsHighNeural) {
+            return 'Sharpens vertical pull speed while neural output is fresh — this is where bar height improves.'
+          }
+          return 'Develops high-force pulling speed — the bar aggression that makes transitions possible.'
         }
         if (isType(['muscle-up', 'transition'])) {
-          return 'Trains the explosive pull-to-push transition — speed and timing, not slow grinding.'
+          return 'Trains the explosive pull-to-push coordination — speed and timing, not slow grinding.'
         }
-        return 'Preserves pulling explosiveness — speed here transfers to skill transitions.'
+        // Generic explosive pull
+        if (isLowFatigueDose) {
+          return 'Preserves pulling explosiveness in a low-fatigue format — speed without recovery cost.'
+        }
+        return 'Develops pulling power and speed — transfers to skill transitions and bar height.'
       }
       if (movementFamily === 'push') {
         if (isType(['clap', 'plyo', 'explosive'])) {
           return 'Builds pressing power and speed — transfers to faster, more controlled skill positions.'
         }
+        if (primaryGoal.includes('planche')) {
+          return 'Develops pressing explosiveness that helps you hold harder planche progressions.'
+        }
         return 'Develops pressing explosiveness without heavy load fatigue.'
       }
-      if (hasSpeedPreserving) {
+      if (isPowerFocused) {
         return 'Power expression slot — dosed for speed and intent, not grindy volume.'
       }
       return 'Develops explosive output — speed and power without grinding fatigue.'
@@ -2989,14 +3232,31 @@ function composeExplanationFromReason(ctx: ExplanationContext): string {
     // BALANCE / COUNTERSTRESS
     // ========================================================================
     case 'balance_counterstress':
-      if (movementFamily === 'pull' && sessionFocus.includes('push')) {
+      if (movementFamily === 'pull' && dayIsPushDominant) {
+        if (isType(['row', 'ring row', 'inverted'])) {
+          return 'Horizontal pulling to offset the day\'s pressing load — keeps shoulder position healthy.'
+        }
+        if (isType(['face pull', 'band pull', 'rear delt'])) {
+          return 'Rear delt and scap work to counter heavy pressing — protects joint balance long-term.'
+        }
         return 'Balances the day\'s pressing bias so shoulders and scaps don\'t drift into one-sided stress.'
       }
-      if (movementFamily === 'push' && sessionFocus.includes('pull')) {
+      if (movementFamily === 'push' && dayIsPullDominant) {
+        if (isType(['dip', 'push-up'])) {
+          return 'Pressing work to balance heavy pulling — keeps both patterns progressing together.'
+        }
         return 'Balances the day\'s pulling emphasis so pressing patterns stay fresh.'
       }
       if (movementFamily === 'scap') {
+        if (isType(['face pull', 'band pull', 'y raise'])) {
+          return 'Scapular balance work to protect shoulder health under demanding skill loads.'
+        }
         return 'Balances the main loading pattern so progress comes without losing positional control.'
+      }
+      if (movementFamily === 'core') {
+        if (isType(['back extension', 'reverse hyper'])) {
+          return 'Posterior chain balance — prevents front-side dominant training from creating imbalances.'
+        }
       }
       return 'Placed here to balance the day\'s dominant stress pattern — keeps output cleaner overall.'
     
@@ -3056,19 +3316,49 @@ function composeExplanationFromReason(ctx: ExplanationContext): string {
     // ========================================================================
     case 'fatigue_managed_support':
       if (movementFamily === 'pull') {
+        if (dayIsPushDominant) {
+          return 'Maintains pulling volume on a pressing day — keeps both patterns progressing without interference.'
+        }
+        if (primaryGoal.includes('front lever') || primaryGoal.includes('muscle')) {
+          return 'Adds pulling volume that supports your main skill without the fatigue cost of more skill work.'
+        }
+        if (isType(['row', 'ring row'])) {
+          return 'Horizontal pulling volume in a low-fatigue format — builds mid-back without crushing recovery.'
+        }
         return 'Adds pulling volume in a lower-fatigue format so your main pulling quality stays high.'
       }
       if (movementFamily === 'push') {
+        if (dayIsPullDominant) {
+          return 'Maintains pressing volume on a pulling day — keeps both patterns developing together.'
+        }
+        if (primaryGoal.includes('planche') || primaryGoal.includes('handstand')) {
+          return 'Adds pressing volume that supports your main skill without heavy skill fatigue.'
+        }
+        if (isType(['ring push', 'ring dip'])) {
+          return 'Ring work in a lower-fatigue format — builds stability without demanding full recovery.'
+        }
         return 'Adds pressing volume in a lower-fatigue format so your main pressing output stays high.'
       }
       if (movementFamily === 'core') {
+        if (primaryGoal.includes('planche') || primaryGoal.includes('front lever')) {
+          return 'Builds the trunk stability your skill positions require — without competing for main recovery.'
+        }
+        if (isType(['hollow', 'compression'])) {
+          return 'Reinforces compression strength needed for skill positions — low fatigue cost, high transfer.'
+        }
         return 'Builds trunk stability without competing for recovery from main skill work.'
       }
       if (movementFamily === 'scap') {
+        if (dayIsHighNeural) {
+          return 'Scap control work placed after main output — protects shoulder health without interfering.'
+        }
         return 'Reinforces scap control in a lower-fatigue slot — keeps the rest of the session cleaner.'
       }
-      if (hasLowFatigue) {
+      if (isLowFatigueDose) {
         return 'Placed here to build capacity without stealing energy from the main work.'
+      }
+      if (dayIsSkillFocused) {
+        return 'Support volume that doesn\'t compete with today\'s skill focus — efficient capacity building.'
       }
       return 'Reinforces a supporting quality without competing for recovery — keeps main work progressing.'
     
@@ -3165,6 +3455,115 @@ function composeExplanationFromReason(ctx: ExplanationContext): string {
   }
 }
 
+/**
+ * CONTRADICTION PATTERNS TO BLOCK
+ * These are patterns that should NEVER appear for certain movement families.
+ */
+const PULL_CONTRADICTION_PATTERNS = [
+  'pressing output',
+  'pressing capacity', 
+  'pressing power',
+  'pressing strength',
+  'pressing foundation',
+  'builds the pressing',
+  'raises pressing',
+  'planche needs',
+  'planche-supporting pressing',
+]
+
+const PUSH_CONTRADICTION_PATTERNS = [
+  'pulling output',
+  'pulling capacity',
+  'pulling power', 
+  'pulling strength',
+  'pulling foundation',
+  'builds the pulling',
+  'raises pulling',
+  'front lever needs',
+  'lever-supporting pulling',
+]
+
+/**
+ * CHECK FOR CONTRADICTIONS
+ * Returns true if the explanation contradicts the movement family.
+ */
+function hasContradiction(explanation: string, movementFamily: string): boolean {
+  const lower = explanation.toLowerCase()
+  
+  if (movementFamily === 'pull') {
+    // Pull movements should not have pressing as primary benefit
+    // Exception: if they explicitly mention pull/pulling context
+    for (const pattern of PULL_CONTRADICTION_PATTERNS) {
+      if (lower.includes(pattern) && !lower.includes('pull') && !lower.includes('row')) {
+        return true
+      }
+    }
+  }
+  
+  if (movementFamily === 'push') {
+    // Push movements should not have pulling as primary benefit
+    // Exception: if they explicitly mention press/pushing context
+    for (const pattern of PUSH_CONTRADICTION_PATTERNS) {
+      if (lower.includes(pattern) && !lower.includes('press') && !lower.includes('push') && !lower.includes('dip')) {
+        return true
+      }
+    }
+  }
+  
+  return false
+}
+
+/**
+ * GET MOVEMENT-FAMILY-SAFE FALLBACK
+ * Returns a truthful, safe explanation when contradiction is detected.
+ */
+function getMovementFamilySafeFallback(ctx: ExplanationContext): string {
+  const { movementFamily, primaryGoal, dayStressProfile, exerciseNameLower } = ctx
+  const goal = primaryGoal
+  
+  if (movementFamily === 'pull') {
+    if (goal.includes('front lever')) {
+      return 'Builds pulling strength that supports your front lever development.'
+    }
+    if (goal.includes('muscle')) {
+      return 'Builds the pulling strength your muscle-up depends on.'
+    }
+    if (exerciseNameLower.includes('row')) {
+      return 'Horizontal pulling that builds mid-back and scapular control.'
+    }
+    if (exerciseNameLower.includes('explosive') || exerciseNameLower.includes('chest-to-bar')) {
+      return 'Develops high-pull power and bar aggression for skill transitions.'
+    }
+    return 'Builds pulling capacity your skill work draws from — a stronger back means more reliable positions.'
+  }
+  
+  if (movementFamily === 'push') {
+    if (goal.includes('planche')) {
+      return 'Builds pressing strength that supports your planche development.'
+    }
+    if (goal.includes('handstand')) {
+      return 'Builds overhead pressing strength your handstand work depends on.'
+    }
+    if (exerciseNameLower.includes('dip')) {
+      return 'Builds pressing strength and lockout power for skill positions.'
+    }
+    return 'Builds pressing capacity your overhead and horizontal work draws from — raises your ceiling.'
+  }
+  
+  if (movementFamily === 'core') {
+    if (goal.includes('planche') || goal.includes('front lever')) {
+      return 'Builds the trunk stability your skill positions require.'
+    }
+    return 'Builds trunk stability that supports body control under load.'
+  }
+  
+  if (movementFamily === 'scap') {
+    return 'Builds scapular control and shoulder stability for cleaner skill positions.'
+  }
+  
+  return 'Builds capacity that supports your main training goals.'
+}
+
 export function buildExercisePurposeLine(
   exercise: {
     name: string
@@ -3199,29 +3598,33 @@ export function buildExercisePurposeLine(
   
   // Stage B: Contradiction guard - ensure movement family is respected
   // This prevents wrong cross-pattern claims (e.g., pull exercise getting press language)
-  const { movementFamily, isPullMovement, isPushMovement, isCoreMovement, isScapMovement } = ctx
+  const { movementFamily } = ctx
   
   // Stage C: Generate explanation from reason family
   const explanation = composeExplanationFromReason(ctx)
   
   // Stage D: Final contradiction check - reject if explanation contradicts movement family
   if (explanation && movementFamily !== 'unknown') {
-    const explanationLower = explanation.toLowerCase()
-    
-    // Pull movement should not mention pressing as the primary benefit
-    if (movementFamily === 'pull' && 
-        (explanationLower.includes('pressing output') || explanationLower.includes('pressing capacity')) &&
-        !explanationLower.includes('pull')) {
+    if (hasContradiction(explanation, movementFamily)) {
       // Contradiction detected - use movement-family-safe fallback
-      return 'Builds pulling capacity your skill work draws from — a stronger back means more reliable positions.'
+      return getMovementFamilySafeFallback(ctx)
     }
-    
-    // Push movement should not mention pulling as the primary benefit
-    if (movementFamily === 'push' &&
-        (explanationLower.includes('pulling output') || explanationLower.includes('pulling capacity')) &&
-        !explanationLower.includes('press')) {
-      // Contradiction detected - use movement-family-safe fallback
-      return 'Builds pressing capacity your overhead and horizontal work draws from — raises your ceiling.'
+  }
+  
+  // Stage E: Quality check - reject overly generic explanations
+  const genericPatterns = [
+    'accessory support',
+    'targeted accessory',
+    'support work',
+    'general strength',
+    'moderate intensity',
+    'rpe 8',
+  ]
+  const explanationLower = explanation.toLowerCase()
+  for (const pattern of genericPatterns) {
+    if (explanationLower === pattern || explanationLower.startsWith(pattern + '.')) {
+      // Too generic - use context-aware fallback
+      return getMovementFamilySafeFallback(ctx)
     }
   }
   

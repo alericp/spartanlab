@@ -21,6 +21,8 @@ import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
 import { buildExerciseCardContract, buildExerciseRowSurface, getBestRowSublabel, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
+import type { ProgramExplanationSurface } from '@/lib/coaching-explanation-contract'
+import { getCompactExerciseExplanation } from '@/lib/coaching-explanation-contract'
 import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, buildSessionMainPreviewSurface, buildFullVisibleRoutineExercises, type SessionAiEvidenceSurface, type FullSessionRoutineSurface, type SessionMainPreviewSurface, type FullRoutineExercise } from '@/lib/program/program-ai-evidence-bridge'
 import { getExerciseRowVisibility, shouldShowRowIntelligence, deduplicateRowDisplay, DEFAULT_DENSITY_MODE } from '@/lib/program/program-display-priority'
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
@@ -49,6 +51,8 @@ interface AdaptiveSessionCardProps {
   // [UI-CLEANUP-FIX] Control initial expanded state - defaults to false for cleaner list view
   // Today's workout should pass true, all others should pass false or omit
   defaultExpanded?: boolean
+  // [COACHING-EXPLANATION-CONTRACT] Authoritative coaching explanation surface
+  coachingExplanation?: ProgramExplanationSurface | null
 }
 
 // =============================================================================
@@ -162,7 +166,7 @@ function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
   }
 }
 
-export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false }: AdaptiveSessionCardProps) {
+export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation }: AdaptiveSessionCardProps) {
   // PHASE 3: Normalize session immediately to prevent crashes
   const session = normalizeSessionForDisplay(rawSession)
   
@@ -851,17 +855,18 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   </div>
 
 {/* Main Exercises - [FULL-VISIBLE-ROUTINE] Uses full routine truth, not narrowed displayExercises */}
-  <MainExercisesRenderer
-    session={session}
-    displayExercises={fullVisibleExercises}
-    sessionId={sessionId}
-    skippedExercises={skippedExercises}
-    adjustedExercises={adjustedExercises}
-    primaryGoal={primaryGoal}
-    sessionEvidence={sessionEvidence}
-    onReplace={handleExerciseReplace}
-    onSkip={handleExerciseSkip}
-    onProgressionAdjust={handleProgressionAdjust}
+<MainExercisesRenderer
+  session={session}
+  displayExercises={fullVisibleExercises}
+  sessionId={sessionId}
+  skippedExercises={skippedExercises}
+  adjustedExercises={adjustedExercises}
+  primaryGoal={primaryGoal}
+  sessionEvidence={sessionEvidence}
+  coachingExplanation={coachingExplanation}
+  onReplace={handleExerciseReplace}
+  onSkip={handleExerciseSkip}
+  onProgressionAdjust={handleProgressionAdjust}
   />
 
           {/* Finisher Block */}
@@ -948,6 +953,8 @@ interface MainExercisesRendererProps {
   primaryGoal?: string
   // [AI-EVIDENCE-BRIDGE] Session evidence for row alignment
   sessionEvidence?: SessionAiEvidenceSurface
+  // [COACHING-EXPLANATION-CONTRACT] Authoritative coaching explanation surface
+  coachingExplanation?: ProgramExplanationSurface | null
   onReplace: (exerciseId: string, exerciseName: string) => void
   onSkip: (exerciseId: string, exerciseName: string) => void
   onProgressionAdjust: (exerciseId: string, newProgression: string, direction: 'up' | 'down') => void
@@ -961,6 +968,7 @@ function MainExercisesRenderer({
   adjustedExercises,
   primaryGoal,
   sessionEvidence,
+  coachingExplanation,
   onReplace,
   onSkip,
   onProgressionAdjust,
@@ -1213,6 +1221,7 @@ function MainExercisesRenderer({
               adjustedName={adjustedExercises.get(block.exercise.id)}
               sessionContext={sessionContextForRows}
               sessionEvidence={sessionEvidence}
+              coachingExplanation={coachingExplanation}
               onReplace={onReplace}
               onSkip={onSkip}
               onProgressionAdjust={onProgressionAdjust}
@@ -1323,6 +1332,7 @@ function MainExercisesRenderer({
                     adjustedName={adjustedExercises.get(fullExercise.id)}
                     sessionContext={sessionContextForRows}
                     sessionEvidence={sessionEvidence}
+                    coachingExplanation={coachingExplanation}
                     onReplace={onReplace}
                     onSkip={onSkip}
                     onProgressionAdjust={onProgressionAdjust}
@@ -1367,6 +1377,8 @@ interface ExerciseRowProps {
   }
   // [AI-EVIDENCE-BRIDGE] Session evidence for row alignment
   sessionEvidence?: SessionAiEvidenceSurface
+  // [COACHING-EXPLANATION-CONTRACT] Authoritative exercise explanation from coaching surface
+  coachingExplanation?: ProgramExplanationSurface | null
   onReplace?: (exerciseId: string, exerciseName: string) => void
   onSkip?: (exerciseId: string, exerciseName: string) => void
   onProgressionAdjust?: (exerciseId: string, newProgression: string, direction: 'up' | 'down') => void
@@ -1382,6 +1394,7 @@ function ExerciseRow({
   adjustedName,
   sessionContext, // [EXERCISE-ROW-SURFACE] Session context for row surface
   sessionEvidence, // [AI-EVIDENCE-BRIDGE] For row alignment
+  coachingExplanation, // [COACHING-EXPLANATION-CONTRACT] Authoritative coaching surface
   onReplace,
   onSkip,
   onProgressionAdjust,
@@ -1532,13 +1545,19 @@ function ExerciseRow({
       {alignedRowSurface && shouldShowRowIntelligence(alignedRowSurface.emphasisKind, DEFAULT_DENSITY_MODE) && (() => {
         const rowVisibility = getExerciseRowVisibility(DEFAULT_DENSITY_MODE)
         const { showSublabel, showChips, chips } = deduplicateRowDisplay(alignedRowSurface, rowVisibility)
-        const bestSublabel = showSublabel ? getBestRowSublabel(alignedRowSurface) : null
+        
+        // [COACHING-EXPLANATION-CONTRACT] Prefer coaching explanation surface when available
+        // This delegates to the sophisticated reasoning engine in program-display-contract.ts
+        const coachingExpl = coachingExplanation ? getCompactExerciseExplanation(coachingExplanation, exercise.id) : null
+        
+        // Use coaching explanation as primary source, fall back to row surface sublabel
+        const bestSublabel = coachingExpl?.role || (showSublabel ? getBestRowSublabel(alignedRowSurface) : null)
         
         if (!bestSublabel && !showChips) return null
         
         return (
         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-          {/* Single compact sublabel - subtle gray supporting text */}
+          {/* [COACHING-EXPLANATION-CONTRACT] Single compact sublabel from authoritative source */}
           {bestSublabel && (
             <span className="text-[10px] text-[#7A7A7A]">
               {bestSublabel}

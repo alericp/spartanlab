@@ -26,11 +26,18 @@ export const maxDuration = 30
 export async function POST(request: Request) {
   const routeStartTime = Date.now()
   
-  // [PHASE15E_LIVE_PROOF] Definitive deployment marker
-  console.log('[PHASE15E_LIVE_PROOF]', {
-    marker: 'PHASE15E_LIVE_PROOF_V1_2026_04_09',
-    checkpoint: 'route_entry',
+  // ==========================================================================
+  // [CANONICAL-REGENERATE-LIVE-MARKER] Authoritative runtime proof
+  // This marker proves which regenerate route/builder/selector chain is executing
+  // ==========================================================================
+  console.log('[CANONICAL-REGENERATE-LIVE]', {
+    route: '/api/program/regenerate/route.ts',
+    builder: 'lib/adaptive-program-builder.ts',
+    selector: 'lib/program-exercise-selector.ts',
+    service: 'lib/server/authoritative-program-generation.ts',
+    version: 'DOCTRINE-MATERIALIZATION-2026-04-11-V1',
     timestamp: new Date().toISOString(),
+    checkpoint: 'route_entry',
   })
   
   console.log('[regenerate-route-thin-adapter-entry]', {

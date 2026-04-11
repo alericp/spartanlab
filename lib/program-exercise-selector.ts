@@ -1131,6 +1131,17 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   } = inputs
   
   // ==========================================================================
+  // [CANONICAL-SELECTOR-LIVE-MARKER] Proof that selector is executing with correct scope
+  // ==========================================================================
+  console.log('[CANONICAL-SELECTOR-LIVE]', {
+    selectorFile: 'lib/program-exercise-selector.ts',
+    functionName: 'selectExercisesForSession',
+    version: 'DOCTRINE-MATERIALIZATION-2026-04-11-V1',
+    hasUnifiedDoctrineDecision: !!unifiedDoctrineDecision,
+    timestamp: new Date().toISOString(),
+  })
+  
+  // ==========================================================================
   // [UNIFIED DOCTRINE DECISION] Enforce doctrine-driven constraints on selection
   // This determines: max exercises, intensity bias, blocked patterns, and more
   // ==========================================================================

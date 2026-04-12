@@ -208,7 +208,11 @@ function buildCanonicalProfileOverride(
    */
   
   const override: Record<string, unknown> = {
-    // Identity - always from canonical profile
+    // ==========================================================================
+    // [CANONICAL_OVERRIDE_IDENTITY] Identity fields - ALWAYS from canonical profile
+    // This is the critical handoff point where repaired identity MUST be preserved
+    // ==========================================================================
+    userId: canonicalProfile.userId, // CRITICAL: Must preserve repaired identity from funnel
     onboardingComplete: canonicalProfile.onboardingComplete ?? true,
     
     // Goals - builder inputs can override
@@ -267,6 +271,18 @@ function buildCanonicalProfileOverride(
     weightedPullUp: canonicalProfile.weightedPullUp,
     weightedDip: canonicalProfile.weightedDip,
   }
+  
+  // ==========================================================================
+  // [CANONICAL_OVERRIDE_IDENTITY_AUDIT] Log identity handoff for debugging
+  // ==========================================================================
+  console.log('[CANONICAL_OVERRIDE_IDENTITY_AUDIT]', {
+    fingerprint: 'IDENTITY_HANDOFF_2026_04_11_V1',
+    canonicalProfileUserId: canonicalProfile.userId?.slice(0, 12) || 'MISSING',
+    overrideUserId: (override.userId as string)?.slice(0, 12) || 'MISSING',
+    identityPreserved: !!override.userId && override.userId === canonicalProfile.userId,
+    generationIntent,
+    verdict: override.userId ? 'IDENTITY_HANDOFF_SUCCESS' : 'IDENTITY_HANDOFF_FAILED',
+  })
   
   // Log the override construction
   console.log('[authoritative-generation-canonical-override-constructed]', {
@@ -548,6 +564,60 @@ export async function executeAuthoritativeGeneration(
     )
     
     markStage('canonical_override_constructed')
+    
+    // ==========================================================================
+    // [CANONICAL_OVERRIDE_IDENTITY_ASSERT] Verify identity survived handoff
+    // This is the final identity gate before builder/truth-bundle execution.
+    // If identity was lost in override construction, fail immediately.
+    // ==========================================================================
+    const overrideUserId = canonicalProfileOverride.userId as string | undefined
+    const authoritativeUserId = authoritativeProfile.userId
+    
+    console.log('[CANONICAL_OVERRIDE_IDENTITY_ASSERT]', {
+      fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+      authoritativeUserId: authoritativeUserId?.slice(0, 12) || 'MISSING',
+      overrideUserId: overrideUserId?.slice(0, 12) || 'MISSING',
+      identityMatch: overrideUserId === authoritativeUserId,
+      verdict: overrideUserId ? 'IDENTITY_HANDOFF_VERIFIED' : 'IDENTITY_HANDOFF_BROKEN',
+    })
+    
+    if (!overrideUserId) {
+      console.log('[IDENTITY_HANDOFF_HARD_FAIL]', {
+        fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+        reason: 'override_userId_missing_after_construction',
+        authoritativeUserId: authoritativeUserId?.slice(0, 12),
+        verdict: 'GENERATION_BLOCKED_IDENTITY_LOST_IN_HANDOFF',
+      })
+      
+      return {
+        success: false,
+        error: 'Identity handoff failed: canonicalProfileOverride missing userId after construction',
+        failedStage: 'canonical_override_identity_assertion',
+        exactFailingSubstep: 'canonical_override_identity_assert',
+        exactLastSafeSubstep: 'canonical_override_constructed',
+        compactBuilderError: 'Override userId was not preserved from authoritative profile - check buildCanonicalProfileOverride',
+        timings: getTimings(),
+        totalElapsedMs: Date.now() - startTime,
+        parityVerdict: {
+          generationIntent: request.generationIntent,
+          triggerSource: request.triggerSource,
+          sameTruthExtractorUsed: false,
+          sameAuthoritativeOwnerUsed: true,
+          sameBuilderCallContractUsed: false,
+          sameSaveContractUsed: false,
+          sameTruthExplanationAttached: false,
+          verdict: 'NO_PARITY',
+        },
+      }
+    }
+    
+    console.log('[IDENTITY_HANDOFF_VERIFIED]', {
+      fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+      overrideUserId: overrideUserId?.slice(0, 12),
+      authoritativeUserId: authoritativeUserId?.slice(0, 12),
+      generationIntent: request.generationIntent,
+      verdict: 'READY_FOR_BUILDER_ENTRY',
+    })
     
     // ==========================================================================
     // STAGE: Build normalized builder inputs

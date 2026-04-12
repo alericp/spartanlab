@@ -7838,6 +7838,30 @@ async function generateAdaptiveProgramImpl(
       verdict: 'POST_ALLOCATION_OWNER_CORRIDOR_PASSED',
     })
     
+    // ==========================================================================
+    // [POST_ALLOCATION_HANDOFF_ENTRY] Authoritative handoff to downstream consumers
+    // ==========================================================================
+    // This proves the bridge output is now the SOLE input for all downstream phases.
+    // No legacy sibling reads allowed after this point.
+    // ==========================================================================
+    console.log('[POST_ALLOCATION_HANDOFF_ENTRY]', {
+      fingerprint: 'HANDOFF_V1_2026_04_12',
+      corridorOwner: 'post_allocation_handoff',
+      localStep: 'handoff_entry',
+      exactLastSafeSubstep: 'CORRIDOR_PASS',
+      // Handoff object verification
+      bridgeVersion: postAllocationOwnerBridge.bridgeVersion,
+      selectedSkillsCount: postAllocationOwnerBridge.selectedSkills.length,
+      primaryGoal: postAllocationOwnerBridge.primaryGoal,
+      materialSkillIntentCount: postAllocationOwnerBridge.materialSkillIntent.length,
+      representedSkillsCount: postAllocationOwnerBridge.representedSkills.length,
+      effectiveTrainingDays: postAllocationOwnerBridge.effectiveTrainingDays,
+      verdict: 'HANDOFF_ENTRY_BRIDGE_ACCEPTED',
+    })
+    
+    postAllocationFatalAudit.lastSuccessfulCheckpoint = 'HANDOFF_ENTRY'
+    postAllocationFatalAudit.exactLocalStep = 'handoff_entry'
+    
   } catch (corridorError) {
     // ==========================================================================
     // CORRIDOR FAIL - Single failure handler
@@ -7905,26 +7929,60 @@ async function generateAdaptiveProgramImpl(
   // 6. Current > Response > History precedence
   // ==========================================================================
   
-  // [POST_ALLOCATION_ALLOCATOR_ENTRY] Ownership boundary entry
+  // ==========================================================================
+  // VERIFY HANDOFF OBJECT EXISTS BEFORE DOWNSTREAM CONSUMPTION
+  // ==========================================================================
+  if (!postAllocationOwnerBridge) {
+    console.error('[POST_ALLOCATION_HANDOFF_FAIL]', {
+      fingerprint: 'HANDOFF_V1_2026_04_12',
+      corridorOwner: 'post_allocation_handoff',
+      localStep: 'handoff_bridge_missing',
+      exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
+      reason: 'postAllocationOwnerBridge is null after corridor pass',
+      verdict: 'POST_ALLOCATION_HANDOFF_FAILED',
+    })
+    
+    throw createGenerationError(
+      'post_allocation_handoff_failed',
+      stageTracker.current,
+      'Post-allocation handoff failed: bridge object is null after corridor pass',
+      {
+        exactBuilderCorridor: 'post_allocation_handoff',
+        exactLocalStep: 'handoff_bridge_missing',
+        exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
+        compactBuilderError: 'Bridge object null after corridor pass',
+        lastSuccessfulPostAllocationCheckpoint: postAllocationFatalAudit.lastSuccessfulCheckpoint,
+        failingOwnerClass: 'required_hard_fail',
+        failingOwnerName: 'post_allocation_handoff',
+      }
+    )
+  }
+  
+  // [POST_ALLOCATION_ALLOCATOR_ENTRY] Ownership boundary entry - NOW USES BRIDGE
   console.log('[POST_ALLOCATION_ALLOCATOR_ENTRY]', {
-    fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
+    fingerprint: 'POST_ALLOCATION_V2_2026_04_12',
     corridorOwner: 'post_allocation_to_weekly_allocator',
     localStep: 'weekly_allocator_entry',
-    exactLastSafeSubstep: 'ai_truth_breadth_audit_allocation',
-    selectedSkillsCount: multiSkillMaterialityContract.selectedSkills?.length || 0,
-    primaryGoal: multiSkillMaterialityContract.primaryGoal || 'MISSING',
-    effectiveTrainingDays,
+    exactLastSafeSubstep: 'HANDOFF_ENTRY',
+    // NOW READS FROM BRIDGE - NOT LEGACY CONTRACT
+    selectedSkillsCount: postAllocationOwnerBridge.selectedSkills.length,
+    primaryGoal: postAllocationOwnerBridge.primaryGoal || 'MISSING',
+    effectiveTrainingDays: postAllocationOwnerBridge.effectiveTrainingDays,
+    bridgeVersion: postAllocationOwnerBridge.bridgeVersion,
     hasReadinessMap: exposureReadinessMap.size > 0,
-    verdict: 'ENTERING_WEEKLY_ALLOCATOR_BUILD',
+    verdict: 'ENTERING_WEEKLY_ALLOCATOR_VIA_HANDOFF',
   })
   
   let weeklyExpressionAllocatorContract: WeeklyExpressionAllocationContract
   try {
+    // ==========================================================================
+    // WEEKLY ALLOCATOR NOW READS FROM AUTHORITATIVE HANDOFF BRIDGE
+    // ==========================================================================
     weeklyExpressionAllocatorContract = buildWeeklyExpressionAllocationContract({
-      selectedSkills: multiSkillMaterialityContract.selectedSkills || [],
-      primaryGoal: multiSkillMaterialityContract.primaryGoal || '',
-      secondaryGoal: multiSkillMaterialityContract.secondaryGoal || null,
-      effectiveTrainingDays,
+      selectedSkills: postAllocationOwnerBridge.selectedSkills,
+      primaryGoal: postAllocationOwnerBridge.primaryGoal,
+      secondaryGoal: postAllocationOwnerBridge.secondaryGoal,
+      effectiveTrainingDays: postAllocationOwnerBridge.effectiveTrainingDays,
       readinessMap: exposureReadinessMap,
       methodPreferences: {
         supersets: canonicalProfile.trainingMethodPreferences?.includes('supersets') || false,
@@ -7932,9 +7990,9 @@ async function generateAdaptiveProgramImpl(
         straightSets: canonicalProfile.trainingMethodPreferences?.includes('straight_sets') || 
                       (!canonicalProfile.trainingMethodPreferences || canonicalProfile.trainingMethodPreferences.length === 0),
       },
-      jointCautions: multiSkillMaterialityContract.jointCautions || [],
-      equipmentAvailable: multiSkillMaterialityContract.equipmentAvailable || [],
-      experienceLevel: String(multiSkillMaterialityContract.experienceLevel || 'intermediate'),
+      jointCautions: postAllocationOwnerBridge.jointCautions,
+      equipmentAvailable: postAllocationOwnerBridge.equipmentAvailable,
+      experienceLevel: postAllocationOwnerBridge.experienceLevel,
     })
     
     // [POST_ALLOCATION_ALLOCATOR_SUCCESS] Verify structural completeness
@@ -8032,30 +8090,34 @@ async function generateAdaptiveProgramImpl(
   // It forces broader selected-skill truth to materially influence the weekly program.
   // ==========================================================================
   
-  // [POST_ALLOCATION_VISIBLE_WEEK_ENTRY] Ownership boundary entry
+  // [POST_ALLOCATION_VISIBLE_WEEK_ENTRY] Ownership boundary entry - NOW USES BRIDGE
   console.log('[POST_ALLOCATION_VISIBLE_WEEK_ENTRY]', {
-    fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
+    fingerprint: 'POST_ALLOCATION_V2_2026_04_12',
     corridorOwner: 'post_allocation_to_visible_week',
     localStep: 'visible_week_entry',
-    exactLastSafeSubstep: 'weekly_allocator_success',
-    materialSkillIntentCount: multiSkillMaterialityContract.materialSkillIntent?.length || 0,
-    hasMultiSkillAllocationContract: !!multiSkillAllocationContract,
-    representedSkillsCount: multiSkillAllocationContract?.representedSkills?.length || 0,
-    supportSkillsCount: multiSkillAllocationContract?.supportSkills?.length || 0,
-    effectiveTrainingDays,
-    primaryGoal: multiSkillMaterialityContract.primaryGoal || 'MISSING',
-    verdict: 'ENTERING_VISIBLE_WEEK_BUILD',
+    exactLastSafeSubstep: 'ALLOCATOR_SUCCESS',
+    // NOW READS FROM BRIDGE - NOT LEGACY CONTRACT
+    materialSkillIntentCount: postAllocationOwnerBridge.materialSkillIntent.length,
+    representedSkillsCount: postAllocationOwnerBridge.representedSkills.length,
+    supportExpressedSkillsCount: postAllocationOwnerBridge.supportExpressedSkills.length,
+    effectiveTrainingDays: postAllocationOwnerBridge.effectiveTrainingDays,
+    primaryGoal: postAllocationOwnerBridge.primaryGoal || 'MISSING',
+    bridgeVersion: postAllocationOwnerBridge.bridgeVersion,
+    verdict: 'ENTERING_VISIBLE_WEEK_VIA_HANDOFF',
   })
   
   let visibleWeekExpressionContract: ReturnType<typeof buildVisibleWeekSkillExpressionContract>
   try {
+    // ==========================================================================
+    // VISIBLE WEEK NOW READS FROM AUTHORITATIVE HANDOFF BRIDGE
+    // ==========================================================================
     visibleWeekExpressionContract = buildVisibleWeekSkillExpressionContract(
-      multiSkillMaterialityContract.materialSkillIntent,
-      multiSkillAllocationContract,
-      effectiveTrainingDays,
-      String(multiSkillMaterialityContract.experienceLevel || 'intermediate'),
-      multiSkillMaterialityContract.primaryGoal || '',
-      multiSkillMaterialityContract.secondaryGoal || null
+      postAllocationOwnerBridge.materialSkillIntent,
+      multiSkillAllocationContract, // This is still needed for full structure - but bridge validates it exists
+      postAllocationOwnerBridge.effectiveTrainingDays,
+      postAllocationOwnerBridge.experienceLevel,
+      postAllocationOwnerBridge.primaryGoal,
+      postAllocationOwnerBridge.secondaryGoal
     )
     
     // [POST_ALLOCATION_VISIBLE_WEEK_SUCCESS] Verify structural completeness
@@ -8083,6 +8145,23 @@ async function generateAdaptiveProgramImpl(
       throw new Error('Visible week contract produced structurally incomplete output')
     }
     
+    // ==========================================================================
+    // [POST_ALLOCATION_HANDOFF_PASS] Full handoff chain completed successfully
+    // ==========================================================================
+    console.log('[POST_ALLOCATION_HANDOFF_PASS]', {
+      fingerprint: 'HANDOFF_V1_2026_04_12',
+      corridorOwner: 'post_allocation_handoff',
+      localStep: 'handoff_complete',
+      exactLastSafeSubstep: 'VISIBLE_WEEK_SUCCESS',
+      // Handoff chain summary
+      bridgeVersion: postAllocationOwnerBridge.bridgeVersion,
+      allocatorDecisionsCount: weeklyExpressionAllocatorContract.decisions.length,
+      visibleWeekSkillCount: visibleWeekExpressionContract.visibleWeekSkillCount,
+      coverageVerdict: visibleWeekExpressionContract.coverageVerdict,
+      verdict: 'POST_ALLOCATION_HANDOFF_PASSED',
+    })
+    postAllocationFatalAudit.lastSuccessfulCheckpoint = 'HANDOFF_PASS'
+    
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err)
     const errorStack = err instanceof Error ? err.stack?.split('\n').slice(0, 5).join('\n') : undefined
@@ -8096,16 +8175,17 @@ async function generateAdaptiveProgramImpl(
     postAllocationFatalAudit.failingOwnerName = 'visible_week'
     
     console.error('[POST_ALLOCATION_VISIBLE_WEEK_FAIL]', {
-      fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
+      fingerprint: 'POST_ALLOCATION_V2_2026_04_12',
       corridorOwner: 'post_allocation_to_visible_week',
       localStep: 'visible_week_build',
       exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
       exactFailingSubstep: 'buildVisibleWeekSkillExpressionContract',
       error: errorMessage,
       errorStack,
-      materialSkillIntentCount: multiSkillMaterialityContract.materialSkillIntent?.length || 0,
-      hasMultiSkillAllocationContract: !!multiSkillAllocationContract,
-      primaryGoal: multiSkillMaterialityContract.primaryGoal || 'MISSING',
+      // NOW READS FROM BRIDGE
+      materialSkillIntentCount: postAllocationOwnerBridge.materialSkillIntent.length,
+      bridgeVersion: postAllocationOwnerBridge.bridgeVersion,
+      primaryGoal: postAllocationOwnerBridge.primaryGoal || 'MISSING',
       verdict: 'VISIBLE_WEEK_BUILD_FAILED',
     })
     

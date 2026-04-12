@@ -8190,12 +8190,12 @@ async function generateAdaptiveProgramImpl(
       corridorOwner: 'post_allocation_to_visible_week',
       localStep: 'visible_week_complete',
       exactLastSafeSubstep: 'visible_week_entry',
-      // Verify outputs
-      directlyRepresentedCount: visibleWeekExpressionContract.directlyRepresentedSkills.length,
-      supportExpressedCount: visibleWeekExpressionContract.supportExpressedSkills.length,
-      rotationalCount: visibleWeekExpressionContract.rotationalSkills?.length || 0,
-      deferredCount: visibleWeekExpressionContract.deferredSkills.length,
-      coverageVerdict: visibleWeekExpressionContract.coverageVerdict,
+      // Verify outputs using NEW authoritative contract shape
+      primaryExpressedCount: visibleWeekExpressionContract.materiallyExpressedPrimarySkills?.length ?? 0,
+      tertiaryExpressedCount: visibleWeekExpressionContract.materiallyExpressedTertiarySkills?.length ?? 0,
+      supportExpressedCount: visibleWeekExpressionContract.materiallyExpressedSupportSkills?.length ?? 0,
+      visibleWeekSkillCount: visibleWeekExpressionContract.visibleWeekSkillCount ?? 0,
+      coverageVerdict: visibleWeekExpressionContract.audit?.verdict ?? 'unknown',
       verdict: 'VISIBLE_WEEK_OUTPUTS_VALID',
     })
     postAllocationFatalAudit.lastSuccessfulCheckpoint = 'VISIBLE_WEEK_SUCCESS'
@@ -8226,11 +8226,11 @@ async function generateAdaptiveProgramImpl(
       corridorOwner: 'post_allocation_handoff',
       localStep: 'handoff_complete',
       exactLastSafeSubstep: 'VISIBLE_WEEK_SUCCESS',
-      // Handoff chain summary
+      // Handoff chain summary using NEW authoritative contract shape
       bridgeVersion: postAllocationOwnerBridge.bridgeVersion,
       allocatorDecisionsCount: weeklyExpressionAllocatorContract.decisions.length,
-      visibleWeekSkillCount: visibleWeekExpressionContract.visibleWeekSkillCount,
-      coverageVerdict: visibleWeekExpressionContract.coverageVerdict,
+      visibleWeekSkillCount: visibleWeekExpressionContract.visibleWeekSkillCount ?? 0,
+      coverageVerdict: visibleWeekExpressionContract.audit?.verdict ?? 'unknown',
       verdict: 'POST_ALLOCATION_HANDOFF_PASSED',
     })
     postAllocationFatalAudit.lastSuccessfulCheckpoint = 'HANDOFF_PASS'

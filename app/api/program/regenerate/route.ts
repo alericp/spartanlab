@@ -91,6 +91,22 @@ export async function POST(request: Request) {
       currentProgramId,
     } = body
     
+    // ==========================================================================
+    // [PROTECTED_FUNNEL_IDENTITY_ENTRY] Route-level identity audit
+    // Check if caller profile has userId before entering protected funnel
+    // ==========================================================================
+    const callerProfileUserId = canonicalProfile?.userId
+    
+    console.log('[PROTECTED_FUNNEL_ROUTE_IDENTITY_ENTRY]', {
+      fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+      serverAuthUserId: authUserId?.slice(0, 12),
+      serverDbUserId: dbUserId?.slice(0, 12),
+      callerProfileUserId: callerProfileUserId?.slice(0, 12) || 'MISSING',
+      callerProfileHasUserId: !!callerProfileUserId,
+      identityWillBeRepaired: !callerProfileUserId && !!dbUserId,
+      verdict: callerProfileUserId ? 'CALLER_HAS_IDENTITY' : (dbUserId ? 'WILL_REPAIR_FROM_SERVER' : 'NO_IDENTITY_SOURCE'),
+    })
+    
     // [ROOT-CAUSE-DIAGNOSTIC] Log request body structure for debugging
     console.log('[regenerate-route-request-body-audit]', {
       hasCanonicalProfile: !!canonicalProfile,

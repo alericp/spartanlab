@@ -2683,7 +2683,24 @@ export function buildVisibleWeekSkillExpressionContract(
   primaryGoal: string,
   secondaryGoal: string | null
 ): AuthoritativeVisibleWeekSkillExpressionContract {
-  const selectedSkills = materialSkillIntent.map(s => s.skill)
+  // ==========================================================================
+  // [VISIBLE_WEEK_INPUT_VALIDATION] Normalize inputs to prevent downstream crashes
+  // ==========================================================================
+  const safeMaterialSkillIntent = Array.isArray(materialSkillIntent) ? materialSkillIntent : []
+  const safeEffectiveTrainingDays = typeof effectiveTrainingDays === 'number' && effectiveTrainingDays > 0 ? effectiveTrainingDays : 3
+  const safeExperienceLevel = experienceLevel || 'intermediate'
+  const safePrimaryGoal = primaryGoal || ''
+  
+  // Normalize multiSkillAllocation - this is the most common crash site
+  const safeMultiSkillAllocation = multiSkillAllocation || {
+    representedSkills: [],
+    supportSkills: [],
+    deferredSkills: [],
+    entries: [],
+  }
+  const safeAllocationEntries = Array.isArray(safeMultiSkillAllocation.entries) ? safeMultiSkillAllocation.entries : []
+  
+  const selectedSkills = safeMaterialSkillIntent.map(s => s.skill)
   
   // Classify skills
   const tertiarySkills: string[] = []
@@ -2694,8 +2711,8 @@ export function buildVisibleWeekSkillExpressionContract(
   const materiallyExpressedSupportSkills: string[] = []
   const skillExpressionPlan: SkillExpressionPlan[] = []
   
-  for (const intent of materialSkillIntent) {
-    const allocationEntry = multiSkillAllocation.entries.find(e => e.skill === intent.skill)
+  for (const intent of safeMaterialSkillIntent) {
+    const allocationEntry = safeAllocationEntries.find(e => e.skill === intent.skill)
     const representationMode = allocationEntry?.representationMode || 'deferred'
     
     let expressionMode: VisibleWeekExpressionMode = 'deferred'
@@ -2817,7 +2834,7 @@ export function buildVisibleWeekSkillExpressionContract(
     contractVersion: '1.0.0',
     builtAt: new Date().toISOString(),
     selectedSkills,
-    primarySkill: primaryGoal,
+    primarySkill: safePrimaryGoal,
     secondarySkill: secondaryGoal,
     tertiarySkills,
     supportSkills,
@@ -7614,22 +7631,91 @@ async function generateAdaptiveProgramImpl(
   // 5. Grouped methods are contract-based decisions
   // 6. Current > Response > History precedence
   // ==========================================================================
-  const weeklyExpressionAllocatorContract = buildWeeklyExpressionAllocationContract({
-    selectedSkills: multiSkillMaterialityContract.selectedSkills || [],
-    primaryGoal: multiSkillMaterialityContract.primaryGoal || '',
-    secondaryGoal: multiSkillMaterialityContract.secondaryGoal || null,
+  
+  // [POST_ALLOCATION_ALLOCATOR_ENTRY] Ownership boundary entry
+  console.log('[POST_ALLOCATION_ALLOCATOR_ENTRY]', {
+    fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
+    corridorOwner: 'post_allocation_to_weekly_allocator',
+    localStep: 'weekly_allocator_entry',
+    exactLastSafeSubstep: 'ai_truth_breadth_audit_allocation',
+    selectedSkillsCount: multiSkillMaterialityContract.selectedSkills?.length || 0,
+    primaryGoal: multiSkillMaterialityContract.primaryGoal || 'MISSING',
     effectiveTrainingDays,
-    readinessMap: exposureReadinessMap,
-    methodPreferences: {
-      supersets: canonicalProfile.trainingMethodPreferences?.includes('supersets') || false,
-      circuits: canonicalProfile.trainingMethodPreferences?.includes('circuits') || false,
-      straightSets: canonicalProfile.trainingMethodPreferences?.includes('straight_sets') || 
-                    (!canonicalProfile.trainingMethodPreferences || canonicalProfile.trainingMethodPreferences.length === 0),
-    },
-    jointCautions: multiSkillMaterialityContract.jointCautions || [],
-    equipmentAvailable: multiSkillMaterialityContract.equipmentAvailable || [],
-    experienceLevel: String(multiSkillMaterialityContract.experienceLevel || 'intermediate'),
+    hasReadinessMap: exposureReadinessMap.size > 0,
+    verdict: 'ENTERING_WEEKLY_ALLOCATOR_BUILD',
   })
+  
+  let weeklyExpressionAllocatorContract: WeeklyExpressionAllocationContract
+  try {
+    weeklyExpressionAllocatorContract = buildWeeklyExpressionAllocationContract({
+      selectedSkills: multiSkillMaterialityContract.selectedSkills || [],
+      primaryGoal: multiSkillMaterialityContract.primaryGoal || '',
+      secondaryGoal: multiSkillMaterialityContract.secondaryGoal || null,
+      effectiveTrainingDays,
+      readinessMap: exposureReadinessMap,
+      methodPreferences: {
+        supersets: canonicalProfile.trainingMethodPreferences?.includes('supersets') || false,
+        circuits: canonicalProfile.trainingMethodPreferences?.includes('circuits') || false,
+        straightSets: canonicalProfile.trainingMethodPreferences?.includes('straight_sets') || 
+                      (!canonicalProfile.trainingMethodPreferences || canonicalProfile.trainingMethodPreferences.length === 0),
+      },
+      jointCautions: multiSkillMaterialityContract.jointCautions || [],
+      equipmentAvailable: multiSkillMaterialityContract.equipmentAvailable || [],
+      experienceLevel: String(multiSkillMaterialityContract.experienceLevel || 'intermediate'),
+    })
+    
+    // [POST_ALLOCATION_ALLOCATOR_SUCCESS] Verify structural completeness
+    const allocatorStructurallyComplete = 
+      Array.isArray(weeklyExpressionAllocatorContract.decisions) &&
+      weeklyExpressionAllocatorContract.decisions.every(d => 
+        d.skill && d.family && Array.isArray(d.finalReasoning) && 
+        d.doctrineDisposition && d.allowedDirectIntensity !== undefined && d.allowedMethodAggression
+      )
+    
+    console.log('[POST_ALLOCATION_ALLOCATOR_SUCCESS]', {
+      fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
+      corridorOwner: 'post_allocation_to_weekly_allocator',
+      localStep: 'weekly_allocator_success',
+      exactLastSafeSubstep: 'weekly_allocator_entry',
+      decisionsCount: weeklyExpressionAllocatorContract.decisions?.length || 0,
+      structurallyComplete: allocatorStructurallyComplete,
+      auditVerdict: weeklyExpressionAllocatorContract.audit?.verdict || 'UNKNOWN',
+      verdict: allocatorStructurallyComplete ? 'ALLOCATOR_BUILD_SUCCESS' : 'ALLOCATOR_BUILD_STRUCTURALLY_INCOMPLETE',
+    })
+    
+    if (!allocatorStructurallyComplete) {
+      throw new Error('Weekly allocator produced structurally incomplete decisions')
+    }
+    
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    const errorStack = err instanceof Error ? err.stack?.split('\n').slice(0, 5).join('\n') : undefined
+    
+    console.error('[POST_ALLOCATION_ALLOCATOR_FAIL]', {
+      fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
+      corridorOwner: 'post_allocation_to_weekly_allocator',
+      localStep: 'weekly_allocator_build',
+      exactLastSafeSubstep: 'weekly_allocator_entry',
+      exactFailingSubstep: 'buildWeeklyExpressionAllocationContract',
+      error: errorMessage,
+      errorStack,
+      selectedSkillsCount: multiSkillMaterialityContract.selectedSkills?.length || 0,
+      primaryGoal: multiSkillMaterialityContract.primaryGoal || 'MISSING',
+      verdict: 'WEEKLY_ALLOCATOR_BUILD_FAILED',
+    })
+    
+    throw createGenerationError(
+      'post_allocation_weekly_allocator_failed',
+      stageTracker.current,
+      `Weekly expression allocator build failed: ${errorMessage}`,
+      {
+        exactBuilderCorridor: 'post_allocation_to_weekly_allocator',
+        exactLocalStep: 'weekly_allocator_build',
+        exactLastSafeSubstep: 'weekly_allocator_entry',
+        compactBuilderError: errorMessage,
+      }
+    )
+  }
   
   // Layer 6: Weekly Expression Allocator (NEW)
   const allocatorSkills = weeklyExpressionAllocatorContract.decisions.map(d => d.skill)
@@ -7648,14 +7734,87 @@ async function generateAdaptiveProgramImpl(
   // This contract is the authoritative bridge between truth contracts and actual week assembly.
   // It forces broader selected-skill truth to materially influence the weekly program.
   // ==========================================================================
-  const visibleWeekExpressionContract = buildVisibleWeekSkillExpressionContract(
-    multiSkillMaterialityContract.materialSkillIntent,
-    multiSkillAllocationContract,
+  
+  // [POST_ALLOCATION_VISIBLE_WEEK_ENTRY] Ownership boundary entry
+  console.log('[POST_ALLOCATION_VISIBLE_WEEK_ENTRY]', {
+    fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
+    corridorOwner: 'post_allocation_to_visible_week',
+    localStep: 'visible_week_entry',
+    exactLastSafeSubstep: 'weekly_allocator_success',
+    materialSkillIntentCount: multiSkillMaterialityContract.materialSkillIntent?.length || 0,
+    hasMultiSkillAllocationContract: !!multiSkillAllocationContract,
+    representedSkillsCount: multiSkillAllocationContract?.representedSkills?.length || 0,
+    supportSkillsCount: multiSkillAllocationContract?.supportSkills?.length || 0,
     effectiveTrainingDays,
-    String(multiSkillMaterialityContract.experienceLevel || 'intermediate'),
-    multiSkillMaterialityContract.primaryGoal || '',
-    multiSkillMaterialityContract.secondaryGoal || null
-  )
+    primaryGoal: multiSkillMaterialityContract.primaryGoal || 'MISSING',
+    verdict: 'ENTERING_VISIBLE_WEEK_BUILD',
+  })
+  
+  let visibleWeekExpressionContract: ReturnType<typeof buildVisibleWeekSkillExpressionContract>
+  try {
+    visibleWeekExpressionContract = buildVisibleWeekSkillExpressionContract(
+      multiSkillMaterialityContract.materialSkillIntent,
+      multiSkillAllocationContract,
+      effectiveTrainingDays,
+      String(multiSkillMaterialityContract.experienceLevel || 'intermediate'),
+      multiSkillMaterialityContract.primaryGoal || '',
+      multiSkillMaterialityContract.secondaryGoal || null
+    )
+    
+    // [POST_ALLOCATION_VISIBLE_WEEK_SUCCESS] Verify structural completeness
+    const visibleWeekStructurallyComplete = 
+      Array.isArray(visibleWeekExpressionContract.skillExpressionPlan) &&
+      Array.isArray(visibleWeekExpressionContract.selectedSkills) &&
+      typeof visibleWeekExpressionContract.visibleWeekSkillCount === 'number'
+    
+    console.log('[POST_ALLOCATION_VISIBLE_WEEK_SUCCESS]', {
+      fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
+      corridorOwner: 'post_allocation_to_visible_week',
+      localStep: 'visible_week_success',
+      exactLastSafeSubstep: 'visible_week_entry',
+      skillExpressionPlanCount: visibleWeekExpressionContract.skillExpressionPlan?.length || 0,
+      selectedSkillsCount: visibleWeekExpressionContract.selectedSkills?.length || 0,
+      visibleWeekSkillCount: visibleWeekExpressionContract.visibleWeekSkillCount,
+      primarySkill: visibleWeekExpressionContract.primarySkill || 'NONE',
+      structurallyComplete: visibleWeekStructurallyComplete,
+      auditVerdict: visibleWeekExpressionContract.audit?.verdict || 'UNKNOWN',
+      verdict: visibleWeekStructurallyComplete ? 'VISIBLE_WEEK_BUILD_SUCCESS' : 'VISIBLE_WEEK_BUILD_STRUCTURALLY_INCOMPLETE',
+    })
+    
+    if (!visibleWeekStructurallyComplete) {
+      throw new Error('Visible week contract produced structurally incomplete output')
+    }
+    
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    const errorStack = err instanceof Error ? err.stack?.split('\n').slice(0, 5).join('\n') : undefined
+    
+    console.error('[POST_ALLOCATION_VISIBLE_WEEK_FAIL]', {
+      fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
+      corridorOwner: 'post_allocation_to_visible_week',
+      localStep: 'visible_week_build',
+      exactLastSafeSubstep: 'visible_week_entry',
+      exactFailingSubstep: 'buildVisibleWeekSkillExpressionContract',
+      error: errorMessage,
+      errorStack,
+      materialSkillIntentCount: multiSkillMaterialityContract.materialSkillIntent?.length || 0,
+      hasMultiSkillAllocationContract: !!multiSkillAllocationContract,
+      primaryGoal: multiSkillMaterialityContract.primaryGoal || 'MISSING',
+      verdict: 'VISIBLE_WEEK_BUILD_FAILED',
+    })
+    
+    throw createGenerationError(
+      'post_allocation_visible_week_failed',
+      stageTracker.current,
+      `Visible week expression contract build failed: ${errorMessage}`,
+      {
+        exactBuilderCorridor: 'post_allocation_to_visible_week',
+        exactLocalStep: 'visible_week_build',
+        exactLastSafeSubstep: 'visible_week_entry',
+        compactBuilderError: errorMessage,
+      }
+    )
+  }
   
   // ==========================================================================
   // [POST_FUNNEL_CONTRACT_GATE] AUTHORITATIVE POST-FUNNEL VALIDATION GATE

@@ -192,6 +192,31 @@ export interface SessionArchitectureTruthInput {
 export function buildSessionArchitectureTruthContract(
   input: SessionArchitectureTruthInput
 ): SessionArchitectureTruthContract {
+  // ==========================================================================
+  // [POST_ALLOCATION_SESSION_ARCHITECTURE_VALIDATION] Input validation gate
+  // ==========================================================================
+  // Validate required inputs exist before proceeding to prevent downstream crashes
+  // ==========================================================================
+  
+  if (!input) {
+    throw new Error('[SESSION_ARCHITECTURE_TRUTH_VALIDATION_FAIL] Input is null/undefined')
+  }
+  
+  if (!input.primaryGoal) {
+    console.warn('[SESSION_ARCHITECTURE_TRUTH_VALIDATION_WARN]', {
+      issue: 'primaryGoal_missing',
+      fallback: 'empty_string',
+    })
+  }
+  
+  if (!Array.isArray(input.selectedSkills)) {
+    console.warn('[SESSION_ARCHITECTURE_TRUTH_VALIDATION_WARN]', {
+      issue: 'selectedSkills_not_array',
+      type: typeof input.selectedSkills,
+      fallback: 'empty_array',
+    })
+  }
+  
   const {
     materialityContract,
     doctrineRuntimeContract,
@@ -208,12 +233,19 @@ export function buildSessionArchitectureTruthContract(
     multiSkillAllocation,
   } = input
   
+  // Normalize inputs to prevent downstream crashes
+  const safeSelectedSkills = Array.isArray(selectedSkills) ? selectedSkills : []
+  const safePrimaryGoal = primaryGoal || ''
+  const safeExperienceLevel = experienceLevel || 'intermediate'
+  const safeEffectiveTrainingDays = effectiveTrainingDays || 3
+  const safeScheduleMode = scheduleMode || 'standard'
+  
   const builtAt = new Date().toISOString()
   
   // ==========================================================================
   // STEP 1: Determine complexity level
   // ==========================================================================
-  const complexity = determineComplexity(selectedSkills, effectiveTrainingDays, experienceLevel)
+  const complexity = determineComplexity(safeSelectedSkills, safeEffectiveTrainingDays, safeExperienceLevel)
   
   // ==========================================================================
   // STEP 2: Build skill classification from multi-skill allocation
@@ -226,7 +258,7 @@ export function buildSessionArchitectureTruthContract(
   if (multiSkillAllocation) {
     // Primary = represented skills (primary + secondary anchors)
     primarySpineSkills.push(...multiSkillAllocation.representedSkills.filter(s => 
-      s.toLowerCase().includes(primaryGoal?.toLowerCase() || '')
+      s.toLowerCase().includes(safePrimaryGoal.toLowerCase())
     ))
     
     // Secondary = remaining represented skills
@@ -250,7 +282,7 @@ export function buildSessionArchitectureTruthContract(
     }
   } else {
     // Fallback: use primary/secondary from goals
-    if (primaryGoal) primarySpineSkills.push(primaryGoal)
+    if (safePrimaryGoal) primarySpineSkills.push(safePrimaryGoal)
     if (secondaryGoal) secondaryAnchorSkills.push(secondaryGoal)
   }
   
@@ -319,7 +351,7 @@ export function buildSessionArchitectureTruthContract(
     forbidHistoricalCeilingProgressions: true, // ALWAYS TRUE - key safety feature
     requireSupportSkillRotationWhenSelected: supportRotationSkills.length > 0,
     requireVisibleDifferenceFromPrimaryOnlyTemplate: 
-      selectedSkills.length > 2 && effectiveTrainingDays >= 5 && complexity !== 'low',
+      safeSelectedSkills.length > 2 && safeEffectiveTrainingDays >= 5 && complexity !== 'low',
   }
   
   // ==========================================================================
@@ -444,16 +476,16 @@ export function buildSessionArchitectureTruthContract(
     visibleDifferenceTargets,
     
     generationContext: {
-      effectiveTrainingDays,
-      scheduleMode,
+      effectiveTrainingDays: safeEffectiveTrainingDays,
+      scheduleMode: safeScheduleMode,
       complexity,
-      experienceLevel,
-      primaryGoal,
+      experienceLevel: safeExperienceLevel,
+      primaryGoal: safePrimaryGoal,
       secondaryGoal,
     },
     
     audit: {
-      totalSelectedSkills: selectedSkills.length,
+      totalSelectedSkills: safeSelectedSkills.length,
       representedSkillCount: primarySpineSkills.length + secondaryAnchorSkills.length,
       supportSkillCount: supportRotationSkills.length,
       deferredSkillCount: deferredSkills.length,

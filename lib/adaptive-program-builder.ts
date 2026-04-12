@@ -7655,65 +7655,25 @@ async function generateAdaptiveProgramImpl(
   ))
   
   // ==========================================================================
-  // [POST_ALLOCATION_TRACE_ENTRY] Immediate first trace after ALLOCATION
+  // [POST_ALLOCATION_OWNER_CORRIDOR] SINGLE AUTHORITATIVE OWNER FOR BRIDGE BUILD
   // ==========================================================================
-  // This log proves the exact next step after ALLOCATION before any downstream
-  // consumer can throw. If this log appears but POST_ALLOCATION_ALLOCATOR_ENTRY
-  // does not, then something throws between here and line 7636.
-  // ==========================================================================
-  console.log('[POST_ALLOCATION_TRACE_ENTRY]', {
-    fingerprint: 'POST_ALLOCATION_TRACE_V1_2026_04_12',
-    corridorOwner: 'post_allocation_trace',
-    localStep: 'immediately_after_allocation_audit',
-    exactLastSafeSubstep: 'ai_truth_breadth_audit_allocation',
-    // Verify all required objects exist before downstream reads
-    multiSkillMaterialityContractExists: !!multiSkillMaterialityContract,
-    multiSkillMaterialityContractSelectedSkillsCount: multiSkillMaterialityContract?.selectedSkills?.length || 0,
-    multiSkillMaterialityContractPrimaryGoal: multiSkillMaterialityContract?.primaryGoal || 'MISSING',
-    multiSkillMaterialityContractMaterialSkillIntentCount: multiSkillMaterialityContract?.materialSkillIntent?.length || 0,
-    exposureReadinessMapSize: exposureReadinessMap?.size || 0,
-    canonicalProfileTrainingMethodPreferences: canonicalProfile?.trainingMethodPreferences || [],
-    effectiveTrainingDays,
-    verdict: 'TRACE_ENTRY_REACHED_CONTINUING_TO_WEEKLY_ALLOCATOR',
-  })
-  
-  // ==========================================================================
-  // [POST_ALLOCATION_TRACE_GAP_FENCE] Deterministic fence for trace gap isolation
-  // ==========================================================================
-  // This fence captures the exact moment BEFORE any tracker/bridge declaration.
-  // If anything throws between this fence and MICRO_STEP_1_ENTRY, the outer
-  // catch will capture it with trace_gap ownership.
-  // ==========================================================================
-  console.log('[POST_ALLOCATION_TRACE_GAP_FENCE]', {
-    fingerprint: 'TRACE_GAP_FENCE_V1_2026_04_12',
-    corridorOwner: 'post_allocation_trace_gap',
-    localStep: 'trace_gap_fence_entered',
-    exactLastSafeSubstep: 'POST_ALLOCATION_TRACE_ENTRY',
-    nextExpectedCheckpoint: 'POST_ALLOCATION_MICRO_STEP_1_ENTRY',
-    deployedSourceVersion: 'v1_2026_04_12_trace_gap_fix',
-    verdict: 'TRACE_GAP_FENCE_REACHED_ENTERING_MICRO_CORRIDOR',
-  })
-  
-  // ==========================================================================
-  // [AUTHORITATIVE_FATAL_AUDIT_TRACKER] Single mutable tracker for post-allocation failures
-  // ==========================================================================
-  // This tracker is updated by each checkpoint and catch block. On failure, it
-  // provides ONE authoritative summary of the exact failing owner.
-  // CRITICAL: This is now INSIDE the trace gap try-catch to capture any throw.
+  // This is THE ONE OWNER for transforming allocation-complete contracts into
+  // the post-allocation bridge. It has ONE entry, ONE success path, ONE fail path.
+  // No fragmented micro-step ownership. No layered trace-gap fences.
   // ==========================================================================
   
-  // Declare tracker and bridge outside try so they're accessible in catch
-  let postAllocationFatalAudit = {
-    lastSuccessfulCheckpoint: 'TRACE_GAP_FENCE' as string,
-    exactBuilderCorridor: null as string | null,
-    exactLocalStep: null as string | null,
-    exactLastSafeSubstep: null as string | null,
+  // Fatal audit tracker - single source of truth for failure metadata
+  const postAllocationFatalAudit = {
+    lastSuccessfulCheckpoint: 'ALLOCATION_COMPLETE' as string,
+    exactBuilderCorridor: 'post_allocation_owner_corridor' as string,
+    exactLocalStep: 'corridor_entry' as string,
+    exactLastSafeSubstep: 'ai_truth_breadth_audit_allocation' as string,
     compactBuilderError: null as string | null,
     failingOwnerClass: null as 'required_hard_fail' | 'optional_fallback' | 'route_only' | null,
-    failingOwnerName: null as string | null,
+    failingOwnerName: 'post_allocation_owner_corridor' as string,
   }
   
-  // Use a simpler type to avoid potential type-reference issues
+  // Bridge output - built inside the corridor
   let postAllocationOwnerBridge: {
     selectedSkills: string[]
     primaryGoal: string
@@ -7731,276 +7691,201 @@ async function generateAdaptiveProgramImpl(
     effectiveTrainingDays: number
     bridgeVersion: string
     sourceContracts: string[]
-    legacyReadsEliminated: string[]
   } | null = null
+  
+  // ==========================================================================
+  // CORRIDOR ENTRY
+  // ==========================================================================
+  console.log('[POST_ALLOCATION_OWNER_CORRIDOR_ENTRY]', {
+    fingerprint: 'OWNER_CORRIDOR_V2_2026_04_12',
+    corridorOwner: 'post_allocation_owner_corridor',
+    localStep: 'corridor_entry',
+    exactLastSafeSubstep: 'ai_truth_breadth_audit_allocation',
+    // Upstream contract validation
+    multiSkillMaterialityContractExists: !!multiSkillMaterialityContract,
+    selectedSkillsCount: multiSkillMaterialityContract?.selectedSkills?.length || 0,
+    primaryGoal: multiSkillMaterialityContract?.primaryGoal || 'MISSING',
+    materialSkillIntentCount: multiSkillMaterialityContract?.materialSkillIntent?.length || 0,
+    multiSkillAllocationContractExists: !!multiSkillAllocationContract,
+    representedSkillsCount: multiSkillAllocationContract?.representedSkills?.length || 0,
+    effectiveTrainingDays,
+    deployedVersion: 'v2_consolidated_owner',
+    verdict: 'ENTERING_CONSOLIDATED_OWNER_CORRIDOR',
+  })
   
   try {
     // ==========================================================================
-    // MICRO-STEP 1: Capture materiality contract inputs
+    // STEP 1: Capture inputs from upstream contracts (single atomic operation)
     // ==========================================================================
-    console.log('[POST_ALLOCATION_MICRO_STEP_1_ENTRY]', {
-      fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
-      corridorOwner: 'post_allocation_micro_corridor',
-      localStep: 'materiality_contract_capture',
-      exactLastSafeSubstep: 'post_allocation_trace_entry',
-      objectBeingTouched: 'multiSkillMaterialityContract',
-      verdict: 'CAPTURING_MATERIALITY_INPUTS',
-    })
-    
-    const microStep1_selectedSkills = multiSkillMaterialityContract?.selectedSkills || []
-    const microStep1_primaryGoal = multiSkillMaterialityContract?.primaryGoal || ''
-    const microStep1_secondaryGoal = multiSkillMaterialityContract?.secondaryGoal || null
-    const microStep1_materialSkillIntent = multiSkillMaterialityContract?.materialSkillIntent || []
-    const microStep1_experienceLevel = multiSkillMaterialityContract?.experienceLevel || 'intermediate'
-    const microStep1_jointCautions = multiSkillMaterialityContract?.jointCautions || []
-    const microStep1_equipmentAvailable = multiSkillMaterialityContract?.equipmentAvailable || []
-    const microStep1_currentWorkingProgressions = multiSkillMaterialityContract?.currentWorkingProgressions || {}
-    
-    console.log('[POST_ALLOCATION_MICRO_STEP_1_PASS]', {
-      fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
-      corridorOwner: 'post_allocation_micro_corridor',
-      localStep: 'materiality_contract_capture_complete',
-      exactLastSafeSubstep: 'materiality_contract_capture',
-      selectedSkillsCount: microStep1_selectedSkills.length,
-      primaryGoal: microStep1_primaryGoal || 'EMPTY',
-      materialSkillIntentCount: microStep1_materialSkillIntent.length,
-      verdict: 'STEP_1_PASSED_CONTINUING',
-    })
-    postAllocationFatalAudit.lastSuccessfulCheckpoint = 'MICRO_STEP_1_PASS'
-    
-    // ==========================================================================
-    // MICRO-STEP 2: Capture allocation contract inputs
-    // ==========================================================================
-    console.log('[POST_ALLOCATION_MICRO_STEP_2_ENTRY]', {
-      fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
-      corridorOwner: 'post_allocation_micro_corridor',
-      localStep: 'allocation_contract_capture',
-      exactLastSafeSubstep: 'materiality_contract_capture_complete',
-      objectBeingTouched: 'multiSkillAllocationContract',
-      hasAllocationContract: !!multiSkillAllocationContract,
-      verdict: 'CAPTURING_ALLOCATION_INPUTS',
-    })
-    
-    const microStep2_representedSkills = multiSkillAllocationContract?.representedSkills || []
-    const microStep2_supportExpressedSkills = multiSkillAllocationContract?.supportExpressedSkills || []
-    const microStep2_supportRotationalSkills = multiSkillAllocationContract?.supportRotationalSkills || []
-    const microStep2_deferredSkills = multiSkillAllocationContract?.deferredSkills || []
-    const microStep2_allocationEntries = multiSkillAllocationContract?.entries || []
-    
-    console.log('[POST_ALLOCATION_MICRO_STEP_2_PASS]', {
-      fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
-      corridorOwner: 'post_allocation_micro_corridor',
-      localStep: 'allocation_contract_capture_complete',
-      exactLastSafeSubstep: 'allocation_contract_capture',
-      representedSkillsCount: microStep2_representedSkills.length,
-      supportExpressedSkillsCount: microStep2_supportExpressedSkills.length,
-      supportRotationalSkillsCount: microStep2_supportRotationalSkills.length,
-      deferredSkillsCount: microStep2_deferredSkills.length,
-      allocationEntriesCount: microStep2_allocationEntries.length,
-      verdict: 'STEP_2_PASSED_CONTINUING',
-    })
-    postAllocationFatalAudit.lastSuccessfulCheckpoint = 'MICRO_STEP_2_PASS'
-    
-    // ==========================================================================
-    // MICRO-STEP 3: Construct bridge object
-    // ==========================================================================
-    console.log('[POST_ALLOCATION_MICRO_STEP_3_ENTRY]', {
-      fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
-      corridorOwner: 'post_allocation_micro_corridor',
-      localStep: 'bridge_object_construction',
-      exactLastSafeSubstep: 'allocation_contract_capture_complete',
-      objectBeingCreated: 'postAllocationOwnerBridge',
-      verdict: 'CONSTRUCTING_BRIDGE_OBJECT',
-    })
-    
-    postAllocationOwnerBridge = {
-      selectedSkills: microStep1_selectedSkills,
-      primaryGoal: microStep1_primaryGoal,
-      secondaryGoal: microStep1_secondaryGoal,
-      materialSkillIntent: microStep1_materialSkillIntent,
-      experienceLevel: microStep1_experienceLevel,
-      jointCautions: microStep1_jointCautions,
-      equipmentAvailable: microStep1_equipmentAvailable,
-      currentWorkingProgressions: microStep1_currentWorkingProgressions,
-      representedSkills: microStep2_representedSkills,
-      supportExpressedSkills: microStep2_supportExpressedSkills,
-      supportRotationalSkills: microStep2_supportRotationalSkills,
-      deferredSkills: microStep2_deferredSkills,
-      allocationEntries: microStep2_allocationEntries,
-      effectiveTrainingDays,
-      bridgeVersion: 'v1_2026_04_12',
-      sourceContracts: ['multiSkillMaterialityContract', 'multiSkillAllocationContract'],
-      legacyReadsEliminated: ['selectedSkillsFromProfile', 'canonicalProfile.primaryGoal', 'canonicalProfile.secondaryGoal'],
+    const bridgeInputs = {
+      // From materiality contract
+      selectedSkills: multiSkillMaterialityContract?.selectedSkills || [],
+      primaryGoal: multiSkillMaterialityContract?.primaryGoal || '',
+      secondaryGoal: multiSkillMaterialityContract?.secondaryGoal || null,
+      materialSkillIntent: multiSkillMaterialityContract?.materialSkillIntent || [],
+      experienceLevel: multiSkillMaterialityContract?.experienceLevel || 'intermediate',
+      jointCautions: multiSkillMaterialityContract?.jointCautions || [],
+      equipmentAvailable: multiSkillMaterialityContract?.equipmentAvailable || [],
+      currentWorkingProgressions: multiSkillMaterialityContract?.currentWorkingProgressions || {},
+      // From allocation contract  
+      representedSkills: multiSkillAllocationContract?.representedSkills || [],
+      supportExpressedSkills: multiSkillAllocationContract?.supportExpressedSkills || [],
+      supportRotationalSkills: multiSkillAllocationContract?.supportRotationalSkills || [],
+      deferredSkills: multiSkillAllocationContract?.deferredSkills || [],
+      allocationEntries: multiSkillAllocationContract?.entries || [],
     }
     
-    console.log('[POST_ALLOCATION_MICRO_STEP_3_PASS]', {
-      fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
-      corridorOwner: 'post_allocation_micro_corridor',
-      localStep: 'bridge_object_construction_complete',
-      exactLastSafeSubstep: 'bridge_object_construction',
-      bridgeObjectCreated: true,
-      verdict: 'STEP_3_PASSED_CONTINUING',
-    })
-    postAllocationFatalAudit.lastSuccessfulCheckpoint = 'MICRO_STEP_3_PASS'
+    postAllocationFatalAudit.lastSuccessfulCheckpoint = 'INPUTS_CAPTURED'
+    postAllocationFatalAudit.exactLocalStep = 'inputs_captured'
     
     // ==========================================================================
-    // MICRO-STEP 4: Validate bridge completeness
+    // STEP 2: Construct bridge object
     // ==========================================================================
-    console.log('[POST_ALLOCATION_MICRO_STEP_4_ENTRY]', {
-      fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
-      corridorOwner: 'post_allocation_micro_corridor',
-      localStep: 'bridge_validation',
-      exactLastSafeSubstep: 'bridge_object_construction_complete',
-      verdict: 'VALIDATING_BRIDGE',
-    })
+    postAllocationOwnerBridge = {
+      selectedSkills: bridgeInputs.selectedSkills,
+      primaryGoal: bridgeInputs.primaryGoal,
+      secondaryGoal: bridgeInputs.secondaryGoal,
+      materialSkillIntent: bridgeInputs.materialSkillIntent,
+      experienceLevel: bridgeInputs.experienceLevel,
+      jointCautions: bridgeInputs.jointCautions,
+      equipmentAvailable: bridgeInputs.equipmentAvailable,
+      currentWorkingProgressions: bridgeInputs.currentWorkingProgressions,
+      representedSkills: bridgeInputs.representedSkills,
+      supportExpressedSkills: bridgeInputs.supportExpressedSkills,
+      supportRotationalSkills: bridgeInputs.supportRotationalSkills,
+      deferredSkills: bridgeInputs.deferredSkills,
+      allocationEntries: bridgeInputs.allocationEntries,
+      effectiveTrainingDays,
+      bridgeVersion: 'v2_consolidated_2026_04_12',
+      sourceContracts: ['multiSkillMaterialityContract', 'multiSkillAllocationContract'],
+    }
     
+    postAllocationFatalAudit.lastSuccessfulCheckpoint = 'BRIDGE_CONSTRUCTED'
+    postAllocationFatalAudit.exactLocalStep = 'bridge_constructed'
+    
+    // ==========================================================================
+    // STEP 3: Validate bridge completeness
+    // ==========================================================================
     const bridgeValid = 
       Array.isArray(postAllocationOwnerBridge.selectedSkills) &&
       postAllocationOwnerBridge.selectedSkills.length > 0 &&
       typeof postAllocationOwnerBridge.primaryGoal === 'string' &&
       Array.isArray(postAllocationOwnerBridge.materialSkillIntent)
     
-    console.log('[POST_ALLOCATION_MICRO_STEP_4_PASS]', {
-      fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
-      corridorOwner: 'post_allocation_micro_corridor',
-      localStep: 'bridge_validation_complete',
-      exactLastSafeSubstep: 'bridge_validation',
-      bridgeValid,
-      selectedSkillsCount: postAllocationOwnerBridge.selectedSkills.length,
-      primaryGoal: postAllocationOwnerBridge.primaryGoal || 'EMPTY',
-      materialSkillIntentCount: postAllocationOwnerBridge.materialSkillIntent.length,
-      verdict: bridgeValid ? 'STEP_4_PASSED_BRIDGE_VALID' : 'STEP_4_PASSED_BUT_BRIDGE_INVALID',
-    })
-    postAllocationFatalAudit.lastSuccessfulCheckpoint = 'MICRO_STEP_4_PASS'
-    
     if (!bridgeValid) {
-      // Update fatal audit tracker
-      postAllocationFatalAudit.exactBuilderCorridor = 'post_allocation_owner_bridge'
       postAllocationFatalAudit.exactLocalStep = 'bridge_validation_failed'
-      postAllocationFatalAudit.exactLastSafeSubstep = 'bridge_validation_complete'
-      postAllocationFatalAudit.compactBuilderError = 'Bridge validation failed - required contract values missing'
+      postAllocationFatalAudit.compactBuilderError = `Bridge invalid: selectedSkills=${postAllocationOwnerBridge.selectedSkills.length}, primaryGoal=${postAllocationOwnerBridge.primaryGoal || 'EMPTY'}`
       postAllocationFatalAudit.failingOwnerClass = 'required_hard_fail'
-      postAllocationFatalAudit.failingOwnerName = 'owner_bridge_validation'
       
-      console.error('[POST_ALLOCATION_OWNER_BRIDGE_FAIL]', {
-        fingerprint: 'POST_ALLOCATION_BRIDGE_V1_2026_04_12',
-        corridorOwner: 'post_allocation_owner_bridge',
+      console.error('[POST_ALLOCATION_OWNER_CORRIDOR_FAIL]', {
+        fingerprint: 'OWNER_CORRIDOR_V2_2026_04_12',
+        corridorOwner: 'post_allocation_owner_corridor',
         localStep: 'bridge_validation_failed',
-        exactLastSafeSubstep: 'bridge_validation_complete',
+        exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
         selectedSkillsCount: postAllocationOwnerBridge.selectedSkills.length,
         primaryGoal: postAllocationOwnerBridge.primaryGoal || 'EMPTY',
         materialSkillIntentCount: postAllocationOwnerBridge.materialSkillIntent.length,
         reason: postAllocationOwnerBridge.selectedSkills.length === 0 
           ? 'selected_skills_empty' 
-          : 'unknown_validation_failure',
-        verdict: 'BRIDGE_FAILED_CANNOT_CONTINUE',
+          : 'bridge_validation_failed',
+        verdict: 'POST_ALLOCATION_OWNER_CORRIDOR_FAILED',
       })
       
-      // Emit authoritative fatal owner summary
       console.error('[AUTHORITATIVE_POST_ALLOCATION_FATAL_OWNER]', {
-        fingerprint: 'FATAL_AUDIT_V1_2026_04_12',
+        fingerprint: 'FATAL_AUDIT_V2_2026_04_12',
         ...postAllocationFatalAudit,
         builderStage: stageTracker.current,
-        failureZone: 'post_allocation',
-        verdict: 'REQUIRED_OWNER_FAILED',
+        failureZone: 'post_allocation_owner_corridor',
+        verdict: 'POST_ALLOCATION_OWNER_CORRIDOR_FAILED',
       })
       
       throw createGenerationError(
-        'post_allocation_owner_bridge_invalid',
+        'post_allocation_owner_corridor_failed',
         stageTracker.current,
-        `Post-allocation owner bridge validation failed: selectedSkills=${postAllocationOwnerBridge.selectedSkills.length}, primaryGoal=${postAllocationOwnerBridge.primaryGoal || 'EMPTY'}`,
+        `Post-allocation owner corridor failed: bridge validation failed - selectedSkills=${postAllocationOwnerBridge.selectedSkills.length}`,
         {
-          exactBuilderCorridor: 'post_allocation_owner_bridge',
+          exactBuilderCorridor: 'post_allocation_owner_corridor',
           exactLocalStep: 'bridge_validation_failed',
-          exactLastSafeSubstep: 'bridge_validation_complete',
-          compactBuilderError: 'Bridge validation failed - required contract values missing',
+          exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
+          compactBuilderError: postAllocationFatalAudit.compactBuilderError,
           lastSuccessfulPostAllocationCheckpoint: postAllocationFatalAudit.lastSuccessfulCheckpoint,
           failingOwnerClass: 'required_hard_fail',
-          failingOwnerName: 'owner_bridge_validation',
+          failingOwnerName: 'post_allocation_owner_corridor',
         }
       )
     }
     
-    console.log('[POST_ALLOCATION_OWNER_BRIDGE_PASS]', {
-      fingerprint: 'POST_ALLOCATION_BRIDGE_V1_2026_04_12',
-      corridorOwner: 'post_allocation_owner_bridge',
-      localStep: 'bridge_validation_passed',
-      exactLastSafeSubstep: 'bridge_validation_complete',
+    postAllocationFatalAudit.lastSuccessfulCheckpoint = 'CORRIDOR_PASS'
+    postAllocationFatalAudit.exactLocalStep = 'corridor_pass'
+    
+    // ==========================================================================
+    // CORRIDOR PASS - Single success log
+    // ==========================================================================
+    console.log('[POST_ALLOCATION_OWNER_CORRIDOR_PASS]', {
+      fingerprint: 'OWNER_CORRIDOR_V2_2026_04_12',
+      corridorOwner: 'post_allocation_owner_corridor',
+      localStep: 'corridor_pass',
+      exactLastSafeSubstep: 'bridge_constructed',
+      // Bridge summary
       selectedSkillsCount: postAllocationOwnerBridge.selectedSkills.length,
       primaryGoal: postAllocationOwnerBridge.primaryGoal,
-      verdict: 'BRIDGE_PASSED_SESSION_ENTRY_ALLOWED',
+      materialSkillIntentCount: postAllocationOwnerBridge.materialSkillIntent.length,
+      representedSkillsCount: postAllocationOwnerBridge.representedSkills.length,
+      supportExpressedSkillsCount: postAllocationOwnerBridge.supportExpressedSkills.length,
+      deferredSkillsCount: postAllocationOwnerBridge.deferredSkills.length,
+      effectiveTrainingDays: postAllocationOwnerBridge.effectiveTrainingDays,
+      bridgeVersion: postAllocationOwnerBridge.bridgeVersion,
+      verdict: 'POST_ALLOCATION_OWNER_CORRIDOR_PASSED',
     })
-    postAllocationFatalAudit.lastSuccessfulCheckpoint = 'OWNER_BRIDGE_PASS'
     
-  } catch (microCorridorError) {
-    // Capture exact first throw site
-    const errorMessage = microCorridorError instanceof Error ? microCorridorError.message : String(microCorridorError)
-    const errorStack = microCorridorError instanceof Error ? microCorridorError.stack?.split('\n').slice(0, 5).join('\n') : undefined
+  } catch (corridorError) {
+    // ==========================================================================
+    // CORRIDOR FAIL - Single failure handler
+    // ==========================================================================
+    const errorMessage = corridorError instanceof Error ? corridorError.message : String(corridorError)
+    const errorStack = corridorError instanceof Error ? corridorError.stack?.split('\n').slice(0, 5).join('\n') : undefined
     
-    // Check if this was already a wrapped GenerationError
-    if (errorMessage.includes('post_allocation_owner_bridge_invalid')) {
-      throw microCorridorError // Re-throw the already-wrapped error
+    // Check if this was already a wrapped GenerationError from validation
+    if (errorMessage.includes('post_allocation_owner_corridor_failed')) {
+      throw corridorError
     }
     
-    // ==========================================================================
-    // TRACE GAP DETECTION: Determine if failure was BEFORE or AFTER MICRO_STEP_1_ENTRY
-    // ==========================================================================
-    const failedBeforeMicroStep1 = postAllocationFatalAudit.lastSuccessfulCheckpoint === 'TRACE_GAP_FENCE'
-    const traceGapVerdict = failedBeforeMicroStep1 
-      ? 'TRACE_GAP_OWNER_FAILED_BEFORE_MICRO_1' 
-      : 'MICRO_1_ENTERED_AND_FAILED_LATER'
-    
-    // Update fatal audit tracker with precise trace gap ownership
-    postAllocationFatalAudit.exactBuilderCorridor = failedBeforeMicroStep1 
-      ? 'post_allocation_trace_gap' 
-      : 'post_allocation_micro_corridor'
-    postAllocationFatalAudit.exactLocalStep = failedBeforeMicroStep1
-      ? 'before_micro_step_1_entry'
-      : 'micro_corridor_first_throw'
-    postAllocationFatalAudit.exactLastSafeSubstep = postAllocationFatalAudit.lastSuccessfulCheckpoint
+    // Update tracker for unexpected errors
     postAllocationFatalAudit.compactBuilderError = errorMessage.slice(0, 200)
     postAllocationFatalAudit.failingOwnerClass = 'required_hard_fail'
-    postAllocationFatalAudit.failingOwnerName = failedBeforeMicroStep1 ? 'trace_gap' : 'micro_corridor'
     
-    console.error('[POST_ALLOCATION_MICRO_CORRIDOR_FAIL]', {
-      fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
-      corridorOwner: postAllocationFatalAudit.exactBuilderCorridor,
+    console.error('[POST_ALLOCATION_OWNER_CORRIDOR_FAIL]', {
+      fingerprint: 'OWNER_CORRIDOR_V2_2026_04_12',
+      corridorOwner: 'post_allocation_owner_corridor',
       localStep: postAllocationFatalAudit.exactLocalStep,
       exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
       error: errorMessage,
       errorStack,
-      failureZone: failedBeforeMicroStep1 ? 'trace_gap_before_micro_1' : 'between_micro_1_and_bridge_pass',
-      failedBeforeMicroStep1,
-      traceGapVerdict,
       multiSkillMaterialityContractExists: !!multiSkillMaterialityContract,
       multiSkillAllocationContractExists: !!multiSkillAllocationContract,
-      verdict: traceGapVerdict,
+      verdict: 'POST_ALLOCATION_OWNER_CORRIDOR_FAILED',
     })
     
-    // Emit authoritative fatal owner summary
     console.error('[AUTHORITATIVE_POST_ALLOCATION_FATAL_OWNER]', {
-      fingerprint: 'FATAL_AUDIT_V1_2026_04_12',
+      fingerprint: 'FATAL_AUDIT_V2_2026_04_12',
       ...postAllocationFatalAudit,
       builderStage: stageTracker.current,
-      failureZone: 'post_allocation',
-      failedBeforeMicroStep1,
-      verdict: traceGapVerdict,
+      failureZone: 'post_allocation_owner_corridor',
+      verdict: 'POST_ALLOCATION_OWNER_CORRIDOR_FAILED',
     })
     
     throw createGenerationError(
-      failedBeforeMicroStep1 ? 'post_allocation_trace_gap_failed' : 'post_allocation_micro_corridor_failed',
+      'post_allocation_owner_corridor_failed',
       stageTracker.current,
-      `Post-allocation ${failedBeforeMicroStep1 ? 'trace gap' : 'micro-corridor'} failed: ${errorMessage}`,
+      `Post-allocation owner corridor failed: ${errorMessage}`,
       {
-        exactBuilderCorridor: postAllocationFatalAudit.exactBuilderCorridor,
+        exactBuilderCorridor: 'post_allocation_owner_corridor',
         exactLocalStep: postAllocationFatalAudit.exactLocalStep,
         exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
         compactBuilderError: errorMessage.slice(0, 200),
         lastSuccessfulPostAllocationCheckpoint: postAllocationFatalAudit.lastSuccessfulCheckpoint,
         failingOwnerClass: 'required_hard_fail',
-        failingOwnerName: postAllocationFatalAudit.failingOwnerName,
-        failedBeforeMicroStep1,
-        traceGapVerdict,
+        failingOwnerName: 'post_allocation_owner_corridor',
       }
     )
   }

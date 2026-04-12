@@ -19954,6 +19954,26 @@ function generateAdaptiveSession(
   })
   
   // ==========================================================================
+  // [DOCTRINE-RELAXATION-TRACKING] Track doctrine relaxation in session metadata
+  // This allows distinguishing between doctrine-recovered sessions and hard failures
+  // ==========================================================================
+  const doctrineRelaxationApplied = !!(selection as any).doctrineRelaxationApplied
+  const doctrineRelaxationReason = (selection as any).doctrineRelaxationReason || ''
+  
+  if (doctrineRelaxationApplied) {
+    console.log('[DOCTRINE_RELAXATION_IN_BUILDER]', {
+      fingerprint: 'REGEN_AUDIT_2026_04_11_V2',
+      dayFocus: day.focus,
+      dayNumber: day.dayNumber,
+      relaxationReason: doctrineRelaxationReason,
+      mainCount: safeMain.length,
+      verdict: safeMain.length > 0 
+        ? 'DOCTRINE_RELAXED_AND_RECOVERED'
+        : 'DOCTRINE_RELAXED_BUT_STILL_EMPTY',
+    })
+  }
+  
+  // ==========================================================================
   // [TASK 1] SESSION ASSEMBLY PHASE AUDIT - Post Selection
   // ==========================================================================
   const postSelectionValidation = validateSessionCandidate(safeMain, equipment, primaryGoal, 'post_selection')

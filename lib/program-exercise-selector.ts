@@ -1030,6 +1030,9 @@ export interface ExerciseSelection {
     materialityVerdict: 'PASS' | 'WARN' | 'FAIL'
     materialityIssues: string[]
   }
+  // [DOCTRINE-RELAXATION-RESCUE] Track if doctrine constraints were relaxed
+  doctrineRelaxationApplied?: boolean
+  doctrineRelaxationReason?: string
 }
 
 interface ExerciseSelectionInputs {
@@ -1784,6 +1787,75 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
       : 'SESSION_ARCHITECTURE_USING_TEMPLATE_FALLBACK',
   })
   
+  // ==========================================================================
+  // [DOCTRINE-RELAXATION-RESCUE] Emergency rescue if main is empty after all paths
+  // This prevents doctrine over-constraint from collapsing session generation entirely
+  // ==========================================================================
+  let doctrineRelaxationApplied = false
+  let doctrineRelaxationReason = ''
+  
+  if (main.length === 0) {
+    console.log('[DOCTRINE_RELAXATION_TRIGGER]', {
+      fingerprint: 'REGEN_AUDIT_2026_04_11_V2',
+      dayFocus: day.focus,
+      primaryGoal,
+      doctrineActive: doctrineEnforcement.active,
+      preventGenericFiller: doctrineEnforcement.preventGenericFiller,
+      blockedMethodsCount: doctrineEnforcement.blockedMethods.length,
+      genericFillerBlockedCount: doctrineEnforcement.genericFillerBlocked.length,
+      availableSkillsCount: availableSkills.length,
+      availableStrengthCount: availableStrength.length,
+      verdict: 'MAIN_EMPTY_ACTIVATING_RESCUE',
+    })
+    
+    // RESCUE ATTEMPT 1: Relax doctrine and try basic skill selection
+    const isSkillDay = day.focus === 'push_skill' || day.focus === 'pull_skill' || day.focus === 'skill_density'
+    const isPushDay = day.focus?.includes('push')
+    const isPullDay = day.focus?.includes('pull')
+    
+    // Build a minimal conservative exercise set without doctrine blocking
+    const conservativePool = [...availableSkills, ...availableStrength, ...goalExercises]
+      .filter(e => {
+        // Only filter by movement pattern alignment, not doctrine rules
+        if (isPushDay && e.movementPattern?.includes('pull')) return false
+        if (isPullDay && e.movementPattern?.includes('push')) return false
+        return true
+      })
+    
+    console.log('[DOCTRINE_RELAXATION_RESCUE_POOL]', {
+      poolSize: conservativePool.length,
+      dayFocus: day.focus,
+      sampleExercises: conservativePool.slice(0, 5).map(e => e.name),
+    })
+    
+    // Select up to 4 exercises from relaxed pool
+    const relaxedBudget = Math.min(4, conservativePool.length)
+    for (let ri = 0; ri < relaxedBudget && main.length < 4; ri++) {
+      const candidate = conservativePool[ri]
+      if (candidate && !usedIds.has(candidate.id)) {
+        addExercise(candidate, 'Doctrine relaxation rescue', undefined, undefined, undefined, 'standalone', {
+          primarySelectionReason: 'doctrine_relaxation_rescue',
+          sessionRole: 'rescue_fallback',
+          expressionMode: 'conservative_fallback',
+          influencingSkills: [],
+          candidatePoolSize: conservativePool.length,
+        })
+        doctrineRelaxationApplied = true
+        doctrineRelaxationReason = 'main_empty_doctrine_over_constrained'
+      }
+    }
+    
+    console.log('[DOCTRINE_RELAXATION_RESULT]', {
+      fingerprint: 'REGEN_AUDIT_2026_04_11_V2',
+      relaxationApplied: doctrineRelaxationApplied,
+      rescuedExerciseCount: main.length,
+      dayFocus: day.focus,
+      verdict: main.length > 0 
+        ? 'DOCTRINE_RELAXATION_RESCUED_SESSION'
+        : 'DOCTRINE_RELAXATION_FAILED_NO_CANDIDATES',
+    })
+  }
+  
   // BUILD-HOTFIX: balanced module structure and restored valid EOF closure
   return {
     warmup,
@@ -1793,6 +1865,9 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     sessionLoadSummary,
     sessionStyle,
     loadRationale,
+    // Include doctrine relaxation info in return
+    doctrineRelaxationApplied,
+    doctrineRelaxationReason,
     antiBloatValidation: {
       isValid: antiBloatResult.isValid,
       issues: antiBloatResult.issues,

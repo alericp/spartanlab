@@ -7873,6 +7873,27 @@ async function generateAdaptiveProgramImpl(
   })
   
   // ==========================================================================
+  // [POST_ALLOCATION_SESSION_ARCHITECTURE_ENTRY] Corridor entry audit
+  // ==========================================================================
+  console.log('[POST_ALLOCATION_SESSION_ARCHITECTURE_ENTRY]', {
+    fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
+    corridorOwner: 'post_allocation_to_session_architecture',
+    localStep: 'session_architecture_entry',
+    exactLastSafeSubstep: 'post_funnel_runtime_bridge_decision',
+    // Inputs being passed
+    hasMaterialityContract: !!multiSkillMaterialityContract,
+    hasDoctrineRuntimeContract: !!doctrineRuntimeContract,
+    hasMultiSkillAllocationContract: !!multiSkillAllocationContract,
+    selectedSkillsCount: selectedSkillsFromProfile?.length || 0,
+    effectiveTrainingDays,
+    primaryGoal: canonicalProfile.primaryGoal,
+    // Validation checks
+    materialitySelectedSkillsIntact: Array.isArray(multiSkillMaterialityContract.selectedSkills),
+    allocationRepresentedSkillsIntact: multiSkillAllocationContract ? Array.isArray(multiSkillAllocationContract.representedSkills) : 'no_contract',
+    verdict: 'ENTERING_SESSION_ARCHITECTURE_BUILD',
+  })
+  
+  // ==========================================================================
   // [SESSION ARCHITECTURE TRUTH] BUILD AUTHORITATIVE SESSION ARCHITECTURE CONTRACT
   // ==========================================================================
   // This contract is GENERATION-FIRST, not UI-first. It MUST be consumed by:
@@ -7946,11 +7967,56 @@ async function generateAdaptiveProgramImpl(
       verdict: 'SESSION_ARCHITECTURE_TRUTH_READY_FOR_GENERATION',
     })
   } catch (err) {
+    // ==========================================================================
+    // [POST_ALLOCATION_BRIDGE_FAIL] Session architecture build failed
+    // ==========================================================================
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    const errorStack = err instanceof Error ? err.stack?.split('\n').slice(0, 5).join('\n') : undefined
+    
+    console.error('[POST_ALLOCATION_BRIDGE_FAIL]', {
+      fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
+      corridorOwner: 'post_allocation_to_session_architecture',
+      localStep: 'session_architecture_build',
+      exactLastSafeSubstep: 'session_architecture_entry',
+      exactFailingSubstep: 'buildSessionArchitectureTruthContract',
+      error: errorMessage,
+      errorStack,
+      // Context for debugging
+      hasMaterialityContract: !!multiSkillMaterialityContract,
+      hasDoctrineRuntimeContract: !!doctrineRuntimeContract,
+      hasMultiSkillAllocationContract: !!multiSkillAllocationContract,
+      selectedSkillsCount: selectedSkillsFromProfile?.length || 0,
+      verdict: 'SESSION_ARCHITECTURE_BUILD_FAILED',
+    })
+    
+    // DO NOT throw here - session architecture is optional fallback
+    // But log clearly that we're continuing without it
     console.log('[SESSION-ARCHITECTURE-TRUTH-FALLBACK]', {
-      error: String(err),
-      verdict: 'SESSION_ARCHITECTURE_TRUTH_FALLBACK',
+      error: errorMessage,
+      verdict: 'SESSION_ARCHITECTURE_TRUTH_FALLBACK_CONTINUING',
     })
   }
+  
+  // ==========================================================================
+  // [POST_ALLOCATION_MULTI_SKILL_INTENT_ENTRY] Corridor entry audit
+  // ==========================================================================
+  console.log('[POST_ALLOCATION_MULTI_SKILL_INTENT_ENTRY]', {
+    fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
+    corridorOwner: 'post_allocation_to_multi_skill_intent',
+    localStep: 'multi_skill_intent_entry',
+    exactLastSafeSubstep: 'session_architecture_truth_built_or_fallback',
+    // Inputs being passed
+    hasCanonicalProfile: !!canonicalProfile,
+    weightedSkillAllocationCount: weightedSkillAllocation?.length || 0,
+    hasMultiSkillAllocationContract: !!multiSkillAllocationContract,
+    hasSessionArchitectureTruth: !!sessionArchitectureTruth,
+    inputSelectedSkillsCount: inputs.selectedSkills?.length || 0,
+    // Validation checks
+    canonicalProfileHasUserId: !!canonicalProfile.userId,
+    canonicalProfileHasPrimaryGoal: !!canonicalProfile.primaryGoal,
+    weightedAllocationIntact: Array.isArray(weightedSkillAllocation),
+    verdict: 'ENTERING_MULTI_SKILL_INTENT_BUILD',
+  })
   
   // ==========================================================================
   // [CHECKLIST 1 OF 5] BUILD AUTHORITATIVE MULTI-SKILL INTENT CONTRACT
@@ -7983,14 +8049,42 @@ async function generateAdaptiveProgramImpl(
     }
   }
   
-  const authoritativeMultiSkillIntentContract = buildAuthoritativeMultiSkillIntentContract(
-    canonicalProfile,
-    weightedSkillAllocation,
-    multiSkillAllocationContract,
-    sessionArchitectureTruth,
-    cwpForIntentContract,
-    inputs.selectedSkills?.length || 0
-  )
+  let authoritativeMultiSkillIntentContract: ReturnType<typeof buildAuthoritativeMultiSkillIntentContract>
+  try {
+    authoritativeMultiSkillIntentContract = buildAuthoritativeMultiSkillIntentContract(
+      canonicalProfile,
+      weightedSkillAllocation,
+      multiSkillAllocationContract,
+      sessionArchitectureTruth,
+      cwpForIntentContract,
+      inputs.selectedSkills?.length || 0
+    )
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    const errorStack = err instanceof Error ? err.stack?.split('\n').slice(0, 5).join('\n') : undefined
+    
+    console.error('[POST_ALLOCATION_BRIDGE_FAIL]', {
+      fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
+      corridorOwner: 'post_allocation_to_multi_skill_intent',
+      localStep: 'multi_skill_intent_build',
+      exactLastSafeSubstep: 'multi_skill_intent_entry',
+      exactFailingSubstep: 'buildAuthoritativeMultiSkillIntentContract',
+      error: errorMessage,
+      errorStack,
+      verdict: 'MULTI_SKILL_INTENT_BUILD_FAILED',
+    })
+    
+    throw createGenerationError(
+      'post_allocation_multi_skill_intent_failed',
+      stageTracker.current,
+      `Multi-skill intent contract build failed: ${errorMessage}`,
+      {
+        exactBuilderCorridor: 'post_allocation_to_multi_skill_intent',
+        exactLocalStep: 'multi_skill_intent_build',
+        exactLastSafeSubstep: 'multi_skill_intent_entry',
+      }
+    )
+  }
   
   // ==========================================================================
   // [AI-TRUTH-BREADTH-AUDIT] Layer 6: Authoritative intent contract
@@ -8010,12 +8104,61 @@ async function generateAdaptiveProgramImpl(
   // This is the authoritative trace showing each skill's journey from canonical
   // source to final week expression. Every skill MUST have an explicit disposition.
   // ==========================================================================
-  const selectedSkillTrace = buildSelectedSkillTraceContract(
-    canonicalProfile,
-    weightedSkillAllocation,
-    multiSkillMaterialityContract,
-    cwpForIntentContract
-  )
+  let selectedSkillTrace: ReturnType<typeof buildSelectedSkillTraceContract>
+  try {
+    selectedSkillTrace = buildSelectedSkillTraceContract(
+      canonicalProfile,
+      weightedSkillAllocation,
+      multiSkillMaterialityContract,
+      cwpForIntentContract
+    )
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    const errorStack = err instanceof Error ? err.stack?.split('\n').slice(0, 5).join('\n') : undefined
+    
+    console.error('[POST_ALLOCATION_BRIDGE_FAIL]', {
+      fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
+      corridorOwner: 'post_allocation_to_skill_trace',
+      localStep: 'skill_trace_build',
+      exactLastSafeSubstep: 'multi_skill_intent_built',
+      exactFailingSubstep: 'buildSelectedSkillTraceContract',
+      error: errorMessage,
+      errorStack,
+      verdict: 'SKILL_TRACE_BUILD_FAILED',
+    })
+    
+    throw createGenerationError(
+      'post_allocation_skill_trace_failed',
+      stageTracker.current,
+      `Skill trace contract build failed: ${errorMessage}`,
+      {
+        exactBuilderCorridor: 'post_allocation_to_skill_trace',
+        exactLocalStep: 'skill_trace_build',
+        exactLastSafeSubstep: 'multi_skill_intent_built',
+      }
+    )
+  }
+  
+  // ==========================================================================
+  // [POST_ALLOCATION_BRIDGE_PASS] All post-allocation contracts built successfully
+  // ==========================================================================
+  console.log('[POST_ALLOCATION_BRIDGE_PASS]', {
+    fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
+    corridorOwner: 'post_allocation_to_session_entry',
+    localStep: 'all_contracts_built',
+    exactLastSafeSubstep: 'skill_trace_built',
+    // Contract summaries
+    sessionArchitectureTruthBuilt: !!sessionArchitectureTruth,
+    sessionArchitectureSourceVerdict: sessionArchitectureTruth?.sourceVerdict || 'NO_CONTRACT',
+    multiSkillIntentMaterialCount: authoritativeMultiSkillIntentContract.materiallyExpressedSkills?.length || 0,
+    multiSkillIntentSupportCount: authoritativeMultiSkillIntentContract.supportSkills?.length || 0,
+    multiSkillIntentDeferredCount: authoritativeMultiSkillIntentContract.deferredSkills?.length || 0,
+    skillTraceSourceCount: selectedSkillTrace.sourceSkillCount,
+    skillTraceCoverageVerdict: selectedSkillTrace.finalWeekExpression.coverageVerdict,
+    // Validation
+    allContractsIntact: true,
+    verdict: 'POST_ALLOCATION_BRIDGE_COMPLETE_SESSION_ENTRY_ALLOWED',
+  })
   
   // Log the trace checkpoint
   console.log('[CHECKLIST_1_OF_4_SKILL_TRACE_AUDIT]', {

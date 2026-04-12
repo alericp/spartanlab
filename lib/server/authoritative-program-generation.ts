@@ -672,6 +672,37 @@ export async function executeAuthoritativeGeneration(
         timestamp: new Date().toISOString(),
       })
       
+      // ==========================================================================
+      // [STRUCTURED_CONTEXT_EXTRACTION] Read structured context from GenerationError FIRST
+      // ==========================================================================
+      // The builder creates GenerationError with a .context property containing exact fields.
+      // We must read this BEFORE falling back to regex parsing of the error string.
+      // ==========================================================================
+      const structuredContext = (builderError as { context?: Record<string, unknown> })?.context
+      const hasStructuredContext = !!structuredContext
+      
+      // Extract structured fields directly from error context (preferred source)
+      const structuredExactBuilderCorridor = structuredContext?.exactBuilderCorridor as string | undefined
+      const structuredExactLocalStep = structuredContext?.exactLocalStep as string | undefined
+      const structuredExactLastSafeSubstep = structuredContext?.exactLastSafeSubstep as string | undefined
+      const structuredCompactBuilderError = structuredContext?.compactBuilderError as string | undefined
+      const structuredLastSuccessfulPostAllocationCheckpoint = structuredContext?.lastSuccessfulPostAllocationCheckpoint as string | undefined
+      const structuredFailingOwnerClass = structuredContext?.failingOwnerClass as string | undefined
+      const structuredFailingOwnerName = structuredContext?.failingOwnerName as string | undefined
+      
+      console.log('[AUTHORITATIVE_SERVICE_FAILURE_CONTRACT]', {
+        fingerprint: 'SERVICE_FAILURE_CONTRACT_V1_2026_04_12',
+        hasStructuredContext,
+        structuredFields: hasStructuredContext ? {
+          exactBuilderCorridor: structuredExactBuilderCorridor ?? 'not_in_context',
+          exactLocalStep: structuredExactLocalStep ?? 'not_in_context',
+          lastSuccessfulPostAllocationCheckpoint: structuredLastSuccessfulPostAllocationCheckpoint ?? 'not_in_context',
+          failingOwnerClass: structuredFailingOwnerClass ?? 'not_in_context',
+          failingOwnerName: structuredFailingOwnerName ?? 'not_in_context',
+        } : 'no_structured_context',
+        source: hasStructuredContext ? 'structured_context' : 'will_use_regex_fallback',
+      })
+      
       // [SELECTION-CRASH-CORRIDOR-AUDIT] Enhanced diagnostics for exercise selection crashes
       const errorStack = builderError instanceof Error ? builderError.stack : undefined
       
@@ -721,27 +752,39 @@ export async function executeAuthoritativeGeneration(
                                     errorString.includes('POST_ALLOCATION_VISIBLE_WEEK_FAIL') ||
                                     errorString.includes('ALLOCATOR_INPUT_VALIDATION_FAIL')
       
-      // Preserve exact corridor from builder if available, otherwise classify
-      const exactBuilderCorridor = corridorMatch?.[1] || 
+      // ==========================================================================
+      // PREFER STRUCTURED CONTEXT, FALLBACK TO REGEX PARSING
+      // ==========================================================================
+      // Use structured context fields first, then fallback to regex for legacy errors
+      const corridorMatch = errorString.match(/exactBuilderCorridor['":\s]+([a-z_]+)/i)
+      const regexExactBuilderCorridor = corridorMatch?.[1] || 
         (isHandoffError ? 'post_allocation_handoff' :
          isOwnerCorridorError ? 'post_allocation_owner_corridor' :
          isPostAllocationError ? 'post_allocation_to_weekly_allocator' :
          isPostFunnelContractError ? 'post_funnel_allocation_to_session_entry' :
          errorString.includes('structure_selection') ? 'post_truth_audit_to_structure_selection' : 'unknown')
       const localStepMatch = errorString.match(/exactLocalStep['":\s]+([a-z_]+)/i)
-      const exactLocalStep = localStepMatch?.[1] || 
+      const regexExactLocalStep = localStepMatch?.[1] || 
         (isHandoffError ? 'handoff_failure' :
          isOwnerCorridorError ? 'owner_corridor_failure' :
          isPostAllocationError ? 'weekly_allocator_or_visible_week' :
          isPostFunnelContractError ? 'contract_validation' : 'unknown')
       
-      // [POST_ALLOCATION_HANDOFF_FIX] Extract additional corridor fields from error string
+      // [POST_ALLOCATION_HANDOFF_FIX] Extract additional corridor fields from error string as fallback
       const checkpointMatch = errorString.match(/lastSuccessfulPostAllocationCheckpoint['":\s]+([A-Z_]+)/i)
-      const lastSuccessfulPostAllocationCheckpoint = checkpointMatch?.[1] || undefined
+      const regexLastSuccessfulPostAllocationCheckpoint = checkpointMatch?.[1] || undefined
       const ownerClassMatch = errorString.match(/failingOwnerClass['":\s]+([a-z_]+)/i)
-      const failingOwnerClass = ownerClassMatch?.[1] || undefined
+      const regexFailingOwnerClass = ownerClassMatch?.[1] || undefined
       const ownerNameMatch = errorString.match(/failingOwnerName['":\s]+([a-z_]+)/i)
-      const failingOwnerName = ownerNameMatch?.[1] || undefined
+      const regexFailingOwnerName = ownerNameMatch?.[1] || undefined
+      
+      // FINAL VALUES: Prefer structured context, fallback to regex
+      const exactBuilderCorridor = structuredExactBuilderCorridor || regexExactBuilderCorridor
+      const exactLocalStep = structuredExactLocalStep || regexExactLocalStep
+      const lastSuccessfulPostAllocationCheckpoint = structuredLastSuccessfulPostAllocationCheckpoint || regexLastSuccessfulPostAllocationCheckpoint
+      const failingOwnerClass = structuredFailingOwnerClass || regexFailingOwnerClass
+      const failingOwnerName = structuredFailingOwnerName || regexFailingOwnerName
+      const compactBuilderErrorFromContext = structuredCompactBuilderError || errorString.substring(0, 200)
       
       console.log('[authoritative-generation-builder-error]', {
         generationIntent: request.generationIntent,
@@ -791,19 +834,21 @@ export async function executeAuthoritativeGeneration(
         error: `Builder failed: ${errorString}`,
         failedStage,
         // [PHASE 15E] Include exact substep info in result
-        exactFailingSubstep: isPhase15eCrash ? exactFailingSubstep : undefined,
-        exactLastSafeSubstep: isPhase15eCrash ? exactLastSafeSubstep : undefined,
-        // [POST-TRUTH-CORRIDOR] Include corridor diagnostic info
+        exactFailingSubstep: isPhase15eCrash ? exactFailingSubstep : (structuredExactLastSafeSubstep || undefined),
+        exactLastSafeSubstep: isPhase15eCrash ? exactLastSafeSubstep : (structuredExactLastSafeSubstep || undefined),
+        // [POST-TRUTH-CORRIDOR] Include corridor diagnostic info - STRUCTURED CONTEXT PREFERRED
         exactBuilderCorridor,
         exactLocalStep,
-        compactBuilderError: errorString.substring(0, 200),
+        compactBuilderError: compactBuilderErrorFromContext,
         compactStackPreview: errorStack?.split('\n').slice(0, 5).join(' | '),
         degradationAttempted: errorStack?.includes('safeDegradationApplied') || false,
         fallbackApplied: errorStack?.includes('fallbackApplied') || errorString.includes('fallback'),
-        // [POST_ALLOCATION_HANDOFF_FIX] Include owner corridor fields
+        // [POST_ALLOCATION_HANDOFF_FIX] Include owner corridor fields - STRUCTURED CONTEXT PREFERRED
         lastSuccessfulPostAllocationCheckpoint,
         failingOwnerClass,
         failingOwnerName,
+        // Source tracking for debugging
+        failureContextSource: hasStructuredContext ? 'structured_context' : 'regex_fallback',
         timings: getTimings(),
         totalElapsedMs: Date.now() - startTime,
         parityVerdict: buildParityVerdict(request, false),

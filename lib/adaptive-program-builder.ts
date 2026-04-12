@@ -4487,6 +4487,21 @@ function createGenerationError(
     ? ` | context: ${JSON.stringify(context)}`
     : ''
   
+  // [BUILDER_POST_ALLOCATION_STRUCTURED_FAILURE] Log once when structured failure is created
+  if (context?.exactBuilderCorridor) {
+    console.error('[BUILDER_POST_ALLOCATION_STRUCTURED_FAILURE]', {
+      fingerprint: 'STRUCTURED_FAILURE_V1_2026_04_12',
+      exactBuilderCorridor: context.exactBuilderCorridor,
+      exactLocalStep: context.exactLocalStep ?? 'not_in_context',
+      exactLastSafeSubstep: context.exactLastSafeSubstep ?? 'not_in_context',
+      compactBuilderError: (context.compactBuilderError as string)?.slice(0, 80) ?? 'not_in_context',
+      lastSuccessfulPostAllocationCheckpoint: context.lastSuccessfulPostAllocationCheckpoint ?? 'not_in_context',
+      failingOwnerClass: context.failingOwnerClass ?? 'not_in_context',
+      failingOwnerName: context.failingOwnerName ?? 'not_in_context',
+      source: 'structured_context',
+    })
+  }
+  
   return new GenerationError(normalizedCode, stage, message + contextSuffix, context)
 }
 

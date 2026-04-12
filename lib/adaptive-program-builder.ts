@@ -7678,119 +7678,241 @@ async function generateAdaptiveProgramImpl(
   })
   
   // ==========================================================================
-  // [POST_ALLOCATION_OWNER_BRIDGE_ENTRY] Create single authoritative bridge
+  // [POST_ALLOCATION_MICRO_CORRIDOR] Deterministic micro-step isolation
   // ==========================================================================
-  // This bridge ensures ALL downstream session-entry consumers use contract-based
-  // values instead of mixed raw/legacy reads. Once this bridge is created, no
-  // downstream owner may bypass it to read selectedSkillsFromProfile or raw
-  // canonicalProfile fields directly.
+  // This micro-corridor ensures EVERY step between POST_ALLOCATION_TRACE_ENTRY
+  // and POST_ALLOCATION_ALLOCATOR_ENTRY is explicitly checkpointed. If any step
+  // fails, the exact first throw site is captured with precise diagnostics.
   // ==========================================================================
-  console.log('[POST_ALLOCATION_OWNER_BRIDGE_ENTRY]', {
-    fingerprint: 'POST_ALLOCATION_BRIDGE_V1_2026_04_12',
-    corridorOwner: 'post_allocation_owner_bridge',
-    localStep: 'bridge_creation_entry',
-    exactLastSafeSubstep: 'post_allocation_trace_entry',
-    verdict: 'CREATING_AUTHORITATIVE_BRIDGE',
-  })
   
-  // Create the authoritative post-allocation bridge object
-  // ALL downstream session-entry logic MUST source from this bridge, NOT from
-  // selectedSkillsFromProfile or raw canonicalProfile reads
-  const postAllocationOwnerBridge = {
-    // Source: multiSkillMaterialityContract (AUTHORITATIVE for selected skills)
-    selectedSkills: multiSkillMaterialityContract.selectedSkills || [],
-    primaryGoal: multiSkillMaterialityContract.primaryGoal || '',
-    secondaryGoal: multiSkillMaterialityContract.secondaryGoal || null,
-    materialSkillIntent: multiSkillMaterialityContract.materialSkillIntent || [],
-    experienceLevel: multiSkillMaterialityContract.experienceLevel || 'intermediate',
-    jointCautions: multiSkillMaterialityContract.jointCautions || [],
-    equipmentAvailable: multiSkillMaterialityContract.equipmentAvailable || [],
-    currentWorkingProgressions: multiSkillMaterialityContract.currentWorkingProgressions || {},
-    
-    // Source: multiSkillAllocationContract (AUTHORITATIVE for allocation decisions)
-    representedSkills: multiSkillAllocationContract?.representedSkills || [],
-    supportExpressedSkills: multiSkillAllocationContract?.supportExpressedSkills || [],
-    supportRotationalSkills: multiSkillAllocationContract?.supportRotationalSkills || [],
-    deferredSkills: multiSkillAllocationContract?.deferredSkills || [],
-    allocationEntries: multiSkillAllocationContract?.entries || [],
-    
-    // Source: effective training days (already normalized)
-    effectiveTrainingDays,
-    
-    // Bridge metadata
-    bridgeVersion: 'v1_2026_04_12',
-    sourceContracts: ['multiSkillMaterialityContract', 'multiSkillAllocationContract'],
-    legacyReadsEliminated: ['selectedSkillsFromProfile', 'canonicalProfile.primaryGoal', 'canonicalProfile.secondaryGoal'],
+  let postAllocationOwnerBridge: {
+    selectedSkills: string[]
+    primaryGoal: string
+    secondaryGoal: string | null
+    materialSkillIntent: MaterialSkillIntentEntry[]
+    experienceLevel: string
+    jointCautions: string[]
+    equipmentAvailable: string[]
+    currentWorkingProgressions: Record<string, CurrentWorkingProgression>
+    representedSkills: string[]
+    supportExpressedSkills: string[]
+    supportRotationalSkills: string[]
+    deferredSkills: Array<{ skill: string; reason: string }>
+    allocationEntries: MultiSkillSessionAllocationEntry[]
+    effectiveTrainingDays: number
+    bridgeVersion: string
+    sourceContracts: string[]
+    legacyReadsEliminated: string[]
   }
   
-  // Validate bridge completeness
-  const bridgeValid = 
-    Array.isArray(postAllocationOwnerBridge.selectedSkills) &&
-    postAllocationOwnerBridge.selectedSkills.length > 0 &&
-    typeof postAllocationOwnerBridge.primaryGoal === 'string' &&
-    Array.isArray(postAllocationOwnerBridge.materialSkillIntent)
-  
-  console.log('[POST_ALLOCATION_OWNER_BRIDGE_AUDIT]', {
-    fingerprint: 'POST_ALLOCATION_BRIDGE_V1_2026_04_12',
-    corridorOwner: 'post_allocation_owner_bridge',
-    localStep: 'bridge_validation',
-    exactLastSafeSubstep: 'bridge_creation_entry',
-    // Bridge contents
-    selectedSkillsCount: postAllocationOwnerBridge.selectedSkills.length,
-    selectedSkillsSource: 'multiSkillMaterialityContract.selectedSkills',
-    primaryGoal: postAllocationOwnerBridge.primaryGoal || 'EMPTY',
-    primaryGoalSource: 'multiSkillMaterialityContract.primaryGoal',
-    secondaryGoal: postAllocationOwnerBridge.secondaryGoal || 'NONE',
-    secondaryGoalSource: 'multiSkillMaterialityContract.secondaryGoal',
-    materialSkillIntentCount: postAllocationOwnerBridge.materialSkillIntent.length,
-    representedSkillsCount: postAllocationOwnerBridge.representedSkills.length,
-    supportExpressedSkillsCount: postAllocationOwnerBridge.supportExpressedSkills.length,
-    supportRotationalSkillsCount: postAllocationOwnerBridge.supportRotationalSkills.length,
-    deferredSkillsCount: postAllocationOwnerBridge.deferredSkills.length,
-    effectiveTrainingDays: postAllocationOwnerBridge.effectiveTrainingDays,
-    // Validation
-    bridgeValid,
-    legacyReadsRequired: false,
-    verdict: bridgeValid ? 'BRIDGE_VALID_DOWNSTREAM_ALLOWED' : 'BRIDGE_INVALID_DOWNSTREAM_BLOCKED',
-  })
-  
-  if (!bridgeValid) {
-    console.error('[POST_ALLOCATION_OWNER_BRIDGE_FAIL]', {
-      fingerprint: 'POST_ALLOCATION_BRIDGE_V1_2026_04_12',
-      corridorOwner: 'post_allocation_owner_bridge',
-      localStep: 'bridge_validation_failed',
-      exactLastSafeSubstep: 'bridge_creation_entry',
+  try {
+    // ==========================================================================
+    // MICRO-STEP 1: Capture materiality contract inputs
+    // ==========================================================================
+    console.log('[POST_ALLOCATION_MICRO_STEP_1_ENTRY]', {
+      fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
+      corridorOwner: 'post_allocation_micro_corridor',
+      localStep: 'materiality_contract_capture',
+      exactLastSafeSubstep: 'post_allocation_trace_entry',
+      objectBeingTouched: 'multiSkillMaterialityContract',
+      verdict: 'CAPTURING_MATERIALITY_INPUTS',
+    })
+    
+    const microStep1_selectedSkills = multiSkillMaterialityContract?.selectedSkills || []
+    const microStep1_primaryGoal = multiSkillMaterialityContract?.primaryGoal || ''
+    const microStep1_secondaryGoal = multiSkillMaterialityContract?.secondaryGoal || null
+    const microStep1_materialSkillIntent = multiSkillMaterialityContract?.materialSkillIntent || []
+    const microStep1_experienceLevel = multiSkillMaterialityContract?.experienceLevel || 'intermediate'
+    const microStep1_jointCautions = multiSkillMaterialityContract?.jointCautions || []
+    const microStep1_equipmentAvailable = multiSkillMaterialityContract?.equipmentAvailable || []
+    const microStep1_currentWorkingProgressions = multiSkillMaterialityContract?.currentWorkingProgressions || {}
+    
+    console.log('[POST_ALLOCATION_MICRO_STEP_1_PASS]', {
+      fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
+      corridorOwner: 'post_allocation_micro_corridor',
+      localStep: 'materiality_contract_capture_complete',
+      exactLastSafeSubstep: 'materiality_contract_capture',
+      selectedSkillsCount: microStep1_selectedSkills.length,
+      primaryGoal: microStep1_primaryGoal || 'EMPTY',
+      materialSkillIntentCount: microStep1_materialSkillIntent.length,
+      verdict: 'STEP_1_PASSED_CONTINUING',
+    })
+    
+    // ==========================================================================
+    // MICRO-STEP 2: Capture allocation contract inputs
+    // ==========================================================================
+    console.log('[POST_ALLOCATION_MICRO_STEP_2_ENTRY]', {
+      fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
+      corridorOwner: 'post_allocation_micro_corridor',
+      localStep: 'allocation_contract_capture',
+      exactLastSafeSubstep: 'materiality_contract_capture_complete',
+      objectBeingTouched: 'multiSkillAllocationContract',
+      hasAllocationContract: !!multiSkillAllocationContract,
+      verdict: 'CAPTURING_ALLOCATION_INPUTS',
+    })
+    
+    const microStep2_representedSkills = multiSkillAllocationContract?.representedSkills || []
+    const microStep2_supportExpressedSkills = multiSkillAllocationContract?.supportExpressedSkills || []
+    const microStep2_supportRotationalSkills = multiSkillAllocationContract?.supportRotationalSkills || []
+    const microStep2_deferredSkills = multiSkillAllocationContract?.deferredSkills || []
+    const microStep2_allocationEntries = multiSkillAllocationContract?.entries || []
+    
+    console.log('[POST_ALLOCATION_MICRO_STEP_2_PASS]', {
+      fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
+      corridorOwner: 'post_allocation_micro_corridor',
+      localStep: 'allocation_contract_capture_complete',
+      exactLastSafeSubstep: 'allocation_contract_capture',
+      representedSkillsCount: microStep2_representedSkills.length,
+      supportExpressedSkillsCount: microStep2_supportExpressedSkills.length,
+      supportRotationalSkillsCount: microStep2_supportRotationalSkills.length,
+      deferredSkillsCount: microStep2_deferredSkills.length,
+      allocationEntriesCount: microStep2_allocationEntries.length,
+      verdict: 'STEP_2_PASSED_CONTINUING',
+    })
+    
+    // ==========================================================================
+    // MICRO-STEP 3: Construct bridge object
+    // ==========================================================================
+    console.log('[POST_ALLOCATION_MICRO_STEP_3_ENTRY]', {
+      fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
+      corridorOwner: 'post_allocation_micro_corridor',
+      localStep: 'bridge_object_construction',
+      exactLastSafeSubstep: 'allocation_contract_capture_complete',
+      objectBeingCreated: 'postAllocationOwnerBridge',
+      verdict: 'CONSTRUCTING_BRIDGE_OBJECT',
+    })
+    
+    postAllocationOwnerBridge = {
+      selectedSkills: microStep1_selectedSkills,
+      primaryGoal: microStep1_primaryGoal,
+      secondaryGoal: microStep1_secondaryGoal,
+      materialSkillIntent: microStep1_materialSkillIntent,
+      experienceLevel: microStep1_experienceLevel,
+      jointCautions: microStep1_jointCautions,
+      equipmentAvailable: microStep1_equipmentAvailable,
+      currentWorkingProgressions: microStep1_currentWorkingProgressions,
+      representedSkills: microStep2_representedSkills,
+      supportExpressedSkills: microStep2_supportExpressedSkills,
+      supportRotationalSkills: microStep2_supportRotationalSkills,
+      deferredSkills: microStep2_deferredSkills,
+      allocationEntries: microStep2_allocationEntries,
+      effectiveTrainingDays,
+      bridgeVersion: 'v1_2026_04_12',
+      sourceContracts: ['multiSkillMaterialityContract', 'multiSkillAllocationContract'],
+      legacyReadsEliminated: ['selectedSkillsFromProfile', 'canonicalProfile.primaryGoal', 'canonicalProfile.secondaryGoal'],
+    }
+    
+    console.log('[POST_ALLOCATION_MICRO_STEP_3_PASS]', {
+      fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
+      corridorOwner: 'post_allocation_micro_corridor',
+      localStep: 'bridge_object_construction_complete',
+      exactLastSafeSubstep: 'bridge_object_construction',
+      bridgeObjectCreated: true,
+      verdict: 'STEP_3_PASSED_CONTINUING',
+    })
+    
+    // ==========================================================================
+    // MICRO-STEP 4: Validate bridge completeness
+    // ==========================================================================
+    console.log('[POST_ALLOCATION_MICRO_STEP_4_ENTRY]', {
+      fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
+      corridorOwner: 'post_allocation_micro_corridor',
+      localStep: 'bridge_validation',
+      exactLastSafeSubstep: 'bridge_object_construction_complete',
+      verdict: 'VALIDATING_BRIDGE',
+    })
+    
+    const bridgeValid = 
+      Array.isArray(postAllocationOwnerBridge.selectedSkills) &&
+      postAllocationOwnerBridge.selectedSkills.length > 0 &&
+      typeof postAllocationOwnerBridge.primaryGoal === 'string' &&
+      Array.isArray(postAllocationOwnerBridge.materialSkillIntent)
+    
+    console.log('[POST_ALLOCATION_MICRO_STEP_4_PASS]', {
+      fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
+      corridorOwner: 'post_allocation_micro_corridor',
+      localStep: 'bridge_validation_complete',
+      exactLastSafeSubstep: 'bridge_validation',
+      bridgeValid,
       selectedSkillsCount: postAllocationOwnerBridge.selectedSkills.length,
       primaryGoal: postAllocationOwnerBridge.primaryGoal || 'EMPTY',
       materialSkillIntentCount: postAllocationOwnerBridge.materialSkillIntent.length,
-      reason: postAllocationOwnerBridge.selectedSkills.length === 0 
-        ? 'selected_skills_empty' 
-        : 'unknown_validation_failure',
-      verdict: 'BRIDGE_FAILED_CANNOT_CONTINUE',
+      verdict: bridgeValid ? 'STEP_4_PASSED_BRIDGE_VALID' : 'STEP_4_PASSED_BUT_BRIDGE_INVALID',
+    })
+    
+    if (!bridgeValid) {
+      console.error('[POST_ALLOCATION_OWNER_BRIDGE_FAIL]', {
+        fingerprint: 'POST_ALLOCATION_BRIDGE_V1_2026_04_12',
+        corridorOwner: 'post_allocation_owner_bridge',
+        localStep: 'bridge_validation_failed',
+        exactLastSafeSubstep: 'bridge_validation_complete',
+        selectedSkillsCount: postAllocationOwnerBridge.selectedSkills.length,
+        primaryGoal: postAllocationOwnerBridge.primaryGoal || 'EMPTY',
+        materialSkillIntentCount: postAllocationOwnerBridge.materialSkillIntent.length,
+        reason: postAllocationOwnerBridge.selectedSkills.length === 0 
+          ? 'selected_skills_empty' 
+          : 'unknown_validation_failure',
+        verdict: 'BRIDGE_FAILED_CANNOT_CONTINUE',
+      })
+      
+      throw createGenerationError(
+        'post_allocation_owner_bridge_invalid',
+        stageTracker.current,
+        `Post-allocation owner bridge validation failed: selectedSkills=${postAllocationOwnerBridge.selectedSkills.length}, primaryGoal=${postAllocationOwnerBridge.primaryGoal || 'EMPTY'}`,
+        {
+          exactBuilderCorridor: 'post_allocation_owner_bridge',
+          exactLocalStep: 'bridge_validation_failed',
+          exactLastSafeSubstep: 'bridge_validation_complete',
+          compactBuilderError: 'Bridge validation failed - required contract values missing',
+        }
+      )
+    }
+    
+    console.log('[POST_ALLOCATION_OWNER_BRIDGE_PASS]', {
+      fingerprint: 'POST_ALLOCATION_BRIDGE_V1_2026_04_12',
+      corridorOwner: 'post_allocation_owner_bridge',
+      localStep: 'bridge_validation_passed',
+      exactLastSafeSubstep: 'bridge_validation_complete',
+      selectedSkillsCount: postAllocationOwnerBridge.selectedSkills.length,
+      primaryGoal: postAllocationOwnerBridge.primaryGoal,
+      verdict: 'BRIDGE_PASSED_SESSION_ENTRY_ALLOWED',
+    })
+    
+  } catch (microCorridorError) {
+    // Capture exact first throw site
+    const errorMessage = microCorridorError instanceof Error ? microCorridorError.message : String(microCorridorError)
+    const errorStack = microCorridorError instanceof Error ? microCorridorError.stack?.split('\n').slice(0, 5).join('\n') : undefined
+    
+    // Check if this was already a wrapped GenerationError
+    if (errorMessage.includes('post_allocation_owner_bridge_invalid')) {
+      throw microCorridorError // Re-throw the already-wrapped error
+    }
+    
+    console.error('[POST_ALLOCATION_MICRO_CORRIDOR_FAIL]', {
+      fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
+      corridorOwner: 'post_allocation_micro_corridor',
+      localStep: 'micro_corridor_first_throw',
+      exactLastSafeSubstep: 'post_allocation_trace_entry',
+      error: errorMessage,
+      errorStack,
+      failureZone: 'between_trace_entry_and_bridge_pass',
+      multiSkillMaterialityContractExists: !!multiSkillMaterialityContract,
+      multiSkillAllocationContractExists: !!multiSkillAllocationContract,
+      verdict: 'MICRO_CORRIDOR_FAILED_EXACT_SITE_CAPTURED',
     })
     
     throw createGenerationError(
-      'post_allocation_owner_bridge_invalid',
+      'post_allocation_micro_corridor_failed',
       stageTracker.current,
-      `Post-allocation owner bridge validation failed: selectedSkills=${postAllocationOwnerBridge.selectedSkills.length}, primaryGoal=${postAllocationOwnerBridge.primaryGoal || 'EMPTY'}`,
+      `Post-allocation micro-corridor failed: ${errorMessage}`,
       {
-        exactBuilderCorridor: 'post_allocation_owner_bridge',
-        exactLocalStep: 'bridge_validation_failed',
-        exactLastSafeSubstep: 'bridge_creation_entry',
-        compactBuilderError: 'Bridge validation failed - required contract values missing',
+        exactBuilderCorridor: 'post_allocation_micro_corridor',
+        exactLocalStep: 'micro_corridor_first_throw',
+        exactLastSafeSubstep: 'post_allocation_trace_entry',
+        compactBuilderError: errorMessage,
       }
     )
   }
-  
-  console.log('[POST_ALLOCATION_OWNER_BRIDGE_PASS]', {
-    fingerprint: 'POST_ALLOCATION_BRIDGE_V1_2026_04_12',
-    corridorOwner: 'post_allocation_owner_bridge',
-    localStep: 'bridge_validation_passed',
-    exactLastSafeSubstep: 'bridge_validation',
-    selectedSkillsCount: postAllocationOwnerBridge.selectedSkills.length,
-    primaryGoal: postAllocationOwnerBridge.primaryGoal,
-    verdict: 'BRIDGE_PASSED_SESSION_ENTRY_ALLOWED',
-  })
   
   // ==========================================================================
   // [WEEKLY-EXPRESSION-ALLOCATOR] AUTHORITATIVE UPSTREAM WEEKLY PLANNING CONTRACT

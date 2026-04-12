@@ -287,6 +287,9 @@ export async function POST(request: Request) {
       },
     }
     
+    // Check if we have the required failure metadata
+    const hasRequiredMetadata = !!(exactBuilderCorridor || exactLocalStep) && !!compactBuilderError
+    
     console.log('[REGENERATE_ROUTE_FAILURE_PAYLOAD]', {
       fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
       payloadKeys: Object.keys(failurePayload),
@@ -295,8 +298,21 @@ export async function POST(request: Request) {
       exactLocalStep: failurePayload.exactLocalStep ?? null,
       compactBuilderErrorPreview: failurePayload.compactBuilderError?.slice(0, 60) ?? null,
       hasDiagnostics: !!failurePayload.diagnostics,
-      verdict: 'PAYLOAD_READY_FOR_CLIENT',
+      hasRequiredMetadata,
+      verdict: hasRequiredMetadata ? 'PAYLOAD_READY_FOR_CLIENT' : 'RUNTIME_FAILURE_METADATA_MISSING',
     })
+    
+    // Log warning if metadata is missing despite builder/runtime failure
+    if (!hasRequiredMetadata && result.failedStage) {
+      console.error('[RUNTIME_FAILURE_METADATA_MISSING]', {
+        fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+        failedStage: result.failedStage,
+        exactBuilderCorridor: exactBuilderCorridor ?? 'MISSING',
+        exactLocalStep: exactLocalStep ?? 'MISSING',
+        compactBuilderError: compactBuilderError ?? 'MISSING',
+        verdict: 'RUNTIME_FAILURE_METADATA_MISSING',
+      })
+    }
     
     // ==========================================================================
     // [AUTHORITATIVE_POST_ALLOCATION_FAILURE_SUMMARY] ONE authoritative summary

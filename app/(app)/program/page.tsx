@@ -7518,21 +7518,24 @@ export default function ProgramPage() {
         // ==========================================================================
         const rebuildFailureSummary = serverResult.rebuildFailureSummary ?? null
         
-        // [PAGE-RESPONSE-TRUTH-AUDIT] Log exactly what the page received from the route
-        console.log('[page-response-truth-audit]', {
+        // ==========================================================================
+        // [REGENERATE_OUTCOME_PAGE] Consume authoritative outcome from route
+        // The route now provides a pre-computed authoritative outcome contract
+        // ==========================================================================
+        const routeAuthoritativeOutcome = serverResult.authoritativeOutcome ?? null
+        
+        console.log('[REGENERATE_OUTCOME_PAGE]', {
+          hasRouteOutcome: !!routeAuthoritativeOutcome,
+          routeOutcomeMode: routeAuthoritativeOutcome?.outcomeMode ?? 'NOT_PROVIDED',
+          routeShouldPromote: routeAuthoritativeOutcome?.shouldPromoteProgram ?? 'NOT_PROVIDED',
+          routeShouldPreserve: routeAuthoritativeOutcome?.shouldPreserveLastGood ?? 'NOT_PROVIDED',
+          routeShouldClearFailure: routeAuthoritativeOutcome?.shouldClearFailureState ?? 'NOT_PROVIDED',
+          routeTotalDegraded: routeAuthoritativeOutcome?.totalDegraded ?? 'NOT_PROVIDED',
           httpOk: serverResponse.ok,
           serverResultSuccess: serverResult.success,
           hasProgram: !!serverResult.program,
           sessionCount: serverResult.program?.sessions?.length ?? 0,
-          hasSummary: !!rebuildFailureSummary,
-          totalDegraded: rebuildFailureSummary?.totalDegraded ?? 0,
-          totalAttempted: rebuildFailureSummary?.totalAttempted ?? 0,
-          totalSucceeded: rebuildFailureSummary?.totalSucceeded ?? 0,
-          firstFailedCheckpoint: rebuildFailureSummary?.firstFailedCheckpoint ?? null,
-          firstFailedFocus: rebuildFailureSummary?.firstFailedFocus ?? null,
-          firstFailedIndex: rebuildFailureSummary?.firstFailedIndex ?? null,
-          uiWillClassifyAs: (rebuildFailureSummary?.totalDegraded ?? 0) > 0 ? 'DEGRADED_SUCCESS' : 'HEALTHY_SUCCESS',
-          verdict: 'PAGE_RECEIVED_ROUTE_RESPONSE',
+          verdict: routeAuthoritativeOutcome?.outcomeMode ?? 'FALLBACK_TO_LOCAL_CLASSIFICATION',
         })
         const totalDegraded = rebuildFailureSummary?.totalDegraded ?? 0
         const hasDegradedSessions = totalDegraded > 0
@@ -13409,9 +13412,29 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               })
               return null
             })()}
-            {/* [program-rebuild-truth] ISSUE B/C: Show rebuild failed warning if last build failed */}
-            {/* [PHASE 16S/16T] Use truth-gated result to prevent stale banner display */}
-            {/* [PHASE 16T] STRICT: Only render if NOT hydrated and matches current runtime */}
+            {/* ==========================================================================
+               [REGENERATE_BANNER_RENDER_GATE] Authoritative banner render decision
+               This is THE final gate that decides if the red banner renders
+               ========================================================================== */}
+            {(() => {
+              const bannerEligible = truthGatedBuildResult?.status === 'preserved_last_good' &&
+                truthGatedBuildResult?.hydratedFromStorage !== true &&
+                truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current
+              
+              console.log('[REGENERATE_BANNER_RENDER_GATE]', {
+                truthGatedBuildResultExists: !!truthGatedBuildResult,
+                status: truthGatedBuildResult?.status ?? 'null',
+                hydratedFromStorage: truthGatedBuildResult?.hydratedFromStorage ?? 'null',
+                truthGatedRuntimeSessionId: truthGatedBuildResult?.runtimeSessionId ?? 'null',
+                currentRuntimeSessionId: runtimeSessionIdRef.current,
+                runtimeSessionIdMatch: truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current,
+                bannerEligible,
+                attemptId: truthGatedBuildResult?.attemptId ?? 'null',
+                totalDegraded: (truthGatedBuildResult as any)?.totalDegraded ?? 'NOT_ON_OBJECT',
+                verdict: bannerEligible ? 'BANNER_WILL_RENDER_RED_CARD' : 'BANNER_BLOCKED_CONDITIONS_NOT_MET',
+              })
+              return null
+            })()}
             {truthGatedBuildResult?.status === 'preserved_last_good' && 
              truthGatedBuildResult?.hydratedFromStorage !== true &&
              truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current && (

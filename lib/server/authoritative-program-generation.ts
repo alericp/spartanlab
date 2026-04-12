@@ -691,9 +691,11 @@ export async function executeAuthoritativeGeneration(
       const exactLastSafeSubstep = exactLastSafeSubstepMatch?.[1] || 'unknown'
       
       // [POST-TRUTH-CORRIDOR] Extract corridor info from GenerationError context
+      // Now supports consolidated post_allocation_owner_corridor
       const isCorridorError = errorString.includes('exactBuilderCorridor') || 
                               errorString.includes('post_truth_audit_to_structure_selection') ||
                               errorString.includes('post_funnel_allocation_to_session_entry') ||
+                              errorString.includes('post_allocation_owner_corridor') ||
                               errorString.includes('post_allocation_to_weekly_allocator') ||
                               errorString.includes('post_allocation_to_visible_week')
       const corridorMatch = errorString.match(/exactBuilderCorridor['":\s]+([a-z_]+)/i)
@@ -702,20 +704,27 @@ export async function executeAuthoritativeGeneration(
       const isPostFunnelContractError = errorString.includes('post_funnel_contract_validation_failed') ||
                                         errorString.includes('POST_FUNNEL_CONTRACT_GATE')
       
+      // [POST_ALLOCATION_OWNER_CORRIDOR] Detect consolidated post-allocation corridor failures
+      const isOwnerCorridorError = errorString.includes('post_allocation_owner_corridor_failed') ||
+                                   errorString.includes('POST_ALLOCATION_OWNER_CORRIDOR_FAIL')
+      
       // [POST_ALLOCATION] Detect post-allocation bridge failures (weekly allocator / visible week)
-      const isPostAllocationError = errorString.includes('post_allocation_weekly_allocator_failed') ||
+      const isPostAllocationError = isOwnerCorridorError ||
+                                    errorString.includes('post_allocation_weekly_allocator_failed') ||
                                     errorString.includes('post_allocation_visible_week_failed') ||
                                     errorString.includes('POST_ALLOCATION_ALLOCATOR_FAIL') ||
                                     errorString.includes('POST_ALLOCATION_VISIBLE_WEEK_FAIL') ||
                                     errorString.includes('ALLOCATOR_INPUT_VALIDATION_FAIL')
       
       const exactBuilderCorridor = corridorMatch?.[1] || 
-        (isPostAllocationError ? 'post_allocation_to_weekly_allocator' :
+        (isOwnerCorridorError ? 'post_allocation_owner_corridor' :
+         isPostAllocationError ? 'post_allocation_to_weekly_allocator' :
          isPostFunnelContractError ? 'post_funnel_allocation_to_session_entry' :
          errorString.includes('structure_selection') ? 'post_truth_audit_to_structure_selection' : 'unknown')
       const localStepMatch = errorString.match(/exactLocalStep['":\s]+([a-z_]+)/i)
       const exactLocalStep = localStepMatch?.[1] || 
-        (isPostAllocationError ? 'weekly_allocator_or_visible_week' :
+        (isOwnerCorridorError ? 'owner_corridor_failure' :
+         isPostAllocationError ? 'weekly_allocator_or_visible_week' :
          isPostFunnelContractError ? 'contract_validation' : 'unknown')
       
       console.log('[authoritative-generation-builder-error]', {

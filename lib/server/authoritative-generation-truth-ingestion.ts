@@ -338,7 +338,8 @@ function computeQuality(presentCount: number, totalFields: number): SignalQualit
 
 function buildProfileTruthBlock(
   callerProfile: Partial<CanonicalProgrammingProfile> | undefined,
-  callerInputs: Partial<AdaptiveProgramInputs> | undefined
+  callerInputs: Partial<AdaptiveProgramInputs> | undefined,
+  dbUserId?: string  // [PROTECTED_FUNNEL_IDENTITY] Server-resolved identity for repair
 ): ProfileTruthBlock {
   // [SERVER-SIDE-ROOT-CAUSE-FIX] getCanonicalProfile() uses localStorage which is unavailable server-side.
   // On the server, the caller-provided profile IS the authoritative source.
@@ -409,8 +410,62 @@ function buildProfileTruthBlock(
   const defaultedFields: string[] = []
   const evidence: string[] = []
   
+  // ==========================================================================
+  // [PROTECTED_FUNNEL_IDENTITY_ENTRY] Identity ingress audit
+  // ==========================================================================
+  const callerUserId = callerProfile?.userId
+  const profileUserId = authoritativeProfile.userId
+  const serverUserId = dbUserId
+  
+  console.log('[PROTECTED_FUNNEL_IDENTITY_ENTRY]', {
+    fingerprint: 'IDENTITY_INGRESS_2026_04_11_V1',
+    callerUserId: callerUserId?.slice(0, 12) || 'missing',
+    profileUserId: profileUserId?.slice(0, 12) || 'missing',
+    serverUserId: serverUserId?.slice(0, 12) || 'missing',
+    callerHasUserId: !!callerUserId,
+    profileHasUserId: !!profileUserId,
+    serverHasUserId: !!serverUserId,
+    isServerSide,
+  })
+  
   // Merge caller profile with tracking
   const merged = { ...authoritativeProfile }
+  
+  // ==========================================================================
+  // [PROTECTED_FUNNEL_IDENTITY_REPAIR] Authoritative identity stitch
+  // If server resolved dbUserId is available, it MUST be stitched into the
+  // canonical profile. This is the SINGLE authoritative identity repair point.
+  // ==========================================================================
+  let identityRepaired = false
+  let identitySource: 'server_resolved' | 'caller_provided' | 'profile_existing' | 'missing' = 'missing'
+  
+  if (serverUserId) {
+    // Server identity is authoritative - always use it
+    merged.userId = serverUserId
+    identityRepaired = !profileUserId || profileUserId !== serverUserId
+    identitySource = 'server_resolved'
+    
+    if (identityRepaired) {
+      evidence.push(`Identity repaired from server: ${serverUserId.slice(0, 12)}...`)
+    }
+  } else if (callerUserId) {
+    // Fallback to caller-provided userId if no server identity
+    merged.userId = callerUserId
+    identitySource = 'caller_provided'
+    evidence.push(`Identity from caller: ${callerUserId.slice(0, 12)}...`)
+  } else if (profileUserId) {
+    // Keep existing profile userId
+    identitySource = 'profile_existing'
+  }
+  
+  console.log('[PROTECTED_FUNNEL_IDENTITY_REPAIR]', {
+    fingerprint: 'IDENTITY_INGRESS_2026_04_11_V1',
+    identityRepaired,
+    identitySource,
+    finalUserId: merged.userId?.slice(0, 12) || 'STILL_MISSING',
+    serverUserIdUsed: serverUserId ? true : false,
+    verdict: merged.userId ? 'IDENTITY_ESTABLISHED' : 'IDENTITY_STILL_MISSING',
+  })
   
   if (callerProfile) {
     // Track each override
@@ -1232,7 +1287,8 @@ export async function buildAuthoritativeGenerationTruthIngestion(
   }
   
   // STEP 2: Build base truth blocks from caller-provided data
-  const baseProfileTruth = buildProfileTruthBlock(input.callerCanonicalProfile, input.callerBuilderInputs)
+  // [PROTECTED_FUNNEL_IDENTITY] Pass server-resolved dbUserId for authoritative identity stitch
+  const baseProfileTruth = buildProfileTruthBlock(input.callerCanonicalProfile, input.callerBuilderInputs, input.dbUserId)
   const baseRecoveryTruth = buildRecoveryTruthBlock(input.trainingFeedback)
   const baseAdherenceTruth = buildAdherenceTruthBlock(input.trainingFeedback)
   const baseExecutionTruth = buildExecutionTruthBlock(input.trainingFeedback)

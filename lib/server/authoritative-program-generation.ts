@@ -366,6 +366,73 @@ export async function executeAuthoritativeGeneration(
   markStage('truth_ingestion_complete')
   
   // ==========================================================================
+  // [PROTECTED_FUNNEL_IDENTITY_ASSERT] Identity gate - fail early if missing
+  // This is the authoritative identity assertion point. NO generation may
+  // proceed past this point without a valid userId in the canonical profile.
+  // ==========================================================================
+  const profileUserId = truthIngestion.profileTruth.canonicalProfile?.userId
+  const requestUserId = request.dbUserId
+  
+  console.log('[PROTECTED_FUNNEL_IDENTITY_ASSERT]', {
+    fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+    profileUserId: profileUserId?.slice(0, 12) || 'MISSING',
+    requestUserId: requestUserId?.slice(0, 12) || 'MISSING',
+    identityMatch: profileUserId === requestUserId,
+    profileQuality: truthIngestion.profileTruth.quality,
+    generationIntent: request.generationIntent,
+  })
+  
+  if (!profileUserId) {
+    console.log('[IDENTITY_INGRESS_HARD_FAIL]', {
+      fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+      reason: 'profile_userId_missing_after_truth_ingestion',
+      requestUserId: requestUserId?.slice(0, 12),
+      profileQuality: truthIngestion.profileTruth.quality,
+      verdict: 'GENERATION_BLOCKED_IDENTITY_MISSING',
+    })
+    
+    return {
+      success: false,
+      error: 'Identity ingress failed: canonical profile missing userId after truth ingestion',
+      failedStage: 'identity_assertion',
+      exactFailingSubstep: 'protected_funnel_identity_assert',
+      exactLastSafeSubstep: 'truth_ingestion_complete',
+      compactBuilderError: 'Profile userId was not established during truth ingestion - check server auth and profile repair',
+      timings: getTimings(),
+      totalElapsedMs: Date.now() - startTime,
+      parityVerdict: {
+        generationIntent: request.generationIntent,
+        triggerSource: request.triggerSource,
+        sameTruthExtractorUsed: false,
+        sameAuthoritativeOwnerUsed: true,
+        sameBuilderCallContractUsed: false,
+        sameSaveContractUsed: false,
+        sameTruthExplanationAttached: false,
+        verdict: 'NO_PARITY',
+      },
+    }
+  }
+  
+  // Verify identity consistency (profile should match request)
+  if (profileUserId !== requestUserId) {
+    console.log('[PROTECTED_FUNNEL_IDENTITY_MISMATCH_WARNING]', {
+      fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+      profileUserId: profileUserId?.slice(0, 12),
+      requestUserId: requestUserId?.slice(0, 12),
+      verdict: 'IDENTITY_MISMATCH_CONTINUING_WITH_PROFILE',
+    })
+    // Not a hard fail, but logged - profile userId takes precedence after repair
+  }
+  
+  console.log('[IDENTITY_SAFE_BUILDER_ENTRY]', {
+    fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+    profileUserId: profileUserId?.slice(0, 12),
+    identityVerified: true,
+    generationIntent: request.generationIntent,
+    verdict: 'GENERATION_ALLOWED',
+  })
+  
+  // ==========================================================================
   // [WEEK-ADAPTATION-DECISION-CONTRACT] STAGE: Build week adaptation decision
   // This is the SINGLE authoritative source for week-level adaptation.
   // The generator MUST obey this contract.

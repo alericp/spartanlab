@@ -698,11 +698,31 @@ export async function buildProgrammingTruthBundle(
   // Step 1: Get canonical profile (required base truth)
   const canonicalProfile = canonicalProfileOverride || getCanonicalProfile()
   
-  if (!canonicalProfile || canonicalProfile.userId !== userId) {
-    console.warn('[ProgrammingTruthBundle] Canonical profile mismatch or missing', {
-      requestedUserId: userId,
-      profileUserId: canonicalProfile?.userId,
+  // ==========================================================================
+  // [TRUTH_BUNDLE_IDENTITY_GATE] Identity verification
+  // The protected funnel should have already repaired identity, so this is
+  // a secondary gate. If identity still doesn't match here, it's a serious issue.
+  // ==========================================================================
+  const profileUserId = canonicalProfile?.userId
+  const identityMatch = profileUserId === userId
+  
+  console.log('[TRUTH_BUNDLE_IDENTITY_GATE]', {
+    fingerprint: 'IDENTITY_INGRESS_2026_04_11_V1',
+    requestedUserId: userId?.slice(0, 12) || 'missing',
+    profileUserId: profileUserId?.slice(0, 12) || 'missing',
+    identityMatch,
+    hasCanonicalProfile: !!canonicalProfile,
+    verdict: identityMatch ? 'IDENTITY_VERIFIED' : (profileUserId ? 'IDENTITY_MISMATCH' : 'IDENTITY_MISSING'),
+  })
+  
+  if (!canonicalProfile || !profileUserId) {
+    console.error('[TRUTH_BUNDLE_IDENTITY_GATE_FAIL]', {
+      fingerprint: 'IDENTITY_INGRESS_2026_04_11_V1',
+      reason: !canonicalProfile ? 'no_canonical_profile' : 'no_profile_userId',
+      requestedUserId: userId?.slice(0, 12),
+      verdict: 'SHOULD_NOT_REACH_HERE_IF_FUNNEL_WORKING',
     })
+    // The protected funnel should have caught this earlier, but we still warn
   }
   
   // Step 2: Build each section in parallel

@@ -7678,6 +7678,121 @@ async function generateAdaptiveProgramImpl(
   })
   
   // ==========================================================================
+  // [POST_ALLOCATION_OWNER_BRIDGE_ENTRY] Create single authoritative bridge
+  // ==========================================================================
+  // This bridge ensures ALL downstream session-entry consumers use contract-based
+  // values instead of mixed raw/legacy reads. Once this bridge is created, no
+  // downstream owner may bypass it to read selectedSkillsFromProfile or raw
+  // canonicalProfile fields directly.
+  // ==========================================================================
+  console.log('[POST_ALLOCATION_OWNER_BRIDGE_ENTRY]', {
+    fingerprint: 'POST_ALLOCATION_BRIDGE_V1_2026_04_12',
+    corridorOwner: 'post_allocation_owner_bridge',
+    localStep: 'bridge_creation_entry',
+    exactLastSafeSubstep: 'post_allocation_trace_entry',
+    verdict: 'CREATING_AUTHORITATIVE_BRIDGE',
+  })
+  
+  // Create the authoritative post-allocation bridge object
+  // ALL downstream session-entry logic MUST source from this bridge, NOT from
+  // selectedSkillsFromProfile or raw canonicalProfile reads
+  const postAllocationOwnerBridge = {
+    // Source: multiSkillMaterialityContract (AUTHORITATIVE for selected skills)
+    selectedSkills: multiSkillMaterialityContract.selectedSkills || [],
+    primaryGoal: multiSkillMaterialityContract.primaryGoal || '',
+    secondaryGoal: multiSkillMaterialityContract.secondaryGoal || null,
+    materialSkillIntent: multiSkillMaterialityContract.materialSkillIntent || [],
+    experienceLevel: multiSkillMaterialityContract.experienceLevel || 'intermediate',
+    jointCautions: multiSkillMaterialityContract.jointCautions || [],
+    equipmentAvailable: multiSkillMaterialityContract.equipmentAvailable || [],
+    currentWorkingProgressions: multiSkillMaterialityContract.currentWorkingProgressions || {},
+    
+    // Source: multiSkillAllocationContract (AUTHORITATIVE for allocation decisions)
+    representedSkills: multiSkillAllocationContract?.representedSkills || [],
+    supportExpressedSkills: multiSkillAllocationContract?.supportExpressedSkills || [],
+    supportRotationalSkills: multiSkillAllocationContract?.supportRotationalSkills || [],
+    deferredSkills: multiSkillAllocationContract?.deferredSkills || [],
+    allocationEntries: multiSkillAllocationContract?.entries || [],
+    
+    // Source: effective training days (already normalized)
+    effectiveTrainingDays,
+    
+    // Bridge metadata
+    bridgeVersion: 'v1_2026_04_12',
+    sourceContracts: ['multiSkillMaterialityContract', 'multiSkillAllocationContract'],
+    legacyReadsEliminated: ['selectedSkillsFromProfile', 'canonicalProfile.primaryGoal', 'canonicalProfile.secondaryGoal'],
+  }
+  
+  // Validate bridge completeness
+  const bridgeValid = 
+    Array.isArray(postAllocationOwnerBridge.selectedSkills) &&
+    postAllocationOwnerBridge.selectedSkills.length > 0 &&
+    typeof postAllocationOwnerBridge.primaryGoal === 'string' &&
+    Array.isArray(postAllocationOwnerBridge.materialSkillIntent)
+  
+  console.log('[POST_ALLOCATION_OWNER_BRIDGE_AUDIT]', {
+    fingerprint: 'POST_ALLOCATION_BRIDGE_V1_2026_04_12',
+    corridorOwner: 'post_allocation_owner_bridge',
+    localStep: 'bridge_validation',
+    exactLastSafeSubstep: 'bridge_creation_entry',
+    // Bridge contents
+    selectedSkillsCount: postAllocationOwnerBridge.selectedSkills.length,
+    selectedSkillsSource: 'multiSkillMaterialityContract.selectedSkills',
+    primaryGoal: postAllocationOwnerBridge.primaryGoal || 'EMPTY',
+    primaryGoalSource: 'multiSkillMaterialityContract.primaryGoal',
+    secondaryGoal: postAllocationOwnerBridge.secondaryGoal || 'NONE',
+    secondaryGoalSource: 'multiSkillMaterialityContract.secondaryGoal',
+    materialSkillIntentCount: postAllocationOwnerBridge.materialSkillIntent.length,
+    representedSkillsCount: postAllocationOwnerBridge.representedSkills.length,
+    supportExpressedSkillsCount: postAllocationOwnerBridge.supportExpressedSkills.length,
+    supportRotationalSkillsCount: postAllocationOwnerBridge.supportRotationalSkills.length,
+    deferredSkillsCount: postAllocationOwnerBridge.deferredSkills.length,
+    effectiveTrainingDays: postAllocationOwnerBridge.effectiveTrainingDays,
+    // Validation
+    bridgeValid,
+    legacyReadsRequired: false,
+    verdict: bridgeValid ? 'BRIDGE_VALID_DOWNSTREAM_ALLOWED' : 'BRIDGE_INVALID_DOWNSTREAM_BLOCKED',
+  })
+  
+  if (!bridgeValid) {
+    console.error('[POST_ALLOCATION_OWNER_BRIDGE_FAIL]', {
+      fingerprint: 'POST_ALLOCATION_BRIDGE_V1_2026_04_12',
+      corridorOwner: 'post_allocation_owner_bridge',
+      localStep: 'bridge_validation_failed',
+      exactLastSafeSubstep: 'bridge_creation_entry',
+      selectedSkillsCount: postAllocationOwnerBridge.selectedSkills.length,
+      primaryGoal: postAllocationOwnerBridge.primaryGoal || 'EMPTY',
+      materialSkillIntentCount: postAllocationOwnerBridge.materialSkillIntent.length,
+      reason: postAllocationOwnerBridge.selectedSkills.length === 0 
+        ? 'selected_skills_empty' 
+        : 'unknown_validation_failure',
+      verdict: 'BRIDGE_FAILED_CANNOT_CONTINUE',
+    })
+    
+    throw createGenerationError(
+      'post_allocation_owner_bridge_invalid',
+      stageTracker.current,
+      `Post-allocation owner bridge validation failed: selectedSkills=${postAllocationOwnerBridge.selectedSkills.length}, primaryGoal=${postAllocationOwnerBridge.primaryGoal || 'EMPTY'}`,
+      {
+        exactBuilderCorridor: 'post_allocation_owner_bridge',
+        exactLocalStep: 'bridge_validation_failed',
+        exactLastSafeSubstep: 'bridge_creation_entry',
+        compactBuilderError: 'Bridge validation failed - required contract values missing',
+      }
+    )
+  }
+  
+  console.log('[POST_ALLOCATION_OWNER_BRIDGE_PASS]', {
+    fingerprint: 'POST_ALLOCATION_BRIDGE_V1_2026_04_12',
+    corridorOwner: 'post_allocation_owner_bridge',
+    localStep: 'bridge_validation_passed',
+    exactLastSafeSubstep: 'bridge_validation',
+    selectedSkillsCount: postAllocationOwnerBridge.selectedSkills.length,
+    primaryGoal: postAllocationOwnerBridge.primaryGoal,
+    verdict: 'BRIDGE_PASSED_SESSION_ENTRY_ALLOWED',
+  })
+  
+  // ==========================================================================
   // [WEEKLY-EXPRESSION-ALLOCATOR] AUTHORITATIVE UPSTREAM WEEKLY PLANNING CONTRACT
   // ==========================================================================
   // This allocator is the SINGLE SOURCE OF TRUTH for how onboarding-selected skills
@@ -8094,18 +8209,44 @@ async function generateAdaptiveProgramImpl(
   // ==========================================================================
   // [POST_ALLOCATION_SESSION_ARCHITECTURE_ENTRY] Corridor entry audit
   // ==========================================================================
+  // ==========================================================================
+  // [POST_ALLOCATION_SESSION_ENTRY_OWNER_DECISION] Use bridge values ONLY
+  // ==========================================================================
+  // This log proves we are using the authoritative bridge instead of mixed
+  // legacy reads. selectedSkillsFromProfile and canonicalProfile.primaryGoal
+  // are NO LONGER used here - we source from postAllocationOwnerBridge.
+  // ==========================================================================
+  console.log('[POST_ALLOCATION_SESSION_ENTRY_OWNER_DECISION]', {
+    fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
+    corridorOwner: 'post_allocation_to_session_architecture',
+    localStep: 'session_entry_owner_decision',
+    exactLastSafeSubstep: 'post_funnel_runtime_bridge_decision',
+    // Prove we are using bridge values
+    selectedSkillsSource: 'postAllocationOwnerBridge.selectedSkills',
+    primaryGoalSource: 'postAllocationOwnerBridge.primaryGoal',
+    secondaryGoalSource: 'postAllocationOwnerBridge.secondaryGoal',
+    // Bridge values being used
+    bridgeSelectedSkillsCount: postAllocationOwnerBridge.selectedSkills.length,
+    bridgePrimaryGoal: postAllocationOwnerBridge.primaryGoal,
+    bridgeSecondaryGoal: postAllocationOwnerBridge.secondaryGoal || 'NONE',
+    bridgeMaterialSkillIntentCount: postAllocationOwnerBridge.materialSkillIntent.length,
+    // Legacy reads eliminated
+    legacyReadsEliminated: ['selectedSkillsFromProfile', 'canonicalProfile.primaryGoal', 'canonicalProfile.secondaryGoal'],
+    verdict: 'USING_AUTHORITATIVE_BRIDGE_VALUES',
+  })
+  
   console.log('[POST_ALLOCATION_SESSION_ARCHITECTURE_ENTRY]', {
     fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
     corridorOwner: 'post_allocation_to_session_architecture',
     localStep: 'session_architecture_entry',
-    exactLastSafeSubstep: 'post_funnel_runtime_bridge_decision',
-    // Inputs being passed
+    exactLastSafeSubstep: 'session_entry_owner_decision',
+    // Inputs being passed - NOW FROM BRIDGE
     hasMaterialityContract: !!multiSkillMaterialityContract,
     hasDoctrineRuntimeContract: !!doctrineRuntimeContract,
     hasMultiSkillAllocationContract: !!multiSkillAllocationContract,
-    selectedSkillsCount: selectedSkillsFromProfile?.length || 0,
-    effectiveTrainingDays,
-    primaryGoal: canonicalProfile.primaryGoal,
+    selectedSkillsCount: postAllocationOwnerBridge.selectedSkills.length,
+    effectiveTrainingDays: postAllocationOwnerBridge.effectiveTrainingDays,
+    primaryGoal: postAllocationOwnerBridge.primaryGoal,
     // Validation checks
     materialitySelectedSkillsIntact: Array.isArray(multiSkillMaterialityContract.selectedSkills),
     allocationRepresentedSkillsIntact: multiSkillAllocationContract ? Array.isArray(multiSkillAllocationContract.representedSkills) : 'no_contract',
@@ -8146,6 +8287,7 @@ async function generateAdaptiveProgramImpl(
       }
     }
     
+    // USE BRIDGE VALUES - not legacy reads
     sessionArchitectureTruth = buildSessionArchitectureTruthContract({
       materialityContract: multiSkillMaterialityContract,
       doctrineRuntimeContract,
@@ -8153,18 +8295,18 @@ async function generateAdaptiveProgramImpl(
       trainingMethodPreferences: inputs.trainingMethodPreferences || null,
       sessionStylePreference: inputs.sessionStyle || null,
       scheduleMode: inputScheduleMode,
-      effectiveTrainingDays,
-      primaryGoal: canonicalProfile.primaryGoal,
-      secondaryGoal: canonicalProfile.secondaryGoal || null,
-      selectedSkills: selectedSkillsFromProfile,
+      effectiveTrainingDays: postAllocationOwnerBridge.effectiveTrainingDays,
+      primaryGoal: postAllocationOwnerBridge.primaryGoal,  // FROM BRIDGE
+      secondaryGoal: postAllocationOwnerBridge.secondaryGoal,  // FROM BRIDGE
+      selectedSkills: postAllocationOwnerBridge.selectedSkills,  // FROM BRIDGE - not selectedSkillsFromProfile
       selectedFlexibility: expandedContext.selectedFlexibility,
-      experienceLevel: String(canonicalProfile.experienceLevel),
-      jointCautions: expandedContext.jointCautions,
+      experienceLevel: String(postAllocationOwnerBridge.experienceLevel),  // FROM BRIDGE
+      jointCautions: postAllocationOwnerBridge.jointCautions,  // FROM BRIDGE
       multiSkillAllocation: multiSkillAllocationContract ? {
-        representedSkills: multiSkillAllocationContract.representedSkills,
-        supportExpressedSkills: multiSkillAllocationContract.supportExpressedSkills,
-        supportRotationalSkills: multiSkillAllocationContract.supportRotationalSkills,
-        deferredSkills: multiSkillAllocationContract.deferredSkills.map(d => ({
+        representedSkills: postAllocationOwnerBridge.representedSkills,  // FROM BRIDGE
+        supportExpressedSkills: postAllocationOwnerBridge.supportExpressedSkills,  // FROM BRIDGE
+        supportRotationalSkills: postAllocationOwnerBridge.supportRotationalSkills,  // FROM BRIDGE
+        deferredSkills: postAllocationOwnerBridge.deferredSkills.map(d => ({
           skill: d.skill,
           reason: d.reason,
         })),
@@ -8200,11 +8342,12 @@ async function generateAdaptiveProgramImpl(
       exactFailingSubstep: 'buildSessionArchitectureTruthContract',
       error: errorMessage,
       errorStack,
-      // Context for debugging
+      // Context for debugging - FROM BRIDGE
       hasMaterialityContract: !!multiSkillMaterialityContract,
       hasDoctrineRuntimeContract: !!doctrineRuntimeContract,
       hasMultiSkillAllocationContract: !!multiSkillAllocationContract,
-      selectedSkillsCount: selectedSkillsFromProfile?.length || 0,
+      selectedSkillsCount: postAllocationOwnerBridge.selectedSkills.length,  // FROM BRIDGE
+      primaryGoal: postAllocationOwnerBridge.primaryGoal,  // FROM BRIDGE
       verdict: 'SESSION_ARCHITECTURE_BUILD_FAILED',
     })
     

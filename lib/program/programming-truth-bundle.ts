@@ -716,13 +716,32 @@ export async function buildProgrammingTruthBundle(
   })
   
   if (!canonicalProfile || !profileUserId) {
+    const failReason = !canonicalProfile ? 'no_canonical_profile' : 'no_profile_userId'
+    
     console.error('[TRUTH_BUNDLE_IDENTITY_GATE_FAIL]', {
       fingerprint: 'IDENTITY_INGRESS_2026_04_11_V1',
-      reason: !canonicalProfile ? 'no_canonical_profile' : 'no_profile_userId',
+      reason: failReason,
       requestedUserId: userId?.slice(0, 12),
       verdict: 'SHOULD_NOT_REACH_HERE_IF_FUNNEL_WORKING',
     })
-    // The protected funnel should have caught this earlier, but we still warn
+    
+    // ==========================================================================
+    // [TRUTH_BUNDLE_IDENTITY_HARD_STOP] Hard fail - do NOT continue building
+    // The protected funnel should have caught this, but we enforce the contract here.
+    // No bundle may be built with missing identity.
+    // ==========================================================================
+    console.log('[TRUTH_BUNDLE_IDENTITY_HARD_STOP]', {
+      fingerprint: 'IDENTITY_INGRESS_2026_04_11_V1',
+      reason: failReason,
+      requestedUserId: userId?.slice(0, 12) || 'unknown',
+      verdict: 'BUNDLE_BUILD_BLOCKED',
+    })
+    
+    throw new Error(
+      `[TRUTH_BUNDLE_IDENTITY_HARD_STOP] Cannot build bundle: ${failReason}. ` +
+      `requestedUserId=${userId?.slice(0, 12) || 'unknown'}. ` +
+      `Protected funnel should have caught this upstream.`
+    )
   }
   
   // Step 2: Build each section in parallel

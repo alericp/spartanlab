@@ -6,6 +6,11 @@ import { executeAuthoritativeGeneration, logGenerationParityTable, type Authorit
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
+// ==========================================================================
+// [REGENERATE_RUNTIME_FINGERPRINT] Proves which source version is executing
+// ==========================================================================
+const REGENERATE_RUNTIME_FINGERPRINT = 'REGEN_AUDIT_2026_04_11_V2'
+
 /**
  * ==========================================================================
  * REGENERATE ROUTE - THIN ADAPTER
@@ -27,17 +32,14 @@ export async function POST(request: Request) {
   const routeStartTime = Date.now()
   
   // ==========================================================================
-  // [CANONICAL-REGENERATE-LIVE-MARKER] Authoritative runtime proof
-  // This marker proves which regenerate route/builder/selector chain is executing
+  // [REGEN_ROUTE_ENTRY] Authoritative runtime proof with fingerprint
   // ==========================================================================
-  console.log('[CANONICAL-REGENERATE-LIVE]', {
-    route: '/api/program/regenerate/route.ts',
-    builder: 'lib/adaptive-program-builder.ts',
-    selector: 'lib/program-exercise-selector.ts',
-    service: 'lib/server/authoritative-program-generation.ts',
-    version: 'DOCTRINE-MATERIALIZATION-2026-04-11-V1',
+  console.log('[REGEN_ROUTE_ENTRY]', {
+    fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+    fileOwner: '/api/program/regenerate/route.ts',
+    functionOwner: 'POST',
+    phase: 'route_entry',
     timestamp: new Date().toISOString(),
-    checkpoint: 'route_entry',
   })
   
   console.log('[regenerate-route-thin-adapter-entry]', {
@@ -296,7 +298,10 @@ export async function POST(request: Request) {
           : 'unexpected_state',
     }
     
-    console.log('[REGENERATE_OUTCOME_ROUTE]', {
+    console.log('[REGEN_ROUTE_OUTCOME]', {
+      fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+      fileOwner: '/api/program/regenerate/route.ts',
+      functionOwner: 'POST',
       ...authoritativeOutcome,
       sessionCount: routeClassification.sessionCount,
       httpStatus: 200,

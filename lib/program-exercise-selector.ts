@@ -1131,13 +1131,16 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   } = inputs
   
   // ==========================================================================
-  // [CANONICAL-SELECTOR-LIVE-MARKER] Proof that selector is executing with correct scope
+  // [REGEN_SELECTOR_ENTRY] Authoritative runtime proof with fingerprint
   // ==========================================================================
-  console.log('[CANONICAL-SELECTOR-LIVE]', {
-    selectorFile: 'lib/program-exercise-selector.ts',
-    functionName: 'selectExercisesForSession',
-    version: 'DOCTRINE-MATERIALIZATION-2026-04-11-V1',
+  const REGENERATE_RUNTIME_FINGERPRINT = 'REGEN_AUDIT_2026_04_11_V2'
+  console.log('[REGEN_SELECTOR_ENTRY]', {
+    fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+    fileOwner: 'lib/program-exercise-selector.ts',
+    functionOwner: 'selectExercisesForSession',
+    phase: 'selector_entry',
     hasUnifiedDoctrineDecision: !!unifiedDoctrineDecision,
+    doctrineEnforcementWillBeScoped: true,
     timestamp: new Date().toISOString(),
   })
   

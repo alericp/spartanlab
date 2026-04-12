@@ -7524,23 +7524,41 @@ export default function ProgramPage() {
         // ==========================================================================
         const routeAuthoritativeOutcome = serverResult.authoritativeOutcome ?? null
         
+        // ==========================================================================
+        // [REGENERATE_OUTCOME_PAGE] Use route authoritativeOutcome as PRIMARY truth
+        // DO NOT locally reconstruct from totalDegraded - use route verdict directly
+        // ==========================================================================
+        const totalDegraded = routeAuthoritativeOutcome?.totalDegraded ?? rebuildFailureSummary?.totalDegraded ?? 0
+        
+        // PRIMARY TRUTH: Use route's authoritative outcome if available
+        const isHealthyRegenerate = routeAuthoritativeOutcome 
+          ? routeAuthoritativeOutcome.outcomeMode === 'HEALTHY_SUCCESS'
+          : serverResult.success === true && totalDegraded === 0
+          
+        const isDegradedRegenerate = routeAuthoritativeOutcome
+          ? routeAuthoritativeOutcome.outcomeMode === 'DEGRADED_SUCCESS_WITH_PARTIAL_PROGRAM'
+          : serverResult.success === true && totalDegraded > 0
+        
         console.log('[REGENERATE_OUTCOME_PAGE]', {
+          fingerprint: 'REGEN_AUDIT_2026_04_11_V2',
           hasRouteOutcome: !!routeAuthoritativeOutcome,
           routeOutcomeMode: routeAuthoritativeOutcome?.outcomeMode ?? 'NOT_PROVIDED',
           routeShouldPromote: routeAuthoritativeOutcome?.shouldPromoteProgram ?? 'NOT_PROVIDED',
           routeShouldPreserve: routeAuthoritativeOutcome?.shouldPreserveLastGood ?? 'NOT_PROVIDED',
           routeShouldClearFailure: routeAuthoritativeOutcome?.shouldClearFailureState ?? 'NOT_PROVIDED',
           routeTotalDegraded: routeAuthoritativeOutcome?.totalDegraded ?? 'NOT_PROVIDED',
+          isHealthyRegenerate,
+          isDegradedRegenerate,
           httpOk: serverResponse.ok,
           serverResultSuccess: serverResult.success,
           hasProgram: !!serverResult.program,
           sessionCount: serverResult.program?.sessions?.length ?? 0,
-          verdict: routeAuthoritativeOutcome?.outcomeMode ?? 'FALLBACK_TO_LOCAL_CLASSIFICATION',
+          verdict: isHealthyRegenerate 
+            ? 'HEALTHY_SUCCESS_FROM_ROUTE_TRUTH' 
+            : isDegradedRegenerate 
+              ? 'DEGRADED_SUCCESS_FROM_ROUTE_TRUTH'
+              : 'HARD_FAILURE',
         })
-        const totalDegraded = rebuildFailureSummary?.totalDegraded ?? 0
-        const hasDegradedSessions = totalDegraded > 0
-        const isHealthyRegenerate = serverResult.success === true && !hasDegradedSessions
-        const isDegradedRegenerate = serverResult.success === true && hasDegradedSessions
         
         // ==========================================================================
         // [REGENERATE-CLASSIFICATION-MARKER] Authoritative classification log
@@ -13395,25 +13413,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           </div>
         ) : program && programModules.isRenderableProgram?.(program) ? (
           <div className="space-y-4">
-            {/* [PHASE 15E BABY AUDIT] Banner render truth verification */}
-            {(() => {
-              const shouldShowBanner = truthGatedBuildResult?.status === 'preserved_last_good' &&
-                truthGatedBuildResult?.hydratedFromStorage !== true &&
-                truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current
-              console.log('[banner-render-truth-verification]', {
-                truthGatedBuildResultExists: !!truthGatedBuildResult,
-                truthGatedBuildResultStatus: truthGatedBuildResult?.status || 'null',
-                truthGatedBuildResultHydratedFromStorage: truthGatedBuildResult?.hydratedFromStorage ?? 'null',
-                truthGatedBuildResultRuntimeSessionId: truthGatedBuildResult?.runtimeSessionId || 'null',
-                currentRuntimeSessionId: runtimeSessionIdRef.current,
-                runtimeSessionIdMatch: truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current,
-                shouldShowBanner,
-                verdict: shouldShowBanner ? 'BANNER_WILL_RENDER' : 'BANNER_BLOCKED',
-              })
-              return null
-            })()}
             {/* ==========================================================================
-               [REGENERATE_BANNER_RENDER_GATE] Authoritative banner render decision
+               [REGEN_BANNER_GATE] Authoritative banner render decision with fingerprint
                This is THE final gate that decides if the red banner renders
                ========================================================================== */}
             {(() => {
@@ -13421,17 +13422,17 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 truthGatedBuildResult?.hydratedFromStorage !== true &&
                 truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current
               
-              console.log('[REGENERATE_BANNER_RENDER_GATE]', {
+              console.log('[REGEN_BANNER_GATE]', {
+                fingerprint: 'REGEN_AUDIT_2026_04_11_V2',
+                fileOwner: 'app/(app)/program/page.tsx',
+                functionOwner: 'ProgramPageContent',
+                phase: 'banner_render_gate',
                 truthGatedBuildResultExists: !!truthGatedBuildResult,
                 status: truthGatedBuildResult?.status ?? 'null',
                 hydratedFromStorage: truthGatedBuildResult?.hydratedFromStorage ?? 'null',
-                truthGatedRuntimeSessionId: truthGatedBuildResult?.runtimeSessionId ?? 'null',
-                currentRuntimeSessionId: runtimeSessionIdRef.current,
                 runtimeSessionIdMatch: truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current,
                 bannerEligible,
-                attemptId: truthGatedBuildResult?.attemptId ?? 'null',
-                totalDegraded: (truthGatedBuildResult as any)?.totalDegraded ?? 'NOT_ON_OBJECT',
-                verdict: bannerEligible ? 'BANNER_WILL_RENDER_RED_CARD' : 'BANNER_BLOCKED_CONDITIONS_NOT_MET',
+                verdict: bannerEligible ? 'BANNER_WILL_RENDER_RED_CARD' : 'BANNER_BLOCKED',
               })
               return null
             })()}

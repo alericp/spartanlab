@@ -8064,7 +8064,21 @@ async function generateAdaptiveProgramImpl(
     postAllocationFatalAudit.lastSuccessfulCheckpoint = 'ALLOCATOR_SUCCESS'
     
     if (!allocatorStructurallyComplete) {
-      throw new Error('Weekly allocator produced structurally incomplete decisions')
+      // Use createGenerationError to ensure structured context is preserved
+      throw createGenerationError(
+        'post_allocation_weekly_allocator_failed',
+        stageTracker.current,
+        'Weekly allocator produced structurally incomplete decisions',
+        {
+          exactBuilderCorridor: 'post_allocation_to_weekly_allocator',
+          exactLocalStep: 'allocator_structural_validation',
+          exactLastSafeSubstep: 'ALLOCATOR_SUCCESS',
+          compactBuilderError: 'Weekly allocator produced structurally incomplete decisions',
+          lastSuccessfulPostAllocationCheckpoint: 'ALLOCATOR_SUCCESS',
+          failingOwnerClass: 'required_hard_fail',
+          failingOwnerName: 'weekly_allocator_structural_validation',
+        }
+      )
     }
     
   } catch (err) {
@@ -8187,7 +8201,21 @@ async function generateAdaptiveProgramImpl(
     postAllocationFatalAudit.lastSuccessfulCheckpoint = 'VISIBLE_WEEK_SUCCESS'
     
     if (!visibleWeekStructurallyComplete) {
-      throw new Error('Visible week contract produced structurally incomplete output')
+      // Use createGenerationError to ensure structured context is preserved
+      throw createGenerationError(
+        'post_allocation_visible_week_failed',
+        stageTracker.current,
+        'Visible week contract produced structurally incomplete output',
+        {
+          exactBuilderCorridor: 'post_allocation_to_visible_week',
+          exactLocalStep: 'visible_week_structural_validation',
+          exactLastSafeSubstep: 'VISIBLE_WEEK_SUCCESS',
+          compactBuilderError: 'Visible week contract produced structurally incomplete output',
+          lastSuccessfulPostAllocationCheckpoint: 'VISIBLE_WEEK_SUCCESS',
+          failingOwnerClass: 'required_hard_fail',
+          failingOwnerName: 'visible_week_structural_validation',
+        }
+      )
     }
     
     // ==========================================================================

@@ -828,6 +828,35 @@ export async function executeAuthoritativeGeneration(
           ? 'selecting_exercises' 
           : 'builder_execution'
       
+      // ==========================================================================
+      // [BACKFILL_GUARANTEE] Ensure failure fields are never all null/undefined
+      // ==========================================================================
+      // If post-allocation failure is detected but exact fields are missing, derive them
+      const isPostAllocationFailure = isPostAllocationError || isOwnerCorridorError || isHandoffError ||
+                                      errorString.includes('post_allocation') || 
+                                      errorString.includes('weekly_allocator') ||
+                                      errorString.includes('visible_week')
+      
+      const finalExactBuilderCorridor = exactBuilderCorridor || 
+        (isPostAllocationFailure ? 'post_allocation_runtime' : 'builder_runtime')
+      const finalExactLocalStep = exactLocalStep || 
+        (isPostAllocationFailure ? 'post_allocation_unknown_step' : 'runtime_unknown_step')
+      const finalCompactBuilderError = compactBuilderErrorFromContext || errorString.substring(0, 200)
+      
+      // Log if we had to backfill (indicates a missing structured context path)
+      if (!exactBuilderCorridor || !exactLocalStep) {
+        console.warn('[SERVICE_FAILURE_BACKFILL_APPLIED]', {
+          fingerprint: 'BACKFILL_V1_2026_04_12',
+          originalExactBuilderCorridor: exactBuilderCorridor ?? 'null',
+          originalExactLocalStep: exactLocalStep ?? 'null',
+          backfilledCorridor: finalExactBuilderCorridor,
+          backfilledStep: finalExactLocalStep,
+          isPostAllocationFailure,
+          hasStructuredContext,
+          verdict: 'BACKFILL_APPLIED_TO_PREVENT_UNAVAILABLE',
+        })
+      }
+      
       return {
         success: false,
         error: `Builder failed: ${errorString}`,
@@ -835,10 +864,10 @@ export async function executeAuthoritativeGeneration(
         // [PHASE 15E] Include exact substep info in result
         exactFailingSubstep: isPhase15eCrash ? exactFailingSubstep : (structuredExactLastSafeSubstep || undefined),
         exactLastSafeSubstep: isPhase15eCrash ? exactLastSafeSubstep : (structuredExactLastSafeSubstep || undefined),
-        // [POST-TRUTH-CORRIDOR] Include corridor diagnostic info - STRUCTURED CONTEXT PREFERRED
-        exactBuilderCorridor,
-        exactLocalStep,
-        compactBuilderError: compactBuilderErrorFromContext,
+        // [POST-TRUTH-CORRIDOR] Include corridor diagnostic info - BACKFILL GUARANTEED
+        exactBuilderCorridor: finalExactBuilderCorridor,
+        exactLocalStep: finalExactLocalStep,
+        compactBuilderError: finalCompactBuilderError,
         compactStackPreview: errorStack?.split('\n').slice(0, 5).join(' | '),
         degradationAttempted: errorStack?.includes('safeDegradationApplied') || false,
         fallbackApplied: errorStack?.includes('fallbackApplied') || errorString.includes('fallback'),

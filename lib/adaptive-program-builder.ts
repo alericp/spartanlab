@@ -7678,6 +7678,22 @@ async function generateAdaptiveProgramImpl(
   })
   
   // ==========================================================================
+  // [AUTHORITATIVE_FATAL_AUDIT_TRACKER] Single mutable tracker for post-allocation failures
+  // ==========================================================================
+  // This tracker is updated by each checkpoint and catch block. On failure, it
+  // provides ONE authoritative summary of the exact failing owner.
+  // ==========================================================================
+  const postAllocationFatalAudit = {
+    lastSuccessfulCheckpoint: 'POST_ALLOCATION_TRACE_ENTRY' as string,
+    exactBuilderCorridor: null as string | null,
+    exactLocalStep: null as string | null,
+    exactLastSafeSubstep: null as string | null,
+    compactBuilderError: null as string | null,
+    failingOwnerClass: null as 'required_hard_fail' | 'optional_fallback' | 'route_only' | null,
+    failingOwnerName: null as string | null,
+  }
+  
+  // ==========================================================================
   // [POST_ALLOCATION_MICRO_CORRIDOR] Deterministic micro-step isolation
   // ==========================================================================
   // This micro-corridor ensures EVERY step between POST_ALLOCATION_TRACE_ENTRY
@@ -7737,6 +7753,7 @@ async function generateAdaptiveProgramImpl(
       materialSkillIntentCount: microStep1_materialSkillIntent.length,
       verdict: 'STEP_1_PASSED_CONTINUING',
     })
+    postAllocationFatalAudit.lastSuccessfulCheckpoint = 'MICRO_STEP_1_PASS'
     
     // ==========================================================================
     // MICRO-STEP 2: Capture allocation contract inputs
@@ -7769,6 +7786,7 @@ async function generateAdaptiveProgramImpl(
       allocationEntriesCount: microStep2_allocationEntries.length,
       verdict: 'STEP_2_PASSED_CONTINUING',
     })
+    postAllocationFatalAudit.lastSuccessfulCheckpoint = 'MICRO_STEP_2_PASS'
     
     // ==========================================================================
     // MICRO-STEP 3: Construct bridge object
@@ -7810,6 +7828,7 @@ async function generateAdaptiveProgramImpl(
       bridgeObjectCreated: true,
       verdict: 'STEP_3_PASSED_CONTINUING',
     })
+    postAllocationFatalAudit.lastSuccessfulCheckpoint = 'MICRO_STEP_3_PASS'
     
     // ==========================================================================
     // MICRO-STEP 4: Validate bridge completeness
@@ -7839,8 +7858,17 @@ async function generateAdaptiveProgramImpl(
       materialSkillIntentCount: postAllocationOwnerBridge.materialSkillIntent.length,
       verdict: bridgeValid ? 'STEP_4_PASSED_BRIDGE_VALID' : 'STEP_4_PASSED_BUT_BRIDGE_INVALID',
     })
+    postAllocationFatalAudit.lastSuccessfulCheckpoint = 'MICRO_STEP_4_PASS'
     
     if (!bridgeValid) {
+      // Update fatal audit tracker
+      postAllocationFatalAudit.exactBuilderCorridor = 'post_allocation_owner_bridge'
+      postAllocationFatalAudit.exactLocalStep = 'bridge_validation_failed'
+      postAllocationFatalAudit.exactLastSafeSubstep = 'bridge_validation_complete'
+      postAllocationFatalAudit.compactBuilderError = 'Bridge validation failed - required contract values missing'
+      postAllocationFatalAudit.failingOwnerClass = 'required_hard_fail'
+      postAllocationFatalAudit.failingOwnerName = 'owner_bridge_validation'
+      
       console.error('[POST_ALLOCATION_OWNER_BRIDGE_FAIL]', {
         fingerprint: 'POST_ALLOCATION_BRIDGE_V1_2026_04_12',
         corridorOwner: 'post_allocation_owner_bridge',
@@ -7855,6 +7883,15 @@ async function generateAdaptiveProgramImpl(
         verdict: 'BRIDGE_FAILED_CANNOT_CONTINUE',
       })
       
+      // Emit authoritative fatal owner summary
+      console.error('[AUTHORITATIVE_POST_ALLOCATION_FATAL_OWNER]', {
+        fingerprint: 'FATAL_AUDIT_V1_2026_04_12',
+        ...postAllocationFatalAudit,
+        builderStage: stageTracker.current,
+        failureZone: 'post_allocation',
+        verdict: 'REQUIRED_OWNER_FAILED',
+      })
+      
       throw createGenerationError(
         'post_allocation_owner_bridge_invalid',
         stageTracker.current,
@@ -7864,6 +7901,9 @@ async function generateAdaptiveProgramImpl(
           exactLocalStep: 'bridge_validation_failed',
           exactLastSafeSubstep: 'bridge_validation_complete',
           compactBuilderError: 'Bridge validation failed - required contract values missing',
+          lastSuccessfulPostAllocationCheckpoint: postAllocationFatalAudit.lastSuccessfulCheckpoint,
+          failingOwnerClass: 'required_hard_fail',
+          failingOwnerName: 'owner_bridge_validation',
         }
       )
     }
@@ -7877,6 +7917,7 @@ async function generateAdaptiveProgramImpl(
       primaryGoal: postAllocationOwnerBridge.primaryGoal,
       verdict: 'BRIDGE_PASSED_SESSION_ENTRY_ALLOWED',
     })
+    postAllocationFatalAudit.lastSuccessfulCheckpoint = 'OWNER_BRIDGE_PASS'
     
   } catch (microCorridorError) {
     // Capture exact first throw site
@@ -7888,17 +7929,34 @@ async function generateAdaptiveProgramImpl(
       throw microCorridorError // Re-throw the already-wrapped error
     }
     
+    // Update fatal audit tracker
+    postAllocationFatalAudit.exactBuilderCorridor = 'post_allocation_micro_corridor'
+    postAllocationFatalAudit.exactLocalStep = 'micro_corridor_first_throw'
+    postAllocationFatalAudit.exactLastSafeSubstep = postAllocationFatalAudit.lastSuccessfulCheckpoint
+    postAllocationFatalAudit.compactBuilderError = errorMessage.slice(0, 200)
+    postAllocationFatalAudit.failingOwnerClass = 'required_hard_fail'
+    postAllocationFatalAudit.failingOwnerName = 'micro_corridor'
+    
     console.error('[POST_ALLOCATION_MICRO_CORRIDOR_FAIL]', {
       fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
       corridorOwner: 'post_allocation_micro_corridor',
       localStep: 'micro_corridor_first_throw',
-      exactLastSafeSubstep: 'post_allocation_trace_entry',
+      exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
       error: errorMessage,
       errorStack,
       failureZone: 'between_trace_entry_and_bridge_pass',
       multiSkillMaterialityContractExists: !!multiSkillMaterialityContract,
       multiSkillAllocationContractExists: !!multiSkillAllocationContract,
       verdict: 'MICRO_CORRIDOR_FAILED_EXACT_SITE_CAPTURED',
+    })
+    
+    // Emit authoritative fatal owner summary
+    console.error('[AUTHORITATIVE_POST_ALLOCATION_FATAL_OWNER]', {
+      fingerprint: 'FATAL_AUDIT_V1_2026_04_12',
+      ...postAllocationFatalAudit,
+      builderStage: stageTracker.current,
+      failureZone: 'post_allocation',
+      verdict: 'REQUIRED_OWNER_FAILED',
     })
     
     throw createGenerationError(
@@ -7908,8 +7966,11 @@ async function generateAdaptiveProgramImpl(
       {
         exactBuilderCorridor: 'post_allocation_micro_corridor',
         exactLocalStep: 'micro_corridor_first_throw',
-        exactLastSafeSubstep: 'post_allocation_trace_entry',
-        compactBuilderError: errorMessage,
+        exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
+        compactBuilderError: errorMessage.slice(0, 200),
+        lastSuccessfulPostAllocationCheckpoint: postAllocationFatalAudit.lastSuccessfulCheckpoint,
+        failingOwnerClass: 'required_hard_fail',
+        failingOwnerName: 'micro_corridor',
       }
     )
   }
@@ -7972,13 +8033,17 @@ async function generateAdaptiveProgramImpl(
     console.log('[POST_ALLOCATION_ALLOCATOR_SUCCESS]', {
       fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
       corridorOwner: 'post_allocation_to_weekly_allocator',
-      localStep: 'weekly_allocator_success',
+      localStep: 'weekly_allocator_complete',
       exactLastSafeSubstep: 'weekly_allocator_entry',
-      decisionsCount: weeklyExpressionAllocatorContract.decisions?.length || 0,
-      structurallyComplete: allocatorStructurallyComplete,
-      auditVerdict: weeklyExpressionAllocatorContract.audit?.verdict || 'UNKNOWN',
-      verdict: allocatorStructurallyComplete ? 'ALLOCATOR_BUILD_SUCCESS' : 'ALLOCATOR_BUILD_STRUCTURALLY_INCOMPLETE',
+      // Verify outputs
+      decisionsCount: weeklyExpressionAllocatorContract.decisions.length,
+      primaryRepresentedCount: weeklyExpressionAllocatorContract.decisions.filter(d => d.representationType === 'primary').length,
+      supportCount: weeklyExpressionAllocatorContract.decisions.filter(d => d.representationType === 'support').length,
+      deferredCount: weeklyExpressionAllocatorContract.decisions.filter(d => d.representationType === 'deferred').length,
+      overlapPairsCount: weeklyExpressionAllocatorContract.highOverlapPairs.length,
+      verdict: 'ALLOCATOR_OUTPUTS_VALID',
     })
+    postAllocationFatalAudit.lastSuccessfulCheckpoint = 'ALLOCATOR_SUCCESS'
     
     if (!allocatorStructurallyComplete) {
       throw new Error('Weekly allocator produced structurally incomplete decisions')
@@ -7988,17 +8053,34 @@ async function generateAdaptiveProgramImpl(
     const errorMessage = err instanceof Error ? err.message : String(err)
     const errorStack = err instanceof Error ? err.stack?.split('\n').slice(0, 5).join('\n') : undefined
     
+    // Update fatal audit tracker
+    postAllocationFatalAudit.exactBuilderCorridor = 'post_allocation_to_weekly_allocator'
+    postAllocationFatalAudit.exactLocalStep = 'weekly_allocator_build'
+    postAllocationFatalAudit.exactLastSafeSubstep = postAllocationFatalAudit.lastSuccessfulCheckpoint
+    postAllocationFatalAudit.compactBuilderError = errorMessage.slice(0, 200)
+    postAllocationFatalAudit.failingOwnerClass = 'required_hard_fail'
+    postAllocationFatalAudit.failingOwnerName = 'weekly_allocator'
+    
     console.error('[POST_ALLOCATION_ALLOCATOR_FAIL]', {
       fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
       corridorOwner: 'post_allocation_to_weekly_allocator',
       localStep: 'weekly_allocator_build',
-      exactLastSafeSubstep: 'weekly_allocator_entry',
+      exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
       exactFailingSubstep: 'buildWeeklyExpressionAllocationContract',
       error: errorMessage,
       errorStack,
       selectedSkillsCount: multiSkillMaterialityContract.selectedSkills?.length || 0,
       primaryGoal: multiSkillMaterialityContract.primaryGoal || 'MISSING',
       verdict: 'WEEKLY_ALLOCATOR_BUILD_FAILED',
+    })
+    
+    // Emit authoritative fatal owner summary
+    console.error('[AUTHORITATIVE_POST_ALLOCATION_FATAL_OWNER]', {
+      fingerprint: 'FATAL_AUDIT_V1_2026_04_12',
+      ...postAllocationFatalAudit,
+      builderStage: stageTracker.current,
+      failureZone: 'post_allocation',
+      verdict: 'REQUIRED_OWNER_FAILED',
     })
     
     throw createGenerationError(
@@ -8008,8 +8090,11 @@ async function generateAdaptiveProgramImpl(
       {
         exactBuilderCorridor: 'post_allocation_to_weekly_allocator',
         exactLocalStep: 'weekly_allocator_build',
-        exactLastSafeSubstep: 'weekly_allocator_entry',
-        compactBuilderError: errorMessage,
+        exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
+        compactBuilderError: errorMessage.slice(0, 200),
+        lastSuccessfulPostAllocationCheckpoint: postAllocationFatalAudit.lastSuccessfulCheckpoint,
+        failingOwnerClass: 'required_hard_fail',
+        failingOwnerName: 'weekly_allocator',
       }
     )
   }
@@ -8067,16 +8152,17 @@ async function generateAdaptiveProgramImpl(
     console.log('[POST_ALLOCATION_VISIBLE_WEEK_SUCCESS]', {
       fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
       corridorOwner: 'post_allocation_to_visible_week',
-      localStep: 'visible_week_success',
+      localStep: 'visible_week_complete',
       exactLastSafeSubstep: 'visible_week_entry',
-      skillExpressionPlanCount: visibleWeekExpressionContract.skillExpressionPlan?.length || 0,
-      selectedSkillsCount: visibleWeekExpressionContract.selectedSkills?.length || 0,
-      visibleWeekSkillCount: visibleWeekExpressionContract.visibleWeekSkillCount,
-      primarySkill: visibleWeekExpressionContract.primarySkill || 'NONE',
-      structurallyComplete: visibleWeekStructurallyComplete,
-      auditVerdict: visibleWeekExpressionContract.audit?.verdict || 'UNKNOWN',
-      verdict: visibleWeekStructurallyComplete ? 'VISIBLE_WEEK_BUILD_SUCCESS' : 'VISIBLE_WEEK_BUILD_STRUCTURALLY_INCOMPLETE',
+      // Verify outputs
+      directlyRepresentedCount: visibleWeekExpressionContract.directlyRepresentedSkills.length,
+      supportExpressedCount: visibleWeekExpressionContract.supportExpressedSkills.length,
+      rotationalCount: visibleWeekExpressionContract.rotationalSkills?.length || 0,
+      deferredCount: visibleWeekExpressionContract.deferredSkills.length,
+      coverageVerdict: visibleWeekExpressionContract.coverageVerdict,
+      verdict: 'VISIBLE_WEEK_OUTPUTS_VALID',
     })
+    postAllocationFatalAudit.lastSuccessfulCheckpoint = 'VISIBLE_WEEK_SUCCESS'
     
     if (!visibleWeekStructurallyComplete) {
       throw new Error('Visible week contract produced structurally incomplete output')
@@ -8086,11 +8172,19 @@ async function generateAdaptiveProgramImpl(
     const errorMessage = err instanceof Error ? err.message : String(err)
     const errorStack = err instanceof Error ? err.stack?.split('\n').slice(0, 5).join('\n') : undefined
     
+    // Update fatal audit tracker
+    postAllocationFatalAudit.exactBuilderCorridor = 'post_allocation_to_visible_week'
+    postAllocationFatalAudit.exactLocalStep = 'visible_week_build'
+    postAllocationFatalAudit.exactLastSafeSubstep = postAllocationFatalAudit.lastSuccessfulCheckpoint
+    postAllocationFatalAudit.compactBuilderError = errorMessage.slice(0, 200)
+    postAllocationFatalAudit.failingOwnerClass = 'required_hard_fail'
+    postAllocationFatalAudit.failingOwnerName = 'visible_week'
+    
     console.error('[POST_ALLOCATION_VISIBLE_WEEK_FAIL]', {
       fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
       corridorOwner: 'post_allocation_to_visible_week',
       localStep: 'visible_week_build',
-      exactLastSafeSubstep: 'visible_week_entry',
+      exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
       exactFailingSubstep: 'buildVisibleWeekSkillExpressionContract',
       error: errorMessage,
       errorStack,
@@ -8100,6 +8194,15 @@ async function generateAdaptiveProgramImpl(
       verdict: 'VISIBLE_WEEK_BUILD_FAILED',
     })
     
+    // Emit authoritative fatal owner summary
+    console.error('[AUTHORITATIVE_POST_ALLOCATION_FATAL_OWNER]', {
+      fingerprint: 'FATAL_AUDIT_V1_2026_04_12',
+      ...postAllocationFatalAudit,
+      builderStage: stageTracker.current,
+      failureZone: 'post_allocation',
+      verdict: 'REQUIRED_OWNER_FAILED',
+    })
+    
     throw createGenerationError(
       'post_allocation_visible_week_failed',
       stageTracker.current,
@@ -8107,8 +8210,11 @@ async function generateAdaptiveProgramImpl(
       {
         exactBuilderCorridor: 'post_allocation_to_visible_week',
         exactLocalStep: 'visible_week_build',
-        exactLastSafeSubstep: 'visible_week_entry',
-        compactBuilderError: errorMessage,
+        exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
+        compactBuilderError: errorMessage.slice(0, 200),
+        lastSuccessfulPostAllocationCheckpoint: postAllocationFatalAudit.lastSuccessfulCheckpoint,
+        failingOwnerClass: 'required_hard_fail',
+        failingOwnerName: 'visible_week',
       }
     )
   }
@@ -8207,14 +8313,22 @@ async function generateAdaptiveProgramImpl(
   }
   
   console.log('[POST_FUNNEL_CONTRACT_GATE_PASS]', {
-    fingerprint: 'POST_FUNNEL_V1_2026_04_12',
-    corridorOwner: postFunnelContractGate.corridorOwner,
-    localStep: 'validation_complete',
-    selectedSkillsCount: postFunnelContractGate.selectedSkillsCount,
-    allocatorDecisionsCount: postFunnelContractGate.allocatorDecisionsCount,
-    visibleWeekSkillCount: postFunnelContractGate.visibleWeekSkillCount,
-    verdict: 'POST_FUNNEL_CONTRACTS_VALID_SESSION_ENTRY_ALLOWED',
+    fingerprint: 'POST_FUNNEL_GATE_V1_2026_04_11',
+    corridorOwner: 'post_funnel_allocation_to_session_entry',
+    localStep: 'contract_gate_validated',
+    exactLastSafeSubstep: 'contract_gate_entry',
+    allContractsValid: gateResult.allValid,
+    allMinimalyUsable: gateResult.minimallyUsable,
+    sessionEntryAllowed: gateResult.sessionEntryAllowed,
+    validationResults: {
+      materialityValid: gateResult.materialityValid,
+      allocationValid: gateResult.allocationValid,
+      weeklyAllocatorValid: gateResult.weeklyAllocatorValid,
+      visibleWeekValid: gateResult.visibleWeekValid,
+    },
+    verdict: 'CONTRACT_GATE_PASSED_SESSION_ENTRY_ALLOWED',
   })
+  postAllocationFatalAudit.lastSuccessfulCheckpoint = 'CONTRACT_GATE_PASS'
   
   // ==========================================================================
   // [DOCTRINE RUNTIME CONTRACT] BUILD AUTHORITATIVE DOCTRINE CONTRACT
@@ -8304,29 +8418,16 @@ async function generateAdaptiveProgramImpl(
   // downstream session generation corridor.
   // ==========================================================================
   console.log('[POST_FUNNEL_RUNTIME_BRIDGE_DECISION]', {
-    fingerprint: 'POST_FUNNEL_V1_2026_04_12',
+    fingerprint: 'POST_FUNNEL_BRIDGE_V1_2026_04_11',
     corridorOwner: 'post_funnel_allocation_to_session_entry',
-    localStep: 'runtime_bridge_entry',
-    // Allocation contracts
-    weeklyAllocatorDecisions: weeklyExpressionAllocatorContract.decisions?.length || 0,
-    weeklyAllocatorVerdict: weeklyExpressionAllocatorContract.audit?.verdict || 'UNKNOWN',
-    // Visible week contracts
-    visibleWeekSkillCount: visibleWeekExpressionContract.visibleWeekSkillCount,
-    visibleWeekPlanCount: visibleWeekExpressionContract.skillExpressionPlan?.length || 0,
-    visibleWeekVerdict: visibleWeekExpressionContract.audit?.verdict || 'UNKNOWN',
-    // Doctrine runtime
-    doctrineRuntimeAvailable: doctrineRuntimeContract?.available || false,
-    doctrineRuntimeSource: doctrineRuntimeContract?.source || 'none',
-    // Doctrine influence
-    doctrineInfluenceAvailable: !!doctrineInfluenceContract,
-    doctrineInfluenceReadiness: doctrineInfluenceContract?.readinessState?.readinessVerdict || 'none',
-    // Key skill facts
-    selectedSkillsCount: multiSkillMaterialityContract.selectedSkills?.length || 0,
-    primaryGoal: multiSkillMaterialityContract.primaryGoal,
-    effectiveTrainingDays,
-    // Decision
-    verdict: 'RUNTIME_BRIDGE_READY_FOR_SESSION_ASSEMBLY',
+    localStep: 'runtime_bridge_selection',
+    exactLastSafeSubstep: 'contract_gate_passed',
+    hasDoctrineRuntimeContract: !!doctrineRuntimeContract,
+    doctrineGlobalCoherence: doctrineRuntimeContract?.globalCoherence,
+    useDoctrineGuidedGeneration: !!doctrineRuntimeContract && (doctrineRuntimeContract?.globalCoherence ?? 0) > 0.5,
+    verdict: 'RUNTIME_BRIDGE_DECIDED',
   })
+  postAllocationFatalAudit.lastSuccessfulCheckpoint = 'RUNTIME_BRIDGE_DECISION'
   
   // ==========================================================================
   // [POST_ALLOCATION_SESSION_ARCHITECTURE_ENTRY] Corridor entry audit
@@ -8484,6 +8585,8 @@ async function generateAdaptiveProgramImpl(
   // ==========================================================================
   // [POST_ALLOCATION_MULTI_SKILL_INTENT_ENTRY] Corridor entry audit
   // ==========================================================================
+  postAllocationFatalAudit.lastSuccessfulCheckpoint = 'SESSION_ARCHITECTURE_BUILT_OR_FALLBACK'
+  
   console.log('[POST_ALLOCATION_MULTI_SKILL_INTENT_ENTRY]', {
     fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
     corridorOwner: 'post_allocation_to_multi_skill_intent',
@@ -8547,15 +8650,32 @@ async function generateAdaptiveProgramImpl(
     const errorMessage = err instanceof Error ? err.message : String(err)
     const errorStack = err instanceof Error ? err.stack?.split('\n').slice(0, 5).join('\n') : undefined
     
+    // Update fatal audit tracker
+    postAllocationFatalAudit.exactBuilderCorridor = 'post_allocation_to_multi_skill_intent'
+    postAllocationFatalAudit.exactLocalStep = 'multi_skill_intent_build'
+    postAllocationFatalAudit.exactLastSafeSubstep = postAllocationFatalAudit.lastSuccessfulCheckpoint
+    postAllocationFatalAudit.compactBuilderError = errorMessage.slice(0, 200)
+    postAllocationFatalAudit.failingOwnerClass = 'required_hard_fail'
+    postAllocationFatalAudit.failingOwnerName = 'multi_skill_intent'
+    
     console.error('[POST_ALLOCATION_BRIDGE_FAIL]', {
       fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
       corridorOwner: 'post_allocation_to_multi_skill_intent',
       localStep: 'multi_skill_intent_build',
-      exactLastSafeSubstep: 'multi_skill_intent_entry',
+      exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
       exactFailingSubstep: 'buildAuthoritativeMultiSkillIntentContract',
       error: errorMessage,
       errorStack,
       verdict: 'MULTI_SKILL_INTENT_BUILD_FAILED',
+    })
+    
+    // Emit authoritative fatal owner summary
+    console.error('[AUTHORITATIVE_POST_ALLOCATION_FATAL_OWNER]', {
+      fingerprint: 'FATAL_AUDIT_V1_2026_04_12',
+      ...postAllocationFatalAudit,
+      builderStage: stageTracker.current,
+      failureZone: 'post_allocation',
+      verdict: 'REQUIRED_OWNER_FAILED',
     })
     
     throw createGenerationError(
@@ -8565,10 +8685,17 @@ async function generateAdaptiveProgramImpl(
       {
         exactBuilderCorridor: 'post_allocation_to_multi_skill_intent',
         exactLocalStep: 'multi_skill_intent_build',
-        exactLastSafeSubstep: 'multi_skill_intent_entry',
+        exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
+        compactBuilderError: errorMessage.slice(0, 200),
+        lastSuccessfulPostAllocationCheckpoint: postAllocationFatalAudit.lastSuccessfulCheckpoint,
+        failingOwnerClass: 'required_hard_fail',
+        failingOwnerName: 'multi_skill_intent',
       }
     )
   }
+  
+  // Update successful checkpoint
+  postAllocationFatalAudit.lastSuccessfulCheckpoint = 'MULTI_SKILL_INTENT_SUCCESS'
   
   // ==========================================================================
   // [AI-TRUTH-BREADTH-AUDIT] Layer 6: Authoritative intent contract
@@ -8600,15 +8727,32 @@ async function generateAdaptiveProgramImpl(
     const errorMessage = err instanceof Error ? err.message : String(err)
     const errorStack = err instanceof Error ? err.stack?.split('\n').slice(0, 5).join('\n') : undefined
     
+    // Update fatal audit tracker
+    postAllocationFatalAudit.exactBuilderCorridor = 'post_allocation_to_skill_trace'
+    postAllocationFatalAudit.exactLocalStep = 'skill_trace_build'
+    postAllocationFatalAudit.exactLastSafeSubstep = postAllocationFatalAudit.lastSuccessfulCheckpoint
+    postAllocationFatalAudit.compactBuilderError = errorMessage.slice(0, 200)
+    postAllocationFatalAudit.failingOwnerClass = 'required_hard_fail'
+    postAllocationFatalAudit.failingOwnerName = 'skill_trace'
+    
     console.error('[POST_ALLOCATION_BRIDGE_FAIL]', {
       fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
       corridorOwner: 'post_allocation_to_skill_trace',
       localStep: 'skill_trace_build',
-      exactLastSafeSubstep: 'multi_skill_intent_built',
+      exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
       exactFailingSubstep: 'buildSelectedSkillTraceContract',
       error: errorMessage,
       errorStack,
       verdict: 'SKILL_TRACE_BUILD_FAILED',
+    })
+    
+    // Emit authoritative fatal owner summary
+    console.error('[AUTHORITATIVE_POST_ALLOCATION_FATAL_OWNER]', {
+      fingerprint: 'FATAL_AUDIT_V1_2026_04_12',
+      ...postAllocationFatalAudit,
+      builderStage: stageTracker.current,
+      failureZone: 'post_allocation',
+      verdict: 'REQUIRED_OWNER_FAILED',
     })
     
     throw createGenerationError(
@@ -8618,7 +8762,11 @@ async function generateAdaptiveProgramImpl(
       {
         exactBuilderCorridor: 'post_allocation_to_skill_trace',
         exactLocalStep: 'skill_trace_build',
-        exactLastSafeSubstep: 'multi_skill_intent_built',
+        exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
+        compactBuilderError: errorMessage.slice(0, 200),
+        lastSuccessfulPostAllocationCheckpoint: postAllocationFatalAudit.lastSuccessfulCheckpoint,
+        failingOwnerClass: 'required_hard_fail',
+        failingOwnerName: 'skill_trace',
       }
     )
   }
@@ -8626,6 +8774,8 @@ async function generateAdaptiveProgramImpl(
   // ==========================================================================
   // [POST_ALLOCATION_BRIDGE_PASS] All post-allocation contracts built successfully
   // ==========================================================================
+  postAllocationFatalAudit.lastSuccessfulCheckpoint = 'SKILL_TRACE_SUCCESS'
+  
   console.log('[POST_ALLOCATION_BRIDGE_PASS]', {
     fingerprint: 'POST_ALLOCATION_V1_2026_04_12',
     corridorOwner: 'post_allocation_to_session_entry',
@@ -8642,7 +8792,10 @@ async function generateAdaptiveProgramImpl(
     // Validation
     allContractsIntact: true,
     verdict: 'POST_ALLOCATION_BRIDGE_COMPLETE_SESSION_ENTRY_ALLOWED',
+    // Fatal audit final state
+    fatalAuditLastCheckpoint: postAllocationFatalAudit.lastSuccessfulCheckpoint,
   })
+  postAllocationFatalAudit.lastSuccessfulCheckpoint = 'POST_ALLOCATION_BRIDGE_PASS'
   
   // Log the trace checkpoint
   console.log('[CHECKLIST_1_OF_4_SKILL_TRACE_AUDIT]', {

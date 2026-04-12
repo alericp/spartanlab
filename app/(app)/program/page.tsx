@@ -5637,6 +5637,18 @@ export default function ProgramPage() {
               if (!failureStep) failureStep = (p15e.exactFailingSubstep as string) || null
               if (!failureMiddleStep) failureMiddleStep = (p15e.exactLastSafeSubstep as string) || null
             }
+            // [POST_ALLOCATION_HANDOFF_FIX] Check ownerCorridorDiagnostic (current key from route)
+            if (diagnostics?.ownerCorridorDiagnostic) {
+              const corr = diagnostics.ownerCorridorDiagnostic as Record<string, unknown>
+              if (!failureStep) failureStep = (corr.exactLocalStep as string) || (corr.exactBuilderCorridor as string) || null
+              if (!failureMiddleStep) failureMiddleStep = (corr.lastSuccessfulPostAllocationCheckpoint as string) || null
+              // Enrich failure reason with owner name if available
+              const ownerName = corr.failingOwnerName as string | undefined
+              if (ownerName && !failureReason?.includes(ownerName)) {
+                failureReason = ownerName + (failureReason ? `: ${failureReason}` : '')
+              }
+            }
+            // Legacy fallback for old key
             if (diagnostics?.corridorDiagnostic) {
               const corr = diagnostics.corridorDiagnostic as Record<string, unknown>
               if (!failureStep) failureStep = (corr.exactLocalStep as string) || null
@@ -5653,6 +5665,7 @@ export default function ProgramPage() {
               mappedFailureStep: failureStep,
               mappedFailureMiddleStep: failureMiddleStep,
               mappedFailureReason: failureReason?.slice(0, 80),
+              hasOwnerCorridorDiagnostic: !!diagnostics?.ownerCorridorDiagnostic,
               verdict: failureStep ? 'SERVER_FAILURE_FIELDS_EXTRACTED' : 'SERVER_FAILURE_FIELDS_MISSING',
             })
           }
@@ -9205,6 +9218,18 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               if (!failureStep) failureStep = (p15e.exactFailingSubstep as string) || null
               if (!failureMiddleStep) failureMiddleStep = (p15e.exactLastSafeSubstep as string) || null
             }
+            // [POST_ALLOCATION_HANDOFF_FIX] Check ownerCorridorDiagnostic (current key from route)
+            if (diagnostics?.ownerCorridorDiagnostic) {
+              const corr = diagnostics.ownerCorridorDiagnostic as Record<string, unknown>
+              if (!failureStep) failureStep = (corr.exactLocalStep as string) || (corr.exactBuilderCorridor as string) || null
+              if (!failureMiddleStep) failureMiddleStep = (corr.lastSuccessfulPostAllocationCheckpoint as string) || null
+              // Enrich failure reason with owner name if available
+              const ownerName = corr.failingOwnerName as string | undefined
+              if (ownerName && !failureReason?.includes(ownerName)) {
+                failureReason = ownerName + (failureReason ? `: ${failureReason}` : '')
+              }
+            }
+            // Legacy fallback for old key
             if (diagnostics?.corridorDiagnostic) {
               const corr = diagnostics.corridorDiagnostic as Record<string, unknown>
               if (!failureStep) failureStep = (corr.exactLocalStep as string) || null
@@ -9221,6 +9246,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               mappedFailureStep: failureStep,
               mappedFailureMiddleStep: failureMiddleStep,
               mappedFailureReason: failureReason?.slice(0, 80),
+              hasOwnerCorridorDiagnostic: !!diagnostics?.ownerCorridorDiagnostic,
               verdict: failureStep ? 'SERVER_FAILURE_FIELDS_EXTRACTED' : 'SERVER_FAILURE_FIELDS_MISSING',
             })
           }

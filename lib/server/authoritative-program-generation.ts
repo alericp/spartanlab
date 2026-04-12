@@ -735,6 +735,14 @@ export async function executeAuthoritativeGeneration(
          isPostAllocationError ? 'weekly_allocator_or_visible_week' :
          isPostFunnelContractError ? 'contract_validation' : 'unknown')
       
+      // [POST_ALLOCATION_HANDOFF_FIX] Extract additional corridor fields from error string
+      const checkpointMatch = errorString.match(/lastSuccessfulPostAllocationCheckpoint['":\s]+([A-Z_]+)/i)
+      const lastSuccessfulPostAllocationCheckpoint = checkpointMatch?.[1] || undefined
+      const ownerClassMatch = errorString.match(/failingOwnerClass['":\s]+([a-z_]+)/i)
+      const failingOwnerClass = ownerClassMatch?.[1] || undefined
+      const ownerNameMatch = errorString.match(/failingOwnerName['":\s]+([a-z_]+)/i)
+      const failingOwnerName = ownerNameMatch?.[1] || undefined
+      
       console.log('[authoritative-generation-builder-error]', {
         generationIntent: request.generationIntent,
         error: errorString,
@@ -792,6 +800,10 @@ export async function executeAuthoritativeGeneration(
         compactStackPreview: errorStack?.split('\n').slice(0, 5).join(' | '),
         degradationAttempted: errorStack?.includes('safeDegradationApplied') || false,
         fallbackApplied: errorStack?.includes('fallbackApplied') || errorString.includes('fallback'),
+        // [POST_ALLOCATION_HANDOFF_FIX] Include owner corridor fields
+        lastSuccessfulPostAllocationCheckpoint,
+        failingOwnerClass,
+        failingOwnerName,
         timings: getTimings(),
         totalElapsedMs: Date.now() - startTime,
         parityVerdict: buildParityVerdict(request, false),

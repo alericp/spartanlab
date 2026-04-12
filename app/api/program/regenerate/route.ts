@@ -253,6 +253,8 @@ export async function POST(request: Request) {
     const lastSuccessfulPostAllocationCheckpointPayload = (result as Record<string, unknown>).lastSuccessfulPostAllocationCheckpoint as string | undefined
     const failingOwnerClassPayload = (result as Record<string, unknown>).failingOwnerClass as string | undefined
     const failingOwnerNamePayload = (result as Record<string, unknown>).failingOwnerName as string | undefined
+    const failedBeforeMicroStep1Payload = (result as Record<string, unknown>).failedBeforeMicroStep1 as boolean | undefined
+    const traceGapVerdictPayload = (result as Record<string, unknown>).traceGapVerdict as string | undefined
     
     const failurePayload = {
       success: false,
@@ -270,6 +272,9 @@ export async function POST(request: Request) {
       lastSuccessfulPostAllocationCheckpoint: lastSuccessfulPostAllocationCheckpointPayload,
       failingOwnerClass: failingOwnerClassPayload,
       failingOwnerName: failingOwnerNamePayload,
+      // Trace gap detection fields
+      failedBeforeMicroStep1: failedBeforeMicroStep1Payload,
+      traceGapVerdict: traceGapVerdictPayload,
       timings: result.timings,
       diagnostics: {
         routeStage: 'authoritative_service_call',
@@ -290,6 +295,10 @@ export async function POST(request: Request) {
           lastSuccessfulPostAllocationCheckpoint: lastSuccessfulPostAllocationCheckpointPayload,
           failingOwnerClass: failingOwnerClassPayload,
           failingOwnerName: failingOwnerNamePayload,
+        } : undefined,
+        traceGapDiagnostic: failedBeforeMicroStep1Payload !== undefined ? {
+          failedBeforeMicroStep1: failedBeforeMicroStep1Payload,
+          traceGapVerdict: traceGapVerdictPayload,
         } : undefined,
       },
     }
@@ -314,14 +323,21 @@ export async function POST(request: Request) {
     const lastSuccessfulPostAllocationCheckpoint = (result as Record<string, unknown>).lastSuccessfulPostAllocationCheckpoint as string | undefined
     const failingOwnerClass = (result as Record<string, unknown>).failingOwnerClass as string | undefined
     const failingOwnerName = (result as Record<string, unknown>).failingOwnerName as string | undefined
+    const failedBeforeMicroStep1 = (result as Record<string, unknown>).failedBeforeMicroStep1 as boolean | undefined
+    const traceGapVerdict = (result as Record<string, unknown>).traceGapVerdict as string | undefined
     
-    const verdictType = exactBuilderCorridor?.includes('post_allocation') 
-      ? 'REQUIRED_OWNER_FAILED'
-      : exactLocalStep === 'route_error'
-        ? 'ROUTE_ONLY_FAILURE'
-        : failingOwnerClass === 'optional_fallback'
-          ? 'OPTIONAL_OWNER_FAILED_BUT_CONTINUED'
-          : 'NO_POST_ALLOCATION_OWNER_FAILURE_FOUND'
+    // Determine verdict with trace gap detection
+    const verdictType = traceGapVerdict 
+      ? traceGapVerdict
+      : exactBuilderCorridor?.includes('trace_gap')
+        ? 'TRACE_GAP_OWNER_FAILED_BEFORE_MICRO_1'
+        : exactBuilderCorridor?.includes('post_allocation') 
+          ? 'REQUIRED_OWNER_FAILED'
+          : exactLocalStep === 'route_error'
+            ? 'ROUTE_ONLY_FAILURE'
+            : failingOwnerClass === 'optional_fallback'
+              ? 'OPTIONAL_OWNER_FAILED_BUT_CONTINUED'
+              : 'NO_POST_ALLOCATION_OWNER_FAILURE_FOUND'
     
     console.error('[AUTHORITATIVE_REGENERATE_FAILURE_SUMMARY]', {
       fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
@@ -334,12 +350,37 @@ export async function POST(request: Request) {
       lastSuccessfulPostAllocationCheckpoint: lastSuccessfulPostAllocationCheckpoint ?? 'not_tracked',
       failingOwnerClass: failingOwnerClass ?? 'unknown',
       failingOwnerName: failingOwnerName ?? 'unknown',
+      // Trace gap detection
+      failedBeforeMicroStep1: failedBeforeMicroStep1 ?? 'not_tracked',
+      traceGapVerdict: traceGapVerdict ?? 'not_applicable',
       // Stage info
       builderStage: result.failedStage ?? 'unknown',
-      failureZone: exactBuilderCorridor?.includes('post_allocation') ? 'post_allocation' : 'other',
+      failureZone: exactBuilderCorridor?.includes('trace_gap') 
+        ? 'trace_gap' 
+        : exactBuilderCorridor?.includes('post_allocation') 
+          ? 'post_allocation' 
+          : 'other',
       // Verdict
       verdict: verdictType,
     })
+    
+    // ==========================================================================
+    // [AUTHORITATIVE_TRACE_GAP_FAILURE_SUMMARY] Specific trace gap summary
+    // ==========================================================================
+    if (failedBeforeMicroStep1 || exactBuilderCorridor?.includes('trace_gap')) {
+      console.error('[AUTHORITATIVE_TRACE_GAP_FAILURE_SUMMARY]', {
+        fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+        exactBuilderCorridor: exactBuilderCorridor ?? 'unknown',
+        exactLocalStep: exactLocalStep ?? 'unknown',
+        exactLastSafeSubstep: exactLastSafeSubstep ?? 'unknown',
+        compactBuilderError: compactBuilderError?.slice(0, 150) ?? 'no_error_captured',
+        failingOwnerClass: failingOwnerClass ?? 'unknown',
+        failingOwnerName: failingOwnerName ?? 'unknown',
+        lastSuccessfulPostAllocationCheckpoint: lastSuccessfulPostAllocationCheckpoint ?? 'not_tracked',
+        failedBeforeMicroStep1: true,
+        verdict: 'TRACE_GAP_OWNER_FAILED_BEFORE_MICRO_1',
+      })
+    }
     
     return NextResponse.json(failurePayload, { status: 500 })
     }

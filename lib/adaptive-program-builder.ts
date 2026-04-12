@@ -7678,13 +7678,33 @@ async function generateAdaptiveProgramImpl(
   })
   
   // ==========================================================================
+  // [POST_ALLOCATION_TRACE_GAP_FENCE] Deterministic fence for trace gap isolation
+  // ==========================================================================
+  // This fence captures the exact moment BEFORE any tracker/bridge declaration.
+  // If anything throws between this fence and MICRO_STEP_1_ENTRY, the outer
+  // catch will capture it with trace_gap ownership.
+  // ==========================================================================
+  console.log('[POST_ALLOCATION_TRACE_GAP_FENCE]', {
+    fingerprint: 'TRACE_GAP_FENCE_V1_2026_04_12',
+    corridorOwner: 'post_allocation_trace_gap',
+    localStep: 'trace_gap_fence_entered',
+    exactLastSafeSubstep: 'POST_ALLOCATION_TRACE_ENTRY',
+    nextExpectedCheckpoint: 'POST_ALLOCATION_MICRO_STEP_1_ENTRY',
+    deployedSourceVersion: 'v1_2026_04_12_trace_gap_fix',
+    verdict: 'TRACE_GAP_FENCE_REACHED_ENTERING_MICRO_CORRIDOR',
+  })
+  
+  // ==========================================================================
   // [AUTHORITATIVE_FATAL_AUDIT_TRACKER] Single mutable tracker for post-allocation failures
   // ==========================================================================
   // This tracker is updated by each checkpoint and catch block. On failure, it
   // provides ONE authoritative summary of the exact failing owner.
+  // CRITICAL: This is now INSIDE the trace gap try-catch to capture any throw.
   // ==========================================================================
-  const postAllocationFatalAudit = {
-    lastSuccessfulCheckpoint: 'POST_ALLOCATION_TRACE_ENTRY' as string,
+  
+  // Declare tracker and bridge outside try so they're accessible in catch
+  let postAllocationFatalAudit = {
+    lastSuccessfulCheckpoint: 'TRACE_GAP_FENCE' as string,
     exactBuilderCorridor: null as string | null,
     exactLocalStep: null as string | null,
     exactLastSafeSubstep: null as string | null,
@@ -7693,33 +7713,26 @@ async function generateAdaptiveProgramImpl(
     failingOwnerName: null as string | null,
   }
   
-  // ==========================================================================
-  // [POST_ALLOCATION_MICRO_CORRIDOR] Deterministic micro-step isolation
-  // ==========================================================================
-  // This micro-corridor ensures EVERY step between POST_ALLOCATION_TRACE_ENTRY
-  // and POST_ALLOCATION_ALLOCATOR_ENTRY is explicitly checkpointed. If any step
-  // fails, the exact first throw site is captured with precise diagnostics.
-  // ==========================================================================
-  
+  // Use a simpler type to avoid potential type-reference issues
   let postAllocationOwnerBridge: {
     selectedSkills: string[]
     primaryGoal: string
     secondaryGoal: string | null
-    materialSkillIntent: MaterialSkillIntentEntry[]
+    materialSkillIntent: Array<{ skill: string; weeklyTargetMinutes: number; minimumViableMinutes: number; expressionPriority: number; isRepresented: boolean; isSupportExpressed: boolean; isSupportRotational: boolean; isDeferred: boolean; deferralReason: string | null }>
     experienceLevel: string
     jointCautions: string[]
     equipmentAvailable: string[]
-    currentWorkingProgressions: Record<string, CurrentWorkingProgression>
+    currentWorkingProgressions: Record<string, { progressionId: string; currentLevel: number }>
     representedSkills: string[]
     supportExpressedSkills: string[]
     supportRotationalSkills: string[]
     deferredSkills: Array<{ skill: string; reason: string }>
-    allocationEntries: MultiSkillSessionAllocationEntry[]
+    allocationEntries: Array<{ skill: string; allocated: boolean }>
     effectiveTrainingDays: number
     bridgeVersion: string
     sourceContracts: string[]
     legacyReadsEliminated: string[]
-  }
+  } | null = null
   
   try {
     // ==========================================================================
@@ -7929,25 +7942,39 @@ async function generateAdaptiveProgramImpl(
       throw microCorridorError // Re-throw the already-wrapped error
     }
     
-    // Update fatal audit tracker
-    postAllocationFatalAudit.exactBuilderCorridor = 'post_allocation_micro_corridor'
-    postAllocationFatalAudit.exactLocalStep = 'micro_corridor_first_throw'
+    // ==========================================================================
+    // TRACE GAP DETECTION: Determine if failure was BEFORE or AFTER MICRO_STEP_1_ENTRY
+    // ==========================================================================
+    const failedBeforeMicroStep1 = postAllocationFatalAudit.lastSuccessfulCheckpoint === 'TRACE_GAP_FENCE'
+    const traceGapVerdict = failedBeforeMicroStep1 
+      ? 'TRACE_GAP_OWNER_FAILED_BEFORE_MICRO_1' 
+      : 'MICRO_1_ENTERED_AND_FAILED_LATER'
+    
+    // Update fatal audit tracker with precise trace gap ownership
+    postAllocationFatalAudit.exactBuilderCorridor = failedBeforeMicroStep1 
+      ? 'post_allocation_trace_gap' 
+      : 'post_allocation_micro_corridor'
+    postAllocationFatalAudit.exactLocalStep = failedBeforeMicroStep1
+      ? 'before_micro_step_1_entry'
+      : 'micro_corridor_first_throw'
     postAllocationFatalAudit.exactLastSafeSubstep = postAllocationFatalAudit.lastSuccessfulCheckpoint
     postAllocationFatalAudit.compactBuilderError = errorMessage.slice(0, 200)
     postAllocationFatalAudit.failingOwnerClass = 'required_hard_fail'
-    postAllocationFatalAudit.failingOwnerName = 'micro_corridor'
+    postAllocationFatalAudit.failingOwnerName = failedBeforeMicroStep1 ? 'trace_gap' : 'micro_corridor'
     
     console.error('[POST_ALLOCATION_MICRO_CORRIDOR_FAIL]', {
       fingerprint: 'MICRO_CORRIDOR_V1_2026_04_12',
-      corridorOwner: 'post_allocation_micro_corridor',
-      localStep: 'micro_corridor_first_throw',
+      corridorOwner: postAllocationFatalAudit.exactBuilderCorridor,
+      localStep: postAllocationFatalAudit.exactLocalStep,
       exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
       error: errorMessage,
       errorStack,
-      failureZone: 'between_trace_entry_and_bridge_pass',
+      failureZone: failedBeforeMicroStep1 ? 'trace_gap_before_micro_1' : 'between_micro_1_and_bridge_pass',
+      failedBeforeMicroStep1,
+      traceGapVerdict,
       multiSkillMaterialityContractExists: !!multiSkillMaterialityContract,
       multiSkillAllocationContractExists: !!multiSkillAllocationContract,
-      verdict: 'MICRO_CORRIDOR_FAILED_EXACT_SITE_CAPTURED',
+      verdict: traceGapVerdict,
     })
     
     // Emit authoritative fatal owner summary
@@ -7956,21 +7983,24 @@ async function generateAdaptiveProgramImpl(
       ...postAllocationFatalAudit,
       builderStage: stageTracker.current,
       failureZone: 'post_allocation',
-      verdict: 'REQUIRED_OWNER_FAILED',
+      failedBeforeMicroStep1,
+      verdict: traceGapVerdict,
     })
     
     throw createGenerationError(
-      'post_allocation_micro_corridor_failed',
+      failedBeforeMicroStep1 ? 'post_allocation_trace_gap_failed' : 'post_allocation_micro_corridor_failed',
       stageTracker.current,
-      `Post-allocation micro-corridor failed: ${errorMessage}`,
+      `Post-allocation ${failedBeforeMicroStep1 ? 'trace gap' : 'micro-corridor'} failed: ${errorMessage}`,
       {
-        exactBuilderCorridor: 'post_allocation_micro_corridor',
-        exactLocalStep: 'micro_corridor_first_throw',
+        exactBuilderCorridor: postAllocationFatalAudit.exactBuilderCorridor,
+        exactLocalStep: postAllocationFatalAudit.exactLocalStep,
         exactLastSafeSubstep: postAllocationFatalAudit.lastSuccessfulCheckpoint,
         compactBuilderError: errorMessage.slice(0, 200),
         lastSuccessfulPostAllocationCheckpoint: postAllocationFatalAudit.lastSuccessfulCheckpoint,
         failingOwnerClass: 'required_hard_fail',
-        failingOwnerName: 'micro_corridor',
+        failingOwnerName: postAllocationFatalAudit.failingOwnerName,
+        failedBeforeMicroStep1,
+        traceGapVerdict,
       }
     )
   }

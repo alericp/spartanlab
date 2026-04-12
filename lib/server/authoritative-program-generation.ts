@@ -730,7 +730,6 @@ export async function executeAuthoritativeGeneration(
                               errorString.includes('post_allocation_handoff') ||
                               errorString.includes('post_allocation_to_weekly_allocator') ||
                               errorString.includes('post_allocation_to_visible_week')
-      const corridorMatch = errorString.match(/exactBuilderCorridor['":\s]+([a-z_]+)/i)
       
       // [POST_FUNNEL_CONTRACT_GATE] Detect post-funnel contract validation failures
       const isPostFunnelContractError = errorString.includes('post_funnel_contract_validation_failed') ||

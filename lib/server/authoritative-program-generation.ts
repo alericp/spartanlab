@@ -295,16 +295,16 @@ export async function executeAuthoritativeGeneration(
   const { markStage, getTimings, getCurrentStage } = createStageTracker(startTime)
   
   // ==========================================================================
-  // [CANONICAL-SERVICE-LIVE] Authoritative runtime proof chain marker
+  // [REGEN_SERVICE_ENTRY] Authoritative runtime proof with fingerprint
   // ==========================================================================
-  console.log('[CANONICAL-SERVICE-LIVE]', {
-    serviceFile: 'lib/server/authoritative-program-generation.ts',
-    functionName: 'executeAuthoritativeGeneration',
-    builderImport: '@/lib/adaptive-program-builder',
-    version: 'DOCTRINE-MATERIALIZATION-2026-04-11-V1',
+  const REGENERATE_RUNTIME_FINGERPRINT = 'REGEN_AUDIT_2026_04_11_V2'
+  console.log('[REGEN_SERVICE_ENTRY]', {
+    fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+    fileOwner: 'lib/server/authoritative-program-generation.ts',
+    functionOwner: 'executeAuthoritativeGeneration',
+    phase: 'service_entry',
     generationIntent: request.generationIntent,
     triggerSource: request.triggerSource,
-    checkpoint: 'authoritative_service_entry',
     timestamp: new Date().toISOString(),
   })
   

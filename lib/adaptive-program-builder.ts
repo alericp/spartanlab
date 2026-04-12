@@ -4451,14 +4451,20 @@ export async function generateAdaptiveProgram(
   onStageChange?: (stage: string) => void,
   serverOptions?: ServerGenerationOptions
 ): Promise<AdaptiveProgram> {
-  // [PHASE 16J] Builder entry diagnostic with override awareness
-  console.log('[phase16j-builder-canonical-source-audit]', {
-    stage: 'generateAdaptiveProgram_entry',
+  // ==========================================================================
+  // [REGEN_BUILDER_ENTRY] Authoritative runtime proof with fingerprint
+  // ==========================================================================
+  const REGENERATE_RUNTIME_FINGERPRINT = 'REGEN_AUDIT_2026_04_11_V2'
+  console.log('[REGEN_BUILDER_ENTRY]', {
+    fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+    fileOwner: 'lib/adaptive-program-builder.ts',
+    functionOwner: 'generateAdaptiveProgram',
+    phase: 'builder_entry',
     hasCanonicalOverride: !!serverOptions?.canonicalProfileOverride,
     source: serverOptions?.canonicalProfileOverride ? 'override' : 'getCanonicalProfile',
-    timestamp: new Date().toISOString(),
     inputPrimaryGoal: inputs.primaryGoal,
     inputSelectedSkillsCount: inputs.selectedSkills?.length || 0,
+    timestamp: new Date().toISOString(),
   })
   
   // ==========================================================================

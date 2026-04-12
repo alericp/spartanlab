@@ -4366,13 +4366,16 @@ export default function ProgramPage() {
       status: serverResponse.status,
       error: serverResult.error,
       failedStage: serverResult.failedStage,
+      exactFailingSubstep: serverResult.exactFailingSubstep,
+      exactLocalStep: serverResult.exactLocalStep,
+      compactBuilderError: serverResult.compactBuilderError?.slice(0, 100),
     })
     throw new ProgramPageValidationError(
       'orchestration_failed',
       generationStage,
       'server_generation_failed',
       serverResult.error || 'Server generation failed',
-      { failedStage: serverResult.failedStage }
+      { serverResult } // Pass full serverResult for failure field extraction
     )
   }
   
@@ -5601,6 +5604,58 @@ export default function ProgramPage() {
           failureDayNumber = (ctx?.failureDayNumber as number) ?? null
           failureFocus = (ctx?.failureFocus as string) ?? null
           failureGoal = (ctx?.failureGoal as string) ?? null
+        }
+        
+        // ==========================================================================
+        // [MAIN_GENERATION_PAGE_FAILURE_INGEST] Extract server failure fields from context
+        // When server returns 500, serverResult in context contains exact diagnostic fields
+        // This prevents "Step: unavailable / Reason: unavailable" in the banner
+        // ==========================================================================
+        if (isPageValidationError && (errorSubCode === 'server_generation_failed' || (err as any).context?.serverResult)) {
+          const ctx = (err as { context?: Record<string, unknown> }).context
+          const serverResult = ctx?.serverResult as Record<string, unknown> | undefined
+          
+          if (serverResult) {
+            // Extract exact server diagnostic fields
+            const serverFailedStage = serverResult.failedStage as string | undefined
+            const exactFailingSubstep = serverResult.exactFailingSubstep as string | undefined
+            const exactLastSafeSubstep = serverResult.exactLastSafeSubstep as string | undefined
+            const exactBuilderCorridor = serverResult.exactBuilderCorridor as string | undefined
+            const exactLocalStep = serverResult.exactLocalStep as string | undefined
+            const compactBuilderError = serverResult.compactBuilderError as string | undefined
+            const diagnostics = serverResult.diagnostics as Record<string, unknown> | undefined
+            
+            // Map server fields to failure display fields
+            // Priority: exactFailingSubstep > exactLocalStep > failedStage
+            failureStep = exactFailingSubstep || exactLocalStep || serverFailedStage || null
+            failureMiddleStep = exactLastSafeSubstep || null
+            failureReason = compactBuilderError || (serverResult.error as string) || null
+            
+            // Extract from diagnostics if available
+            if (diagnostics?.phase15eDiagnostic) {
+              const p15e = diagnostics.phase15eDiagnostic as Record<string, unknown>
+              if (!failureStep) failureStep = (p15e.exactFailingSubstep as string) || null
+              if (!failureMiddleStep) failureMiddleStep = (p15e.exactLastSafeSubstep as string) || null
+            }
+            if (diagnostics?.corridorDiagnostic) {
+              const corr = diagnostics.corridorDiagnostic as Record<string, unknown>
+              if (!failureStep) failureStep = (corr.exactLocalStep as string) || null
+            }
+            
+            console.log('[MAIN_GENERATION_PAGE_FAILURE_INGEST]', {
+              fingerprint: 'REGEN_AUDIT_2026_04_11_V2',
+              serverFailedStage,
+              exactFailingSubstep,
+              exactLastSafeSubstep,
+              exactBuilderCorridor,
+              exactLocalStep,
+              compactBuilderError: compactBuilderError?.slice(0, 80),
+              mappedFailureStep: failureStep,
+              mappedFailureMiddleStep: failureMiddleStep,
+              mappedFailureReason: failureReason?.slice(0, 80),
+              verdict: failureStep ? 'SERVER_FAILURE_FIELDS_EXTRACTED' : 'SERVER_FAILURE_FIELDS_MISSING',
+            })
+          }
         }
         
         // Fallback: parse from errorMessage if structured fields missing
@@ -9119,6 +9174,58 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           failureGoal = (ctx?.failureGoal as string) ?? null
         }
         
+        // ==========================================================================
+        // [REGENERATE_PAGE_FAILURE_INGEST] Extract server failure fields from context
+        // When server returns 500, serverResult in context contains exact diagnostic fields
+        // This prevents "Step: unavailable / Reason: unavailable" in the banner
+        // ==========================================================================
+        if (isPageValidationError && (errorSubCode === 'server_regenerate_failed' || (err as any).context?.serverResult)) {
+          const ctx = (err as { context?: Record<string, unknown> }).context
+          const serverResult = ctx?.serverResult as Record<string, unknown> | undefined
+          
+          if (serverResult) {
+            // Extract exact server diagnostic fields
+            const serverFailedStage = serverResult.failedStage as string | undefined
+            const exactFailingSubstep = serverResult.exactFailingSubstep as string | undefined
+            const exactLastSafeSubstep = serverResult.exactLastSafeSubstep as string | undefined
+            const exactBuilderCorridor = serverResult.exactBuilderCorridor as string | undefined
+            const exactLocalStep = serverResult.exactLocalStep as string | undefined
+            const compactBuilderError = serverResult.compactBuilderError as string | undefined
+            const diagnostics = serverResult.diagnostics as Record<string, unknown> | undefined
+            
+            // Map server fields to failure display fields
+            // Priority: exactFailingSubstep > exactLocalStep > failedStage
+            failureStep = exactFailingSubstep || exactLocalStep || serverFailedStage || null
+            failureMiddleStep = exactLastSafeSubstep || null
+            failureReason = compactBuilderError || (serverResult.error as string) || null
+            
+            // Extract from diagnostics if available
+            if (diagnostics?.phase15eDiagnostic) {
+              const p15e = diagnostics.phase15eDiagnostic as Record<string, unknown>
+              if (!failureStep) failureStep = (p15e.exactFailingSubstep as string) || null
+              if (!failureMiddleStep) failureMiddleStep = (p15e.exactLastSafeSubstep as string) || null
+            }
+            if (diagnostics?.corridorDiagnostic) {
+              const corr = diagnostics.corridorDiagnostic as Record<string, unknown>
+              if (!failureStep) failureStep = (corr.exactLocalStep as string) || null
+            }
+            
+            console.log('[REGENERATE_PAGE_FAILURE_INGEST]', {
+              fingerprint: 'REGEN_AUDIT_2026_04_11_V2',
+              serverFailedStage,
+              exactFailingSubstep,
+              exactLastSafeSubstep,
+              exactBuilderCorridor,
+              exactLocalStep,
+              compactBuilderError: compactBuilderError?.slice(0, 80),
+              mappedFailureStep: failureStep,
+              mappedFailureMiddleStep: failureMiddleStep,
+              mappedFailureReason: failureReason?.slice(0, 80),
+              verdict: failureStep ? 'SERVER_FAILURE_FIELDS_EXTRACTED' : 'SERVER_FAILURE_FIELDS_MISSING',
+            })
+          }
+        }
+        
         // Fallback: parse from errorMessage if structured fields missing
         if (!failureStep && errorMessage.includes('session_generation_failed')) {
           const stepMatch = errorMessage.match(/step=([a-z_]+)/i)
@@ -9276,6 +9383,25 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           runtimeSessionId: regenFailedResultWithMetadata.runtimeSessionId,
           hydratedFromStorage: regenFailedResultWithMetadata.hydratedFromStorage,
           verdict: 'payload_ready_for_state',
+        })
+        
+        // ==========================================================================
+        // [REGENERATE_PAGE_FAILURE_DISPLAY_FIELDS] Authoritative proof of banner fields
+        // This log proves whether server failure fields survived to banner-driving state
+        // ==========================================================================
+        console.log('[REGENERATE_PAGE_FAILURE_DISPLAY_FIELDS]', {
+          fingerprint: 'REGEN_AUDIT_2026_04_11_V2',
+          flowName: 'regeneration',
+          failureStepForBanner: regenFailedResultWithMetadata.failureStep ?? 'unavailable',
+          failureMiddleStepForBanner: regenFailedResultWithMetadata.failureMiddleStep ?? null,
+          failureReasonForBanner: regenFailedResultWithMetadata.failureReason?.slice(0, 100) ?? 'unavailable',
+          failureFocusForBanner: regenFailedResultWithMetadata.failureFocus ?? null,
+          failureDayNumberForBanner: regenFailedResultWithMetadata.failureDayNumber ?? null,
+          errorSubCode: regenFailedResultWithMetadata.subCode,
+          serverFieldsExtracted: !!(regenFailedResultWithMetadata.failureStep && regenFailedResultWithMetadata.failureStep !== 'unavailable'),
+          verdict: (regenFailedResultWithMetadata.failureStep && regenFailedResultWithMetadata.failureStep !== 'unavailable')
+            ? 'EXACT_FAILURE_WILL_DISPLAY'
+            : 'UNAVAILABLE_STILL_PRESENT',
         })
         
         setLastBuildResult(regenFailedResultWithMetadata)

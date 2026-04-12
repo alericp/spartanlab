@@ -194,54 +194,88 @@ export async function POST(request: Request) {
         fallbackApplied?: boolean
       }
       
-      console.log('[regenerate-route-generation-failed]', {
-        error: result.error,
-        failedStage: result.failedStage,
-        // [PHASE 15E] Exact substep diagnostic
-        exactFailingSubstep,
-        exactLastSafeSubstep,
-        degradationAttempted,
-        // [POST-TRUTH-CORRIDOR] Corridor diagnostic
-        exactBuilderCorridor,
-        exactLocalStep,
-        fallbackApplied,
-        timings: result.timings,
-      })
-      
-      return NextResponse.json({
-        success: false,
-        error: result.error,
-        failedStage: result.failedStage,
-        // [PHASE 15E] Include exact substep info in 500 response
-        exactFailingSubstep,
-        exactLastSafeSubstep,
-        compactBuilderError,
-        compactStackPreview,
-        degradationAttempted,
-        // [POST-TRUTH-CORRIDOR] Include corridor diagnostic fields
-        exactBuilderCorridor,
-        exactLocalStep,
-        fallbackApplied,
-        timings: result.timings,
-        diagnostics: {
-          routeStage: 'authoritative_service_call',
-          serviceStage: result.failedStage,
-          generationIntent: 'regenerate',
-          triggerSource: 'regenerate',
-          // Preserve exact Phase 15E failure info
-          phase15eDiagnostic: exactFailingSubstep ? {
-            exactFailingSubstep,
-            exactLastSafeSubstep,
-            degradationAttempted,
-          } : undefined,
-          // [POST-TRUTH-CORRIDOR] Include corridor info in diagnostics
-          corridorDiagnostic: exactBuilderCorridor ? {
-            exactBuilderCorridor,
-            exactLocalStep,
-            fallbackApplied,
-          } : undefined,
-        },
-      }, { status: 500 })
+    console.log('[regenerate-route-generation-failed]', {
+      error: result.error,
+      failedStage: result.failedStage,
+      // [PHASE 15E] Exact substep diagnostic
+      exactFailingSubstep,
+      exactLastSafeSubstep,
+      degradationAttempted,
+      // [POST-TRUTH-CORRIDOR] Corridor diagnostic
+      exactBuilderCorridor,
+      exactLocalStep,
+      fallbackApplied,
+      timings: result.timings,
+    })
+    
+    // ==========================================================================
+    // [REGENERATE_SERVER_FAILURE_CONTRACT] Authoritative proof of failure fields
+    // This log proves what failure data the service returned and route is passing
+    // ==========================================================================
+    console.log('[REGENERATE_SERVER_FAILURE_CONTRACT]', {
+      fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+      httpStatus: 500,
+      successField: false,
+      failedStage: result.failedStage,
+      exactFailingSubstep: exactFailingSubstep ?? 'not_present',
+      exactLastSafeSubstep: exactLastSafeSubstep ?? 'not_present',
+      exactBuilderCorridor: exactBuilderCorridor ?? 'not_present',
+      exactLocalStep: exactLocalStep ?? 'not_present',
+      compactBuilderError: compactBuilderError?.slice(0, 100) ?? 'not_present',
+      degradationAttempted: degradationAttempted ?? false,
+      fallbackApplied: fallbackApplied ?? false,
+      fieldsSerializable: true,
+      verdict: exactFailingSubstep || exactLocalStep 
+        ? 'EXACT_FAILURE_FIELDS_PRESENT'
+        : 'GENERIC_FAILURE_ONLY',
+    })
+    
+    // ==========================================================================
+    // [REGENERATE_ROUTE_FAILURE_PAYLOAD] Final payload being sent to client
+    // ==========================================================================
+    const failurePayload = {
+      success: false,
+      error: result.error,
+      failedStage: result.failedStage,
+      exactFailingSubstep,
+      exactLastSafeSubstep,
+      compactBuilderError,
+      compactStackPreview,
+      degradationAttempted,
+      exactBuilderCorridor,
+      exactLocalStep,
+      fallbackApplied,
+      timings: result.timings,
+      diagnostics: {
+        routeStage: 'authoritative_service_call',
+        serviceStage: result.failedStage,
+        generationIntent: 'regenerate',
+        triggerSource: 'regenerate',
+        phase15eDiagnostic: exactFailingSubstep ? {
+          exactFailingSubstep,
+          exactLastSafeSubstep,
+          degradationAttempted,
+        } : undefined,
+        corridorDiagnostic: exactBuilderCorridor ? {
+          exactBuilderCorridor,
+          exactLocalStep,
+          fallbackApplied,
+        } : undefined,
+      },
+    }
+    
+    console.log('[REGENERATE_ROUTE_FAILURE_PAYLOAD]', {
+      fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+      payloadKeys: Object.keys(failurePayload),
+      failedStage: failurePayload.failedStage,
+      exactFailingSubstep: failurePayload.exactFailingSubstep ?? null,
+      exactLocalStep: failurePayload.exactLocalStep ?? null,
+      compactBuilderErrorPreview: failurePayload.compactBuilderError?.slice(0, 60) ?? null,
+      hasDiagnostics: !!failurePayload.diagnostics,
+      verdict: 'PAYLOAD_READY_FOR_CLIENT',
+    })
+    
+    return NextResponse.json(failurePayload, { status: 500 })
     }
     
     // [PHASE15E-FAILURE-SUMMARY-PROMOTION] Log attached summary for debugging
@@ -308,6 +342,24 @@ export async function POST(request: Request) {
       verdict: authoritativeOutcome.outcomeMode,
     })
     
+    // ==========================================================================
+    // [REGENERATE_HEALTHY_SUCCESS_CONTRACT] Proof of healthy success for audits
+    // ==========================================================================
+    console.log('[REGENERATE_HEALTHY_SUCCESS_CONTRACT]', {
+      fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+      httpStatus: 200,
+      successField: true,
+      sessionCount: routeClassification.sessionCount,
+      outcomeMode: authoritativeOutcome.outcomeMode,
+      shouldClearFailureState: authoritativeOutcome.shouldClearFailureState,
+      totalDegraded: authoritativeOutcome.totalDegraded,
+      verdict: authoritativeOutcome.outcomeMode === 'HEALTHY_SUCCESS'
+        ? 'HEALTHY_SUCCESS_CONFIRMED'
+        : authoritativeOutcome.outcomeMode === 'DEGRADED_SUCCESS_WITH_PARTIAL_PROGRAM'
+          ? 'DEGRADED_SUCCESS_CONFIRMED'
+          : 'UNEXPECTED_STATE',
+    })
+    
     return NextResponse.json({
       success: true,
       program: result.program,
@@ -330,10 +382,28 @@ export async function POST(request: Request) {
       totalElapsedMs: Date.now() - routeStartTime,
     })
     
+    // ==========================================================================
+    // [REGENERATE_500_ROOT_OWNER] Identifies when 500 comes from outer catch
+    // This proves the 500 is from route-level exception, not service failure
+    // ==========================================================================
+    console.log('[REGENERATE_500_ROOT_OWNER]', {
+      fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+      httpStatus: 500,
+      rootOwner: 'route_outer_catch',
+      errorName: error instanceof Error ? error.name : 'unknown',
+      errorMessage: errorMessage.slice(0, 200),
+      stackTopLine: error instanceof Error ? error.stack?.split('\n')[1]?.trim()?.slice(0, 100) : 'no stack',
+      verdict: 'ROUTE_CATCH_FAILURE_NOT_SERVICE_FAILURE',
+    })
+    
     return NextResponse.json({
       success: false,
       error: errorMessage,
       failedStage: 'route_error',
+      // Include exact fields for page extraction even in route catch
+      exactFailingSubstep: 'route_outer_catch',
+      exactLocalStep: 'route_error',
+      compactBuilderError: errorMessage.slice(0, 200),
       diagnostics: {
         routeStage: 'route_catch_block',
         serviceStage: 'unknown',

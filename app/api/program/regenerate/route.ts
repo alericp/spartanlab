@@ -308,18 +308,24 @@ export async function POST(request: Request) {
     const failingOwnerClass = (result as Record<string, unknown>).failingOwnerClass as string | undefined
     const failingOwnerName = (result as Record<string, unknown>).failingOwnerName as string | undefined
     
-    // Determine verdict - simplified for consolidated owner corridor
-    const verdictType = exactBuilderCorridor === 'post_allocation_owner_corridor'
-      ? 'POST_ALLOCATION_OWNER_CORRIDOR_FAILED'
-      : exactBuilderCorridor?.includes('post_allocation') 
+    // Determine verdict - supports handoff chain and consolidated owner corridor
+    const verdictType = exactBuilderCorridor === 'post_allocation_handoff'
+      ? 'POST_ALLOCATION_HANDOFF_FAILED'
+      : exactBuilderCorridor === 'post_allocation_owner_corridor'
         ? 'POST_ALLOCATION_OWNER_CORRIDOR_FAILED'
-        : exactLocalStep === 'route_error'
-          ? 'ROUTE_ONLY_FAILURE'
-          : failingOwnerClass === 'optional_fallback'
-            ? 'OPTIONAL_OWNER_FAILED_BUT_CONTINUED'
-            : exactBuilderCorridor 
-              ? 'ROUTE_PRESERVED_BUILDER_OWNER'
-              : 'ROUTE_LOST_BUILDER_OWNER_METADATA'
+        : exactBuilderCorridor === 'post_allocation_to_weekly_allocator'
+          ? 'POST_ALLOCATION_HANDOFF_FAILED'
+          : exactBuilderCorridor === 'post_allocation_to_visible_week'
+            ? 'POST_ALLOCATION_HANDOFF_FAILED'
+            : exactBuilderCorridor?.includes('post_allocation') 
+              ? 'POST_ALLOCATION_HANDOFF_FAILED'
+              : exactLocalStep === 'route_error'
+                ? 'ROUTE_ONLY_FAILURE'
+                : failingOwnerClass === 'optional_fallback'
+                  ? 'OPTIONAL_OWNER_FAILED_BUT_CONTINUED'
+                  : exactBuilderCorridor 
+                    ? 'ROUTE_PRESERVED_BUILDER_OWNER'
+                    : 'ROUTE_LOST_BUILDER_OWNER_METADATA'
     
     console.error('[AUTHORITATIVE_POST_ALLOCATION_FAILURE_SUMMARY]', {
       fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
@@ -334,9 +340,12 @@ export async function POST(request: Request) {
       failingOwnerName: failingOwnerName ?? 'unknown',
       // Stage info
       builderStage: result.failedStage ?? 'unknown',
-      failureZone: exactBuilderCorridor?.includes('post_allocation') 
-        ? 'post_allocation_owner_corridor' 
-        : 'other',
+      // Failure zone now differentiates handoff vs corridor
+      failureZone: exactBuilderCorridor === 'post_allocation_handoff' 
+        ? 'post_allocation_handoff'
+        : exactBuilderCorridor?.includes('post_allocation') 
+          ? 'post_allocation_handoff_chain' 
+          : 'other',
       // Verdict
       verdict: verdictType,
     })

@@ -691,11 +691,12 @@ export async function executeAuthoritativeGeneration(
       const exactLastSafeSubstep = exactLastSafeSubstepMatch?.[1] || 'unknown'
       
       // [POST-TRUTH-CORRIDOR] Extract corridor info from GenerationError context
-      // Now supports consolidated post_allocation_owner_corridor
+      // Now supports consolidated post_allocation_owner_corridor and handoff chain
       const isCorridorError = errorString.includes('exactBuilderCorridor') || 
                               errorString.includes('post_truth_audit_to_structure_selection') ||
                               errorString.includes('post_funnel_allocation_to_session_entry') ||
                               errorString.includes('post_allocation_owner_corridor') ||
+                              errorString.includes('post_allocation_handoff') ||
                               errorString.includes('post_allocation_to_weekly_allocator') ||
                               errorString.includes('post_allocation_to_visible_week')
       const corridorMatch = errorString.match(/exactBuilderCorridor['":\s]+([a-z_]+)/i)
@@ -708,22 +709,29 @@ export async function executeAuthoritativeGeneration(
       const isOwnerCorridorError = errorString.includes('post_allocation_owner_corridor_failed') ||
                                    errorString.includes('POST_ALLOCATION_OWNER_CORRIDOR_FAIL')
       
+      // [POST_ALLOCATION_HANDOFF] Detect handoff chain failures (includes allocator + visible week)
+      const isHandoffError = errorString.includes('post_allocation_handoff_failed') ||
+                             errorString.includes('POST_ALLOCATION_HANDOFF_FAIL')
+      
       // [POST_ALLOCATION] Detect post-allocation bridge failures (weekly allocator / visible week)
-      const isPostAllocationError = isOwnerCorridorError ||
+      const isPostAllocationError = isOwnerCorridorError || isHandoffError ||
                                     errorString.includes('post_allocation_weekly_allocator_failed') ||
                                     errorString.includes('post_allocation_visible_week_failed') ||
                                     errorString.includes('POST_ALLOCATION_ALLOCATOR_FAIL') ||
                                     errorString.includes('POST_ALLOCATION_VISIBLE_WEEK_FAIL') ||
                                     errorString.includes('ALLOCATOR_INPUT_VALIDATION_FAIL')
       
+      // Preserve exact corridor from builder if available, otherwise classify
       const exactBuilderCorridor = corridorMatch?.[1] || 
-        (isOwnerCorridorError ? 'post_allocation_owner_corridor' :
+        (isHandoffError ? 'post_allocation_handoff' :
+         isOwnerCorridorError ? 'post_allocation_owner_corridor' :
          isPostAllocationError ? 'post_allocation_to_weekly_allocator' :
          isPostFunnelContractError ? 'post_funnel_allocation_to_session_entry' :
          errorString.includes('structure_selection') ? 'post_truth_audit_to_structure_selection' : 'unknown')
       const localStepMatch = errorString.match(/exactLocalStep['":\s]+([a-z_]+)/i)
       const exactLocalStep = localStepMatch?.[1] || 
-        (isOwnerCorridorError ? 'owner_corridor_failure' :
+        (isHandoffError ? 'handoff_failure' :
+         isOwnerCorridorError ? 'owner_corridor_failure' :
          isPostAllocationError ? 'weekly_allocator_or_visible_week' :
          isPostFunnelContractError ? 'contract_validation' : 'unknown')
       

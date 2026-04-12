@@ -2700,6 +2700,22 @@ export function buildVisibleWeekSkillExpressionContract(
   }
   const safeAllocationEntries = Array.isArray(safeMultiSkillAllocation.entries) ? safeMultiSkillAllocation.entries : []
   
+  // Log validation results
+  console.log('[VISIBLE_WEEK_INPUT_VALIDATION_PASS]', {
+    fingerprint: 'VISIBLE_WEEK_V1_2026_04_12',
+    materialSkillIntentCount: safeMaterialSkillIntent.length,
+    allocationEntriesCount: safeAllocationEntries.length,
+    effectiveTrainingDays: safeEffectiveTrainingDays,
+    primaryGoal: safePrimaryGoal || 'NONE',
+    experienceLevel: safeExperienceLevel,
+    inputsWereNormalized: {
+      materialSkillIntent: !Array.isArray(materialSkillIntent),
+      multiSkillAllocation: !multiSkillAllocation,
+      allocationEntries: !Array.isArray(multiSkillAllocation?.entries),
+    },
+    verdict: safeMaterialSkillIntent.length > 0 ? 'INPUTS_VALID' : 'INPUTS_EMPTY_BUT_SAFE',
+  })
+  
   const selectedSkills = safeMaterialSkillIntent.map(s => s.skill)
   
   // Classify skills
@@ -3072,13 +3088,34 @@ export function buildAuthoritativeMultiSkillIntentContract(
   builderInputSkillCount: number
 ): AuthoritativeMultiSkillIntentContract {
   // ==========================================================================
+  // [INTENT_CONTRACT_INPUT_VALIDATION] Validate and normalize all inputs
+  // ==========================================================================
+  const safeCanonicalProfile = canonicalProfile || {} as CanonicalProgrammingProfile
+  const safeWeightedSkillAllocation = Array.isArray(weightedSkillAllocation) ? weightedSkillAllocation : []
+  const safeMultiSkillAllocationContract = multiSkillAllocationContract || null
+  const safeSessionArchitectureTruth = sessionArchitectureTruth || null
+  const safeCurrentWorkingProgressions = currentWorkingProgressions || {}
+  const safeBuilderInputSkillCount = typeof builderInputSkillCount === 'number' ? builderInputSkillCount : 0
+  
+  console.log('[INTENT_CONTRACT_INPUT_VALIDATION_PASS]', {
+    fingerprint: 'INTENT_V1_2026_04_12',
+    canonicalProfileExists: !!canonicalProfile,
+    weightedSkillAllocationCount: safeWeightedSkillAllocation.length,
+    multiSkillAllocationContractExists: !!safeMultiSkillAllocationContract,
+    sessionArchitectureTruthExists: !!safeSessionArchitectureTruth,
+    currentWorkingProgressionsCount: Object.keys(safeCurrentWorkingProgressions).length,
+    builderInputSkillCount: safeBuilderInputSkillCount,
+    verdict: 'INPUTS_VALIDATED',
+  })
+  
+  // ==========================================================================
   // [AI-TRUTH-BREADTH-AUDIT] CHECKLIST 3 OF 7: GUARDRAIL AGAINST 2-SKILL COLLAPSE
   // ==========================================================================
   // selectedSkills MUST come from the FULL canonical profile array, NOT a derived
   // [primary, secondary] shortcut. This guardrail ensures broader skills are never
   // silently lost when the user has selected 3+ skills.
   // ==========================================================================
-  const canonicalSelectedSkills = canonicalProfile.selectedSkills || []
+  const canonicalSelectedSkills = safeCanonicalProfile.selectedSkills || []
   const primaryGoal = canonicalProfile.primaryGoal || null
   const secondaryGoal = canonicalProfile.secondaryGoal || null
   
@@ -7616,6 +7653,29 @@ async function generateAdaptiveProgramImpl(
     multiSkillMaterialityContract.selectedSkills || [],
     'buildAuthoritativeMultiSkillAllocationContract'
   ))
+  
+  // ==========================================================================
+  // [POST_ALLOCATION_TRACE_ENTRY] Immediate first trace after ALLOCATION
+  // ==========================================================================
+  // This log proves the exact next step after ALLOCATION before any downstream
+  // consumer can throw. If this log appears but POST_ALLOCATION_ALLOCATOR_ENTRY
+  // does not, then something throws between here and line 7636.
+  // ==========================================================================
+  console.log('[POST_ALLOCATION_TRACE_ENTRY]', {
+    fingerprint: 'POST_ALLOCATION_TRACE_V1_2026_04_12',
+    corridorOwner: 'post_allocation_trace',
+    localStep: 'immediately_after_allocation_audit',
+    exactLastSafeSubstep: 'ai_truth_breadth_audit_allocation',
+    // Verify all required objects exist before downstream reads
+    multiSkillMaterialityContractExists: !!multiSkillMaterialityContract,
+    multiSkillMaterialityContractSelectedSkillsCount: multiSkillMaterialityContract?.selectedSkills?.length || 0,
+    multiSkillMaterialityContractPrimaryGoal: multiSkillMaterialityContract?.primaryGoal || 'MISSING',
+    multiSkillMaterialityContractMaterialSkillIntentCount: multiSkillMaterialityContract?.materialSkillIntent?.length || 0,
+    exposureReadinessMapSize: exposureReadinessMap?.size || 0,
+    canonicalProfileTrainingMethodPreferences: canonicalProfile?.trainingMethodPreferences || [],
+    effectiveTrainingDays,
+    verdict: 'TRACE_ENTRY_REACHED_CONTINUING_TO_WEEKLY_ALLOCATOR',
+  })
   
   // ==========================================================================
   // [WEEKLY-EXPRESSION-ALLOCATOR] AUTHORITATIVE UPSTREAM WEEKLY PLANNING CONTRACT

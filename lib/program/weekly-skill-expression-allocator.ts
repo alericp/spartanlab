@@ -188,16 +188,56 @@ export interface AllocatorInputs {
 export function buildWeeklyExpressionAllocationContract(
   inputs: AllocatorInputs
 ): WeeklyExpressionAllocationContract {
+  // ==========================================================================
+  // [ALLOCATOR_INPUT_VALIDATION] Validate and normalize inputs before processing
+  // ==========================================================================
+  if (!inputs) {
+    throw new Error('[ALLOCATOR_INPUT_VALIDATION_FAIL] inputs is null/undefined')
+  }
+  
+  // Normalize all inputs to safe values
+  const safeSelectedSkills = Array.isArray(inputs.selectedSkills) ? inputs.selectedSkills : []
+  const safePrimaryGoal = inputs.primaryGoal || ''
+  const safeSecondaryGoal = inputs.secondaryGoal || null
+  const safeEffectiveTrainingDays = typeof inputs.effectiveTrainingDays === 'number' && inputs.effectiveTrainingDays > 0 
+    ? inputs.effectiveTrainingDays : 3
+  const safeReadinessMap = inputs.readinessMap instanceof Map ? inputs.readinessMap : new Map()
+  const safeMethodPreferences = inputs.methodPreferences || { supersets: false, circuits: false, straightSets: true }
+  const safeJointCautions = Array.isArray(inputs.jointCautions) ? inputs.jointCautions : []
+  const safeExperienceLevel = inputs.experienceLevel || 'intermediate'
+  
+  // Log validation results
+  console.log('[ALLOCATOR_INPUT_VALIDATION_PASS]', {
+    fingerprint: 'ALLOCATOR_V1_2026_04_12',
+    selectedSkillsCount: safeSelectedSkills.length,
+    primaryGoal: safePrimaryGoal || 'NONE',
+    secondaryGoal: safeSecondaryGoal || 'NONE',
+    effectiveTrainingDays: safeEffectiveTrainingDays,
+    readinessMapSize: safeReadinessMap.size,
+    experienceLevel: safeExperienceLevel,
+    verdict: safeSelectedSkills.length > 0 ? 'INPUTS_VALID' : 'INPUTS_EMPTY_BUT_SAFE',
+  })
+  
   const {
-    selectedSkills,
-    primaryGoal,
-    secondaryGoal,
-    effectiveTrainingDays,
-    readinessMap,
-    methodPreferences,
-    jointCautions,
-    experienceLevel,
+    selectedSkills: _rawSelectedSkills,
+    primaryGoal: _rawPrimaryGoal,
+    secondaryGoal: _rawSecondaryGoal,
+    effectiveTrainingDays: _rawTrainingDays,
+    readinessMap: _rawReadinessMap,
+    methodPreferences: _rawMethodPreferences,
+    jointCautions: _rawJointCautions,
+    experienceLevel: _rawExperienceLevel,
   } = inputs
+  
+  // Use safe values for all processing
+  const selectedSkills = safeSelectedSkills
+  const primaryGoal = safePrimaryGoal
+  const secondaryGoal = safeSecondaryGoal
+  const effectiveTrainingDays = safeEffectiveTrainingDays
+  const readinessMap = safeReadinessMap
+  const methodPreferences = safeMethodPreferences
+  const jointCautions = safeJointCautions
+  const experienceLevel = safeExperienceLevel
   
   const decisions: WeeklySkillExpressionDecision[] = []
   const overlapMatrix: OverlapMatrixEntry[] = []

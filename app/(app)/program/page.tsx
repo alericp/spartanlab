@@ -7637,7 +7637,7 @@ export default function ProgramPage() {
           httpOk: serverResponse.ok,
           serverResultSuccess: serverResult.success,
           totalDegraded,
-          hasDegradedSessions,
+          hasDegradedSessions: totalDegraded > 0,
           isHealthyRegenerate,
           isDegradedRegenerate,
           classification: isHealthyRegenerate 

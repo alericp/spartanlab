@@ -4460,6 +4460,36 @@ export class GenerationError extends Error {
   }
 }
 
+// =============================================================================
+// [POST_ALLOCATION_CORRIDOR_FIX] Helper to create GenerationError with corridor context
+// =============================================================================
+// This helper was missing and caused ReferenceError when post-allocation corridors failed.
+// It creates a GenerationError and stringifies the context into the message so the
+// authoritative-program-generation.ts can extract it via regex from the error string.
+// =============================================================================
+function createGenerationError(
+  code: string,
+  stage: string,
+  message: string,
+  context?: Record<string, unknown>
+): GenerationError {
+  // Map corridor-specific codes to GenerationErrorCode
+  const normalizedCode: GenerationErrorCode = 
+    code.includes('structure') || code.includes('selection') ? 'structure_selection_failed' :
+    code.includes('validation') ? 'validation_failed' :
+    code.includes('session') ? 'session_assembly_failed' :
+    code.includes('allocation') || code.includes('corridor') || code.includes('visible_week') 
+      ? 'structure_selection_failed' :
+    'unknown_generation_failure'
+  
+  // Append context to message as JSON suffix so authoritative-program-generation can extract via regex
+  const contextSuffix = context 
+    ? ` | context: ${JSON.stringify(context)}`
+    : ''
+  
+  return new GenerationError(normalizedCode, stage, message + contextSuffix, context)
+}
+
 // Mutable stage tracker for error classification
 interface StageTracker {
   current: string

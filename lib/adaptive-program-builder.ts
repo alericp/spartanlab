@@ -11180,6 +11180,10 @@ async function generateAdaptiveProgramImpl(
     let postSessionStep = sessionGenerationFailed ? 'session_fallback_applied' : 'session_generated'
     const sessionExerciseCountAtStart = session.exercises?.length || 0
     
+    // [SESSION_COMMIT_GUARD] Track whether real session has been committed to array
+    // This prevents duplicate fallback sessions when post-push code throws
+    let sessionCommittedToArray = false
+    
     console.log('[post-session-start]', {
       dayNumber: day.dayNumber,
       focus: day.focus,
@@ -11706,6 +11710,9 @@ async function generateAdaptiveProgramImpl(
   // [PHASE 16C] Push to sessions array instead of return (converted from map to for loop)
   sessions.push(session)
   
+  // [SESSION_COMMIT_GUARD] Mark session as committed - prevents duplicate fallback
+  sessionCommittedToArray = true
+  
   // ==========================================================================
   // [SESSION-SURVIVAL-CONTRACT-FINAL] Mark session as successfully completed
   // This is THE authoritative point where we decide: recovered vs degraded
@@ -11891,13 +11898,30 @@ async function generateAdaptiveProgramImpl(
         _degradedReason: matchedPattern,
       } as AdaptiveSession & { _degraded?: boolean; _degradedReason?: string }
       
-      sessions.push(fallbackSession)
-      
-      console.log('[post-session-fallback-applied]', {
-        sessionIndex: index,
-        matchedPattern,
-        verdict: 'SESSION_POST_MUTATION_FAILED_FALLBACK_APPLIED_CONTINUING',
-      })
+      // [SESSION_COMMIT_GUARD] Only push fallback if real session was NOT already committed
+      if (sessionCommittedToArray) {
+        // Real session already committed - DO NOT duplicate with fallback
+        console.log('[POST_SESSION_COMMITTED_NO_FALLBACK]', {
+          fingerprint: 'SESSION_GUARD_V1_2026_04_12',
+          dayNumber: day.dayNumber,
+          focus: day.focus,
+          sessionIndex: index,
+          committedSessionAlreadyPresent: true,
+          errorMessage: errorMessage.slice(0, 100),
+          postSessionStep,
+          verdict: 'PRESERVE_REAL_SESSION_DO_NOT_DUPLICATE',
+        })
+        // Continue without pushing fallback - real session is preserved
+      } else {
+        // Real session NOT committed - safe to push fallback
+        sessions.push(fallbackSession)
+        
+        console.log('[post-session-fallback-applied]', {
+          sessionIndex: index,
+          matchedPattern,
+          verdict: 'SESSION_POST_MUTATION_FAILED_FALLBACK_APPLIED_CONTINUING',
+        })
+      }
       
       // Continue to next session - don't throw
     }

@@ -7539,6 +7539,28 @@ export default function ProgramPage() {
         const isHealthyRegenerate = serverResult.success === true && !hasDegradedSessions
         const isDegradedRegenerate = serverResult.success === true && hasDegradedSessions
         
+        // ==========================================================================
+        // [REGENERATE-CLASSIFICATION-MARKER] Authoritative classification log
+        // This is the SINGLE SOURCE OF TRUTH for how the page classifies regenerate outcome
+        // ==========================================================================
+        console.log('[REGENERATE-CLASSIFICATION-MARKER]', {
+          marker: 'REGENERATE_CLASSIFICATION_2026_04_11_V1',
+          httpOk: serverResponse.ok,
+          serverResultSuccess: serverResult.success,
+          totalDegraded,
+          hasDegradedSessions,
+          isHealthyRegenerate,
+          isDegradedRegenerate,
+          classification: isHealthyRegenerate 
+            ? 'HEALTHY_SUCCESS_WILL_CLEAR_BANNER'
+            : isDegradedRegenerate 
+              ? 'DEGRADED_SUCCESS_WILL_SHOW_BANNER'
+              : 'HARD_FAILURE_WILL_SHOW_ERROR',
+          bannerWillRender: isDegradedRegenerate,
+          programWillBePromoted: isHealthyRegenerate,
+          timestamp: new Date().toISOString(),
+        })
+        
         // Build the authoritative regenerate outcome object
         const regenerateOutcome: {
           mode: 'healthy_success' | 'degraded_success' | 'hard_failure'

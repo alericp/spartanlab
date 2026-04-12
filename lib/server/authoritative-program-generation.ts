@@ -692,12 +692,19 @@ export async function executeAuthoritativeGeneration(
       
       // [POST-TRUTH-CORRIDOR] Extract corridor info from GenerationError context
       const isCorridorError = errorString.includes('exactBuilderCorridor') || 
-                              errorString.includes('post_truth_audit_to_structure_selection')
+                              errorString.includes('post_truth_audit_to_structure_selection') ||
+                              errorString.includes('post_funnel_allocation_to_session_entry')
       const corridorMatch = errorString.match(/exactBuilderCorridor['":\s]+([a-z_]+)/i)
+      
+      // [POST_FUNNEL_CONTRACT_GATE] Detect post-funnel contract validation failures
+      const isPostFunnelContractError = errorString.includes('post_funnel_contract_validation_failed') ||
+                                        errorString.includes('POST_FUNNEL_CONTRACT_GATE')
+      
       const exactBuilderCorridor = corridorMatch?.[1] || 
-        (errorString.includes('structure_selection') ? 'post_truth_audit_to_structure_selection' : 'unknown')
+        (isPostFunnelContractError ? 'post_funnel_allocation_to_session_entry' :
+         errorString.includes('structure_selection') ? 'post_truth_audit_to_structure_selection' : 'unknown')
       const localStepMatch = errorString.match(/exactLocalStep['":\s]+([a-z_]+)/i)
-      const exactLocalStep = localStepMatch?.[1] || 'unknown'
+      const exactLocalStep = localStepMatch?.[1] || (isPostFunnelContractError ? 'contract_validation' : 'unknown')
       
       console.log('[authoritative-generation-builder-error]', {
         generationIntent: request.generationIntent,

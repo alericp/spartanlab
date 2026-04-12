@@ -7658,6 +7658,109 @@ async function generateAdaptiveProgramImpl(
   )
   
   // ==========================================================================
+  // [POST_FUNNEL_CONTRACT_GATE] AUTHORITATIVE POST-FUNNEL VALIDATION GATE
+  // ==========================================================================
+  // This gate validates all allocation/expression contracts BEFORE downstream
+  // doctrine/session assembly consumes them. If contracts are incomplete,
+  // fail here with exact corridor metadata instead of crashing later.
+  // ==========================================================================
+  const postFunnelContractGate = {
+    corridorOwner: 'post_funnel_allocation_to_session_entry',
+    localStep: 'contract_validation_entry',
+    selectedSkillsCount: multiSkillMaterialityContract.selectedSkills?.length || 0,
+    allocatorDecisionsCount: weeklyExpressionAllocatorContract.decisions?.length || 0,
+    visibleWeekSkillCount: visibleWeekExpressionContract.visibleWeekSkillCount || 0,
+    allocatorIntact: Array.isArray(weeklyExpressionAllocatorContract.decisions),
+    visibleWeekIntact: Array.isArray(visibleWeekExpressionContract.skillExpressionPlan),
+    primarySkillPresent: !!visibleWeekExpressionContract.primarySkill,
+    selectedSkillsArray: Array.isArray(visibleWeekExpressionContract.selectedSkills),
+    skillsVanished: false,
+    validationPassed: true,
+    failureReason: null as string | null,
+  }
+  
+  // Validate allocator contract completeness
+  if (!weeklyExpressionAllocatorContract.decisions || !Array.isArray(weeklyExpressionAllocatorContract.decisions)) {
+    postFunnelContractGate.validationPassed = false
+    postFunnelContractGate.failureReason = 'allocator_decisions_missing_or_not_array'
+    postFunnelContractGate.allocatorIntact = false
+  }
+  
+  // Validate visible week contract completeness
+  if (!visibleWeekExpressionContract.skillExpressionPlan || !Array.isArray(visibleWeekExpressionContract.skillExpressionPlan)) {
+    postFunnelContractGate.validationPassed = false
+    postFunnelContractGate.failureReason = 'visible_week_expression_plan_missing_or_not_array'
+    postFunnelContractGate.visibleWeekIntact = false
+  }
+  
+  // Validate no silent skill vanishing
+  if (postFunnelContractGate.selectedSkillsCount > 0 && postFunnelContractGate.allocatorDecisionsCount === 0) {
+    postFunnelContractGate.validationPassed = false
+    postFunnelContractGate.failureReason = 'all_skills_vanished_in_allocator'
+    postFunnelContractGate.skillsVanished = true
+  }
+  
+  // Validate primary skill presence
+  if (!visibleWeekExpressionContract.primarySkill && postFunnelContractGate.selectedSkillsCount > 0) {
+    postFunnelContractGate.validationPassed = false
+    postFunnelContractGate.failureReason = 'primary_skill_missing_from_visible_week'
+    postFunnelContractGate.primarySkillPresent = false
+  }
+  
+  console.log('[POST_FUNNEL_CONTRACT_GATE_ENTRY]', {
+    fingerprint: 'POST_FUNNEL_V1_2026_04_12',
+    corridorOwner: postFunnelContractGate.corridorOwner,
+    localStep: postFunnelContractGate.localStep,
+    selectedSkillsCount: postFunnelContractGate.selectedSkillsCount,
+    allocatorDecisionsCount: postFunnelContractGate.allocatorDecisionsCount,
+    visibleWeekSkillCount: postFunnelContractGate.visibleWeekSkillCount,
+    allocatorIntact: postFunnelContractGate.allocatorIntact,
+    visibleWeekIntact: postFunnelContractGate.visibleWeekIntact,
+    primarySkillPresent: postFunnelContractGate.primarySkillPresent,
+    skillsVanished: postFunnelContractGate.skillsVanished,
+    validationPassed: postFunnelContractGate.validationPassed,
+    failureReason: postFunnelContractGate.failureReason,
+    verdict: postFunnelContractGate.validationPassed ? 'CONTRACTS_VALID_PROCEED' : 'CONTRACTS_INVALID_FAIL',
+  })
+  
+  if (!postFunnelContractGate.validationPassed) {
+    console.error('[POST_FUNNEL_CONTRACT_GATE_FAIL]', {
+      fingerprint: 'POST_FUNNEL_V1_2026_04_12',
+      corridorOwner: postFunnelContractGate.corridorOwner,
+      localStep: postFunnelContractGate.localStep,
+      failureReason: postFunnelContractGate.failureReason,
+      allocatorDecisions: weeklyExpressionAllocatorContract.decisions?.slice(0, 3),
+      visibleWeekPlan: visibleWeekExpressionContract.skillExpressionPlan?.slice(0, 3),
+      primarySkill: visibleWeekExpressionContract.primarySkill,
+      verdict: 'GENERATION_BLOCKED_POST_FUNNEL_CONTRACT_INVALID',
+    })
+    
+    throw createGenerationError(
+      'post_funnel_contract_validation_failed',
+      stageTracker.current,
+      `Post-funnel contract validation failed: ${postFunnelContractGate.failureReason}`,
+      {
+        exactBuilderCorridor: postFunnelContractGate.corridorOwner,
+        exactLocalStep: postFunnelContractGate.localStep,
+        exactLastSafeSubstep: 'visible_week_expression_contract_built',
+        selectedSkillsCount: postFunnelContractGate.selectedSkillsCount,
+        allocatorDecisionsCount: postFunnelContractGate.allocatorDecisionsCount,
+        visibleWeekSkillCount: postFunnelContractGate.visibleWeekSkillCount,
+      }
+    )
+  }
+  
+  console.log('[POST_FUNNEL_CONTRACT_GATE_PASS]', {
+    fingerprint: 'POST_FUNNEL_V1_2026_04_12',
+    corridorOwner: postFunnelContractGate.corridorOwner,
+    localStep: 'validation_complete',
+    selectedSkillsCount: postFunnelContractGate.selectedSkillsCount,
+    allocatorDecisionsCount: postFunnelContractGate.allocatorDecisionsCount,
+    visibleWeekSkillCount: postFunnelContractGate.visibleWeekSkillCount,
+    verdict: 'POST_FUNNEL_CONTRACTS_VALID_SESSION_ENTRY_ALLOWED',
+  })
+  
+  // ==========================================================================
   // [DOCTRINE RUNTIME CONTRACT] BUILD AUTHORITATIVE DOCTRINE CONTRACT
   // ==========================================================================
   // This contract combines Doctrine DB + resolved athlete truth into a single
@@ -7736,6 +7839,38 @@ async function generateAdaptiveProgramImpl(
       verdict: 'DOCTRINE_INFLUENCE_CONSUMED_BY_MATERIALITY',
     })
   }
+  
+  // ==========================================================================
+  // [POST_FUNNEL_RUNTIME_BRIDGE_DECISION] Runtime bridge decision audit
+  // ==========================================================================
+  // This log captures the state of all contracts BEFORE session architecture
+  // and actual session assembly begins. It's the last checkpoint before the
+  // downstream session generation corridor.
+  // ==========================================================================
+  console.log('[POST_FUNNEL_RUNTIME_BRIDGE_DECISION]', {
+    fingerprint: 'POST_FUNNEL_V1_2026_04_12',
+    corridorOwner: 'post_funnel_allocation_to_session_entry',
+    localStep: 'runtime_bridge_entry',
+    // Allocation contracts
+    weeklyAllocatorDecisions: weeklyExpressionAllocatorContract.decisions?.length || 0,
+    weeklyAllocatorVerdict: weeklyExpressionAllocatorContract.audit?.verdict || 'UNKNOWN',
+    // Visible week contracts
+    visibleWeekSkillCount: visibleWeekExpressionContract.visibleWeekSkillCount,
+    visibleWeekPlanCount: visibleWeekExpressionContract.skillExpressionPlan?.length || 0,
+    visibleWeekVerdict: visibleWeekExpressionContract.audit?.verdict || 'UNKNOWN',
+    // Doctrine runtime
+    doctrineRuntimeAvailable: doctrineRuntimeContract?.available || false,
+    doctrineRuntimeSource: doctrineRuntimeContract?.source || 'none',
+    // Doctrine influence
+    doctrineInfluenceAvailable: !!doctrineInfluenceContract,
+    doctrineInfluenceReadiness: doctrineInfluenceContract?.readinessState?.readinessVerdict || 'none',
+    // Key skill facts
+    selectedSkillsCount: multiSkillMaterialityContract.selectedSkills?.length || 0,
+    primaryGoal: multiSkillMaterialityContract.primaryGoal,
+    effectiveTrainingDays,
+    // Decision
+    verdict: 'RUNTIME_BRIDGE_READY_FOR_SESSION_ASSEMBLY',
+  })
   
   // ==========================================================================
   // [SESSION ARCHITECTURE TRUTH] BUILD AUTHORITATIVE SESSION ARCHITECTURE CONTRACT

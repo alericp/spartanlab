@@ -272,10 +272,35 @@ export async function POST(request: Request) {
           ? 'DEGRADED_SUCCESS_WITH_PARTIAL_PROGRAM'
           : 'UNEXPECTED_STATE'
     
-    console.log('[route-response-truth-audit]', {
-      routeOutcomeType,
-      ...routeClassification,
-      verdict: routeOutcomeType,
+    // ==========================================================================
+    // [REGENERATE_OUTCOME_ROUTE] AUTHORITATIVE OUTCOME CONTRACT
+    // This is THE single source of truth for regenerate outcome classification
+    // ==========================================================================
+    const authoritativeOutcome = {
+      outcomeMode: routeOutcomeType as 'HEALTHY_SUCCESS' | 'DEGRADED_SUCCESS_WITH_PARTIAL_PROGRAM' | 'UNEXPECTED_STATE',
+      currentAttemptId: `regen_${Date.now()}`,
+      totalDegraded: routeClassification.totalDegraded,
+      totalAttempted: routeClassification.totalAttempted,
+      totalSucceeded: routeClassification.totalSucceeded,
+      shouldPromoteProgram: routeOutcomeType === 'HEALTHY_SUCCESS',
+      shouldPreserveLastGood: routeOutcomeType === 'DEGRADED_SUCCESS_WITH_PARTIAL_PROGRAM',
+      shouldClearFailureState: routeOutcomeType === 'HEALTHY_SUCCESS',
+      firstFailedCheckpoint: routeClassification.firstFailedCheckpoint,
+      firstFailedFocus: routeClassification.firstFailedFocus,
+      firstFailedIndex: routeClassification.firstFailedIndex,
+      compactFailureReason: rebuildFailureSummary?.failureVerdict ?? null,
+      truthSource: routeOutcomeType === 'HEALTHY_SUCCESS' 
+        ? 'healthy_generation' 
+        : routeOutcomeType === 'DEGRADED_SUCCESS_WITH_PARTIAL_PROGRAM'
+          ? 'degraded_generation'
+          : 'unexpected_state',
+    }
+    
+    console.log('[REGENERATE_OUTCOME_ROUTE]', {
+      ...authoritativeOutcome,
+      sessionCount: routeClassification.sessionCount,
+      httpStatus: 200,
+      verdict: authoritativeOutcome.outcomeMode,
     })
     
     return NextResponse.json({
@@ -286,6 +311,8 @@ export async function POST(request: Request) {
       parityVerdict: result.parityVerdict,
       // [PHASE15E-FAILURE-SUMMARY-PROMOTION] Expose authoritative rebuild failure summary
       rebuildFailureSummary,
+      // [REGENERATE_OUTCOME_ROUTE] Expose authoritative outcome contract to page
+      authoritativeOutcome,
     })
     
   } catch (error) {

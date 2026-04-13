@@ -28,12 +28,13 @@ export const PHASE27C_BUILD_IDENTITY = {
   modifyPipeline: 'CANONICAL_7_STEP_WITH_2_PHASE_PROMOTION',
   currentPhase: 'SINGLE_TRUTH_SURFACE_LOCKED',
   // [SCOPE_FIX_2026_04_12] Runtime fingerprint proving this exact fix is deployed
-  // V4: Obsolete error family now BLOCKS banner render entirely, not just cosmetic text rewrite
-  regenScopeFix: 'PP_REGEN_OBSOLETE_ERROR_SUPPRESSION_2026_04_12_V4',
+  // V5: Obsolete error suppression now covers BOTH red AND amber banners
+  regenScopeFix: 'PP_REGEN_FULL_OBSOLETE_SUPPRESSION_2026_04_12_V5',
   regenScopeFixApplied: true,
   staleBannerGuardActive: true,
   staleErrorBlocklistActive: true,
   obsoleteErrorBannerSuppressionActive: true,
+  amberBannerObsoleteSuppressionActive: true,
   retiredPhases: [
     'MODIFY_PIPELINE_CORRIDOR',
     'WEAK_LOCAL_COMPLEXITY_ESTIMATE',
@@ -3802,14 +3803,15 @@ export default function ProgramPage() {
     // User should see this in console immediately to verify latest fix is deployed
     // ==========================================================================
     console.log('[PROGRAM_PAGE_VERSION_PROOF]', {
-      fingerprint: 'PP_REGEN_OBSOLETE_ERROR_SUPPRESSION_2026_04_12_V4',
+      fingerprint: 'PP_REGEN_FULL_OBSOLETE_SUPPRESSION_2026_04_12_V5',
       buildIdentity: PHASE27C_BUILD_IDENTITY.regenScopeFix,
       staleBannerGuardActive: PHASE27C_BUILD_IDENTITY.staleBannerGuardActive,
       staleErrorBlocklistActive: PHASE27C_BUILD_IDENTITY.staleErrorBlocklistActive,
       obsoleteErrorBannerSuppressionActive: PHASE27C_BUILD_IDENTITY.obsoleteErrorBannerSuppressionActive,
+      amberBannerObsoleteSuppressionActive: PHASE27C_BUILD_IDENTITY.amberBannerObsoleteSuppressionActive,
       hasDegradedSessionsFlagScope: 'FIXED_LOCAL_CONSTANT',
       timestamp: new Date().toISOString(),
-      verificationMessage: 'V4: Obsolete hasDegradedSessions error family now BLOCKED from banner render entirely.',
+      verificationMessage: 'V5: Both red AND amber banners now block obsolete hasDegradedSessions error family.',
     })
     
     const stored = getLastBuildAttemptResult()
@@ -13153,10 +13155,12 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           <div className="space-y-6">
             {/* HARDENED: Generation error banner - recoverable state */}
             {/* [PHASE 16S/16T] Use truth-gated result to prevent stale banner display */}
+            {/* [OBSOLETE_ERROR_SUPPRESSION_V5] Block amber banner entirely for known obsolete error family */}
             {generationError && 
              truthGatedBuildResult && 
              truthGatedBuildResult.hydratedFromStorage !== true &&
-             truthGatedBuildResult.runtimeSessionId === runtimeSessionIdRef.current && (
+             truthGatedBuildResult.runtimeSessionId === runtimeSessionIdRef.current &&
+             !generationError.includes('hasDegradedSessions is not defined') && (
               <Card className="bg-amber-500/10 border-amber-500/30 p-4">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />

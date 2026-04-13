@@ -126,6 +126,10 @@ import { getUnifiedSkillIntelligence, generateTrainingAdjustments, type UnifiedS
 import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionReadinessResult } from './compression-readiness'
 import { selectOptimalStructure, getDayExplanation } from './program-structure-engine'
 import { selectExercisesForSession, evaluateSessionProgressions, getSmartProgressionExercise, buildFallbackSelectionForSession } from './program-exercise-selector'
+
+// [CORRIDOR_LOCK_V1] Version fingerprint for cache/deploy proof
+const SESSION_ASSEMBLY_VERSION = 'SESSION_ASSEMBLY_CORRIDOR_LOCK_V1_2026_04_13'
+
 // [PHASE 4] Doctrine DB exercise scoring - prefetch rules before generation
 import { prefetchDoctrineRules, getDoctrineInfluenceSummary, getCachedDoctrineRules, type DoctrineScoringAudit } from './doctrine-exercise-scorer'
 
@@ -10674,6 +10678,13 @@ async function generateAdaptiveProgramImpl(
   
   // ISSUE A: Stage tracking for session assembly
   await setStage('session_assembly')
+  
+  // [CORRIDOR_LOCK_V1] Log version proof at session assembly entry
+  console.log('[SESSION_ASSEMBLY_CORRIDOR_LOCK_ENTRY]', {
+    version: SESSION_ASSEMBLY_VERSION,
+    phase: 'session_assembly_entry',
+    timestamp: new Date().toISOString(),
+  })
   
   // [session-assembly] Log structure received for assembly
   console.log('[session-assembly] Weekly structure received:', {

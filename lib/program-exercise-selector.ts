@@ -1098,9 +1098,10 @@ interface ExerciseSelectionInputs {
 
 /**
  * [SELECTOR_RUNTIME_VERSION] Hard version fingerprint for cache/deploy proof
- * V5: DECLOSURE - helpers receive context as explicit parameter, not closure
+ * CORRIDOR_LOCK_V1: Full corridor repair - ALL runtime-active helpers use explicit parameters
+ * NO closure-based selectorCtx access allowed in any nested callback
  */
-const SELECTOR_RUNTIME_VERSION = 'SELECTOR_CONTEXT_DECLOSURE_V1_2026_04_13'
+const SELECTOR_RUNTIME_VERSION = 'SELECTOR_CORRIDOR_LOCK_V1_2026_04_13'
 
 /**
  * [SELECTOR_DOCTRINE_CONTEXT_TYPE] Explicit type for selector doctrine context.
@@ -4159,18 +4160,22 @@ function applyMaterialityScoreAdjustments(
   /**
    * [EXERCISE-SELECTION-MATERIALITY] Rank candidates using materiality engine
    * Returns candidates sorted by materiality-aware score with full audit trail.
-   * [HOISTING_FIX] Converted to arrow function to prevent hoisting issues.
+   * [CORRIDOR_LOCK_V1] Receives ownedCtx as EXPLICIT PARAMETER - no closure dependency
    */
   const rankCandidatesWithMateriality = <T extends { exercise: Exercise; score: number }>(
+    ownedCtx: SelectorRuntimeContext, // CORRIDOR_LOCK: explicit parameter
     candidates: T[],
     slotType: SlotType,
     sessionSkills: SessionSkillAllocation[]
   ): Array<T & { materialityScore: ExerciseMaterialityScore | null; primaryReason: MaterialityReasonCode }> => {
+    // [CORRIDOR_LOCK_V1] Validate explicit parameter ownership
+    assertRuntimeContext(ownedCtx, 'rankCandidatesWithMateriality')
+    
     // Score each candidate with materiality
-    // [SELECTOR_CONTEXT_DECLOSURE_V1] Pass selectorCtx explicitly
+    // [CORRIDOR_LOCK_V1] Pass ownedCtx explicitly - no closure access
     const scored = candidates.map(c => {
       const { score, materialityScore, primaryReason } = scoreExerciseWithMateriality(
-        selectorCtx, // DECLOSURE: explicit parameter
+        ownedCtx, // CORRIDOR_LOCK: explicit parameter chain
         c.exercise,
         sessionSkills,
         day.focus,
@@ -4268,7 +4273,7 @@ function applyMaterialityScoreAdjustments(
       
       // [EXERCISE-SELECTION-MATERIALITY] Apply materiality-aware ranking
       // This replaces the basic doctrine-only scoring with full materiality analysis
-      const materialityRankedCandidates = rankCandidatesWithMateriality(
+      const materialityRankedCandidates = rankCandidatesWithMateriality(selectorCtx,
         progressionFilteredCandidates,
         'direct_skill',
         sessionSkillsToExpress
@@ -4345,7 +4350,7 @@ function applyMaterialityScoreAdjustments(
       }))
       
       // [EXERCISE-SELECTION-MATERIALITY] Apply materiality-aware ranking for secondary skill
-      const materialityRankedTech = rankCandidatesWithMateriality(baseScoredTech, 'secondary_skill', sessionSkillsToExpress)
+      const materialityRankedTech = rankCandidatesWithMateriality(selectorCtx, baseScoredTech, 'secondary_skill', sessionSkillsToExpress)
       const scoredTech = applyDoctrineToPool(
         materialityRankedTech.map(c => ({ exercise: c.exercise, score: c.score })),
         day.focus
@@ -4437,7 +4442,7 @@ function applyMaterialityScoreAdjustments(
           exercise: e,
           score: scoreExerciseForSession(e, sessionSkillsToExpress, day.focus, hasWeightedEquipment)
         }))
-        const materialityRankedStrength = rankCandidatesWithMateriality(baseScoredStrength, 'support_carryover', sessionSkillsToExpress)
+        const materialityRankedStrength = rankCandidatesWithMateriality(selectorCtx, baseScoredStrength, 'support_carryover', sessionSkillsToExpress)
         
         const strengthWinner = materialityRankedStrength[0]
         if (strengthWinner) {

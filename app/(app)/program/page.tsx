@@ -28,11 +28,12 @@ export const PHASE27C_BUILD_IDENTITY = {
   modifyPipeline: 'CANONICAL_7_STEP_WITH_2_PHASE_PROMOTION',
   currentPhase: 'SINGLE_TRUTH_SURFACE_LOCKED',
   // [SCOPE_FIX_2026_04_12] Runtime fingerprint proving this exact fix is deployed
-  // V3: Added stale error text blocklist to intercept obsolete cached-code errors
-  regenScopeFix: 'PP_REGEN_STALE_BANNER_FIX_2026_04_12_V3',
+  // V4: Obsolete error family now BLOCKS banner render entirely, not just cosmetic text rewrite
+  regenScopeFix: 'PP_REGEN_OBSOLETE_ERROR_SUPPRESSION_2026_04_12_V4',
   regenScopeFixApplied: true,
   staleBannerGuardActive: true,
   staleErrorBlocklistActive: true,
+  obsoleteErrorBannerSuppressionActive: true,
   retiredPhases: [
     'MODIFY_PIPELINE_CORRIDOR',
     'WEAK_LOCAL_COMPLEXITY_ESTIMATE',
@@ -3801,13 +3802,14 @@ export default function ProgramPage() {
     // User should see this in console immediately to verify latest fix is deployed
     // ==========================================================================
     console.log('[PROGRAM_PAGE_VERSION_PROOF]', {
-      fingerprint: 'PP_REGEN_STALE_BANNER_FIX_2026_04_12_V3',
+      fingerprint: 'PP_REGEN_OBSOLETE_ERROR_SUPPRESSION_2026_04_12_V4',
       buildIdentity: PHASE27C_BUILD_IDENTITY.regenScopeFix,
       staleBannerGuardActive: PHASE27C_BUILD_IDENTITY.staleBannerGuardActive,
       staleErrorBlocklistActive: PHASE27C_BUILD_IDENTITY.staleErrorBlocklistActive,
+      obsoleteErrorBannerSuppressionActive: PHASE27C_BUILD_IDENTITY.obsoleteErrorBannerSuppressionActive,
       hasDegradedSessionsFlagScope: 'FIXED_LOCAL_CONSTANT',
       timestamp: new Date().toISOString(),
-      verificationMessage: 'If you see this log, V3 stale banner fix with error blocklist is deployed.',
+      verificationMessage: 'V4: Obsolete hasDegradedSessions error family now BLOCKED from banner render entirely.',
     })
     
     const stored = getLastBuildAttemptResult()
@@ -13613,19 +13615,21 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 truthGatedBuildResult?.userMessage?.includes('hasDegradedSessions is not defined')
               
               if (isKnownObsoleteError) {
-                console.warn('[STALE_CACHED_CODE_DETECTED]', {
-                  fingerprint: 'STALE_ERROR_BLOCKLIST_2026_04_12_V1',
+                console.warn('[OBSOLETE_ERROR_BANNER_BLOCKED]', {
+                  fingerprint: 'OBSOLETE_ERROR_SUPPRESSION_2026_04_12_V1',
                   detectedObsoleteError: 'hasDegradedSessions is not defined',
                   failureReason: truthGatedBuildResult?.failureReason?.slice(0, 100),
                   userMessage: truthGatedBuildResult?.userMessage?.slice(0, 100),
-                  action: 'User should hard-refresh (Ctrl+Shift+R) to load fixed code',
+                  verdict: 'BANNER_BLOCKED_OBSOLETE_ERROR_FAMILY',
+                  action: 'Banner will NOT render for this obsolete error. User should hard-refresh to get clean state.',
                   currentPageFingerprint: PHASE27C_BUILD_IDENTITY.regenScopeFix,
                 })
               }
               
               console.log('[REGEN_BANNER_GATE]', {
-                fingerprint: 'REGEN_STALE_BANNER_FIX_2026_04_12_V3',
+                fingerprint: 'REGEN_OBSOLETE_ERROR_SUPPRESSION_2026_04_12_V4',
                 isKnownObsoleteError,
+                obsoleteErrorWillBlockBanner: isKnownObsoleteError,
                 fileOwner: 'app/(app)/program/page.tsx',
                 functionOwner: 'ProgramPageContent',
                 phase: 'banner_render_gate',
@@ -13639,19 +13643,24 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 lastBuildResultAttemptId: lastBuildResult?.attemptId ?? 'null',
                 truthGatedAttemptId: truthGatedBuildResult?.attemptId ?? 'null',
                 staleFailureRisk,
-                verdict: staleFailureRisk 
-                  ? 'STALE_FAILURE_RISK_DETECTED' 
-                  : bannerEligible 
-                    ? 'BANNER_WILL_RENDER_RED_CARD' 
-                    : 'BANNER_BLOCKED',
+                verdict: isKnownObsoleteError
+                  ? 'BANNER_BLOCKED_OBSOLETE_ERROR_FAMILY'
+                  : staleFailureRisk 
+                    ? 'STALE_FAILURE_RISK_DETECTED' 
+                    : bannerEligible 
+                      ? 'BANNER_WILL_RENDER_RED_CARD' 
+                      : 'BANNER_BLOCKED',
               })
               return null
             })()}
             {/* [STALE_BANNER_GUARD] Defense-in-depth: Never show failure banner if lastBuildResult is success */}
+            {/* [OBSOLETE_ERROR_SUPPRESSION] Block banner render entirely for known obsolete error family */}
             {truthGatedBuildResult?.status === 'preserved_last_good' && 
              truthGatedBuildResult?.hydratedFromStorage !== true &&
              truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current &&
-             lastBuildResult?.status !== 'success' && (
+             lastBuildResult?.status !== 'success' &&
+             !(truthGatedBuildResult?.failureReason?.includes('hasDegradedSessions is not defined') ||
+               truthGatedBuildResult?.userMessage?.includes('hasDegradedSessions is not defined')) && (
               <Card className="bg-red-500/10 border-red-500/30 p-4">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />

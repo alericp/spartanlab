@@ -28,10 +28,11 @@ export const PHASE27C_BUILD_IDENTITY = {
   modifyPipeline: 'CANONICAL_7_STEP_WITH_2_PHASE_PROMOTION',
   currentPhase: 'SINGLE_TRUTH_SURFACE_LOCKED',
   // [SCOPE_FIX_2026_04_12] Runtime fingerprint proving this exact fix is deployed
-  // V2: Force new diff to prove latest source is running
-  regenScopeFix: 'PP_REGEN_STALE_BANNER_FIX_2026_04_12_V2',
+  // V3: Added stale error text blocklist to intercept obsolete cached-code errors
+  regenScopeFix: 'PP_REGEN_STALE_BANNER_FIX_2026_04_12_V3',
   regenScopeFixApplied: true,
   staleBannerGuardActive: true,
+  staleErrorBlocklistActive: true,
   retiredPhases: [
     'MODIFY_PIPELINE_CORRIDOR',
     'WEAK_LOCAL_COMPLEXITY_ESTIMATE',
@@ -3800,12 +3801,13 @@ export default function ProgramPage() {
     // User should see this in console immediately to verify latest fix is deployed
     // ==========================================================================
     console.log('[PROGRAM_PAGE_VERSION_PROOF]', {
-      fingerprint: 'PP_REGEN_STALE_BANNER_FIX_2026_04_12_V2',
+      fingerprint: 'PP_REGEN_STALE_BANNER_FIX_2026_04_12_V3',
       buildIdentity: PHASE27C_BUILD_IDENTITY.regenScopeFix,
       staleBannerGuardActive: PHASE27C_BUILD_IDENTITY.staleBannerGuardActive,
+      staleErrorBlocklistActive: PHASE27C_BUILD_IDENTITY.staleErrorBlocklistActive,
       hasDegradedSessionsFlagScope: 'FIXED_LOCAL_CONSTANT',
       timestamp: new Date().toISOString(),
-      verificationMessage: 'If you see this log, the stale banner fix is deployed.',
+      verificationMessage: 'If you see this log, V3 stale banner fix with error blocklist is deployed.',
     })
     
     const stored = getLastBuildAttemptResult()
@@ -7655,10 +7657,10 @@ export default function ProgramPage() {
         // This is the SINGLE SOURCE OF TRUTH for how the page classifies regenerate outcome
         // [SCOPE_FIX_2026_04_12] Uses explicitly defined local constant hasDegradedSessionsFlag
         // ==========================================================================
-        const REGEN_SCOPE_FIX_STAMP = 'PP_REGEN_STALE_BANNER_FIX_2026_04_12_V2'
+        const REGEN_SCOPE_FIX_STAMP = 'PP_REGEN_STALE_BANNER_FIX_2026_04_12_V3'
         
         console.log('[REGENERATE-CLASSIFICATION-MARKER]', {
-          marker: 'REGENERATE_CLASSIFICATION_2026_04_12_V3',
+          marker: 'REGENERATE_CLASSIFICATION_2026_04_12_V4',
           scopeFixStamp: REGEN_SCOPE_FIX_STAMP,
           httpOk: serverResponse.ok,
           serverResultSuccess: serverResult.success,
@@ -13605,8 +13607,25 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               const truthGatedIsFailure = truthGatedBuildResult?.status === 'preserved_last_good'
               const staleFailureRisk = lastBuildIsSuccess && bannerEligible
               
+              // [STALE_ERROR_BLOCKLIST] Detect if this is the known obsolete hasDegradedSessions error
+              const isKnownObsoleteError = 
+                truthGatedBuildResult?.failureReason?.includes('hasDegradedSessions is not defined') ||
+                truthGatedBuildResult?.userMessage?.includes('hasDegradedSessions is not defined')
+              
+              if (isKnownObsoleteError) {
+                console.warn('[STALE_CACHED_CODE_DETECTED]', {
+                  fingerprint: 'STALE_ERROR_BLOCKLIST_2026_04_12_V1',
+                  detectedObsoleteError: 'hasDegradedSessions is not defined',
+                  failureReason: truthGatedBuildResult?.failureReason?.slice(0, 100),
+                  userMessage: truthGatedBuildResult?.userMessage?.slice(0, 100),
+                  action: 'User should hard-refresh (Ctrl+Shift+R) to load fixed code',
+                  currentPageFingerprint: PHASE27C_BUILD_IDENTITY.regenScopeFix,
+                })
+              }
+              
               console.log('[REGEN_BANNER_GATE]', {
-                fingerprint: 'REGEN_STALE_BANNER_FIX_2026_04_12_V2',
+                fingerprint: 'REGEN_STALE_BANNER_FIX_2026_04_12_V3',
+                isKnownObsoleteError,
                 fileOwner: 'app/(app)/program/page.tsx',
                 functionOwner: 'ProgramPageContent',
                 phase: 'banner_render_gate',
@@ -13638,8 +13657,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                   <div className="flex-1">
                     <p className="text-sm text-red-200 font-medium">Last rebuild did not complete</p>
+                    {/* [STALE_ERROR_BLOCKLIST] Intercept known obsolete errors in userMessage */}
                     <p className="text-xs text-red-400/80 mt-1">
-                      {truthGatedBuildResult.userMessage}
+                      {truthGatedBuildResult.userMessage?.includes('hasDegradedSessions is not defined')
+                        ? 'Your browser is running outdated code. Please hard-refresh (Ctrl+Shift+R or Cmd+Shift+R) to apply the fix.'
+                        : truthGatedBuildResult.userMessage}
                     </p>
   <p className="text-xs text-[#6A6A6A] mt-1">
   This is your previous plan. Your latest settings were not applied.
@@ -13663,9 +13685,14 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     )}
     {/* Line 3: Reason - only if exists */}
     {/* [CORRIDOR-STABILIZATION] Use break-all instead of truncate to prevent horizontal overflow */}
+    {/* [STALE_ERROR_BLOCKLIST] Intercept known obsolete errors from cached old code */}
     {truthGatedBuildResult.failureReason && (
       <p className="text-[10px] text-[#4A4A4A] font-mono break-all max-w-full" style={{ overflowWrap: 'anywhere' }}>
-        Reason: {truthGatedBuildResult.failureReason.slice(0, 150)}
+        Reason: {
+          truthGatedBuildResult.failureReason.includes('hasDegradedSessions is not defined')
+            ? 'Stale cached code detected. Please hard-refresh (Ctrl+Shift+R) to load the fix.'
+            : truthGatedBuildResult.failureReason.slice(0, 150)
+        }
       </p>
     )}
     {/* TASK 1-E: Defensive fallback when no structured fields exist */}

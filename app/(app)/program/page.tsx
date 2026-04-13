@@ -28,13 +28,14 @@ export const PHASE27C_BUILD_IDENTITY = {
   modifyPipeline: 'CANONICAL_7_STEP_WITH_2_PHASE_PROMOTION',
   currentPhase: 'SINGLE_TRUTH_SURFACE_LOCKED',
   // [SCOPE_FIX_2026_04_12] Runtime fingerprint proving this exact fix is deployed
-  // V5: Obsolete error suppression now covers BOTH red AND amber banners
-  regenScopeFix: 'PP_REGEN_FULL_OBSOLETE_SUPPRESSION_2026_04_12_V5',
+  // V6: Amber banner diagnostic failureReason leak fixed
+  regenScopeFix: 'PP_REGEN_AMBER_DIAGNOSTIC_FIX_2026_04_12_V6',
   regenScopeFixApplied: true,
   staleBannerGuardActive: true,
   staleErrorBlocklistActive: true,
   obsoleteErrorBannerSuppressionActive: true,
   amberBannerObsoleteSuppressionActive: true,
+  amberDiagnosticObsoleteSuppressionActive: true,
   retiredPhases: [
     'MODIFY_PIPELINE_CORRIDOR',
     'WEAK_LOCAL_COMPLEXITY_ESTIMATE',
@@ -3803,15 +3804,16 @@ export default function ProgramPage() {
     // User should see this in console immediately to verify latest fix is deployed
     // ==========================================================================
     console.log('[PROGRAM_PAGE_VERSION_PROOF]', {
-      fingerprint: 'PP_REGEN_FULL_OBSOLETE_SUPPRESSION_2026_04_12_V5',
+      fingerprint: 'PP_REGEN_AMBER_DIAGNOSTIC_FIX_2026_04_12_V6',
       buildIdentity: PHASE27C_BUILD_IDENTITY.regenScopeFix,
       staleBannerGuardActive: PHASE27C_BUILD_IDENTITY.staleBannerGuardActive,
       staleErrorBlocklistActive: PHASE27C_BUILD_IDENTITY.staleErrorBlocklistActive,
       obsoleteErrorBannerSuppressionActive: PHASE27C_BUILD_IDENTITY.obsoleteErrorBannerSuppressionActive,
       amberBannerObsoleteSuppressionActive: PHASE27C_BUILD_IDENTITY.amberBannerObsoleteSuppressionActive,
+      amberDiagnosticObsoleteSuppressionActive: PHASE27C_BUILD_IDENTITY.amberDiagnosticObsoleteSuppressionActive,
       hasDegradedSessionsFlagScope: 'FIXED_LOCAL_CONSTANT',
       timestamp: new Date().toISOString(),
-      verificationMessage: 'V5: Both red AND amber banners now block obsolete hasDegradedSessions error family.',
+      verificationMessage: 'V6: Amber banner diagnostic failureReason leak now also blocked.',
     })
     
     const stored = getLastBuildAttemptResult()
@@ -13191,7 +13193,9 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                           </p>
                         )}
                         {/* Line 3: Reason - only if exists */}
-                        {truthGatedBuildResult.failureReason && (
+                        {/* [OBSOLETE_ERROR_SUPPRESSION_V6] Also check failureReason in amber banner diagnostic */}
+                        {truthGatedBuildResult.failureReason && 
+                         !truthGatedBuildResult.failureReason.includes('hasDegradedSessions is not defined') && (
                           <p className="text-[10px] text-[#5A5A5A] font-mono break-all max-w-full" style={{ overflowWrap: 'anywhere' }}>
                             Reason: {truthGatedBuildResult.failureReason.slice(0, 100)}
                           </p>

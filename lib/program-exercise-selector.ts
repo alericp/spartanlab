@@ -1099,7 +1099,7 @@ interface ExerciseSelectionInputs {
 /**
  * [SELECTOR_RUNTIME_VERSION] Hard version fingerprint for cache/deploy proof
  */
-const SELECTOR_RUNTIME_VERSION = 'SELECTOR_CTX_HARDLOCK_V3_2026_04_13'
+const SELECTOR_RUNTIME_VERSION = 'SELECTOR_CONTEXT_LOCK_V4_2026_04_13'
 
 /**
  * [SELECTOR_DOCTRINE_CONTEXT_TYPE] Explicit type for selector doctrine context.
@@ -1227,18 +1227,51 @@ function assertRuntimeContext(
 // =============================================================================
 
 export function selectExercisesForSession(inputs: ExerciseSelectionInputs): ExerciseSelection {
-  // [SELECTOR_CTX_HARDLOCK_V3] Entry point - log version immediately
-  console.log('[SELECTOR_ENTRY]', {
-    version: SELECTOR_RUNTIME_VERSION,
-    phase: 'function_entry',
+  // ==========================================================================
+  // [SELECTOR_CONTEXT_LOCK_V4] CRITICAL: Create selectorCtx FIRST before ANY other code
+  // This ensures selectorCtx exists before any helper functions are defined.
+  // Version: SELECTOR_CONTEXT_LOCK_V4_2026_04_13
+  // ==========================================================================
+  
+  // [HARD_GUARD] Validate inputs exist before any destructuring
+  if (!inputs) {
+    console.error('[SELECTOR_CRITICAL_FAILURE] inputs is null/undefined')
+    throw new Error('selector_execution_context_invalid:inputs_missing')
+  }
+  
+  // [SELECTOR_CONTEXT_LOCK_V4] Build context IMMEDIATELY - before destructuring
+  // This guarantees selectorCtx is defined before any other const in this scope
+  const selectorCtx = buildSelectorRuntimeContext(
+    inputs.unifiedDoctrineDecision,
+    inputs.day?.focus ?? 'unknown',
+    inputs.primaryGoal
+  )
+  
+  // [HARD_GUARD] Validate selectorCtx was created successfully
+  if (!selectorCtx || !selectorCtx.doctrine) {
+    console.error('[SELECTOR_CRITICAL_FAILURE] selectorCtx creation failed')
+    throw new Error('selector_execution_context_invalid:creation_failed')
+  }
+  
+  // [CONTEXT_LOCK_PROOF] Log that context is now locked and available
+  console.log('[SELECTOR_CONTEXT_LOCKED]', {
+    version: selectorCtx.version,
+    phase: 'context_locked_first',
+    doctrineActive: selectorCtx.doctrine.active,
+    dayFocus: selectorCtx.dayFocus,
+    primaryGoal: selectorCtx.primaryGoal,
     timestamp: new Date().toISOString(),
   })
+  
+  // ==========================================================================
+  // NOW safe to proceed with destructuring and other setup
+  // ==========================================================================
   
   // [AI_SESSION_MATERIALITY_PHASE] Reset skill expression capture at start of each session
   resetSessionSkillExpressionCapture()
   
   console.log('[exercise-resolver] selectExercisesForSession called:', {
-    dayFocus: inputs.day.focus,
+    dayFocus: inputs.day?.focus,
     primaryGoal: inputs.primaryGoal,
     sessionMinutes: inputs.sessionMinutes,
   })
@@ -1271,19 +1304,6 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   // [UNIFIED DOCTRINE DECISION] Extract doctrine-driven generation constraints
   unifiedDoctrineDecision,
   } = inputs
-  
-  // ==========================================================================
-  // [REGEN_SELECTOR_ENTRY] Authoritative runtime proof with fingerprint
-  // ==========================================================================
-  // [SELECTOR_CTX_HARDLOCK_V3] Build ONE canonical runtime context for ALL helpers
-  // This is the ONLY doctrine context creation point. All helpers receive it explicitly.
-  // NO helper should access doctrine via closure - always through selectorCtx.doctrine
-  // ==========================================================================
-  const selectorCtx = buildSelectorRuntimeContext(
-    unifiedDoctrineDecision,
-    day?.focus ?? 'unknown',
-    primaryGoal
-  )
   
   // [RUNTIME_CONTEXT_ENTRY] Log entry with version proof
   console.log('[SELECTOR_RUNTIME_CONTEXT_ENTRY]', {

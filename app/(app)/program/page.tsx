@@ -6474,14 +6474,21 @@ export default function ProgramPage() {
   
   // TASK 5: Regenerate Program - creates updated program from current profile truth
   // HARDENED: Full try/catch/finally to prevent stuck spinner state
-  // [PROGRAM_RETRY_VERSION] Visible runtime version proof - matches selector V3
-  const PROGRAM_RETRY_VERSION = 'PROGRAM_RETRY_CTX_HARDLOCK_V3_2026_04_13'
+  // [PROGRAM_RETRY_VERSION] Visible runtime version proof - matches selector V4
+  const PROGRAM_RETRY_VERSION = 'PROGRAM_RETRY_CONTEXT_LOCK_V4_2026_04_13'
   
   const handleRegenerate = useCallback(() => {
     // [RUNTIME_VERSION_LOG] Prove this code version is executing
     console.log('[PROGRAM_RETRY_VERSION]', {
       version: PROGRAM_RETRY_VERSION,
       phase: 'regenerate_start',
+      timestamp: new Date().toISOString(),
+    })
+    
+    // [V4_BANNER_CLEAR] Clear stale degraded banner state before starting fresh attempt
+    console.log('[PROGRAM_RETRY_BANNER_CLEAR]', {
+      version: PROGRAM_RETRY_VERSION,
+      phase: 'clearing_stale_banner',
       timestamp: new Date().toISOString(),
     })
     

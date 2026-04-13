@@ -1098,8 +1098,9 @@ interface ExerciseSelectionInputs {
 
 /**
  * [SELECTOR_RUNTIME_VERSION] Hard version fingerprint for cache/deploy proof
+ * V5: DECLOSURE - helpers receive context as explicit parameter, not closure
  */
-const SELECTOR_RUNTIME_VERSION = 'SELECTOR_CONTEXT_LOCK_V4_2026_04_13'
+const SELECTOR_RUNTIME_VERSION = 'SELECTOR_CONTEXT_DECLOSURE_V1_2026_04_13'
 
 /**
  * [SELECTOR_DOCTRINE_CONTEXT_TYPE] Explicit type for selector doctrine context.
@@ -1982,7 +1983,7 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     for (let ri = 0; ri < relaxedBudget && main.length < 4; ri++) {
       const candidate = conservativePool[ri]
       if (candidate && !usedIds.has(candidate.id)) {
-        addExercise(candidate, 'Doctrine relaxation rescue', undefined, undefined, undefined, 'standalone', {
+        addExercise(selectorCtx, candidate, 'Doctrine relaxation rescue', undefined, undefined, undefined, 'standalone', {
           primarySelectionReason: 'doctrine_relaxation_rescue',
           sessionRole: 'rescue_fallback',
           expressionMode: 'conservative_fallback',
@@ -2781,7 +2782,9 @@ function selectMainExercises(
   
   // [exercise-trace] TASK 2: Enhanced addExercise with full traceability
   // Helper to add exercise with prerequisite gate check, load tracking, and trace
+  // [SELECTOR_CONTEXT_DECLOSURE_V1] ownedCtx is EXPLICIT PARAMETER - no closure dependency
   const addExercise = (
+    ownedCtx: SelectorRuntimeContext, // DECLOSURE: explicit parameter, not closure
     exercise: Exercise,
     reason: string,
     setsOverride?: number,
@@ -2812,9 +2815,8 @@ function selectMainExercises(
       materialityFactors?: string[]
     }
   ) => {
-    // [SELECTOR_CTX_HARDLOCK_V3] Use assertRuntimeContext to validate explicit ownership
-    // selectorCtx is passed from parent scope - no closure on raw doctrine variables
-    assertRuntimeContext(selectorCtx, 'addExercise')
+    // [SELECTOR_CONTEXT_DECLOSURE_V1] Validate explicit parameter ownership
+    assertRuntimeContext(ownedCtx, 'addExercise')
     
     if (usedIds.has(exercise.id)) return false
     if (selected.length >= maxExercises) return false
@@ -2822,20 +2824,21 @@ function selectMainExercises(
     // ==========================================================================
     // [DOCTRINE-DRIVEN-BLOCKING] Block generic filler exercises when doctrine active
     // This is where doctrine ACTUALLY filters exercise choices, not just logs
+    // [SELECTOR_CONTEXT_DECLOSURE_V1] Uses ownedCtx explicit parameter
     // ==========================================================================
-    if (selectorCtx.doctrine.active && selectorCtx.doctrine.preventGenericFiller) {
+    if (ownedCtx.doctrine.active && ownedCtx.doctrine.preventGenericFiller) {
       const exNameLower = safeLower(exercise.name || '')
       const exIdLower = safeLower(exercise.id || '')
       
-      for (const blockedPattern of selectorCtx.doctrine.genericFillerBlocked) {
+      for (const blockedPattern of ownedCtx.doctrine.genericFillerBlocked) {
         const patternLower = blockedPattern.toLowerCase().replace(/_/g, ' ')
         if (exNameLower.includes(patternLower) || exIdLower.includes(patternLower.replace(/ /g, '_'))) {
           console.log('[DOCTRINE-BLOCKED-EXERCISE]', {
             exerciseId: exercise.id,
             exerciseName: exercise.name,
             blockedPattern,
-            dominantSpine: selectorCtx.doctrine.dominantSpine,
-            reason: `Generic filler blocked for ${selectorCtx.doctrine.dominantSpine} spine`,
+            dominantSpine: ownedCtx.doctrine.dominantSpine,
+            reason: `Generic filler blocked for ${ownedCtx.doctrine.dominantSpine} spine`,
             verdict: 'DOCTRINE_BLOCKED_GENERIC_FILLER',
           })
           return false
@@ -3248,7 +3251,8 @@ function selectMainExercises(
     let doctrineFinalRepsOrTime = canonicalRepsOrTime ?? finalExercise.defaultRepsOrTime ?? '8-12'
     let doctrineFinalNote = canonicalNote ?? finalExercise.notes ?? ''
     
-    if (selectorCtx.doctrine.active) {
+    // [SELECTOR_CONTEXT_DECLOSURE_V1] Uses ownedCtx explicit parameter
+    if (ownedCtx.doctrine.active) {
       const originalSets = typeof doctrineFinalSets === 'number' ? doctrineFinalSets : 3
       const originalRepsOrTime = doctrineFinalRepsOrTime
       
@@ -3256,9 +3260,9 @@ function selectMainExercises(
       // STEP 1: Apply INTENSITY BIAS to sets
       // ========================================================================
       if (typeof doctrineFinalSets === 'number') {
-        if (selectorCtx.doctrine.intensityBias === 'conservative') {
+        if (ownedCtx.doctrine.intensityBias === 'conservative') {
           doctrineFinalSets = Math.max(2, Math.floor(doctrineFinalSets * 0.8))
-        } else if (selectorCtx.doctrine.intensityBias === 'aggressive') {
+        } else if (ownedCtx.doctrine.intensityBias === 'aggressive') {
           doctrineFinalSets = Math.min(6, Math.ceil(doctrineFinalSets * 1.25))
         }
       }
@@ -3267,9 +3271,9 @@ function selectMainExercises(
       // STEP 2: Apply VOLUME BIAS to sets (compounds with intensity)
       // ========================================================================
       if (typeof doctrineFinalSets === 'number') {
-        if (selectorCtx.doctrine.volumeBias === 'low') {
+        if (ownedCtx.doctrine.volumeBias === 'low') {
           doctrineFinalSets = Math.max(2, doctrineFinalSets - 1)
-        } else if (selectorCtx.doctrine.volumeBias === 'high') {
+        } else if (ownedCtx.doctrine.volumeBias === 'high') {
           doctrineFinalSets = Math.min(6, doctrineFinalSets + 1)
         }
       }
@@ -3278,7 +3282,7 @@ function selectMainExercises(
       // STEP 3: Apply SKILL QUALITY emphasis to reps/time
       // When skillQualityOverQuantity is true, reduce volume for quality focus
       // ========================================================================
-      if (selectorCtx.doctrine.skillQualityOverQuantity) {
+      if (ownedCtx.doctrine.skillQualityOverQuantity) {
         const isSkillExercise = finalExercise.category === 'skill' || 
           safeLower(reason).includes('skill') ||
           safeLower(finalExercise.id || '').includes('progression')
@@ -3298,7 +3302,7 @@ function selectMainExercises(
       // STEP 4: Apply HOLD TIME EMPHASIS for static skill spines
       // Transform rep-based prescriptions to hold-based for isometric work
       // ========================================================================
-      if (selectorCtx.doctrine.holdTimeEmphasis && selectorCtx.doctrine.dominantSpine === 'static_skill_mastery') {
+      if (ownedCtx.doctrine.holdTimeEmphasis && ownedCtx.doctrine.dominantSpine === 'static_skill_mastery') {
         const isStaticExercise = finalExercise.isIsometric || 
           safeLower(finalExercise.name || '').includes('hold') ||
           safeLower(finalExercise.name || '').includes('lever') ||
@@ -3307,7 +3311,7 @@ function selectMainExercises(
           finalExercise.category === 'skill'
         
         if (isStaticExercise) {
-          doctrineFinalRepsOrTime = transformToHoldEmphasis(doctrineFinalRepsOrTime, selectorCtx.doctrine.intensityBias)
+          doctrineFinalRepsOrTime = transformToHoldEmphasis(doctrineFinalRepsOrTime, ownedCtx.doctrine.intensityBias)
         }
       }
       
@@ -3315,7 +3319,7 @@ function selectMainExercises(
       // STEP 5: Apply RECOVERY CONSTRAINED dosage
       // Conservative dosage when recovery is limited
       // ========================================================================
-      if (selectorCtx.doctrine.recoveryConstrainedDosage) {
+      if (ownedCtx.doctrine.recoveryConstrainedDosage) {
         if (typeof doctrineFinalSets === 'number') {
           doctrineFinalSets = Math.max(2, doctrineFinalSets - 1)
         }
@@ -3332,10 +3336,10 @@ function selectMainExercises(
       // Different spines get fundamentally different prescription patterns
       // ========================================================================
       const spineTransform = applySpineDosageTransform(
-        selectorCtx.doctrine.dominantSpine,
+        ownedCtx.doctrine.dominantSpine,
         doctrineFinalRepsOrTime,
         finalExercise,
-        selectorCtx.doctrine.intensityBias
+        ownedCtx.doctrine.intensityBias
       )
       if (spineTransform.modified) {
         doctrineFinalRepsOrTime = spineTransform.repsOrTime
@@ -3353,12 +3357,12 @@ function selectMainExercises(
         console.log('[DOCTRINE-MATERIALIZATION-APPLIED]', {
           exerciseId: finalExercise.id,
           exerciseName: finalExercise.name,
-          dominantSpine: selectorCtx.doctrine.dominantSpine,
-          intensityBias: selectorCtx.doctrine.intensityBias,
-          volumeBias: selectorCtx.doctrine.volumeBias,
-          skillQuality: selectorCtx.doctrine.skillQualityOverQuantity,
-          holdEmphasis: selectorCtx.doctrine.holdTimeEmphasis,
-          recoveryConstrained: selectorCtx.doctrine.recoveryConstrainedDosage,
+          dominantSpine: ownedCtx.doctrine.dominantSpine,
+          intensityBias: ownedCtx.doctrine.intensityBias,
+          volumeBias: ownedCtx.doctrine.volumeBias,
+          skillQuality: ownedCtx.doctrine.skillQualityOverQuantity,
+          holdEmphasis: ownedCtx.doctrine.holdTimeEmphasis,
+          recoveryConstrained: ownedCtx.doctrine.recoveryConstrainedDosage,
           original: { sets: originalSets, repsOrTime: originalRepsOrTime },
           final: { sets: doctrineFinalSets, repsOrTime: doctrineFinalRepsOrTime },
           verdict: 'DOCTRINE_MATERIALLY_TRANSFORMED_DOSAGE',
@@ -4070,17 +4074,17 @@ function applyMaterialityScoreAdjustments(
    * This function combines the existing session-based scoring with deep materiality analysis
    * to produce rankings that are visibly more personalized.
    * 
-   * [SELECTOR_CTX_HARDLOCK_V3] Uses selectorCtx for explicit doctrine ownership.
-   * Arrow function defined AFTER selectorCtx creation - no closure on raw variables.
+   * [SELECTOR_CONTEXT_DECLOSURE_V1] ownedCtx is EXPLICIT PARAMETER - no closure dependency
    */
   const scoreExerciseWithMateriality = (
+    ownedCtx: SelectorRuntimeContext, // DECLOSURE: explicit parameter, not closure
     exercise: Exercise,
     sessionSkills: SessionSkillAllocation[],
     dayFocus: string,
     slotType: SlotType
   ): { score: number; materialityScore: ExerciseMaterialityScore | null; primaryReason: MaterialityReasonCode } => {
-    // [SELECTOR_CTX_HARDLOCK_V3] Validate explicit runtime context ownership
-    assertRuntimeContext(selectorCtx, 'scoreExerciseWithMateriality')
+    // [SELECTOR_CONTEXT_DECLOSURE_V1] Validate explicit parameter ownership
+    assertRuntimeContext(ownedCtx, 'scoreExerciseWithMateriality')
     
     // Get base session score
     const baseScore = scoreExerciseForSession(exercise, sessionSkills, dayFocus, hasWeightedEquipment)
@@ -4116,9 +4120,10 @@ function applyMaterialityScoreAdjustments(
     // ==========================================================================
     // [DOCTRINE-DRIVEN-VARIANT-PREFERENCE] Boost exercises matching spine preference
     // This makes doctrine preferWeighted/preferStatic actually influence selection
+    // [SELECTOR_CONTEXT_DECLOSURE_V1] Uses ownedCtx explicit parameter
     // ==========================================================================
     let doctrineVariantBoost = 0
-    if (selectorCtx.doctrine.active) {
+    if (ownedCtx.doctrine.active) {
       const exNameLower = safeLower(exercise.name || '')
       const exIdLower = safeLower(exercise.id || '')
       const isWeightedExercise = exNameLower.includes('weighted') || exIdLower.includes('weighted')
@@ -4128,9 +4133,9 @@ function applyMaterialityScoreAdjustments(
         exercise.category === 'hold' ||
         exercise.category === 'skill'
       
-      if (selectorCtx.doctrine.preferWeighted && isWeightedExercise) {
+      if (ownedCtx.doctrine.preferWeighted && isWeightedExercise) {
         doctrineVariantBoost = 15 // Significant boost for weighted variants
-      } else if (selectorCtx.doctrine.preferStatic && isStaticExercise) {
+      } else if (ownedCtx.doctrine.preferStatic && isStaticExercise) {
         doctrineVariantBoost = 15 // Significant boost for static variants
       }
     }
@@ -4162,8 +4167,10 @@ function applyMaterialityScoreAdjustments(
     sessionSkills: SessionSkillAllocation[]
   ): Array<T & { materialityScore: ExerciseMaterialityScore | null; primaryReason: MaterialityReasonCode }> => {
     // Score each candidate with materiality
+    // [SELECTOR_CONTEXT_DECLOSURE_V1] Pass selectorCtx explicitly
     const scored = candidates.map(c => {
       const { score, materialityScore, primaryReason } = scoreExerciseWithMateriality(
+        selectorCtx, // DECLOSURE: explicit parameter
         c.exercise,
         sessionSkills,
         day.focus,
@@ -4303,7 +4310,7 @@ function applyMaterialityScoreAdjustments(
       }
       
       if (primarySkill) {
-        addExercise(primarySkill, `Primary ${primarySkillAlloc.skill} skill work`, undefined, undefined, undefined, 'standalone', {
+        addExercise(selectorCtx, primarySkill, `Primary ${primarySkillAlloc.skill} skill work`, undefined, undefined, undefined, 'standalone', {
           primarySelectionReason: 'primary_skill_direct',
           sessionRole: 'skill_primary',
           expressionMode: 'direct_intensity',
@@ -4346,7 +4353,7 @@ function applyMaterialityScoreAdjustments(
       
       if (scoredTech[0]) {
         const techWinner = materialityRankedTech[0]
-        addExercise(scoredTech[0].exercise, `Technical work for ${technicalSkillAlloc.skill}`, undefined, undefined, 'Moderate intensity', 'standalone', {
+        addExercise(selectorCtx, scoredTech[0].exercise, `Technical work for ${technicalSkillAlloc.skill}`, undefined, undefined, 'Moderate intensity', 'standalone', {
           primarySelectionReason: 'secondary_skill_technical',
           sessionRole: 'skill_secondary',
           expressionMode: 'technical_focus',
@@ -4375,7 +4382,7 @@ function applyMaterialityScoreAdjustments(
       if (skills.length > 0) {
         const secondarySkill = selectByLevel(skills, experienceLevel)
         if (secondarySkill) {
-          addExercise(secondarySkill, 'Additional skill density', undefined, undefined, 'Moderate intensity', 'standalone', {
+          addExercise(selectorCtx, secondarySkill, 'Additional skill density', undefined, undefined, 'Moderate intensity', 'standalone', {
             primarySelectionReason: 'primary_skill_technical',
             sessionRole: 'skill_secondary',
             expressionMode: 'technical_focus',
@@ -4396,7 +4403,7 @@ function applyMaterialityScoreAdjustments(
       const doctrineExercises = getDoctrineBackedExercisesForSkill(skill, availableStrength)
       for (const { exercise, doctrineSource } of doctrineExercises) {
         if (!usedIds.has(exercise.id) && canAddMore(exercise, 'standalone')) {
-          addExercise(exercise, `Doctrine-backed support for ${skill}`, undefined, undefined, undefined, 'standalone', {
+          addExercise(selectorCtx, exercise, `Doctrine-backed support for ${skill}`, undefined, undefined, undefined, 'standalone', {
             primarySelectionReason: 'doctrine_recommended',
             sessionRole: 'strength_support',
             expressionMode: 'strength_support',
@@ -4434,7 +4441,7 @@ function applyMaterialityScoreAdjustments(
         
         const strengthWinner = materialityRankedStrength[0]
         if (strengthWinner) {
-          addExercise(strengthWinner.exercise, `Supports ${primaryGoal} development`, undefined, undefined, undefined, 'standalone', {
+          addExercise(selectorCtx, strengthWinner.exercise, `Supports ${primaryGoal} development`, undefined, undefined, undefined, 'standalone', {
             primarySelectionReason: 'selected_skill_support',
             sessionRole: 'strength_support',
             expressionMode: 'strength_support',
@@ -4507,6 +4514,7 @@ function applyMaterialityScoreAdjustments(
       
       if (primaryWeighted) {
         addExercise(
+          selectorCtx,
           primaryWeighted,
           isHeavyDay ? 'Primary strength builder (heavy)' : 'Primary strength builder (volume)',
           isHeavyDay ? 4 : 3,
@@ -4545,6 +4553,7 @@ function applyMaterialityScoreAdjustments(
               : undefined
         
         addExercise(
+          selectorCtx,
           bodyweightPrimary,
           isHeavyDay ? 'Primary strength builder (bodyweight)' : 'Bodyweight strength volume',
           isHeavyDay ? 4 : 3,
@@ -4579,7 +4588,7 @@ function applyMaterialityScoreAdjustments(
       const doctrineExercises = getDoctrineBackedExercisesForSkill(skillAlloc.skill, availableStrength)
       for (const { exercise, doctrineSource } of doctrineExercises) {
         if (!usedIds.has(exercise.id) && canAddMore(exercise, 'standalone')) {
-          addExercise(exercise, `Strength support for ${skillAlloc.skill}`, undefined, undefined, undefined, 'standalone', {
+          addExercise(selectorCtx, exercise, `Strength support for ${skillAlloc.skill}`, undefined, undefined, undefined, 'standalone', {
             primarySelectionReason: 'doctrine_recommended',
             sessionRole: 'strength_support',
             expressionMode: 'strength_support',
@@ -4600,7 +4609,7 @@ function applyMaterialityScoreAdjustments(
     if (goalStrength.length > 0 && selected.length < maxExercises - 1) {
       const strengthPick = selectByLevel(goalStrength, experienceLevel)
       if (strengthPick) {
-        addExercise(strengthPick, `Skill-specific ${isPush ? 'push' : 'pull'} strength`, undefined, undefined, undefined, 'standalone', {
+        addExercise(selectorCtx, strengthPick, `Skill-specific ${isPush ? 'push' : 'pull'} strength`, undefined, undefined, undefined, 'standalone', {
           primarySelectionReason: 'selected_skill_support',
           sessionRole: 'strength_support',
           expressionMode: 'strength_support',
@@ -4622,7 +4631,7 @@ function applyMaterialityScoreAdjustments(
       
       if (skillCandidates.length > 0) {
         const skillPick = selectByLevel(skillCandidates, experienceLevel) || skillCandidates[0]
-        addExercise(skillPick, 'Skill exposure alongside strength work', undefined, undefined, undefined, 'standalone', {
+        addExercise(selectorCtx, skillPick, 'Skill exposure alongside strength work', undefined, undefined, undefined, 'standalone', {
           primarySelectionReason: 'primary_skill_technical',
           sessionRole: 'skill_secondary',
           expressionMode: 'technical_focus',
@@ -4688,7 +4697,7 @@ function applyMaterialityScoreAdjustments(
         return skillKey && exerciseTransfersToSkill(pick.exercise, skillKey)
       })
       
-      addExercise(pick.exercise, pick.skillAligned ? `Push work supporting ${influencingSkill?.skill || 'skills'}` : 'Balanced push work', isLightDay ? 3 : 4, undefined, undefined, 'standalone', {
+      addExercise(selectorCtx, pick.exercise, pick.skillAligned ? `Push work supporting ${influencingSkill?.skill || 'skills'}` : 'Balanced push work', isLightDay ? 3 : 4, undefined, undefined, 'standalone', {
         primarySelectionReason: pick.skillAligned ? 'selected_skill_support' : 'session_role_fill',
         sessionRole: 'accessory',
         expressionMode: isLightDay ? 'rotation_light' : 'strength_support',
@@ -4734,7 +4743,7 @@ function applyMaterialityScoreAdjustments(
         return skillKey && exerciseTransfersToSkill(pick.exercise, skillKey)
       })
       
-      addExercise(pick.exercise, pick.skillAligned ? `Pull work supporting ${influencingSkill?.skill || 'skills'}` : 'Balanced pull work', isLightDay ? 3 : 4, undefined, undefined, 'standalone', {
+      addExercise(selectorCtx, pick.exercise, pick.skillAligned ? `Pull work supporting ${influencingSkill?.skill || 'skills'}` : 'Balanced pull work', isLightDay ? 3 : 4, undefined, undefined, 'standalone', {
         primarySelectionReason: pick.skillAligned ? 'selected_skill_support' : 'session_role_fill',
         sessionRole: 'accessory',
         expressionMode: isLightDay ? 'rotation_light' : 'strength_support',
@@ -4758,7 +4767,7 @@ function applyMaterialityScoreAdjustments(
       
       if (skillCandidates.length > 0) {
         const skillPick = selectByLevel(skillCandidates, experienceLevel) || skillCandidates[0]
-        addExercise(skillPick, 'Skill maintenance', 3, undefined, 'Moderate intensity', 'standalone', {
+        addExercise(selectorCtx, skillPick, 'Skill maintenance', 3, undefined, 'Moderate intensity', 'standalone', {
           primarySelectionReason: 'recovery_rotation',
           sessionRole: 'skill_secondary',
           expressionMode: 'rotation_light',
@@ -4780,7 +4789,7 @@ function applyMaterialityScoreAdjustments(
     })
     
     transitionExercises.slice(0, 2).forEach(e => {
-      addExercise(e, 'Transition pattern development')
+      addExercise(selectorCtx, e, 'Transition pattern development')
     })
   }
   
@@ -4829,6 +4838,7 @@ function applyMaterialityScoreAdjustments(
       const flexCount = rangeTrainingMode === 'hybrid' ? 2 : Math.min(4, maxExercises - 1)
       sortedFlexExercises.slice(0, flexCount).forEach((exercise) => {
         addExercise(
+          selectorCtx,
           exercise,
           `${primaryGoal} flexibility flow`,
           3,
@@ -4862,6 +4872,7 @@ function applyMaterialityScoreAdjustments(
         }
         
         addExercise(
+          selectorCtx,
           matchingExercise,
           `${primaryGoal} mobility work (RPE ${mobEx.targetRPE})`,
           mobEx.sets,
@@ -4881,7 +4892,7 @@ function applyMaterialityScoreAdjustments(
           : false
       })
       if (compressionCore && !usedIds.has(compressionCore.id)) {
-        addExercise(compressionCore, 'Active compression support', 3, '15s')
+        addExercise(selectorCtx, compressionCore, 'Active compression support', 3, '15s')
       }
     }
   }
@@ -5001,7 +5012,7 @@ function applyMaterialityScoreAdjustments(
       
       // Add the selected exercise if found
       if (skillExercise) {
-        const added = addExercise(skillExercise, exerciseReason)
+        const added = addExercise(selectorCtx, skillExercise, exerciseReason)
         if (added) {
           expressedSkillIds.add(allocation.skill)
           console.log('[exercise-expression] Added skill exercise:', {
@@ -5113,9 +5124,10 @@ function applyMaterialityScoreAdjustments(
       
       // Add the support exercise with explicit tracing
       if (supportExercise) {
-        const added = addExercise(
-          supportExercise, 
-          supportReason, 
+const added = addExercise(
+          selectorCtx,
+          supportExercise,
+          supportReason,
           undefined, 
           undefined, 
           undefined, 
@@ -5201,7 +5213,7 @@ function applyMaterialityScoreAdjustments(
     
     for (const ex of goalSupportExercises.slice(0, 2)) {
       if (selected.length >= maxExercises - 1) break
-      const added = addExercise(ex, `[Constrained] ${primaryGoal} support strength`, undefined, undefined, undefined, 'standalone', {
+      const added = addExercise(selectorCtx, ex, `[Constrained] ${primaryGoal} support strength`, undefined, undefined, undefined, 'standalone', {
         primarySelectionReason: 'constraint_fallback_support',
         sessionRole: 'strength_support',
         expressionMode: 'strength_support',
@@ -5224,7 +5236,7 @@ function applyMaterialityScoreAdjustments(
       
       for (const ex of limiterExercises.slice(0, 2)) {
         if (selected.length >= maxExercises - 1) break
-        addExercise(ex, `[Constrained] Limiter correction for ${primaryGoal}`, undefined, undefined, undefined, 'standalone', {
+        addExercise(selectorCtx, ex, `[Constrained] Limiter correction for ${primaryGoal}`, undefined, undefined, undefined, 'standalone', {
           primarySelectionReason: 'constraint_fallback_limiter',
           sessionRole: 'support_volume',
           expressionMode: 'prehab_focus',
@@ -5244,7 +5256,7 @@ function applyMaterialityScoreAdjustments(
       
       for (const ex of coreForGoal.slice(0, 2)) {
         if (selected.length >= maxExercises - 1) break
-        addExercise(ex, `[Constrained] Core for ${primaryGoal}`, undefined, undefined, undefined, 'standalone', {
+        addExercise(selectorCtx, ex, `[Constrained] Core for ${primaryGoal}`, undefined, undefined, undefined, 'standalone', {
           primarySelectionReason: 'constraint_fallback_core',
           sessionRole: 'core',
           expressionMode: 'core_focus',
@@ -5260,7 +5272,7 @@ function applyMaterialityScoreAdjustments(
       
       for (const ex of fallbackStrength) {
         if (selected.length >= maxExercises - 1) break
-        addExercise(ex, `[Constrained] General strength fallback`, undefined, undefined, undefined, 'standalone', {
+        addExercise(selectorCtx, ex, `[Constrained] General strength fallback`, undefined, undefined, undefined, 'standalone', {
           primarySelectionReason: 'constraint_fallback_general',
           sessionRole: 'strength_support',
           expressionMode: 'strength_support',
@@ -5288,7 +5300,7 @@ function applyMaterialityScoreAdjustments(
       usedIds
     )
     if (constraintExercise) {
-      addExercise(constraintExercise, `Targets your current limiter: ${constraintType}`)
+      addExercise(selectorCtx, constraintExercise, `Targets your current limiter: ${constraintType}`)
     }
   }
   
@@ -5388,9 +5400,10 @@ function applyMaterialityScoreAdjustments(
         }
         
         if (selectedTertiaryExercise) {
-          const added = addExercise(
-            selectedTertiaryExercise,
-            `[Tertiary Skill] ${tertiaryEntry.skill.replace(/_/g, ' ')} development`,
+const added = addExercise(
+          selectorCtx,
+          selectedTertiaryExercise,
+          `[Tertiary Skill] ${tertiaryEntry.skill.replace(/_/g, ' ')} development`,
             undefined, undefined, undefined, 'standalone',
             {
               primarySelectionReason: 'selected_skill_tertiary',
@@ -5518,9 +5531,10 @@ function applyMaterialityScoreAdjustments(
         }
         
         if (selectedSupportExercise) {
-          const added = addExercise(
-            selectedSupportExercise,
-            `[Support Skill] ${supportEntry.skill.replace(/_/g, ' ')} development`,
+const added = addExercise(
+          selectorCtx,
+          selectedSupportExercise,
+          `[Support Skill] ${supportEntry.skill.replace(/_/g, ' ')} development`,
             undefined, undefined, undefined, 'standalone',
             {
               primarySelectionReason: 'selected_skill_support',
@@ -5596,7 +5610,7 @@ function applyMaterialityScoreAdjustments(
     const unusedAccessory = accessoryPool.filter(e => !usedIds.has(e.id))
     if (unusedAccessory.length > 0) {
       const pick = unusedAccessory.find(e => e.fatigueCost <= 2) || unusedAccessory[0]
-      addExercise(pick, 'Support volume')
+      addExercise(selectorCtx, pick, 'Support volume')
     }
   }
   
@@ -5657,7 +5671,7 @@ function applyMaterialityScoreAdjustments(
     
     if (corePick) {
       console.log('[movement-intel] Selected core exercise:', corePick.id, coreReason)
-      addExercise(corePick, coreReason)
+      addExercise(selectorCtx, corePick, coreReason)
     }
   }
   
@@ -5702,7 +5716,7 @@ function applyMaterialityScoreAdjustments(
     
     for (const ex of lastResortStrength) {
       if (selected.length >= maxExercises) break
-      addExercise(ex, `[Last Resort] General strength`, undefined, undefined, undefined, 'standalone', {
+      addExercise(selectorCtx, ex, `[Last Resort] General strength`, undefined, undefined, undefined, 'standalone', {
         primarySelectionReason: 'constraint_fallback_general',
         sessionRole: 'strength_support',
         expressionMode: 'strength_support',
@@ -5717,7 +5731,7 @@ function applyMaterialityScoreAdjustments(
       
       for (const ex of lastResortCore) {
         if (selected.length >= maxExercises) break
-        addExercise(ex, `[Last Resort] Core work`, undefined, undefined, undefined, 'standalone', {
+        addExercise(selectorCtx, ex, `[Last Resort] Core work`, undefined, undefined, undefined, 'standalone', {
           primarySelectionReason: 'constraint_fallback_core',
           sessionRole: 'core',
           expressionMode: 'core_focus',
@@ -5782,7 +5796,7 @@ function applyMaterialityScoreAdjustments(
     
     for (const candidate of unusedSkillCandidates) {
       if (deduplicatedSelected.length >= maxExercises) break
-      addExercise(candidate, `[Skill Floor] Direct ${primaryGoal} work`, undefined, undefined, undefined, 'standalone', {
+      addExercise(selectorCtx, candidate, `[Skill Floor] Direct ${primaryGoal} work`, undefined, undefined, undefined, 'standalone', {
         primarySelectionReason: 'skill_floor_enforcement',
         sessionRole: 'skill_secondary',
         expressionMode: 'technical_focus',

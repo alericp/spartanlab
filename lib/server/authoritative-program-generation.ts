@@ -713,12 +713,15 @@ export async function executeAuthoritativeGeneration(
                                errorStack?.includes('movement-intelligence') ||
                                errorStack?.includes('exercise-override-service')
       
-      // [SELECTOR_EXECUTION_CONTEXT_FAILURE] Explicit detection for V4 execution context failures
+      // [SELECTOR_DECLOSURE_FAILURE] Explicit detection for DECLOSURE V1 context failures
+      // After DECLOSURE fix, helpers receive context as explicit parameter - no more closure access
       const isSelectorExecutionContextFailure = errorString.includes('selector_execution_context_missing') ||
                                                 errorString.includes('selector_execution_context_invalid') ||
                                                 errorString.includes('selector_runtime_context_missing') ||
                                                 errorString.includes('selector_doctrine_context_missing') ||
                                                 errorString.includes('selector_doctrine_context_invalid') ||
+                                                errorString.includes('selector_owner_failure') || // DECLOSURE V1 owner-specific
+                                                errorString.includes('ownedCtx is not defined') || // DECLOSURE V1 specific
                                                 errorString.includes('selectorCtx is not defined') ||
                                                 errorString.includes('doctrineCtx is not defined') ||
                                                 errorString.includes('selectorDoctrineContext is not defined') ||

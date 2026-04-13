@@ -1097,11 +1097,11 @@ interface ExerciseSelectionInputs {
 // selector corridor. ALL helpers receive this explicitly - NO closure access.
 
 /**
- * [SELECTOR_RUNTIME_VERSION] Hard version fingerprint for cache/deploy proof
- * CORRIDOR_LOCK_V1: Full corridor repair - ALL runtime-active helpers use explicit parameters
- * NO closure-based selectorCtx access allowed in any nested callback
- */
-const SELECTOR_RUNTIME_VERSION = 'SELECTOR_CORRIDOR_LOCK_V1_2026_04_13'
+  * [SELECTOR_RUNTIME_VERSION] Hard version fingerprint for cache/deploy proof
+  * TRUTH_SYNC_V1: All corridor layers must show this same fingerprint
+  * NO closure-based selectorCtx access allowed in any nested callback
+  */
+  const SELECTOR_RUNTIME_VERSION = 'SELECTOR_TRUTH_SYNC_V1_2026_04_13'
 
 /**
  * [SELECTOR_DOCTRINE_CONTEXT_TYPE] Explicit type for selector doctrine context.

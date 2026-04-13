@@ -41,9 +41,10 @@ import {
 } from '@/lib/program-generation/week-adaptation-decision-contract'
 
 // ==========================================================================
-// [CORRIDOR_LOCK_V1] Version fingerprint for cache/deploy proof
+// [TRUTH_SYNC_V1] Version fingerprint for cache/deploy proof
+// All corridor layers must show this same fingerprint
 // ==========================================================================
-const AUTHORITATIVE_VERSION = 'AUTHORITATIVE_CORRIDOR_LOCK_V1_2026_04_13'
+const AUTHORITATIVE_VERSION = 'AUTHORITATIVE_TRUTH_SYNC_V1_2026_04_13'
 
 // ==========================================================================
 // TYPES: Generation Intent and Request Contract
@@ -733,8 +734,8 @@ export async function executeAuthoritativeGeneration(
                                                 errorString.includes('inputs_missing') ||
                                                 errorString.includes('creation_failed')
       
-      // [CORRIDOR_LOCK_V1] Log version proof for this error handling path
-      console.log('[AUTHORITATIVE_CORRIDOR_LOCK_ERROR_HANDLER]', {
+      // [TRUTH_SYNC_V1] Log version proof for this error handling path
+      console.log('[AUTHORITATIVE_TRUTH_SYNC_ERROR_HANDLER]', {
         version: AUTHORITATIVE_VERSION,
         errorString: errorString.slice(0, 200),
         isSelectorContextFailure: isSelectorExecutionContextFailure,

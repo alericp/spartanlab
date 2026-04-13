@@ -8,8 +8,9 @@ export const maxDuration = 30
 
 // ==========================================================================
 // [REGENERATE_RUNTIME_FINGERPRINT] Proves which source version is executing
+// TRUTH_SYNC_V1: All corridor layers must show this same fingerprint
 // ==========================================================================
-const REGENERATE_RUNTIME_FINGERPRINT = 'REGEN_AUDIT_2026_04_11_V2'
+const REGENERATE_RUNTIME_FINGERPRINT = 'REGENERATE_ROUTE_TRUTH_SYNC_V1_2026_04_13'
 
 /**
  * ==========================================================================
@@ -30,12 +31,16 @@ const REGENERATE_RUNTIME_FINGERPRINT = 'REGEN_AUDIT_2026_04_11_V2'
 
 export async function POST(request: Request) {
   const routeStartTime = Date.now()
+  // [TRUTH_SYNC_V1] Generate attempt ID at route entry for full corridor tracing
+  const attemptId = `regen_${routeStartTime}_${Math.random().toString(36).slice(2, 8)}`
   
   // ==========================================================================
   // [REGEN_ROUTE_ENTRY] Authoritative runtime proof with fingerprint
+  // [TRUTH_SYNC_V1] All corridor layers must show this same fingerprint
   // ==========================================================================
   console.log('[REGEN_ROUTE_ENTRY]', {
     fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+    attemptId,
     fileOwner: '/api/program/regenerate/route.ts',
     functionOwner: 'POST',
     phase: 'route_entry',

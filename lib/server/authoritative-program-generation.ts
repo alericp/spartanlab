@@ -713,6 +713,12 @@ export async function executeAuthoritativeGeneration(
                                errorStack?.includes('movement-intelligence') ||
                                errorStack?.includes('exercise-override-service')
       
+      // [SELECTOR_DOCTRINE_CONTEXT_FAILURE] Explicit detection for doctrine context ownership failures
+      const isSelectorDoctrineContextFailure = errorString.includes('selector_doctrine_context_missing') ||
+                                               errorString.includes('selector_doctrine_context_invalid') ||
+                                               errorString.includes('doctrineCtx') ||
+                                               errorString.includes('selectorDoctrineContext')
+      
       // [PHASE 15E SUBSTEP DIAGNOSTIC] Extract exact failing substep from error message/stack
       const isPhase15eCrash = errorStack?.includes('phase15e') || errorString.includes('phase15e')
       const phase15eSubstepMatch = errorStack?.match(/phase15e-exact-step-failure.*failingSubstep['":\s]+([a-z_]+)/i)
@@ -801,7 +807,10 @@ export async function executeAuthoritativeGeneration(
         crashCorridorAudit: {
           isToLowerCaseCrash,
           isSelectionCrash,
-          suspectedField: isToLowerCaseCrash ? 'skill/exercise/rule key (undefined)' : 'unknown',
+          isSelectorDoctrineContextFailure,
+          suspectedField: isSelectorDoctrineContextFailure 
+            ? 'doctrine_context_ownership' 
+            : isToLowerCaseCrash ? 'skill/exercise/rule key (undefined)' : 'unknown',
           inputAudit: {
             primaryGoal: request.canonicalProfile.primaryGoal || 'MISSING',
             secondaryGoal: request.canonicalProfile.secondaryGoal || 'null',

@@ -1091,6 +1091,87 @@ interface ExerciseSelectionInputs {
   }
 
 // =============================================================================
+// SELECTOR DOCTRINE CONTEXT - EXPLICIT TYPE AND FACTORY
+// =============================================================================
+
+/**
+ * [SELECTOR_DOCTRINE_CONTEXT_TYPE] Explicit type for selector doctrine context.
+ * This ensures all doctrine-consuming code has a stable, typed contract.
+ */
+export interface SelectorDoctrineContext {
+  readonly active: boolean
+  readonly maxExercises: number
+  readonly intensityBias: 'conservative' | 'moderate' | 'aggressive'
+  readonly volumeBias: 'low' | 'moderate' | 'high'
+  readonly preventGenericFiller: boolean
+  readonly dominantSpine: string | null
+  readonly integrationMode: string | null
+  readonly blockedMethods: string[]
+  readonly preferWeighted: boolean
+  readonly preferStatic: boolean
+  readonly genericFillerBlocked: string[]
+  readonly skillQualityOverQuantity: boolean
+  readonly holdTimeEmphasis: boolean
+  readonly recoveryConstrainedDosage: boolean
+  readonly skillBlockMandatory: boolean
+  readonly strengthBlockMandatory: boolean
+  readonly expectedSessionCharacter: string | null
+  readonly primaryMethodEmphasis: string[]
+  readonly minimumSpineVisibility: number
+}
+
+/**
+ * [SELECTOR_DOCTRINE_CONTEXT_FACTORY] Builds a complete, safe doctrine context.
+ * This factory ALWAYS returns a fully-shaped object with safe defaults.
+ * Use this instead of inline object construction to ensure consistency.
+ */
+function buildSelectorDoctrineContext(
+  unifiedDoctrineDecision: import('./doctrine/unified-doctrine-decision-model').UnifiedDoctrineDecision | null | undefined
+): SelectorDoctrineContext {
+  return Object.freeze({
+    active: !!unifiedDoctrineDecision,
+    maxExercises: unifiedDoctrineDecision?.sessionStructureRules.maxTotalExercisesPerSession ?? 8,
+    intensityBias: unifiedDoctrineDecision?.dosageRules.intensityBias ?? 'moderate',
+    volumeBias: unifiedDoctrineDecision?.dosageRules.volumeBias ?? 'moderate',
+    preventGenericFiller: unifiedDoctrineDecision?.antiFlatteningRules.preventFillerAccessories ?? false,
+    dominantSpine: unifiedDoctrineDecision?.dominantSpine.type ?? null,
+    integrationMode: unifiedDoctrineDecision?.integrationConstraints.mode ?? null,
+    blockedMethods: unifiedDoctrineDecision?.integrationConstraints.blockedMethods ?? [],
+    preferWeighted: unifiedDoctrineDecision?.exerciseSelectionRules.preferWeightedVariants ?? false,
+    preferStatic: unifiedDoctrineDecision?.exerciseSelectionRules.preferStaticVariants ?? false,
+    genericFillerBlocked: unifiedDoctrineDecision?.exerciseSelectionRules.genericFillerBlocked ?? [],
+    skillQualityOverQuantity: unifiedDoctrineDecision?.dosageRules.skillQualityOverQuantity ?? false,
+    holdTimeEmphasis: unifiedDoctrineDecision?.dosageRules.holdTimeEmphasis ?? false,
+    recoveryConstrainedDosage: unifiedDoctrineDecision?.dosageRules.recoveryConstrainedDosage ?? false,
+    skillBlockMandatory: unifiedDoctrineDecision?.sessionStructureRules.skillBlockMandatory ?? false,
+    strengthBlockMandatory: unifiedDoctrineDecision?.sessionStructureRules.strengthBlockMandatory ?? false,
+    expectedSessionCharacter: unifiedDoctrineDecision?.dominantSpine.expectedSessionCharacter ?? null,
+    primaryMethodEmphasis: unifiedDoctrineDecision?.dominantSpine.primaryMethodEmphasis ?? [],
+    minimumSpineVisibility: unifiedDoctrineDecision?.antiFlatteningRules.minimumSpineVisibility ?? 0.5,
+  })
+}
+
+/**
+ * [SELECTOR_DOCTRINE_CONTEXT_GUARD] Validates doctrine context is present.
+ * If missing, throws a classified error instead of raw ReferenceError.
+ */
+function assertDoctrineContext(
+  ctx: SelectorDoctrineContext | undefined | null,
+  functionOwner: string,
+  metadata: { dayFocus?: string; dayNumber?: number; primaryGoal?: string }
+): asserts ctx is SelectorDoctrineContext {
+  if (!ctx) {
+    console.error('[SELECTOR_DOCTRINE_CONTEXT_MISSING]', {
+      fileOwner: 'lib/program-exercise-selector.ts',
+      functionOwner,
+      ...metadata,
+      timestamp: new Date().toISOString(),
+    })
+    throw new Error(`selector_doctrine_context_missing:${functionOwner}`)
+  }
+}
+
+// =============================================================================
 // MAIN SELECTION FUNCTION
 // =============================================================================
 
@@ -1148,75 +1229,45 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   })
   
   // ==========================================================================
-  // [SELECTOR_DOCTRINE_CONTEXT] Single authoritative doctrine context for selector
-  // This replaces the old doctrineEnforcement variable with explicit ownership
-  // All nested helpers MUST read from this context, not from outer closure
+  // [SELECTOR_DOCTRINE_CONTEXT] Build authoritative doctrine context via factory
+  // This ensures a fully-shaped, frozen object with safe defaults.
   // ==========================================================================
-  const selectorDoctrineContext = {
-    active: !!unifiedDoctrineDecision,
-    maxExercises: unifiedDoctrineDecision?.sessionStructureRules.maxTotalExercisesPerSession ?? 8,
-    intensityBias: unifiedDoctrineDecision?.dosageRules.intensityBias ?? 'moderate',
-    preventGenericFiller: unifiedDoctrineDecision?.antiFlatteningRules.preventFillerAccessories ?? false,
-    dominantSpine: unifiedDoctrineDecision?.dominantSpine.type ?? null,
-    integrationMode: unifiedDoctrineDecision?.integrationConstraints.mode ?? null,
-    blockedMethods: unifiedDoctrineDecision?.integrationConstraints.blockedMethods ?? [],
-    preferWeighted: unifiedDoctrineDecision?.exerciseSelectionRules.preferWeightedVariants ?? false,
-    preferStatic: unifiedDoctrineDecision?.exerciseSelectionRules.preferStaticVariants ?? false,
-    genericFillerBlocked: unifiedDoctrineDecision?.exerciseSelectionRules.genericFillerBlocked ?? [],
-    // ==========================================================================
-    // [DOCTRINE-MATERIALIZATION-ENGINE] Full dosage rules for real prescription impact
-    // ==========================================================================
-    volumeBias: unifiedDoctrineDecision?.dosageRules.volumeBias ?? 'moderate',
-    skillQualityOverQuantity: unifiedDoctrineDecision?.dosageRules.skillQualityOverQuantity ?? false,
-    holdTimeEmphasis: unifiedDoctrineDecision?.dosageRules.holdTimeEmphasis ?? false,
-    recoveryConstrainedDosage: unifiedDoctrineDecision?.dosageRules.recoveryConstrainedDosage ?? false,
-    // Session structure for role-based dosage
-    skillBlockMandatory: unifiedDoctrineDecision?.sessionStructureRules.skillBlockMandatory ?? false,
-    strengthBlockMandatory: unifiedDoctrineDecision?.sessionStructureRules.strengthBlockMandatory ?? false,
-    // Expected session character for intent-driven prescriptions
-    expectedSessionCharacter: unifiedDoctrineDecision?.dominantSpine.expectedSessionCharacter ?? null,
-    primaryMethodEmphasis: unifiedDoctrineDecision?.dominantSpine.primaryMethodEmphasis ?? [],
-    // Anti-flattening
-    minimumSpineVisibility: unifiedDoctrineDecision?.antiFlatteningRules.minimumSpineVisibility ?? 0.5,
-  }
+  const doctrineCtx = buildSelectorDoctrineContext(unifiedDoctrineDecision)
   
   // [SELECTOR_DOCTRINE_CONTEXT_READY] Authoritative audit log for doctrine context creation
   console.log('[SELECTOR_DOCTRINE_CONTEXT_READY]', {
     fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
     dayFocus: day?.focus,
     primaryGoal,
-    dominantSpine: selectorDoctrineContext.dominantSpine,
-    active: selectorDoctrineContext.active,
-    maxExercises: selectorDoctrineContext.maxExercises,
-    preferWeighted: selectorDoctrineContext.preferWeighted,
-    preferStatic: selectorDoctrineContext.preferStatic,
-    preventGenericFiller: selectorDoctrineContext.preventGenericFiller,
-    contextOwnership: 'SELECTOR_DOCTRINE_CONTEXT_EXPLICITLY_OWNED',
+    dominantSpine: doctrineCtx.dominantSpine,
+    active: doctrineCtx.active,
+    maxExercises: doctrineCtx.maxExercises,
+    preferWeighted: doctrineCtx.preferWeighted,
+    preferStatic: doctrineCtx.preferStatic,
+    preventGenericFiller: doctrineCtx.preventGenericFiller,
+    contextOwnership: 'FACTORY_BUILT_FROZEN',
+    factoryUsed: true,
   })
-  
-  // Legacy alias kept for reference - all code now uses selectorDoctrineContext directly
-  // Prefixed with underscore to indicate intentionally unused
-  const _doctrineEnforcementLegacyAlias = selectorDoctrineContext
   
   if (unifiedDoctrineDecision) {
     console.log('[UNIFIED-DOCTRINE-MATERIALIZATION-ACTIVE]', {
       dayFocus: day?.focus,
-      dominantSpine: selectorDoctrineContext.dominantSpine,
-      integrationMode: selectorDoctrineContext.integrationMode,
-      maxExercises: selectorDoctrineContext.maxExercises,
+      dominantSpine: doctrineCtx.dominantSpine,
+      integrationMode: doctrineCtx.integrationMode,
+      maxExercises: doctrineCtx.maxExercises,
       // Dosage materialization fields
-      intensityBias: selectorDoctrineContext.intensityBias,
-      volumeBias: selectorDoctrineContext.volumeBias,
-      skillQualityOverQuantity: selectorDoctrineContext.skillQualityOverQuantity,
-      holdTimeEmphasis: selectorDoctrineContext.holdTimeEmphasis,
-      recoveryConstrainedDosage: selectorDoctrineContext.recoveryConstrainedDosage,
+      intensityBias: doctrineCtx.intensityBias,
+      volumeBias: doctrineCtx.volumeBias,
+      skillQualityOverQuantity: doctrineCtx.skillQualityOverQuantity,
+      holdTimeEmphasis: doctrineCtx.holdTimeEmphasis,
+      recoveryConstrainedDosage: doctrineCtx.recoveryConstrainedDosage,
       // Exercise selection
-      preventGenericFiller: selectorDoctrineContext.preventGenericFiller,
-      blockedMethods: selectorDoctrineContext.blockedMethods,
-      preferWeighted: selectorDoctrineContext.preferWeighted,
-      preferStatic: selectorDoctrineContext.preferStatic,
+      preventGenericFiller: doctrineCtx.preventGenericFiller,
+      blockedMethods: doctrineCtx.blockedMethods,
+      preferWeighted: doctrineCtx.preferWeighted,
+      preferStatic: doctrineCtx.preferStatic,
       // Session character
-      expectedSessionCharacter: selectorDoctrineContext.expectedSessionCharacter,
+      expectedSessionCharacter: doctrineCtx.expectedSessionCharacter,
       verdict: 'DOCTRINE_MATERIALIZATION_ENGINE_ACTIVE',
     })
   }
@@ -1310,21 +1361,21 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
           sessionArchitectureContract.slotAllocation.supportWork +
           sessionArchitectureContract.slotAllocation.accessoryWork
         : baseBudget.mainExercises,
-      selectorDoctrineContext.maxExercises // Doctrine enforces max cap
+      doctrineCtx.maxExercises // Doctrine enforces max cap
     ),
   }
   
   // [UNIFIED DOCTRINE DECISION] Log doctrine enforcement on exercise budget
-  if (selectorDoctrineContext.active) {
+  if (doctrineCtx.active) {
     console.log('[UNIFIED-DOCTRINE-BUDGET-ENFORCED]', {
       dayFocus: day?.focus,
       baseBudget: baseBudget.mainExercises,
       architectureBudget: sessionArchitectureContract.templateEscaped 
         ? sessionArchitectureContract.slotAllocation.primaryWork + sessionArchitectureContract.slotAllocation.secondaryWork + sessionArchitectureContract.slotAllocation.supportWork + sessionArchitectureContract.slotAllocation.accessoryWork
         : null,
-      doctrineMaxExercises: selectorDoctrineContext.maxExercises,
+      doctrineMaxExercises: doctrineCtx.maxExercises,
       finalBudget: budget.mainExercises,
-      dominantSpine: selectorDoctrineContext.dominantSpine,
+      dominantSpine: doctrineCtx.dominantSpine,
       verdict: 'DOCTRINE_BUDGET_CAP_APPLIED',
     })
   }
@@ -1818,10 +1869,10 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
       fingerprint: 'REGEN_AUDIT_2026_04_11_V2',
       dayFocus: day.focus,
       primaryGoal,
-      doctrineActive: selectorDoctrineContext.active,
-      preventGenericFiller: selectorDoctrineContext.preventGenericFiller,
-      blockedMethodsCount: selectorDoctrineContext.blockedMethods.length,
-      genericFillerBlockedCount: selectorDoctrineContext.genericFillerBlocked.length,
+      doctrineActive: doctrineCtx.active,
+      preventGenericFiller: doctrineCtx.preventGenericFiller,
+      blockedMethodsCount: doctrineCtx.blockedMethods.length,
+      genericFillerBlockedCount: doctrineCtx.genericFillerBlocked.length,
       availableSkillsCount: availableSkills.length,
       availableStrengthCount: availableStrength.length,
       verdict: 'MAIN_EMPTY_ACTIVATING_RESCUE',
@@ -2682,9 +2733,9 @@ function selectMainExercises(
       materialityFactors?: string[]
     }
   ) => {
-    // NOTE: selectorDoctrineContext is guaranteed to be in scope via closure.
-    // The const is defined at line ~1155, before this arrow function at line ~2654.
-    // If we get here, closure capture is guaranteed.
+    // [DOCTRINE_CONTEXT_ACCESS] doctrineCtx is explicitly available in this scope
+    // via factory-built frozen object created at selector entry.
+    assertDoctrineContext(doctrineCtx, 'addExercise', { dayFocus: day?.focus, primaryGoal })
     
     if (usedIds.has(exercise.id)) return false
     if (selected.length >= maxExercises) return false
@@ -2693,19 +2744,19 @@ function selectMainExercises(
     // [DOCTRINE-DRIVEN-BLOCKING] Block generic filler exercises when doctrine active
     // This is where doctrine ACTUALLY filters exercise choices, not just logs
     // ==========================================================================
-    if (selectorDoctrineContext.active && selectorDoctrineContext.preventGenericFiller) {
+    if (doctrineCtx.active && doctrineCtx.preventGenericFiller) {
       const exNameLower = safeLower(exercise.name || '')
       const exIdLower = safeLower(exercise.id || '')
       
-      for (const blockedPattern of selectorDoctrineContext.genericFillerBlocked) {
+      for (const blockedPattern of doctrineCtx.genericFillerBlocked) {
         const patternLower = blockedPattern.toLowerCase().replace(/_/g, ' ')
         if (exNameLower.includes(patternLower) || exIdLower.includes(patternLower.replace(/ /g, '_'))) {
           console.log('[DOCTRINE-BLOCKED-EXERCISE]', {
             exerciseId: exercise.id,
             exerciseName: exercise.name,
             blockedPattern,
-            dominantSpine: selectorDoctrineContext.dominantSpine,
-            reason: `Generic filler blocked for ${selectorDoctrineContext.dominantSpine} spine`,
+            dominantSpine: doctrineCtx.dominantSpine,
+            reason: `Generic filler blocked for ${doctrineCtx.dominantSpine} spine`,
             verdict: 'DOCTRINE_BLOCKED_GENERIC_FILLER',
           })
           return false
@@ -3118,7 +3169,7 @@ function selectMainExercises(
     let doctrineFinalRepsOrTime = canonicalRepsOrTime ?? finalExercise.defaultRepsOrTime ?? '8-12'
     let doctrineFinalNote = canonicalNote ?? finalExercise.notes ?? ''
     
-    if (selectorDoctrineContext.active) {
+    if (doctrineCtx.active) {
       const originalSets = typeof doctrineFinalSets === 'number' ? doctrineFinalSets : 3
       const originalRepsOrTime = doctrineFinalRepsOrTime
       
@@ -3126,9 +3177,9 @@ function selectMainExercises(
       // STEP 1: Apply INTENSITY BIAS to sets
       // ========================================================================
       if (typeof doctrineFinalSets === 'number') {
-        if (selectorDoctrineContext.intensityBias === 'conservative') {
+        if (doctrineCtx.intensityBias === 'conservative') {
           doctrineFinalSets = Math.max(2, Math.floor(doctrineFinalSets * 0.8))
-        } else if (selectorDoctrineContext.intensityBias === 'aggressive') {
+        } else if (doctrineCtx.intensityBias === 'aggressive') {
           doctrineFinalSets = Math.min(6, Math.ceil(doctrineFinalSets * 1.25))
         }
       }
@@ -3137,9 +3188,9 @@ function selectMainExercises(
       // STEP 2: Apply VOLUME BIAS to sets (compounds with intensity)
       // ========================================================================
       if (typeof doctrineFinalSets === 'number') {
-        if (selectorDoctrineContext.volumeBias === 'low') {
+        if (doctrineCtx.volumeBias === 'low') {
           doctrineFinalSets = Math.max(2, doctrineFinalSets - 1)
-        } else if (selectorDoctrineContext.volumeBias === 'high') {
+        } else if (doctrineCtx.volumeBias === 'high') {
           doctrineFinalSets = Math.min(6, doctrineFinalSets + 1)
         }
       }
@@ -3148,7 +3199,7 @@ function selectMainExercises(
       // STEP 3: Apply SKILL QUALITY emphasis to reps/time
       // When skillQualityOverQuantity is true, reduce volume for quality focus
       // ========================================================================
-      if (selectorDoctrineContext.skillQualityOverQuantity) {
+      if (doctrineCtx.skillQualityOverQuantity) {
         const isSkillExercise = finalExercise.category === 'skill' || 
           safeLower(reason).includes('skill') ||
           safeLower(finalExercise.id || '').includes('progression')
@@ -3168,7 +3219,7 @@ function selectMainExercises(
       // STEP 4: Apply HOLD TIME EMPHASIS for static skill spines
       // Transform rep-based prescriptions to hold-based for isometric work
       // ========================================================================
-      if (selectorDoctrineContext.holdTimeEmphasis && selectorDoctrineContext.dominantSpine === 'static_skill_mastery') {
+      if (doctrineCtx.holdTimeEmphasis && doctrineCtx.dominantSpine === 'static_skill_mastery') {
         const isStaticExercise = finalExercise.isIsometric || 
           safeLower(finalExercise.name || '').includes('hold') ||
           safeLower(finalExercise.name || '').includes('lever') ||
@@ -3177,7 +3228,7 @@ function selectMainExercises(
           finalExercise.category === 'skill'
         
         if (isStaticExercise) {
-          doctrineFinalRepsOrTime = transformToHoldEmphasis(doctrineFinalRepsOrTime, selectorDoctrineContext.intensityBias)
+          doctrineFinalRepsOrTime = transformToHoldEmphasis(doctrineFinalRepsOrTime, doctrineCtx.intensityBias)
         }
       }
       
@@ -3185,7 +3236,7 @@ function selectMainExercises(
       // STEP 5: Apply RECOVERY CONSTRAINED dosage
       // Conservative dosage when recovery is limited
       // ========================================================================
-      if (selectorDoctrineContext.recoveryConstrainedDosage) {
+      if (doctrineCtx.recoveryConstrainedDosage) {
         if (typeof doctrineFinalSets === 'number') {
           doctrineFinalSets = Math.max(2, doctrineFinalSets - 1)
         }
@@ -3202,10 +3253,10 @@ function selectMainExercises(
       // Different spines get fundamentally different prescription patterns
       // ========================================================================
       const spineTransform = applySpineDosageTransform(
-        selectorDoctrineContext.dominantSpine,
+        doctrineCtx.dominantSpine,
         doctrineFinalRepsOrTime,
         finalExercise,
-        selectorDoctrineContext.intensityBias
+        doctrineCtx.intensityBias
       )
       if (spineTransform.modified) {
         doctrineFinalRepsOrTime = spineTransform.repsOrTime
@@ -3223,12 +3274,12 @@ function selectMainExercises(
         console.log('[DOCTRINE-MATERIALIZATION-APPLIED]', {
           exerciseId: finalExercise.id,
           exerciseName: finalExercise.name,
-          dominantSpine: selectorDoctrineContext.dominantSpine,
-          intensityBias: selectorDoctrineContext.intensityBias,
-          volumeBias: selectorDoctrineContext.volumeBias,
-          skillQuality: selectorDoctrineContext.skillQualityOverQuantity,
-          holdEmphasis: selectorDoctrineContext.holdTimeEmphasis,
-          recoveryConstrained: selectorDoctrineContext.recoveryConstrainedDosage,
+          dominantSpine: doctrineCtx.dominantSpine,
+          intensityBias: doctrineCtx.intensityBias,
+          volumeBias: doctrineCtx.volumeBias,
+          skillQuality: doctrineCtx.skillQualityOverQuantity,
+          holdEmphasis: doctrineCtx.holdTimeEmphasis,
+          recoveryConstrained: doctrineCtx.recoveryConstrainedDosage,
           original: { sets: originalSets, repsOrTime: originalRepsOrTime },
           final: { sets: doctrineFinalSets, repsOrTime: doctrineFinalRepsOrTime },
           verdict: 'DOCTRINE_MATERIALLY_TRANSFORMED_DOSAGE',
@@ -3941,9 +3992,9 @@ function applyMaterialityScoreAdjustments(
     dayFocus: string,
     slotType: SlotType
   ): { score: number; materialityScore: ExerciseMaterialityScore | null; primaryReason: MaterialityReasonCode } {
-    // NOTE: selectorDoctrineContext is guaranteed to be in scope via closure.
-    // The const is defined at line ~1155, before this function declaration at line ~3944.
-    // If we get here, closure capture is guaranteed.
+    // [DOCTRINE_CONTEXT_ACCESS] doctrineCtx is explicitly available in this scope
+    // via factory-built frozen object created at selector entry.
+    assertDoctrineContext(doctrineCtx, 'scoreExerciseWithMateriality', { dayFocus, primaryGoal })
     
     // Get base session score
     const baseScore = scoreExerciseForSession(exercise, sessionSkills, dayFocus, hasWeightedEquipment)
@@ -3981,7 +4032,7 @@ function applyMaterialityScoreAdjustments(
     // This makes doctrine preferWeighted/preferStatic actually influence selection
     // ==========================================================================
     let doctrineVariantBoost = 0
-    if (selectorDoctrineContext.active) {
+    if (doctrineCtx.active) {
       const exNameLower = safeLower(exercise.name || '')
       const exIdLower = safeLower(exercise.id || '')
       const isWeightedExercise = exNameLower.includes('weighted') || exIdLower.includes('weighted')
@@ -3991,9 +4042,9 @@ function applyMaterialityScoreAdjustments(
         exercise.category === 'hold' ||
         exercise.category === 'skill'
       
-      if (selectorDoctrineContext.preferWeighted && isWeightedExercise) {
+      if (doctrineCtx.preferWeighted && isWeightedExercise) {
         doctrineVariantBoost = 15 // Significant boost for weighted variants
-      } else if (selectorDoctrineContext.preferStatic && isStaticExercise) {
+      } else if (doctrineCtx.preferStatic && isStaticExercise) {
         doctrineVariantBoost = 15 // Significant boost for static variants
       }
     }

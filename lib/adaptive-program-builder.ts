@@ -21062,6 +21062,20 @@ function generateAdaptiveSession(
     })
   }
   
+  // [SELECTOR_PREFLIGHT_AUDIT] Doctrine context ownership preflight before selector call
+  console.log('[SELECTOR_PREFLIGHT_AUDIT]', {
+    fileOwner: 'lib/adaptive-program-builder.ts',
+    functionOwner: 'generateAdaptiveSession',
+    phase: 'before_selector_call',
+    unifiedDoctrineDecisionPresent: !!unifiedDoctrineDecision,
+    dayFocus: day?.focus,
+    dayNumber: day?.dayNumber,
+    selectedSkillsCount: selectedSkills?.length ?? 0,
+    sessionIndex,
+    primaryGoal,
+    timestamp: new Date().toISOString(),
+  })
+  
   const selection = selectExercisesForSession({
   day,
   primaryGoal,

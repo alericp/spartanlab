@@ -127,9 +127,9 @@ import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionR
 import { selectOptimalStructure, getDayExplanation } from './program-structure-engine'
 import { selectExercisesForSession, evaluateSessionProgressions, getSmartProgressionExercise, buildFallbackSelectionForSession } from './program-exercise-selector'
 
-// [TRUTH_SYNC_V1] Version fingerprint for cache/deploy proof
-// All corridor layers must show this same fingerprint
-const SESSION_ASSEMBLY_VERSION = 'ADAPTIVE_BUILDER_TRUTH_SYNC_V1_2026_04_13'
+// [REGEN_LOCK_V2] Version fingerprint for cache/deploy proof
+// All corridor layers must show matching V2 fingerprint
+const SESSION_ASSEMBLY_VERSION = 'ADAPTIVE_BUILDER_REGEN_LOCK_V2_2026_04_13'
 
 // [PHASE 4] Doctrine DB exercise scoring - prefetch rules before generation
 import { prefetchDoctrineRules, getDoctrineInfluenceSummary, getCachedDoctrineRules, type DoctrineScoringAudit } from './doctrine-exercise-scorer'
@@ -4557,10 +4557,12 @@ export async function generateAdaptiveProgram(
 ): Promise<AdaptiveProgram> {
   // ==========================================================================
   // [REGEN_BUILDER_ENTRY] Authoritative runtime proof with fingerprint
+  // [REGEN_LOCK_V2] All corridor layers must show matching V2 fingerprint
   // ==========================================================================
-  const REGENERATE_RUNTIME_FINGERPRINT = 'REGEN_AUDIT_2026_04_11_V2'
+  const REGENERATE_RUNTIME_FINGERPRINT = 'ADAPTIVE_BUILDER_REGEN_LOCK_V2_2026_04_13'
   console.log('[REGEN_BUILDER_ENTRY]', {
     fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
+    version: SESSION_ASSEMBLY_VERSION,
     fileOwner: 'lib/adaptive-program-builder.ts',
     functionOwner: 'generateAdaptiveProgram',
     phase: 'builder_entry',

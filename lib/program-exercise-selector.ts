@@ -1175,7 +1175,17 @@ function assertDoctrineContext(
 // MAIN SELECTION FUNCTION
 // =============================================================================
 
+// [SELECTOR_RUNTIME_FINGERPRINT] Visible runtime version proof
+const SELECTOR_RUNTIME_FINGERPRINT = 'SELECTOR_DOCTRINE_HARDLOCK_2026_04_13_V2'
+
 export function selectExercisesForSession(inputs: ExerciseSelectionInputs): ExerciseSelection {
+  // [RUNTIME_FINGERPRINT_LOG] Prove this code version is executing
+  console.log('[SELECTOR_RUNTIME_FINGERPRINT]', {
+    fingerprint: SELECTOR_RUNTIME_FINGERPRINT,
+    phase: 'selector_entry',
+    timestamp: new Date().toISOString(),
+  })
+  
   // [AI_SESSION_MATERIALITY_PHASE] Reset skill expression capture at start of each session
   resetSessionSkillExpressionCapture()
   
@@ -1350,6 +1360,17 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   // Calculate exercise budget based on session time
   // [SESSION-ARCHITECTURE-OWNERSHIP] Use architecture contract to influence slot allocation
   const baseBudget = calculateExerciseBudget(sessionMinutes)
+  
+  // [RUNTIME_FINGERPRINT_LOG] Log before first doctrineCtx usage to prove ownership is safe
+  console.log('[SELECTOR_RUNTIME_FINGERPRINT]', {
+    fingerprint: SELECTOR_RUNTIME_FINGERPRINT,
+    phase: 'before_first_doctrine_usage',
+    doctrineCtxDefined: typeof doctrineCtx !== 'undefined',
+    doctrineCtxActive: doctrineCtx?.active,
+    dayFocus: day?.focus,
+    timestamp: new Date().toISOString(),
+  })
+  
   const budget = {
     ...baseBudget,
     // Override main exercises based on architecture contract when available
@@ -3322,7 +3343,8 @@ function selectMainExercises(
   
   /** Infer selection reason from reason string */
   // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
-  function inferSelectionReason(reason: string, exercise: Exercise, goal: string): ExerciseSelectionReason {
+  // [HOISTING_FIX] Converted to arrow function for consistency
+  const inferSelectionReason = (reason: string, exercise: Exercise, goal: string): ExerciseSelectionReason => {
     const r = safeLower(reason)
     if (r.includes('primary') && r.includes('skill')) return 'primary_skill_direct'
     if (r.includes('secondary') && r.includes('skill')) return 'secondary_skill_direct'
@@ -3340,7 +3362,8 @@ function selectMainExercises(
   }
   
   /** Infer session role from load metadata role */
-  function inferSessionRole(loadRole: string | undefined): TraceSessionRole {
+  // [HOISTING_FIX] Converted to arrow function for consistency
+  const inferSessionRole = (loadRole: string | undefined): TraceSessionRole => {
     if (!loadRole) return 'accessory'
     if (loadRole === 'skill_primary') return 'skill_primary'
     if (loadRole === 'skill_secondary') return 'skill_secondary'
@@ -3360,13 +3383,14 @@ function selectMainExercises(
   /**
    * Score an exercise based on skill alignment, session role, and weighted capability.
    * [selection-compression-fix] TASK 3: Rebalanced ranking weights.
+   * [HOISTING_FIX] Converted to arrow function for consistency.
    */
-  function scoreExerciseForSession(
+  const scoreExerciseForSession = (
     exercise: Exercise,
     sessionSkills: SessionSkillAllocation[],
     dayFocus: string,
     hasWeightedEquipment: boolean
-  ): number {
+  ): number => {
     let score = 0
     
     // Base score: general quality
@@ -3635,11 +3659,12 @@ function applyMaterialityScoreAdjustments(
   /**
   * Get exercises that support a specific skill via doctrine mappings.
   * [selection-compression-fix] ISSUE F: Prefer doctrine-backed support.
+  * [HOISTING_FIX] Converted to arrow function for consistency.
    */
-  function getDoctrineBackedExercisesForSkill(
+  const getDoctrineBackedExercisesForSkill = (
     skill: string,
     availableExercises: Exercise[]
-  ): { exercise: Exercise; doctrineSource: string }[] {
+  ): { exercise: Exercise; doctrineSource: string }[] => {
     const mapping = getSupportMapping(skill as SkillCarryover)
     if (!mapping) return []
     
@@ -3717,11 +3742,12 @@ function applyMaterialityScoreAdjustments(
    * Returns re-sorted candidates with doctrine adjustments.
    * [PHASE 4] Bounded doctrine integration - scoring layer only.
    * [PHASE 4 HOTFIX] Fully guarded with try/catch - doctrine CANNOT crash generation.
+   * [HOISTING_FIX] Converted to arrow function to prevent hoisting issues with doctrineContext.
    */
-  function applyDoctrineToPool<T extends { exercise: Exercise; score: number }>(
+  const applyDoctrineToPool = <T extends { exercise: Exercise; score: number }>(
     candidates: T[],
     sessionFocus: string
-  ): T[] {
+  ): T[] => {
     // Always have a fallback sorted list
     const baseSorted = [...candidates].sort((a, b) => b.score - a.score)
     
@@ -3985,15 +4011,20 @@ function applyMaterialityScoreAdjustments(
    * [EXERCISE-SELECTION-MATERIALITY] Enhanced scoring with materiality engine
    * This function combines the existing session-based scoring with deep materiality analysis
    * to produce rankings that are visibly more personalized.
+   * 
+   * [HOISTING_FIX] Converted from function declaration to const arrow function.
+   * Function declarations are hoisted, but const doctrineCtx is NOT hoisted.
+   * This caused ReferenceError when hoisted function tried to access doctrineCtx.
+   * Arrow function assignment is NOT hoisted, ensuring doctrineCtx is defined first.
    */
-  function scoreExerciseWithMateriality(
+  const scoreExerciseWithMateriality = (
     exercise: Exercise,
     sessionSkills: SessionSkillAllocation[],
     dayFocus: string,
     slotType: SlotType
-  ): { score: number; materialityScore: ExerciseMaterialityScore | null; primaryReason: MaterialityReasonCode } {
-    // [DOCTRINE_CONTEXT_ACCESS] doctrineCtx is explicitly available in this scope
-    // via factory-built frozen object created at selector entry.
+  ): { score: number; materialityScore: ExerciseMaterialityScore | null; primaryReason: MaterialityReasonCode } => {
+    // [DOCTRINE_CONTEXT_EXPLICIT_ACCESS] doctrineCtx is now safely in scope
+    // because this arrow function is defined AFTER const doctrineCtx (line ~1245)
     assertDoctrineContext(doctrineCtx, 'scoreExerciseWithMateriality', { dayFocus, primaryGoal })
     
     // Get base session score
@@ -4068,12 +4099,13 @@ function applyMaterialityScoreAdjustments(
   /**
    * [EXERCISE-SELECTION-MATERIALITY] Rank candidates using materiality engine
    * Returns candidates sorted by materiality-aware score with full audit trail.
+   * [HOISTING_FIX] Converted to arrow function to prevent hoisting issues.
    */
-  function rankCandidatesWithMateriality<T extends { exercise: Exercise; score: number }>(
+  const rankCandidatesWithMateriality = <T extends { exercise: Exercise; score: number }>(
     candidates: T[],
     slotType: SlotType,
     sessionSkills: SessionSkillAllocation[]
-  ): Array<T & { materialityScore: ExerciseMaterialityScore | null; primaryReason: MaterialityReasonCode }> {
+  ): Array<T & { materialityScore: ExerciseMaterialityScore | null; primaryReason: MaterialityReasonCode }> => {
     // Score each candidate with materiality
     const scored = candidates.map(c => {
       const { score, materialityScore, primaryReason } = scoreExerciseWithMateriality(

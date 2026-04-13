@@ -8,9 +8,9 @@ export const maxDuration = 30
 
 // ==========================================================================
 // [REGENERATE_RUNTIME_FINGERPRINT] Proves which source version is executing
-// TRUTH_SYNC_V1: All corridor layers must show this same fingerprint
+// REGEN_LOCK_V2: All corridor layers must show matching V2 fingerprint
 // ==========================================================================
-const REGENERATE_RUNTIME_FINGERPRINT = 'REGENERATE_ROUTE_TRUTH_SYNC_V1_2026_04_13'
+const REGENERATE_RUNTIME_FINGERPRINT = 'REGENERATE_ROUTE_REGEN_LOCK_V2_2026_04_13'
 
 /**
  * ==========================================================================

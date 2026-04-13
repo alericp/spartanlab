@@ -6474,8 +6474,8 @@ export default function ProgramPage() {
   
   // TASK 5: Regenerate Program - creates updated program from current profile truth
   // HARDENED: Full try/catch/finally to prevent stuck spinner state
-  // [PROGRAM_RETRY_VERSION] TRUTH_SYNC_V1: All corridor layers must show this same fingerprint
-  const PROGRAM_RETRY_VERSION = 'PROGRAM_PAGE_TRUTH_SYNC_V1_2026_04_13'
+  // [PROGRAM_RETRY_VERSION] REGEN_LOCK_V2: All corridor layers must show matching V2 fingerprint
+  const PROGRAM_RETRY_VERSION = 'PROGRAM_PAGE_REGEN_LOCK_V2_2026_04_13'
   
   const handleRegenerate = useCallback(() => {
     // [RUNTIME_VERSION_LOG] Prove this code version is executing

@@ -28,8 +28,10 @@ export const PHASE27C_BUILD_IDENTITY = {
   modifyPipeline: 'CANONICAL_7_STEP_WITH_2_PHASE_PROMOTION',
   currentPhase: 'SINGLE_TRUTH_SURFACE_LOCKED',
   // [SCOPE_FIX_2026_04_12] Runtime fingerprint proving this exact fix is deployed
-  regenScopeFix: 'PP_REGEN_SCOPE_FIX_2026_04_12_V1',
+  // V2: Force new diff to prove latest source is running
+  regenScopeFix: 'PP_REGEN_STALE_BANNER_FIX_2026_04_12_V2',
   regenScopeFixApplied: true,
+  staleBannerGuardActive: true,
   retiredPhases: [
     'MODIFY_PIPELINE_CORRIDOR',
     'WEAK_LOCAL_COMPLEXITY_ESTIMATE',
@@ -3793,6 +3795,19 @@ export default function ProgramPage() {
   
   // Load last build result on mount - but clear stale failures if current program is newer
   useEffect(() => {
+    // ==========================================================================
+    // [STALE_BANNER_FIX_VERSION_PROOF] Log on every mount to prove which source is running
+    // User should see this in console immediately to verify latest fix is deployed
+    // ==========================================================================
+    console.log('[PROGRAM_PAGE_VERSION_PROOF]', {
+      fingerprint: 'PP_REGEN_STALE_BANNER_FIX_2026_04_12_V2',
+      buildIdentity: PHASE27C_BUILD_IDENTITY.regenScopeFix,
+      staleBannerGuardActive: PHASE27C_BUILD_IDENTITY.staleBannerGuardActive,
+      hasDegradedSessionsFlagScope: 'FIXED_LOCAL_CONSTANT',
+      timestamp: new Date().toISOString(),
+      verificationMessage: 'If you see this log, the stale banner fix is deployed.',
+    })
+    
     const stored = getLastBuildAttemptResult()
     
     // [PHASE 15E BABY AUDIT] Hydration entry audit
@@ -7640,10 +7655,10 @@ export default function ProgramPage() {
         // This is the SINGLE SOURCE OF TRUTH for how the page classifies regenerate outcome
         // [SCOPE_FIX_2026_04_12] Uses explicitly defined local constant hasDegradedSessionsFlag
         // ==========================================================================
-        const REGEN_SCOPE_FIX_STAMP = 'PP_REGEN_SCOPE_FIX_2026_04_12_V1'
+        const REGEN_SCOPE_FIX_STAMP = 'PP_REGEN_STALE_BANNER_FIX_2026_04_12_V2'
         
         console.log('[REGENERATE-CLASSIFICATION-MARKER]', {
-          marker: 'REGENERATE_CLASSIFICATION_2026_04_12_V2',
+          marker: 'REGENERATE_CLASSIFICATION_2026_04_12_V3',
           scopeFixStamp: REGEN_SCOPE_FIX_STAMP,
           httpOk: serverResponse.ok,
           serverResultSuccess: serverResult.success,
@@ -13591,7 +13606,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               const staleFailureRisk = lastBuildIsSuccess && bannerEligible
               
               console.log('[REGEN_BANNER_GATE]', {
-                fingerprint: 'REGEN_AUDIT_2026_04_12_V3',
+                fingerprint: 'REGEN_STALE_BANNER_FIX_2026_04_12_V2',
                 fileOwner: 'app/(app)/program/page.tsx',
                 functionOwner: 'ProgramPageContent',
                 phase: 'banner_render_gate',

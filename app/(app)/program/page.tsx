@@ -28,14 +28,15 @@ export const PHASE27C_BUILD_IDENTITY = {
   modifyPipeline: 'CANONICAL_7_STEP_WITH_2_PHASE_PROMOTION',
   currentPhase: 'SINGLE_TRUTH_SURFACE_LOCKED',
   // [SCOPE_FIX_2026_04_12] Runtime fingerprint proving this exact fix is deployed
-  // V6: Amber banner diagnostic failureReason leak fixed
-  regenScopeFix: 'PP_REGEN_AMBER_DIAGNOSTIC_FIX_2026_04_12_V6',
+  // V7: Added aggressive purge of obsolete error from localStorage on mount
+  regenScopeFix: 'PP_REGEN_OBSOLETE_PURGE_2026_04_12_V7',
   regenScopeFixApplied: true,
   staleBannerGuardActive: true,
   staleErrorBlocklistActive: true,
   obsoleteErrorBannerSuppressionActive: true,
   amberBannerObsoleteSuppressionActive: true,
   amberDiagnosticObsoleteSuppressionActive: true,
+  aggressiveObsoletePurgeActive: true,
   retiredPhases: [
     'MODIFY_PIPELINE_CORRIDOR',
     'WEAK_LOCAL_COMPLEXITY_ESTIMATE',
@@ -3804,19 +3805,47 @@ export default function ProgramPage() {
     // User should see this in console immediately to verify latest fix is deployed
     // ==========================================================================
     console.log('[PROGRAM_PAGE_VERSION_PROOF]', {
-      fingerprint: 'PP_REGEN_AMBER_DIAGNOSTIC_FIX_2026_04_12_V6',
+      fingerprint: 'PP_REGEN_OBSOLETE_PURGE_2026_04_12_V7',
       buildIdentity: PHASE27C_BUILD_IDENTITY.regenScopeFix,
       staleBannerGuardActive: PHASE27C_BUILD_IDENTITY.staleBannerGuardActive,
       staleErrorBlocklistActive: PHASE27C_BUILD_IDENTITY.staleErrorBlocklistActive,
       obsoleteErrorBannerSuppressionActive: PHASE27C_BUILD_IDENTITY.obsoleteErrorBannerSuppressionActive,
       amberBannerObsoleteSuppressionActive: PHASE27C_BUILD_IDENTITY.amberBannerObsoleteSuppressionActive,
       amberDiagnosticObsoleteSuppressionActive: PHASE27C_BUILD_IDENTITY.amberDiagnosticObsoleteSuppressionActive,
+      aggressiveObsoletePurgeActive: PHASE27C_BUILD_IDENTITY.aggressiveObsoletePurgeActive,
       hasDegradedSessionsFlagScope: 'FIXED_LOCAL_CONSTANT',
       timestamp: new Date().toISOString(),
-      verificationMessage: 'V6: Amber banner diagnostic failureReason leak now also blocked.',
+      verificationMessage: 'V7: Aggressive purge of obsolete hasDegradedSessions error from localStorage on mount.',
     })
     
     const stored = getLastBuildAttemptResult()
+    
+    // ==========================================================================
+    // [AGGRESSIVE_OBSOLETE_PURGE_V7] Immediately purge any stored result containing
+    // the known obsolete "hasDegradedSessions is not defined" error.
+    // This is a one-time migration to clear stale state from before the fix.
+    // ==========================================================================
+    if (stored) {
+      const storedFailureReason = (stored as { failureReason?: string }).failureReason ?? ''
+      const storedUserMessage = (stored as { userMessage?: string }).userMessage ?? ''
+      const isObsoleteError = 
+        storedFailureReason.includes('hasDegradedSessions is not defined') ||
+        storedUserMessage.includes('hasDegradedSessions is not defined')
+      
+      if (isObsoleteError) {
+        console.warn('[AGGRESSIVE_OBSOLETE_PURGE_V7]', {
+          fingerprint: 'PP_REGEN_OBSOLETE_PURGE_2026_04_12_V7',
+          action: 'PURGING_OBSOLETE_STORED_FAILURE',
+          storedStatus: stored.status,
+          storedFailureReasonSnippet: storedFailureReason.slice(0, 80),
+          storedUserMessageSnippet: storedUserMessage.slice(0, 80),
+          verdict: 'OBSOLETE_ERROR_PURGED_FROM_LOCALSTORAGE',
+        })
+        clearLastBuildAttemptResult()
+        // Don't proceed with hydration - the obsolete data is now purged
+        return
+      }
+    }
     
     // [PHASE 15E BABY AUDIT] Hydration entry audit
     console.log('[hydration-entry-audit]', {

@@ -41,6 +41,11 @@ import {
 } from '@/lib/program-generation/week-adaptation-decision-contract'
 
 // ==========================================================================
+// [CORRIDOR_LOCK_V1] Version fingerprint for cache/deploy proof
+// ==========================================================================
+const AUTHORITATIVE_VERSION = 'AUTHORITATIVE_CORRIDOR_LOCK_V1_2026_04_13'
+
+// ==========================================================================
 // TYPES: Generation Intent and Request Contract
 // ==========================================================================
 
@@ -713,20 +718,29 @@ export async function executeAuthoritativeGeneration(
                                errorStack?.includes('movement-intelligence') ||
                                errorStack?.includes('exercise-override-service')
       
-      // [SELECTOR_DECLOSURE_FAILURE] Explicit detection for DECLOSURE V1 context failures
-      // After DECLOSURE fix, helpers receive context as explicit parameter - no more closure access
+      // [CORRIDOR_LOCK_V1] Explicit detection for context ownership failures
+      // After CORRIDOR_LOCK fix, ALL helpers receive context as explicit parameter
       const isSelectorExecutionContextFailure = errorString.includes('selector_execution_context_missing') ||
                                                 errorString.includes('selector_execution_context_invalid') ||
                                                 errorString.includes('selector_runtime_context_missing') ||
                                                 errorString.includes('selector_doctrine_context_missing') ||
                                                 errorString.includes('selector_doctrine_context_invalid') ||
-                                                errorString.includes('selector_owner_failure') || // DECLOSURE V1 owner-specific
-                                                errorString.includes('ownedCtx is not defined') || // DECLOSURE V1 specific
+                                                errorString.includes('selector_owner_failure') || // CORRIDOR_LOCK owner-specific
+                                                errorString.includes('ownedCtx is not defined') || // Explicit param missing
                                                 errorString.includes('selectorCtx is not defined') ||
                                                 errorString.includes('doctrineCtx is not defined') ||
                                                 errorString.includes('selectorDoctrineContext is not defined') ||
                                                 errorString.includes('inputs_missing') ||
                                                 errorString.includes('creation_failed')
+      
+      // [CORRIDOR_LOCK_V1] Log version proof for this error handling path
+      console.log('[AUTHORITATIVE_CORRIDOR_LOCK_ERROR_HANDLER]', {
+        version: AUTHORITATIVE_VERSION,
+        errorString: errorString.slice(0, 200),
+        isSelectorContextFailure: isSelectorExecutionContextFailure,
+        isSelectionCrash,
+        timestamp: new Date().toISOString(),
+      })
       
       // [PHASE 15E SUBSTEP DIAGNOSTIC] Extract exact failing substep from error message/stack
       const isPhase15eCrash = errorStack?.includes('phase15e') || errorString.includes('phase15e')

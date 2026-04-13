@@ -6474,8 +6474,8 @@ export default function ProgramPage() {
   
   // TASK 5: Regenerate Program - creates updated program from current profile truth
   // HARDENED: Full try/catch/finally to prevent stuck spinner state
-  // [PROGRAM_RETRY_VERSION] Visible runtime version proof - matches selector V4
-  const PROGRAM_RETRY_VERSION = 'PROGRAM_RETRY_CONTEXT_LOCK_V4_2026_04_13'
+  // [PROGRAM_RETRY_VERSION] Visible runtime version proof - matches selector DECLOSURE V1
+  const PROGRAM_RETRY_VERSION = 'PROGRAM_RETRY_DECLOSURE_V1_2026_04_13'
   
   const handleRegenerate = useCallback(() => {
     // [RUNTIME_VERSION_LOG] Prove this code version is executing

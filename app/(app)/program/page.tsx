@@ -13574,8 +13574,13 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 truthGatedBuildResult?.hydratedFromStorage !== true &&
                 truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current
               
+              // [STALE_BANNER_DEBUG] Check if we're showing stale failure after success
+              const lastBuildIsSuccess = lastBuildResult?.status === 'success'
+              const truthGatedIsFailure = truthGatedBuildResult?.status === 'preserved_last_good'
+              const staleFailureRisk = lastBuildIsSuccess && bannerEligible
+              
               console.log('[REGEN_BANNER_GATE]', {
-                fingerprint: 'REGEN_AUDIT_2026_04_11_V2',
+                fingerprint: 'REGEN_AUDIT_2026_04_12_V3',
                 fileOwner: 'app/(app)/program/page.tsx',
                 functionOwner: 'ProgramPageContent',
                 phase: 'banner_render_gate',
@@ -13584,13 +13589,24 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 hydratedFromStorage: truthGatedBuildResult?.hydratedFromStorage ?? 'null',
                 runtimeSessionIdMatch: truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current,
                 bannerEligible,
-                verdict: bannerEligible ? 'BANNER_WILL_RENDER_RED_CARD' : 'BANNER_BLOCKED',
+                // [STALE_BANNER_DEBUG] New diagnostic fields
+                lastBuildResultStatus: lastBuildResult?.status ?? 'null',
+                lastBuildResultAttemptId: lastBuildResult?.attemptId ?? 'null',
+                truthGatedAttemptId: truthGatedBuildResult?.attemptId ?? 'null',
+                staleFailureRisk,
+                verdict: staleFailureRisk 
+                  ? 'STALE_FAILURE_RISK_DETECTED' 
+                  : bannerEligible 
+                    ? 'BANNER_WILL_RENDER_RED_CARD' 
+                    : 'BANNER_BLOCKED',
               })
               return null
             })()}
+            {/* [STALE_BANNER_GUARD] Defense-in-depth: Never show failure banner if lastBuildResult is success */}
             {truthGatedBuildResult?.status === 'preserved_last_good' && 
              truthGatedBuildResult?.hydratedFromStorage !== true &&
-             truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current && (
+             truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current &&
+             lastBuildResult?.status !== 'success' && (
               <Card className="bg-red-500/10 border-red-500/30 p-4">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />

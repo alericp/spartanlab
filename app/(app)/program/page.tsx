@@ -27,6 +27,9 @@ export const PHASE27C_BUILD_IDENTITY = {
   buildTimestamp: new Date().toISOString(),
   modifyPipeline: 'CANONICAL_7_STEP_WITH_2_PHASE_PROMOTION',
   currentPhase: 'SINGLE_TRUTH_SURFACE_LOCKED',
+  // [SCOPE_FIX_2026_04_12] Runtime fingerprint proving this exact fix is deployed
+  regenScopeFix: 'PP_REGEN_SCOPE_FIX_2026_04_12_V1',
+  regenScopeFixApplied: true,
   retiredPhases: [
     'MODIFY_PIPELINE_CORRIDOR',
     'WEAK_LOCAL_COMPLEXITY_ESTIMATE',
@@ -7598,6 +7601,10 @@ export default function ProgramPage() {
         // ==========================================================================
         const totalDegraded = routeAuthoritativeOutcome?.totalDegraded ?? rebuildFailureSummary?.totalDegraded ?? 0
         
+        // [SCOPE_FIX_2026_04_12] Explicitly define degraded flag as local constant
+        // This prevents any ambiguous identifier usage in logs/classification
+        const hasDegradedSessionsFlag = totalDegraded > 0
+        
         // PRIMARY TRUTH: Use route's authoritative outcome if available
         const isHealthyRegenerate = routeAuthoritativeOutcome 
           ? routeAuthoritativeOutcome.outcomeMode === 'HEALTHY_SUCCESS'
@@ -7631,13 +7638,17 @@ export default function ProgramPage() {
         // ==========================================================================
         // [REGENERATE-CLASSIFICATION-MARKER] Authoritative classification log
         // This is the SINGLE SOURCE OF TRUTH for how the page classifies regenerate outcome
+        // [SCOPE_FIX_2026_04_12] Uses explicitly defined local constant hasDegradedSessionsFlag
         // ==========================================================================
+        const REGEN_SCOPE_FIX_STAMP = 'PP_REGEN_SCOPE_FIX_2026_04_12_V1'
+        
         console.log('[REGENERATE-CLASSIFICATION-MARKER]', {
-          marker: 'REGENERATE_CLASSIFICATION_2026_04_11_V1',
+          marker: 'REGENERATE_CLASSIFICATION_2026_04_12_V2',
+          scopeFixStamp: REGEN_SCOPE_FIX_STAMP,
           httpOk: serverResponse.ok,
           serverResultSuccess: serverResult.success,
           totalDegraded,
-          hasDegradedSessions: totalDegraded > 0,
+          hasDegradedSessionsFlag, // Uses explicitly defined local constant
           isHealthyRegenerate,
           isDegradedRegenerate,
           classification: isHealthyRegenerate 

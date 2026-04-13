@@ -713,11 +713,13 @@ export async function executeAuthoritativeGeneration(
                                errorStack?.includes('movement-intelligence') ||
                                errorStack?.includes('exercise-override-service')
       
-      // [SELECTOR_DOCTRINE_CONTEXT_FAILURE] Explicit detection for doctrine context ownership failures
-      const isSelectorDoctrineContextFailure = errorString.includes('selector_doctrine_context_missing') ||
-                                               errorString.includes('selector_doctrine_context_invalid') ||
-                                               errorString.includes('doctrineCtx') ||
-                                               errorString.includes('selectorDoctrineContext')
+      // [SELECTOR_RUNTIME_CONTEXT_FAILURE] Explicit detection for V3 runtime context failures
+      const isSelectorRuntimeContextFailure = errorString.includes('selector_runtime_context_missing') ||
+                                              errorString.includes('selector_doctrine_context_missing') ||
+                                              errorString.includes('selector_doctrine_context_invalid') ||
+                                              errorString.includes('selectorCtx is not defined') ||
+                                              errorString.includes('doctrineCtx is not defined') ||
+                                              errorString.includes('selectorDoctrineContext is not defined')
       
       // [PHASE 15E SUBSTEP DIAGNOSTIC] Extract exact failing substep from error message/stack
       const isPhase15eCrash = errorStack?.includes('phase15e') || errorString.includes('phase15e')
@@ -807,9 +809,9 @@ export async function executeAuthoritativeGeneration(
         crashCorridorAudit: {
           isToLowerCaseCrash,
           isSelectionCrash,
-          isSelectorDoctrineContextFailure,
-          suspectedField: isSelectorDoctrineContextFailure 
-            ? 'doctrine_context_ownership' 
+          isSelectorRuntimeContextFailure,
+          suspectedField: isSelectorRuntimeContextFailure 
+            ? 'selector_runtime_context_ownership' 
             : isToLowerCaseCrash ? 'skill/exercise/rule key (undefined)' : 'unknown',
           inputAudit: {
             primaryGoal: request.canonicalProfile.primaryGoal || 'MISSING',

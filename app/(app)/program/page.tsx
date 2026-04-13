@@ -6474,13 +6474,13 @@ export default function ProgramPage() {
   
   // TASK 5: Regenerate Program - creates updated program from current profile truth
   // HARDENED: Full try/catch/finally to prevent stuck spinner state
-  // [PROGRAM_RETRY_FINGERPRINT] Visible runtime version proof
-  const PROGRAM_RETRY_FINGERPRINT = 'PROGRAM_RETRY_CLEAR_2026_04_13_V2'
+  // [PROGRAM_RETRY_VERSION] Visible runtime version proof - matches selector V3
+  const PROGRAM_RETRY_VERSION = 'PROGRAM_RETRY_CTX_HARDLOCK_V3_2026_04_13'
   
   const handleRegenerate = useCallback(() => {
-    // [RUNTIME_FINGERPRINT_LOG] Prove this code version is executing
-    console.log('[PROGRAM_RETRY_FINGERPRINT]', {
-      fingerprint: PROGRAM_RETRY_FINGERPRINT,
+    // [RUNTIME_VERSION_LOG] Prove this code version is executing
+    console.log('[PROGRAM_RETRY_VERSION]', {
+      version: PROGRAM_RETRY_VERSION,
       phase: 'regenerate_start',
       timestamp: new Date().toISOString(),
     })

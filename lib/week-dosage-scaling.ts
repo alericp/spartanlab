@@ -176,14 +176,20 @@ export function scaleExerciseForWeek(
   
   // Week 1: acclimation - still apply dosage fields for consistent display
   // [WEEK-SCALING-FIX] Always attach scaled fields even for week 1 so display contract works
+  // [PRESCRIPTION-TYPE-FIX] Use repsOrTime field (canonical) with fallback to reps for compatibility
+  const rawRepsOrTime = exercise.repsOrTime || (exercise as { reps?: string }).reps || '8-12'
+  
   if (!scaling.scalingApplied || weekNumber === 1) {
     const originalSets = typeof exercise.sets === 'number' ? exercise.sets : parseInt(String(exercise.sets)) || 3
-    const originalReps = exercise.reps || '8-12'
     const originalTargetRPE = exercise.targetRPE || 8
+    // [PRESCRIPTION-TYPE-FIX] Preserve hold format for week 1 display
+    const holdDuration = parseHoldDuration(rawRepsOrTime)
+    const scaledReps = holdDuration !== null ? formatHoldDuration(holdDuration) : rawRepsOrTime
     return {
       ...exercise,
       scaledSets: originalSets, // Same as original for week 1
-      scaledReps: originalReps,
+      scaledReps,
+      scaledHoldDuration: holdDuration ?? undefined,
       scaledTargetRPE: originalTargetRPE,
       weekScalingApplied: false,
     }
@@ -191,10 +197,9 @@ export function scaleExerciseForWeek(
   
   // Parse original values
   const originalSets = typeof exercise.sets === 'number' ? exercise.sets : parseInt(String(exercise.sets)) || 3
-  const originalReps = exercise.reps || '8-12'
   const originalTargetRPE = exercise.targetRPE || 8
   const originalRestPeriod = exercise.restPeriod || 90
-  const originalHoldDuration = parseHoldDuration(exercise.reps)
+  const originalHoldDuration = parseHoldDuration(rawRepsOrTime)
   
   // Apply scaling
   const scaledSets = Math.round(originalSets * scaling.volumeMultiplier)
@@ -206,15 +211,17 @@ export function scaleExerciseForWeek(
   )
   const scaledRestPeriod = Math.round(originalRestPeriod * scaling.restMultiplier)
   
-  // Scale hold durations for isometric exercises
-  let scaledReps = originalReps
+  // [PRESCRIPTION-TYPE-FIX] Scale hold durations for isometric exercises, preserve reps for rep-based
+  let scaledReps = rawRepsOrTime
   let scaledHoldDuration: number | undefined
   
   if (originalHoldDuration !== null) {
+    // Hold-based exercise: scale hold duration, keep format as "Xs hold"
     scaledHoldDuration = Math.round(originalHoldDuration * scaling.holdDurationMultiplier)
     scaledReps = formatHoldDuration(scaledHoldDuration)
   } else {
-    scaledReps = scaleRepRange(originalReps, scaling.volumeMultiplier)
+    // Rep-based exercise: scale rep range
+    scaledReps = scaleRepRange(rawRepsOrTime, scaling.volumeMultiplier)
   }
   
   return {
@@ -228,7 +235,7 @@ export function scaleExerciseForWeek(
     // Metadata
     weekScalingApplied: true,
     originalSets,
-    originalReps,
+    originalReps: rawRepsOrTime,
     originalTargetRPE,
   }
 }
@@ -293,9 +300,10 @@ function parseHoldDuration(reps: string | undefined): number | null {
 
 /**
  * Format hold duration back to string
+ * [PRESCRIPTION-TYPE-FIX] Output format matches builder: "Xs" (e.g., "20s")
  */
 function formatHoldDuration(seconds: number): string {
-  return `${seconds}s hold`
+  return `${seconds}s`
 }
 
 /**

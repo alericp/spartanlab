@@ -219,24 +219,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   
 
   
-  // ==========================================================================
-  // [PHASE 7B TASK 2] DISPLAY COLLAPSE POINT AUDIT
-  // Identify exact location where styled groups would be ignored
-  // ==========================================================================
-  console.log('[phase7b-display-collapse-point-audit]', {
-    exactFile: 'components/programs/AdaptiveSessionCard.tsx',
-    exactFunction: 'MainExercisesRenderer',
-    exactFieldExpected: 'session.styleMetadata.styledGroups',
-    exactFieldActuallyUsed: builderHasStyledGroups && hasNonStraightGroups
-      ? 'styledGroups (grouped render)'
-      : 'displayExercises (flat render)',
-    whyStyledGroupsDisappear: !builderHasStyledGroups
-      ? 'builder_did_not_compute_groups'
-      : !hasNonStraightGroups
-        ? 'all_groups_are_straight_type'
-        : 'groups_are_being_used',
-    isMetadataOnlyOrFullyDropped: builderHasStyledGroups ? 'being_rendered' : 'not_present_in_session',
-  })
   const router = useRouter()
   // [UI-CLEANUP-FIX] Use defaultExpanded prop (defaults to false for cleaner list view)
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
@@ -295,17 +277,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const safeExercises = Array.isArray(session.exercises) ? session.exercises : []
   const rpeExerciseCount = safeExercises.filter((e) => exerciseSupportsRPE(e.name)).length
   
-  // [PHASE 10 TASK 5] Child display contract hardening audit
-  console.log('[phase10-child-display-contract-hardening-verdict]', {
-    component: 'AdaptiveSessionCard',
-    sessionExercisesExists: Array.isArray(session.exercises),
-    safeExercisesCount: safeExercises.length,
-    sessionVariantsExists: Array.isArray(session.variants),
-    sessionFocusExists: !!session.focus,
-    sessionDayNumberExists: typeof session.dayNumber === 'number',
-    verdict: 'CHILD_ENTRY_CONTRACT_SAFE',
-  })
-
   const handleStartWorkout = () => {
     // [workout-route] UNIFIED ENTRY: Route to canonical workout session page
     // This ensures all "Start Workout" paths use the same StreamlinedWorkoutSession experience
@@ -324,32 +295,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     } else if (variantDuration && variantDuration <= 50) {
       executionMode = '45_min'
     }
-    
-    console.log('[LIVE-WORKOUT-AUTHORITY] handleStartWorkout', {
-      dayNumber: session.dayNumber,
-      sessionName: session.name,
-      selectedVariant,
-      variantLabel: variant?.label,
-      variantDuration,
-      executionMode,
-      variantIndex: selectedVariant ?? 0,
-    })
-    
-    // ==========================================================================
-    // [PHASE 7B TASK 6] WORKOUT EXECUTION TRUTH AUDIT
-    // Verify workout execution uses same source as grouped render
-    // ==========================================================================
-    console.log('[phase7b-workout-execution-truth-audit]', {
-      sessionId: `day_${session.dayNumber}`,
-      groupedRenderSource: builderHasStyledGroups && hasNonStraightGroups 
-        ? 'styleMetadata.styledGroups' 
-        : 'session.exercises',
-      workoutExecutionSource: 'session.exercises',  // Workout always uses flat exercises
-      sourcesMatchSemantically: true,  // Both ultimately iterate the same exercises
-      flatteningStepIntentional: true, // Workout execution intentionally flattens for step-by-step progression
-      semanticLossDetected: false,     // No loss - grouped render is display-only, workout uses same exercises
-      verdict: 'workout_execution_uses_same_exercise_data',
-    })
     
     trackWorkoutStarted(session.name)
     // [LIVE-WORKOUT-AUTHORITY] Pass execution mode and variant index to workout route
@@ -569,15 +514,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       return acc
     }, {} as Record<string, number>)
     
-    console.log('[v0] Full Visible Routine Audit - Day', session.dayNumber, {
-      totalSessionExercises: safeExercises.length,
-      totalRoutineItems: fullRoutineSurface.routineItems.length,
-      totalVisibleExercises: fullVisibleExercises.length,
-      familyCounts: fullRoutineSurface.familyCounts,
-      visibleFamilyBreakdown: familyBreakdown,
-      isVariantMode: !!selectedVariantData,
-      variantMainCount: selectedVariantData?.selection?.main?.length || 0,
-    })
   }
   
   // ==========================================================================
@@ -601,26 +537,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     const selectedNames = activeSessionView.exercises.map(e => e.name)
     const isSelectedIdenticalToFull = JSON.stringify(selectedNames) === JSON.stringify(fullExerciseNames)
     
-    console.log('[variant-truth-audit]', {
-      sessionDay: session.dayNumber,
-      sessionName: session.name,
-      baseDuration: session.estimatedMinutes,
-      variant45Exists: !!variant45,
-      variant30Exists: !!variant30,
-      fullExerciseCount: fullExerciseNames.length,
-      variant45ExerciseCount: variant45Names.length,
-      variant30ExerciseCount: variant30Names.length,
-      fullExercises: fullExerciseNames.slice(0, 5).join(', '),
-      variant45Exercises: variant45Names.slice(0, 5).join(', '),
-      variant30Exercises: variant30Names.slice(0, 5).join(', '),
-      are45And30Identical,
-      isSelectedIdenticalToFull,
-      currentSelectedVariant: selectedVariant,
-      activeVariantLabel: activeSessionView.variantLabel,
-      activeExerciseCount: activeSessionView.exerciseCount,
-      activeEstimatedMinutes: activeSessionView.estimatedMinutes,
-    })
-    
     // ==========================================================================
     // [TASK 7] DEFAULT SESSION TIME VERDICT
     // Explain why full session may appear shorter than expected
@@ -634,30 +550,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     } else if (!variant45 && !variant30 && fullDuration < 40) {
       defaultTimeVerdict = 'full_session_compact_no_variants_needed'
     }
-    
-    // ==========================================================================
-    // [PHASE 7B TASK 7] VARIANT GROUP TRUTH AUDIT
-    // Check if grouped style truth survives in variants
-    // ==========================================================================
-    console.log('[phase7b-variant-group-truth-audit]', {
-      sessionId: `day_${session.dayNumber}`,
-      fullVariantHasGroups: builderHasStyledGroups,
-      shortVariantHasGroups: builderHasStyledGroups, // Groups are session-level, not variant-specific
-      groupedIdentityPreserved: true, // Style metadata is attached to session, not variant
-      groupLossReason: !builderHasStyledGroups ? 'no_groups_in_base_session' : null,
-      verdict: builderHasStyledGroups 
-        ? 'groups_preserved_across_variants'
-        : 'no_groups_to_preserve',
-    })
-    
-    console.log('[default-session-time-verdict]', {
-      sessionDay: session.dayNumber,
-      canonicalFullDuration: fullDuration,
-      isFullShorterThanTarget,
-      fullExerciseCount: fullExerciseNames.length,
-      variantsAvailable: session.variants?.length || 1,
-      finalVerdict: defaultTimeVerdict,
-    })
     
     // ==========================================================================
     // [TASK 9] FINAL SESSION-TIME CONSISTENCY AUDIT
@@ -674,19 +566,8 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       sessionTimeFinalVerdict = 'session_underbuilt_but_truthful'
     }
     
-    console.log('[session-time-final-verdict]', {
-      dayNumber: session.dayNumber,
-      baseEstimatedMinutes: session.estimatedMinutes,
-      fullVariantDuration: fullVariant?.duration,
-      selectedVariantDurations: variantDurations,
-      baseExerciseCount: session.exercises?.length || 0,
-      fullVariantExerciseCount: fullExerciseNames.length,
-      visibleButtonLabels: session.variants?.map(v => v.label) || ['Full Session'],
-      baseAndFullAgree: baseMatchesFull,
-      finalVerdict: sessionTimeFinalVerdict,
-    })
   }
-
+  
   return (
     <Card className="bg-[#2A2A2A] border-[#3A3A3A] overflow-hidden">
       {/* Header - Collapsible day summary */}
@@ -1066,63 +947,6 @@ function MainExercisesRenderer({
   const useGroupedRender = styledGroups.length > 0 && hasNonStraightGroups
   
   // ==========================================================================
-  // [PHASE 7B TASK 3] RENDER CONTRACT TRUTH AUDIT
-  // ==========================================================================
-  // Get methods applied in builder vs what will be visible in render
-  const methodsAppliedInBuilder = styleMetadata?.appliedMethods || ['straight_sets']
-  const methodsVisibleInRender = useGroupedRender 
-    ? [...new Set(styledGroups.filter(g => g.groupType !== 'straight').map(g => g.groupType))]
-    : ['straight_sets']
-  const invisibleAppliedMethods = methodsAppliedInBuilder.filter(
-    m => m !== 'straight_sets' && !methodsVisibleInRender.includes(m as any)
-  )
-  
-  console.log('[phase7b-render-contract-truth-audit]', {
-    sessionId: `day_${session.dayNumber}`,
-    renderModeChosen: useGroupedRender ? 'grouped' : 'flat',
-    styledGroupsValid: styledGroups.length > 0,
-    flatExercisesValid: displayExercises.length > 0,
-    authoritativeRenderSource: useGroupedRender ? 'styleMetadata.styledGroups' : 'displayExercises',
-    fallbackReasonIfFlat: !useGroupedRender
-      ? styledGroups.length === 0
-        ? 'no_styled_groups'
-        : 'all_groups_are_straight_sets'
-      : null,
-    groupTypesPresent: [...new Set(styledGroups.map(g => g.groupType))],
-    verdict: useGroupedRender ? 'grouped_render_active' : 'flat_render_fallback',
-  })
-  
-  // ==========================================================================
-  // [PHASE 7B TASK 8] METHOD VISIBILITY TRUTH AUDIT
-  // Ensure we don't claim methods are applied if user can't see them
-  // ==========================================================================
-  console.log('[phase7b-method-visibility-truth-audit]', {
-    sessionId: `day_${session.dayNumber}`,
-    methodsAppliedInBuilder,
-    methodsVisibleInRender,
-    invisibleAppliedMethods,
-    overclaimedMethods: invisibleAppliedMethods.length > 0 ? invisibleAppliedMethods : [],
-    finalVerdict: invisibleAppliedMethods.length === 0 
-      ? 'all_applied_methods_visible'
-      : 'some_methods_not_visible_in_ui',
-  })
-  
-  // ==========================================================================
-  // [PHASE 7B TASK 5] FEATURE PRESERVATION AUDIT
-  // Verify all existing features remain functional
-  // ==========================================================================
-  console.log('[phase7b-feature-preservation-audit]', {
-    sessionId: `day_${session.dayNumber}`,
-    replaceActionPreserved: typeof onReplace === 'function',
-    rationalePreserved: displayExercises.some(e => e.selectionReason),
-    tagRenderingPreserved: true, // ExerciseRow handles tags
-    variantTogglePreserved: true, // Variant selection is handled upstream
-    startWorkoutPayloadPreserved: true, // Workout uses session.exercises directly
-    regressionsDetected: [],
-    verdict: 'all_features_preserved',
-  })
-  
-  // ==========================================================================
   // FLAT RENDER PATH - [VISIBLE-IMPROVEMENT] Now groups by category for clarity
   // ==========================================================================
   if (!useGroupedRender) {
@@ -1252,21 +1076,6 @@ function MainExercisesRenderer({
   })
   
   let globalExerciseIndex = 0
-  
-  // ==========================================================================
-  // [PHASE 7B TASK 4] GROUPED RENDER TRUTH AUDIT
-  // ==========================================================================
-  console.log('[phase7b-grouped-render-truth-audit]', {
-    sessionId: `day_${session.dayNumber}`,
-    groupedRenderUsed: true,
-    groupTypesRendered: [...new Set(styledGroups.map(g => g.groupType))],
-    totalGroupsRendered: styledGroups.length,
-    displayBlocksCreated: displayBlocks.length,
-    blockOrder: displayBlocks.map(b => b.type === 'group' ? `group-${b.groupIndex}` : `ex-${b.exercise.id}`),
-    flatFallbackUsed: false,
-    whyFallbackUsed: null,
-    verdict: 'canonical_order_preserved',
-  })
   
   return (
     <div className="space-y-4">

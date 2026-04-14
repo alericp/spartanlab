@@ -327,15 +327,19 @@ export function getWeekVolumeIndicator(weekNumber: number): { label: string; per
   // So we describe it relative to "full" volume
   const baselinePercentage = 75 // Week 1 is approximately 75% of full volume
   
+  // [WEEK-PROGRESSION-TRUTH] Cap display percentage at 100% to avoid confusing "101%" displays
+  // The actual scaling can exceed 100% (e.g., peak week), but we display it as "Full" / 100%
+  const capAt100 = (pct: number) => Math.min(100, Math.round(pct))
+  
   switch (scaling.phaseLabel) {
     case 'acclimation':
       return { label: 'Reduced', percentage: baselinePercentage }
     case 'ramp_up':
-      return { label: 'Building', percentage: Math.round(baselinePercentage * scaling.volumeMultiplier) }
+      return { label: 'Building', percentage: capAt100(baselinePercentage * scaling.volumeMultiplier) }
     case 'peak':
-      return { label: 'Full', percentage: Math.round(baselinePercentage * scaling.volumeMultiplier) }
+      return { label: 'Full', percentage: capAt100(baselinePercentage * scaling.volumeMultiplier) }
     case 'consolidation':
-      return { label: 'Maintained', percentage: Math.round(baselinePercentage * scaling.volumeMultiplier) }
+      return { label: 'Maintained', percentage: capAt100(baselinePercentage * scaling.volumeMultiplier) }
     default:
       return { label: 'Normal', percentage: 100 }
   }

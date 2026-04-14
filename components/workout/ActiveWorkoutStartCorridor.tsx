@@ -1252,8 +1252,21 @@ export function ActiveWorkoutStartCorridor({
           {/* ========== ACTION RAIL ========== */}
           {/* [MOBILE-FIX] Sticky action rail that stays accessible on mobile */}
           {/* [OVERFLOW-FIX] Removed -mx-4 negative margin that caused horizontal overflow */}
+          {/* 
+            [LIVE-SESSION-CONTROL-CONTRACT] 
+            This action rail MUST contain these 5 controls in ALL states:
+            1. Log Set (primary) - Logs current set with RPE
+            2. Back - Returns to previous set/exercise (conditional on canGoBack)
+            3. Skip - Skips current set
+            4. Next - Advances to next exercise  
+            5. End - Opens exit confirmation modal
+            
+            DO NOT remove any control without explicit product decision.
+            DO NOT hide controls via overflow - use responsive sizing instead.
+            See: handleGoBack, handleSkipSet, handleEndExercise, handleDiscardAndExit
+          */}
           <div className="sticky bottom-0 bg-[#0F1115] pt-3 pb-2 pb-safe border-t border-[#2B313A]/50">
-            {/* Primary Action */}
+            {/* Primary Action: Log Set */}
             <Button 
               onClick={onCompleteSet} 
               disabled={selectedRPE === null}
@@ -1263,10 +1276,10 @@ export function ActiveWorkoutStartCorridor({
               Log Set
             </Button>
             
-            {/* Secondary Actions with Back Button */}
+            {/* Secondary Actions: Back | Skip | Next | End */}
             {/* [MOBILE-OVERFLOW-FIX] Use flex-wrap and gap for mobile containment */}
             <div className="flex items-center justify-between flex-wrap gap-1 pt-2">
-              {/* Left: Back button */}
+              {/* Control 1: Back button (conditional) */}
               {canGoBack && onGoBack ? (
                 <Button 
                   variant="ghost" 

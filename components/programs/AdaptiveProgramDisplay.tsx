@@ -87,7 +87,12 @@ export function AdaptiveProgramDisplay({
   const [scheduleNotice, setScheduleNotice] = useState<ScheduleChangeNotice | null>(null)
   
   // [WEEK-ADVANCEMENT] Week progression state for advancing to next week
-  const [weekProgression, setWeekProgression] = useState<WeekProgressionState | null>(null)
+  // [AUTHORITATIVE-WEEK-FIX] Initialize synchronously from persisted state to avoid hydration flash
+  const [weekProgression, setWeekProgression] = useState<WeekProgressionState | null>(() => {
+    // Only run on client
+    if (typeof window === 'undefined') return null
+    return getWeekProgressionState()
+  })
   const [isAdvancingWeek, setIsAdvancingWeek] = useState(false)
   const [weekAdvancementResult, setWeekAdvancementResult] = useState<WeekAdvancementResult | null>(null)
   

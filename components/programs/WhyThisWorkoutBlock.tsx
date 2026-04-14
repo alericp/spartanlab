@@ -212,20 +212,12 @@ export function WhyThisSessionBlock({
     }
   }
   
-  // [PHASE 15F TASK 2] Prefer truthful session explanation from final assembly
-  // This reads from final session truth, NOT template-level assumptions
+  // Prefer truthful session explanation from final assembly
   if (truthfulSessionExplanation || resolvedNarrativeReason) {
     const truthfulLines = [
       truthfulSessionExplanation,
       resolvedNarrativeReason,
     ].filter(Boolean) as string[]
-    
-    console.log('[phase15f-why-block-uses-truthful-explanation]', {
-      dayNumber,
-      hasTruthfulExplanation: !!truthfulSessionExplanation,
-      hasResolvedNarrative: !!resolvedNarrativeReason,
-      usedFinalSessionTruth: true,
-    })
     
     return (
       <div className={`p-3 bg-[#1A1A1A]/50 rounded-lg border border-[#2A2A2A]/50 ${className}`}>

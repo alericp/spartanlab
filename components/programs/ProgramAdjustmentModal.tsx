@@ -124,43 +124,7 @@ export function ProgramAdjustmentModal({
   currentTrainingDays = 4,
   currentScheduleMode = 'adaptive',
 }: ProgramAdjustmentModalProps) {
-  // ==========================================================================
-  // [PHASE 24B] TASK 2 - PROVE MODAL COMPONENT RENDERS AND RECEIVES PROPS
-  // ==========================================================================
-  
-  // [PHASE 24B] Step F - Modal receives open prop
-  console.log('[phase24b-modal-props-received]', {
-    open,
-    componentName: 'ProgramAdjustmentModal',
-    onOpenChangeExists: !!onOpenChange,
-    onContinueExists: !!onContinue,
-    onStartNewExists: !!onStartNew,
-    currentSessionMinutes,
-    currentTrainingDays,
-    verdict: open ? 'MODAL_OPEN_PROP_TRUE' : 'MODAL_OPEN_PROP_FALSE',
-  })
-  
-  // [PHASE 24H] TASK B - Modal prop wiring audit
-  console.log('[phase24h-modify-modal-prop-wiring-audit]', {
-    open,
-    onOpenChangeExists: !!onOpenChange,
-    onOpenChangeType: typeof onOpenChange,
-    onContinueExists: !!onContinue,
-    onContinueType: typeof onContinue,
-    onStartNewExists: !!onStartNew,
-    onStartNewType: typeof onStartNew,
-    onRebuildRequiredExists: !!onRebuildRequired,
-    currentEquipmentCount: currentEquipment?.length ?? 0,
-    currentTrainingDays,
-    currentSessionMinutes,
-    currentScheduleMode,
-    verdict: onStartNew ? 'ON_START_NEW_WIRED' : 'ON_START_NEW_MISSING',
-  })
-  
-  // ==========================================================================
-  // [PHASE 24C] TASK 3 - Body scroll lock + Escape close
-  // Deterministic behavior without Radix lifecycle
-  // ==========================================================================
+  // Body scroll lock + Escape close
   useEffect(() => {
     if (!open) return
     
@@ -168,20 +132,9 @@ export function ProgramAdjustmentModal({
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     
-    console.log('[phase24c-inline-modal-open-state-audit]', {
-      open,
-      scrollLocked: true,
-      previousOverflow,
-      verdict: 'INLINE_MODAL_OPEN_TRUE',
-    })
-    
     // Escape key handler
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        console.log('[phase24c-inline-modal-escape-close-audit]', {
-          action: 'escape_close',
-          verdict: 'INLINE_MODAL_CLOSE_REQUESTED',
-        })
         onOpenChange(false)
       }
     }
@@ -217,50 +170,6 @@ export function ProgramAdjustmentModal({
     })
   }, [currentSessionMinutes, currentTrainingDays])
   
-  // ==========================================================================
-  // [PHASE 21A] Simple controlled dialog - no timing guards, no refs
-  // Just standard Radix Dialog behavior like Restart modal uses
-  // ==========================================================================
-  useEffect(() => {
-    if (open) {
-      console.log('[phase21a-adjustment-modal-render]', {
-        open,
-        view,
-        selectedCategory,
-        isRebuilding,
-      })
-    }
-  }, [open, view, selectedCategory, isRebuilding])
-  
-  // ==========================================================================
-  // [PHASE 16W] TRUTHFUL SCHEDULE CAPABILITY - No hardcoded Beta labels
-  // The builder fully supports 6 and 7 day schedules via buildSixDayStructure
-  // and buildSevenDayStructure. Beta labels are removed since support is real.
-  // ==========================================================================
-  const builderSupports6Day = true  // Structure engine has buildSixDayStructure
-  const builderSupports7Day = true  // Structure engine has buildSevenDayStructure
-  
-  // [PHASE 16W] Schedule option capability audit
-  console.log('[phase16w-schedule-option-capability-audit]', {
-    builderSupports6DayGlobally: builderSupports6Day,
-    builderSupports7DayGlobally: builderSupports7Day,
-    rebuildSupports6DayForThisContext: builderSupports6Day,
-    rebuildSupports7DayForThisContext: builderSupports7Day,
-    supportIsStable: true,
-    supportRequiresCaution: false,
-    exactReasonIfCautionIsNeeded: null,
-    verdict: 'full_support_no_beta_label_needed',
-  })
-  
-  // [PHASE 16W] Schedule label truth audit
-  console.log('[phase16w-schedule-label-truth-audit]', {
-    shouldLabel6DayAsBeta: false,
-    shouldLabel7DayAsBeta: false,
-    shouldShowHighFrequencyWarning: false,
-    highFrequencyWarningReason: null,
-    verdict: 'labels_are_truthful',
-  })
-
   const interceptMessage = getExitInterceptMessage()
   const programStatus = getProgramStatus()
   const frequentRestartCheck = checkFrequentRestarts()
@@ -299,120 +208,36 @@ export function ProgramAdjustmentModal({
         
         let rebuildRequest: AdjustmentRebuildRequest
         if (selectedCategory === 'schedule') {
-          // [PHASE 17P] Flexible-preserving rebuild logic
-          // If user is flexible and hasn't explicitly changed the day count,
-          // dispatch undefined to preserve flexible identity
+          // Flexible-preserving rebuild logic
           const isFlexibleUser = currentScheduleMode === 'flexible' || currentScheduleMode === 'adaptive'
           const userChangedDayCount = trainingDays !== currentTrainingDays
           const shouldPreserveFlexible = isFlexibleUser && !userChangedDayCount
           
-          // [PHASE 17P] Adjustment prefill truth audit
-          console.log('[phase17p-adjustment-prefill-truth-audit]', {
-            scheduleMode: currentScheduleMode,
-            canonicalPreferredDays: currentTrainingDays,
-            generatedSessionCount: currentTrainingDays, // This is what was displayed
-            displayValueForModal: trainingDays,
-            userChangedDayCount,
-            isFlexibleUser,
-            shouldPreserveFlexible,
-            warning: isFlexibleUser
-              ? 'flexible_user_prefill_may_be_display_count_not_schedule_identity'
-              : 'static_user_prefill',
-          })
-          
           rebuildRequest = {
             type: 'training_days',
-            // [PHASE 17P] Only send explicit day count if user is static OR explicitly changed days
             newTrainingDays: shouldPreserveFlexible ? undefined : trainingDays,
           }
         } else {
           rebuildRequest = {
             type: 'equipment',
-            newEquipment: currentEquipment, // Would need equipment state if changeable
+            newEquipment: currentEquipment,
           }
         }
         
-        // [PHASE 17R] TASK 1 - Modal submit payload truth audit
-        console.log('[phase17r-modal-submit-truth-audit]', {
-          flowIntent: {
-            continueCurrentProgramSelected: false,
-            makeSmallAdjustmentsSelected: true, // This is the adjustment flow
-            startNewProgramSelected: false,
-          },
-          outgoingPayload: {
-            requestType: rebuildRequest.type,
-            newTrainingDays: rebuildRequest.newTrainingDays ?? null,
-            newEquipment: rebuildRequest.type === 'equipment' ? rebuildRequest.newEquipment : null,
-          },
-          modalState: {
-            selectedCategory,
-            trainingDays,
-            currentTrainingDays,
-            currentScheduleMode,
-            isFlexibleUser,
-            userChangedDayCount,
-            shouldPreserveFlexible,
-          },
-          verdict: shouldPreserveFlexible
-            ? 'FLEXIBLE_PRESERVING_REQUEST_SENT'
-            : 'EXPLICIT_DAY_COUNT_REQUEST_SENT',
-        })
-        
-        // [PHASE 16W] Schedule rebuild request audit
-        console.log('[phase16w-schedule-rebuild-request-audit]', {
-          category: selectedCategory,
-          requestType: rebuildRequest.type,
-          requestedTrainingDays: rebuildRequest.newTrainingDays,
-          currentTrainingDays: currentTrainingDays,
-          isHighFrequencyRequest: (rebuildRequest.newTrainingDays || 0) >= 6,
-          verdict: 'rebuild_request_dispatched',
-        })
-        
         const rebuildResult = await onRebuildRequired(rebuildRequest)
         
-        // [PHASE 16W] Schedule rebuild result audit
-        console.log('[phase16w-schedule-rebuild-result-audit]', {
-          success: rebuildResult.success,
-          error: rebuildResult.error || null,
-          actualSessionCount: rebuildResult.actualSessionCount,
-          requestedTrainingDays: rebuildRequest.newTrainingDays,
-          verdict: rebuildResult.success ? 'rebuild_succeeded' : 'rebuild_failed',
-        })
-        
         if (!rebuildResult.success) {
-          // [PHASE 16W] Use structured error message if available, not generic fallback
           const structuredError = rebuildResult.error || 'Schedule rebuild failed. Your previous program has been preserved.'
-          
-          // [PHASE 16W] Schedule error display audit
-          console.log('[phase16w-schedule-error-display-audit]', {
-            rawError: rebuildResult.error,
-            displayedError: structuredError,
-            isGenericFallback: !rebuildResult.error,
-            verdict: rebuildResult.error ? 'showing_structured_error' : 'showing_fallback',
-          })
-          
           setRebuildError(structuredError)
           setIsRebuilding(false)
           return
         }
         
-        // [adjustment-sync] Use actual session count from rebuild if available
         const actualSessions = rebuildResult.actualSessionCount ?? trainingDays
         
-        // Only now record the adjustment metadata (after successful rebuild)
         const result = applyProgramAdjustment({
           type: selectedCategory === 'schedule' ? 'training_days' : 'equipment',
           newTrainingDays: selectedCategory === 'schedule' ? trainingDays : undefined,
-        })
-        
-        // [adjustment-sync] STEP 2: Log actual before/after values
-        console.log('[adjustment-sync] Adjustment confirmed:', {
-          settingsSaved: true,
-          rebuildSucceeded: true,
-          previousTrainingDays: currentTrainingDays,
-          requestedTrainingDays: trainingDays,
-          actualSessionCount: actualSessions,
-          trainingDaysChanged: currentTrainingDays !== trainingDays,
         })
         
         // [canonical-rebuild] TASK J: Use truthful description and message from actual rebuild
@@ -428,21 +253,13 @@ export function ProgramAdjustmentModal({
         setView('confirm')
         
       } catch (error) {
-        console.error('[canonical-rebuild] Rebuild error:', error)
-        // [PHASE 16W] Extract structured error message if available
+        console.error('Rebuild error:', error)
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         const structuredCatchError = errorMessage.includes('validation') 
           ? `Schedule validation failed: ${errorMessage}`
           : errorMessage.includes('session')
             ? `Session generation failed: ${errorMessage}`
             : `Schedule rebuild failed: ${errorMessage}. Your previous program has been preserved.`
-        
-        console.log('[phase16w-schedule-error-display-audit]', {
-          rawError: errorMessage,
-          displayedError: structuredCatchError,
-          isGenericFallback: false,
-          verdict: 'showing_catch_error',
-        })
         
         setRebuildError(structuredCatchError)
         setIsRebuilding(false)
@@ -543,50 +360,13 @@ export function ProgramAdjustmentModal({
         <Button
           variant="ghost"
           onClick={() => {
-            // [PHASE 24H] TASK D - Start New click execution audit
-            console.log('[phase24h-start-new-click-execution-audit]', {
-              clickReceived: true,
-              localView_before: view,
-              selectedCategory_before: selectedCategory,
-              onStartNewExists: !!onStartNew,
-              recordProgramEnd_called: false,
-            })
-            
             recordProgramEnd('new_program')
-            
-            console.log('[phase24h-start-new-click-execution-audit]', {
-              recordProgramEnd_called: true,
-              recordProgramEnd_completed: true,
-              onStartNew_called: false,
-            })
-            
             onStartNew()
-            
-            console.log('[phase24h-start-new-click-execution-audit]', {
-              onStartNew_called: true,
-              expectedParentTransition: 'BUILDER_SHOULD_OPEN',
-            })
           }}
           className="text-[#6B7280] hover:text-[#A4ACB8]"
         >
           Start New Program
         </Button>
-        
-        {/* [PHASE 24H] TASK C - Start New button truth audit */}
-        {(() => {
-          console.log('[phase24h-start-new-button-truth-audit]', {
-            buttonRendered: true,
-            disabledValue: false,
-            disabledReason: null,
-            onClickExists: !!onStartNew,
-            visualStateClasses: 'text-[#6B7280] hover:text-[#A4ACB8]',
-            pointerEventsState: 'auto',
-            opacityState: 1,
-            shouldBeClickableForModifyFlow: true,
-            finalVerdict: 'BUTTON_SHOULD_BE_CLICKABLE',
-          })
-          return null
-        })()}
       </div>
     </div>
   )
@@ -999,33 +779,13 @@ export function ProgramAdjustmentModal({
     </div>
   )
 
-  // ==========================================================================
-  // [PHASE 24C] TASK 2, 4, 5 - DETERMINISTIC INLINE FIXED MODAL
-  // No portal, no Radix lifecycle, direct render when open === true
-  // ==========================================================================
-  
-  // [PHASE 24C] Render audit - log every render
-  console.log('[phase24c-inline-modal-render-audit]', {
-    open,
-    currentView: view,
-    renderMode: 'inline_fixed_modal',
-    usesPortal: false,
-    usesRadixDialogShell: false,
-    verdict: open ? 'VISIBLE_INLINE_MODAL_RENDERED' : 'INLINE_MODAL_NOT_RENDERED',
-  })
-  
-  // If not open, render nothing
+  // Inline fixed modal - direct render when open === true
   if (!open) {
     return null
   }
   
   // Handle overlay click to close
   const handleOverlayClick = () => {
-    console.log('[phase24c-inline-modal-overlay-close-audit]', {
-      action: 'overlay_click_close',
-      currentView: view,
-      verdict: 'INLINE_MODAL_CLOSE_REQUESTED',
-    })
     onOpenChange(false)
   }
   
@@ -1084,18 +844,10 @@ export function ProgramAdjustmentModal({
               </div>
             </div>
             
-            {/* [PHASE 24C] TASK 8 - Explicit close button */}
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => {
-                console.log('[phase24c-inline-modal-close-button-audit]', {
-                  action: 'close_button_click',
-                  currentView: view,
-                  verdict: 'INLINE_MODAL_CLOSE_REQUESTED',
-                })
-                onOpenChange(false)
-              }}
+              onClick={() => onOpenChange(false)}
               className="w-8 h-8 text-[#6B7280] hover:text-[#E6E9EF]"
             >
               <X className="w-4 h-4" />
@@ -1104,42 +856,12 @@ export function ProgramAdjustmentModal({
 
           {/* Body content */}
           <div className="p-6 pt-4">
-            {/* [PHASE 24H] TASK I - Modal view rendering audit */}
-            {(() => {
-              console.log('[phase24h-modal-view-render-audit]', {
-                currentView: view,
-                interceptViewWillRender: view === 'intercept',
-                adjustmentsViewWillRender: view === 'adjustments',
-                confirmViewWillRender: view === 'confirm',
-                startNewButtonWillBeVisible: view === 'intercept',
-              })
-              return null
-            })()}
             {view === 'intercept' && renderInterceptView()}
             {view === 'adjustments' && renderAdjustmentsView()}
             {view === 'confirm' && renderConfirmView()}
           </div>
         </div>
       </div>
-      
-      {/* [PHASE 24H] TASK I - Modal start new final verdict */}
-      {(() => {
-        console.log('[phase24h-modal-start-new-final-verdict]', {
-          modalIsOpen: open,
-          currentView: view,
-          startNewButtonVisible: view === 'intercept',
-          onStartNewWired: !!onStartNew,
-          expectedClickBehavior: 'CALL_ON_START_NEW_THEN_CLOSE_MODAL',
-          verdict: open && view === 'intercept' && onStartNew 
-            ? 'START_NEW_SHOULD_BE_CLICKABLE'
-            : !open 
-            ? 'MODAL_NOT_OPEN'
-            : view !== 'intercept'
-            ? 'WRONG_VIEW_START_NEW_NOT_VISIBLE'
-            : 'ON_START_NEW_NOT_WIRED',
-        })
-        return null
-      })()}
     </>
   )
 }

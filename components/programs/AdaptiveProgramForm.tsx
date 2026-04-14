@@ -111,150 +111,17 @@ export function AdaptiveProgramForm({
   
   // Reset explicit choice tracking when inputs change externally (new builder session)
   const inputsKey = `${inputs.scheduleMode}-${inputs.trainingDaysPerWeek}`
-  useEffect(() => {
-    // Only reset if this is a new builder session (inputs changed from outside)
-    console.log('[phase27b-explicit-choice-tracker]', {
-      event: 'INPUTS_CHANGED_EXTERNALLY',
-      inputsKey,
-      currentExplicitChoice: explicitScheduleChoice,
-    })
-    
-    // ==========================================================================
-    // [PHASE 29B] FORM INITIAL STATE VS PREFILL - Task 5
-    // Proves form state matches prefill values
-    // ==========================================================================
-    console.log('[phase29b-form-initial-state-vs-prefill]', {
-      // Prefill (from scheduleTruthAudit)
-      'prefill.scheduleMode': scheduleTruthAudit?.prefillScheduleMode ?? null,
-      'prefill.trainingDays': scheduleTruthAudit?.prefillTrainingDays ?? null,
-      // Form initial state (what form is showing)
-      'form.scheduleMode': inputs.scheduleMode,
-      'form.trainingDays': inputs.trainingDaysPerWeek,
-      'form.adaptiveWorkload': scheduleTruthAudit?.adaptiveWorkloadEnabled ?? true,
-      // Match detection
-      scheduleModeMatches: scheduleTruthAudit?.prefillScheduleMode === inputs.scheduleMode,
-      trainingDaysMatches: scheduleTruthAudit?.prefillTrainingDays == inputs.trainingDaysPerWeek,
-      // Verdict
-      verdict: (() => {
-        const prefillStatic6 = scheduleTruthAudit?.prefillScheduleMode === 'static' && scheduleTruthAudit?.prefillTrainingDays === 6
-        const formStatic6 = inputs.scheduleMode === 'static' && inputs.trainingDaysPerWeek === 6
-        if (prefillStatic6 && formStatic6) return 'FORM_MATCHES_PREFILL_STATIC_6'
-        if (prefillStatic6 && !formStatic6) return 'BUG_FORM_REWROTE_PREFILL'
-        if (!prefillStatic6 && inputs.scheduleMode === 'flexible') return 'FORM_MATCHES_PREFILL_FLEXIBLE'
-        return 'FORM_STATE_SET'
-      })(),
-    })
-    
-    // ==========================================================================
-    // [PHASE 29D] FORM INITIAL STATE - proves form received correct initial values
-    // ==========================================================================
-    console.log('[phase29d-form-initial-state]', {
-      initialScheduleMode: inputs.scheduleMode,
-      initialTrainingDays: inputs.trainingDaysPerWeek,
-      verdict: inputs.scheduleMode === 'static' && inputs.trainingDaysPerWeek === 6
-        ? 'STATIC_6_FORM_OPENED'
-        : inputs.scheduleMode === 'static'
-          ? `STATIC_${inputs.trainingDaysPerWeek}_FORM_OPENED`
-          : 'FLEXIBLE_FORM_OPENED',
-    })
-    
-    // ==========================================================================
-    // [PHASE 30A] FORM AUTHORITATIVE OPEN STATE
-    // THE DEFINITIVE LOG proving form received correct initial values
-    // ==========================================================================
-    console.log('[phase30a-form-authoritative-open-state]', {
-      inputs_scheduleMode: inputs.scheduleMode,
-      inputs_trainingDaysPerWeek: inputs.trainingDaysPerWeek,
-      inputs_adaptiveWorkloadEnabled: (inputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-      audit_prefill_scheduleMode: scheduleTruthAudit?.prefillScheduleMode ?? null,
-      audit_prefill_trainingDays: scheduleTruthAudit?.prefillTrainingDays ?? null,
-      verdict:
-        inputs.scheduleMode === 'static' && inputs.trainingDaysPerWeek === 6
-          ? 'FORM_OPENED_STATIC_6'
-          : inputs.scheduleMode === 'flexible'
-          ? 'FORM_OPENED_FLEXIBLE'
-          : `FORM_OPENED_STATIC_${inputs.trainingDaysPerWeek}`,
-    })
-    
-    // ==========================================================================
-    // [PHASE 30D] FORM OPEN FINAL - AUTHORITATIVE BEHAVIOR FIX LOG
-    // THE DEFINITIVE LOG proving form received correct initial values
-    // ==========================================================================
-    console.log('[phase30d-form-open-final]', {
-      inputs_scheduleMode: inputs.scheduleMode ?? null,
-      inputs_trainingDaysPerWeek: inputs.trainingDaysPerWeek ?? null,
-      inputs_adaptiveWorkloadEnabled: (inputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-      verdict:
-        inputs.scheduleMode === 'static' && inputs.trainingDaysPerWeek === 6
-          ? 'FORM_STATIC_6'
-          : inputs.scheduleMode === 'flexible'
-          ? 'FORM_FLEXIBLE'
-          : `FORM_${inputs.scheduleMode}_${inputs.trainingDaysPerWeek}`,
-    })
-    
-    // ==========================================================================
-    // [PHASE 30E] FORM OPEN SOURCE LOCK
-    // THE DEFINITIVE LOG proving form preserves static 6 from prefill
-    // ==========================================================================
-    console.log('[phase30e-form-open-source-lock]', {
-      inputs_scheduleMode: inputs.scheduleMode ?? null,
-      inputs_trainingDaysPerWeek: inputs.trainingDaysPerWeek ?? null,
-      inputs_adaptiveWorkloadEnabled: (inputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-      verdict:
-        inputs.scheduleMode === 'static' && inputs.trainingDaysPerWeek === 6
-          ? 'FORM_OPEN_STATIC_6'
-          : inputs.scheduleMode === 'flexible'
-          ? 'FORM_OPEN_FLEXIBLE'
-          : `FORM_OPEN_${inputs.scheduleMode}_${inputs.trainingDaysPerWeek}`,
-    })
-    
-    // ==========================================================================
-    // [PHASE 30C] FORM OPEN FINAL
-    // THE DEFINITIVE LOG proving form received correct initial values
-    // ==========================================================================
-    console.log('[phase30c-form-open-final]', {
-      inputs_scheduleMode: inputs.scheduleMode ?? null,
-      inputs_trainingDaysPerWeek: inputs.trainingDaysPerWeek ?? null,
-      inputs_adaptiveWorkloadEnabled: (inputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-      verdict:
-        inputs.scheduleMode === 'static' && inputs.trainingDaysPerWeek === 6
-          ? 'FORM_STATIC_6'
-          : inputs.scheduleMode === 'flexible'
-          ? 'FORM_FLEXIBLE'
-          : `FORM_${inputs.scheduleMode}_${inputs.trainingDaysPerWeek}`,
-    })
-    // [PHASE 30B] FORM OPEN FINAL
-    console.log('[phase30b-form-open-final]', {
-      inputs_scheduleMode: inputs.scheduleMode,
-      inputs_trainingDaysPerWeek: inputs.trainingDaysPerWeek,
-      inputs_adaptiveWorkloadEnabled: (inputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-      verdict:
-        inputs.scheduleMode === 'static' && inputs.trainingDaysPerWeek === 6
-          ? 'FORM_STATIC_6'
-          : inputs.scheduleMode === 'flexible'
-          ? 'FORM_FLEXIBLE'
-          : `FORM_STATIC_${inputs.trainingDaysPerWeek}`,
-    })
-  }, [inputsKey]) // eslint-disable-line react-hooks/exhaustive-deps
   
   const updateInput = <K extends keyof AdaptiveProgramInputs>(
     key: K,
     value: AdaptiveProgramInputs[K]
   ) => {
-    // [PHASE 24O] CRITICAL FIX: When user selects a numeric trainingDaysPerWeek,
-    // automatically flip scheduleMode to 'static' to ensure the selection registers
-    // This prevents flexible schedule identity from overriding explicit day selection
+    // When user selects a numeric trainingDaysPerWeek, automatically flip scheduleMode to 'static'
     if (key === 'trainingDaysPerWeek' && typeof value === 'number') {
-      console.log('[phase24o-builder-form-static-mode-fix]', {
-        selectedDays: value,
-        previousScheduleMode: inputs.scheduleMode,
-        newScheduleMode: 'static',
-        verdict: 'NUMERIC_DAY_SELECTION_FLIPS_TO_STATIC',
-      })
       onInputChange({ 
         ...inputs, 
         trainingDaysPerWeek: value as TrainingDays,
-        scheduleMode: 'static', // [PHASE 24O] Explicit numeric selection = static mode
+        scheduleMode: 'static',
       })
       return
     }
@@ -269,40 +136,10 @@ export function AdaptiveProgramForm({
     updateInput('equipment', updated)
   }
 
-  // ==========================================================================
-  // [PHASE 28E.5] PREFILL LOCK LOG - Form Render
-  // Proves whether form inputs match what canonical/prefill intended
-  // ==========================================================================
+  // Derive selector value for training days display
   const selectorValue = inputs.scheduleMode === 'flexible' || inputs.trainingDaysPerWeek === 'flexible' 
     ? 'flexible' 
     : String(inputs.trainingDaysPerWeek)
-  const selectorOptionsPresent = ['flexible', '2', '3', '4', '5', '6', '7'] // Expected options
-  
-  // Check if prefill matches what form is rendering
-  const prefillMatchesForm = scheduleTruthAudit 
-    ? scheduleTruthAudit.prefillScheduleMode === inputs.scheduleMode
-    : true // No audit = assume match
-  
-  console.log('[phase28e5-live-modify-prefill-lock]', {
-    checkpoint: 'FORM_RENDER',
-    // Builder session inputs (what should be used)
-    builderSessionScheduleMode: inputs.scheduleMode,
-    builderSessionTrainingDays: inputs.trainingDaysPerWeek,
-    // Selector rendered value
-    selectorRenderedValue: selectorValue,
-    // Audit info if available
-    auditPrefillScheduleMode: scheduleTruthAudit?.prefillScheduleMode ?? null,
-    auditPrefillTrainingDays: scheduleTruthAudit?.prefillTrainingDays ?? null,
-    auditCanonicalScheduleMode: scheduleTruthAudit?.canonicalScheduleMode ?? null,
-    // Explicit choice present
-    explicitChoicePresent: inputs.scheduleMode !== undefined,
-    // Verdicts
-    prefillMatchesForm,
-    verdict: prefillMatchesForm 
-      ? 'PREFILL_LOCK_MATCH' 
-      : 'PREFILL_MASKED_AFTER_OPEN',
-    formBuildIdentity: PHASE27C_FORM_BUILD_IDENTITY.formBuildIdentityName,
-  })
   
   return (
     <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-6">
@@ -357,49 +194,34 @@ export function AdaptiveProgramForm({
                 : String(inputs.trainingDaysPerWeek)}
               onValueChange={(v) => {
                 const timestamp = new Date().toISOString()
-                if (v === 'flexible') {
-                  // [PHASE 27B] Record explicit flexible choice
-                  const choice: ExplicitScheduleChoice = {
-                    madeAt: timestamp,
-                    scheduleMode: 'flexible',
-                    trainingDaysPerWeek: 'flexible',
-                  }
-                  setExplicitScheduleChoice(choice)
-                  console.log('[phase27b-explicit-schedule-choice]', {
-                    action: 'USER_EXPLICITLY_SELECTED_FLEXIBLE',
-                    choice,
-                    previousScheduleMode: inputs.scheduleMode,
-                    previousTrainingDays: inputs.trainingDaysPerWeek,
-                    verdict: 'EXPLICIT_FLEXIBLE_CHOICE_RECORDED',
-                  })
-                  onInputChange({
-                    ...inputs,
-                    trainingDaysPerWeek: 'flexible',
-                    scheduleMode: 'flexible',
-                  })
-                } else {
-                  const numDays = Number(v) as TrainingDays
-                  // [PHASE 27B] Record explicit static choice
-                  const choice: ExplicitScheduleChoice = {
-                    madeAt: timestamp,
-                    scheduleMode: 'static',
-                    trainingDaysPerWeek: numDays,
-                  }
-                  setExplicitScheduleChoice(choice)
-                  console.log('[phase27b-explicit-schedule-choice]', {
-                    action: 'USER_EXPLICITLY_SELECTED_FIXED_DAYS',
-                    choice,
-                    selectedDays: numDays,
-                    previousScheduleMode: inputs.scheduleMode,
-                    previousTrainingDays: inputs.trainingDaysPerWeek,
-                    verdict: `EXPLICIT_STATIC_${numDays}_DAYS_CHOICE_RECORDED`,
-                  })
-                  onInputChange({
-                    ...inputs,
-                    trainingDaysPerWeek: numDays,
-                    scheduleMode: 'static',
-                  })
-                }
+                    if (v === 'flexible') {
+                      // Record explicit flexible choice
+                      const choice: ExplicitScheduleChoice = {
+                        madeAt: timestamp,
+                        scheduleMode: 'flexible',
+                        trainingDaysPerWeek: 'flexible',
+                      }
+                      setExplicitScheduleChoice(choice)
+                      onInputChange({
+                        ...inputs,
+                        trainingDaysPerWeek: 'flexible',
+                        scheduleMode: 'flexible',
+                      })
+                    } else {
+                      const numDays = Number(v) as TrainingDays
+                      // Record explicit static choice
+                      const choice: ExplicitScheduleChoice = {
+                        madeAt: timestamp,
+                        scheduleMode: 'static',
+                        trainingDaysPerWeek: numDays,
+                      }
+                      setExplicitScheduleChoice(choice)
+                      onInputChange({
+                        ...inputs,
+                        trainingDaysPerWeek: numDays,
+                        scheduleMode: 'static',
+                      })
+                    }
               }}
             >
               <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A]">
@@ -593,49 +415,7 @@ export function AdaptiveProgramForm({
             </div>
           </div>
           
-          {/* [PHASE 29A] Submit contract log - shows baseline vs adaptive separation */}
-          {(() => {
-            // Determine adaptive workload status from audit or default to true
-            const adaptiveWorkload = scheduleTruthAudit?.adaptiveWorkloadEnabled ?? true
-            console.log('[phase29a-modify-submit-contract]', {
-              // Baseline schedule identity (what will be submitted)
-              baselineScheduleMode: inputs.scheduleMode,
-              baselineTrainingDaysPerWeek: inputs.trainingDaysPerWeek,
-              // Adaptive workload (separate concept!)
-              adaptiveWorkloadEnabled: adaptiveWorkload,
-              // Session config
-              sessionDurationMode: inputs.sessionDurationMode,
-              sessionLength: inputs.sessionLength,
-              primaryGoal: inputs.primaryGoal,
-              // Verdict
-              verdict: (() => {
-                if (inputs.scheduleMode === 'static' && adaptiveWorkload) {
-                  return `SUBMITTING_STATIC_${inputs.trainingDaysPerWeek}_BASELINE_WITH_ADAPTIVE_WORKLOAD`
-                }
-                if (inputs.scheduleMode === 'static' && !adaptiveWorkload) {
-                  return `SUBMITTING_STATIC_${inputs.trainingDaysPerWeek}_BASELINE_NO_ADAPTATION`
-                }
-                return 'SUBMITTING_FLEXIBLE_BASELINE'
-              })(),
-            })
-            return null
-          })()}
-          {/* [PHASE 27A/27B] Forensic log on every render */}
-          {(() => {
-            console.log('[phase27a-submit-snapshot]', {
-              scheduleMode: inputs.scheduleMode,
-              trainingDaysPerWeek: inputs.trainingDaysPerWeek,
-              sessionDurationMode: inputs.sessionDurationMode,
-              sessionLength: inputs.sessionLength,
-              primaryGoal: inputs.primaryGoal,
-              explicitChoiceMade: !!explicitScheduleChoice,
-              explicitChoiceDetails: explicitScheduleChoice,
-              verdict: inputs.scheduleMode === 'static' 
-                ? `SNAPSHOT_SHOWS_STATIC_${inputs.trainingDaysPerWeek}_DAYS`
-                : 'SNAPSHOT_SHOWS_ADAPTIVE',
-            })
-            return null
-          })()}
+
         </div>
 
         {/* Generate Button */}

@@ -1098,10 +1098,10 @@ interface ExerciseSelectionInputs {
 
 /**
   * [SELECTOR_RUNTIME_VERSION] Hard version fingerprint for cache/deploy proof
-  * OWNER_LOCK_V3: Final owner reconciliation - all corridor layers must show V3
+  * CORRIDOR_KILL_V4: Final selector corridor hardening - all layers must show V4
   * NO closure-based selectorCtx access allowed in any nested callback
   */
-  const SELECTOR_RUNTIME_VERSION = 'SELECTOR_OWNER_LOCK_V3_2026_04_13'
+  const SELECTOR_RUNTIME_VERSION = 'SELECTOR_CORRIDOR_KILL_V4_2026_04_14'
 
 /**
  * [SELECTOR_DOCTRINE_CONTEXT_TYPE] Explicit type for selector doctrine context.
@@ -1306,6 +1306,32 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   // [UNIFIED DOCTRINE DECISION] Extract doctrine-driven generation constraints
   unifiedDoctrineDecision,
   } = inputs
+  
+  // ==========================================================================
+  // [SELECTOR_CORRIDOR_KILL_TRACE] ONE authoritative same-attempt corridor trace
+  // This log proves all corridor layers are using V4 fingerprints
+  // ==========================================================================
+  const corridorAttemptId = `sel_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+  console.log('[SELECTOR_CORRIDOR_KILL_TRACE]', {
+    attemptId: corridorAttemptId,
+    fileOwner: 'lib/program-exercise-selector.ts',
+    functionOwner: 'selectExercisesForSession',
+    branchName: 'selector_entry',
+    version: SELECTOR_RUNTIME_VERSION,
+    selectorCtxVersion: selectorCtx.version,
+    dayFocus: selectorCtx.dayFocus,
+    primaryGoal: selectorCtx.primaryGoal,
+    doctrineActive: selectorCtx.doctrine.active,
+    dominantSpine: selectorCtx.doctrine.dominantSpine,
+    inputsPresent: {
+      day: !!day,
+      primaryGoal: !!primaryGoal,
+      equipment: equipment?.length ?? 0,
+      skillsForSession: skillsForSession?.length ?? 0,
+      unifiedDoctrineDecision: !!unifiedDoctrineDecision,
+    },
+    timestamp: new Date().toISOString(),
+  })
   
   // [RUNTIME_CONTEXT_ENTRY] Log entry with version proof
   console.log('[SELECTOR_RUNTIME_CONTEXT_ENTRY]', {

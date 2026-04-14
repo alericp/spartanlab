@@ -38,6 +38,11 @@ export interface WeekDosageScalingResult {
   holdDurationMultiplier: number
   restMultiplier: number // >1 = more rest for early weeks, <1 = less rest for peak weeks
   scalingReason: string
+  // [DOCTRINE-STRENGTHENING] Session character flags for visible week differentiation
+  densityAllowed: boolean // Can include density blocks/supersets
+  finishersAllowed: boolean // Can include finisher exercises
+  skillExposureLevel: 'conservative' | 'moderate' | 'full' // How much skill work is allowed
+  sessionIntensityCap: number // Max RPE allowed (6-10 scale)
 }
 
 export interface ScaledExercise extends AdaptiveExercise {
@@ -59,6 +64,14 @@ export interface ScaledSession extends Omit<AdaptiveSession, 'exercises'> {
   weekScalingApplied: boolean
   weekNumber: number
   dosageScaling: WeekDosageScalingResult
+  // [DOCTRINE-STRENGTHENING] Session-level week character flags
+  weekCharacter: {
+    densityAllowed: boolean
+    finishersAllowed: boolean
+    skillExposureLevel: 'conservative' | 'moderate' | 'full'
+    sessionIntensityCap: number
+    phaseLabel: 'acclimation' | 'ramp_up' | 'peak' | 'consolidation'
+  }
 }
 
 // =============================================================================
@@ -68,47 +81,74 @@ export interface ScaledSession extends Omit<AdaptiveSession, 'exercises'> {
 /**
  * Week-specific scaling factors
  * These define how dosage scales across a 4-week cycle
+ * 
+ * [DOCTRINE-STRENGTHENING] Made multipliers MORE PRONOUNCED so users can actually
+ * see meaningful week-to-week differences in their program:
+ * - Week 1: 2 sets base (conservative acclimation)
+ * - Week 2: 3 sets (ramp-up, +50% from base)
+ * - Week 3: 4 sets (peak, +100% from base)
+ * - Week 4: 3 sets (consolidation, maintain without overreaching)
  */
 const WEEK_SCALING_PROFILES: Record<number, WeekDosageScalingResult> = {
   1: {
     weekNumber: 1,
     scalingApplied: false, // Week 1 uses stored acclimation values as-is
     phaseLabel: 'acclimation',
-    volumeMultiplier: 1.0, // Already reduced in generation
-    intensityMultiplier: 1.0,
-    holdDurationMultiplier: 1.0,
-    restMultiplier: 1.0,
-    scalingReason: 'Week 1 uses stored acclimation dosage - no scaling needed',
+    volumeMultiplier: 1.0, // Base acclimation - typically 2 sets per exercise
+    intensityMultiplier: 1.0, // Conservative RPE
+    holdDurationMultiplier: 1.0, // Base hold times
+    restMultiplier: 1.2, // MORE rest in acclimation (longer recovery)
+    scalingReason: 'Acclimation: Conservative entry with reduced volume and extended rest',
+    // [DOCTRINE] Week 1 is protective - no density, no finishers, capped intensity
+    densityAllowed: false,
+    finishersAllowed: false,
+    skillExposureLevel: 'conservative',
+    sessionIntensityCap: 7,
   },
   2: {
     weekNumber: 2,
     scalingApplied: true,
     phaseLabel: 'ramp_up',
-    volumeMultiplier: 1.20, // 20% more sets than week 1
-    intensityMultiplier: 1.05, // Slight RPE increase
-    holdDurationMultiplier: 1.15, // 15% longer holds
-    restMultiplier: 0.95, // Slightly less rest
-    scalingReason: 'Week 2 ramp-up: increased volume and intensity from acclimation baseline',
+    volumeMultiplier: 1.50, // 50% more sets (2→3 sets)
+    intensityMultiplier: 1.10, // Moderate RPE increase
+    holdDurationMultiplier: 1.25, // 25% longer holds
+    restMultiplier: 1.0, // Normal rest periods
+    scalingReason: 'Ramp-Up: Building toward full training capacity',
+    // [DOCTRINE] Week 2 starts to open up - some density allowed
+    densityAllowed: true,
+    finishersAllowed: false,
+    skillExposureLevel: 'moderate',
+    sessionIntensityCap: 8,
   },
   3: {
     weekNumber: 3,
     scalingApplied: true,
     phaseLabel: 'peak',
-    volumeMultiplier: 1.35, // 35% more sets than week 1
-    intensityMultiplier: 1.10, // Higher RPE targets
-    holdDurationMultiplier: 1.25, // 25% longer holds
-    restMultiplier: 0.90, // Less rest for density
-    scalingReason: 'Week 3 peak: full training volume and intensity',
+    volumeMultiplier: 2.0, // Double the sets (2→4 sets)
+    intensityMultiplier: 1.15, // Higher RPE targets
+    holdDurationMultiplier: 1.50, // 50% longer holds
+    restMultiplier: 0.85, // Reduced rest for density
+    scalingReason: 'Peak: Maximum productive volume and intensity',
+    // [DOCTRINE] Week 3 is full exposure - everything allowed
+    densityAllowed: true,
+    finishersAllowed: true,
+    skillExposureLevel: 'full',
+    sessionIntensityCap: 9,
   },
   4: {
     weekNumber: 4,
     scalingApplied: true,
     phaseLabel: 'consolidation',
-    volumeMultiplier: 1.25, // Slightly backed off from peak
-    intensityMultiplier: 1.08, // Maintain good intensity
-    holdDurationMultiplier: 1.20,
-    restMultiplier: 0.95,
-    scalingReason: 'Week 4 consolidation: maintaining gains, slight volume reduction before next cycle',
+    volumeMultiplier: 1.50, // Back to ramp-up level (2→3 sets)
+    intensityMultiplier: 1.12, // Maintain intensity but reduce volume stress
+    holdDurationMultiplier: 1.35, // Moderate holds
+    restMultiplier: 0.95, // Slightly reduced rest
+    scalingReason: 'Consolidation: Maintain adaptations while managing fatigue',
+    // [DOCTRINE] Week 4 consolidates - maintain quality but reduce stress
+    densityAllowed: true,
+    finishersAllowed: false, // No finishers - focus on core work
+    skillExposureLevel: 'moderate',
+    sessionIntensityCap: 8,
   },
 }
 
@@ -151,7 +191,12 @@ export function scaleExerciseForWeek(
   
   // Apply scaling
   const scaledSets = Math.round(originalSets * scaling.volumeMultiplier)
-  const scaledTargetRPE = Math.min(10, Math.round((originalTargetRPE * scaling.intensityMultiplier) * 10) / 10)
+  // [DOCTRINE-STRENGTHENING] RPE is scaled but ALSO capped by week's sessionIntensityCap
+  const scaledTargetRPE = Math.min(
+    scaling.sessionIntensityCap, // Week-based cap
+    10, // Absolute max
+    Math.round((originalTargetRPE * scaling.intensityMultiplier) * 10) / 10
+  )
   const scaledRestPeriod = Math.round(originalRestPeriod * scaling.restMultiplier)
   
   // Scale hold durations for isometric exercises
@@ -200,6 +245,14 @@ export function scaleSessionForWeek(
     weekScalingApplied: scaling.scalingApplied,
     weekNumber,
     dosageScaling: scaling,
+    // [DOCTRINE-STRENGTHENING] Include week character for UI differentiation
+    weekCharacter: {
+      densityAllowed: scaling.densityAllowed,
+      finishersAllowed: scaling.finishersAllowed,
+      skillExposureLevel: scaling.skillExposureLevel,
+      sessionIntensityCap: scaling.sessionIntensityCap,
+      phaseLabel: scaling.phaseLabel,
+    },
   }
 }
 

@@ -592,7 +592,7 @@ export function ActiveWorkoutStartCorridor({
   const indicatorColor = mode === 'block_round_rest' ? 'bg-amber-500' : mode === 'resting' ? 'bg-blue-500' : 'bg-green-500'
   
   return (
-    <div className="min-h-screen bg-[#0F1115] flex flex-col">
+    <div className="min-h-screen bg-[#0F1115] flex flex-col overflow-x-hidden">
       {/* ========== STICKY HEADER ========== */}
       <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
         <div className="px-4 py-2.5">
@@ -1251,7 +1251,8 @@ export function ActiveWorkoutStartCorridor({
           
           {/* ========== ACTION RAIL ========== */}
           {/* [MOBILE-FIX] Sticky action rail that stays accessible on mobile */}
-          <div className="sticky bottom-0 bg-[#0F1115] pt-3 pb-2 -mx-4 px-4 border-t border-[#2B313A]/50">
+          {/* [OVERFLOW-FIX] Removed -mx-4 negative margin that caused horizontal overflow */}
+          <div className="sticky bottom-0 bg-[#0F1115] pt-3 pb-2 pb-safe border-t border-[#2B313A]/50">
             {/* Primary Action */}
             <Button 
               onClick={onCompleteSet} 
@@ -1263,19 +1264,20 @@ export function ActiveWorkoutStartCorridor({
             </Button>
             
             {/* Secondary Actions with Back Button */}
-            <div className="flex items-center justify-between pt-2">
+            {/* [MOBILE-OVERFLOW-FIX] Use flex-wrap and gap for mobile containment */}
+            <div className="flex items-center justify-between flex-wrap gap-1 pt-2">
               {/* Left: Back button */}
               {canGoBack && onGoBack ? (
                 <Button 
                   variant="ghost" 
                   onClick={onGoBack}
-                  className="text-[#6B7280] text-sm h-9 px-3 hover:text-[#A4ACB8]"
+                  className="text-[#6B7280] text-xs h-8 px-2 hover:text-[#A4ACB8] shrink-0"
                 >
-                  <ChevronLeft className="w-3.5 h-3.5 mr-1" />
+                  <ChevronLeft className="w-3 h-3 mr-0.5" />
                   Back
                 </Button>
               ) : (
-                <div className="w-16" /> // Spacer when back not available
+                <div className="w-12" /> // Spacer when back not available
               )}
               
               {/* [LIVE-WORKOUT-AUTHORITY] Distinct Skip Actions */}
@@ -1292,10 +1294,10 @@ export function ActiveWorkoutStartCorridor({
                   if (onSkipSet) onSkipSet()
                   else if (onSkip) onSkip()
                 }}
-                className="text-[#6B7280] text-sm h-9 px-3 hover:text-[#A4ACB8]"
+                className="text-[#6B7280] text-xs h-8 px-2 hover:text-[#A4ACB8] shrink-0"
               >
-                <SkipForward className="w-3.5 h-3.5 mr-1.5" />
-                Skip Set
+                <SkipForward className="w-3 h-3 mr-1" />
+                Skip
               </Button>
               
               {/* End Exercise: Skip all remaining sets, advance to next exercise */}
@@ -1311,19 +1313,19 @@ export function ActiveWorkoutStartCorridor({
                   if (onEndExercise) onEndExercise()
                   else setShowExitConfirm(true) // Fallback to exit confirm
                 }}
-                className="text-amber-500/80 text-sm h-9 px-3 hover:text-amber-400"
+                className="text-amber-500/80 text-xs h-8 px-2 hover:text-amber-400 shrink-0"
               >
-                <ChevronRight className="w-3.5 h-3.5 mr-1.5" />
-                Next Exercise
+                <ChevronRight className="w-3 h-3 mr-0.5" />
+                Next
               </Button>
               
               {/* End Workout: Opens exit modal */}
               <Button 
                 variant="ghost" 
                 onClick={() => setShowExitConfirm(true)}
-                className="text-[#6B7280] text-sm h-9 px-3 hover:text-[#A4ACB8]"
+                className="text-[#6B7280] text-xs h-8 px-2 hover:text-[#A4ACB8] shrink-0"
               >
-                <X className="w-3.5 h-3.5 mr-1.5" />
+                <X className="w-3 h-3 mr-0.5" />
                 End
               </Button>
             </div>

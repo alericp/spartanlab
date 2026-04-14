@@ -3773,13 +3773,6 @@ if (styledGroups && styledGroups.length > 0) {
   // The user sees a seeded value (e.g., 6s from prescription) but machine holdValue might still be 30 (default)
   // So we must compute the same displayed value here to log what the user actually saw
   const handleCompleteSet = useCallback(() => {
-    console.log('[v0] [COMPLETE_SET_HANDLER] handleCompleteSet called', {
-      safeExerciseIndex,
-      validatedSetNumber,
-      machinePhase: machineState.phase,
-      safeSelectedRPE,
-      completedSetsCount: machineState.completedSets?.length ?? 0,
-    })
     const currentIndex = safeExerciseIndex
     
     // [LOGGED-VALUE-FIX] Compute the DISPLAYED hold/reps value that matches what the UI showed
@@ -3882,15 +3875,6 @@ if (styledGroups && styledGroups.length > 0) {
       // This fixes the reference error where corridorRecommendedBand was defined after this callback
       const localRecommendedBand = safeCurrentExercise?.executionTruth?.recommendedBand as ResistanceBandColor | undefined
       
-      console.log('[v0] [COMPLETE_SET_DISPATCH] About to dispatch COMPLETE_SET', {
-        setNumber: validatedSetNumber,
-        exerciseIndex: currentIndex,
-        isLastSet,
-        exerciseCount: exercises.length,
-        reps: setData.actualReps,
-        rpe: setData.actualRPE,
-        localRecommendedBand,
-      })
       machineDispatch({
         type: 'COMPLETE_SET',
         completedSet: setData,
@@ -3905,7 +3889,6 @@ if (styledGroups && styledGroups.length > 0) {
         exerciseName: safeCurrentExercise?.name || '',
         totalPrescribedSets: safeCurrentExercise?.sets || 3,
       })
-      console.log('[v0] [COMPLETE_SET_DISPATCH] COMPLETE_SET dispatched successfully')
     // [CRASH-FIX] Removed liveSession dep, use machine-derived values
     // [LOGGED-VALUE-FIX] Added safeCurrentExercise to deps for prescription seed derivation
     }, [validatedSetNumber, safeRepsValue, safeHoldValue, safeSelectedRPE, safeBandUsed, safeCurrentExercise, safeExerciseIndex, isHoldExercise, exercises, machineSessionContract, machineState, machineDispatch])
@@ -5508,7 +5491,7 @@ function InterExerciseRestCountdown({
     }
     
     return (
-      <div className="min-h-screen bg-[#0F1115] flex flex-col">
+      <div className="min-h-screen bg-[#0F1115] flex flex-col overflow-x-hidden">
         {/* Sticky Session Header */}
         <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
           <div className="px-4 py-2.5">
@@ -5631,7 +5614,7 @@ function InterExerciseRestCountdown({
     }
     
     return (
-      <div className="min-h-screen bg-[#0F1115] flex flex-col">
+      <div className="min-h-screen bg-[#0F1115] flex flex-col overflow-x-hidden">
         {/* Sticky Session Header */}
         <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
           <div className="px-4 py-2.5">
@@ -5775,7 +5758,7 @@ function InterExerciseRestCountdown({
     }
     
     return (
-      <div className="min-h-screen bg-[#0F1115] flex flex-col">
+      <div className="min-h-screen bg-[#0F1115] flex flex-col overflow-x-hidden">
         {/* Sticky Session Header - Compact (same as active) */}
         <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
           <div className="px-4 py-2.5">
@@ -6705,7 +6688,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     console.log('[v0] [Stage1] About to return JSX')
     
     return (
-      <div className="min-h-screen bg-[#0F1115] flex flex-col">
+      <div className="min-h-screen bg-[#0F1115] flex flex-col overflow-x-hidden">
         {/* Header */}
         <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
           <div className="px-4 py-2.5">
@@ -6811,7 +6794,7 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
   unitStatus.shell.rendered = true
   
   return (
-    <div className="min-h-screen bg-[#0F1115] flex flex-col">
+    <div className="min-h-screen bg-[#0F1115] flex flex-col overflow-x-hidden">
       {/* UNIT 1: Header */}
       {renderHeaderUnit()}
       

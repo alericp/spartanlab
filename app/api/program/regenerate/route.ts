@@ -8,9 +8,9 @@ export const maxDuration = 30
 
 // ==========================================================================
 // [REGENERATE_RUNTIME_FINGERPRINT] Proves which source version is executing
-// OWNER_LOCK_V3: Final owner reconciliation - all layers must show V3 fingerprint
+// CORRIDOR_KILL_V4: Final selector corridor hardening - all layers must show V4
 // ==========================================================================
-const REGENERATE_RUNTIME_FINGERPRINT = 'REGEN_ROUTE_OWNER_LOCK_V3_2026_04_13'
+const REGENERATE_RUNTIME_FINGERPRINT = 'REGEN_ROUTE_CORRIDOR_KILL_V4_2026_04_14'
 
 /**
  * ==========================================================================
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   
   // ==========================================================================
   // [REGEN_ROUTE_ENTRY] Authoritative runtime proof with fingerprint
-  // [OWNER_LOCK_V3] Final owner reconciliation - trace full corridor
+  // [CORRIDOR_KILL_V4] Final selector corridor hardening - trace full corridor
   // ==========================================================================
   console.log('[REGEN_ROUTE_ENTRY]', {
     fingerprint: REGENERATE_RUNTIME_FINGERPRINT,

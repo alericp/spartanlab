@@ -127,9 +127,9 @@ import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionR
 import { selectOptimalStructure, getDayExplanation } from './program-structure-engine'
 import { selectExercisesForSession, evaluateSessionProgressions, getSmartProgressionExercise, buildFallbackSelectionForSession } from './program-exercise-selector'
 
-// [OWNER_LOCK_V3] Version fingerprint for cache/deploy proof
-// Final owner reconciliation - all corridor layers must show V3 fingerprint
-const SESSION_ASSEMBLY_VERSION = 'BUILDER_OWNER_LOCK_V3_2026_04_13'
+// [CORRIDOR_KILL_V4] Version fingerprint for cache/deploy proof
+// Final selector corridor hardening - all corridor layers must show V4
+const SESSION_ASSEMBLY_VERSION = 'BUILDER_CORRIDOR_KILL_V4_2026_04_14'
 
 // [PHASE 4] Doctrine DB exercise scoring - prefetch rules before generation
 import { prefetchDoctrineRules, getDoctrineInfluenceSummary, getCachedDoctrineRules, type DoctrineScoringAudit } from './doctrine-exercise-scorer'

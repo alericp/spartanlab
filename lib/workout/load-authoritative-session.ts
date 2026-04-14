@@ -24,6 +24,8 @@ import {
 } from '@/lib/workout/normalize-workout-session'
 import { getSessionDiagnostic } from '@/lib/workout/validate-session'
 import type { WorkoutSessionContract } from '@/lib/contracts/workout-session-contract'
+// [WEEK-PROGRESSION-TRUTH] Import week scaling to apply dosage adjustments at session load time
+import { scaleSessionForWeek, type ScaledSession } from '@/lib/week-dosage-scaling'
 
 // =============================================================================
 // SESSION METADATA - TRACKS SOURCE AND VALIDATION STATUS
@@ -49,6 +51,10 @@ export interface SessionMeta {
   resolvedSessionIndex?: number
   /** Original day param from request */
   requestedDayParam?: string | null
+  /** [WEEK-PROGRESSION-TRUTH] Current week number used for dosage scaling */
+  weekNumber?: number
+  /** [WEEK-PROGRESSION-TRUTH] Whether week scaling was applied to the session */
+  weekScalingApplied?: boolean
 }
 
 export interface AuthoritativeSessionResult {
@@ -485,20 +491,54 @@ export async function loadAuthoritativeSession(
       ;(normalizedSession.compositionMetadata as Record<string, unknown>).programPrimaryGoal = programPrimaryGoal
     }
     
-    // SUCCESS - Return the valid session
+    // ==========================================================================
+    // [WEEK-PROGRESSION-TRUTH] Apply week dosage scaling to the session
+    // ==========================================================================
+    // This ensures the live workout session receives the same scaled values 
+    // (scaledSets, scaledReps, scaledTargetRPE, etc.) that the Program page displays.
+    // Without this, the UI shows Week 2/3/4 dosage but the workout uses Week 1 values.
+    const currentWeekNumber = adaptiveProgram.weekNumber ?? 1
+    const scaledSession = scaleSessionForWeek(normalizedSession, currentWeekNumber)
+    
+    // Merge scaled exercise data back onto normalizedSession
+    // This preserves all original metadata while adding scaled values
+    const finalSession: AdaptiveSession = {
+      ...normalizedSession,
+      exercises: scaledSession.exercises.map((scaledEx, idx) => ({
+        ...normalizedSession.exercises[idx],
+        // [WEEK-PROGRESSION-TRUTH] Add scaled values for live workout consumption
+        scaledSets: scaledEx.scaledSets,
+        scaledReps: scaledEx.scaledReps,
+        scaledHoldDuration: scaledEx.scaledHoldDuration,
+        scaledTargetRPE: scaledEx.scaledTargetRPE,
+        scaledRestPeriod: scaledEx.scaledRestPeriod,
+        weekScalingApplied: scaledEx.weekScalingApplied,
+      })),
+    }
+    
+    logSessionLoad('WEEK_SCALING_APPLIED', {
+      weekNumber: currentWeekNumber,
+      scalingApplied: scaledSession.weekScalingApplied,
+      phaseLabel: scaledSession.dosageScaling.phaseLabel,
+      volumeMultiplier: scaledSession.dosageScaling.volumeMultiplier,
+    })
+    
+    // SUCCESS - Return the valid session with week scaling applied
     logSessionLoad('SESSION_LOAD_SUCCESS', {
-      dayLabel: normalizedSession.dayLabel,
-      dayNumber: normalizedSession.dayNumber,
-      exerciseCount: normalizedSession.exercises.length,
+      dayLabel: finalSession.dayLabel,
+      dayNumber: finalSession.dayNumber,
+      exerciseCount: finalSession.exercises.length,
       source: 'PROGRAM_STATE',
       actualSessionCount: adaptiveProgram.sessions.length,
       resolvedSessionIndex: clampedIndex,
       requestedDayParam: dayParam ?? null,
       programPrimaryGoal: programPrimaryGoal ?? 'not_found',
+      weekNumber: currentWeekNumber,
+      weekScalingApplied: scaledSession.weekScalingApplied,
     })
     
     return {
-      session: normalizedSession,
+      session: finalSession,
       meta: {
         source: 'PROGRAM_STATE',
         validationPassed: true,
@@ -509,6 +549,9 @@ export async function loadAuthoritativeSession(
         sessionCount: adaptiveProgram.sessions.length,
         resolvedSessionIndex: clampedIndex,
         requestedDayParam: dayParam ?? null,
+        // [WEEK-PROGRESSION-TRUTH] Include week metadata in session meta
+        weekNumber: currentWeekNumber,
+        weekScalingApplied: scaledSession.weekScalingApplied,
       },
       reasoningSummary: adaptiveProgram.workoutReasoningSummary,
     }

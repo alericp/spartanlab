@@ -30,6 +30,8 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { buildExercisePurposeLine, buildExerciseEffortReasonLine } from '@/lib/program/program-display-contract'
 import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-builder'
+// [WEEK-PROGRESSION-TRUTH] Import scaled exercise type for week-aware dosage in live workout
+import type { ScaledExercise } from '@/lib/week-dosage-scaling'
 // [LIVE-WORKOUT-CORRIDOR-FIX] getLatestAdaptiveProgram loaded dynamically - post-completion only
 // The adaptive-program-builder is a MASSIVE file (18,000+ lines) that can crash module evaluation
 // We only need it for the "next session" preview in PostWorkoutSummary
@@ -346,6 +348,37 @@ function getBlockForExercise(plan: ExecutionPlan | undefined, exerciseIndex: num
 // =============================================================================
 // TYPES
 // =============================================================================
+
+// =============================================================================
+// [WEEK-PROGRESSION-TRUTH] Helper to extract effective exercise values
+// Prefers week-scaled values when available, falls back to base values
+// This ensures the live workout uses the same dosage as the Program page displays
+// =============================================================================
+interface EffectiveExerciseValues {
+  sets: number
+  repsOrTime: string
+  targetRPE: number
+  restPeriod: number
+  weekScalingApplied: boolean
+}
+
+function getEffectiveExerciseValues(exercise: AdaptiveExercise | null | undefined): EffectiveExerciseValues {
+  if (!exercise) {
+    return { sets: 3, repsOrTime: '8-12 reps', targetRPE: 8, restPeriod: 90, weekScalingApplied: false }
+  }
+  
+  // Cast to ScaledExercise to access optional scaled fields
+  const scaled = exercise as unknown as ScaledExercise
+  
+  return {
+    // [WEEK-PROGRESSION-TRUTH] Prefer scaled values, fall back to base values
+    sets: scaled.scaledSets ?? exercise.sets ?? 3,
+    repsOrTime: scaled.scaledReps ?? exercise.repsOrTime ?? '8-12 reps',
+    targetRPE: scaled.scaledTargetRPE ?? exercise.targetRPE ?? 8,
+    restPeriod: scaled.scaledRestPeriod ?? exercise.restPeriod ?? 90,
+    weekScalingApplied: scaled.weekScalingApplied === true,
+  }
+}
 
 interface CompletedSetData {
   exerciseIndex: number
@@ -3011,11 +3044,12 @@ if (styledGroups && styledGroups.length > 0) {
         failureReason: null,
         targetValue: 8,
         recommendedBand: undefined,
-        targetRPE: 8,
-        isHoldExercise: false,
-        displaySets: `${safeCurrentExercise?.sets ?? 3} sets`,
-        displayRepsTime: safeCurrentExercise?.repsOrTime ?? '8-12 reps',
-      }
+      targetRPE: 8,
+      isHoldExercise: false,
+      // [WEEK-PROGRESSION-TRUTH] Use effective scaled values for display
+      displaySets: `${getEffectiveExerciseValues(safeCurrentExercise).sets} sets`,
+      displayRepsTime: getEffectiveExerciseValues(safeCurrentExercise).repsOrTime,
+    }
     }
     
     try {
@@ -3054,8 +3088,9 @@ if (styledGroups && styledGroups.length > 0) {
       recommendedBand,
       targetRPE: 8,
       isHoldExercise,
-      displaySets: `${safeCurrentExercise?.sets ?? 3} sets`,
-      displayRepsTime: safeCurrentExercise?.repsOrTime ?? '8-12 reps',
+      // [WEEK-PROGRESSION-TRUTH] Use effective scaled values for display
+      displaySets: `${getEffectiveExerciseValues(safeCurrentExercise).sets} sets`,
+      displayRepsTime: getEffectiveExerciseValues(safeCurrentExercise).repsOrTime,
     }
     } catch (error) {
       console.error('[v0] [activeEntryPreparation_error]', error instanceof Error ? error.message : 'unknown')
@@ -3124,12 +3159,19 @@ if (styledGroups && styledGroups.length > 0) {
     
     try {
       // STEP 1: Resolve current exercise safely
-      console.log('[v0] [active_contract_current_exercise_resolved]', { index: safeExerciseIndex, name: safeCurrentExercise?.name })
+      // [WEEK-PROGRESSION-TRUTH] Use effective values which prefer scaled week dosage
+      const effectiveValues = getEffectiveExerciseValues(safeCurrentExercise)
+      console.log('[v0] [active_contract_current_exercise_resolved]', { 
+        index: safeExerciseIndex, 
+        name: safeCurrentExercise?.name,
+        weekScalingApplied: effectiveValues.weekScalingApplied,
+        effectiveSets: effectiveValues.sets,
+      })
       const exerciseIndex = safeExerciseIndex
       const exerciseName = safeCurrentExercise?.name ?? 'Exercise'
       const exerciseCategory = safeCurrentExercise?.category ?? 'general'
-      const exerciseSets = safeCurrentExercise?.sets ?? 3
-      const exerciseRepsOrTime = safeCurrentExercise?.repsOrTime ?? '8-12 reps'
+      const exerciseSets = effectiveValues.sets
+      const exerciseRepsOrTime = effectiveValues.repsOrTime
       const exerciseNote = safeCurrentExercise?.note ?? ''
       
       // STEP 2: Resolve grouped block context safely
@@ -3300,11 +3342,12 @@ if (styledGroups && styledGroups.length > 0) {
         exerciseTruth: exerciseRuntimeTruth,
         executionPlan: machineSessionContract?.executionPlan ?? null,
         currentExerciseIndex: safeExerciseIndex,
-        currentSet: machineState.currentSet,
-        currentRound: machineState.currentRound,
-        targetSets: safeCurrentExercise?.sets ?? 3,
-        lastSetRPE: machineState.lastSetRPE ?? null,
-      })
+    currentSet: machineState.currentSet,
+    currentRound: machineState.currentRound,
+    // [WEEK-PROGRESSION-TRUTH] Use effective scaled sets
+    targetSets: getEffectiveExerciseValues(safeCurrentExercise).sets,
+    lastSetRPE: machineState.lastSetRPE ?? null,
+  })
     } catch (err) {
       console.error('[v0] [live_execution_contract] Failed to build contract:', err)
       return null
@@ -3390,9 +3433,10 @@ if (styledGroups && styledGroups.length > 0) {
     const safeDayLabel = safeWorkoutSessionContract.dayLabel || 'Workout'
     const safeDayNumber = safeWorkoutSessionContract.dayNumber || 1
     
-    // Exercise counts - use centralized validation
-    const safeExerciseCount = exercises.length
-    const safeTotalSets = exercises.reduce((sum, ex) => sum + (ex?.sets ?? 3), 0)
+  // Exercise counts - use centralized validation
+  // [WEEK-PROGRESSION-TRUTH] Use effective values for total sets calculation
+  const safeExerciseCount = exercises.length
+  const safeTotalSets = exercises.reduce((sum, ex) => sum + getEffectiveExerciseValues(ex).sets, 0)
     const safeCompletedSetsCount = normalizedCompletedSets.length
     
     // Current exercise position - use centralized validation (already clamped/validated)
@@ -4285,18 +4329,20 @@ if (styledGroups && styledGroups.length > 0) {
       // Build exercise-level outcomes for progression engine
       // [LIVE-WORKOUT-MACHINE] Use normalizedCompletedSets from machine
       const exerciseOutcomes = exercises.map((exercise, exerciseIndex) => {
-        const exerciseSets = normalizedCompletedSets.filter(s => s.exerciseIndex === exerciseIndex)
-        const completedSetCount = exerciseSets.length
-        const isCompleted = completedSetCount >= (exercise.sets || 1)
+    const exerciseSets = normalizedCompletedSets.filter(s => s.exerciseIndex === exerciseIndex)
+    const completedSetCount = exerciseSets.length
+    // [WEEK-PROGRESSION-TRUTH] Use effective scaled sets for completion check
+    const isCompleted = completedSetCount >= getEffectiveExerciseValues(exercise).sets
         const bestReps = exerciseSets.length > 0 ? Math.max(...exerciseSets.map(s => s.actualReps)) : 0
         const bestHold = exerciseSets.length > 0 ? Math.max(...exerciseSets.map(s => s.holdSeconds || 0)) : 0
         const bandUsed = exerciseSets.find(s => s.bandUsed && s.bandUsed !== 'none')?.bandUsed
         
         return {
           id: exercise.id || `ex-${exerciseIndex}`,
-          name: exercise.name,
-          category: exercise.category as 'skill' | 'push' | 'pull' | 'core' | 'legs' | 'mobility',
-          sets: exercise.sets || 1,
+    name: exercise.name,
+    category: exercise.category as 'skill' | 'push' | 'pull' | 'core' | 'legs' | 'mobility',
+    // [WEEK-PROGRESSION-TRUTH] Use effective scaled sets
+    sets: getEffectiveExerciseValues(exercise).sets,
           reps: bestReps > 0 ? bestReps : undefined,
           holdSeconds: bestHold > 0 ? bestHold : undefined,
           completed: isCompleted,

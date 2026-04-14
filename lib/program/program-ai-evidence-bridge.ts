@@ -1873,6 +1873,12 @@ export interface FullRoutineExercise {
   note?: string
   // Family tracking for section headers
   routineFamily: RoutineItemFamily
+  // [WEEK-SCALING-BRIDGE] Week-scaled dosage fields for live UI updates
+  scaledSets?: number
+  scaledReps?: string
+  scaledTargetRPE?: number
+  scaledRestPeriod?: number
+  weekScalingApplied?: boolean
 }
 
 /**
@@ -1903,6 +1909,12 @@ export function buildFullVisibleRoutineExercises(
     selectionReason?: string
     isOverrideable?: boolean
     note?: string
+    // [WEEK-SCALING-BRIDGE] Accept week-scaled fields from scaleSessionsForWeek
+    scaledSets?: number
+    scaledReps?: string
+    scaledTargetRPE?: number
+    scaledRestPeriod?: number
+    weekScalingApplied?: boolean
   }>,
   variantSelection?: {
     main?: Array<{
@@ -1998,6 +2010,12 @@ export function buildFullVisibleRoutineExercises(
       isOverrideable: variantEx?.isOverrideable ?? sessionEx?.isOverrideable ?? true,
       note: variantEx?.note || sessionEx?.note,
       routineFamily: item.family,
+      // [WEEK-SCALING-BRIDGE] Preserve scaled fields from session exercises for live UI updates
+      scaledSets: sessionEx?.scaledSets,
+      scaledReps: sessionEx?.scaledReps,
+      scaledTargetRPE: sessionEx?.scaledTargetRPE,
+      scaledRestPeriod: sessionEx?.scaledRestPeriod,
+      weekScalingApplied: sessionEx?.weekScalingApplied,
     })
   }
   

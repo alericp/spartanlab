@@ -1572,7 +1572,9 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   // TASK 1-B: Pass weightedBenchmarks to fix ReferenceError in selectMainExercises
   // [PHASE 4 HOTFIX] Pass jointCautions for doctrine context
   // [SESSION-ARCHITECTURE-VISIBLE-EXPRESSION] Pass architecture contract for slot enforcement
+  // [ROOT_CAUSE_FIX] selectorCtx MUST be passed as first argument - fixes "selectorCtx is not defined"
   const main = selectMainExercises(
+  selectorCtx,       // [ROOT_CAUSE_FIX] Explicit context threading - NOT available via closure
   day,
   primaryGoal,
   experienceLevel,
@@ -2279,6 +2281,9 @@ type SessionSkillAllocation = {
 }
 
 function selectMainExercises(
+  // [ROOT_CAUSE_FIX] selectorCtx MUST be passed explicitly - it is NOT available via closure
+  // This fixes "selectorCtx is not defined" ReferenceError in push-skill selection
+  selectorCtx: SelectorRuntimeContext,
   day: DayStructure,
   primaryGoal: PrimaryGoal,
   experienceLevel: ExperienceLevel,

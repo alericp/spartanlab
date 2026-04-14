@@ -1098,10 +1098,10 @@ interface ExerciseSelectionInputs {
 
 /**
   * [SELECTOR_RUNTIME_VERSION] Hard version fingerprint for cache/deploy proof
-  * REGEN_LOCK_V2: All corridor layers must show matching V2 fingerprint
+  * OWNER_LOCK_V3: Final owner reconciliation - all corridor layers must show V3
   * NO closure-based selectorCtx access allowed in any nested callback
   */
-  const SELECTOR_RUNTIME_VERSION = 'SELECTOR_REGEN_LOCK_V2_2026_04_13'
+  const SELECTOR_RUNTIME_VERSION = 'SELECTOR_OWNER_LOCK_V3_2026_04_13'
 
 /**
  * [SELECTOR_DOCTRINE_CONTEXT_TYPE] Explicit type for selector doctrine context.

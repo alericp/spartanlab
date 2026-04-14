@@ -1116,6 +1116,8 @@ export function AdaptiveProgramDisplay({
   }
   // [COACHING-EXPLANATION-CONTRACT] Pass authoritative coaching explanation surface
   coachingExplanation={intelligenceContract?.coachingExplanation || null}
+  // [DOCTRINE-STRENGTHENING] Pass week character for visible differentiation badges
+  weekCharacter={session.weekCharacter}
   />
               </div>
             )

@@ -35,6 +35,15 @@ import {
 import { recordReplaceSignal } from '@/lib/override-signal-service'
 import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
 
+// [DOCTRINE-STRENGTHENING] Week character flags for visible differentiation
+interface WeekCharacter {
+  densityAllowed: boolean
+  finishersAllowed: boolean
+  skillExposureLevel: 'conservative' | 'moderate' | 'full'
+  sessionIntensityCap: number
+  phaseLabel: 'acclimation' | 'ramp_up' | 'peak' | 'consolidation'
+}
+
 interface AdaptiveSessionCardProps {
   session: AdaptiveSession
   onExerciseReplace?: (exerciseId: string) => void
@@ -53,6 +62,8 @@ interface AdaptiveSessionCardProps {
   defaultExpanded?: boolean
   // [COACHING-EXPLANATION-CONTRACT] Authoritative coaching explanation surface
   coachingExplanation?: ProgramExplanationSurface | null
+  // [DOCTRINE-STRENGTHENING] Week-specific training character for visible differentiation
+  weekCharacter?: WeekCharacter
 }
 
 // =============================================================================
@@ -166,7 +177,7 @@ function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
   }
 }
 
-export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation }: AdaptiveSessionCardProps) {
+export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter }: AdaptiveSessionCardProps) {
   // PHASE 3: Normalize session immediately to prevent crashes
   const session = normalizeSessionForDisplay(rawSession)
   
@@ -709,6 +720,57 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 <span className="text-[#E63946]/70">({activeSessionView.variantLabel})</span>
               )}
             </div>
+            
+            {/* [DOCTRINE-STRENGTHENING] Week-specific character badges */}
+            {weekCharacter && (
+              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                {/* Intensity cap badge */}
+                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                  weekCharacter.sessionIntensityCap <= 7
+                    ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                    : weekCharacter.sessionIntensityCap >= 9
+                    ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                }`}>
+                  RPE ≤{weekCharacter.sessionIntensityCap}
+                </span>
+                
+                {/* Skill exposure badge */}
+                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                  weekCharacter.skillExposureLevel === 'conservative'
+                    ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                    : weekCharacter.skillExposureLevel === 'full'
+                    ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                }`}>
+                  {weekCharacter.skillExposureLevel === 'conservative' && 'Conservative'}
+                  {weekCharacter.skillExposureLevel === 'moderate' && 'Building'}
+                  {weekCharacter.skillExposureLevel === 'full' && 'Full Exposure'}
+                </span>
+                
+                {/* Density badge - only show if blocked or explicitly allowed */}
+                {!weekCharacter.densityAllowed && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20">
+                    No Density
+                  </span>
+                )}
+                
+                {/* Finishers badge - only show if blocked */}
+                {!weekCharacter.finishersAllowed && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20">
+                    No Finishers
+                  </span>
+                )}
+                
+                {/* Peak week indicator */}
+                {weekCharacter.phaseLabel === 'peak' && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-green-500/10 text-green-400 border border-green-500/20">
+                    <Zap className="w-2.5 h-2.5" />
+                    Peak Week
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <div className="text-[#6A6A6A]">
             {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}

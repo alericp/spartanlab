@@ -307,16 +307,26 @@ function formatHoldDuration(seconds: number): string {
 }
 
 /**
- * Scale a rep range string (e.g., "8-12" -> "10-15")
+ * Clean Rep Band Normalization
+ * 
+ * [DOCTRINE-CLEAN-BANDS] Volume scaling applies to SETS, not rep ranges.
+ * Rep ranges should remain clean and doctrine-appropriate based on exercise intent.
+ * This function normalizes any awkward ranges into clean coaching-credible bands.
+ * 
+ * Clean Band Families:
+ * - Strength/Neural: 3-5, 4-6, 5-8
+ * - Hybrid Strength-Hypertrophy: 6-8, 6-10, 8-10
+ * - Hypertrophy: 8-12, 10-12, 10-15
+ * - Endurance/Burnout: 12-15, 15-20
  */
-function scaleRepRange(reps: string, multiplier: number): string {
-  // Handle "XxY" format (e.g., "3x8")
+function normalizeToCleanBand(reps: string, _multiplier: number): string {
+  // Handle "XxY" format (e.g., "3x8") - preserve sets part, normalize reps
   const setRepMatch = reps.match(/(\d+)\s*x\s*(\d+)/i)
   if (setRepMatch) {
     const sets = parseInt(setRepMatch[1], 10)
     const repCount = parseInt(setRepMatch[2], 10)
-    const scaledReps = Math.round(repCount * Math.sqrt(multiplier)) // Square root for moderate scaling
-    return `${sets}x${scaledReps}`
+    const cleanReps = normalizeRepCountToCleanBand(repCount)
+    return `${sets}x${cleanReps}`
   }
   
   // Handle range format (e.g., "8-12")
@@ -324,21 +334,67 @@ function scaleRepRange(reps: string, multiplier: number): string {
   if (rangeMatch) {
     const low = parseInt(rangeMatch[1], 10)
     const high = parseInt(rangeMatch[2], 10)
-    const scaledLow = Math.round(low * Math.sqrt(multiplier))
-    const scaledHigh = Math.round(high * Math.sqrt(multiplier))
-    return `${scaledLow}-${scaledHigh}`
+    return normalizeRangeToCleanBand(low, high)
   }
   
-  // Handle single number
+  // Handle single number - keep as clean single rep target
   const singleMatch = reps.match(/^(\d+)$/)
   if (singleMatch) {
-    const count = parseInt(singleMatch[1], 10)
-    const scaled = Math.round(count * Math.sqrt(multiplier))
-    return String(scaled)
+    return singleMatch[1]
   }
   
-  // Return unchanged if format not recognized
+  // Return unchanged if format not recognized (AMRAP, special formats)
   return reps
+}
+
+/**
+ * Normalize a single rep count to the nearest clean band midpoint
+ */
+function normalizeRepCountToCleanBand(repCount: number): number {
+  // Keep single rep targets clean - don't change them
+  return repCount
+}
+
+/**
+ * Normalize a rep range to the nearest clean doctrine-friendly band
+ * 
+ * [DOCTRINE-CLEAN-BANDS] Maps any range to clean coaching bands:
+ * - Very low (1-4): 3-5 (neural/max strength)
+ * - Low (5-7): 5-8 (strength)
+ * - Moderate (8-10): 8-10 (hybrid)
+ * - Standard hypertrophy (11-13): 8-12 (classic hypertrophy)
+ * - Higher (14+): 10-15 (higher volume hypertrophy)
+ */
+function normalizeRangeToCleanBand(low: number, high: number): string {
+  const mid = (low + high) / 2
+  const span = high - low
+  
+  // If already a clean narrow band (span <= 4), keep it
+  if (span <= 4) {
+    return `${low}-${high}`
+  }
+  
+  // Wide ugly ranges get normalized to clean bands based on midpoint
+  if (mid <= 4) {
+    return '3-5'
+  } else if (mid <= 6) {
+    return '4-6'
+  } else if (mid <= 7) {
+    return '5-8'
+  } else if (mid <= 9) {
+    return '6-10'
+  } else if (mid <= 11) {
+    return '8-12'
+  } else if (mid <= 14) {
+    return '10-15'
+  } else {
+    return '12-15'
+  }
+}
+
+// Backward compatibility alias
+function scaleRepRange(reps: string, multiplier: number): string {
+  return normalizeToCleanBand(reps, multiplier)
 }
 
 // =============================================================================

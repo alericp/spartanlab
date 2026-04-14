@@ -3773,6 +3773,13 @@ if (styledGroups && styledGroups.length > 0) {
   // The user sees a seeded value (e.g., 6s from prescription) but machine holdValue might still be 30 (default)
   // So we must compute the same displayed value here to log what the user actually saw
   const handleCompleteSet = useCallback(() => {
+    console.log('[v0] [COMPLETE_SET_HANDLER] handleCompleteSet called', {
+      safeExerciseIndex,
+      validatedSetNumber,
+      machinePhase: machineState.phase,
+      safeSelectedRPE,
+      completedSetsCount: machineState.completedSets?.length ?? 0,
+    })
     const currentIndex = safeExerciseIndex
     
     // [LOGGED-VALUE-FIX] Compute the DISPLAYED hold/reps value that matches what the UI showed
@@ -3871,6 +3878,19 @@ if (styledGroups && styledGroups.length > 0) {
       
       // [LIVE-WORKOUT-ADAPTIVE] Include target prescription for adaptive summary
       // [LIVE-WORKOUT-ACTION-PLANNER] Include exercise context for action planning
+      // [LIVE-SESSION-FIX] Derive recommendedBand from safeCurrentExercise directly
+      // This fixes the reference error where corridorRecommendedBand was defined after this callback
+      const localRecommendedBand = safeCurrentExercise?.executionTruth?.recommendedBand as ResistanceBandColor | undefined
+      
+      console.log('[v0] [COMPLETE_SET_DISPATCH] About to dispatch COMPLETE_SET', {
+        setNumber: validatedSetNumber,
+        exerciseIndex: currentIndex,
+        isLastSet,
+        exerciseCount: exercises.length,
+        reps: setData.actualReps,
+        rpe: setData.actualRPE,
+        localRecommendedBand,
+      })
       machineDispatch({
         type: 'COMPLETE_SET',
         completedSet: setData,
@@ -3880,11 +3900,12 @@ if (styledGroups && styledGroups.length > 0) {
         targetReps: isHoldExercise ? undefined : prescriptionSeedValue,
         targetHoldSeconds: isHoldExercise ? prescriptionSeedValue : undefined,
         targetRPE: safeCurrentExercise?.targetRPE || 8,
-        recommendedBand: corridorRecommendedBand,
+        recommendedBand: localRecommendedBand,
         // Exercise context for action planning
         exerciseName: safeCurrentExercise?.name || '',
         totalPrescribedSets: safeCurrentExercise?.sets || 3,
       })
+      console.log('[v0] [COMPLETE_SET_DISPATCH] COMPLETE_SET dispatched successfully')
     // [CRASH-FIX] Removed liveSession dep, use machine-derived values
     // [LOGGED-VALUE-FIX] Added safeCurrentExercise to deps for prescription seed derivation
     }, [validatedSetNumber, safeRepsValue, safeHoldValue, safeSelectedRPE, safeBandUsed, safeCurrentExercise, safeExerciseIndex, isHoldExercise, exercises, machineSessionContract, machineState, machineDispatch])

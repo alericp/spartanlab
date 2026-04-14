@@ -808,6 +808,7 @@ function WorkoutSessionContent() {
   }
   
   // Deterministic exit routing - never use router.back() for critical paths
+  // [LIVE-SESSION-FIX] Normal workouts should return to program page, not dashboard
   const handleCancel = () => {
     if (isFirstSession) {
       // Coming from first-session flow - return there
@@ -816,8 +817,8 @@ function WorkoutSessionContent() {
       // Demo mode - go to dashboard
       router.push('/dashboard')
     } else {
-      // Normal workout - go to dashboard
-      router.push('/dashboard')
+      // Normal workout - go to program page to see the plan and select another session
+      router.push('/program')
     }
   }
   

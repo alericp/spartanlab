@@ -21182,8 +21182,9 @@ function generateAdaptiveSession(
   
   // SESSION SURVIVAL CONTRACT: Track this session's rescue state
   // If doctrine relaxation was applied AND session has exercises, it's a recovery candidate
+  // [ROOT_CAUSE_FIX] Use sessionIndex (from context) not index (outer loop scope - not available here)
   const sessionSurvivalContract = {
-    sessionIndex: index,
+    sessionIndex: sessionIndex,
     dayNumber: day.dayNumber,
     dayFocus: day.focus,
     doctrineRelaxationApplied,

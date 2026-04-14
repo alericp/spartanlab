@@ -1012,7 +1012,7 @@ export function AdaptiveProgramDisplay({
             const hasCoachingExplanation = !!coachingSessionExpl?.purpose
             
             return (
-              <div key={`${program.id}-${session.dayNumber}-${session.name || session.focusLabel}`}>
+              <div key={`${program.id}-${session.dayNumber}-${session.name || session.focusLabel}-week${currentWeekNumber}`}>
                 {/* [SESSION-CARD-SURFACE] Authoritative per-card identity display */}
                 {/* [COACHING-EXPLANATION-CONTRACT] Show header when we have coaching explanation */}
                 {(hasAuthoritativeSurface || hasAnyChips || hasCoachingExplanation || sessionSurfaceSignals.hasPrescriptionChanges || (dayRationale && dayRationale.source !== 'unavailable')) ? (

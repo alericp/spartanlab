@@ -174,10 +174,17 @@ export function scaleExerciseForWeek(
 ): ScaledExercise {
   const scaling = getWeekDosageScaling(weekNumber)
   
-  // Week 1: no scaling, return as-is
+  // Week 1: acclimation - still apply dosage fields for consistent display
+  // [WEEK-SCALING-FIX] Always attach scaled fields even for week 1 so display contract works
   if (!scaling.scalingApplied || weekNumber === 1) {
+    const originalSets = typeof exercise.sets === 'number' ? exercise.sets : parseInt(String(exercise.sets)) || 3
+    const originalReps = exercise.reps || '8-12'
+    const originalTargetRPE = exercise.targetRPE || 8
     return {
       ...exercise,
+      scaledSets: originalSets, // Same as original for week 1
+      scaledReps: originalReps,
+      scaledTargetRPE: originalTargetRPE,
       weekScalingApplied: false,
     }
   }

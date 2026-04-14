@@ -45,11 +45,19 @@ import {
 import { getCompactSessionExplanation } from '@/lib/coaching-explanation-contract'
 import { 
   advanceToNextWeek, 
+  advanceToWeek,
   getWeekProgressionState,
   type WeekProgressionState,
   type WeekAdvancementResult,
 } from '@/lib/week-advancement-service'
-import { Info, Sparkles, Shield, Scale, Layers, ChevronRight, ArrowRight, Loader2 } from 'lucide-react'
+import { Info, Sparkles, Shield, Scale, Layers, ChevronRight, ArrowRight, Loader2, ChevronLeft, Zap } from 'lucide-react'
+import { 
+  getWeekDosageScaling, 
+  scaleSessionsForWeek, 
+  getWeekPhaseLabel, 
+  getWeekVolumeIndicator,
+  type ScaledSession 
+} from '@/lib/week-dosage-scaling'
 
 interface AdaptiveProgramDisplayProps {
   program: AdaptiveProgram
@@ -243,6 +251,31 @@ export function AdaptiveProgramDisplay({
   // ROOT CAUSE: Phase 15C added useEffect audits at ~line 246/289 that referenced validSessions.length
   // But validSessions was declared at line 713, causing TDZ error (minified as 'ew')
   const validSessions = safeSessions.filter(s => Array.isArray(s.exercises))
+  
+  // ==========================================================================
+  // [WEEK-PROGRESSION-TRUTH] Apply week-specific dosage scaling
+  // Week 1 uses stored acclimation values, Week 2+ get progressively scaled dosage
+  // ==========================================================================
+  const currentWeekNumber = program.weekNumber || 1
+  const weekDosageScaling = getWeekDosageScaling(currentWeekNumber)
+  const scaledSessions: ScaledSession[] = scaleSessionsForWeek(validSessions, currentWeekNumber)
+  const weekVolumeIndicator = getWeekVolumeIndicator(currentWeekNumber)
+  const weekPhaseLabel = getWeekPhaseLabel(currentWeekNumber)
+  
+  console.log('[week-progression-truth-scaling-audit]', {
+    currentWeekNumber,
+    weekPhaseLabel,
+    scalingApplied: weekDosageScaling.scalingApplied,
+    volumeMultiplier: weekDosageScaling.volumeMultiplier,
+    intensityMultiplier: weekDosageScaling.intensityMultiplier,
+    volumeIndicator: weekVolumeIndicator,
+    sessionsScaled: scaledSessions.length,
+    firstSessionScaledExampleSets: scaledSessions[0]?.exercises?.[0]?.scaledSets,
+    verdict: currentWeekNumber > 1 && weekDosageScaling.scalingApplied 
+      ? 'WEEK_PROGRESSION_SCALING_APPLIED' 
+      : 'WEEK_1_NO_SCALING_NEEDED',
+  })
+  
   const safeRepresentedSkills = Array.isArray(rawRepresentedSkills) ? rawRepresentedSkills : []
   const safeSummaryTruth = rawSummaryTruth && typeof rawSummaryTruth === 'object'
     ? (rawSummaryTruth as { 
@@ -490,6 +523,43 @@ export function AdaptiveProgramDisplay({
       }
     } catch (err) {
       console.error('[week-advancement-ui] Error advancing week:', err)
+      setWeekAdvancementResult({
+        success: false,
+        previousWeek: weekProgression?.currentWeek || 1,
+        newWeek: weekProgression?.currentWeek || 1,
+        programId: program.id,
+        advancedAt: new Date().toISOString(),
+        error: err instanceof Error ? err.message : 'Unknown error',
+      })
+    } finally {
+      setIsAdvancingWeek(false)
+    }
+  }
+  
+  // [WEEK-ADVANCEMENT] Handler for going to a specific week (forward or backward)
+  const handleGoToWeek = async (targetWeek: number) => {
+    setIsAdvancingWeek(true)
+    setWeekAdvancementResult(null)
+    
+    try {
+      const result = advanceToWeek(targetWeek)
+      setWeekAdvancementResult(result)
+      
+      if (result.success) {
+        // Update local state immediately
+        const newState = getWeekProgressionState()
+        setWeekProgression(newState)
+        
+        console.log('[week-advancement-ui] Successfully changed to week', {
+          previousWeek: result.previousWeek,
+          newWeek: result.newWeek,
+          programId: result.programId,
+        })
+      } else {
+        console.warn('[week-advancement-ui] Week change failed:', result.error)
+      }
+    } catch (err) {
+      console.error('[week-advancement-ui] Error changing week:', err)
       setWeekAdvancementResult({
         success: false,
         previousWeek: weekProgression?.currentWeek || 1,
@@ -926,6 +996,78 @@ export function AdaptiveProgramDisplay({
     return isHeadline || isRepresentedBroaderWithSubstance
   })
   
+  // ==========================================================================
+  // [SKILL-REPRESENTATION-TRUTH] PART B: Show ALL selected skills with representation labels
+  // Skills that don't meet strict threshold are still shown but labeled as indirect/support
+  // This ensures NO SKILL SILENTLY DISAPPEARS
+  // ==========================================================================
+  type SkillRepresentationType = 'primary' | 'direct' | 'support' | 'accessory'
+  
+  interface SkillWithRepresentation {
+    skill: string
+    representationType: SkillRepresentationType
+    label: string
+    isPrimary: boolean
+  }
+  
+  const allSelectedSkillsWithRepresentation: SkillWithRepresentation[] = safeSelectedSkills.map(skill => {
+    const chipState = getSharedChipState(skill)
+    const policy = (safeWeeklyRepresentation as { policies?: Array<{ skill: string; actualExposure?: { direct?: number; total?: number } }> })?.policies?.find(p => p.skill === skill)
+    const directExposure = policy?.actualExposure?.direct || 0
+    const totalExposure = policy?.actualExposure?.total || 0
+    
+    const isHeadline = chipState === 'headline_priority'
+    const hasMeaningfulDirect = directExposure >= 2
+    const hasSignificantTotal = totalExposure >= 3
+    
+    // Determine representation type
+    let representationType: SkillRepresentationType
+    let label: string
+    
+    if (isHeadline) {
+      representationType = 'primary'
+      label = skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    } else if (hasMeaningfulDirect) {
+      representationType = 'direct'
+      label = skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    } else if (hasSignificantTotal || chipState === 'support_only' || sharedWeekSupportSkills.includes(skill)) {
+      representationType = 'support'
+      label = `${skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} (Support)`
+    } else {
+      // Still selected but only represented through accessory/carryover work
+      representationType = 'accessory'
+      label = `${skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} (Accessory)`
+    }
+    
+    return {
+      skill,
+      representationType,
+      label,
+      isPrimary: isHeadline,
+    }
+  })
+  
+  // Separate into primary/direct skills and support/accessory skills
+  const primaryDirectSkills = allSelectedSkillsWithRepresentation.filter(
+    s => s.representationType === 'primary' || s.representationType === 'direct'
+  )
+  const supportAccessorySkills = allSelectedSkillsWithRepresentation.filter(
+    s => s.representationType === 'support' || s.representationType === 'accessory'
+  )
+  
+  console.log('[skill-representation-truth-audit]', {
+    safeSelectedSkills,
+    totalSelectedSkills: safeSelectedSkills.length,
+    primaryDirectSkillsCount: primaryDirectSkills.length,
+    supportAccessorySkillsCount: supportAccessorySkills.length,
+    primaryDirectSkills: primaryDirectSkills.map(s => s.skill),
+    supportAccessorySkills: supportAccessorySkills.map(s => ({ skill: s.skill, type: s.representationType })),
+    noSkillSilentlyDropped: allSelectedSkillsWithRepresentation.length === safeSelectedSkills.length,
+    verdict: supportAccessorySkills.length > 0 
+      ? 'INDIRECT_SKILLS_TRUTHFULLY_REPRESENTED' 
+      : 'ALL_SKILLS_DIRECTLY_REPRESENTED',
+  })
+  
   // [PHASE 10F TASK 5] Shared chip truth hoist contract audit
   const hasWeeklyRepPolicies = safeWeeklyRepresentation?.policies && safeWeeklyRepresentation.policies.length > 0
   console.log('[phase10f-shared-chip-truth-hoist-contract-audit]', {
@@ -1306,28 +1448,49 @@ export function AdaptiveProgramDisplay({
           </div>
         </div>
         
-        {/* This Week Focus - Compact skill chips with context */}
-        {safeSelectedSkills.length > 0 && sharedStrictRepresentedSkillsForChips.length > 0 && (
+        {/* [SKILL-REPRESENTATION-TRUTH] All Skills Focus - Show ALL selected skills with representation type */}
+        {safeSelectedSkills.length > 0 && (
           <div className="px-4 py-2.5 border-t border-[#333]/30">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wide font-medium mr-1">This Week</span>
-              {sharedStrictRepresentedSkillsForChips.map((skill) => {
-                const chipState = getSharedChipState(skill)
-                const isHeadline = chipState === 'headline_priority'
-                return (
-                  <span 
-                    key={skill}
-                    className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${
-                      isHeadline 
-                        ? 'bg-[#E63946]/15 text-[#E63946] border border-[#E63946]/25' 
-                        : 'bg-[#1A1A1A] text-[#8A8A8A] border border-[#333]'
-                    }`}
-                  >
-                    {skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+              <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wide font-medium mr-1">Your Goals</span>
+              {/* Primary/Direct Skills - shown prominently */}
+              {primaryDirectSkills.map(({ skill, representationType, isPrimary }) => (
+                <span 
+                  key={skill}
+                  className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${
+                    isPrimary 
+                      ? 'bg-[#E63946]/15 text-[#E63946] border border-[#E63946]/25' 
+                      : 'bg-[#1A1A1A] text-[#8A8A8A] border border-[#333]'
+                  }`}
+                >
+                  {skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                </span>
+              ))}
+              {/* Support/Accessory Skills - shown with label indicating indirect representation */}
+              {supportAccessorySkills.map(({ skill, representationType }) => (
+                <span 
+                  key={skill}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#1A1A1A]/50 text-[#6A6A6A] border border-[#2A2A2A]"
+                  title={representationType === 'support' 
+                    ? 'Developed through support work this week' 
+                    : 'Developed through accessory/carryover work'}
+                >
+                  {skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                  <span className="text-[8px] text-[#5A5A5A]">
+                    {representationType === 'support' ? '(support)' : '(accessory)'}
                   </span>
-                )
-              })}
+                </span>
+              ))}
             </div>
+            {/* [SKILL-REPRESENTATION-TRUTH] Truthful explanation if some skills are indirect */}
+            {supportAccessorySkills.length > 0 && (
+              <p className="mt-1.5 text-[9px] text-[#5A5A5A] leading-relaxed">
+                {supportAccessorySkills.length === 1 
+                  ? `${supportAccessorySkills[0].skill.replace(/_/g, ' ')} is developed through ${supportAccessorySkills[0].representationType} work that builds foundational strength.`
+                  : `${supportAccessorySkills.map(s => s.skill.replace(/_/g, ' ')).join(', ')} are developed through foundational work that supports these skills.`
+                }
+              </p>
+            )}
           </div>
         )}
         
@@ -1335,38 +1498,77 @@ export function AdaptiveProgramDisplay({
         {weekProgression && (
           <div className="px-4 py-2.5 border-t border-[#333]/30 bg-[#1A1A1A]/20">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-[#C8C8C8]">
-                  Week {weekProgression.currentWeek}
+              <div className="flex items-center gap-3">
+                {/* Week number with phase label */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-[#C8C8C8]">
+                    Week {weekProgression.currentWeek}
+                  </span>
+                  <span className="text-[10px] text-[#6A6A6A]">
+                    of {weekProgression.totalWeeksInCycle}
+                  </span>
+                </div>
+                
+                {/* [WEEK-PROGRESSION-TRUTH] Phase label chip */}
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-medium ${
+                  weekPhaseLabel === 'Acclimation' 
+                    ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                    : weekPhaseLabel === 'Ramp Up'
+                    ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                    : weekPhaseLabel === 'Peak'
+                    ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                    : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                }`}>
+                  <Zap className="w-2.5 h-2.5" />
+                  {weekPhaseLabel}
                 </span>
-                <span className="text-[10px] text-[#6A6A6A]">
-                  of {weekProgression.totalWeeksInCycle}
+                
+                {/* Volume indicator */}
+                <span className="text-[9px] text-[#5A5A5A]">
+                  {weekVolumeIndicator.percentage}% volume
                 </span>
               </div>
               
-              {weekProgression.canAdvance ? (
-                <button
-                  onClick={handleAdvanceWeek}
-                  disabled={isAdvancingWeek}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-[#E63946] bg-[#E63946]/10 hover:bg-[#E63946]/20 rounded-md border border-[#E63946]/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isAdvancingWeek ? (
-                    <>
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      <span>Advancing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Start Week {weekProgression.currentWeek + 1}</span>
-                      <ArrowRight className="w-3 h-3" />
-                    </>
-                  )}
-                </button>
-              ) : (
-                <span className="text-[10px] text-[#5A5A5A]">
-                  {weekProgression.cannotAdvanceReason || 'Final week'}
-                </span>
-              )}
+              {/* Week navigation buttons */}
+              <div className="flex items-center gap-1.5">
+                {/* Go back button */}
+                {weekProgression.currentWeek > 1 && (
+                  <button
+                    onClick={() => handleGoToWeek(weekProgression.currentWeek - 1)}
+                    disabled={isAdvancingWeek}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-[#6A6A6A] hover:text-[#8A8A8A] bg-[#1A1A1A] hover:bg-[#252525] rounded border border-[#333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={`Go back to Week ${weekProgression.currentWeek - 1}`}
+                  >
+                    <ChevronLeft className="w-3 h-3" />
+                    <span>Week {weekProgression.currentWeek - 1}</span>
+                  </button>
+                )}
+                
+                {/* Advance button */}
+                {weekProgression.canAdvance ? (
+                  <button
+                    onClick={handleAdvanceWeek}
+                    disabled={isAdvancingWeek}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-[#E63946] bg-[#E63946]/10 hover:bg-[#E63946]/20 rounded-md border border-[#E63946]/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isAdvancingWeek ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        <span>Advancing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Start Week {weekProgression.currentWeek + 1}</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <span className="text-[10px] text-[#5A5A5A]">
+                    {weekProgression.cannotAdvanceReason || 'Final week'}
+                  </span>
+                )}
+              </div>
             </div>
             
             {/* Success/Error feedback */}
@@ -1540,8 +1742,9 @@ export function AdaptiveProgramDisplay({
           </div>
         )}
         
-        {validSessions.length > 0 ? (
-          validSessions.map((session, sessionIndex) => {
+        {/* [WEEK-PROGRESSION-TRUTH] Render scaled sessions with week-appropriate dosage */}
+        {scaledSessions.length > 0 ? (
+          scaledSessions.map((session, sessionIndex) => {
             // [SESSION-CARD-SURFACE] Get authoritative card surface for this session
             const cardSurface = sessionCardSurfaces[sessionIndex]
             

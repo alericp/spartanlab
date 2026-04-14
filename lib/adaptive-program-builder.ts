@@ -4557,9 +4557,9 @@ export async function generateAdaptiveProgram(
 ): Promise<AdaptiveProgram> {
   // ==========================================================================
   // [REGEN_BUILDER_ENTRY] Authoritative runtime proof with fingerprint
-  // [OWNER_LOCK_V3] Final owner reconciliation - all layers must show V3
+  // [CORRIDOR_KILL_V4] Final selector corridor hardening - all layers must show V4
   // ==========================================================================
-  const REGENERATE_RUNTIME_FINGERPRINT = 'BUILDER_OWNER_LOCK_V3_2026_04_13'
+  const REGENERATE_RUNTIME_FINGERPRINT = 'BUILDER_CORRIDOR_KILL_V4_2026_04_14'
   console.log('[REGEN_BUILDER_ENTRY]', {
     fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
     version: SESSION_ASSEMBLY_VERSION,

@@ -6474,8 +6474,8 @@ export default function ProgramPage() {
   
   // TASK 5: Regenerate Program - creates updated program from current profile truth
   // HARDENED: Full try/catch/finally to prevent stuck spinner state
-  // [PROGRAM_RETRY_VERSION] OWNER_LOCK_V3: Final owner reconciliation - all layers must show V3
-  const PROGRAM_RETRY_VERSION = 'PROGRAM_PAGE_OWNER_LOCK_V3_2026_04_13'
+  // [PROGRAM_RETRY_VERSION] CORRIDOR_KILL_V4: Final selector corridor hardening - all layers must show V4
+  const PROGRAM_RETRY_VERSION = 'PROGRAM_PAGE_CORRIDOR_KILL_V4_2026_04_14'
   
   const handleRegenerate = useCallback(() => {
     // [RUNTIME_VERSION_LOG] Prove this code version is executing

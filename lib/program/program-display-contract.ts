@@ -2058,6 +2058,7 @@ export function buildExerciseCardContract(
   }
 ): ExerciseCardDisplayContract {
   const nameLower = exercise.name.toLowerCase()
+  // [WEEK-SCALING-FIX] exercise.repsOrTime contains week-scaled value from caller
   const repsLower = exercise.repsOrTime?.toLowerCase() || ''
   const reasonLower = (exercise.selectionReason || '').toLowerCase()
   const expressionMode = exercise.coachingMeta?.expressionMode?.toLowerCase() || ''
@@ -2112,8 +2113,9 @@ export function buildExerciseCardContract(
       prescriptionIntent = 'skill_intensity'
     } else if (expressionMode.includes('technical') || holdSeconds <= 10) {
       prescriptionIntent = 'skill_acquisition'
-    } else if (holdSeconds >= 20 || (exercise.targetRPE && exercise.targetRPE >= 8)) {
-      prescriptionIntent = 'skill_intensity'
+  // [WEEK-SCALING-FIX] exercise.targetRPE contains week-scaled value from caller
+  } else if (holdSeconds >= 20 || (exercise.targetRPE && exercise.targetRPE >= 8)) {
+  prescriptionIntent = 'skill_intensity'
     } else {
       prescriptionIntent = 'skill_acquisition'
     }
@@ -2199,12 +2201,14 @@ export function buildExerciseCardContract(
   }
   
   // Build prescription line - sets × reps format
+  // [WEEK-SCALING-FIX] exercise.sets and exercise.repsOrTime contain week-scaled values from caller
   const prescriptionLine = `${exercise.sets} × ${exercise.repsOrTime}`
   
   // [AUTHORITATIVE] Intensity badge - compact effort reasoning from single source of truth
+  // [WEEK-SCALING-FIX] exercise.targetRPE contains week-scaled value from caller
   let intensityBadge: string | null = null
   if (exercise.targetRPE) {
-    const rpe = exercise.targetRPE
+  const rpe = exercise.targetRPE
     const catLower = categoryLower
     const exprMode = expressionMode
     const roleSession = (exercise.coachingMeta?.roleInSession || '').toLowerCase()

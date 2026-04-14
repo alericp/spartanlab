@@ -134,107 +134,11 @@ export function AdaptiveProgramDisplay({
   // [phase15a-hotfix-ordering-hazard-removed-audit]: declarations moved above consumers
   // ==========================================================================
   
-  // [PHASE 17I] Program surface source map audit - AdaptiveProgramDisplay
-  console.log('[phase17i-program-surface-source-map]', {
-    surface: 'AdaptiveProgramDisplay_prop',
-    sourceType: 'prop_from_parent',
-    programId: program.id,
-    createdAt: program.createdAt,
-    sessionCount: program.sessions?.length || 0,
-    scheduleMode: program.scheduleMode,
-    flexibleFrequencyRootCause: (program as unknown as { flexibleFrequencyRootCause?: { finalReasonCategory?: string } }).flexibleFrequencyRootCause?.finalReasonCategory || 'not_set',
-    selectedSkillsCount: (program as unknown as { selectedSkills?: string[] }).selectedSkills?.length || 0,
-    representedSkillsCount: (program as unknown as { representedSkills?: string[] }).representedSkills?.length || 0,
-  })
-  
-  // ==========================================================================
-  // [PHASE 26D] POST-GENERATION SAVE/HYDRATION FORENSIC - DISPLAY RENDER AUDIT
-  // This captures EXACTLY what the display component receives after generation
-  // If this shows flexible when user selected 6, the bug is BEFORE display
-  // ==========================================================================
+  // Get training days and displayed label
   const trainingDaysPerWeek = (program as unknown as { trainingDaysPerWeek?: number | string }).trainingDaysPerWeek
-  
-  // ==========================================================================
-  // [PHASE 30C] DISPLAY SCHEDULE FINAL
-  // THE DEFINITIVE LOG proving what display component received
-  // ==========================================================================
-  console.log('[phase30c-display-schedule-final]', {
-    program_scheduleMode: program?.scheduleMode ?? null,
-    program_trainingDaysPerWeek: trainingDaysPerWeek ?? null,
-    program_adaptiveWorkloadEnabled: (program as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-    verdict:
-      program?.scheduleMode === 'static' && trainingDaysPerWeek === 6
-        ? 'DISPLAY_STATIC_6'
-        : program?.scheduleMode === 'flexible'
-        ? 'DISPLAY_FLEXIBLE'
-        : `DISPLAY_${program?.scheduleMode}_${trainingDaysPerWeek}`,
-  })
-  
-  // ==========================================================================
-  // [PHASE 30B] DISPLAY SCHEDULE FINAL
-  // THE DEFINITIVE LOG proving what display component received
-  // ==========================================================================
-  console.log('[phase30b-display-schedule-final]', {
-    program_scheduleMode: program?.scheduleMode ?? null,
-    program_trainingDaysPerWeek: trainingDaysPerWeek ?? null,
-    program_adaptiveWorkloadEnabled: (program as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-    verdict:
-      program?.scheduleMode === 'static' && trainingDaysPerWeek === 6
-        ? 'DISPLAY_STATIC_6'
-        : program?.scheduleMode === 'flexible'
-        ? 'DISPLAY_FLEXIBLE'
-        : `DISPLAY_STATIC_${trainingDaysPerWeek}`,
-  })
-  
-  // ==========================================================================
-  // [PHASE 30A] DISPLAY CONTRACT FINAL - AUTHORITATIVE
-  // THE DEFINITIVE LOG proving what display component received
-  // ==========================================================================
-  console.log('[phase30a-display-contract-final]', {
-    program_scheduleMode: program?.scheduleMode ?? null,
-    program_trainingDaysPerWeek: trainingDaysPerWeek ?? null,
-    program_adaptiveWorkloadEnabled: (program as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-    verdict:
-      program?.scheduleMode === 'static' && trainingDaysPerWeek === 6
-        ? 'DISPLAY_STATIC_6'
-        : program?.scheduleMode === 'flexible'
-        ? 'DISPLAY_FLEXIBLE'
-        : `DISPLAY_STATIC_${trainingDaysPerWeek}`,
-  })
-  
-  console.log('[phase26d-post-generation-save-hydration-forensic]', {
-    stage: 'DISPLAY_COMPONENT_RENDER',
-    displayProgramId: program.id,
-    displayScheduleMode: program.scheduleMode,
-    displayTrainingDaysPerWeek: trainingDaysPerWeek,
-    displaySessionsCount: program.sessions?.length || 0,
-    displayedScheduleLabel: program.scheduleMode === 'flexible' ? 'Adaptive' : `${trainingDaysPerWeek} days/week`,
-    programCreatedAt: program.createdAt,
-    verdict: program.scheduleMode === 'static'
-      ? `DISPLAY_RECEIVED_STATIC_${trainingDaysPerWeek}_DAYS`
-      : 'DISPLAY_RECEIVED_FLEXIBLE_SO_SHOWS_ADAPTIVE',
-  })
-  
-  // ==========================================================================
-  // [PHASE 27A] PROGRAM_RENDERED_ON_CARD - forensic chain step 7
-  // Records EXACTLY what the display component renders
-  // ==========================================================================
   const displayedScheduleLabelText = program.scheduleMode === 'flexible' 
     ? 'Adaptive' 
     : `${trainingDaysPerWeek} days/week`
-  
-  console.log('[phase27a-modify-forensic-chain]', {
-    step: 'PROGRAM_RENDERED_ON_CARD',
-    programId: program.id,
-    scheduleMode: program.scheduleMode,
-    trainingDaysPerWeek: trainingDaysPerWeek,
-    sessionCount: program.sessions?.length || 0,
-    displayedLabelText: displayedScheduleLabelText,
-    programCreatedAt: program.createdAt,
-    verdict: program.scheduleMode === 'static'
-      ? `CARD_SHOWS_STATIC_${trainingDaysPerWeek}_DAYS`
-      : 'CARD_SHOWS_ADAPTIVE',
-  })
   
   // Get raw program fields with type assertions for optional fields
   const rawSelectedSkills = (program as unknown as { selectedSkills?: string[] }).selectedSkills
@@ -262,19 +166,7 @@ export function AdaptiveProgramDisplay({
   const weekVolumeIndicator = getWeekVolumeIndicator(currentWeekNumber)
   const weekPhaseLabel = getWeekPhaseLabel(currentWeekNumber)
   
-  console.log('[week-progression-truth-scaling-audit]', {
-    currentWeekNumber,
-    weekPhaseLabel,
-    scalingApplied: weekDosageScaling.scalingApplied,
-    volumeMultiplier: weekDosageScaling.volumeMultiplier,
-    intensityMultiplier: weekDosageScaling.intensityMultiplier,
-    volumeIndicator: weekVolumeIndicator,
-    sessionsScaled: scaledSessions.length,
-    firstSessionScaledExampleSets: scaledSessions[0]?.exercises?.[0]?.scaledSets,
-    verdict: currentWeekNumber > 1 && weekDosageScaling.scalingApplied 
-      ? 'WEEK_PROGRESSION_SCALING_APPLIED' 
-      : 'WEEK_1_NO_SCALING_NEEDED',
-  })
+
   
   const safeRepresentedSkills = Array.isArray(rawRepresentedSkills) ? rawRepresentedSkills : []
   const safeSummaryTruth = rawSummaryTruth && typeof rawSummaryTruth === 'object'
@@ -291,14 +183,7 @@ export function AdaptiveProgramDisplay({
     ? rawWeeklyRepresentation
     : null
   
-  // [phase15a-hotfix-render-local-order-audit]: All safe locals now declared before useEffects
-  // [phase15a-hotfix-derived-local-dependency-graph-audit]: No forward references
-  // [phase15a-hotfix-no-self-reference-scan]: Each safe local derives from raw* or program.*
-  
-  // ==========================================================================
-  // [SESSION-CARD-SURFACE] Build authoritative per-card display surfaces
-  // This is the SINGLE owner of differentiated day card identity
-  // ==========================================================================
+  // Build authoritative per-card display surfaces
   const sessionCardSurfaces: SessionCardSurface[] = validSessions.length > 0
     ? buildAllSessionCardSurfaces(
         validSessions as Parameters<typeof buildAllSessionCardSurfaces>[0],
@@ -312,129 +197,14 @@ export function AdaptiveProgramDisplay({
       )
     : []
   
-  // ==========================================================================
-  // [PHASE 15C-HOTFIX] ROOT CAUSE AND RENDER SCOPE AUDITS
-  // ==========================================================================
-  console.log('[phase15c-hotfix-current-ew-root-cause-audit]', {
-    minifiedSymbolObserved: 'ew',
-    likelyRealSymbol: 'validSessions',
-    wasUsedBeforeDeclaration: true,
-    fixApplied: true,
-    declarationMovedAboveConsumers: true,
-    previousDeclarationLine: 713,
-    newDeclarationLine: 'with_safe_locals_at_top',
-    phase15cUseEffectReferencedIt: true,
-    useEffectDependencyArrayIncludedIt: true,
-  })
-  
-  console.log('[phase15c-hotfix-render-scope-order-audit]', {
-    safeSelectedSkillsDeclaredBeforeUseEffects: true,
-    safeSessionsDeclaredBeforeUseEffects: true,
-    safeRepresentedSkillsDeclaredBeforeUseEffects: true,
-    safeSummaryTruthDeclaredBeforeUseEffects: true,
-    safeWeeklyRepresentationDeclaredBeforeUseEffects: true,
-    validSessionsDeclaredBeforeUseEffects: true,
-    allDerivedFromRawOrProgram: true,
-    noForwardReferences: true,
-  })
-  
-  console.log('[phase15c-hotfix-no-forward-reference-final-verdict]', {
-    sameFileAuditCompleted: true,
-    confirmedHazardsRemaining: 0,
-    noUseEffectReadsLaterLocals: true,
-    noDependencyArrayReadsLaterLocals: true,
-    noJSXReadsLaterLocals: true,
-    hazardsFixedInThisHotfix: ['validSessions'],
-    verdict: 'display_render_scope_safe',
-  })
-  
-  console.log('[phase15c-hotfix-no-behavior-change-verdict]', {
-    trainingLogicChanged: false,
-    displayOrderingOnly: true,
-    uiCopyChanged: false,
-    validSessionLogicChanged: false,
-    filterLogicIdentical: 'safeSessions.filter(s => Array.isArray(s.exercises))',
-    verdict: 'ordering_fix_only',
-  })
-  
-  // ==========================================================================
-  // [PHASE 24K] TASK 8 - MIXED-LAYER CONTRADICTION DIAGNOSTIC
-  // Final render-time audit to prove selectedSkills source alignment
-  // ==========================================================================
+  // Build render context for skills
   const renderPrimaryGoal = program.primaryGoal
   const renderSecondaryGoal = program.secondaryGoal
   const renderSelectedSkills = safeSelectedSkills
   const summaryTextRaw = safeSummaryTruth?.truthfulHybridSummary || program.programRationale || ''
   
-  console.log('[phase24k-mixed-layer-contradiction-diagnostic]', {
-    renderPrimaryGoal,
-    renderSecondaryGoal,
-    renderSelectedSkills,
-    renderSelectedSkillsCount: renderSelectedSkills.length,
-    summaryTruthProfileSelectedSkills: safeSummaryTruth?.profileSelectedSkills || [],
-    summaryTruthSummaryRenderableSkills: safeSummaryTruth?.summaryRenderableSkills || [],
-    summaryTruthWeekRepresentedSkills: safeSummaryTruth?.weekRepresentedSkills || [],
-    summaryTruthWeekSupportSkills: safeSummaryTruth?.weekSupportSkills || [],
-    summaryTextSample: summaryTextRaw.slice(0, 200),
-    // Boolean verdicts for instant diagnosis
-    selectedSkillsContainBackLever: renderSelectedSkills.includes('back_lever'),
-    selectedSkillsContainDragonFlag: renderSelectedSkills.includes('dragon_flag'),
-    summaryTextMentionsBackLever: summaryTextRaw.toLowerCase().includes('back lever'),
-    summaryTextMentionsDragonFlag: summaryTextRaw.toLowerCase().includes('dragon flag'),
-    profileSnapshotMatchesProgramSelectedSkills: 
-      JSON.stringify((safeSummaryTruth?.profileSelectedSkills || []).sort()) === 
-      JSON.stringify(renderSelectedSkills.sort()),
-    // Final verdicts
-    renderIsUsingStaleSnapshot: (
-      safeSummaryTruth?.profileSelectedSkills?.includes('back_lever') ||
-      safeSummaryTruth?.profileSelectedSkills?.includes('dragon_flag')
-    ) && !renderSelectedSkills.includes('back_lever') && !renderSelectedSkills.includes('dragon_flag'),
-    identityLeakDetected: (
-      summaryTextRaw.toLowerCase().includes('back lever') ||
-      summaryTextRaw.toLowerCase().includes('dragon flag')
-    ) && !renderSelectedSkills.includes('back_lever') && !renderSelectedSkills.includes('dragon_flag'),
-    verdict: (
-      !renderSelectedSkills.includes('back_lever') && 
-      !renderSelectedSkills.includes('dragon_flag') &&
-      (summaryTextRaw.toLowerCase().includes('back lever') || summaryTextRaw.toLowerCase().includes('dragon flag'))
-    ) ? 'IDENTITY_LEAK_CONFIRMED' : 'NO_IDENTITY_LEAK_DETECTED',
-  })
-  
-  // ==========================================================================
-  // [PHASE 15D] DOMINANT SPINE DISPLAY TRUTH AUDIT
-  // Verify that the spine resolution from the builder is accessible and truthful
-  // ==========================================================================
+  // Dominant spine resolution from builder
   const dominantSpineResolution = program.dominantSpineResolution || null
-  
-  console.log('[phase15d-display-spine-resolution-audit]', {
-    hasDominantSpineResolution: !!dominantSpineResolution,
-    primarySpine: dominantSpineResolution?.primarySpine || 'not_available',
-    primaryStyleMode: dominantSpineResolution?.primaryStyleMode || 'not_available',
-    secondaryInfluencesCount: dominantSpineResolution?.secondaryInfluences?.length || 0,
-    secondaryInfluences: dominantSpineResolution?.secondaryInfluences?.map(s => s.influence) || [],
-    densityAllowed: dominantSpineResolution?.densityIntegration?.allowed ?? 'not_available',
-    densityMaxSessions: dominantSpineResolution?.densityIntegration?.maxSessionsPerWeek ?? 'not_available',
-    spineRationale: dominantSpineResolution?.spineRationale || 'not_available',
-    hasAllStylesSelected: dominantSpineResolution?.hasAllStylesSelected ?? false,
-    displayCanAccessSpine: !!dominantSpineResolution,
-    verdict: dominantSpineResolution 
-      ? 'spine_resolution_available_for_display'
-      : 'spine_resolution_not_in_program_object',
-  })
-  
-  // [PHASE 15D] Style materiality at display layer
-  console.log('[phase15d-display-style-materiality-audit]', {
-    spineAffectsWhyThisPlan: !!dominantSpineResolution?.spineRationale,
-    spineAffectsSessionLabels: true, // Session labels come from builder which uses spine
-    spineAffectsExplanationText: safeSummaryTruth?.truthfulHybridSummary?.includes('spine') || 
-      safeSummaryTruth?.truthfulHybridSummary?.includes('resolved') || false,
-    allStylesExplainedAsDominantNotBlended: dominantSpineResolution?.hasAllStylesSelected ? 
-      (dominantSpineResolution?.spineRationale?.includes('rather than equally') || 
-       dominantSpineResolution?.spineRationale?.includes('spine')) : 'n/a_single_style',
-    verdict: dominantSpineResolution?.hasAllStylesSelected
-      ? 'all_styles_resolved_not_blended'
-      : 'single_style_mode_used_directly',
-  })
   
   // [PHASE 13] Listen for workout completion and check for pending notices
   useEffect(() => {
@@ -460,14 +230,6 @@ export function AdaptiveProgramDisplay({
         if (mutationResult.noticePayload && mutationResult.applied) {
           setScheduleNotice(mutationResult.noticePayload)
         }
-        
-        console.log('[phase13-schedule-change-notice-truth-audit]', {
-          noticeAppearsAfterRealMutation: mutationResult.applied,
-          noticeTextMatchesMutationMetadata: true,
-          noMutationMeansNoFalseNotice: !mutationResult.applied ? true : 'n/a',
-          noticeDoesNotImplyFutureFeatures: true,
-          verdict: mutationResult.applied ? 'truthful_notice_shown' : 'correctly_no_notice',
-        })
       }
     }
     
@@ -512,17 +274,9 @@ export function AdaptiveProgramDisplay({
         // Update local state immediately
         const newState = getWeekProgressionState()
         setWeekProgression(newState)
-        
-        console.log('[week-advancement-ui] Successfully advanced week', {
-          previousWeek: result.previousWeek,
-          newWeek: result.newWeek,
-          programId: result.programId,
-        })
-      } else {
-        console.warn('[week-advancement-ui] Week advancement failed:', result.error)
       }
     } catch (err) {
-      console.error('[week-advancement-ui] Error advancing week:', err)
+      console.error('Error advancing week:', err)
       setWeekAdvancementResult({
         success: false,
         previousWeek: weekProgression?.currentWeek || 1,
@@ -549,17 +303,9 @@ export function AdaptiveProgramDisplay({
         // Update local state immediately
         const newState = getWeekProgressionState()
         setWeekProgression(newState)
-        
-        console.log('[week-advancement-ui] Successfully changed to week', {
-          previousWeek: result.previousWeek,
-          newWeek: result.newWeek,
-          programId: result.programId,
-        })
-      } else {
-        console.warn('[week-advancement-ui] Week change failed:', result.error)
       }
     } catch (err) {
-      console.error('[week-advancement-ui] Error changing week:', err)
+      console.error('Error changing week:', err)
       setWeekAdvancementResult({
         success: false,
         previousWeek: weekProgression?.currentWeek || 1,
@@ -573,7 +319,7 @@ export function AdaptiveProgramDisplay({
     }
   }
   
-  // [PHASE 14B TASK 5] Run adaptive display parity audit when program renders
+  // Run adaptive display parity audit when program renders
   useEffect(() => {
     const displayedScheduleLabel = program.scheduleMode === 'flexible' ? 'Adaptive' : `${program.trainingDaysPerWeek} days/week`
     const displayedDurationLabel = program.sessionDurationMode === 'adaptive' ? 'Adaptive' : `${program.sessionLength} min`
@@ -587,311 +333,13 @@ export function AdaptiveProgramDisplay({
       displayedScheduleLabel,
       displayedDurationLabel
     )
-    
-    console.log('[phase14b-adaptive-display-final-verdict]', {
-      source: 'AdaptiveProgramDisplay',
-      scheduleMode: program.scheduleMode,
-      sessionDurationMode: program.sessionDurationMode,
-      displaysTruthfully: true,
-    })
-    
-    // [PHASE 15A TASK 5] Display vs builder parity audits
-    console.log('[phase15a-display-schedule-truth-audit]', {
-      programScheduleMode: program.scheduleMode,
-      programTrainingDays: program.trainingDaysPerWeek,
-      displayedLabel: displayedScheduleLabel,
-      isAdaptive: program.scheduleMode === 'flexible',
-    })
-    
-    console.log('[phase15a-display-duration-truth-audit]', {
-      programSessionDurationMode: program.sessionDurationMode,
-      programSessionLength: program.sessionLength,
-      displayedLabel: displayedDurationLabel,
-      isAdaptive: program.sessionDurationMode === 'adaptive',
-    })
-    
-    console.log('[phase15a-display-built-around-skills-truth-audit]', {
-      selectedSkillsInProgram: safeSelectedSkills,
-      selectedSkillsCount: safeSelectedSkills.length,
-      representedSkillsInProgram: safeRepresentedSkills,
-      representedSkillsCount: safeRepresentedSkills.length,
-      summaryTruthSkills: safeSummaryTruth?.profileSelectedSkills,
-    })
-    
-    console.log('[phase15a-selected-skills-display-parity-audit]', {
-      selectedSkillsInProgram: safeSelectedSkills,
-      displayedInUI: true,
-      skillsShownInSummary: safeSummaryTruth?.summaryRenderableSkills || safeSelectedSkills,
-      parity: true,
-      verdict: 'skills_display_matches_program_truth',
-    })
-    
-    console.log('[phase15a-display-vs-builder-parity-final-verdict]', {
-      scheduleDisplayMatchesProgram: true,
-      durationDisplayMatchesProgram: true,
-      skillsDisplayMatchesProgram: true,
-      verdict: 'display_reflects_builder_truth',
-    })
-    
-    // ==========================================================================
-    // [PHASE 15C] TASK 4: PROGRAM PAGE FREQUENCY/DURATION TRUTH AUDIT
-    // Verify display distinguishes selected mode from resolved output
-    // ==========================================================================
-    console.log('[phase15c-program-page-frequency-truth-audit]', {
-      selectedFrequencyMode: program.scheduleMode,
-      resolvedWeeklySessions: program.trainingDaysPerWeek,
-      currentWeekFrequency: program.currentWeekFrequency,
-      displayShowsMode: program.scheduleMode === 'flexible' ? 'Adaptive' : 'Fixed',
-      displayShowsResolved: `${validSessions.length} sessions this week`,
-      modeAndOutputSeparated: true,
-      modeNotReplacedByOutput: program.scheduleMode !== String(program.trainingDaysPerWeek),
-      verdict: program.scheduleMode 
-        ? 'mode_displayed_truthfully'
-        : 'mode_missing_from_program',
-    })
-    
-    console.log('[phase15c-program-page-duration-truth-audit]', {
-      selectedDurationMode: program.sessionDurationMode,
-      resolvedSessionLength: program.sessionLength,
-      displayShowsMode: program.sessionDurationMode === 'adaptive' ? 'Adaptive' : 'Fixed',
-      displayShowsResolved: `~${program.sessionLength} min`,
-      modeAndOutputSeparated: true,
-      modeNotReplacedByOutput: program.sessionDurationMode !== String(program.sessionLength),
-      verdict: program.sessionDurationMode 
-        ? 'mode_displayed_truthfully'
-        : 'mode_missing_from_program',
-    })
-    
-    console.log('[phase15c-mode-vs-current-plan-copy-audit]', {
-      frequencyDisplayPattern: {
-        showsSelectedMode: program.scheduleMode === 'flexible',
-        showsResolvedOutput: true,
-        correctPattern: program.scheduleMode === 'flexible' 
-          ? '"Adaptive" + "X sessions this week"'
-          : '"X days/week"',
-      },
-      durationDisplayPattern: {
-        showsSelectedMode: program.sessionDurationMode === 'adaptive',
-        showsResolvedOutput: true,
-        correctPattern: program.sessionDurationMode === 'adaptive'
-          ? '"Adaptive" + "~X min base target"'
-          : '"X min"',
-      },
-      verdict: 'mode_and_output_displayed_distinctly',
-    })
-    
-    // [PHASE 15C] TASK 6: User case validation for adaptive mode
-    console.log('[phase15c-user-case-adaptive-frequency-verdict]', {
-      userSelectedFlexible: program.scheduleMode === 'flexible',
-      programPreservesMode: program.scheduleMode === 'flexible',
-      displayShowsAdaptive: program.scheduleMode === 'flexible',
-      resolvedSessionCountShown: validSessions.length,
-      modeNotOverwritten: true,
-      verdict: program.scheduleMode === 'flexible' 
-        ? 'flexible_mode_preserved_and_displayed'
-        : 'static_mode_preserved_and_displayed',
-    })
-    
-    console.log('[phase15c-user-case-adaptive-duration-verdict]', {
-      userSelectedAdaptive: program.sessionDurationMode === 'adaptive',
-      programPreservesMode: program.sessionDurationMode === 'adaptive',
-      displayShowsAdaptive: program.sessionDurationMode === 'adaptive',
-      resolvedDurationShown: program.sessionLength,
-      modeNotOverwritten: true,
-      verdict: program.sessionDurationMode === 'adaptive'
-        ? 'adaptive_duration_preserved_and_displayed'
-        : 'static_duration_preserved_and_displayed',
-    })
-    
-    console.log('[phase15c-final-adaptive-mode-parity-verdict]', {
-      frequencyModePreserved: !!program.scheduleMode,
-      durationModePreserved: !!program.sessionDurationMode,
-      displayDistinguishesModeFromOutput: true,
-      noCollapseDetected: true,
-      verdict: 'adaptive_mode_identity_parity_locked',
-    })
-  }, [program.scheduleMode, program.sessionDurationMode, program.trainingDaysPerWeek, program.sessionLength, safeSelectedSkills, safeRepresentedSkills, safeSummaryTruth, validSessions.length])
+  }, [program.scheduleMode, program.sessionDurationMode, program.trainingDaysPerWeek, program.sessionLength])
   
-  // ==========================================================================
-  // [PHASE 15A-HOTFIX] Additional safe locals (plannerTruthAudit, flexibleRootCause)
-  // Main safe locals are declared above useEffects to avoid TDZ
-  // ==========================================================================
+  // Additional safe locals
   const safePlannerTruthAudit = program.plannerTruthAudit || null
   const safeFlexibleRootCause = program.flexibleFrequencyRootCause || null
   
-  // [PHASE 15A-HOTFIX] Audit: verify no TDZ hazards remain
-  // [PHASE 15C-HOTFIX] Updated to include validSessions
-  console.log('[phase15a-hotfix-program-tree-tdz-scan-audit]', {
-    safeSelectedSkillsDeclared: true,
-    safeRepresentedSkillsDeclared: true,
-    safeSummaryTruthDeclared: true,
-    safeSessionsDeclared: true,
-    safeWeeklyRepresentationDeclared: true,
-    validSessionsDeclared: true, // [PHASE 15C-HOTFIX] Added - was the 'ew' TDZ crash root cause
-    safePlannerTruthAuditDeclared: true,
-    safeFlexibleRootCauseDeclared: true,
-    allSafeLocalsBeforeUseEffects: true,
-    noTdzHazards: true,
-  })
-  
-  // [PHASE 15A-HOTFIX] Source truth smoke audits - verify Phase 15A truth chain intact
-  console.log('[phase15a-hotfix-post-fix-schedule-truth-smoke-audit]', {
-    scheduleMode: program.scheduleMode,
-    trainingDaysPerWeek: program.trainingDaysPerWeek,
-    truthPreserved: true,
-  })
-  
-  console.log('[phase15a-hotfix-post-fix-duration-truth-smoke-audit]', {
-    sessionDurationMode: program.sessionDurationMode,
-    sessionLength: program.sessionLength,
-    truthPreserved: true,
-  })
-  
-  console.log('[phase15a-hotfix-post-fix-bench-truth-smoke-audit]', {
-    equipment: (program as unknown as { equipment?: string[] }).equipment,
-    truthPreserved: true,
-  })
-  
-  console.log('[phase15a-hotfix-post-fix-selected-skills-smoke-audit]', {
-    selectedSkillsCount: safeSelectedSkills.length,
-    selectedSkills: safeSelectedSkills,
-    truthPreserved: true,
-  })
-  
-  console.log('[phase15a-hotfix-normal-render-restored-audit]', {
-    renderReached: true,
-    noTdzCrash: true,
-    safeLocalsDeclaredBeforeUse: true,
-  })
-  
-  console.log('[phase15a-hotfix-no-behavior-change-verdict]', {
-    onlyDeclarationOrderChanged: true,
-    noLogicChanged: true,
-    noTrainingBehaviorChanged: true,
-    verdict: 'ordering_fix_only',
-  })
-  
-  console.log('[phase15a-hotfix-display-tree-final-verdict]', {
-    tdzFixed: true,
-    staleNameScanPassed: true,
-    duplicateLocalScanPassed: true,
-    normalRenderRestored: true,
-    fallbackNotTriggered: true,
-    verdict: 'display_tree_stable',
-  })
-  
-  // [PHASE 10B TASK 1] Safe selected skills self-init fix audit
-  console.log('[phase10b-safe-selected-skills-self-init-fixed]', {
-    sourceFieldUsed: 'program.selectedSkills (via rawSelectedSkills)',
-    selectedSkillCount: safeSelectedSkills.length,
-    fallbackWasNeeded: !Array.isArray(rawSelectedSkills),
-    verdict: 'SELF_REFERENCE_BUG_FIXED',
-  })
-  
-  // [PHASE 10B TASK 2] Safe view-model declaration order audit
-  console.log('[phase10b-safe-view-model-order-audit]', {
-    safeSelectedSkills: { source: 'rawSelectedSkills', selfSafe: true, sourceNullable: true },
-    safeSessions: { source: 'program.sessions', selfSafe: true, sourceNullable: true },
-    safeRepresentedSkills: { source: 'rawRepresentedSkills', selfSafe: true, sourceNullable: true },
-    safeSummaryTruth: { source: 'rawSummaryTruth', selfSafe: true, sourceNullable: true },
-    safeWeeklyRepresentation: { source: 'rawWeeklyRepresentation', selfSafe: true, sourceNullable: true },
-    safePlannerTruthAudit: { source: 'program.plannerTruthAudit', selfSafe: true, sourceNullable: true },
-    safeFlexibleRootCause: { source: 'program.flexibleFrequencyRootCause', selfSafe: true, sourceNullable: true },
-    verdict: 'ALL_SAFE_LOCALS_INIT_ORDER_CORRECT',
-  })
-  
-  // [PHASE 10 TASK 7] Real program shape audit for debugging
-  console.log('[phase10-real-program-shape-audit]', {
-    programId: program.id,
-    keysPresent: Object.keys(program).slice(0, 20), // First 20 keys
-    firstSessionKeys: safeSessions[0] ? Object.keys(safeSessions[0]).slice(0, 15) : [],
-    selectedSkillsExists: Array.isArray(rawSelectedSkills),
-    selectedSkillsCount: safeSelectedSkills.length,
-    sessionsExists: Array.isArray(program.sessions),
-    sessionCount: safeSessions.length,
-    equipmentProfileExists: !!program.equipmentProfile,
-    summaryTruthExists: !!safeSummaryTruth && Object.keys(safeSummaryTruth).length > 0,
-    weeklyRepresentationExists: !!safeWeeklyRepresentation,
-    plannerTruthExists: !!safePlannerTruthAudit,
-    flexibleRootCauseExists: !!safeFlexibleRootCause,
-    verdict: 'REAL_PROGRAM_SHAPE_AUDITED',
-  })
-  
-  // [PHASE 10B TASK 4] Display post-fix runtime verdict
-  console.log('[phase10b-display-post-fix-runtime-verdict]', {
-    safeViewModelBuiltSuccessfully: true,
-    noSelfReferenceErrors: true,
-    noTDZErrors: true,
-    displayShouldRenderNow: safeSelectedSkills.length >= 0 && safeSessions.length >= 0,
-    verdict: 'DISPLAY_INIT_SAFE_NO_CRASH_EXPECTED',
-  })
-  
-  // [PHASE 10C TASK 2] Complete safe display source contract audit
-  console.log('[phase10c-safe-display-source-contract-audit]', {
-    rawSources: {
-      rawSelectedSkills: { present: !!rawSelectedSkills, isArray: Array.isArray(rawSelectedSkills) },
-      rawRepresentedSkills: { present: !!rawRepresentedSkills, isArray: Array.isArray(rawRepresentedSkills) },
-      rawSummaryTruth: { present: !!rawSummaryTruth, isObject: typeof rawSummaryTruth === 'object' },
-      rawWeeklyRepresentation: { present: !!rawWeeklyRepresentation, isObject: typeof rawWeeklyRepresentation === 'object' },
-      programSessions: { present: !!program.sessions, isArray: Array.isArray(program.sessions) },
-      programPlannerTruthAudit: { present: !!program.plannerTruthAudit },
-      programFlexibleRootCause: { present: !!program.flexibleFrequencyRootCause },
-      programEquipmentProfile: { present: !!program.equipmentProfile },
-    },
-    safeLocals: {
-      safeSelectedSkills: { count: safeSelectedSkills.length, fallbackUsed: !Array.isArray(rawSelectedSkills) },
-      safeSessions: { count: safeSessions.length, fallbackUsed: !Array.isArray(program.sessions) },
-      safeRepresentedSkills: { count: safeRepresentedSkills.length, fallbackUsed: !Array.isArray(rawRepresentedSkills) },
-      safeSummaryTruth: { hasKeys: Object.keys(safeSummaryTruth).length > 0, fallbackUsed: !rawSummaryTruth },
-      safeWeeklyRepresentation: { present: !!safeWeeklyRepresentation, fallbackUsed: !rawWeeklyRepresentation },
-      safePlannerTruthAudit: { present: !!safePlannerTruthAudit, fallbackUsed: !program.plannerTruthAudit },
-      safeFlexibleRootCause: { present: !!safeFlexibleRootCause, fallbackUsed: !program.flexibleFrequencyRootCause },
-    },
-    verdict: 'SAFE_DISPLAY_SOURCE_CONTRACT_COMPLETE',
-  })
-  
-  // [PHASE 10C TASK 3] No raw optional display access final verdict
-  console.log('[phase10c-no-raw-optional-display-access-final-verdict]', {
-    allCastAccessesReplaced: true,
-    rawAccessesReplaced: [
-      '(program as ...).representedSkills -> safeRepresentedSkills',
-      '(program as ...).summaryTruth -> safeSummaryTruth',
-      '(program as ...).weeklyRepresentation -> safeWeeklyRepresentation',
-      'program.sessions -> safeSessions -> validSessions',
-    ],
-    verdict: 'NO_RAW_OPTIONAL_DISPLAY_ACCESS_REMAINING',
-  })
-  
-  // [PHASE 10C] Safe locals actually consumed audit
-  console.log('[phase10c-safe-locals-actually-consumed-audit]', {
-    safeSelectedSkillsUsedInChipSection: true,
-    safeRepresentedSkillsUsedInTruthAudit: true,
-    safeSummaryTruthUsedInRationale: true,
-    safeWeeklyRepresentationUsedInPolicyAudit: true,
-    safeSessionsUsedForValidSessions: true,
-    verdict: 'SAFE_LOCALS_ACTUALLY_CONSUMED',
-  })
-  
-  // [PHASE 10D TASK 3] Local vs safe represented skills scope audit
-  console.log('[phase10d-local-vs-safe-represented-skills-scope-audit]', {
-    safeRepresentedSkillsSource: 'program.representedSkills via rawRepresentedSkills',
-    safeRepresentedSkillsCount: safeRepresentedSkills.length,
-    localRepresentedSkillsNote: 'computed later in render for chip/week fallback',
-    bothMayCoexist: true,
-    verdict: 'SCOPE_CLEAR_NO_CONFUSION',
-  })
-  
-  // [PHASE 10D TASK 4] Stale identifier sweep final verdict
-  console.log('[phase10d-stale-identifier-sweep-final-verdict]', {
-    staleWeeklyRepresentationRefsFixed: 3,
-    staleSummaryTruthRefsFixed: 1,
-    remainingStaleRefsAfterSweep: 0,
-    allRefsNowUseSafeLocals: true,
-    verdict: 'STALE_IDENTIFIER_SWEEP_COMPLETE',
-  })
-  
-  // ==========================================================================
-  // [PHASE 10F] HOISTED CHIP TRUTH LOCALS - TRUE COMPONENT RENDER SCOPE
+  // Hoisted chip truth locals - true component render scope
   // These must be defined OUTSIDE the built-around IIFE so Phase 7 audits can access them
   // ==========================================================================
   
@@ -1055,74 +503,7 @@ export function AdaptiveProgramDisplay({
     s => s.representationType === 'support' || s.representationType === 'accessory'
   )
   
-  console.log('[skill-representation-truth-audit]', {
-    safeSelectedSkills,
-    totalSelectedSkills: safeSelectedSkills.length,
-    primaryDirectSkillsCount: primaryDirectSkills.length,
-    supportAccessorySkillsCount: supportAccessorySkills.length,
-    primaryDirectSkills: primaryDirectSkills.map(s => s.skill),
-    supportAccessorySkills: supportAccessorySkills.map(s => ({ skill: s.skill, type: s.representationType })),
-    noSkillSilentlyDropped: allSelectedSkillsWithRepresentation.length === safeSelectedSkills.length,
-    verdict: supportAccessorySkills.length > 0 
-      ? 'INDIRECT_SKILLS_TRUTHFULLY_REPRESENTED' 
-      : 'ALL_SKILLS_DIRECTLY_REPRESENTED',
-  })
-  
-  // [PHASE 10F TASK 5] Shared chip truth hoist contract audit
-  const hasWeeklyRepPolicies = safeWeeklyRepresentation?.policies && safeWeeklyRepresentation.policies.length > 0
-  console.log('[phase10f-shared-chip-truth-hoist-contract-audit]', {
-    safeSelectedSkills,
-    safeSelectedSkillsCount: safeSelectedSkills.length,
-    sharedRepresentedSkills,
-    sharedHeadlineSkills,
-    sharedWeekSupportSkills,
-    sharedStrictRepresentedSkillsForChips,
-    sharedStrictRepresentedSkillsForChipsCount: sharedStrictRepresentedSkillsForChips.length,
-    availableBeforeBuiltAroundSection: true,
-    availableBeforePhase7Audits: true,
-    // [VISIBLE-PROGRAM-TRUTH-CONTRACT] Source tracking
-    chipSourcePath: hasWeeklyRepPolicies 
-      ? 'canonical_weeklyRepresentation.policies' 
-      : 'fallback_headline_only',
-    hasWeeklyRepPolicies,
-    weeklyRepPoliciesCount: safeWeeklyRepresentation?.policies?.length || 0,
-    skillsFilteredOut: safeSelectedSkills.filter(s => !sharedStrictRepresentedSkillsForChips.includes(s)),
-    skillsFilteredOutCount: safeSelectedSkills.length - sharedStrictRepresentedSkillsForChips.length,
-    verdict: sharedStrictRepresentedSkillsForChips.length < safeSelectedSkills.length
-      ? 'CHIPS_TIGHTENED_STALE_SKILLS_FILTERED_OUT'
-      : 'ALL_SELECTED_SKILLS_MEET_REPRESENTATION_THRESHOLD',
-  })
-  
-  // ==========================================================================
-  // [PHASE 24P] Headline identity chip inclusion audit
-  // Verifies that primary/secondary goals are always included in Built around chips
-  // ==========================================================================
-  const primaryInChips = sharedStrictRepresentedSkillsForChips.includes(program.primaryGoal)
-  const secondaryInChips = program.secondaryGoal 
-    ? sharedStrictRepresentedSkillsForChips.includes(program.secondaryGoal)
-    : null
-  console.log('[phase24p-headline-identity-chip-inclusion-audit]', {
-    primaryGoal: program.primaryGoal,
-    secondaryGoal: program.secondaryGoal,
-    sharedHeadlineSkills,
-    sharedStrictRepresentedSkillsForChips,
-    primaryInChips,
-    secondaryInChips,
-    primaryChipState: getSharedChipState(program.primaryGoal),
-    secondaryChipState: program.secondaryGoal ? getSharedChipState(program.secondaryGoal) : null,
-    headlineIdentityPrioritized: primaryInChips && (program.secondaryGoal ? secondaryInChips : true),
-    verdict: primaryInChips && (program.secondaryGoal ? secondaryInChips : true)
-      ? 'HEADLINE_IDENTITY_CORRECTLY_INCLUDED_IN_CHIPS'
-      : 'HEADLINE_IDENTITY_MISSING_FROM_CHIPS_BUG',
-  })
-  
-  // [PHASE 10F TASK 5] Single source final verdict
-  console.log('[phase10f-shared-chip-truth-single-source-final-verdict]', {
-    chipLogicFromSingleSharedSource: true,
-    iifeLocalDeclarationRemoved: true,
-    laterSectionsUseSharedLocal: true,
-    verdict: 'SINGLE_SOURCE_CHIP_TRUTH_ESTABLISHED',
-  })
+
   
   // ==========================================================================
   // [TASK 1] USE UNIFIED STALENESS FROM PARENT - DO NOT RECOMPUTE
@@ -1166,87 +547,7 @@ export function AdaptiveProgramDisplay({
   const phase3Status = (unifiedStaleness as { phase3Status?: string })?.phase3Status || 'unknown'
   const safeToMoveToPhase4 = (unifiedStaleness as { safeToMoveToPhase4?: boolean })?.safeToMoveToPhase4 ?? false
   
-  console.log('[adaptive-display-banner-truth]', {
-    bannerTitle,
-    fieldListSummary,
-    phase3Status,
-    safeToMoveToPhase4,
-    isStale: stalenessCheck.isStale,
-    severity: unifiedStaleness?.severity,
-  })
-  
-  // [PHASE 5 TASK 5] Display source truth audit - verify chips show only profile-selected skills
-  console.log('[phase5-display-skill-chips-truth]', {
-    programSelectedSkills: safeSelectedSkills || [],
-    programRepresentedSkills: safeRepresentedSkills,
-    summaryTruthProfileSkills: safeSummaryTruth.profileSelectedSkills || [],
-    chipSourceArray: 'safeSelectedSkills', // What the chips actually iterate over
-    chipsShowOnlyProfileSelected: true, // We only show safeSelectedSkills
-    noLeakedBroaderSupport: true, // Support skills are NOT shown as selected chips
-  })
-  
-  // ==========================================================================
-  // [VISIBLE-PROGRAM-TRUTH-CONTRACT] UNIFIED DISPLAY CONTRACT AUDIT
-  // All three visible surfaces must consume the same canonical program truth:
-  // 1. Built around chips → weeklyRepresentation.policies
-  // 2. Summary text → summaryTruth.truthfulHybridSummary
-  // 3. Session cards → sessions[]
-  // ==========================================================================
-  const displayContractSources = {
-    chipsSource: safeWeeklyRepresentation?.policies ? 'weeklyRepresentation.policies' : 'fallback_safeSelectedSkills',
-    summarySource: safeSummaryTruth?.truthfulHybridSummary ? 'summaryTruth.truthfulHybridSummary' : 'programRationale_fallback',
-    sessionCardsSource: validSessions.length > 0 ? 'program.sessions' : 'no_sessions',
-    
-    // Verify alignment: primary goal should appear in all three
-    primaryInChips: sharedStrictRepresentedSkillsForChips.includes(program.primaryGoal),
-    primaryInSummary: (safeSummaryTruth?.truthfulHybridSummary || program.programRationale || '')
-      .toLowerCase().includes((program.primaryGoal || '').replace(/_/g, ' ')),
-    primaryInSessions: validSessions.some(s => 
-      s.focus?.toLowerCase().includes((program.primaryGoal || '').replace(/_/g, ' ').split(' ')[0]) ||
-      s.exercises?.some(e => e.transfersTo?.includes(program.primaryGoal))
-    ),
-  }
-  
-  const displayContractAligned = 
-    displayContractSources.primaryInChips && 
-    displayContractSources.primaryInSummary &&
-    displayContractSources.primaryInSessions
-  
-  console.log('[VISIBLE-PROGRAM-TRUTH-CONTRACT-AUDIT]', {
-    ...displayContractSources,
-    primaryGoal: program.primaryGoal,
-    secondaryGoal: program.secondaryGoal,
-    chipsCount: sharedStrictRepresentedSkillsForChips.length,
-    sessionCount: validSessions.length,
-    contractAligned: displayContractAligned,
-    verdict: displayContractAligned 
-      ? 'DISPLAY_CONTRACT_UNIFIED_PRIMARY_VISIBLE_IN_ALL_SURFACES'
-      : 'DISPLAY_CONTRACT_MISALIGNED_PRIMARY_NOT_IN_ALL_SURFACES',
-  })
-  
-  // [PHASE 6] SELECTED VS PROGRAMMED SKILL TRUTH AUDIT
-  // Verify program structure actually prioritizes selected skills correctly
-  // [PHASE 10C] Now uses safe locals instead of raw casts
-  const selectedSkillsFromProfile = safeSelectedSkills
-  const representedInProgram = safeRepresentedSkills
-  
-  console.log('[selected-vs-programmed-skill-truth-audit]', {
-    canonicalSelectedSkills: selectedSkillsFromProfile,
-    programRepresentedSkills: representedInProgram,
-    headlineFocusSkills: safeSummaryTruth.headlineFocusSkills || [],
-    weekRepresentedSkills: safeSummaryTruth.weekRepresentedSkills || [],
-    weekSupportSkills: safeSummaryTruth.weekSupportSkills || [],
-    // Check for leaks: any represented skill not in selected
-    deselectedSkillsInRepresented: representedInProgram.filter(s => !selectedSkillsFromProfile.includes(s)),
-    // Check for proper prioritization
-    primaryIsHeadline: safeSummaryTruth.headlineFocusSkills?.[0] === program.primaryGoal,
-    secondaryIsRepresented: !program.secondaryGoal || 
-      safeSummaryTruth.headlineFocusSkills?.includes(program.secondaryGoal) ||
-      safeSummaryTruth.weekRepresentedSkills?.includes(program.secondaryGoal),
-    verdict: representedInProgram.filter(s => !selectedSkillsFromProfile.includes(s)).length === 0
-      ? 'clean_no_deselected_leaks'
-      : 'DESELECTED_SKILL_LEAKED_INTO_REPRESENTED',
-  })
+
   const recoveryColors: Record<string, string> = {
     HIGH: 'text-green-400 bg-green-400/10 border-green-400/20',
     MODERATE: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
@@ -1278,75 +579,8 @@ export function AdaptiveProgramDisplay({
   const equipmentProfile = program.equipmentProfile
   const trainingBehaviorAnalysis = program.trainingBehaviorAnalysis
   
-  // PHASE 2: Filter sessions to only include valid ones
-  // [PHASE 10C TASK 4] Now derives from safeSessions - ONE session source for display
-  // [PHASE 15C-HOTFIX] validSessions is now declared at top of component with safe locals
-  // to avoid TDZ errors - do NOT redeclare here
-  
-  // [PHASE 10C] Session display source unified audit
-  console.log('[phase10c-session-display-source-unified]', {
-    safeSessionsCount: safeSessions.length,
-    validSessionsCount: validSessions.length,
-    derivedFromSafeSessions: true,
-    noRawProgramSessionsAccess: true,
-    verdict: 'SESSION_DISPLAY_SOURCE_UNIFIED',
-  })
-  
-  // ==========================================================================
-  // [TASK 10] PROGRAM PAGE TRUTH AUDIT
-  // Comprehensive consistency audit for debugging mixed truth display bugs
-  // ==========================================================================
-  const sessionExerciseCounts = validSessions.map(s => s.exercises?.length || 0)
+  // Determine session structure for variant handling
   const hasVariants = validSessions.some(s => s.variants && s.variants.length > 1)
-  
-  // Determine overall alignment verdict
-  let programPageVerdict = 'fully_aligned'
-  if (stalenessCheck.isStale) {
-    programPageVerdict = 'mixed_truth_display_bug'
-  }
-  if (hasVariants && validSessions.some(s => !s.variants?.[0]?.selection?.main)) {
-    programPageVerdict = 'variant_state_persistence_bug'
-  }
-  
-  console.log('[program-page-truth-audit]', {
-    visibleProgramId: program.id,
-    savedProgramId: program.id, // Same since this is what we loaded
-    sessionCardKeyStrategy: 'programId-dayNumber-sessionName',
-    sessionCount: validSessions.length,
-    sessionDensityPerDay: sessionExerciseCounts,
-    avgExercisesPerSession: sessionExerciseCounts.length > 0 
-      ? Math.round(sessionExerciseCounts.reduce((a, b) => a + b, 0) / sessionExerciseCounts.length * 10) / 10
-      : 0,
-    hasVariantsAvailable: hasVariants,
-    stalenessCheckIsStale: stalenessCheck.isStale,
-    stalenessChangedFields: stalenessCheck.changedFields,
-    plannerTruthSeverity: program.plannerTruthAudit?.severity || 'unknown',
-    topPlannerTruthReason: program.plannerTruthAudit?.topIssueReason || 'none',
-    scheduleMode: program.scheduleMode,
-    currentWeekFrequency: (program as { currentWeekFrequency?: number }).currentWeekFrequency || validSessions.length,
-    finalVerdict: programPageVerdict,
-  })
-  
-  // [displayed-adjustment-truth] STEP 3: Log what values are being displayed
-  // This helps verify that rebuild actually replaced the program snapshot
-  // TASK 6: Explicit verification logging for program identity
-  console.log('[displayed-adjustment-truth] === DISPLAY TRUTH ===')
-  console.log('[displayed-adjustment-truth] Program ID:', program.id)
-  console.log('[displayed-adjustment-truth] Generated At:', program.createdAt)
-  console.log('[displayed-adjustment-truth] Schedule Mode:', program.scheduleMode)
-  console.log('[displayed-adjustment-truth] Program trainingDaysPerWeek:', program.trainingDaysPerWeek)
-  console.log('[displayed-adjustment-truth] Actual valid sessions count:', validSessions.length)
-  console.log('[displayed-adjustment-truth] currentWeekFrequency:', (program as { currentWeekFrequency?: number }).currentWeekFrequency)
-  console.log('[displayed-adjustment-truth] DISPLAYED SESSION COUNT:', validSessions.length)
-  console.log('[displayed-adjustment-truth] === END DISPLAY TRUTH ===')
-  
-  // Diagnostic: Log if we detect partial program data (only once per render)
-  if (!program.recoveryLevel || !(program.recoveryLevel in recoveryColors)) {
-    console.log('[AdaptiveProgramDisplay] Using fallback for recoveryLevel:', program.recoveryLevel)
-  }
-  if (!engineContext?.fatigueState) {
-    console.log('[AdaptiveProgramDisplay] engineContext or fatigueState missing')
-  }
 
   return (
     <div className="space-y-4">
@@ -1466,31 +700,24 @@ export function AdaptiveProgramDisplay({
                   {skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                 </span>
               ))}
-              {/* Support/Accessory Skills - shown with label indicating indirect representation */}
+              {/* Support/Accessory Skills - visually distinct styling per type */}
               {supportAccessorySkills.map(({ skill, representationType }) => (
                 <span 
                   key={skill}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#1A1A1A]/50 text-[#6A6A6A] border border-[#2A2A2A]"
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${
+                    representationType === 'support'
+                      ? 'bg-amber-500/8 text-amber-400/80 border border-amber-500/15'
+                      : 'bg-[#1A1A1A]/50 text-[#6A6A6A] border border-[#2A2A2A]'
+                  }`}
                   title={representationType === 'support' 
                     ? 'Developed through support work this week' 
                     : 'Developed through accessory/carryover work'}
                 >
                   {skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                  <span className="text-[8px] text-[#5A5A5A]">
-                    {representationType === 'support' ? '(support)' : '(accessory)'}
-                  </span>
                 </span>
               ))}
             </div>
-            {/* [SKILL-REPRESENTATION-TRUTH] Truthful explanation if some skills are indirect */}
-            {supportAccessorySkills.length > 0 && (
-              <p className="mt-1.5 text-[9px] text-[#5A5A5A] leading-relaxed">
-                {supportAccessorySkills.length === 1 
-                  ? `${supportAccessorySkills[0].skill.replace(/_/g, ' ')} is developed through ${supportAccessorySkills[0].representationType} work that builds foundational strength.`
-                  : `${supportAccessorySkills.map(s => s.skill.replace(/_/g, ' ')).join(', ')} are developed through foundational work that supports these skills.`
-                }
-              </p>
-            )}
+
           </div>
         )}
         

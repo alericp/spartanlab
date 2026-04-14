@@ -139,10 +139,10 @@ const WEEK_SCALING_PROFILES: Record<number, WeekDosageScalingResult> = {
     weekNumber: 4,
     scalingApplied: true,
     phaseLabel: 'consolidation',
-    volumeMultiplier: 1.50, // Back to ramp-up level (2→3 sets)
+    volumeMultiplier: 1.80, // 90% of peak (slightly reduced from 100%, not a full deload)
     intensityMultiplier: 1.12, // Maintain intensity but reduce volume stress
-    holdDurationMultiplier: 1.35, // Moderate holds
-    restMultiplier: 0.95, // Slightly reduced rest
+    holdDurationMultiplier: 1.40, // Moderate-high holds
+    restMultiplier: 0.90, // Moderate rest (between ramp-up and peak)
     scalingReason: 'Consolidation: Maintain adaptations while managing fatigue',
     // [DOCTRINE] Week 4 consolidates - maintain quality but reduce stress
     densityAllowed: true,
@@ -379,8 +379,8 @@ export function getWeekVolumeIndicator(weekNumber: number): { label: string; per
   const scaling = getWeekDosageScaling(weekNumber)
   
   // [DOCTRINE-FIX] Show percentages relative to PEAK week (Week 3 = 100%)
-  // This makes the progression visible: 50% → 75% → 100% → 75%
-  // Instead of the old flattened: 75% → 100% → 100% → 100%
+  // This makes the progression visible: 50% → 75% → 100% → 90%
+  // Week 4 is consolidation (90%), not a full deload (75%)
   switch (scaling.phaseLabel) {
     case 'acclimation':
       return { 
@@ -403,7 +403,7 @@ export function getWeekVolumeIndicator(weekNumber: number): { label: string; per
     case 'consolidation':
       return { 
         label: 'Maintained', 
-        percentage: 75, 
+        percentage: 90, 
         description: 'Preserving gains while managing fatigue'
       }
     default:

@@ -1408,28 +1408,41 @@ function ExerciseRow({
     return null
   }
   
+  // [WEEK-PROGRESSION-TRUTH] Prefer scaled values when available
+  // ScaledExercise adds scaledSets, scaledReps, scaledTargetRPE for week-adjusted dosage
+  const scaledExercise = exercise as unknown as { 
+    scaledSets?: number
+    scaledReps?: string
+    scaledTargetRPE?: number
+    weekScalingApplied?: boolean 
+  }
+  const effectiveSets = scaledExercise.scaledSets ?? exercise.sets ?? 3
+  const effectiveReps = scaledExercise.scaledReps ?? exercise.repsOrTime ?? '8-12'
+  const effectiveTargetRPE = scaledExercise.scaledTargetRPE ?? exercise.targetRPE
+  
   // [EXERCISE-CARD-CONTRACT] Build canonical display contract
   const card = buildExerciseCardContract({
     name: exercise.name || 'Exercise',
     category: exercise.category || 'accessory',
-    sets: exercise.sets ?? 3,
-    repsOrTime: exercise.repsOrTime || '8-12',
+    sets: effectiveSets,
+    repsOrTime: effectiveReps,
     selectionReason: exercise.selectionReason,
-    targetRPE: exercise.targetRPE,
+    targetRPE: effectiveTargetRPE,
     restSeconds: exercise.restSeconds,
     prescribedLoad: exercise.prescribedLoad as Parameters<typeof buildExerciseCardContract>[0]['prescribedLoad'],
     coachingMeta: exercise.coachingMeta as Parameters<typeof buildExerciseCardContract>[0]['coachingMeta'],
   })
   
   // [EXERCISE-ROW-SURFACE] Build authoritative row surface for enhanced display
+  // [WEEK-PROGRESSION-TRUTH] Use scaled values for week-appropriate dosage display
   const rowSurface = !isWarmupCooldown ? buildExerciseRowSurface(
     {
       id: exercise.id,
       name: exercise.name || 'Exercise',
       category: exercise.category || 'accessory',
-      sets: exercise.sets ?? 3,
-      repsOrTime: exercise.repsOrTime || '8-12',
-      targetRPE: exercise.targetRPE,
+      sets: effectiveSets,
+      repsOrTime: effectiveReps,
+      targetRPE: effectiveTargetRPE,
       restSeconds: exercise.restSeconds,
       selectionReason: exercise.selectionReason,
       isProtected: (exercise as unknown as { isProtected?: boolean }).isProtected,

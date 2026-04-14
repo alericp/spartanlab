@@ -43,7 +43,13 @@ import {
   type SessionCardSurface,
 } from '@/lib/program/program-display-contract'
 import { getCompactSessionExplanation } from '@/lib/coaching-explanation-contract'
-import { Info, Sparkles, Shield, Scale, Layers } from 'lucide-react'
+import { 
+  advanceToNextWeek, 
+  getWeekProgressionState,
+  type WeekProgressionState,
+  type WeekAdvancementResult,
+} from '@/lib/week-advancement-service'
+import { Info, Sparkles, Shield, Scale, Layers, ChevronRight, ArrowRight, Loader2 } from 'lucide-react'
 
 interface AdaptiveProgramDisplayProps {
   program: AdaptiveProgram
@@ -71,6 +77,11 @@ export function AdaptiveProgramDisplay({
   
   // [PHASE 13] Schedule change notice state
   const [scheduleNotice, setScheduleNotice] = useState<ScheduleChangeNotice | null>(null)
+  
+  // [WEEK-ADVANCEMENT] Week progression state for advancing to next week
+  const [weekProgression, setWeekProgression] = useState<WeekProgressionState | null>(null)
+  const [isAdvancingWeek, setIsAdvancingWeek] = useState(false)
+  const [weekAdvancementResult, setWeekAdvancementResult] = useState<WeekAdvancementResult | null>(null)
   
   // Premium explanation contract - doctrine-driven intelligence
   const intelligenceContract: ProgramIntelligenceContract | null = program 
@@ -433,6 +444,64 @@ export function AdaptiveProgramDisplay({
       window.removeEventListener('spartanlab:workout-logged', handleWorkoutLogged as EventListener)
     }
   }, [program.id, program])
+  
+  // [WEEK-ADVANCEMENT] Load week progression state and listen for advancement events
+  useEffect(() => {
+    // Load current week progression state
+    const state = getWeekProgressionState()
+    setWeekProgression(state)
+    
+    // Listen for week advancement events to update state
+    const handleWeekAdvanced = () => {
+      const newState = getWeekProgressionState()
+      setWeekProgression(newState)
+      // Clear any previous advancement result after a short delay
+      setTimeout(() => setWeekAdvancementResult(null), 3000)
+    }
+    
+    window.addEventListener('spartanlab:week-advanced', handleWeekAdvanced)
+    
+    return () => {
+      window.removeEventListener('spartanlab:week-advanced', handleWeekAdvanced)
+    }
+  }, [program.id])
+  
+  // [WEEK-ADVANCEMENT] Handler for advancing to next week
+  const handleAdvanceWeek = async () => {
+    setIsAdvancingWeek(true)
+    setWeekAdvancementResult(null)
+    
+    try {
+      const result = advanceToNextWeek()
+      setWeekAdvancementResult(result)
+      
+      if (result.success) {
+        // Update local state immediately
+        const newState = getWeekProgressionState()
+        setWeekProgression(newState)
+        
+        console.log('[week-advancement-ui] Successfully advanced week', {
+          previousWeek: result.previousWeek,
+          newWeek: result.newWeek,
+          programId: result.programId,
+        })
+      } else {
+        console.warn('[week-advancement-ui] Week advancement failed:', result.error)
+      }
+    } catch (err) {
+      console.error('[week-advancement-ui] Error advancing week:', err)
+      setWeekAdvancementResult({
+        success: false,
+        previousWeek: weekProgression?.currentWeek || 1,
+        newWeek: weekProgression?.currentWeek || 1,
+        programId: program.id,
+        advancedAt: new Date().toISOString(),
+        error: err instanceof Error ? err.message : 'Unknown error',
+      })
+    } finally {
+      setIsAdvancingWeek(false)
+    }
+  }
   
   // [PHASE 14B TASK 5] Run adaptive display parity audit when program renders
   useEffect(() => {
@@ -1259,6 +1328,55 @@ export function AdaptiveProgramDisplay({
                 )
               })}
             </div>
+          </div>
+        )}
+        
+        {/* [WEEK-ADVANCEMENT] Week Progression Control - Safe advancement without regeneration */}
+        {weekProgression && (
+          <div className="px-4 py-2.5 border-t border-[#333]/30 bg-[#1A1A1A]/20">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-[#C8C8C8]">
+                  Week {weekProgression.currentWeek}
+                </span>
+                <span className="text-[10px] text-[#6A6A6A]">
+                  of {weekProgression.totalWeeksInCycle}
+                </span>
+              </div>
+              
+              {weekProgression.canAdvance ? (
+                <button
+                  onClick={handleAdvanceWeek}
+                  disabled={isAdvancingWeek}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-[#E63946] bg-[#E63946]/10 hover:bg-[#E63946]/20 rounded-md border border-[#E63946]/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isAdvancingWeek ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span>Advancing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Start Week {weekProgression.currentWeek + 1}</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </>
+                  )}
+                </button>
+              ) : (
+                <span className="text-[10px] text-[#5A5A5A]">
+                  {weekProgression.cannotAdvanceReason || 'Final week'}
+                </span>
+              )}
+            </div>
+            
+            {/* Success/Error feedback */}
+            {weekAdvancementResult && (
+              <div className={`mt-2 text-[10px] ${weekAdvancementResult.success ? 'text-green-500' : 'text-amber-500'}`}>
+                {weekAdvancementResult.success 
+                  ? `Advanced to Week ${weekAdvancementResult.newWeek}`
+                  : weekAdvancementResult.error || 'Could not advance week'}
+              </div>
+            )}
           </div>
         )}
         

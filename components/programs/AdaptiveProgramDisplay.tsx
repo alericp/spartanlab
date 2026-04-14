@@ -159,8 +159,10 @@ export function AdaptiveProgramDisplay({
   // ==========================================================================
   // [WEEK-PROGRESSION-TRUTH] Apply week-specific dosage scaling
   // Week 1 uses stored acclimation values, Week 2+ get progressively scaled dosage
+  // CRITICAL FIX: Use weekProgression?.currentWeek as AUTHORITATIVE source when available
+  // This ensures UI updates immediately when user changes week via navigation
   // ==========================================================================
-  const currentWeekNumber = program.weekNumber || 1
+  const currentWeekNumber = weekProgression?.currentWeek ?? program.weekNumber ?? 1
   const weekDosageScaling = getWeekDosageScaling(currentWeekNumber)
   const scaledSessions: ScaledSession[] = scaleSessionsForWeek(validSessions, currentWeekNumber)
   const weekVolumeIndicator = getWeekVolumeIndicator(currentWeekNumber)

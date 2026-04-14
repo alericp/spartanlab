@@ -11730,8 +11730,9 @@ async function generateAdaptiveProgramImpl(
   // ==========================================================================
   // [SESSION-SURVIVAL-CONTRACT-FINAL] Mark session as successfully completed
   // This is THE authoritative point where we decide: recovered vs degraded
+  // [ROOT_CAUSE_FIX] Use outerDoctrineRecoveryTracker (outer scope) NOT sessionSurvivalContract (inner function scope)
   // ==========================================================================
-  sessionSurvivalContract.completedSuccessfully = true
+  outerDoctrineRecoveryTracker.completedSuccessfully = true
   
   // [PHASE15E-SESSION-ROOT-CAUSE] Track successful session
   if (!(session as any)._degraded) {
@@ -11740,8 +11741,9 @@ async function generateAdaptiveProgramImpl(
     // ==========================================================================
     // [SESSION_RECOVERED_NO_DEGRADE] If doctrine relaxation was applied AND
     // session completed successfully, track as RECOVERED not DEGRADED
+    // [ROOT_CAUSE_FIX] Use outerDoctrineRecoveryTracker.wasRecoveryCandidate
     // ==========================================================================
-  if (sessionSurvivalContract.isRecoveryCandidate) {
+  if (outerDoctrineRecoveryTracker.wasRecoveryCandidate) {
   // Track recovered sessions separately - these should NOT count toward totalDegraded
   sessionFailureTracker.totalRecovered++
       
@@ -11750,8 +11752,8 @@ async function generateAdaptiveProgramImpl(
         sessionIndex: index,
         dayNumber: day.dayNumber,
         dayFocus: day.focus,
-        doctrineRelaxationApplied: sessionSurvivalContract.doctrineRelaxationApplied,
-        doctrineRelaxationReason: sessionSurvivalContract.doctrineRelaxationReason,
+        doctrineRelaxationApplied: outerDoctrineRecoveryTracker.doctrineRelaxationApplied,
+        doctrineRelaxationReason: outerDoctrineRecoveryTracker.doctrineRelaxationReason,
         finalExerciseCount: session.exercises?.length || 0,
         verdict: 'DOCTRINE_RESCUED_SESSION_COMPLETED_SUCCESSFULLY_NOT_DEGRADED',
       })
@@ -11762,9 +11764,9 @@ async function generateAdaptiveProgramImpl(
       sessionIndex: index,
       dayNumber: day.dayNumber,
       dayFocus: day.focus,
-      wasRecoveryCandidate: sessionSurvivalContract.isRecoveryCandidate,
+      wasRecoveryCandidate: outerDoctrineRecoveryTracker.wasRecoveryCandidate,
       completedSuccessfully: true,
-      finalClassification: sessionSurvivalContract.isRecoveryCandidate ? 'RECOVERED' : 'SUCCESS',
+      finalClassification: outerDoctrineRecoveryTracker.wasRecoveryCandidate ? 'RECOVERED' : 'SUCCESS',
       exerciseCount: session.exercises?.length || 0,
       variantCount: session.variants?.length || 0,
     })

@@ -56,7 +56,9 @@ import {
   scaleSessionsForWeek, 
   getWeekPhaseLabel, 
   getWeekVolumeIndicator,
-  type ScaledSession 
+  getWeekPhaseContext,
+  type ScaledSession,
+  type WeekPhaseContext
 } from '@/lib/week-dosage-scaling'
 
 interface AdaptiveProgramDisplayProps {
@@ -172,6 +174,8 @@ export function AdaptiveProgramDisplay({
   const scaledSessions: ScaledSession[] = scaleSessionsForWeek(validSessions, currentWeekNumber)
   const weekVolumeIndicator = getWeekVolumeIndicator(currentWeekNumber)
   const weekPhaseLabel = getWeekPhaseLabel(currentWeekNumber)
+  // [WEEK-PHASE-DOCTRINE-FIX] Get comprehensive week phase context for dynamic UI
+  const weekPhaseContext = getWeekPhaseContext(currentWeekNumber)
   
 
   
@@ -819,20 +823,21 @@ export function AdaptiveProgramDisplay({
         {/* [MAIN-PAGE-AI-VISIBILITY] Weekly Intelligence Strip - visible without opening modal */}
         {intelligenceContract && (
           <div className="px-4 py-3 border-t border-[#333]/30 bg-[#1A1A1A]/30">
-            {/* [SURFACE-SIGNALS] Protective week dosage banner - only when real prescription changes applied */}
-            {programSurfaceSignals?.isProtectiveWeek && programSurfaceSignals.signals.length > 0 && (
-              <div className="mb-2.5 flex items-start gap-2 p-2 rounded-md bg-[#E63946]/5 border border-[#E63946]/15">
-                <Shield className="w-3.5 h-3.5 text-[#E63946]/70 shrink-0 mt-0.5" />
+            {/* [WEEK-PHASE-DOCTRINE-FIX] Protective week banner - NOW uses SELECTED week context, not static program */}
+            {weekPhaseContext.isProtectiveWeek && (
+              <div className="mb-2.5 flex items-start gap-2 p-2 rounded-md bg-blue-500/8 border border-blue-500/20">
+                <Shield className="w-3.5 h-3.5 text-blue-400/70 shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
-                  {programSurfaceSignals.dosageMessage && (
-                    <p className="text-[11px] text-[#E63946]/90 font-medium leading-snug">
-                      {programSurfaceSignals.dosageMessage}
-                    </p>
-                  )}
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-                    {programSurfaceSignals.signals.map((signal, i) => (
-                      <span key={i} className="text-[10px] text-[#9A9A9A]">
-                        {signal}
+                  <p className="text-[11px] text-blue-400/90 font-medium leading-snug">
+                    Week {currentWeekNumber} - {weekPhaseContext.phaseName}
+                  </p>
+                  <p className="text-[10px] text-[#8A8A8A] mt-0.5">
+                    {weekPhaseContext.volumeDescription}
+                  </p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
+                    {weekPhaseContext.keyCharacteristics.slice(0, 2).map((char, i) => (
+                      <span key={i} className="text-[9px] text-[#7A7A7A]">
+                        • {char}
                       </span>
                     ))}
                   </div>
@@ -840,18 +845,10 @@ export function AdaptiveProgramDisplay({
               </div>
             )}
             
-            {/* [COACHING-EXPLANATION-CONTRACT] PRIMARY VISIBLE IMPACT: Coach-style headline */}
-            {/* Priority 1: Use authoritative coaching headline */}
-            {/* Priority 2: Fall back to strategic summary if coaching unavailable */}
-            {intelligenceContract.coachingExplanation?.program?.headline ? (
-              <p className="text-[13px] text-[#C8C8C8] font-medium leading-relaxed mb-2.5">
-                {intelligenceContract.coachingExplanation.program.headline}
-              </p>
-            ) : intelligenceContract.strategicSummary?.headline && (
-              <p className="text-xs text-[#A4ACB8] leading-relaxed mb-2.5">
-                {intelligenceContract.strategicSummary.headline}
-              </p>
-            )}
+            {/* [WEEK-PHASE-DOCTRINE-FIX] Week-specific coaching headline - uses selected week context */}
+            <p className="text-[13px] text-[#C8C8C8] font-medium leading-relaxed mb-2.5">
+              {weekPhaseContext.coachingHeadline}
+            </p>
             
             {/* Weekly structure signals - compact row */}
             <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[10px]">
@@ -882,12 +879,22 @@ export function AdaptiveProgramDisplay({
               )}
             </div>
             
-            {/* Key architectural decision (if any) - skip if already showing in surface signals */}
+            {/* Key architectural decision (if any) - skip if already showing in protective banner */}
             {intelligenceContract.weeklyDecisionLogic?.architecturalDecisions?.[0] && 
-             !programSurfaceSignals?.isProtectiveWeek && (
+             !weekPhaseContext.isProtectiveWeek && (
               <p className="mt-2 text-[10px] text-[#5A5A5A] leading-relaxed">
                 {intelligenceContract.weeklyDecisionLogic.architecturalDecisions[0]}
               </p>
+            )}
+            
+            {/* [WEEK-PHASE-DOCTRINE-FIX] Subtle week phase explanation - for non-protective weeks */}
+            {!weekPhaseContext.isProtectiveWeek && (
+              <div className="mt-2 pt-2 border-t border-[#2A2A2A]">
+                <p className="text-[10px] text-[#6A6A6A]">
+                  <span className="text-[#8A8A8A]">Week {currentWeekNumber} · {weekPhaseContext.phaseName}:</span>{' '}
+                  {weekPhaseContext.volumeDescription}
+                </p>
+              </div>
             )}
           </div>
         )}

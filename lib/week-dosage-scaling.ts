@@ -372,28 +372,139 @@ export function getWeekPhaseLabel(weekNumber: number): string {
 
 /**
  * Get volume indicator for display
+ * [WEEK-PHASE-DOCTRINE-FIX] Percentages now show meaningful distinct values per week phase
+ * instead of all collapsing to 100% after capping
  */
-export function getWeekVolumeIndicator(weekNumber: number): { label: string; percentage: number } {
+export function getWeekVolumeIndicator(weekNumber: number): { label: string; percentage: number; description: string } {
   const scaling = getWeekDosageScaling(weekNumber)
   
-  // Week 1 is the stored baseline (which is ~70-80% of full volume)
-  // So we describe it relative to "full" volume
-  const baselinePercentage = 75 // Week 1 is approximately 75% of full volume
-  
-  // [WEEK-PROGRESSION-TRUTH] Cap display percentage at 100% to avoid confusing "101%" displays
-  // The actual scaling can exceed 100% (e.g., peak week), but we display it as "Full" / 100%
-  const capAt100 = (pct: number) => Math.min(100, Math.round(pct))
+  // [DOCTRINE-FIX] Show percentages relative to PEAK week (Week 3 = 100%)
+  // This makes the progression visible: 50% → 75% → 100% → 75%
+  // Instead of the old flattened: 75% → 100% → 100% → 100%
+  switch (scaling.phaseLabel) {
+    case 'acclimation':
+      return { 
+        label: 'Reduced', 
+        percentage: 50, 
+        description: 'Conservative entry volume for safe adaptation'
+      }
+    case 'ramp_up':
+      return { 
+        label: 'Building', 
+        percentage: 75, 
+        description: 'Progressing toward full training capacity'
+      }
+    case 'peak':
+      return { 
+        label: 'Full', 
+        percentage: 100, 
+        description: 'Maximum productive volume for this cycle'
+      }
+    case 'consolidation':
+      return { 
+        label: 'Maintained', 
+        percentage: 75, 
+        description: 'Preserving gains while managing fatigue'
+      }
+    default:
+      return { label: 'Normal', percentage: 100, description: 'Standard training volume' }
+  }
+}
+
+/**
+ * [WEEK-PHASE-DOCTRINE-FIX] Get comprehensive week phase context for UI display
+ * This replaces stale static explanations with dynamic week-aware content
+ */
+export interface WeekPhaseContext {
+  weekNumber: number
+  phaseLabel: string
+  phaseName: string
+  isProtectiveWeek: boolean
+  coachingHeadline: string
+  volumeDescription: string
+  keyCharacteristics: string[]
+  scalingReason: string
+}
+
+export function getWeekPhaseContext(weekNumber: number): WeekPhaseContext {
+  const scaling = getWeekDosageScaling(weekNumber)
+  const volumeIndicator = getWeekVolumeIndicator(weekNumber)
   
   switch (scaling.phaseLabel) {
     case 'acclimation':
-      return { label: 'Reduced', percentage: baselinePercentage }
+      return {
+        weekNumber,
+        phaseLabel: scaling.phaseLabel,
+        phaseName: 'Acclimation',
+        isProtectiveWeek: true,
+        coachingHeadline: 'Building your foundation with controlled exposure',
+        volumeDescription: volumeIndicator.description,
+        keyCharacteristics: [
+          'Conservative volume to prevent overload',
+          'Extended rest between sets',
+          'No high-density or finisher work',
+          'Focus on movement quality'
+        ],
+        scalingReason: scaling.scalingReason
+      }
     case 'ramp_up':
-      return { label: 'Building', percentage: capAt100(baselinePercentage * scaling.volumeMultiplier) }
+      return {
+        weekNumber,
+        phaseLabel: scaling.phaseLabel,
+        phaseName: 'Ramp Up',
+        isProtectiveWeek: false,
+        coachingHeadline: 'Progressing toward full training capacity',
+        volumeDescription: volumeIndicator.description,
+        keyCharacteristics: [
+          'Increased volume from acclimation',
+          'Normal rest periods',
+          'Density work now permitted',
+          'Building toward peak performance'
+        ],
+        scalingReason: scaling.scalingReason
+      }
     case 'peak':
-      return { label: 'Full', percentage: capAt100(baselinePercentage * scaling.volumeMultiplier) }
+      return {
+        weekNumber,
+        phaseLabel: scaling.phaseLabel,
+        phaseName: 'Peak',
+        isProtectiveWeek: false,
+        coachingHeadline: 'Maximum productive training volume',
+        volumeDescription: volumeIndicator.description,
+        keyCharacteristics: [
+          'Highest volume of the cycle',
+          'Reduced rest for density',
+          'Finishers and advanced work unlocked',
+          'Full skill exposure'
+        ],
+        scalingReason: scaling.scalingReason
+      }
     case 'consolidation':
-      return { label: 'Maintained', percentage: capAt100(baselinePercentage * scaling.volumeMultiplier) }
+      return {
+        weekNumber,
+        phaseLabel: scaling.phaseLabel,
+        phaseName: 'Consolidation',
+        isProtectiveWeek: false,
+        coachingHeadline: 'Maintaining gains while managing fatigue',
+        volumeDescription: volumeIndicator.description,
+        keyCharacteristics: [
+          'Reduced volume from peak',
+          'No finishers - focus on core work',
+          'Preserving adaptations',
+          'Preparing for next cycle'
+        ],
+        scalingReason: scaling.scalingReason
+      }
     default:
-      return { label: 'Normal', percentage: 100 }
+      return {
+        weekNumber,
+        phaseLabel: 'normal',
+        phaseName: 'Normal',
+        isProtectiveWeek: false,
+        coachingHeadline: 'Standard training week',
+        volumeDescription: 'Normal training volume',
+        keyCharacteristics: ['Standard training parameters'],
+        scalingReason: 'Normal training week'
+      }
   }
 }

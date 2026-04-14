@@ -2221,13 +2221,16 @@ export function buildExerciseCardContract(
         : `RPE ${rpe} · managed for longevity`
     }
     // PRIORITY 2: Skill / primary work - technique-gated
+    // [SEMANTIC-TRUTH-FIX] RPE 8 is demanding work (2-3 from failure) - wording must reflect that
     else if (prescriptionIntent === 'skill_acquisition' || prescriptionIntent === 'skill_intensity' || catLower === 'skill' || exprMode.includes('direct') || exprMode.includes('primary')) {
-      if (rpe <= 7) {
-        intensityBadge = `RPE ${rpe} · clean reps over grind`
-      } else if (rpe >= 9) {
-        intensityBadge = `RPE ${rpe} · ceiling test`
+      if (rpe <= 6) {
+        intensityBadge = `RPE ${rpe} · controlled technique focus`
+      } else if (rpe === 7) {
+        intensityBadge = `RPE ${rpe} · clean reps, moderate effort`
+      } else if (rpe === 8) {
+        intensityBadge = `RPE ${rpe} · hard set, maintain form`
       } else {
-        intensityBadge = `RPE ${rpe} · quality challenge`
+        intensityBadge = `RPE ${rpe} · max effort, respect limits`
       }
     }
     // PRIORITY 3: Strength / overload slots
@@ -2249,10 +2252,15 @@ export function buildExerciseCardContract(
       }
     }
     // PRIORITY 5: Core
+    // [SEMANTIC-TRUTH-FIX] RPE-aligned core work descriptors
     else if (catLower === 'core') {
-      intensityBadge = rpe <= 7 
-        ? `RPE ${rpe} · trunk quality focus`
-        : `RPE ${rpe} · midline challenge`
+      if (rpe <= 6) {
+        intensityBadge = `RPE ${rpe} · trunk stability focus`
+      } else if (rpe === 7) {
+        intensityBadge = `RPE ${rpe} · controlled core work`
+      } else {
+        intensityBadge = `RPE ${rpe} · demanding core set`
+      }
     }
     // PRIORITY 6: Mobility
     else if (catLower === 'mobility' || catLower === 'flexibility') {

@@ -8,9 +8,9 @@ export const maxDuration = 30
 
 // ==========================================================================
 // [REGENERATE_RUNTIME_FINGERPRINT] Proves which source version is executing
-// REGEN_LOCK_V2: All corridor layers must show matching V2 fingerprint
+// OWNER_LOCK_V3: Final owner reconciliation - all layers must show V3 fingerprint
 // ==========================================================================
-const REGENERATE_RUNTIME_FINGERPRINT = 'REGENERATE_ROUTE_REGEN_LOCK_V2_2026_04_13'
+const REGENERATE_RUNTIME_FINGERPRINT = 'REGEN_ROUTE_OWNER_LOCK_V3_2026_04_13'
 
 /**
  * ==========================================================================
@@ -36,13 +36,14 @@ export async function POST(request: Request) {
   
   // ==========================================================================
   // [REGEN_ROUTE_ENTRY] Authoritative runtime proof with fingerprint
-  // [TRUTH_SYNC_V1] All corridor layers must show this same fingerprint
+  // [OWNER_LOCK_V3] Final owner reconciliation - trace full corridor
   // ==========================================================================
   console.log('[REGEN_ROUTE_ENTRY]', {
     fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
     attemptId,
     fileOwner: '/api/program/regenerate/route.ts',
     functionOwner: 'POST',
+    importChain: 'route.ts → authoritative-program-generation.ts → adaptive-program-builder.ts → program-exercise-selector.ts',
     phase: 'route_entry',
     timestamp: new Date().toISOString(),
   })

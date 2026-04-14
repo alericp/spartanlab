@@ -41,10 +41,10 @@ import {
 } from '@/lib/program-generation/week-adaptation-decision-contract'
 
 // ==========================================================================
-// [REGEN_LOCK_V2] Version fingerprint for cache/deploy proof
-// All corridor layers must show matching V2 fingerprint
+// [OWNER_LOCK_V3] Version fingerprint for cache/deploy proof
+// Final owner reconciliation - all corridor layers must show V3 fingerprint
 // ==========================================================================
-const AUTHORITATIVE_VERSION = 'AUTHORITATIVE_REGEN_LOCK_V2_2026_04_13'
+const AUTHORITATIVE_VERSION = 'AUTHORITATIVE_OWNER_LOCK_V3_2026_04_13'
 
 // ==========================================================================
 // TYPES: Generation Intent and Request Contract
@@ -318,9 +318,9 @@ export async function executeAuthoritativeGeneration(
   
   // ==========================================================================
   // [REGEN_SERVICE_ENTRY] Authoritative runtime proof with fingerprint
-  // [REGEN_LOCK_V2] All corridor layers must show matching V2 fingerprint
+  // [OWNER_LOCK_V3] Final owner reconciliation - all layers must show V3
   // ==========================================================================
-  const REGENERATE_RUNTIME_FINGERPRINT = 'AUTHORITATIVE_REGEN_LOCK_V2_2026_04_13'
+  const REGENERATE_RUNTIME_FINGERPRINT = 'AUTHORITATIVE_OWNER_LOCK_V3_2026_04_13'
   console.log('[REGEN_SERVICE_ENTRY]', {
     fingerprint: REGENERATE_RUNTIME_FINGERPRINT,
     version: AUTHORITATIVE_VERSION,

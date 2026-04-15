@@ -11696,53 +11696,46 @@ async function generateAdaptiveProgramImpl(
       // [SUPERSET-ELIGIBILITY-FIX] Find TRUE accessory/support exercises that can be safely supersetted
       // Never superset: skill work, primary strength, power/explosive movements, or heavy loaded work
       // These require full rest and dedicated focus - they are NOT accessory work
-      const supersetCandidates = session.exercises.filter(ex => {
+      // [STRENGTHENED-SUPERSET-FILTER] More inclusive filter for calisthenics training
+      // Previous filter was too strict - excluded almost everything for advanced users
+      const supersetCandidates = session.exercises.filter((ex, idx) => {
         const nameLower = ex.name?.toLowerCase() || ''
+        const totalExercises = session.exercises.length
         
-        // EXCLUDE: Skill category exercises
-        if (ex.category === 'skill') return false
+        // EXCLUDE: Primary skill exercises (first 1-2 skill exercises are protected)
+        if (ex.category === 'skill' && ex.selectionReason?.includes('primary')) return false
         
-        // EXCLUDE: Primary selection reason exercises (main session pillars)
-        if (ex.selectionReason?.includes('primary')) return false
+        // EXCLUDE: Exercises explicitly tagged as primary session pillars
+        if (ex.selectionReason?.includes('primary') && idx < 3) return false
         
-        // EXCLUDE: Weighted/heavy strength work
-        if (nameLower.includes('weighted') || nameLower.includes('heavy')) return false
+        // EXCLUDE: Only truly heavy weighted compounds (weighted pull-ups, weighted dips when heavy)
+        if (nameLower.includes('weighted pull') || nameLower.includes('weighted dip')) return false
         
-        // EXCLUDE: Power/explosive/plyometric movements - these require full rest
-        // Exercises like "Explosive Pull-Ups" should NOT be in accessory supersets
+        // EXCLUDE: Power/explosive movements that need full rest
         if (nameLower.includes('explosive') || 
-            nameLower.includes('power') || 
             nameLower.includes('plyometric') ||
-            nameLower.includes('dynamic') ||
             nameLower.includes('ballistic') ||
-            nameLower.includes('jumping') ||
             nameLower.includes('clapping')) return false
         
-        // EXCLUDE: Main compound strength movements that function as session pillars
-        // Even without "primary" tag, these should stay straight
-        if (nameLower.includes('muscle-up') || 
-            nameLower.includes('front lever') || 
-            nameLower.includes('back lever') ||
-            nameLower.includes('planche') ||
-            nameLower.includes('iron cross')) return false
+        // EXCLUDE: Advanced skill holds/levers only when they're the session focus
+        if ((nameLower.includes('front lever') || 
+             nameLower.includes('back lever') ||
+             nameLower.includes('planche') ||
+             nameLower.includes('iron cross') ||
+             nameLower.includes('muscle-up')) && ex.selectionReason?.includes('primary')) return false
         
-        return true
+        // INCLUDE: Everything else in the session's latter half is fair game
+        // This captures support strength, rows, push-ups, core work, etc.
+        // Prioritize exercises in the second half of the session (true accessory tail)
+        return idx >= Math.floor(totalExercises / 2) || 
+               ex.category === 'core' || 
+               ex.category === 'accessory' ||
+               (ex.category === 'strength' && !ex.selectionReason?.includes('primary'))
       })
       
       // [SUPERSET-PAIRING-FIX] Pair from the END of the candidate array (true accessory/core tail)
       // NOT from the front - earlier exercises are often more important even if they pass the filter
       // Group into pairs for supersets (max 2 superset pairs per session)
-      
-      // [SURGICAL-DEBUG] Log superset candidate detection
-      console.log('[SUPERSET-CANDIDATE-DETECTION]', {
-        dayNumber: session.dayNumber,
-        totalExercises: session.exercises?.length || 0,
-        candidateCount: supersetCandidates.length,
-        candidateNames: supersetCandidates.map(e => e.name),
-        willCreatePairs: supersetCandidates.length >= 2,
-        shouldApplySupersets,
-      })
-      
       if (supersetCandidates.length >= 2) {
         const pairsToCreate = Math.min(2, Math.floor(supersetCandidates.length / 2))
         let pairsCreated = 0

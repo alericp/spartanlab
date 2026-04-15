@@ -2343,36 +2343,37 @@ export function buildExerciseCardContract(
     let refined = reason.split('.')[0]
     
     // If reason is generic, add intent-specific doctrine context
+    // [POLISH] Natural coaching language, not formulaic system text
     if (refined.length < 20 || refined.toLowerCase().includes('selected for')) {
-      // Doctrine-driven intent explanations - specific job descriptions
       const intentContext: Record<PrescriptionIntent, string> = {
-        max_strength: 'Peak neural drive for strength adaptation',
-        strength_volume: 'Controlled volume accumulates structural adaptation',
-        skill_acquisition: 'Greasing the groove for position mastery',
-        skill_intensity: 'Testing ceiling while protecting technique',
-        explosive_power: 'Training rate of force development',
-        hypertrophy: 'Building the muscle substrate that powers skill',
-        support_strength: 'Structural balance protects joints under load',
-        technical_carryover: 'Direct transfer to target skill mechanics',
-        tissue_prep: 'Readies connective tissue for main work',
-        density_conditioning: 'Fatigue tolerance without intensity cost',
+        max_strength: 'Heavy work builds the neural drive your skills depend on',
+        strength_volume: 'Moderate loads accumulate the structural gains you need',
+        skill_acquisition: 'Practice builds the positions your body learns to own',
+        skill_intensity: 'Pushing skill ceiling while protecting technique',
+        explosive_power: 'Developing the power and speed your skills require',
+        hypertrophy: 'Building the muscle that powers harder progressions',
+        support_strength: 'Joint health and balance under load',
+        technical_carryover: 'Direct carryover to your target skill',
+        tissue_prep: 'Warming the structures that do the real work',
+        density_conditioning: 'Building work capacity without intensity cost',
       }
       refined = intentContext[prescriptionIntent]
     }
     
     // Further refine support work based on exercise characteristics
+    // [POLISH] Natural coaching language for accessory/support roles
     if (prescriptionIntent === 'support_strength' && reason) {
       const reasonLowerCheck = reason.toLowerCase()
       if (reasonLowerCheck.includes('scap') || reasonLowerCheck.includes('shoulder')) {
-        refined = 'Scapular stability underpins overhead positions'
+        refined = 'Scapular control supports cleaner overhead positions'
       } else if (reasonLowerCheck.includes('rear delt') || reasonLowerCheck.includes('face pull')) {
-        refined = 'Posterior shoulder balance counters pressing bias'
+        refined = 'Balances the shoulders against all that pressing'
       } else if (reasonLowerCheck.includes('core') || reasonLowerCheck.includes('trunk') || reasonLowerCheck.includes('compression')) {
-        refined = 'Trunk rigidity transfers force to limbs'
+        refined = 'Trunk strength transfers force to your limbs'
       } else if (reasonLowerCheck.includes('grip') || reasonLowerCheck.includes('hang')) {
-        refined = 'Grip endurance extends effective working sets'
+        refined = 'Grip work means more effective working sets'
       } else if (reasonLowerCheck.includes('hip') || reasonLowerCheck.includes('glute')) {
-        refined = 'Hip stability anchors full-body tension'
+        refined = 'Hip strength anchors full-body tension'
       }
     }
     

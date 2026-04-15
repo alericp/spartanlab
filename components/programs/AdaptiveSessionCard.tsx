@@ -20,9 +20,9 @@ import { trackWorkoutStarted, trackWorkoutCompleted } from '@/lib/analytics'
 import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
-import { buildExerciseCardContract, buildExerciseRowSurface, getBestRowSublabel, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
+import { buildExerciseCardContract, buildExerciseRowSurface, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
 import type { ProgramExplanationSurface } from '@/lib/coaching-explanation-contract'
-import { getCompactExerciseExplanation } from '@/lib/coaching-explanation-contract'
+// [SINGLE-TRUTH-FIX] Removed: getCompactExerciseExplanation - was source of contradictory text
 import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, buildSessionMainPreviewSurface, buildFullVisibleRoutineExercises, type SessionAiEvidenceSurface, type FullSessionRoutineSurface, type SessionMainPreviewSurface, type FullRoutineExercise } from '@/lib/program/program-ai-evidence-bridge'
 import { getExerciseRowVisibility, shouldShowRowIntelligence, deduplicateRowDisplay, DEFAULT_DENSITY_MODE } from '@/lib/program/program-display-priority'
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
@@ -1438,57 +1438,35 @@ function ExerciseRow({
         const rowVisibility = getExerciseRowVisibility(DEFAULT_DENSITY_MODE)
         const { showSublabel, showChips, chips } = deduplicateRowDisplay(alignedRowSurface, rowVisibility)
         
-        // [COACHING-EXPLANATION-CONTRACT] Prefer coaching explanation surface when available
-        // This delegates to the sophisticated reasoning engine in program-display-contract.ts
-        const coachingExpl = coachingExplanation ? getCompactExerciseExplanation(coachingExplanation, exercise.id) : null
+        // [SINGLE-TRUTH-FIX] KILL ALL STALE SECONDARY TEXT PATHS
+        // The card contract (prescriptionLine, intensityBadge) is the ONLY authoritative source.
+        // DO NOT fall back to:
+        // - getBestRowSublabel(alignedRowSurface) - reads from doctrine notes with stale RPE/quality text
+        // - coachingExplanation - uses BASE RPE values, not SCALED
+        // These paths created contradictions like "RPE 8" in headline vs "RPE 7 / Quality focus" below.
+        // The fix: show NOTHING in the sublabel area. Prescription line IS the truth.
         
-        // [CONTRADICTION-FIX] Filter out explanations that mention RPE values
-        // The coaching explanation uses BASE RPE, but the card headline uses SCALED RPE
-        // To avoid "RPE 8" in headline vs "RPE 7" in sublabel, we:
-        // 1. Never show RPE-containing text in the sublabel
-        // 2. Prefer role explanations that describe intent without specific RPE numbers
-        const filterOutRpeText = (text: string | null | undefined): string | null => {
-          if (!text) return null
-          // Remove any text that contains explicit RPE mentions that could contradict
-          if (/RPE\s*\d/i.test(text)) return null
-          // Remove intensity-focused explanations that imply specific effort levels
-          if (/effort pushed|pushed harder|kept submaximal|moderate-high effort/i.test(text)) return null
-          return text
-        }
+        // [SIMPLIFIED] Only show chips if they don't contain contradictory wording
+        const safeChips = chips.filter(chip => {
+          const lower = chip.toLowerCase()
+          // Remove chips that mention RPE, quality, or recovery - these could contradict
+          return !lower.includes('rpe') && 
+                 !lower.includes('quality') && 
+                 !lower.includes('recovery') &&
+                 !lower.includes('fewer reps') &&
+                 !lower.includes('precision')
+        })
         
-        // Use bestPrimary for smart prioritization - picks the single best explanation line
-        // Falls back to role, then row surface sublabel
-        // [CONTRADICTION-FIX] Filter all coaching text to remove RPE contradictions
-        const cleanBestPrimary = filterOutRpeText(coachingExpl?.bestPrimary)
-        const cleanRole = filterOutRpeText(coachingExpl?.role)
-        const bestSublabel = cleanBestPrimary || cleanRole || (showSublabel ? getBestRowSublabel(alignedRowSurface) : null)
-        const isCoachingSource = !!cleanBestPrimary || !!cleanRole
-        
-        // [PREMIUM-INFO-BUBBLE] Secondary detail goes into tooltip, not stacked on card
-        // This keeps cards clean while preserving depth
-        // [CONTRADICTION-FIX] Also filter secondary detail to avoid RPE contradictions in bubble
-        const secondaryDetail = filterOutRpeText(coachingExpl?.secondaryDetail)
-        const hasUsefulSecondary = coachingExpl?.hasUsefulSecondary && !!secondaryDetail
-        
-        if (!bestSublabel && !showChips) return null
+        if (safeChips.length === 0) return null
         
         return (
         <div className="flex items-center gap-1 mt-0.5">
-          {/* [COACHING-EXPLANATION-CONTRACT] Single clean primary explanation line */}
-          {bestSublabel && (
-            <span className={`text-[10px] ${isCoachingSource ? 'text-[#9A9A9A]' : 'text-[#7A7A7A]'}`}>
-              {bestSublabel}
-            </span>
-          )}
-          {/* [MOBILE-INFO-BUBBLE-FIX] Controlled tap-to-toggle bubble for secondary detail */}
-          {hasUsefulSecondary && secondaryDetail && (
-            <InfoBubble content={secondaryDetail} />
-          )}
-          {/* Single chip max in prescription-first mode - subtle styling */}
-          {showChips && chips.slice(0, 1).map((chip, i) => (
+          {/* [SINGLE-TRUTH-FIX] Only safe chips that don't contradict prescription */}
+          {/* NO sublabel, NO info bubble - prescription line IS the truth */}
+          {safeChips.slice(0, 1).map((chip, i) => (
             <span 
               key={`chip-${i}`}
-              className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#6A6A6A] ml-1"
+              className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#6A6A6A]"
             >
               {chip}
             </span>

@@ -11588,18 +11588,26 @@ async function generateAdaptiveProgramImpl(
     const primaryExerciseCount = session.exercises?.filter(e => e.selectionReason?.includes('primary')).length || 0
     const totalExercises = session.exercises?.length || 0
     
-    // Compute whether this is a skill-dominated session (affects method eligibility)
-    const isSkillPrimarySession = skillExerciseCount >= 2 || 
-      (skillExerciseCount > 0 && skillExerciseCount >= totalExercises * 0.4) ||
-      session.exercises?.some(e => e.category === 'skill' && e.selectionReason?.includes('primary'))
+    // [STRENGTHENED] Compute whether this is a skill-dominated session
+    // Only block grouping methods when skill work TRULY dominates (>50% of session)
+    // This allows accessory tails to still be grouped even on skill days
+    const isSkillPrimarySession = skillExerciseCount >= 3 && skillExerciseCount >= totalExercises * 0.5
     
-    // Compute accessory/support tail size - this is what can be grouped
-    const accessoryTailSize = accessoryExerciseCount + coreExerciseCount + 
-      session.exercises?.filter(e => 
-        e.category === 'strength' && 
-        !e.selectionReason?.includes('primary') &&
-        !(e.name?.toLowerCase().includes('weighted'))
-      ).length || 0
+    // [STRENGTHENED] Compute whether skill work needs protection (separate from blocking all grouping)
+    // This protects skill exercises themselves but allows accessory grouping
+    const hasSkillWorkToProtect = skillExerciseCount >= 1
+    
+    // [STRENGTHENED] Compute groupable tail size - includes more exercise types
+    // Support strength work (non-primary, non-weighted-compound) can be grouped
+    const supportStrengthCount = session.exercises?.filter(e => 
+      e.category === 'strength' && 
+      !e.selectionReason?.includes('primary') &&
+      // Only exclude heavy weighted compounds, not all weighted work
+      !(e.name?.toLowerCase().includes('weighted pull') || e.name?.toLowerCase().includes('weighted dip'))
+    ).length || 0
+    
+    // Accessory tail now includes support strength, core, and accessory
+    const accessoryTailSize = accessoryExerciseCount + coreExerciseCount + supportStrengthCount
     
     // Blueprint-based eligibility (from session composition intelligence)
     const blueprintSupersetEligibility = sessionCompositionBlueprint?.methodEligibility?.supersets
@@ -11626,20 +11634,25 @@ async function generateAdaptiveProgramImpl(
       primaryExerciseCount,
       isSkillDominated: isSkillPrimarySession,
       
-      // Method eligibility decisions (doctrine + blueprint + user truth combined)
-      supersetsAllowed: !isSkillPrimarySession || accessoryTailSize >= 2,
-      supersetsEarned: (blueprintSupersetEligibility === 'earned' || blueprintSupersetEligibility === 'allowed') && accessoryTailSize >= 2,
-      circuitsAllowed: accessoryTailSize >= 3 && !isSkillPrimarySession,
-      circuitsEarned: (blueprintCircuitEligibility === 'earned' || blueprintCircuitEligibility === 'allowed') && accessoryTailSize >= 3,
+      // [STRENGTHENED] Method eligibility decisions - more permissive for accessory tails
+      // Supersets: allowed on any session with 2+ groupable exercises
+      supersetsAllowed: accessoryTailSize >= 2,
+      supersetsEarned: accessoryTailSize >= 2, // Always earned if tail exists
+      // Circuits: allowed if 3+ groupable exercises, even on skill days (we protect skill work separately)
+      circuitsAllowed: accessoryTailSize >= 3, // Removed !isSkillPrimarySession gate
+      circuitsEarned: accessoryTailSize >= 3,
+      // Density: same as circuits
       densityAllowed: accessoryTailSize >= 3,
-      densityEarned: (blueprintDensityEligibility === 'earned' || blueprintDensityEligibility === 'allowed') && accessoryTailSize >= 3,
-      clusterAllowed: skillExerciseCount >= 1, // Cluster is for skill quality preservation
+      densityEarned: accessoryTailSize >= 3,
+      // Cluster: for skill work quality preservation
+      clusterAllowed: hasSkillWorkToProtect,
       
-      // Final method selection (user wants + doctrine allows + earned/allowed)
+      // [STRENGTHENED] Final method selection - lower thresholds, trust user preferences
       shouldApplySupersets: methodPrefsForGrouping.includes('supersets') && accessoryTailSize >= 2,
-      shouldApplyCircuits: methodPrefsForGrouping.includes('circuits') && accessoryTailSize >= 3 && !isSkillPrimarySession,
+      // Circuits allowed even on skill days - we protect skill exercises separately
+      shouldApplyCircuits: methodPrefsForGrouping.includes('circuits') && accessoryTailSize >= 3,
       shouldApplyDensity: methodPrefsForGrouping.includes('density_blocks') && accessoryTailSize >= 3,
-      shouldApplyCluster: methodPrefsForGrouping.includes('cluster_sets') && skillExerciseCount >= 1,
+      shouldApplyCluster: methodPrefsForGrouping.includes('cluster_sets') && hasSkillWorkToProtect,
       
       // Packaging priority (what to try first)
       preferredPackagingOrder: [
@@ -11885,29 +11898,29 @@ async function generateAdaptiveProgramImpl(
     const circuitsEarned = sessionMethodIntentContract.circuitsEarned || sessionMethodIntentContract.circuitsAllowed
     const densityEarned = sessionMethodIntentContract.densityEarned || sessionMethodIntentContract.densityAllowed
     
-    // [FIX] Use contract-based eligibility, not focus string matching
-    // The contract already considers skill domination and accessory tail size
-    const sessionIsSafeForDenseMethods = sessionMethodIntentContract.circuitsAllowed || 
-      sessionMethodIntentContract.densityAllowed
+    // [STRENGTHENED] Session is safe for dense methods if there's a groupable tail
+    // We protect skill exercises separately - the tail itself can be grouped
+    const sessionIsSafeForDenseMethods = sessionMethodIntentContract.accessoryTailSize >= 3
     
     if (shouldEvaluateCircuits && sessionHasCircuitEligibleTail && sessionIsSafeForDenseMethods) {
-      // Find circuit-eligible exercises (accessory/core tail only)
+      // [STRENGTHENED] Find circuit-eligible exercises - more inclusive for support/accessory work
       const circuitCandidates = session.exercises.filter(ex => {
         // EXCLUDE: Already grouped in supersets
         if (ex.blockId && ex.method === 'superset') return false
-        // EXCLUDE: Skill category
+        // EXCLUDE: Skill category (protect skill work quality)
         if (ex.category === 'skill') return false
         // EXCLUDE: Primary selections
         if (ex.selectionReason?.includes('primary')) return false
-        // EXCLUDE: Weighted/heavy work
         const nameLower = ex.name?.toLowerCase() || ''
-        if (nameLower.includes('weighted') || nameLower.includes('heavy')) return false
+        // EXCLUDE: Only heavy weighted compounds (weighted pull-ups, weighted dips)
+        if (nameLower.includes('weighted pull') || nameLower.includes('weighted dip')) return false
         // EXCLUDE: Power/explosive movements
         if (nameLower.includes('explosive') || nameLower.includes('power') || nameLower.includes('plyometric')) return false
-        // INCLUDE: Core, accessory, conditioning-style work
-        return ex.category === 'core' || ex.category === 'accessory' || 
-               nameLower.includes('hold') || nameLower.includes('plank') ||
-               nameLower.includes('raise') || nameLower.includes('crunch')
+        // [STRENGTHENED] INCLUDE: Core, accessory, AND support strength work
+        // This allows rows, push-ups, inverted rows, pike push-ups, etc. to be circuited
+        return ex.category === 'core' || 
+               ex.category === 'accessory' || 
+               (ex.category === 'strength' && !ex.selectionReason?.includes('primary'))
       })
       
       // Apply circuit grouping if we have 3+ candidates (not already supersetted)
@@ -11959,10 +11972,10 @@ async function generateAdaptiveProgramImpl(
       }
     } else if (shouldEvaluateCircuits) {
       // Log why circuits were not applied
-      if (isSkillPrimarySession || session.focus?.toLowerCase().includes('skill')) {
+      if (!sessionHasCircuitEligibleTail) {
         methodMaterializationResult.rejectedMethods.push({
           method: 'circuits',
-          reason: 'Doctrine safety: circuits blocked on skill-primary sessions',
+          reason: `Accessory tail too small for circuits (${sessionMethodIntentContract.accessoryTailSize} < 3 required)`,
         })
       } else if (!sessionHasCircuitEligibleTail) {
         methodMaterializationResult.rejectedMethods.push({

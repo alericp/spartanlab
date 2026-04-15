@@ -935,6 +935,11 @@ type AdaptiveSessionContext = {
       informed: boolean
     }
   } | null
+  // ==========================================================================
+  // [DAY-CONTRACT-OWNERSHIP-FIX] Session intent for per-day rationale/type
+  // This is passed explicitly to avoid out-of-scope reference errors
+  // ==========================================================================
+  sessionIntent?: SessionIntent | null
   }
 
 export interface AdaptiveProgramInputs {
@@ -10836,6 +10841,44 @@ async function generateAdaptiveProgramImpl(
   })
   
   // ==========================================================================
+  // [DAY-CONTRACT-OWNERSHIP-FIX] AUTHORITATIVE VALIDATION BOUNDARY
+  // Ensure sessionIntents count matches structure.days count BEFORE entering loop
+  // This prevents undefined intent at any array index during session assembly
+  // ==========================================================================
+  const structureDaysCount = structure.days.length
+  const sessionIntentsCount = sessionIntents.length
+  
+  if (sessionIntentsCount !== structureDaysCount) {
+    console.error('[day-contract-ownership-mismatch]', {
+      structureDaysCount,
+      sessionIntentsCount,
+      effectiveTrainingDays,
+      structureDayFocuses: structure.days.map(d => d.focus),
+      sessionIntentTypes: sessionIntents.map(i => i?.sessionType || 'undefined'),
+      verdict: 'FATAL_DAY_CONTRACT_MISMATCH',
+    })
+    throw new GenerationError(
+      'day_contract_mismatch',
+      stageTracker.current,
+      `Session intents count (${sessionIntentsCount}) does not match structure days count (${structureDaysCount}). ` +
+      `effectiveTrainingDays=${effectiveTrainingDays}. This is an authoritative day-contract violation.`,
+      {
+        subCode: 'session_intent_structure_mismatch',
+        sessionIntentsCount,
+        structureDaysCount,
+        effectiveTrainingDays,
+      }
+    )
+  }
+  
+  console.log('[day-contract-ownership-validated]', {
+    structureDaysCount,
+    sessionIntentsCount,
+    allIntentsValid: sessionIntents.every(i => i?.sessionType !== undefined),
+    verdict: 'DAY_CONTRACT_VALIDATED',
+  })
+  
+  // ==========================================================================
   // [SESSION-SURVIVAL-CONTRACT-LOOP-LEVEL] Track doctrine relaxation across all sessions
   // This allows the outer catch block to check if any session had doctrine relaxation
   // ==========================================================================
@@ -11023,6 +11066,11 @@ async function generateAdaptiveProgramImpl(
   unifiedDoctrineDecision: unifiedDoctrineDecision || null,
   // [DOCTRINE INFLUENCE] Pass doctrine influence contract for audit visibility
   doctrineInfluenceContract: doctrineInfluenceContract || null,
+  // ==========================================================================
+  // [DAY-CONTRACT-OWNERSHIP-FIX] Pass session intent explicitly
+  // This fixes the out-of-scope reference error in generateAdaptiveSession
+  // ==========================================================================
+  sessionIntent: intent || null,
   // [SESSION-SURVIVAL-CONTRACT] Outer tracker ref - will be populated by generateAdaptiveSession
   outerDoctrineRecoveryTracker: null as any, // Will be set below
   // [SESSION-SURVIVAL-CONTRACT-LOOP] Loop-level tracker ref for outer catch access
@@ -20895,6 +20943,11 @@ function generateAdaptiveSession(
   // [UNIFIED DOCTRINE DECISION] Extract doctrine decision for exercise selection
   // CRITICAL: Must be extracted from context, NOT referenced from outer closure scope
   unifiedDoctrineDecision,
+  // ==========================================================================
+  // [DAY-CONTRACT-OWNERSHIP-FIX] Extract session intent for rationale
+  // This was previously accessed from outer scope closure, causing reference errors
+  // ==========================================================================
+  sessionIntent,
   } = context
   
   // ==========================================================================
@@ -23422,7 +23475,8 @@ function generateAdaptiveSession(
     
     // Get day explanation
     // [PROGRAM-TRUTH-STRENGTHENING] Prefer user-specific intent rationale over generic day explanation
-    rationale = intent?.rationale || getDayExplanation(day, GOAL_LABELS[primaryGoal])
+    // [DAY-CONTRACT-OWNERSHIP-FIX] Use sessionIntent from context, not outer scope intent
+    rationale = sessionIntent?.rationale || getDayExplanation(day, GOAL_LABELS[primaryGoal])
     
     // Generate endurance finisher if appropriate
     middleStep = 'time_fit_resolving'
@@ -23552,7 +23606,8 @@ function generateAdaptiveSession(
   variants = variants || [{ duration: fallbackCanonicalDuration, label: 'Full Session', selection: effectiveSelection, compressionLevel: 'none' }]
   adaptationNotes = adaptationNotes || []
   // [PROGRAM-TRUTH-STRENGTHENING] Fallback rationale prefers intent over generic
-  rationale = rationale || intent?.rationale || getDayExplanation(day, GOAL_LABELS[primaryGoal])
+  // [DAY-CONTRACT-OWNERSHIP-FIX] Use sessionIntent from context, not outer scope intent
+  rationale = rationale || sessionIntent?.rationale || getDayExplanation(day, GOAL_LABELS[primaryGoal])
       enduranceResult = enduranceResult || { shouldIncludeEndurance: false, blockType: null, duration: 4, rationale: 'Skipped due to helper failure', wasCondensed: false }
       currentFatigueScore = currentFatigueScore ?? 50
       finisher = undefined

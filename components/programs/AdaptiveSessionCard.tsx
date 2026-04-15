@@ -24,7 +24,8 @@ import { buildExerciseCardContract, buildExerciseRowSurface, type ExerciseRowSur
 import type { ProgramExplanationSurface } from '@/lib/coaching-explanation-contract'
 // [SINGLE-TRUTH-FIX] Removed: getCompactExerciseExplanation - was source of contradictory text
 import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, buildSessionMainPreviewSurface, buildFullVisibleRoutineExercises, type SessionAiEvidenceSurface, type FullSessionRoutineSurface, type SessionMainPreviewSurface, type FullRoutineExercise } from '@/lib/program/program-ai-evidence-bridge'
-import { getExerciseRowVisibility, shouldShowRowIntelligence, deduplicateRowDisplay, DEFAULT_DENSITY_MODE } from '@/lib/program/program-display-priority'
+// [SINGLE-TRUTH-FIX] Removed: getExerciseRowVisibility, shouldShowRowIntelligence, deduplicateRowDisplay, DEFAULT_DENSITY_MODE
+// These were used by the ROW 2.5 chip block which was a stale secondary text path
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { 
@@ -1374,13 +1375,7 @@ function ExerciseRow({
     density_conditioning: 'text-orange-400',
   }
   
-  // [DISPLAY-PRIORITY] WhyLine suppressed in prescription-first mode
-  
-  // Only show context cue for primary work
-  const showContextCue = !isWarmupCooldown && card.prescriptionContext &&
-    (card.prescriptionIntent === 'skill_intensity' || 
-     card.prescriptionIntent === 'max_strength' || 
-     card.prescriptionIntent === 'explosive_power')
+  // [SINGLE-TRUTH-FIX] showContextCue removed - prescriptionContext was a stale secondary path
 
   return (
     <div className={`py-2 px-3 rounded-lg border transition-colors ${
@@ -1417,8 +1412,9 @@ function ExerciseRow({
         )}
       </div>
       
-      {/* ROW 2: Unified prescription - VISIBLE DOSAGE TRUTH */}
-      {/* [VISIBLE-SURFACE-FIX] Prescription line is now MORE PROMINENT for clear week differentiation */}
+      {/* ROW 2: Unified prescription - SINGLE VISIBLE DOSAGE TRUTH */}
+      {/* [SINGLE-TRUTH-SURFACE] This is the ONLY prescription surface. All secondary text paths removed. */}
+      {/* REMOVED: prescriptionContext, chips, exercise.note - all were stale/contradictory sources */}
       <div className="flex items-center gap-2 mt-1">
         <span className="text-[13px] font-medium text-[#CACACA]">{card.prescriptionLine}</span>
         {card.intensityBadge && hasRPE && (
@@ -1427,62 +1423,18 @@ function ExerciseRow({
         {card.restGuidance && (
           <span className="text-[10px] text-[#5A5A5A]">{card.restGuidance}</span>
         )}
-        {showContextCue && card.prescriptionContext && (
-          <span className="text-[10px] text-[#5A5A5A] italic">— {card.prescriptionContext}</span>
-        )}
       </div>
       
-      {/* [DISPLAY-PRIORITY] ROW 2.5: Compact intelligence - prescription-first policy */}
-      {/* Only show for primary exercises to keep rows tight */}
-      {alignedRowSurface && shouldShowRowIntelligence(alignedRowSurface.emphasisKind, DEFAULT_DENSITY_MODE) && (() => {
-        const rowVisibility = getExerciseRowVisibility(DEFAULT_DENSITY_MODE)
-        const { showSublabel, showChips, chips } = deduplicateRowDisplay(alignedRowSurface, rowVisibility)
-        
-        // [SINGLE-TRUTH-FIX] KILL ALL STALE SECONDARY TEXT PATHS
-        // The card contract (prescriptionLine, intensityBadge) is the ONLY authoritative source.
-        // DO NOT fall back to:
-        // - getBestRowSublabel(alignedRowSurface) - reads from doctrine notes with stale RPE/quality text
-        // - coachingExplanation - uses BASE RPE values, not SCALED
-        // These paths created contradictions like "RPE 8" in headline vs "RPE 7 / Quality focus" below.
-        // The fix: show NOTHING in the sublabel area. Prescription line IS the truth.
-        
-        // [SIMPLIFIED] Only show chips if they don't contain contradictory wording
-        const safeChips = chips.filter(chip => {
-          const lower = chip.toLowerCase()
-          // Remove chips that mention RPE, quality, or recovery - these could contradict
-          return !lower.includes('rpe') && 
-                 !lower.includes('quality') && 
-                 !lower.includes('recovery') &&
-                 !lower.includes('fewer reps') &&
-                 !lower.includes('precision')
-        })
-        
-        if (safeChips.length === 0) return null
-        
-        return (
-        <div className="flex items-center gap-1 mt-0.5">
-          {/* [SINGLE-TRUTH-FIX] Only safe chips that don't contradict prescription */}
-          {/* NO sublabel, NO info bubble - prescription line IS the truth */}
-          {safeChips.slice(0, 1).map((chip, i) => (
-            <span 
-              key={`chip-${i}`}
-              className="text-[9px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#6A6A6A]"
-            >
-              {chip}
-            </span>
-          ))}
-        </div>
-        )
-      })()}
+      {/* [SINGLE-TRUTH-FIX] ALL SECONDARY TEXT PATHS REMOVED:
+          - prescriptionContext: came from card contract but separate logic, could contradict
+          - ROW 2.5 chips: came from alignedRowSurface, fed by doctrine notes
+          - exercise.note: came from doctrineFinalNote in program-exercise-selector.ts
+            containing "Quality focus: fewer reps" and "Recovery-managed volume"
+          The card now has ONE truth surface: prescriptionLine + intensityBadge + restGuidance */}
       
-      {/* Constraint note inline if present */}
+      {/* Constraint note kept - this is safety/equipment info, not prescription wording */}
       {card.constraintNote && (
         <p className="text-[10px] text-amber-400/70 mt-1">{card.constraintNote}</p>
-      )}
-      
-      {/* Exercise-specific note */}
-      {exercise.note && (
-        <p className="text-[10px] text-[#5A5A5A] mt-1 italic">{exercise.note}</p>
       )}
       
       {/* Knowledge expansion - only for main exercises with knowledge */}

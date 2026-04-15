@@ -254,6 +254,21 @@ function checkRepetitionJustification(
 // VARIATION GENERATOR
 // =============================================================================
 
+/**
+ * [PROGRAM-TRUTH-STRENGTHENING] Athlete context for user-specific rationale generation
+ * This enables session rationale to be tied to actual onboarding truth rather than generic templates
+ */
+export interface AthleteSessionContext {
+  trainingOutcome: string | null  // e.g., 'skills', 'strength', 'max_reps'
+  trainingOutcomeLabel: string | null  // e.g., 'Skill Mastery', 'Bodyweight Strength'
+  primaryLimitation: string | null  // e.g., 'strength', 'flexibility', 'skill_coordination'
+  weakestArea: string | null  // e.g., 'pulling_strength', 'core_strength'
+  jointCautions: string[]  // e.g., ['shoulders', 'wrists']
+  selectedSkillLabels: string[]  // e.g., ['Front Lever', 'Planche']
+  isFirstWeek: boolean
+  scheduleComplexity: 'minimal' | 'standard' | 'demanding'  // Based on days/week
+}
+
 export interface VariationConfig {
   skill: SkillType
   trainingStyle: TrainingStyleMode
@@ -261,13 +276,15 @@ export interface VariationConfig {
   experienceLevel: 'beginner' | 'intermediate' | 'advanced'
   weeklyDays: number
   existingIntents: SessionIntent[]
+  // [PROGRAM-TRUTH-STRENGTHENING] User context for richer rationale
+  athleteContext?: AthleteSessionContext
 }
 
 /**
  * Generate varied session intents for a week
  */
 export function generateWeeklySessionIntents(config: VariationConfig): SessionIntent[] {
-  const { skill, trainingStyle, primaryConstraint, experienceLevel, weeklyDays, existingIntents } = config
+  const { skill, trainingStyle, primaryConstraint, experienceLevel, weeklyDays, existingIntents, athleteContext } = config
   const intents: SessionIntent[] = []
   
   // [PHASE 16M] Input audit
@@ -334,6 +351,7 @@ export function generateWeeklySessionIntents(config: VariationConfig): SessionIn
     }
     
     // Build intent with appropriate variation
+    // [PROGRAM-TRUTH-STRENGTHENING] Pass athlete context for richer rationale
     const intent = buildSessionIntent({
       dayNumber: day,
       skill,
@@ -343,6 +361,7 @@ export function generateWeeklySessionIntents(config: VariationConfig): SessionIn
       trainingStyle,
       experienceLevel,
       existingIntents: intents,
+      athleteContext,
     })
     
     intents.push(intent)
@@ -557,10 +576,12 @@ interface IntentBuilderInput {
   trainingStyle: TrainingStyleMode
   experienceLevel: 'beginner' | 'intermediate' | 'advanced'
   existingIntents: SessionIntent[]
+  // [PROGRAM-TRUTH-STRENGTHENING] Athlete context for user-specific rationale
+  athleteContext?: AthleteSessionContext
 }
 
 function buildSessionIntent(input: IntentBuilderInput): SessionIntent {
-  const { dayNumber, skill, families, constraint, distribution, trainingStyle, experienceLevel, existingIntents } = input
+  const { dayNumber, skill, families, constraint, distribution, trainingStyle, experienceLevel, existingIntents, athleteContext } = input
   
   // [PHASE 16M] Entry guard - distribution must be defined
   // This is the exact crash site for the `.type` undefined error
@@ -596,7 +617,8 @@ function buildSessionIntent(input: IntentBuilderInput): SessionIntent {
   const secondaryFocus = getSecondaryFocus(skill, distribution.supportVariant, constraint)
   
   // Build rationale
-  const rationale = buildSessionRationale(distribution, skill, trainingStyle, dayNumber)
+  // [PROGRAM-TRUTH-STRENGTHENING] Pass athlete context for user-specific rationale
+  const rationale = buildSessionRationale(distribution, skill, trainingStyle, dayNumber, athleteContext)
   
   return {
     sessionType: distribution.type,
@@ -692,31 +714,108 @@ function getSecondaryFocus(skill: SkillType, variant: 'primary' | 'secondary' | 
   return focus
 }
 
+/**
+ * [PROGRAM-TRUTH-STRENGTHENING] Build user-specific session rationale
+ * 
+ * This function now produces rationale that reflects:
+ * - The user's training outcome (skills vs strength vs max reps)
+ * - Their identified limitations and weak points
+ * - Schedule complexity and first-week considerations
+ * - Joint cautions when relevant
+ */
 function buildSessionRationale(
   distribution: SessionDistribution,
   skill: SkillType,
   style: TrainingStyleMode,
-  dayNumber: number
+  dayNumber: number,
+  athleteContext?: AthleteSessionContext
 ): string {
   const skillName = skill.replace(/_/g, ' ')
   
+  // [PROGRAM-TRUTH-STRENGTHENING] Build user-specific context fragments
+  const outcomeContext = athleteContext?.trainingOutcomeLabel 
+    ? ` aligned with your ${athleteContext.trainingOutcomeLabel.toLowerCase()} focus`
+    : ''
+  
+  const limitationContext = athleteContext?.primaryLimitation && athleteContext.primaryLimitation !== 'not_sure'
+    ? buildLimitationPhrase(athleteContext.primaryLimitation)
+    : ''
+  
+  const weakPointContext = athleteContext?.weakestArea && athleteContext.weakestArea !== 'not_sure'
+    ? buildWeakPointPhrase(athleteContext.weakestArea)
+    : ''
+  
+  const jointContext = athleteContext?.jointCautions && athleteContext.jointCautions.length > 0
+    ? ' with joint-conscious loading'
+    : ''
+  
+  const firstWeekContext = athleteContext?.isFirstWeek
+    ? ' Conservative intensity while your body adapts.'
+    : ''
+  
+  const scheduleContext = athleteContext?.scheduleComplexity === 'demanding'
+    ? ' placed strategically within your high-frequency schedule'
+    : ''
+
   switch (distribution.type) {
-    case 'skill_exposure':
-      return `Day ${dayNumber} focuses on high-quality ${skillName} practice with fresh neural output.`
-    case 'strength_emphasis':
-      return `Day ${dayNumber} emphasizes strength development to support ${skillName} progression.`
-    case 'technique_day':
-      return `Day ${dayNumber} prioritizes technique refinement for ${skillName} at submaximal intensity.`
-    case 'support_volume':
-      return `Day ${dayNumber} builds supporting muscle capacity for ${skillName} without high CNS demand.`
-    case 'density_day':
-      return `Day ${dayNumber} uses higher volume with moderate rest to build work capacity for ${skillName}.`
-    case 'joint_support_day':
-      return `Day ${dayNumber} focuses on tendon health and joint preparation for ${skillName} demands.`
-    case 'power_day':
-      return `Day ${dayNumber} develops explosive qualities needed for ${skillName}.`
+  case 'skill_exposure':
+    return `High-quality ${skillName} practice while your nervous system is fresh${outcomeContext}${limitationContext}.${firstWeekContext}`
+  case 'strength_emphasis':
+    return `Strength development supporting your ${skillName} progression${weakPointContext}${jointContext}.${firstWeekContext}`
+  case 'technique_day':
+    return `Technique refinement for ${skillName} at submaximal intensity${outcomeContext}. Focus on movement quality over output.${firstWeekContext}`
+  case 'support_volume':
+    return `Supporting muscle capacity for ${skillName}${weakPointContext}${scheduleContext}. Lower neural demand allows recovery.${firstWeekContext}`
+  case 'density_day':
+    return `Work capacity building for ${skillName} with higher volume and moderate rest${outcomeContext}.${firstWeekContext}`
+  case 'joint_support_day':
+    return `Tendon health and joint preparation for ${skillName} demands${jointContext}. Critical for long-term progress.${firstWeekContext}`
+  case 'power_day':
+    return `Explosive quality development for ${skillName}${outcomeContext}. Maximum effort, full recovery between sets.${firstWeekContext}`
+  default:
+    return `Balanced training supporting ${skillName} development${outcomeContext}${limitationContext}.${firstWeekContext}`
+  }
+}
+
+/**
+ * [PROGRAM-TRUTH-STRENGTHENING] Build limitation-aware phrase
+ */
+function buildLimitationPhrase(limitation: string): string {
+  switch (limitation) {
+    case 'strength':
+      return ' - building the strength foundation you identified as limiting'
+    case 'flexibility':
+      return ' - accounting for flexibility constraints'
+    case 'skill_coordination':
+      return ' - emphasizing the motor patterns you\'re developing'
+    case 'recovery':
+      return ' - respecting your recovery capacity'
+    case 'consistency':
+      return ' - structured for sustainable consistency'
     default:
-      return `Day ${dayNumber} provides balanced training supporting ${skillName} development.`
+      return ''
+  }
+}
+
+/**
+ * [PROGRAM-TRUTH-STRENGTHENING] Build weak-point-aware phrase
+ */
+function buildWeakPointPhrase(weakPoint: string): string {
+  switch (weakPoint) {
+    case 'pulling_strength':
+      return ' with emphasis on your pulling development'
+    case 'pushing_strength':
+      return ' with emphasis on your pushing development'
+    case 'core_strength':
+      return ' with trunk strength priority'
+    case 'shoulder_stability':
+      return ' with scapular control emphasis'
+    case 'hip_mobility':
+      return ' addressing hip mobility needs'
+    case 'hamstring_flexibility':
+      return ' working around hamstring constraints'
+    default:
+      return ''
   }
 }
 

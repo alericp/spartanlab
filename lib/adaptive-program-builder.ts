@@ -369,6 +369,7 @@ import {
   type SessionIntent,
   type RepetitionJustification,
   type SessionSignature,
+  type AthleteSessionContext,
 } from './session-variety-engine'
 import {
   buildWorkoutReasoningSummary,
@@ -10586,6 +10587,41 @@ async function generateAdaptiveProgramImpl(
     isHighFrequency: effectiveTrainingDays > 5,
   })
   
+  // [PROGRAM-TRUTH-STRENGTHENING] Build athlete context for user-specific session rationale
+  const athleteSessionContext: AthleteSessionContext = {
+    trainingOutcome: onboardingProfile?.primaryTrainingOutcome || null,
+    trainingOutcomeLabel: onboardingProfile?.primaryTrainingOutcome 
+      ? (() => {
+          const labels: Record<string, string> = {
+            strength: 'Bodyweight Strength',
+            max_reps: 'Rep Performance',
+            military: 'Military & Tactical Prep',
+            skills: 'Skill Mastery',
+            endurance: 'Endurance & Work Capacity',
+            general_fitness: 'General Fitness',
+          }
+          return labels[onboardingProfile.primaryTrainingOutcome] || null
+        })()
+      : null,
+    primaryLimitation: onboardingProfile?.primaryLimitation || null,
+    weakestArea: onboardingProfile?.weakestArea || null,
+    jointCautions: (onboardingProfile?.jointCautions || []) as string[],
+    selectedSkillLabels: (canonicalProfile.selectedSkills || []).map(s => 
+      s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    ),
+    isFirstWeek,
+    scheduleComplexity: effectiveTrainingDays >= 5 ? 'demanding' : effectiveTrainingDays >= 3 ? 'standard' : 'minimal',
+  }
+  
+  console.log('[program-truth-strengthening] Built athlete session context:', {
+    trainingOutcome: athleteSessionContext.trainingOutcome,
+    primaryLimitation: athleteSessionContext.primaryLimitation,
+    weakestArea: athleteSessionContext.weakestArea,
+    jointCautions: athleteSessionContext.jointCautions,
+    isFirstWeek: athleteSessionContext.isFirstWeek,
+    scheduleComplexity: athleteSessionContext.scheduleComplexity,
+  })
+  
   const sessionIntents = generateWeeklySessionIntents({
     skill: skillType,
     trainingStyle: trainingStyleMode,
@@ -10593,6 +10629,7 @@ async function generateAdaptiveProgramImpl(
     experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
     weeklyDays: effectiveTrainingDays,  // Uses resolved flexible frequency
     existingIntents: [],
+    athleteContext: athleteSessionContext,  // [PROGRAM-TRUTH-STRENGTHENING] Pass user context
   })
   
   // Generate repetition justifications
@@ -23377,7 +23414,8 @@ function generateAdaptiveSession(
     }
     
     // Get day explanation
-    rationale = getDayExplanation(day, GOAL_LABELS[primaryGoal])
+    // [PROGRAM-TRUTH-STRENGTHENING] Prefer user-specific intent rationale over generic day explanation
+    rationale = intent?.rationale || getDayExplanation(day, GOAL_LABELS[primaryGoal])
     
     // Generate endurance finisher if appropriate
     middleStep = 'time_fit_resolving'
@@ -23504,9 +23542,10 @@ function generateAdaptiveSession(
       // [TASK 2] Use actual built session time for fallback, not target preference
       const fallbackCanonicalDuration = effectiveSelection.totalEstimatedTime || sessionMinutesResolved
       console.log('[session-finisher-skipped-due-to-helper-failure]', { middleStep, dayNumber: day.dayNumber, fallbackCanonicalDuration })
-      variants = variants || [{ duration: fallbackCanonicalDuration, label: 'Full Session', selection: effectiveSelection, compressionLevel: 'none' }]
-      adaptationNotes = adaptationNotes || []
-      rationale = rationale || getDayExplanation(day, GOAL_LABELS[primaryGoal])
+  variants = variants || [{ duration: fallbackCanonicalDuration, label: 'Full Session', selection: effectiveSelection, compressionLevel: 'none' }]
+  adaptationNotes = adaptationNotes || []
+  // [PROGRAM-TRUTH-STRENGTHENING] Fallback rationale prefers intent over generic
+  rationale = rationale || intent?.rationale || getDayExplanation(day, GOAL_LABELS[primaryGoal])
       enduranceResult = enduranceResult || { shouldIncludeEndurance: false, blockType: null, duration: 4, rationale: 'Skipped due to helper failure', wasCondensed: false }
       currentFatigueScore = currentFatigueScore ?? 50
       finisher = undefined

@@ -68,6 +68,8 @@ interface AdaptiveSessionCardProps {
   // [PREVIEW-VISIBLE-PROBE] Enable visible truth probe via ?programProbe=1 query param
   // This bypasses NODE_ENV checks to show diagnostics in Preview/production
   showProbe?: boolean
+  // [ALWAYS-VISIBLE-PROBE] Force probe to render unconditionally
+  forceProbe?: boolean
 }
 
 // =============================================================================
@@ -181,7 +183,10 @@ function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
   }
 }
 
-export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter, showProbe = false }: AdaptiveSessionCardProps) {
+export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter, showProbe = false, forceProbe = false }: AdaptiveSessionCardProps) {
+  // [ALWAYS-VISIBLE-PROBE] Generate stable card instance ID for probe correlation
+  const cardInstanceId = `card-${rawSession.dayNumber}-${rawSession.name?.slice(0,10) || 'session'}-${Date.now().toString(36).slice(-4)}`
+  const probeActive = showProbe || forceProbe
   // PHASE 3: Normalize session immediately to prevent crashes
   const session = normalizeSessionForDisplay(rawSession)
   
@@ -572,8 +577,92 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     
   }
   
+  // ==========================================================================
+  // [ALWAYS-VISIBLE-PROBE] Compute flat reason code for diagnostic display
+  // ==========================================================================
+  const computeTopProbeFlatReason = (): string => {
+    if (!sessionStyleMetadata) return 'NO_STYLE_METADATA'
+    if (!sessionStyleMetadata.styledGroups || sessionStyleMetadata.styledGroups.length === 0) return 'NO_STYLED_GROUPS'
+    if (!hasNonStraightGroups) return 'ONLY_STRAIGHT_GROUPS'
+    return 'HAS_GROUPED_TRUTH'
+  }
+  const topProbeFlatReason = computeTopProbeFlatReason()
+  
+  // Compute verdict for top probe
+  const computeTopProbeVerdict = (): string => {
+    if (!sessionStyleMetadata) return 'CARD_DID_NOT_RECEIVE_AUTHORITATIVE_GROUPED_SESSION_DATA'
+    if (!sessionStyleMetadata.styledGroups || sessionStyleMetadata.styledGroups.length === 0) return 'CARD_RECEIVED_ONLY_FLAT_TRUTH'
+    if (!hasNonStraightGroups) return 'CARD_RECEIVED_ONLY_FLAT_TRUTH'
+    // Has grouped truth - will it render grouped?
+    return 'CARD_RECEIVED_GROUPED_TRUTH_AND_SHOULD_RENDER_GROUPED'
+  }
+  const topProbeVerdict = computeTopProbeVerdict()
+  
   return (
     <Card className="bg-[#2A2A2A] border-[#3A3A3A] overflow-hidden">
+      {/* ==========================================================================
+          [ALWAYS-VISIBLE-PROBE] TOP-OF-CARD TRUTH BANNER
+          This renders ABOVE the header, visible even when collapsed
+          Force-enabled via FORCE_VISIBLE_SESSION_PROBE constant
+          ========================================================================== */}
+      {probeActive && (
+        <div className="p-3 bg-fuchsia-900 border-b-4 border-fuchsia-500 font-mono text-xs">
+          <div className="text-fuchsia-200 font-bold text-sm mb-2 flex items-center gap-2">
+            <span className="bg-fuchsia-500 text-white px-2 py-0.5 rounded text-xs">PROBE ACTIVE</span>
+            <span>SESSION TRUTH PROBE - {cardInstanceId}</span>
+          </div>
+          
+          {/* Session Identity */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-fuchsia-300 mb-2">
+            <div>Day: <span className="text-white font-bold">{session.dayNumber}</span></div>
+            <div>Label: <span className="text-white">{session.dayLabel}</span></div>
+            <div>Focus: <span className="text-white">{session.focus || session.focusLabel || 'none'}</span></div>
+            <div>Name: <span className="text-white">{session.name || 'unnamed'}</span></div>
+          </div>
+          
+          {/* Probe Status */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-fuchsia-300 mb-2">
+            <div>probeActive: <span className="text-green-400 font-bold">YES</span></div>
+            <div>forceProbe: <span className={forceProbe ? 'text-green-400' : 'text-gray-400'}>{forceProbe ? 'YES' : 'NO'}</span></div>
+            <div>showProbe: <span className={showProbe ? 'text-green-400' : 'text-gray-400'}>{showProbe ? 'YES' : 'NO'}</span></div>
+            <div>cardInstanceId: <span className="text-white text-[10px]">{cardInstanceId}</span></div>
+          </div>
+          
+          {/* Style Metadata Truth */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-fuchsia-300 mb-2">
+            <div>hasStyleMetadata: <span className={sessionStyleMetadata ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{sessionStyleMetadata ? 'YES' : 'NO'}</span></div>
+            <div>builderHasStyledGroups: <span className={builderHasStyledGroups ? 'text-green-400' : 'text-red-400'}>{builderHasStyledGroups ? 'YES' : 'NO'}</span></div>
+            <div>styledGroups count: <span className="text-white font-bold">{sessionStyleMetadata?.styledGroups?.length || 0}</span></div>
+            <div>non-straight groups: <span className={hasNonStraightGroups ? 'text-green-400 font-bold' : 'text-amber-400 font-bold'}>{sessionStyleMetadata?.styledGroups?.filter(g => g.groupType !== 'straight').length || 0}</span></div>
+          </div>
+          
+          {/* Group Types */}
+          <div className="text-fuchsia-300 mb-2">
+            groupTypes: <span className="text-white">{sessionStyleMetadata?.styledGroups?.map(g => g.groupType).join(', ') || 'none'}</span>
+          </div>
+          
+          {/* Flat Reason */}
+          <div className="text-fuchsia-300 mb-2">
+            flatReasonCode: <span className={topProbeFlatReason === 'HAS_GROUPED_TRUTH' ? 'text-green-400 font-bold' : 'text-amber-400 font-bold'}>{topProbeFlatReason}</span>
+          </div>
+          
+          {/* Exercise Counts */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-fuchsia-300 mb-2">
+            <div>session.exercises: <span className="text-white">{session.exercises?.length || 0}</span></div>
+            <div>isExpanded: <span className={isExpanded ? 'text-green-400' : 'text-gray-400'}>{isExpanded ? 'YES' : 'NO'}</span></div>
+          </div>
+          
+          {/* VERDICT */}
+          <div className={`p-2 rounded text-center font-bold text-sm mt-2 ${
+            topProbeVerdict.includes('GROUPED_TRUTH') 
+              ? 'bg-green-800 text-green-200' 
+              : 'bg-amber-800 text-amber-200'
+          }`}>
+            {topProbeVerdict}
+          </div>
+        </div>
+      )}
+      
       {/* Header - Collapsible day summary */}
       <div
         className="p-4 cursor-pointer hover:bg-[#333333] transition-colors"
@@ -945,6 +1034,8 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   onSkip={handleExerciseSkip}
   onProgressionAdjust={handleProgressionAdjust}
   showProbe={showProbe}
+  forceProbe={forceProbe}
+  cardInstanceId={cardInstanceId}
   />
 
           {/* Finisher Block */}
@@ -1038,6 +1129,10 @@ interface MainExercisesRendererProps {
   onProgressionAdjust: (exerciseId: string, newProgression: string, direction: 'up' | 'down') => void
   // [PREVIEW-VISIBLE-PROBE] Enable visible probe via query param
   showProbe?: boolean
+  // [ALWAYS-VISIBLE-PROBE] Force probe unconditionally
+  forceProbe?: boolean
+  // [ALWAYS-VISIBLE-PROBE] Card instance ID for correlation
+  cardInstanceId?: string
 }
 
 function MainExercisesRenderer({
@@ -1053,7 +1148,11 @@ function MainExercisesRenderer({
   onSkip,
   onProgressionAdjust,
   showProbe = false,
+  forceProbe = false,
+  cardInstanceId = 'unknown',
 }: MainExercisesRendererProps) {
+  // [ALWAYS-VISIBLE-PROBE] Compute probeActive for inner banner
+  const innerProbeActive = showProbe || forceProbe
   // Get style metadata from session if available
   const styleMetadata = (session as AdaptiveSession & { styleMetadata?: SessionStyleMetadata }).styleMetadata
   const styledGroups = styleMetadata?.styledGroups || []
@@ -1125,18 +1224,22 @@ function MainExercisesRenderer({
       : 'GROUPED_RENDER_ACTIVE'
   
   // ==========================================================================
-  // [PREVIEW-VISIBLE-PROBE] RENDER BRANCH BANNER
-  // Visible when showProbe is true (via ?programProbe=1 query param)
+  // [ALWAYS-VISIBLE-PROBE] RENDER BRANCH BANNER
+  // Visible when innerProbeActive is true (force or query param)
   // ==========================================================================
   const DevRenderBranchBanner = () => {
-    if (!showProbe) return null
+    if (!innerProbeActive) return null
     
     if (useGroupedRender) {
       const firstNonStraightGroup = nonStraightGroups[0]
       return (
-        <div className="mb-3 p-2 bg-green-900/50 border-2 border-green-500 rounded font-mono text-[10px]">
-          <div className="text-green-400 font-bold text-xs mb-1">GROUPED RENDER ACTIVE</div>
-          <div className="text-green-300/80 space-y-0.5">
+        <div className="mb-3 p-3 bg-green-900 border-2 border-green-400 rounded font-mono text-xs">
+          <div className="text-green-300 font-bold text-sm mb-2 flex items-center gap-2">
+            <span className="bg-green-500 text-white px-2 py-0.5 rounded text-xs">INNER BRANCH</span>
+            GROUPED CONTENT BRANCH ACTIVE
+          </div>
+          <div className="text-green-200/80 space-y-1">
+            <div>cardInstanceId: <span className="text-white">{cardInstanceId}</span></div>
             <div>Session: Day {session.dayNumber} - {session.focus || session.focusLabel}</div>
             <div>Grouped blocks: {nonStraightGroups.length}</div>
             <div>First group type: {firstNonStraightGroup?.groupType}</div>
@@ -1147,9 +1250,13 @@ function MainExercisesRenderer({
     }
     
     return (
-      <div className="mb-3 p-2 bg-amber-900/50 border-2 border-amber-500 rounded font-mono text-[10px]">
-        <div className="text-amber-400 font-bold text-xs mb-1">FLAT RENDER ACTIVE</div>
-        <div className="text-amber-300/80 space-y-0.5">
+      <div className="mb-3 p-3 bg-amber-900 border-2 border-amber-400 rounded font-mono text-xs">
+        <div className="text-amber-300 font-bold text-sm mb-2 flex items-center gap-2">
+          <span className="bg-amber-500 text-white px-2 py-0.5 rounded text-xs">INNER BRANCH</span>
+          FLAT CONTENT BRANCH ACTIVE
+        </div>
+        <div className="text-amber-200/80 space-y-1">
+          <div>cardInstanceId: <span className="text-white">{cardInstanceId}</span></div>
           <div>Flat reason: <span className="text-red-400 font-bold">{flatReasonCode}</span></div>
           <div>styleMetadata exists: {styleMetadata ? 'YES' : 'NO'}</div>
           <div>styledGroups count: {styledGroups.length}</div>
@@ -1158,7 +1265,7 @@ function MainExercisesRenderer({
           {missingGroupedNames.length > 0 && (
             <div className="text-red-400">Missing from display: {missingGroupedNames.join(', ')}</div>
           )}
-          <div className="mt-1 pt-1 border-t border-amber-500/30">
+          <div className="mt-2 pt-2 border-t border-amber-400/30">
             <span className={doctrineVerdict === 'DOCTRINE_APPEARS_TO_HAVE_CHOSEN_FLAT' ? 'text-blue-400' : 'text-red-400'}>
               Verdict: {doctrineVerdict}
             </span>

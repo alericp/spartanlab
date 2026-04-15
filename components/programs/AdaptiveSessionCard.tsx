@@ -729,6 +729,136 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 </Button>
               </div>
 
+          {/* ==========================================================================
+              [DEV-TRUTH-PROBE] VISIBLE SESSION TRUTH CHIP BLOCK
+              Dev-only diagnostic showing exact session/variant truth state
+              ========================================================================== */}
+          {process.env.NODE_ENV !== 'production' && (
+            <div className="mb-4 p-3 bg-red-900/40 border-2 border-red-500 rounded font-mono text-[10px] space-y-1.5">
+              <div className="text-red-400 font-bold text-xs border-b border-red-500/30 pb-1 mb-2">
+                SESSION TRUTH PROBE (dev only)
+              </div>
+              
+              {/* Session Identity */}
+              <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-red-300/80">
+                <div>dayLabel:</div>
+                <div className="text-white">{session.dayLabel}</div>
+                
+                <div>dayNumber:</div>
+                <div className="text-white">{session.dayNumber}</div>
+                
+                <div>resolvedIdentity:</div>
+                <div className="text-white truncate">{(session as any).resolvedSessionIdentity || 'none'}</div>
+                
+                <div>session.id:</div>
+                <div className="text-white truncate">{(session as any).id || 'none'}</div>
+              </div>
+              
+              {/* Variant State */}
+              <div className="mt-2 pt-2 border-t border-red-500/30">
+                <div className="text-amber-400 font-semibold mb-1">Variant State</div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-amber-300/80">
+                  <div>selectedVariant:</div>
+                  <div className="text-white">{selectedVariant === null ? 'null (Full)' : selectedVariant}</div>
+                  
+                  <div>variantLabel:</div>
+                  <div className="text-white">{activeSessionView.variantLabel || 'Full Session'}</div>
+                  
+                  <div>duration:</div>
+                  <div className="text-white">{activeSessionView.estimatedMinutes} min</div>
+                  
+                  <div>isVariantSelected:</div>
+                  <div className="text-white">{activeSessionView.isVariantSelected ? 'YES' : 'NO'}</div>
+                  
+                  <div>exerciseSource:</div>
+                  <div className="text-white">{activeSessionView.isVariantSelected ? 'variant' : 'base session'}</div>
+                </div>
+              </div>
+              
+              {/* Style Metadata Truth */}
+              <div className="mt-2 pt-2 border-t border-red-500/30">
+                <div className="text-cyan-400 font-semibold mb-1">styleMetadata Truth</div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-cyan-300/80">
+                  <div>hasStyleMetadata:</div>
+                  <div className={sessionStyleMetadata ? 'text-green-400' : 'text-red-400'}>{sessionStyleMetadata ? 'YES' : 'NO'}</div>
+                  
+                  <div>styledGroups count:</div>
+                  <div className="text-white">{sessionStyleMetadata?.styledGroups?.length || 0}</div>
+                  
+                  <div>non-straight groups:</div>
+                  <div className={hasNonStraightGroups ? 'text-green-400 font-bold' : 'text-red-400'}>
+                    {sessionStyleMetadata?.styledGroups?.filter(g => g.groupType !== 'straight').length || 0}
+                  </div>
+                  
+                  <div>groupTypes:</div>
+                  <div className="text-white">
+                    {sessionStyleMetadata?.styledGroups?.map(g => g.groupType).join(', ') || 'none'}
+                  </div>
+                  
+                  <div>primaryStyle:</div>
+                  <div className="text-white">{sessionStyleMetadata?.primaryStyle || 'none'}</div>
+                  
+                  <div>appliedMethods:</div>
+                  <div className="text-white">{sessionStyleMetadata?.appliedMethods?.join(', ') || 'none'}</div>
+                </div>
+              </div>
+              
+              {/* Display Exercises Truth */}
+              <div className="mt-2 pt-2 border-t border-red-500/30">
+                <div className="text-purple-400 font-semibold mb-1">Display Exercises</div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-purple-300/80">
+                  <div>fullVisibleExercises:</div>
+                  <div className="text-white">{fullVisibleExercises.length}</div>
+                  
+                  <div>first 5 names:</div>
+                  <div className="text-white text-[9px]">{fullVisibleExercises.slice(0, 5).map(e => e.name).join(', ')}</div>
+                </div>
+              </div>
+              
+              {/* Grouped Exercise Names from Truth */}
+              <div className="mt-2 pt-2 border-t border-red-500/30">
+                <div className="text-green-400 font-semibold mb-1">Grouped Exercise Names (from styledGroups)</div>
+                <div className="text-green-300/80 text-[9px]">
+                  {sessionStyleMetadata?.styledGroups
+                    ?.filter(g => g.groupType !== 'straight')
+                    .flatMap(g => g.exercises?.map(e => e.name) || [])
+                    .join(', ') || 'none (all straight)'}
+                </div>
+              </div>
+              
+              {/* Render Decision */}
+              <div className="mt-2 pt-2 border-t border-red-500/30">
+                <div className="text-yellow-400 font-semibold mb-1">Render Decision</div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-yellow-300/80">
+                  <div>builderHasStyledGroups:</div>
+                  <div className={builderHasStyledGroups ? 'text-green-400' : 'text-red-400'}>{builderHasStyledGroups ? 'YES' : 'NO'}</div>
+                  
+                  <div>hasNonStraightGroups:</div>
+                  <div className={hasNonStraightGroups ? 'text-green-400' : 'text-red-400'}>{hasNonStraightGroups ? 'YES' : 'NO'}</div>
+                  
+                  <div>useGroupedRender:</div>
+                  <div className={hasNonStraightGroups ? 'text-green-400 font-bold' : 'text-amber-400'}>
+                    {hasNonStraightGroups ? 'GROUPED' : 'FLAT'}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Final Verdict */}
+              <div className="mt-2 pt-2 border-t border-red-500/30">
+                <div className={`text-sm font-bold ${
+                  hasNonStraightGroups 
+                    ? 'text-green-400' 
+                    : 'text-blue-400'
+                }`}>
+                  {hasNonStraightGroups 
+                    ? 'GROUPED_TRUTH_EXISTS - UI SHOULD SHOW GROUPED BLOCKS'
+                    : 'DOCTRINE_CHOSE_FLAT - No non-straight groups in session truth'
+                  }
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* [TASK 4] Time Variants - Improved toggle behavior
               - Full Session = null or 0 (explicitly reset to full)
               - 45 Min = idx of 45-minute variant
@@ -948,6 +1078,89 @@ function MainExercisesRenderer({
   const useGroupedRender = styledGroups.length > 0 && hasNonStraightGroups
   
   // ==========================================================================
+  // [DEV-TRUTH-PROBE] Compute explicit flat reason code
+  // ==========================================================================
+  type FlatReasonCode = 
+    | 'NO_STYLE_METADATA'
+    | 'NO_STYLED_GROUPS'
+    | 'ONLY_STRAIGHT_GROUPS'
+    | 'GROUPED_MATCHING_WOULD_FAIL'
+    | 'GROUPED_BRANCH_ACTIVE'
+  
+  const computeFlatReason = (): FlatReasonCode => {
+    if (!styleMetadata) return 'NO_STYLE_METADATA'
+    if (!styledGroups || styledGroups.length === 0) return 'NO_STYLED_GROUPS'
+    if (!hasNonStraightGroups) return 'ONLY_STRAIGHT_GROUPS'
+    if (useGroupedRender) return 'GROUPED_BRANCH_ACTIVE'
+    return 'GROUPED_MATCHING_WOULD_FAIL'
+  }
+  const flatReasonCode = computeFlatReason()
+  
+  // [DEV-TRUTH-PROBE] Compute grouped-vs-visible overlap
+  const nonStraightGroups = styledGroups.filter(g => g.groupType !== 'straight')
+  const groupedExerciseNamesFromTruth = nonStraightGroups.flatMap(g => g.exercises?.map(e => e.name) || [])
+  const displayExerciseNames = displayExercises.map(e => e.name)
+  const matchedGroupedNames = groupedExerciseNamesFromTruth.filter(name => 
+    displayExerciseNames.some(dn => dn.toLowerCase() === name.toLowerCase())
+  )
+  const missingGroupedNames = groupedExerciseNamesFromTruth.filter(name => 
+    !displayExerciseNames.some(dn => dn.toLowerCase() === name.toLowerCase())
+  )
+  const overlapScore = groupedExerciseNamesFromTruth.length > 0 
+    ? Math.round((matchedGroupedNames.length / groupedExerciseNamesFromTruth.length) * 100)
+    : 0
+  
+  // [DEV-TRUTH-PROBE] Doctrine verdict
+  const doctrineVerdict = nonStraightGroups.length > 0 && !useGroupedRender
+    ? 'GROUPED_TRUTH_EXISTS_BUT_UI_NOT_SHOWING_IT'
+    : nonStraightGroups.length === 0
+      ? 'DOCTRINE_APPEARS_TO_HAVE_CHOSEN_FLAT'
+      : 'GROUPED_RENDER_ACTIVE'
+  
+  // ==========================================================================
+  // [DEV-TRUTH-PROBE] VISIBLE RENDER BRANCH BANNER
+  // ==========================================================================
+  const DevRenderBranchBanner = () => {
+    if (process.env.NODE_ENV === 'production') return null
+    
+    if (useGroupedRender) {
+      const firstNonStraightGroup = nonStraightGroups[0]
+      return (
+        <div className="mb-3 p-2 bg-green-900/50 border-2 border-green-500 rounded font-mono text-[10px]">
+          <div className="text-green-400 font-bold text-xs mb-1">GROUPED RENDER ACTIVE</div>
+          <div className="text-green-300/80 space-y-0.5">
+            <div>Session: Day {session.dayNumber} - {session.focus || session.focusLabel}</div>
+            <div>Grouped blocks: {nonStraightGroups.length}</div>
+            <div>First group type: {firstNonStraightGroup?.groupType}</div>
+            <div>First grouped exercises: {firstNonStraightGroup?.exercises?.map(e => e.name).join(', ')}</div>
+          </div>
+        </div>
+      )
+    }
+    
+    return (
+      <div className="mb-3 p-2 bg-amber-900/50 border-2 border-amber-500 rounded font-mono text-[10px]">
+        <div className="text-amber-400 font-bold text-xs mb-1">FLAT RENDER ACTIVE</div>
+        <div className="text-amber-300/80 space-y-0.5">
+          <div>Flat reason: <span className="text-red-400 font-bold">{flatReasonCode}</span></div>
+          <div>styleMetadata exists: {styleMetadata ? 'YES' : 'NO'}</div>
+          <div>styledGroups count: {styledGroups.length}</div>
+          <div>Non-straight groups: {nonStraightGroups.length}</div>
+          <div>Overlap score: {overlapScore}% ({matchedGroupedNames.length}/{groupedExerciseNamesFromTruth.length})</div>
+          {missingGroupedNames.length > 0 && (
+            <div className="text-red-400">Missing from display: {missingGroupedNames.join(', ')}</div>
+          )}
+          <div className="mt-1 pt-1 border-t border-amber-500/30">
+            <span className={doctrineVerdict === 'DOCTRINE_APPEARS_TO_HAVE_CHOSEN_FLAT' ? 'text-blue-400' : 'text-red-400'}>
+              Verdict: {doctrineVerdict}
+            </span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
+  // ==========================================================================
   // FLAT RENDER PATH - [VISIBLE-IMPROVEMENT] Now groups by category for clarity
   // ==========================================================================
   if (!useGroupedRender) {
@@ -1006,6 +1219,7 @@ function MainExercisesRenderer({
     
     return (
       <div className="space-y-4">
+        <DevRenderBranchBanner />
         {renderCategorySection(skillExercises, 'skill')}
         {renderCategorySection(strengthExercises, 'strength')}
         {renderCategorySection(accessoryExercises, 'accessory')}
@@ -1080,6 +1294,7 @@ function MainExercisesRenderer({
   
   return (
     <div className="space-y-4">
+      <DevRenderBranchBanner />
       {displayBlocks.map((block, blockIdx) => {
         // Handle ungrouped exercise
         if (block.type === 'exercise') {

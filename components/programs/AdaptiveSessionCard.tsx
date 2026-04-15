@@ -1294,6 +1294,7 @@ function ExerciseRow({
   const weekScalingApplied = scaledExercise.weekScalingApplied ?? false
   
   // [EXERCISE-CARD-CONTRACT] Build canonical display contract
+  // [RICH-EXPLANATION-FIX] Pass sessionContext to enable goal-aware reasoning in purpose/effort builders
   const card = buildExerciseCardContract({
     name: exercise.name || 'Exercise',
     category: exercise.category || 'accessory',
@@ -1304,7 +1305,12 @@ function ExerciseRow({
     restSeconds: exercise.restSeconds,
     prescribedLoad: exercise.prescribedLoad as Parameters<typeof buildExerciseCardContract>[0]['prescribedLoad'],
     coachingMeta: exercise.coachingMeta as Parameters<typeof buildExerciseCardContract>[0]['coachingMeta'],
-  })
+  }, sessionContext ? {
+    sessionFocus: sessionContext.sessionFocus,
+    isPrimarySession: sessionContext.isPrimarySession,
+    primaryGoal: sessionContext.primaryGoal,
+    compositionMetadata: sessionContext.compositionMetadata
+  } : undefined)
   
   // [EXERCISE-ROW-SURFACE] Build authoritative row surface for enhanced display
   // [WEEK-PROGRESSION-TRUTH] Use scaled values for week-appropriate dosage display

@@ -593,26 +593,6 @@ function ProgramDisplayWrapper({
   unifiedStaleness: UnifiedStalenessResult | null // [TASK 1] Unified staleness from page
 }) {
   // ==========================================================================
-  // [PROGRAM-RENDER-SOURCE-TRUTH] CRITICAL AUDIT ON EVERY RENDER
-  // This log proves which program object is actually being rendered
-  // Source: program prop comes from useState(program) in ProgramPage
-  // If this log shows a different ID than expected, there's a source override bug
-  // ==========================================================================
-  console.log('[PROGRAM-RENDER-SOURCE-TRUTH]', {
-    authoritative: true,
-    source: 'useState_program_prop',
-    programId: program.id,
-    programCreatedAt: program.createdAt,
-    sessionCount: program.sessions?.length || 0,
-    scheduleMode: (program as unknown as { scheduleMode?: string }).scheduleMode,
-    trainingDaysPerWeek: (program as unknown as { trainingDaysPerWeek?: number }).trainingDaysPerWeek,
-    primaryGoal: program.primaryGoal,
-    exerciseCount: program.sessions?.reduce((sum, s) => sum + (s.exercises?.length || 0), 0) || 0,
-    renderTimestamp: new Date().toISOString(),
-    verdict: 'UI_CONSUMING_AUTHORITATIVE_PROGRAM_STATE',
-  })
-  
-  // ==========================================================================
   // [VISIBLE-PROGRAM-TRUTH-CONTRACT] CANONICAL DISPLAY TRUTH
   // Build the single authoritative truth object for all visible surfaces
   // ==========================================================================
@@ -13916,33 +13896,6 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 <span className="text-[#6A6A6A]">
                   Built {new Date(truthGatedBuildResult.attemptedAt).toLocaleDateString()}
                 </span>
-              </div>
-            )}
-            
-            {/* ==========================================================================
-              [PROGRAM-RENDER-SOURCE-TRUTH-DEBUG] TEMPORARY VISIBLE DEBUG BLOCK
-              Proves UI is consuming authoritative program from state, not stale data
-              ========================================================================== */}
-            {process.env.NODE_ENV !== 'production' && program && (
-              <div className="mb-4 p-3 bg-blue-900/30 border border-blue-500/40 rounded text-xs font-mono">
-                <div className="text-blue-400 font-semibold mb-1">Program Source Truth Debug:</div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-blue-300/80">
-                  <div>Program ID:</div>
-                  <div className="truncate">{program.id?.slice(0, 24) || 'none'}</div>
-                  <div>Total Sessions:</div>
-                  <div>{program.sessions?.length || 0}</div>
-                  <div>Created At:</div>
-                  <div>{program.createdAt ? new Date(program.createdAt).toLocaleString() : 'N/A'}</div>
-                  <div>Schedule Mode:</div>
-                  <div>{(program as unknown as { scheduleMode?: string }).scheduleMode || 'unknown'}</div>
-                  <div>Primary Goal:</div>
-                  <div>{program.primaryGoal || 'none'}</div>
-                  <div>Exercise Count:</div>
-                  <div>{program.sessions?.reduce((sum, s) => sum + (s.exercises?.length || 0), 0) || 0}</div>
-                </div>
-                <div className="mt-2 text-blue-400/60 text-[10px]">
-                  Source: useState(program) via getProgramState() &rarr; getLatestAdaptiveProgram()
-                </div>
               </div>
             )}
             

@@ -71,6 +71,8 @@ interface AdaptiveProgramDisplayProps {
   unifiedStaleness?: UnifiedStalenessResult | null
   // [PREVIEW-VISIBLE-PROBE] Enable truth probe on session cards via ?programProbe=1
   showProbe?: boolean
+  // [ALWAYS-VISIBLE-PROBE] Force probe to render unconditionally
+  forceProbe?: boolean
   }
 
 export function AdaptiveProgramDisplay({
@@ -81,6 +83,7 @@ export function AdaptiveProgramDisplay({
   onExerciseReplace,
   unifiedStaleness, // [TASK 1] Consume parent's staleness evaluation
   showProbe = false, // [PREVIEW-VISIBLE-PROBE] Truth probe visibility
+  forceProbe = false, // [ALWAYS-VISIBLE-PROBE] Force probe unconditionally
   }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
@@ -1135,6 +1138,8 @@ export function AdaptiveProgramDisplay({
   weekCharacter={session.weekCharacter}
   // [PREVIEW-VISIBLE-PROBE] Pass probe flag
   showProbe={showProbe}
+  // [ALWAYS-VISIBLE-PROBE] Pass force probe flag
+  forceProbe={forceProbe}
   />
               </div>
             )

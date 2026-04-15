@@ -585,6 +585,7 @@ function ProgramDisplayWrapper({
   onRecoveryNeeded,
   unifiedStaleness, // [TASK 1] Pass through unified staleness
   showProbe = false, // [PREVIEW-VISIBLE-PROBE] Truth probe visibility via ?programProbe=1
+  forceProbe = false, // [ALWAYS-VISIBLE-PROBE] Force probe unconditionally
 }: { 
   program: AdaptiveProgram
   onDelete: () => void
@@ -593,6 +594,7 @@ function ProgramDisplayWrapper({
   onRecoveryNeeded: () => void
   unifiedStaleness: UnifiedStalenessResult | null // [TASK 1] Unified staleness from page
   showProbe?: boolean // [PREVIEW-VISIBLE-PROBE] Enable truth probe on session cards
+  forceProbe?: boolean // [ALWAYS-VISIBLE-PROBE] Force probe unconditionally
 }) {
   // ==========================================================================
   // [VISIBLE-PROGRAM-TRUTH-CONTRACT] CANONICAL DISPLAY TRUTH
@@ -692,11 +694,20 @@ function ProgramDisplayWrapper({
           onRegenerate={onRegenerate}
           unifiedStaleness={unifiedStaleness}
           showProbe={showProbe}
+          forceProbe={forceProbe}
         />
       </ErrorBoundary>
     </div>
   )
 }
+
+// ==========================================================================
+// [ALWAYS-VISIBLE-PROBE] FORCE DIAGNOSTIC FLAG
+// This is a hard constant that forces the session truth probe to render
+// on every card, without relying on NODE_ENV, query params, or toggles.
+// Set to false when diagnostic pass is complete.
+// ==========================================================================
+const FORCE_VISIBLE_SESSION_PROBE = true
 
 export default function ProgramPage() {
   // ==========================================================================
@@ -730,20 +741,17 @@ export default function ProgramPage() {
   const [mounted, setMounted] = useState(false)
   
   // ==========================================================================
-  // [PREVIEW-VISIBLE-PROBE] Query param to enable truth probe on session cards
-  // Add ?programProbe=1 to URL to show diagnostic panels in Preview/production
+  // [ALWAYS-VISIBLE-PROBE] Force-enabled diagnostic for this pass
+  // Uses hard constant FORCE_VISIBLE_SESSION_PROBE instead of query params
   // ==========================================================================
-  const [showProbe, setShowProbe] = useState(false)
+  const showProbe = FORCE_VISIBLE_SESSION_PROBE
+  
+  // Log that probe is force-enabled
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search)
-      const probeEnabled = params.get('programProbe') === '1'
-      setShowProbe(probeEnabled)
-      if (probeEnabled) {
-        console.log('[PREVIEW-VISIBLE-PROBE] Truth probe ENABLED via ?programProbe=1')
-      }
+    if (showProbe) {
+      console.log('[ALWAYS-VISIBLE-PROBE] Session truth probe FORCE ENABLED - should appear on all cards')
     }
-  }, [])
+  }, [showProbe])
   
   // ==========================================================================
   // [PHASE 31F] STABLE COMPONENT INSTANCE ID
@@ -13932,6 +13940,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   }}
   unifiedStaleness={unifiedStaleness}
   showProbe={showProbe}
+  forceProbe={FORCE_VISIBLE_SESSION_PROBE}
   />
           </div>
         ) : program ? (

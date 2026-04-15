@@ -1427,17 +1427,23 @@ function ExerciseRow({
         )}
       </div>
       
-      {/* ROW 3: Canonical explanation - RICHER doctrine-driven reasoning */}
-      {/* [CANONICAL-EXPLANATION-OWNER] whyLine = rich doctrine explanation from selectionReason */}
-      {/* [COMPACT-CUE-OWNER] prescriptionContext = short execution cue from prescriptionIntent */}
-      {/* Both come from buildExerciseCardContract - same canonical source, no contradiction possible */}
-      {/* BANNED: exercise.note, alignedRowSurface, getBestRowSublabel, coaching explanation fallbacks */}
+      {/* ROW 3: Canonical explanation - TWO LEVELS from SAME canonical contract */}
+      {/* [SUMMARY-OWNER] whyLine = visible card summary (concise WHY) */}
+      {/* [DETAIL-OWNER] detailExplanation = InfoBubble content (richer purpose + effort) */}
+      {/* [COMPACT-CUE] prescriptionContext = fallback execution cue */}
+      {/* All from buildExerciseCardContract - same canonical source, no contradiction possible */}
+      {/* BANNED: exercise.note, alignedRowSurface, getBestRowSublabel, old coaching fallbacks */}
       {!isWarmupCooldown && (card.whyLine || card.prescriptionContext) && (
-        <p className="text-[10px] text-[#6A6A6A] mt-1 italic">
-          {/* Prefer whyLine (rich) over prescriptionContext (compact) */}
-          {/* whyLine explains WHY this exercise, prescriptionContext explains HOW to execute */}
-          {card.whyLine || card.prescriptionContext}
-        </p>
+        <div className="flex items-center gap-1 mt-1">
+          <p className="text-[10px] text-[#6A6A6A] italic">
+            {/* Summary: prefer whyLine (WHY this exercise) over prescriptionContext (HOW to execute) */}
+            {card.whyLine || card.prescriptionContext}
+          </p>
+          {/* InfoBubble: richer detail from same canonical contract */}
+          {card.detailExplanation && card.detailExplanation !== card.whyLine && (
+            <InfoBubble content={card.detailExplanation} />
+          )}
+        </div>
       )}
       
       {/* Constraint note kept - this is safety/equipment info, not prescription wording */}

@@ -2018,7 +2018,8 @@ export interface ExerciseCardDisplayContract {
   restGuidance: string | null  // "90-120s" or null
   
   // WHY - Why this exercise (role-specific, not generic)
-  whyLine: string | null  // Selection reason, refined by intent
+  whyLine: string | null  // Selection reason, refined by intent (SUMMARY - visible on card)
+  detailExplanation: string | null  // Richer purpose + effort reasoning (DETAIL - for info bubble)
   
   // FLAGS - Only when meaningful
   isWeighted: boolean
@@ -2368,6 +2369,49 @@ export function buildExerciseCardContract(
     whyLine = refined.length > 80 ? refined.substring(0, 77) + '...' : refined
   }
   
+  // [RICH-EXPLANATION] Build detail explanation from purpose + effort builders
+  // This is the RICHER content for the info bubble, fed by existing sophisticated builders
+  const purposeLineRich = buildExercisePurposeLine(
+    { 
+      name: exercise.name, 
+      category: exercise.category, 
+      selectionReason: exercise.selectionReason,
+      isPrimary: catLower === 'skill' || catLower === 'strength',
+      coachingMeta: exercise.coachingMeta
+    },
+    undefined, // sessionContext - will use defaults
+    catLower === 'skill' ? 'primary' : catLower === 'strength' ? 'secondary' : 'support'
+  )
+  
+  const effortLineRich = buildExerciseEffortReasonLine(
+    {
+      name: exercise.name,
+      category: exercise.category,
+      targetRPE: exercise.targetRPE,
+      selectionReason: exercise.selectionReason,
+      isPrimary: catLower === 'skill' || catLower === 'strength',
+      coachingMeta: exercise.coachingMeta
+    },
+    undefined // sessionContext - will use defaults
+  )
+  
+  // Compose detail explanation: purpose + effort, avoiding redundancy
+  let detailExplanation: string | null = null
+  if (purposeLineRich && effortLineRich) {
+    // Only combine if they add different information
+    const purposeLower = purposeLineRich.toLowerCase()
+    const effortLower = effortLineRich.toLowerCase()
+    if (!purposeLower.includes(effortLower.substring(0, 20)) && 
+        !effortLower.includes(purposeLower.substring(0, 20))) {
+      detailExplanation = `${purposeLineRich} ${effortLineRich}`
+    } else {
+      // If similar, prefer the longer/richer one
+      detailExplanation = purposeLineRich.length > effortLineRich.length ? purposeLineRich : effortLineRich
+    }
+  } else {
+    detailExplanation = purposeLineRich || effortLineRich || null
+  }
+  
   // Constraint detection
   const isConstrained = reasonLower.includes('limited') ||
     reasonLower.includes('capped') ||
@@ -2399,6 +2443,7 @@ export function buildExerciseCardContract(
     loadBadge,
     restGuidance,
     whyLine,
+    detailExplanation,
     isWeighted: loadBadge !== null,
     isConstrained,
     constraintNote,

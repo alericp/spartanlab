@@ -10587,6 +10587,13 @@ async function generateAdaptiveProgramImpl(
     isHighFrequency: effectiveTrainingDays > 5,
   })
   
+  // ==========================================================================
+  // [REGENERATE-CORRIDOR-FIX] Derive isFirstWeek from authoritative weekAdaptationDecision
+  // This is the SINGLE authoritative source for first-week truth in the generation corridor
+  // All downstream consumers MUST read from this derived value, not from loose variables
+  // ==========================================================================
+  const isFirstWeek = weekAdaptationDecision?.firstWeekGovernor?.active ?? false
+  
   // [PROGRAM-TRUTH-STRENGTHENING] Build athlete context for user-specific session rationale
   const athleteSessionContext: AthleteSessionContext = {
     trainingOutcome: onboardingProfile?.primaryTrainingOutcome || null,

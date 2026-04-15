@@ -1016,27 +1016,35 @@ export interface AdaptiveSession {
     removed: string[]
   }
   // [PHASE 7A] Training style metadata
+  // [AUTHORITATIVE-METHOD-MATERIALIZATION] Extended to support full method materialization
   styleMetadata?: {
-    primaryStyle: TrainingMethodPreference
-    hasSupersetsApplied: boolean
-    hasCircuitsApplied: boolean
-    hasDensityApplied: boolean
-    structureDescription: string
-    appliedMethods: TrainingMethodPreference[]
-    rejectedMethods: Array<{ method: TrainingMethodPreference; reason: string }>
-    styledGroups: Array<{
-      id: string
-      groupType: 'straight' | 'superset' | 'circuit' | 'density_block' | 'cluster'
-      exercises: Array<{
-        id: string
-        name: string
-        prefix?: string
-        trainingMethod: string
-        methodRationale: string
-      }>
-      instruction: string
-      restProtocol: string
-    }>
+  primaryStyle: TrainingMethodPreference
+  hasSupersetsApplied: boolean
+  hasCircuitsApplied: boolean
+  hasDensityApplied: boolean
+  hasClusterApplied?: boolean  // [METHOD-MATERIALIZATION] Cluster sets for quality on skill holds
+  structureDescription: string
+  appliedMethods: TrainingMethodPreference[]
+  rejectedMethods: Array<{ method: string; reason: string }>
+  styledGroups: Array<{
+  id: string
+  groupType: 'straight' | 'superset' | 'circuit' | 'density_block' | 'cluster'
+  exercises: Array<{
+  id: string
+  name: string
+  prefix?: string
+  trainingMethod: string
+  methodRationale: string
+  }>
+  instruction: string
+  restProtocol: string
+  }>
+  // [AUTHORITATIVE-METHOD-MATERIALIZATION] Audit trail for method decisions
+  materializationAudit?: {
+  methodsEvaluated: readonly string[]
+  structureDecisions: Array<{ block: string; method: string; rationale: string }>
+  timestamp: string
+  }
   }
   // [AI_SESSION_MATERIALITY_PHASE] Session-level skill expression metadata
   // This makes the ACTUAL skill materiality visible in each session
@@ -11727,6 +11735,306 @@ async function generateAdaptiveProgramImpl(
       }
     }
     postSessionStep = 'superset_grouping_applied'
+    
+    // =========================================================================
+    // [AUTHORITATIVE TRAINING-METHOD MATERIALIZATION LAYER]
+    // This is the single owner of method decisions beyond supersets.
+    // It evaluates circuits, density blocks, and cluster-style grouping.
+    // All decisions are doctrine-gated and written to durable output contracts.
+    // =========================================================================
+    const methodMaterializationResult = {
+      methodsEvaluated: ['supersets', 'circuits', 'density_blocks', 'cluster_sets'] as const,
+      appliedMethods: [] as string[],
+      rejectedMethods: [] as Array<{ method: string; reason: string }>,
+      structureDecisions: [] as Array<{ block: string; method: string; rationale: string }>,
+    }
+    
+    // Inherit any already-applied methods from superset pass
+    if (session.styleMetadata?.hasSupersetsApplied) {
+      methodMaterializationResult.appliedMethods.push('supersets')
+    }
+    
+    // -------------------------------------------------------------------------
+    // CIRCUIT / DENSITY BLOCK MATERIALIZATION
+    // Only applies to accessory tails or conditioning-focused slots
+    // NEVER applies to skill work or primary strength
+    // -------------------------------------------------------------------------
+    const shouldEvaluateCircuits = methodPrefsForGrouping.includes('circuits') || 
+      methodPrefsForGrouping.includes('density_blocks')
+    const sessionHasCircuitEligibleTail = session.exercises && session.exercises.length >= 5
+    
+    // Check session composition blueprint for method eligibility
+    const blueprintCircuitEligibility = sessionCompositionBlueprint?.methodEligibility?.circuits
+    const blueprintDensityEligibility = sessionCompositionBlueprint?.methodEligibility?.density
+    const circuitsEarned = blueprintCircuitEligibility === 'earned' || blueprintCircuitEligibility === 'allowed'
+    const densityEarned = blueprintDensityEligibility === 'earned' || blueprintDensityEligibility === 'allowed'
+    
+    // Doctrine safety: never circuit/density a skill-primary session
+    const sessionIsSafeForDenseMethods = !isSkillPrimarySession && 
+      !session.focus?.toLowerCase().includes('skill') &&
+      (session.focus?.toLowerCase().includes('support') || 
+       session.focus?.toLowerCase().includes('accessory') ||
+       session.focus?.toLowerCase().includes('conditioning') ||
+       session.focus?.toLowerCase().includes('endurance'))
+    
+    if (shouldEvaluateCircuits && sessionHasCircuitEligibleTail && sessionIsSafeForDenseMethods) {
+      // Find circuit-eligible exercises (accessory/core tail only)
+      const circuitCandidates = session.exercises.filter(ex => {
+        // EXCLUDE: Already grouped in supersets
+        if (ex.blockId && ex.method === 'superset') return false
+        // EXCLUDE: Skill category
+        if (ex.category === 'skill') return false
+        // EXCLUDE: Primary selections
+        if (ex.selectionReason?.includes('primary')) return false
+        // EXCLUDE: Weighted/heavy work
+        const nameLower = ex.name?.toLowerCase() || ''
+        if (nameLower.includes('weighted') || nameLower.includes('heavy')) return false
+        // EXCLUDE: Power/explosive movements
+        if (nameLower.includes('explosive') || nameLower.includes('power') || nameLower.includes('plyometric')) return false
+        // INCLUDE: Core, accessory, conditioning-style work
+        return ex.category === 'core' || ex.category === 'accessory' || 
+               nameLower.includes('hold') || nameLower.includes('plank') ||
+               nameLower.includes('raise') || nameLower.includes('crunch')
+      })
+      
+      // Apply circuit grouping if we have 3+ candidates (not already supersetted)
+      if (circuitCandidates.length >= 3 && (circuitsEarned || densityEarned)) {
+        const circuitSize = Math.min(4, circuitCandidates.length)
+        const circuitExercises = circuitCandidates.slice(-circuitSize) // Take from the end (true tail)
+        const circuitBlockId = `circuit_${session.dayNumber}_1`
+        
+        for (let i = 0; i < circuitExercises.length; i++) {
+          const ex = circuitExercises[i]
+          const idx = session.exercises.findIndex(e => e.id === ex.id)
+          if (idx !== -1) {
+            session.exercises[idx].blockId = circuitBlockId
+            session.exercises[idx].method = 'circuit'
+            session.exercises[idx].methodLabel = `Circuit ${String.fromCharCode(65 + i)}`
+            // Adjust rest for circuit format
+            if (session.exercises[idx].restSeconds && session.exercises[idx].restSeconds > 30) {
+              session.exercises[idx].restSeconds = 15 // Minimal rest between circuit exercises
+            }
+          }
+        }
+        
+        methodMaterializationResult.appliedMethods.push('circuits')
+        methodMaterializationResult.structureDecisions.push({
+          block: 'accessory_tail',
+          method: 'circuit',
+          rationale: `${circuitSize} exercises grouped for density - user selected circuits/density_blocks and session is conditioning-compatible`,
+        })
+        
+        console.log('[TRAINING-METHOD-MATERIALIZED] Circuit applied:', {
+          dayNumber: session.dayNumber,
+          circuitSize,
+          exercises: circuitExercises.map(e => e.name),
+          eligibility: { circuitsEarned, densityEarned },
+        })
+        
+        session.adaptationNotes = session.adaptationNotes || []
+        session.adaptationNotes.push(`${circuitSize}-exercise circuit applied to accessory tail for density`)
+      } else if (circuitCandidates.length < 3) {
+        methodMaterializationResult.rejectedMethods.push({
+          method: 'circuits',
+          reason: `Insufficient circuit candidates (${circuitCandidates.length} < 3 required)`,
+        })
+      } else if (!circuitsEarned && !densityEarned) {
+        methodMaterializationResult.rejectedMethods.push({
+          method: 'circuits',
+          reason: 'Method not earned by session composition blueprint',
+        })
+      }
+    } else if (shouldEvaluateCircuits) {
+      // Log why circuits were not applied
+      if (isSkillPrimarySession || session.focus?.toLowerCase().includes('skill')) {
+        methodMaterializationResult.rejectedMethods.push({
+          method: 'circuits',
+          reason: 'Doctrine safety: circuits blocked on skill-primary sessions',
+        })
+      } else if (!sessionHasCircuitEligibleTail) {
+        methodMaterializationResult.rejectedMethods.push({
+          method: 'circuits', 
+          reason: `Session too short for circuit grouping (${session.exercises?.length || 0} exercises)`,
+        })
+      }
+    }
+    
+    // -------------------------------------------------------------------------
+    // CLUSTER SET MATERIALIZATION
+    // Applies to high-skill or heavy strength work to maintain quality
+    // ONLY when user has selected cluster-style training AND exercise qualifies
+    // -------------------------------------------------------------------------
+    const shouldEvaluateCluster = methodPrefsForGrouping.includes('cluster_sets') ||
+      methodPrefsForGrouping.includes('rest_pause')
+    
+    if (shouldEvaluateCluster && session.exercises && session.exercises.length > 0) {
+      // Find cluster-eligible exercises (skill isometrics, heavy strength holds)
+      const clusterCandidates = session.exercises.filter(ex => {
+        if (ex.blockId) return false // Already grouped
+        const nameLower = ex.name?.toLowerCase() || ''
+        // INCLUDE: High-skill isometric work that benefits from intra-set rest
+        const isSkillHold = ex.category === 'skill' && 
+          (nameLower.includes('hold') || nameLower.includes('lever') || nameLower.includes('planche'))
+        // INCLUDE: Heavy weighted work
+        const isHeavyWork = nameLower.includes('weighted') && ex.category === 'strength'
+        return isSkillHold || isHeavyWork
+      })
+      
+      // Apply cluster to first qualifying exercise only (to preserve quality)
+      if (clusterCandidates.length > 0) {
+        const clusterTarget = clusterCandidates[0]
+        const idx = session.exercises.findIndex(e => e.id === clusterTarget.id)
+        
+        if (idx !== -1) {
+          session.exercises[idx].method = 'cluster'
+          session.exercises[idx].methodLabel = 'Cluster Sets'
+          // Cluster sets use brief intra-set rest (10-20s)
+          // Keep longer inter-set rest
+          
+          methodMaterializationResult.appliedMethods.push('cluster_sets')
+          methodMaterializationResult.structureDecisions.push({
+            block: 'primary_skill',
+            method: 'cluster',
+            rationale: `Cluster format applied to ${clusterTarget.name} for quality maintenance on high-demand work`,
+          })
+          
+          console.log('[TRAINING-METHOD-MATERIALIZED] Cluster sets applied:', {
+            dayNumber: session.dayNumber,
+            exercise: clusterTarget.name,
+            category: clusterTarget.category,
+          })
+          
+          session.adaptationNotes = session.adaptationNotes || []
+          session.adaptationNotes.push(`Cluster set format applied to ${clusterTarget.name} for quality`)
+        }
+      } else {
+        methodMaterializationResult.rejectedMethods.push({
+          method: 'cluster_sets',
+          reason: 'No qualifying exercises for cluster format (requires skill holds or weighted strength)',
+        })
+      }
+    }
+    
+    // -------------------------------------------------------------------------
+    // UPDATE STYLE METADATA WITH FULL METHOD MATERIALIZATION RESULTS
+    // This ensures durable truth survives save/load/render cycles
+    // -------------------------------------------------------------------------
+    const existingStyleMeta = session.styleMetadata || {}
+    const hasCircuitsApplied = methodMaterializationResult.appliedMethods.includes('circuits')
+    const hasDensityApplied = hasCircuitsApplied // Circuits are a form of density
+    const hasClusterApplied = methodMaterializationResult.appliedMethods.includes('cluster_sets')
+    
+    // Rebuild styledGroups from final exercise state
+    type StyledGroupFinal = {
+      id: string
+      groupType: 'straight' | 'superset' | 'circuit' | 'density_block' | 'cluster'
+      exercises: Array<{
+        id: string
+        name: string
+        prefix?: string
+        trainingMethod: string
+        methodRationale: string
+      }>
+      instruction: string
+      restProtocol: string
+    }
+    
+    const finalStyledGroups: StyledGroupFinal[] = []
+    const processedBlockIds = new Set<string>()
+    
+    for (const ex of session.exercises || []) {
+      if (ex.blockId && !processedBlockIds.has(ex.blockId)) {
+        processedBlockIds.add(ex.blockId)
+        const blockExercises = session.exercises.filter(e => e.blockId === ex.blockId)
+        const groupType = ex.method === 'circuit' ? 'circuit' : 
+                         ex.method === 'superset' ? 'superset' : 
+                         ex.method === 'cluster' ? 'cluster' : 'straight'
+        
+        finalStyledGroups.push({
+          id: ex.blockId,
+          groupType,
+          exercises: blockExercises.map((e, idx) => ({
+            id: e.id,
+            name: e.name,
+            prefix: String.fromCharCode(65 + idx),
+            trainingMethod: e.method || 'straight_sets',
+            methodRationale: e.methodLabel || 'Standard execution',
+          })),
+          instruction: groupType === 'circuit' 
+            ? 'Complete all exercises in sequence, then rest before next round'
+            : groupType === 'superset'
+            ? 'Alternate between exercises with minimal rest'
+            : groupType === 'cluster'
+            ? 'Use brief 10-20s intra-set rest to maintain quality'
+            : 'Complete all sets before moving on',
+          restProtocol: groupType === 'circuit' ? '60-90s after full circuit'
+            : groupType === 'superset' ? '0-15s between, 90-120s after pair'
+            : groupType === 'cluster' ? '10-20s intra-set, 120-180s inter-set'
+            : '60-120s between sets',
+        })
+      }
+    }
+    
+    // Add remaining ungrouped exercises as straight sets
+    const ungroupedExercises = (session.exercises || []).filter(e => !e.blockId)
+    for (const ex of ungroupedExercises) {
+      finalStyledGroups.push({
+        id: `straight_${ex.id}`,
+        groupType: ex.method === 'cluster' ? 'cluster' : 'straight',
+        exercises: [{
+          id: ex.id,
+          name: ex.name,
+          prefix: undefined,
+          trainingMethod: ex.method || 'straight_sets',
+          methodRationale: ex.methodLabel || ex.selectionReason || 'Standard execution',
+        }],
+        instruction: ex.method === 'cluster' 
+          ? 'Use brief 10-20s intra-set rest to maintain quality'
+          : 'Complete all sets before moving on',
+        restProtocol: ex.category === 'skill' ? '120-180s' : '60-90s',
+      })
+    }
+    
+    // Determine primary style based on applied methods
+    const primaryStyle = hasCircuitsApplied ? 'circuits' :
+      existingStyleMeta.hasSupersetsApplied ? 'supersets' :
+      hasClusterApplied ? 'cluster_sets' : 'straight_sets'
+    
+    session.styleMetadata = {
+      ...existingStyleMeta,
+      primaryStyle,
+      hasSupersetsApplied: existingStyleMeta.hasSupersetsApplied || false,
+      hasCircuitsApplied,
+      hasDensityApplied,
+      hasClusterApplied,
+      structureDescription: methodMaterializationResult.structureDecisions.length > 0
+        ? methodMaterializationResult.structureDecisions.map(d => d.rationale).join('; ')
+        : existingStyleMeta.structureDescription || 'Standard straight sets',
+      appliedMethods: [...new Set([
+        ...(existingStyleMeta.appliedMethods || []),
+        ...methodMaterializationResult.appliedMethods,
+        'straight_sets', // Always include as baseline
+      ])],
+      rejectedMethods: methodMaterializationResult.rejectedMethods,
+      styledGroups: finalStyledGroups,
+      // Audit trail for materialization
+      materializationAudit: {
+        methodsEvaluated: methodMaterializationResult.methodsEvaluated,
+        structureDecisions: methodMaterializationResult.structureDecisions,
+        timestamp: new Date().toISOString(),
+      },
+    }
+    
+    console.log('[TRAINING-METHOD-MATERIALIZATION-COMPLETE]', {
+      dayNumber: session.dayNumber,
+      focus: session.focus,
+      appliedMethods: session.styleMetadata.appliedMethods,
+      rejectedMethods: methodMaterializationResult.rejectedMethods.map(r => `${r.method}: ${r.reason}`),
+      styledGroupsCount: finalStyledGroups.length,
+      primaryStyle,
+    })
+    
+    postSessionStep = 'training_method_materialization_complete'
     
     // =========================================================================
     // STEP E: Post-mutation core integrity check

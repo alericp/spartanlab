@@ -10975,6 +10975,22 @@ async function generateAdaptiveProgramImpl(
     const intent = sessionIntents[index]
     
     // ==========================================================================
+    // [SESSION-INTENT-DEFENSIVE-GUARD] Ensure intent is ALWAYS defined with fallback
+    // This prevents undefined access errors if sessionIntents array is somehow short
+    // While the validation at 10878 should catch this, this is a defensive safeguard
+    // ==========================================================================
+    if (!intent) {
+      console.warn('[session-intent-defensive-guard] Intent undefined at index', {
+        index,
+        sessionIntentsLength: sessionIntents.length,
+        structureDaysLength: structure.days.length,
+        dayFocus: day.focus,
+        dayNumber: day.dayNumber,
+        verdict: 'INTENT_UNDEFINED_WILL_USE_FALLBACK',
+      })
+    }
+    
+    // ==========================================================================
     // [SESSION-COMPOSITION-INTELLIGENCE] Build composition blueprint for this session
     // This determines block structure, ordering, method eligibility BEFORE exercise selection
     // ==========================================================================
@@ -11124,6 +11140,28 @@ async function generateAdaptiveProgramImpl(
   // ==========================================================================
   // [POST-TRUTH-CORRIDOR] Wrap session generation in try/catch for fallback
   // ==========================================================================
+  
+  // ==========================================================================
+  // [SESSION-GENERATION-ENTRY-AUDIT] Prove sessionContext contract at generation entry
+  // This helps diagnose any missing/null fields that could cause downstream errors
+  // ==========================================================================
+  console.log('[session-generation-entry-audit]', {
+    sessionIndex: index,
+    dayNumber: day.dayNumber,
+    dayFocus: day.focus,
+    hasSessionIntent: !!sessionContext.sessionIntent,
+    sessionIntentRationale: sessionContext.sessionIntent?.rationale?.slice(0, 50) || 'no_rationale',
+    hasWeekAdaptation: !!sessionContext.weekAdaptation,
+    hasCompositionBlueprint: !!sessionContext.sessionCompositionBlueprint,
+    hasDoctrineContract: !!sessionContext.doctrineRuntimeContract,
+    hasAuthoritativeSpine: !!sessionContext.authoritativeSpine,
+    hasUnifiedDoctrineDecision: !!sessionContext.unifiedDoctrineDecision,
+    selectedSkillsCount: sessionContext.selectedSkills?.length || 0,
+    verdict: sessionContext.sessionIntent 
+      ? 'SESSION_INTENT_PRESENT'
+      : 'SESSION_INTENT_NULL_WILL_USE_FALLBACK_RATIONALE',
+  })
+  
   let session: AdaptiveSession
   let sessionGenerationFailed = false
   try {
@@ -23937,7 +23975,24 @@ function generateAdaptiveSession(
     // Get day explanation
     // [PROGRAM-TRUTH-STRENGTHENING] Prefer user-specific intent rationale over generic day explanation
     // [DAY-CONTRACT-OWNERSHIP-FIX] Use sessionIntent from context, not outer scope intent
+    // ==========================================================================
+    // [SESSION-RATIONALE-CONTRACT-AUDIT] Trace rationale source for ownership debugging
+    // ==========================================================================
+    const rationaleSource = sessionIntent?.rationale ? 'session_intent_rationale' : 'generic_day_explanation'
     rationale = sessionIntent?.rationale || getDayExplanation(day, GOAL_LABELS[primaryGoal])
+    
+    if (rationaleSource === 'generic_day_explanation') {
+      console.log('[session-rationale-contract-audit]', {
+        sessionIndex,
+        dayNumber: day.dayNumber,
+        dayFocus: day.focus,
+        rationaleSource,
+        sessionIntentExists: !!sessionIntent,
+        sessionIntentRationaleExists: !!sessionIntent?.rationale,
+        fallbackUsed: 'getDayExplanation',
+        verdict: 'USING_GENERIC_FALLBACK_NO_ISSUE',
+      })
+    }
     
     // Generate endurance finisher if appropriate
     middleStep = 'time_fit_resolving'

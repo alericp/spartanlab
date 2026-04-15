@@ -1413,8 +1413,10 @@ function ExerciseRow({
       </div>
       
       {/* ROW 2: Unified prescription - SINGLE VISIBLE DOSAGE TRUTH */}
-      {/* [SINGLE-TRUTH-SURFACE] This is the ONLY prescription surface. All secondary text paths removed. */}
-      {/* REMOVED: prescriptionContext, chips, exercise.note - all were stale/contradictory sources */}
+      {/* [CANONICAL-DISPLAY-CONTRACT] All fields from buildExerciseCardContract in program-display-contract.ts */}
+      {/* DOSAGE OWNER: prescriptionLine, intensityBadge, restGuidance */}
+      {/* EXPLANATION OWNER: prescriptionContext (derived from same prescriptionIntent) */}
+      {/* BANNED STALE SOURCES: exercise.note (doctrineFinalNote), alignedRowSurface chips, getBestRowSublabel */}
       <div className="flex items-center gap-2 mt-1">
         <span className="text-[13px] font-medium text-[#CACACA]">{card.prescriptionLine}</span>
         {card.intensityBadge && hasRPE && (
@@ -1425,12 +1427,12 @@ function ExerciseRow({
         )}
       </div>
       
-      {/* [SINGLE-TRUTH-FIX] ALL SECONDARY TEXT PATHS REMOVED:
-          - prescriptionContext: came from card contract but separate logic, could contradict
-          - ROW 2.5 chips: came from alignedRowSurface, fed by doctrine notes
-          - exercise.note: came from doctrineFinalNote in program-exercise-selector.ts
-            containing "Quality focus: fewer reps" and "Recovery-managed volume"
-          The card now has ONE truth surface: prescriptionLine + intensityBadge + restGuidance */}
+      {/* ROW 3: Canonical explanation - from SAME display contract as dosage */}
+      {/* prescriptionContext is computed from prescriptionIntent in buildExerciseCardContract */}
+      {/* It cannot contradict because it uses the same intent that determines the dosage pattern */}
+      {card.prescriptionContext && !isWarmupCooldown && (
+        <p className="text-[10px] text-[#6A6A6A] mt-1 italic">{card.prescriptionContext}</p>
+      )}
       
       {/* Constraint note kept - this is safety/equipment info, not prescription wording */}
       {card.constraintNote && (

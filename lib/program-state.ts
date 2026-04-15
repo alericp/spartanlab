@@ -37,154 +37,78 @@ import {
 import { EMPTY_SKILL_TRACE, getSafeSkillTrace } from './safe-access'
 
 // =============================================================================
-// [GROUPED-CONTRACT-RECONCILIATION] Canonical Load-Time Grouped Truth Reconciler
+// [BUILDER-TRUTH-PRESERVATION] Canonical Load-Time Grouped Truth Preservation
 // =============================================================================
-// This ensures persisted programs don't keep obsolete grouped metadata after
-// grouping rules evolve. Stale grouped fields are CLEARED and REBUILT from
-// CURRENT grouping eligibility rules - not blindly preserved.
+// CRITICAL DOCTRINE: The builder is the SINGLE AUTHORITATIVE SOURCE for grouped
+// training method truth. Load-time normalization must PRESERVE builder truth,
+// not rebuild it with potentially different/outdated eligibility rules.
+//
+// This was changed from destructive reconciliation to preservation because:
+// 1. The builder may use DIFFERENT (richer) eligibility rules than load-time
+// 2. Re-running eligibility at load-time creates version skew
+// 3. Users expect their generated program to stay consistent after save/reload
+// 4. Any eligibility changes should require explicit program regeneration
+//
+// ALLOWED: Null-safety defaults, structural validation
+// NOT ALLOWED: Re-deciding method eligibility, rebuilding styledGroups from scratch
 // =============================================================================
 
 /**
- * Check if an exercise is eligible for superset grouping under CURRENT rules.
- * This is the SAME eligibility logic as the builder, extracted for load-time reconciliation.
- */
-function isEligibleForSuperset(ex: AdaptiveExercise): boolean {
-  const nameLower = ex.name?.toLowerCase() || ''
-  
-  // EXCLUDE: Skill category exercises
-  if (ex.category === 'skill') return false
-  
-  // EXCLUDE: Primary selection reason exercises (main session pillars)
-  if (ex.selectionReason?.includes('primary')) return false
-  
-  // EXCLUDE: Weighted/heavy strength work
-  if (nameLower.includes('weighted') || nameLower.includes('heavy')) return false
-  
-  // EXCLUDE: Power/explosive/plyometric movements - these require full rest
-  if (nameLower.includes('explosive') ||
-      nameLower.includes('power') ||
-      nameLower.includes('plyometric') ||
-      nameLower.includes('dynamic') ||
-      nameLower.includes('ballistic') ||
-      nameLower.includes('jumping') ||
-      nameLower.includes('clapping')) return false
-  
-  // EXCLUDE: Main compound strength movements that function as session pillars
-  if (nameLower.includes('muscle-up') ||
-      nameLower.includes('front lever') ||
-      nameLower.includes('back lever') ||
-      nameLower.includes('planche') ||
-      nameLower.includes('iron cross')) return false
-  
-  return true
-}
-
-/**
- * Reconcile session grouped contract to CURRENT rules.
- * This CLEARS stale grouped fields and REBUILDS canonical grouped truth.
+ * PRESERVE session grouped contract from builder (NOT rebuild it).
+ * This function validates structural integrity and adds safe defaults,
+ * but does NOT re-evaluate eligibility or rebuild grouped truth.
  * 
- * - Strips stale blockId/method/methodLabel from exercises that no longer qualify
- * - Rebuilds styleMetadata.styledGroups from CURRENT eligibility rules
- * - Ensures grouped truth matches what the builder would produce today
+ * The builder's styleMetadata/styledGroups/appliedMethods are AUTHORITATIVE.
+ * Load-time normalization must not act as a shadow builder.
  */
-function reconcileSessionGroupedContract(session: AdaptiveSession): AdaptiveSession {
+function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSession {
   if (!session || !Array.isArray(session.exercises)) return session
   
-  // Step 1: Clean all exercises - remove stale grouped decorations
-  const cleanedExercises = session.exercises.map((ex, idx) => {
-    // Check if this exercise CURRENTLY qualifies for superset
-    const qualifiesNow = isEligibleForSuperset(ex)
-    
-    // If it had grouped fields but no longer qualifies, STRIP THEM
-    if (!qualifiesNow && (ex.blockId || ex.method === 'superset' || ex.method === 'circuit')) {
-      const { blockId, method, methodLabel, ...cleanEx } = ex as AdaptiveExercise & { blockId?: string; method?: string; methodLabel?: string }
-      return cleanEx
-    }
-    
-    return ex
-  })
+  // ==========================================================================
+  // [FUNNEL-RULE] BUILDER TRUTH IS AUTHORITATIVE - PRESERVE, DON'T REBUILD
+  // ==========================================================================
+  // If the builder computed grouped truth (styleMetadata exists), preserve it.
+  // Only add safe defaults for missing structural fields - never re-evaluate.
+  // ==========================================================================
   
-  // Step 2: Identify CURRENT valid superset candidates (from tail, per builder logic)
-  const supersetCandidates = cleanedExercises
-    .map((ex, idx) => ({ ex, idx }))
-    .filter(({ ex }) => isEligibleForSuperset(ex))
-  
-  // Step 3: Rebuild superset pairs from the END of the candidate array (matching builder)
-  const newSupersetGroups: Array<{
-    id: string
-    groupType: 'superset' | 'straight'
-    exercises: Array<{ id: string; name: string; prefix?: string }>
-    instruction?: string
-  }> = []
-  
-  const pairedIndexes = new Set<number>()
-  
-  if (supersetCandidates.length >= 2) {
-    const pairsToCreate = Math.min(2, Math.floor(supersetCandidates.length / 2))
-    let pairsCreated = 0
-    
-    // Pair from the END (true accessory/core tail)
-    for (let i = supersetCandidates.length - 2; i >= 0 && pairsCreated < pairsToCreate; i -= 2) {
-      const { ex: ex1, idx: idx1 } = supersetCandidates[i]
-      const { ex: ex2, idx: idx2 } = supersetCandidates[i + 1]
-      
-      // Assign blockId to these exercises
-      const blockId = `superset-${pairsCreated + 1}`
-      cleanedExercises[idx1] = { ...cleanedExercises[idx1], blockId, method: 'superset' as const }
-      cleanedExercises[idx2] = { ...cleanedExercises[idx2], blockId, method: 'superset' as const }
-      
-      pairedIndexes.add(idx1)
-      pairedIndexes.add(idx2)
-      
-      newSupersetGroups.push({
-        id: blockId,
-        groupType: 'superset',
-        exercises: [
-          { id: ex1.id || `ex-${idx1}`, name: ex1.name, prefix: 'A' },
-          { id: ex2.id || `ex-${idx2}`, name: ex2.name, prefix: 'B' },
-        ],
-        instruction: 'Alternate with minimal rest',
-      })
-      
-      pairsCreated++
-    }
-  }
-  
-  // Step 4: Build straight groups for non-supersetted exercises
-  const straightGroups: typeof newSupersetGroups = []
-  cleanedExercises.forEach((ex, idx) => {
-    if (!pairedIndexes.has(idx)) {
-      straightGroups.push({
-        id: `straight-${idx}`,
-        groupType: 'straight',
-        exercises: [{ id: ex.id || `ex-${idx}`, name: ex.name }],
-      })
-    }
-  })
-  
-  // Step 5: Rebuild styleMetadata with CURRENT grouped truth
-  const hasSupersetsApplied = newSupersetGroups.length > 0
-  const styledGroups = [...newSupersetGroups, ...straightGroups]
-  
-  // Preserve unrelated styleMetadata fields, but OVERWRITE grouped fields
   const existingMeta = session.styleMetadata || {}
-  const reconciledMeta = {
-    ...existingMeta,
-    // ALWAYS overwrite grouped-contract fields with CURRENT truth
-    hasSupersetsApplied,
-    styledGroups,
-    structureDescription: hasSupersetsApplied 
-      ? `${newSupersetGroups.length} superset pair${newSupersetGroups.length > 1 ? 's' : ''} on accessory work`
-      : existingMeta.structureDescription || '',
-    appliedMethods: hasSupersetsApplied 
-      ? ['supersets', 'straight_sets']
-      : ['straight_sets'],
+  
+  // If builder already computed styledGroups, PRESERVE them exactly
+  if (existingMeta.styledGroups && Array.isArray(existingMeta.styledGroups) && existingMeta.styledGroups.length > 0) {
+    // Builder truth exists - preserve it intact, only ensure structural fields
+    return {
+      ...session,
+      styleMetadata: {
+        ...existingMeta,
+        // Ensure these fields exist but don't overwrite builder values
+        hasSupersetsApplied: existingMeta.hasSupersetsApplied ?? existingMeta.styledGroups.some((g: { groupType: string }) => g.groupType === 'superset'),
+        appliedMethods: existingMeta.appliedMethods ?? ['straight_sets'],
+      },
+    }
   }
+  
+  // ==========================================================================
+  // [FALLBACK] Only create defaults when builder provided NO grouped truth
+  // ==========================================================================
+  // This handles programs saved before method materialization was implemented.
+  // We create minimal straight groups as safe defaults, not as authoritative truth.
+  // ==========================================================================
+  
+  const fallbackStyledGroups = session.exercises.map((ex, idx) => ({
+    id: `straight-${idx}`,
+    groupType: 'straight' as const,
+    exercises: [{ id: ex.id || `ex-${idx}`, name: ex.name }],
+  }))
   
   return {
     ...session,
-    exercises: cleanedExercises,
-    styleMetadata: reconciledMeta,
+    styleMetadata: {
+      ...existingMeta,
+      hasSupersetsApplied: false,
+      styledGroups: fallbackStyledGroups,
+      appliedMethods: ['straight_sets'],
+      structureDescription: existingMeta.structureDescription || '',
+    },
   }
 }
 
@@ -1271,9 +1195,9 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
           : [],
       } : undefined,
       
-      // [PHASE-X] Ensure sessions array exists and normalize each session
-      // This prevents downstream crashes from malformed session data
-      // [GROUPED-CONTRACT-RECONCILIATION] Also reconcile stale grouped truth to CURRENT rules
+    // [PHASE-X] Ensure sessions array exists and normalize each session
+    // This prevents downstream crashes from malformed session data
+    // [BUILDER-TRUTH-PRESERVATION] Preserve builder's grouped truth, don't rebuild
       sessions: Array.isArray(program.sessions) 
         ? program.sessions
             .filter(s => s && typeof s === 'object' && Array.isArray(s.exercises))
@@ -1310,9 +1234,9 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
                 cooldown: Array.isArray(s.cooldown) ? s.cooldown : [],
               }
               
-              // [GROUPED-CONTRACT-RECONCILIATION] Reconcile grouped truth to CURRENT rules
-              // This ensures stale persisted grouped metadata doesn't survive builder evolution
-              return reconcileSessionGroupedContract(normalizedSession)
+        // [BUILDER-TRUTH-PRESERVATION] Preserve builder's grouped truth, don't rebuild
+        // Load-time normalization preserves authoritative builder output
+        return preserveSessionGroupedContract(normalizedSession)
             })
         : [],
       
@@ -1366,27 +1290,25 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
       console.warn('[CONTRACT_NORMALIZATION] Missing fields normalized:', missingFields.join(', '))
     }
     
-    // [GROUPED-CONTRACT-RECONCILIATION] Log grouped truth reconciliation results
-    const reconciledSessions = normalized.sessions.map((s, idx) => {
+    // [BUILDER-TRUTH-PRESERVATION] Log grouped truth preservation audit
+    const preservedSessions = normalized.sessions.map((s, idx) => {
       const originalMeta = program.sessions?.[idx]?.styleMetadata
-      const newMeta = s.styleMetadata
+      const preservedMeta = s.styleMetadata
       return {
         day: s.dayNumber,
         originalSupersetsApplied: originalMeta?.hasSupersetsApplied,
-        reconciledSupersetsApplied: newMeta?.hasSupersetsApplied,
+        preservedSupersetsApplied: preservedMeta?.hasSupersetsApplied,
         originalGroupCount: originalMeta?.styledGroups?.length || 0,
-        reconciledGroupCount: newMeta?.styledGroups?.length || 0,
-        supersetGroups: newMeta?.styledGroups?.filter((g: { groupType: string }) => g.groupType === 'superset').length || 0,
+        preservedGroupCount: preservedMeta?.styledGroups?.length || 0,
+        supersetGroups: preservedMeta?.styledGroups?.filter((g: { groupType: string }) => g.groupType === 'superset').length || 0,
+        builderTruthPreserved: originalMeta?.styledGroups?.length === preservedMeta?.styledGroups?.length,
       }
     })
     
-    const groupedReconciliationOccurred = reconciledSessions.some(s => 
-      s.originalSupersetsApplied !== s.reconciledSupersetsApplied ||
-      s.originalGroupCount !== s.reconciledGroupCount
-    )
+    const builderTruthFullyPreserved = preservedSessions.every(s => s.builderTruthPreserved)
     
-    if (groupedReconciliationOccurred) {
-      console.log('[GROUPED-CONTRACT-RECONCILIATION] Stale grouped truth reconciled:', reconciledSessions)
+    if (!builderTruthFullyPreserved) {
+      console.warn('[BUILDER-TRUTH-PRESERVATION] Some sessions had no builder truth - fallback defaults applied:', preservedSessions)
     }
     
     console.log('[ProgramState] Normalized program for display:', {
@@ -1396,7 +1318,7 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
       hasStructure: !!program.structure,
       hasEngineContext: !!program.engineContext,
       contractFieldsNormalized: missingFields.length,
-      groupedReconciliationOccurred,
+      builderTruthFullyPreserved,
     })
     
     return normalized

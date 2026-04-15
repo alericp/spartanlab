@@ -598,6 +598,19 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 {activeSessionView.estimatedMinutes} min
               </span>
               <span>{fullVisibleExercises.length} exercises</span>
+              {/* [SURGICAL-DEBUG] Visible structure truth indicator */}
+              {process.env.NODE_ENV !== 'production' && (
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${
+                  hasNonStraightGroups 
+                    ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                    : 'bg-zinc-600/30 text-zinc-400'
+                }`}>
+                  {hasNonStraightGroups 
+                    ? `GROUPED: ${sessionStyleMetadata?.styledGroups?.filter(g => g.groupType !== 'straight').map(g => g.groupType).join(', ')}`
+                    : `FLAT (${sessionStyleMetadata?.styledGroups?.length || 0} straight groups)`
+                  }
+                </span>
+              )}
               {activeSessionView.isVariantSelected && (
                 <span className="text-[#E63946]/70">({activeSessionView.variantLabel})</span>
               )}
@@ -946,6 +959,18 @@ function MainExercisesRenderer({
   // Determine render mode - use groups only if they actually have meaningful structure
   const hasNonStraightGroups = styledGroups.some(g => g.groupType !== 'straight')
   const useGroupedRender = styledGroups.length > 0 && hasNonStraightGroups
+  
+  // [SURGICAL-DEBUG] Trace why grouped render may not be activating
+  console.log('[GROUPED-RENDER-DECISION]', {
+    sessionDayNumber: session.dayNumber,
+    sessionFocus: session.focus,
+    hasStyleMetadata: !!styleMetadata,
+    styledGroupsCount: styledGroups.length,
+    styledGroupTypes: styledGroups.map(g => g.groupType),
+    hasNonStraightGroups,
+    useGroupedRender,
+    methodIntentContract: styleMetadata?.methodIntentContract,
+  })
   
   // ==========================================================================
   // FLAT RENDER PATH - [VISIBLE-IMPROVEMENT] Now groups by category for clarity

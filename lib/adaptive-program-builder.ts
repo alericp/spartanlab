@@ -11732,6 +11732,17 @@ async function generateAdaptiveProgramImpl(
       // [SUPERSET-PAIRING-FIX] Pair from the END of the candidate array (true accessory/core tail)
       // NOT from the front - earlier exercises are often more important even if they pass the filter
       // Group into pairs for supersets (max 2 superset pairs per session)
+      
+      // [SURGICAL-DEBUG] Log superset candidate detection
+      console.log('[SUPERSET-CANDIDATE-DETECTION]', {
+        dayNumber: session.dayNumber,
+        totalExercises: session.exercises?.length || 0,
+        candidateCount: supersetCandidates.length,
+        candidateNames: supersetCandidates.map(e => e.name),
+        willCreatePairs: supersetCandidates.length >= 2,
+        shouldApplySupersets,
+      })
+      
       if (supersetCandidates.length >= 2) {
         const pairsToCreate = Math.min(2, Math.floor(supersetCandidates.length / 2))
         let pairsCreated = 0

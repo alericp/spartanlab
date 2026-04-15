@@ -1442,15 +1442,33 @@ function ExerciseRow({
         // This delegates to the sophisticated reasoning engine in program-display-contract.ts
         const coachingExpl = coachingExplanation ? getCompactExerciseExplanation(coachingExplanation, exercise.id) : null
         
+        // [CONTRADICTION-FIX] Filter out explanations that mention RPE values
+        // The coaching explanation uses BASE RPE, but the card headline uses SCALED RPE
+        // To avoid "RPE 8" in headline vs "RPE 7" in sublabel, we:
+        // 1. Never show RPE-containing text in the sublabel
+        // 2. Prefer role explanations that describe intent without specific RPE numbers
+        const filterOutRpeText = (text: string | null | undefined): string | null => {
+          if (!text) return null
+          // Remove any text that contains explicit RPE mentions that could contradict
+          if (/RPE\s*\d/i.test(text)) return null
+          // Remove intensity-focused explanations that imply specific effort levels
+          if (/effort pushed|pushed harder|kept submaximal|moderate-high effort/i.test(text)) return null
+          return text
+        }
+        
         // Use bestPrimary for smart prioritization - picks the single best explanation line
         // Falls back to role, then row surface sublabel
-        const bestSublabel = coachingExpl?.bestPrimary || coachingExpl?.role || (showSublabel ? getBestRowSublabel(alignedRowSurface) : null)
-        const isCoachingSource = !!coachingExpl?.bestPrimary || !!coachingExpl?.role
+        // [CONTRADICTION-FIX] Filter all coaching text to remove RPE contradictions
+        const cleanBestPrimary = filterOutRpeText(coachingExpl?.bestPrimary)
+        const cleanRole = filterOutRpeText(coachingExpl?.role)
+        const bestSublabel = cleanBestPrimary || cleanRole || (showSublabel ? getBestRowSublabel(alignedRowSurface) : null)
+        const isCoachingSource = !!cleanBestPrimary || !!cleanRole
         
         // [PREMIUM-INFO-BUBBLE] Secondary detail goes into tooltip, not stacked on card
         // This keeps cards clean while preserving depth
-        const secondaryDetail = coachingExpl?.secondaryDetail
-        const hasUsefulSecondary = coachingExpl?.hasUsefulSecondary
+        // [CONTRADICTION-FIX] Also filter secondary detail to avoid RPE contradictions in bubble
+        const secondaryDetail = filterOutRpeText(coachingExpl?.secondaryDetail)
+        const hasUsefulSecondary = coachingExpl?.hasUsefulSecondary && !!secondaryDetail
         
         if (!bestSublabel && !showChips) return null
         

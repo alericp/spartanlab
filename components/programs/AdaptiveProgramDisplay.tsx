@@ -69,16 +69,19 @@ interface AdaptiveProgramDisplayProps {
   onExerciseReplace?: (dayNumber: number, exerciseId: string) => void
   // [TASK 1] Unified staleness result passed from parent - display does NOT recompute its own
   unifiedStaleness?: UnifiedStalenessResult | null
-}
+  // [PREVIEW-VISIBLE-PROBE] Enable truth probe on session cards via ?programProbe=1
+  showProbe?: boolean
+  }
 
-export function AdaptiveProgramDisplay({ 
-  program, 
+export function AdaptiveProgramDisplay({
+  program,
   onDelete,
   onRestart,
   onRegenerate,
   onExerciseReplace,
   unifiedStaleness, // [TASK 1] Consume parent's staleness evaluation
-}: AdaptiveProgramDisplayProps) {
+  showProbe = false, // [PREVIEW-VISIBLE-PROBE] Truth probe visibility
+  }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
   
@@ -1130,6 +1133,8 @@ export function AdaptiveProgramDisplay({
   coachingExplanation={intelligenceContract?.coachingExplanation || null}
   // [DOCTRINE-STRENGTHENING] Pass week character for visible differentiation badges
   weekCharacter={session.weekCharacter}
+  // [PREVIEW-VISIBLE-PROBE] Pass probe flag
+  showProbe={showProbe}
   />
               </div>
             )

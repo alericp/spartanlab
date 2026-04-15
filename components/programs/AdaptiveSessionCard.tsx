@@ -65,6 +65,9 @@ interface AdaptiveSessionCardProps {
   coachingExplanation?: ProgramExplanationSurface | null
   // [DOCTRINE-STRENGTHENING] Week-specific training character for visible differentiation
   weekCharacter?: WeekCharacter
+  // [PREVIEW-VISIBLE-PROBE] Enable visible truth probe via ?programProbe=1 query param
+  // This bypasses NODE_ENV checks to show diagnostics in Preview/production
+  showProbe?: boolean
 }
 
 // =============================================================================
@@ -178,7 +181,7 @@ function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
   }
 }
 
-export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter }: AdaptiveSessionCardProps) {
+export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter, showProbe = false }: AdaptiveSessionCardProps) {
   // PHASE 3: Normalize session immediately to prevent crashes
   const session = normalizeSessionForDisplay(rawSession)
   
@@ -730,10 +733,10 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               </div>
 
           {/* ==========================================================================
-              [DEV-TRUTH-PROBE] VISIBLE SESSION TRUTH CHIP BLOCK
-              Dev-only diagnostic showing exact session/variant truth state
+              [PREVIEW-VISIBLE-PROBE] SESSION TRUTH CHIP BLOCK
+              Enable via ?programProbe=1 query param - bypasses NODE_ENV for Preview visibility
               ========================================================================== */}
-          {process.env.NODE_ENV !== 'production' && (
+          {showProbe && (
             <div className="mb-4 p-3 bg-red-900/40 border-2 border-red-500 rounded font-mono text-[10px] space-y-1.5">
               <div className="text-red-400 font-bold text-xs border-b border-red-500/30 pb-1 mb-2">
                 SESSION TRUTH PROBE (dev only)
@@ -941,6 +944,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   onReplace={handleExerciseReplace}
   onSkip={handleExerciseSkip}
   onProgressionAdjust={handleProgressionAdjust}
+  showProbe={showProbe}
   />
 
           {/* Finisher Block */}
@@ -1032,6 +1036,8 @@ interface MainExercisesRendererProps {
   onReplace: (exerciseId: string, exerciseName: string) => void
   onSkip: (exerciseId: string, exerciseName: string) => void
   onProgressionAdjust: (exerciseId: string, newProgression: string, direction: 'up' | 'down') => void
+  // [PREVIEW-VISIBLE-PROBE] Enable visible probe via query param
+  showProbe?: boolean
 }
 
 function MainExercisesRenderer({
@@ -1046,6 +1052,7 @@ function MainExercisesRenderer({
   onReplace,
   onSkip,
   onProgressionAdjust,
+  showProbe = false,
 }: MainExercisesRendererProps) {
   // Get style metadata from session if available
   const styleMetadata = (session as AdaptiveSession & { styleMetadata?: SessionStyleMetadata }).styleMetadata
@@ -1118,10 +1125,11 @@ function MainExercisesRenderer({
       : 'GROUPED_RENDER_ACTIVE'
   
   // ==========================================================================
-  // [DEV-TRUTH-PROBE] VISIBLE RENDER BRANCH BANNER
+  // [PREVIEW-VISIBLE-PROBE] RENDER BRANCH BANNER
+  // Visible when showProbe is true (via ?programProbe=1 query param)
   // ==========================================================================
   const DevRenderBranchBanner = () => {
-    if (process.env.NODE_ENV === 'production') return null
+    if (!showProbe) return null
     
     if (useGroupedRender) {
       const firstNonStraightGroup = nonStraightGroups[0]

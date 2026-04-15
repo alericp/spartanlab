@@ -2371,16 +2371,21 @@ export function buildExerciseCardContract(
   
   // [RICH-EXPLANATION] Build detail explanation from purpose + effort builders
   // This is the RICHER content for the info bubble, fed by existing sophisticated builders
+  // [SCOPE-FIX] Use outer-scope categoryLower / expressionMode — always defined regardless of targetRPE presence.
+  // catLower / exprMode were declared inside if(exercise.targetRPE) and caused ReferenceError when RPE absent.
+  const isPrimaryCategory = categoryLower === 'skill' || categoryLower === 'strength'
+  const categoryRole = categoryLower === 'skill' ? 'primary' : categoryLower === 'strength' ? 'secondary' : 'support'
+
   const purposeLineRich = buildExercisePurposeLine(
     { 
       name: exercise.name, 
       category: exercise.category, 
       selectionReason: exercise.selectionReason,
-      isPrimary: catLower === 'skill' || catLower === 'strength',
+      isPrimary: isPrimaryCategory,
       coachingMeta: exercise.coachingMeta
     },
     undefined, // sessionContext - will use defaults
-    catLower === 'skill' ? 'primary' : catLower === 'strength' ? 'secondary' : 'support'
+    categoryRole
   )
   
   const effortLineRich = buildExerciseEffortReasonLine(
@@ -2389,7 +2394,7 @@ export function buildExerciseCardContract(
       category: exercise.category,
       targetRPE: exercise.targetRPE,
       selectionReason: exercise.selectionReason,
-      isPrimary: catLower === 'skill' || catLower === 'strength',
+      isPrimary: isPrimaryCategory,
       coachingMeta: exercise.coachingMeta
     },
     undefined // sessionContext - will use defaults

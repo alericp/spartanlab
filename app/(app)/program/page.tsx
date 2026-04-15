@@ -584,6 +584,7 @@ function ProgramDisplayWrapper({
   onRegenerate,
   onRecoveryNeeded,
   unifiedStaleness, // [TASK 1] Pass through unified staleness
+  showProbe = false, // [PREVIEW-VISIBLE-PROBE] Truth probe visibility via ?programProbe=1
 }: { 
   program: AdaptiveProgram
   onDelete: () => void
@@ -591,6 +592,7 @@ function ProgramDisplayWrapper({
   onRegenerate: () => void
   onRecoveryNeeded: () => void
   unifiedStaleness: UnifiedStalenessResult | null // [TASK 1] Unified staleness from page
+  showProbe?: boolean // [PREVIEW-VISIBLE-PROBE] Enable truth probe on session cards
 }) {
   // ==========================================================================
   // [VISIBLE-PROGRAM-TRUTH-CONTRACT] CANONICAL DISPLAY TRUTH
@@ -689,6 +691,7 @@ function ProgramDisplayWrapper({
           onRestart={onRestart}
           onRegenerate={onRegenerate}
           unifiedStaleness={unifiedStaleness}
+          showProbe={showProbe}
         />
       </ErrorBoundary>
     </div>
@@ -725,6 +728,22 @@ export default function ProgramPage() {
   const [showBuilder, setShowBuilder] = useState(false)
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false)
   const [mounted, setMounted] = useState(false)
+  
+  // ==========================================================================
+  // [PREVIEW-VISIBLE-PROBE] Query param to enable truth probe on session cards
+  // Add ?programProbe=1 to URL to show diagnostic panels in Preview/production
+  // ==========================================================================
+  const [showProbe, setShowProbe] = useState(false)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const probeEnabled = params.get('programProbe') === '1'
+      setShowProbe(probeEnabled)
+      if (probeEnabled) {
+        console.log('[PREVIEW-VISIBLE-PROBE] Truth probe ENABLED via ?programProbe=1')
+      }
+    }
+  }, [])
   
   // ==========================================================================
   // [PHASE 31F] STABLE COMPONENT INSTANCE ID
@@ -13902,17 +13921,18 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             {/* TASK 1: Wrap display in error boundary-like try-catch via component */}
             {/* [TASK 1] Pass unified staleness to prevent duplicate staleness checks */}
             {/* [PHASE 9 TASK 2] Render-time audit IIFE REMOVED - now in useEffect */}
-            <ProgramDisplayWrapper 
-              program={program} 
-              onDelete={handleDelete}
-              onRestart={handleRestart}
-              onRegenerate={handleRegenerate}
-              onRecoveryNeeded={() => {
-                console.log('[v0] Display render failed, showing recovery state')
-                setLoadStage('display-render-error')
-              }}
-              unifiedStaleness={unifiedStaleness}
-            />
+<ProgramDisplayWrapper
+  program={program}
+  onDelete={handleDelete}
+  onRestart={handleRestart}
+  onRegenerate={handleRegenerate}
+  onRecoveryNeeded={() => {
+  console.log('[v0] Display render failed, showing recovery state')
+  setLoadStage('display-render-error')
+  }}
+  unifiedStaleness={unifiedStaleness}
+  showProbe={showProbe}
+  />
           </div>
         ) : program ? (
           // TASK 2: Program exists but is malformed - show recovery state (not fatal error)

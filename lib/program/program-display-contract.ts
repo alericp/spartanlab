@@ -2056,6 +2056,16 @@ export function buildExerciseCardContract(
       loadDecisionSummary?: string
       restLabel?: string
     }
+  },
+  // [RICH-EXPLANATION-FIX] Session context enables richer explanation output from purpose/effort builders
+  sessionContext?: {
+    sessionFocus?: string
+    isPrimarySession?: boolean
+    primaryGoal?: string
+    compositionMetadata?: {
+      spineSessionType?: string
+      sessionIntent?: string
+    }
   }
 ): ExerciseCardDisplayContract {
   const nameLower = exercise.name.toLowerCase()
@@ -2384,7 +2394,7 @@ export function buildExerciseCardContract(
       isPrimary: isPrimaryCategory,
       coachingMeta: exercise.coachingMeta
     },
-    undefined, // sessionContext - will use defaults
+    sessionContext, // [RICH-EXPLANATION-FIX] Now receives real session context for goal-aware reasoning
     categoryRole
   )
   
@@ -2397,7 +2407,7 @@ export function buildExerciseCardContract(
       isPrimary: isPrimaryCategory,
       coachingMeta: exercise.coachingMeta
     },
-    undefined // sessionContext - will use defaults
+    sessionContext // [RICH-EXPLANATION-FIX] Now receives real session context
   )
   
   // Compose detail explanation: purpose + effort, avoiding redundancy

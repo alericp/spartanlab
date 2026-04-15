@@ -12154,26 +12154,28 @@ async function generateAdaptiveProgramImpl(
         structureDecisions: methodMaterializationResult.structureDecisions,
         timestamp: new Date().toISOString(),
       },
-      // [AUTHORITATIVE-METHOD-INTENT-CONTRACT] Persist the computed contract
-      // This ensures UI and workout consumers can read authoritative truth
-      methodIntentContract: {
-        userPreferences: sessionMethodIntentContract.selectedUserMethodPreferences,
-        accessoryTailSize: sessionMethodIntentContract.accessoryTailSize,
-        isSkillDominated: sessionMethodIntentContract.isSkillDominated,
-        eligibility: {
-          supersetsAllowed: sessionMethodIntentContract.supersetsAllowed,
-          circuitsAllowed: sessionMethodIntentContract.circuitsAllowed,
-          densityAllowed: sessionMethodIntentContract.densityAllowed,
-          clusterAllowed: sessionMethodIntentContract.clusterAllowed,
-        },
-        decisions: {
-          shouldApplySupersets: sessionMethodIntentContract.shouldApplySupersets,
-          shouldApplyCircuits: sessionMethodIntentContract.shouldApplyCircuits,
-          shouldApplyDensity: sessionMethodIntentContract.shouldApplyDensity,
-          shouldApplyCluster: sessionMethodIntentContract.shouldApplyCluster,
-        },
-        complexityLevel: sessionMethodIntentContract.complexityLevel,
+    }
+    
+    // Add methodIntentContract to the already-set styleMetadata
+    // [AUTHORITATIVE-METHOD-INTENT-CONTRACT] Persist the computed contract
+    // This ensures UI and workout consumers can read authoritative truth
+    session.styleMetadata.methodIntentContract = {
+      userPreferences: sessionMethodIntentContract.selectedUserMethodPreferences,
+      accessoryTailSize: sessionMethodIntentContract.accessoryTailSize,
+      isSkillDominated: sessionMethodIntentContract.isSkillDominated,
+      eligibility: {
+        supersetsAllowed: sessionMethodIntentContract.supersetsAllowed,
+        circuitsAllowed: sessionMethodIntentContract.circuitsAllowed,
+        densityAllowed: sessionMethodIntentContract.densityAllowed,
+        clusterAllowed: sessionMethodIntentContract.clusterAllowed,
       },
+      decisions: {
+        shouldApplySupersets: sessionMethodIntentContract.shouldApplySupersets,
+        shouldApplyCircuits: sessionMethodIntentContract.shouldApplyCircuits,
+        shouldApplyDensity: sessionMethodIntentContract.shouldApplyDensity,
+        shouldApplyCluster: sessionMethodIntentContract.shouldApplyCluster,
+      },
+      complexityLevel: sessionMethodIntentContract.complexityLevel,
     }
     
     console.log('[TRAINING-METHOD-MATERIALIZATION-COMPLETE]', {

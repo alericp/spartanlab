@@ -1427,11 +1427,17 @@ function ExerciseRow({
         )}
       </div>
       
-      {/* ROW 3: Canonical explanation - from SAME display contract as dosage */}
-      {/* prescriptionContext is computed from prescriptionIntent in buildExerciseCardContract */}
-      {/* It cannot contradict because it uses the same intent that determines the dosage pattern */}
-      {card.prescriptionContext && !isWarmupCooldown && (
-        <p className="text-[10px] text-[#6A6A6A] mt-1 italic">{card.prescriptionContext}</p>
+      {/* ROW 3: Canonical explanation - RICHER doctrine-driven reasoning */}
+      {/* [CANONICAL-EXPLANATION-OWNER] whyLine = rich doctrine explanation from selectionReason */}
+      {/* [COMPACT-CUE-OWNER] prescriptionContext = short execution cue from prescriptionIntent */}
+      {/* Both come from buildExerciseCardContract - same canonical source, no contradiction possible */}
+      {/* BANNED: exercise.note, alignedRowSurface, getBestRowSublabel, coaching explanation fallbacks */}
+      {!isWarmupCooldown && (card.whyLine || card.prescriptionContext) && (
+        <p className="text-[10px] text-[#6A6A6A] mt-1 italic">
+          {/* Prefer whyLine (rich) over prescriptionContext (compact) */}
+          {/* whyLine explains WHY this exercise, prescriptionContext explains HOW to execute */}
+          {card.whyLine || card.prescriptionContext}
+        </p>
       )}
       
       {/* Constraint note kept - this is safety/equipment info, not prescription wording */}

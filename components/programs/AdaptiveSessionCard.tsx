@@ -1290,6 +1290,7 @@ function ExerciseRow({
   const effectiveSets = scaledExercise.scaledSets ?? exercise.sets ?? 3
   const effectiveReps = scaledExercise.scaledReps ?? exercise.repsOrTime ?? '8-12'
   const effectiveTargetRPE = scaledExercise.scaledTargetRPE ?? exercise.targetRPE
+  const weekScalingApplied = scaledExercise.weekScalingApplied ?? false
   
   // [EXERCISE-CARD-CONTRACT] Build canonical display contract
   const card = buildExerciseCardContract({
@@ -1416,14 +1417,20 @@ function ExerciseRow({
         )}
       </div>
       
-      {/* ROW 2: Unified prescription */}
-      <p className="text-[12px] text-[#9A9A9A] mt-1">
-        {unifiedPrescription}
-        {showContextCue && <span className="text-[#5A5A5A] italic"> — {card.prescriptionContext}</span>}
-        {card.showLoadConfidence && card.loadConfidenceNote && (
-          <span className="text-[#4A4A4A]"> ({card.loadConfidenceNote})</span>
+      {/* ROW 2: Unified prescription - VISIBLE DOSAGE TRUTH */}
+      {/* [VISIBLE-SURFACE-FIX] Prescription line is now MORE PROMINENT for clear week differentiation */}
+      <div className="flex items-center gap-2 mt-1">
+        <span className="text-[13px] font-medium text-[#CACACA]">{card.prescriptionLine}</span>
+        {card.intensityBadge && hasRPE && (
+          <span className="text-[11px] text-[#7A7A7A]">{card.intensityBadge}</span>
         )}
-      </p>
+        {card.restGuidance && (
+          <span className="text-[10px] text-[#5A5A5A]">{card.restGuidance}</span>
+        )}
+        {showContextCue && card.prescriptionContext && (
+          <span className="text-[10px] text-[#5A5A5A] italic">— {card.prescriptionContext}</span>
+        )}
+      </div>
       
       {/* [DISPLAY-PRIORITY] ROW 2.5: Compact intelligence - prescription-first policy */}
       {/* Only show for primary exercises to keep rows tight */}

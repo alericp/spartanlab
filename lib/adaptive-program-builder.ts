@@ -1045,6 +1045,25 @@ export interface AdaptiveSession {
   structureDecisions: Array<{ block: string; method: string; rationale: string }>
   timestamp: string
   }
+  // [AUTHORITATIVE-METHOD-INTENT-CONTRACT] Persisted per-session method intent
+  methodIntentContract?: {
+  userPreferences: string[]
+  accessoryTailSize: number
+  isSkillDominated: boolean
+  eligibility: {
+    supersetsAllowed: boolean
+    circuitsAllowed: boolean
+    densityAllowed: boolean
+    clusterAllowed: boolean
+  }
+  decisions: {
+    shouldApplySupersets: boolean
+    shouldApplyCircuits: boolean
+    shouldApplyDensity: boolean
+    shouldApplyCluster: boolean
+  }
+  complexityLevel: string
+  }
   }
   // [AI_SESSION_MATERIALITY_PHASE] Session-level skill expression metadata
   // This makes the ACTUAL skill materiality visible in each session
@@ -11554,13 +11573,111 @@ async function generateAdaptiveProgramImpl(
     }
     
     // =========================================================================
-    // [PHASE 8] STEP D2: Apply superset grouping if trainingMethodPreferences includes 'supersets'
-    // This materially changes exercise packaging based on user's style preferences
+    // [AUTHORITATIVE SESSION METHOD INTENT CONTRACT]
+    // This is the SINGLE OWNER of per-session method decisions.
+    // It computes eligibility from real user truth, not focus string matching.
+    // All downstream materialization must use this contract, not ad-hoc gates.
     // =========================================================================
     const methodPrefsForGrouping = canonicalProfile.trainingMethodPreferences || []
-    const shouldApplySupersets = methodPrefsForGrouping.includes('supersets')
-    const isSkillPrimarySession = session.focus?.toLowerCase().includes('skill') || 
+    
+    // Count exercise categories to understand session composition
+    const skillExerciseCount = session.exercises?.filter(e => e.category === 'skill').length || 0
+    const strengthExerciseCount = session.exercises?.filter(e => e.category === 'strength').length || 0
+    const coreExerciseCount = session.exercises?.filter(e => e.category === 'core').length || 0
+    const accessoryExerciseCount = session.exercises?.filter(e => e.category === 'accessory').length || 0
+    const primaryExerciseCount = session.exercises?.filter(e => e.selectionReason?.includes('primary')).length || 0
+    const totalExercises = session.exercises?.length || 0
+    
+    // Compute whether this is a skill-dominated session (affects method eligibility)
+    const isSkillPrimarySession = skillExerciseCount >= 2 || 
+      (skillExerciseCount > 0 && skillExerciseCount >= totalExercises * 0.4) ||
       session.exercises?.some(e => e.category === 'skill' && e.selectionReason?.includes('primary'))
+    
+    // Compute accessory/support tail size - this is what can be grouped
+    const accessoryTailSize = accessoryExerciseCount + coreExerciseCount + 
+      session.exercises?.filter(e => 
+        e.category === 'strength' && 
+        !e.selectionReason?.includes('primary') &&
+        !(e.name?.toLowerCase().includes('weighted'))
+      ).length || 0
+    
+    // Blueprint-based eligibility (from session composition intelligence)
+    const blueprintSupersetEligibility = sessionCompositionBlueprint?.methodEligibility?.supersets
+    const blueprintCircuitEligibility = sessionCompositionBlueprint?.methodEligibility?.circuits
+    const blueprintDensityEligibility = sessionCompositionBlueprint?.methodEligibility?.density
+    
+    // Build the authoritative session method intent contract
+    const sessionMethodIntentContract = {
+      sessionId: `day_${session.dayNumber}`,
+      sessionPurpose: session.focus || 'general',
+      totalExercises,
+      
+      // User truth
+      selectedUserMethodPreferences: methodPrefsForGrouping,
+      userWantsSupersets: methodPrefsForGrouping.includes('supersets'),
+      userWantsCircuits: methodPrefsForGrouping.includes('circuits'),
+      userWantsDensity: methodPrefsForGrouping.includes('density_blocks'),
+      userWantsCluster: methodPrefsForGrouping.includes('cluster_sets'),
+      
+      // Session composition analysis
+      skillExerciseCount,
+      strengthExerciseCount,
+      accessoryTailSize,
+      primaryExerciseCount,
+      isSkillDominated: isSkillPrimarySession,
+      
+      // Method eligibility decisions (doctrine + blueprint + user truth combined)
+      supersetsAllowed: !isSkillPrimarySession || accessoryTailSize >= 2,
+      supersetsEarned: (blueprintSupersetEligibility === 'earned' || blueprintSupersetEligibility === 'allowed') && accessoryTailSize >= 2,
+      circuitsAllowed: accessoryTailSize >= 3 && !isSkillPrimarySession,
+      circuitsEarned: (blueprintCircuitEligibility === 'earned' || blueprintCircuitEligibility === 'allowed') && accessoryTailSize >= 3,
+      densityAllowed: accessoryTailSize >= 3,
+      densityEarned: (blueprintDensityEligibility === 'earned' || blueprintDensityEligibility === 'allowed') && accessoryTailSize >= 3,
+      clusterAllowed: skillExerciseCount >= 1, // Cluster is for skill quality preservation
+      
+      // Final method selection (user wants + doctrine allows + earned/allowed)
+      shouldApplySupersets: methodPrefsForGrouping.includes('supersets') && accessoryTailSize >= 2,
+      shouldApplyCircuits: methodPrefsForGrouping.includes('circuits') && accessoryTailSize >= 3 && !isSkillPrimarySession,
+      shouldApplyDensity: methodPrefsForGrouping.includes('density_blocks') && accessoryTailSize >= 3,
+      shouldApplyCluster: methodPrefsForGrouping.includes('cluster_sets') && skillExerciseCount >= 1,
+      
+      // Packaging priority (what to try first)
+      preferredPackagingOrder: [
+        ...(methodPrefsForGrouping.includes('supersets') ? ['supersets'] : []),
+        ...(methodPrefsForGrouping.includes('circuits') ? ['circuits'] : []),
+        ...(methodPrefsForGrouping.includes('density_blocks') ? ['density'] : []),
+        ...(methodPrefsForGrouping.includes('cluster_sets') ? ['cluster'] : []),
+        'straight_sets', // Always fallback
+      ],
+      
+      // Complexity/safety level
+      complexityLevel: isSkillPrimarySession ? 'conservative' : 
+        accessoryTailSize >= 4 ? 'moderate' : 'minimal',
+      mustProtectSkillQuality: isSkillPrimarySession,
+      
+      // Audit
+      timestamp: new Date().toISOString(),
+    }
+    
+    console.log('[AUTHORITATIVE-SESSION-METHOD-INTENT-CONTRACT]', {
+      sessionId: sessionMethodIntentContract.sessionId,
+      purpose: sessionMethodIntentContract.sessionPurpose,
+      userPrefs: sessionMethodIntentContract.selectedUserMethodPreferences,
+      accessoryTailSize: sessionMethodIntentContract.accessoryTailSize,
+      shouldApply: {
+        supersets: sessionMethodIntentContract.shouldApplySupersets,
+        circuits: sessionMethodIntentContract.shouldApplyCircuits,
+        density: sessionMethodIntentContract.shouldApplyDensity,
+        cluster: sessionMethodIntentContract.shouldApplyCluster,
+      },
+      isSkillDominated: sessionMethodIntentContract.isSkillDominated,
+    })
+    
+    // =========================================================================
+    // [PHASE 8] STEP D2: Apply superset grouping using method intent contract
+    // This materially changes exercise packaging based on user's style preferences
+    // =========================================================================
+    const shouldApplySupersets = sessionMethodIntentContract.shouldApplySupersets
     
     if (shouldApplySupersets && session.exercises && session.exercises.length >= 4) {
       // [SUPERSET-ELIGIBILITY-FIX] Find TRUE accessory/support exercises that can be safely supersetted
@@ -11756,26 +11873,22 @@ async function generateAdaptiveProgramImpl(
     
     // -------------------------------------------------------------------------
     // CIRCUIT / DENSITY BLOCK MATERIALIZATION
-    // Only applies to accessory tails or conditioning-focused slots
-    // NEVER applies to skill work or primary strength
+    // Uses the authoritative session method intent contract for eligibility
+    // Applies to accessory tails when user truth supports it
     // -------------------------------------------------------------------------
-    const shouldEvaluateCircuits = methodPrefsForGrouping.includes('circuits') || 
-      methodPrefsForGrouping.includes('density_blocks')
-    const sessionHasCircuitEligibleTail = session.exercises && session.exercises.length >= 5
+    // [FIX] Use method intent contract instead of restrictive focus string matching
+    const shouldEvaluateCircuits = sessionMethodIntentContract.shouldApplyCircuits || 
+      sessionMethodIntentContract.shouldApplyDensity
+    const sessionHasCircuitEligibleTail = sessionMethodIntentContract.accessoryTailSize >= 3
     
-    // Check session composition blueprint for method eligibility
-    const blueprintCircuitEligibility = sessionCompositionBlueprint?.methodEligibility?.circuits
-    const blueprintDensityEligibility = sessionCompositionBlueprint?.methodEligibility?.density
-    const circuitsEarned = blueprintCircuitEligibility === 'earned' || blueprintCircuitEligibility === 'allowed'
-    const densityEarned = blueprintDensityEligibility === 'earned' || blueprintDensityEligibility === 'allowed'
+    // Blueprint eligibility is already computed in the contract
+    const circuitsEarned = sessionMethodIntentContract.circuitsEarned || sessionMethodIntentContract.circuitsAllowed
+    const densityEarned = sessionMethodIntentContract.densityEarned || sessionMethodIntentContract.densityAllowed
     
-    // Doctrine safety: never circuit/density a skill-primary session
-    const sessionIsSafeForDenseMethods = !isSkillPrimarySession && 
-      !session.focus?.toLowerCase().includes('skill') &&
-      (session.focus?.toLowerCase().includes('support') || 
-       session.focus?.toLowerCase().includes('accessory') ||
-       session.focus?.toLowerCase().includes('conditioning') ||
-       session.focus?.toLowerCase().includes('endurance'))
+    // [FIX] Use contract-based eligibility, not focus string matching
+    // The contract already considers skill domination and accessory tail size
+    const sessionIsSafeForDenseMethods = sessionMethodIntentContract.circuitsAllowed || 
+      sessionMethodIntentContract.densityAllowed
     
     if (shouldEvaluateCircuits && sessionHasCircuitEligibleTail && sessionIsSafeForDenseMethods) {
       // Find circuit-eligible exercises (accessory/core tail only)
@@ -11862,9 +11975,10 @@ async function generateAdaptiveProgramImpl(
     // -------------------------------------------------------------------------
     // CLUSTER SET MATERIALIZATION
     // Applies to high-skill or heavy strength work to maintain quality
-    // ONLY when user has selected cluster-style training AND exercise qualifies
+    // Uses the authoritative session method intent contract for eligibility
     // -------------------------------------------------------------------------
-    const shouldEvaluateCluster = methodPrefsForGrouping.includes('cluster_sets') ||
+    // [FIX] Use method intent contract for cluster eligibility
+    const shouldEvaluateCluster = sessionMethodIntentContract.shouldApplyCluster ||
       methodPrefsForGrouping.includes('rest_pause')
     
     if (shouldEvaluateCluster && session.exercises && session.exercises.length > 0) {
@@ -12022,6 +12136,26 @@ async function generateAdaptiveProgramImpl(
         methodsEvaluated: methodMaterializationResult.methodsEvaluated,
         structureDecisions: methodMaterializationResult.structureDecisions,
         timestamp: new Date().toISOString(),
+      },
+      // [AUTHORITATIVE-METHOD-INTENT-CONTRACT] Persist the computed contract
+      // This ensures UI and workout consumers can read authoritative truth
+      methodIntentContract: {
+        userPreferences: sessionMethodIntentContract.selectedUserMethodPreferences,
+        accessoryTailSize: sessionMethodIntentContract.accessoryTailSize,
+        isSkillDominated: sessionMethodIntentContract.isSkillDominated,
+        eligibility: {
+          supersetsAllowed: sessionMethodIntentContract.supersetsAllowed,
+          circuitsAllowed: sessionMethodIntentContract.circuitsAllowed,
+          densityAllowed: sessionMethodIntentContract.densityAllowed,
+          clusterAllowed: sessionMethodIntentContract.clusterAllowed,
+        },
+        decisions: {
+          shouldApplySupersets: sessionMethodIntentContract.shouldApplySupersets,
+          shouldApplyCircuits: sessionMethodIntentContract.shouldApplyCircuits,
+          shouldApplyDensity: sessionMethodIntentContract.shouldApplyDensity,
+          shouldApplyCluster: sessionMethodIntentContract.shouldApplyCluster,
+        },
+        complexityLevel: sessionMethodIntentContract.complexityLevel,
       },
     }
     

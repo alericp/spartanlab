@@ -816,12 +816,12 @@ function ProgramDisplayWrapper({
 }
 
 // ==========================================================================
-// [ALWAYS-VISIBLE-PROBE] FORCE DIAGNOSTIC FLAG
-// This is a hard constant that forces the session truth probe to render
-// on every card, without relying on NODE_ENV, query params, or toggles.
-// Set to false when diagnostic pass is complete.
+// [DEBUG-PROBE-GATE] Session truth probe is OFF by default.
+// Diagnostic pass is complete. Grouped-method rendering is the primary UX.
+// To re-enable probes for debugging, append ?programProbe=1 to the URL.
+// Do NOT flip this constant back to true - use the query param instead.
 // ==========================================================================
-const FORCE_VISIBLE_SESSION_PROBE = true
+const FORCE_VISIBLE_SESSION_PROBE = false
 
 export default function ProgramPage() {
   // ==========================================================================
@@ -855,17 +855,20 @@ export default function ProgramPage() {
   const [mounted, setMounted] = useState(false)
   
   // ==========================================================================
-  // [ALWAYS-VISIBLE-PROBE] Force-enabled diagnostic for this pass
-  // Uses hard constant FORCE_VISIBLE_SESSION_PROBE instead of query params
+  // [DEBUG-PROBE-GATE] Opt-in diagnostic visibility
+  // Probe is OFF by default. To enable for debugging, append ?programProbe=1
+  // Read from window.location.search on mount only (no reactivity needed).
   // ==========================================================================
-  const showProbe = FORCE_VISIBLE_SESSION_PROBE
-  
-  // Log that probe is force-enabled
+  const [showProbe, setShowProbe] = useState(false)
   useEffect(() => {
-    if (showProbe) {
-      console.log('[ALWAYS-VISIBLE-PROBE] Session truth probe FORCE ENABLED - should appear on all cards')
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const probeRequested = params.get('programProbe') === '1'
+    if (probeRequested) {
+      setShowProbe(true)
+      console.log('[DEBUG-PROBE-GATE] Session truth probe enabled via ?programProbe=1')
     }
-  }, [showProbe])
+  }, [])
   
   // ==========================================================================
   // [PHASE 31F] STABLE COMPONENT INSTANCE ID

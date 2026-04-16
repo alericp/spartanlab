@@ -11811,6 +11811,20 @@ async function generateAdaptiveProgramImpl(
     // =========================================================================
     const shouldApplySupersets = sessionMethodIntentContract.shouldApplySupersets && dayOwnsSupersets
     
+    // [v0] DIAGNOSTIC: Track superset eligibility for debugging
+    console.log('[v0] SUPERSET-ELIGIBILITY-CHECK', {
+      dayNumber: session.dayNumber,
+      shouldApplySupersets,
+      contractShouldApply: sessionMethodIntentContract.shouldApplySupersets,
+      dayOwnsSupersets,
+      exerciseCount: session.exercises?.length || 0,
+      accessoryTailSize: sessionMethodIntentContract.accessoryTailSize,
+      trueGroupableTailSize,
+      userWantsSupersets: sessionMethodIntentContract.userWantsSupersets,
+      methodPrefsForGrouping,
+      willEnterSupersetBlock: shouldApplySupersets && session.exercises && session.exercises.length >= 4,
+    })
+    
     if (shouldApplySupersets && session.exercises && session.exercises.length >= 4) {
       // [SUPERSET-ELIGIBILITY-FIX] Find TRUE accessory/support exercises that can be safely supersetted
       // Never superset: skill work, primary strength, power/explosive movements, or heavy loaded work

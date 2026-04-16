@@ -1287,7 +1287,6 @@ function MainExercisesRenderer({
       hasDensityApplied: styleMetadata.hasDensityApplied,
     } : undefined,
     // [EXPLAIN-OWNER-LOCK] Pass compositionMetadata for full explanation context
-    compositionMetadata: compositionMeta,
     compositionMetadata: compositionMeta ? {
       spineSessionType: compositionMeta.spineSessionType,
       sessionIntent: compositionMeta.sessionIntent,
@@ -1520,6 +1519,41 @@ function MainExercisesRenderer({
     }
   })
   
+  // ==========================================================================
+  // [GROUPED-TRUTH-RESCUE] Final-stage guarantee that non-straight grouped
+  // truth is never silently dropped by the canonical-order walk above.
+  //
+  // The canonical walk only adds a group to displayBlocks when one of that
+  // group's exercise ids/names (from styledGroups) also appears inside
+  // displayExercises (fullVisibleExercises). When variant selection, family
+  // hydration, or routine-surface shaping changes exercise identifiers
+  // between session.exercises (the source of styledGroups) and
+  // displayExercises (the render surface), a non-straight group can fail
+  // BOTH the id-match AND the lowercased-name-match -- and the entire
+  // grouped block gets silently dropped from displayBlocks, producing a
+  // visibly flat render even though useGroupedRender === true and the
+  // authoritative builder truth says this session is supersetted/circuited.
+  //
+  // Per truth-to-UI contract: if the builder's authoritative styledGroups
+  // include a non-straight group, that group MUST render. We append any
+  // unprocessed non-straight groups here so the group header + its
+  // grouped exercises (sourced from styledGroups' own truth when the
+  // per-exercise lookup inside the block fails) remain visible.
+  // Straight single-exercise groups are NOT rescued here; they are already
+  // covered by the flat path above and do not represent grouped-method
+  // truth that would be lost.
+  // ==========================================================================
+  styledGroups.forEach((group, gIdx) => {
+    if (processedGroupIndices.has(gIdx)) return
+    if (group.groupType === 'straight') return
+    displayBlocks.push({ type: 'group', group, groupIndex: gIdx })
+    processedGroupIndices.add(gIdx)
+    group.exercises.forEach(e => {
+      processedExerciseIds.add(e.id)
+      processedExerciseIds.add(e.name.toLowerCase())
+    })
+  })
+  
   let globalExerciseIndex = 0
   
   return (
@@ -1607,14 +1641,30 @@ function MainExercisesRenderer({
                     )
                 
                 if (!fullExercise) {
-                  // Exercise in styled groups but not in displayExercises
-                  // This can happen if variant selection differs - skip gracefully
-                  console.warn('[phase7b-grouped-render] Exercise not found in displayExercises:', {
+                  // Exercise in styled groups but not in displayExercises.
+                  // [GROUPED-TRUTH-RESCUE] Previously returned null, which silently
+                  // dropped the grouped exercise and flattened the visible group.
+                  // We now render a minimal row from styledGroups' own authoritative
+                  // truth so the grouped structure (prefix A1/A2, exercise name)
+                  // remains visibly intact. This never invents grouped truth -- the
+                  // groupExercise came directly from builder-authoritative styledGroups.
+                  console.warn('[phase7b-grouped-render] Exercise not found in displayExercises, rendering from styledGroups truth:', {
                     groupExerciseId: groupExercise.id,
                     groupExerciseName: groupExercise.name,
-                    displayExerciseIds: displayExercises.map(e => e.id),
                   })
-                  return null
+                  return (
+                    <div
+                      key={groupExercise.id || `${groupExercise.name}-${exIdx}`}
+                      className="flex items-baseline gap-2 py-1.5 text-sm text-[#C8C8C8]"
+                    >
+                      {groupExercise.prefix && (
+                        <span className={`text-[11px] font-semibold ${colors.text} shrink-0`}>
+                          {groupExercise.prefix}
+                        </span>
+                      )}
+                      <span className="truncate">{groupExercise.name}</span>
+                    </div>
+                  )
                 }
                 
                 return (

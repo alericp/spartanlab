@@ -627,11 +627,11 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             <div>Name: <span className="text-white">{session.name || 'unnamed'}</span></div>
           </div>
           
-          {/* Probe Status */}
+          {/* Probe Status - uses probeActive (hard-locked false) for all flags */}
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-fuchsia-300 mb-2">
             <div>probeActive: <span className="text-green-400 font-bold">YES</span></div>
-            <div>forceProbe: <span className={forceProbe ? 'text-green-400' : 'text-gray-400'}>{forceProbe ? 'YES' : 'NO'}</span></div>
-            <div>showProbe: <span className={showProbe ? 'text-green-400' : 'text-gray-400'}>{showProbe ? 'YES' : 'NO'}</span></div>
+            <div>forceProbe: <span className={probeActive ? 'text-green-400' : 'text-gray-400'}>{probeActive ? 'YES' : 'NO'}</span></div>
+            <div>showProbe: <span className={probeActive ? 'text-green-400' : 'text-gray-400'}>{probeActive ? 'YES' : 'NO'}</span></div>
             <div>cardInstanceId: <span className="text-white text-[10px]">{cardInstanceId}</span></div>
           </div>
           
@@ -829,10 +829,10 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               </div>
 
           {/* ==========================================================================
-              [PREVIEW-VISIBLE-PROBE] SESSION TRUTH CHIP BLOCK
-              Enable via ?programProbe=1 query param - bypasses NODE_ENV for Preview visibility
+              [PREVIEW-VISIBLE-PROBE] SESSION TRUTH CHIP BLOCK - DEAD CODE
+              probeActive is hard-locked to false, so this block never renders.
               ========================================================================== */}
-          {showProbe && (
+          {probeActive && (
             <div className="mb-4 p-3 bg-red-900/40 border-2 border-red-500 rounded font-mono text-[10px] space-y-1.5">
               <div className="text-red-400 font-bold text-xs border-b border-red-500/30 pb-1 mb-2">
                 SESSION TRUTH PROBE (dev only)
@@ -1040,8 +1040,8 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   onReplace={handleExerciseReplace}
   onSkip={handleExerciseSkip}
   onProgressionAdjust={handleProgressionAdjust}
-  showProbe={showProbe}
-  forceProbe={forceProbe}
+  showProbe={probeActive}
+  forceProbe={probeActive}
   cardInstanceId={cardInstanceId}
   />
 

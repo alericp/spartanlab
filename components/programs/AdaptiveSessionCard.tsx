@@ -1279,6 +1279,17 @@ function MainExercisesRenderer({
   const styleMetadata = (session as AdaptiveSession & { styleMetadata?: SessionStyleMetadata }).styleMetadata
   const styledGroups = styleMetadata?.styledGroups || []
   
+  // [v0] DIAGNOSTIC: What grouped truth does the card receive?
+  console.log('[v0] CARD-GROUPED-TRUTH', {
+    sessionDayNumber: session.dayNumber,
+    hasStyleMetadata: !!styleMetadata,
+    styledGroupsCount: styledGroups.length,
+    groupTypes: styledGroups.map(g => g.groupType),
+    nonStraightCount: styledGroups.filter(g => g.groupType !== 'straight').length,
+    primaryStyle: styleMetadata?.primaryStyle,
+    hasSupersetsApplied: styleMetadata?.hasSupersetsApplied,
+  })
+  
   // [EXERCISE-ROW-SURFACE] Build session context for exercise row surfaces
   // [EXPLAIN-OWNER-LOCK] Ensure primaryGoal (program's skill) is passed to explanation engine
   const compositionMeta = (session as unknown as { compositionMetadata?: { spineSessionType?: string; sessionIntent?: string } }).compositionMetadata

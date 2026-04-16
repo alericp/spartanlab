@@ -11644,8 +11644,45 @@ async function generateAdaptiveProgramImpl(
       !(e.name?.toLowerCase().includes('weighted pull') || e.name?.toLowerCase().includes('weighted dip'))
     ).length || 0
     
-    // Accessory tail now includes support strength, core, and accessory
-    const accessoryTailSize = accessoryExerciseCount + coreExerciseCount + supportStrengthCount
+    // [ROOT-CAUSE-FIX] Compute TRUE groupable tail using SAME logic as supersetCandidates filter
+    // The previous accessoryTailSize was too restrictive - it only counted explicit accessory/core categories
+    // But supersetCandidates filter includes exercises in the second half OR any core/accessory/non-primary-strength
+    // This mismatch caused shouldApplySupersets to be false even when supersetCandidates would find 2+ exercises
+    const trueGroupableTailSize = session.exercises?.filter((ex, idx) => {
+      const nameLower = ex.name?.toLowerCase() || ''
+      const exCount = session.exercises?.length || 0
+      
+      // EXCLUDE: First exercise (session pillar)
+      if (idx === 0) return false
+      
+      // EXCLUDE: Primary skill exercises
+      if (ex.category === 'skill' && ex.selectionReason?.includes('primary')) return false
+      
+      // EXCLUDE: Exercises tagged as primary in first 3 positions
+      if (ex.selectionReason?.includes('primary') && idx < 3) return false
+      
+      // EXCLUDE: Heavy weighted compounds
+      if (nameLower.includes('weighted pull') || nameLower.includes('weighted dip')) return false
+      
+      // EXCLUDE: Power/explosive movements
+      if (nameLower.includes('explosive') || nameLower.includes('plyometric') || 
+          nameLower.includes('ballistic') || nameLower.includes('clapping')) return false
+      
+      // EXCLUDE: Primary advanced skill holds
+      if ((nameLower.includes('front lever') || nameLower.includes('back lever') ||
+           nameLower.includes('planche') || nameLower.includes('iron cross') ||
+           nameLower.includes('muscle-up')) && ex.selectionReason?.includes('primary')) return false
+      
+      // INCLUDE: Exercises in second half OR core/accessory/non-primary strength
+      return idx >= Math.floor(exCount / 2) ||
+             ex.category === 'core' ||
+             ex.category === 'accessory' ||
+             (ex.category === 'strength' && !ex.selectionReason?.includes('primary'))
+    }).length || 0
+    
+    // Use the TRUE groupable tail size for method eligibility decisions
+    // Fall back to old calculation if somehow trueGroupableTailSize is 0 but old calculation had value
+    const accessoryTailSize = Math.max(trueGroupableTailSize, accessoryExerciseCount + coreExerciseCount + supportStrengthCount)
     
     // Blueprint-based eligibility (from session composition intelligence)
     const blueprintSupersetEligibility = sessionCompositionBlueprint?.methodEligibility?.supersets
@@ -11715,6 +11752,11 @@ async function generateAdaptiveProgramImpl(
       purpose: sessionMethodIntentContract.sessionPurpose,
       userPrefs: sessionMethodIntentContract.selectedUserMethodPreferences,
       accessoryTailSize: sessionMethodIntentContract.accessoryTailSize,
+      // [ROOT-CAUSE-FIX-AUDIT] Show both calculation methods for debugging
+      trueGroupableTailSize,
+      legacyTailSize: accessoryExerciseCount + coreExerciseCount + supportStrengthCount,
+      categoryBreakdown: { skillExerciseCount, strengthExerciseCount, accessoryExerciseCount, coreExerciseCount, supportStrengthCount },
+      totalExercises,
       shouldApply: {
         supersets: sessionMethodIntentContract.shouldApplySupersets,
         circuits: sessionMethodIntentContract.shouldApplyCircuits,

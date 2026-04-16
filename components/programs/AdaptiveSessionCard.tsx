@@ -239,6 +239,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const [selectedExerciseForReplace, setSelectedExerciseForReplace] = useState<{id: string, name: string} | null>(null)
   const [skippedExercises, setSkippedExercises] = useState<Set<string>>(new Set())
   const [adjustedExercises, setAdjustedExercises] = useState<Map<string, string>>(new Map())
+  const [showMethodDecisions, setShowMethodDecisions] = useState(false)
   
   // [TASK 4] Track session identity to reset variant state when session changes
   // Using ref to avoid setting state during render
@@ -1038,6 +1039,120 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   cardInstanceId={cardInstanceId}
   />
 
+          {/* [METHOD-DECISIONS-DISCLOSURE] Clean athlete-facing explanation of structure choices.
+              Only shows when there is meaningful truth to share: applied grouped methods
+              AND/OR rejected user-selected grouped methods. Uses runtime-shape access because
+              the authoritative builder writes additional fields (rejectedMethods, appliedMethods,
+              methodIntentContract) that are intentionally not in the narrow display interface. */}
+          {(() => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const styleMeta: any = (session as any).styleMetadata
+            if (!styleMeta) return null
+            const userSelected: string[] = styleMeta.methodIntentContract?.userPreferences || []
+            // Only surface grouped-corridor methods; top_set/drop_set are per-exercise, not this corridor
+            const groupedCorridor = ['supersets', 'circuits', 'density_blocks', 'cluster_sets']
+            const userSelectedGrouped = userSelected.filter((m: string) => groupedCorridor.includes(m))
+            const applied: string[] = (styleMeta.appliedMethods || []).filter((m: string) => groupedCorridor.includes(m))
+            const rejected: Array<{ method: string; reason: string }> = (styleMeta.rejectedMethods || [])
+              .filter((r: unknown): r is { method: string; reason: string } =>
+                !!r && typeof r === 'object' && 'method' in r && 'reason' in r && groupedCorridor.includes((r as { method: string }).method))
+              // De-duplicate by method, keeping the first (most specific) reason
+              .filter((r, idx, arr) => arr.findIndex((x) => x.method === r.method) === idx)
+
+            // Nothing meaningful to say? Don't render the surface.
+            if (userSelectedGrouped.length === 0 && applied.length === 0) return null
+
+            const methodLabel = (m: string): string => {
+              switch (m) {
+                case 'supersets': return 'Supersets'
+                case 'circuits': return 'Circuits'
+                case 'density_blocks': return 'Density blocks'
+                case 'cluster_sets': return 'Cluster sets'
+                default: return m
+              }
+            }
+
+            // One-sentence summary of why the applied structure was chosen
+            let appliedSummary = ''
+            if (applied.length > 0) {
+              const primary = styleMeta.primaryStyle || applied[0]
+              if (primary === 'supersets' || applied.includes('supersets')) {
+                appliedSummary = 'Supersets applied to accessory work to save time without compromising the main quality exposure.'
+              } else if (primary === 'circuits' || applied.includes('circuits')) {
+                appliedSummary = 'Circuits applied to the accessory tail for conditioning density.'
+              } else if (primary === 'cluster_sets' || applied.includes('cluster_sets')) {
+                appliedSummary = 'Cluster sets applied to preserve output on heavy or skill work.'
+              } else if (primary === 'density_blocks' || applied.includes('density_blocks')) {
+                appliedSummary = 'Density block applied to the accessory tail to build work capacity.'
+              }
+            } else {
+              appliedSummary = 'Straight sets today — today\'s composition favors focused quality over grouping.'
+            }
+
+            return (
+              <div className="mt-4 border-t border-[#2A2A2A] pt-3">
+                <button
+                  className="flex items-center gap-2 text-xs text-[#8A8A8A] hover:text-[#C5C5C5] transition-colors w-full"
+                  onClick={() => setShowMethodDecisions(!showMethodDecisions)}
+                  aria-expanded={showMethodDecisions}
+                >
+                  {showMethodDecisions ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  <span className="font-medium">Method decisions</span>
+                  <span className="text-[10px] text-[#6A6A6A] ml-auto">
+                    {applied.length > 0 ? `${applied.length} applied` : 'Straight sets'}
+                    {rejected.length > 0 && ` · ${rejected.length} not used`}
+                  </span>
+                </button>
+
+                {showMethodDecisions && (
+                  <div className="mt-3 space-y-3 text-xs">
+                    {/* Applied methods summary */}
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-[#6A6A6A] mb-1.5">
+                        Today&apos;s structure
+                      </div>
+                      <p className="text-[#C5C5C5] leading-relaxed">
+                        {appliedSummary}
+                      </p>
+                      {applied.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {applied.map(m => (
+                            <span
+                              key={m}
+                              className="text-[10px] px-2 py-0.5 rounded bg-[#2A2A2A] text-[#C5C5C5] border border-[#3A3A3A]"
+                            >
+                              {methodLabel(m)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Rejected methods (only those the user selected) */}
+                    {rejected.length > 0 && (
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wide text-[#6A6A6A] mb-1.5">
+                          Selected styles not used today
+                        </div>
+                        <ul className="space-y-1.5">
+                          {rejected.map((r, i) => (
+                            <li key={i} className="flex gap-2">
+                              <span className="text-[#6A6A6A] shrink-0">·</span>
+                              <span className="text-[#A5A5A5] leading-relaxed">
+                                <span className="text-[#C5C5C5] font-medium">{methodLabel(r.method)}:</span>{' '}
+                                {r.reason}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
           {/* Finisher Block */}
           {session.finisher && session.finisherIncluded && (
             <div className="mt-4 p-4 bg-gradient-to-r from-[#E63946]/5 to-[#E63946]/10 rounded-lg border border-[#E63946]/20">
@@ -1441,63 +1556,38 @@ function MainExercisesRenderer({
         
         return (
           <div key={group.id || `group-${groupIndex}`}>
-            {/* [VISIBLE-IMPROVEMENT] Group Header - Enhanced with educational context */}
+            {/* [CLEAN-GROUP-HEADER] Compact header - no heavy colored fill, just an inline label + optional info bubble */}
             {isSpecialGroup && (
-              <div className={`mb-3 px-3 py-3 rounded-lg border-l-4 ${colors.border} ${colors.bg}`}>
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <span className={`${colors.text} text-lg`}>{icon}</span>
-                  {/* Enhanced label: Show purpose + method (e.g., "Accessory Superset") */}
-                  <span className={`text-sm font-semibold ${colors.text}`}>
-                    {/* Derive purpose from first exercise category if available */}
-                    {(() => {
-                      const firstExercise = group.exercises[0]
-                      const fullExercise = displayExercises.find(e => 
-                        e.id === firstExercise?.id || 
-                        e.name.toLowerCase() === firstExercise?.name.toLowerCase()
-                      )
-                      const category = fullExercise?.category
-                      // Capitalize category and prepend to method label
-                      const purposePrefix = category && category !== 'accessory' 
-                        ? `${category.charAt(0).toUpperCase() + category.slice(1)} ` 
-                        : category === 'accessory' 
-                          ? 'Accessory ' 
-                          : ''
-                      return `${purposePrefix}${label}`
-                    })()}
-                  </span>
-                  {/* [EDUCATIONAL] Method info bubble - explains what this training method is */}
-                  <MethodInfoBubble 
-                    methodType={group.groupType as 'superset' | 'circuit' | 'cluster' | 'density_block'}
-                    context={group.exercises[0]?.methodRationale || undefined}
-                  />
-                  {/* Show exercise count in group */}
-                  <span className="text-xs text-[#6A6A6A] bg-[#2A2A2A] px-1.5 py-0.5 rounded">
-                    {group.exercises.length} exercises
-                  </span>
-                </div>
-                {/* Show instruction or methodRationale if available, otherwise show default educational text */}
-                <p className="text-xs text-[#8A8A8A] mt-2 leading-relaxed">
-                  {group.instruction || group.exercises[0]?.methodRationale || (() => {
-                    // Provide default educational text based on group type
-                    switch (group.groupType) {
-                      case 'superset':
-                        return 'Perform these exercises back-to-back with minimal rest between them. This increases training efficiency and muscular endurance.'
-                      case 'circuit':
-                        return 'Complete all exercises in sequence before resting. This builds work capacity and cardiovascular conditioning.'
-                      case 'density_block':
-                        return 'Complete as many quality rounds as possible in the time block. Focus on maintaining form over speed.'
-                      case 'cluster':
-                        return 'Perform sets with short intra-set rest periods to maintain power output while accumulating volume.'
-                      default:
-                        return 'Perform these exercises as a group for optimal training effect.'
-                    }
+              <div className="mb-2 flex items-center gap-2 flex-wrap">
+                <span className={`${colors.text} opacity-80`}>{icon}</span>
+                <span className={`text-xs font-semibold uppercase tracking-wide ${colors.text}`}>
+                  {(() => {
+                    const firstExercise = group.exercises[0]
+                    const fullExercise = displayExercises.find(e => 
+                      e.id === firstExercise?.id || 
+                      e.name.toLowerCase() === firstExercise?.name.toLowerCase()
+                    )
+                    const category = fullExercise?.category
+                    const purposePrefix = category && category !== 'accessory' 
+                      ? `${category.charAt(0).toUpperCase() + category.slice(1)} ` 
+                      : category === 'accessory' 
+                        ? 'Accessory ' 
+                        : ''
+                    return `${purposePrefix}${label}`
                   })()}
-                </p>
+                </span>
+                <span className="text-[10px] text-[#6A6A6A]">
+                  · {group.exercises.length} exercises
+                </span>
                 {group.restProtocol && (
-                  <p className="text-xs text-[#6A6A6A] mt-1.5 flex items-center gap-1">
-                    <span className="font-medium">Rest:</span> {group.restProtocol}
-                  </p>
+                  <span className="text-[10px] text-[#6A6A6A]">
+                    · Rest {group.restProtocol}
+                  </span>
                 )}
+                <MethodInfoBubble 
+                  methodType={group.groupType as 'superset' | 'circuit' | 'cluster' | 'density_block'}
+                  context={group.exercises[0]?.methodRationale || group.instruction || undefined}
+                />
               </div>
             )}
             

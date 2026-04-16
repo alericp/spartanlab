@@ -11740,6 +11740,15 @@ async function generateAdaptiveProgramImpl(
         const nameLower = ex.name?.toLowerCase() || ''
         const totalExercises = session.exercises.length
         
+        // [DOCTRINE-TIGHTENING] EXCLUDE: Session pillar (index 0 is ALWAYS protected straight work)
+        // The first exercise is the session's primary quality exposure regardless of category.
+        // It must never be grouped into a superset.
+        if (idx === 0) return false
+        
+        // [DOCTRINE-TIGHTENING] EXCLUDE: Any skill-category exercise in the first half
+        // Skill work requires focused neural quality and should not be grouped early.
+        if (ex.category === 'skill' && idx < Math.floor(totalExercises / 2)) return false
+        
         // EXCLUDE: Primary skill exercises (first 1-2 skill exercises are protected)
         if (ex.category === 'skill' && ex.selectionReason?.includes('primary')) return false
         
@@ -12169,6 +12178,49 @@ async function generateAdaptiveProgramImpl(
       existingStyleMeta.hasSupersetsApplied ? 'supersets' :
       hasClusterApplied ? 'cluster_sets' : 'straight_sets'
     
+    // [DOCTRINE-REJECTION-COMPLETION] Fill in truthful rejection reasons for user-selected
+    // methods that were gated out at contract time (not just at materialization time).
+    // This ensures the athlete-facing "Method decisions" surface can honestly explain
+    // why selected styles were not used today.
+    const completedRejectedMethods: Array<{ method: string; reason: string }> = [
+      ...methodMaterializationResult.rejectedMethods,
+    ]
+    const alreadyRejectedSet = new Set(completedRejectedMethods.map(r => r.method))
+    const userSelectedMethods = sessionMethodIntentContract.selectedUserMethodPreferences || []
+    
+    // Only evaluate grouped-corridor methods (supersets, circuits, density, cluster).
+    // Top sets and drop sets are per-exercise set-structure methods, not part of this corridor.
+    if (userSelectedMethods.includes('supersets') && !existingStyleMeta.hasSupersetsApplied && !alreadyRejectedSet.has('supersets')) {
+      const reason = sessionMethodIntentContract.isSkillDominated
+        ? 'Session is skill-dominated today; protecting neural quality takes priority'
+        : sessionMethodIntentContract.accessoryTailSize < 2
+          ? `Accessory tail too small (${sessionMethodIntentContract.accessoryTailSize} eligible) — no safe pairing available`
+          : 'No compatible accessory pairs found in today\'s composition'
+      completedRejectedMethods.push({ method: 'supersets', reason })
+    }
+    if (userSelectedMethods.includes('circuits') && !hasCircuitsApplied && !alreadyRejectedSet.has('circuits')) {
+      const reason = sessionMethodIntentContract.isSkillDominated
+        ? 'Session is quality/skill-protected; circuits would compromise output'
+        : sessionMethodIntentContract.accessoryTailSize < 3
+          ? `Accessory tail too small for circuits (${sessionMethodIntentContract.accessoryTailSize} of 3 minimum)`
+          : 'Session composition did not earn circuit density today'
+      completedRejectedMethods.push({ method: 'circuits', reason })
+    }
+    if (userSelectedMethods.includes('density_blocks') && !hasDensityApplied && !alreadyRejectedSet.has('density_blocks')) {
+      const reason = sessionMethodIntentContract.isSkillDominated
+        ? 'Session prioritizes quality over density today'
+        : sessionMethodIntentContract.accessoryTailSize < 3
+          ? `Accessory tail too small for density block (${sessionMethodIntentContract.accessoryTailSize} of 3 minimum)`
+          : 'Weekly fatigue profile disfavors density grouping this session'
+      completedRejectedMethods.push({ method: 'density_blocks', reason })
+    }
+    if (userSelectedMethods.includes('cluster_sets') && !hasClusterApplied && !alreadyRejectedSet.has('cluster_sets')) {
+      const reason = !sessionMethodIntentContract.clusterAllowed
+        ? 'No qualifying skill-hold or weighted strength work in this session for cluster format'
+        : 'Cluster format not earned by today\'s exercise pool'
+      completedRejectedMethods.push({ method: 'cluster_sets', reason })
+    }
+    
     session.styleMetadata = {
       ...existingStyleMeta,
       primaryStyle,
@@ -12184,7 +12236,7 @@ async function generateAdaptiveProgramImpl(
         ...methodMaterializationResult.appliedMethods,
         'straight_sets', // Always include as baseline
       ])],
-      rejectedMethods: methodMaterializationResult.rejectedMethods,
+      rejectedMethods: completedRejectedMethods,
       styledGroups: finalStyledGroups,
       // Audit trail for materialization
       materializationAudit: {

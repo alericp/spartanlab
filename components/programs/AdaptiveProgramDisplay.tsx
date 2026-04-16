@@ -970,6 +970,33 @@ export function AdaptiveProgramDisplay({
           )}
         </div>
         
+        {/* [PROGRAM-DECISION-DEFINITIONS] Quick reference for program concepts */}
+        <details className="group">
+          <summary className="flex items-center gap-1.5 cursor-pointer text-[10px] text-[#5A5A5A] hover:text-[#7A7A7A] transition-colors select-none">
+            <Info className="w-3 h-3" />
+            <span>What these terms mean</span>
+            <ChevronRight className="w-3 h-3 transition-transform group-open:rotate-90" />
+          </summary>
+          <div className="mt-2 p-3 bg-[#151515] rounded-lg border border-[#2A2A2A] space-y-2 text-[11px] leading-relaxed">
+            <div className="flex items-start gap-2">
+              <span className="text-[#E63946] font-medium shrink-0 w-14">Focus</span>
+              <span className="text-[#8A8A8A]">The main training priority of this plan.</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-[#E63946] font-medium shrink-0 w-14">Phase</span>
+              <span className="text-[#8A8A8A]">Where you are in the training cycle (intro, build, peak, deload).</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-[#E63946] font-medium shrink-0 w-14">Volume</span>
+              <span className="text-[#8A8A8A]">Total amount of work this week relative to baseline.</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-[#E63946] font-medium shrink-0 w-14">Weekly</span>
+              <span className="text-[#8A8A8A]">How training stress is distributed across the week.</span>
+            </div>
+          </div>
+        </details>
+        
         {/* [MAIN-PAGE-AI-VISIBILITY] Compact tradeoffs summary - visible without modal */}
         {intelligenceContract?.tradeoffs && intelligenceContract.tradeoffs.length > 1 && (
           <div className="p-2.5 bg-[#1A1A1A]/50 rounded-lg border border-[#2A2A2A]">

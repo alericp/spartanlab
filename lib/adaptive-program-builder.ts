@@ -11740,14 +11740,15 @@ async function generateAdaptiveProgramImpl(
         const nameLower = ex.name?.toLowerCase() || ''
         const totalExercises = session.exercises.length
         
-        // [DOCTRINE-TIGHTENING] EXCLUDE: Session pillar (index 0 is ALWAYS protected straight work)
+        // [DOCTRINE-TIGHTENING-RESTORED] EXCLUDE: Session pillar (index 0 is protected straight work)
         // The first exercise is the session's primary quality exposure regardless of category.
         // It must never be grouped into a superset.
+        //
+        // [REGRESSION-FIX] The earlier "first-half skill exclusion" was removed — it was too
+        // aggressive for skill-heavy calisthenics sessions where most exercises are category='skill',
+        // and it was killing valid supersets by reducing candidate pool below the 2-candidate
+        // minimum. Primary-skill and selectionReason-primary guards below still protect quality work.
         if (idx === 0) return false
-        
-        // [DOCTRINE-TIGHTENING] EXCLUDE: Any skill-category exercise in the first half
-        // Skill work requires focused neural quality and should not be grouped early.
-        if (ex.category === 'skill' && idx < Math.floor(totalExercises / 2)) return false
         
         // EXCLUDE: Primary skill exercises (first 1-2 skill exercises are protected)
         if (ex.category === 'skill' && ex.selectionReason?.includes('primary')) return false

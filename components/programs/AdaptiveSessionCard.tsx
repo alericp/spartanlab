@@ -1556,11 +1556,14 @@ function MainExercisesRenderer({
         
         return (
           <div key={group.id || `group-${groupIndex}`}>
-            {/* [CLEAN-GROUP-HEADER] Compact header - no heavy colored fill, just an inline label + optional info bubble */}
+            {/* [CLEAN-GROUP-HEADER-RESTORED] Compact but clearly visible header.
+                Previous pass made it too quiet (text-xs + opacity-80) which flattened grouped
+                truth visually. Restored to text-sm, full opacity, with a subtle tinted background
+                pill so grouped blocks are immediately recognizable without debug clutter. */}
             {isSpecialGroup && (
-              <div className="mb-2 flex items-center gap-2 flex-wrap">
-                <span className={`${colors.text} opacity-80`}>{icon}</span>
-                <span className={`text-xs font-semibold uppercase tracking-wide ${colors.text}`}>
+              <div className={`mb-2 flex items-center gap-2 flex-wrap px-2.5 py-1.5 rounded-md ${colors.bg}`}>
+                <span className={colors.text}>{icon}</span>
+                <span className={`text-sm font-semibold ${colors.text}`}>
                   {(() => {
                     const firstExercise = group.exercises[0]
                     const fullExercise = displayExercises.find(e => 
@@ -1576,11 +1579,11 @@ function MainExercisesRenderer({
                     return `${purposePrefix}${label}`
                   })()}
                 </span>
-                <span className="text-[10px] text-[#6A6A6A]">
+                <span className="text-[11px] text-[#8A8A8A]">
                   · {group.exercises.length} exercises
                 </span>
                 {group.restProtocol && (
-                  <span className="text-[10px] text-[#6A6A6A]">
+                  <span className="text-[11px] text-[#8A8A8A]">
                     · Rest {group.restProtocol}
                   </span>
                 )}

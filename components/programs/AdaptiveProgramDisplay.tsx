@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import { AdaptiveSessionCard } from './AdaptiveSessionCard'
+import { BuildIdentityStamp } from './BuildIdentityStamp'
 import { WhyThisPlanBlock } from './WhyThisWorkoutBlock'
 import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
@@ -1485,6 +1486,10 @@ export function AdaptiveProgramDisplay({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* [BUILD-IDENTITY-STAMP] Tiny footer marker so the user can verify
+          the live page is running the expected deploy, not a stale bundle. */}
+      <BuildIdentityStamp />
     </div>
   )
 }

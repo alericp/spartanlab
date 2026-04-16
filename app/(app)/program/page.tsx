@@ -230,6 +230,120 @@ function isBuilderGenerationError(err: unknown): err is { code: string; stage: s
     !(err instanceof ProgramPageValidationError)
 }
 
+// ==========================================================================
+// [DEGRADED-BANNER-CONTRACT] Safe Banner Diagnostic Display Helper
+// Provides stable, consistent formatting for degraded/failure banner display.
+// Guarantees no crashes from missing optional fields, no stale data display.
+// ==========================================================================
+
+interface StableBannerDiagnostics {
+  /** Primary user message - always present */
+  primaryMessage: string
+  /** Explanation line - always present */
+  explanationLine: string
+  /** Stage line - "Stage: X | Code: Y" format, safe defaults */
+  stageLine: string
+  /** Detail line - Step/Day/Focus if available, null if none */
+  detailLine: string | null
+  /** Reason line - failure reason if available, null if none */
+  reasonLine: string | null
+  /** Whether this is a known obsolete error that should be handled specially */
+  isObsoleteError: boolean
+  /** Whether banner should render at all */
+  shouldRender: boolean
+}
+
+/**
+ * Creates stable, safe banner diagnostic content from a build result.
+ * Handles missing fields, stale data, and obsolete error patterns.
+ */
+function createStableBannerDiagnostics(
+  buildResult: BuildAttemptResult | null,
+  currentRuntimeSessionId: string,
+  lastBuildStatus: string | null
+): StableBannerDiagnostics {
+  // Default "nothing to show" state
+  const emptyResult: StableBannerDiagnostics = {
+    primaryMessage: '',
+    explanationLine: '',
+    stageLine: '',
+    detailLine: null,
+    reasonLine: null,
+    isObsoleteError: false,
+    shouldRender: false,
+  }
+  
+  // Guard: no build result
+  if (!buildResult) return emptyResult
+  
+  // Guard: not a failure state
+  if (buildResult.status !== 'preserved_last_good') return emptyResult
+  
+  // Guard: hydrated from storage (stale across page loads)
+  if (buildResult.hydratedFromStorage === true) return emptyResult
+  
+  // Guard: runtime session mismatch (stale within session)
+  if (buildResult.runtimeSessionId !== currentRuntimeSessionId) return emptyResult
+  
+  // Guard: last build was success (would show stale failure after success)
+  if (lastBuildStatus === 'success') return emptyResult
+  
+  // Check for known obsolete errors
+  const isObsolete = 
+    buildResult.failureReason?.includes('hasDegradedSessions is not defined') ||
+    buildResult.userMessage?.includes('hasDegradedSessions is not defined')
+  
+  // Build stage line with safe fallbacks
+  const stage = buildResult.stage || 'unknown'
+  const code = buildResult.errorCode || 'unknown'
+  const subCode = buildResult.subCode && buildResult.subCode !== 'none' 
+    ? ` (${buildResult.subCode})` 
+    : ''
+  const stageLine = `Stage: ${stage} | Code: ${code}${subCode}`
+  
+  // Build detail line only if meaningful data exists
+  const hasStep = !!buildResult.failureStep
+  const hasDay = buildResult.failureDayNumber !== null && buildResult.failureDayNumber !== undefined
+  const hasFocus = !!buildResult.failureFocus
+  const hasMiddle = !!buildResult.failureMiddleStep
+  
+  let detailLine: string | null = null
+  if (hasStep || hasDay || hasFocus) {
+    const parts: string[] = []
+    if (hasStep) parts.push(`Step: ${buildResult.failureStep}`)
+    if (hasMiddle) parts.push(`Middle: ${buildResult.failureMiddleStep}`)
+    if (hasDay) parts.push(`Day: ${buildResult.failureDayNumber}`)
+    if (hasFocus) parts.push(`Focus: ${buildResult.failureFocus}`)
+    detailLine = parts.join(' | ')
+  }
+  
+  // Build reason line only if exists
+  let reasonLine: string | null = null
+  if (buildResult.failureReason) {
+    if (isObsolete) {
+      reasonLine = 'Reason: Stale cached code detected. Please hard-refresh (Ctrl+Shift+R) to load the fix.'
+    } else {
+      // Truncate long reasons for display, preserve first 150 chars
+      reasonLine = `Reason: ${buildResult.failureReason.slice(0, 150)}`
+    }
+  }
+  
+  // Build user message with obsolete handling
+  const primaryMessage = isObsolete
+    ? 'Your browser is running outdated code. Please hard-refresh (Ctrl+Shift+R or Cmd+Shift+R) to apply the fix.'
+    : buildResult.userMessage || 'Your rebuild returned degraded sessions.'
+  
+  return {
+    primaryMessage,
+    explanationLine: 'This is your previous plan. Your latest settings were not applied.',
+    stageLine,
+    detailLine,
+    reasonLine,
+    isObsoleteError: isObsolete,
+    shouldRender: !isObsolete, // Block render for obsolete errors
+  }
+}
+
 // [PHASE 16R] Plain error elimination audit
 // All classifiable page-owned throws are now ProgramPageValidationError
 // Remaining plain Error throws are either:
@@ -13721,155 +13835,115 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         ) : program && programModules.isRenderableProgram?.(program) ? (
           <div className="space-y-4">
             {/* ==========================================================================
-               [REGEN_BANNER_GATE] Authoritative banner render decision with fingerprint
-               This is THE final gate that decides if the red banner renders
+               [DEGRADED-BANNER-CONTRACT] Authoritative banner render using stable helper
+               Single source of truth for degraded/failure banner display
                ========================================================================== */}
             {(() => {
-              const bannerEligible = truthGatedBuildResult?.status === 'preserved_last_good' &&
-                truthGatedBuildResult?.hydratedFromStorage !== true &&
-                truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current
+              // Use the authoritative stable banner helper
+              const bannerDiagnostics = createStableBannerDiagnostics(
+                truthGatedBuildResult,
+                runtimeSessionIdRef.current,
+                lastBuildResult?.status ?? null
+              )
               
-              // [STALE_BANNER_DEBUG] Check if we're showing stale failure after success
-              const lastBuildIsSuccess = lastBuildResult?.status === 'success'
-              const truthGatedIsFailure = truthGatedBuildResult?.status === 'preserved_last_good'
-              const staleFailureRisk = lastBuildIsSuccess && bannerEligible
-              
-              // [STALE_ERROR_BLOCKLIST] Detect if this is the known obsolete hasDegradedSessions error
-              const isKnownObsoleteError = 
-                truthGatedBuildResult?.failureReason?.includes('hasDegradedSessions is not defined') ||
-                truthGatedBuildResult?.userMessage?.includes('hasDegradedSessions is not defined')
-              
-              if (isKnownObsoleteError) {
-                console.warn('[OBSOLETE_ERROR_BANNER_BLOCKED]', {
-                  fingerprint: 'OBSOLETE_ERROR_SUPPRESSION_2026_04_12_V1',
-                  detectedObsoleteError: 'hasDegradedSessions is not defined',
-                  failureReason: truthGatedBuildResult?.failureReason?.slice(0, 100),
-                  userMessage: truthGatedBuildResult?.userMessage?.slice(0, 100),
-                  verdict: 'BANNER_BLOCKED_OBSOLETE_ERROR_FAMILY',
-                  action: 'Banner will NOT render for this obsolete error. User should hard-refresh to get clean state.',
-                  currentPageFingerprint: PHASE27C_BUILD_IDENTITY.regenScopeFix,
-                })
-              }
-              
-              console.log('[REGEN_BANNER_GATE]', {
-                fingerprint: 'REGEN_OBSOLETE_ERROR_SUPPRESSION_2026_04_12_V4',
-                isKnownObsoleteError,
-                obsoleteErrorWillBlockBanner: isKnownObsoleteError,
-                fileOwner: 'app/(app)/program/page.tsx',
-                functionOwner: 'ProgramPageContent',
-                phase: 'banner_render_gate',
-                truthGatedBuildResultExists: !!truthGatedBuildResult,
-                status: truthGatedBuildResult?.status ?? 'null',
-                hydratedFromStorage: truthGatedBuildResult?.hydratedFromStorage ?? 'null',
-                runtimeSessionIdMatch: truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current,
-                bannerEligible,
-                // [STALE_BANNER_DEBUG] New diagnostic fields
-                lastBuildResultStatus: lastBuildResult?.status ?? 'null',
-                lastBuildResultAttemptId: lastBuildResult?.attemptId ?? 'null',
-                truthGatedAttemptId: truthGatedBuildResult?.attemptId ?? 'null',
-                staleFailureRisk,
-                verdict: isKnownObsoleteError
-                  ? 'BANNER_BLOCKED_OBSOLETE_ERROR_FAMILY'
-                  : staleFailureRisk 
-                    ? 'STALE_FAILURE_RISK_DETECTED' 
-                    : bannerEligible 
-                      ? 'BANNER_WILL_RENDER_RED_CARD' 
-                      : 'BANNER_BLOCKED',
+              // Diagnostic log for banner decision
+              console.log('[DEGRADED_BANNER_GATE]', {
+                fingerprint: 'DEGRADED_BANNER_CONTRACT_2026_04_16_V1',
+                shouldRender: bannerDiagnostics.shouldRender,
+                isObsoleteError: bannerDiagnostics.isObsoleteError,
+                hasDetailLine: !!bannerDiagnostics.detailLine,
+                hasReasonLine: !!bannerDiagnostics.reasonLine,
+                truthGatedStatus: truthGatedBuildResult?.status ?? 'null',
+                lastBuildStatus: lastBuildResult?.status ?? 'null',
+                runtimeSessionMatch: truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current,
+                verdict: bannerDiagnostics.shouldRender 
+                  ? 'BANNER_WILL_RENDER' 
+                  : bannerDiagnostics.isObsoleteError
+                    ? 'BANNER_BLOCKED_OBSOLETE_ERROR'
+                    : 'BANNER_BLOCKED_NO_VALID_FAILURE',
               })
-              return null
-            })()}
-            {/* [STALE_BANNER_GUARD] Defense-in-depth: Never show failure banner if lastBuildResult is success */}
-            {/* [OBSOLETE_ERROR_SUPPRESSION] Block banner render entirely for known obsolete error family */}
-            {truthGatedBuildResult?.status === 'preserved_last_good' && 
-             truthGatedBuildResult?.hydratedFromStorage !== true &&
-             truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current &&
-             lastBuildResult?.status !== 'success' &&
-             !(truthGatedBuildResult?.failureReason?.includes('hasDegradedSessions is not defined') ||
-               truthGatedBuildResult?.userMessage?.includes('hasDegradedSessions is not defined')) && (
-              <Card className="bg-red-500/10 border-red-500/30 p-4">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="text-sm text-red-200 font-medium">Last rebuild did not complete</p>
-                    {/* [STALE_ERROR_BLOCKLIST] Intercept known obsolete errors in userMessage */}
-                    <p className="text-xs text-red-400/80 mt-1">
-                      {truthGatedBuildResult.userMessage?.includes('hasDegradedSessions is not defined')
-                        ? 'Your browser is running outdated code. Please hard-refresh (Ctrl+Shift+R or Cmd+Shift+R) to apply the fix.'
-                        : truthGatedBuildResult.userMessage}
-                    </p>
-  <p className="text-xs text-[#6A6A6A] mt-1">
-  This is your previous plan. Your latest settings were not applied.
-  </p>
-  {/* TASK 1-D: Structured diagnostic display for red card */}
-  {/* [CORRIDOR-STABILIZATION] Text overflow fix: break-all + max-w-full for mobile safety */}
-  <div className="mt-2 space-y-0.5 overflow-hidden max-w-full">
-    {/* Line 1: Stage and Code */}
-    <p className="text-[10px] text-[#5A5A5A] font-mono break-all max-w-full" style={{ overflowWrap: 'anywhere' }}>
-      Stage: {truthGatedBuildResult.stage} | Code: {truthGatedBuildResult.errorCode || 'unknown'}
-      {truthGatedBuildResult.subCode !== 'none' && ` (${truthGatedBuildResult.subCode})`}
-    </p>
-    {/* Line 2: Step, Middle, Day, Focus - only if any exist */}
-    {(truthGatedBuildResult.failureStep || truthGatedBuildResult.failureDayNumber || truthGatedBuildResult.failureFocus) && (
-      <p className="text-[10px] text-[#4A4A4A] font-mono break-all max-w-full" style={{ overflowWrap: 'anywhere' }}>
-        Step: {truthGatedBuildResult.failureStep || 'none'}
-        {truthGatedBuildResult.failureMiddleStep && ` | Middle: ${truthGatedBuildResult.failureMiddleStep}`}
-        {truthGatedBuildResult.failureDayNumber !== null && ` | Day: ${truthGatedBuildResult.failureDayNumber}`}
-        {truthGatedBuildResult.failureFocus && ` | Focus: ${truthGatedBuildResult.failureFocus}`}
-      </p>
-    )}
-    {/* Line 3: Reason - only if exists */}
-    {/* [CORRIDOR-STABILIZATION] Use break-all instead of truncate to prevent horizontal overflow */}
-    {/* [STALE_ERROR_BLOCKLIST] Intercept known obsolete errors from cached old code */}
-    {truthGatedBuildResult.failureReason && (
-      <p className="text-[10px] text-[#4A4A4A] font-mono break-all max-w-full" style={{ overflowWrap: 'anywhere' }}>
-        Reason: {
-          truthGatedBuildResult.failureReason.includes('hasDegradedSessions is not defined')
-            ? 'Stale cached code detected. Please hard-refresh (Ctrl+Shift+R) to load the fix.'
-            : truthGatedBuildResult.failureReason.slice(0, 150)
-        }
-      </p>
-    )}
-    {/* TASK 1-E: Defensive fallback when no structured fields exist */}
-    {!truthGatedBuildResult.failureStep && !truthGatedBuildResult.failureDayNumber && !truthGatedBuildResult.failureReason && (
-      <p className="text-[10px] text-[#4A4A4A] font-mono break-all max-w-full">
-        Step: unavailable | Reason: unavailable
-      </p>
-    )}
-  </div>
-  <div className="flex gap-2 mt-2">
-                      <Button
-                        size="sm"
-                        className="bg-red-600 hover:bg-red-700 text-white h-7 px-3 text-xs"
-                        onClick={handleRegenerate}
-                      >
-                        Try Again
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-400/70 hover:text-red-300 h-7 px-2 text-xs"
-                        onClick={() => {
-                          // [PHASE 16S] Dismiss audit for preserved banner
-                          console.log('[phase16s-dismiss-cleared-banner-audit]', {
-                            clearedGenerationError: false,
-                            clearedLastBuildResult: !!lastBuildResult,
-                            clearedPersistedStorage: true,
-                            currentRuntimeSessionId: runtimeSessionIdRef.current,
-                            dismissedAttemptId: lastBuildResult?.attemptId ?? null,
-                            dismissedErrorCode: lastBuildResult?.errorCode ?? null,
-                            verdict: 'preserved_banner_dismissed',
-                          })
-                          setLastBuildResult(null)
-                          clearLastBuildAttemptResult()
-                        }}
-                      >
-                        Dismiss
-                      </Button>
+              
+              // Render nothing if banner shouldn't show
+              if (!bannerDiagnostics.shouldRender) return null
+              
+              return (
+                <Card className="bg-red-500/10 border-red-500/30 p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      {/* Primary message: "Last rebuild did not complete" */}
+                      <p className="text-sm text-red-200 font-medium">Last rebuild did not complete</p>
+                      
+                      {/* User-facing message */}
+                      <p className="text-xs text-red-400/80 mt-1">
+                        {bannerDiagnostics.primaryMessage}
+                      </p>
+                      
+                      {/* Explanation line */}
+                      <p className="text-xs text-[#6A6A6A] mt-1">
+                        {bannerDiagnostics.explanationLine}
+                      </p>
+                      
+                      {/* Structured diagnostic display */}
+                      <div className="mt-2 space-y-0.5 overflow-hidden max-w-full">
+                        {/* Stage and Code line - always present with safe defaults */}
+                        <p className="text-[10px] text-[#5A5A5A] font-mono break-all max-w-full" style={{ overflowWrap: 'anywhere' }}>
+                          {bannerDiagnostics.stageLine}
+                        </p>
+                        
+                        {/* Detail line - Step/Day/Focus, only if available */}
+                        {bannerDiagnostics.detailLine && (
+                          <p className="text-[10px] text-[#4A4A4A] font-mono break-all max-w-full" style={{ overflowWrap: 'anywhere' }}>
+                            {bannerDiagnostics.detailLine}
+                          </p>
+                        )}
+                        
+                        {/* Reason line - only if available */}
+                        {bannerDiagnostics.reasonLine && (
+                          <p className="text-[10px] text-[#4A4A4A] font-mono break-all max-w-full" style={{ overflowWrap: 'anywhere' }}>
+                            {bannerDiagnostics.reasonLine}
+                          </p>
+                        )}
+                        
+                        {/* Fallback when no detail or reason available */}
+                        {!bannerDiagnostics.detailLine && !bannerDiagnostics.reasonLine && (
+                          <p className="text-[10px] text-[#4A4A4A] font-mono break-all max-w-full">
+                            No additional diagnostic details available
+                          </p>
+                        )}
+                      </div>
+                      
+                      {/* Action buttons */}
+                      <div className="flex gap-2 mt-2">
+                        <Button
+                          size="sm"
+                          className="bg-red-600 hover:bg-red-700 text-white h-7 px-3 text-xs"
+                          onClick={handleRegenerate}
+                        >
+                          Try Again
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-red-400/70 hover:text-red-300 h-7 px-2 text-xs"
+                          onClick={() => {
+                            console.log('[degraded-banner-dismissed]', {
+                              fingerprint: 'BANNER_DISMISS_2026_04_16_V1',
+                              dismissedAttemptId: lastBuildResult?.attemptId ?? null,
+                              dismissedErrorCode: lastBuildResult?.errorCode ?? null,
+                            })
+                            setLastBuildResult(null)
+                            clearLastBuildAttemptResult()
+                          }}
+                        >
+                          Dismiss
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </Card>
-            )}
+                </Card>
+              )
+            })()}
             
             {/* [program-alignment] ISSUE B/C: Show stale program warning with last good plan note */}
             {/* [PHASE 16S] Use truth-gated result for stale condition */}

@@ -183,10 +183,16 @@ function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
   }
 }
 
-export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter, showProbe = false, forceProbe = false }: AdaptiveSessionCardProps) {
-  // [ALWAYS-VISIBLE-PROBE] Generate stable card instance ID for probe correlation
+export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter, showProbe: _showProbe = false, forceProbe: _forceProbe = false }: AdaptiveSessionCardProps) {
+  // [PROBES-HARD-DISABLED] Session truth probes are retired. They caused
+  // debug-looking text ("PROBE ACTIVE", instance-id letter fragments, etc.)
+  // to leak into production UI when accidentally enabled via query param.
+  // The probeActive flag is permanently false here -- probe JSX blocks below
+  // are dead code that never renders. showProbe/forceProbe props are kept for
+  // interface compatibility but are not honored. To revive probes, wire a
+  // new explicitly dev-only gate behind process.env.NODE_ENV checks.
   const cardInstanceId = `card-${rawSession.dayNumber}-${rawSession.name?.slice(0,10) || 'session'}-${Date.now().toString(36).slice(-4)}`
-  const probeActive = showProbe || forceProbe
+  const probeActive = false as boolean
   // PHASE 3: Normalize session immediately to prevent crashes
   const session = normalizeSessionForDisplay(rawSession)
   
@@ -1262,12 +1268,13 @@ function MainExercisesRenderer({
   onReplace,
   onSkip,
   onProgressionAdjust,
-  showProbe = false,
-  forceProbe = false,
+  showProbe: _innerShowProbe = false,
+  forceProbe: _innerForceProbe = false,
   cardInstanceId = 'unknown',
 }: MainExercisesRendererProps) {
-  // [ALWAYS-VISIBLE-PROBE] Compute probeActive for inner banner
-  const innerProbeActive = showProbe || forceProbe
+  // [PROBES-HARD-DISABLED] See note above -- inner render-branch probe banner
+  // is retired to prevent debug text leakage into production. Flag is false.
+  const innerProbeActive = false as boolean
   // Get style metadata from session if available
   const styleMetadata = (session as AdaptiveSession & { styleMetadata?: SessionStyleMetadata }).styleMetadata
   const styledGroups = styleMetadata?.styledGroups || []
@@ -1642,19 +1649,18 @@ function MainExercisesRenderer({
                 
                 if (!fullExercise) {
                   // Exercise in styled groups but not in displayExercises.
-                  // [GROUPED-TRUTH-RESCUE] Previously returned null, which silently
-                  // dropped the grouped exercise and flattened the visible group.
-                  // We now render a minimal row from styledGroups' own authoritative
-                  // truth so the grouped structure (prefix A1/A2, exercise name)
-                  // remains visibly intact. This never invents grouped truth -- the
-                  // groupExercise came directly from builder-authoritative styledGroups.
-                  console.warn('[phase7b-grouped-render] Exercise not found in displayExercises, rendering from styledGroups truth:', {
-                    groupExerciseId: groupExercise.id,
-                    groupExerciseName: groupExercise.name,
-                  })
+                  // [GROUPED-TRUTH-RESCUE] Render a minimal row from styledGroups'
+                  // authoritative truth so grouped structure stays visible.
+                  // [JUNK-TEXT-GUARD] If the grouped truth has no usable name,
+                  // drop the row entirely rather than rendering a lone prefix
+                  // (e.g. "A1" with no exercise) or a stray letter fragment.
+                  const safeName = (groupExercise.name || '').trim()
+                  if (!safeName || safeName.length < 2) {
+                    return null
+                  }
                   return (
                     <div
-                      key={groupExercise.id || `${groupExercise.name}-${exIdx}`}
+                      key={groupExercise.id || `${safeName}-${exIdx}`}
                       className="flex items-baseline gap-2 py-1.5 text-sm text-[#C8C8C8]"
                     >
                       {groupExercise.prefix && (
@@ -1662,7 +1668,7 @@ function MainExercisesRenderer({
                           {groupExercise.prefix}
                         </span>
                       )}
-                      <span className="truncate">{groupExercise.name}</span>
+                      <span className="truncate">{safeName}</span>
                     </div>
                   )
                 }

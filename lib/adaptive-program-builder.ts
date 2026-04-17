@@ -11864,9 +11864,14 @@ async function generateAdaptiveProgramImpl(
       
       // [SUPERSET-PAIRING-FIX] Pair from the END of the candidate array (true accessory/core tail)
       // NOT from the front - earlier exercises are often more important even if they pass the filter
-      // Group into pairs for supersets (max 2 superset pairs per session)
+      // [VISIBLE-GROUPING-LIFT] Raised per-session pair cap from 2 to 3 when the accessory
+      // tail has enough room (>= 6 eligible candidates). This lets sessions where the user
+      // explicitly selected supersets actually look grouped in the body instead of leaving
+      // only two pairs buried at the very end. Primary/skill work stays protected because
+      // upstream candidate filtering already excludes it.
       if (supersetCandidates.length >= 2) {
-        const pairsToCreate = Math.min(2, Math.floor(supersetCandidates.length / 2))
+        const pairCap = supersetCandidates.length >= 6 ? 3 : 2
+        const pairsToCreate = Math.min(pairCap, Math.floor(supersetCandidates.length / 2))
         let pairsCreated = 0
         
         // Start from the END of the candidate array and work backwards

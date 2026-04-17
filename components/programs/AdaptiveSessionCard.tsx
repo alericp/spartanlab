@@ -1027,6 +1027,50 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     )}
   </div>
 
+{/* =========================================================================
+    [GROUPED-METHOD-SUMMARY] Visible session methodology indicator
+    Shows what training methods are applied to this session
+    ========================================================================= */}
+{(() => {
+  const nonStraightGroupsForSummary = sessionStyleMetadata?.styledGroups?.filter(g => g.groupType !== 'straight') || []
+  const supersetCount = nonStraightGroupsForSummary.filter(g => g.groupType === 'superset').length
+  const circuitCount = nonStraightGroupsForSummary.filter(g => g.groupType === 'circuit').length
+  const densityCount = nonStraightGroupsForSummary.filter(g => g.groupType === 'density_block').length
+  const clusterCount = nonStraightGroupsForSummary.filter(g => g.groupType === 'cluster').length
+  const hasGroupedMethods = nonStraightGroupsForSummary.length > 0
+  
+  if (!hasGroupedMethods) return null
+  
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      {supersetCount > 0 && (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-purple-500/15 text-purple-300 border border-purple-500/25">
+          <Layers className="w-3.5 h-3.5" />
+          {supersetCount} Superset{supersetCount > 1 ? 's' : ''}
+        </span>
+      )}
+      {circuitCount > 0 && (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-orange-500/15 text-orange-300 border border-orange-500/25">
+          <Zap className="w-3.5 h-3.5" />
+          {circuitCount} Circuit{circuitCount > 1 ? 's' : ''}
+        </span>
+      )}
+      {densityCount > 0 && (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/25">
+          <Scale className="w-3.5 h-3.5" />
+          {densityCount} Density Block{densityCount > 1 ? 's' : ''}
+        </span>
+      )}
+      {clusterCount > 0 && (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-cyan-500/15 text-cyan-300 border border-cyan-500/25">
+          <Layers className="w-3.5 h-3.5" />
+          {clusterCount} Cluster Set{clusterCount > 1 ? 's' : ''}
+        </span>
+      )}
+    </div>
+  )
+})()}
+
 {/* Main Exercises - [FULL-VISIBLE-ROUTINE] Uses full routine truth, not narrowed displayExercises */}
 <MainExercisesRenderer
   session={session}

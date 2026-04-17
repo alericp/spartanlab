@@ -520,17 +520,55 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     safeExercises,
     selectedVariantData?.selection || null
   )
-  
+
   // ==========================================================================
-  // [v0] AUTHORITATIVE ROUTINE OWNERSHIP AUDIT
-  // Verify full routine truth is flowing through correctly
+  // [FUNNEL-AUDIT] One-shot compact stage comparison for THIS session only.
+  // Emits a single line per card mount so the render-delivery corridor is
+  // observable end-to-end without spamming. This is the authoritative probe
+  // for deciding whether grouped truth exists at Stage 1 (session prop) and
+  // whether it survived through Stage 6 (fullVisibleExercises) on the same
+  // session identity. Prior noisier per-session / per-render logs have been
+  // demoted to fire only on truth-loss (contract violations).
   // ==========================================================================
-  if (process.env.NODE_ENV === 'development') {
-    const familyBreakdown = fullVisibleExercises.reduce((acc, ex) => {
-      acc[ex.routineFamily] = (acc[ex.routineFamily] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
-    
+  if (typeof window !== 'undefined' && session.dayNumber) {
+    const s1Ex = Array.isArray(rawSession.exercises) ? rawSession.exercises : []
+    const s1StyledGroups = sessionStyleMetadata?.styledGroups ?? []
+    const s1NonStraight = s1StyledGroups.filter(g => g.groupType !== 'straight').length
+    const s1ExWithBlockId = s1Ex.filter(e => !!(e as { blockId?: string }).blockId).length
+    const s1ExWithNonStraightMethod = s1Ex.filter(e => {
+      const m = (e as { method?: string }).method
+      return !!m && m !== 'straight'
+    }).length
+    const s6ExWithBlockId = fullVisibleExercises.filter(
+      e => !!(e as unknown as { blockId?: string }).blockId
+    ).length
+    const s6ExWithNonStraightMethod = fullVisibleExercises.filter(e => {
+      const m = (e as unknown as { method?: string }).method
+      return !!m && m !== 'straight'
+    }).length
+    // Verdict for this session: where does truth exist / where is it lost?
+    let verdict: string
+    if (!sessionStyleMetadata && s1ExWithBlockId === 0 && s1ExWithNonStraightMethod === 0) {
+      verdict = 'STAGE1_FLAT_NO_UPSTREAM_GROUPED_TRUTH'
+    } else if (s1NonStraight === 0 && s1ExWithNonStraightMethod === 0) {
+      verdict = 'STAGE1_ONLY_STRAIGHT_GROUPED_TRUTH'
+    } else if (s6ExWithBlockId < s1ExWithBlockId || s6ExWithNonStraightMethod < s1ExWithNonStraightMethod) {
+      verdict = 'STAGE5_6_BRIDGE_LOST_PER_EXERCISE_GROUPED_FIELDS'
+    } else {
+      verdict = 'STAGE1_THROUGH_STAGE6_GROUPED_TRUTH_INTACT'
+    }
+    console.log('[v0] [FUNNEL-AUDIT] Day', session.dayNumber, {
+      s1_hasStyleMeta: !!sessionStyleMetadata,
+      s1_styledGroups: s1StyledGroups.length,
+      s1_nonStraight: s1NonStraight,
+      s1_exCount: s1Ex.length,
+      s1_exWithBlockId: s1ExWithBlockId,
+      s1_exWithNonStraightMethod: s1ExWithNonStraightMethod,
+      s6_exCount: fullVisibleExercises.length,
+      s6_exWithBlockId: s6ExWithBlockId,
+      s6_exWithNonStraightMethod: s6ExWithNonStraightMethod,
+      verdict,
+    })
   }
   
   // ==========================================================================
@@ -1705,15 +1743,16 @@ function MainExercisesRenderer({
     }
   })
   
-  // [GROUPED-TRUTH-TRACE] Emit one authoritative render-time log so the truth
-  // state at the card is observable end-to-end. This helps prove whether the
-  // fix landed: styledGroups should contain non-straight groups AND the walk
-  // should have placed them into displayBlocks.
+  // [GROUPED-TRUTH-TRACE] Failure-only trace. This used to fire on every
+  // render of every session with grouped truth, which drowned out signal.
+  // Now it only fires when the render contract is violated (non-straight
+  // groups exist in truth but did NOT get rendered as group blocks). The
+  // compact one-shot per-session FUNNEL-AUDIT above is the primary probe.
   if (typeof window !== 'undefined') {
     const nonStraightCount = styledGroups.filter(g => g.groupType !== 'straight').length
     const renderedGroupCount = displayBlocks.filter(b => b.type === 'group' && b.group.groupType !== 'straight').length
-    if (nonStraightCount > 0) {
-      console.log('[v0] [GROUPED-TRUTH-TRACE]', {
+    if (nonStraightCount > 0 && renderedGroupCount < nonStraightCount) {
+      console.log('[v0] [GROUPED-TRUTH-TRACE] CONTRACT_VIOLATION', {
         sessionDay: session.dayNumber,
         focus: session.focus || session.focusLabel,
         nonStraightGroupsInTruth: nonStraightCount,
@@ -1721,7 +1760,6 @@ function MainExercisesRenderer({
         groupTypes: styledGroups.filter(g => g.groupType !== 'straight').map(g => g.groupType),
         displayExerciseCount: displayExercises.length,
         exercisesWithBlockId: displayExercises.filter(e => (e as unknown as { blockId?: string }).blockId).length,
-        contractHonored: renderedGroupCount === nonStraightCount,
       })
     }
   }

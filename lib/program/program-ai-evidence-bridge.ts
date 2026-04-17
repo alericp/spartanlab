@@ -1247,26 +1247,38 @@ export function buildFullSessionRoutineSurface(
   }
   
   // ==========================================================================
-  // [v0] BRIDGE OUTPUT AUDIT - Confirm what gets returned from the bridge
-  // ==========================================================================
-  // [GROUPED-TRUTH-CONTRACT] Count preserved grouped-truth carry-forward so we
-  // can verify at a glance that upstream blockId/method/methodLabel actually
-  // reached RoutineItem. If these counts are 0 on a session that's supposed to
-  // have grouping, the break is at session.exercises[] -- NOT here anymore.
+  // [BRIDGE-OUTPUT-AUDIT] Failure-only audit. Previously this fired on every
+  // session on every render, drowning out signal. Now it fires only when the
+  // input session claimed per-exercise grouped truth (blockId or non-straight
+  // method) but NONE of it survived into routineItems -- i.e. the bridge itself
+  // lost ownership. The compact one-shot per-session FUNNEL-AUDIT at the card
+  // (see AdaptiveSessionCard.tsx) is the primary observability probe.
   const withBlockIdCount = routineItems.filter(r => !!r.blockId).length
   const withMethodCount = routineItems.filter(r => r.method && r.method !== 'straight').length
-  const uniqueBlockIds = new Set(routineItems.map(r => r.blockId).filter(Boolean)).size
-  console.log('[v0] BRIDGE-OUTPUT-AUDIT Day', session.dayNumber, {
-    totalRoutineItems: routineItems.length,
-    familyCounts,
-    routineItemNames: routineItems.map(r => `${r.displayName}[${r.family}]`).slice(0, 12),
-    source: routineItems.some(r => r.source === 'authoritative') ? 'authoritative' : 'fallback_minimal',
-    groupedTruthPreserved: {
-      itemsWithBlockId: withBlockIdCount,
-      itemsWithNonStraightMethod: withMethodCount,
-      uniqueBlocks: uniqueBlockIds,
-    },
-  })
+  const sessionExInputWithBlockId = (session.exercises ?? []).filter(
+    e => !!(e as { blockId?: string }).blockId
+  ).length
+  const sessionExInputWithNonStraightMethod = (session.exercises ?? []).filter(e => {
+    const m = (e as { method?: string }).method
+    return !!m && m !== 'straight'
+  }).length
+  const bridgeOwnershipFailed =
+    (sessionExInputWithBlockId > 0 && withBlockIdCount === 0) ||
+    (sessionExInputWithNonStraightMethod > 0 && withMethodCount === 0)
+  if (bridgeOwnershipFailed) {
+    console.log('[v0] [BRIDGE-OUTPUT-AUDIT] OWNERSHIP_FAILURE Day', session.dayNumber, {
+      totalRoutineItems: routineItems.length,
+      sessionInput: {
+        exCount: session.exercises?.length ?? 0,
+        exWithBlockId: sessionExInputWithBlockId,
+        exWithNonStraightMethod: sessionExInputWithNonStraightMethod,
+      },
+      bridgeOutput: {
+        itemsWithBlockId: withBlockIdCount,
+        itemsWithNonStraightMethod: withMethodCount,
+      },
+    })
+  }
   
   return {
     dayLabel: session.dayLabel || `Day ${session.dayNumber}`,

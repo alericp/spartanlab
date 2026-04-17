@@ -17,6 +17,8 @@ export interface DisplayGroupExercise {
   id: string
   name: string
   methodLabel?: string
+  prefix?: string  // [GROUPED-RENDER-FIX] Exercise label like A1, B1, etc.
+  methodRationale?: string  // [GROUPED-RENDER-FIX] Why this exercise is in this group
 }
 
 export interface DisplayGroup {
@@ -25,6 +27,7 @@ export interface DisplayGroup {
   label: string
   exercises: DisplayGroupExercise[]
   instruction?: string
+  restProtocol?: string  // [GROUPED-RENDER-FIX] Rest instructions for this group
 }
 
 export interface GroupedDisplayModel {
@@ -106,16 +109,26 @@ function buildFromStyledGroups(styledGroups: StyledGroupInput[]): GroupedDisplay
       case 'cluster': index = clusterIndex++; break
     }
     
+    // [GROUPED-RENDER-FIX] Include prefix derived from methodLabel and restProtocol for render
+    const restProtocol = group.groupType === 'circuit' ? '60-90s after full circuit'
+      : group.groupType === 'superset' ? '0-15s between, 90-120s after pair'
+      : group.groupType === 'density_block' ? 'Timed block, minimal rest'
+      : group.groupType === 'cluster' ? '10-20s intra-set, 120-180s inter-set'
+      : '60-120s between sets'
+    
     return {
       id: group.id,
       groupType: group.groupType,
       label: getGroupLabel(group.groupType, index),
-      exercises: group.exercises.map(ex => ({
+      exercises: group.exercises.map((ex, exIdx) => ({
         id: ex.id,
         name: ex.name,
         methodLabel: ex.methodLabel,
+        // Generate prefix from methodLabel or position (A1, A2, B1, B2, etc.)
+        prefix: ex.methodLabel?.match(/[A-Z]\d?$/)?.[0] || String.fromCharCode(65 + exIdx),
       })),
       instruction: group.instruction,
+      restProtocol,
     }
   })
   
@@ -190,15 +203,24 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
     }
     
     if (groupType !== 'straight') {
+      // [GROUPED-RENDER-FIX] Include prefix and restProtocol for render
+      const restProtocol = groupType === 'circuit' ? '60-90s after full circuit'
+        : groupType === 'superset' ? '0-15s between, 90-120s after pair'
+        : groupType === 'cluster' ? '10-20s intra-set, 120-180s inter-set'
+        : '60-120s between sets'
+      
       displayGroups.push({
         id: blockId,
         groupType,
         label: getGroupLabel(groupType, index),
-        exercises: blockExercises.map(ex => ({
+        exercises: blockExercises.map((ex, exIdx) => ({
           id: ex.id,
           name: ex.name,
           methodLabel: ex.methodLabel,
+          // Generate prefix from methodLabel or position
+          prefix: ex.methodLabel?.match(/[A-Z]\d?$/)?.[0] || String.fromCharCode(65 + exIdx),
         })),
+        restProtocol,
       })
     }
   }

@@ -28,6 +28,7 @@ import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWith
 // These were used by the ROW 2.5 chip block which was a stale secondary text path
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
+import { buildGroupedDisplayModel, type GroupedDisplayModel } from './lib/session-group-display'
 import { 
   addOverride, 
   applyOverridesToSession,
@@ -1029,42 +1030,47 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
 
 {/* =========================================================================
     [GROUPED-METHOD-SUMMARY] Visible session methodology indicator
-    Shows what training methods are applied to this session
+    Uses the unified display adapter for consistent grouped truth consumption
     ========================================================================= */}
 {(() => {
-  const nonStraightGroupsForSummary = sessionStyleMetadata?.styledGroups?.filter(g => g.groupType !== 'straight') || []
-  const supersetCount = nonStraightGroupsForSummary.filter(g => g.groupType === 'superset').length
-  const circuitCount = nonStraightGroupsForSummary.filter(g => g.groupType === 'circuit').length
-  const densityCount = nonStraightGroupsForSummary.filter(g => g.groupType === 'density_block').length
-  const clusterCount = nonStraightGroupsForSummary.filter(g => g.groupType === 'cluster').length
-  const hasGroupedMethods = nonStraightGroupsForSummary.length > 0
+  // Use the authoritative display adapter - checks styledGroups first, then exercises as fallback
+  const groupedDisplay = buildGroupedDisplayModel(
+    sessionStyleMetadata,
+    session.exercises?.map(ex => ({
+      id: ex.id,
+      name: ex.name,
+      blockId: (ex as unknown as { blockId?: string }).blockId,
+      method: (ex as unknown as { method?: string }).method,
+      methodLabel: (ex as unknown as { methodLabel?: string }).methodLabel,
+    })) || []
+  )
   
-  if (!hasGroupedMethods) return null
+  if (!groupedDisplay.hasGroups) return null
   
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
-      {supersetCount > 0 && (
+      {groupedDisplay.supersetCount > 0 && (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-purple-500/15 text-purple-300 border border-purple-500/25">
           <Layers className="w-3.5 h-3.5" />
-          {supersetCount} Superset{supersetCount > 1 ? 's' : ''}
+          {groupedDisplay.supersetCount} Superset{groupedDisplay.supersetCount > 1 ? 's' : ''}
         </span>
       )}
-      {circuitCount > 0 && (
+      {groupedDisplay.circuitCount > 0 && (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-orange-500/15 text-orange-300 border border-orange-500/25">
           <Zap className="w-3.5 h-3.5" />
-          {circuitCount} Circuit{circuitCount > 1 ? 's' : ''}
+          {groupedDisplay.circuitCount} Circuit{groupedDisplay.circuitCount > 1 ? 's' : ''}
         </span>
       )}
-      {densityCount > 0 && (
+      {groupedDisplay.densityCount > 0 && (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/25">
-          <Scale className="w-3.5 h-3.5" />
-          {densityCount} Density Block{densityCount > 1 ? 's' : ''}
+          <Timer className="w-3.5 h-3.5" />
+          {groupedDisplay.densityCount} Density Block{groupedDisplay.densityCount > 1 ? 's' : ''}
         </span>
       )}
-      {clusterCount > 0 && (
+      {groupedDisplay.clusterCount > 0 && (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-cyan-500/15 text-cyan-300 border border-cyan-500/25">
           <Layers className="w-3.5 h-3.5" />
-          {clusterCount} Cluster Set{clusterCount > 1 ? 's' : ''}
+          {groupedDisplay.clusterCount} Cluster Set{groupedDisplay.clusterCount > 1 ? 's' : ''}
         </span>
       )}
     </div>
@@ -1323,6 +1329,25 @@ function MainExercisesRenderer({
   const styleMetadata = (session as AdaptiveSession & { styleMetadata?: SessionStyleMetadata }).styleMetadata
   const styledGroups = styleMetadata?.styledGroups || []
   
+  // ==========================================================================
+  // [UNIFIED-DISPLAY-ADAPTER] Single authoritative source for grouped truth
+  // Uses styledGroups first, then falls back to exercise blockId/method fields
+  // ==========================================================================
+  const groupedDisplayModel = buildGroupedDisplayModel(
+    styleMetadata,
+    session.exercises?.map(ex => ({
+      id: ex.id,
+      name: ex.name,
+      blockId: (ex as unknown as { blockId?: string }).blockId,
+      method: (ex as unknown as { method?: string }).method,
+      methodLabel: (ex as unknown as { methodLabel?: string }).methodLabel,
+    })) || []
+  )
+  
+  // Single authoritative render decision based on display adapter
+  const useGroupedRender = groupedDisplayModel.hasGroups
+  const hasNonStraightGroups = groupedDisplayModel.nonStraightGroupCount > 0
+  
   // [EXERCISE-ROW-SURFACE] Build session context for exercise row surfaces
   // [EXPLAIN-OWNER-LOCK] Ensure primaryGoal (program's skill) is passed to explanation engine
   const compositionMeta = (session as unknown as { compositionMetadata?: { spineSessionType?: string; sessionIntent?: string } }).compositionMetadata
@@ -1343,10 +1368,6 @@ function MainExercisesRenderer({
       sessionIntent: compositionMeta.sessionIntent,
     } : undefined,
   }
-  
-  // Determine render mode - use groups only if they actually have meaningful structure
-  const hasNonStraightGroups = styledGroups.some(g => g.groupType !== 'straight')
-  const useGroupedRender = styledGroups.length > 0 && hasNonStraightGroups
   
   // ==========================================================================
   // [DEV-TRUTH-PROBE] Compute explicit flat reason code

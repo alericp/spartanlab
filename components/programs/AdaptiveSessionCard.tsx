@@ -580,37 +580,43 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const hasRenderableGroups = hasRichRenderableGroups
 
   // ==========================================================================
-  // [OUTER-BRANCH-DECISION] SINGLE AUTHORITATIVE OWNER
+  // [OUTER-BODY-DECISION] SINGLE AUTHORITATIVE OWNER
   //
-  // This variable is the ONE source of truth for which outer expanded-body
-  // branch wins. Both the visible OUTER BODY DECISION DEBUG panel and the
-  // JSX branch chain below read from this same variable, so the debug print
-  // and the real body path can never disagree.
+  // `chosenOuterBodyMode` is the ONE source of truth for which expanded-body
+  // branch is rendered. Both the visible debug panel and the JSX branch chain
+  // below consume this same variable, so they can never disagree.
   //
-  // Evaluation order must match the real JSX ternary chain 1:1:
-  //   1. isCompleted                          -> COMPLETED_SUMMARY
-  //   2. isActive || isPaused                 -> ACTIVE_WORKOUT_CARD
-  //   3. FORCE_LAST_VISIBLE_BODY_PROOF
-  //      && hasGroupedTruth                   -> GROUPED_PROOF_OVERRIDE
+  // `shouldRenderGroupedProgramBody` is the ONE source of truth for whether a
+  // card is grouped-eligible. It derives from the authoritative grouped render
+  // contract (`hasGroupedTruth`), not from cosmetic/debug booleans. When it is
+  // true, grouped display MUST win over the completed/active/paused branches
+  // because those branches were silently stealing grouped-eligible Program
+  // cards that had stale completion/session flags.
+  //
+  // Priority order:
+  //   1. shouldRenderGroupedProgramBody       -> GROUPED_PROGRAM_BODY
+  //   2. isCompleted                          -> COMPLETED_SUMMARY
+  //   3. isActive || isPaused                 -> ACTIVE_WORKOUT_CARD
   //   4. (else)                               -> NORMAL_EXPANDED_BODY
   // ==========================================================================
-  type OuterBranch =
+  const shouldRenderGroupedProgramBody =
+    FORCE_LAST_VISIBLE_BODY_PROOF && hasGroupedTruth
+
+  type OuterBodyMode =
+    | 'GROUPED_PROGRAM_BODY'
     | 'COMPLETED_SUMMARY'
     | 'ACTIVE_WORKOUT_CARD'
-    | 'GROUPED_PROOF_OVERRIDE'
     | 'NORMAL_EXPANDED_BODY'
-  let chosenOuterBranch: OuterBranch
-  if (isCompleted) {
-    chosenOuterBranch = 'COMPLETED_SUMMARY'
+  let chosenOuterBodyMode: OuterBodyMode
+  if (shouldRenderGroupedProgramBody) {
+    chosenOuterBodyMode = 'GROUPED_PROGRAM_BODY'
+  } else if (isCompleted) {
+    chosenOuterBodyMode = 'COMPLETED_SUMMARY'
   } else if (isActive || isPaused) {
-    chosenOuterBranch = 'ACTIVE_WORKOUT_CARD'
-  } else if (FORCE_LAST_VISIBLE_BODY_PROOF && hasGroupedTruth) {
-    chosenOuterBranch = 'GROUPED_PROOF_OVERRIDE'
+    chosenOuterBodyMode = 'ACTIVE_WORKOUT_CARD'
   } else {
-    chosenOuterBranch = 'NORMAL_EXPANDED_BODY'
+    chosenOuterBodyMode = 'NORMAL_EXPANDED_BODY'
   }
-  const groupedTruthButProofBranchLost =
-    hasGroupedTruth && chosenOuterBranch !== 'GROUPED_PROOF_OVERRIDE'
 
   // ==========================================================================
   // [FUNNEL-AUDIT] One-shot compact stage comparison for THIS session only.
@@ -1009,10 +1015,11 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         <div className="px-4 pb-4 space-y-4">
           {/* ==========================================================================
               [OUTER BODY DECISION DEBUG]
-              Temporary highly-visible confession panel. Prints the exact booleans
-              the outer branch chain uses AND the single authoritative variable
-              (`chosenOuterBranch`) that drives the real JSX path. If grouped truth
-              is true but a different branch wins, the red warning line is shown.
+              Temporary visible confession panel. Prints the single authoritative
+              variables that drive the real JSX path (`shouldRenderGroupedProgramBody`,
+              `chosenOuterBodyMode`) alongside the raw booleans they derive from.
+              No split ownership: the JSX branch chain below consumes the same
+              `chosenOuterBodyMode` variable, so debug and render cannot disagree.
               ========================================================================== */}
           <div className="rounded border-2 border-fuchsia-500 bg-fuchsia-950 p-3 font-mono text-[11px] text-fuchsia-100">
             <div className="mb-2 text-center text-xs font-extrabold tracking-wider text-fuchsia-300">
@@ -1028,6 +1035,31 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   ? ` — ${session.focus || session.focusLabel}`
                   : ''}
               </div>
+              <div>hasGroupedTruth:</div>
+              <div className={`text-right font-bold ${hasGroupedTruth ? 'text-green-300' : 'text-red-300'}`}>
+                {String(hasGroupedTruth)}
+              </div>
+              <div>shouldRenderGroupedProgramBody:</div>
+              <div
+                className={`text-right font-bold ${
+                  shouldRenderGroupedProgramBody ? 'text-green-300' : 'text-red-300'
+                }`}
+              >
+                {String(shouldRenderGroupedProgramBody)}
+              </div>
+              <div>chosenOuterBodyMode:</div>
+              <div
+                className={`text-right font-extrabold ${
+                  chosenOuterBodyMode === 'GROUPED_PROGRAM_BODY'
+                    ? 'text-green-300'
+                    : 'text-fuchsia-200'
+                }`}
+              >
+                {chosenOuterBodyMode}
+              </div>
+              <div className="col-span-2 mt-1 border-t border-fuchsia-700 pt-1 text-[10px] text-fuchsia-300">
+                raw inputs
+              </div>
               <div>isExpanded:</div>
               <div className="text-right text-white">{String(isExpanded)}</div>
               <div>isCompleted:</div>
@@ -1038,28 +1070,15 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               <div className="text-right text-white">{String(isPaused)}</div>
               <div>FORCE_LAST_VISIBLE_BODY_PROOF:</div>
               <div className="text-right text-white">{String(FORCE_LAST_VISIBLE_BODY_PROOF)}</div>
-              <div>hasGroupedTruth:</div>
-              <div className={`text-right font-bold ${hasGroupedTruth ? 'text-green-300' : 'text-red-300'}`}>
-                {String(hasGroupedTruth)}
-              </div>
-              <div>chosenOuterBranch:</div>
-              <div className="text-right font-extrabold text-fuchsia-200">{chosenOuterBranch}</div>
             </div>
-            {groupedTruthButProofBranchLost && (
-              <div className="mt-2 rounded border-2 border-red-500 bg-red-950 p-2 text-red-200">
-                <div className="text-xs font-extrabold text-red-300">
-                  GROUPED TRUTH IS TRUE BUT OUTER GROUPED PROOF BRANCH DID NOT WIN
-                </div>
-                <div className="mt-1 text-[10px]">
-                  Winning branch:{' '}
-                  <span className="font-bold text-white">{chosenOuterBranch}</span>
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Session Completed - Show Summary */}
-          {chosenOuterBranch === 'COMPLETED_SUMMARY' ? (
+          {/* ==========================================================================
+              [OUTER-BODY-DISPATCH] Single consumer of `chosenOuterBodyMode`.
+              Priority enforced: GROUPED_PROGRAM_BODY wins over completed / active /
+              paused for any card whose contract reports grouped truth.
+              ========================================================================== */}
+          {chosenOuterBodyMode === 'COMPLETED_SUMMARY' ? (
             <WorkoutSessionSummary
               stats={stats}
               completedSets={completedSets}
@@ -1068,7 +1087,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               onReturnToDashboard={handleReturnToDashboard}
               onReturnToProgram={handleReturnToProgram}
             />
-          ) : chosenOuterBranch === 'ACTIVE_WORKOUT_CARD' ? (
+          ) : chosenOuterBodyMode === 'ACTIVE_WORKOUT_CARD' ? (
             /* [workout-route] UNIFIED: Active workouts now route to /workout/session */
             <WorkoutExecutionCard
               session={session}
@@ -1076,7 +1095,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               onCancel={handleWorkoutCancel}
               sessionState={workoutSession}
             />
-          ) : chosenOuterBranch === 'GROUPED_PROOF_OVERRIDE' ? (
+          ) : chosenOuterBodyMode === 'GROUPED_PROGRAM_BODY' ? (
             /* =====================================================================
                [LAST VISIBLE PROGRAM CARD BODY SURFACE]
                This branch FULLY REPLACES the normal expanded body (warmup toggle,
@@ -1097,13 +1116,13 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               return (
                 <div className="rounded-lg border-4 border-yellow-400 bg-yellow-950 p-4 font-mono text-xs">
                   {/* [OUTER BRANCH WINNER] Giant unmistakable label printed when
-                      the grouped-proof branch actually wins. If you see this,
-                      chosenOuterBranch === 'GROUPED_PROOF_OVERRIDE' on this card. */}
+                      the grouped body actually wins. If you see this,
+                      chosenOuterBodyMode === 'GROUPED_PROGRAM_BODY' on this card. */}
                   <div className="mb-3 rounded border-4 border-green-400 bg-green-950 p-3 text-center text-base font-extrabold tracking-widest text-green-300">
-                    OUTER BRANCH WINNER = GROUPED_PROOF_OVERRIDE
+                    OUTER BRANCH WINNER = GROUPED_PROGRAM_BODY
                   </div>
                   <div className="mb-3 text-center text-base font-extrabold tracking-wider text-yellow-300">
-                    GROUPED LAST-VISIBLE-SURFACE PROOF
+                    GROUPED PROGRAM BODY
                   </div>
                   <div className="mb-3 text-center text-sm font-bold text-yellow-100">
                     {sessionLabel}

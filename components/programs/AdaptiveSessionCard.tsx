@@ -540,12 +540,22 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       methodLabel: (ex as unknown as { methodLabel?: string }).methodLabel,
     }))
   )
-  // Final render-branch decision derived from the single contract.
-  // Grouped rendering is chosen IFF the contract produced renderable non-straight
-  // groups from either authoritative source (styledGroups OR exerciseFallback).
-  const hasRenderableGroups =
-    groupedRenderContract.sourceUsed !== 'none' &&
-    groupedRenderContract.nonStraightGroupCount > 0
+  // [DISPLAY-FIRST-FALLBACK] Two separate gates, each with a precise meaning:
+  //   - hasGroupedTruth:         upstream grouped truth exists (raw signal,
+  //                              pre-partial-validity filtering).
+  //   - hasRichRenderableGroups: the rich grouped contract is strong enough
+  //                              for the preferred grouped renderer.
+  //
+  // The card renders via this priority:
+  //   1. hasRichRenderableGroups === true  -> rich grouped path
+  //   2. hasGroupedTruth === true          -> raw grouped fallback path
+  //   3. neither                            -> honest flat path
+  //
+  // `hasRenderableGroups` is preserved as an alias of `hasRichRenderableGroups`
+  // for the chip/audit consumers that already read it.
+  const hasGroupedTruth = groupedRenderContract.hasGroupedTruth
+  const hasRichRenderableGroups = groupedRenderContract.hasRichRenderableGroups
+  const hasRenderableGroups = hasRichRenderableGroups
 
   // ==========================================================================
   // [FUNNEL-AUDIT] One-shot compact stage comparison for THIS session only.
@@ -593,8 +603,12 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       verdict = 'STAGE7_ADAPTER_RETURNED_ONLY_STRAIGHT_GROUPS'
     } else if (s7Model.hasGroups && s7Model.nonStraightGroupCount > 0 && !hasRenderableGroups) {
       verdict = 'STAGE8_CONTRACT_SAYS_GROUPED_BUT_RENDER_BRANCH_FLAT'
-    } else if (hasRenderableGroups) {
-      verdict = 'STAGE8_GROUPED_RENDER_BRANCH_ACTIVE'
+    } else if (hasRichRenderableGroups) {
+      verdict = 'STAGE8_RICH_GROUPED_RENDER_BRANCH_ACTIVE'
+    } else if (hasGroupedTruth && s7Model.rawFallbackBlocks.length > 0) {
+      verdict = 'STAGE8_RAW_GROUPED_FALLBACK_BRANCH_ACTIVE'
+    } else if (hasGroupedTruth) {
+      verdict = 'STAGE8_GROUPED_TRUTH_EXISTS_BUT_NO_FALLBACK_BLOCKS'
     } else {
       verdict = 'STAGE1_THROUGH_STAGE8_UNCLASSIFIED'
     }
@@ -622,6 +636,10 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       s7_clusterCount: s7Model.clusterCount,
       // Stage 8: final render branch
       s8_useGroupedRender: hasRenderableGroups,
+      // [DISPLAY-FIRST-FALLBACK] Explicit two-gate signals
+      s8_hasGroupedTruth: hasGroupedTruth,
+      s8_hasRichRenderableGroups: hasRichRenderableGroups,
+      s8_rawFallbackBlockCount: s7Model.rawFallbackBlocks.length,
       // Final first-failing-stage verdict
       verdict,
     })
@@ -1184,6 +1202,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   // the renderer does not recompute and cannot diverge from the chip/audit.
   groupedRenderContract={groupedRenderContract}
   hasRenderableGroups={hasRenderableGroups}
+  hasGroupedTruth={hasGroupedTruth}
   />
 
           {/* [METHOD-DECISIONS-DISCLOSURE] Clean athlete-facing explanation of structure choices.
@@ -1438,7 +1457,13 @@ interface MainExercisesRendererProps {
   // computed once in the parent card. Passing it as a required prop makes the
   // renderer a pure consumer -- it CANNOT disagree with the chip/audit.
   groupedRenderContract: GroupedDisplayModel
+  // [DISPLAY-FIRST-FALLBACK] Rich grouped render is possible. Alias of
+  // `groupedRenderContract.hasRichRenderableGroups` forwarded from the parent.
   hasRenderableGroups: boolean
+  // [DISPLAY-FIRST-FALLBACK] Upstream grouped truth exists at all (raw
+  // pre-filter signal). When true but hasRenderableGroups is false, the
+  // renderer takes the raw grouped fallback branch instead of falling to flat.
+  hasGroupedTruth: boolean
 }
 
 function MainExercisesRenderer({
@@ -1458,6 +1483,7 @@ function MainExercisesRenderer({
   cardInstanceId = 'unknown',
   groupedRenderContract,
   hasRenderableGroups,
+  hasGroupedTruth,
 }: MainExercisesRendererProps) {
   // [PROBES-HARD-DISABLED] See note above -- inner render-branch probe banner
   // is retired to prevent debug text leakage into production. Flag is false.
@@ -1591,6 +1617,109 @@ function MainExercisesRenderer({
     )
   }
   
+  // ==========================================================================
+  // [DISPLAY-FIRST-FALLBACK] RAW GROUPED FALLBACK PATH
+  //
+  // Priority:
+  //   1. hasRichRenderableGroups === true  -> rich grouped path (below)
+  //   2. hasGroupedTruth === true          -> THIS raw fallback path
+  //   3. neither                            -> flat path (further below)
+  //
+  // This intermediate branch activates when upstream grouped truth exists
+  // (styledGroups had non-straight groups, or exercises had blockId+method
+  // grouping) but the rich path could not produce renderable groups --
+  // typically because partial-validity filters dropped too many members.
+  //
+  // The branch renders grouped headers + member rows using the contract's
+  // rawFallbackBlocks (permissive: >=1 usable member per block, no min-count
+  // gate). Rows are hydrated to full ExerciseRow when displayExercises can
+  // resolve the member by id/name; otherwise a minimal text row is rendered.
+  // Either way, visible grouped structure is guaranteed whenever grouped
+  // truth exists upstream.
+  // ==========================================================================
+  if (!useGroupedRender && hasGroupedTruth && groupedDisplayModel.rawFallbackBlocks.length > 0) {
+    const fallbackBlocks = groupedDisplayModel.rawFallbackBlocks
+    const normalizeKey = (s: string): string =>
+      (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+    const hydrateMap = new Map<string, AdaptiveExercise>()
+    displayExercises.forEach(e => {
+      if (e.id) hydrateMap.set(e.id, e)
+      if (e.name) {
+        hydrateMap.set(e.name, e)
+        hydrateMap.set(e.name.toLowerCase(), e)
+        const norm = normalizeKey(e.name)
+        if (norm) hydrateMap.set(norm, e)
+      }
+    })
+    let rawIdx = 0
+    return (
+      <div className="space-y-4">
+        <DevRenderBranchBanner />
+        {fallbackBlocks.map((block, bIdx) => {
+          const colors = getGroupTypeColors(block.groupType)
+          const icon = getGroupTypeIcon(block.groupType)
+          return (
+            <div key={block.groupId || `raw-${bIdx}`}>
+              <div className={`mb-2 flex items-center gap-2 flex-wrap px-2.5 py-1.5 rounded-md ${colors.bg}`}>
+                <span className={colors.text}>{icon}</span>
+                <span className={`text-sm font-semibold ${colors.text}`}>{block.label}</span>
+                <span className="text-[11px] text-[#8A8A8A]">
+                  · {block.members.length} {block.members.length === 1 ? 'exercise' : 'exercises'}
+                </span>
+              </div>
+              <div className={`space-y-2 pl-4 border-l-2 ${colors.border}`}>
+                {block.members.map((member, mIdx) => {
+                  rawIdx++
+                  const hydrated =
+                    (member.id ? hydrateMap.get(member.id) : undefined) ||
+                    (member.name ? hydrateMap.get(member.name) : undefined) ||
+                    (member.name ? hydrateMap.get(member.name.toLowerCase()) : undefined) ||
+                    (member.name ? hydrateMap.get(normalizeKey(member.name)) : undefined)
+                  if (hydrated) {
+                    return (
+                      <ExerciseRow
+                        key={hydrated.id}
+                        exercise={hydrated}
+                        index={rawIdx}
+                        prefix={member.prefix}
+                        sessionId={sessionId}
+                        isSkipped={skippedExercises.has(hydrated.id)}
+                        adjustedName={adjustedExercises.get(hydrated.id)}
+                        sessionContext={sessionContextForRows}
+                        sessionEvidence={sessionEvidence}
+                        coachingExplanation={coachingExplanation}
+                        onReplace={onReplace}
+                        onSkip={onSkip}
+                        onProgressionAdjust={onProgressionAdjust}
+                      />
+                    )
+                  }
+                  // Minimal text fallback row. Display-first: name must be
+                  // visible even when rich hydration cannot resolve it.
+                  const safeName = (member.name || '').trim()
+                  if (safeName.length < 2) return null
+                  return (
+                    <div
+                      key={member.id || `${block.groupId}-${mIdx}`}
+                      className="flex items-baseline gap-2 py-1.5 text-sm text-[#C8C8C8]"
+                    >
+                      {member.prefix && (
+                        <span className={`text-[11px] font-semibold ${colors.text} shrink-0`}>
+                          {member.prefix}
+                        </span>
+                      )}
+                      <span className="truncate">{safeName}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   // ==========================================================================
   // FLAT RENDER PATH - [VISIBLE-IMPROVEMENT] Now groups by category for clarity
   // ==========================================================================

@@ -54,6 +54,28 @@ export type RenderBlock =
   | { type: 'group'; group: DisplayGroup }
   | { type: 'exercise'; exerciseId: string; exerciseName: string }
 
+// [DISPLAY-FIRST-FALLBACK] Raw fallback block shape. A minimal, permissive
+// representation of grouped truth used by the card when the rich grouped
+// contract is not "renderable enough" (e.g. partial-validity filters dropped
+// the only resolvable members) BUT upstream grouped truth still genuinely
+// exists. The card uses this as an intermediate render branch:
+//   rich grouped  ->  raw grouped fallback  ->  flat
+// This guarantees visible grouped structure whenever grouped truth exists,
+// even if richly hydrated rows are not yet achievable.
+export interface RawFallbackMember {
+  id?: string
+  name: string
+  prefix?: string
+}
+
+export interface RawFallbackBlock {
+  type: 'group'
+  groupId: string
+  groupType: GroupType
+  label: string
+  members: RawFallbackMember[]
+}
+
 export interface GroupedDisplayModel {
   hasGroups: boolean
   totalGroupCount: number
@@ -76,6 +98,24 @@ export interface GroupedDisplayModel {
   // render path will iterate. Empty when sourceUsed === 'none' (flat path
   // does not consume this field).
   renderBlocks: RenderBlock[]
+  // [DISPLAY-FIRST-FALLBACK] Does upstream grouped truth exist at all?
+  // Computed from RAW inputs BEFORE partial-validity filtering:
+  //   - styleMetadata.styledGroups contains at least one non-straight group, OR
+  //   - exercises have at least one blockId + non-straight method.
+  // If true but hasRichRenderableGroups is false, the card must render the raw
+  // fallback path instead of collapsing to flat.
+  hasGroupedTruth: boolean
+  // [DISPLAY-FIRST-FALLBACK] Is the rich grouped contract (renderBlocks)
+  // strong enough for the preferred grouped renderer? True iff sourceUsed !==
+  // 'none' AND nonStraightGroupCount > 0. Equivalent to the prior
+  // `hasRenderableGroups` gate used inside AdaptiveSessionCard, surfaced here
+  // so both card and adapter share one definition.
+  hasRichRenderableGroups: boolean
+  // [DISPLAY-FIRST-FALLBACK] A minimal but ordered grouped-block list derived
+  // from the best upstream grouped truth available, using a permissive member
+  // rule (>=1 usable name, no minimum-count gate). Consumed ONLY when the
+  // rich path cannot render grouped. Empty when hasGroupedTruth === false.
+  rawFallbackBlocks: RawFallbackBlock[]
 }
 
 // Interface for styledGroups from session
@@ -229,12 +269,16 @@ function buildFromStyledGroups(styledGroups: StyledGroupInput[]): GroupedDisplay
     clusterCount,
     groups: displayGroups,
     methodSummary: summaryParts.length > 0 ? summaryParts.join(' · ') : null,
-    // sourceUsed, flatReason, and renderBlocks are assigned by the top-level
-    // orchestrator. renderBlocks needs the input `exercises` list to compute
-    // canonical interleaved order and that is only available in the orchestrator.
+    // sourceUsed, flatReason, renderBlocks, and the display-first fallback
+    // fields are assigned by the top-level orchestrator. renderBlocks needs
+    // the input `exercises` list to compute canonical interleaved order and
+    // that is only available in the orchestrator.
     sourceUsed: 'styledGroups',
     flatReason: null,
     renderBlocks: [],
+    hasGroupedTruth: false,
+    hasRichRenderableGroups: false,
+    rawFallbackBlocks: [],
   }
 }
 
@@ -349,11 +393,14 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
     clusterCount: clusterIndex,
     groups: displayGroups,
     methodSummary: summaryParts.length > 0 ? summaryParts.join(' · ') : null,
-    // sourceUsed, flatReason, and renderBlocks are assigned by the top-level
-    // orchestrator.
+    // sourceUsed, flatReason, renderBlocks, and the display-first fallback
+    // fields are assigned by the top-level orchestrator.
     sourceUsed: 'exerciseFallback',
     flatReason: null,
     renderBlocks: [],
+    hasGroupedTruth: false,
+    hasRichRenderableGroups: false,
+    rawFallbackBlocks: [],
   }
 }
 
@@ -433,6 +480,105 @@ function buildRenderBlocks(
 }
 
 /**
+ * [DISPLAY-FIRST-FALLBACK] Build a permissive raw grouped block list used
+ * when upstream grouped truth exists but is not rich-renderable.
+ *
+ * Differences from rich builders:
+ *  - No minimum-member gate (a single-member superset is still rendered).
+ *  - Drops truly empty member names but keeps everything else.
+ *  - Does not depend on exercise hydration succeeding; the card's raw
+ *    fallback renderer uses these members as the source of truth for text.
+ *
+ * Priority order matches the rich path:
+ *  1. styleMetadata.styledGroups (authoritative non-straight groups)
+ *  2. exercise blockId + non-straight method grouping
+ */
+function buildRawFallbackBlocks(
+  styleMetadata: SessionStyleMetadata | undefined | null,
+  exercises: ExerciseInput[]
+): RawFallbackBlock[] {
+  // Priority 1: styledGroups
+  const styledNonStraight = (styleMetadata?.styledGroups || []).filter(
+    g => g.groupType !== 'straight'
+  )
+  if (styledNonStraight.length > 0) {
+    const typeIndex: Record<string, number> = {
+      superset: 0,
+      circuit: 0,
+      density_block: 0,
+      cluster: 0,
+    }
+    const blocks: RawFallbackBlock[] = []
+    for (const g of styledNonStraight) {
+      const usable = (g.exercises || []).filter(m => hasUsableName(m))
+      if (usable.length === 0) continue
+      const idx = typeIndex[g.groupType] ?? 0
+      typeIndex[g.groupType] = idx + 1
+      const letter = String.fromCharCode(65 + idx)
+      blocks.push({
+        type: 'group',
+        groupId: g.id,
+        groupType: g.groupType,
+        label: getGroupLabel(g.groupType, idx),
+        members: usable.map((m, i) => ({
+          id: m.id,
+          name: m.name,
+          prefix: m.methodLabel?.match(/[A-Z]\d?$/)?.[0] || `${letter}${i + 1}`,
+        })),
+      })
+    }
+    if (blocks.length > 0) return blocks
+  }
+
+  // Priority 2: exercises with blockId + non-straight method
+  const blockOrder: string[] = []
+  const blockMembers = new Map<string, ExerciseInput[]>()
+  const blockMethod = new Map<string, GroupType>()
+  for (const ex of exercises) {
+    const m = ex.method?.toLowerCase()
+    if (
+      ex.blockId &&
+      m &&
+      (m === 'superset' || m === 'circuit' || m === 'cluster' || m === 'density_block' || m === 'density')
+    ) {
+      if (!blockMembers.has(ex.blockId)) {
+        blockMembers.set(ex.blockId, [])
+        blockOrder.push(ex.blockId)
+        blockMethod.set(ex.blockId, (m === 'density' ? 'density_block' : m) as GroupType)
+      }
+      blockMembers.get(ex.blockId)!.push(ex)
+    }
+  }
+  const typeIndex: Record<string, number> = {
+    superset: 0,
+    circuit: 0,
+    density_block: 0,
+    cluster: 0,
+  }
+  const blocks: RawFallbackBlock[] = []
+  for (const bId of blockOrder) {
+    const method = blockMethod.get(bId) as GroupType
+    const usable = (blockMembers.get(bId) || []).filter(m => hasUsableName(m))
+    if (usable.length === 0) continue
+    const idx = typeIndex[method] ?? 0
+    typeIndex[method] = idx + 1
+    const letter = String.fromCharCode(65 + idx)
+    blocks.push({
+      type: 'group',
+      groupId: bId,
+      groupType: method,
+      label: getGroupLabel(method, idx),
+      members: usable.map((m, i) => ({
+        id: m.id,
+        name: m.name,
+        prefix: m.methodLabel?.match(/[A-Z]\d?$/)?.[0] || `${letter}${i + 1}`,
+      })),
+    })
+  }
+  return blocks
+}
+
+/**
  * Main adapter function - creates a stable grouped display model from session data
  * 
  * @param styleMetadata - The session's styleMetadata (may be undefined)
@@ -455,6 +601,12 @@ export function buildGroupedDisplayModel(
     )
   })
   const styledGroupsPresent = !!(styleMetadata?.styledGroups && styleMetadata.styledGroups.length > 0)
+  // [DISPLAY-FIRST-FALLBACK] Detect RAW upstream grouped truth BEFORE any
+  // partial-validity filtering. This is the gate for "show something grouped
+  // even if the rich path can't hydrate" and must be computed from pre-filter
+  // signals only.
+  const hasAnyStyledNonStraightRaw = !!(styleMetadata?.styledGroups?.some(g => g.groupType !== 'straight'))
+  const hasGroupedTruth = hasAnyStyledNonStraightRaw || hasAnyExerciseMethodTruth
 
   let fromStyledGroups: GroupedDisplayModel | null = null
   if (styledGroupsPresent) {
@@ -465,7 +617,17 @@ export function buildGroupedDisplayModel(
       // here (NOT in the renderer) so block set + order is owned by the same
       // contract that decides grouped-vs-flat.
       const renderBlocks = buildRenderBlocks(fromStyledGroups.groups, exercises)
-      return { ...fromStyledGroups, sourceUsed: 'styledGroups', flatReason: null, renderBlocks }
+      return {
+        ...fromStyledGroups,
+        sourceUsed: 'styledGroups',
+        flatReason: null,
+        renderBlocks,
+        // [DISPLAY-FIRST-FALLBACK] Rich path wins; fallback blocks are not
+        // consumed by the renderer in this branch.
+        hasGroupedTruth: true,
+        hasRichRenderableGroups: true,
+        rawFallbackBlocks: [],
+      }
     }
   }
 
@@ -475,7 +637,15 @@ export function buildGroupedDisplayModel(
     const fromExercises = buildFromExercises(exercises)
     if (fromExercises.hasGroups) {
       const renderBlocks = buildRenderBlocks(fromExercises.groups, exercises)
-      return { ...fromExercises, sourceUsed: 'exerciseFallback', flatReason: null, renderBlocks }
+      return {
+        ...fromExercises,
+        sourceUsed: 'exerciseFallback',
+        flatReason: null,
+        renderBlocks,
+        hasGroupedTruth: true,
+        hasRichRenderableGroups: true,
+        rawFallbackBlocks: [],
+      }
     }
   }
 
@@ -495,10 +665,27 @@ export function buildGroupedDisplayModel(
     flatReason = 'NO_STYLE_METADATA_AND_NO_EXERCISE_METHOD_TRUTH'
   }
 
+  // [DISPLAY-FIRST-FALLBACK] The rich path did not win. Compute raw fallback
+  // blocks ONCE so both tail returns below share the same list. When upstream
+  // grouped truth exists, the card will use this to render a minimal grouped
+  // body instead of collapsing to flat.
+  const rawFallbackBlocks = hasGroupedTruth
+    ? buildRawFallbackBlocks(styleMetadata, exercises)
+    : []
+
   if (fromStyledGroups) {
     // Flat path: renderBlocks stays empty; the card's flat renderer does not
-    // consume it.
-    return { ...fromStyledGroups, sourceUsed: 'none', flatReason, renderBlocks: [] }
+    // consume it. rawFallbackBlocks is populated iff grouped truth existed
+    // upstream so the card can render the intermediate raw grouped branch.
+    return {
+      ...fromStyledGroups,
+      sourceUsed: 'none',
+      flatReason,
+      renderBlocks: [],
+      hasGroupedTruth,
+      hasRichRenderableGroups: false,
+      rawFallbackBlocks,
+    }
   }
 
   return {
@@ -514,6 +701,9 @@ export function buildGroupedDisplayModel(
     sourceUsed: 'none',
     flatReason,
     renderBlocks: [],
+    hasGroupedTruth,
+    hasRichRenderableGroups: false,
+    rawFallbackBlocks,
   }
 }
 

@@ -89,10 +89,47 @@ function getGroupLabel(groupType: GroupType, index: number): string {
 }
 
 /**
+ * [PARTIAL-VALIDITY] Minimum real members required to render a grouped block.
+ * A "superset" with one usable member is not a superset and should not render
+ * a group header; those members fall back to flat rendering cleanly.
+ */
+function minMembersFor(groupType: GroupType): number {
+  switch (groupType) {
+    case 'superset': return 2
+    case 'circuit': return 2
+    case 'density_block': return 2
+    case 'cluster': return 1
+    default: return 1
+  }
+}
+
+/**
+ * [PARTIAL-VALIDITY] A member "resolves" when it has a usable name. Empty or
+ * stub entries (e.g. single-letter placeholders) are not rendered. Unresolved
+ * members are DROPPED from the block but the block itself is KEPT as long as
+ * the remaining resolved members meet the method's minimum.
+ */
+function hasUsableName(ex: { name?: string }): boolean {
+  const n = (ex.name || '').trim()
+  return n.length >= 2
+}
+
+/**
  * Build grouped display model from styledGroups (authoritative source)
  */
 function buildFromStyledGroups(styledGroups: StyledGroupInput[]): GroupedDisplayModel {
-  const nonStraightGroups = styledGroups.filter(g => g.groupType !== 'straight')
+  // [PARTIAL-VALIDITY] Filter each group's members to those that actually
+  // resolve, then keep the block only when enough real members remain for the
+  // method to be meaningful. This stops us from rendering a "Superset" header
+  // over a single lonely row (prior behavior) while preserving the block when
+  // one of several members fails to resolve (desired behavior).
+  const filteredGroups: StyledGroupInput[] = styledGroups
+    .map(g => ({ ...g, exercises: g.exercises.filter(hasUsableName) }))
+    .filter(g => {
+      if (g.groupType === 'straight') return true
+      return g.exercises.length >= minMembersFor(g.groupType)
+    })
+  const nonStraightGroups = filteredGroups.filter(g => g.groupType !== 'straight')
   
   // Create display groups only for non-straight groups
   let supersetIndex = 0
@@ -132,10 +169,12 @@ function buildFromStyledGroups(styledGroups: StyledGroupInput[]): GroupedDisplay
     }
   })
   
-  const supersetCount = styledGroups.filter(g => g.groupType === 'superset').length
-  const circuitCount = styledGroups.filter(g => g.groupType === 'circuit').length
-  const densityCount = styledGroups.filter(g => g.groupType === 'density_block').length
-  const clusterCount = styledGroups.filter(g => g.groupType === 'cluster').length
+  // [PARTIAL-VALIDITY] Counts derive from the filtered result so "Method
+  // decisions" stays truthful to what actually renders.
+  const supersetCount = filteredGroups.filter(g => g.groupType === 'superset').length
+  const circuitCount = filteredGroups.filter(g => g.groupType === 'circuit').length
+  const densityCount = filteredGroups.filter(g => g.groupType === 'density_block').length
+  const clusterCount = filteredGroups.filter(g => g.groupType === 'cluster').length
   
   // Build summary
   const summaryParts: string[] = []
@@ -146,7 +185,7 @@ function buildFromStyledGroups(styledGroups: StyledGroupInput[]): GroupedDisplay
   
   return {
     hasGroups: nonStraightGroups.length > 0,
-    totalGroupCount: styledGroups.length,
+    totalGroupCount: filteredGroups.length,
     nonStraightGroupCount: nonStraightGroups.length,
     supersetCount,
     circuitCount,
@@ -184,7 +223,10 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
   
   const displayGroups: DisplayGroup[] = []
   
-  for (const [blockId, blockExercises] of blockMap) {
+  for (const [blockId, rawBlockExercises] of blockMap) {
+    // [PARTIAL-VALIDITY] Drop unresolved members; keep the block when enough
+    // real members remain. A superset needs >=2 usable names; a cluster >=1.
+    const blockExercises = rawBlockExercises.filter(hasUsableName)
     if (blockExercises.length === 0) continue
     
     const method = blockExercises[0].method?.toLowerCase() || 'straight'
@@ -193,15 +235,22 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
     
     if (method === 'superset') {
       groupType = 'superset'
-      index = supersetIndex++
     } else if (method === 'circuit') {
       groupType = 'circuit'
-      index = circuitIndex++
     } else if (method === 'cluster') {
       groupType = 'cluster'
-      index = clusterIndex++
     }
-    
+
+    if (groupType !== 'straight' && blockExercises.length < minMembersFor(groupType)) {
+      // Not enough resolved members to be meaningful as this group type;
+      // those exercises will render flat via the card's canonical walk.
+      continue
+    }
+
+    if (groupType === 'superset') index = supersetIndex++
+    else if (groupType === 'circuit') index = circuitIndex++
+    else if (groupType === 'cluster') index = clusterIndex++
+
     if (groupType !== 'straight') {
       // [GROUPED-RENDER-FIX] Include prefix and restProtocol for render
       const restProtocol = groupType === 'circuit' ? '60-90s after full circuit'
@@ -255,19 +304,36 @@ export function buildGroupedDisplayModel(
   styleMetadata: SessionStyleMetadata | undefined | null,
   exercises: ExerciseInput[] = []
 ): GroupedDisplayModel {
-  // Priority 1: Use styledGroups if available and has content
+  // [PARTIAL-VALIDITY-BRIDGE] Priority 1 short-circuit only wins when it
+  // actually produced usable non-straight groups. Previously this returned
+  // unconditionally whenever styledGroups was non-empty, which starved the
+  // exercise-level fallback (Priority 2) in the common case where the builder
+  // wrote per-exercise grouping (blockId + method) but styledGroups lagged or
+  // was persisted as all-straight. That mismatch produced the visible symptom
+  // of "method decisions say supersets applied, but day card renders flat".
+  let fromStyledGroups: GroupedDisplayModel | null = null
   if (styleMetadata?.styledGroups && styleMetadata.styledGroups.length > 0) {
-    return buildFromStyledGroups(styleMetadata.styledGroups)
+    fromStyledGroups = buildFromStyledGroups(styleMetadata.styledGroups)
+    if (fromStyledGroups.hasGroups) {
+      return fromStyledGroups
+    }
   }
-  
-  // Priority 2: Try to derive from exercises directly
+
+  // Priority 2: Try to derive from exercises directly when styledGroups was
+  // missing, empty, or resolved to all-straight.
   if (exercises.length > 0) {
     const fromExercises = buildFromExercises(exercises)
     if (fromExercises.hasGroups) {
       return fromExercises
     }
   }
-  
+
+  // Preserve the Priority 1 result (totals, straight counts) if it ran,
+  // otherwise emit the empty model.
+  if (fromStyledGroups) {
+    return fromStyledGroups
+  }
+
   // No grouped truth found
   return {
     hasGroups: false,

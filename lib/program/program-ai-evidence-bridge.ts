@@ -789,6 +789,26 @@ export interface RoutineItem {
   restCue: string | null
   /** Source tracking */
   source: 'authoritative' | 'fallback_minimal'
+  // ==========================================================================
+  // [GROUPED-TRUTH-CONTRACT] Preserved grouped identity from authoritative
+  // session/exercise truth. These are PASSIVE carry-fields only -- the bridge
+  // does not compute or decide grouping, it only preserves what the builder
+  // already wrote. Downstream stages (buildFullVisibleRoutineExercises,
+  // AdaptiveSessionCard) must consume these as the PRIMARY grouping signal
+  // and treat name/id matching as legacy fallback only.
+  // ==========================================================================
+  /** Authoritative source session-exercise id (for exact-match rehydration) */
+  sourceExerciseId?: string
+  /** Authoritative source session-exercise name (fallback identity only) */
+  sourceExerciseName?: string
+  /** Canonical position in session.exercises[] (preserves order across renames) */
+  sourceOrder?: number
+  /** Block identity from builder's method materialization pass */
+  blockId?: string
+  /** Method tag: 'superset' | 'circuit' | 'cluster' | 'density_block' | 'straight' */
+  method?: string
+  /** Display label for the method, e.g. "Superset A1/A2" */
+  methodLabel?: string
 }
 
 export interface FullSessionRoutineSurface {
@@ -838,6 +858,14 @@ export function buildFullSessionRoutineSurface(
       assistanceLevel?: string
       selectionReason?: string
       prescriptionIntent?: string
+      // [GROUPED-TRUTH-CONTRACT] Declare the grouped-truth fields the
+      // builder writes at lib/adaptive-program-builder.ts method
+      // materialization. Without these declarations TypeScript silently
+      // strips them at the bridge doorway, erasing grouped identity before
+      // any downstream stage can see it.
+      blockId?: string
+      method?: string
+      methodLabel?: string
     }>
     warmup?: Array<{
       id: string
@@ -913,6 +941,54 @@ export function buildFullSessionRoutineSurface(
   const familyCounts: Record<RoutineItemFamily, number> = {
     warmup: 0, primary: 0, secondary: 0, support: 0, accessory: 0,
     core: 0, mobility: 0, finisher: 0, cooldown: 0, other: 0
+  }
+
+  // ==========================================================================
+  // [GROUPED-TRUTH-CONTRACT] Canonical source lookup so we can preserve
+  // grouped identity ONTO RoutineItem directly at creation time, instead of
+  // letting downstream stages guess it back by name. This is THE primary
+  // bridge-layer anti-guesswork change.
+  //
+  // Indexed keys per session exercise (priority on read):
+  //   1. raw id
+  //   2. lowercased name
+  //   3. normalized name (punct/whitespace collapsed) -- tolerates drift
+  //
+  // Each map entry carries the original exercise + its canonical order index
+  // from session.exercises[]. That order index is stable across variant
+  // rename/re-ID and is the authoritative anti-guesswork source field.
+  // ==========================================================================
+  const normalizeNameKey = (s: string | undefined): string =>
+    (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+
+  type SessionLookupEntry = {
+    ex: NonNullable<typeof session.exercises>[number]
+    order: number
+  }
+  const sessionLookup = new Map<string, SessionLookupEntry>()
+  session.exercises?.forEach((ex, idx) => {
+    const entry: SessionLookupEntry = { ex, order: idx }
+    if (ex.id) sessionLookup.set(ex.id, entry)
+    if (ex.name) {
+      const lower = ex.name.toLowerCase()
+      if (!sessionLookup.has(lower)) sessionLookup.set(lower, entry)
+      const norm = normalizeNameKey(ex.name)
+      if (norm && !sessionLookup.has(norm)) sessionLookup.set(norm, entry)
+    }
+  })
+
+  const findSessionSource = (
+    id: string | undefined,
+    name: string | undefined
+  ): SessionLookupEntry | undefined => {
+    if (id && sessionLookup.has(id)) return sessionLookup.get(id)
+    if (name) {
+      const lower = name.toLowerCase()
+      if (sessionLookup.has(lower)) return sessionLookup.get(lower)
+      const norm = normalizeNameKey(name)
+      if (norm && sessionLookup.has(norm)) return sessionLookup.get(norm)
+    }
+    return undefined
   }
   
   // Helper to build prescription line
@@ -1003,6 +1079,13 @@ export function buildFullSessionRoutineSurface(
         ? `${m.prescribedLoad.load}${m.prescribedLoad.unit || 'kg'}`
         : null
       const restCue = m.restSeconds ? `${Math.round(m.restSeconds / 60)}min` : null
+
+      // [GROUPED-TRUTH-CONTRACT] Look up the originating session exercise so
+      // we can preserve its blockId/method/methodLabel ONTO the RoutineItem.
+      // Variant selection often renames/re-IDs exercises and its type doesn't
+      // carry grouped fields -- this lookup is the only place grouped truth
+      // survives for variant-main items.
+      const sessionSrc = findSessionSource(m.exercise.id, m.exercise.name)
       
       routineItems.push({
         id: m.exercise.id,
@@ -1012,6 +1095,12 @@ export function buildFullSessionRoutineSurface(
         loadCue,
         restCue,
         source: m.selectionReason ? 'authoritative' : 'fallback_minimal',
+        sourceExerciseId: sessionSrc?.ex.id,
+        sourceExerciseName: sessionSrc?.ex.name,
+        sourceOrder: sessionSrc?.order,
+        blockId: sessionSrc?.ex.blockId,
+        method: sessionSrc?.ex.method,
+        methodLabel: sessionSrc?.ex.methodLabel,
       })
       familyCounts[family]++
     })
@@ -1020,7 +1109,7 @@ export function buildFullSessionRoutineSurface(
     // CRITICAL FIX: Include session exercises NOT in variant main
     // This preserves support/accessory/core/mobility exercises that variant doesn't own
     // ==========================================================================
-    session.exercises?.forEach(ex => {
+    session.exercises?.forEach((ex, idx) => {
       // Skip if already in variant main (by ID or name)
       if (variantMainIds.has(ex.id) || variantMainNames.has(ex.name.toLowerCase())) {
         return
@@ -1038,6 +1127,15 @@ export function buildFullSessionRoutineSurface(
         loadCue,
         restCue,
         source: ex.selectionReason ? 'authoritative' : 'fallback_minimal',
+        // [GROUPED-TRUTH-CONTRACT] Direct preservation -- ex IS the
+        // authoritative session source for this carried-non-variant path,
+        // so no lookup is needed; copy grouped fields straight through.
+        sourceExerciseId: ex.id,
+        sourceExerciseName: ex.name,
+        sourceOrder: idx,
+        blockId: ex.blockId,
+        method: ex.method,
+        methodLabel: ex.methodLabel,
       })
       familyCounts[family]++
     })
@@ -1088,7 +1186,7 @@ export function buildFullSessionRoutineSurface(
     })
     
     // Main exercises - determine families from category/intent
-    session.exercises?.forEach(ex => {
+    session.exercises?.forEach((ex, idx) => {
       const family = determineFamily(ex.category, ex.prescriptionIntent, ex.selectionReason)
       const loadCue = ex.loading || ex.assistanceLevel || null
       const restCue = ex.rest || null
@@ -1101,6 +1199,14 @@ export function buildFullSessionRoutineSurface(
         loadCue,
         restCue,
         source: ex.selectionReason ? 'authoritative' : 'fallback_minimal',
+        // [GROUPED-TRUTH-CONTRACT] Full-session mode: ex IS the authoritative
+        // source; direct-copy grouped fields from the session exercise.
+        sourceExerciseId: ex.id,
+        sourceExerciseName: ex.name,
+        sourceOrder: idx,
+        blockId: ex.blockId,
+        method: ex.method,
+        methodLabel: ex.methodLabel,
       })
       familyCounts[family]++
     })
@@ -1143,11 +1249,23 @@ export function buildFullSessionRoutineSurface(
   // ==========================================================================
   // [v0] BRIDGE OUTPUT AUDIT - Confirm what gets returned from the bridge
   // ==========================================================================
+  // [GROUPED-TRUTH-CONTRACT] Count preserved grouped-truth carry-forward so we
+  // can verify at a glance that upstream blockId/method/methodLabel actually
+  // reached RoutineItem. If these counts are 0 on a session that's supposed to
+  // have grouping, the break is at session.exercises[] -- NOT here anymore.
+  const withBlockIdCount = routineItems.filter(r => !!r.blockId).length
+  const withMethodCount = routineItems.filter(r => r.method && r.method !== 'straight').length
+  const uniqueBlockIds = new Set(routineItems.map(r => r.blockId).filter(Boolean)).size
   console.log('[v0] BRIDGE-OUTPUT-AUDIT Day', session.dayNumber, {
     totalRoutineItems: routineItems.length,
     familyCounts,
     routineItemNames: routineItems.map(r => `${r.displayName}[${r.family}]`).slice(0, 12),
     source: routineItems.some(r => r.source === 'authoritative') ? 'authoritative' : 'fallback_minimal',
+    groupedTruthPreserved: {
+      itemsWithBlockId: withBlockIdCount,
+      itemsWithNonStraightMethod: withMethodCount,
+      uniqueBlocks: uniqueBlockIds,
+    },
   })
   
   return {
@@ -1996,11 +2114,18 @@ export function buildFullVisibleRoutineExercises(
     
     // Try to find full exercise data from session or variant
     const variantEx = variantExerciseMap.get(item.id) || variantExerciseMap.get(item.displayName.toLowerCase())
-    // [GROUPED-TRUTH-PROPAGATION] Three-tier lookup: exact id → lowercased
-    // name → normalized name. The normalized tier catches variant-rename
-    // drift that would otherwise drop blockId/method/methodLabel from the
-    // FullRoutineExercise and break group matching in the canonical walk.
+    // [GROUPED-TRUTH-CONTRACT] PRIMARY OWNERSHIP: when the upstream bridge
+    // preserved the originating session exercise identity onto RoutineItem
+    // (item.sourceExerciseId), we match by that id FIRST. This is exact-identity
+    // rehydration, not name guesswork -- if the builder wrote blockId to session
+    // exercise X and the bridge preserved sourceExerciseId=X onto its RoutineItem,
+    // we ALWAYS resolve to the same session exercise X here regardless of variant
+    // rename/re-ID.
+    // LEGACY FALLBACK: name-based lookup remains for programs generated before
+    // the preserved-field contract (older saved programs where item.sourceExerciseId
+    // is undefined).
     const sessionEx =
+      (item.sourceExerciseId && sessionExerciseMap.get(item.sourceExerciseId)) ||
       sessionExerciseMap.get(item.id) ||
       sessionExerciseMap.get(item.displayName.toLowerCase()) ||
       sessionExerciseMap.get(normalizeExerciseKey(item.displayName))
@@ -2061,15 +2186,15 @@ export function buildFullVisibleRoutineExercises(
       scaledTargetRPE: sessionEx?.scaledTargetRPE,
       scaledRestPeriod: sessionEx?.scaledRestPeriod,
       weekScalingApplied: sessionEx?.weekScalingApplied,
-      // [GROUPED-TRUTH-PROPAGATION] Critical: carry grouping identity forward so
-      // AdaptiveSessionCard's canonical-walk and the groupedDisplayModel adapter
-      // can both see which exercises belong to which superset/circuit block.
-      // Without this, a variant-renamed or re-ID'd exercise breaks group matching
-      // and the rescue block pushes the group to the END with minimal rows instead
-      // of interleaving it in the correct session position.
-      blockId: sessionEx?.blockId,
-      method: sessionEx?.method,
-      methodLabel: sessionEx?.methodLabel,
+      // [GROUPED-TRUTH-CONTRACT] PRIMARY OWNERSHIP: the bridge already preserved
+      // grouped identity onto RoutineItem at creation time (see
+      // buildFullSessionRoutineSurface). That is the authoritative carry-forward
+      // path. sessionEx?.blockId is LEGACY FALLBACK only -- it handles older
+      // saved programs where RoutineItem.blockId is undefined. For all newly
+      // generated healthy programs, item.blockId is the truth source.
+      blockId: item.blockId ?? sessionEx?.blockId,
+      method: item.method ?? sessionEx?.method,
+      methodLabel: item.methodLabel ?? sessionEx?.methodLabel,
     })
   }
   

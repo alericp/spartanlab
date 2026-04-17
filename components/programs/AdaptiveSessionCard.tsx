@@ -1366,7 +1366,6 @@ function MainExercisesRenderer({
   const innerProbeActive = false as boolean
   // Get style metadata from session if available
   const styleMetadata = (session as AdaptiveSession & { styleMetadata?: SessionStyleMetadata }).styleMetadata
-  const styledGroups = styleMetadata?.styledGroups || []
   
   // ==========================================================================
   // [UNIFIED-DISPLAY-ADAPTER] Single authoritative source for grouped truth
@@ -1386,6 +1385,14 @@ function MainExercisesRenderer({
   // Single authoritative render decision based on display adapter
   const useGroupedRender = groupedDisplayModel.hasGroups
   const hasNonStraightGroups = groupedDisplayModel.nonStraightGroupCount > 0
+  
+  // ==========================================================================
+  // [GROUPED-TRUTH-FIX] Use adapter's unified groups, NOT styleMetadata directly.
+  // The adapter handles both styledGroups AND exercise blockId/method fallback,
+  // so we must use its output for rendering to ensure consistency.
+  // The adapter now provides prefix and restProtocol directly.
+  // ==========================================================================
+  const styledGroups = groupedDisplayModel.groups
   
   // [EXERCISE-ROW-SURFACE] Build session context for exercise row surfaces
   // [EXPLAIN-OWNER-LOCK] Ensure primaryGoal (program's skill) is passed to explanation engine

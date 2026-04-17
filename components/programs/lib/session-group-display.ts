@@ -30,6 +30,18 @@ export interface DisplayGroup {
   restProtocol?: string  // [GROUPED-RENDER-FIX] Rest instructions for this group
 }
 
+// [GROUPED-RENDER-CONTRACT] Explicit verdict codes so the card can state, in one
+// place, exactly which upstream source produced the visible grouped model and,
+// when grouped rendering is NOT possible, exactly why. These values are
+// consumed by AdaptiveSessionCard's single authoritative groupedRenderContract.
+export type GroupedSourceUsed = 'styledGroups' | 'exerciseFallback' | 'none'
+export type GroupedFlatReason =
+  | null
+  | 'NO_STYLE_METADATA_AND_NO_EXERCISE_METHOD_TRUTH'
+  | 'STYLED_GROUPS_PRESENT_BUT_ALL_STRAIGHT_AND_NO_EXERCISE_METHOD_TRUTH'
+  | 'STYLED_GROUPS_PRESENT_BUT_UNUSABLE_AND_NO_EXERCISE_METHOD_TRUTH'
+  | 'EXERCISE_METHOD_TRUTH_PRESENT_BUT_INSUFFICIENT_MEMBERS'
+
 export interface GroupedDisplayModel {
   hasGroups: boolean
   totalGroupCount: number
@@ -40,6 +52,14 @@ export interface GroupedDisplayModel {
   clusterCount: number
   groups: DisplayGroup[]
   methodSummary: string | null
+  // [GROUPED-RENDER-CONTRACT] Which source produced the renderable groups.
+  // 'styledGroups'     = Priority 1 (builder's authoritative styledGroups)
+  // 'exerciseFallback' = Priority 2 (per-exercise blockId+method fields)
+  // 'none'             = no grouped truth usable; card must render flat
+  sourceUsed: GroupedSourceUsed
+  // [GROUPED-RENDER-CONTRACT] When sourceUsed === 'none', names the exact
+  // reason so the card (and diagnostics) can report honest attribution.
+  flatReason: GroupedFlatReason
 }
 
 // Interface for styledGroups from session
@@ -193,6 +213,9 @@ function buildFromStyledGroups(styledGroups: StyledGroupInput[]): GroupedDisplay
     clusterCount,
     groups: displayGroups,
     methodSummary: summaryParts.length > 0 ? summaryParts.join(' · ') : null,
+    // sourceUsed + flatReason are assigned by the top-level orchestrator.
+    sourceUsed: 'styledGroups',
+    flatReason: null,
   }
 }
 
@@ -207,7 +230,19 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
   
   for (const ex of exercises) {
     const method = ex.method?.toLowerCase()
-    if (ex.blockId && (method === 'superset' || method === 'circuit' || method === 'cluster')) {
+    // [GROUPED-RENDER-CONTRACT] density_block added to the recognized method set.
+    // Previously this fallback dropped density_block silently when styledGroups
+    // was missing/unusable, which produced the "method wrote density but body
+    // rendered flat" symptom. The builder writes method='density_block' at
+    // training-style-service.ts:921, so the adapter must honor it here.
+    if (
+      ex.blockId &&
+      (method === 'superset' ||
+        method === 'circuit' ||
+        method === 'cluster' ||
+        method === 'density_block' ||
+        method === 'density')
+    ) {
       const existing = blockMap.get(ex.blockId) || []
       existing.push(ex)
       blockMap.set(ex.blockId, existing)
@@ -220,6 +255,7 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
   let supersetIndex = 0
   let circuitIndex = 0
   let clusterIndex = 0
+  let densityIndex = 0
   
   const displayGroups: DisplayGroup[] = []
   
@@ -239,6 +275,8 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
       groupType = 'circuit'
     } else if (method === 'cluster') {
       groupType = 'cluster'
+    } else if (method === 'density_block' || method === 'density') {
+      groupType = 'density_block'
     }
 
     if (groupType !== 'straight' && blockExercises.length < minMembersFor(groupType)) {
@@ -250,6 +288,7 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
     if (groupType === 'superset') index = supersetIndex++
     else if (groupType === 'circuit') index = circuitIndex++
     else if (groupType === 'cluster') index = clusterIndex++
+    else if (groupType === 'density_block') index = densityIndex++
 
     if (groupType !== 'straight') {
       // [GROUPED-RENDER-FIX] Include prefix and restProtocol for render
@@ -278,6 +317,7 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
   const summaryParts: string[] = []
   if (supersetIndex > 0) summaryParts.push(`${supersetIndex} Superset${supersetIndex > 1 ? 's' : ''}`)
   if (circuitIndex > 0) summaryParts.push(`${circuitIndex} Circuit${circuitIndex > 1 ? 's' : ''}`)
+  if (densityIndex > 0) summaryParts.push(`${densityIndex} Density Block${densityIndex > 1 ? 's' : ''}`)
   if (clusterIndex > 0) summaryParts.push(`${clusterIndex} Cluster Set${clusterIndex > 1 ? 's' : ''}`)
   
   return {
@@ -286,10 +326,13 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
     nonStraightGroupCount: displayGroups.length,
     supersetCount: supersetIndex,
     circuitCount: circuitIndex,
-    densityCount: 0, // Not detectable from exercises alone
+    densityCount: densityIndex,
     clusterCount: clusterIndex,
     groups: displayGroups,
     methodSummary: summaryParts.length > 0 ? summaryParts.join(' · ') : null,
+    // sourceUsed + flatReason are assigned by the top-level orchestrator.
+    sourceUsed: 'exerciseFallback',
+    flatReason: null,
   }
 }
 
@@ -304,37 +347,57 @@ export function buildGroupedDisplayModel(
   styleMetadata: SessionStyleMetadata | undefined | null,
   exercises: ExerciseInput[] = []
 ): GroupedDisplayModel {
-  // [PARTIAL-VALIDITY-BRIDGE] Priority 1 short-circuit only wins when it
-  // actually produced usable non-straight groups. Previously this returned
-  // unconditionally whenever styledGroups was non-empty, which starved the
-  // exercise-level fallback (Priority 2) in the common case where the builder
-  // wrote per-exercise grouping (blockId + method) but styledGroups lagged or
-  // was persisted as all-straight. That mismatch produced the visible symptom
-  // of "method decisions say supersets applied, but day card renders flat".
+  // [GROUPED-RENDER-CONTRACT] Priority 1: authoritative styledGroups from builder.
+  // Priority 2: per-exercise blockId+method fallback. Priority 1 wins only when
+  // it actually produced usable non-straight groups; otherwise Priority 2 runs.
+  const hasAnyExerciseMethodTruth = exercises.some(e => {
+    const m = e.method?.toLowerCase()
+    return (
+      !!e.blockId &&
+      !!m &&
+      (m === 'superset' || m === 'circuit' || m === 'cluster' || m === 'density_block' || m === 'density')
+    )
+  })
+  const styledGroupsPresent = !!(styleMetadata?.styledGroups && styleMetadata.styledGroups.length > 0)
+
   let fromStyledGroups: GroupedDisplayModel | null = null
-  if (styleMetadata?.styledGroups && styleMetadata.styledGroups.length > 0) {
-    fromStyledGroups = buildFromStyledGroups(styleMetadata.styledGroups)
+  if (styledGroupsPresent) {
+    fromStyledGroups = buildFromStyledGroups(styleMetadata!.styledGroups!)
     if (fromStyledGroups.hasGroups) {
-      return fromStyledGroups
+      // Priority 1 wins: builder's authoritative grouped truth is usable.
+      return { ...fromStyledGroups, sourceUsed: 'styledGroups', flatReason: null }
     }
   }
 
-  // Priority 2: Try to derive from exercises directly when styledGroups was
-  // missing, empty, or resolved to all-straight.
+  // Priority 2: derive from exercises directly when styledGroups was missing,
+  // empty, all-straight, or resolved to unusable members.
   if (exercises.length > 0) {
     const fromExercises = buildFromExercises(exercises)
     if (fromExercises.hasGroups) {
-      return fromExercises
+      return { ...fromExercises, sourceUsed: 'exerciseFallback', flatReason: null }
     }
   }
 
-  // Preserve the Priority 1 result (totals, straight counts) if it ran,
-  // otherwise emit the empty model.
-  if (fromStyledGroups) {
-    return fromStyledGroups
+  // No renderable grouped truth. Preserve the Priority 1 totals (for straight
+  // block counts) but surface an honest flatReason so the card and diagnostics
+  // can attribute exactly why grouped rendering is not possible.
+  let flatReason: GroupedFlatReason
+  if (!styledGroupsPresent && !hasAnyExerciseMethodTruth) {
+    flatReason = 'NO_STYLE_METADATA_AND_NO_EXERCISE_METHOD_TRUTH'
+  } else if (styledGroupsPresent && fromStyledGroups && fromStyledGroups.totalGroupCount > 0 && fromStyledGroups.nonStraightGroupCount === 0 && !hasAnyExerciseMethodTruth) {
+    flatReason = 'STYLED_GROUPS_PRESENT_BUT_ALL_STRAIGHT_AND_NO_EXERCISE_METHOD_TRUTH'
+  } else if (styledGroupsPresent && !hasAnyExerciseMethodTruth) {
+    flatReason = 'STYLED_GROUPS_PRESENT_BUT_UNUSABLE_AND_NO_EXERCISE_METHOD_TRUTH'
+  } else if (hasAnyExerciseMethodTruth) {
+    flatReason = 'EXERCISE_METHOD_TRUTH_PRESENT_BUT_INSUFFICIENT_MEMBERS'
+  } else {
+    flatReason = 'NO_STYLE_METADATA_AND_NO_EXERCISE_METHOD_TRUTH'
   }
 
-  // No grouped truth found
+  if (fromStyledGroups) {
+    return { ...fromStyledGroups, sourceUsed: 'none', flatReason }
+  }
+
   return {
     hasGroups: false,
     totalGroupCount: 0,
@@ -345,6 +408,8 @@ export function buildGroupedDisplayModel(
     clusterCount: 0,
     groups: [],
     methodSummary: null,
+    sourceUsed: 'none',
+    flatReason,
   }
 }
 

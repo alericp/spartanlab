@@ -522,6 +522,32 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   )
 
   // ==========================================================================
+  // [GROUPED-RENDER-CONTRACT] SINGLE AUTHORITATIVE grouped render contract.
+  // Computed ONCE per card mount. All three consumers below (FUNNEL-AUDIT probe,
+  // method-summary chip row, and MainExercisesRenderer body) read from this
+  // exact object. Previously each site called buildGroupedDisplayModel
+  // independently; identical inputs kept them in sync in practice, but the
+  // split ownership allowed drift and made "which source decided grouped"
+  // ambiguous. This single object is the card's final grouped truth for render.
+  // ==========================================================================
+  const groupedRenderContract: GroupedDisplayModel = buildGroupedDisplayModel(
+    sessionStyleMetadata,
+    fullVisibleExercises.map(ex => ({
+      id: ex.id,
+      name: ex.name,
+      blockId: (ex as unknown as { blockId?: string }).blockId,
+      method: (ex as unknown as { method?: string }).method,
+      methodLabel: (ex as unknown as { methodLabel?: string }).methodLabel,
+    }))
+  )
+  // Final render-branch decision derived from the single contract.
+  // Grouped rendering is chosen IFF the contract produced renderable non-straight
+  // groups from either authoritative source (styledGroups OR exerciseFallback).
+  const hasRenderableGroups =
+    groupedRenderContract.sourceUsed !== 'none' &&
+    groupedRenderContract.nonStraightGroupCount > 0
+
+  // ==========================================================================
   // [FUNNEL-AUDIT] One-shot compact stage comparison for THIS session only.
   // Emits ONE line per card mount covering the ENTIRE render-population
   // corridor (Stage 1 session prop -> Stage 6 fullVisibleExercises -> Stage 7
@@ -547,24 +573,13 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       return !!m && m !== 'straight'
     }).length
 
-    // [FUNNEL-AUDIT] Stage 7: call the grouped-display adapter with the SAME
-    // inputs the renderer uses so this verdict reflects what the card actually
-    // decides. This is a read-only inspection call -- MainExercisesRenderer
-    // computes the same model again for rendering (single render ownership is
-    // preserved; this extra call is observational only).
-    const s7Model = buildGroupedDisplayModel(
-      sessionStyleMetadata,
-      fullVisibleExercises.map(ex => ({
-        id: ex.id,
-        name: ex.name,
-        blockId: (ex as unknown as { blockId?: string }).blockId,
-        method: (ex as unknown as { method?: string }).method,
-        methodLabel: (ex as unknown as { methodLabel?: string }).methodLabel,
-      }))
-    )
+    // [FUNNEL-AUDIT] Stage 7: consume the SINGLE authoritative grouped render
+    // contract. This probe is observational only -- it reads the same object
+    // the chip summary and the renderer body consume, so its verdict is never
+    // allowed to disagree with what actually renders.
+    const s7Model = groupedRenderContract
 
-    // Final verdict: the exact stage where truth is lost (or where the render
-    // path is honestly flat because upstream truth is absent).
+    // Final verdict: the exact first failing stage (or honest flat attribution).
     let verdict: string
     if (!sessionStyleMetadata && s1ExWithBlockId === 0 && s1ExWithNonStraightMethod === 0) {
       verdict = 'STAGE1_FLAT_NO_UPSTREAM_GROUPED_TRUTH'
@@ -576,10 +591,12 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       verdict = 'STAGE7_ADAPTER_REJECTED_GROUPED_TRUTH'
     } else if (s7Model.hasGroups && s7Model.nonStraightGroupCount === 0) {
       verdict = 'STAGE7_ADAPTER_RETURNED_ONLY_STRAIGHT_GROUPS'
-    } else if (s7Model.hasGroups && s7Model.nonStraightGroupCount > 0) {
-      verdict = 'STAGE7_GROUPED_TRUTH_REACHED_ADAPTER_UI_SHOULD_RENDER_GROUPED'
+    } else if (s7Model.hasGroups && s7Model.nonStraightGroupCount > 0 && !hasRenderableGroups) {
+      verdict = 'STAGE8_CONTRACT_SAYS_GROUPED_BUT_RENDER_BRANCH_FLAT'
+    } else if (hasRenderableGroups) {
+      verdict = 'STAGE8_GROUPED_RENDER_BRANCH_ACTIVE'
     } else {
-      verdict = 'STAGE1_THROUGH_STAGE7_UNCLASSIFIED'
+      verdict = 'STAGE1_THROUGH_STAGE8_UNCLASSIFIED'
     }
     console.log('[v0] [FUNNEL-AUDIT] Day', session.dayNumber, {
       // Stage 1: session prop as received by the card
@@ -593,14 +610,18 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       s6_exCount: fullVisibleExercises.length,
       s6_exWithBlockId: s6ExWithBlockId,
       s6_exWithNonStraightMethod: s6ExWithNonStraightMethod,
-      // Stage 7: grouped display adapter output (what decides grouped-vs-flat)
+      // Stage 7: single grouped render contract (what decides grouped-vs-flat)
+      s7_sourceUsed: s7Model.sourceUsed,
+      s7_flatReason: s7Model.flatReason,
       s7_hasGroups: s7Model.hasGroups,
       s7_totalGroups: s7Model.totalGroupCount,
       s7_nonStraightGroups: s7Model.nonStraightGroupCount,
       s7_supersetCount: s7Model.supersetCount,
       s7_circuitCount: s7Model.circuitCount,
-      // Stage 8: would-be render branch
-      s8_useGroupedRender: s7Model.hasGroups,
+      s7_densityCount: s7Model.densityCount,
+      s7_clusterCount: s7Model.clusterCount,
+      // Stage 8: final render branch
+      s8_useGroupedRender: hasRenderableGroups,
       // Final first-failing-stage verdict
       verdict,
     })
@@ -1106,24 +1127,12 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     Uses the unified display adapter for consistent grouped truth consumption
     ========================================================================= */}
 {(() => {
-  // [UNIFIED-RENDER-OWNERSHIP] Decision source MUST equal the row-render source.
-  // Previously this chip summary read from session.exercises while MainExercisesRenderer
-  // rendered rows from fullVisibleExercises -- the two surfaces can diverge when variant
-  // hydration renames members, which produced the "chip says 2 Supersets but body is flat"
-  // mismatch. The chip summary now reads from the SAME fullVisibleExercises surface the
-  // renderer uses, so decision and display are guaranteed to agree.
-  const groupedDisplay = buildGroupedDisplayModel(
-    sessionStyleMetadata,
-    fullVisibleExercises.map(ex => ({
-      id: ex.id,
-      name: ex.name,
-      blockId: (ex as unknown as { blockId?: string }).blockId,
-      method: (ex as unknown as { method?: string }).method,
-      methodLabel: (ex as unknown as { methodLabel?: string }).methodLabel,
-    }))
-  )
-  
-  if (!groupedDisplay.hasGroups) return null
+  // [GROUPED-RENDER-CONTRACT] Consume the SINGLE authoritative grouped render
+  // contract hoisted above. The chip and the body are now guaranteed to agree:
+  // chip visibility is gated by the EXACT same object that drives the body's
+  // grouped-vs-flat decision. No parallel computation, no drift.
+  const groupedDisplay = groupedRenderContract
+  if (!hasRenderableGroups) return null
   
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -1171,6 +1180,10 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   showProbe={probeActive}
   forceProbe={probeActive}
   cardInstanceId={cardInstanceId}
+  // [GROUPED-RENDER-CONTRACT] Pass the SINGLE authoritative contract down so
+  // the renderer does not recompute and cannot diverge from the chip/audit.
+  groupedRenderContract={groupedRenderContract}
+  hasRenderableGroups={hasRenderableGroups}
   />
 
           {/* [METHOD-DECISIONS-DISCLOSURE] Clean athlete-facing explanation of structure choices.
@@ -1421,6 +1434,11 @@ interface MainExercisesRendererProps {
   forceProbe?: boolean
   // [ALWAYS-VISIBLE-PROBE] Card instance ID for correlation
   cardInstanceId?: string
+  // [GROUPED-RENDER-CONTRACT] SINGLE authoritative grouped render contract,
+  // computed once in the parent card. Passing it as a required prop makes the
+  // renderer a pure consumer -- it CANNOT disagree with the chip/audit.
+  groupedRenderContract: GroupedDisplayModel
+  hasRenderableGroups: boolean
 }
 
 function MainExercisesRenderer({
@@ -1438,6 +1456,8 @@ function MainExercisesRenderer({
   showProbe: _innerShowProbe = false,
   forceProbe: _innerForceProbe = false,
   cardInstanceId = 'unknown',
+  groupedRenderContract,
+  hasRenderableGroups,
 }: MainExercisesRendererProps) {
   // [PROBES-HARD-DISABLED] See note above -- inner render-branch probe banner
   // is retired to prevent debug text leakage into production. Flag is false.
@@ -1446,37 +1466,16 @@ function MainExercisesRenderer({
   const styleMetadata = (session as AdaptiveSession & { styleMetadata?: SessionStyleMetadata }).styleMetadata
   
   // ==========================================================================
-  // [UNIFIED-DISPLAY-ADAPTER] Single authoritative source for grouped truth
-  // [UNIFIED-RENDER-OWNERSHIP] Decision source MUST equal row-render source.
-  // Previously this read from session.exercises while rows rendered from
-  // displayExercises (= fullVisibleExercises). That split-brain meant the
-  // adapter could say "hasGroups=true" from session truth while the canonical
-  // walk below iterated a different surface that had lost blockId during
-  // variant hydration, producing broken rescue rendering at the bottom of
-  // the card. Using displayExercises here guarantees the decision and the
-  // walk see exactly the same exercise identities and blockIds.
+  // [GROUPED-RENDER-CONTRACT] Renderer is a PURE CONSUMER of the single
+  // authoritative contract computed in the parent card. No recomputation here.
+  // This guarantees the body's grouped-vs-flat decision is IDENTICAL to the
+  // chip summary's decision and to the FUNNEL-AUDIT probe's verdict. The stale
+  // parallel decision path (recomputing buildGroupedDisplayModel inside the
+  // renderer) has been removed entirely.
   // ==========================================================================
-  const groupedDisplayModel = buildGroupedDisplayModel(
-    styleMetadata,
-    displayExercises.map(ex => ({
-      id: ex.id,
-      name: ex.name,
-      blockId: (ex as unknown as { blockId?: string }).blockId,
-      method: (ex as unknown as { method?: string }).method,
-      methodLabel: (ex as unknown as { methodLabel?: string }).methodLabel,
-    }))
-  )
-  
-  // Single authoritative render decision based on display adapter
-  const useGroupedRender = groupedDisplayModel.hasGroups
+  const groupedDisplayModel = groupedRenderContract
+  const useGroupedRender = hasRenderableGroups
   const hasNonStraightGroups = groupedDisplayModel.nonStraightGroupCount > 0
-  
-  // ==========================================================================
-  // [GROUPED-TRUTH-FIX] Use adapter's unified groups, NOT styleMetadata directly.
-  // The adapter handles both styledGroups AND exercise blockId/method fallback,
-  // so we must use its output for rendering to ensure consistency.
-  // The adapter now provides prefix and restProtocol directly.
-  // ==========================================================================
   const styledGroups = groupedDisplayModel.groups
   
   // [EXERCISE-ROW-SURFACE] Build session context for exercise row surfaces

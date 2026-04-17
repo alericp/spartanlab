@@ -11789,19 +11789,50 @@ async function generateAdaptiveProgramImpl(
     const _tailFitsBothStyles = sessionMethodIntentContract.accessoryTailSize >= 5
     const shouldRotateStyles = _wantsSupersets && _wantsCircuitsOrDensity && !_tailFitsBothStyles
     const _dayIdx = Math.max(1, session.dayNumber || 1) - 1
+
+    // [ROTATION-FEASIBILITY-FIX] Circuits use a STRICTER candidate filter than
+    // supersets (no skill category, no "power" substring, no second-half
+    // fallback). When rotation hands this day to circuits but the session's
+    // circuit-eligible pool is below the 3-exercise threshold circuits require,
+    // circuits cannot materialize AND rotation has already blocked supersets,
+    // so the day ends flat even though supersets would have succeeded.
+    // Pre-compute circuit feasibility here using the SAME filter the circuit
+    // materializer uses downstream, so we can reclaim the day for supersets
+    // when circuits would have failed. This is the smallest upstream fix that
+    // honors the "one authoritative groupable-tail rule" requirement.
+    const circuitFeasibleCount = session.exercises?.filter(ex => {
+      if (ex.category === 'skill') return false
+      if (ex.selectionReason?.includes('primary')) return false
+      const nameLower = ex.name?.toLowerCase() || ''
+      if (nameLower.includes('weighted pull') || nameLower.includes('weighted dip')) return false
+      if (nameLower.includes('explosive') || nameLower.includes('power') || nameLower.includes('plyometric')) return false
+      return ex.category === 'core' ||
+        ex.category === 'accessory' ||
+        (ex.category === 'strength' && !ex.selectionReason?.includes('primary'))
+    }).length || 0
+
+    const rotationWouldPickCircuits = shouldRotateStyles && (_dayIdx % 2 === 1)
+    const circuitsInfeasibleThisDay = rotationWouldPickCircuits && circuitFeasibleCount < 3
+
     // Even day indices own supersets; odd own circuits/density. Rotation is only
     // active when shouldRotateStyles is true -- otherwise both flags stay true so
     // single-style selections behave exactly as before.
-    const dayOwnsSupersets = !shouldRotateStyles || (_dayIdx % 2 === 0)
-    const dayOwnsCircuitsOrDensity = !shouldRotateStyles || (_dayIdx % 2 === 1)
+    // [ROTATION-FEASIBILITY-FIX] When circuits can't materialize on a rotation-
+    // circuit day, reclaim that day for supersets instead of leaving it flat.
+    const dayOwnsSupersets = !shouldRotateStyles || (_dayIdx % 2 === 0) || circuitsInfeasibleThisDay
+    const dayOwnsCircuitsOrDensity = !shouldRotateStyles || ((_dayIdx % 2 === 1) && !circuitsInfeasibleThisDay)
     
     if (shouldRotateStyles) {
       console.log('[MULTI-STYLE-ROTATION]', {
         dayNumber: session.dayNumber,
         accessoryTailSize: sessionMethodIntentContract.accessoryTailSize,
+        circuitFeasibleCount,
+        circuitsInfeasibleThisDay,
         dayOwnsSupersets,
         dayOwnsCircuitsOrDensity,
-        rationale: 'Tail < 5; alternating style ownership by day for weekly variety',
+        rationale: circuitsInfeasibleThisDay
+          ? 'Rotation-circuit day with <3 circuit-eligible exercises; reclaimed for supersets to avoid flat output'
+          : 'Tail < 5; alternating style ownership by day for weekly variety',
       })
     }
     
@@ -11811,7 +11842,12 @@ async function generateAdaptiveProgramImpl(
     // =========================================================================
     const shouldApplySupersets = sessionMethodIntentContract.shouldApplySupersets && dayOwnsSupersets
     
-    if (shouldApplySupersets && session.exercises && session.exercises.length >= 4) {
+    // [SUPERSET-SIZE-GATE-FIX] Previously required >=4 exercises, which blocked
+    // small sessions (1 primary + 2 groupable accessory = 3 total) from ever
+    // forming a pair even though the authoritative contract's
+    // accessoryTailSize>=2 rule said supersets were allowed. Align this gate
+    // with the contract so the "allowed but not materialized" state stops.
+    if (shouldApplySupersets && session.exercises && session.exercises.length >= 3) {
       // [SUPERSET-ELIGIBILITY-FIX] Find TRUE accessory/support exercises that can be safely supersetted
       // Never superset: skill work, primary strength, power/explosive movements, or heavy loaded work
       // These require full rest and dedicated focus - they are NOT accessory work
@@ -12292,23 +12328,27 @@ async function generateAdaptiveProgramImpl(
       completedRejectedMethods.push({ method: 'supersets', reason })
     }
     if (userSelectedMethods.includes('circuits') && !hasCircuitsApplied && !alreadyRejectedSet.has('circuits')) {
-      const reason = shouldRotateStyles && !dayOwnsCircuitsOrDensity
-        ? 'Rotated to supersets today so both selected styles appear across the week'
-        : sessionMethodIntentContract.isSkillDominated
-          ? 'Session is quality/skill-protected; circuits would compromise output'
-          : sessionMethodIntentContract.accessoryTailSize < 3
-            ? `Accessory tail too small for circuits (${sessionMethodIntentContract.accessoryTailSize} of 3 minimum)`
-            : 'Session composition did not earn circuit density today'
+      const reason = circuitsInfeasibleThisDay
+        ? `Circuit-eligible exercises too few today (${circuitFeasibleCount} of 3 minimum) — used supersets instead so today still shows grouped work`
+        : shouldRotateStyles && !dayOwnsCircuitsOrDensity
+          ? 'Rotated to supersets today so both selected styles appear across the week'
+          : sessionMethodIntentContract.isSkillDominated
+            ? 'Session is quality/skill-protected; circuits would compromise output'
+            : sessionMethodIntentContract.accessoryTailSize < 3
+              ? `Accessory tail too small for circuits (${sessionMethodIntentContract.accessoryTailSize} of 3 minimum)`
+              : 'Session composition did not earn circuit density today'
       completedRejectedMethods.push({ method: 'circuits', reason })
     }
     if (userSelectedMethods.includes('density_blocks') && !hasDensityApplied && !alreadyRejectedSet.has('density_blocks')) {
-      const reason = shouldRotateStyles && !dayOwnsCircuitsOrDensity
-        ? 'Rotated to supersets today so both selected styles appear across the week'
-        : sessionMethodIntentContract.isSkillDominated
-          ? 'Session prioritizes quality over density today'
-          : sessionMethodIntentContract.accessoryTailSize < 3
-            ? `Accessory tail too small for density block (${sessionMethodIntentContract.accessoryTailSize} of 3 minimum)`
-            : 'Weekly fatigue profile disfavors density grouping this session'
+      const reason = circuitsInfeasibleThisDay
+        ? `Density-eligible exercises too few today (${circuitFeasibleCount} of 3 minimum) — used supersets instead so today still shows grouped work`
+        : shouldRotateStyles && !dayOwnsCircuitsOrDensity
+          ? 'Rotated to supersets today so both selected styles appear across the week'
+          : sessionMethodIntentContract.isSkillDominated
+            ? 'Session prioritizes quality over density today'
+            : sessionMethodIntentContract.accessoryTailSize < 3
+              ? `Accessory tail too small for density block (${sessionMethodIntentContract.accessoryTailSize} of 3 minimum)`
+              : 'Weekly fatigue profile disfavors density grouping this session'
       completedRejectedMethods.push({ method: 'density_blocks', reason })
     }
     if (userSelectedMethods.includes('cluster_sets') && !hasClusterApplied && !alreadyRejectedSet.has('cluster_sets')) {

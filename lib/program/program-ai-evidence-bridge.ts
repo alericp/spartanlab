@@ -1949,10 +1949,33 @@ export function buildFullVisibleRoutineExercises(
   const result: FullRoutineExercise[] = []
   
   // Build lookup maps for hydration
+  // [GROUPED-TRUTH-PROPAGATION] Multi-key map so blockId/method/methodLabel
+  // survive variant-rename / routine-surface id drift. The canonical-walk in
+  // AdaptiveSessionCard matches grouped members by blockId FIRST, so if this
+  // lookup fails and blockId drops to undefined on a FullRoutineExercise,
+  // the corresponding exercise loses its grouped identity at render time
+  // and the group gets pushed to the end by the rescue block (looking
+  // detached from canonical session order).
+  //
+  // Keys indexed (in priority order per-entry):
+  //   1. raw id
+  //   2. lowercased raw name
+  //   3. normalized name (trimmed, collapsed whitespace, punctuation stripped)
+  // The normalized key handles minor rename drift between session.exercises
+  // and variant.selection.main (e.g. "Pull-ups" vs "Pull Ups" vs "Pullups").
+  const normalizeExerciseKey = (s: string | undefined): string =>
+    (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+
   const sessionExerciseMap = new Map<string, typeof sessionExercises[0]>()
   sessionExercises.forEach(e => {
-    sessionExerciseMap.set(e.id, e)
-    sessionExerciseMap.set(e.name.toLowerCase(), e)
+    if (e.id) sessionExerciseMap.set(e.id, e)
+    if (e.name) {
+      sessionExerciseMap.set(e.name.toLowerCase(), e)
+      const normKey = normalizeExerciseKey(e.name)
+      if (normKey && !sessionExerciseMap.has(normKey)) {
+        sessionExerciseMap.set(normKey, e)
+      }
+    }
   })
   
   // Build variant lookup if available
@@ -1973,7 +1996,14 @@ export function buildFullVisibleRoutineExercises(
     
     // Try to find full exercise data from session or variant
     const variantEx = variantExerciseMap.get(item.id) || variantExerciseMap.get(item.displayName.toLowerCase())
-    const sessionEx = sessionExerciseMap.get(item.id) || sessionExerciseMap.get(item.displayName.toLowerCase())
+    // [GROUPED-TRUTH-PROPAGATION] Three-tier lookup: exact id → lowercased
+    // name → normalized name. The normalized tier catches variant-rename
+    // drift that would otherwise drop blockId/method/methodLabel from the
+    // FullRoutineExercise and break group matching in the canonical walk.
+    const sessionEx =
+      sessionExerciseMap.get(item.id) ||
+      sessionExerciseMap.get(item.displayName.toLowerCase()) ||
+      sessionExerciseMap.get(normalizeExerciseKey(item.displayName))
     
     // Build category from family
     const category = item.family === 'primary' ? 'skill'

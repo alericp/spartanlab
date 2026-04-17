@@ -618,7 +618,65 @@ interface SessionExerciseListProps {
 }
 
 function SessionExerciseList({ session, adjustment }: SessionExerciseListProps) {
-  const styledGroups = session.styleMetadata?.styledGroups
+  // [GROUPED-TRUTH-LAST-MILE] Prefer authoritative styledGroups. If that array
+  // is missing/empty but exercises carry grouping identity on their own
+  // (blockId + method, written by the builder's method materialization pass),
+  // synthesize a minimal styledGroups shape in canonical exercise order so the
+  // existing grouped render below just works. No new imports, no type changes,
+  // no flat fallback takeover -- we only synthesize when authoritative data is
+  // absent AND exercise-level grouping truth actually exists. Fully reversible.
+  let styledGroups = session.styleMetadata?.styledGroups
+  if (!styledGroups || styledGroups.length === 0) {
+    const synthesized: NonNullable<typeof styledGroups> = []
+    const seenBlockIds = new Set<string>()
+    for (const ex of session.exercises) {
+      const exUnknown = ex as unknown as { blockId?: string; method?: string; methodLabel?: string }
+      const method = exUnknown.method?.toLowerCase()
+      const blockId = exUnknown.blockId
+      if (blockId && seenBlockIds.has(blockId)) continue
+      const isGrouped = !!blockId && (method === 'superset' || method === 'circuit' || method === 'cluster')
+      if (isGrouped && blockId) {
+        const members = session.exercises.filter(e => (e as unknown as { blockId?: string }).blockId === blockId)
+        synthesized.push({
+          id: blockId,
+          groupType: method as 'superset' | 'circuit' | 'cluster',
+          exercises: members.map((m, i) => {
+            const mUnknown = m as unknown as { methodLabel?: string }
+            return {
+              id: m.id,
+              name: m.name,
+              prefix: mUnknown.methodLabel?.match(/[A-Z]\d?$/)?.[0] || `A${i + 1}`,
+              trainingMethod: method as string,
+              methodRationale: '',
+            }
+          }),
+          instruction: '',
+          restProtocol: method === 'circuit'
+            ? '60-90s after full circuit'
+            : method === 'cluster'
+              ? '10-20s intra-set, 120-180s inter-set'
+              : '0-15s between, 90-120s after pair',
+        })
+        seenBlockIds.add(blockId)
+      } else {
+        synthesized.push({
+          id: `straight-${ex.id}`,
+          groupType: 'straight',
+          exercises: [{
+            id: ex.id,
+            name: ex.name,
+            trainingMethod: 'straight',
+            methodRationale: '',
+          }],
+          instruction: '',
+          restProtocol: '60-120s between sets',
+        })
+      }
+    }
+    if (synthesized.some(g => g.groupType !== 'straight')) {
+      styledGroups = synthesized
+    }
+  }
   const hasGroupedBlocks = styledGroups && styledGroups.some(g => g.groupType !== 'straight')
   
   // Extract session context for reason-first microcopy

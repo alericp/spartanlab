@@ -1879,7 +1879,16 @@ export interface FullRoutineExercise {
   scaledTargetRPE?: number
   scaledRestPeriod?: number
   weekScalingApplied?: boolean
-}
+  // [GROUPED-TRUTH-PROPAGATION] Method materialization fields that MUST survive
+  // the session -> fullRoutineSurface -> displayExercises hydration chain.
+  // Without these, the adapter's exercise-fallback path can never detect grouping,
+  // and the canonical-walk in AdaptiveSessionCard cannot group by blockId.
+  // The builder writes these at lib/adaptive-program-builder.ts:11895-11901 -- we
+  // must carry them all the way to the render surface.
+  blockId?: string
+  method?: string
+  methodLabel?: string
+  }
 
 /**
  * Build FULL VISIBLE ROUTINE EXERCISES from fullRoutineSurface.
@@ -1893,28 +1902,34 @@ export interface FullRoutineExercise {
 export function buildFullVisibleRoutineExercises(
   fullRoutineSurface: FullSessionRoutineSurface,
   sessionExercises: Array<{
-    id: string
-    name: string
-    category?: string
-    sets?: number
-    reps?: string | number
-    repsOrTime?: string
-    hold?: string
-    targetRPE?: number
-    rest?: string
-    restSeconds?: number
-    loading?: string
-    assistanceLevel?: string
-    prescribedLoad?: { load?: number; unit?: string }
-    selectionReason?: string
-    isOverrideable?: boolean
-    note?: string
-    // [WEEK-SCALING-BRIDGE] Accept week-scaled fields from scaleSessionsForWeek
-    scaledSets?: number
-    scaledReps?: string
-    scaledTargetRPE?: number
-    scaledRestPeriod?: number
-    weekScalingApplied?: boolean
+  id: string
+  name: string
+  category?: string
+  sets?: number
+  reps?: string | number
+  repsOrTime?: string
+  hold?: string
+  targetRPE?: number
+  rest?: string
+  restSeconds?: number
+  loading?: string
+  assistanceLevel?: string
+  prescribedLoad?: { load?: number; unit?: string }
+  selectionReason?: string
+  isOverrideable?: boolean
+  note?: string
+  // [WEEK-SCALING-BRIDGE] Accept week-scaled fields from scaleSessionsForWeek
+  scaledSets?: number
+  scaledReps?: string
+  scaledTargetRPE?: number
+  scaledRestPeriod?: number
+  weekScalingApplied?: boolean
+  // [GROUPED-TRUTH-PROPAGATION] Grouping fields written by the builder's
+  // method materialization layer (adaptive-program-builder.ts:11895-11901).
+  // Must be passed through to keep render-time grouping detection alive.
+  blockId?: string
+  method?: string
+  methodLabel?: string
   }>,
   variantSelection?: {
     main?: Array<{
@@ -2016,6 +2031,15 @@ export function buildFullVisibleRoutineExercises(
       scaledTargetRPE: sessionEx?.scaledTargetRPE,
       scaledRestPeriod: sessionEx?.scaledRestPeriod,
       weekScalingApplied: sessionEx?.weekScalingApplied,
+      // [GROUPED-TRUTH-PROPAGATION] Critical: carry grouping identity forward so
+      // AdaptiveSessionCard's canonical-walk and the groupedDisplayModel adapter
+      // can both see which exercises belong to which superset/circuit block.
+      // Without this, a variant-renamed or re-ID'd exercise breaks group matching
+      // and the rescue block pushes the group to the END with minimal rows instead
+      // of interleaving it in the correct session position.
+      blockId: sessionEx?.blockId,
+      method: sessionEx?.method,
+      methodLabel: sessionEx?.methodLabel,
     })
   }
   

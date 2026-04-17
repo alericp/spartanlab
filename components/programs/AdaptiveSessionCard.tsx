@@ -1611,13 +1611,35 @@ function MainExercisesRenderer({
     })
   })
   
+  // ==========================================================================
+  // [GROUPED-TRUTH-PROPAGATION] blockId index: map each displayExercise's
+  // blockId back to the styledGroup index. This is the most reliable match
+  // signal because the builder's superset pass uses the SAME blockId on
+  // session.exercises[].blockId AND styledGroups[].id. Name/ID matching fails
+  // when variant selection renames or re-IDs exercises -- blockId does not.
+  // Now that buildFullVisibleRoutineExercises propagates blockId through to
+  // FullRoutineExercise, we can use it as the primary grouping signal here.
+  // ==========================================================================
+  const blockIdToGroupIndex = new Map<string, number>()
+  styledGroups.forEach((group, idx) => {
+    if (group.id && group.groupType !== 'straight') {
+      blockIdToGroupIndex.set(group.id, idx)
+    }
+  })
+  
   // Walk through displayExercises in canonical order
   displayExercises.forEach(exercise => {
-    const isGrouped = groupedExerciseIds.has(exercise.id) || groupedExerciseNames.has(exercise.name.toLowerCase())
+    // [GROUPED-TRUTH-PROPAGATION] Check blockId first (most reliable), then id, then name
+    const exBlockId = (exercise as unknown as { blockId?: string }).blockId
+    const byBlockId = exBlockId ? blockIdToGroupIndex.get(exBlockId) : undefined
+    const byId = groupedExerciseIds.has(exercise.id) ? exerciseToGroupIndex.get(exercise.id) : undefined
+    const byName = groupedExerciseNames.has(exercise.name.toLowerCase())
+      ? exerciseToGroupIndex.get(exercise.name.toLowerCase())
+      : undefined
+    const gIdx = byBlockId ?? byId ?? byName
+    const isGrouped = gIdx !== undefined
     
     if (isGrouped) {
-      // Find the group index
-      const gIdx = exerciseToGroupIndex.get(exercise.id) ?? exerciseToGroupIndex.get(exercise.name.toLowerCase())
       if (gIdx !== undefined && !processedGroupIndices.has(gIdx)) {
         // First encounter of this group - add the entire group block here
         displayBlocks.push({ type: 'group', group: styledGroups[gIdx], groupIndex: gIdx })
@@ -1627,15 +1649,47 @@ function MainExercisesRenderer({
           processedExerciseIds.add(e.id)
           processedExerciseIds.add(e.name.toLowerCase())
         })
+        // [GROUPED-TRUTH-PROPAGATION] Also mark the actual display exercise as
+        // processed so a later canonical iteration of the same exercise (under
+        // a different id/name shape) doesn't duplicate it as an ungrouped row.
+        processedExerciseIds.add(exercise.id)
+        processedExerciseIds.add(exercise.name.toLowerCase())
+      } else {
+        // Group already pushed on a prior iteration -- mark this exercise as
+        // consumed by the group so we don't render it again as a loose row.
+        processedExerciseIds.add(exercise.id)
+        processedExerciseIds.add(exercise.name.toLowerCase())
       }
     } else {
       // Ungrouped exercise - render at canonical position
-      if (!processedExerciseIds.has(exercise.id)) {
+      if (!processedExerciseIds.has(exercise.id) && !processedExerciseIds.has(exercise.name.toLowerCase())) {
         displayBlocks.push({ type: 'exercise', exercise })
         processedExerciseIds.add(exercise.id)
+        processedExerciseIds.add(exercise.name.toLowerCase())
       }
     }
   })
+  
+  // [GROUPED-TRUTH-TRACE] Emit one authoritative render-time log so the truth
+  // state at the card is observable end-to-end. This helps prove whether the
+  // fix landed: styledGroups should contain non-straight groups AND the walk
+  // should have placed them into displayBlocks.
+  if (typeof window !== 'undefined') {
+    const nonStraightCount = styledGroups.filter(g => g.groupType !== 'straight').length
+    const renderedGroupCount = displayBlocks.filter(b => b.type === 'group' && b.group.groupType !== 'straight').length
+    if (nonStraightCount > 0) {
+      console.log('[v0] [GROUPED-TRUTH-TRACE]', {
+        sessionDay: session.dayNumber,
+        focus: session.focus || session.focusLabel,
+        nonStraightGroupsInTruth: nonStraightCount,
+        renderedGroupBlocks: renderedGroupCount,
+        groupTypes: styledGroups.filter(g => g.groupType !== 'straight').map(g => g.groupType),
+        displayExerciseCount: displayExercises.length,
+        exercisesWithBlockId: displayExercises.filter(e => (e as unknown as { blockId?: string }).blockId).length,
+        contractHonored: renderedGroupCount === nonStraightCount,
+      })
+    }
+  }
   
   // ==========================================================================
   // [GROUPED-TRUTH-RESCUE] Final-stage guarantee that non-straight grouped

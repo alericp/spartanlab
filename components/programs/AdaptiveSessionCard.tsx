@@ -1033,16 +1033,21 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     Uses the unified display adapter for consistent grouped truth consumption
     ========================================================================= */}
 {(() => {
-  // Use the authoritative display adapter - checks styledGroups first, then exercises as fallback
+  // [UNIFIED-RENDER-OWNERSHIP] Decision source MUST equal the row-render source.
+  // Previously this chip summary read from session.exercises while MainExercisesRenderer
+  // rendered rows from fullVisibleExercises -- the two surfaces can diverge when variant
+  // hydration renames members, which produced the "chip says 2 Supersets but body is flat"
+  // mismatch. The chip summary now reads from the SAME fullVisibleExercises surface the
+  // renderer uses, so decision and display are guaranteed to agree.
   const groupedDisplay = buildGroupedDisplayModel(
     sessionStyleMetadata,
-    session.exercises?.map(ex => ({
+    fullVisibleExercises.map(ex => ({
       id: ex.id,
       name: ex.name,
       blockId: (ex as unknown as { blockId?: string }).blockId,
       method: (ex as unknown as { method?: string }).method,
       methodLabel: (ex as unknown as { methodLabel?: string }).methodLabel,
-    })) || []
+    }))
   )
   
   if (!groupedDisplay.hasGroups) return null
@@ -1369,17 +1374,24 @@ function MainExercisesRenderer({
   
   // ==========================================================================
   // [UNIFIED-DISPLAY-ADAPTER] Single authoritative source for grouped truth
-  // Uses styledGroups first, then falls back to exercise blockId/method fields
+  // [UNIFIED-RENDER-OWNERSHIP] Decision source MUST equal row-render source.
+  // Previously this read from session.exercises while rows rendered from
+  // displayExercises (= fullVisibleExercises). That split-brain meant the
+  // adapter could say "hasGroups=true" from session truth while the canonical
+  // walk below iterated a different surface that had lost blockId during
+  // variant hydration, producing broken rescue rendering at the bottom of
+  // the card. Using displayExercises here guarantees the decision and the
+  // walk see exactly the same exercise identities and blockIds.
   // ==========================================================================
   const groupedDisplayModel = buildGroupedDisplayModel(
     styleMetadata,
-    session.exercises?.map(ex => ({
+    displayExercises.map(ex => ({
       id: ex.id,
       name: ex.name,
       blockId: (ex as unknown as { blockId?: string }).blockId,
       method: (ex as unknown as { method?: string }).method,
       methodLabel: (ex as unknown as { methodLabel?: string }).methodLabel,
-    })) || []
+    }))
   )
   
   // Single authoritative render decision based on display adapter
@@ -1579,11 +1591,34 @@ function MainExercisesRenderer({
   // GROUPED RENDER PATH - Styled groups with visual structure
   // ==========================================================================
   
-  // Create a map of exercise ID to full exercise data from displayExercises
+  // [UNIFIED-RENDER-OWNERSHIP] Robust render-surface maps so grouped block
+  // members always resolve back to a FULL displayExercise row (with sets,
+  // reps, RPE, rest, prescribedLoad). When name/id lookups fail due to
+  // variant-rename drift, the blockId map below is authoritative.
+  // Four lookup tiers on exerciseDataMap: raw id, raw name, lowercased name,
+  // normalized name (punctuation/whitespace collapsed -- matches bridge).
   const exerciseDataMap = new Map<string, AdaptiveExercise>()
-  displayExercises.forEach(e => exerciseDataMap.set(e.id, e))
-  // Also map by name as a fallback (styledGroups may have ID mismatches)
-  displayExercises.forEach(e => exerciseDataMap.set(e.name, e))
+  const normalizeExerciseKey = (s: string): string =>
+    (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+  // blockId -> list of displayExercises with that blockId, in canonical order.
+  // This is the authoritative render-surface member list per group and is the
+  // preferred lookup for grouped block rendering.
+  const blockIdToDisplayExercises = new Map<string, AdaptiveExercise[]>()
+  displayExercises.forEach(e => {
+    if (e.id) exerciseDataMap.set(e.id, e)
+    if (e.name) {
+      exerciseDataMap.set(e.name, e)
+      const lowered = e.name.toLowerCase()
+      if (!exerciseDataMap.has(lowered)) exerciseDataMap.set(lowered, e)
+      const norm = normalizeExerciseKey(e.name)
+      if (norm && !exerciseDataMap.has(norm)) exerciseDataMap.set(norm, e)
+    }
+    const bId = (e as unknown as { blockId?: string }).blockId
+    if (bId) {
+      if (!blockIdToDisplayExercises.has(bId)) blockIdToDisplayExercises.set(bId, [])
+      blockIdToDisplayExercises.get(bId)!.push(e)
+    }
+  })
   
   // ==========================================================================
   // [FIX] CANONICAL DISPLAY BLOCKS - Preserve TRUE session order
@@ -1771,11 +1806,19 @@ function MainExercisesRenderer({
                 <span className={colors.text}>{icon}</span>
                 <span className={`text-sm font-semibold ${colors.text}`}>
                   {(() => {
+                    // [UNIFIED-RENDER-OWNERSHIP] Resolve the first member from
+                    // the render surface (blockId first, then id/name fallbacks)
+                    // so the header category prefix matches what actually renders
+                    // inside the block.
                     const firstExercise = group.exercises[0]
-                    const fullExercise = displayExercises.find(e => 
-                      e.id === firstExercise?.id || 
-                      e.name.toLowerCase() === firstExercise?.name.toLowerCase()
-                    )
+                    const renderSurfaceFirst = group.id
+                      ? blockIdToDisplayExercises.get(group.id)?.[0]
+                      : undefined
+                    const fullExercise = renderSurfaceFirst
+                      || (firstExercise ? (exerciseDataMap.get(firstExercise.id)
+                        || exerciseDataMap.get(firstExercise.name)
+                        || exerciseDataMap.get(firstExercise.name.toLowerCase())
+                        || exerciseDataMap.get(normalizeExerciseKey(firstExercise.name))) : undefined)
                     const category = fullExercise?.category
                     const purposePrefix = category && category !== 'accessory' 
                       ? `${category.charAt(0).toUpperCase() + category.slice(1)} ` 
@@ -1805,12 +1848,24 @@ function MainExercisesRenderer({
               {group.exercises.map((groupExercise, exIdx) => {
                 globalExerciseIndex++
                 
-                // Find the full exercise data from displayExercises
-                const fullExercise = exerciseDataMap.get(groupExercise.id) 
+                // [UNIFIED-RENDER-OWNERSHIP] Prefer the RENDER surface as the
+                // authoritative member source. Order of preference:
+                //   1. blockId + positional index  (most reliable; survives rename)
+                //   2. exact id                     (exact identity match)
+                //   3. exact raw name
+                //   4. lowercased name
+                //   5. normalized name              (handles "Pull-Ups" vs "Pull Ups")
+                // When all five miss, we fall through to the minimal-row rescue
+                // below so the group header still renders honestly.
+                const renderSurfaceMembers = group.id
+                  ? blockIdToDisplayExercises.get(group.id)
+                  : undefined
+                const fullExercise =
+                  (renderSurfaceMembers && renderSurfaceMembers[exIdx])
+                  || exerciseDataMap.get(groupExercise.id)
                   || exerciseDataMap.get(groupExercise.name)
-                  || displayExercises.find(e => 
-                      e.name.toLowerCase() === groupExercise.name.toLowerCase()
-                    )
+                  || exerciseDataMap.get(groupExercise.name.toLowerCase())
+                  || exerciseDataMap.get(normalizeExerciseKey(groupExercise.name))
                 
                 if (!fullExercise) {
                   // Exercise in styled groups but not in displayExercises.

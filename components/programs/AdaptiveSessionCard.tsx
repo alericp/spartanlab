@@ -580,6 +580,39 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const hasRenderableGroups = hasRichRenderableGroups
 
   // ==========================================================================
+  // [OUTER-BRANCH-DECISION] SINGLE AUTHORITATIVE OWNER
+  //
+  // This variable is the ONE source of truth for which outer expanded-body
+  // branch wins. Both the visible OUTER BODY DECISION DEBUG panel and the
+  // JSX branch chain below read from this same variable, so the debug print
+  // and the real body path can never disagree.
+  //
+  // Evaluation order must match the real JSX ternary chain 1:1:
+  //   1. isCompleted                          -> COMPLETED_SUMMARY
+  //   2. isActive || isPaused                 -> ACTIVE_WORKOUT_CARD
+  //   3. FORCE_LAST_VISIBLE_BODY_PROOF
+  //      && hasGroupedTruth                   -> GROUPED_PROOF_OVERRIDE
+  //   4. (else)                               -> NORMAL_EXPANDED_BODY
+  // ==========================================================================
+  type OuterBranch =
+    | 'COMPLETED_SUMMARY'
+    | 'ACTIVE_WORKOUT_CARD'
+    | 'GROUPED_PROOF_OVERRIDE'
+    | 'NORMAL_EXPANDED_BODY'
+  let chosenOuterBranch: OuterBranch
+  if (isCompleted) {
+    chosenOuterBranch = 'COMPLETED_SUMMARY'
+  } else if (isActive || isPaused) {
+    chosenOuterBranch = 'ACTIVE_WORKOUT_CARD'
+  } else if (FORCE_LAST_VISIBLE_BODY_PROOF && hasGroupedTruth) {
+    chosenOuterBranch = 'GROUPED_PROOF_OVERRIDE'
+  } else {
+    chosenOuterBranch = 'NORMAL_EXPANDED_BODY'
+  }
+  const groupedTruthButProofBranchLost =
+    hasGroupedTruth && chosenOuterBranch !== 'GROUPED_PROOF_OVERRIDE'
+
+  // ==========================================================================
   // [FUNNEL-AUDIT] One-shot compact stage comparison for THIS session only.
   // Emits ONE line per card mount covering the ENTIRE render-population
   // corridor (Stage 1 session prop -> Stage 6 fullVisibleExercises -> Stage 7
@@ -974,8 +1007,59 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       {/* Expanded Content */}
       {isExpanded && (
         <div className="px-4 pb-4 space-y-4">
+          {/* ==========================================================================
+              [OUTER BODY DECISION DEBUG]
+              Temporary highly-visible confession panel. Prints the exact booleans
+              the outer branch chain uses AND the single authoritative variable
+              (`chosenOuterBranch`) that drives the real JSX path. If grouped truth
+              is true but a different branch wins, the red warning line is shown.
+              ========================================================================== */}
+          <div className="rounded border-2 border-fuchsia-500 bg-fuchsia-950 p-3 font-mono text-[11px] text-fuchsia-100">
+            <div className="mb-2 text-center text-xs font-extrabold tracking-wider text-fuchsia-300">
+              OUTER BODY DECISION DEBUG
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+              <div>cardInstanceId:</div>
+              <div className="text-right text-[10px] text-white">{cardInstanceId}</div>
+              <div>session:</div>
+              <div className="text-right text-white">
+                Day {session.dayNumber}
+                {session.focus || session.focusLabel
+                  ? ` — ${session.focus || session.focusLabel}`
+                  : ''}
+              </div>
+              <div>isExpanded:</div>
+              <div className="text-right text-white">{String(isExpanded)}</div>
+              <div>isCompleted:</div>
+              <div className="text-right text-white">{String(isCompleted)}</div>
+              <div>isActive:</div>
+              <div className="text-right text-white">{String(isActive)}</div>
+              <div>isPaused:</div>
+              <div className="text-right text-white">{String(isPaused)}</div>
+              <div>FORCE_LAST_VISIBLE_BODY_PROOF:</div>
+              <div className="text-right text-white">{String(FORCE_LAST_VISIBLE_BODY_PROOF)}</div>
+              <div>hasGroupedTruth:</div>
+              <div className={`text-right font-bold ${hasGroupedTruth ? 'text-green-300' : 'text-red-300'}`}>
+                {String(hasGroupedTruth)}
+              </div>
+              <div>chosenOuterBranch:</div>
+              <div className="text-right font-extrabold text-fuchsia-200">{chosenOuterBranch}</div>
+            </div>
+            {groupedTruthButProofBranchLost && (
+              <div className="mt-2 rounded border-2 border-red-500 bg-red-950 p-2 text-red-200">
+                <div className="text-xs font-extrabold text-red-300">
+                  GROUPED TRUTH IS TRUE BUT OUTER GROUPED PROOF BRANCH DID NOT WIN
+                </div>
+                <div className="mt-1 text-[10px]">
+                  Winning branch:{' '}
+                  <span className="font-bold text-white">{chosenOuterBranch}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Session Completed - Show Summary */}
-          {isCompleted ? (
+          {chosenOuterBranch === 'COMPLETED_SUMMARY' ? (
             <WorkoutSessionSummary
               stats={stats}
               completedSets={completedSets}
@@ -984,7 +1068,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               onReturnToDashboard={handleReturnToDashboard}
               onReturnToProgram={handleReturnToProgram}
             />
-          ) : (isActive || isPaused) ? (
+          ) : chosenOuterBranch === 'ACTIVE_WORKOUT_CARD' ? (
             /* [workout-route] UNIFIED: Active workouts now route to /workout/session */
             <WorkoutExecutionCard
               session={session}
@@ -992,7 +1076,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               onCancel={handleWorkoutCancel}
               sessionState={workoutSession}
             />
-          ) : FORCE_LAST_VISIBLE_BODY_PROOF && hasGroupedTruth ? (
+          ) : chosenOuterBranch === 'GROUPED_PROOF_OVERRIDE' ? (
             /* =====================================================================
                [LAST VISIBLE PROGRAM CARD BODY SURFACE]
                This branch FULLY REPLACES the normal expanded body (warmup toggle,
@@ -1012,6 +1096,12 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               }
               return (
                 <div className="rounded-lg border-4 border-yellow-400 bg-yellow-950 p-4 font-mono text-xs">
+                  {/* [OUTER BRANCH WINNER] Giant unmistakable label printed when
+                      the grouped-proof branch actually wins. If you see this,
+                      chosenOuterBranch === 'GROUPED_PROOF_OVERRIDE' on this card. */}
+                  <div className="mb-3 rounded border-4 border-green-400 bg-green-950 p-3 text-center text-base font-extrabold tracking-widest text-green-300">
+                    OUTER BRANCH WINNER = GROUPED_PROOF_OVERRIDE
+                  </div>
                   <div className="mb-3 text-center text-base font-extrabold tracking-wider text-yellow-300">
                     GROUPED LAST-VISIBLE-SURFACE PROOF
                   </div>

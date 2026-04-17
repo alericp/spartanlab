@@ -1014,69 +1014,13 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       {isExpanded && (
         <div className="px-4 pb-4 space-y-4">
           {/* ==========================================================================
-              [OUTER BODY DECISION DEBUG]
-              Temporary visible confession panel. Prints the single authoritative
-              variables that drive the real JSX path (`shouldRenderGroupedProgramBody`,
-              `chosenOuterBodyMode`) alongside the raw booleans they derive from.
-              No split ownership: the JSX branch chain below consumes the same
-              `chosenOuterBodyMode` variable, so debug and render cannot disagree.
-              ========================================================================== */}
-          <div className="rounded border-2 border-fuchsia-500 bg-fuchsia-950 p-3 font-mono text-[11px] text-fuchsia-100">
-            <div className="mb-2 text-center text-xs font-extrabold tracking-wider text-fuchsia-300">
-              OUTER BODY DECISION DEBUG
-            </div>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-              <div>cardInstanceId:</div>
-              <div className="text-right text-[10px] text-white">{cardInstanceId}</div>
-              <div>session:</div>
-              <div className="text-right text-white">
-                Day {session.dayNumber}
-                {session.focus || session.focusLabel
-                  ? ` — ${session.focus || session.focusLabel}`
-                  : ''}
-              </div>
-              <div>hasGroupedTruth:</div>
-              <div className={`text-right font-bold ${hasGroupedTruth ? 'text-green-300' : 'text-red-300'}`}>
-                {String(hasGroupedTruth)}
-              </div>
-              <div>shouldRenderGroupedProgramBody:</div>
-              <div
-                className={`text-right font-bold ${
-                  shouldRenderGroupedProgramBody ? 'text-green-300' : 'text-red-300'
-                }`}
-              >
-                {String(shouldRenderGroupedProgramBody)}
-              </div>
-              <div>chosenOuterBodyMode:</div>
-              <div
-                className={`text-right font-extrabold ${
-                  chosenOuterBodyMode === 'GROUPED_PROGRAM_BODY'
-                    ? 'text-green-300'
-                    : 'text-fuchsia-200'
-                }`}
-              >
-                {chosenOuterBodyMode}
-              </div>
-              <div className="col-span-2 mt-1 border-t border-fuchsia-700 pt-1 text-[10px] text-fuchsia-300">
-                raw inputs
-              </div>
-              <div>isExpanded:</div>
-              <div className="text-right text-white">{String(isExpanded)}</div>
-              <div>isCompleted:</div>
-              <div className="text-right text-white">{String(isCompleted)}</div>
-              <div>isActive:</div>
-              <div className="text-right text-white">{String(isActive)}</div>
-              <div>isPaused:</div>
-              <div className="text-right text-white">{String(isPaused)}</div>
-              <div>FORCE_LAST_VISIBLE_BODY_PROOF:</div>
-              <div className="text-right text-white">{String(FORCE_LAST_VISIBLE_BODY_PROOF)}</div>
-            </div>
-          </div>
-
-          {/* ==========================================================================
               [OUTER-BODY-DISPATCH] Single consumer of `chosenOuterBodyMode`.
               Priority enforced: GROUPED_PROGRAM_BODY wins over completed / active /
-              paused for any card whose contract reports grouped truth.
+              paused for any card whose contract reports grouped truth. Both
+              GROUPED_PROGRAM_BODY and NORMAL_EXPANDED_BODY render the same real
+              production body; `MainExercisesRenderer` inside that body performs
+              the grouped-vs-flat internal dispatch via its `rawFallbackBlocks`
+              path, so grouped-eligible cards visibly render grouped structure.
               ========================================================================== */}
           {chosenOuterBodyMode === 'COMPLETED_SUMMARY' ? (
             <WorkoutSessionSummary
@@ -1095,104 +1039,38 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               onCancel={handleWorkoutCancel}
               sessionState={workoutSession}
             />
-          ) : chosenOuterBodyMode === 'GROUPED_PROGRAM_BODY' ? (
-            /* =====================================================================
-               [LAST VISIBLE PROGRAM CARD BODY SURFACE]
-               This branch FULLY REPLACES the normal expanded body (warmup toggle,
-               method-summary chips, MainExercisesRenderer, method decisions,
-               finisher, cooldown) with a dominant proof block. If you see this
-               on-screen, grouped truth is definitively reaching the card.
-               ===================================================================== */
-            (() => {
-              const sessionLabel = `Day ${session.dayNumber}${session.focus || session.focusLabel ? ` — ${session.focus || session.focusLabel}` : ''}`
-              const rawBlocks = groupedRenderContract.rawFallbackBlocks
-              const groupTypeTag = (gt: string) => {
-                if (gt === 'superset') return 'SUPERSET'
-                if (gt === 'circuit') return 'CIRCUIT'
-                if (gt === 'cluster') return 'CLUSTER SET'
-                if (gt === 'density_block' || gt === 'density') return 'DENSITY BLOCK'
-                return gt.toUpperCase()
-              }
-              return (
-                <div className="rounded-lg border-4 border-yellow-400 bg-yellow-950 p-4 font-mono text-xs">
-                  {/* [OUTER BRANCH WINNER] Giant unmistakable label printed when
-                      the grouped body actually wins. If you see this,
-                      chosenOuterBodyMode === 'GROUPED_PROGRAM_BODY' on this card. */}
-                  <div className="mb-3 rounded border-4 border-green-400 bg-green-950 p-3 text-center text-base font-extrabold tracking-widest text-green-300">
-                    OUTER BRANCH WINNER = GROUPED_PROGRAM_BODY
-                  </div>
-                  <div className="mb-3 text-center text-base font-extrabold tracking-wider text-yellow-300">
-                    GROUPED PROGRAM BODY
-                  </div>
-                  <div className="mb-3 text-center text-sm font-bold text-yellow-100">
-                    {sessionLabel}
-                  </div>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded border border-yellow-600/60 bg-yellow-900/40 p-3 text-yellow-100">
-                    <div>sourceUsed:</div>
-                    <div className="text-right font-bold text-white">{groupedRenderContract.sourceUsed}</div>
-                    <div>hasGroupedTruth:</div>
-                    <div className="text-right font-bold text-white">{String(groupedRenderContract.hasGroupedTruth)}</div>
-                    <div>hasRichRenderableGroups:</div>
-                    <div className="text-right font-bold text-white">{String(groupedRenderContract.hasRichRenderableGroups)}</div>
-                    <div>rawFallbackBlocks.length:</div>
-                    <div className="text-right font-bold text-white">{rawBlocks.length}</div>
-                    <div>renderBlocks.length:</div>
-                    <div className="text-right font-bold text-white">{groupedRenderContract.renderBlocks.length}</div>
-                    <div>nonStraightGroupCount:</div>
-                    <div className="text-right font-bold text-white">{groupedRenderContract.nonStraightGroupCount}</div>
-                    <div>totalGroupCount:</div>
-                    <div className="text-right font-bold text-white">{groupedRenderContract.totalGroupCount}</div>
-                    <div>flatReason:</div>
-                    <div className="text-right font-bold text-white">{groupedRenderContract.flatReason ?? 'null'}</div>
-                  </div>
-                  {rawBlocks.length === 0 ? (
-                    <div className="mt-4 rounded border-2 border-red-500 bg-red-950 p-3 text-red-200">
-                      <div className="text-sm font-extrabold text-red-300">
-                        GROUPED TRUTH TRUE BUT LAST VISIBLE BODY RECEIVED ZERO RAW BLOCKS
-                      </div>
-                      <div className="mt-2 space-y-1">
-                        <div>sourceUsed: <span className="font-bold text-white">{groupedRenderContract.sourceUsed}</span></div>
-                        <div>flatReason: <span className="font-bold text-white">{groupedRenderContract.flatReason ?? 'null'}</span></div>
-                        <div>totalGroupCount: <span className="font-bold text-white">{groupedRenderContract.totalGroupCount}</span></div>
-                        <div>nonStraightGroupCount: <span className="font-bold text-white">{groupedRenderContract.nonStraightGroupCount}</span></div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-4 space-y-3">
-                      {rawBlocks.map((block, bIdx) => (
-                        <div
-                          key={block.groupId || `proof-${bIdx}`}
-                          className="rounded border-2 border-yellow-500 bg-yellow-900/30 p-3"
-                        >
-                          <div className="mb-2 text-sm font-extrabold tracking-wider text-yellow-300">
-                            [{groupTypeTag(block.groupType)} {String.fromCharCode(65 + bIdx)}]
-                          </div>
-                          <div className="mb-2 text-[11px] text-yellow-200/70">
-                            label: {block.label} · members: {block.members.length}
-                          </div>
-                          <ul className="space-y-1 pl-2">
-                            {block.members.map((m, mIdx) => (
-                              <li key={m.id || `${block.groupId}-${mIdx}`} className="text-yellow-50">
-                                <span className="mr-2 text-yellow-400">-</span>
-                                <span className="font-bold">{m.name || '(unnamed)'}</span>
-                                {m.prefix && (
-                                  <span className="ml-2 text-[10px] text-yellow-400">[{m.prefix}]</span>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="mt-3 text-center text-[10px] uppercase tracking-widest text-yellow-500/70">
-                    FORCE_LAST_VISIBLE_BODY_PROOF = true · flip off in AdaptiveSessionCard.tsx to restore normal body
-                  </div>
-                </div>
-              )
-            })()
           ) : (
+            /* =====================================================================
+               [SHARED PRODUCTION BODY] Rendered for BOTH `GROUPED_PROGRAM_BODY`
+               and `NORMAL_EXPANDED_BODY`. Grouped-vs-flat rendering is delegated
+               to `MainExercisesRenderer` (which uses the single authoritative
+               grouped render contract). No parallel grouped UI path exists; one
+               owner drives the visible body.
+               ===================================================================== */
             <>
+              {/* [TINY-MODE-INDICATOR] Non-dominant footprint showing which outer
+                  body mode is rendering and whether grouped truth is present. */}
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded border border-[#2A2A2A] bg-[#1A1A1A] px-2 py-0.5 font-mono text-[10px] text-[#6A6A6A]">
+                <span>mode:</span>
+                <span
+                  className={
+                    chosenOuterBodyMode === 'GROUPED_PROGRAM_BODY'
+                      ? 'font-semibold text-green-400'
+                      : 'text-[#A5A5A5]'
+                  }
+                >
+                  {chosenOuterBodyMode}
+                </span>
+                <span className="text-[#3A3A3A]">·</span>
+                <span>grouped:</span>
+                <span
+                  className={
+                    hasGroupedTruth ? 'font-semibold text-green-400' : 'text-[#A5A5A5]'
+                  }
+                >
+                  {hasGroupedTruth ? 'true' : 'false'}
+                </span>
+              </div>
               {/* =================================================================
                   [SESSION-PRESCRIPTION-SURFACE] PRESCRIPTION-FIRST COMPACT VIEW
                   Primary display: actual routine. Secondary: AI explanation.

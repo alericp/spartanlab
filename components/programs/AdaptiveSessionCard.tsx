@@ -28,7 +28,7 @@ import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWith
 // These were used by the ROW 2.5 chip block which was a stale secondary text path
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
-import { buildGroupedDisplayModel, type GroupedDisplayModel } from './lib/session-group-display'
+import { buildGroupedDisplayModel, type GroupedDisplayModel, type RenderBlock } from './lib/session-group-display'
 import { 
   addOverride, 
   applyOverridesToSession,
@@ -1693,163 +1693,79 @@ function MainExercisesRenderer({
   })
   
   // ==========================================================================
-  // [FIX] CANONICAL DISPLAY BLOCKS - Preserve TRUE session order
-  // Instead of rendering all groups first then ungrouped, we interleave based on 
-  // the actual position of exercises in displayExercises (canonical order)
+  // [GROUPED-RENDER-CONTRACT] SINGLE render source. The adapter now owns the
+  // full ordered list of render blocks (groups + interleaved standalone
+  // exercises) including canonical ordering and the rescue pass for groups
+  // whose members failed id/name/blockId matching. The renderer's prior local
+  // canonical-walk (displayBlocks / exerciseToGroupIndex / blockIdToGroupIndex
+  // / groupedExerciseIds / groupedExerciseNames / processedExerciseIds /
+  // processedGroupIndices / rescue append) has been removed entirely. This
+  // removes the split display ownership that previously let "grouped branch =
+  // yes" coexist with a flat-looking body.
   // ==========================================================================
-  type DisplayBlock = 
-    | { type: 'group'; group: typeof styledGroups[0]; groupIndex: number }
-    | { type: 'exercise'; exercise: typeof displayExercises[0] }
-  
-  const displayBlocks: DisplayBlock[] = []
-  const processedGroupIndices = new Set<number>()
-  const processedExerciseIds = new Set<string>()
-  
-  // Build maps for quick lookup
-  const groupedExerciseIds = new Set(styledGroups.flatMap(g => g.exercises.map(e => e.id)))
-  const groupedExerciseNames = new Set(styledGroups.flatMap(g => g.exercises.map(e => e.name.toLowerCase())))
-  
-  // Map each exercise to its group
-  const exerciseToGroupIndex = new Map<string, number>()
-  styledGroups.forEach((group, idx) => {
-    group.exercises.forEach(e => {
-      exerciseToGroupIndex.set(e.id, idx)
-      exerciseToGroupIndex.set(e.name.toLowerCase(), idx)
-    })
-  })
-  
-  // ==========================================================================
-  // [GROUPED-TRUTH-PROPAGATION] blockId index: map each displayExercise's
-  // blockId back to the styledGroup index. This is the most reliable match
-  // signal because the builder's superset pass uses the SAME blockId on
-  // session.exercises[].blockId AND styledGroups[].id. Name/ID matching fails
-  // when variant selection renames or re-IDs exercises -- blockId does not.
-  // Now that buildFullVisibleRoutineExercises propagates blockId through to
-  // FullRoutineExercise, we can use it as the primary grouping signal here.
-  // ==========================================================================
-  const blockIdToGroupIndex = new Map<string, number>()
-  styledGroups.forEach((group, idx) => {
-    if (group.id && group.groupType !== 'straight') {
-      blockIdToGroupIndex.set(group.id, idx)
-    }
-  })
-  
-  // Walk through displayExercises in canonical order
-  displayExercises.forEach(exercise => {
-    // [GROUPED-TRUTH-PROPAGATION] Check blockId first (most reliable), then id, then name
-    const exBlockId = (exercise as unknown as { blockId?: string }).blockId
-    const byBlockId = exBlockId ? blockIdToGroupIndex.get(exBlockId) : undefined
-    const byId = groupedExerciseIds.has(exercise.id) ? exerciseToGroupIndex.get(exercise.id) : undefined
-    const byName = groupedExerciseNames.has(exercise.name.toLowerCase())
-      ? exerciseToGroupIndex.get(exercise.name.toLowerCase())
-      : undefined
-    const gIdx = byBlockId ?? byId ?? byName
-    const isGrouped = gIdx !== undefined
-    
-    if (isGrouped) {
-      if (gIdx !== undefined && !processedGroupIndices.has(gIdx)) {
-        // First encounter of this group - add the entire group block here
-        displayBlocks.push({ type: 'group', group: styledGroups[gIdx], groupIndex: gIdx })
-        processedGroupIndices.add(gIdx)
-        // Mark all exercises in this group as processed
-        styledGroups[gIdx].exercises.forEach(e => {
-          processedExerciseIds.add(e.id)
-          processedExerciseIds.add(e.name.toLowerCase())
-        })
-        // [GROUPED-TRUTH-PROPAGATION] Also mark the actual display exercise as
-        // processed so a later canonical iteration of the same exercise (under
-        // a different id/name shape) doesn't duplicate it as an ungrouped row.
-        processedExerciseIds.add(exercise.id)
-        processedExerciseIds.add(exercise.name.toLowerCase())
-      } else {
-        // Group already pushed on a prior iteration -- mark this exercise as
-        // consumed by the group so we don't render it again as a loose row.
-        processedExerciseIds.add(exercise.id)
-        processedExerciseIds.add(exercise.name.toLowerCase())
-      }
-    } else {
-      // Ungrouped exercise - render at canonical position
-      if (!processedExerciseIds.has(exercise.id) && !processedExerciseIds.has(exercise.name.toLowerCase())) {
-        displayBlocks.push({ type: 'exercise', exercise })
-        processedExerciseIds.add(exercise.id)
-        processedExerciseIds.add(exercise.name.toLowerCase())
-      }
-    }
-  })
-  
-  // [GROUPED-TRUTH-TRACE] Failure-only trace. This used to fire on every
-  // render of every session with grouped truth, which drowned out signal.
-  // Now it only fires when the render contract is violated (non-straight
-  // groups exist in truth but did NOT get rendered as group blocks). The
-  // compact one-shot per-session FUNNEL-AUDIT above is the primary probe.
+  const renderBlocks: RenderBlock[] = groupedDisplayModel.renderBlocks
+
+  // [GROUPED-TRUTH-TRACE] Failure-only diagnostic. Now that ownership is
+  // unified inside the contract, this should never fire -- keep it as a
+  // structural defense so any future regression is loud.
   if (typeof window !== 'undefined') {
-    const nonStraightCount = styledGroups.filter(g => g.groupType !== 'straight').length
-    const renderedGroupCount = displayBlocks.filter(b => b.type === 'group' && b.group.groupType !== 'straight').length
-    if (nonStraightCount > 0 && renderedGroupCount < nonStraightCount) {
+    const nonStraightInContract = groupedDisplayModel.nonStraightGroupCount
+    const renderedNonStraightBlocks = renderBlocks.filter(
+      b => b.type === 'group' && b.group.groupType !== 'straight'
+    ).length
+    if (nonStraightInContract > 0 && renderedNonStraightBlocks < nonStraightInContract) {
       console.log('[v0] [GROUPED-TRUTH-TRACE] CONTRACT_VIOLATION', {
         sessionDay: session.dayNumber,
         focus: session.focus || session.focusLabel,
-        nonStraightGroupsInTruth: nonStraightCount,
-        renderedGroupBlocks: renderedGroupCount,
-        groupTypes: styledGroups.filter(g => g.groupType !== 'straight').map(g => g.groupType),
+        nonStraightInContract,
+        renderedNonStraightBlocks,
+        sourceUsed: groupedDisplayModel.sourceUsed,
+        flatReason: groupedDisplayModel.flatReason,
         displayExerciseCount: displayExercises.length,
-        exercisesWithBlockId: displayExercises.filter(e => (e as unknown as { blockId?: string }).blockId).length,
       })
     }
   }
-  
-  // ==========================================================================
-  // [GROUPED-TRUTH-RESCUE] Final-stage guarantee that non-straight grouped
-  // truth is never silently dropped by the canonical-order walk above.
-  //
-  // The canonical walk only adds a group to displayBlocks when one of that
-  // group's exercise ids/names (from styledGroups) also appears inside
-  // displayExercises (fullVisibleExercises). When variant selection, family
-  // hydration, or routine-surface shaping changes exercise identifiers
-  // between session.exercises (the source of styledGroups) and
-  // displayExercises (the render surface), a non-straight group can fail
-  // BOTH the id-match AND the lowercased-name-match -- and the entire
-  // grouped block gets silently dropped from displayBlocks, producing a
-  // visibly flat render even though useGroupedRender === true and the
-  // authoritative builder truth says this session is supersetted/circuited.
-  //
-  // Per truth-to-UI contract: if the builder's authoritative styledGroups
-  // include a non-straight group, that group MUST render. We append any
-  // unprocessed non-straight groups here so the group header + its
-  // grouped exercises (sourced from styledGroups' own truth when the
-  // per-exercise lookup inside the block fails) remain visible.
-  // Straight single-exercise groups are NOT rescued here; they are already
-  // covered by the flat path above and do not represent grouped-method
-  // truth that would be lost.
-  // ==========================================================================
-  styledGroups.forEach((group, gIdx) => {
-    if (processedGroupIndices.has(gIdx)) return
-    if (group.groupType === 'straight') return
-    displayBlocks.push({ type: 'group', group, groupIndex: gIdx })
-    processedGroupIndices.add(gIdx)
-    group.exercises.forEach(e => {
-      processedExerciseIds.add(e.id)
-      processedExerciseIds.add(e.name.toLowerCase())
-    })
-  })
-  
+
   let globalExerciseIndex = 0
   
   return (
     <div className="space-y-4">
       <DevRenderBranchBanner />
-      {displayBlocks.map((block, blockIdx) => {
-        // Handle ungrouped exercise
+      {renderBlocks.map((block, blockIdx) => {
+        // [GROUPED-RENDER-CONTRACT] Handle ungrouped exercise -- hydrate the
+        // row from exerciseDataMap (pure enrichment; NOT block ownership).
+        // If hydration fails, render a minimal fallback so the contract's
+        // choice is still honored.
         if (block.type === 'exercise') {
           globalExerciseIndex++
+          const fullExercise =
+            (block.exerciseId && exerciseDataMap.get(block.exerciseId)) ||
+            (block.exerciseName && exerciseDataMap.get(block.exerciseName)) ||
+            (block.exerciseName && exerciseDataMap.get(block.exerciseName.toLowerCase())) ||
+            (block.exerciseName && exerciseDataMap.get(normalizeExerciseKey(block.exerciseName)))
+
+          if (!fullExercise) {
+            const safeName = (block.exerciseName || '').trim()
+            if (!safeName || safeName.length < 2) return null
+            return (
+              <div
+                key={block.exerciseId || `ex-${blockIdx}`}
+                className="flex items-baseline gap-2 py-2 px-3 rounded-lg border bg-[#171717] border-[#282828] text-sm text-[#C8C8C8]"
+              >
+                <span className="text-[10px] text-[#4A4A4A] font-mono shrink-0">{globalExerciseIndex}.</span>
+                <span className="truncate">{safeName}</span>
+              </div>
+            )
+          }
+
           return (
             <ExerciseRow
-              key={block.exercise.id}
-              exercise={block.exercise}
+              key={fullExercise.id}
+              exercise={fullExercise}
               index={globalExerciseIndex}
               sessionId={sessionId}
-              isSkipped={skippedExercises.has(block.exercise.id)}
-              adjustedName={adjustedExercises.get(block.exercise.id)}
+              isSkipped={skippedExercises.has(fullExercise.id)}
+              adjustedName={adjustedExercises.get(fullExercise.id)}
               sessionContext={sessionContextForRows}
               sessionEvidence={sessionEvidence}
               coachingExplanation={coachingExplanation}
@@ -1859,16 +1775,16 @@ function MainExercisesRenderer({
             />
           )
         }
-        
-        // Handle grouped block
-        const { group, groupIndex } = block
+
+        // Handle grouped block (contract-owned; renderer does not decide set/order)
+        const { group } = block
         const colors = getGroupTypeColors(group.groupType)
         const label = getGroupTypeLabel(group.groupType)
         const icon = getGroupTypeIcon(group.groupType)
         const isSpecialGroup = group.groupType !== 'straight'
         
         return (
-          <div key={group.id || `group-${groupIndex}`}>
+          <div key={group.id || `group-${blockIdx}`}>
             {/* [CLEAN-GROUP-HEADER-RESTORED] Compact but clearly visible header.
                 Previous pass made it too quiet (text-xs + opacity-80) which flattened grouped
                 truth visually. Restored to text-sm, full opacity, with a subtle tinted background

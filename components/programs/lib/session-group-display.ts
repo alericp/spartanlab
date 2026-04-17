@@ -42,6 +42,18 @@ export type GroupedFlatReason =
   | 'STYLED_GROUPS_PRESENT_BUT_UNUSABLE_AND_NO_EXERCISE_METHOD_TRUTH'
   | 'EXERCISE_METHOD_TRUTH_PRESENT_BUT_INSUFFICIENT_MEMBERS'
 
+// [GROUPED-RENDER-CONTRACT] Final visible block ownership. Previously the
+// renderer inside AdaptiveSessionCard performed its own canonical walk over
+// displayExercises, building a local `displayBlocks` array from styledGroups +
+// id/name/blockId indexes -- while the contract only owned the grouped-vs-flat
+// decision. That split ownership let the render-branch say "grouped" while the
+// visible body was rebuilt from a different corridor that could drop, reorder,
+// or flatten grouped truth. The adapter now produces the exact ordered list of
+// render blocks the card will iterate. The renderer becomes a pure consumer.
+export type RenderBlock =
+  | { type: 'group'; group: DisplayGroup }
+  | { type: 'exercise'; exerciseId: string; exerciseName: string }
+
 export interface GroupedDisplayModel {
   hasGroups: boolean
   totalGroupCount: number
@@ -60,6 +72,10 @@ export interface GroupedDisplayModel {
   // [GROUPED-RENDER-CONTRACT] When sourceUsed === 'none', names the exact
   // reason so the card (and diagnostics) can report honest attribution.
   flatReason: GroupedFlatReason
+  // [GROUPED-RENDER-CONTRACT] The exact ordered list of blocks the grouped
+  // render path will iterate. Empty when sourceUsed === 'none' (flat path
+  // does not consume this field).
+  renderBlocks: RenderBlock[]
 }
 
 // Interface for styledGroups from session
@@ -213,9 +229,12 @@ function buildFromStyledGroups(styledGroups: StyledGroupInput[]): GroupedDisplay
     clusterCount,
     groups: displayGroups,
     methodSummary: summaryParts.length > 0 ? summaryParts.join(' · ') : null,
-    // sourceUsed + flatReason are assigned by the top-level orchestrator.
+    // sourceUsed, flatReason, and renderBlocks are assigned by the top-level
+    // orchestrator. renderBlocks needs the input `exercises` list to compute
+    // canonical interleaved order and that is only available in the orchestrator.
     sourceUsed: 'styledGroups',
     flatReason: null,
+    renderBlocks: [],
   }
 }
 
@@ -330,10 +349,87 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
     clusterCount: clusterIndex,
     groups: displayGroups,
     methodSummary: summaryParts.length > 0 ? summaryParts.join(' · ') : null,
-    // sourceUsed + flatReason are assigned by the top-level orchestrator.
+    // sourceUsed, flatReason, and renderBlocks are assigned by the top-level
+    // orchestrator.
     sourceUsed: 'exerciseFallback',
     flatReason: null,
+    renderBlocks: [],
   }
+}
+
+/**
+ * [GROUPED-RENDER-CONTRACT] Build the final ordered list of render blocks
+ * (groups interleaved with standalone exercises) in canonical session order.
+ * This moves the canonical walk -- previously owned by MainExercisesRenderer
+ * -- into the adapter so block set and ordering are owned by the same contract
+ * that decides grouped-vs-flat. The renderer becomes a pure consumer.
+ */
+function findGroupForExerciseInput(
+  ex: ExerciseInput,
+  groups: DisplayGroup[]
+): DisplayGroup | null {
+  for (const group of groups) {
+    if (group.groupType === 'straight') continue
+    // blockId is the most reliable signal -- the builder writes the same id on
+    // session.exercises[].blockId AND on styledGroups[].id (which carries to
+    // DisplayGroup.id in both sourceUsed paths).
+    if (ex.blockId && ex.blockId === group.id) return group
+    if (ex.id && group.exercises.some(m => m.id === ex.id)) return group
+    const lower = (ex.name || '').toLowerCase()
+    if (lower && group.exercises.some(m => m.name.toLowerCase() === lower)) return group
+  }
+  return null
+}
+
+function buildRenderBlocks(
+  groups: DisplayGroup[],
+  exercises: ExerciseInput[]
+): RenderBlock[] {
+  const blocks: RenderBlock[] = []
+  const emittedGroupIds = new Set<string>()
+  const consumedKeys = new Set<string>()
+
+  const keyId = (id: string) => `id:${id}`
+  const keyName = (name: string) => `name:${name.toLowerCase()}`
+
+  for (const ex of exercises) {
+    const group = findGroupForExerciseInput(ex, groups)
+    if (group) {
+      if (!emittedGroupIds.has(group.id)) {
+        blocks.push({ type: 'group', group })
+        emittedGroupIds.add(group.id)
+        // Mark every group member consumed so a later identity-drift duplicate
+        // of the same exercise is not re-emitted as a loose row.
+        for (const m of group.exercises) {
+          if (m.id) consumedKeys.add(keyId(m.id))
+          if (m.name) consumedKeys.add(keyName(m.name))
+        }
+      }
+      if (ex.id) consumedKeys.add(keyId(ex.id))
+      if (ex.name) consumedKeys.add(keyName(ex.name))
+      continue
+    }
+    // Ungrouped: emit at canonical position unless already consumed by a group.
+    const idK = ex.id ? keyId(ex.id) : ''
+    const nameK = ex.name ? keyName(ex.name) : ''
+    if ((idK && consumedKeys.has(idK)) || (nameK && consumedKeys.has(nameK))) continue
+    blocks.push({ type: 'exercise', exerciseId: ex.id, exerciseName: ex.name })
+    if (idK) consumedKeys.add(idK)
+    if (nameK) consumedKeys.add(nameK)
+  }
+
+  // [GROUPED-TRUTH-RESCUE] Any non-straight group whose members never matched
+  // any exercise by blockId/id/name is appended at the end. This preserves the
+  // previous rescue behavior that lived inside MainExercisesRenderer, but now
+  // it's owned by the contract so the renderer cannot disagree with it.
+  for (const group of groups) {
+    if (group.groupType === 'straight') continue
+    if (emittedGroupIds.has(group.id)) continue
+    blocks.push({ type: 'group', group })
+    emittedGroupIds.add(group.id)
+  }
+
+  return blocks
 }
 
 /**
@@ -365,7 +461,11 @@ export function buildGroupedDisplayModel(
     fromStyledGroups = buildFromStyledGroups(styleMetadata!.styledGroups!)
     if (fromStyledGroups.hasGroups) {
       // Priority 1 wins: builder's authoritative grouped truth is usable.
-      return { ...fromStyledGroups, sourceUsed: 'styledGroups', flatReason: null }
+      // [GROUPED-RENDER-CONTRACT] Compute the final ordered render block list
+      // here (NOT in the renderer) so block set + order is owned by the same
+      // contract that decides grouped-vs-flat.
+      const renderBlocks = buildRenderBlocks(fromStyledGroups.groups, exercises)
+      return { ...fromStyledGroups, sourceUsed: 'styledGroups', flatReason: null, renderBlocks }
     }
   }
 
@@ -374,7 +474,8 @@ export function buildGroupedDisplayModel(
   if (exercises.length > 0) {
     const fromExercises = buildFromExercises(exercises)
     if (fromExercises.hasGroups) {
-      return { ...fromExercises, sourceUsed: 'exerciseFallback', flatReason: null }
+      const renderBlocks = buildRenderBlocks(fromExercises.groups, exercises)
+      return { ...fromExercises, sourceUsed: 'exerciseFallback', flatReason: null, renderBlocks }
     }
   }
 
@@ -395,7 +496,9 @@ export function buildGroupedDisplayModel(
   }
 
   if (fromStyledGroups) {
-    return { ...fromStyledGroups, sourceUsed: 'none', flatReason }
+    // Flat path: renderBlocks stays empty; the card's flat renderer does not
+    // consume it.
+    return { ...fromStyledGroups, sourceUsed: 'none', flatReason, renderBlocks: [] }
   }
 
   return {
@@ -410,6 +513,7 @@ export function buildGroupedDisplayModel(
     methodSummary: null,
     sourceUsed: 'none',
     flatReason,
+    renderBlocks: [],
   }
 }
 

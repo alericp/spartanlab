@@ -523,12 +523,12 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
 
   // ==========================================================================
   // [FUNNEL-AUDIT] One-shot compact stage comparison for THIS session only.
-  // Emits a single line per card mount so the render-delivery corridor is
-  // observable end-to-end without spamming. This is the authoritative probe
-  // for deciding whether grouped truth exists at Stage 1 (session prop) and
-  // whether it survived through Stage 6 (fullVisibleExercises) on the same
-  // session identity. Prior noisier per-session / per-render logs have been
-  // demoted to fire only on truth-loss (contract violations).
+  // Emits ONE line per card mount covering the ENTIRE render-population
+  // corridor (Stage 1 session prop -> Stage 6 fullVisibleExercises -> Stage 7
+  // grouped display adapter output -> Stage 8 render branch decision). This is
+  // the single authoritative probe for narrowing the first failing stage when
+  // the visible card body does not show grouped structure. Prior noisier
+  // per-session / per-render logs have been demoted to fire only on truth-loss.
   // ==========================================================================
   if (typeof window !== 'undefined' && session.dayNumber) {
     const s1Ex = Array.isArray(rawSession.exercises) ? rawSession.exercises : []
@@ -546,7 +546,25 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       const m = (e as unknown as { method?: string }).method
       return !!m && m !== 'straight'
     }).length
-    // Verdict for this session: where does truth exist / where is it lost?
+
+    // [FUNNEL-AUDIT] Stage 7: call the grouped-display adapter with the SAME
+    // inputs the renderer uses so this verdict reflects what the card actually
+    // decides. This is a read-only inspection call -- MainExercisesRenderer
+    // computes the same model again for rendering (single render ownership is
+    // preserved; this extra call is observational only).
+    const s7Model = buildGroupedDisplayModel(
+      sessionStyleMetadata,
+      fullVisibleExercises.map(ex => ({
+        id: ex.id,
+        name: ex.name,
+        blockId: (ex as unknown as { blockId?: string }).blockId,
+        method: (ex as unknown as { method?: string }).method,
+        methodLabel: (ex as unknown as { methodLabel?: string }).methodLabel,
+      }))
+    )
+
+    // Final verdict: the exact stage where truth is lost (or where the render
+    // path is honestly flat because upstream truth is absent).
     let verdict: string
     if (!sessionStyleMetadata && s1ExWithBlockId === 0 && s1ExWithNonStraightMethod === 0) {
       verdict = 'STAGE1_FLAT_NO_UPSTREAM_GROUPED_TRUTH'
@@ -554,19 +572,36 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       verdict = 'STAGE1_ONLY_STRAIGHT_GROUPED_TRUTH'
     } else if (s6ExWithBlockId < s1ExWithBlockId || s6ExWithNonStraightMethod < s1ExWithNonStraightMethod) {
       verdict = 'STAGE5_6_BRIDGE_LOST_PER_EXERCISE_GROUPED_FIELDS'
+    } else if ((s1NonStraight > 0 || s1ExWithNonStraightMethod > 0) && !s7Model.hasGroups) {
+      verdict = 'STAGE7_ADAPTER_REJECTED_GROUPED_TRUTH'
+    } else if (s7Model.hasGroups && s7Model.nonStraightGroupCount === 0) {
+      verdict = 'STAGE7_ADAPTER_RETURNED_ONLY_STRAIGHT_GROUPS'
+    } else if (s7Model.hasGroups && s7Model.nonStraightGroupCount > 0) {
+      verdict = 'STAGE7_GROUPED_TRUTH_REACHED_ADAPTER_UI_SHOULD_RENDER_GROUPED'
     } else {
-      verdict = 'STAGE1_THROUGH_STAGE6_GROUPED_TRUTH_INTACT'
+      verdict = 'STAGE1_THROUGH_STAGE7_UNCLASSIFIED'
     }
     console.log('[v0] [FUNNEL-AUDIT] Day', session.dayNumber, {
+      // Stage 1: session prop as received by the card
       s1_hasStyleMeta: !!sessionStyleMetadata,
       s1_styledGroups: s1StyledGroups.length,
       s1_nonStraight: s1NonStraight,
       s1_exCount: s1Ex.length,
       s1_exWithBlockId: s1ExWithBlockId,
       s1_exWithNonStraightMethod: s1ExWithNonStraightMethod,
+      // Stage 6: fullVisibleExercises (what the renderer actually walks)
       s6_exCount: fullVisibleExercises.length,
       s6_exWithBlockId: s6ExWithBlockId,
       s6_exWithNonStraightMethod: s6ExWithNonStraightMethod,
+      // Stage 7: grouped display adapter output (what decides grouped-vs-flat)
+      s7_hasGroups: s7Model.hasGroups,
+      s7_totalGroups: s7Model.totalGroupCount,
+      s7_nonStraightGroups: s7Model.nonStraightGroupCount,
+      s7_supersetCount: s7Model.supersetCount,
+      s7_circuitCount: s7Model.circuitCount,
+      // Stage 8: would-be render branch
+      s8_useGroupedRender: s7Model.hasGroups,
+      // Final first-failing-stage verdict
       verdict,
     })
   }

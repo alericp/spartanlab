@@ -3165,7 +3165,67 @@ export default function ProgramPage() {
           setLoadStage('normalizing-program')
           if (programState.hasUsableWorkoutProgram && programState.adaptiveProgram) {
             const normalizedProgram = stateMod.normalizeProgramForDisplay(programState.adaptiveProgram)
-            
+
+            // ================================================================
+            // [GROUPED-TRUTH-FUNNEL-AUDIT] STAGE 1 -> STAGE 2 PROBE
+            // Compares grouped-truth presence on each session of the canonical
+            // program (Stage 1) against the post-normalize program (Stage 2).
+            // If Stage 1 has truth and Stage 2 does not, the loss is in
+            // normalizeProgramForDisplay / preserveSessionGroupedContract.
+            // If Stage 1 is already flat, the saved program never had grouped
+            // truth and the display corridor is not the primary blocker.
+            // ================================================================
+            if (typeof window !== 'undefined') {
+              const s1Sessions = (programState.adaptiveProgram?.sessions ?? []) as Array<{
+                dayNumber?: number
+                styleMetadata?: { styledGroups?: Array<{ groupType: string }> }
+                exercises?: Array<{ blockId?: string; method?: string }>
+              }>
+              const s2Sessions = (normalizedProgram?.sessions ?? []) as Array<{
+                dayNumber?: number
+                styleMetadata?: { styledGroups?: Array<{ groupType: string }> }
+                exercises?: Array<{ blockId?: string; method?: string }>
+              }>
+              const summarize = (sessions: typeof s1Sessions) =>
+                sessions.map((sess) => {
+                  const styled = sess.styleMetadata?.styledGroups ?? []
+                  const nonStraight = styled.filter((g) => g.groupType !== 'straight').length
+                  const ex = Array.isArray(sess.exercises) ? sess.exercises : []
+                  const exWithBlockId = ex.filter((e) => !!e.blockId).length
+                  const exWithNonStraightMethod = ex.filter((e) => !!e.method && e.method !== 'straight').length
+                  return {
+                    day: sess.dayNumber,
+                    styled: styled.length,
+                    nonStraight,
+                    exCount: ex.length,
+                    exWithBlockId,
+                    exWithNonStraightMethod,
+                    hasGroupedTruth: nonStraight > 0 || exWithNonStraightMethod > 0,
+                  }
+                })
+              const s1Summary = summarize(s1Sessions)
+              const s2Summary = summarize(s2Sessions)
+              const s1AnyGroupedTruth = s1Summary.some((s) => s.hasGroupedTruth)
+              const s2AnyGroupedTruth = s2Summary.some((s) => s.hasGroupedTruth)
+              let verdict: string
+              if (!s1AnyGroupedTruth && !s2AnyGroupedTruth) {
+                verdict = 'STAGE1_SAVED_PROGRAM_HAS_NO_GROUPED_TRUTH'
+              } else if (s1AnyGroupedTruth && !s2AnyGroupedTruth) {
+                verdict = 'STAGE1_TO_STAGE2_LOSS_IN_NORMALIZE_PROGRAM_FOR_DISPLAY'
+              } else {
+                verdict = 'STAGE1_AND_STAGE2_BOTH_HAVE_GROUPED_TRUTH'
+              }
+              console.log('[v0] [FUNNEL-AUDIT-S1S2] program', programState.adaptiveProgram.id, {
+                s1_sessionCount: s1Summary.length,
+                s2_sessionCount: s2Summary.length,
+                s1_anyGroupedTruth: s1AnyGroupedTruth,
+                s2_anyGroupedTruth: s2AnyGroupedTruth,
+                s1_perSession: s1Summary,
+                s2_perSession: s2Summary,
+                verdict,
+              })
+            }
+
             // [TASK 5] Verify normalization didn't change identity
             if (normalizedProgram.id !== programState.adaptiveProgram.id) {
               console.error('[program-rebuild-identity-audit] MOUNT WARNING: Normalization changed program ID!', {

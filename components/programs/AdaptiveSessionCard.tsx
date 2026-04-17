@@ -836,6 +836,52 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 <span className="text-[#E63946]/70">({activeSessionView.variantLabel})</span>
               )}
             </div>
+            {/* [GROUPED-TRUTH-BREADCRUMB] Temporary visible 3-state chip showing
+                whether grouped truth is reaching this card across the funnel.
+                Stage 4 = session.styleMetadata or exercises carry grouped truth.
+                Stage 5 = fullVisibleExercises carry blockId + non-straight method.
+                Stage 7 = groupedRenderContract.hasGroupedTruth.
+                Remove these three lines + parent block to retire the breadcrumb. */}
+            <div className="mt-1 inline-flex items-center gap-1.5 rounded border border-yellow-600/40 bg-yellow-950/40 px-1.5 py-0.5 font-mono text-[9px] tracking-wider">
+              <span className="font-semibold text-yellow-400">GROUPED_TRUTH</span>
+              <span className={
+                ((rawSession.styleMetadata?.styledGroups ?? []).some((g: { groupType: string }) => g.groupType !== 'straight')
+                  || (Array.isArray(rawSession.exercises) && rawSession.exercises.some(e => {
+                      const m = (e as { method?: string }).method
+                      return !!(e as { blockId?: string }).blockId && !!m && m !== 'straight'
+                    })))
+                  ? 'text-green-400'
+                  : 'text-red-400'
+              }>
+                s4:{
+                  ((rawSession.styleMetadata?.styledGroups ?? []).some((g: { groupType: string }) => g.groupType !== 'straight')
+                    || (Array.isArray(rawSession.exercises) && rawSession.exercises.some(e => {
+                        const m = (e as { method?: string }).method
+                        return !!(e as { blockId?: string }).blockId && !!m && m !== 'straight'
+                      })))
+                    ? 'T' : 'F'
+                }
+              </span>
+              <span className={
+                fullVisibleExercises.some(e => {
+                  const m = (e as unknown as { method?: string }).method
+                  return !!(e as unknown as { blockId?: string }).blockId && !!m && m !== 'straight'
+                })
+                  ? 'text-green-400'
+                  : 'text-red-400'
+              }>
+                s5:{
+                  fullVisibleExercises.some(e => {
+                    const m = (e as unknown as { method?: string }).method
+                    return !!(e as unknown as { blockId?: string }).blockId && !!m && m !== 'straight'
+                  })
+                    ? 'T' : 'F'
+                }
+              </span>
+              <span className={hasGroupedTruth ? 'text-green-400' : 'text-red-400'}>
+                s7:{hasGroupedTruth ? 'T' : 'F'}
+              </span>
+            </div>
             
             {/* [DOCTRINE-STRENGTHENING] Week-specific character badges */}
             {weekCharacter && (

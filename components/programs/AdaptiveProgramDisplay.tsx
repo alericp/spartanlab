@@ -1020,6 +1020,64 @@ export function AdaptiveProgramDisplay({
         {/* [WEEK-PROGRESSION-TRUTH] Render scaled sessions with week-appropriate dosage */}
         {scaledSessions.length > 0 ? (
           scaledSessions.map((session, sessionIndex) => {
+            // ================================================================
+            // [GROUPED-TRUTH-FUNNEL-AUDIT] STAGE 3 -> STAGE 4 PROBE
+            // Logs grouped-truth presence on (a) the validSessions[i] entry
+            // (Stage 3, post-normalize, pre-week-scaling) and (b) the
+            // scaledSessions[i] entry being passed into AdaptiveSessionCard
+            // (Stage 4). If Stage 3 has truth and Stage 4 does not, the loss
+            // is in scaleSessionForWeek. If both are false, grouped truth was
+            // already absent before this component received the program.
+            // ================================================================
+            if (typeof window !== 'undefined') {
+              const s3Source = validSessions[sessionIndex] as unknown as {
+                styleMetadata?: { styledGroups?: Array<{ groupType: string }> }
+                exercises?: Array<{ blockId?: string; method?: string }>
+              } | undefined
+              const s3Styled = s3Source?.styleMetadata?.styledGroups ?? []
+              const s3NonStraight = s3Styled.filter(g => g.groupType !== 'straight').length
+              const s3Ex = Array.isArray(s3Source?.exercises) ? s3Source.exercises : []
+              const s3ExWithBlockId = s3Ex.filter(e => !!e.blockId).length
+              const s3ExWithNonStraightMethod = s3Ex.filter(e => !!e.method && e.method !== 'straight').length
+              const s3HasGroupedTruth = s3NonStraight > 0 || s3ExWithNonStraightMethod > 0
+
+              const s4Source = session as unknown as {
+                styleMetadata?: { styledGroups?: Array<{ groupType: string }> }
+                exercises?: Array<{ blockId?: string; method?: string }>
+              }
+              const s4Styled = s4Source.styleMetadata?.styledGroups ?? []
+              const s4NonStraight = s4Styled.filter(g => g.groupType !== 'straight').length
+              const s4Ex = Array.isArray(s4Source.exercises) ? s4Source.exercises : []
+              const s4ExWithBlockId = s4Ex.filter(e => !!e.blockId).length
+              const s4ExWithNonStraightMethod = s4Ex.filter(e => !!e.method && e.method !== 'straight').length
+              const s4HasGroupedTruth = s4NonStraight > 0 || s4ExWithNonStraightMethod > 0
+
+              let stage34Verdict: string
+              if (!s3HasGroupedTruth && !s4HasGroupedTruth) {
+                stage34Verdict = 'STAGE3_ALREADY_FLAT_BEFORE_DISPLAY'
+              } else if (s3HasGroupedTruth && !s4HasGroupedTruth) {
+                stage34Verdict = 'STAGE3_TO_STAGE4_LOSS_IN_SCALE_SESSION_FOR_WEEK'
+              } else {
+                stage34Verdict = 'STAGE3_AND_STAGE4_BOTH_HAVE_GROUPED_TRUTH'
+              }
+
+              console.log('[v0] [FUNNEL-AUDIT-S3S4] Day', session.dayNumber, {
+                s3_styledGroups: s3Styled.length,
+                s3_nonStraight: s3NonStraight,
+                s3_exCount: s3Ex.length,
+                s3_exWithBlockId: s3ExWithBlockId,
+                s3_exWithNonStraightMethod: s3ExWithNonStraightMethod,
+                s3_hasGroupedTruth: s3HasGroupedTruth,
+                s4_styledGroups: s4Styled.length,
+                s4_nonStraight: s4NonStraight,
+                s4_exCount: s4Ex.length,
+                s4_exWithBlockId: s4ExWithBlockId,
+                s4_exWithNonStraightMethod: s4ExWithNonStraightMethod,
+                s4_hasGroupedTruth: s4HasGroupedTruth,
+                verdict: stage34Verdict,
+              })
+            }
+
             // [SESSION-CARD-SURFACE] Get authoritative card surface for this session
             const cardSurface = sessionCardSurfaces[sessionIndex]
             

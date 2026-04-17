@@ -919,23 +919,24 @@ export function buildFullSessionRoutineSurface(
   sessionEvidence?: SessionAiEvidenceSurface
 ): FullSessionRoutineSurface {
   // ==========================================================================
-  // [v0] BRIDGE INPUT AUDIT - Log exactly what session data arrives at the bridge
+  // [BRIDGE-INPUT-AUDIT] Demoted to fire only when input appears malformed.
+  // Previously fired on every render of every session, masking the signal from
+  // the authoritative FUNNEL-AUDIT in AdaptiveSessionCard. Now only fires when
+  // the bridge receives an empty or structurally-invalid session so the cause
+  // of a fallback_minimal output is still traceable.
   // ==========================================================================
-  const sessionCategoryBreakdown = session.exercises?.reduce((acc, ex) => {
-    const cat = ex.category || 'unknown'
-    acc[cat] = (acc[cat] || 0) + 1
-    return acc
-  }, {} as Record<string, number>) || {}
-  
-  console.log('[v0] BRIDGE-INPUT-AUDIT Day', session.dayNumber, {
-    sessionExerciseCount: session.exercises?.length || 0,
-    sessionCategoryBreakdown,
-    exerciseNames: session.exercises?.map(e => `${e.name}[${e.category || '?'}]`).slice(0, 10) || [],
-    warmupCount: session.warmup?.length || 0,
-    cooldownCount: session.cooldown?.length || 0,
-    variantProvided: !!variant,
-    variantMainCount: variant?.selection?.main?.length || 0,
-  })
+  const _bridgeInputInvalid =
+    !session.exercises || !Array.isArray(session.exercises) || session.exercises.length === 0
+  if (_bridgeInputInvalid) {
+    console.log('[v0] [BRIDGE-INPUT-AUDIT] INPUT_INVALID Day', session.dayNumber, {
+      sessionExerciseCount: session.exercises?.length || 0,
+      exercisesIsArray: Array.isArray(session.exercises),
+      warmupCount: session.warmup?.length || 0,
+      cooldownCount: session.cooldown?.length || 0,
+      variantProvided: !!variant,
+      variantMainCount: variant?.selection?.main?.length || 0,
+    })
+  }
   
   const routineItems: RoutineItem[] = []
   const familyCounts: Record<RoutineItemFamily, number> = {

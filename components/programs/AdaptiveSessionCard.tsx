@@ -1096,10 +1096,9 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   />
 
           {/* [METHOD-DECISIONS-DISCLOSURE] Clean athlete-facing explanation of structure choices.
-              Only shows when there is meaningful truth to share: applied grouped methods
-              AND/OR rejected user-selected grouped methods. Uses runtime-shape access because
-              the authoritative builder writes additional fields (rejectedMethods, appliedMethods,
-              methodIntentContract) that are intentionally not in the narrow display interface. */}
+              [TRUTH-CONTRACT] Applied methods MUST derive from actual final styledGroups with
+              non-straight blocks, NOT from upstream intent metadata. This prevents false-positive
+              "Supersets applied" messages when the final session is actually flat. */}
           {(() => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const styleMeta: any = (session as any).styleMetadata
@@ -1108,12 +1107,52 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             // Only surface grouped-corridor methods; top_set/drop_set are per-exercise, not this corridor
             const groupedCorridor = ['supersets', 'circuits', 'density_blocks', 'cluster_sets']
             const userSelectedGrouped = userSelected.filter((m: string) => groupedCorridor.includes(m))
-            const applied: string[] = (styleMeta.appliedMethods || []).filter((m: string) => groupedCorridor.includes(m))
-            const rejected: Array<{ method: string; reason: string }> = (styleMeta.rejectedMethods || [])
+            
+            // =================================================================
+            // [TRUTH-CONTRACT-FIX] Derive applied methods from ACTUAL final
+            // styledGroups with non-straight blocks, NOT from intent metadata.
+            // This enforces: GROUPED METHOD APPLIED = FINAL SESSION HAS NON-STRAIGHT GROUPED STRUCTURE
+            // =================================================================
+            const styledGroups: Array<{ groupType: string }> = styleMeta.styledGroups || []
+            const actualNonStraightGroups = styledGroups.filter(g => g.groupType !== 'straight')
+            
+            // Map group types to method names for truthful "applied" reporting
+            const groupTypeToMethod: Record<string, string> = {
+              'superset': 'supersets',
+              'circuit': 'circuits',
+              'density_block': 'density_blocks',
+              'cluster': 'cluster_sets',
+            }
+            
+            // Build applied array from ACTUAL final grouped truth only
+            const applied: string[] = [...new Set(
+              actualNonStraightGroups
+                .map(g => groupTypeToMethod[g.groupType])
+                .filter((m): m is string => !!m && groupedCorridor.includes(m))
+            )]
+            
+            // Build rejected array: methods user selected that did NOT materialize in final groups
+            const intentApplied: string[] = (styleMeta.appliedMethods || []).filter((m: string) => groupedCorridor.includes(m))
+            const falsePositiveApplied = intentApplied.filter(m => !applied.includes(m))
+            
+            // Start with explicit rejected methods from builder
+            const builderRejected: Array<{ method: string; reason: string }> = (styleMeta.rejectedMethods || [])
               .filter((r: unknown): r is { method: string; reason: string } =>
                 !!r && typeof r === 'object' && 'method' in r && 'reason' in r && groupedCorridor.includes((r as { method: string }).method))
               // De-duplicate by method, keeping the first (most specific) reason
               .filter((r, idx, arr) => arr.findIndex((x) => x.method === r.method) === idx)
+            
+            // [TRUTH-CONTRACT] Add false-positive "applied" methods to rejected with honest reason
+            // These are methods that upstream intent marked as applied, but no actual grouped blocks exist
+            const falsePositiveRejected: Array<{ method: string; reason: string }> = falsePositiveApplied
+              .filter(m => !builderRejected.some(r => r.method === m))
+              .map(m => ({
+                method: m,
+                reason: 'No eligible exercise pairs found for grouping in final session structure.'
+              }))
+            
+            // Combine builder rejected + false-positive rejected
+            const rejected = [...builderRejected, ...falsePositiveRejected]
 
             // Nothing meaningful to say? Don't render the surface.
             if (userSelectedGrouped.length === 0 && applied.length === 0) return null

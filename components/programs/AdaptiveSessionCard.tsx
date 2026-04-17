@@ -37,6 +37,23 @@ import {
 import { recordReplaceSignal } from '@/lib/override-signal-service'
 import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
 
+// ============================================================================
+// [FORCE_GROUPED_RUNTIME_PROOF]
+// TEMPORARY runtime-proof override. When true, any session whose grouped
+// display contract reports `hasGroupedTruth === true` will render an
+// impossible-to-miss proof block INSTEAD OF the normal exercise body.
+//
+// Purpose: answer, at runtime, on the real Program card:
+//   1. does grouped truth exist?
+//   2. is the grouped branch actually being entered?
+//   3. are rawFallbackBlocks actually reaching the visible card?
+//
+// Flip this to `false` to restore normal rich / raw-fallback / flat dispatch.
+// This is an intentional display-first debug override and must not ship long
+// term. Flat sessions (hasGroupedTruth === false) are UNAFFECTED.
+// ============================================================================
+const FORCE_GROUPED_RUNTIME_PROOF = true
+
 // [DOCTRINE-STRENGTHENING] Week character flags for visible differentiation
 interface WeekCharacter {
   densityAllowed: boolean
@@ -1617,6 +1634,107 @@ function MainExercisesRenderer({
     )
   }
   
+  // ==========================================================================
+  // [FORCE_GROUPED_RUNTIME_PROOF] TEMPORARY DOMINANT OVERRIDE
+  //
+  // When FORCE_GROUPED_RUNTIME_PROOF is true AND grouped truth exists upstream,
+  // this branch FULLY REPLACES the normal exercise body with an impossible-to-
+  // miss proof block. The override runs BEFORE the rich grouped path, the raw
+  // fallback path, and the flat path -- so if you can read this banner on the
+  // real Program card, grouped truth is definitively reaching the renderer.
+  //
+  // Flat sessions (hasGroupedTruth === false) fall through this branch and
+  // render normally via the flat path below.
+  // ==========================================================================
+  if (FORCE_GROUPED_RUNTIME_PROOF && hasGroupedTruth) {
+    const sessionLabel = `Day ${session.dayNumber}${session.focus || session.focusLabel ? ` — ${session.focus || session.focusLabel}` : ''}`
+    const rawBlocks = groupedDisplayModel.rawFallbackBlocks
+    const groupTypeTag = (gt: string) => {
+      if (gt === 'superset') return 'SUPERSET'
+      if (gt === 'circuit') return 'CIRCUIT'
+      if (gt === 'cluster') return 'CLUSTER SET'
+      if (gt === 'density_block' || gt === 'density') return 'DENSITY BLOCK'
+      return gt.toUpperCase()
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="rounded-lg border-4 border-yellow-400 bg-yellow-950 p-4 font-mono text-xs">
+          <div className="mb-3 text-center text-base font-extrabold tracking-wider text-yellow-300">
+            GROUPED RUNTIME PROOF MODE ACTIVE
+          </div>
+          <div className="mb-3 text-center text-sm font-bold text-yellow-100">
+            {sessionLabel}
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded border border-yellow-600/60 bg-yellow-900/40 p-3 text-yellow-100">
+            <div>sourceUsed:</div>
+            <div className="text-right font-bold text-white">{groupedDisplayModel.sourceUsed}</div>
+            <div>hasGroupedTruth:</div>
+            <div className="text-right font-bold text-white">{String(groupedDisplayModel.hasGroupedTruth)}</div>
+            <div>hasRichRenderableGroups:</div>
+            <div className="text-right font-bold text-white">{String(groupedDisplayModel.hasRichRenderableGroups)}</div>
+            <div>rawFallbackBlocks.length:</div>
+            <div className="text-right font-bold text-white">{rawBlocks.length}</div>
+            <div>renderBlocks.length:</div>
+            <div className="text-right font-bold text-white">{groupedDisplayModel.renderBlocks.length}</div>
+            <div>nonStraightGroupCount:</div>
+            <div className="text-right font-bold text-white">{groupedDisplayModel.nonStraightGroupCount}</div>
+            <div>totalGroupCount:</div>
+            <div className="text-right font-bold text-white">{groupedDisplayModel.totalGroupCount}</div>
+            <div>flatReason:</div>
+            <div className="text-right font-bold text-white">{groupedDisplayModel.flatReason ?? 'null'}</div>
+          </div>
+
+          {rawBlocks.length === 0 ? (
+            <div className="mt-4 rounded border-2 border-red-500 bg-red-950 p-3 text-red-200">
+              <div className="text-sm font-extrabold text-red-300">
+                GROUPED TRUTH EXISTS BUT RAW FALLBACK BLOCKS ARE EMPTY
+              </div>
+              <div className="mt-2 space-y-1">
+                <div>sourceUsed: <span className="font-bold text-white">{groupedDisplayModel.sourceUsed}</span></div>
+                <div>flatReason: <span className="font-bold text-white">{groupedDisplayModel.flatReason ?? 'null'}</span></div>
+                <div>totalGroupCount: <span className="font-bold text-white">{groupedDisplayModel.totalGroupCount}</span></div>
+                <div>nonStraightGroupCount: <span className="font-bold text-white">{groupedDisplayModel.nonStraightGroupCount}</span></div>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 space-y-3">
+              {rawBlocks.map((block, bIdx) => (
+                <div
+                  key={block.groupId || `proof-${bIdx}`}
+                  className="rounded border-2 border-yellow-500 bg-yellow-900/30 p-3"
+                >
+                  <div className="mb-2 text-sm font-extrabold tracking-wider text-yellow-300">
+                    [{groupTypeTag(block.groupType)} {String.fromCharCode(65 + bIdx)}]
+                  </div>
+                  <div className="mb-2 text-[11px] text-yellow-200/70">
+                    label: {block.label} · members: {block.members.length}
+                  </div>
+                  <ul className="space-y-1 pl-2">
+                    {block.members.map((m, mIdx) => (
+                      <li key={m.id || `${block.groupId}-${mIdx}`} className="text-yellow-50">
+                        <span className="mr-2 text-yellow-400">-</span>
+                        <span className="font-bold">{m.name || '(unnamed)'}</span>
+                        {m.prefix && (
+                          <span className="ml-2 text-[10px] text-yellow-400">[{m.prefix}]</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-3 text-center text-[10px] uppercase tracking-widest text-yellow-500/70">
+            FORCE_GROUPED_RUNTIME_PROOF = true · flip off in AdaptiveSessionCard.tsx to restore normal body
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // ==========================================================================
   // [DISPLAY-FIRST-FALLBACK] RAW GROUPED FALLBACK PATH
   //

@@ -11811,20 +11811,6 @@ async function generateAdaptiveProgramImpl(
     // =========================================================================
     const shouldApplySupersets = sessionMethodIntentContract.shouldApplySupersets && dayOwnsSupersets
     
-    // [v0] DIAGNOSTIC: Track superset eligibility for debugging
-    console.log('[v0] SUPERSET-ELIGIBILITY-CHECK', {
-      dayNumber: session.dayNumber,
-      shouldApplySupersets,
-      contractShouldApply: sessionMethodIntentContract.shouldApplySupersets,
-      dayOwnsSupersets,
-      exerciseCount: session.exercises?.length || 0,
-      accessoryTailSize: sessionMethodIntentContract.accessoryTailSize,
-      trueGroupableTailSize,
-      userWantsSupersets: sessionMethodIntentContract.userWantsSupersets,
-      methodPrefsForGrouping,
-      willEnterSupersetBlock: shouldApplySupersets && session.exercises && session.exercises.length >= 4,
-    })
-    
     if (shouldApplySupersets && session.exercises && session.exercises.length >= 4) {
       // [SUPERSET-ELIGIBILITY-FIX] Find TRUE accessory/support exercises that can be safely supersetted
       // Never superset: skill work, primary strength, power/explosive movements, or heavy loaded work
@@ -12272,8 +12258,9 @@ async function generateAdaptiveProgramImpl(
     }
     
     // Determine primary style based on applied methods
+    // [ROOT-CAUSE-FIX] Check CURRENT session.styleMetadata for supersets, not stale existingStyleMeta
     const primaryStyle = hasCircuitsApplied ? 'circuits' :
-      existingStyleMeta.hasSupersetsApplied ? 'supersets' :
+      session.styleMetadata?.hasSupersetsApplied ? 'supersets' :
       hasClusterApplied ? 'cluster_sets' : 'straight_sets'
     
     // [DOCTRINE-REJECTION-COMPLETION] Fill in truthful rejection reasons for user-selected
@@ -12288,7 +12275,8 @@ async function generateAdaptiveProgramImpl(
     
     // Only evaluate grouped-corridor methods (supersets, circuits, density, cluster).
     // Top sets and drop sets are per-exercise set-structure methods, not part of this corridor.
-    if (userSelectedMethods.includes('supersets') && !existingStyleMeta.hasSupersetsApplied && !alreadyRejectedSet.has('supersets')) {
+    // [ROOT-CAUSE-FIX] Check CURRENT session.styleMetadata, not stale existingStyleMeta
+    if (userSelectedMethods.includes('supersets') && !session.styleMetadata?.hasSupersetsApplied && !alreadyRejectedSet.has('supersets')) {
       const reason = shouldRotateStyles && !dayOwnsSupersets
         ? 'Rotated to circuits/density today so both selected styles appear across the week'
         : sessionMethodIntentContract.isSkillDominated
@@ -12325,10 +12313,16 @@ async function generateAdaptiveProgramImpl(
       completedRejectedMethods.push({ method: 'cluster_sets', reason })
     }
     
+    // [ROOT-CAUSE-FIX] Read hasSupersetsApplied from CURRENT session.styleMetadata (which was updated
+    // by the superset application block at line ~12002), NOT from the stale existingStyleMeta snapshot
+    // that was captured BEFORE superset application ran. This was causing supersets to be marked as
+    // not applied even when they were successfully created.
+    const currentSupersetsApplied = session.styleMetadata?.hasSupersetsApplied || false
+    
     session.styleMetadata = {
       ...existingStyleMeta,
       primaryStyle,
-      hasSupersetsApplied: existingStyleMeta.hasSupersetsApplied || false,
+      hasSupersetsApplied: currentSupersetsApplied, // [FIX] Use current value, not stale snapshot
       hasCircuitsApplied,
       hasDensityApplied,
       hasClusterApplied,
@@ -12336,7 +12330,7 @@ async function generateAdaptiveProgramImpl(
         ? methodMaterializationResult.structureDecisions.map(d => d.rationale).join('; ')
         : existingStyleMeta.structureDescription || 'Standard straight sets',
       appliedMethods: [...new Set([
-        ...(existingStyleMeta.appliedMethods || []),
+        ...(session.styleMetadata?.appliedMethods || existingStyleMeta.appliedMethods || []), // [FIX] Also use current
         ...methodMaterializationResult.appliedMethods,
         'straight_sets', // Always include as baseline
       ])],

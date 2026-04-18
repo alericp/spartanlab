@@ -1512,9 +1512,24 @@ function MainExercisesRenderer({
   }
 
   // ==========================================================================
-  // FLAT RENDER PATH - [VISIBLE-IMPROVEMENT] Now groups by category for clarity
+  // [FLAT-WINNER-LOCKOUT] FLAT RENDER PATH - category-sectioned layout
+  //
+  // CRITICAL GATE: this path now ONLY fires for true flat sessions
+  // (`!hasGroupedTruth`). Previously the gate was just `!useGroupedRender`,
+  // which silently swallowed grouped-truth sessions where the rich grouped
+  // path could not produce renderable groups AND `rawFallbackBlocks` happened
+  // to be 0 (e.g. styledGroups present but all member names blank). Those
+  // grouped-intent days were being painted with SKILL / STRENGTH / ACCESSORY
+  // / OTHER category headers -- visually indistinguishable from a flat day,
+  // which is exactly the "still looks flat" symptom.
+  //
+  // Now:
+  //   - hasGroupedTruth === false  -> this flat category layout (correct)
+  //   - hasGroupedTruth === true   -> grouped paths above OR the honest
+  //                                   simple-ordered fallback below
+  //                                   (never this category layout)
   // ==========================================================================
-  if (!useGroupedRender) {
+  if (!useGroupedRender && !hasGroupedTruth) {
     // Group exercises by category for visual organization
     const skillExercises = displayExercises.filter(e => e.category === 'skill')
     const strengthExercises = displayExercises.filter(e => e.category === 'strength')
@@ -1574,6 +1589,47 @@ function MainExercisesRenderer({
         {renderCategorySection(strengthExercises, 'strength')}
         {renderCategorySection(accessoryExercises, 'accessory')}
         {renderCategorySection(otherExercises, 'other')}
+      </div>
+    )
+  }
+
+  // ==========================================================================
+  // [FLAT-WINNER-LOCKOUT] GROUPED-INTENT SIMPLE-ORDER FALLBACK
+  //
+  // Fires only when `!useGroupedRender && hasGroupedTruth` AND the raw-fallback
+  // branch above did not engage (rawFallbackBlocks was empty because all
+  // upstream grouped members failed the usable-name filter). In that case we
+  // have grouped intent but nothing renderable as a grouped block.
+  //
+  // Rather than silently fall through to the category-sectioned flat layout
+  // (which paints a session as a flat categorized day and hides the fact
+  // that grouped truth existed), render a simple ordered list of the actual
+  // exercises. This is honest about what we can show: no fake category
+  // headers, no fake group headers, just the session's exercises in order.
+  // ==========================================================================
+  if (!useGroupedRender && hasGroupedTruth) {
+    let globalIdx = 0
+    return (
+      <div className="space-y-2">
+        {displayExercises.map((exercise) => {
+          globalIdx++
+          return (
+            <ExerciseRow
+              key={exercise.id}
+              exercise={exercise}
+              index={globalIdx}
+              sessionId={sessionId}
+              isSkipped={skippedExercises.has(exercise.id)}
+              adjustedName={adjustedExercises.get(exercise.id)}
+              sessionContext={sessionContextForRows}
+              sessionEvidence={sessionEvidence}
+              coachingExplanation={coachingExplanation}
+              onReplace={onReplace}
+              onSkip={onSkip}
+              onProgressionAdjust={onProgressionAdjust}
+            />
+          )
+        })}
       </div>
     )
   }

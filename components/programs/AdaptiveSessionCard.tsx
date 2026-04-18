@@ -38,26 +38,14 @@ import { recordReplaceSignal } from '@/lib/override-signal-service'
 import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
 
 // ============================================================================
-// [FORCE_LAST_VISIBLE_BODY_PROOF]
-// TEMPORARY override that replaces the EXACT LAST VISIBLE PROGRAM CARD BODY
-// SURFACE with an impossible-to-miss proof block whenever upstream grouped
-// truth exists. This is intentionally above `MainExercisesRenderer` so the
-// override does not live inside a child surface that the user may not be
-// seeing; it sits on the outer expanded-body fragment itself.
-//
-// Flat sessions (hasGroupedTruth === false) fall through and render normally.
-// Flip to `false` to restore the normal rich / raw-fallback / flat dispatch.
+// [GROUPED-BODY-PRIORITY]
+// Production rule: whenever the grouped render contract reports grouped
+// truth, the grouped body wins priority over COMPLETED_SUMMARY /
+// ACTIVE_WORKOUT_CARD. The prior debug-era `FORCE_LAST_VISIBLE_BODY_PROOF`
+// / `FORCE_GROUPED_RUNTIME_PROOF` constants and their giant proof panels
+// have been removed; grouped display is owned by `MainExercisesRenderer`
+// via its real rich / raw-fallback / flat dispatch.
 // ============================================================================
-const FORCE_LAST_VISIBLE_BODY_PROOF = true
-
-// ============================================================================
-// [FORCE_GROUPED_RUNTIME_PROOF]
-// Inner (child-surface) proof override. NEUTRALIZED now that the outer
-// FORCE_LAST_VISIBLE_BODY_PROOF has hoisted the proof to the last visible
-// surface. Keeping the constant (set to false) so the child branch stays
-// inert but the historical code is not silently deleted.
-// ============================================================================
-const FORCE_GROUPED_RUNTIME_PROOF = false
 
 // [DOCTRINE-STRENGTHENING] Week character flags for visible differentiation
 interface WeekCharacter {
@@ -599,8 +587,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   //   3. isActive || isPaused                 -> ACTIVE_WORKOUT_CARD
   //   4. (else)                               -> NORMAL_EXPANDED_BODY
   // ==========================================================================
-  const shouldRenderGroupedProgramBody =
-    FORCE_LAST_VISIBLE_BODY_PROOF && hasGroupedTruth
+  const shouldRenderGroupedProgramBody = hasGroupedTruth
 
   type OuterBodyMode =
     | 'GROUPED_PROGRAM_BODY'
@@ -758,92 +745,13 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     
   }
   
-  // ==========================================================================
-  // [ALWAYS-VISIBLE-PROBE] Compute flat reason code for diagnostic display
-  // ==========================================================================
-  const computeTopProbeFlatReason = (): string => {
-    if (!sessionStyleMetadata) return 'NO_STYLE_METADATA'
-    if (!sessionStyleMetadata.styledGroups || sessionStyleMetadata.styledGroups.length === 0) return 'NO_STYLED_GROUPS'
-    if (!hasNonStraightGroups) return 'ONLY_STRAIGHT_GROUPS'
-    return 'HAS_GROUPED_TRUTH'
-  }
-  const topProbeFlatReason = computeTopProbeFlatReason()
-  
-  // Compute verdict for top probe
-  const computeTopProbeVerdict = (): string => {
-    if (!sessionStyleMetadata) return 'CARD_DID_NOT_RECEIVE_AUTHORITATIVE_GROUPED_SESSION_DATA'
-    if (!sessionStyleMetadata.styledGroups || sessionStyleMetadata.styledGroups.length === 0) return 'CARD_RECEIVED_ONLY_FLAT_TRUTH'
-    if (!hasNonStraightGroups) return 'CARD_RECEIVED_ONLY_FLAT_TRUTH'
-    // Has grouped truth - will it render grouped?
-    return 'CARD_RECEIVED_GROUPED_TRUTH_AND_SHOULD_RENDER_GROUPED'
-  }
-  const topProbeVerdict = computeTopProbeVerdict()
-  
+  // [REMOVED] Top-level debug probe computations (computeTopProbeFlatReason,
+  // computeTopProbeVerdict, topProbeFlatReason, topProbeVerdict). They fed
+  // the now-removed fuchsia SESSION TRUTH PROBE banner and had no production
+  // consumer.
+
   return (
     <Card className="bg-[#2A2A2A] border-[#3A3A3A] overflow-hidden">
-      {/* ==========================================================================
-          [ALWAYS-VISIBLE-PROBE] TOP-OF-CARD TRUTH BANNER
-          This renders ABOVE the header, visible even when collapsed
-          Force-enabled via FORCE_VISIBLE_SESSION_PROBE constant
-          ========================================================================== */}
-      {probeActive && (
-        <div className="p-3 bg-fuchsia-900 border-b-4 border-fuchsia-500 font-mono text-xs">
-          <div className="text-fuchsia-200 font-bold text-sm mb-2 flex items-center gap-2">
-            <span className="bg-fuchsia-500 text-white px-2 py-0.5 rounded text-xs">PROBE ACTIVE</span>
-            <span>SESSION TRUTH PROBE - {cardInstanceId}</span>
-          </div>
-          
-          {/* Session Identity */}
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-fuchsia-300 mb-2">
-            <div>Day: <span className="text-white font-bold">{session.dayNumber}</span></div>
-            <div>Label: <span className="text-white">{session.dayLabel}</span></div>
-            <div>Focus: <span className="text-white">{session.focus || session.focusLabel || 'none'}</span></div>
-            <div>Name: <span className="text-white">{session.name || 'unnamed'}</span></div>
-          </div>
-          
-          {/* Probe Status - uses probeActive (hard-locked false) for all flags */}
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-fuchsia-300 mb-2">
-            <div>probeActive: <span className="text-green-400 font-bold">YES</span></div>
-            <div>forceProbe: <span className={probeActive ? 'text-green-400' : 'text-gray-400'}>{probeActive ? 'YES' : 'NO'}</span></div>
-            <div>showProbe: <span className={probeActive ? 'text-green-400' : 'text-gray-400'}>{probeActive ? 'YES' : 'NO'}</span></div>
-            <div>cardInstanceId: <span className="text-white text-[10px]">{cardInstanceId}</span></div>
-          </div>
-          
-          {/* Style Metadata Truth */}
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-fuchsia-300 mb-2">
-            <div>hasStyleMetadata: <span className={sessionStyleMetadata ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{sessionStyleMetadata ? 'YES' : 'NO'}</span></div>
-            <div>builderHasStyledGroups: <span className={builderHasStyledGroups ? 'text-green-400' : 'text-red-400'}>{builderHasStyledGroups ? 'YES' : 'NO'}</span></div>
-            <div>styledGroups count: <span className="text-white font-bold">{sessionStyleMetadata?.styledGroups?.length || 0}</span></div>
-            <div>non-straight groups: <span className={hasNonStraightGroups ? 'text-green-400 font-bold' : 'text-amber-400 font-bold'}>{sessionStyleMetadata?.styledGroups?.filter(g => g.groupType !== 'straight').length || 0}</span></div>
-          </div>
-          
-          {/* Group Types */}
-          <div className="text-fuchsia-300 mb-2">
-            groupTypes: <span className="text-white">{sessionStyleMetadata?.styledGroups?.map(g => g.groupType).join(', ') || 'none'}</span>
-          </div>
-          
-          {/* Flat Reason */}
-          <div className="text-fuchsia-300 mb-2">
-            flatReasonCode: <span className={topProbeFlatReason === 'HAS_GROUPED_TRUTH' ? 'text-green-400 font-bold' : 'text-amber-400 font-bold'}>{topProbeFlatReason}</span>
-          </div>
-          
-          {/* Exercise Counts */}
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-fuchsia-300 mb-2">
-            <div>session.exercises: <span className="text-white">{session.exercises?.length || 0}</span></div>
-            <div>isExpanded: <span className={isExpanded ? 'text-green-400' : 'text-gray-400'}>{isExpanded ? 'YES' : 'NO'}</span></div>
-          </div>
-          
-          {/* VERDICT */}
-          <div className={`p-2 rounded text-center font-bold text-sm mt-2 ${
-            topProbeVerdict.includes('GROUPED_TRUTH') 
-              ? 'bg-green-800 text-green-200' 
-              : 'bg-amber-800 text-amber-200'
-          }`}>
-            {topProbeVerdict}
-          </div>
-        </div>
-      )}
-      
       {/* Header - Collapsible day summary */}
       <div
         className="p-4 cursor-pointer hover:bg-[#333333] transition-colors"
@@ -875,53 +783,11 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 <span className="text-[#E63946]/70">({activeSessionView.variantLabel})</span>
               )}
             </div>
-            {/* [GROUPED-TRUTH-BREADCRUMB] Temporary visible 3-state chip showing
-                whether grouped truth is reaching this card across the funnel.
-                Stage 4 = session.styleMetadata or exercises carry grouped truth.
-                Stage 5 = fullVisibleExercises carry blockId + non-straight method.
-                Stage 7 = groupedRenderContract.hasGroupedTruth.
-                Remove these three lines + parent block to retire the breadcrumb. */}
-            <div className="mt-1 inline-flex items-center gap-1.5 rounded border border-yellow-600/40 bg-yellow-950/40 px-1.5 py-0.5 font-mono text-[9px] tracking-wider">
-              <span className="font-semibold text-yellow-400">GROUPED_TRUTH</span>
-              <span className={
-                ((rawSession.styleMetadata?.styledGroups ?? []).some((g: { groupType: string }) => g.groupType !== 'straight')
-                  || (Array.isArray(rawSession.exercises) && rawSession.exercises.some(e => {
-                      const m = (e as { method?: string }).method
-                      return !!(e as { blockId?: string }).blockId && !!m && m !== 'straight'
-                    })))
-                  ? 'text-green-400'
-                  : 'text-red-400'
-              }>
-                s4:{
-                  ((rawSession.styleMetadata?.styledGroups ?? []).some((g: { groupType: string }) => g.groupType !== 'straight')
-                    || (Array.isArray(rawSession.exercises) && rawSession.exercises.some(e => {
-                        const m = (e as { method?: string }).method
-                        return !!(e as { blockId?: string }).blockId && !!m && m !== 'straight'
-                      })))
-                    ? 'T' : 'F'
-                }
-              </span>
-              <span className={
-                fullVisibleExercises.some(e => {
-                  const m = (e as unknown as { method?: string }).method
-                  return !!(e as unknown as { blockId?: string }).blockId && !!m && m !== 'straight'
-                })
-                  ? 'text-green-400'
-                  : 'text-red-400'
-              }>
-                s5:{
-                  fullVisibleExercises.some(e => {
-                    const m = (e as unknown as { method?: string }).method
-                    return !!(e as unknown as { blockId?: string }).blockId && !!m && m !== 'straight'
-                  })
-                    ? 'T' : 'F'
-                }
-              </span>
-              <span className={hasGroupedTruth ? 'text-green-400' : 'text-red-400'}>
-                s7:{hasGroupedTruth ? 'T' : 'F'}
-              </span>
-            </div>
-            
+            {/* [REMOVED] GROUPED_TRUTH s4/s5/s7 breadcrumb chip. Grouped days are
+                now visibly recognized through the production method-summary
+                chips (Superset/Circuit/Density/Cluster) and the colored grouped
+                block headers inside MainExercisesRenderer, not via a debug chip. */}
+
             {/* [DOCTRINE-STRENGTHENING] Week-specific character badges */}
             {weekCharacter && (
               <div className="flex items-center gap-1.5 mt-2 flex-wrap">
@@ -1048,29 +914,12 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                owner drives the visible body.
                ===================================================================== */
             <>
-              {/* [TINY-MODE-INDICATOR] Non-dominant footprint showing which outer
-                  body mode is rendering and whether grouped truth is present. */}
-              <div className="mb-2 inline-flex items-center gap-1.5 rounded border border-[#2A2A2A] bg-[#1A1A1A] px-2 py-0.5 font-mono text-[10px] text-[#6A6A6A]">
-                <span>mode:</span>
-                <span
-                  className={
-                    chosenOuterBodyMode === 'GROUPED_PROGRAM_BODY'
-                      ? 'font-semibold text-green-400'
-                      : 'text-[#A5A5A5]'
-                  }
-                >
-                  {chosenOuterBodyMode}
-                </span>
-                <span className="text-[#3A3A3A]">·</span>
-                <span>grouped:</span>
-                <span
-                  className={
-                    hasGroupedTruth ? 'font-semibold text-green-400' : 'text-[#A5A5A5]'
-                  }
-                >
-                  {hasGroupedTruth ? 'true' : 'false'}
-                </span>
-              </div>
+              {/* [REMOVED] Tiny mode/grouped diagnostic chip. Grouped branch
+                  ownership is still enforced by `chosenOuterBodyMode` above
+                  (GROUPED_PROGRAM_BODY wins over COMPLETED / ACTIVE whenever
+                  grouped truth exists), but the visible chip is no longer
+                  needed; grouped days are recognized through real production
+                  UI (method chips + colored grouped block headers). */}
               {/* =================================================================
                   [SESSION-PRESCRIPTION-SURFACE] PRESCRIPTION-FIRST COMPACT VIEW
                   Primary display: actual routine. Secondary: AI explanation.
@@ -1086,135 +935,11 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 </Button>
               </div>
 
-          {/* ==========================================================================
-              [PREVIEW-VISIBLE-PROBE] SESSION TRUTH CHIP BLOCK - DEAD CODE
-              probeActive is hard-locked to false, so this block never renders.
-              ========================================================================== */}
-          {probeActive && (
-            <div className="mb-4 p-3 bg-red-900/40 border-2 border-red-500 rounded font-mono text-[10px] space-y-1.5">
-              <div className="text-red-400 font-bold text-xs border-b border-red-500/30 pb-1 mb-2">
-                SESSION TRUTH PROBE (dev only)
-              </div>
-              
-              {/* Session Identity */}
-              <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-red-300/80">
-                <div>dayLabel:</div>
-                <div className="text-white">{session.dayLabel}</div>
-                
-                <div>dayNumber:</div>
-                <div className="text-white">{session.dayNumber}</div>
-                
-                <div>resolvedIdentity:</div>
-                <div className="text-white truncate">{(session as any).resolvedSessionIdentity || 'none'}</div>
-                
-                <div>session.id:</div>
-                <div className="text-white truncate">{(session as any).id || 'none'}</div>
-              </div>
-              
-              {/* Variant State */}
-              <div className="mt-2 pt-2 border-t border-red-500/30">
-                <div className="text-amber-400 font-semibold mb-1">Variant State</div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-amber-300/80">
-                  <div>selectedVariant:</div>
-                  <div className="text-white">{selectedVariant === null ? 'null (Full)' : selectedVariant}</div>
-                  
-                  <div>variantLabel:</div>
-                  <div className="text-white">{activeSessionView.variantLabel || 'Full Session'}</div>
-                  
-                  <div>duration:</div>
-                  <div className="text-white">{activeSessionView.estimatedMinutes} min</div>
-                  
-                  <div>isVariantSelected:</div>
-                  <div className="text-white">{activeSessionView.isVariantSelected ? 'YES' : 'NO'}</div>
-                  
-                  <div>exerciseSource:</div>
-                  <div className="text-white">{activeSessionView.isVariantSelected ? 'variant' : 'base session'}</div>
-                </div>
-              </div>
-              
-              {/* Style Metadata Truth */}
-              <div className="mt-2 pt-2 border-t border-red-500/30">
-                <div className="text-cyan-400 font-semibold mb-1">styleMetadata Truth</div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-cyan-300/80">
-                  <div>hasStyleMetadata:</div>
-                  <div className={sessionStyleMetadata ? 'text-green-400' : 'text-red-400'}>{sessionStyleMetadata ? 'YES' : 'NO'}</div>
-                  
-                  <div>styledGroups count:</div>
-                  <div className="text-white">{sessionStyleMetadata?.styledGroups?.length || 0}</div>
-                  
-                  <div>non-straight groups:</div>
-                  <div className={hasNonStraightGroups ? 'text-green-400 font-bold' : 'text-red-400'}>
-                    {sessionStyleMetadata?.styledGroups?.filter(g => g.groupType !== 'straight').length || 0}
-                  </div>
-                  
-                  <div>groupTypes:</div>
-                  <div className="text-white">
-                    {sessionStyleMetadata?.styledGroups?.map(g => g.groupType).join(', ') || 'none'}
-                  </div>
-                  
-                  <div>primaryStyle:</div>
-                  <div className="text-white">{sessionStyleMetadata?.primaryStyle || 'none'}</div>
-                  
-                  <div>appliedMethods:</div>
-                  <div className="text-white">{sessionStyleMetadata?.appliedMethods?.join(', ') || 'none'}</div>
-                </div>
-              </div>
-              
-              {/* Display Exercises Truth */}
-              <div className="mt-2 pt-2 border-t border-red-500/30">
-                <div className="text-purple-400 font-semibold mb-1">Display Exercises</div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-purple-300/80">
-                  <div>fullVisibleExercises:</div>
-                  <div className="text-white">{fullVisibleExercises.length}</div>
-                  
-                  <div>first 5 names:</div>
-                  <div className="text-white text-[9px]">{fullVisibleExercises.slice(0, 5).map(e => e.name).join(', ')}</div>
-                </div>
-              </div>
-              
-              {/* Grouped Exercise Names from Truth */}
-              <div className="mt-2 pt-2 border-t border-red-500/30">
-                <div className="text-green-400 font-semibold mb-1">Grouped Exercise Names (from styledGroups)</div>
-                <div className="text-green-300/80 text-[9px]">
-                  {sessionStyleMetadata?.styledGroups
-                    ?.filter(g => g.groupType !== 'straight')
-                    .flatMap(g => g.exercises?.map(e => e.name) || [])
-                    .join(', ') || 'none (all straight)'}
-                </div>
-              </div>
-              
-              {/* Render Decision */}
-              <div className="mt-2 pt-2 border-t border-red-500/30">
-                <div className="text-yellow-400 font-semibold mb-1">Render Decision</div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-yellow-300/80">
-                  <div>builderHasStyledGroups:</div>
-                  <div className={builderHasStyledGroups ? 'text-green-400' : 'text-red-400'}>{builderHasStyledGroups ? 'YES' : 'NO'}</div>
-                  
-                  <div>hasNonStraightGroups:</div>
-                  <div className={hasNonStraightGroups ? 'text-green-400' : 'text-red-400'}>{hasNonStraightGroups ? 'YES' : 'NO'}</div>
-                  
-                  <div>useGroupedRender:</div>
-                  <div className={hasNonStraightGroups ? 'text-green-400 font-bold' : 'text-amber-400'}>
-                    {hasNonStraightGroups ? 'GROUPED' : 'FLAT'}
-                  </div>
-                </div>
-              </div>
-              
-              {/* Final Verdict */}
-              <div className="mt-2 pt-2 border-t border-red-500/30">
-                <div className={`text-sm font-bold ${
-                  hasNonStraightGroups 
-                    ? 'text-green-400' 
-                    : 'text-blue-400'
-                }`}>
-                  {hasNonStraightGroups 
-                    ? 'GROUPED_TRUTH_EXISTS - UI SHOULD SHOW GROUPED BLOCKS'
-                    : 'DOCTRINE_CHOSE_FLAT - No non-straight groups in session truth'
-                  }
-                </div>
-              </div>
-            </div>
-          )}
+          {/* [REMOVED] SESSION TRUTH PROBE (dev only) dump. Debug-era diagnostic
+              panel that printed raw style-metadata, variant state, render
+              decisions, and verdict strings. No replacement UI is needed; the
+              grouped render contract already drives the production method chips
+              and grouped block headers below. */}
 
           {/* [TASK 4] Time Variants - Improved toggle behavior
               - Full Session = null or 0 (explicitly reset to full)
@@ -1630,9 +1355,6 @@ function MainExercisesRenderer({
   hasRenderableGroups,
   hasGroupedTruth,
 }: MainExercisesRendererProps) {
-  // [PROBES-HARD-DISABLED] See note above -- inner render-branch probe banner
-  // is retired to prevent debug text leakage into production. Flag is false.
-  const innerProbeActive = false as boolean
   // Get style metadata from session if available
   const styleMetadata = (session as AdaptiveSession & { styleMetadata?: SessionStyleMetadata }).styleMetadata
   
@@ -1670,198 +1392,22 @@ function MainExercisesRenderer({
     } : undefined,
   }
   
-  // ==========================================================================
-  // [DEV-TRUTH-PROBE] Compute explicit flat reason code
-  // ==========================================================================
-  type FlatReasonCode = 
-    | 'NO_STYLE_METADATA'
-    | 'NO_STYLED_GROUPS'
-    | 'ONLY_STRAIGHT_GROUPS'
-    | 'GROUPED_MATCHING_WOULD_FAIL'
-    | 'GROUPED_BRANCH_ACTIVE'
-  
-  const computeFlatReason = (): FlatReasonCode => {
-    if (!styleMetadata) return 'NO_STYLE_METADATA'
-    if (!styledGroups || styledGroups.length === 0) return 'NO_STYLED_GROUPS'
-    if (!hasNonStraightGroups) return 'ONLY_STRAIGHT_GROUPS'
-    if (useGroupedRender) return 'GROUPED_BRANCH_ACTIVE'
-    return 'GROUPED_MATCHING_WOULD_FAIL'
-  }
-  const flatReasonCode = computeFlatReason()
-  
-  // [DEV-TRUTH-PROBE] Compute grouped-vs-visible overlap
-  const nonStraightGroups = styledGroups.filter(g => g.groupType !== 'straight')
-  const groupedExerciseNamesFromTruth = nonStraightGroups.flatMap(g => g.exercises?.map(e => e.name) || [])
-  const displayExerciseNames = displayExercises.map(e => e.name)
-  const matchedGroupedNames = groupedExerciseNamesFromTruth.filter(name => 
-    displayExerciseNames.some(dn => dn.toLowerCase() === name.toLowerCase())
-  )
-  const missingGroupedNames = groupedExerciseNamesFromTruth.filter(name => 
-    !displayExerciseNames.some(dn => dn.toLowerCase() === name.toLowerCase())
-  )
-  const overlapScore = groupedExerciseNamesFromTruth.length > 0 
-    ? Math.round((matchedGroupedNames.length / groupedExerciseNamesFromTruth.length) * 100)
-    : 0
-  
-  // [DEV-TRUTH-PROBE] Doctrine verdict
-  const doctrineVerdict = nonStraightGroups.length > 0 && !useGroupedRender
-    ? 'GROUPED_TRUTH_EXISTS_BUT_UI_NOT_SHOWING_IT'
-    : nonStraightGroups.length === 0
-      ? 'DOCTRINE_APPEARS_TO_HAVE_CHOSEN_FLAT'
-      : 'GROUPED_RENDER_ACTIVE'
+  // [REMOVED] DEV-TRUTH-PROBE computations (flatReasonCode, nonStraightGroups,
+  // groupedExerciseNamesFromTruth, matchedGroupedNames, missingGroupedNames,
+  // overlapScore, doctrineVerdict) and the DevRenderBranchBanner component.
+  // These fed the retired debug banners and have no production consumer. The
+  // grouped render contract is already the single authoritative source of
+  // truth for grouped-vs-flat decisions below.
   
   // ==========================================================================
-  // [ALWAYS-VISIBLE-PROBE] RENDER BRANCH BANNER
-  // Visible when innerProbeActive is true (force or query param)
+  // [REMOVED] FORCE_GROUPED_RUNTIME_PROOF temporary dominant override.
+  // The yellow "GROUPED RUNTIME PROOF MODE ACTIVE" panel that previously
+  // replaced the entire exercise body for grouped-eligible cards has been
+  // deleted. Grouped-eligible sessions now fall through to the raw grouped
+  // fallback path (display-first, visible grouped structure) or the rich
+  // grouped path below, both of which produce the real production grouped
+  // card body with colored section headers + hydrated ExerciseRow members.
   // ==========================================================================
-  const DevRenderBranchBanner = () => {
-    if (!innerProbeActive) return null
-    
-    if (useGroupedRender) {
-      const firstNonStraightGroup = nonStraightGroups[0]
-      return (
-        <div className="mb-3 p-3 bg-green-900 border-2 border-green-400 rounded font-mono text-xs">
-          <div className="text-green-300 font-bold text-sm mb-2 flex items-center gap-2">
-            <span className="bg-green-500 text-white px-2 py-0.5 rounded text-xs">INNER BRANCH</span>
-            GROUPED CONTENT BRANCH ACTIVE
-          </div>
-          <div className="text-green-200/80 space-y-1">
-            <div>cardInstanceId: <span className="text-white">{cardInstanceId}</span></div>
-            <div>Session: Day {session.dayNumber} - {session.focus || session.focusLabel}</div>
-            <div>Grouped blocks: {nonStraightGroups.length}</div>
-            <div>First group type: {firstNonStraightGroup?.groupType}</div>
-            <div>First grouped exercises: {firstNonStraightGroup?.exercises?.map(e => e.name).join(', ')}</div>
-          </div>
-        </div>
-      )
-    }
-    
-    return (
-      <div className="mb-3 p-3 bg-amber-900 border-2 border-amber-400 rounded font-mono text-xs">
-        <div className="text-amber-300 font-bold text-sm mb-2 flex items-center gap-2">
-          <span className="bg-amber-500 text-white px-2 py-0.5 rounded text-xs">INNER BRANCH</span>
-          FLAT CONTENT BRANCH ACTIVE
-        </div>
-        <div className="text-amber-200/80 space-y-1">
-          <div>cardInstanceId: <span className="text-white">{cardInstanceId}</span></div>
-          <div>Flat reason: <span className="text-red-400 font-bold">{flatReasonCode}</span></div>
-          <div>styleMetadata exists: {styleMetadata ? 'YES' : 'NO'}</div>
-          <div>styledGroups count: {styledGroups.length}</div>
-          <div>Non-straight groups: {nonStraightGroups.length}</div>
-          <div>Overlap score: {overlapScore}% ({matchedGroupedNames.length}/{groupedExerciseNamesFromTruth.length})</div>
-          {missingGroupedNames.length > 0 && (
-            <div className="text-red-400">Missing from display: {missingGroupedNames.join(', ')}</div>
-          )}
-          <div className="mt-2 pt-2 border-t border-amber-400/30">
-            <span className={doctrineVerdict === 'DOCTRINE_APPEARS_TO_HAVE_CHOSEN_FLAT' ? 'text-blue-400' : 'text-red-400'}>
-              Verdict: {doctrineVerdict}
-            </span>
-          </div>
-        </div>
-      </div>
-    )
-  }
-  
-  // ==========================================================================
-  // [FORCE_GROUPED_RUNTIME_PROOF] TEMPORARY DOMINANT OVERRIDE
-  //
-  // When FORCE_GROUPED_RUNTIME_PROOF is true AND grouped truth exists upstream,
-  // this branch FULLY REPLACES the normal exercise body with an impossible-to-
-  // miss proof block. The override runs BEFORE the rich grouped path, the raw
-  // fallback path, and the flat path -- so if you can read this banner on the
-  // real Program card, grouped truth is definitively reaching the renderer.
-  //
-  // Flat sessions (hasGroupedTruth === false) fall through this branch and
-  // render normally via the flat path below.
-  // ==========================================================================
-  if (FORCE_GROUPED_RUNTIME_PROOF && hasGroupedTruth) {
-    const sessionLabel = `Day ${session.dayNumber}${session.focus || session.focusLabel ? ` — ${session.focus || session.focusLabel}` : ''}`
-    const rawBlocks = groupedDisplayModel.rawFallbackBlocks
-    const groupTypeTag = (gt: string) => {
-      if (gt === 'superset') return 'SUPERSET'
-      if (gt === 'circuit') return 'CIRCUIT'
-      if (gt === 'cluster') return 'CLUSTER SET'
-      if (gt === 'density_block' || gt === 'density') return 'DENSITY BLOCK'
-      return gt.toUpperCase()
-    }
-
-    return (
-      <div className="space-y-4">
-        <div className="rounded-lg border-4 border-yellow-400 bg-yellow-950 p-4 font-mono text-xs">
-          <div className="mb-3 text-center text-base font-extrabold tracking-wider text-yellow-300">
-            GROUPED RUNTIME PROOF MODE ACTIVE
-          </div>
-          <div className="mb-3 text-center text-sm font-bold text-yellow-100">
-            {sessionLabel}
-          </div>
-
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded border border-yellow-600/60 bg-yellow-900/40 p-3 text-yellow-100">
-            <div>sourceUsed:</div>
-            <div className="text-right font-bold text-white">{groupedDisplayModel.sourceUsed}</div>
-            <div>hasGroupedTruth:</div>
-            <div className="text-right font-bold text-white">{String(groupedDisplayModel.hasGroupedTruth)}</div>
-            <div>hasRichRenderableGroups:</div>
-            <div className="text-right font-bold text-white">{String(groupedDisplayModel.hasRichRenderableGroups)}</div>
-            <div>rawFallbackBlocks.length:</div>
-            <div className="text-right font-bold text-white">{rawBlocks.length}</div>
-            <div>renderBlocks.length:</div>
-            <div className="text-right font-bold text-white">{groupedDisplayModel.renderBlocks.length}</div>
-            <div>nonStraightGroupCount:</div>
-            <div className="text-right font-bold text-white">{groupedDisplayModel.nonStraightGroupCount}</div>
-            <div>totalGroupCount:</div>
-            <div className="text-right font-bold text-white">{groupedDisplayModel.totalGroupCount}</div>
-            <div>flatReason:</div>
-            <div className="text-right font-bold text-white">{groupedDisplayModel.flatReason ?? 'null'}</div>
-          </div>
-
-          {rawBlocks.length === 0 ? (
-            <div className="mt-4 rounded border-2 border-red-500 bg-red-950 p-3 text-red-200">
-              <div className="text-sm font-extrabold text-red-300">
-                GROUPED TRUTH EXISTS BUT RAW FALLBACK BLOCKS ARE EMPTY
-              </div>
-              <div className="mt-2 space-y-1">
-                <div>sourceUsed: <span className="font-bold text-white">{groupedDisplayModel.sourceUsed}</span></div>
-                <div>flatReason: <span className="font-bold text-white">{groupedDisplayModel.flatReason ?? 'null'}</span></div>
-                <div>totalGroupCount: <span className="font-bold text-white">{groupedDisplayModel.totalGroupCount}</span></div>
-                <div>nonStraightGroupCount: <span className="font-bold text-white">{groupedDisplayModel.nonStraightGroupCount}</span></div>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-4 space-y-3">
-              {rawBlocks.map((block, bIdx) => (
-                <div
-                  key={block.groupId || `proof-${bIdx}`}
-                  className="rounded border-2 border-yellow-500 bg-yellow-900/30 p-3"
-                >
-                  <div className="mb-2 text-sm font-extrabold tracking-wider text-yellow-300">
-                    [{groupTypeTag(block.groupType)} {String.fromCharCode(65 + bIdx)}]
-                  </div>
-                  <div className="mb-2 text-[11px] text-yellow-200/70">
-                    label: {block.label} · members: {block.members.length}
-                  </div>
-                  <ul className="space-y-1 pl-2">
-                    {block.members.map((m, mIdx) => (
-                      <li key={m.id || `${block.groupId}-${mIdx}`} className="text-yellow-50">
-                        <span className="mr-2 text-yellow-400">-</span>
-                        <span className="font-bold">{m.name || '(unnamed)'}</span>
-                        {m.prefix && (
-                          <span className="ml-2 text-[10px] text-yellow-400">[{m.prefix}]</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-3 text-center text-[10px] uppercase tracking-widest text-yellow-500/70">
-            FORCE_GROUPED_RUNTIME_PROOF = true · flip off in AdaptiveSessionCard.tsx to restore normal body
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   // ==========================================================================
   // [DISPLAY-FIRST-FALLBACK] RAW GROUPED FALLBACK PATH
@@ -1900,7 +1446,6 @@ function MainExercisesRenderer({
     let rawIdx = 0
     return (
       <div className="space-y-4">
-        <DevRenderBranchBanner />
         {fallbackBlocks.map((block, bIdx) => {
           const colors = getGroupTypeColors(block.groupType)
           const icon = getGroupTypeIcon(block.groupType)
@@ -2025,7 +1570,6 @@ function MainExercisesRenderer({
     
     return (
       <div className="space-y-4">
-        <DevRenderBranchBanner />
         {renderCategorySection(skillExercises, 'skill')}
         {renderCategorySection(strengthExercises, 'strength')}
         {renderCategorySection(accessoryExercises, 'accessory')}
@@ -2105,7 +1649,6 @@ function MainExercisesRenderer({
   
   return (
     <div className="space-y-4">
-      <DevRenderBranchBanner />
       {renderBlocks.map((block, blockIdx) => {
         // [GROUPED-RENDER-CONTRACT] Handle ungrouped exercise -- hydrate the
         // row from exerciseDataMap (pure enrichment; NOT block ownership).

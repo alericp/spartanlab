@@ -1530,43 +1530,49 @@ function MainExercisesRenderer({
   //                                   (never this category layout)
   // ==========================================================================
   if (!useGroupedRender && !hasGroupedTruth) {
-    // Group exercises by category for visual organization
-    const skillExercises = displayExercises.filter(e => e.category === 'skill')
-    const strengthExercises = displayExercises.filter(e => e.category === 'strength')
-    const accessoryExercises = displayExercises.filter(e => e.category === 'accessory')
-    const otherExercises = displayExercises.filter(e => !['skill', 'strength', 'accessory'].includes(e.category || ''))
-    
-    let globalIdx = 0
-    
-    // [TRUTH-ENFORCEMENT] Use centralized category contract instead of hardcoded values
-    const renderCategorySection = (
-      exercises: typeof displayExercises, 
-      category: string
-    ) => {
-      if (exercises.length === 0) return null
-      // Get centralized contract - components are renderers, not reasoners
-      const contract = getCategoryDisplayContract(category, sessionEvidence)
-      return (
-        <div className="space-y-2">
-          {/* Category header from centralized contract */}
-          <div className="flex items-center gap-2 pt-1">
-            <span className={`text-[10px] uppercase tracking-wider font-semibold ${contract.color}`}>
-              {contract.label}
-            </span>
-            {contract.description && (
-              <span className="text-[10px] text-[#6A6A6A]">
-                {contract.description}
-              </span>
-            )}
-            <div className="flex-1 h-px bg-[#2A2A2A]" />
-          </div>
-          {exercises.map((exercise) => {
-            globalIdx++
-            return (
+    // ==========================================================================
+    // [CANONICAL-ORDER-CONTRACT] Flat render path.
+    //
+    // Previously this branch bucketed exercises by category (skill / strength /
+    // accessory / other) and emitted them in that fixed order. That quietly
+    // reordered the numbered workout away from canonical session order, so the
+    // Program card could show a different sequence than Start Workout. The
+    // renderer now walks displayExercises in canonical order and only emits a
+    // category header when the category changes between adjacent rows, so the
+    // visual "sections" remain but the exercise sequence matches the order the
+    // live workout machine consumes.
+    // ==========================================================================
+    const normalizeCat = (cat?: string): string => {
+      if (!cat) return 'other'
+      return ['skill', 'strength', 'accessory'].includes(cat) ? cat : 'other'
+    }
+
+    let lastCat: string | null = null
+    return (
+      <div className="space-y-4">
+        {displayExercises.map((exercise, idx) => {
+          const thisCat = normalizeCat(exercise.category)
+          const emitHeader = thisCat !== lastCat
+          lastCat = thisCat
+          const contract = emitHeader ? getCategoryDisplayContract(thisCat, sessionEvidence) : null
+          return (
+            <div key={exercise.id} className="space-y-2">
+              {emitHeader && contract && (
+                <div className="flex items-center gap-2 pt-1">
+                  <span className={`text-[10px] uppercase tracking-wider font-semibold ${contract.color}`}>
+                    {contract.label}
+                  </span>
+                  {contract.description && (
+                    <span className="text-[10px] text-[#6A6A6A]">
+                      {contract.description}
+                    </span>
+                  )}
+                  <div className="flex-1 h-px bg-[#2A2A2A]" />
+                </div>
+              )}
               <ExerciseRow
-                key={exercise.id}
                 exercise={exercise}
-                index={globalIdx}
+                index={idx + 1}
                 sessionId={sessionId}
                 isSkipped={skippedExercises.has(exercise.id)}
                 adjustedName={adjustedExercises.get(exercise.id)}
@@ -1577,18 +1583,9 @@ function MainExercisesRenderer({
                 onSkip={onSkip}
                 onProgressionAdjust={onProgressionAdjust}
               />
-            )
-          })}
-        </div>
-      )
-    }
-    
-    return (
-      <div className="space-y-4">
-        {renderCategorySection(skillExercises, 'skill')}
-        {renderCategorySection(strengthExercises, 'strength')}
-        {renderCategorySection(accessoryExercises, 'accessory')}
-        {renderCategorySection(otherExercises, 'other')}
+            </div>
+          )
+        })}
       </div>
     )
   }

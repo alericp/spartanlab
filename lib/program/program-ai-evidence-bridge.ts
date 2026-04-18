@@ -1033,16 +1033,23 @@ export function buildFullSessionRoutineSurface(
   // Use variant if provided, otherwise use full session
   if (variant?.selection) {
     // ==========================================================================
-    // VARIANT MODE: Use variant's main selection + PRESERVE session's non-main exercises
-    // FIX: Variant selection only contains main/warmup/cooldown - we must still include
-    // support/accessory/core/mobility from the full session to avoid losing them
+    // [CANONICAL-ORDER-CONTRACT] VARIANT MODE
+    //
+    // AUTHORITATIVE: variant.selection.main is THE complete main-workout list for
+    // this variant. It was built by lib/session-compression-engine.ts and already
+    // includes whatever support/accessory/core the variant intentionally kept
+    // (see compressMain STEP 2/4/5). The bridge MUST NOT re-expand it.
+    //
+    // Previously this branch appended every session.exercise that was absent
+    // from variant.selection.main ("preserve support/accessory/core"). That
+    // silently pulled 45/30 variants back toward Full, making the Program card
+    // show a longer list than Start Workout (which consumes variant.selection.main
+    // directly via app/(app)/workout/session/page.tsx). The re-expansion has
+    // been removed: variant mode now emits ONLY variant.selection.main for the
+    // numbered main workout, preserving variant compression end-to-end.
     // ==========================================================================
     const sel = variant.selection
-    
-    // Track IDs in variant main to avoid duplicates
-    const variantMainIds = new Set(sel.main.map(m => m.exercise.id))
-    const variantMainNames = new Set(sel.main.map(m => m.exercise.name.toLowerCase()))
-    
+
     // Warmup from variant
     if (sel.warmup?.length) {
       sel.warmup.forEach(w => {
@@ -1106,41 +1113,11 @@ export function buildFullSessionRoutineSurface(
       familyCounts[family]++
     })
     
-    // ==========================================================================
-    // CRITICAL FIX: Include session exercises NOT in variant main
-    // This preserves support/accessory/core/mobility exercises that variant doesn't own
-    // ==========================================================================
-    session.exercises?.forEach((ex, idx) => {
-      // Skip if already in variant main (by ID or name)
-      if (variantMainIds.has(ex.id) || variantMainNames.has(ex.name.toLowerCase())) {
-        return
-      }
-      
-      const family = determineFamily(ex.category, ex.prescriptionIntent, ex.selectionReason)
-      const loadCue = ex.loading || ex.assistanceLevel || null
-      const restCue = ex.rest || null
-      
-      routineItems.push({
-        id: ex.id,
-        displayName: ex.name,
-        family,
-        prescriptionLine: buildPrescription(ex),
-        loadCue,
-        restCue,
-        source: ex.selectionReason ? 'authoritative' : 'fallback_minimal',
-        // [GROUPED-TRUTH-CONTRACT] Direct preservation -- ex IS the
-        // authoritative session source for this carried-non-variant path,
-        // so no lookup is needed; copy grouped fields straight through.
-        sourceExerciseId: ex.id,
-        sourceExerciseName: ex.name,
-        sourceOrder: idx,
-        blockId: ex.blockId,
-        method: ex.method,
-        methodLabel: ex.methodLabel,
-      })
-      familyCounts[family]++
-    })
-    
+    // [CANONICAL-ORDER-CONTRACT] NOTE: No carry-forward of non-variant
+    // session.exercises here. variant.selection.main is the authoritative
+    // main-workout contract; anything the variant dropped stays dropped so
+    // the Program card and Start Workout consume the same ordered list.
+
     // Cooldown from variant
     if (sel.cooldown?.length) {
       sel.cooldown.forEach(c => {
@@ -1296,25 +1273,11 @@ export function buildFullSessionRoutineSurface(
 }
 
 // =============================================================================
-// SESSION MAIN PREVIEW SURFACE - Display-priority reordering for compact cards
+// SESSION MAIN PREVIEW SURFACE - Canonical-order preview + warmup/cooldown counts
 // =============================================================================
 
-/** Priority order for display (lower = appears first in compact preview) */
-const FAMILY_DISPLAY_PRIORITY: Record<RoutineItemFamily, number> = {
-  primary: 1,
-  secondary: 2,
-  support: 3,
-  accessory: 4,
-  core: 5,
-  mobility: 6,
-  finisher: 7,
-  other: 8,
-  warmup: 9,
-  cooldown: 10,
-}
-
 export interface SessionMainPreviewSurface {
-  /** Reordered items for compact preview display (main work first) */
+  /** Main items in CANONICAL session order (warmup/cooldown excluded) */
   previewItems: RoutineItem[]
   /** Count of main workout items (non-warmup/cooldown) */
   mainExerciseCount: number
@@ -1332,31 +1295,34 @@ export interface SessionMainPreviewSurface {
 }
 
 /**
- * Build DISPLAY-PRIORITY preview surface from full routine.
- * This reorders items so main workout appears first in compact card preview.
- * Warmup/cooldown are demoted to secondary summary, not lead rows.
- * 
+ * Build preview surface from the full routine while preserving CANONICAL
+ * session order. Only warmup/cooldown are filtered out of the numbered
+ * preview - no family/category reordering occurs.
+ *
+ * [CANONICAL-ORDER-CONTRACT] Previously this function sorted main items by
+ * FAMILY_DISPLAY_PRIORITY (primary → secondary → support → accessory ...),
+ * which produced a different exercise order in card previews than in the
+ * live Start Workout screen (which walks session.exercises / variant.main
+ * in canonical order). The sort has been removed. Preview now preserves the
+ * exact order the bridge wrote into fullRoutine.routineItems, which is the
+ * same authoritative order Start Workout consumes.
+ *
  * @param fullRoutine - The authoritative full routine surface
  */
 export function buildSessionMainPreviewSurface(
   fullRoutine: FullSessionRoutineSurface
 ): SessionMainPreviewSurface {
-  // Separate warmup/cooldown from main workout items
+  // Separate warmup/cooldown from main workout items - preserve original order
   const warmupItems = fullRoutine.routineItems.filter(r => r.family === 'warmup')
   const cooldownItems = fullRoutine.routineItems.filter(r => r.family === 'cooldown')
   const mainItems = fullRoutine.routineItems.filter(r => r.family !== 'warmup' && r.family !== 'cooldown')
-  
-  // Sort main items by display priority
-  const sortedMainItems = [...mainItems].sort((a, b) => {
-    return FAMILY_DISPLAY_PRIORITY[a.family] - FAMILY_DISPLAY_PRIORITY[b.family]
-  })
-  
-  // Preview items = main items first (warmup/cooldown excluded from numbered list)
-  // If no main items exist, fall back to showing warmup/cooldown
-  const previewItems = sortedMainItems.length > 0 
-    ? sortedMainItems 
+
+  // Preview items = main items in CANONICAL order (no family-priority sort).
+  // If no main items exist, fall back to showing warmup/cooldown.
+  const previewItems = mainItems.length > 0
+    ? mainItems
     : [...warmupItems, ...cooldownItems]
-  
+
   return {
     previewItems,
     mainExerciseCount: mainItems.length,

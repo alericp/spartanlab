@@ -411,10 +411,27 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
  * -- into the adapter so block set and ordering are owned by the same contract
  * that decides grouped-vs-flat. The renderer becomes a pure consumer.
  */
+// [GROUPED-RENDER-MATCH] Normalize a name for member <-> exercise matching:
+// lowercase, trim, strip punctuation, collapse whitespace. Matches the key used
+// by `buildFullVisibleRoutineExercises` so "Pull-Ups", "Pull Ups", and
+// "pull  ups" all resolve to the same group. Without this, trivial punctuation
+// drift between styledGroups member names and session.exercises names silently
+// pushes groups to the end of the render list via the rescue pass, which makes
+// the visible body look flat even though grouped truth exists.
+function normalizeNameKey(s: string | undefined): string {
+  return (s || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function findGroupForExerciseInput(
   ex: ExerciseInput,
   groups: DisplayGroup[]
 ): DisplayGroup | null {
+  const exNorm = normalizeNameKey(ex.name)
   for (const group of groups) {
     if (group.groupType === 'straight') continue
     // blockId is the most reliable signal -- the builder writes the same id on
@@ -424,6 +441,10 @@ function findGroupForExerciseInput(
     if (ex.id && group.exercises.some(m => m.id === ex.id)) return group
     const lower = (ex.name || '').toLowerCase()
     if (lower && group.exercises.some(m => m.name.toLowerCase() === lower)) return group
+    // [GROUPED-RENDER-MATCH] Punctuation/whitespace-insensitive fallback so
+    // "Pull-Ups" matches "Pull Ups" matches "pull ups". Fires only when the
+    // exact lowercased equality already failed, so it cannot over-match.
+    if (exNorm && group.exercises.some(m => normalizeNameKey(m.name) === exNorm)) return group
   }
   return null
 }
@@ -438,6 +459,10 @@ function buildRenderBlocks(
 
   const keyId = (id: string) => `id:${id}`
   const keyName = (name: string) => `name:${name.toLowerCase()}`
+  // [GROUPED-RENDER-MATCH] Normalized-name key mirrors findGroupForExerciseInput
+  // so duplicate-identity drift ("Pull-Ups" vs "Pull Ups") does not double-emit
+  // a group member as a loose row AFTER the group already rendered it.
+  const keyNorm = (name: string) => `norm:${normalizeNameKey(name)}`
 
   for (const ex of exercises) {
     const group = findGroupForExerciseInput(ex, groups)
@@ -449,20 +474,32 @@ function buildRenderBlocks(
         // of the same exercise is not re-emitted as a loose row.
         for (const m of group.exercises) {
           if (m.id) consumedKeys.add(keyId(m.id))
-          if (m.name) consumedKeys.add(keyName(m.name))
+          if (m.name) {
+            consumedKeys.add(keyName(m.name))
+            consumedKeys.add(keyNorm(m.name))
+          }
         }
       }
       if (ex.id) consumedKeys.add(keyId(ex.id))
-      if (ex.name) consumedKeys.add(keyName(ex.name))
+      if (ex.name) {
+        consumedKeys.add(keyName(ex.name))
+        consumedKeys.add(keyNorm(ex.name))
+      }
       continue
     }
     // Ungrouped: emit at canonical position unless already consumed by a group.
     const idK = ex.id ? keyId(ex.id) : ''
     const nameK = ex.name ? keyName(ex.name) : ''
-    if ((idK && consumedKeys.has(idK)) || (nameK && consumedKeys.has(nameK))) continue
+    const normK = ex.name ? keyNorm(ex.name) : ''
+    if (
+      (idK && consumedKeys.has(idK)) ||
+      (nameK && consumedKeys.has(nameK)) ||
+      (normK && consumedKeys.has(normK))
+    ) continue
     blocks.push({ type: 'exercise', exerciseId: ex.id, exerciseName: ex.name })
     if (idK) consumedKeys.add(idK)
     if (nameK) consumedKeys.add(nameK)
+    if (normK) consumedKeys.add(normK)
   }
 
   // [GROUPED-TRUTH-RESCUE] Any non-straight group whose members never matched

@@ -502,18 +502,36 @@ function buildRenderBlocks(
     if (normK) consumedKeys.add(normK)
   }
 
-  // [GROUPED-TRUTH-RESCUE] Any non-straight group whose members never matched
-  // any exercise by blockId/id/name is appended at the end. This preserves the
-  // previous rescue behavior that lived inside MainExercisesRenderer, but now
-  // it's owned by the contract so the renderer cannot disagree with it.
+  // [GROUPED-TRUTH-RESCUE-PREPEND] Any non-straight group whose members never
+  // matched any exercise by blockId/id/name is PREPENDED to the top of the
+  // render list (not appended to the end).
+  //
+  // Why this matters for visible display:
+  // Previously these groups were appended after all standalone-exercise blocks.
+  // When upstream group/member identity drifts (e.g. variant rewrites exercise
+  // ids, builder writes styledGroup.id = 'styled-0' while session.exercises
+  // carries a different blockId, or names are renamed between builder passes),
+  // EVERY exercise fails inline matching -- and the card body reads as:
+  //     [standalone row 1] [standalone row 2] ... [standalone row N]
+  //     [Superset header at very bottom with minimal text rows]
+  // That is visually indistinguishable from a flat card for the user even
+  // though grouped truth is present.
+  //
+  // Prepending makes rescued groups the FIRST visible element, which is what
+  // "grouped day" should look like. The exercises that belong to those groups
+  // still render as standalone rows below (since identity match failed) --
+  // that's honest: we couldn't hydrate them into the group, so they show as
+  // separate rows, but the grouped structure is visibly acknowledged at the
+  // top of the card.
+  const rescued: RenderBlock[] = []
   for (const group of groups) {
     if (group.groupType === 'straight') continue
     if (emittedGroupIds.has(group.id)) continue
-    blocks.push({ type: 'group', group })
+    rescued.push({ type: 'group', group })
     emittedGroupIds.add(group.id)
   }
-
-  return blocks
+  if (rescued.length === 0) return blocks
+  return [...rescued, ...blocks]
 }
 
 /**

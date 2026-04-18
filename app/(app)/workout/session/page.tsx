@@ -698,27 +698,130 @@ function WorkoutSessionContent() {
             originalExerciseCount: result.session.exercises.length,
             variantExerciseCount: variant.selection.main.length,
           })
-          
-          // Map variant selection to exercises format
-          const variantExercises = variant.selection.main.map((sel, idx) => ({
-            id: `variant-${variantIndex}-${idx}`,
-            name: sel.name,
-            category: sel.category || 'general',
-            sets: sel.sets,
-            repsOrTime: sel.repsOrTime,
-            note: sel.note || '',
-            isOverrideable: true,
-            selectionReason: sel.selectionReason || '',
-            targetRPE: sel.targetRPE,
-            restSeconds: sel.restSeconds,
-            wasAdapted: sel.wasAdapted,
-            coachingMeta: sel.coachingMeta,
-          }))
-          
+
+          // ===================================================================
+          // [SESSION-TRUTH-UNITY] Preserve authoritative exercise identity.
+          //
+          // Previously this branch synthesized new IDs (`variant-${i}-${idx}`)
+          // and dropped blockId/method/methodLabel/prescribedLoad, so the live
+          // runner received a flattened variant that no longer matched the
+          // Program card (which uses `variant.selection.main[i].exercise.id`,
+          // the original id, and the bridge's lookup against session.exercises
+          // to preserve grouped identity). The two surfaces consumed different
+          // session truths, which broke order parity AND stripped grouped
+          // execution in 45/30 mode.
+          //
+          // Now: look up each variant.selection.main[i] against the original
+          // result.session.exercises by id and normalized name, carry forward
+          // the matched original exercise, and overlay variant-specific
+          // prescription fields (sets / repsOrTime / targetRPE / restSeconds
+          // / note / selectionReason / wasAdapted / coachingMeta). Original
+          // id, blockId, method, methodLabel, prescribedLoad, and category
+          // survive intact so grouped execution plan derivation in
+          // StreamlinedWorkoutSession matches what the Program card rendered.
+          // ===================================================================
+          const normKey = (s: string): string =>
+            String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+
+          const originalById = new Map<string, typeof result.session.exercises[number]>()
+          const originalByName = new Map<string, typeof result.session.exercises[number]>()
+          for (const ex of result.session.exercises) {
+            if (ex?.id) originalById.set(ex.id, ex)
+            if (ex?.name) originalByName.set(normKey(ex.name), ex)
+          }
+
+          const variantExercises = variant.selection.main.map((sel, idx) => {
+            const selExId = sel.exercise?.id
+            const selExName = sel.exercise?.name || sel.name
+            const matched =
+              (selExId && originalById.get(selExId)) ||
+              (selExName && originalByName.get(normKey(selExName))) ||
+              null
+
+            if (!matched) {
+              console.log('[SESSION-TRUTH-UNITY] No original match for variant selection', {
+                variantIndex,
+                idx,
+                selExId,
+                selExName,
+              })
+            }
+
+            // Start from original exercise truth (preserves id, blockId,
+            // method, methodLabel, prescribedLoad, category, source, etc.),
+            // then overlay variant-specific prescription fields. If no match
+            // (variant introduced a new item), fall back to a minimal shape
+            // using the variant id so at least one identity survives.
+            const base = matched ?? {
+              id: selExId || `variant-${variantIndex}-${idx}`,
+              name: selExName,
+              category: sel.category || 'general',
+              sets: sel.sets,
+              repsOrTime: sel.repsOrTime,
+              note: sel.note || '',
+              isOverrideable: true,
+              selectionReason: sel.selectionReason || '',
+            }
+
+            return {
+              ...base,
+              // Overlay variant-specific prescription. These fields are what
+              // the variant actually compressed/adjusted.
+              sets: sel.sets ?? base.sets,
+              repsOrTime: sel.repsOrTime ?? base.repsOrTime,
+              note: sel.note ?? base.note,
+              selectionReason: sel.selectionReason ?? base.selectionReason,
+              targetRPE: sel.targetRPE ?? (base as { targetRPE?: unknown }).targetRPE,
+              restSeconds: sel.restSeconds ?? (base as { restSeconds?: unknown }).restSeconds,
+              wasAdapted: sel.wasAdapted ?? (base as { wasAdapted?: unknown }).wasAdapted,
+              coachingMeta: sel.coachingMeta ?? (base as { coachingMeta?: unknown }).coachingMeta,
+            }
+          })
+
+          // ===================================================================
+          // [SESSION-TRUTH-UNITY] Prune styleMetadata.styledGroups so runtime
+          // grouped-plan derivation only references exercises present in the
+          // selected variant. Without this, a superset whose second member
+          // was dropped by compression would still tell StreamlinedWorkoutSession
+          // to execute both members (it reads groups.exercises, not the
+          // exercise list), producing an execution that disagrees with the
+          // Program card and the variant itself.
+          // ===================================================================
+          let prunedStyleMetadata = result.session.styleMetadata
+          if (result.session.styleMetadata?.styledGroups) {
+            const survivingIds = new Set(variantExercises.map((e) => e.id))
+            const survivingNames = new Set(variantExercises.map((e) => normKey(e.name)))
+            const prunedGroups = result.session.styleMetadata.styledGroups
+              .map((g) => {
+                const keptMembers = g.exercises.filter(
+                  (m) => survivingIds.has(m.id) || survivingNames.has(normKey(m.name))
+                )
+                return { ...g, exercises: keptMembers }
+              })
+              // Drop groups that lost too many members to be a real group
+              .filter((g) => {
+                if (g.groupType === 'straight') return g.exercises.length >= 1
+                // supersets/circuits need >= 2 to still be that shape
+                return g.exercises.length >= 2
+              })
+
+            prunedStyleMetadata = {
+              ...result.session.styleMetadata,
+              styledGroups: prunedGroups,
+            }
+
+            console.log('[SESSION-TRUTH-UNITY] Pruned styledGroups for variant', {
+              variantIndex,
+              originalGroupCount: result.session.styleMetadata.styledGroups.length,
+              prunedGroupCount: prunedGroups.length,
+            })
+          }
+
           finalSession = {
             ...result.session,
             exercises: variantExercises,
             estimatedMinutes: variant.duration,
+            styleMetadata: prunedStyleMetadata,
           }
         }
       }

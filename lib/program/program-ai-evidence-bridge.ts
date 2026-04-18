@@ -2098,7 +2098,19 @@ export function buildFullVisibleRoutineExercises(
     (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
 
   const sessionExerciseMap = new Map<string, typeof sessionExercises[0]>()
-  sessionExercises.forEach(e => {
+  // [GROUPED-TRUTH-PROPAGATION] POSITIONAL INDEX. The bridge preserves
+  // `sourceOrder` (canonical index in session.exercises[]) onto RoutineItem.
+  // When id-based and name-based lookups both miss (e.g. aggressive variant
+  // rename rewrites the id AND the name so neither raw/lower/normalized key
+  // resolves), this positional index is the last-resort exact identity
+  // bridge. Without it, sessionEx falls through to undefined and we silently
+  // lose access to the authoritative session exercise -- which breaks the
+  // legacy fallback for blockId/method/methodLabel (item.blockId ?? sessionEx?.blockId)
+  // and also drops category/sets/reps hydration. Indexing by position mirrors
+  // how the bridge wrote sourceOrder: idx === session.exercises[idx].
+  const sessionExerciseByOrder = new Map<number, typeof sessionExercises[0]>()
+  sessionExercises.forEach((e, idx) => {
+    sessionExerciseByOrder.set(idx, e)
     if (e.id) sessionExerciseMap.set(e.id, e)
     if (e.name) {
       sessionExerciseMap.set(e.name.toLowerCase(), e)
@@ -2141,7 +2153,14 @@ export function buildFullVisibleRoutineExercises(
       (item.sourceExerciseId && sessionExerciseMap.get(item.sourceExerciseId)) ||
       sessionExerciseMap.get(item.id) ||
       sessionExerciseMap.get(item.displayName.toLowerCase()) ||
-      sessionExerciseMap.get(normalizeExerciseKey(item.displayName))
+      sessionExerciseMap.get(normalizeExerciseKey(item.displayName)) ||
+      // [GROUPED-TRUTH-PROPAGATION] Last-resort positional bridge. When
+      // variant rename drift erased id AND name AND normalized name, the
+      // canonical session-exercise position (written by the bridge at
+      // sourceOrder) is the only surviving identity signal. This preserves
+      // category/sets/reps hydration AND the legacy-fallback grouped
+      // carry (sessionEx?.blockId / method / methodLabel) used below.
+      (typeof item.sourceOrder === 'number' ? sessionExerciseByOrder.get(item.sourceOrder) : undefined)
     
     // Build category from family
     const category = item.family === 'primary' ? 'skill'

@@ -404,82 +404,189 @@ function compressMain(
     })),
   })
   
+  // ==========================================================================
+  // [VARIANT-DISTINCTNESS-AUTHORITY]
+  // Root-cause fix: prior light/moderate/heavy branches only dropped 0-1
+  // exercise and cut ~1 set, so Full/45/30 produced nearly identical set
+  // totals. This is the exact stage where variant truth diverged from
+  // declared minutes. We now enforce explicit target EXERCISE counts per
+  // level AND meaningful SET cuts per level, and we treat grouped blocks
+  // (superset/circuit/density/cluster) as atomic units so a variant never
+  // emits a half-pair (which downstream group adapters drop to flat rows).
+  // ==========================================================================
+  const fullCount = main.length
+  let targetCount: number
+  let setCut: number              // subtracted from non-top-2 exercises
+  let topTwoSetCut: number        // subtracted from top-2 spine exercises
+  let setFloor: number            // minimum sets after cut
+  let topTwoSetFloor: number      // minimum sets for top-2 spine
   if (level === 'light') {
-    // [VARIANT-REALISM-LOCK] For light compression (e.g. 45-min derived from
-    // a 55-60 min Full), preserve the ORIGINAL session order so the variant
-    // reads as a trimmed version of Full, not a reshuffled workout.
-    //
-    // [VARIANT-VISIBLE-DIFFERENCE-LOCK] Previously the 45-min variant kept
-    // EVERY exercise and only reduced sets on a few low-priority rows. With
-    // typical sessions (6-7 exercises, 2-4 sets each), that made Full and
-    // 45 look practically identical on the Program screen -- the classic
-    // "fake variant" symptom. We now drop the SINGLE lowest-priority
-    // non-skill accessory in addition to the set reduction, which gives 45
-    // a real, visible burden difference while still preserving the main
-    // skill/strength spine and all grouped pair adjacency.
-    //
-    // Grouped truth survival: before dropping, we check that the
-    // lowest-priority candidate is NOT a member of a non-straight grouped
-    // block (blockId+method !== 'straight'). Dropping one superset member
-    // would break the pair; we skip that exercise and look at the next.
-    // This keeps A1/A2 adjacency intact across the variant.
-    const sortedAsc = scoredExercises
-      .slice()
-      .sort((a, b) => a.identityScore - b.identityScore)
-    const isGroupedMember = (e: SelectedExercise): boolean => {
-      const ex = e.exercise as unknown as { blockId?: string; method?: string }
-      return !!ex.blockId && !!ex.method && ex.method !== 'straight'
-    }
-    const dropCandidate = sortedAsc.find(s =>
-      s.exercise.exercise.category !== 'skill' &&
-      !isGroupedMember(s.exercise)
-    )
-    const dropId = (main.length >= 4 && dropCandidate) ? dropCandidate.exercise.exercise.id : null
-    // Top-N (by score, after drop) keep their full sets; everything else
-    // loses one set. Top-2 are the highest-priority spine; they stay rich.
-    const keepFullSetsIds = new Set(
-      scoredExercises
-        .slice()
-        .sort((a, b) => b.identityScore - a.identityScore)
-        .slice(0, 2)
-        .map(s => s.exercise.exercise.id)
-    )
-    const kept = dropId
-      ? main.filter(e => e.exercise.id !== dropId)
-      : main
-    console.log('[variant-realism-lock-light]', {
-      originalCount: main.length,
-      keptCount: kept.length,
-      droppedExerciseId: dropId,
-      droppedExerciseName: dropCandidate?.exercise.exercise.name ?? null,
-      keepFullSets: Array.from(keepFullSetsIds),
-    })
-    return kept.map(e => {
-      if (keepFullSetsIds.has(e.exercise.id)) return { ...e }
-      return { ...e, sets: Math.max(2, e.sets - 1) }
-    })
+    // 45-min from ~55-60 Full: keep ~70% of exercises, trim one set off
+    // non-spine rows. Top-2 spine stays full.
+    targetCount = Math.max(4, Math.ceil(fullCount * 0.70))
+    setCut = 1
+    topTwoSetCut = 0
+    setFloor = 2
+    topTwoSetFloor = 3
+  } else if (level === 'moderate') {
+    // 30-min from ~55-60 Full: keep ~55% of exercises, cut two sets off
+    // non-spine rows, one set off top-2. This creates a visible burden
+    // delta of ~8-10 working sets vs Full.
+    targetCount = Math.max(3, Math.ceil(fullCount * 0.55))
+    setCut = 2
+    topTwoSetCut = 1
+    setFloor = 2
+    topTwoSetFloor = 3
+  } else {
+    // Heavy (20-25 min or very short): keep ~40%, aggressive set cut.
+    targetCount = Math.max(3, Math.ceil(fullCount * 0.40))
+    setCut = 2
+    topTwoSetCut = 1
+    setFloor = 2
+    topTwoSetFloor = 3
   }
-  
-  if (level === 'moderate') {
-    // [VARIANT-REALISM-LOCK] Pick which exercises to keep by identity score,
-    // but render them back in the ORIGINAL session order. This keeps the
-    // compressed variant structurally recognizable as a trimmed version of
-    // Full (same flow, fewer slots) instead of a re-sorted list that looks
-    // like a different workout.
-    const sortedByScore = scoredExercises
+  // Safety: never inflate target above original count
+  if (targetCount > fullCount) targetCount = fullCount
+  // Always drop at least one exercise when compressing so the user can
+  // feel the difference from Full.
+  if (targetCount === fullCount && fullCount > 3) targetCount = fullCount - 1
+
+  // ==========================================================================
+  // GROUPED-BLOCK AWARE UNIT SELECTION
+  // Build "units": each straight exercise = 1 unit; each grouped block
+  // (same blockId with non-straight method) = 1 atomic unit (all members
+  // kept together, or all dropped together). This prevents half-pair
+  // supersets from appearing in 45/30 variants.
+  // ==========================================================================
+  type Unit = {
+    id: string
+    members: SelectedExercise[]
+    score: number
+    isGroup: boolean
+  }
+  const blockIdOf = (e: SelectedExercise): string | null => {
+    const ex = e.exercise as unknown as { blockId?: string; method?: string }
+    if (ex.blockId && ex.method && ex.method !== 'straight') return ex.blockId
+    return null
+  }
+  const scoreById = new Map(
+    scoredExercises.map(s => [s.exercise.exercise.id, s.identityScore])
+  )
+  const blockMap = new Map<string, SelectedExercise[]>()
+  for (const e of main) {
+    const bid = blockIdOf(e)
+    if (bid) {
+      const arr = blockMap.get(bid) || []
+      arr.push(e)
+      blockMap.set(bid, arr)
+    }
+  }
+  const units: Unit[] = []
+  const seen = new Set<string>()
+  for (const e of main) {
+    if (seen.has(e.exercise.id)) continue
+    const bid = blockIdOf(e)
+    if (bid && blockMap.has(bid)) {
+      const members = blockMap.get(bid)!
+      const score = Math.max(...members.map(m => scoreById.get(m.exercise.id) ?? 0))
+      units.push({ id: bid, members, score, isGroup: true })
+      members.forEach(m => seen.add(m.exercise.id))
+    } else {
+      units.push({
+        id: e.exercise.id,
+        members: [e],
+        score: scoreById.get(e.exercise.id) ?? 0,
+        isGroup: false,
+      })
+      seen.add(e.exercise.id)
+    }
+  }
+
+  // Greedy pick by score until we hit targetCount exercises. Groups are
+  // kept whole when they fit; skipped otherwise so an individual exercise
+  // can take their slot (this is the honest-degrade rule -- a group either
+  // survives intact or doesn't survive at all).
+  units.sort((a, b) => b.score - a.score)
+  const keptExerciseIds = new Set<string>()
+  let kept = 0
+  for (const unit of units) {
+    if (kept >= targetCount) break
+    const remaining = targetCount - kept
+    if (unit.isGroup) {
+      // Only admit the group if ALL members fit. Partial groups are banned.
+      if (unit.members.length <= remaining) {
+        unit.members.forEach(m => keptExerciseIds.add(m.exercise.id))
+        kept += unit.members.length
+      }
+      // else: skip this group, try next unit
+    } else {
+      keptExerciseIds.add(unit.id)
+      kept += 1
+    }
+  }
+  // Safety net: if greedy under-filled (rare: big groups + tiny targetCount),
+  // force the highest-score remaining units in until we reach the floor of 3.
+  if (kept < Math.min(3, fullCount)) {
+    for (const unit of units) {
+      if (kept >= Math.min(3, fullCount)) break
+      const allIn = unit.members.every(m => keptExerciseIds.has(m.exercise.id))
+      if (allIn) continue
+      unit.members.forEach(m => keptExerciseIds.add(m.exercise.id))
+      kept += unit.members.filter(m => !keptExerciseIds.has(m.exercise.id)).length
+      // Re-count keptExerciseIds truthfully
+      kept = keptExerciseIds.size
+    }
+  }
+
+  // Top-2 spine IDs by raw identity score (not by unit score). Both spine
+  // exercises might be in a single kept group, or split across units.
+  const topTwoIds = new Set(
+    scoredExercises
       .slice()
       .sort((a, b) => b.identityScore - a.identityScore)
-    const keptIds = new Set(sortedByScore.slice(0, 5).map(s => s.exercise.exercise.id))
-    const topTwoIds = new Set(sortedByScore.slice(0, 2).map(s => s.exercise.exercise.id))
-    return main
-      .filter(e => keptIds.has(e.exercise.id))
-      .map(e => {
-        if (preserveSkillWork && e.exercise.category === 'skill') {
-          return { ...e } // Preserve full metadata and full sets
-        }
-        if (topTwoIds.has(e.exercise.id)) return { ...e, sets: Math.max(3, e.sets) }
-        return { ...e, sets: Math.max(2, e.sets - 1) }
-      })
+      .slice(0, 2)
+      .map(s => s.exercise.exercise.id)
+  )
+
+  // Emit result in ORIGINAL session order (variant-realism: the shorter
+  // mode reads as the same workout, trimmed -- not re-sorted).
+  if (level === 'light' || level === 'moderate') {
+    const result: SelectedExercise[] = []
+    for (const e of main) {
+      if (!keptExerciseIds.has(e.exercise.id)) continue
+      // Preserve skill work full sets when requested and top-2 spine
+      if (preserveSkillWork && e.exercise.category === 'skill') {
+        result.push({ ...e })
+        continue
+      }
+      if (topTwoIds.has(e.exercise.id)) {
+        const newSets = Math.max(topTwoSetFloor, e.sets - topTwoSetCut)
+        result.push({ ...e, sets: newSets })
+      } else {
+        const newSets = Math.max(setFloor, e.sets - setCut)
+        result.push({ ...e, sets: newSets })
+      }
+    }
+    console.log('[variant-distinctness-authority]', {
+      level,
+      fullCount,
+      targetCount,
+      keptCount: result.length,
+      droppedNames: main
+        .filter(e => !keptExerciseIds.has(e.exercise.id))
+        .map(e => e.exercise.name),
+      originalTotalSets: main.reduce((sum, e) => sum + (e.sets || 0), 0),
+      compressedTotalSets: result.reduce((sum, e) => sum + (e.sets || 0), 0),
+      setCutNonSpine: setCut,
+      setCutSpine: topTwoSetCut,
+      groupedUnitsKept: units
+        .filter(u => u.isGroup && u.members.every(m => keptExerciseIds.has(m.exercise.id)))
+        .map(u => u.id),
+      groupedUnitsDropped: units
+        .filter(u => u.isGroup && !u.members.every(m => keptExerciseIds.has(m.exercise.id)))
+        .map(u => u.id),
+    })
+    return result
   }
   
   // ==========================================================================

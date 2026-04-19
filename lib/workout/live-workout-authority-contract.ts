@@ -106,15 +106,18 @@ export function resolveExerciseInputMode(
   }
   
   // Weighted strength exercises
+  // [LIVE-INPUT-AUTHORITY] Only real weighted signals classify as weighted_strength.
+  // Category-only heuristics like category === 'strength' or name.includes('pull-up')
+  // were over-expanding classification and incorrectly hiding band UI for bodyweight
+  // movements while simultaneously allowing downstream render gates to leak band UI
+  // onto real weighted movements. Keep this strict: explicit isWeighted flag,
+  // a valid prescribed external load, or an explicit "weighted" name token.
+  const hasPrescribedLoad =
+    typeof exercise.prescribedLoad?.load === 'number' && exercise.prescribedLoad.load > 0
   if (
     exec.isWeighted === true ||
-    exercise.prescribedLoad?.load ||
-    name.includes('weighted') ||
-    category === 'strength' ||
-    name.includes('dip') ||
-    name.includes('pull-up') ||
-    name.includes('pullup') ||
-    name.includes('row')
+    hasPrescribedLoad ||
+    name.includes('weighted')
   ) {
     // Check if also unilateral
     const isUnilateral = exec.isUnilateral === true ||

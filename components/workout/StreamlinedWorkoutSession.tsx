@@ -2920,8 +2920,19 @@ if (styledGroups && styledGroups.length > 0) {
       })
       
       // STEP 4: Resolve UI flags safely - using input mode contract
-      // [LIVE-WORKOUT-AUTHORITY] Band selector only shows for band-assisted exercises
-      const bandSelectable = inputModeContract.showBandSelector || !!recommendedBand
+      // [LIVE-WORKOUT-AUTHORITY] Band selector visibility is owned EXCLUSIVELY by
+      // the authoritative input mode contract. Secondary hints like recommendedBand,
+      // notes, or preparation layer metadata MUST NOT widen it. For weighted_strength
+      // and reps_per_side (weighted) modes, showBandSelector is hard-false and
+      // downstream UI cannot re-enable band controls.
+      const bandSelectable = inputModeContract.showBandSelector
+      if (process.env.NODE_ENV === 'development' && !inputModeContract.showBandSelector && recommendedBand) {
+        console.log('[v0] [band_ui_suppressed_by_contract]', {
+          exerciseName,
+          inputMode: inputModeContract.mode,
+          recommendedBandIgnored: recommendedBand,
+        })
+      }
       const hasLoad = !!(safeCurrentExercise?.prescribedLoad?.load && safeCurrentExercise.prescribedLoad.load > 0)
       const loadDisplay = hasLoad 
         ? `+${safeCurrentExercise?.prescribedLoad?.load}${safeCurrentExercise?.prescribedLoad?.unit || 'lbs'}`
@@ -3516,10 +3527,14 @@ if (styledGroups && styledGroups.length > 0) {
     const targetMatch = exerciseRepsOrTime.match(/(\d+)/)
     const prescriptionSeedValue = targetMatch ? parseInt(targetMatch[1], 10) : (isHoldExerciseForLog ? 30 : 8)
     
-    const INITIAL_REPS_VALUE = 8
-    const INITIAL_HOLD_VALUE = 30
-    const machineRepsIsDefault = safeRepsValue === 0 || safeRepsValue === INITIAL_REPS_VALUE
-    const machineHoldIsDefault = safeHoldValue === 0 || safeHoldValue === INITIAL_HOLD_VALUE
+    // [LIVE-INPUT-SEED-FIX] Only the explicit 0 sentinel (set by the machine on
+    // init, set completion, or exercise advance) triggers re-seeding from the
+    // prescription. Previously the code ALSO treated safeRepsValue === 8 and
+    // safeHoldValue === 30 as "default", which silently clamped truthful logs
+    // back to the prescription lower bound whenever the user actually entered 8
+    // or 30 as a real performance value. Never do that again.
+    const machineRepsIsDefault = safeRepsValue === 0
+    const machineHoldIsDefault = safeHoldValue === 0
     
     // Log the value the user SAW (seeded from prescription if not modified, otherwise machine value)
     const loggedRepsValue = isHoldExercise ? 0 : (machineRepsIsDefault ? prescriptionSeedValue : safeRepsValue)
@@ -5228,23 +5243,21 @@ function InterExerciseRestCountdown({
     const prescriptionSeedValue = targetMatch ? parseInt(targetMatch[1], 10) : 8
     
     // [DEFAULT_SEED_DECISION] Deterministic seeding rule:
-    // Machine state initial values are repsValue=8, holdValue=30.
-    // If machine value equals these initial defaults, treat as "not user-modified"
-    // and seed from prescription truth instead.
-    // This ensures a "6s hold" exercise shows 6, not 30.
-    const INITIAL_REPS_VALUE = 8
-    const INITIAL_HOLD_VALUE = 30
+    // The machine sets repsValue/holdValue to 0 on init, on COMPLETE_SET, and
+    // on ADVANCE_TO_NEXT_EXERCISE as a re-seed sentinel. ONLY that explicit 0
+    // value triggers display seeding from prescription truth. Previously we
+    // ALSO treated 8 (reps) / 30 (hold) as "default" which silently clamped
+    // legit user entries of 8 or 30 back to the prescription lower bound -
+    // that was the "reps feel capped near target" bug. Never again.
+    const machineRepsIsDefault = safeRepsValue === 0
+    const machineHoldIsDefault = safeHoldValue === 0
     
-    // For holds: if machine has initial default 30 or 0, seed from prescription
-    // For reps: if machine has initial default 8 or 0, seed from prescription
-    const machineRepsIsDefault = safeRepsValue === 0 || safeRepsValue === INITIAL_REPS_VALUE
-    const machineHoldIsDefault = safeHoldValue === 0 || safeHoldValue === INITIAL_HOLD_VALUE
-    
-    // Always seed from prescription if machine has default values
+    // Seed from prescription only if machine still holds the 0 sentinel.
+    // Otherwise the user's actual entered value is authoritative.
     const corridorRepsValue = machineRepsIsDefault ? prescriptionSeedValue : safeRepsValue
     const corridorHoldValue = isHoldExerciseForDefault 
       ? (machineHoldIsDefault ? prescriptionSeedValue : safeHoldValue)
-      : safeHoldValue || 30
+      : (safeHoldValue > 0 ? safeHoldValue : 30)
     
     const corridorCurrentSetNote = machineState.currentSetNote || ''
     const corridorCurrentSetReasonTags = (machineState.currentSetReasonTags || []) as import('./ActiveWorkoutStartCorridor').SetReasonTag[]
@@ -5266,8 +5279,18 @@ function InterExerciseRestCountdown({
       showLoadInput: corridorInputMode.showLoadInput,
     })
     
-    // [LIVE-WORKOUT-AUTHORITY] Band selector only for band-assisted exercises
-    const corridorBandSelectable = corridorInputMode.showBandSelector || !!corridorRecommendedBand
+    // [LIVE-WORKOUT-AUTHORITY] Band selector visibility is owned ONLY by the
+    // authoritative input mode contract. A recommendedBand hint on executionTruth
+    // is metadata, not UI permission - it must never re-open band controls for
+    // weighted_strength or unilateral weighted modes.
+    const corridorBandSelectable = corridorInputMode.showBandSelector
+    if (process.env.NODE_ENV === 'development' && !corridorInputMode.showBandSelector && corridorRecommendedBand) {
+      console.log('[v0] [corridor_band_ui_suppressed_by_contract]', {
+        exerciseName: safeCurrentExercise?.name,
+        inputMode: corridorInputMode.mode,
+        recommendedBandIgnored: corridorRecommendedBand,
+      })
+    }
     
     // Build recent sets for ledger (last 3 completed sets)
     // [RECENT-SETS-FIX] Filter recent sets by CURRENT EXERCISE only, not global last 3
@@ -5333,54 +5356,77 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     const nextExercise = nextExerciseIndex < exercises.length ? exercises[nextExerciseIndex] : null
     const nextExerciseName = nextExercise?.name
     
-    // [ADAPTIVE-REST-FIX] Rest duration based on rest type and exercise prescription truth
+    // [REST-CORRIDOR-SINGLE-OWNER] Rest duration flows through one authoritative
+    // decision path. Block-round rest is owned by the block prescription. 
+    // Same-exercise rest uses the current exercise's prescribed restSeconds if
+    // present, else the doctrine resolver fed the just-completed set RPE. 
+    // Between-exercise rest uses the next exercise's prescribed restSeconds if
+    // present, else the doctrine resolver fed the next exercise's category and
+    // intended targetRPE. The two corridors NEVER share a branch.
     const getRestDuration = (): number => {
       let restSource = 'unknown'
       let restValue = 90
       
+      // ---- BLOCK ROUND REST ------------------------------------------------
       if (isBlockRoundRest) {
         restSource = 'block_round_rest_prescribed'
         restValue = blockRoundRestSeconds
-      } else if (isBetweenExerciseRest) {
-        // Between-exercise rest: Use NEXT exercise's prescribed rest if available,
-        // otherwise derive adaptively from next exercise's category/intensity
+      }
+      // ---- BETWEEN-EXERCISE REST -------------------------------------------
+      else if (isBetweenExerciseRest) {
         if (nextExercise?.restSeconds && nextExercise.restSeconds > 0) {
+          // Priority 1: next exercise's prescribed rest
           restSource = 'next_exercise_prescribed_restSeconds'
           restValue = nextExercise.restSeconds
+        } else if (nextExercise) {
+          // Priority 2: doctrine-aligned derivation from next exercise truth
+          const rec = resolveRestTime({
+            restType: 'between_exercises',
+            exerciseCategory: (safeCurrentExercise?.category || 'general'),
+            exerciseName: safeCurrentExercise?.name || '',
+            targetRPE: nextExercise.targetRPE || 8,
+            // last-set RPE belongs to the JUST-FINISHED exercise; it informs
+            // how much carryover fatigue to respect before the next movement.
+            actualRPE: (safeLastSetRPE as number | null) ?? null,
+            isHoldBased: false,
+            groupType: null,
+            nextExerciseCategory: nextExercise.category,
+            nextExerciseName: nextExercise.name,
+          })
+          restSource = 'doctrine_between_exercises'
+          restValue = rec.seconds
         } else {
-          // Adaptive fallback: derive from next exercise target RPE or machine tracked value
-          const nextExerciseTargetRPE = nextExercise?.targetRPE || 8
-          if (nextExerciseTargetRPE >= 9) {
-            restSource = 'adaptive_next_rpe_high'
-            restValue = 180 // Heavy next exercise = more rest
-          } else if (nextExerciseTargetRPE >= 8) {
-            restSource = 'adaptive_next_rpe_moderate'
-            restValue = 120
-          } else {
-            restSource = 'machine_inter_exercise_fallback'
-            restValue = machineState.interExerciseRestSeconds || 90
-          }
+          // Priority 3: controlled machine fallback
+          restSource = 'machine_inter_exercise_fallback'
+          restValue = machineState.interExerciseRestSeconds || 90
         }
-      } else {
-        // [SAME-EXERCISE-REST-FIX] Same-exercise rest: 
-        // Priority 1: Current exercise's prescribed restSeconds (authoritative)
-        // Priority 2: Derive from last set's RPE (adaptive)
-        // Priority 3: Static fallback (90s)
+      }
+      // ---- SAME-EXERCISE REST ----------------------------------------------
+      else {
         if (safeCurrentExercise?.restSeconds && safeCurrentExercise.restSeconds > 0) {
+          // Priority 1: current exercise's prescribed rest is authoritative
           restSource = 'current_exercise_prescribed_restSeconds'
           restValue = safeCurrentExercise.restSeconds
-        } else if (!safeLastSetRPE) {
-          restSource = 'static_fallback_no_rpe'
-          restValue = 90
-        } else if (safeLastSetRPE >= 9) {
-          restSource = 'adaptive_last_rpe_high'
-          restValue = 180 // 3 min for RPE 9-10
-        } else if (safeLastSetRPE >= 8) {
-          restSource = 'adaptive_last_rpe_moderate'
-          restValue = 120 // 2 min for RPE 8
         } else {
-          restSource = 'adaptive_last_rpe_low'
-          restValue = 90 // 1.5 min for RPE 6-7
+          // Priority 2: doctrine-aligned derivation honoring last-set RPE.
+          // This replaces the previous local "if RPE>=9 -> 180 etc" branch
+          // duplication so the honest last-effort truth always wins over
+          // static generic defaults when RPE is known.
+          const exRepsOrTime = (safeCurrentExercise?.repsOrTime || '').toLowerCase()
+          const isHoldBased = exRepsOrTime.includes('sec') || exRepsOrTime.includes('hold')
+          const rec = resolveRestTime({
+            restType: 'between_sets',
+            exerciseCategory: (safeCurrentExercise?.category || 'general'),
+            exerciseName: safeCurrentExercise?.name || '',
+            targetRPE: safeCurrentExercise?.targetRPE || 8,
+            actualRPE: (safeLastSetRPE as number | null) ?? null,
+            isHoldBased,
+            groupType: null,
+          })
+          restSource = safeLastSetRPE != null
+            ? 'doctrine_same_exercise_rpe_aware'
+            : 'doctrine_same_exercise_no_rpe'
+          restValue = rec.seconds
         }
       }
       

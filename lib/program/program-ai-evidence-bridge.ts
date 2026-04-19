@@ -2088,11 +2088,27 @@ export function buildFullVisibleRoutineExercises(
   })
   
   // Build variant lookup if available
+  // [VARIANT-LOOKUP-KEY-PARITY] Indexing MUST cover the same key space as the
+  // trim pass below (raw id, lowercased name, normalized name). Previously
+  // only id + lowercased name were indexed here, so rows whose name had
+  // punctuation/casing drift (e.g. "Pull-Ups" vs "Pull Ups") would:
+  //   - PASS the trim pass (which uses normalized name)
+  //   - FAIL this hydration lookup (which doesn't)
+  // resulting in rows that survive into the variant output but carry the
+  // FULL session's `sets`/`targetRPE`/`restSeconds` via the sessionEx
+  // fallback branch. That is the exact prescription-divergence point that
+  // made 45 and 30 look as heavy as Full.
   const variantExerciseMap = new Map<string, NonNullable<typeof variantSelection>['main'][0]>()
   if (variantSelection?.main) {
     variantSelection.main.forEach(v => {
-      variantExerciseMap.set(v.exercise.id, v)
-      variantExerciseMap.set(v.exercise.name.toLowerCase(), v)
+      if (v.exercise.id) variantExerciseMap.set(v.exercise.id, v)
+      if (v.exercise.name) {
+        variantExerciseMap.set(v.exercise.name.toLowerCase(), v)
+        const normKey = normalizeExerciseKey(v.exercise.name)
+        if (normKey && !variantExerciseMap.has(normKey)) {
+          variantExerciseMap.set(normKey, v)
+        }
+      }
     })
   }
   
@@ -2104,7 +2120,13 @@ export function buildFullVisibleRoutineExercises(
     }
     
     // Try to find full exercise data from session or variant
-    const variantEx = variantExerciseMap.get(item.id) || variantExerciseMap.get(item.displayName.toLowerCase())
+    // [VARIANT-LOOKUP-KEY-PARITY] Third tier uses normalized name so rename
+    // drift between fullRoutineSurface items and variant.selection.main members
+    // (different punctuation/casing) cannot demote us to sessionEx fallback.
+    const variantEx =
+      variantExerciseMap.get(item.id) ||
+      variantExerciseMap.get(item.displayName.toLowerCase()) ||
+      variantExerciseMap.get(normalizeExerciseKey(item.displayName))
     // [GROUPED-TRUTH-CONTRACT] PRIMARY OWNERSHIP: when the upstream bridge
     // preserved the originating session exercise identity onto RoutineItem
     // (item.sourceExerciseId), we match by that id FIRST. This is exact-identity
@@ -2197,29 +2219,33 @@ export function buildFullVisibleRoutineExercises(
   }
 
   // [POST-SELECTION-FLATTENING-FIX] If a variant is actually selected, TRIM the
-  // visible exercise list to the variant's chosen exercises. Previously this
-  // function always walked the full routine surface and only overlaid variant
-  // prescription values on matching rows -- meaning Full, 45, and 30 all
-  // rendered the same rows with the same count, because the variant's own
-  // subset was silently widened back to the full session. That is the exact
-  // post-selection rewrite that made shorter modes look as heavy as Full.
+  // visible exercise list to the variant's chosen exercises AND overwrite the
+  // prescription values with the variant's authoritative truth.
   //
-  // With a variant present, the selected variant's `selection.main` is the
-  // final authoritative ordered list. We keep rows whose id OR normalized name
-  // matches a variant member, then re-sort to match variant order so grouped
-  // truth stays intact in the shorter session too.
+  // Prior behaviour only TRIMMED rows but kept each surviving row's existing
+  // prescription (sets/repsOrTime/hold/targetRPE/restSeconds/prescribedLoad)
+  // as it was hydrated above. When the upstream hydration lookup missed the
+  // variant (key drift: id vs lowercased vs normalized name), the row
+  // fell through to `sessionEx.*` which is the FULL session's prescription.
+  // Net effect: 45 and 30 dropped exercises count-wise but carried Full's
+  // set counts on every remaining row, so burden felt almost identical.
+  //
+  // [VARIANT-PRESCRIPTION-AUTHORITY] Fix: when trimming, rehydrate each
+  // surviving row's prescription FROM THE VARIANT'S selection.main[vi]
+  // directly. This is the single authoritative prescription source for the
+  // selected mode; no probabilistic map lookup involved. scaledSets /
+  // scaledReps / scaledTargetRPE / scaledRestPeriod are cleared because the
+  // week-scaling path targeted the FULL session baseline, not this trimmed
+  // variant -- keeping them would let effectiveSets in ExerciseRow
+  // (scaledSets ?? exercise.sets) silently revert back to Full truth.
   if (variantSelection?.main && variantSelection.main.length > 0) {
-    const variantIds = new Set<string>()
-    const variantNameKeys = new Set<string>()
     const variantOrder = new Map<string, number>() // key -> index in variant
     variantSelection.main.forEach((v, idx) => {
       if (v.exercise.id) {
-        variantIds.add(v.exercise.id)
         variantOrder.set(`id:${v.exercise.id}`, idx)
       }
       if (v.exercise.name) {
         const nk = normalizeExerciseKey(v.exercise.name)
-        variantNameKeys.add(nk)
         if (!variantOrder.has(`name:${nk}`)) variantOrder.set(`name:${nk}`, idx)
       }
     })
@@ -2242,7 +2268,49 @@ export function buildFullVisibleRoutineExercises(
     // Safety net: if every row dropped (identity drift), fall back to full
     // result so we never render an empty session body.
     if (trimmed.length > 0) {
-      return trimmed.map(x => x.row)
+      // [VARIANT-PRESCRIPTION-AUTHORITY] Overwrite each trimmed row's
+      // prescription with the variant's authoritative truth. This is the
+      // single source of truth for the selected mode's dosage.
+      const authoritative = trimmed.map(({ row, vi }) => {
+        const v = variantSelection.main![vi]
+        return {
+          ...row,
+          // Hard override: variant dosage is the final visible contract.
+          sets: v.sets ?? row.sets,
+          repsOrTime: v.repsOrTime ?? row.repsOrTime,
+          hold: v.hold ?? row.hold,
+          targetRPE: v.targetRPE ?? row.targetRPE,
+          restSeconds: v.restSeconds ?? row.restSeconds,
+          prescribedLoad: v.prescribedLoad ?? row.prescribedLoad,
+          // Clear Week-scaling leak paths: those values were computed from
+          // the FULL session baseline, not from this trimmed variant. If
+          // kept, ExerciseRow's `scaledSets ?? exercise.sets` priority
+          // would silently re-surface Full's set count on every row.
+          scaledSets: undefined,
+          scaledReps: undefined,
+          scaledTargetRPE: undefined,
+          scaledRestPeriod: undefined,
+          weekScalingApplied: false,
+        } as FullRoutineExercise
+      })
+
+      // [VARIANT-PRESCRIPTION-AUTHORITY-AUDIT] Burden-delta proof so we can
+      // eyeball in logs that 45/30 actually trim vs Full for the selected day.
+      const variantTotalSets = authoritative.reduce((sum, r) => sum + (r.sets ?? 0), 0)
+      const fullTotalSets = result.reduce((sum, r) => sum + (r.sets ?? 0), 0)
+      console.log('[variant-prescription-authority-audit]', {
+        variantMainCount: variantSelection.main.length,
+        fullRowCount: result.length,
+        visibleRowCount: authoritative.length,
+        visibleSetsPerRow: authoritative.map(r => ({ name: r.name, sets: r.sets })),
+        fullSetsTotal: fullTotalSets,
+        variantSetsTotal: variantTotalSets,
+        burdenDeltaPct: fullTotalSets > 0
+          ? Math.round((1 - variantTotalSets / fullTotalSets) * 100)
+          : 0,
+      })
+
+      return authoritative
     }
   }
 

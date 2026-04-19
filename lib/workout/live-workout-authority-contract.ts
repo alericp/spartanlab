@@ -89,36 +89,34 @@ export function resolveExerciseInputMode(
   const category = exercise.category?.toLowerCase() || ''
   const method = exercise.method?.toLowerCase() || ''
   const exec = exercise.executionTruth || {}
-  
-  // Band-assisted skill work
-  if (exec.bandSelectable === true) {
-    return {
-      mode: 'band_assisted_skill',
-      showBandSelector: true,
-      showMultiBandSelector: true, // Enable multi-band selection
-      showLoadInput: false,
-      showRepsInput: true,
-      showHoldInput: true,
-      showPerSideToggle: false,
-      showRPEInput: true,
-      primaryInputLabel: 'Reps or Hold Time',
-    }
-  }
-  
-  // Weighted strength exercises
-  // [LIVE-INPUT-AUTHORITY] Only real weighted signals classify as weighted_strength.
-  // Category-only heuristics like category === 'strength' or name.includes('pull-up')
-  // were over-expanding classification and incorrectly hiding band UI for bodyweight
-  // movements while simultaneously allowing downstream render gates to leak band UI
-  // onto real weighted movements. Keep this strict: explicit isWeighted flag,
-  // a valid prescribed external load, or an explicit "weighted" name token.
+
+  // ===========================================================================
+  // [AUTHORITATIVE-CONTRACT-PRIORITY-LOCK]
+  // Weighted signals DOMINATE bandSelectable. An exercise with any explicit
+  // weighted signal (isWeighted=true, prescribedLoad.load > 0, or a "weighted"
+  // name token) is classified as weighted_strength / reps_per_side (weighted)
+  // REGARDLESS of whether the exercise template also carries bandSelectable=true.
+  //
+  // Why: Exercise templates like "Dip" and "Pull-up" carry bandSelectable=true
+  // because their bodyweight variants are band-assistable. When the builder
+  // prescribes the WEIGHTED variant of the same movement ("Weighted Dip",
+  // "Weighted Pull-up"), that exercise inherits bandSelectable=true from the
+  // template. Previously this caused the weighted variant to resolve to
+  // band_assisted_skill mode and show the band selector - a real product bug.
+  //
+  // Once we classify an exercise as weighted here, downstream UI cannot
+  // re-open band controls (showBandSelector / showMultiBandSelector are both
+  // hard-false). Band controls are only valid for true band-assisted
+  // bodyweight work, which is now handled in a secondary branch below.
+  // ===========================================================================
   const hasPrescribedLoad =
     typeof exercise.prescribedLoad?.load === 'number' && exercise.prescribedLoad.load > 0
-  if (
+  const isWeighted =
     exec.isWeighted === true ||
     hasPrescribedLoad ||
     name.includes('weighted')
-  ) {
+
+  if (isWeighted) {
     // Check if also unilateral
     const isUnilateral = exec.isUnilateral === true ||
       name.includes('archer') ||
@@ -151,6 +149,21 @@ export function resolveExerciseInputMode(
       showPerSideToggle: false,
       showRPEInput: true,
       primaryInputLabel: 'Reps',
+    }
+  }
+
+  // Band-assisted skill work (bodyweight only - weighted branch above wins first)
+  if (exec.bandSelectable === true) {
+    return {
+      mode: 'band_assisted_skill',
+      showBandSelector: true,
+      showMultiBandSelector: true, // Enable multi-band selection
+      showLoadInput: false,
+      showRepsInput: true,
+      showHoldInput: true,
+      showPerSideToggle: false,
+      showRPEInput: true,
+      primaryInputLabel: 'Reps or Hold Time',
     }
   }
   

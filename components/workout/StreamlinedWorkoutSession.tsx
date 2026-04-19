@@ -5476,13 +5476,22 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
         // [LIVE-WORKOUT-AUTHORITY] Input mode contract
         inputMode={corridorInputMode.mode}
         showLoadInput={corridorInputMode.showLoadInput}
-        showMultiBandSelector={corridorInputMode.showMultiBandSelector}
+        // [AUTHORITATIVE-BAND-GATE] Both band gates collapse to the same
+        // contract-owned flag. If the contract says no band UI, the corridor
+        // cannot render band controls regardless of any other prop.
+        showMultiBandSelector={corridorBandSelectable && corridorInputMode.showMultiBandSelector}
         showPerSideToggle={corridorInputMode.showPerSideToggle}
         primaryInputLabel={corridorInputMode.primaryInputLabel}
         bandSelectable={corridorBandSelectable}
-        recommendedBand={corridorRecommendedBand}
+        recommendedBand={corridorBandSelectable ? corridorRecommendedBand : undefined}
         // [LIVE-WORKOUT-AUTHORITY] Multi-band selection
-        selectedBands={machineState.selectedBands || []}
+        // [STALE-BAND-HANDOFF-GUARD] If the contract forbids band UI (weighted
+        // exercise), never hand stale selectedBands down to the corridor.
+        // This is a belt-and-suspenders guard on top of the machine-level
+        // clearing in ADVANCE_TO_NEXT_* reducers: even if a render fires
+        // before the next advance dispatch, the contract-forbidden surface
+        // cannot display stale colored band chips from the prior exercise.
+        selectedBands={corridorBandSelectable ? (machineState.selectedBands || []) : []}
         onSetSelectedBands={(bands) => machineDispatch({ type: 'SET_SELECTED_BANDS', bands })}
         // [LIVE-WORKOUT-AUTHORITY] Weighted exercise inputs
         actualLoadUsed={machineState.actualLoadUsed}

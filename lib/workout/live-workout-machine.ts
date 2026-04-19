@@ -762,6 +762,11 @@ export function workoutMachineReducer(
         repsValue: action.targetValue,
         holdValue: action.targetValue,
         bandUsed: 'none',
+        // [STALE-BAND-CLEAR] Band state from the previous exercise MUST NOT
+        // leak into the next exercise. Whether the next exercise is weighted
+        // or band-assisted, it needs a clean slate so the contract-authorized
+        // input UI (and only that UI) drives what the user sees.
+        selectedBands: [],
         interExerciseRestSeconds: 0,
       }
     
@@ -974,6 +979,10 @@ export function workoutMachineReducer(
         repsValue: action.targetValue,
         holdValue: action.targetValue,
         bandUsed: 'none',
+        // [STALE-BAND-CLEAR] Each block member may be a different exercise
+        // (e.g. band-assisted pull-up paired with weighted dip). Wipe band
+        // state so the next member's authority contract owns band visibility.
+        selectedBands: [],
         interExerciseRestSeconds: 0,
         blockRoundRestSeconds: 0,
       }
@@ -997,6 +1006,9 @@ export function workoutMachineReducer(
         repsValue: action.targetValue,
         holdValue: action.targetValue,
         bandUsed: 'none',
+        // [STALE-BAND-CLEAR] Block boundary - new block may carry a completely
+        // different input contract. Wipe band state for a clean contract read.
+        selectedBands: [],
         interExerciseRestSeconds: 0,
         blockRoundRestSeconds: 0,
       }

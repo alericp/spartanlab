@@ -421,29 +421,37 @@ function compressMain(
   let setFloor: number            // minimum sets after cut
   let topTwoSetFloor: number      // minimum sets for top-2 spine
   if (level === 'light') {
-    // 45-min from ~55-60 Full: keep ~70% of exercises, trim one set off
-    // non-spine rows. Top-2 spine stays full.
-    targetCount = Math.max(4, Math.ceil(fullCount * 0.70))
+    // 45-min from ~55-60 Full: keep ~65% of exercises, trim one set off
+    // non-spine rows. Top-2 spine stays full at 3.
+    // Target-burden: ~65-70% of Full's total sets. User should see 1-2
+    // fewer exercises AND smaller non-spine set counts.
+    targetCount = Math.max(4, Math.ceil(fullCount * 0.65))
     setCut = 1
     topTwoSetCut = 0
     setFloor = 2
     topTwoSetFloor = 3
   } else if (level === 'moderate') {
-    // 30-min from ~55-60 Full: keep ~55% of exercises, cut two sets off
-    // non-spine rows, one set off top-2. This creates a visible burden
-    // delta of ~8-10 working sets vs Full.
-    targetCount = Math.max(3, Math.ceil(fullCount * 0.55))
+    // 30-min from ~55-60 Full: keep ~50% of exercises, cut two sets off
+    // non-spine rows, AND drop the spine to 2 sets. Prior behavior held
+    // the top-2 spine at 3 sets (topTwoSetFloor=3) -- which kept 30-min's
+    // spine identical to Full's spine, so the user read both modes as
+    // "the same heavy work with a couple fewer accessories" -- the exact
+    // "feels too similar" symptom. Dropping spine to 2 sets produces a
+    // visible ~45-55% burden delta vs Full.
+    targetCount = Math.max(3, Math.ceil(fullCount * 0.50))
     setCut = 2
     topTwoSetCut = 1
     setFloor = 2
-    topTwoSetFloor = 3
+    topTwoSetFloor = 2
   } else {
-    // Heavy (20-25 min or very short): keep ~40%, aggressive set cut.
+    // Heavy (20-25 min or short Full >= 60): keep ~40%, drop spine to 2
+    // sets as well, cut two sets off everything else. This path ALSO uses
+    // the grouped-atomic unit selection below (prior code bypassed it).
     targetCount = Math.max(3, Math.ceil(fullCount * 0.40))
     setCut = 2
     topTwoSetCut = 1
     setFloor = 2
-    topTwoSetFloor = 3
+    topTwoSetFloor = 2
   }
   // Safety: never inflate target above original count
   if (targetCount > fullCount) targetCount = fullCount
@@ -550,176 +558,49 @@ function compressMain(
 
   // Emit result in ORIGINAL session order (variant-realism: the shorter
   // mode reads as the same workout, trimmed -- not re-sorted).
-  if (level === 'light' || level === 'moderate') {
-    const result: SelectedExercise[] = []
-    for (const e of main) {
-      if (!keptExerciseIds.has(e.exercise.id)) continue
-      // Preserve skill work full sets when requested and top-2 spine
-      if (preserveSkillWork && e.exercise.category === 'skill') {
-        result.push({ ...e })
-        continue
-      }
-      if (topTwoIds.has(e.exercise.id)) {
-        const newSets = Math.max(topTwoSetFloor, e.sets - topTwoSetCut)
-        result.push({ ...e, sets: newSets })
-      } else {
-        const newSets = Math.max(setFloor, e.sets - setCut)
-        result.push({ ...e, sets: newSets })
-      }
-    }
-    console.log('[variant-distinctness-authority]', {
-      level,
-      fullCount,
-      targetCount,
-      keptCount: result.length,
-      droppedNames: main
-        .filter(e => !keptExerciseIds.has(e.exercise.id))
-        .map(e => e.exercise.name),
-      originalTotalSets: main.reduce((sum, e) => sum + (e.sets || 0), 0),
-      compressedTotalSets: result.reduce((sum, e) => sum + (e.sets || 0), 0),
-      setCutNonSpine: setCut,
-      setCutSpine: topTwoSetCut,
-      groupedUnitsKept: units
-        .filter(u => u.isGroup && u.members.every(m => keptExerciseIds.has(m.exercise.id)))
-        .map(u => u.id),
-      groupedUnitsDropped: units
-        .filter(u => u.isGroup && !u.members.every(m => keptExerciseIds.has(m.exercise.id)))
-        .map(u => u.id),
-    })
-    return result
-  }
-  
-  // ==========================================================================
-  // [PHASE 6A TASK 2-3] HEAVY COMPRESSION - IDENTITY PRESERVATION
-  // For 30-min variants: Keep at least one true priority skill expression
-  // Don't let generic support dominate the short session
-  // ==========================================================================
-  
+  // [HEAVY-UNIFIED] Heavy now follows the same emission path as light/moderate
+  // so grouped-atomic unit selection applies to ALL compression levels
+  // (prior heavy branch used a separate Phase 6A loop that could half-break
+  // a superset pair and ignored the targetCount contract entirely).
   const result: SelectedExercise[] = []
-  const droppedIdentityElements: string[] = []
-  
-  // STEP 1: Preserve at least one priority skill expression if it existed
-  const prioritySkillExercise = prioritized.find(e => 
-    e.exercise.category === 'skill' ||
-    e.selectionReason?.toLowerCase().includes('skill progression') ||
-    e.selectionReason?.toLowerCase().includes('primary goal')
-  )
-  
-  if (prioritySkillExercise) {
-    result.push({ ...prioritySkillExercise }) // Preserve all metadata
-  }
-  
-  // STEP 2: Add session-specific strength support if it supports the skill
-  const specificStrengthSupport = prioritized.find(e => 
-    e.exercise.category === 'strength' &&
-    !result.some(r => r.exercise.id === e.exercise.id) &&
-    (e.selectionReason?.toLowerCase().includes('support') ||
-     e.selectionReason?.toLowerCase().includes('hybrid') ||
-     e.selectionReason?.toLowerCase().includes('advanced'))
-  )
-  
-  if (specificStrengthSupport && result.length < 3) {
-    result.push({ ...specificStrengthSupport, sets: Math.max(2, specificStrengthSupport.sets - 1) })
-  }
-  
-  // STEP 3: Add secondary/broader skill expression if time allows
-  const secondaryExpression = prioritized.find(e => 
-    !result.some(r => r.exercise.id === e.exercise.id) &&
-    (e.selectionReason?.toLowerCase().includes('secondary') ||
-     e.selectionReason?.toLowerCase().includes('selected skill') ||
-     e.selectionReason?.toLowerCase().includes('broader'))
-  )
-  
-  if (secondaryExpression && result.length < 3) {
-    result.push({ ...secondaryExpression, sets: Math.max(2, secondaryExpression.sets - 1) })
-  }
-  
-  // STEP 4: Fill remaining slots with strength/accessory (not letting generic dominate)
-  let genericCount = 0
-  const maxGeneric = Math.max(1, 4 - result.length) // At least 4 exercises total
-  
-  for (const e of prioritized) {
-    if (result.length >= 4) break
-    if (result.some(r => r.exercise.id === e.exercise.id)) continue
-    
-    const isGeneric = (e.exercise.category === 'accessory' || e.exercise.category === 'core') &&
-                      !e.selectionReason?.toLowerCase().includes('skill')
-    
-    if (isGeneric) {
-      if (genericCount >= maxGeneric) {
-        droppedIdentityElements.push(`${e.exercise.name} (generic support capped)`)
-        continue
-      }
-      genericCount++
+  for (const e of main) {
+    if (!keptExerciseIds.has(e.exercise.id)) continue
+    // Skill preservation still applies: skill work keeps its full set
+    // count because the whole point of preserveSkillWork is to protect
+    // neural-demand quality even in shorter sessions.
+    if (preserveSkillWork && e.exercise.category === 'skill') {
+      result.push({ ...e })
+      continue
     }
-    
-    result.push({ ...e, sets: Math.max(2, e.sets - 1) })
-  }
-  
-  // STEP 5: Always include at least one core movement if we have room
-  if (result.length < 4 && !result.some(e => e.exercise.category === 'core')) {
-    const coreExercise = prioritized.find(e => 
-      e.exercise.category === 'core' &&
-      !result.some(r => r.exercise.id === e.exercise.id)
-    )
-    if (coreExercise) {
-      result.push({ ...coreExercise, sets: 2 })
+    if (topTwoIds.has(e.exercise.id)) {
+      const newSets = Math.max(topTwoSetFloor, e.sets - topTwoSetCut)
+      result.push({ ...e, sets: newSets })
+    } else {
+      const newSets = Math.max(setFloor, e.sets - setCut)
+      result.push({ ...e, sets: newSets })
     }
   }
-  
-  // ==========================================================================
-  // [PHASE 6A TASK 3] GENERIC COLLAPSE GUARD AUDIT
-  // ==========================================================================
-  const fullHadPrioritySkill = prioritized.some(e => 
-    e.exercise.category === 'skill' ||
-    e.selectionReason?.toLowerCase().includes('skill progression')
-  )
-  const fullHadHybridSupport = prioritized.some(e => 
-    e.selectionReason?.toLowerCase().includes('hybrid') ||
-    e.selectionReason?.toLowerCase().includes('advanced')
-  )
-  const shortPreservedSkill = result.some(e => 
-    e.exercise.category === 'skill' ||
-    e.selectionReason?.toLowerCase().includes('skill progression')
-  )
-  const shortPreservedHybrid = result.some(e => 
-    e.selectionReason?.toLowerCase().includes('hybrid') ||
-    e.selectionReason?.toLowerCase().includes('advanced')
-  )
-  
-  const genericDominates = result.filter(e => 
-    (e.exercise.category === 'accessory' || e.exercise.category === 'core') &&
-    !e.selectionReason?.toLowerCase().includes('skill')
-  ).length > result.length / 2
-  
-  // [VARIANT-REALISM-LOCK] Sort the heavy-compressed result BACK into the
-  // original session order so 30-min mode looks like "the same workout,
-  // shorter" rather than a re-sorted list. The priority logic above decides
-  // which exercises to KEEP and their set counts; the visible order must
-  // still follow the canonical session flow so grouped truth (consecutive
-  // superset/circuit members) remains intact and the shorter variant
-  // structurally reads as a subset of Full, not a new session.
-  const originalOrderIndex = new Map<string, number>()
-  main.forEach((e, idx) => originalOrderIndex.set(e.exercise.id, idx))
-  result.sort((a, b) => {
-    const ai = originalOrderIndex.get(a.exercise.id) ?? Number.MAX_SAFE_INTEGER
-    const bi = originalOrderIndex.get(b.exercise.id) ?? Number.MAX_SAFE_INTEGER
-    return ai - bi
+  console.log('[variant-distinctness-authority]', {
+    level,
+    fullCount,
+    targetCount,
+    keptCount: result.length,
+    droppedNames: main
+      .filter(e => !keptExerciseIds.has(e.exercise.id))
+      .map(e => e.exercise.name),
+    originalTotalSets: main.reduce((sum, e) => sum + (e.sets || 0), 0),
+    compressedTotalSets: result.reduce((sum, e) => sum + (e.sets || 0), 0),
+    setCutNonSpine: setCut,
+    setCutSpine: topTwoSetCut,
+    topTwoSetFloor,
+    setFloor,
+    groupedUnitsKept: units
+      .filter(u => u.isGroup && u.members.every(m => keptExerciseIds.has(m.exercise.id)))
+      .map(u => u.id),
+    groupedUnitsDropped: units
+      .filter(u => u.isGroup && !u.members.every(m => keptExerciseIds.has(m.exercise.id)))
+      .map(u => u.id),
   })
-  
-  console.log('[short-variant-generic-collapse-guard-audit]', {
-    fullSessionHadPrioritySkill: fullHadPrioritySkill,
-    fullSessionHadHybridSpecificSupport: fullHadHybridSupport,
-    shortVariantPreservedThem: shortPreservedSkill || shortPreservedHybrid,
-    collapseWasForced: !shortPreservedSkill && fullHadPrioritySkill,
-    exactForcedReason: !shortPreservedSkill && fullHadPrioritySkill 
-      ? 'no_skill_exercise_available_after_filtering' 
-      : null,
-    genericDominated: genericDominates,
-    droppedIdentityElements,
-    verdict: genericDominates ? 'WARNING_generic_support_dominates' : 'identity_preserved',
-  })
-  
   return result
 }
 

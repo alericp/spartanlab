@@ -169,7 +169,22 @@ function getGroupLabel(groupType: GroupType, index: number): string {
  * A "superset" with one usable member is not a superset and should not render
  * a group header; those members fall back to flat rendering cleanly.
  */
-function minMembersFor(groupType: GroupType): number {
+// [METHOD-MIN-MEMBERS-AUTHORITY] The single authoritative rule for "how many
+// resolved members does a grouped block need to still render as its method?"
+//
+// Exported so variant-prune sites (AdaptiveSessionCard + app/(app)/workout/
+// session/page.tsx) consume the SAME rule instead of duplicating a blanket
+// `>= 2` filter that incorrectly kills legitimate single-exercise cluster
+// groups. Prior behavior: both prune sites used `g.exercises.length >= 2`
+// for every non-straight group, so every cluster (emitted as a 1-member
+// group by adaptive-program-builder) was silently dropped BEFORE reaching
+// this adapter -- making clusters invisible on the Program card even when
+// compression/variant selection kept the cluster exercise.
+//
+// Per-method minimums (unchanged):
+//   superset/circuit/density_block -> 2  (method requires pairing to mean anything)
+//   cluster                         -> 1  (method is intra-set, single exercise)
+export function minMembersFor(groupType: GroupType): number {
   switch (groupType) {
     case 'superset': return 2
     case 'circuit': return 2

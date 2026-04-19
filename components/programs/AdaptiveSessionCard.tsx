@@ -28,7 +28,7 @@ import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWith
 // These were used by the ROW 2.5 chip block which was a stale secondary text path
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
-import { buildGroupedDisplayModel, type GroupedDisplayModel, type RenderBlock } from './lib/session-group-display'
+import { buildGroupedDisplayModel, minMembersFor, type GroupedDisplayModel, type RenderBlock } from './lib/session-group-display'
 import { 
   addOverride, 
   applyOverridesToSession,
@@ -586,10 +586,15 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         return { ...g, exercises: keptMembers }
       })
       .filter(g => {
-        if (g.groupType === 'straight') return g.exercises.length >= 1
-        // Non-straight groups (superset/circuit/density_block) need >= 2
-        // members remaining to still be meaningful as that method.
-        return g.exercises.length >= 2
+        // [METHOD-MIN-MEMBERS-AUTHORITY] Method-specific minimums -- NOT a
+        // blanket `>= 2`. The prior blanket rule silently dropped legitimate
+        // single-exercise cluster groups (clusters are emitted as 1-member
+        // groups by adaptive-program-builder.ts line 12286), making every
+        // cluster invisible on the Program card. Now reuses the canonical
+        // `minMembersFor()` helper so this rule is identical across the card
+        // variant prune, Start-Workout variant prune, and the adapter's own
+        // partial-validity filter -- single source of truth.
+        return g.exercises.length >= minMembersFor(g.groupType)
       })
     return {
       ...sessionStyleMetadata,

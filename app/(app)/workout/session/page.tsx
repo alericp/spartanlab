@@ -798,11 +798,24 @@ function WorkoutSessionContent() {
                 )
                 return { ...g, exercises: keptMembers }
               })
-              // Drop groups that lost too many members to be a real group
+              // [METHOD-MIN-MEMBERS-AUTHORITY] Method-specific minimums so we
+              // don't accidentally drop legitimate single-exercise cluster
+              // groups. Inlined to match the canonical `minMembersFor()` in
+              // components/programs/lib/session-group-display.ts without
+              // adding a top-level import to this boot-sensitive route. Rule
+              // MUST stay in sync with that helper (and with the identical
+              // prune in AdaptiveSessionCard's variantPrunedStyleMetadata).
+              //   superset / circuit / density_block -> 2 members minimum
+              //   cluster                             -> 1 member minimum
+              //   straight / default                  -> 1 member minimum
               .filter((g) => {
-                if (g.groupType === 'straight') return g.exercises.length >= 1
-                // supersets/circuits need >= 2 to still be that shape
-                return g.exercises.length >= 2
+                const minMembers =
+                  g.groupType === 'superset' ||
+                  g.groupType === 'circuit' ||
+                  g.groupType === 'density_block'
+                    ? 2
+                    : 1
+                return g.exercises.length >= minMembers
               })
 
             prunedStyleMetadata = {

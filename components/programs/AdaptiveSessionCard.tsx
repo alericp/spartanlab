@@ -2124,12 +2124,25 @@ function ExerciseRow({
   
   // [SINGLE-TRUTH-FIX] showContextCue removed - prescriptionContext was a stale secondary path
 
+  // [WARM-UP-ROW-CONTRACT-RESTORED] Warm-up rows previously had their own
+  // richer contract: a green identity accent (left border + WARMUP tag) plus
+  // the per-row `selectionReason` italic subtitle so each warm-up exercise
+  // showed WHY it was prescribed. A recent regression collapsed warm-up rows
+  // into a near-silent gray variant of the main row (name + prescription line
+  // only), which is what "plain stripped warm-up" refers to. This block
+  // restores the prior warm-up row contract without re-introducing main-row
+  // surfaces that were intentionally suppressed for warm-up rows (no intent
+  // label, no InfoBubble, no knowledge expansion, no action menu).
+  const warmupReason = isWarmupCooldown ? (exercise.selectionReason || '').trim() : ''
+
   return (
     <div className={`py-2 px-3 rounded-lg border transition-colors ${
-      isWarmupCooldown 
-        ? 'bg-[#151515] border-[#222]' 
-        : adjustedName 
-          ? 'bg-[#171717] border-[#4F6D8A]/20' 
+      isWarmupCooldown
+        // Green identity treatment: subtle emerald-tinted background + left-
+        // accent border so warm-up rows are visibly distinct from main rows.
+        ? 'bg-emerald-500/[0.04] border-[#222] border-l-2 border-l-emerald-500/50'
+        : adjustedName
+          ? 'bg-[#171717] border-[#4F6D8A]/20'
           : 'bg-[#171717] border-[#282828] hover:border-[#3A3A3A]'
     }`}>
       {/* ROW 1: Name + Intent + Actions */}
@@ -2139,7 +2152,12 @@ function ExerciseRow({
             <span className="text-[10px] text-[#4A4A4A] font-mono shrink-0">{prefix || `${index}.`}</span>
           )}
           <p className="font-medium text-[#E5E5E5] text-[13px] truncate">{displayName}</p>
-          {!isWarmupCooldown && (
+          {isWarmupCooldown ? (
+            // Warm-up identity tag (prior contract) - replaces main-row intent label.
+            <span className="text-[8px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400/90 shrink-0">
+              Warm-Up
+            </span>
+          ) : (
             <span className={`text-[9px] shrink-0 ${intentAccent[card.prescriptionIntent] || 'text-[#5A5A5A]'}`}>
               {card.intentLabel}
             </span>
@@ -2173,7 +2191,17 @@ function ExerciseRow({
           <span className="text-[10px] text-[#5A5A5A]">{card.restGuidance}</span>
         )}
       </div>
-      
+
+      {/* ROW 3a: [WARM-UP-ROW-CONTRACT-RESTORED] Per-row warm-up selectionReason.
+          This is the "prior supporting subtitle / intent line behavior" that the
+          regression stripped. Main rows have their own whyLine/detailExplanation
+          contract below, which remains gated by !isWarmupCooldown. */}
+      {isWarmupCooldown && warmupReason && (
+        <p className="text-[10px] text-emerald-400/70 italic mt-1">
+          {warmupReason}
+        </p>
+      )}
+
       {/* ROW 3: Canonical explanation - TWO LEVELS from SAME canonical contract */}
       {/* [SUMMARY-OWNER] whyLine = visible card summary (concise WHY) */}
       {/* [DETAIL-OWNER] detailExplanation = InfoBubble content (richer purpose + effort) */}

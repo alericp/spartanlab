@@ -328,8 +328,12 @@ export function createInitialMachineState(
     startTime: null,
     elapsedSeconds: 0,
     selectedRPE: null,
-    repsValue: 8,
-    holdValue: 30,
+    // [LIVE-INPUT-SEED-FIX] Sentinel 0 means "not user-modified yet"; the live
+    // component re-seeds display from the exercise prescription. Using 8/30
+    // here collided with legit user input of 8/30 and silently snapped values
+    // back to the lower bound. Only 0 is the re-seed trigger now.
+    repsValue: 0,
+    holdValue: 0,
     bandUsed: 'none',
     // [LIVE-WORKOUT-AUTHORITY] Multi-band support
     selectedBands: [],

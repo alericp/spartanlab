@@ -2195,7 +2195,57 @@ export function buildFullVisibleRoutineExercises(
       methodLabel: item.methodLabel ?? sessionEx?.methodLabel,
     })
   }
-  
+
+  // [POST-SELECTION-FLATTENING-FIX] If a variant is actually selected, TRIM the
+  // visible exercise list to the variant's chosen exercises. Previously this
+  // function always walked the full routine surface and only overlaid variant
+  // prescription values on matching rows -- meaning Full, 45, and 30 all
+  // rendered the same rows with the same count, because the variant's own
+  // subset was silently widened back to the full session. That is the exact
+  // post-selection rewrite that made shorter modes look as heavy as Full.
+  //
+  // With a variant present, the selected variant's `selection.main` is the
+  // final authoritative ordered list. We keep rows whose id OR normalized name
+  // matches a variant member, then re-sort to match variant order so grouped
+  // truth stays intact in the shorter session too.
+  if (variantSelection?.main && variantSelection.main.length > 0) {
+    const variantIds = new Set<string>()
+    const variantNameKeys = new Set<string>()
+    const variantOrder = new Map<string, number>() // key -> index in variant
+    variantSelection.main.forEach((v, idx) => {
+      if (v.exercise.id) {
+        variantIds.add(v.exercise.id)
+        variantOrder.set(`id:${v.exercise.id}`, idx)
+      }
+      if (v.exercise.name) {
+        const nk = normalizeExerciseKey(v.exercise.name)
+        variantNameKeys.add(nk)
+        if (!variantOrder.has(`name:${nk}`)) variantOrder.set(`name:${nk}`, idx)
+      }
+    })
+
+    const matchVariantIndex = (row: FullRoutineExercise): number | null => {
+      if (row.id && variantOrder.has(`id:${row.id}`)) return variantOrder.get(`id:${row.id}`)!
+      const nk = normalizeExerciseKey(row.name)
+      if (nk && variantOrder.has(`name:${nk}`)) return variantOrder.get(`name:${nk}`)!
+      return null
+    }
+
+    const trimmed = result
+      .map(row => ({ row, vi: matchVariantIndex(row) }))
+      .filter(x => x.vi !== null) as Array<{ row: FullRoutineExercise; vi: number }>
+
+    // Sort by variant order so the visible list matches the selected session
+    // contract exactly (e.g. grouped pair stays adjacent, skill-first order).
+    trimmed.sort((a, b) => a.vi - b.vi)
+
+    // Safety net: if every row dropped (identity drift), fall back to full
+    // result so we never render an empty session body.
+    if (trimmed.length > 0) {
+      return trimmed.map(x => x.row)
+    }
+  }
+
   return result
 }
 

@@ -1058,42 +1058,59 @@ export function ActiveWorkoutStartCorridor({
               </div>
             )}
             
-            {/* [LIVE-WORKOUT-AUTHORITY] Actual Load Input - for weighted exercises */}
-            {showLoadInput && prescribedLoad && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-[#A4ACB8]">Load Used</span>
-                  <span className="text-xs text-[#6B7280]">
-                    Prescribed: +{prescribedLoad.load}{prescribedLoad.unit}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] h-10 px-3"
-                    onClick={() => onSetActualLoad?.((actualLoadUsed ?? prescribedLoad.load) - 5, actualLoadUnit)}
-                    disabled={(actualLoadUsed ?? prescribedLoad.load) <= 0}
-                  >
-                    -5
-                  </Button>
-                  <div className="flex-1 text-center">
-                    <span className="text-2xl font-bold text-amber-400">
-                      +{actualLoadUsed ?? prescribedLoad.load}
+            {/* [LIVE-WORKOUT-AUTHORITY] Actual Load Input - for weighted exercises
+                [WEIGHTED-INCREMENT-LOCK] Fine-grained loading steps that match real plates:
+                  - lbs: 2.5 lb step (smallest microplate pair, standard US gym)
+                  - kg:  1.0 kg step (smallest standard plate pair)
+                The same step drives storage (onSetActualLoad), the numeric display,
+                and the disabled gate so storage/display/live-tap logic all agree. */}
+            {showLoadInput && prescribedLoad && (() => {
+              const unit = (actualLoadUnit || prescribedLoad.unit || 'lbs').toLowerCase()
+              const loadStep = unit === 'kg' ? 1 : 2.5
+              const formatNum = (n: number) =>
+                Number.isInteger(n) ? String(n) : n.toFixed(loadStep === 2.5 ? 1 : 1).replace(/\.0$/, '')
+              const stepLabel = formatNum(loadStep)
+              const currentLoad = actualLoadUsed ?? prescribedLoad.load
+              const nextDown = Math.max(0, currentLoad - loadStep)
+              const nextUp = currentLoad + loadStep
+              return (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-[#A4ACB8]">Load Used</span>
+                    <span className="text-xs text-[#6B7280]">
+                      Prescribed: +{formatNum(prescribedLoad.load)}{prescribedLoad.unit}
                     </span>
-                    <span className="text-sm text-[#A4ACB8] ml-1">{actualLoadUnit || prescribedLoad.unit}</span>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] h-10 px-3"
-                    onClick={() => onSetActualLoad?.((actualLoadUsed ?? prescribedLoad.load) + 5, actualLoadUnit)}
-                  >
-                    +5
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] h-10 px-3"
+                      onClick={() => onSetActualLoad?.(nextDown, actualLoadUnit)}
+                      disabled={currentLoad <= 0}
+                      aria-label={`Decrease load by ${stepLabel} ${unit}`}
+                    >
+                      -{stepLabel}
+                    </Button>
+                    <div className="flex-1 text-center">
+                      <span className="text-2xl font-bold text-amber-400 tabular-nums">
+                        +{formatNum(currentLoad)}
+                      </span>
+                      <span className="text-sm text-[#A4ACB8] ml-1">{actualLoadUnit || prescribedLoad.unit}</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] h-10 px-3"
+                      onClick={() => onSetActualLoad?.(nextUp, actualLoadUnit)}
+                      aria-label={`Increase load by ${stepLabel} ${unit}`}
+                    >
+                      +{stepLabel}
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )
+            })()}
             
             {/* Reps/Hold Input - with per-side label when applicable */}
             {isHold ? (

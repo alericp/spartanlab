@@ -405,28 +405,58 @@ function compressMain(
   })
   
   if (level === 'light') {
-    // Keep all exercises, reduce sets on lower priority ones
-    // [PHASE 6A] Preserve all metadata from original exercises
-    return prioritized.map((e, idx) => {
-      if (idx < 2) return { ...e } // Keep top 2 unchanged with all metadata
-      return {
-        ...e, // Preserve selectionReason, selectionTrace, etc.
-        sets: Math.max(2, e.sets - 1),
-      }
+    // [VARIANT-REALISM-LOCK] For light compression (e.g. 45-min derived from
+    // a 55-60 min Full), preserve the ORIGINAL session order. The identity
+    // sort above is used ONLY to pick which exercises get their sets reduced
+    // -- NOT to reorder the visible session. Reordering a light variant made
+    // the 45-min mode look "weirder" than Full because the natural warmup ->
+    // skill -> strength -> accessory flow was shuffled by identity score,
+    // producing a structurally stranger session that practically felt
+    // heavier. Walk `main` in its canonical order here and only look up the
+    // identity score to decide which items lose a set.
+    //
+    // This also guarantees grouped truth stays intact: when consecutive
+    // A1/A2 superset members are kept in their original positions, the
+    // downstream grouped render contract matches them into a superset
+    // block. Reordering would separate paired members and flatten the group.
+    const scoreById = new Map<string, number>()
+    for (const s of scoredExercises) {
+      scoreById.set(s.exercise.exercise.id, s.identityScore)
+    }
+    // Top-N (by score) keep their full sets; everything else loses one set.
+    const keepFullSetsIds = new Set(
+      scoredExercises
+        .slice()
+        .sort((a, b) => b.identityScore - a.identityScore)
+        .slice(0, 2)
+        .map(s => s.exercise.exercise.id)
+    )
+    return main.map(e => {
+      if (keepFullSetsIds.has(e.exercise.id)) return { ...e }
+      return { ...e, sets: Math.max(2, e.sets - 1) }
     })
   }
   
   if (level === 'moderate') {
-    // Keep top 4-5 exercises, reduce sets
-    // [PHASE 6A] Preserve session identity - keep skill expressions first
-    const kept = prioritized.slice(0, 5)
-    return kept.map((e, idx) => {
-      if (preserveSkillWork && e.exercise.category === 'skill') {
-        return { ...e } // Preserve full metadata
-      }
-      if (idx < 2) return { ...e, sets: Math.max(3, e.sets) }
-      return { ...e, sets: Math.max(2, e.sets - 1) }
-    })
+    // [VARIANT-REALISM-LOCK] Pick which exercises to keep by identity score,
+    // but render them back in the ORIGINAL session order. This keeps the
+    // compressed variant structurally recognizable as a trimmed version of
+    // Full (same flow, fewer slots) instead of a re-sorted list that looks
+    // like a different workout.
+    const sortedByScore = scoredExercises
+      .slice()
+      .sort((a, b) => b.identityScore - a.identityScore)
+    const keptIds = new Set(sortedByScore.slice(0, 5).map(s => s.exercise.exercise.id))
+    const topTwoIds = new Set(sortedByScore.slice(0, 2).map(s => s.exercise.exercise.id))
+    return main
+      .filter(e => keptIds.has(e.exercise.id))
+      .map(e => {
+        if (preserveSkillWork && e.exercise.category === 'skill') {
+          return { ...e } // Preserve full metadata and full sets
+        }
+        if (topTwoIds.has(e.exercise.id)) return { ...e, sets: Math.max(3, e.sets) }
+        return { ...e, sets: Math.max(2, e.sets - 1) }
+      })
   }
   
   // ==========================================================================
@@ -531,6 +561,21 @@ function compressMain(
     (e.exercise.category === 'accessory' || e.exercise.category === 'core') &&
     !e.selectionReason?.toLowerCase().includes('skill')
   ).length > result.length / 2
+  
+  // [VARIANT-REALISM-LOCK] Sort the heavy-compressed result BACK into the
+  // original session order so 30-min mode looks like "the same workout,
+  // shorter" rather than a re-sorted list. The priority logic above decides
+  // which exercises to KEEP and their set counts; the visible order must
+  // still follow the canonical session flow so grouped truth (consecutive
+  // superset/circuit members) remains intact and the shorter variant
+  // structurally reads as a subset of Full, not a new session.
+  const originalOrderIndex = new Map<string, number>()
+  main.forEach((e, idx) => originalOrderIndex.set(e.exercise.id, idx))
+  result.sort((a, b) => {
+    const ai = originalOrderIndex.get(a.exercise.id) ?? Number.MAX_SAFE_INTEGER
+    const bi = originalOrderIndex.get(b.exercise.id) ?? Number.MAX_SAFE_INTEGER
+    return ai - bi
+  })
   
   console.log('[short-variant-generic-collapse-guard-audit]', {
     fullSessionHadPrioritySkill: fullHadPrioritySkill,

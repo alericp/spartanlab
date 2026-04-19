@@ -149,18 +149,31 @@ function getGroupTypeIcon(groupType: StyledGroup['groupType']) {
 }
 
 // Helper to get color classes for group type
-function getGroupTypeColors(groupType: StyledGroup['groupType']): { border: string; bg: string; text: string } {
+// [GROUPED-VISIBLE-OWNERSHIP] The card body must visibly assert grouped truth
+// as the dominant session structure whenever grouped truth exists upstream.
+// Earlier palette used `/5` background and `/40` border, which rendered grouped
+// blocks almost indistinguishable from flat rows on the dark card background --
+// ownership was correct in the contract but lost visually. We now expose two
+// background tiers:
+//   - `bg`:      the header pill tint (moderate -- `/15`)
+//   - `blockBg`: the surrounding block-container tint (subtle but present --
+//                `/[0.08]`) so members visibly belong to the group, not the
+//                flat list above/below.
+// Border goes to `/60` so the left-border accent on members is unmistakable.
+// Text colors stay on-brand (superset uses blue-gray palette tone instead of
+// a flat muted hex so contrast lifts without adding a new color family).
+function getGroupTypeColors(groupType: StyledGroup['groupType']): { border: string; bg: string; blockBg: string; text: string } {
   switch (groupType) {
     case 'superset':
-      return { border: 'border-[#4F6D8A]/40', bg: 'bg-[#4F6D8A]/5', text: 'text-[#4F6D8A]' }
+      return { border: 'border-[#4F6D8A]/60', bg: 'bg-[#4F6D8A]/15', blockBg: 'bg-[#4F6D8A]/[0.08]', text: 'text-[#7FA8CC]' }
     case 'circuit':
-      return { border: 'border-emerald-500/40', bg: 'bg-emerald-500/5', text: 'text-emerald-500' }
+      return { border: 'border-emerald-500/60', bg: 'bg-emerald-500/15', blockBg: 'bg-emerald-500/[0.08]', text: 'text-emerald-300' }
     case 'density_block':
-      return { border: 'border-amber-500/40', bg: 'bg-amber-500/5', text: 'text-amber-500' }
+      return { border: 'border-amber-500/60', bg: 'bg-amber-500/15', blockBg: 'bg-amber-500/[0.08]', text: 'text-amber-300' }
     case 'cluster':
-      return { border: 'border-purple-500/40', bg: 'bg-purple-500/5', text: 'text-purple-500' }
+      return { border: 'border-purple-500/60', bg: 'bg-purple-500/15', blockBg: 'bg-purple-500/[0.08]', text: 'text-purple-300' }
     default:
-      return { border: 'border-transparent', bg: 'bg-transparent', text: 'text-[#A5A5A5]' }
+      return { border: 'border-transparent', bg: 'bg-transparent', blockBg: 'bg-transparent', text: 'text-[#A5A5A5]' }
   }
 }
 
@@ -1494,7 +1507,14 @@ function MainExercisesRenderer({
           const colors = getGroupTypeColors(block.groupType)
           const icon = getGroupTypeIcon(block.groupType)
           return (
-            <div key={block.groupId || `raw-${bIdx}`}>
+            <div
+              key={block.groupId || `raw-${bIdx}`}
+              // [GROUPED-VISIBLE-OWNERSHIP] Same dominant container treatment as
+              // the rich grouped path so the raw-fallback branch (grouped truth
+              // exists upstream but rich hydration incomplete) still visibly
+              // wins ownership of the card body instead of looking flat.
+              className={`rounded-lg border ${colors.border} ${colors.blockBg} p-2`}
+            >
               <div className={`mb-2 flex items-center gap-2 flex-wrap px-2.5 py-1.5 rounded-md ${colors.bg}`}>
                 <span className={colors.text}>{icon}</span>
                 <span className={`text-sm font-semibold ${colors.text}`}>{block.label}</span>
@@ -1799,7 +1819,17 @@ function MainExercisesRenderer({
         const isSpecialGroup = group.groupType !== 'straight'
         
         return (
-          <div key={group.id || `group-${blockIdx}`}>
+          <div
+            key={group.id || `group-${blockIdx}`}
+            // [GROUPED-VISIBLE-OWNERSHIP] Wrap the entire grouped block (header +
+            // members) in a tinted container so grouped structure is the visually
+            // dominant unit in the card body. Previously the header was a small
+            // pill and members only carried a thin left border, so a 2-row
+            // superset inside a 7-row session read as "mostly flat with a colored
+            // pill". With a container tint + padding, the group is unmistakably
+            // a distinct structural block.
+            className={isSpecialGroup ? `rounded-lg border ${colors.border} ${colors.blockBg} p-2` : ''}
+          >
             {/* [CLEAN-GROUP-HEADER-RESTORED] Compact but clearly visible header.
                 Previous pass made it too quiet (text-xs + opacity-80) which flattened grouped
                 truth visually. Restored to text-sm, full opacity, with a subtle tinted background

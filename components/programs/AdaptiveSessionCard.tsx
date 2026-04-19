@@ -2138,9 +2138,13 @@ function ExerciseRow({
   return (
     <div className={`py-2 px-3 rounded-lg border transition-colors ${
       isWarmupCooldown
-        // Green identity treatment: subtle emerald-tinted background + left-
-        // accent border so warm-up rows are visibly distinct from main rows.
-        ? 'bg-emerald-500/[0.04] border-[#222] border-l-2 border-l-emerald-500/50'
+        // [WARM-UP-STYLE-DEMOTED] Keep the richer row contract (identity tag +
+        // per-row reason italic) but strip the heavy emerald-washed background
+        // and left-accent border. Rows now sit on the same dark container as
+        // main rows (`bg-[#151515] border-[#222]`), with green expressed ONLY
+        // through the small `Warm-Up` tag -- cleaner, less saturated, closer
+        // to the pre-regression look. Structure and contract unchanged.
+        ? 'bg-[#151515] border-[#222]'
         : adjustedName
           ? 'bg-[#171717] border-[#4F6D8A]/20'
           : 'bg-[#171717] border-[#282828] hover:border-[#3A3A3A]'
@@ -2153,8 +2157,9 @@ function ExerciseRow({
           )}
           <p className="font-medium text-[#E5E5E5] text-[13px] truncate">{displayName}</p>
           {isWarmupCooldown ? (
-            // Warm-up identity tag (prior contract) - replaces main-row intent label.
-            <span className="text-[8px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400/90 shrink-0">
+            // [WARM-UP-STYLE-DEMOTED] Warm-up identity tag remains the sole
+            // green accent in the row -- small, restrained, not saturated.
+            <span className="text-[8px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400/80 shrink-0">
               Warm-Up
             </span>
           ) : (
@@ -2195,9 +2200,12 @@ function ExerciseRow({
       {/* ROW 3a: [WARM-UP-ROW-CONTRACT-RESTORED] Per-row warm-up selectionReason.
           This is the "prior supporting subtitle / intent line behavior" that the
           regression stripped. Main rows have their own whyLine/detailExplanation
-          contract below, which remains gated by !isWarmupCooldown. */}
+          contract below, which remains gated by !isWarmupCooldown.
+          [WARM-UP-STYLE-DEMOTED] Uses the same neutral italic treatment as the
+          main-row whyLine (`text-[#6A6A6A]`) so warm-up rows no longer feel
+          green-washed -- the only green in the row is the small identity tag. */}
       {isWarmupCooldown && warmupReason && (
-        <p className="text-[10px] text-emerald-400/70 italic mt-1">
+        <p className="text-[10px] text-[#6A6A6A] italic mt-1">
           {warmupReason}
         </p>
       )}

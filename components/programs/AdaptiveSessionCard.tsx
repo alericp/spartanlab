@@ -535,13 +535,57 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   // [GROUPED-RENDER-CONTRACT] SINGLE AUTHORITATIVE grouped render contract.
   // Computed ONCE per card mount. All three consumers below (FUNNEL-AUDIT probe,
   // method-summary chip row, and MainExercisesRenderer body) read from this
-  // exact object. Previously each site called buildGroupedDisplayModel
-  // independently; identical inputs kept them in sync in practice, but the
-  // split ownership allowed drift and made "which source decided grouped"
-  // ambiguous. This single object is the card's final grouped truth for render.
+  // exact object.
+  //
+  // [VARIANT-PRUNE-LOCK] When a variant is selected (45 or 30 mode), the
+  // card's visible exercise list is already trimmed to the variant's
+  // subset via `fullVisibleExercises`. But `sessionStyleMetadata` is the
+  // FULL session's metadata -- its styledGroups may reference exercises
+  // that are NO LONGER present in the variant. Feeding the raw metadata
+  // to the adapter makes it return "group with 2 members" for a pair
+  // whose second member was dropped; the renderer then hydrates one row
+  // and text-fallbacks the other, producing a broken-looking group.
+  //
+  // The fix: prune styledGroups to only members present in
+  // `fullVisibleExercises` BEFORE handing to the adapter. Groups that
+  // lose too many members to still be that method (e.g. superset below
+  // 2 members) are dropped entirely. This keeps the grouped contract
+  // and the visible variant body in lockstep, mirroring the same prune
+  // already applied in the live workout route at
+  // app/(app)/workout/session/page.tsx.
   // ==========================================================================
+  const variantPrunedStyleMetadata: SessionStyleMetadata | undefined = (() => {
+    if (!sessionStyleMetadata?.styledGroups || sessionStyleMetadata.styledGroups.length === 0) {
+      return sessionStyleMetadata
+    }
+    if (!selectedVariantData) {
+      return sessionStyleMetadata
+    }
+    const normalizeKey = (s: string): string =>
+      (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+    const survivingIds = new Set(fullVisibleExercises.map(e => e.id).filter(Boolean))
+    const survivingNames = new Set(fullVisibleExercises.map(e => normalizeKey(e.name)).filter(Boolean))
+    const prunedGroups = sessionStyleMetadata.styledGroups
+      .map(g => {
+        const keptMembers = g.exercises.filter(m =>
+          survivingIds.has(m.id) || survivingNames.has(normalizeKey(m.name))
+        )
+        return { ...g, exercises: keptMembers }
+      })
+      .filter(g => {
+        if (g.groupType === 'straight') return g.exercises.length >= 1
+        // Non-straight groups (superset/circuit/density_block) need >= 2
+        // members remaining to still be meaningful as that method.
+        return g.exercises.length >= 2
+      })
+    return {
+      ...sessionStyleMetadata,
+      styledGroups: prunedGroups,
+    }
+  })()
+
   const groupedRenderContract: GroupedDisplayModel = buildGroupedDisplayModel(
-    sessionStyleMetadata,
+    variantPrunedStyleMetadata,
     fullVisibleExercises.map(ex => ({
       id: ex.id,
       name: ex.name,

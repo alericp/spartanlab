@@ -406,24 +406,37 @@ function compressMain(
   
   if (level === 'light') {
     // [VARIANT-REALISM-LOCK] For light compression (e.g. 45-min derived from
-    // a 55-60 min Full), preserve the ORIGINAL session order. The identity
-    // sort above is used ONLY to pick which exercises get their sets reduced
-    // -- NOT to reorder the visible session. Reordering a light variant made
-    // the 45-min mode look "weirder" than Full because the natural warmup ->
-    // skill -> strength -> accessory flow was shuffled by identity score,
-    // producing a structurally stranger session that practically felt
-    // heavier. Walk `main` in its canonical order here and only look up the
-    // identity score to decide which items lose a set.
+    // a 55-60 min Full), preserve the ORIGINAL session order so the variant
+    // reads as a trimmed version of Full, not a reshuffled workout.
     //
-    // This also guarantees grouped truth stays intact: when consecutive
-    // A1/A2 superset members are kept in their original positions, the
-    // downstream grouped render contract matches them into a superset
-    // block. Reordering would separate paired members and flatten the group.
-    const scoreById = new Map<string, number>()
-    for (const s of scoredExercises) {
-      scoreById.set(s.exercise.exercise.id, s.identityScore)
+    // [VARIANT-VISIBLE-DIFFERENCE-LOCK] Previously the 45-min variant kept
+    // EVERY exercise and only reduced sets on a few low-priority rows. With
+    // typical sessions (6-7 exercises, 2-4 sets each), that made Full and
+    // 45 look practically identical on the Program screen -- the classic
+    // "fake variant" symptom. We now drop the SINGLE lowest-priority
+    // non-skill accessory in addition to the set reduction, which gives 45
+    // a real, visible burden difference while still preserving the main
+    // skill/strength spine and all grouped pair adjacency.
+    //
+    // Grouped truth survival: before dropping, we check that the
+    // lowest-priority candidate is NOT a member of a non-straight grouped
+    // block (blockId+method !== 'straight'). Dropping one superset member
+    // would break the pair; we skip that exercise and look at the next.
+    // This keeps A1/A2 adjacency intact across the variant.
+    const sortedAsc = scoredExercises
+      .slice()
+      .sort((a, b) => a.identityScore - b.identityScore)
+    const isGroupedMember = (e: SelectedExercise): boolean => {
+      const ex = e.exercise as unknown as { blockId?: string; method?: string }
+      return !!ex.blockId && !!ex.method && ex.method !== 'straight'
     }
-    // Top-N (by score) keep their full sets; everything else loses one set.
+    const dropCandidate = sortedAsc.find(s =>
+      s.exercise.exercise.category !== 'skill' &&
+      !isGroupedMember(s.exercise)
+    )
+    const dropId = (main.length >= 4 && dropCandidate) ? dropCandidate.exercise.exercise.id : null
+    // Top-N (by score, after drop) keep their full sets; everything else
+    // loses one set. Top-2 are the highest-priority spine; they stay rich.
     const keepFullSetsIds = new Set(
       scoredExercises
         .slice()
@@ -431,7 +444,17 @@ function compressMain(
         .slice(0, 2)
         .map(s => s.exercise.exercise.id)
     )
-    return main.map(e => {
+    const kept = dropId
+      ? main.filter(e => e.exercise.id !== dropId)
+      : main
+    console.log('[variant-realism-lock-light]', {
+      originalCount: main.length,
+      keptCount: kept.length,
+      droppedExerciseId: dropId,
+      droppedExerciseName: dropCandidate?.exercise.exercise.name ?? null,
+      keepFullSets: Array.from(keepFullSetsIds),
+    })
+    return kept.map(e => {
       if (keepFullSetsIds.has(e.exercise.id)) return { ...e }
       return { ...e, sets: Math.max(2, e.sets - 1) }
     })

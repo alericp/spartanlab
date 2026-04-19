@@ -12421,6 +12421,147 @@ async function generateAdaptiveProgramImpl(
     })
     
     postSessionStep = 'training_method_materialization_complete'
+
+    // =========================================================================
+    // [VARIANT-PARENT-TRUTH-RECONCILE]
+    // ROOT-CAUSE FIX for "45/30 breaks grouped pairs / Full shows grouped but
+    // shorts don't". session.variants was generated INSIDE buildSession (see
+    // line ~24119: `generateSessionVariants(effectiveSelection, ...)`) from the
+    // PRE-MATERIALIZATION exercise objects -- i.e. before blockId / method /
+    // methodLabel were written to session.exercises[i] by the superset /
+    // circuit / cluster / density materialization passes above.
+    //
+    // Consequence in the old flow:
+    //   1. compressMain (inside generateSessionVariants) calls blockIdOf(e)
+    //      which reads `e.exercise.blockId`. Pre-materialization that field
+    //      is always undefined, so blockIdOf returns null for every row.
+    //   2. The "grouped-atomic unit selection" in compressMain (line ~492)
+    //      therefore sees zero groups and treats every exercise as a
+    //      standalone unit. Supersets/circuits can be half-broken by the
+    //      target-count greedy pick (one member kept, one dropped).
+    //   3. Downstream the card's variantPrunedStyleMetadata correctly drops
+    //      any group whose members fell below minMembersFor() -- so the
+    //      half-pair becomes INVISIBLE grouped truth in 45/30 while Full
+    //      still renders the intact superset. That is the exact "Full
+    //      shows grouped, shorts don't" parent-truth drift.
+    //
+    // This reconcile pass makes Full the authoritative parent:
+    //   A. Walk session.variants, find the Full variant (compressionLevel
+    //      === 'none'). Decorate every full.selection.main[j].exercise with
+    //      blockId / method / methodLabel matched from session.exercises by
+    //      id. session.exercises is now the post-materialization truth.
+    //   B. Re-run generateSessionVariants against the decorated Full so the
+    //      compressed 45/30 variants inherit atomic-unit awareness. Groups
+    //      either survive in full or are dropped in full -- no half-pairs.
+    //
+    // No effect on sessions without grouped truth (no blockId written) --
+    // the decorate step is a no-op and the regenerated variants are
+    // identical to the pre-reconcile ones.
+    // =========================================================================
+    if (Array.isArray(session.variants) && session.variants.length > 0) {
+      try {
+        const variants = session.variants
+        const fullVariant = variants.find(v => v.compressionLevel === 'none') || variants[0]
+        const fullDuration = fullVariant?.duration
+        const fullSelection = fullVariant?.selection
+
+        if (fullSelection && Array.isArray(fullSelection.main) && typeof fullDuration === 'number') {
+          // Build a lookup from session.exercises (post-materialization truth)
+          // keyed by id so we can decorate matching variant rows.
+          const sessionExerciseById = new Map<string, {
+            blockId?: string
+            method?: string
+            methodLabel?: string
+          }>()
+          for (const ex of (session.exercises || [])) {
+            const exId = (ex as { id?: string; exerciseId?: string }).id
+              || (ex as { id?: string; exerciseId?: string }).exerciseId
+            if (exId) {
+              const blockId = (ex as { blockId?: string }).blockId
+              const method = (ex as { method?: string }).method
+              const methodLabel = (ex as { methodLabel?: string }).methodLabel
+              if (blockId || method || methodLabel) {
+                sessionExerciseById.set(exId, { blockId, method, methodLabel })
+              }
+            }
+          }
+
+          // Only reconcile when grouped truth actually exists on
+          // session.exercises. If no row has blockId, there is nothing to
+          // propagate and the existing variants are already correct.
+          if (sessionExerciseById.size > 0) {
+            // Decorate Full's selection.main[j].exercise with grouped truth.
+            // Mutates in place -- compressMain / downstream consumers read
+            // `e.exercise.blockId` so the decoration must live on that field.
+            let decoratedCount = 0
+            const decoratedFullMain = fullSelection.main.map(sel => {
+              const sourceEx = sel.exercise as unknown as { id?: string }
+              const grouped = sourceEx.id ? sessionExerciseById.get(sourceEx.id) : undefined
+              if (!grouped) return sel
+              // Only propagate actually-grouped methods; preserve pre-existing fields otherwise.
+              const nextExercise = {
+                ...sel.exercise,
+                blockId: grouped.blockId ?? (sel.exercise as unknown as { blockId?: string }).blockId,
+                method: grouped.method ?? (sel.exercise as unknown as { method?: string }).method,
+                methodLabel: grouped.methodLabel ?? (sel.exercise as unknown as { methodLabel?: string }).methodLabel,
+              }
+              if (grouped.blockId || grouped.method) decoratedCount++
+              return { ...sel, exercise: nextExercise }
+            })
+
+            const decoratedFullSelection = {
+              ...fullSelection,
+              main: decoratedFullMain,
+            }
+
+            // Regenerate the variant trio from the decorated Full so compressMain
+            // can see grouped blocks and treat them as atomic units.
+            const regeneratedVariants = generateSessionVariants(decoratedFullSelection, fullDuration)
+
+            // Overwrite -- the regenerated list is strictly richer than the prior
+            // one (same Full, grouped-aware 45/30). Preserve the array reference
+            // shape by reassigning session.variants.
+            session.variants = regeneratedVariants
+
+            console.log('[VARIANT-PARENT-TRUTH-RECONCILE]', {
+              dayNumber: session.dayNumber,
+              focus: session.focus,
+              fullMainCount: decoratedFullMain.length,
+              sessionExercisesWithGroupedTruth: sessionExerciseById.size,
+              rowsDecoratedWithBlockId: decoratedCount,
+              regeneratedVariantCount: regeneratedVariants.length,
+              regeneratedVariantMainCounts: regeneratedVariants.map(v => ({
+                label: v.label,
+                duration: v.duration,
+                mainCount: v.selection.main.length,
+                groupedRowCount: v.selection.main.filter(m =>
+                  !!(m.exercise as unknown as { blockId?: string }).blockId
+                ).length,
+              })),
+              verdict: 'FULL_IS_PARENT_TRUTH__SHORTS_DERIVED_WITH_ATOMIC_GROUPS',
+            })
+
+            postSessionStep = 'variant_parent_truth_reconciled'
+          } else {
+            console.log('[VARIANT-PARENT-TRUTH-RECONCILE-SKIPPED]', {
+              dayNumber: session.dayNumber,
+              focus: session.focus,
+              reason: 'no_grouped_truth_on_session_exercises',
+              verdict: 'EXISTING_VARIANTS_ALREADY_CORRECT',
+            })
+          }
+        }
+      } catch (reconcileErr) {
+        // Never fail the session over a reconciliation issue -- fall back to
+        // the pre-reconcile variants, which are still functionally valid
+        // (just without atomic-unit grouped awareness).
+        console.warn('[VARIANT-PARENT-TRUTH-RECONCILE-FAILED]', {
+          dayNumber: session.dayNumber,
+          error: reconcileErr instanceof Error ? reconcileErr.message : String(reconcileErr),
+          verdict: 'KEEPING_PRE_RECONCILE_VARIANTS',
+        })
+      }
+    }
     
     // =========================================================================
     // STEP E: Post-mutation core integrity check

@@ -263,6 +263,12 @@ export type WorkoutMachineAction =
       // [LIVE-WORKOUT-ACTION-PLANNER] Exercise context for planning
       exerciseName?: string
       totalPrescribedSets?: number
+      // [RPE-REST-AUTHORITY] Caller-computed inter-exercise rest (RPE + category
+      // + fatigue). When present, it replaces the machine's fallback 120s and
+      // becomes the green timer duration. The caller is the ONLY site that has
+      // the live session context (exercise, justCompletedRPE, fatigue) needed
+      // to compute true rest; the machine must not guess a default.
+      interExerciseRestSeconds?: number
     }
   | { type: 'COMPLETE_REST' } // Between-set rest -> next active set (same exercise)
   | { type: 'COMPLETE_BLOCK_ROUND_REST' } // Block round rest -> next round
@@ -288,8 +294,8 @@ export type WorkoutMachineAction =
   | { type: 'SET_MULTI_BAND'; selection: MultiBandSelection | null }
   | { type: 'SET_SELECTED_BANDS'; bands: ResistanceBandColor[] }
   | { type: 'ADD_COACHING_SIGNAL'; signals: CoachingSignalTag[]; freeText?: string }
-  | { type: 'SKIP_SET'; totalSets: number; exerciseCount: number; reason?: string }
-  | { type: 'END_EXERCISE'; totalSets: number; exerciseCount: number; reason?: string }
+  | { type: 'SKIP_SET'; totalSets: number; exerciseCount: number; reason?: string; interExerciseRestSeconds?: number }
+  | { type: 'END_EXERCISE'; totalSets: number; exerciseCount: number; reason?: string; interExerciseRestSeconds?: number }
   | { type: 'SET_ACTUAL_LOAD'; load: number; unit?: string }
   | { type: 'SET_IS_PER_SIDE'; isPerSide: boolean }
 
@@ -683,7 +689,16 @@ export function workoutMachineReducer(
             currentSetReasonTags: [],
           }
         }
-        // Will need to trigger between_exercise_rest via separate action
+        // [RPE-REST-AUTHORITY] Prefer caller-computed rest (RPE + exercise
+        // category + session fatigue). Fallback to 120s only when no caller
+        // value is available (edge cases like RPE-less completion). The
+        // green inter-exercise timer reads interExerciseRestSeconds, so
+        // this is the single source of truth for its duration.
+        const rpeComputedRest =
+          typeof action.interExerciseRestSeconds === 'number' &&
+          action.interExerciseRestSeconds > 0
+            ? Math.round(action.interExerciseRestSeconds)
+            : 120
         return {
           ...state,
           phase: 'between_exercise_rest',
@@ -696,7 +711,7 @@ export function workoutMachineReducer(
           // Reset input values so component can re-seed from next exercise prescription
           repsValue: 0,
           holdValue: 0,
-          interExerciseRestSeconds: 120,
+          interExerciseRestSeconds: rpeComputedRest,
           // Clear per-set notes for next exercise
           currentSetNote: '',
           currentSetReasonTags: [],
@@ -812,12 +827,19 @@ export function workoutMachineReducer(
       if (state.currentSetNumber >= action.totalSets) {
         // Skipping last set = end exercise
         const isLastExercise = state.currentExerciseIndex >= action.exerciseCount - 1
+        // [RPE-REST-AUTHORITY] Caller-computed rest dominates the 120s fallback.
+        const skipRest = isLastExercise
+          ? 0
+          : typeof action.interExerciseRestSeconds === 'number' &&
+            action.interExerciseRestSeconds > 0
+              ? Math.round(action.interExerciseRestSeconds)
+              : 120
         return {
           ...state,
           phase: isLastExercise ? 'completed' : 'between_exercise_rest',
           skipDecisions: [...state.skipDecisions, skipDecision],
           currentSetNumber: state.currentSetNumber,
-          interExerciseRestSeconds: isLastExercise ? 0 : 120,
+          interExerciseRestSeconds: skipRest,
           currentSetNote: '',
           currentSetReasonTags: [],
         }
@@ -855,12 +877,19 @@ export function workoutMachineReducer(
       })
       
       const isLastExercise = state.currentExerciseIndex >= action.exerciseCount - 1
+      // [RPE-REST-AUTHORITY] Caller-computed rest dominates the 120s fallback.
+      const endExerciseRest = isLastExercise
+        ? 0
+        : typeof action.interExerciseRestSeconds === 'number' &&
+          action.interExerciseRestSeconds > 0
+            ? Math.round(action.interExerciseRestSeconds)
+            : 120
       
       return {
         ...state,
         phase: isLastExercise ? 'completed' : 'between_exercise_rest',
         skipDecisions: [...state.skipDecisions, skipDecision],
-        interExerciseRestSeconds: isLastExercise ? 0 : 120,
+        interExerciseRestSeconds: endExerciseRest,
         currentSetNote: '',
         currentSetReasonTags: [],
       }

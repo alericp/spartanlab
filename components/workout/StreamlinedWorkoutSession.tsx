@@ -2031,10 +2031,37 @@ if (styledGroups && styledGroups.length > 0) {
           })
         }
         break
-      case 'SHOW_INTER_EXERCISE_REST':
+      case 'SHOW_INTER_EXERCISE_REST': {
         // This is handled by COMPLETE_SET when isLastSetOfExercise=true
         const restSet = action.newCompletedSets[action.newCompletedSets.length - 1]
         if (restSet) {
+          // [RPE-REST-AUTHORITY] Mirror the RPE->rest computation used by the
+          // primary handler above. This adapter is invoked by a different
+          // upstream corridor (the reducer wrapper), so it independently needs
+          // to compute and forward the doctrine-backed rest seconds -- without
+          // it, the machine would fall back to 120s on this path.
+          let adapterComputedRest: number | undefined
+          const exAtIdx = exercises[restSet.exerciseIndex] ?? safeCurrentExercise
+          if (exAtIdx && typeof restSet.actualRPE === 'number') {
+            try {
+              const priorSets = normalizedCompletedSets
+              const avgRPE = priorSets.length > 0
+                ? priorSets.reduce((sum, s) => sum + s.actualRPE, 0) / priorSets.length
+                : restSet.actualRPE
+              const rec = getRestRecommendation(
+                exAtIdx,
+                restSet.actualRPE,
+                {
+                  setNumber: restSet.setNumber,
+                  totalSetsCompleted: priorSets.length + 1,
+                  averageRPE: avgRPE,
+                }
+              )
+              adapterComputedRest = rec.adjustedSeconds
+            } catch {
+              // fallthrough - machine falls back to 120s
+            }
+          }
           machineDispatch({
             type: 'COMPLETE_SET',
             completedSet: {
@@ -2048,9 +2075,11 @@ if (styledGroups && styledGroups.length > 0) {
             },
             isLastSetOfExercise: true,
             exerciseCount: machineSessionContract?.exercises.length ?? 1,
+            interExerciseRestSeconds: adapterComputedRest,
           })
         }
         break
+      }
       case 'COMPLETE_INTER_EXERCISE_REST':
       case 'SKIP_INTER_EXERCISE_REST':
         machineDispatch({
@@ -3624,6 +3653,44 @@ if (styledGroups && styledGroups.length > 0) {
       // This fixes the reference error where corridorRecommendedBand was defined after this callback
       const localRecommendedBand = safeCurrentExercise?.executionTruth?.recommendedBand as ResistanceBandColor | undefined
       
+      // [RPE-REST-AUTHORITY] On the last set of the exercise, compute the real
+      // inter-exercise rest NOW using the RPE being logged + exercise category
+      // + current session fatigue. This is the SAME engine the rest card uses,
+      // just seeded with the RPE of the set that just finished instead of the
+      // prior lastSetRPE snapshot. The result is passed to the machine so the
+      // green timer renders doctrine-backed rest -- never the legacy 120s
+      // fallback -- whenever a valid RPE exists for the completed set.
+      let computedInterExerciseRest: number | undefined
+      if (isLastSet && typeof setData.actualRPE === 'number') {
+        try {
+          const priorSets = normalizedCompletedSets
+          const avgRPE = priorSets.length > 0
+            ? priorSets.reduce((sum, s) => sum + s.actualRPE, 0) / priorSets.length
+            : setData.actualRPE
+          const rec = getRestRecommendation(
+            safeCurrentExercise,
+            setData.actualRPE,
+            {
+              setNumber: validatedSetNumber,
+              totalSetsCompleted: priorSets.length + 1,
+              averageRPE: avgRPE,
+            }
+          )
+          computedInterExerciseRest = rec.adjustedSeconds
+          console.log('[RPE-REST-AUTHORITY] Computed inter-exercise rest', {
+            exerciseName: safeCurrentExercise?.name,
+            category: rec.category,
+            baseSeconds: rec.baseSeconds,
+            adjustedSeconds: rec.adjustedSeconds,
+            justCompletedRPE: setData.actualRPE,
+            adjustmentReason: rec.adjustment.reason,
+            adjustmentType: rec.adjustment.type,
+          })
+        } catch (err) {
+          console.warn('[RPE-REST-AUTHORITY] getRestRecommendation threw; machine fallback will apply', err)
+        }
+      }
+      
       machineDispatch({
         type: 'COMPLETE_SET',
         completedSet: setData,
@@ -3637,6 +3704,9 @@ if (styledGroups && styledGroups.length > 0) {
         // Exercise context for action planning
         exerciseName: safeCurrentExercise?.name || '',
         totalPrescribedSets: safeCurrentExercise?.sets || 3,
+        // [RPE-REST-AUTHORITY] Doctrine-backed rest seconds (category + RPE +
+        // fatigue). Undefined when no RPE was logged; machine falls back to 120s.
+        interExerciseRestSeconds: computedInterExerciseRest,
       })
     // [CRASH-FIX] Removed liveSession dep, use machine-derived values
     // [LOGGED-VALUE-FIX] Added safeCurrentExercise to deps for prescription seed derivation
@@ -5357,15 +5427,23 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     const nextExerciseName = nextExercise?.name
     
     // [REST-CORRIDOR-SINGLE-OWNER] Rest duration flows through one authoritative
-    // decision path. Block-round rest is owned by the block prescription. 
-    // Same-exercise rest uses the current exercise's prescribed restSeconds if
-    // present, else the doctrine resolver fed the just-completed set RPE. 
-    // Between-exercise rest uses the next exercise's prescribed restSeconds if
-    // present, else the doctrine resolver fed the next exercise's category and
-    // intended targetRPE. The two corridors NEVER share a branch.
+    // decision path. Block-round rest is owned by the block prescription. For
+    // between-exercise and same-exercise rest, priority is:
+    //   1. RPE-aware computation (getRestRecommendation) when last-set RPE is known
+    //   2. Exercise's own prescribed restSeconds
+    //   3. Doctrine resolveRestTime as final fallback
+    //
+    // [RPE-AUTHORITY-OVER-PRESCRIPTION] This priority swap is the fix for the
+    // "green timer uses default path" complaint. Previously prescribed
+    // restSeconds won over RPE adaptation, so a last set of RPE 9.5 got the
+    // same rest as a last set of RPE 7, even though the rest engine has
+    // explicit RPE -> rest delta logic (rest-intelligence.ts). When the user
+    // logs a real RPE, that RPE must drive rest -- prescription becomes the
+    // floor only when no RPE has been logged yet.
     const getRestDuration = (): number => {
       let restSource = 'unknown'
       let restValue = 90
+      const lastRPE = (safeLastSetRPE as number | null) ?? null
       
       // ---- BLOCK ROUND REST ------------------------------------------------
       if (isBlockRoundRest) {
@@ -5374,20 +5452,42 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
       }
       // ---- BETWEEN-EXERCISE REST -------------------------------------------
       else if (isBetweenExerciseRest) {
-        if (nextExercise?.restSeconds && nextExercise.restSeconds > 0) {
-          // Priority 1: next exercise's prescribed rest
+        if (lastRPE != null && safeCurrentExercise) {
+          // Priority 1: RPE-aware rest for the JUST-COMPLETED exercise.
+          // This respects category + RPE + fatigue, which is exactly the
+          // doctrine the user expects the green timer to honor.
+          try {
+            const priorSets = normalizedCompletedSets
+            const avgRPE = priorSets.length > 0
+              ? priorSets.reduce((sum, s) => sum + s.actualRPE, 0) / priorSets.length
+              : lastRPE
+            const rec = getRestRecommendation(
+              safeCurrentExercise,
+              lastRPE,
+              {
+                setNumber: validatedSetNumber,
+                totalSetsCompleted: priorSets.length,
+                averageRPE: avgRPE,
+              }
+            )
+            restSource = 'rpe_aware_between_exercise'
+            restValue = rec.adjustedSeconds
+          } catch {
+            restSource = 'rpe_aware_threw_fallback'
+            restValue = nextExercise?.restSeconds || machineState.interExerciseRestSeconds || 90
+          }
+        } else if (nextExercise?.restSeconds && nextExercise.restSeconds > 0) {
+          // Priority 2: next exercise's prescribed rest
           restSource = 'next_exercise_prescribed_restSeconds'
           restValue = nextExercise.restSeconds
         } else if (nextExercise) {
-          // Priority 2: doctrine-aligned derivation from next exercise truth
+          // Priority 3: doctrine-aligned derivation from next exercise truth
           const rec = resolveRestTime({
             restType: 'between_exercises',
             exerciseCategory: (safeCurrentExercise?.category || 'general'),
             exerciseName: safeCurrentExercise?.name || '',
             targetRPE: nextExercise.targetRPE || 8,
-            // last-set RPE belongs to the JUST-FINISHED exercise; it informs
-            // how much carryover fatigue to respect before the next movement.
-            actualRPE: (safeLastSetRPE as number | null) ?? null,
+            actualRPE: lastRPE,
             isHoldBased: false,
             groupType: null,
             nextExerciseCategory: nextExercise.category,
@@ -5396,22 +5496,41 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           restSource = 'doctrine_between_exercises'
           restValue = rec.seconds
         } else {
-          // Priority 3: controlled machine fallback
+          // Priority 4: controlled machine fallback
           restSource = 'machine_inter_exercise_fallback'
           restValue = machineState.interExerciseRestSeconds || 90
         }
       }
       // ---- SAME-EXERCISE REST ----------------------------------------------
       else {
-        if (safeCurrentExercise?.restSeconds && safeCurrentExercise.restSeconds > 0) {
-          // Priority 1: current exercise's prescribed rest is authoritative
+        if (lastRPE != null && safeCurrentExercise) {
+          // Priority 1: RPE-aware rest for the ongoing exercise.
+          try {
+            const priorSets = normalizedCompletedSets
+            const avgRPE = priorSets.length > 0
+              ? priorSets.reduce((sum, s) => sum + s.actualRPE, 0) / priorSets.length
+              : lastRPE
+            const rec = getRestRecommendation(
+              safeCurrentExercise,
+              lastRPE,
+              {
+                setNumber: validatedSetNumber,
+                totalSetsCompleted: priorSets.length,
+                averageRPE: avgRPE,
+              }
+            )
+            restSource = 'rpe_aware_same_exercise'
+            restValue = rec.adjustedSeconds
+          } catch {
+            restSource = 'rpe_aware_threw_fallback'
+            restValue = safeCurrentExercise?.restSeconds || 90
+          }
+        } else if (safeCurrentExercise?.restSeconds && safeCurrentExercise.restSeconds > 0) {
+          // Priority 2: current exercise's prescribed rest
           restSource = 'current_exercise_prescribed_restSeconds'
           restValue = safeCurrentExercise.restSeconds
         } else {
-          // Priority 2: doctrine-aligned derivation honoring last-set RPE.
-          // This replaces the previous local "if RPE>=9 -> 180 etc" branch
-          // duplication so the honest last-effort truth always wins over
-          // static generic defaults when RPE is known.
+          // Priority 3: doctrine-aligned derivation.
           const exRepsOrTime = (safeCurrentExercise?.repsOrTime || '').toLowerCase()
           const isHoldBased = exRepsOrTime.includes('sec') || exRepsOrTime.includes('hold')
           const rec = resolveRestTime({
@@ -5419,13 +5538,11 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
             exerciseCategory: (safeCurrentExercise?.category || 'general'),
             exerciseName: safeCurrentExercise?.name || '',
             targetRPE: safeCurrentExercise?.targetRPE || 8,
-            actualRPE: (safeLastSetRPE as number | null) ?? null,
+            actualRPE: lastRPE,
             isHoldBased,
             groupType: null,
           })
-          restSource = safeLastSetRPE != null
-            ? 'doctrine_same_exercise_rpe_aware'
-            : 'doctrine_same_exercise_no_rpe'
+          restSource = 'doctrine_same_exercise_no_rpe'
           restValue = rec.seconds
         }
       }

@@ -19,7 +19,7 @@ import { WorkoutSessionSummary } from '@/components/workout/WorkoutSessionSummar
 import { trackWorkoutStarted, trackWorkoutCompleted } from '@/lib/analytics'
 import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
-import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
+import { InfoBubble, ExerciseKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
 import { buildExerciseCardContract, buildExerciseRowSurface, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
 import type { ProgramExplanationSurface } from '@/lib/coaching-explanation-contract'
 // [SINGLE-TRUTH-FIX] Removed: getCompactExerciseExplanation - was source of contradictory text
@@ -1045,32 +1045,30 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             </div>
           )}
 
-{/* Warmup Toggle */}
-  <div>
-    <button
-      className="flex items-center gap-2 text-sm text-[#6A6A6A] hover:text-[#A5A5A5] transition-colors"
-      onClick={() => setShowWarmup(!showWarmup)}
-    >
-      {showWarmup ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-      <span>Warm-Up</span>
-      <span className="text-xs text-[#4F6D8A]">({session.warmup.length} exercises)</span>
-    </button>
-    {showWarmup && (
-      <div className="mt-2 space-y-2">
-        {/* Structure explanation for warmup protocols */}
-        <StructureKnowledgeBubble structureType="protocol_warmup" />
-        {/* [TRUTH-ENFORCEMENT] selectionReason is authoritative builder output - safe direct access */}
-        {session.warmup[0]?.selectionReason && (
-          <p className="text-xs text-[#6A6A6A] italic pl-2 border-l-2 border-[#4F6D8A]/30">
-            {session.warmup[0].selectionReason}
-          </p>
-        )}
-        {session.warmup.map((exercise, idx) => (
-          <ExerciseRow key={idx} exercise={exercise} isWarmupCooldown />
-        ))}
-      </div>
-    )}
-  </div>
+          {/* Warmup Toggle */}
+          <div>
+            <button
+              className="flex items-center gap-2 text-sm text-[#6A6A6A] hover:text-[#A5A5A5] transition-colors"
+              onClick={() => setShowWarmup(!showWarmup)}
+            >
+              {showWarmup ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              Warm-Up
+              <span className="text-xs text-[#4F6D8A]">({session.warmup.length} exercises)</span>
+            </button>
+            {showWarmup && (
+              <div className="mt-2 space-y-2">
+                {/* [TRUTH-ENFORCEMENT] selectionReason is authoritative builder output - safe direct access */}
+                {session.warmup[0]?.selectionReason && (
+                  <p className="text-xs text-[#6A6A6A] italic mb-2 pl-2 border-l-2 border-[#4F6D8A]/30">
+                    {session.warmup[0].selectionReason}
+                  </p>
+                )}
+                {session.warmup.map((exercise, idx) => (
+                  <ExerciseRow key={idx} exercise={exercise} isWarmupCooldown />
+                ))}
+              </div>
+            )}
+          </div>
 
 {/* =========================================================================
     [GROUPED-METHOD-SUMMARY] Visible session methodology indicator
@@ -1235,12 +1233,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 >
                   {showMethodDecisions ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   <span className="font-medium">Method decisions</span>
-                  {/* [ACTIVE-PATH-MARKER v1] temporary ownership marker — proves preview is consuming
-                      the authoritative components/programs/AdaptiveSessionCard.tsx. Remove this
-                      single <span/> block once the grouped-render corridor is re-verified live. */}
-                  <span className="text-[9px] font-mono tracking-wide text-[#C5C5C5] bg-[#2A2A2A] border border-[#3A3A3A] rounded px-1.5 py-0.5 ml-2">
-                    ACTIVE PATH v1
-                  </span>
                   <span className="text-[10px] text-[#6A6A6A] ml-auto">
                     {applied.length > 0 ? `${applied.length} applied` : 'Straight sets'}
                     {rejected.length > 0 && ` · ${rejected.length} not used`}

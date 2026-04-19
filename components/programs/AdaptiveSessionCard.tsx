@@ -1235,6 +1235,12 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 >
                   {showMethodDecisions ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   <span className="font-medium">Method decisions</span>
+                  {/* [ACTIVE-PATH-MARKER v1] temporary ownership marker — proves preview is consuming
+                      the authoritative components/programs/AdaptiveSessionCard.tsx. Remove this
+                      single <span/> block once the grouped-render corridor is re-verified live. */}
+                  <span className="text-[9px] font-mono tracking-wide text-[#C5C5C5] bg-[#2A2A2A] border border-[#3A3A3A] rounded px-1.5 py-0.5 ml-2">
+                    ACTIVE PATH v1
+                  </span>
                   <span className="text-[10px] text-[#6A6A6A] ml-auto">
                     {applied.length > 0 ? `${applied.length} applied` : 'Straight sets'}
                     {rejected.length > 0 && ` · ${rejected.length} not used`}

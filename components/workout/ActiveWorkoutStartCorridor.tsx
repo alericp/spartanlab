@@ -80,6 +80,12 @@ export interface CompletedSetInfo {
   actualLoadUnit?: string
   isPerSide?: boolean
   structuredCoachingInputs?: string[]
+  // [COMPLETED-SET-NOTE-SURFACE] Optional free-text coaching note captured
+  // during this set. Display-only field; persistence/reducer contracts are
+  // unchanged. Renders as a subtle MessageSquare indicator + one-line
+  // truncated preview in the Recent Sets and rest-screen Completed Sets
+  // ledgers so the user can immediately verify feedback was captured.
+  note?: string
 }
 
 export interface ActiveWorkoutCorridorProps {
@@ -1072,21 +1078,38 @@ export function ActiveWorkoutStartCorridor({
                 <Card className="bg-[#1A1F26]/50 border-[#2B313A]/50 p-3">
                   <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-2">Completed Sets</p>
                   <div className="space-y-1.5">
-                    {recentSets.map((set, idx) => (
-                      <div key={idx} className="flex items-center justify-between text-sm">
-                        <span className="text-[#A4ACB8]">Set {set.setNumber}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[#E6E9EF]">
-                            {set.holdSeconds ? `${set.holdSeconds}s` : `${set.actualReps} reps`}
-                          </span>
-                          {set.actualRPE && (
-                            <Badge variant="outline" className="text-[10px] border-[#2B313A] text-[#A4ACB8]">
-                              RPE {set.actualRPE}
-                            </Badge>
+                    {recentSets.map((set, idx) => {
+                      const trimmedNote = typeof set.note === 'string' ? set.note.trim() : ''
+                      const hasNote = trimmedNote.length > 0
+                      return (
+                        <div key={idx} className="text-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[#A4ACB8]">Set {set.setNumber}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[#E6E9EF]">
+                                {set.holdSeconds ? `${set.holdSeconds}s` : `${set.actualReps} reps`}
+                              </span>
+                              {set.actualRPE && (
+                                <Badge variant="outline" className="text-[10px] border-[#2B313A] text-[#A4ACB8]">
+                                  RPE {set.actualRPE}
+                                </Badge>
+                              )}
+                              {hasNote && (
+                                <MessageSquare
+                                  className="w-3 h-3 text-[#6B7280]"
+                                  aria-label="Has coaching note"
+                                />
+                              )}
+                            </div>
+                          </div>
+                          {hasNote && (
+                            <p className="text-xs text-[#6B7280] truncate mt-0.5" title={trimmedNote}>
+                              {trimmedNote}
+                            </p>
                           )}
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </Card>
               )}
@@ -1589,41 +1612,60 @@ export function ActiveWorkoutStartCorridor({
             <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
               <div className="text-xs font-medium text-[#A4ACB8] mb-2">Recent Sets</div>
               <div className="space-y-1 text-xs max-h-24 overflow-y-auto">
-                {recentSets.map((set, idx) => (
-                  <div key={idx} className="flex items-center justify-between px-2 py-1.5 bg-[#2B313A]/50 rounded">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <span className="text-[#6B7280] w-12 flex-shrink-0">Set {set.setNumber}</span>
-                      <span className="text-[#E6E9EF] font-medium">
-                        {set.actualReps > 0 
-                          ? `${set.actualReps}${set.isPerSide ? '/side' : ''}` 
-                          : set.holdSeconds 
-                            ? `${set.holdSeconds}s` 
-                            : '—'}
-                      </span>
-                      {/* Load used - for weighted exercises */}
-                      {set.actualLoadUsed !== undefined && set.actualLoadUsed > 0 && (
-                        <span className="text-amber-400 text-[10px]">+{set.actualLoadUsed}{set.actualLoadUnit || 'lbs'}</span>
-                      )}
-                      {/* Multi-band - show combined */}
-                      {set.selectedBands && set.selectedBands.length > 0 ? (
-                        <span className="text-[#C1121F] text-[10px] truncate max-w-[60px]">
-                          {set.selectedBands.map(b => BAND_SHORT_LABELS[b]).join('+')}
-                        </span>
-                      ) : set.bandUsed && set.bandUsed !== 'none' && (
-                        <span className="text-[#C1121F] text-[10px]">{BAND_SHORT_LABELS[set.bandUsed]}</span>
+                {recentSets.map((set, idx) => {
+                  const trimmedNote = typeof set.note === 'string' ? set.note.trim() : ''
+                  const hasNote = trimmedNote.length > 0
+                  return (
+                    <div key={idx} className="px-2 py-1.5 bg-[#2B313A]/50 rounded">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <span className="text-[#6B7280] w-12 flex-shrink-0">Set {set.setNumber}</span>
+                          <span className="text-[#E6E9EF] font-medium">
+                            {set.actualReps > 0 
+                              ? `${set.actualReps}${set.isPerSide ? '/side' : ''}` 
+                              : set.holdSeconds 
+                                ? `${set.holdSeconds}s` 
+                                : '—'}
+                          </span>
+                          {/* Load used - for weighted exercises */}
+                          {set.actualLoadUsed !== undefined && set.actualLoadUsed > 0 && (
+                            <span className="text-amber-400 text-[10px]">+{set.actualLoadUsed}{set.actualLoadUnit || 'lbs'}</span>
+                          )}
+                          {/* Multi-band - show combined */}
+                          {set.selectedBands && set.selectedBands.length > 0 ? (
+                            <span className="text-[#C1121F] text-[10px] truncate max-w-[60px]">
+                              {set.selectedBands.map(b => BAND_SHORT_LABELS[b]).join('+')}
+                            </span>
+                          ) : set.bandUsed && set.bandUsed !== 'none' && (
+                            <span className="text-[#C1121F] text-[10px]">{BAND_SHORT_LABELS[set.bandUsed]}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-[#A4ACB8]">RPE {set.actualRPE}</span>
+                          {/* Coaching signals indicator */}
+                          {((set.reasonTags && set.reasonTags.length > 0) || (set.structuredCoachingInputs && set.structuredCoachingInputs.length > 0)) && (
+                            <span className="text-amber-400 text-[10px]">
+                              +{(set.reasonTags?.length || 0) + (set.structuredCoachingInputs?.length || 0)}
+                            </span>
+                          )}
+                          {/* Free-text note indicator */}
+                          {hasNote && (
+                            <MessageSquare
+                              className="w-3 h-3 text-[#6B7280]"
+                              aria-label="Has coaching note"
+                            />
+                          )}
+                        </div>
+                      </div>
+                      {/* One-line muted note preview */}
+                      {hasNote && (
+                        <p className="text-[10px] text-[#6B7280] truncate mt-0.5 pl-14" title={trimmedNote}>
+                          {trimmedNote}
+                        </p>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="text-[#A4ACB8]">RPE {set.actualRPE}</span>
-                      {/* Coaching signals indicator */}
-                      {((set.reasonTags && set.reasonTags.length > 0) || (set.structuredCoachingInputs && set.structuredCoachingInputs.length > 0)) && (
-                        <span className="text-amber-400 text-[10px]">
-                          +{(set.reasonTags?.length || 0) + (set.structuredCoachingInputs?.length || 0)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </Card>
           )}

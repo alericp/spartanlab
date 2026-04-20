@@ -5949,9 +5949,17 @@ function InterExerciseRestCountdown({
       selectedBands: set.selectedBands,
       actualLoadUsed: set.actualLoadUsed,
       actualLoadUnit: set.actualLoadUnit,
-      isPerSide: set.isPerSide,
-      structuredCoachingInputs: set.structuredCoachingInputs,
-    }))
+    isPerSide: set.isPerSide,
+    structuredCoachingInputs: set.structuredCoachingInputs,
+    // [COMPLETED-SET-NOTE-SURFACE] Free-text coaching note passthrough so
+    // the active and rest-screen set ledgers can show a subtle indicator
+    // + preview line, closing the "did my note save?" trust gap. Does not
+    // alter reducer/machine/persistence contracts - this is a display-only
+    // pass-through of an already-persisted field.
+    note: typeof (set as { note?: unknown }).note === 'string'
+      ? ((set as { note?: string }).note as string)
+      : undefined,
+  }))
     
 
     

@@ -1,5 +1,15 @@
 'use client'
 
+// [LIVE_LOG_CORRIDOR_LANDING_V1] Active-branch landing marker.
+// If `grep -R LIVE_LOG_CORRIDOR_LANDING_V1 .` returns three matches
+// (this file, ActiveWorkoutStartCorridor.tsx, live-workout-machine.ts),
+// the runnable branch contains the full accumulated straight-set Log Set
+// fix: strict `isTrulyGroupedExercise` gate, Layer-A/Layer-B fail-open
+// COMPLETE_SET reducer, single `activeCorridorSnapshot` handoff surface,
+// and stages 1-7 proof logs. Zero runtime behavior; purely a branch
+// identity marker so the user can verify a pull landed the landing commit
+// without chasing v0 branch hashes.
+
 import { useState, useEffect, useCallback, useRef, useMemo, useReducer } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'

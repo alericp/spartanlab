@@ -1,3 +1,11 @@
+// [LIVE_LOG_CORRIDOR_LANDING_V1] Active-branch landing marker. See
+// components/workout/StreamlinedWorkoutSession.tsx for the marker
+// contract. This file's carried-fix surface: COMPLETE_SET case split
+// into Layer A (base required commit - cannot be blocked by optional
+// helper failures) and Layer B (fail-open intelligence enrichment with
+// per-helper try/catch and `[log-corridor] helper-failed:` dev warnings),
+// plus stage-4 reducer entry log and per-branch post-commit assertions.
+
 /**
  * [LIVE-WORKOUT-MACHINE] Explicit Runtime State Machine for Live Workout Execution
  * 

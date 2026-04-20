@@ -1,5 +1,11 @@
 'use client'
 
+// [LIVE_LOG_CORRIDOR_LANDING_V1] Active-branch landing marker. See
+// StreamlinedWorkoutSession.tsx for the marker contract. This file's
+// carried-fix surface: stage-7 render-time log, `isHoldExercise` prop
+// consumed as `isHoldExerciseProp` with `isHoldExerciseFallback` defensive
+// detector only, no local state masking Set X/Y / recent sets / inputs.
+
 /**
  * [ACTIVE-WORKOUT-START-CORRIDOR] Isolated Active Workout UI
  * 

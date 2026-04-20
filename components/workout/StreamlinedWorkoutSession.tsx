@@ -1611,17 +1611,34 @@ export function StreamlinedWorkoutSession({
         return null
       }
       
-      // Build guaranteed-safe exercise object with ALL fields used anywhere in render
+      // [WEEK-TRUTH-CORRIDOR] Preservation-safe normalizer (not a destructive rebuild).
+      // This is the FIRST losing stage that was stripping week-scaled truth from the
+      // loader. We now preserve scaled dosage fields emitted by
+      // lib/workout/load-authoritative-session.ts (scaledSets, scaledReps,
+      // scaledHoldDuration, scaledTargetRPE, scaledRestPeriod, weekScalingApplied)
+      // so that getEffectiveExerciseValues() can actually see them and prefer
+      // them over base Week-1 values. NO new scaling logic is introduced here;
+      // we only preserve what the loader already resolved.
+      const exAny = ex as Record<string, unknown>
       return {
         // Core identity - ALWAYS strings, never undefined
         id: typeof ex.id === 'string' && ex.id ? ex.id : `exercise-${idx}`,
         name: typeof ex.name === 'string' && ex.name ? ex.name : 'Exercise',
         category: typeof ex.category === 'string' && ex.category ? ex.category : 'general',
         
-        // Execution parameters - guaranteed safe
+        // Execution parameters - guaranteed safe (base/raw values)
         sets: typeof ex.sets === 'number' && ex.sets > 0 ? ex.sets : 3,
         repsOrTime: typeof ex.repsOrTime === 'string' && ex.repsOrTime ? ex.repsOrTime : '8-12 reps',
         note: typeof ex.note === 'string' ? ex.note : '',
+        
+        // [WEEK-TRUTH-CORRIDOR] Preserved scaled dosage fields from loader.
+        // getEffectiveExerciseValues() at line ~371 prefers these over base values.
+        scaledSets: typeof exAny.scaledSets === 'number' && (exAny.scaledSets as number) > 0 ? (exAny.scaledSets as number) : undefined,
+        scaledReps: typeof exAny.scaledReps === 'string' && exAny.scaledReps ? (exAny.scaledReps as string) : undefined,
+        scaledHoldDuration: typeof exAny.scaledHoldDuration === 'number' ? (exAny.scaledHoldDuration as number) : undefined,
+        scaledTargetRPE: typeof exAny.scaledTargetRPE === 'number' ? (exAny.scaledTargetRPE as number) : undefined,
+        scaledRestPeriod: typeof exAny.scaledRestPeriod === 'number' ? (exAny.scaledRestPeriod as number) : undefined,
+        weekScalingApplied: exAny.weekScalingApplied === true,
         
         // Override/selection
         isOverrideable: ex.isOverrideable !== false,
@@ -1648,6 +1665,15 @@ export function StreamlinedWorkoutSession({
       }
     }).filter((ex): ex is NonNullable<typeof ex> => ex !== null)
     
+    // [WEEK-TRUTH-CORRIDOR] Preserve session-level metadata the ready shell
+    // and grouped-rendering path need. Previously safeWorkoutSessionContract
+    // silently dropped these, which forced the ready shell into fallback
+    // branches (flat rendering) and suppressed grouped identity. The
+    // ready-shell grouped rendering at line ~4836, acclimation microcopy
+    // gating at line ~5083, and compositionMetadata fallback at line ~6150
+    // all depend on these being preserved.
+    const sessionAny = session as Record<string, unknown>
+    
     // Build the authoritative contract
     return {
       // Session identity
@@ -1664,12 +1690,26 @@ export function StreamlinedWorkoutSession({
       isPrimary: session.isPrimary !== false,
       finisherIncluded: session.finisherIncluded === true,
       
-      // Exercises - authoritative safe array
+      // Exercises - authoritative safe array (now preserves scaled dosage)
       exercises: normalizedExercises,
       
       // Warmup/cooldown (optional arrays)
       warmup: Array.isArray(session.warmup) ? session.warmup : [],
       cooldown: Array.isArray(session.cooldown) ? session.cooldown : [],
+      
+      // [WEEK-TRUTH-CORRIDOR] Preserve session-level grouping / audit metadata.
+      // Passed through as-is; downstream readers (line ~1728 styledGroups
+      // derivation, ~4836 grouped render, ~5083 acclimation microcopy,
+      // ~6150 compositionMetadata fallback) use optional chaining so loose
+      // typing here is safe and avoids re-declaring these complex upstream
+      // shapes inside the component. The `any` cast matches the existing
+      // access pattern for these optional runtime fields.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      styleMetadata: sessionAny.styleMetadata as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      prescriptionPropagationAudit: sessionAny.prescriptionPropagationAudit as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      compositionMetadata: sessionAny.compositionMetadata as any,
     }
   }, [session, sessionIsValid])
   
@@ -1704,6 +1744,12 @@ export function StreamlinedWorkoutSession({
     }
     
     // Map exercises with grouped method fields
+    // [WEEK-TRUTH-CORRIDOR] This is the second losing corridor stage that was
+    // stripping scaled dosage from the safeSession on its way into the machine
+    // contract. We now forward the scaled fields alongside base fields so the
+    // machine bridge is a preservation-safe normalizer, not a collapsing one.
+    // getEffectiveExerciseValues() reads from this shape via a ScaledExercise
+    // cast and will now prefer scaled over base Week-1 values.
     const exercises: MachineExercise[] = safeSession.exercises.map((ex): MachineExercise => ({
       id: ex.id,
       name: ex.name,
@@ -1720,6 +1766,14 @@ export function StreamlinedWorkoutSession({
       method: ex.method,
       methodLabel: ex.methodLabel,
       blockId: ex.blockId,
+      // [WEEK-TRUTH-CORRIDOR] Forwarded scaled dosage (see interface note in
+      // lib/workout/live-workout-machine.ts). No recomputation happens here.
+      scaledSets: ex.scaledSets,
+      scaledReps: ex.scaledReps,
+      scaledHoldDuration: ex.scaledHoldDuration,
+      scaledTargetRPE: ex.scaledTargetRPE,
+      scaledRestPeriod: ex.scaledRestPeriod,
+      weekScalingApplied: ex.weekScalingApplied,
     }))
     
     // [GROUPED-TRUTH-UNIFY] Derive execution plan from AUTHORITATIVE source

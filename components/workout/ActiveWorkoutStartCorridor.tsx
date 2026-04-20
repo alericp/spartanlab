@@ -696,6 +696,83 @@ export function ActiveWorkoutStartCorridor({
   const targetValue = parseTargetValue(exerciseRepsOrTime)
   const progressPercent = totalSetsCount > 0 ? (completedSetsCount / totalSetsCount) * 100 : 0
   
+  // ---------------------------------------------------------------------
+  // [LOAD-PRESS-AND-HOLD] Weighted load +/- auto-repeat
+  //
+  // Mirrors the RepsHoldInput press-and-hold pattern already in this file
+  // (see the `stopRepeat` / `startRepeat` helpers around line 343 that back
+  // the reps/hold stepper). The refs below track the LATEST load value,
+  // step, unit, and callback so auto-repeat ticks read live values instead
+  // of stale closure captures - identical technique to valueRef /
+  // onChangeRef in RepsHoldInput. Nothing touches actualLoadUsed ownership:
+  // the parent remains source of truth; we only call onSetActualLoad more
+  // often while the button is held.
+  // ---------------------------------------------------------------------
+  const loadValueRef = useRef<number>(0)
+  const loadStepRef = useRef<number>(2.5)
+  const loadUnitRef = useRef<string | undefined>(actualLoadUnit)
+  const loadOnChangeRef = useRef<typeof onSetActualLoad>(onSetActualLoad)
+  const loadHoldDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const loadRepeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  
+  // Keep callback ref fresh. Load value + step + unit refs are synced in
+  // the weighted-load IIFE below (where currentLoad / loadStep are derived)
+  // so every tick uses the post-commit parent value.
+  loadOnChangeRef.current = onSetActualLoad
+  
+  const stopLoadRepeat = useCallback(() => {
+    if (loadHoldDelayRef.current) {
+      clearTimeout(loadHoldDelayRef.current)
+      loadHoldDelayRef.current = null
+    }
+    if (loadRepeatIntervalRef.current) {
+      clearInterval(loadRepeatIntervalRef.current)
+      loadRepeatIntervalRef.current = null
+    }
+  }, [])
+  
+  const stepLoad = useCallback((direction: 1 | -1) => {
+    const current = loadValueRef.current
+    const step = loadStepRef.current
+    const next = direction === 1 ? current + step : Math.max(0, current - step)
+    if (next !== current) {
+      loadOnChangeRef.current?.(next, loadUnitRef.current)
+    }
+  }, [])
+  
+  const startLoadRepeat = useCallback((direction: 1 | -1) => {
+    // Immediate single step on tap - matches RepsHoldInput behavior.
+    stepLoad(direction)
+    stopLoadRepeat()
+    loadHoldDelayRef.current = setTimeout(() => {
+      let tickCount = 0
+      let currentInterval = 250
+      const scheduleNext = () => {
+        loadRepeatIntervalRef.current = setInterval(() => {
+          stepLoad(direction)
+          tickCount += 1
+          if (tickCount === 8 || tickCount === 16) {
+            currentInterval = tickCount === 8 ? 100 : 50
+            if (loadRepeatIntervalRef.current) {
+              clearInterval(loadRepeatIntervalRef.current)
+              loadRepeatIntervalRef.current = null
+            }
+            scheduleNext()
+          }
+        }, currentInterval)
+      }
+      scheduleNext()
+    }, 350)
+  }, [stepLoad, stopLoadRepeat])
+  
+  // Hard-stop any pending load timers on unmount, even if pointer
+  // up/leave/cancel never fired (e.g. exercise transition, rest screen).
+  useEffect(() => {
+    return () => {
+      stopLoadRepeat()
+    }
+  }, [stopLoadRepeat])
+  
   // [log-corridor] Stage 7: corridor received these props THIS render. Paired
   // with stage 6 in StreamlinedWorkoutSession.tsx - if stage 6 shows fresh
   // post-commit values but stage 7 shows stale, the bug is inside the
@@ -1307,8 +1384,13 @@ export function ActiveWorkoutStartCorridor({
                 Number.isInteger(n) ? String(n) : n.toFixed(loadStep === 2.5 ? 1 : 1).replace(/\.0$/, '')
               const stepLabel = formatNum(loadStep)
               const currentLoad = actualLoadUsed ?? prescribedLoad.load
-              const nextDown = Math.max(0, currentLoad - loadStep)
-              const nextUp = currentLoad + loadStep
+              // [LOAD-PRESS-AND-HOLD] Sync refs every render so the auto-repeat
+              // ticks scheduled by startLoadRepeat see the latest parent-owned
+              // value/step/unit instead of a stale capture from the initial tap.
+              // This is the same valueRef pattern RepsHoldInput uses above.
+              loadValueRef.current = currentLoad
+              loadStepRef.current = loadStep
+              loadUnitRef.current = actualLoadUnit
               return (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -1321,8 +1403,15 @@ export function ActiveWorkoutStartCorridor({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] h-10 px-3"
-                      onClick={() => onSetActualLoad?.(nextDown, actualLoadUnit)}
+                      className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] h-10 px-3 select-none touch-none"
+                      onPointerDown={(e) => {
+                        e.preventDefault()
+                        startLoadRepeat(-1)
+                      }}
+                      onPointerUp={stopLoadRepeat}
+                      onPointerLeave={stopLoadRepeat}
+                      onPointerCancel={stopLoadRepeat}
+                      onContextMenu={(e) => e.preventDefault()}
                       disabled={currentLoad <= 0}
                       aria-label={`Decrease load by ${stepLabel} ${unit}`}
                     >
@@ -1337,8 +1426,15 @@ export function ActiveWorkoutStartCorridor({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] h-10 px-3"
-                      onClick={() => onSetActualLoad?.(nextUp, actualLoadUnit)}
+                      className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] h-10 px-3 select-none touch-none"
+                      onPointerDown={(e) => {
+                        e.preventDefault()
+                        startLoadRepeat(1)
+                      }}
+                      onPointerUp={stopLoadRepeat}
+                      onPointerLeave={stopLoadRepeat}
+                      onPointerCancel={stopLoadRepeat}
+                      onContextMenu={(e) => e.preventDefault()}
                       aria-label={`Increase load by ${stepLabel} ${unit}`}
                     >
                       +{stepLabel}

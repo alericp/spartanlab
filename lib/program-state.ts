@@ -73,7 +73,10 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
   
   const existingMeta = session.styleMetadata || {}
   
-  // If builder already computed styledGroups, PRESERVE them exactly
+  // --------------------------------------------------------------------------
+  // PRIORITY 1 - Authoritative builder styledGroups
+  // --------------------------------------------------------------------------
+  // If the builder already computed styledGroups, PRESERVE them exactly.
   if (existingMeta.styledGroups && Array.isArray(existingMeta.styledGroups) && existingMeta.styledGroups.length > 0) {
     // Builder truth exists - preserve it intact, only ensure structural fields
     return {
@@ -87,13 +90,60 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
     }
   }
   
-  // ==========================================================================
-  // [FALLBACK] Only create defaults when builder provided NO grouped truth
-  // ==========================================================================
-  // This handles programs saved before method materialization was implemented.
-  // We create minimal straight groups as safe defaults, not as authoritative truth.
-  // ==========================================================================
+  // --------------------------------------------------------------------------
+  // [BUILDER-TRUTH-PRESERVATION / PRIORITY 2] Exercise-level grouped truth
+  // --------------------------------------------------------------------------
+  // Builder styledGroups may be missing from an older save or from an upstream
+  // serialization path that dropped the style metadata, BUT the per-exercise
+  // grouped authority fields (`blockId` / non-straight `method`) can still be
+  // present on `session.exercises[]`. Converting those to fallback straight
+  // groups is destructive: it transforms RECOVERABLE grouped truth into
+  // AUTHORITATIVE straight truth and permanently seals `appliedMethods` to
+  // ['straight_sets']. That is the exact load-corridor bug that was stripping
+  // grouped truth before the card ever read it.
+  //
+  // When exercise-level grouped truth exists, we preserve it intact:
+  //   - no fabricated styledGroups
+  //   - no appliedMethods override
+  //   - downstream consumers (buildFullSessionRoutineSurface,
+  //     buildFullVisibleRoutineExercises, buildGroupedDisplayModel,
+  //     AdaptiveSessionCard) still read `session.exercises[].blockId/method/
+  //     methodLabel` and reconstruct grouped shape from that authoritative
+  //     per-exercise data.
+  // --------------------------------------------------------------------------
+  const hasExerciseLevelGroupedTruth = session.exercises.some(ex => {
+    const m = ex?.method
+    const methodIsNonStraight = typeof m === 'string' && m.length > 0 && m !== 'straight_sets'
+    const hasBlockId = typeof ex?.blockId === 'string' && ex.blockId.length > 0
+    return hasBlockId || methodIsNonStraight
+  })
+
+  if (hasExerciseLevelGroupedTruth) {
+    // Preserve exercise-level grouped truth intact. Only set safe structural
+    // defaults on styleMetadata -- do NOT invent styledGroups, do NOT override
+    // appliedMethods, do NOT act as a shadow builder.
+    return {
+      ...session,
+      styleMetadata: {
+        ...existingMeta,
+        // Keep whatever the upstream metadata already said; never force false.
+        hasSupersetsApplied: existingMeta.hasSupersetsApplied ?? false,
+        // Do NOT default appliedMethods here -- leaving it undefined signals
+        // "metadata incomplete, defer to exercise-level truth" to downstream
+        // consumers. Overriding with ['straight_sets'] would lie about intent.
+        structureDescription: existingMeta.structureDescription || '',
+      },
+    }
+  }
   
+  // --------------------------------------------------------------------------
+  // PRIORITY 3 - No grouped truth at either level: minimal straight fallback
+  // --------------------------------------------------------------------------
+  // Only reached when BOTH builder styledGroups AND per-exercise grouped truth
+  // are absent. This handles genuinely flat programs and programs saved before
+  // method materialization existed. These minimal straight groups are safe
+  // defaults, not authoritative truth.
+  // --------------------------------------------------------------------------
   const fallbackStyledGroups = session.exercises.map((ex, idx) => ({
     id: `straight-${idx}`,
     groupType: 'straight' as const,
@@ -1214,7 +1264,19 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
                 estimatedMinutes: typeof s.estimatedMinutes === 'number' ? s.estimatedMinutes : 45,
                 isPrimary: s.isPrimary !== false,
                 finisherIncluded: s.finisherIncluded === true,
-                // Normalize exercises with safe defaults
+                // Normalize exercises with safe defaults.
+                //
+                // [BUILDER-TRUTH-PRESERVATION] Grouped-authority field contract:
+                // The `...ex` spread already carries ALL runtime fields through,
+                // but the explicit `blockId` / `method` / `methodLabel` lines
+                // below make the grouped-truth preservation a CONTRACT rather
+                // than an accidental side-effect of ordering. Any future edit
+                // that reorders this map (e.g. someone refactors to a picked
+                // subset or adds a field-whitelist step above the spread) will
+                // still preserve grouped truth because these three fields are
+                // named explicitly and placed AFTER the generic safety
+                // defaults. They are the ONLY fields the card needs for
+                // grouped body rendering when builder styledGroups are absent.
                 exercises: Array.isArray(s.exercises) 
                   ? s.exercises
                       .filter(ex => ex && typeof ex === 'object')
@@ -1228,6 +1290,12 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
                         note: typeof ex.note === 'string' ? ex.note : '',
                         isOverrideable: ex.isOverrideable !== false,
                         selectionReason: typeof ex.selectionReason === 'string' ? ex.selectionReason : '',
+                        // [BUILDER-TRUTH-PRESERVATION] Explicit grouped-truth carry-forward.
+                        // Only overwrite with `undefined` if source was already missing --
+                        // never coerce a valid builder value to a default here.
+                        blockId: typeof ex.blockId === 'string' && ex.blockId ? ex.blockId : ex.blockId,
+                        method: ex.method,
+                        methodLabel: typeof ex.methodLabel === 'string' && ex.methodLabel ? ex.methodLabel : ex.methodLabel,
                       }))
                   : [],
                 warmup: Array.isArray(s.warmup) ? s.warmup : [],
@@ -1290,27 +1358,70 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
       console.warn('[CONTRACT_NORMALIZATION] Missing fields normalized:', missingFields.join(', '))
     }
     
-    // [BUILDER-TRUTH-PRESERVATION] Log grouped truth preservation audit
-    const preservedSessions = normalized.sessions.map((s, idx) => {
-      const originalMeta = program.sessions?.[idx]?.styleMetadata
-      const preservedMeta = s.styleMetadata
+    // ==========================================================================
+    // [BUILDER-TRUTH-PRESERVATION] Grouped-truth preservation audit
+    // ==========================================================================
+    // One compact summary per normalization call. Reports for each session:
+    //   - blockId counts (source vs. normalized)
+    //   - non-straight method counts (source vs. normalized)
+    //   - styledGroups counts (source vs. normalized)
+    //   - status: 'preserved' | 'downgraded' | 'absent_at_source'
+    //
+    // `downgraded` fires only when source had grouped truth at either level
+    // but normalization lost it -- i.e. the exact destructive corridor this
+    // fix closes. If this warns after the fix, the loader regressed.
+    // ==========================================================================
+    const countNonStraightMethods = (exs: AdaptiveExercise[] | undefined): number => {
+      if (!Array.isArray(exs)) return 0
+      return exs.reduce((n, ex) => {
+        const m = ex?.method
+        return n + (typeof m === 'string' && m.length > 0 && m !== 'straight_sets' ? 1 : 0)
+      }, 0)
+    }
+    const countBlockIds = (exs: AdaptiveExercise[] | undefined): number => {
+      if (!Array.isArray(exs)) return 0
+      return exs.reduce((n, ex) => n + (typeof ex?.blockId === 'string' && ex.blockId ? 1 : 0), 0)
+    }
+
+    const preservationSummary = normalized.sessions.map((s, idx) => {
+      const sourceSession = program.sessions?.[idx]
+      const sourceBlockIds = countBlockIds(sourceSession?.exercises)
+      const normalizedBlockIds = countBlockIds(s.exercises)
+      const sourceMethods = countNonStraightMethods(sourceSession?.exercises)
+      const normalizedMethods = countNonStraightMethods(s.exercises)
+      const sourceStyledGroups = sourceSession?.styleMetadata?.styledGroups?.length ?? 0
+      const normalizedStyledGroups = s.styleMetadata?.styledGroups?.length ?? 0
+
+      const sourceHadGroupedTruth = sourceBlockIds > 0 || sourceMethods > 0 || sourceStyledGroups > 0
+      const normalizedHasGroupedTruth = normalizedBlockIds > 0 || normalizedMethods > 0 || normalizedStyledGroups > 0
+
+      let status: 'preserved' | 'downgraded' | 'absent_at_source'
+      if (!sourceHadGroupedTruth) status = 'absent_at_source'
+      else if (
+        normalizedBlockIds < sourceBlockIds ||
+        normalizedMethods < sourceMethods ||
+        (sourceStyledGroups > 0 && normalizedStyledGroups < sourceStyledGroups) ||
+        !normalizedHasGroupedTruth
+      ) status = 'downgraded'
+      else status = 'preserved'
+
       return {
         day: s.dayNumber,
-        originalSupersetsApplied: originalMeta?.hasSupersetsApplied,
-        preservedSupersetsApplied: preservedMeta?.hasSupersetsApplied,
-        originalGroupCount: originalMeta?.styledGroups?.length || 0,
-        preservedGroupCount: preservedMeta?.styledGroups?.length || 0,
-        supersetGroups: preservedMeta?.styledGroups?.filter((g: { groupType: string }) => g.groupType === 'superset').length || 0,
-        builderTruthPreserved: originalMeta?.styledGroups?.length === preservedMeta?.styledGroups?.length,
+        sourceBlockIds,
+        normalizedBlockIds,
+        sourceMethods,
+        normalizedMethods,
+        sourceStyledGroups,
+        normalizedStyledGroups,
+        status,
       }
     })
-    
-    const builderTruthFullyPreserved = preservedSessions.every(s => s.builderTruthPreserved)
-    
-    if (!builderTruthFullyPreserved) {
-      console.warn('[BUILDER-TRUTH-PRESERVATION] Some sessions had no builder truth - fallback defaults applied:', preservedSessions)
+
+    const anyDowngraded = preservationSummary.some(x => x.status === 'downgraded')
+    if (anyDowngraded) {
+      console.warn('[BUILDER-TRUTH-PRESERVATION] Grouped truth DOWNGRADED during normalization:', preservationSummary)
     }
-    
+
     console.log('[ProgramState] Normalized program for display:', {
       originalSessions: program.sessions?.length || 0,
       normalizedSessions: normalized.sessions.length,
@@ -1318,7 +1429,8 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
       hasStructure: !!program.structure,
       hasEngineContext: !!program.engineContext,
       contractFieldsNormalized: missingFields.length,
-      builderTruthFullyPreserved,
+      groupedTruthPreservation: preservationSummary,
+      anyDowngraded,
     })
     
     return normalized

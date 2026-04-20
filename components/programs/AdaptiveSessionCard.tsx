@@ -775,7 +775,11 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     if (!__funnelAuditPostedKeys.has(dedupeKey)) {
       __funnelAuditPostedKeys.add(dedupeKey)
       try {
-        void fetch('/api/_funnel-audit', {
+        // [TEMP-INSTRUMENTATION] Posted under /api/public/ because the
+        // Clerk proxy in proxy.ts gates all non-public /api/* routes; using
+        // a public path ensures this fire-and-forget POST actually reaches
+        // the handler (which then writes the payload to public.funnel_audit_log).
+        void fetch('/api/public/_funnel-audit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(funnelAuditPayload),

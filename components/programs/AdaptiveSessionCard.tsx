@@ -28,7 +28,7 @@ import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWith
 // These were used by the ROW 2.5 chip block which was a stale secondary text path
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
-import { buildGroupedDisplayModel, minMembersFor, type GroupedDisplayModel, type RenderBlock } from './lib/session-group-display'
+import { buildGroupedDisplayModel, minMembersFor, type GroupedDisplayModel, type RenderBlock, type RawFallbackBlock, type GroupedSourceUsed, type GroupedFlatReason } from './lib/session-group-display'
 import { 
   addOverride, 
   applyOverridesToSession,
@@ -733,21 +733,138 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   }
 
   // ==========================================================================
-  // [FINAL-VISIBLE-BODY-MODE] Name the single decision that `MainExercisesRenderer`
-  // will act on. The priority EXACTLY MIRRORS the branch chain inside
-  // MainExercisesRenderer below; this is the canonical authoritative name for
-  // which body path owns the rendered card. No parallel display corridor.
-  //   1. rich_grouped          : useGroupedRender (a.k.a. hasRichRenderableGroups)
-  //   2. raw_grouped_fallback  : !rich && hasGroupedTruth && rawFallbackBlocks > 0
-  //   3. flat_honest           : everything else (flat category OR simple-order)
+  // [FINAL-VISIBLE-BODY-MODEL] THE SINGLE AUTHORITATIVE final visible body
+  // object. This replaces the prior parallel-boolean dispatch
+  // (`hasRenderableGroups` / `hasGroupedTruth` / `rawFallbackBlocks.length`
+  // re-interpreted inside `MainExercisesRenderer`). The renderer is now a
+  // pure consumer of `finalVisibleBodyModel.mode` -- it CANNOT select a
+  // different visible branch than the one encoded here, and the on-screen
+  // probe reads the exact same object so it cannot disagree with the body.
+  //
+  // Source precedence (grouped wins whenever grouped truth exists):
+  //   1. rich_grouped           : hasRichRenderableGroups
+  //                               -> render `renderBlocks` (authoritative
+  //                                  contract-owned ordering)
+  //   2. raw_grouped_fallback   : !rich && hasGroupedTruth && rawFallbackBlocks > 0
+  //                               -> render `rawFallbackBlocks` with grouped
+  //                                  headers + hydrated/text-fallback rows
+  //   3. simple_order_grouped   : !rich && hasGroupedTruth && rawFallbackBlocks == 0
+  //                               -> honest ordered list (grouped intent
+  //                                  exists but nothing renderable as a group
+  //                                  block; we do NOT paint fake headers)
+  //   4. flat_category          : !hasGroupedTruth
+  //                               -> honest category-sectioned flat layout
+  //                                  (SKILL / STRENGTH / ACCESSORY / OTHER)
+  //
+  // IMPORTANT: a flat-looking legacy source (raw `session.exercises` /
+  // narrowed `displayExercises`) can NEVER outrank grouped truth because
+  // grouped-mode selection happens before the renderer sees anything, and
+  // the renderer's per-branch JSX consumes ONLY the model's block list for
+  // grouped modes. The flat legacy list is only touched for flat_category /
+  // simple_order_grouped, which are selected here -- not by the renderer.
   // ==========================================================================
-  type FinalVisibleBodyMode = 'rich_grouped' | 'raw_grouped_fallback' | 'flat_honest'
-  const finalVisibleBodyMode: FinalVisibleBodyMode =
-    hasRichRenderableGroups
-      ? 'rich_grouped'
-      : hasGroupedTruth && s7Model.rawFallbackBlocks.length > 0
-        ? 'raw_grouped_fallback'
-        : 'flat_honest'
+  type FinalBodyMode =
+    | 'rich_grouped'
+    | 'raw_grouped_fallback'
+    | 'simple_order_grouped'
+    | 'flat_category'
+  interface FinalVisibleBodyModel {
+    /** Authoritative visible body branch. The renderer dispatches on this. */
+    mode: FinalBodyMode
+    /** Which upstream source produced grouped truth (or 'none' for flat). */
+    sourceUsed: GroupedSourceUsed
+    /**
+     * When mode is not a rich/raw grouped path, why we fell off the rich path.
+     * - flat_category  -> the adapter's own flatReason (never null)
+     * - simple_order_grouped -> 'RAW_FALLBACK_EMPTY' (grouped truth existed
+     *   but rawFallbackBlocks came back empty, so we render honestly ordered)
+     * - rich / raw grouped -> null
+     */
+    reasonIfNotRich: GroupedFlatReason | 'RAW_FALLBACK_EMPTY' | null
+    /** Block list consumed by the rich grouped render path (mode 1). */
+    renderBlocks: RenderBlock[]
+    /** Block list consumed by the raw grouped fallback path (mode 2). */
+    rawFallbackBlocks: RawFallbackBlock[]
+    /** Non-straight group count (used by chips/probe attribution). */
+    nonStraightGroupCount: number
+    supersetCount: number
+    circuitCount: number
+    densityCount: number
+    clusterCount: number
+    /** Upstream grouped truth exists at all (pre-filter raw signal). */
+    hasGroupedTruth: boolean
+    /** Rich path is possible. */
+    hasRichRenderableGroups: boolean
+  }
+  const finalVisibleBodyModel: FinalVisibleBodyModel = (() => {
+    // Grouped truth wins whenever it exists. Rich first, raw fallback second,
+    // simple-order third. Flat category is reserved for sessions with no
+    // grouped truth at all.
+    if (hasRichRenderableGroups) {
+      return {
+        mode: 'rich_grouped' as const,
+        sourceUsed: groupedRenderContract.sourceUsed,
+        reasonIfNotRich: null,
+        renderBlocks: groupedRenderContract.renderBlocks,
+        rawFallbackBlocks: [],
+        nonStraightGroupCount: groupedRenderContract.nonStraightGroupCount,
+        supersetCount: groupedRenderContract.supersetCount,
+        circuitCount: groupedRenderContract.circuitCount,
+        densityCount: groupedRenderContract.densityCount,
+        clusterCount: groupedRenderContract.clusterCount,
+        hasGroupedTruth: true,
+        hasRichRenderableGroups: true,
+      }
+    }
+    if (hasGroupedTruth && groupedRenderContract.rawFallbackBlocks.length > 0) {
+      return {
+        mode: 'raw_grouped_fallback' as const,
+        sourceUsed: groupedRenderContract.sourceUsed,
+        reasonIfNotRich: null,
+        renderBlocks: [],
+        rawFallbackBlocks: groupedRenderContract.rawFallbackBlocks,
+        nonStraightGroupCount: groupedRenderContract.nonStraightGroupCount,
+        supersetCount: groupedRenderContract.supersetCount,
+        circuitCount: groupedRenderContract.circuitCount,
+        densityCount: groupedRenderContract.densityCount,
+        clusterCount: groupedRenderContract.clusterCount,
+        hasGroupedTruth: true,
+        hasRichRenderableGroups: false,
+      }
+    }
+    if (hasGroupedTruth) {
+      return {
+        mode: 'simple_order_grouped' as const,
+        sourceUsed: groupedRenderContract.sourceUsed,
+        reasonIfNotRich: 'RAW_FALLBACK_EMPTY' as const,
+        renderBlocks: [],
+        rawFallbackBlocks: [],
+        nonStraightGroupCount: groupedRenderContract.nonStraightGroupCount,
+        supersetCount: groupedRenderContract.supersetCount,
+        circuitCount: groupedRenderContract.circuitCount,
+        densityCount: groupedRenderContract.densityCount,
+        clusterCount: groupedRenderContract.clusterCount,
+        hasGroupedTruth: true,
+        hasRichRenderableGroups: false,
+      }
+    }
+    return {
+      mode: 'flat_category' as const,
+      sourceUsed: groupedRenderContract.sourceUsed,
+      reasonIfNotRich: groupedRenderContract.flatReason,
+      renderBlocks: [],
+      rawFallbackBlocks: [],
+      nonStraightGroupCount: 0,
+      supersetCount: 0,
+      circuitCount: 0,
+      densityCount: 0,
+      clusterCount: 0,
+      hasGroupedTruth: false,
+      hasRichRenderableGroups: false,
+    }
+  })()
+  // Back-compat alias retained only for the audit payload key name.
+  const finalVisibleBodyMode: FinalBodyMode = finalVisibleBodyModel.mode
 
   const funnelAuditPayload = {
     day: session.dayNumber,
@@ -1182,11 +1299,15 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   showProbe={probeActive}
   forceProbe={probeActive}
   cardInstanceId={cardInstanceId}
-  // [GROUPED-RENDER-CONTRACT] Pass the SINGLE authoritative contract down so
-  // the renderer does not recompute and cannot diverge from the chip/audit.
+  // [FINAL-VISIBLE-BODY-MODEL] Pass the SINGLE authoritative visible-body
+  // model. The renderer dispatches STRICTLY on `finalVisibleBodyModel.mode`
+  // and consumes ONLY the block lists carried by that model for grouped
+  // modes; it does not re-derive grouped-vs-flat from parallel booleans.
+  // `groupedRenderContract` is still passed for grouped-block hydration
+  // (group.exercises metadata, blockId lookups) but it CANNOT change the
+  // branch the renderer takes.
+  finalVisibleBodyModel={finalVisibleBodyModel}
   groupedRenderContract={groupedRenderContract}
-  hasRenderableGroups={hasRenderableGroups}
-  hasGroupedTruth={hasGroupedTruth}
   />
 
           {/* [METHOD-DECISIONS-DISCLOSURE] Clean athlete-facing explanation of structure choices.
@@ -1364,11 +1485,11 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 <span className="text-[#8A8A8A]">verdict</span>
                 <span className="text-amber-400/90 break-all">{funnelVerdict}</span>
                 <span className="text-[#8A8A8A]">finalBodyMode</span>
-                <span className="text-cyan-400/90 font-semibold">{finalVisibleBodyMode}</span>
+                <span className="text-cyan-400/90 font-semibold">{finalVisibleBodyModel.mode}</span>
                 <span className="text-[#8A8A8A]">sourceUsed</span>
-                <span>{s7Model.sourceUsed}</span>
-                <span className="text-[#8A8A8A]">flatReason</span>
-                <span className="break-all">{s7Model.flatReason ?? '—'}</span>
+                <span>{finalVisibleBodyModel.sourceUsed}</span>
+                <span className="text-[#8A8A8A]">reasonIfNotRich</span>
+                <span className="break-all">{finalVisibleBodyModel.reasonIfNotRich ?? '—'}</span>
                 <span className="text-[#8A8A8A]">hasGroupedTruth</span>
                 <span className={hasGroupedTruth ? 'text-emerald-400' : 'text-[#6A6A6A]'}>
                   {String(hasGroupedTruth)}
@@ -1397,7 +1518,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 <span>{activeSessionView.variantLabel}</span>
               </div>
               <p className="mt-2 text-[10px] text-[#6A6A6A] italic leading-relaxed">
-                Temporary diagnostic. The body rendered above reflects <span className="text-cyan-400/90 font-semibold">{finalVisibleBodyMode}</span>. When <span className="font-semibold">flat_honest</span> fires for a day you expected grouped, the verdict names the exact first failing stage upstream.
+                Temporary diagnostic. The body rendered above reflects <span className="text-cyan-400/90 font-semibold">{finalVisibleBodyModel.mode}</span>. <span className="font-semibold">rich_grouped</span> = contract-owned renderBlocks; <span className="font-semibold">raw_grouped_fallback</span> = grouped headers from rawFallbackBlocks; <span className="font-semibold">simple_order_grouped</span> = grouped truth existed but no renderable block members; <span className="font-semibold">flat_category</span> = no grouped truth upstream.
               </p>
             </div>
           )}
@@ -1497,17 +1618,19 @@ interface MainExercisesRendererProps {
   forceProbe?: boolean
   // [ALWAYS-VISIBLE-PROBE] Card instance ID for correlation
   cardInstanceId?: string
-  // [GROUPED-RENDER-CONTRACT] SINGLE authoritative grouped render contract,
-  // computed once in the parent card. Passing it as a required prop makes the
-  // renderer a pure consumer -- it CANNOT disagree with the chip/audit.
+  // [GROUPED-RENDER-CONTRACT] Still passed for grouped-block HYDRATION only
+  // (group.exercises metadata, blockId -> displayExercise maps). It does NOT
+  // select which visible branch renders; that is owned by finalVisibleBodyModel.
   groupedRenderContract: GroupedDisplayModel
-  // [DISPLAY-FIRST-FALLBACK] Rich grouped render is possible. Alias of
-  // `groupedRenderContract.hasRichRenderableGroups` forwarded from the parent.
-  hasRenderableGroups: boolean
-  // [DISPLAY-FIRST-FALLBACK] Upstream grouped truth exists at all (raw
-  // pre-filter signal). When true but hasRenderableGroups is false, the
-  // renderer takes the raw grouped fallback branch instead of falling to flat.
-  hasGroupedTruth: boolean
+  // [FINAL-VISIBLE-BODY-MODEL] THE authoritative visible-body model. The
+  // renderer's entire branch selection is `switch (finalVisibleBodyModel.mode)`
+  // with no parallel boolean re-derivation. Grouped modes consume the block
+  // lists carried here; flat/simple modes consume `displayExercises` directly.
+  finalVisibleBodyModel: {
+    mode: 'rich_grouped' | 'raw_grouped_fallback' | 'simple_order_grouped' | 'flat_category'
+    renderBlocks: RenderBlock[]
+    rawFallbackBlocks: RawFallbackBlock[]
+  }
 }
 
 function MainExercisesRenderer({
@@ -1526,24 +1649,26 @@ function MainExercisesRenderer({
   forceProbe: _innerForceProbe = false,
   cardInstanceId = 'unknown',
   groupedRenderContract,
-  hasRenderableGroups,
-  hasGroupedTruth,
+  finalVisibleBodyModel,
 }: MainExercisesRendererProps) {
   // Get style metadata from session if available
   const styleMetadata = (session as AdaptiveSession & { styleMetadata?: SessionStyleMetadata }).styleMetadata
-  
+
   // ==========================================================================
-  // [GROUPED-RENDER-CONTRACT] Renderer is a PURE CONSUMER of the single
-  // authoritative contract computed in the parent card. No recomputation here.
-  // This guarantees the body's grouped-vs-flat decision is IDENTICAL to the
-  // chip summary's decision and to the FUNNEL-AUDIT probe's verdict. The stale
-  // parallel decision path (recomputing buildGroupedDisplayModel inside the
-  // renderer) has been removed entirely.
+  // [FINAL-VISIBLE-BODY-MODEL] Renderer is a PURE CONSUMER of the authoritative
+  // visible-body model computed in the parent card. The renderer does NOT
+  // re-derive grouped-vs-flat from parallel booleans; its entire branch
+  // selection is `finalVisibleBodyModel.mode`. This guarantees the body
+  // cannot disagree with the probe / chip / audit, because all of them read
+  // the exact same model object.
+  //
+  // `groupedRenderContract` is retained ONLY for HYDRATION inside the grouped
+  // branches (group.exercises member metadata, blockId lookups). It can no
+  // longer change which branch renders.
   // ==========================================================================
   const groupedDisplayModel = groupedRenderContract
-  const useGroupedRender = hasRenderableGroups
-  const hasNonStraightGroups = groupedDisplayModel.nonStraightGroupCount > 0
-  const styledGroups = groupedDisplayModel.groups
+  const bodyMode = finalVisibleBodyModel.mode
+
   
   // [EXERCISE-ROW-SURFACE] Build session context for exercise row surfaces
   // [EXPLAIN-OWNER-LOCK] Ensure primaryGoal (program's skill) is passed to explanation engine
@@ -1584,17 +1709,15 @@ function MainExercisesRenderer({
   // ==========================================================================
 
   // ==========================================================================
-  // [DISPLAY-FIRST-FALLBACK] RAW GROUPED FALLBACK PATH
+  // [FINAL-VISIBLE-BODY-MODEL] RAW GROUPED FALLBACK PATH
   //
-  // Priority:
-  //   1. hasRichRenderableGroups === true  -> rich grouped path (below)
-  //   2. hasGroupedTruth === true          -> THIS raw fallback path
-  //   3. neither                            -> flat path (further below)
-  //
-  // This intermediate branch activates when upstream grouped truth exists
-  // (styledGroups had non-straight groups, or exercises had blockId+method
-  // grouping) but the rich path could not produce renderable groups --
-  // typically because partial-validity filters dropped too many members.
+  // Engages when `finalVisibleBodyModel.mode === 'raw_grouped_fallback'`.
+  // That mode is selected by the parent card when upstream grouped truth
+  // exists (styledGroups had non-straight groups, or exercises had blockId +
+  // non-straight method) but the rich path could not produce renderable
+  // groups -- typically because partial-validity filters dropped too many
+  // members. This renderer NEVER re-decides grouped-vs-flat; if the model
+  // says raw_grouped_fallback, this branch renders, period.
   //
   // The branch renders grouped headers + member rows using the contract's
   // rawFallbackBlocks (permissive: >=1 usable member per block, no min-count
@@ -1603,8 +1726,10 @@ function MainExercisesRenderer({
   // Either way, visible grouped structure is guaranteed whenever grouped
   // truth exists upstream.
   // ==========================================================================
-  if (!useGroupedRender && hasGroupedTruth && groupedDisplayModel.rawFallbackBlocks.length > 0) {
-    const fallbackBlocks = groupedDisplayModel.rawFallbackBlocks
+  if (bodyMode === 'raw_grouped_fallback') {
+    // [FINAL-VISIBLE-BODY-MODEL] Consume the model's block list, NOT the raw
+    // contract -- the model is the single authoritative visible-body source.
+    const fallbackBlocks = finalVisibleBodyModel.rawFallbackBlocks
     const normalizeKey = (s: string): string =>
       (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
     const hydrateMap = new Map<string, AdaptiveExercise>()
@@ -1693,24 +1818,18 @@ function MainExercisesRenderer({
   }
 
   // ==========================================================================
-  // [FLAT-WINNER-LOCKOUT] FLAT RENDER PATH - category-sectioned layout
+  // [FINAL-VISIBLE-BODY-MODEL] FLAT CATEGORY RENDER PATH
   //
-  // CRITICAL GATE: this path now ONLY fires for true flat sessions
-  // (`!hasGroupedTruth`). Previously the gate was just `!useGroupedRender`,
-  // which silently swallowed grouped-truth sessions where the rich grouped
-  // path could not produce renderable groups AND `rawFallbackBlocks` happened
-  // to be 0 (e.g. styledGroups present but all member names blank). Those
-  // grouped-intent days were being painted with SKILL / STRENGTH / ACCESSORY
-  // / OTHER category headers -- visually indistinguishable from a flat day,
-  // which is exactly the "still looks flat" symptom.
-  //
-  // Now:
-  //   - hasGroupedTruth === false  -> this flat category layout (correct)
-  //   - hasGroupedTruth === true   -> grouped paths above OR the honest
-  //                                   simple-ordered fallback below
-  //                                   (never this category layout)
+  // Engages ONLY when `finalVisibleBodyModel.mode === 'flat_category'`. That
+  // mode is selected by the parent card exclusively for sessions with NO
+  // upstream grouped truth. Grouped-intent days (hasGroupedTruth === true)
+  // are routed to rich_grouped / raw_grouped_fallback / simple_order_grouped
+  // by the model before the renderer is invoked, so this category-sectioned
+  // layout can never silently swallow a grouped day. This is the lockout
+  // that prevents the prior "grouped truth existed but body looked flat"
+  // regression from returning.
   // ==========================================================================
-  if (!useGroupedRender && !hasGroupedTruth) {
+  if (bodyMode === 'flat_category') {
     // ==========================================================================
     // [CANONICAL-ORDER-CONTRACT] Flat render path.
     //
@@ -1772,20 +1891,18 @@ function MainExercisesRenderer({
   }
 
   // ==========================================================================
-  // [FLAT-WINNER-LOCKOUT] GROUPED-INTENT SIMPLE-ORDER FALLBACK
+  // [FINAL-VISIBLE-BODY-MODEL] SIMPLE-ORDER GROUPED FALLBACK
   //
-  // Fires only when `!useGroupedRender && hasGroupedTruth` AND the raw-fallback
-  // branch above did not engage (rawFallbackBlocks was empty because all
-  // upstream grouped members failed the usable-name filter). In that case we
-  // have grouped intent but nothing renderable as a grouped block.
-  //
-  // Rather than silently fall through to the category-sectioned flat layout
-  // (which paints a session as a flat categorized day and hides the fact
-  // that grouped truth existed), render a simple ordered list of the actual
-  // exercises. This is honest about what we can show: no fake category
-  // headers, no fake group headers, just the session's exercises in order.
+  // Engages when `finalVisibleBodyModel.mode === 'simple_order_grouped'`.
+  // That mode is selected by the parent card when grouped intent exists
+  // upstream but nothing is renderable as a grouped block (rawFallbackBlocks
+  // came back empty because every upstream member failed the usable-name
+  // filter). Rather than silently fall through to the category-sectioned
+  // flat layout (which would visually hide the fact that grouped truth
+  // existed), we render a simple ordered list of the actual exercises --
+  // no fake category headers, no fake group headers.
   // ==========================================================================
-  if (!useGroupedRender && hasGroupedTruth) {
+  if (bodyMode === 'simple_order_grouped') {
     let globalIdx = 0
     return (
       <div className="space-y-2">
@@ -1856,7 +1973,14 @@ function MainExercisesRenderer({
   // removes the split display ownership that previously let "grouped branch =
   // yes" coexist with a flat-looking body.
   // ==========================================================================
-  const renderBlocks: RenderBlock[] = groupedDisplayModel.renderBlocks
+  // [FINAL-VISIBLE-BODY-MODEL] Rich path reads the block list directly off the
+  // authoritative visible-body model so the final JSX renders ONLY from the
+  // model. Previously this read from `groupedDisplayModel.renderBlocks` which
+  // happened to be the same array, but routing through the model enforces the
+  // single-ownership contract structurally: any divergence between the model
+  // selection and the block list consumed here now requires changing the model
+  // itself, not a parallel renderer decision.
+  const renderBlocks: RenderBlock[] = finalVisibleBodyModel.renderBlocks
 
   // [GROUPED-TRUTH-TRACE] Failure-only diagnostic. Now that ownership is
   // unified inside the contract, this should never fire -- keep it as a

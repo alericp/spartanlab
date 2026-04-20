@@ -30,7 +30,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
-import { ChevronLeft, ChevronDown, ChevronUp, ChevronRight, Check, SkipForward, X, MessageSquare, Play } from 'lucide-react'
+import { ChevronLeft, ChevronDown, ChevronUp, ChevronRight, Check, SkipForward, X, MessageSquare, Play, Loader2 } from 'lucide-react'
 import { MethodInfoBubble } from '@/components/coaching'
 import type { RPEValue } from '@/lib/rpe-adjustment-engine'
 import type { ResistanceBandColor } from '@/lib/band-progression-engine'
@@ -796,6 +796,36 @@ export function ActiveWorkoutStartCorridor({
   // Local UI state
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [showSetNotes, setShowSetNotes] = useState(false)
+  
+  // [LOG-SET-SAVING-STATE] Local in-flight flag for the Log Set button only.
+  // Flips true on tap, flips false when the parent commits (completedSetsCount
+  // or currentSetNumber advances) OR after an 800ms safety window if the
+  // commit didn't land (e.g. validation refused it). Does NOT own any
+  // workout state - reducer/machine remain source of truth.
+  const [isSaving, setIsSaving] = useState(false)
+  const lastCommitSignatureRef = useRef<string>(`${completedSetsCount}:${currentSetNumber}`)
+  
+  // Reset saving flag when parent confirms commit landed (count or set number
+  // advanced), and as a safety net 800ms after tap if nothing advanced.
+  useEffect(() => {
+    const signature = `${completedSetsCount}:${currentSetNumber}`
+    if (signature !== lastCommitSignatureRef.current) {
+      lastCommitSignatureRef.current = signature
+      if (isSaving) setIsSaving(false)
+    }
+  }, [completedSetsCount, currentSetNumber, isSaving])
+  
+  useEffect(() => {
+    if (!isSaving) return
+    const t = setTimeout(() => setIsSaving(false), 800)
+    return () => clearTimeout(t)
+  }, [isSaving])
+  
+  const handleLogSet = useCallback(() => {
+    if (isSaving || selectedRPE === null) return
+    setIsSaving(true)
+    onCompleteSet()
+  }, [isSaving, selectedRPE, onCompleteSet])
   
   // Rest timer state (for resting mode)
   const [restTimeRemaining, setRestTimeRemaining] = useState(restDurationSeconds)
@@ -1617,12 +1647,22 @@ export function ActiveWorkoutStartCorridor({
           <div className="sticky bottom-0 bg-[#0F1115] pt-3 pb-2 pb-safe border-t border-[#2B313A]/50">
             {/* Primary Action: Log Set */}
             <Button 
-              onClick={onCompleteSet} 
-              disabled={selectedRPE === null}
+              onClick={handleLogSet} 
+              disabled={selectedRPE === null || isSaving}
+              aria-busy={isSaving}
               className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] disabled:bg-[#C1121F]/50 disabled:cursor-not-allowed text-white text-base font-bold"
             >
-              <Check className="w-5 h-5 mr-2" />
-              Log Set
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Check className="w-5 h-5 mr-2" />
+                  Log Set
+                </>
+              )}
             </Button>
             
             {/* Secondary Actions: Back | Skip | Next | End */}

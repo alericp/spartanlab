@@ -23,8 +23,6 @@
  */
 
 import { generateAdaptiveProgram, type AdaptiveProgram, type AdaptiveProgramInputs } from '@/lib/adaptive-program-builder'
-// [TEMP-INSTRUMENTATION] Remove in cleanup turn along with lib/server/funnel-audit-server.ts
-import { writeServerSideFunnelAuditForProgram } from '@/lib/server/funnel-audit-server'
 import { attachTruthExplanation, extractProgramTruth, logMaterialInputPresence } from '@/lib/program-truth-extractor'
 import type { CanonicalProgrammingProfile } from '@/lib/canonical-profile-service'
 import { calibrateAthleteProfile, resolveCurrentWorkingProgressions, type CurrentWorkingProgressionsContract } from '@/lib/athlete-calibration'
@@ -1274,15 +1272,6 @@ export async function executeAuthoritativeGeneration(
       truthIngestionQuality: truthIngestion.signalAudit.overallQuality,
       callerOverridesApplied: truthIngestion.profileTruth.callerOverriddenFields.length,
     })
-    
-    // [TEMP-INSTRUMENTATION] Write one audit row per session into
-    // public.funnel_audit_log so the grouped-body funnel verdict is readable
-    // from Neon regardless of whether the client-side probe's POST lands.
-    // Best-effort: errors inside the helper are swallowed.
-    await writeServerSideFunnelAuditForProgram(
-      program as unknown as Parameters<typeof writeServerSideFunnelAuditForProgram>[0],
-      request.triggerSource ?? 'unknown_trigger',
-    )
     
     return {
       success: true,

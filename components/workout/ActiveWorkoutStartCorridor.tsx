@@ -1198,6 +1198,9 @@ export function ActiveWorkoutStartCorridor({
               )}
             </div>
             
+            {/* Subtle progress-persistence helper line */}
+            <p className="text-xs text-[#6B7280] mt-1">Progress saves when Log Set succeeds</p>
+            
             {/* Set progress dots */}
             <div className="flex items-center gap-3 mt-3">
               <div className="flex items-center gap-1.5 flex-1">

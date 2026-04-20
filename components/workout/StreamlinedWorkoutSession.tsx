@@ -1948,6 +1948,35 @@ if (styledGroups && styledGroups.length > 0) {
     targetDurationMinutes: machineState.targetDurationMinutes,
   })
   
+  // [LIVE-LOG-CORRIDOR-PROOF] Stage 5: rerender consumes post-reducer state.
+  // Paired with stage-4 reducer log in lib/workout/live-workout-machine.ts.
+  // Fires whenever completedSets.length, currentSetNumber, currentExerciseIndex,
+  // or phase changes - the four values that prove a COMPLETE_SET dispatch
+  // actually landed. If stages 1-4 log but this effect never fires after
+  // clicking Log Set, the reducer is not returning a new state object (or
+  // React is bailing on re-render). Strict-mode safe: no deps are mutated.
+  useEffect(() => {
+    console.log('[v0] [log-corridor] stage5 rerender sees machine state', {
+      phase: machineState.phase,
+      currentExerciseIndex: machineState.currentExerciseIndex,
+      currentSetNumber: machineState.currentSetNumber,
+      completedSetsLength: machineState.completedSets?.length ?? 0,
+      lastCompletedSet: machineState.completedSets?.length
+        ? {
+            exerciseIndex: machineState.completedSets[machineState.completedSets.length - 1].exerciseIndex,
+            setNumber: machineState.completedSets[machineState.completedSets.length - 1].setNumber,
+            actualReps: machineState.completedSets[machineState.completedSets.length - 1].actualReps,
+            holdSeconds: machineState.completedSets[machineState.completedSets.length - 1].holdSeconds,
+          }
+        : null,
+    })
+  }, [
+    machineState.phase,
+    machineState.currentExerciseIndex,
+    machineState.currentSetNumber,
+    machineState.completedSets,
+  ])
+  
   // ==========================================================================
   // [LIVE-WORKOUT-MACHINE] Derive view model from machine state
   // This is the ONLY source for render values - no scattered ad hoc derivations
@@ -3812,6 +3841,16 @@ if (styledGroups && styledGroups.length > 0) {
   // The user sees a seeded value (e.g., 6s from prescription) but machine holdValue might still be 30 (default)
   // So we must compute the same displayed value here to log what the user actually saw
   const handleCompleteSet = useCallback(() => {
+    // [LIVE-LOG-CORRIDOR-PROOF] Stage 1: prove the click reached the parent.
+    // onCompleteSet is wired from ActiveWorkoutStartCorridor's Log Set button.
+    // If this log is missing, the click never reached the parent handler and
+    // the bug is upstream of handleCompleteSet (corridor button wiring).
+    console.log('[v0] [log-corridor] stage1 handleCompleteSet entered', {
+      exerciseName: safeCurrentExercise?.name,
+      exerciseIndex: safeExerciseIndex,
+      setNumber: validatedSetNumber,
+    })
+    
     const currentIndex = safeExerciseIndex
     
     // [LOGGED-VALUE-FIX] + [ACTIVE-WEEK-PARITY] Compute the DISPLAYED hold/reps
@@ -3906,8 +3945,51 @@ if (styledGroups && styledGroups.length > 0) {
         structuredCoachingInputs: structuredCoachingInputs.length > 0 ? structuredCoachingInputs : undefined,
       }
       
-      // Check if this exercise is part of a grouped block
-      if (blockInfo && blockInfo.block.groupType !== null) {
+      // [LIVE-LOG-CORRIDOR-FIX] Single authoritative grouped boolean.
+      //
+      // PREVIOUS (fragile): `blockInfo && blockInfo.block.groupType !== null`
+      // That excluded only `null`, not `undefined`, and treated the mere
+      // presence of a block wrapper as grouped. But getBlockForExercise()
+      // (line ~343) returns a wrapper for EVERY exercise in the plan,
+      // including straight single-member blocks where groupType is null
+      // (by design, see flushCurrentBlock line ~252-276). If any plan
+      // builder variant emitted `groupType: undefined` on a straight block
+      // (the second builder at ~1807-1867 routes 'straight' -> null, but
+      // any future or partially-constructed block with an unset groupType
+      // would leak through `!== null`), a straight exercise like Planche
+      // Leans would dispatch COMPLETE_BLOCK_SET and never advance the flat
+      // set counter. The stricter authority at line ~3153 already excludes
+      // both null AND undefined and treats only the known grouped types
+      // as grouped. This site now matches that contract exactly.
+      //
+      // RULE: grouped iff blockInfo exists AND groupType is one of the four
+      // canonical grouped methods. Straight exercises -> COMPLETE_SET.
+      const rawGroupType = blockInfo?.block?.groupType
+      const isTrulyGroupedExercise =
+        blockInfo !== null &&
+        rawGroupType !== null &&
+        rawGroupType !== undefined &&
+        (rawGroupType === 'superset' ||
+          rawGroupType === 'circuit' ||
+          rawGroupType === 'cluster' ||
+          rawGroupType === 'density_block')
+      
+      // [LIVE-LOG-CORRIDOR-PROOF] Stage 2: pre-dispatch assertion log. Proves
+      // which branch handleCompleteSet chose and why. If this prints
+      // `dispatch: 'COMPLETE_SET'` for Planche Leans, the branch decision is
+      // correct and any remaining failure is downstream (reducer or rerender).
+      console.log('[v0] [log-corridor] stage2 pre-dispatch decision', {
+        exerciseName: safeCurrentExercise?.name,
+        exerciseIndex: currentIndex,
+        effectiveRepsOrTime: activeEffectiveContract.effectiveRepsOrTime,
+        effectiveSets: activeEffectiveContract.effectiveSets,
+        blockInfoPresent: blockInfo !== null,
+        rawGroupType,
+        isTrulyGroupedExercise,
+        chosenDispatch: isTrulyGroupedExercise ? 'COMPLETE_BLOCK_SET' : 'COMPLETE_SET',
+      })
+      
+      if (isTrulyGroupedExercise && blockInfo) {
         // This is a grouped exercise - dispatch COMPLETE_BLOCK_SET instead
         console.log('[v0] [grouped] Completing set in grouped block:', {
           blockId: blockInfo.block.blockId,
@@ -3977,6 +4059,17 @@ if (styledGroups && styledGroups.length > 0) {
           console.warn('[RPE-REST-AUTHORITY] getRestRecommendation threw; machine fallback will apply', err)
         }
       }
+      
+      // [LIVE-LOG-CORRIDOR-PROOF] Stage 3: dispatching straight-set COMPLETE_SET.
+      // Paired with stage-4 reducer log in lib/workout/live-workout-machine.ts
+      // to prove the reducer ACTUALLY ran this case after dispatch.
+      console.log('[v0] [log-corridor] stage3 dispatch COMPLETE_SET', {
+        exerciseName: safeCurrentExercise?.name,
+        exerciseIndex: currentIndex,
+        setNumber: validatedSetNumber,
+        isLastSet,
+        effectiveSets: activeEffectiveContract.effectiveSets,
+      })
       
       machineDispatch({
         type: 'COMPLETE_SET',

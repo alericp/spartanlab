@@ -12,6 +12,9 @@
 
 import type { RPEValue } from '@/lib/rpe-adjustment-engine'
 import type { ResistanceBandColor } from '@/lib/band-progression-engine'
+// [LIVE-UNIT-CONTRACT] Canonical hold classifier - used by the unit-aware
+// default-poisoning guard inside normalizeExercise().
+import { isHoldUnit } from '@/lib/workout/execution-unit-contract'
 
 // =============================================================================
 // TYPES
@@ -182,9 +185,22 @@ function normalizeExercise(exercise: unknown, index: number): NormalizedExercise
     ? exercise.sets 
     : 3
   
+  // [LIVE-UNIT-CONTRACT] Unit-aware default guard. Reps default ('8-12 reps')
+  // was silently applied to hold exercises whose repsOrTime arrived empty -
+  // that was the poisoning path the prompt calls out. If name/category
+  // classifies the exercise as hold, default to '30 sec hold' instead so
+  // downstream consumers (logging, display) see a hold prescription and
+  // the live runner never infers reps from a reps-typed default string.
+  const candidateName = typeof exercise.name === 'string' ? exercise.name : ''
+  const candidateCategory = typeof exercise.category === 'string' ? exercise.category : ''
+  const candidateIsHold = isHoldUnit({
+    name: candidateName,
+    category: candidateCategory,
+  })
+  const fallbackRepsOrTime = candidateIsHold ? '30 sec hold' : '8-12 reps'
   const repsOrTime = typeof exercise.repsOrTime === 'string' && exercise.repsOrTime.trim()
     ? exercise.repsOrTime.trim()
-    : '8-12 reps'
+    : fallbackRepsOrTime
   
   return {
     id: typeof exercise.id === 'string' ? exercise.id : `exercise-${index}`,

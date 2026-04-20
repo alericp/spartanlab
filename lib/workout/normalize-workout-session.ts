@@ -22,6 +22,8 @@ import type {
   SessionValidationResult,
 } from '@/lib/contracts/workout-session-contract'
 import { validateWorkoutSessionContract } from '@/lib/contracts/workout-session-contract'
+// [LIVE-UNIT-CONTRACT] Canonical hold classifier for unit-aware default guards.
+import { isHoldUnit } from '@/lib/workout/execution-unit-contract'
 
 // =============================================================================
 // SAFE STRING HELPER - PREVENTS toLowerCase CRASHES
@@ -66,6 +68,24 @@ function normalizeExercise(raw: unknown, index: number): WorkoutExerciseContract
   
   const ex = raw as Record<string, unknown>
   
+  // [LIVE-UNIT-CONTRACT] Unit-aware default for repsOrTime. When the upstream
+  // value is missing, we must NOT blindly fall back to '8-12 reps' because
+  // that silently poisons hold exercises (e.g. Planche Lean arriving with
+  // no repsOrTime would become reps-based here and log "8 reps" forever
+  // after). Instead, if the exercise name or category classifies as hold,
+  // default to '30 sec hold'. All branches still satisfy the non-empty
+  // string contract.
+  const candidateName = typeof ex.name === 'string' ? ex.name : ''
+  const candidateCategory = typeof ex.category === 'string' ? ex.category : ''
+  const candidateIsHold = isHoldUnit({
+    // Do NOT feed the possibly-empty candidate repsOrTime back into the
+    // detector here - that would be circular. Name + category classification
+    // is sufficient for the hold default guard.
+    name: candidateName,
+    category: candidateCategory,
+  })
+  const fallbackRepsOrTime = candidateIsHold ? '30 sec hold' : '8-12 reps'
+
   // Build the normalized exercise with guaranteed safe values
   const normalized: WorkoutExerciseContract = {
     // Core identity - ALWAYS strings, never undefined
@@ -75,7 +95,7 @@ function normalizeExercise(raw: unknown, index: number): WorkoutExerciseContract
     
     // Execution parameters - guaranteed safe
     sets: safeNumber(ex.sets, 3, 1),
-    repsOrTime: safeString(ex.repsOrTime, '8-12 reps'),
+    repsOrTime: safeString(ex.repsOrTime, fallbackRepsOrTime),
     note: safeString(ex.note, ''),
     
     // Override/selection

@@ -32,6 +32,12 @@ import { buildExercisePurposeLine, buildExerciseEffortReasonLine } from '@/lib/p
 import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-builder'
 // [WEEK-PROGRESSION-TRUTH] Import scaled exercise type for week-aware dosage in live workout
 import type { ScaledExercise } from '@/lib/week-dosage-scaling'
+// [LIVE-UNIT-CONTRACT] Canonical hold-vs-reps detector - single source of truth
+// for classifying an exercise as hold-based vs reps-based across the entire
+// live workout corridor (active card, set logging, completed-set serialization,
+// history surface). Replaces 4+ divergent inline regex variants that missed
+// bare-second shorthand like "6s" and silently logged hold exercises as reps.
+import { isHoldUnit } from '@/lib/workout/execution-unit-contract'
 // [LIVE-WORKOUT-CORRIDOR-FIX] getLatestAdaptiveProgram loaded dynamically - post-completion only
 // The adaptive-program-builder is a MASSIVE file (18,000+ lines) that can crash module evaluation
 // We only need it for the "next session" preview in PostWorkoutSummary
@@ -2216,6 +2222,32 @@ if (styledGroups && styledGroups.length > 0) {
   
   // Timer
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+
+  // ==========================================================================
+  // [DISCARD-INTENT-LOCK] Authoritative exit intent ref
+  // ==========================================================================
+  // Synchronous flag that wins against any post-discard autosave re-fire.
+  //
+  // The prior bug: `handleDiscardAndExit` called `clearSessionStorage()` and
+  // then `onCancel()` to navigate away, but it ALSO called
+  // `setShowExitConfirm(false)` which triggered one more React render cycle
+  // before the navigation completed. That re-render re-ran the autosave
+  // useEffect (which depends on `liveSession`), and the effect wrote the
+  // current `liveSession` back to localStorage - un-doing the discard.
+  //
+  // A ref is the correct primitive here because:
+  //   1. It's synchronous: flipping it and calling clearSessionStorage in
+  //      the same tick guarantees the autosave effect sees it on the very
+  //      next commit.
+  //   2. It doesn't cause a re-render (state would).
+  //   3. It survives the re-renders caused by `setShowExitConfirm(false)`.
+  //
+  // Save/Exit does NOT set this flag. Save/Exit preserves the workout.
+  // Accidental close (navigation elsewhere, tab close) does NOT set this
+  // flag either, so autosave is still the safety net there - only an
+  // explicit Discard action wins against autosave.
+  // ==========================================================================
+  const discardIntentRef = useRef<boolean>(false)
   
   // ==========================================================================
   // [PHASE LW3] AUTHORITATIVE SESSION HYDRATION EFFECT
@@ -2795,9 +2827,14 @@ if (styledGroups && styledGroups.length > 0) {
       }
     }
     
-    // Detect hold exercise
-    const isHoldExercise = typeof repsOrTime === 'string' && 
-      (repsOrTime.toLowerCase().includes('sec') || repsOrTime.toLowerCase().includes('hold'))
+    // [LIVE-UNIT-CONTRACT] Detect hold exercise via canonical detector.
+    // Replaces the prior `.includes('sec') || .includes('hold')` check which
+    // missed bare-second shorthand like "6s" used for Planche Leans.
+    const isHoldExercise = isHoldUnit({
+      repsOrTime,
+      name: safeCurrentExercise?.name,
+      category: safeCurrentExercise?.category,
+    })
     
     return {
       ok: true as const,
@@ -3186,9 +3223,13 @@ if (styledGroups && styledGroups.length > 0) {
     const nextExerciseName = nextExercise?.name || null
     const nextExerciseCategory = nextExercise?.category || null
     
-    // Derived booleans
-    const isHoldType = safeLower(currentExerciseRepsOrTime).includes('sec') || 
-                       safeLower(currentExerciseRepsOrTime).includes('hold')
+    // [LIVE-UNIT-CONTRACT] Unified hold detection - replaces local regex that
+    // missed "6s" style hold prescriptions.
+    const isHoldType = isHoldUnit({
+      repsOrTime: currentExerciseRepsOrTime,
+      name: safeCurrentExercise?.name,
+      category: safeCurrentExercise?.category,
+    })
     const hasLoad = !!(safeCurrentExercise.prescribedLoad?.load && safeCurrentExercise.prescribedLoad.load > 0)
     const isLastExercise = safeCurrentIndex >= exercises.length - 1
     const isLastSet = safeCurrentSetNumber >= currentExerciseSets
@@ -3432,7 +3473,18 @@ if (styledGroups && styledGroups.length > 0) {
   useEffect(() => {
     // Demo sessions don't persist to storage
     if (isDemoSession) return
-    
+
+    // [DISCARD-INTENT-LOCK] If the user explicitly discarded this workout,
+    // suppress autosave entirely until the component unmounts. Without this,
+    // the re-render triggered by `setShowExitConfirm(false)` inside
+    // handleDiscardAndExit caused this effect to rewrite the session to
+    // storage *after* clearSessionStorage() had already cleared it -
+    // silently resurrecting the workout the user just discarded.
+    if (discardIntentRef.current) {
+      console.log('[exit-intent] autosave suppressed: discardIntentRef is set')
+      return
+    }
+
     if (liveSession.status !== 'ready') {
       // Save the core workout state from the unified liveSession
       saveSessionToStorage({
@@ -3552,7 +3604,15 @@ if (styledGroups && styledGroups.length > 0) {
     // [LOGGED-VALUE-FIX] Compute the DISPLAYED hold/reps value that matches what the UI showed
     // This mirrors the corridorHoldValue/corridorRepsValue derivation logic
     const exerciseRepsOrTime = safeCurrentExercise?.repsOrTime || '8-12 reps'
-    const isHoldExerciseForLog = /(\d+)\s*s(ec)?/i.test(exerciseRepsOrTime) || exerciseRepsOrTime.toLowerCase().includes('hold')
+    // [LIVE-UNIT-CONTRACT] Use the canonical hold detector. Previously this
+    // path had its own independent regex variant that could disagree with the
+    // activeEntryPreparation isHoldExercise value - creating a split-brain
+    // where the UI showed a hold input but the log path still wrote reps.
+    const isHoldExerciseForLog = isHoldUnit({
+      repsOrTime: exerciseRepsOrTime,
+      name: safeCurrentExercise?.name,
+      category: safeCurrentExercise?.category,
+    })
     const targetMatch = exerciseRepsOrTime.match(/(\d+)/)
     const prescriptionSeedValue = targetMatch ? parseInt(targetMatch[1], 10) : (isHoldExerciseForLog ? 30 : 8)
     
@@ -3565,9 +3625,15 @@ if (styledGroups && styledGroups.length > 0) {
     const machineRepsIsDefault = safeRepsValue === 0
     const machineHoldIsDefault = safeHoldValue === 0
     
+    // [LIVE-UNIT-CONTRACT] Collapse activeEntryPreparation's isHoldExercise
+    // with this site's isHoldExerciseForLog into one authoritative boolean so
+    // upstream display truth and logging truth can never disagree. If either
+    // source classifies this as a hold exercise, the log writes a hold.
+    const isHoldForPersist = isHoldExercise || isHoldExerciseForLog
+    
     // Log the value the user SAW (seeded from prescription if not modified, otherwise machine value)
-    const loggedRepsValue = isHoldExercise ? 0 : (machineRepsIsDefault ? prescriptionSeedValue : safeRepsValue)
-    const loggedHoldValue = isHoldExercise 
+    const loggedRepsValue = isHoldForPersist ? 0 : (machineRepsIsDefault ? prescriptionSeedValue : safeRepsValue)
+    const loggedHoldValue = isHoldForPersist
       ? (machineHoldIsDefault ? prescriptionSeedValue : safeHoldValue)
       : undefined
     
@@ -3696,9 +3762,10 @@ if (styledGroups && styledGroups.length > 0) {
         completedSet: setData,
         isLastSetOfExercise: isLastSet,
         exerciseCount: exercises.length,
-        // Target prescription for adaptive summary
-        targetReps: isHoldExercise ? undefined : prescriptionSeedValue,
-        targetHoldSeconds: isHoldExercise ? prescriptionSeedValue : undefined,
+        // [LIVE-UNIT-CONTRACT] Use isHoldForPersist so target prescription
+        // persists as hold iff the set was logged as hold.
+        targetReps: isHoldForPersist ? undefined : prescriptionSeedValue,
+        targetHoldSeconds: isHoldForPersist ? prescriptionSeedValue : undefined,
         targetRPE: safeCurrentExercise?.targetRPE || 8,
         recommendedBand: localRecommendedBand,
         // Exercise context for action planning
@@ -4018,14 +4085,31 @@ if (styledGroups && styledGroups.length > 0) {
     onCancel()
   }, [normalizedCompletedSets.length, safeExerciseIndex, onCancel])
   
-  // [EXIT-INTENT-FIX] Discard Workout - clears all state, no logging, no resume
-  // Explicitly clears session storage so workout cannot be resumed
+  // [EXIT-INTENT-FIX / DISCARD-INTENT-LOCK] Discard Workout - atomic no-resume exit.
+  //
+  // Execution order below is load-bearing:
+  //   1. Flip `discardIntentRef` FIRST (synchronous, wins against any next
+  //      autosave re-render caused by the setShowExitConfirm(false) below).
+  //   2. Clear all persisted + transient state.
+  //   3. Close the confirm dialog (this triggers a re-render -> autosave
+  //      effect -> the ref check short-circuits it).
+  //   4. Navigate away via onCancel().
+  //
+  // Save & Exit does NOT flip the ref (it preserves the workout).
+  // Accidental close / backgrounding does NOT flip the ref either - autosave
+  // remains the safety net for those.
   const handleDiscardAndExit = useCallback(() => {
+    // [DISCARD-INTENT-LOCK] Step 1 - synchronous intent lock.
+    discardIntentRef.current = true
+    // Step 2 - purge all persistence surfaces.
     clearSessionStorage()
     clearRestTimerState()
     clearSessionOverrides()
+    // Step 3 - close the confirm dialog. This causes one more render cycle
+    // that re-fires the autosave useEffect. The ref check now wins.
     setShowExitConfirm(false)
-    console.log('[exit-intent] Discard Workout: Cleared all session state')
+    console.log('[exit-intent] Discard Workout: Cleared all session state (ref locked)')
+    // Step 4 - navigate away.
     onCancel()
   }, [onCancel])
   
@@ -5307,10 +5391,20 @@ function InterExerciseRestCountdown({
     // [DEFAULT-INPUT-SEEDING] Parse target values from exercise prescription
     // Use authoritative prescription truth to seed defaults
     const exerciseRepsOrTime = safeCurrentExercise?.repsOrTime || '8-12 reps'
-    const repsOrTimeLower = exerciseRepsOrTime.toLowerCase()
-    const isHoldExerciseForDefault = repsOrTimeLower.includes('sec') || repsOrTimeLower.includes('hold') || repsOrTimeLower.includes('s ')
+    // [LIVE-UNIT-CONTRACT] Canonical hold detector replaces previous local
+    // regex (`.includes('sec') || .includes('hold') || .includes('s ')`)
+    // which still missed terminal-s shorthand like "6s" and could disagree
+    // with activeEntryPreparation's isHoldExercise, producing the split-brain
+    // where the display showed reps but logging wrote hold or vice versa.
+    const isHoldExerciseForDefault = isHoldUnit({
+      repsOrTime: exerciseRepsOrTime,
+      name: safeCurrentExercise?.name,
+      category: safeCurrentExercise?.category,
+    })
     const targetMatch = exerciseRepsOrTime.match(/(\d+)/)
-    const prescriptionSeedValue = targetMatch ? parseInt(targetMatch[1], 10) : 8
+    const prescriptionSeedValue = targetMatch
+      ? parseInt(targetMatch[1], 10)
+      : (isHoldExerciseForDefault ? 30 : 8)
     
     // [DEFAULT_SEED_DECISION] Deterministic seeding rule:
     // The machine sets repsValue/holdValue to 0 on init, on COMPLETE_SET, and
@@ -5531,8 +5625,13 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           restValue = safeCurrentExercise.restSeconds
         } else {
           // Priority 3: doctrine-aligned derivation.
-          const exRepsOrTime = (safeCurrentExercise?.repsOrTime || '').toLowerCase()
-          const isHoldBased = exRepsOrTime.includes('sec') || exRepsOrTime.includes('hold')
+          // [LIVE-UNIT-CONTRACT] Use canonical hold detector so rest doctrine
+          // sees hold-based classification for "6s" style prescriptions too.
+          const isHoldBased = isHoldUnit({
+            repsOrTime: safeCurrentExercise?.repsOrTime,
+            name: safeCurrentExercise?.name,
+            category: safeCurrentExercise?.category,
+          })
           const rec = resolveRestTime({
             restType: 'between_sets',
             exerciseCategory: (safeCurrentExercise?.category || 'general'),
@@ -6187,10 +6286,15 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     const s1CompletedSets = normalizedCompletedSets?.length || 0
     const s1TotalSets = (exercises || []).reduce((sum, ex) => sum + (ex?.sets || 3), 0) || 3
     const s1Elapsed = safeElapsedSeconds || 0
-    const s1IsHold = safeLower(s1ExerciseRepsOrTime).includes('sec') || safeLower(s1ExerciseRepsOrTime).includes('hold')
+    // [LIVE-UNIT-CONTRACT] Canonical hold detector for Stage1 summary.
+    const s1IsHold = isHoldUnit({
+      repsOrTime: s1ExerciseRepsOrTime,
+      name: s1ExerciseName,
+      category: s1ExerciseCategory,
+    })
     
     // Parse target value simply
-    let s1TargetValue = 8
+    let s1TargetValue = s1IsHold ? 30 : 8
     const s1RepsMatch = s1ExerciseRepsOrTime.match(/(\d+)/)
     if (s1RepsMatch) s1TargetValue = parseInt(s1RepsMatch[1], 10)
     

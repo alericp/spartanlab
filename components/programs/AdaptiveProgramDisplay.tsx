@@ -1226,6 +1226,9 @@ export function AdaptiveProgramDisplay({
   showProbe={showProbe}
   // [ALWAYS-VISIBLE-PROBE] Pass force probe flag
   forceProbe={forceProbe}
+  // [WEEK-AUTHORITY-HANDOFF] Pass the AUTHORITATIVE selected week so Start
+  // Workout carries the same week as the dosage rendered on this card.
+  currentWeekNumber={currentWeekNumber}
   />
               </div>
             )

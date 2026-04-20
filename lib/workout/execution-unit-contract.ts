@@ -453,14 +453,111 @@ export function generateMemberLabels(groupType: GroupType, count: number): strin
 // =============================================================================
 
 export function parseTarget(repsOrTime: string): { reps: number | null; hold: number | null; isHold: boolean } {
-  const lower = repsOrTime.toLowerCase()
-  const isHold = lower.includes('sec') || lower.includes('hold')
+  const isHold = isHoldUnit(repsOrTime)
   const match = repsOrTime.match(/(\d+)/)
-  const value = match ? parseInt(match[1], 10) : 8
+  // [LIVE-UNIT-CONTRACT] If the exercise is hold-based, unknown seed defaults
+  // to 30s. Reps-based defaults to 8. This removes the former silent reps
+  // default of 8 being applied to hold exercises when the numeric parse
+  // failed.
+  const value = match ? parseInt(match[1], 10) : (isHold ? 30 : 8)
   
   return {
     reps: isHold ? null : value,
     hold: isHold ? value : null,
     isHold,
   }
+}
+
+// =============================================================================
+// [LIVE-UNIT-CONTRACT] CANONICAL HOLD-VS-REPS UNIT DETECTOR
+// =============================================================================
+// Single authoritative function that classifies an exercise as hold-based or
+// reps-based for the ENTIRE live workout corridor (active card, set logging,
+// completed-set serialization, recap). All per-file inline `includes('sec')`
+// regex variants have been consolidated here.
+//
+// Returns true when the exercise is a pure hold exercise. Returns false when
+// it is reps-based. Mixed/variant exercises still resolve to one primary
+// unit - hold takes precedence when the prescription explicitly signals a
+// timed quantity OR when the exercise name matches a well-known isometric
+// skill.
+//
+// Why the old checks were broken:
+//   - Prior sites used `repsOrTime.includes('sec') || includes('hold')` only.
+//   - That FAILED for bare second shorthand like "6s", "20s", "30s", which
+//     is the canonical compact form for hold prescriptions.
+//   - A Planche Lean prescribed as "6s" was silently classified as 6 REPS,
+//     producing the "8 reps" logging bug for hold exercises.
+//
+// This helper now additionally matches:
+//   1. `\d+\s*s` (short form: 6s, 30 s)
+//   2. `second`/`seconds`/`sec`/`hold`/`hang`/`iso` (word forms)
+//   3. Known hold-skill names (planche, lever, lean, l-sit, support, flag)
+// =============================================================================
+
+export interface HoldUnitContext {
+  repsOrTime?: string | null
+  name?: string | null
+  category?: string | null
+  // Optional explicit signal from authoritative contracts upstream
+  isTimedHold?: boolean | null
+}
+
+export function isHoldUnit(input: string | HoldUnitContext | null | undefined): boolean {
+  if (!input) return false
+
+  let repsOrTime: string
+  let name: string
+  let category: string
+  let explicit: boolean | null | undefined
+
+  if (typeof input === 'string') {
+    repsOrTime = input
+    name = ''
+    category = ''
+    explicit = null
+  } else {
+    repsOrTime = String(input.repsOrTime ?? '')
+    name = String(input.name ?? '')
+    category = String(input.category ?? '')
+    explicit = input.isTimedHold
+  }
+
+  // 1. Explicit upstream authority wins.
+  if (explicit === true) return true
+
+  const rotLower = repsOrTime.toLowerCase()
+
+  // 2. Word-form prescription signals.
+  if (/\b(hold|holds|hang|hangs|iso|isom|second|seconds|sec|secs)\b/.test(rotLower)) {
+    return true
+  }
+
+  // 3. Short-form second shorthand: "6s", "20s", "30 s", "45s hold".
+  //    Guard against matching things like "8-12 reps" (no digit-adjacent s).
+  if (/(^|[^a-z])\d+\s*s(?![a-rt-z])/.test(rotLower)) {
+    return true
+  }
+
+  // 4. Known hold-skill name patterns. Category 'skill' is not sufficient on
+  //    its own because some skill work is reps-based (pseudo planche push-ups).
+  const nameLower = name.toLowerCase()
+  const categoryLower = category.toLowerCase()
+  if (
+    /(planche lean|planche hold|tuck planche|adv tuck|straddle planche|full planche)/.test(nameLower) ||
+    /(front lever|back lever|side lever|tuck lever|advanced tuck lever|straddle lever)/.test(nameLower) ||
+    /(l-sit|l sit|v-sit|v sit|manna|straddle l)/.test(nameLower) ||
+    /(handstand hold|handstand against wall|wall handstand)/.test(nameLower) ||
+    /(support hold|dip support|ring support|ring hold)/.test(nameLower) ||
+    /(human flag|flag hold|scapular hold|dead hang|active hang|bar hang)/.test(nameLower) ||
+    /(hollow hold|arch hold|plank hold|copenhagen hold|wall sit)/.test(nameLower)
+  ) {
+    return true
+  }
+  // Explicit hold-named category (e.g. 'isometric').
+  if (/isometric/.test(categoryLower)) {
+    return true
+  }
+
+  return false
 }

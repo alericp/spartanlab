@@ -607,11 +607,20 @@ function WorkoutSessionContent() {
   const executionMode = executionModeParam || 'full'
   const variantIndexParam = searchParams.get('variant')
   const variantIndex = variantIndexParam ? parseInt(variantIndexParam, 10) : 0
+  // [WEEK-AUTHORITY-HANDOFF] Read the AUTHORITATIVE selected week from the URL.
+  // This is the SAME week the Program card rendered dosage for when the user
+  // clicked Start Workout. It becomes the exclusive source of truth for week
+  // scaling in the live workout - overriding the program baseline weekNumber
+  // which may lag or disagree with the visible Program card selection.
+  const weekParamRaw = searchParams.get('week')
+  const weekParamParsed = weekParamRaw ? parseInt(weekParamRaw, 10) : NaN
+  const weekOverride = Number.isFinite(weekParamParsed) && weekParamParsed >= 1 ? weekParamParsed : null
   
   console.log('[LIVE-WORKOUT-AUTHORITY] Route params read', {
     dayParam,
     executionMode,
     variantIndex,
+    weekOverride,
     demoMode,
     isFirstSession,
   })
@@ -656,6 +665,11 @@ function WorkoutSessionContent() {
         dayParam,
         isDemo: demoMode,
         isFirstSession,
+        // [WEEK-AUTHORITY-HANDOFF] Authoritative selected week from URL.
+        // When present, this wins over adaptiveProgram.weekNumber inside the
+        // loader so the live workout boots the exact week the Program card
+        // displayed dosage for.
+        weekOverride: weekOverride ?? undefined,
       })
       
       if (!mounted) return

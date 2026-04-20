@@ -2050,6 +2050,17 @@ export interface FullRoutineExercise {
   blockId?: string
   method?: string
   methodLabel?: string
+  // [VARIANT-BINDING-CONTRACT] Authoritative upstream identity preserved from
+  // RoutineItem so the selected-variant trim/binding step can match rows at
+  // equal strength to what `buildFullSessionRoutineSurface` already resolved.
+  // Without these, the trim step was forced to bind on variant-renamed `id` +
+  // normalized `name` only -- a weaker contract than the upstream rescue
+  // chain that writes RoutineItem.sourceExerciseId / sourceOrder. Result: a
+  // rescued grouped row could be silently dropped at trim time because the
+  // variant member's id/name drifted, even though canonical session identity
+  // still matched perfectly.
+  sourceExerciseId?: string
+  sourceOrder?: number
   }
 
 /**
@@ -2280,6 +2291,15 @@ export function buildFullVisibleRoutineExercises(
       blockId: item.blockId ?? sessionEx?.blockId,
       method: item.method ?? sessionEx?.method,
       methodLabel: item.methodLabel ?? sessionEx?.methodLabel,
+      // [VARIANT-BINDING-CONTRACT] Propagate upstream-preserved identity so
+      // the trim/binding step below can bind at the same strength the bridge
+      // already resolved. In variant mode, item.sourceExerciseId is the
+      // ORIGINAL session exercise id (before variant rename/re-ID), and
+      // item.sourceOrder is the canonical session.exercises position -- both
+      // set by buildFullSessionRoutineSurface via findSessionSource. In full
+      // mode, both equal the session exercise's own id/index directly.
+      sourceExerciseId: item.sourceExerciseId,
+      sourceOrder: item.sourceOrder,
     })
   }
 
@@ -2304,27 +2324,142 @@ export function buildFullVisibleRoutineExercises(
   // variant -- keeping them would let effectiveSets in ExerciseRow
   // (scaledSets ?? exercise.sets) silently revert back to Full truth.
   if (variantSelection?.main && variantSelection.main.length > 0) {
-    const variantOrder = new Map<string, number>() // key -> index in variant
-    variantSelection.main.forEach((v, idx) => {
-      if (v.exercise.id) {
-        variantOrder.set(`id:${v.exercise.id}`, idx)
-      }
-      if (v.exercise.name) {
-        const nk = normalizeExerciseKey(v.exercise.name)
-        if (!variantOrder.has(`name:${nk}`)) variantOrder.set(`name:${nk}`, idx)
+    // =========================================================================
+    // [VARIANT-BINDING-CONTRACT] Multi-tier deterministic binder.
+    //
+    // The previous single-pass matcher only checked row.id and normalized
+    // row.name. That was strictly WEAKER than the upstream identity contract
+    // preserved in buildFullSessionRoutineSurface (which already resolves
+    // sourceExerciseId / sourceOrder / blockId via findSessionSource). Net
+    // effect: a grouped row that had been rescued upstream via positional
+    // sourceOrder could still be DROPPED here if the variant's entry had an
+    // aggressive rename+re-ID -- the rescue truth never reached the trim
+    // step. That is the exact "rescue then forget" corridor fragility
+    // described in the fix prompt.
+    //
+    // This binder runs four descending-confidence tiers across ALL unbound
+    // rows before moving to the next weaker tier. Each successful bind
+    // CLAIMS its variant index so no two rows can bind to the same vi
+    // (double-bind prevention). Running the strongest tier across all
+    // rows first is what prevents a weaker match for row A from stealing
+    // a vi that row B could have bound to at a stronger tier.
+    //
+    // Tiers (highest confidence first):
+    //   1. row.id              <-> variant.exercise.id
+    //   2. row.sourceExerciseId<-> variant entry's resolved session id
+    //   3. row.blockId         <-> variant entry's resolved blockId, ONLY
+    //                             when that blockId is uniquely held by
+    //                             exactly one variant entry (non-ambiguous)
+    //   4. normalized row.name <-> normalized variant.exercise.name
+    //   5. row.sourceOrder     <-> variant entry's resolved sourceOrder
+    //
+    // Prescription authority (below) is unchanged: once a row is bound to
+    // vi, its dosage is overwritten from variantSelection.main[vi]. Only
+    // the HOW-we-pick-vi step changes here.
+    // =========================================================================
+
+    // Precompute each variant entry's resolved session identity by running
+    // the SAME key-order lookup the upstream bridge uses. This gives the
+    // trim step access to equal-strength identity fields -- without it,
+    // the variant side of the match would remain weaker than the row side.
+    type ViResolution = {
+      sourceExerciseId: string | undefined
+      sourceOrder: number | undefined
+      blockId: string | undefined
+    }
+    const viResolutions: ViResolution[] = variantSelection.main.map(v => {
+      const sessionForVi =
+        (v.exercise.id ? sessionExerciseMap.get(v.exercise.id) : undefined) ||
+        (v.exercise.name ? sessionExerciseMap.get(v.exercise.name.toLowerCase()) : undefined) ||
+        (v.exercise.name ? sessionExerciseMap.get(normalizeExerciseKey(v.exercise.name)) : undefined)
+      const sourceOrder = sessionForVi ? sessionExercises.indexOf(sessionForVi) : -1
+      return {
+        sourceExerciseId: sessionForVi?.id,
+        sourceOrder: sourceOrder >= 0 ? sourceOrder : undefined,
+        blockId: sessionForVi?.blockId,
       }
     })
 
-    const matchVariantIndex = (row: FullRoutineExercise): number | null => {
-      if (row.id && variantOrder.has(`id:${row.id}`)) return variantOrder.get(`id:${row.id}`)!
-      const nk = normalizeExerciseKey(row.name)
-      if (nk && variantOrder.has(`name:${nk}`)) return variantOrder.get(`name:${nk}`)!
-      return null
+    // Tier-1: variant.exercise.id -> vi
+    const variantIdMap = new Map<string, number>()
+    // Tier-2: resolved session exercise id -> vi
+    const variantSourceIdMap = new Map<string, number>()
+    // Tier-3: resolved blockId -> vi (only populated for uniquely-held blockIds)
+    const variantBlockIdMap = new Map<string, number>()
+    // Tier-4: normalized variant name -> vi
+    const variantNameMap = new Map<string, number>()
+    // Tier-5: resolved session source order -> vi
+    const variantSourceOrderMap = new Map<number, number>()
+
+    // First build tier-1 / tier-2 / tier-4 / tier-5 directly.
+    variantSelection.main.forEach((v, idx) => {
+      if (v.exercise.id && !variantIdMap.has(v.exercise.id)) {
+        variantIdMap.set(v.exercise.id, idx)
+      }
+      const resolved = viResolutions[idx]
+      if (resolved.sourceExerciseId && !variantSourceIdMap.has(resolved.sourceExerciseId)) {
+        variantSourceIdMap.set(resolved.sourceExerciseId, idx)
+      }
+      if (v.exercise.name) {
+        const nk = normalizeExerciseKey(v.exercise.name)
+        if (nk && !variantNameMap.has(nk)) variantNameMap.set(nk, idx)
+      }
+      if (typeof resolved.sourceOrder === 'number' && !variantSourceOrderMap.has(resolved.sourceOrder)) {
+        variantSourceOrderMap.set(resolved.sourceOrder, idx)
+      }
+    })
+
+    // Tier-3 requires a uniqueness pass: blockId is only a safe binder when
+    // exactly one variant entry resolves to it. Supersets/circuits hold the
+    // same blockId across multiple members, so we MUST NOT use blockId as a
+    // matcher in those cases or two rows could falsely alias to the same vi.
+    const blockIdCounts = new Map<string, number>()
+    viResolutions.forEach(r => {
+      if (r.blockId) blockIdCounts.set(r.blockId, (blockIdCounts.get(r.blockId) || 0) + 1)
+    })
+    viResolutions.forEach((r, idx) => {
+      if (r.blockId && blockIdCounts.get(r.blockId) === 1 && !variantBlockIdMap.has(r.blockId)) {
+        variantBlockIdMap.set(r.blockId, idx)
+      }
+    })
+
+    // Two-phase binder: run each tier across ALL unbound rows so stronger
+    // tiers always win before weaker tiers claim anything.
+    const rowToVi = new Map<number, number>()
+    const usedVi = new Set<number>()
+
+    const runTier = (lookup: (row: FullRoutineExercise) => number | undefined): void => {
+      result.forEach((row, ri) => {
+        if (rowToVi.has(ri)) return
+        const candidate = lookup(row)
+        if (candidate !== undefined && !usedVi.has(candidate)) {
+          rowToVi.set(ri, candidate)
+          usedVi.add(candidate)
+        }
+      })
     }
 
-    const trimmed = result
-      .map(row => ({ row, vi: matchVariantIndex(row) }))
-      .filter(x => x.vi !== null) as Array<{ row: FullRoutineExercise; vi: number }>
+    // Tier 1
+    runTier(row => (row.id ? variantIdMap.get(row.id) : undefined))
+    // Tier 2
+    runTier(row => (row.sourceExerciseId ? variantSourceIdMap.get(row.sourceExerciseId) : undefined))
+    // Tier 3 (guarded: only unique-blockId variant entries are in the map)
+    runTier(row => (row.blockId ? variantBlockIdMap.get(row.blockId) : undefined))
+    // Tier 4
+    runTier(row => {
+      const nk = normalizeExerciseKey(row.name)
+      return nk ? variantNameMap.get(nk) : undefined
+    })
+    // Tier 5
+    runTier(row =>
+      typeof row.sourceOrder === 'number' ? variantSourceOrderMap.get(row.sourceOrder) : undefined
+    )
+
+    const trimmed: Array<{ row: FullRoutineExercise; vi: number }> = []
+    result.forEach((row, ri) => {
+      const vi = rowToVi.get(ri)
+      if (vi !== undefined) trimmed.push({ row, vi })
+    })
 
     // Sort by variant order so the visible list matches the selected session
     // contract exactly (e.g. grouped pair stays adjacent, skill-first order).

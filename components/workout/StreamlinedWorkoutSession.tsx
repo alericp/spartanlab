@@ -6068,6 +6068,15 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
         elapsedSeconds={safeElapsedSeconds || 0}
         repsValue={corridorRepsValue}
         holdValue={corridorHoldValue}
+        // [ACTIVE-SET-SAVE-PARITY] Single authoritative primary-input kind.
+        // `isHoldExerciseForDefault` is computed above via the canonical
+        // isHoldUnit() detector against the same effectiveRepsOrTime +
+        // name + category. handleCompleteSet's `isHoldExerciseForLog`
+        // (line ~3828) computes the IDENTICAL boolean with the IDENTICAL
+        // inputs, so the corridor's rendered input branch and the
+        // persistence branch can never disagree. No local inference in the
+        // corridor will override this prop.
+        isHoldExercise={isHoldExerciseForDefault}
         selectedRPE={safeSelectedRPE}
         bandUsed={safeBandUsed || 'none'}
         currentSetNote={corridorCurrentSetNote}

@@ -163,6 +163,15 @@ export interface ActiveWorkoutCorridorProps {
   // [LIVE-WORKOUT-ACTION-PLANNER] Adaptive coaching expression from planner
   coachingExpression?: import('@/lib/workout/live-workout-action-planner').CoachingExpression | null
   
+  // [ACTIVE-SET-SAVE-PARITY] Authoritative primary input kind from parent.
+  // The corridor MUST render its primary input from this prop rather than
+  // re-inferring hold-vs-reps from raw prescription text. Parent derives
+  // this via the canonical isHoldUnit() detector (lib/workout/execution-unit-contract.ts)
+  // - the SAME detector handleCompleteSet uses to decide whether to persist
+  // a hold or a rep. When this prop is omitted, the corridor falls back to a
+  // defensive local check that now also recognizes "8s"/"6s" shorthand.
+  isHoldExercise?: boolean
+  
   // Callbacks (passed from parent)
   onCompleteSet: () => void
   onSetReps: (value: number) => void
@@ -228,9 +237,22 @@ function safeLower(str: string | undefined | null): string {
   return (str ?? '').toLowerCase()
 }
 
-function isHoldExercise(repsOrTime: string): boolean {
+// [ACTIVE-SET-SAVE-PARITY] Defensive fallback ONLY. The corridor consumes the
+// authoritative `isHoldExercise` prop from the parent, which uses the
+// canonical isHoldUnit() detector (same one handleCompleteSet uses for
+// persistence). This local detector runs ONLY when the prop is undefined
+// and is now hardened to also recognize terminal "s" shorthand like "8s"
+// and "6s" - previously it only matched "sec"/"hold", which caused Planche
+// Leans on Week 2 (effectiveRepsOrTime = "8s") to render the reps input
+// while persistence took the hold branch (split-brain).
+function isHoldExerciseFallback(repsOrTime: string): boolean {
   const lower = safeLower(repsOrTime)
-  return lower.includes('sec') || lower.includes('hold')
+  if (lower.includes('sec') || lower.includes('hold')) return true
+  // Match "8s", "10s", "3 s" - a pure number (with optional decimal) followed
+  // by terminal "s" and no further numeric content. Guards against "3x8-12 reps"
+  // which should remain a reps prescription.
+  if (/^\s*\d+(?:\.\d+)?\s*s\s*$/.test(lower)) return true
+  return false
 }
 
 function parseTargetValue(repsOrTime: string): number {
@@ -633,6 +655,8 @@ export function ActiveWorkoutStartCorridor({
   groupedMemberIndex = null,
   // [LIVE-WORKOUT-ACTION-PLANNER] Adaptive coaching expression
   coachingExpression,
+  // [ACTIVE-SET-SAVE-PARITY] Authoritative primary-input kind from parent
+  isHoldExercise: isHoldExerciseProp,
   onCompleteSet,
   onSetReps,
   onSetHold,
@@ -652,7 +676,17 @@ export function ActiveWorkoutStartCorridor({
   canGoBack = false,
 }: ActiveWorkoutCorridorProps) {
 
-  const isHold = isHoldExercise(exerciseRepsOrTime)
+  // [ACTIVE-SET-SAVE-PARITY] Prefer authoritative parent-owned truth. The
+  // parent derives this via the canonical isHoldUnit() detector from
+  // lib/workout/execution-unit-contract.ts - the SAME detector
+  // handleCompleteSet uses when persisting the logged set, which is what
+  // guarantees edit-path and save-path use the same classification. The
+  // local fallback only runs when the prop is undefined and is hardened
+  // to recognize "8s"/"6s" shorthand so even legacy callers without the
+  // prop render correctly.
+  const isHold = typeof isHoldExerciseProp === 'boolean'
+    ? isHoldExerciseProp
+    : isHoldExerciseFallback(exerciseRepsOrTime)
   const targetValue = parseTargetValue(exerciseRepsOrTime)
   const progressPercent = totalSetsCount > 0 ? (completedSetsCount / totalSetsCount) * 100 : 0
   

@@ -690,6 +690,26 @@ export function ActiveWorkoutStartCorridor({
   const targetValue = parseTargetValue(exerciseRepsOrTime)
   const progressPercent = totalSetsCount > 0 ? (completedSetsCount / totalSetsCount) * 100 : 0
   
+  // [log-corridor] Stage 7: corridor received these props THIS render. Paired
+  // with stage 6 in StreamlinedWorkoutSession.tsx - if stage 6 shows fresh
+  // post-commit values but stage 7 shows stale, the bug is inside the
+  // corridor component (impossible right now: the corridor has zero local
+  // state that masks set-number/recent-sets/inputs, and all of those render
+  // directly from props). If stage 7 matches stage 6 but the UI still shows
+  // Set 1/5, the bug is in the JSX below this line - either an early return
+  // in a rest-mode branch or a derived display value shadowing the prop.
+  console.log('[v0] [log-corridor] stage7 corridor render values', {
+    mode,
+    currentSetNumber,
+    exerciseSets,
+    recentSetsLength: recentSets.length,
+    selectedRPE,
+    repsValue,
+    holdValue,
+    isHold,
+    completedSetsCount,
+  })
+  
   // Local UI state
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [showSetNotes, setShowSetNotes] = useState(false)

@@ -639,14 +639,42 @@ export function validateHydrationPayload(
     }
     
     // Normalize completedSets
+    //
+    // [REFRESH-DUPLICATE-SET-FIX] DEDUPE BARRIER (load-time, layer 1 of 4)
+    //
+    // Root cause context: when the user refreshes during the green
+    // between_exercise_rest screen, the autosaved completedSets array is
+    // the authoritative machine state and should NOT contain duplicates
+    // by construction. However if ANY upstream mutation ever appended a
+    // second completion for the same (exerciseIndex, setNumber) - e.g.
+    // from a race where COMPLETE_SET fired twice, or from an older
+    // corrupted storage payload - those duplicates must never enter the
+    // live runtime. We dedupe strictly by (exerciseIndex, setNumber),
+    // keeping the EARLIEST authoritative instance. We never merge across
+    // different exercise indices, never fabricate new sets, and we log
+    // when dedupe happens so the issue is observable end-to-end.
     const normalizedSets: CompletedSetData[] = []
+    const seenKeys = new Set<string>()
+    let dedupedCount = 0
     if (isValidArray(savedState.completedSets)) {
       for (const rawSet of savedState.completedSets) {
         const normalized = normalizeCompletedSet(rawSet)
         if (normalized && normalized.exerciseIndex < exerciseCount) {
+          const key = `${normalized.exerciseIndex}:${normalized.setNumber}`
+          if (seenKeys.has(key)) {
+            dedupedCount += 1
+            continue
+          }
+          seenKeys.add(key)
           normalizedSets.push(normalized)
         }
       }
+    }
+    if (dedupedCount > 0) {
+      console.log('[REFRESH-DUPLICATE-SET-FIX] validateHydrationPayload dedupe removed duplicate completed sets', {
+        dedupedCount,
+        survivingCount: normalizedSets.length,
+      })
     }
     
     // Normalize overrides

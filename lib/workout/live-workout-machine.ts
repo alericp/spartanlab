@@ -586,7 +586,36 @@ export function workoutMachineReducer(
         adaptiveSummary,
       }
       
-      const newCompletedSets = [...state.completedSets, enrichedCompletedSet]
+      // [REFRESH-DUPLICATE-SET-FIX] COMPLETE_SET IDEMPOTENCY (layer 3 of 4)
+      //
+      // If a set with the same (exerciseIndex, setNumber) already exists in
+      // state.completedSets, REPLACE it in place rather than appending.
+      // This prevents duplicate rows from:
+      //   (a) Refresh during between_exercise_rest leaving a stale pointer
+      //       (primary cause fixed by layer 2) if that fix ever regresses.
+      //   (b) Any future edit-in-place UX that re-dispatches COMPLETE_SET
+      //       for an already-logged set.
+      //   (c) Any double-dispatch race.
+      // We preserve array order by replacing at the existing index so
+      // chronological history of OTHER sets is untouched.
+      const existingIdxInCompleted = state.completedSets.findIndex(
+        s =>
+          s.exerciseIndex === enrichedCompletedSet.exerciseIndex &&
+          s.setNumber === enrichedCompletedSet.setNumber
+      )
+      const newCompletedSets: CompletedSet[] =
+        existingIdxInCompleted >= 0
+          ? state.completedSets.map((s, i) =>
+              i === existingIdxInCompleted ? enrichedCompletedSet : s
+            )
+          : [...state.completedSets, enrichedCompletedSet]
+      if (existingIdxInCompleted >= 0) {
+        console.log('[REFRESH-DUPLICATE-SET-FIX] COMPLETE_SET replaced existing entry for duplicate (exerciseIndex,setNumber)', {
+          exerciseIndex: enrichedCompletedSet.exerciseIndex,
+          setNumber: enrichedCompletedSet.setNumber,
+          totalCompletedSetsUnchanged: newCompletedSets.length === state.completedSets.length,
+        })
+      }
       
       // Update session-level adaptive readiness
       const newSessionReadiness = updateSessionReadiness(
@@ -950,7 +979,26 @@ export function workoutMachineReducer(
     
     case 'COMPLETE_BLOCK_SET': {
       const { completedSet, block, memberIndex, round } = action
-      const newCompletedSets = [...state.completedSets, completedSet]
+      // [REFRESH-DUPLICATE-SET-FIX] Same idempotency guarantee as COMPLETE_SET
+      // for grouped execution (supersets / circuits). Replace-in-place on
+      // duplicate (exerciseIndex, setNumber) rather than append.
+      const existingIdxInBlockCompleted = state.completedSets.findIndex(
+        s =>
+          s.exerciseIndex === completedSet.exerciseIndex &&
+          s.setNumber === completedSet.setNumber
+      )
+      const newCompletedSets: CompletedSet[] =
+        existingIdxInBlockCompleted >= 0
+          ? state.completedSets.map((s, i) =>
+              i === existingIdxInBlockCompleted ? completedSet : s
+            )
+          : [...state.completedSets, completedSet]
+      if (existingIdxInBlockCompleted >= 0) {
+        console.log('[REFRESH-DUPLICATE-SET-FIX] COMPLETE_BLOCK_SET replaced existing entry for duplicate (exerciseIndex,setNumber)', {
+          exerciseIndex: completedSet.exerciseIndex,
+          setNumber: completedSet.setNumber,
+        })
+      }
       const isLastMember = memberIndex >= block.memberExercises.length - 1
       const isLastRound = round >= block.targetRounds
       

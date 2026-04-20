@@ -2127,23 +2127,110 @@ if (styledGroups && styledGroups.length > 0) {
           })
         }
         break
-      case 'HYDRATE_FROM_STORAGE':
-        // Handle hydration by dispatching RESUME_WORKOUT
-        if (action.savedState.completedSets && action.savedState.completedSets.length > 0) {
+      case 'HYDRATE_FROM_STORAGE': {
+        // [REFRESH-DUPLICATE-SET-FIX] PHASE-SAFE POINTER ADVANCEMENT (layer 2 of 4)
+        //
+        // Root cause the guard below fixes:
+        //   During the green between_exercise_rest screen, the machine phase
+        //   is `between_exercise_rest` with:
+        //     - currentExerciseIndex = the exercise that was just finished
+        //     - currentSetNumber    = the FINAL set number of that exercise
+        //                             (the set that was JUST completed)
+        //     - completedSets       = already contains that final set
+        //   liveSession flattens this to status:'resting' for autosave. On
+        //   refresh, RESUME_WORKOUT forces phase:'active' and preserves
+        //   currentSetNumber. That leaves the runtime pointed at an
+        //   already-completed set. When the user logs it, COMPLETE_SET
+        //   appends a SECOND Set N to completedSets -> the visible
+        //   "two Set 2 rows" duplicate.
+        //
+        //   Fix: before dispatching RESUME_WORKOUT, detect the exact
+        //   condition "pointer is at an already-completed set" using the
+        //   authoritative session contract for the per-exercise set count.
+        //   If so, advance the pointer to the next logical logging slot
+        //   (next set of same exercise, or set 1 of next exercise, or
+        //   clamp to end). Completed-set history is NEVER changed here;
+        //   only the transient pointer is repaired. Durable truth vs
+        //   transient truth is separated.
+        const rawSaved = action.savedState
+        const rawCompletedSets = (rawSaved.completedSets ?? []) as Array<{
+          exerciseIndex: number
+          setNumber: number
+        }>
+        if (rawCompletedSets.length > 0) {
+          const exercises = machineSessionContract?.exercises ?? []
+          const exerciseCount = exercises.length
+          let safeIdx = typeof rawSaved.currentExerciseIndex === 'number'
+            ? rawSaved.currentExerciseIndex
+            : 0
+          let safeSetNumber = typeof rawSaved.currentSetNumber === 'number'
+            ? rawSaved.currentSetNumber
+            : 1
+          
+          const isSetAlreadyCompleted = (exIdx: number, setNum: number) =>
+            rawCompletedSets.some(
+              s => s.exerciseIndex === exIdx && s.setNumber === setNum
+            )
+          
+          if (
+            exerciseCount > 0 &&
+            safeIdx >= 0 &&
+            safeIdx < exerciseCount &&
+            isSetAlreadyCompleted(safeIdx, safeSetNumber)
+          ) {
+            // Pointer references an already-completed set. Advance it.
+            const prescribedSets =
+              typeof exercises[safeIdx]?.sets === 'number' && exercises[safeIdx].sets > 0
+                ? exercises[safeIdx].sets
+                : 1
+            
+            let advancedIdx = safeIdx
+            let advancedSetNumber = safeSetNumber
+            
+            if (safeSetNumber < prescribedSets) {
+              // Still more sets remaining in current exercise -> next set
+              advancedSetNumber = safeSetNumber + 1
+            } else {
+              // Current exercise fully done -> jump to set 1 of next exercise
+              if (safeIdx + 1 < exerciseCount) {
+                advancedIdx = safeIdx + 1
+                advancedSetNumber = 1
+              } else {
+                // Last exercise also done - clamp at the end. The machine
+                // will drive to completed as appropriate on user action.
+                advancedIdx = safeIdx
+                advancedSetNumber = prescribedSets
+              }
+            }
+            
+            console.log('[REFRESH-DUPLICATE-SET-FIX] advanced stale pointer past already-completed set', {
+              fromExerciseIndex: safeIdx,
+              fromSetNumber: safeSetNumber,
+              toExerciseIndex: advancedIdx,
+              toSetNumber: advancedSetNumber,
+              completedSetsCount: rawCompletedSets.length,
+              reason: 'refresh_during_between_exercise_rest_or_equivalent',
+            })
+            
+            safeIdx = advancedIdx
+            safeSetNumber = advancedSetNumber
+          }
+          
           machineDispatch({
             type: 'RESUME_WORKOUT',
-            startTime: action.savedState.startTime || Date.now(),
+            startTime: rawSaved.startTime || Date.now(),
             savedState: {
-              currentExerciseIndex: action.savedState.currentExerciseIndex,
-              currentSetNumber: action.savedState.currentSetNumber,
-              completedSets: action.savedState.completedSets as unknown as CompletedSet[],
-              elapsedSeconds: action.savedState.elapsedSeconds,
-              workoutNotes: action.savedState.workoutNotes,
-              lastSetRPE: action.savedState.lastSetRPE,
+              currentExerciseIndex: safeIdx,
+              currentSetNumber: safeSetNumber,
+              completedSets: rawSaved.completedSets as unknown as CompletedSet[],
+              elapsedSeconds: rawSaved.elapsedSeconds,
+              workoutNotes: rawSaved.workoutNotes,
+              lastSetRPE: rawSaved.lastSetRPE,
             },
           })
         }
         break
+      }
       case 'SET_TRANSITION_ERROR':
         machineDispatch({ type: 'ENTER_INVALID', reason: action.error.message, stage: action.error.type })
         break
@@ -5539,9 +5626,28 @@ function InterExerciseRestCountdown({
     
     // Build recent sets for ledger (last 3 completed sets)
     // [RECENT-SETS-FIX] Filter recent sets by CURRENT EXERCISE only, not global last 3
-    const currentExerciseCompletedSets = normalizedCompletedSets.filter(
+    // [REFRESH-DUPLICATE-SET-FIX] LEDGER RENDER HARDENING (layer 4 of 4)
+    // Last-line safety guard: dedupe by (exerciseIndex, setNumber),
+    // keep-first, so even if an upstream duplicate ever slipped through
+    // all three earlier layers, the ledger never shows two identical
+    // "Set 2" rows for the same exercise. This is a render-only filter
+    // - the authoritative completedSets array on machineState is NEVER
+    // mutated by this pass.
+    const currentExerciseCompletedSetsRaw = normalizedCompletedSets.filter(
       s => s.exerciseIndex === safeExerciseIndex
     )
+    const seenCorridorKeys = new Set<number>()
+    const currentExerciseCompletedSets = currentExerciseCompletedSetsRaw.filter(s => {
+      if (seenCorridorKeys.has(s.setNumber)) {
+        console.log('[REFRESH-DUPLICATE-SET-FIX] corridor recent-sets render dropped duplicate row', {
+          exerciseIndex: s.exerciseIndex,
+          setNumber: s.setNumber,
+        })
+        return false
+      }
+      seenCorridorKeys.add(s.setNumber)
+      return true
+    })
     // [LIVE-WORKOUT-AUTHORITY] Include extended execution facts in recent sets
     const corridorRecentSets = currentExerciseCompletedSets.slice(-3).map(set => ({
       setNumber: set.setNumber,
@@ -6231,7 +6337,18 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     // [CRASH-FIX] Use normalizedCompletedSets with null safety
     if (normalizedCompletedSets.length === 0) return null
     try {
-      const recentSets = normalizedCompletedSets.slice(-3) // Show last 3 sets
+      // [REFRESH-DUPLICATE-SET-FIX] LEDGER RENDER HARDENING (layer 4 of 4)
+      // Mirror the corridor-recent-sets dedupe here. Last-line safety:
+      // drop duplicate (exerciseIndex, setNumber) rows at render time,
+      // keep-first. Never mutates authoritative completedSets.
+      const ledgerSeenKeys = new Set<string>()
+      const dedupedCompletedSets = normalizedCompletedSets.filter(s => {
+        const key = `${s.exerciseIndex}:${s.setNumber}`
+        if (ledgerSeenKeys.has(key)) return false
+        ledgerSeenKeys.add(key)
+        return true
+      })
+      const recentSets = dedupedCompletedSets.slice(-3) // Show last 3 sets
       const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, safeExerciseIndex)
       
       return (

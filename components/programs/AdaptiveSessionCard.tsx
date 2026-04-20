@@ -578,10 +578,36 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
     const survivingIds = new Set(fullVisibleExercises.map(e => e.id).filter(Boolean))
     const survivingNames = new Set(fullVisibleExercises.map(e => normalizeKey(e.name)).filter(Boolean))
+    // [VARIANT-PRUNE-BLOCKID-MATCH] Third surviving signal: blockId. The
+    // builder writes `styledGroup.id === blockId` on the group, and the bridge
+    // propagates `blockId` onto every `FullRoutineExercise` (see
+    // program-ai-evidence-bridge.ts buildFullVisibleRoutineExercises -> item.blockId).
+    // Previously the prune only matched members by id or normalized name. When
+    // a variant rewrote a member's id AND renamed it (e.g. variant-specific
+    // accessory regression), both lookups missed even though the exercise
+    // still carried the SAME blockId as its styledGroup -- the member was
+    // silently dropped, the group lost its minimum, and the adapter fell
+    // through to the flat path. Matching on blockId keeps the grouped pair
+    // alive whenever the variant retained at least one exercise under that
+    // block. The rich render path then emits visible grouped structure in the
+    // body above Method decisions.
+    const survivingBlockIds = new Set(
+      fullVisibleExercises
+        .map(e => (e as unknown as { blockId?: string }).blockId)
+        .filter((b): b is string => typeof b === 'string' && b.length > 0)
+    )
     const prunedGroups = sessionStyleMetadata.styledGroups
       .map(g => {
+        // [VARIANT-PRUNE-BLOCKID-MATCH] If the group's own blockId survives on
+        // ANY visible exercise, treat every original member as surviving for
+        // this group. Individual member id/name lookups are still consulted
+        // first; this blockId-level rescue only applies when the per-member
+        // lookups would otherwise strand the group below its method minimum.
+        const groupBlockSurvives = g.id && survivingBlockIds.has(g.id)
         const keptMembers = g.exercises.filter(m =>
-          survivingIds.has(m.id) || survivingNames.has(normalizeKey(m.name))
+          survivingIds.has(m.id) ||
+          survivingNames.has(normalizeKey(m.name)) ||
+          groupBlockSurvives
         )
         return { ...g, exercises: keptMembers }
       })

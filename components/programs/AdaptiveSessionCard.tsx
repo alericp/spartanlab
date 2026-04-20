@@ -47,6 +47,13 @@ import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
 // via its real rich / raw-fallback / flat dispatch.
 // ============================================================================
 
+// [TEMP-INSTRUMENTATION] Module-level dedupe guard for the fire-and-forget
+// POST to /api/_funnel-audit. Keys are `${dayNumber}|${verdict}|${variantLabel}`.
+// Prevents re-posting on every render/re-mount within a single tab session.
+// Remove along with the fetch block and the /api/_funnel-audit/route.ts file
+// once the tested session's first-failing-stage verdict has been captured.
+const __funnelAuditPostedKeys: Set<string> = new Set()
+
 // [DOCTRINE-STRENGTHENING] Week character flags for visible differentiation
 interface WeekCharacter {
   densityAllowed: boolean
@@ -722,7 +729,8 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     } else {
       verdict = 'STAGE1_THROUGH_STAGE8_UNCLASSIFIED'
     }
-    console.log('[v0] [FUNNEL-AUDIT] Day', session.dayNumber, {
+    const funnelAuditPayload = {
+      day: session.dayNumber,
       // Stage 1: session prop as received by the card
       s1_hasStyleMeta: !!sessionStyleMetadata,
       s1_styledGroups: s1StyledGroups.length,
@@ -750,9 +758,33 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       s8_hasGroupedTruth: hasGroupedTruth,
       s8_hasRichRenderableGroups: hasRichRenderableGroups,
       s8_rawFallbackBlockCount: s7Model.rawFallbackBlocks.length,
+      // Variant identity for reproducibility of the tested case
+      selectedVariant: activeSessionView.variantLabel,
       // Final first-failing-stage verdict
       verdict,
-    })
+    }
+    console.log('[v0] [FUNNEL-AUDIT] Day', session.dayNumber, funnelAuditPayload)
+
+    // [TEMP-INSTRUMENTATION] Fire-and-forget POST to the server sink at
+    // /api/_funnel-audit so the payload lands in SERVER logs (readable by the
+    // agent via user_read_only_context/v0_debug_logs.log) even when client
+    // console output is not accessible. Guarded by a module-level Set keyed on
+    // (dayNumber, verdict, variant) so each distinct verdict POSTs at most
+    // once per tab session. Remove this block and the route file when done.
+    const dedupeKey = `${session.dayNumber}|${verdict}|${activeSessionView.variantLabel}`
+    if (!__funnelAuditPostedKeys.has(dedupeKey)) {
+      __funnelAuditPostedKeys.add(dedupeKey)
+      try {
+        void fetch('/api/_funnel-audit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(funnelAuditPayload),
+          keepalive: true,
+        }).catch(() => { /* swallow: telemetry is best-effort */ })
+      } catch {
+        /* swallow: telemetry is best-effort */
+      }
+    }
   }
   
   // ==========================================================================

@@ -567,14 +567,49 @@ export function workoutMachineReducer(
     // =========================================================================
     
     case 'COMPLETE_SET': {
+      // =====================================================================
+      // [LIVE-LOG-COMMIT-FIX] FAIL-OPEN COMPLETE_SET
+      //
+      // This reducer case is structured in TWO DISTINCT LAYERS:
+      //
+      //   LAYER A - BASE REQUIRED COMMIT (cannot throw, cannot be skipped)
+      //     Computes the core progression state from:
+      //       - state
+      //       - action.completedSet
+      //       - action.isLastSetOfExercise
+      //       - action.exerciseCount
+      //       - duplicate replacement logic
+      //       - phase / set-number transitions
+      //       - input resets
+      //     The base commit ALWAYS appends (or idempotently replaces) the
+      //     completed set, advances currentSetNumber (or transitions to
+      //     between_exercise_rest / completed), and resets per-set notes /
+      //     inputs. The user's visible progression is guaranteed to land
+      //     even if every optional helper crashes.
+      //
+      //   LAYER B - OPTIONAL INTELLIGENCE ENRICHMENT (fail-open)
+      //     Wraps each of these helpers in a try/catch and uses a safe
+      //     fallback on failure:
+      //       - buildAdaptiveExecutionSummary     -> null adaptiveSummary
+      //       - updateSessionReadiness            -> prior sessionAdaptiveReadiness
+      //       - normalizeCoachingSignals          -> skipped (actionPlan=null)
+      //       - normalizeSupportLoad              -> skipped (actionPlan=null)
+      //       - normalizeExerciseIntent           -> skipped (actionPlan=null)
+      //       - buildActionPlan                   -> null actionPlan
+      //     If any helper throws, a `[log-corridor] helper-failed` dev
+      //     warning prints the helper name and the base commit still
+      //     advances. This was the exact pattern that previously froze
+      //     the UI at Set 1/5 with no logged row.
+      //
+      // The reducer's return uses the base commit fields as the authoritative
+      // skeleton, then merges enrichment on top. Enrichment CAN overwrite
+      // adaptiveSummary-inflected fields (sessionAdaptiveReadiness,
+      // currentActionPlan, enrichedCompletedSet) but CANNOT suppress the
+      // base set append, phase transition, or currentSetNumber advance.
+      // =====================================================================
+      
       // [LIVE-LOG-CORRIDOR-PROOF] Stage 4: reducer COMPLETE_SET case entered.
       // Paired with stage-3 dispatch log in StreamlinedWorkoutSession.tsx.
-      // If this log prints but a stage-3 log did not, the dispatch was
-      // somehow wrong type. If stage-3 printed but this did not, the
-      // reducer is not receiving the action (impossible with useReducer
-      // but proves store wiring). Post-state values are logged by a
-      // component-level effect (stage 5) because COMPLETE_SET returns
-      // from many branches and we avoid touching each.
       console.log('[v0] [log-corridor] stage4 reducer COMPLETE_SET entered', {
         exerciseIndex: action.completedSet.exerciseIndex,
         setNumber: action.completedSet.setNumber,
@@ -584,6 +619,10 @@ export function workoutMachineReducer(
         priorPhase: state.phase,
       })
       
+      // ---------------------------------------------------------------------
+      // LAYER A - BASE REQUIRED COMMIT
+      // ---------------------------------------------------------------------
+      
       // [LIVE-WORKOUT-AUTHORITY] Track consecutive high RPE for recommendations
       const rpeValue = action.completedSet.actualRPE as number
       const isHighRPE = rpeValue >= 9
@@ -591,210 +630,278 @@ export function workoutMachineReducer(
         ? state.consecutiveHighRPECount + 1 
         : 0 // Reset on normal RPE
       
-      // [LIVE-WORKOUT-ADAPTIVE] Build canonical adaptive execution summary
-      const targetPrescription: TargetPrescription = {
-        targetReps: action.targetReps,
-        targetHoldSeconds: action.targetHoldSeconds,
-        targetRPE: action.targetRPE || 8,
-        prescribedLoad: action.completedSet.prescribedLoad,
-        prescribedLoadUnit: action.completedSet.prescribedLoadUnit,
-        recommendedBand: action.recommendedBand,
-      }
-      
-      const priorContext = {
-        completedSets: state.completedSets,
-        exerciseIndex: action.completedSet.exerciseIndex,
-      }
-      
-      const adaptiveSummary = buildAdaptiveExecutionSummary(
-        action.completedSet,
-        targetPrescription,
-        priorContext
-      )
-      
-      // Attach summary to the completed set
-      const enrichedCompletedSet: CompletedSet = {
-        ...action.completedSet,
-        adaptiveSummary,
-      }
-      
       // [REFRESH-DUPLICATE-SET-FIX] COMPLETE_SET IDEMPOTENCY (layer 3 of 4)
       //
       // If a set with the same (exerciseIndex, setNumber) already exists in
       // state.completedSets, REPLACE it in place rather than appending.
-      // This prevents duplicate rows from:
-      //   (a) Refresh during between_exercise_rest leaving a stale pointer
-      //       (primary cause fixed by layer 2) if that fix ever regresses.
-      //   (b) Any future edit-in-place UX that re-dispatches COMPLETE_SET
-      //       for an already-logged set.
-      //   (c) Any double-dispatch race.
-      // We preserve array order by replacing at the existing index so
-      // chronological history of OTHER sets is untouched.
+      // This base path uses action.completedSet WITHOUT adaptiveSummary so
+      // it cannot be blocked by a buildAdaptiveExecutionSummary failure;
+      // LAYER B will overlay the enriched version when it succeeds.
+      const baseCompletedSet: CompletedSet = { ...action.completedSet }
       const existingIdxInCompleted = state.completedSets.findIndex(
         s =>
-          s.exerciseIndex === enrichedCompletedSet.exerciseIndex &&
-          s.setNumber === enrichedCompletedSet.setNumber
+          s.exerciseIndex === baseCompletedSet.exerciseIndex &&
+          s.setNumber === baseCompletedSet.setNumber
       )
-      const newCompletedSets: CompletedSet[] =
+      // newCompletedSetsBase is the guaranteed set ledger state after this
+      // dispatch. LAYER B will substitute the enriched entry if enrichment
+      // succeeds; the length and ordering here are fixed.
+      const baseCompletedSets: CompletedSet[] =
         existingIdxInCompleted >= 0
           ? state.completedSets.map((s, i) =>
-              i === existingIdxInCompleted ? enrichedCompletedSet : s
+              i === existingIdxInCompleted ? baseCompletedSet : s
             )
-          : [...state.completedSets, enrichedCompletedSet]
+          : [...state.completedSets, baseCompletedSet]
       if (existingIdxInCompleted >= 0) {
         console.log('[REFRESH-DUPLICATE-SET-FIX] COMPLETE_SET replaced existing entry for duplicate (exerciseIndex,setNumber)', {
-          exerciseIndex: enrichedCompletedSet.exerciseIndex,
-          setNumber: enrichedCompletedSet.setNumber,
-          totalCompletedSetsUnchanged: newCompletedSets.length === state.completedSets.length,
+          exerciseIndex: baseCompletedSet.exerciseIndex,
+          setNumber: baseCompletedSet.setNumber,
+          totalCompletedSetsUnchanged: baseCompletedSets.length === state.completedSets.length,
         })
       }
       
-      // Update session-level adaptive readiness
-      const newSessionReadiness = updateSessionReadiness(
-        state.sessionAdaptiveReadiness,
-        adaptiveSummary
-      )
+      // ---------------------------------------------------------------------
+      // LAYER B - OPTIONAL INTELLIGENCE ENRICHMENT (fail-open)
+      //
+      // Each helper is wrapped so a throw in one does not skip the others
+      // AND does not skip the base commit at the bottom of the case.
+      // ---------------------------------------------------------------------
       
-      // [LIVE-WORKOUT-ACTION-PLANNER] Build action plan for current exercise
-      const exerciseSummaries = newSessionReadiness.exerciseSummaries.get(state.currentExerciseIndex) || []
-      
-      // [LIVE-WORKOUT-NORMALIZERS] Normalize coaching signals from current set
-      const normalizedCoachingSignals = normalizeCoachingSignals({
-        tags: action.completedSet.structuredCoachingInputs || state.currentSetReasonTags as any[],
-        freeText: action.completedSet.note || state.currentSetNote || null,
-      })
-      
-      // Normalize support/load based on input mode
       const inputMode = action.completedSet.inputMode || 'bodyweight_strength'
-      const normalizedSupportLoad = normalizeSupportLoad({
-        inputMode,
-        selectedBands: action.completedSet.selectedBands || action.completedSet.multiBandSelection?.bands,
-        prescribedLoad: action.completedSet.prescribedLoad,
-        prescribedLoadUnit: action.completedSet.prescribedLoadUnit,
-        actualLoadUsed: action.completedSet.actualLoadUsed ?? state.actualLoadUsed ?? undefined,
-        actualLoadUnit: action.completedSet.actualLoadUnit ?? state.actualLoadUnit,
-      })
       
-      // Normalize exercise intent
-      const normalizedExerciseIntent = normalizeExerciseIntent({
-        targetReps: action.targetReps,
-        targetSets: action.totalPrescribedSets,
-        inputMode,
-        exerciseName: action.exerciseName || '',
-      })
-      
-      const planningContext: ExercisePlanningContext = {
-        exerciseIndex: state.currentExerciseIndex,
-        exerciseName: action.exerciseName || '',
-        inputMode,
-        totalPrescribedSets: action.totalPrescribedSets || 3,
-        currentSetNumber: state.currentSetNumber,
-        isStraightArm: false,  // Will be detected by planner from name
-        isRecoverySensitive: false,  // Will be detected by planner from name
-        isHoldBased: inputMode === 'timed_hold',
-        isWeighted: inputMode === 'weighted_strength',
-        isBandAssisted: inputMode === 'band_assisted_skill',
-        isUnilateral: inputMode === 'reps_per_side',
-        targetReps: action.targetReps,
-        targetHoldSeconds: action.targetHoldSeconds,
-        targetRPE: action.targetRPE,
-        prescribedLoad: action.completedSet.prescribedLoad,
-        recommendedBand: action.recommendedBand,
-        completedSummaries: exerciseSummaries,
-        sessionReadiness: newSessionReadiness,
-        // [LIVE-WORKOUT-NORMALIZERS] Add normalized inputs
-        coachingSignals: normalizedCoachingSignals,
-        supportLoad: normalizedSupportLoad,
-        exerciseIntent: normalizedExerciseIntent,
-        selectedBands: action.completedSet.selectedBands || action.completedSet.multiBandSelection?.bands,
-        actualLoadUsed: action.completedSet.actualLoadUsed ?? state.actualLoadUsed ?? undefined,
-        actualLoadUnit: action.completedSet.actualLoadUnit ?? state.actualLoadUnit,
+      // B.1 adaptiveSummary (fail -> null)
+      let adaptiveSummary: ReturnType<typeof buildAdaptiveExecutionSummary> | null = null
+      try {
+        const targetPrescription: TargetPrescription = {
+          targetReps: action.targetReps,
+          targetHoldSeconds: action.targetHoldSeconds,
+          targetRPE: action.targetRPE || 8,
+          prescribedLoad: action.completedSet.prescribedLoad,
+          prescribedLoadUnit: action.completedSet.prescribedLoadUnit,
+          recommendedBand: action.recommendedBand,
+        }
+        const priorContext = {
+          completedSets: state.completedSets,
+          exerciseIndex: action.completedSet.exerciseIndex,
+        }
+        adaptiveSummary = buildAdaptiveExecutionSummary(
+          action.completedSet,
+          targetPrescription,
+          priorContext
+        )
+      } catch (err) {
+        console.warn('[v0] [log-corridor] helper-failed: buildAdaptiveExecutionSummary - base commit continues', err)
+        adaptiveSummary = null
       }
       
-      const actionPlan = buildActionPlan(planningContext)
+      // B.2 enrichedCompletedSet (derived from B.1; fail-open to baseCompletedSet)
+      const enrichedCompletedSet: CompletedSet = adaptiveSummary
+        ? { ...baseCompletedSet, adaptiveSummary }
+        : baseCompletedSet
+      const newCompletedSets: CompletedSet[] =
+        existingIdxInCompleted >= 0
+          ? baseCompletedSets.map((s, i) =>
+              i === existingIdxInCompleted ? enrichedCompletedSet : s
+            )
+          : [
+              ...baseCompletedSets.slice(0, baseCompletedSets.length - 1),
+              enrichedCompletedSet,
+            ]
       
-      console.log('[LIVE-WORKOUT-ACTION-PLANNER] Action plan built', {
-        actionType: actionPlan.actionType,
-        reasonCodes: actionPlan.reasonCodes,
-        recoveryProtection: actionPlan.recoveryProtectionLevel,
-        hint: actionPlan.humanReadableHint,
-      })
+      // B.3 sessionAdaptiveReadiness (fail -> reuse prior readiness)
+      let newSessionReadiness = state.sessionAdaptiveReadiness
+      if (adaptiveSummary) {
+        try {
+          newSessionReadiness = updateSessionReadiness(
+            state.sessionAdaptiveReadiness,
+            adaptiveSummary
+          )
+        } catch (err) {
+          console.warn('[v0] [log-corridor] helper-failed: updateSessionReadiness - base commit continues', err)
+          newSessionReadiness = state.sessionAdaptiveReadiness
+        }
+      }
       
-      console.log('[LIVE-WORKOUT-ADAPTIVE] Set completed with summary', {
-        exerciseIndex: state.currentExerciseIndex,
-        setNumber: state.currentSetNumber,
-        rpe: rpeValue,
-        performanceOutcome: adaptiveSummary.performanceOutcome,
-        intensityDirection: adaptiveSummary.intensityDirection,
-        recoverySignal: adaptiveSummary.recoverySignal,
-        sessionFatigue: newSessionReadiness.sessionFatigueLevel,
-      })
+      // B.4 actionPlan (fail -> null). Bundled with its three normalizers
+      // because buildActionPlan consumes all three; if any normalizer throws,
+      // we skip the whole plan instead of constructing a partial context.
+      let actionPlan: ReturnType<typeof buildActionPlan> | null = null
+      try {
+        const exerciseSummaries =
+          newSessionReadiness.exerciseSummaries?.get?.(state.currentExerciseIndex) || []
+        const normalizedCoachingSignals = normalizeCoachingSignals({
+          tags: action.completedSet.structuredCoachingInputs || state.currentSetReasonTags as any[],
+          freeText: action.completedSet.note || state.currentSetNote || null,
+        })
+        const normalizedSupportLoad = normalizeSupportLoad({
+          inputMode,
+          selectedBands: action.completedSet.selectedBands || action.completedSet.multiBandSelection?.bands,
+          prescribedLoad: action.completedSet.prescribedLoad,
+          prescribedLoadUnit: action.completedSet.prescribedLoadUnit,
+          actualLoadUsed: action.completedSet.actualLoadUsed ?? state.actualLoadUsed ?? undefined,
+          actualLoadUnit: action.completedSet.actualLoadUnit ?? state.actualLoadUnit,
+        })
+        const normalizedExerciseIntent = normalizeExerciseIntent({
+          targetReps: action.targetReps,
+          targetSets: action.totalPrescribedSets,
+          inputMode,
+          exerciseName: action.exerciseName || '',
+        })
+        const planningContext: ExercisePlanningContext = {
+          exerciseIndex: state.currentExerciseIndex,
+          exerciseName: action.exerciseName || '',
+          inputMode,
+          totalPrescribedSets: action.totalPrescribedSets || 3,
+          currentSetNumber: state.currentSetNumber,
+          isStraightArm: false,
+          isRecoverySensitive: false,
+          isHoldBased: inputMode === 'timed_hold',
+          isWeighted: inputMode === 'weighted_strength',
+          isBandAssisted: inputMode === 'band_assisted_skill',
+          isUnilateral: inputMode === 'reps_per_side',
+          targetReps: action.targetReps,
+          targetHoldSeconds: action.targetHoldSeconds,
+          targetRPE: action.targetRPE,
+          prescribedLoad: action.completedSet.prescribedLoad,
+          recommendedBand: action.recommendedBand,
+          completedSummaries: exerciseSummaries,
+          sessionReadiness: newSessionReadiness,
+          coachingSignals: normalizedCoachingSignals,
+          supportLoad: normalizedSupportLoad,
+          exerciseIntent: normalizedExerciseIntent,
+          selectedBands: action.completedSet.selectedBands || action.completedSet.multiBandSelection?.bands,
+          actualLoadUsed: action.completedSet.actualLoadUsed ?? state.actualLoadUsed ?? undefined,
+          actualLoadUnit: action.completedSet.actualLoadUnit ?? state.actualLoadUnit,
+        }
+        actionPlan = buildActionPlan(planningContext)
+        console.log('[LIVE-WORKOUT-ACTION-PLANNER] Action plan built', {
+          actionType: actionPlan.actionType,
+          reasonCodes: actionPlan.reasonCodes,
+          recoveryProtection: actionPlan.recoveryProtectionLevel,
+          hint: actionPlan.humanReadableHint,
+        })
+      } catch (err) {
+        console.warn('[v0] [log-corridor] helper-failed: buildActionPlan / normalizers - base commit continues', err)
+        actionPlan = null
+      }
+      
+      // Diagnostic for adaptive observability. Guarded so a malformed
+      // adaptiveSummary cannot throw here and skip the base return below.
+      try {
+        if (adaptiveSummary) {
+          console.log('[LIVE-WORKOUT-ADAPTIVE] Set completed with summary', {
+            exerciseIndex: state.currentExerciseIndex,
+            setNumber: state.currentSetNumber,
+            rpe: rpeValue,
+            performanceOutcome: adaptiveSummary.performanceOutcome,
+            intensityDirection: adaptiveSummary.intensityDirection,
+            recoverySignal: adaptiveSummary.recoverySignal,
+            sessionFatigue: newSessionReadiness.sessionFatigueLevel,
+          })
+        }
+      } catch {
+        // never allow a log to block commit
+      }
+      
+      // ---------------------------------------------------------------------
+      // BASE RETURN - layer A skeleton, optional layer B merged on top.
+      // The layer A fields (phase, completedSets, currentSetNumber,
+      // input resets, note clears) are the ones that unfreeze the UI.
+      // ---------------------------------------------------------------------
+      
+      // [LIVE-LOG-CORRIDOR-PROOF] Post-commit assertion. This print runs
+      // regardless of which return branch is taken below (all three share
+      // the same base skeleton), so its presence proves the reducer
+      // reached the commit point and a new state object is about to return.
+      const completedSetsForReturn = newCompletedSets
       
       if (action.isLastSetOfExercise) {
-        // Last set of exercise - will transition to between_exercise_rest or completed
         const isLastExercise = state.currentExerciseIndex >= action.exerciseCount - 1
         if (isLastExercise) {
+          console.log('[v0] [log-corridor] COMPLETE_SET base commit -> last set / last exercise', {
+            phase: 'completed',
+            currentExerciseIndex: state.currentExerciseIndex,
+            currentSetNumber: state.currentSetNumber,
+            completedSetsLength: completedSetsForReturn.length,
+            lastCompletedSet: {
+              exerciseIndex: baseCompletedSet.exerciseIndex,
+              setNumber: baseCompletedSet.setNumber,
+            },
+          })
           return {
             ...state,
             phase: 'completed',
-            completedSets: newCompletedSets,
+            completedSets: completedSetsForReturn,
             lastSetRPE: action.completedSet.actualRPE,
-            consecutiveHighRPECount: 0, // Reset at workout end
+            consecutiveHighRPECount: 0,
             sessionAdaptiveReadiness: newSessionReadiness,
-            currentActionPlan: null,  // Clear at workout end
+            currentActionPlan: null,
             selectedRPE: null,
             repsValue: 0,
             holdValue: 0,
-            // Clear per-set notes
             currentSetNote: '',
             currentSetReasonTags: [],
           }
         }
         // [RPE-REST-AUTHORITY] Prefer caller-computed rest (RPE + exercise
         // category + session fatigue). Fallback to 120s only when no caller
-        // value is available (edge cases like RPE-less completion). The
-        // green inter-exercise timer reads interExerciseRestSeconds, so
-        // this is the single source of truth for its duration.
+        // value is available.
         const rpeComputedRest =
           typeof action.interExerciseRestSeconds === 'number' &&
           action.interExerciseRestSeconds > 0
             ? Math.round(action.interExerciseRestSeconds)
             : 120
+        console.log('[v0] [log-corridor] COMPLETE_SET base commit -> last set / next exercise', {
+          phase: 'between_exercise_rest',
+          currentExerciseIndex: state.currentExerciseIndex,
+          currentSetNumber: state.currentSetNumber,
+          completedSetsLength: completedSetsForReturn.length,
+          interExerciseRestSeconds: rpeComputedRest,
+          lastCompletedSet: {
+            exerciseIndex: baseCompletedSet.exerciseIndex,
+            setNumber: baseCompletedSet.setNumber,
+          },
+        })
         return {
           ...state,
           phase: 'between_exercise_rest',
-          completedSets: newCompletedSets,
+          completedSets: completedSetsForReturn,
           lastSetRPE: action.completedSet.actualRPE,
-          consecutiveHighRPECount: 0, // Reset between exercises
+          consecutiveHighRPECount: 0,
           sessionAdaptiveReadiness: newSessionReadiness,
-          currentActionPlan: null,  // Clear between exercises, will rebuild for next
+          currentActionPlan: null,
           selectedRPE: null,
-          // Reset input values so component can re-seed from next exercise prescription
           repsValue: 0,
           holdValue: 0,
           interExerciseRestSeconds: rpeComputedRest,
-          // Clear per-set notes for next exercise
           currentSetNote: '',
           currentSetReasonTags: [],
         }
       }
       
-      // Not last set - rest then next set
       // Not last set - transition to resting for same-exercise continuation
+      console.log('[v0] [log-corridor] COMPLETE_SET base commit -> not-last-set / same-exercise rest', {
+        phase: 'resting',
+        currentExerciseIndex: state.currentExerciseIndex,
+        newCurrentSetNumber: state.currentSetNumber + 1,
+        completedSetsLength: completedSetsForReturn.length,
+        lastCompletedSet: {
+          exerciseIndex: baseCompletedSet.exerciseIndex,
+          setNumber: baseCompletedSet.setNumber,
+        },
+      })
       return {
         ...state,
         phase: 'resting' as const,
-        completedSets: newCompletedSets,
+        completedSets: completedSetsForReturn,
         currentSetNumber: state.currentSetNumber + 1,
         lastSetRPE: action.completedSet.actualRPE,
         consecutiveHighRPECount: newConsecutiveHighRPE,
         sessionAdaptiveReadiness: newSessionReadiness,
-        currentActionPlan: actionPlan,  // Store for next set guidance
+        currentActionPlan: actionPlan,
         selectedRPE: null,
-        // Reset input values so component can re-seed from prescription for next set
         repsValue: 0,
         holdValue: 0,
-        // Clear per-set notes for next set
         currentSetNote: '',
         currentSetReasonTags: [],
       }

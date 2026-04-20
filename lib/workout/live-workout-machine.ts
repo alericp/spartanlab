@@ -201,6 +201,21 @@ export interface MachineExercise {
   method?: string
   methodLabel?: string
   blockId?: string
+  // [WEEK-TRUTH-CORRIDOR] Preserved week-scaled dosage from loader
+  // (lib/workout/load-authoritative-session.ts + lib/week-dosage-scaling.ts).
+  // The machine bridge was previously collapsing exercises down to only
+  // raw Week-1 sets/repsOrTime, which caused the pre-start shell to
+  // render acclimation-style dosage even on Week 2/3/4. These optional
+  // slots carry the authoritative scaled truth through so that
+  // getEffectiveExerciseValues() can prefer them over raw values.
+  // No new scaling is ever computed here - values are produced by
+  // scaleSessionForWeek() upstream and only forwarded.
+  scaledSets?: number
+  scaledReps?: string
+  scaledHoldDuration?: number
+  scaledTargetRPE?: number
+  scaledRestPeriod?: number
+  weekScalingApplied?: boolean
 }
 
 /** Execution block for grouped exercises (superset/circuit/cluster/density_block) */

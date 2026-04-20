@@ -4121,6 +4121,87 @@ if (styledGroups && styledGroups.length > 0) {
   // Compute whether user can go back (not at first set of first exercise)
   const canGoBack = safeExerciseIndex > 0 || validatedSetNumber > 1
   
+  // ==========================================================================
+  // [LIVE-WORKOUT-CORRIDOR] PHONE / SYSTEM BACK INTEGRATION
+  // ==========================================================================
+  // Android hardware back, iOS swipe-back, and desktop browser Back were
+  // ejecting the user straight out of a live workout route -> Program page.
+  // That is a corridor ownership failure: during a live session, system
+  // back MUST map to the same in-app Back control the user sees on screen.
+  //
+  // Strategy:
+  //   1. On mount (while session is live and has any progress), push a
+  //      sentinel history entry so the first system-back press hits us,
+  //      not the underlying /program entry.
+  //   2. In popstate, route to handleGoBack when the user has progress to
+  //      undo. When at the first set of the first exercise (nothing to
+  //      unwind), show the exit confirm modal instead of silently leaving.
+  //   3. After handling, re-push the sentinel so the NEXT system-back
+  //      press is intercepted too. True exit only happens through the
+  //      intentional Save & Exit / Discard paths (which call onCancel ->
+  //      router navigation and do NOT pop through this interceptor).
+  //   4. Cleanup removes the listener and (if we're the top entry) pops
+  //      our own sentinel so we don't leak history noise.
+  //
+  // We use refs so the effect doesn't re-bind on every render and every
+  // popstate always reads the latest canGoBack / handler.
+  // ==========================================================================
+  const canGoBackRef = useRef(canGoBack)
+  canGoBackRef.current = canGoBack
+  const handleGoBackRef = useRef(handleGoBack)
+  handleGoBackRef.current = handleGoBack
+  const safeStatusRef = useRef(safeStatus)
+  safeStatusRef.current = safeStatus
+  
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    // Only arm the interceptor while the session is interactive. If we
+    // haven't reached active/resting/etc yet (ready) or we're already at
+    // completed, let normal navigation happen.
+    const interactiveStatuses = ['active', 'resting']
+    if (!interactiveStatuses.includes(safeStatus)) return
+    
+    const SENTINEL = 'spartan_workout_session_sentinel'
+    let sentinelArmed = false
+    
+    const armSentinel = () => {
+      try {
+        window.history.pushState({ [SENTINEL]: true }, '')
+        sentinelArmed = true
+      } catch {
+        // no-op: some embedded browsers restrict pushState
+      }
+    }
+    
+    armSentinel()
+    
+    const onPopState = () => {
+      console.log('[LIVE-WORKOUT-CORRIDOR] system back intercepted', {
+        canGoBack: canGoBackRef.current,
+        status: safeStatusRef.current,
+      })
+      if (canGoBackRef.current) {
+        handleGoBackRef.current()
+      } else {
+        setShowExitConfirm(true)
+      }
+      // Re-arm so the next system-back press is also intercepted.
+      armSentinel()
+    }
+    
+    window.addEventListener('popstate', onPopState)
+    
+    return () => {
+      window.removeEventListener('popstate', onPopState)
+      // If we armed a sentinel and we're leaving while it's still on
+      // the stack, pop it so we don't leave a phantom entry behind.
+      if (sentinelArmed && typeof window.history.state === 'object' &&
+          window.history.state?.[SENTINEL]) {
+        try { window.history.back() } catch { /* no-op */ }
+      }
+    }
+  }, [safeStatus])
+  
   // Save completed workout with full logging
   const handleSaveWorkout = useCallback(async (difficulty?: PerceivedDifficulty) => {
     setIsSaving(true)

@@ -19,7 +19,7 @@
  * - Participate in stage-lock experiments
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -286,6 +286,93 @@ interface RepsHoldInputProps {
 function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProps) {
   const label = type === 'reps' ? 'Actual Reps' : 'Hold (sec)'
   
+  // [LIVE-WORKOUT-CORRIDOR] Press-and-hold auto-repeat.
+  //
+  // Contract:
+  //   - Tap (pointer down then up quickly)     -> single step, as before.
+  //   - Press-and-hold past ~350ms             -> auto-step begins.
+  //   - Continuing to hold                     -> steps accelerate
+  //                                              (250ms -> 100ms -> 50ms).
+  //   - Pointer up / pointer leave / cancel
+  //     / unmount / user lifts finger          -> all timers cleared,
+  //                                              no leaked intervals.
+  //
+  // We keep the current value in a ref so the repeating tick always reads
+  // the latest value (closures captured at pointer-down go stale as
+  // soon as we onChange once).
+  const valueRef = useRef(value)
+  valueRef.current = value
+  
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
+  
+  // Timers for both the initial delay and the repeating tick. Kept as
+  // refs so the cleanup-on-release helper sees the current set, not a
+  // stale closure.
+  const holdDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const repeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  
+  const stopRepeat = useCallback(() => {
+    if (holdDelayRef.current) {
+      clearTimeout(holdDelayRef.current)
+      holdDelayRef.current = null
+    }
+    if (repeatIntervalRef.current) {
+      clearInterval(repeatIntervalRef.current)
+      repeatIntervalRef.current = null
+    }
+  }, [])
+  
+  const stepValue = useCallback((direction: 1 | -1) => {
+    const current = valueRef.current
+    const next = direction === 1 ? current + 1 : Math.max(1, current - 1)
+    if (next !== current) {
+      onChangeRef.current(next)
+    }
+  }, [])
+  
+  const startRepeat = useCallback((direction: 1 | -1) => {
+    // Immediate single step on tap.
+    stepValue(direction)
+    // If we're already repeating (shouldn't happen, but be defensive),
+    // clear first.
+    stopRepeat()
+    // After an initial hold window, begin auto-repeat.
+    holdDelayRef.current = setTimeout(() => {
+      let tickCount = 0
+      // Start at a comfortable 250ms cadence; after a few ticks we speed
+      // up so long holds don't feel stuck.
+      let currentInterval = 250
+      const scheduleNext = () => {
+        repeatIntervalRef.current = setInterval(() => {
+          stepValue(direction)
+          tickCount += 1
+          // Accelerate at 8 and 16 ticks.
+          if (tickCount === 8 || tickCount === 16) {
+            currentInterval = tickCount === 8 ? 100 : 50
+            if (repeatIntervalRef.current) {
+              clearInterval(repeatIntervalRef.current)
+              repeatIntervalRef.current = null
+            }
+            scheduleNext()
+          }
+        }, currentInterval)
+      }
+      scheduleNext()
+    }, 350)
+  }, [stepValue, stopRepeat])
+  
+  // Hard-stop any pending timers when the component unmounts, even if
+  // the pointer-up/leave handlers somehow never fired.
+  useEffect(() => {
+    return () => {
+      stopRepeat()
+    }
+  }, [stopRepeat])
+  
+  const buttonClass =
+    'w-12 h-12 rounded-lg bg-[#0F1115] border border-[#2B313A] text-[#A4ACB8] text-xl font-bold active:bg-[#2B313A] select-none touch-none'
+  
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
@@ -294,8 +381,17 @@ function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProp
       </div>
       <div className="flex items-center justify-center gap-3">
         <button
-          onClick={() => onChange(Math.max(1, value - 1))}
-          className="w-12 h-12 rounded-lg bg-[#0F1115] border border-[#2B313A] text-[#A4ACB8] text-xl font-bold active:bg-[#2B313A]"
+          type="button"
+          aria-label={`Decrease ${label}`}
+          onPointerDown={(e) => {
+            e.preventDefault()
+            startRepeat(-1)
+          }}
+          onPointerUp={stopRepeat}
+          onPointerLeave={stopRepeat}
+          onPointerCancel={stopRepeat}
+          onContextMenu={(e) => e.preventDefault()}
+          className={buttonClass}
         >
           -
         </button>
@@ -303,8 +399,17 @@ function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProp
           {value}
         </span>
         <button
-          onClick={() => onChange(value + 1)}
-          className="w-12 h-12 rounded-lg bg-[#0F1115] border border-[#2B313A] text-[#A4ACB8] text-xl font-bold active:bg-[#2B313A]"
+          type="button"
+          aria-label={`Increase ${label}`}
+          onPointerDown={(e) => {
+            e.preventDefault()
+            startRepeat(1)
+          }}
+          onPointerUp={stopRepeat}
+          onPointerLeave={stopRepeat}
+          onPointerCancel={stopRepeat}
+          onContextMenu={(e) => e.preventDefault()}
+          className={buttonClass}
         >
           +
         </button>
@@ -840,6 +945,74 @@ export function ActiveWorkoutStartCorridor({
                   </>
                 )}
               </Button>
+              
+              {/* ============================================================
+                  [LIVE-WORKOUT-CORRIDOR] REST SCREEN CONTROL PARITY
+                  
+                  The rest / exercise-complete green screen used to trap the
+                  user into only "Skip Rest". That broke parity with the
+                  active set screen, which owns Back | Skip | Next | End.
+                  We now render the SAME bottom rail on rest screens, wired
+                  to the SAME single-owner handlers the active screen uses
+                  (onGoBack, onSkipSet, onEndExercise, exit modal). No
+                  business logic is duplicated here - this is purely a UI
+                  surface that reuses the authoritative handlers.
+                  ============================================================ */}
+              <div className="flex items-center justify-between flex-wrap gap-1 pt-2">
+                {canGoBack && onGoBack ? (
+                  <Button 
+                    variant="ghost" 
+                    onClick={onGoBack}
+                    className="text-[#6B7280] text-xs h-8 px-2 hover:text-[#A4ACB8] shrink-0"
+                  >
+                    <ChevronLeft className="w-3 h-3 mr-0.5" />
+                    Back
+                  </Button>
+                ) : (
+                  <div className="w-12" />
+                )}
+                <Button 
+                  variant="ghost" 
+                  onClick={() => {
+                    console.log('[LIVE-WORKOUT-CORRIDOR] Rest Skip Set clicked', {
+                      restType,
+                      exerciseName,
+                      currentSetNumber,
+                    })
+                    if (onSkipSet) onSkipSet()
+                    else if (onSkip) onSkip()
+                  }}
+                  className="text-[#6B7280] text-xs h-8 px-2 hover:text-[#A4ACB8] shrink-0"
+                >
+                  <SkipForward className="w-3 h-3 mr-1" />
+                  Skip
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  onClick={() => {
+                    console.log('[LIVE-WORKOUT-CORRIDOR] Rest End Exercise clicked', {
+                      restType,
+                      exerciseName,
+                      currentSetNumber,
+                      remainingSets: exerciseSets - currentSetNumber + 1,
+                    })
+                    if (onEndExercise) onEndExercise()
+                    else setShowExitConfirm(true)
+                  }}
+                  className="text-amber-500/80 text-xs h-8 px-2 hover:text-amber-400 shrink-0"
+                >
+                  <ChevronRight className="w-3 h-3 mr-0.5" />
+                  Next
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setShowExitConfirm(true)}
+                  className="text-[#6B7280] text-xs h-8 px-2 hover:text-[#A4ACB8] shrink-0"
+                >
+                  <X className="w-3 h-3 mr-0.5" />
+                  End
+                </Button>
+              </div>
             </>
           )}
           

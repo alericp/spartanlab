@@ -2494,7 +2494,14 @@ if (styledGroups && styledGroups.length > 0) {
   // Get exercises array from contract (for iteration, length checks)
   const exercises = machineSessionContract?.exercises ?? []
   const totalExercises = exercises.length
-  const totalSets = exercises.reduce((sum, ex) => sum + (ex.sets || 3), 0)
+  // [PRE-START-SHELL-WEEK-PARITY] Ready-shell header total sets MUST reflect
+  // the same week-scaled dosage used by active execution. Reading raw
+  // `ex.sets` here was painting Week 1 base volume (e.g. 3x) even when the
+  // Program card handed in Week 2/3/4 truth. getEffectiveExerciseValues()
+  // is the single authoritative effective-value resolver (prefers
+  // scaledSets over base sets), already used by the active runner at
+  // lines 2888, 3202, etc. No parallel scaling logic is introduced here.
+  const totalSets = exercises.reduce((sum, ex) => sum + getEffectiveExerciseValues(ex).sets, 0)
   
   // [START-CRASH-FIX] Get executionPlan from contract for grouped rendering in ready state
   // This was missing and causing undefined access crash when clicking Start Workout
@@ -4868,6 +4875,8 @@ if (shouldShowLocalFallback) {
               <div className="pl-3 space-y-0">
                 {group.exercises.map((exInfo, memberIdx) => {
                   const fullEx = exercises.find(e => e.id === exInfo.id)
+                  // [PRE-START-SHELL-WEEK-PARITY] Use effective scaled values
+                  const effective = getEffectiveExerciseValues(fullEx)
                   return (
                     <div key={exInfo.id} className="flex items-center justify-between py-1.5 pl-4 border-b border-[#2B313A]/15 last:border-0">
                       <div className="flex items-center gap-2">
@@ -4877,7 +4886,7 @@ if (shouldShowLocalFallback) {
                         <span className="text-sm text-[#E6E9EF]">{exInfo.name}</span>
                       </div>
                       <span className="text-[11px] text-[#6B7280] tabular-nums">
-                        {fullEx?.sets || 3}×{fullEx?.repsOrTime || '8-12 reps'}
+                        {effective.sets}×{effective.repsOrTime}
                         {fullEx?.prescribedLoad && fullEx.prescribedLoad.load > 0 && (
                           <span className="ml-1 text-[#C1121F] font-medium">@ +{fullEx.prescribedLoad.load}{fullEx.prescribedLoad.unit}</span>
                         )}
@@ -4897,6 +4906,8 @@ if (shouldShowLocalFallback) {
           
           if (!exInfo || !fullEx) return null
           
+          // [PRE-START-SHELL-WEEK-PARITY] Use effective scaled values
+          const effective = getEffectiveExerciseValues(fullEx)
           return (
             <div key={group.id} className="flex items-center justify-between py-1.5 border-b border-[#2B313A]/30 last:border-0">
               <div className="flex items-center gap-2.5">
@@ -4904,7 +4915,7 @@ if (shouldShowLocalFallback) {
                 <span className="text-sm text-[#E6E9EF]">{exInfo.name}</span>
               </div>
               <span className="text-[11px] text-[#6B7280] tabular-nums">
-                {fullEx.sets}×{fullEx.repsOrTime}
+                {effective.sets}×{effective.repsOrTime}
                 {fullEx.prescribedLoad && fullEx.prescribedLoad.load > 0 && (
                   <span className="ml-1 text-[#C1121F] font-medium">@ +{fullEx.prescribedLoad.load}{fullEx.prescribedLoad.unit}</span>
                 )}
@@ -4941,7 +4952,10 @@ if (shouldShowLocalFallback) {
                 <span className="text-[10px] text-[#6B7280] ml-auto">{block.targetRounds} rounds</span>
               </div>
               <div className="pl-3 space-y-0">
-                {block.memberExercises.map((ex, memberIdx) => (
+                {block.memberExercises.map((ex, memberIdx) => {
+                  // [PRE-START-SHELL-WEEK-PARITY] Use effective scaled values
+                  const effective = getEffectiveExerciseValues(ex)
+                  return (
                   <div key={ex.id} className="flex items-center justify-between py-1.5 pl-4 border-b border-[#2B313A]/15 last:border-0">
                     <div className="flex items-center gap-2">
                       <span className="w-4 h-4 rounded-full bg-[#C1121F]/10 text-[#C1121F] text-[9px] flex items-center justify-center font-semibold border border-[#C1121F]/30">
@@ -4950,13 +4964,14 @@ if (shouldShowLocalFallback) {
                       <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
                     </div>
                     <span className="text-[11px] text-[#6B7280] tabular-nums">
-                      {ex.sets}×{ex.repsOrTime}
+                      {effective.sets}×{effective.repsOrTime}
                       {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
                         <span className="ml-1 text-[#C1121F] font-medium">@ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}</span>
                       )}
                     </span>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )
@@ -4965,6 +4980,8 @@ if (shouldShowLocalFallback) {
           const globalIndex = executionPlan.blocks
             .slice(0, blockIdx)
             .reduce((sum, b) => sum + b.memberExercises.length, 0) + 1
+          // [PRE-START-SHELL-WEEK-PARITY] Use effective scaled values
+          const effective = getEffectiveExerciseValues(ex)
           return (
             <div key={block.blockId} className="flex items-center justify-between py-1.5 border-b border-[#2B313A]/30 last:border-0">
               <div className="flex items-center gap-2.5">
@@ -4972,7 +4989,7 @@ if (shouldShowLocalFallback) {
                 <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
               </div>
               <span className="text-[11px] text-[#6B7280] tabular-nums">
-                {ex.sets}×{ex.repsOrTime}
+                {effective.sets}×{effective.repsOrTime}
                 {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
                   <span className="ml-1 text-[#C1121F] font-medium">@ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}</span>
                 )}
@@ -4984,20 +5001,24 @@ if (shouldShowLocalFallback) {
     }
     
     // Priority 3: Flat render - no grouped blocks
-    return exercises.map((ex, i) => (
+    return exercises.map((ex, i) => {
+      // [PRE-START-SHELL-WEEK-PARITY] Use effective scaled values
+      const effective = getEffectiveExerciseValues(ex)
+      return (
       <div key={i} className="flex items-center justify-between py-1.5 border-b border-[#2B313A]/30 last:border-0">
         <div className="flex items-center gap-2.5">
           <span className="w-5 h-5 rounded-full bg-[#2B313A] text-[#6B7280] text-[10px] flex items-center justify-center font-medium">{i + 1}</span>
           <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
         </div>
         <span className="text-[11px] text-[#6B7280] tabular-nums">
-          {ex.sets}×{ex.repsOrTime}
+          {effective.sets}×{effective.repsOrTime}
           {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
             <span className="ml-1 text-[#C1121F] font-medium">@ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}</span>
           )}
         </span>
       </div>
-    ))
+      )
+    })
   }
   
   // [LIVE-WORKOUT-MACHINE] Use safeStatus from machine
@@ -5042,17 +5063,43 @@ if (shouldShowLocalFallback) {
                   </>
                 )}
             </div>
-            {/* [PHASE-OMISSION-TRUTH] Acclimation/protection explanation when applicable */}
-            {safeSession.prescriptionPropagationAudit?.adaptationPhase === 'initial_acclimation' && (
-              <p className="text-[11px] text-amber-400/80 mt-2 px-4 text-center">
-                Week 1 — Volume conservatively managed for adaptation.
-              </p>
-            )}
-            {safeSession.prescriptionPropagationAudit?.adaptationPhase === 'recovery_constrained' && (
-              <p className="text-[11px] text-amber-400/80 mt-2 px-4 text-center">
-                Recovery focus — Intensity reduced this week.
-              </p>
-            )}
+            {/* [PRE-START-SHELL-WEEK-PARITY] Acclimation / protection copy
+                MUST be gated on resolved LIVE week truth, not the base
+                session's adaptationPhase. Previously this branch fired
+                "Week 1 — Volume conservatively managed for adaptation."
+                even when the user had tapped Start Workout from a
+                Week 2/3/4 Program card, because the audit object is
+                built off the base session and does not downgrade when
+                scaling is applied. The resolved week signal we use is
+                `weekScalingApplied` on any exercise: week scaling only
+                fires for week > 1 (see scaleSessionForWeek in
+                lib/program/week-scaling.ts), so if ANY exercise has
+                it true, we are past the acclimation week and must
+                suppress the Week 1 copy. */}
+            {(() => {
+              const readyShellWeekScalingApplied = exercises.some(
+                ex => getEffectiveExerciseValues(ex).weekScalingApplied
+              )
+              const baseAdaptationPhase = safeSession.prescriptionPropagationAudit?.adaptationPhase
+              const showAcclimationCopy =
+                baseAdaptationPhase === 'initial_acclimation' && !readyShellWeekScalingApplied
+              const showRecoveryCopy =
+                baseAdaptationPhase === 'recovery_constrained'
+              return (
+                <>
+                  {showAcclimationCopy && (
+                    <p className="text-[11px] text-amber-400/80 mt-2 px-4 text-center">
+                      Week 1 — Volume conservatively managed for adaptation.
+                    </p>
+                  )}
+                  {showRecoveryCopy && (
+                    <p className="text-[11px] text-amber-400/80 mt-2 px-4 text-center">
+                      Recovery focus — Intensity reduced this week.
+                    </p>
+                  )}
+                </>
+              )
+            })()}
           </div>
           
           {/* Session Overview Card - Compact */}

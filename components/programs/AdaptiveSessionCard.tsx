@@ -54,6 +54,13 @@ import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
 // once the tested session's first-failing-stage verdict has been captured.
 const __funnelAuditPostedKeys: Set<string> = new Set()
 
+// [TEMP-GROUPED-VERDICT] Single on/off switch for the on-screen grouped-body
+// verdict row rendered inside the existing "Method decisions" disclosure.
+// Flip to `false` (or delete the surrounding JSX) in the cleanup turn to
+// remove the diagnostic surface. The diagnostic never renders anything to
+// non-expanded cards and does not change body ownership.
+const SHOW_GROUPED_DEBUG_VERDICT = true
+
 // [DOCTRINE-STRENGTHENING] Week character flags for visible differentiation
 interface WeekCharacter {
   densityAllowed: boolean
@@ -675,110 +682,115 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   }
 
   // ==========================================================================
-  // [FUNNEL-AUDIT] One-shot compact stage comparison for THIS session only.
-  // Emits ONE line per card mount covering the ENTIRE render-population
+  // [FUNNEL-AUDIT] Outer-scope snapshot of the ENTIRE render-population
   // corridor (Stage 1 session prop -> Stage 6 fullVisibleExercises -> Stage 7
-  // grouped display adapter output -> Stage 8 render branch decision). This is
-  // the single authoritative probe for narrowing the first failing stage when
-  // the visible card body does not show grouped structure. Prior noisier
-  // per-session / per-render logs have been demoted to fire only on truth-loss.
+  // grouped display adapter output -> Stage 8 render branch decision). The
+  // snapshot is computed at outer render scope so:
+  //   (1) the client console.log + POST below can read it,
+  //   (2) the [TEMP-GROUPED-VERDICT] in-card diagnostic row (inside the
+  //       existing "Method decisions" disclosure) can display it on-screen
+  //       for the exact card the user is looking at.
   // ==========================================================================
+  const s1Ex = Array.isArray(rawSession.exercises) ? rawSession.exercises : []
+  const s1StyledGroups = sessionStyleMetadata?.styledGroups ?? []
+  const s1NonStraight = s1StyledGroups.filter(g => g.groupType !== 'straight').length
+  const s1ExWithBlockId = s1Ex.filter(e => !!(e as { blockId?: string }).blockId).length
+  const s1ExWithNonStraightMethod = s1Ex.filter(e => {
+    const m = (e as { method?: string }).method
+    return !!m && m !== 'straight'
+  }).length
+  const s6ExWithBlockId = fullVisibleExercises.filter(
+    e => !!(e as unknown as { blockId?: string }).blockId
+  ).length
+  const s6ExWithNonStraightMethod = fullVisibleExercises.filter(e => {
+    const m = (e as unknown as { method?: string }).method
+    return !!m && m !== 'straight'
+  }).length
+  const s7Model = groupedRenderContract
+
+  // Final verdict: the exact first failing stage (or honest flat attribution).
+  let funnelVerdict: string
+  if (!sessionStyleMetadata && s1ExWithBlockId === 0 && s1ExWithNonStraightMethod === 0) {
+    funnelVerdict = 'STAGE1_FLAT_NO_UPSTREAM_GROUPED_TRUTH'
+  } else if (s1NonStraight === 0 && s1ExWithNonStraightMethod === 0) {
+    funnelVerdict = 'STAGE1_ONLY_STRAIGHT_GROUPED_TRUTH'
+  } else if (s6ExWithBlockId < s1ExWithBlockId || s6ExWithNonStraightMethod < s1ExWithNonStraightMethod) {
+    funnelVerdict = 'STAGE5_6_BRIDGE_LOST_PER_EXERCISE_GROUPED_FIELDS'
+  } else if ((s1NonStraight > 0 || s1ExWithNonStraightMethod > 0) && !s7Model.hasGroups) {
+    funnelVerdict = 'STAGE7_ADAPTER_REJECTED_GROUPED_TRUTH'
+  } else if (s7Model.hasGroups && s7Model.nonStraightGroupCount === 0) {
+    funnelVerdict = 'STAGE7_ADAPTER_RETURNED_ONLY_STRAIGHT_GROUPS'
+  } else if (s7Model.hasGroups && s7Model.nonStraightGroupCount > 0 && !hasRenderableGroups) {
+    funnelVerdict = 'STAGE8_CONTRACT_SAYS_GROUPED_BUT_RENDER_BRANCH_FLAT'
+  } else if (hasRichRenderableGroups) {
+    funnelVerdict = 'STAGE8_RICH_GROUPED_RENDER_BRANCH_ACTIVE'
+  } else if (hasGroupedTruth && s7Model.rawFallbackBlocks.length > 0) {
+    funnelVerdict = 'STAGE8_RAW_GROUPED_FALLBACK_BRANCH_ACTIVE'
+  } else if (hasGroupedTruth) {
+    funnelVerdict = 'STAGE8_GROUPED_TRUTH_EXISTS_BUT_NO_FALLBACK_BLOCKS'
+  } else {
+    funnelVerdict = 'STAGE1_THROUGH_STAGE8_UNCLASSIFIED'
+  }
+
+  // ==========================================================================
+  // [FINAL-VISIBLE-BODY-MODE] Name the single decision that `MainExercisesRenderer`
+  // will act on. The priority EXACTLY MIRRORS the branch chain inside
+  // MainExercisesRenderer below; this is the canonical authoritative name for
+  // which body path owns the rendered card. No parallel display corridor.
+  //   1. rich_grouped          : useGroupedRender (a.k.a. hasRichRenderableGroups)
+  //   2. raw_grouped_fallback  : !rich && hasGroupedTruth && rawFallbackBlocks > 0
+  //   3. flat_honest           : everything else (flat category OR simple-order)
+  // ==========================================================================
+  type FinalVisibleBodyMode = 'rich_grouped' | 'raw_grouped_fallback' | 'flat_honest'
+  const finalVisibleBodyMode: FinalVisibleBodyMode =
+    hasRichRenderableGroups
+      ? 'rich_grouped'
+      : hasGroupedTruth && s7Model.rawFallbackBlocks.length > 0
+        ? 'raw_grouped_fallback'
+        : 'flat_honest'
+
+  const funnelAuditPayload = {
+    day: session.dayNumber,
+    s1_hasStyleMeta: !!sessionStyleMetadata,
+    s1_styledGroups: s1StyledGroups.length,
+    s1_nonStraight: s1NonStraight,
+    s1_exCount: s1Ex.length,
+    s1_exWithBlockId: s1ExWithBlockId,
+    s1_exWithNonStraightMethod: s1ExWithNonStraightMethod,
+    s6_exCount: fullVisibleExercises.length,
+    s6_exWithBlockId: s6ExWithBlockId,
+    s6_exWithNonStraightMethod: s6ExWithNonStraightMethod,
+    s7_sourceUsed: s7Model.sourceUsed,
+    s7_flatReason: s7Model.flatReason,
+    s7_hasGroups: s7Model.hasGroups,
+    s7_totalGroups: s7Model.totalGroupCount,
+    s7_nonStraightGroups: s7Model.nonStraightGroupCount,
+    s7_supersetCount: s7Model.supersetCount,
+    s7_circuitCount: s7Model.circuitCount,
+    s7_densityCount: s7Model.densityCount,
+    s7_clusterCount: s7Model.clusterCount,
+    s8_useGroupedRender: hasRenderableGroups,
+    s8_hasGroupedTruth: hasGroupedTruth,
+    s8_hasRichRenderableGroups: hasRichRenderableGroups,
+    s8_rawFallbackBlockCount: s7Model.rawFallbackBlocks.length,
+    finalVisibleBodyMode,
+    selectedVariant: activeSessionView.variantLabel,
+    verdict: funnelVerdict,
+  }
+
+  // Client-only telemetry (console + POST). The snapshot itself is computed
+  // unconditionally above so the on-screen verdict row never desyncs from it.
   if (typeof window !== 'undefined' && session.dayNumber) {
-    const s1Ex = Array.isArray(rawSession.exercises) ? rawSession.exercises : []
-    const s1StyledGroups = sessionStyleMetadata?.styledGroups ?? []
-    const s1NonStraight = s1StyledGroups.filter(g => g.groupType !== 'straight').length
-    const s1ExWithBlockId = s1Ex.filter(e => !!(e as { blockId?: string }).blockId).length
-    const s1ExWithNonStraightMethod = s1Ex.filter(e => {
-      const m = (e as { method?: string }).method
-      return !!m && m !== 'straight'
-    }).length
-    const s6ExWithBlockId = fullVisibleExercises.filter(
-      e => !!(e as unknown as { blockId?: string }).blockId
-    ).length
-    const s6ExWithNonStraightMethod = fullVisibleExercises.filter(e => {
-      const m = (e as unknown as { method?: string }).method
-      return !!m && m !== 'straight'
-    }).length
-
-    // [FUNNEL-AUDIT] Stage 7: consume the SINGLE authoritative grouped render
-    // contract. This probe is observational only -- it reads the same object
-    // the chip summary and the renderer body consume, so its verdict is never
-    // allowed to disagree with what actually renders.
-    const s7Model = groupedRenderContract
-
-    // Final verdict: the exact first failing stage (or honest flat attribution).
-    let verdict: string
-    if (!sessionStyleMetadata && s1ExWithBlockId === 0 && s1ExWithNonStraightMethod === 0) {
-      verdict = 'STAGE1_FLAT_NO_UPSTREAM_GROUPED_TRUTH'
-    } else if (s1NonStraight === 0 && s1ExWithNonStraightMethod === 0) {
-      verdict = 'STAGE1_ONLY_STRAIGHT_GROUPED_TRUTH'
-    } else if (s6ExWithBlockId < s1ExWithBlockId || s6ExWithNonStraightMethod < s1ExWithNonStraightMethod) {
-      verdict = 'STAGE5_6_BRIDGE_LOST_PER_EXERCISE_GROUPED_FIELDS'
-    } else if ((s1NonStraight > 0 || s1ExWithNonStraightMethod > 0) && !s7Model.hasGroups) {
-      verdict = 'STAGE7_ADAPTER_REJECTED_GROUPED_TRUTH'
-    } else if (s7Model.hasGroups && s7Model.nonStraightGroupCount === 0) {
-      verdict = 'STAGE7_ADAPTER_RETURNED_ONLY_STRAIGHT_GROUPS'
-    } else if (s7Model.hasGroups && s7Model.nonStraightGroupCount > 0 && !hasRenderableGroups) {
-      verdict = 'STAGE8_CONTRACT_SAYS_GROUPED_BUT_RENDER_BRANCH_FLAT'
-    } else if (hasRichRenderableGroups) {
-      verdict = 'STAGE8_RICH_GROUPED_RENDER_BRANCH_ACTIVE'
-    } else if (hasGroupedTruth && s7Model.rawFallbackBlocks.length > 0) {
-      verdict = 'STAGE8_RAW_GROUPED_FALLBACK_BRANCH_ACTIVE'
-    } else if (hasGroupedTruth) {
-      verdict = 'STAGE8_GROUPED_TRUTH_EXISTS_BUT_NO_FALLBACK_BLOCKS'
-    } else {
-      verdict = 'STAGE1_THROUGH_STAGE8_UNCLASSIFIED'
-    }
-    const funnelAuditPayload = {
-      day: session.dayNumber,
-      // Stage 1: session prop as received by the card
-      s1_hasStyleMeta: !!sessionStyleMetadata,
-      s1_styledGroups: s1StyledGroups.length,
-      s1_nonStraight: s1NonStraight,
-      s1_exCount: s1Ex.length,
-      s1_exWithBlockId: s1ExWithBlockId,
-      s1_exWithNonStraightMethod: s1ExWithNonStraightMethod,
-      // Stage 6: fullVisibleExercises (what the renderer actually walks)
-      s6_exCount: fullVisibleExercises.length,
-      s6_exWithBlockId: s6ExWithBlockId,
-      s6_exWithNonStraightMethod: s6ExWithNonStraightMethod,
-      // Stage 7: single grouped render contract (what decides grouped-vs-flat)
-      s7_sourceUsed: s7Model.sourceUsed,
-      s7_flatReason: s7Model.flatReason,
-      s7_hasGroups: s7Model.hasGroups,
-      s7_totalGroups: s7Model.totalGroupCount,
-      s7_nonStraightGroups: s7Model.nonStraightGroupCount,
-      s7_supersetCount: s7Model.supersetCount,
-      s7_circuitCount: s7Model.circuitCount,
-      s7_densityCount: s7Model.densityCount,
-      s7_clusterCount: s7Model.clusterCount,
-      // Stage 8: final render branch
-      s8_useGroupedRender: hasRenderableGroups,
-      // [DISPLAY-FIRST-FALLBACK] Explicit two-gate signals
-      s8_hasGroupedTruth: hasGroupedTruth,
-      s8_hasRichRenderableGroups: hasRichRenderableGroups,
-      s8_rawFallbackBlockCount: s7Model.rawFallbackBlocks.length,
-      // Variant identity for reproducibility of the tested case
-      selectedVariant: activeSessionView.variantLabel,
-      // Final first-failing-stage verdict
-      verdict,
-    }
     console.log('[v0] [FUNNEL-AUDIT] Day', session.dayNumber, funnelAuditPayload)
 
-    // [TEMP-INSTRUMENTATION] Fire-and-forget POST to the server sink at
-    // /api/_funnel-audit so the payload lands in SERVER logs (readable by the
-    // agent via user_read_only_context/v0_debug_logs.log) even when client
-    // console output is not accessible. Guarded by a module-level Set keyed on
-    // (dayNumber, verdict, variant) so each distinct verdict POSTs at most
-    // once per tab session. Remove this block and the route file when done.
-    const dedupeKey = `${session.dayNumber}|${verdict}|${activeSessionView.variantLabel}`
+    // [TEMP-INSTRUMENTATION] Fire-and-forget POST to the public audit sink.
+    // No longer the primary diagnostic mechanism -- the on-screen verdict row
+    // below is. Kept only because it is already wired; remove together with
+    // the [TEMP-GROUPED-VERDICT] surface in the cleanup turn.
+    const dedupeKey = `${session.dayNumber}|${funnelVerdict}|${activeSessionView.variantLabel}`
     if (!__funnelAuditPostedKeys.has(dedupeKey)) {
       __funnelAuditPostedKeys.add(dedupeKey)
       try {
-        // [TEMP-INSTRUMENTATION] Posted under /api/public/ because the
-        // Clerk proxy in proxy.ts gates all non-public /api/* routes; using
-        // a public path ensures this fire-and-forget POST actually reaches
-        // the handler (which then writes the payload to public.funnel_audit_log).
         void fetch('/api/public/_funnel-audit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1324,11 +1336,71 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                         </ul>
                       </div>
                     )}
+
                   </div>
                 )}
               </div>
             )
           })()}
+
+          {/* ==============================================================
+              [TEMP-GROUPED-VERDICT] ON-SCREEN VERDICT ROW
+              Rendered as a sibling of the "Method decisions" disclosure so
+              it is visible even when Method decisions early-returns (e.g.
+              sessions missing `styleMetadata`, which is precisely the
+              honest-flat case where the user most needs to see the
+              verdict). Reads the same outer-scope `funnelAuditPayload`
+              snapshot used by the client console.log + POST, so on-screen
+              verdict, logs, and DB audit can never disagree.
+              Remove this block + `SHOW_GROUPED_DEBUG_VERDICT` +
+              /api/public/_funnel-audit in the cleanup turn.
+              ============================================================== */}
+          {SHOW_GROUPED_DEBUG_VERDICT && (
+            <div className="mt-4 border-t border-dashed border-amber-500/25 pt-3">
+              <div className="text-[10px] uppercase tracking-wide text-amber-500/90 mb-1.5 font-semibold">
+                [TEMP] Grouped-body verdict · Day {session.dayNumber}
+              </div>
+              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[10px] font-mono text-[#C5C5C5]">
+                <span className="text-[#8A8A8A]">verdict</span>
+                <span className="text-amber-400/90 break-all">{funnelVerdict}</span>
+                <span className="text-[#8A8A8A]">finalBodyMode</span>
+                <span className="text-cyan-400/90 font-semibold">{finalVisibleBodyMode}</span>
+                <span className="text-[#8A8A8A]">sourceUsed</span>
+                <span>{s7Model.sourceUsed}</span>
+                <span className="text-[#8A8A8A]">flatReason</span>
+                <span className="break-all">{s7Model.flatReason ?? '—'}</span>
+                <span className="text-[#8A8A8A]">hasGroupedTruth</span>
+                <span className={hasGroupedTruth ? 'text-emerald-400' : 'text-[#6A6A6A]'}>
+                  {String(hasGroupedTruth)}
+                </span>
+                <span className="text-[#8A8A8A]">hasRichRenderable</span>
+                <span className={hasRichRenderableGroups ? 'text-emerald-400' : 'text-[#6A6A6A]'}>
+                  {String(hasRichRenderableGroups)}
+                </span>
+                <span className="text-[#8A8A8A]">rawFallbackBlocks</span>
+                <span>{s7Model.rawFallbackBlocks.length}</span>
+                <span className="text-[#8A8A8A]">nonStraightGroups</span>
+                <span>{s7Model.nonStraightGroupCount}</span>
+                <span className="text-[#8A8A8A]">s1 styleMeta</span>
+                <span className={sessionStyleMetadata ? 'text-emerald-400' : 'text-[#6A6A6A]'}>
+                  {String(!!sessionStyleMetadata)} · styledGroups={s1StyledGroups.length} · nonStraight={s1NonStraight}
+                </span>
+                <span className="text-[#8A8A8A]">s1 exWithBlockId</span>
+                <span>{s1ExWithBlockId} / {s1Ex.length}</span>
+                <span className="text-[#8A8A8A]">s1 nonStraightMethod</span>
+                <span>{s1ExWithNonStraightMethod} / {s1Ex.length}</span>
+                <span className="text-[#8A8A8A]">s6 exWithBlockId</span>
+                <span>{s6ExWithBlockId} / {fullVisibleExercises.length}</span>
+                <span className="text-[#8A8A8A]">s6 nonStraightMethod</span>
+                <span>{s6ExWithNonStraightMethod} / {fullVisibleExercises.length}</span>
+                <span className="text-[#8A8A8A]">variant</span>
+                <span>{activeSessionView.variantLabel}</span>
+              </div>
+              <p className="mt-2 text-[10px] text-[#6A6A6A] italic leading-relaxed">
+                Temporary diagnostic. The body rendered above reflects <span className="text-cyan-400/90 font-semibold">{finalVisibleBodyMode}</span>. When <span className="font-semibold">flat_honest</span> fires for a day you expected grouped, the verdict names the exact first failing stage upstream.
+              </p>
+            </div>
+          )}
 
           {/* Finisher Block */}
           {session.finisher && session.finisherIncluded && (

@@ -12245,13 +12245,54 @@ async function generateAdaptiveProgramImpl(
     const finalStyledGroups: StyledGroupFinal[] = []
     const processedBlockIds = new Set<string>()
     
+    // [FINAL-GROUPED-TRUTH-NORMALIZER] Single authoritative mapping from the
+    // final per-exercise `method` value (as written by supersets / circuits /
+    // cluster / density materialization passes above) to the finalStyledGroups
+    // `groupType` taxonomy. This MUST be used everywhere finalStyledGroups is
+    // rebuilt — both the grouped-block (blockId) path and the ungrouped path
+    // below — so no grouped method can silently collapse to 'straight' just
+    // because a local mapping forgot to handle it.
+    //
+    // Coverage rule: preserve ALL grouped truth the builder can emit onto
+    // ex.method today (superset / circuit / cluster) PLUS the defensive
+    // aliases density_block / density / cluster_sets that may appear on
+    // imported / migrated / future-materialized sessions. Anything else
+    // (undefined, 'straight_sets', empty string, unknown) is honestly
+    // 'straight'. Never fabricate grouped truth.
+    const normalizeFinalGroupType = (
+      method: string | undefined | null,
+    ): 'straight' | 'superset' | 'circuit' | 'density_block' | 'cluster' => {
+      switch (method) {
+        case 'superset':
+          return 'superset'
+        case 'circuit':
+        case 'circuits':
+          return 'circuit'
+        case 'cluster':
+        case 'cluster_sets':
+          return 'cluster'
+        case 'density_block':
+        case 'density':
+        case 'density_blocks':
+          return 'density_block'
+        default:
+          return 'straight'
+      }
+    }
+    
     for (const ex of session.exercises || []) {
       if (ex.blockId && !processedBlockIds.has(ex.blockId)) {
         processedBlockIds.add(ex.blockId)
         const blockExercises = session.exercises.filter(e => e.blockId === ex.blockId)
-        const groupType = ex.method === 'circuit' ? 'circuit' : 
-                         ex.method === 'superset' ? 'superset' : 
-                         ex.method === 'cluster' ? 'cluster' : 'straight'
+        // [FINAL-GROUPED-TRUTH-NORMALIZER] Derive the block's groupType from
+        // whichever member of the block carries a non-straight method — the
+        // anchor exercise may be straight while members are grouped, or
+        // vice-versa, so scan all members and keep the first non-straight
+        // verdict. Falls back to the anchor if the entire block is straight.
+        const derivedFromMembers = blockExercises
+          .map(e => normalizeFinalGroupType(e.method))
+          .find(t => t !== 'straight')
+        const groupType = derivedFromMembers ?? normalizeFinalGroupType(ex.method)
         
         finalStyledGroups.push({
           id: ex.blockId,
@@ -12269,10 +12310,13 @@ async function generateAdaptiveProgramImpl(
             ? 'Alternate between exercises with minimal rest'
             : groupType === 'cluster'
             ? 'Use brief 10-20s intra-set rest to maintain quality'
+            : groupType === 'density_block'
+            ? 'Complete prescribed work within the timed block'
             : 'Complete all sets before moving on',
           restProtocol: groupType === 'circuit' ? '60-90s after full circuit'
             : groupType === 'superset' ? '0-15s between, 90-120s after pair'
             : groupType === 'cluster' ? '10-20s intra-set, 120-180s inter-set'
+            : groupType === 'density_block' ? '30-60s between rounds'
             : '60-120s between sets',
         })
       }
@@ -12281,9 +12325,14 @@ async function generateAdaptiveProgramImpl(
     // Add remaining ungrouped exercises as straight sets
     const ungroupedExercises = (session.exercises || []).filter(e => !e.blockId)
     for (const ex of ungroupedExercises) {
+      // [FINAL-GROUPED-TRUTH-NORMALIZER] Use the same normalizer here so an
+      // ungrouped exercise carrying a non-straight per-exercise method (most
+      // commonly 'cluster' from cluster_sets materialization, but defensively
+      // also 'density_block' / 'density') cannot silently collapse to straight.
+      const groupType = normalizeFinalGroupType(ex.method)
       finalStyledGroups.push({
         id: `straight_${ex.id}`,
-        groupType: ex.method === 'cluster' ? 'cluster' : 'straight',
+        groupType,
         exercises: [{
           id: ex.id,
           name: ex.name,
@@ -12291,10 +12340,58 @@ async function generateAdaptiveProgramImpl(
           trainingMethod: ex.method || 'straight_sets',
           methodRationale: ex.methodLabel || ex.selectionReason || 'Standard execution',
         }],
-        instruction: ex.method === 'cluster' 
+        instruction: groupType === 'cluster' 
           ? 'Use brief 10-20s intra-set rest to maintain quality'
+          : groupType === 'density_block'
+          ? 'Complete prescribed work within the timed block'
           : 'Complete all sets before moving on',
-        restProtocol: ex.category === 'skill' ? '120-180s' : '60-90s',
+        restProtocol: groupType === 'cluster'
+          ? '10-20s intra-set, 120-180s inter-set'
+          : groupType === 'density_block'
+          ? '30-60s between rounds'
+          : ex.category === 'skill' ? '120-180s' : '60-90s',
+      })
+    }
+    
+    // [FINAL-GROUPED-TRUTH-INVARIANT] Hard invariant check: if the final
+    // materialized exercise state carries ANY grouped identity (blockId or a
+    // non-straight per-exercise method) OR the materialization pass reported
+    // a grouped method as applied for this session, then the just-rebuilt
+    // finalStyledGroups MUST contain at least one non-straight group. If it
+    // does not, grouped truth was silently flattened by this rebuild — log a
+    // concise diagnostic so the exact day is identifiable, without mutating
+    // or fabricating any grouped state. This is safety-only and never
+    // promotes fake grouping to the UI.
+    const finalNonStraightStyledGroupsCount = finalStyledGroups.filter(g => g.groupType !== 'straight').length
+    const finalExerciseBlockIdCount = (session.exercises || []).filter(e => !!e.blockId).length
+    const finalExerciseNonStraightMethodCount = (session.exercises || []).filter(e => {
+      const m = e.method
+      return !!m && m !== 'straight' && m !== 'straight_sets'
+    }).length
+    const groupedMethodsAppliedForSession =
+      methodMaterializationResult.appliedMethods.some(m =>
+        m === 'supersets' || m === 'circuits' || m === 'density_blocks' || m === 'cluster_sets',
+      ) || (session.styleMetadata?.hasSupersetsApplied === true)
+    const hasGroupedExerciseEvidence =
+      finalExerciseBlockIdCount > 0 || finalExerciseNonStraightMethodCount > 0
+    let finalGroupedTruthVerdict: 'FINAL_GROUPED_TRUTH_PRESENT' | 'FINAL_GROUPED_TRUTH_FLATTENED' | 'FINAL_GROUPED_TRUTH_HONESTLY_STRAIGHT'
+    if (finalNonStraightStyledGroupsCount > 0) {
+      finalGroupedTruthVerdict = 'FINAL_GROUPED_TRUTH_PRESENT'
+    } else if (hasGroupedExerciseEvidence || groupedMethodsAppliedForSession) {
+      finalGroupedTruthVerdict = 'FINAL_GROUPED_TRUTH_FLATTENED'
+    } else {
+      finalGroupedTruthVerdict = 'FINAL_GROUPED_TRUTH_HONESTLY_STRAIGHT'
+    }
+    if (finalGroupedTruthVerdict === 'FINAL_GROUPED_TRUTH_FLATTENED') {
+      console.warn('[FINAL-GROUPED-TRUTH-FLATTENED]', {
+        dayNumber: session.dayNumber,
+        focus: session.focus,
+        finalNonStraightStyledGroupsCount,
+        finalExerciseBlockIdCount,
+        finalExerciseNonStraightMethodCount,
+        groupedMethodsAppliedForSession,
+        appliedMethods: methodMaterializationResult.appliedMethods,
+        hasSupersetsApplied: session.styleMetadata?.hasSupersetsApplied,
       })
     }
     

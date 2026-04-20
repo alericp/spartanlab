@@ -1093,73 +1093,136 @@ export function workoutMachineReducer(
     }
     
     case 'GO_BACK': {
-      // [BACK-NAVIGATION] Navigate backward through workout sets/exercises
-      // Only allowed from active or resting phases
-      if (state.phase !== 'active' && state.phase !== 'resting') {
+      // [BACK-NAVIGATION] Navigate backward through workout sets/exercises.
+      //
+      // [LIVE-WORKOUT-CORRIDOR] Allowed from any *interactive* phase so the
+      // Back control on the rest screen (green between-exercise rest AND
+      // blue between-set rest) walks the user back to the previously logged
+      // set instead of ejecting. Terminal phases (ready/completed/invalid
+      // /transitioning) remain unaffected.
+      const backNavPhases: WorkoutPhase[] = [
+        'active',
+        'resting',
+        'between_exercise_rest',
+        'block_round_rest',
+      ]
+      if (!backNavPhases.includes(state.phase)) {
         return state
       }
       
       const exercises = action.exercises
-      const currentExercise = exercises[state.currentExerciseIndex]
       
-      // RULE A: If on Set N > 1, go back to Set N-1 of same exercise
-      if (state.currentSetNumber > 1) {
-        // Remove the last completed set for this exercise if it exists
+      // [LIVE-WORKOUT-CORRIDOR] REAL-VALUE RESTORE CONTRACT
+      // When we pop a completed set, we restore the user's entered values
+      // EXACTLY as they were. No generic literals (no 8, no 30) may appear
+      // here. If a field was not recorded, we preserve the current state
+      // value (which still reflects whatever the user / prescription seed
+      // produced), NEVER an invented fallback. This is the fix for
+      // "why did my 6s turn into 30s" on GO_BACK from a hold exercise.
+      const restoreFromRemovedSet = (removedSet: CompletedSet | null) => ({
+        repsValue:
+          removedSet && typeof removedSet.actualReps === 'number'
+            ? removedSet.actualReps
+            : state.repsValue,
+        holdValue:
+          removedSet && typeof removedSet.holdSeconds === 'number'
+            ? removedSet.holdSeconds
+            : state.holdValue,
+        selectedRPE: removedSet?.actualRPE ?? null,
+        bandUsed: removedSet?.bandUsed ?? 'none',
+        selectedBands: removedSet?.selectedBands ?? [],
+        actualLoadUsed:
+          removedSet && typeof removedSet.actualLoadUsed === 'number'
+            ? removedSet.actualLoadUsed
+            : state.actualLoadUsed,
+        actualLoadUnit: removedSet?.actualLoadUnit ?? state.actualLoadUnit,
+        isPerSide: removedSet?.isPerSide ?? state.isPerSide,
+        currentSetNote: removedSet?.note ?? '',
+        currentSetReasonTags: removedSet?.reasonTags ?? [],
+      })
+      
+      // [LIVE-WORKOUT-CORRIDOR] Phase-aware current set resolution.
+      // In 'between_exercise_rest' the machine has NOT yet advanced
+      // currentExerciseIndex (see COMPLETE_SET path), and currentSetNumber
+      // still points at the just-completed final set of the current
+      // exercise. GO_BACK from that phase means "re-edit that last set".
+      const isBetweenExerciseRest = state.phase === 'between_exercise_rest'
+      const targetSetToPop = isBetweenExerciseRest
+        ? state.currentSetNumber              // pop the just-completed final set
+        : state.currentSetNumber - 1          // pop the previously-completed set
+      
+      // RULE A: If on Set N > 1 (or in between_exercise_rest after Set N),
+      // pop the last completed set of CURRENT exercise and re-edit it.
+      if (targetSetToPop >= 1) {
         const lastSetForExercise = state.completedSets.findLastIndex(
-          s => s.exerciseIndex === state.currentExerciseIndex && s.setNumber === state.currentSetNumber - 1
+          s => s.exerciseIndex === state.currentExerciseIndex && s.setNumber === targetSetToPop
         )
+        const removedSet = lastSetForExercise >= 0 ? state.completedSets[lastSetForExercise] : null
         const updatedSets = lastSetForExercise >= 0 
           ? state.completedSets.filter((_, i) => i !== lastSetForExercise)
           : state.completedSets
         
-        // Restore values from the removed set for re-editing
-        const removedSet = lastSetForExercise >= 0 ? state.completedSets[lastSetForExercise] : null
-        
-        return {
-          ...state,
-          phase: 'active',
-          currentSetNumber: state.currentSetNumber - 1,
-          completedSets: updatedSets,
-          // Restore editable values from the removed set
-          repsValue: removedSet?.actualReps || 8,
-          holdValue: removedSet?.holdSeconds || 30,
-          selectedRPE: removedSet?.actualRPE || null,
-          bandUsed: removedSet?.bandUsed || 'none',
-          currentSetNote: removedSet?.note || '',
-          currentSetReasonTags: removedSet?.reasonTags || [],
+        // If we're already on Set 1 of current exercise (not in rest), we
+        // cannot pop to Set 0 - fall through to Rule B (previous exercise).
+        if (!isBetweenExerciseRest && targetSetToPop < 1) {
+          // noop - handled below
+        } else {
+          const restored = restoreFromRemovedSet(removedSet)
+          console.log('[LIVE-WORKOUT-CORRIDOR] GO_BACK RULE A', {
+            fromPhase: state.phase,
+            exerciseIndex: state.currentExerciseIndex,
+            currentSetNumber: state.currentSetNumber,
+            poppedSetNumber: targetSetToPop,
+            foundRemovedSet: lastSetForExercise >= 0,
+            restoredReps: restored.repsValue,
+            restoredHold: restored.holdValue,
+          })
+          return {
+            ...state,
+            phase: 'active',
+            currentSetNumber: targetSetToPop,
+            completedSets: updatedSets,
+            interExerciseRestSeconds: 0,
+            blockRoundRestSeconds: 0,
+            ...restored,
+          }
         }
       }
       
-      // RULE B: If on Set 1 and there's a previous exercise, go to last set of previous exercise
-      if (state.currentExerciseIndex > 0) {
+      // RULE B: If at Set 1 of current exercise and a prior exercise
+      // exists, go to the last set of the previous exercise and re-edit it.
+      if (!isBetweenExerciseRest && state.currentExerciseIndex > 0) {
         const prevExerciseIndex = state.currentExerciseIndex - 1
         const prevExercise = exercises[prevExerciseIndex]
         const prevExerciseSets = prevExercise?.sets || 3
         
-        // Find and remove the last completed set for the previous exercise
         const lastSetForPrevExercise = state.completedSets.findLastIndex(
           s => s.exerciseIndex === prevExerciseIndex && s.setNumber === prevExerciseSets
         )
+        const removedSet = lastSetForPrevExercise >= 0 ? state.completedSets[lastSetForPrevExercise] : null
         const updatedSets = lastSetForPrevExercise >= 0 
           ? state.completedSets.filter((_, i) => i !== lastSetForPrevExercise)
           : state.completedSets
         
-        // Restore values from the removed set
-        const removedSet = lastSetForPrevExercise >= 0 ? state.completedSets[lastSetForPrevExercise] : null
-        
+        const restored = restoreFromRemovedSet(removedSet)
+        console.log('[LIVE-WORKOUT-CORRIDOR] GO_BACK RULE B', {
+          fromPhase: state.phase,
+          fromExerciseIndex: state.currentExerciseIndex,
+          toExerciseIndex: prevExerciseIndex,
+          toSetNumber: prevExerciseSets,
+          foundRemovedSet: lastSetForPrevExercise >= 0,
+          restoredReps: restored.repsValue,
+          restoredHold: restored.holdValue,
+        })
         return {
           ...state,
           phase: 'active',
           currentExerciseIndex: prevExerciseIndex,
           currentSetNumber: prevExerciseSets,
           completedSets: updatedSets,
-          // Restore editable values
-          repsValue: removedSet?.actualReps || 8,
-          holdValue: removedSet?.holdSeconds || 30,
-          selectedRPE: removedSet?.actualRPE || null,
-          bandUsed: removedSet?.bandUsed || 'none',
-          currentSetNote: removedSet?.note || '',
-          currentSetReasonTags: removedSet?.reasonTags || [],
+          interExerciseRestSeconds: 0,
+          blockRoundRestSeconds: 0,
+          ...restored,
         }
       }
       

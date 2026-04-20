@@ -913,7 +913,15 @@ function WorkoutSessionContent() {
     return () => {
       mounted = false
     }
-  }, [dayParam, demoMode, isFirstSession])
+    // [LIVE-WORKOUT-CORRIDOR] Effect MUST react to ALL route-level truth that
+    // materially changes the loaded session. Previously only [dayParam,
+    // demoMode, isFirstSession] were tracked, so changing variantIndex /
+    // executionMode / weekOverride in-place (e.g. the user bouncing between
+    // Full/45/30 or selecting Week 2 vs Week 1) would NOT re-run the loader,
+    // leaving stale session truth alive on the screen that disagreed with
+    // the authoritative URL. Adding variantIndex + executionMode +
+    // weekOverride closes that stale-session window.
+  }, [dayParam, demoMode, isFirstSession, variantIndex, executionMode, weekOverride])
   
   // [freshness-sync] TASK 3: Listen for snapshot replacement events
   // If a new program replaces the old one, we should NOT be showing stale session data

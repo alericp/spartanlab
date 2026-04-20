@@ -55,6 +55,15 @@ export interface SessionMeta {
   weekNumber?: number
   /** [WEEK-PROGRESSION-TRUTH] Whether week scaling was applied to the session */
   weekScalingApplied?: boolean
+  /**
+   * [LIVE-WORKOUT-CORRIDOR] Authoritative source of the resolved week.
+   *   route_week       = URL `week=` param (Program card's visible selection)
+   *   program_week     = adaptiveProgram.weekNumber (no URL override present)
+   *   fallback_week_1  = neither source was usable; defaulted to Week 1
+   * Surfaced in meta so downstream consumers and logs can prove the
+   * Program card -> live workout handoff didn't silently fall back.
+   */
+  weekSource?: 'route_week' | 'program_week' | 'fallback_week_1'
 }
 
 export interface AuthoritativeSessionResult {
@@ -514,15 +523,28 @@ export async function loadAuthoritativeSession(
     // the previous silent reversion to adaptiveProgram.weekNumber, which was
     // the root cause of Week 2/3/4 selection on the Program page still
     // booting Week 1 acclimation values in the live workout.
-    const resolvedWeekNumber = typeof weekOverride === 'number' && weekOverride >= 1
-      ? weekOverride
-      : (adaptiveProgram.weekNumber ?? 1)
+    // [LIVE-WORKOUT-CORRIDOR] Narrow, auditable week source selection.
+    // route_week beats program_week beats fallback_week_1. The resolved
+    // weekSource is propagated to SessionMeta so UI/logs can prove which
+    // branch won for this session load (no silent fallbacks).
+    const weekSource: SessionMeta['weekSource'] =
+      typeof weekOverride === 'number' && weekOverride >= 1
+        ? 'route_week'
+        : typeof adaptiveProgram.weekNumber === 'number' && adaptiveProgram.weekNumber >= 1
+          ? 'program_week'
+          : 'fallback_week_1'
+    const resolvedWeekNumber =
+      weekSource === 'route_week'
+        ? (weekOverride as number)
+        : weekSource === 'program_week'
+          ? (adaptiveProgram.weekNumber as number)
+          : 1
     const currentWeekNumber = resolvedWeekNumber
     logSessionLoad('WEEK_AUTHORITY_RESOLVED', {
       weekOverride: weekOverride ?? null,
       programWeekNumber: adaptiveProgram.weekNumber ?? null,
       resolvedWeekNumber,
-      source: typeof weekOverride === 'number' && weekOverride >= 1 ? 'url_override' : 'program_state',
+      weekSource,
     })
     const scaledSession = scaleSessionForWeek(normalizedSession, currentWeekNumber)
     
@@ -578,6 +600,8 @@ export async function loadAuthoritativeSession(
         // [WEEK-PROGRESSION-TRUTH] Include week metadata in session meta
         weekNumber: currentWeekNumber,
         weekScalingApplied: scaledSession.weekScalingApplied,
+        // [LIVE-WORKOUT-CORRIDOR] Propagate resolved week source for audit
+        weekSource,
       },
       reasoningSummary: adaptiveProgram.workoutReasoningSummary,
     }

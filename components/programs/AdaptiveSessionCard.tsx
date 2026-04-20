@@ -81,6 +81,13 @@ interface AdaptiveSessionCardProps {
   showProbe?: boolean
   // [ALWAYS-VISIBLE-PROBE] Force probe to render unconditionally
   forceProbe?: boolean
+  // [WEEK-AUTHORITY-HANDOFF] Authoritative selected week from the Program page.
+  // This is the SAME week the Program card is rendering dosage for, and MUST
+  // be carried as a URL param into Start Workout so the live workout runner
+  // boots the identical week prescription. Without this, the live runner
+  // silently reverts to adaptiveProgram.weekNumber (acclimation) even when
+  // the user is viewing Week 2/3/4 on the Program page.
+  currentWeekNumber?: number
 }
 
 // =============================================================================
@@ -207,7 +214,7 @@ function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
   }
 }
 
-export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter, showProbe: _showProbe = false, forceProbe: _forceProbe = false }: AdaptiveSessionCardProps) {
+export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter, showProbe: _showProbe = false, forceProbe: _forceProbe = false, currentWeekNumber }: AdaptiveSessionCardProps) {
   // [PROBES-HARD-DISABLED] Session truth probes are retired. They caused
   // debug-looking text ("PROBE ACTIVE", instance-id letter fragments, etc.)
   // to leak into production UI when accidentally enabled via query param.
@@ -337,8 +344,17 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     }
     
     trackWorkoutStarted(session.name)
+    // [WEEK-AUTHORITY-HANDOFF] Carry the Program page's AUTHORITATIVE selected
+    // week into the live workout route. The live runner uses this week as the
+    // exclusive source of truth for dosage scaling. If absent we fall back to
+    // the program baseline, but when the user is viewing Week 2/3/4 this param
+    // is the only way to guarantee parity between Program card dosage and
+    // the workout that actually boots.
+    const weekParam = typeof currentWeekNumber === 'number' && currentWeekNumber >= 1
+      ? `&week=${currentWeekNumber}`
+      : ''
     // [LIVE-WORKOUT-AUTHORITY] Pass execution mode and variant index to workout route
-    router.push(`/workout/session?day=${session.dayNumber || 1}&mode=${executionMode}&variant=${selectedVariant ?? 0}`)
+    router.push(`/workout/session?day=${session.dayNumber || 1}&mode=${executionMode}&variant=${selectedVariant ?? 0}${weekParam}`)
   }
 
   const handleWorkoutComplete = () => {

@@ -236,6 +236,16 @@ export interface SessionLoadRequest {
   isDemo?: boolean
   /** Whether this is the user's first session */
   isFirstSession?: boolean
+  /**
+   * [WEEK-AUTHORITY-HANDOFF] Authoritative selected week from the Program
+   * page. When provided, this is the EXCLUSIVE source of truth for week
+   * dosage scaling inside the live workout loader and overrides
+   * adaptiveProgram.weekNumber. This exists so the Program card's visible
+   * Week 2/3/4 dosage matches exactly what Start Workout boots into - the
+   * adaptive program's own weekNumber field can lag or disagree with the
+   * user's current visible selection.
+   */
+  weekOverride?: number
 }
 
 /**
@@ -250,7 +260,7 @@ export interface SessionLoadRequest {
 export async function loadAuthoritativeSession(
   request: SessionLoadRequest
 ): Promise<AuthoritativeSessionResult> {
-  const { dayParam, isDemo, isFirstSession } = request
+  const { dayParam, isDemo, isFirstSession, weekOverride } = request
   
   logSessionLoad('SESSION_LOAD_START', { 
     dayParam, 
@@ -497,7 +507,23 @@ export async function loadAuthoritativeSession(
     // This ensures the live workout session receives the same scaled values 
     // (scaledSets, scaledReps, scaledTargetRPE, etc.) that the Program page displays.
     // Without this, the UI shows Week 2/3/4 dosage but the workout uses Week 1 values.
-    const currentWeekNumber = adaptiveProgram.weekNumber ?? 1
+    //
+    // [WEEK-AUTHORITY-HANDOFF] When the caller supplies a weekOverride (the
+    // Program page's visibly-selected week, passed through the Start Workout
+    // URL), that value is the EXCLUSIVE source of truth here. This removes
+    // the previous silent reversion to adaptiveProgram.weekNumber, which was
+    // the root cause of Week 2/3/4 selection on the Program page still
+    // booting Week 1 acclimation values in the live workout.
+    const resolvedWeekNumber = typeof weekOverride === 'number' && weekOverride >= 1
+      ? weekOverride
+      : (adaptiveProgram.weekNumber ?? 1)
+    const currentWeekNumber = resolvedWeekNumber
+    logSessionLoad('WEEK_AUTHORITY_RESOLVED', {
+      weekOverride: weekOverride ?? null,
+      programWeekNumber: adaptiveProgram.weekNumber ?? null,
+      resolvedWeekNumber,
+      source: typeof weekOverride === 'number' && weekOverride >= 1 ? 'url_override' : 'program_state',
+    })
     const scaledSession = scaleSessionForWeek(normalizedSession, currentWeekNumber)
     
     // Merge scaled exercise data back onto normalizedSession

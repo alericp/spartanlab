@@ -2622,6 +2622,55 @@ if (styledGroups && styledGroups.length > 0) {
   }, [validatedCurrentExercise])
   
   // ==========================================================================
+  // [ACTIVE-WEEK-PARITY] ONE AUTHORITATIVE ACTIVE EFFECTIVE CONTRACT
+  //
+  // The pre-start shell already reads week-scaled truth via
+  // getEffectiveExerciseValues(). This contract makes the ACTIVE corridor
+  // read the SAME effective truth, so when the Program card handed off
+  // Week 2/3/4 scaled dosage (e.g. Planche Leans 5x8s), the live session
+  // no longer falls back to raw Week 1 base dosage (3x6s).
+  //
+  // RULES:
+  //  - No new scaling logic is introduced here. This is a single read of
+  //    the existing getEffectiveExerciseValues() resolver, which already
+  //    prefers scaledSets / scaledReps / scaledTargetRPE / scaledRestPeriod
+  //    over base fields.
+  //  - All ACTIVE-corridor derivations (target text, seed parse, hold
+  //    detection, set progress denominator, set label, targetRPE prop to
+  //    ActiveWorkoutStartCorridor, rest-fallback for current exercise)
+  //    read from this ONE object. Raw safeCurrentExercise.sets /
+  //    .repsOrTime / .targetRPE / .restSeconds reads in the active
+  //    corridor are replaced by these effective fields.
+  //  - `effectiveRestSeconds` prefers the scaled rest period (emitted by
+  //    the loader as scaledRestPeriod). When that is undefined, it falls
+  //    back to the base exercise.restSeconds. The rest engine itself
+  //    (getRestDuration, RPE-REST-AUTHORITY) is NOT rewritten - we only
+  //    change the per-exercise base it reads when that base has been
+  //    scaled for the selected week.
+  // ==========================================================================
+  const activeEffectiveContract = useMemo(() => {
+    const eff = getEffectiveExerciseValues(safeCurrentExercise)
+    // Base restSeconds falls back when no scaled rest was provided.
+    const baseRestSeconds = typeof safeCurrentExercise?.restSeconds === 'number'
+      ? safeCurrentExercise.restSeconds
+      : undefined
+    // eff.restPeriod returns either scaledRestPeriod or base exercise.restPeriod
+    // or the 90s default from the resolver. We only prefer it over
+    // baseRestSeconds when week scaling is actually applied, so un-scaled
+    // sessions keep their existing rest behaviour bit-identical.
+    const effectiveRestSeconds = eff.weekScalingApplied
+      ? eff.restPeriod
+      : baseRestSeconds
+    return {
+      effectiveSets: eff.sets,
+      effectiveRepsOrTime: eff.repsOrTime,
+      effectiveTargetRPE: eff.targetRPE,
+      effectiveRestSeconds,
+      weekScalingApplied: eff.weekScalingApplied,
+    }
+  }, [safeCurrentExercise])
+  
+  // ==========================================================================
   // [AUTHORITATIVE-HYDRATION-CONTRACT] STAGE CONTEXT PERSISTENCE
   // Store context in sessionStorage for crash recovery diagnostics
   // ==========================================================================
@@ -2943,18 +2992,23 @@ if (styledGroups && styledGroups.length > 0) {
         failureReason: null,
         targetValue: 8,
         recommendedBand: undefined,
-      targetRPE: 8,
+      // [ACTIVE-WEEK-PARITY] Even the stage-skipped fast path must report
+      // effective scaled display so the active shell never flashes raw
+      // Week-1 dosage mid-mount.
+      targetRPE: activeEffectiveContract.effectiveTargetRPE,
       isHoldExercise: false,
-      // [WEEK-PROGRESSION-TRUTH] Use effective scaled values for display
-      displaySets: `${getEffectiveExerciseValues(safeCurrentExercise).sets} sets`,
-      displayRepsTime: getEffectiveExerciseValues(safeCurrentExercise).repsOrTime,
+      displaySets: `${activeEffectiveContract.effectiveSets} sets`,
+      displayRepsTime: activeEffectiveContract.effectiveRepsOrTime,
     }
     }
     
     try {
-    // Parse target value from current exercise
+    // [ACTIVE-WEEK-PARITY] Parse target value from EFFECTIVE prescription
+    // text, not raw base text. This is the seed source for the active hold /
+    // reps input default, so parsing from base "6s" would paint the live
+    // session with Week-1 acclimation targets even on Week 2/3/4.
+    const repsOrTime = activeEffectiveContract.effectiveRepsOrTime
     let targetValue = 8
-    const repsOrTime = safeCurrentExercise?.repsOrTime ?? ''
     if (typeof repsOrTime === 'string' && repsOrTime.length > 0) {
       const match = repsOrTime.match(/(\d+)/)
       if (match) {
@@ -2962,7 +3016,7 @@ if (styledGroups && styledGroups.length > 0) {
       }
     }
     
-    // Parse recommended band from note
+    // Parse recommended band from note (note text is not week-scaled)
     let recommendedBand: ResistanceBandColor | undefined
     const note = safeCurrentExercise?.note ?? ''
     if (typeof note === 'string' && note.length > 0) {
@@ -2975,9 +3029,10 @@ if (styledGroups && styledGroups.length > 0) {
       }
     }
     
-    // [LIVE-UNIT-CONTRACT] Detect hold exercise via canonical detector.
-    // Replaces the prior `.includes('sec') || .includes('hold')` check which
-    // missed bare-second shorthand like "6s" used for Planche Leans.
+    // [LIVE-UNIT-CONTRACT] + [ACTIVE-WEEK-PARITY] Detect hold exercise via
+    // canonical detector using EFFECTIVE repsOrTime. Hold detection must
+    // reflect the scaled prescription (e.g. "8s") rather than the raw base
+    // ("6s"), so behaviour matches pre-start for week-scaled sessions.
     const isHoldExercise = isHoldUnit({
       repsOrTime,
       name: safeCurrentExercise?.name,
@@ -2990,11 +3045,12 @@ if (styledGroups && styledGroups.length > 0) {
       failureReason: null,
       targetValue,
       recommendedBand,
-      targetRPE: 8,
+      // [ACTIVE-WEEK-PARITY] Prefer scaledTargetRPE when present
+      targetRPE: activeEffectiveContract.effectiveTargetRPE,
       isHoldExercise,
-      // [WEEK-PROGRESSION-TRUTH] Use effective scaled values for display
-      displaySets: `${getEffectiveExerciseValues(safeCurrentExercise).sets} sets`,
-      displayRepsTime: getEffectiveExerciseValues(safeCurrentExercise).repsOrTime,
+      // [WEEK-PROGRESSION-TRUTH] Effective scaled values for display
+      displaySets: `${activeEffectiveContract.effectiveSets} sets`,
+      displayRepsTime: activeEffectiveContract.effectiveRepsOrTime,
     }
     } catch (error) {
       console.error('[v0] [activeEntryPreparation_error]', error instanceof Error ? error.message : 'unknown')
@@ -3010,7 +3066,9 @@ if (styledGroups && styledGroups.length > 0) {
         displayRepsTime: '8-12 reps',
       }
     }
-  }, [safeCurrentExercise])
+    // [ACTIVE-WEEK-PARITY] Depend on the effective contract so seed parse and
+    // hold detection re-run when scaled truth changes week-to-week.
+  }, [safeCurrentExercise, activeEffectiveContract])
 
   // ==========================================================================
   // [ACTIVE-ENTRY-CONTRACT] SINGLE AUTHORITATIVE ACTIVE RENDER PAYLOAD
@@ -3323,8 +3381,10 @@ if (styledGroups && styledGroups.length > 0) {
         currentSetNumber: validatedSetNumber || 1,
         currentExerciseName: safeCurrentExercise?.name || 'Exercise',
         currentExerciseCategory: safeCurrentExercise?.category || 'general',
-        currentExerciseSets: safeCurrentExercise?.sets || 3,
-        currentExerciseRepsOrTime: safeCurrentExercise?.repsOrTime || '8-12 reps',
+        // [ACTIVE-WEEK-PARITY] Use effective scaled sets/reps so Stage 1-5
+        // never shows raw Week-1 dosage while mounting.
+        currentExerciseSets: activeEffectiveContract.effectiveSets,
+        currentExerciseRepsOrTime: activeEffectiveContract.effectiveRepsOrTime,
         currentExerciseNote: safeCurrentExercise?.note || '',
         hasNextExercise: false,
         nextExerciseName: null,
@@ -3334,7 +3394,7 @@ if (styledGroups && styledGroups.length > 0) {
         isLastExercise: false,
         isLastSet: false,
         isWorkoutComplete: false,
-        setDisplay: `Set ${validatedSetNumber || 1}/${safeCurrentExercise?.sets || 3}`,
+        setDisplay: `Set ${validatedSetNumber || 1}/${activeEffectiveContract.effectiveSets}`,
         exerciseProgress: `1/${exercises.length || 1}`,
         setsProgress: `0/${totalSets || 3}`,
         loadDisplay: null,
@@ -3359,10 +3419,13 @@ if (styledGroups && styledGroups.length > 0) {
     const safeCurrentSetNumber = validatedSetNumber
     
     // Current exercise details (from safe contract)
+    // [ACTIVE-WEEK-PARITY] Sets and repsOrTime come from the effective
+    // contract so Week 2/3/4 scaled dosage powers the live session set
+    // progress denominator and label.
     const currentExerciseName = safeCurrentExercise.name || 'Exercise'
     const currentExerciseCategory = safeCurrentExercise.category || 'general'
-    const currentExerciseSets = safeCurrentExercise.sets || 3
-    const currentExerciseRepsOrTime = safeCurrentExercise.repsOrTime || '8-12 reps'
+    const currentExerciseSets = activeEffectiveContract.effectiveSets
+    const currentExerciseRepsOrTime = activeEffectiveContract.effectiveRepsOrTime
     const currentExerciseNote = safeCurrentExercise.note || ''
     
     // Next exercise info (bounded)
@@ -3482,7 +3545,9 @@ if (styledGroups && styledGroups.length > 0) {
     normalizedCompletedSets, 
     safeCurrentExercise,
     hasValidExercises,
-    validatedCurrentExercise
+    validatedCurrentExercise,
+    // [ACTIVE-WEEK-PARITY] Effective contract powers set count + reps text
+    activeEffectiveContract,
   ])
   
   // [LIVE-WORKOUT-MACHINE] Use machine-derived isHoldExercise
@@ -3749,9 +3814,13 @@ if (styledGroups && styledGroups.length > 0) {
   const handleCompleteSet = useCallback(() => {
     const currentIndex = safeExerciseIndex
     
-    // [LOGGED-VALUE-FIX] Compute the DISPLAYED hold/reps value that matches what the UI showed
-    // This mirrors the corridorHoldValue/corridorRepsValue derivation logic
-    const exerciseRepsOrTime = safeCurrentExercise?.repsOrTime || '8-12 reps'
+    // [LOGGED-VALUE-FIX] + [ACTIVE-WEEK-PARITY] Compute the DISPLAYED hold/reps
+    // value that matches what the UI showed. The corridor seeds inputs from
+    // the EFFECTIVE prescription text (see corridorRepsValue/corridorHoldValue
+    // derivation below). Logging must mirror the exact same source, otherwise
+    // on Week 2/3/4 a default-seed logged value would still be parsed from
+    // raw Week-1 text ("6s") instead of the scaled text ("8s") the user saw.
+    const exerciseRepsOrTime = activeEffectiveContract.effectiveRepsOrTime
     // [LIVE-UNIT-CONTRACT] Use the canonical hold detector. Previously this
     // path had its own independent regex variant that could disagree with the
     // activeEntryPreparation isHoldExercise value - creating a split-brain
@@ -3859,7 +3928,11 @@ if (styledGroups && styledGroups.length > 0) {
       
       // Non-grouped set - use standard flat dispatch
       // [CRASH-FIX] Use validatedSetNumber instead of liveSession
-      const isLastSet = validatedSetNumber >= (safeCurrentExercise.sets || 3)
+      // [ACTIVE-WEEK-PARITY] Compare against EFFECTIVE scaled sets. Using the
+      // raw .sets here caused isLastSet to fire on set 3 of 5 under Week 2
+      // scaling, which triggers the inter-exercise rest transition one or
+      // two sets early and advances the exercise pointer prematurely.
+      const isLastSet = validatedSetNumber >= activeEffectiveContract.effectiveSets
       
       // [LIVE-WORKOUT-ADAPTIVE] Include target prescription for adaptive summary
       // [LIVE-WORKOUT-ACTION-PLANNER] Include exercise context for action planning
@@ -3914,18 +3987,25 @@ if (styledGroups && styledGroups.length > 0) {
         // persists as hold iff the set was logged as hold.
         targetReps: isHoldForPersist ? undefined : prescriptionSeedValue,
         targetHoldSeconds: isHoldForPersist ? prescriptionSeedValue : undefined,
-        targetRPE: safeCurrentExercise?.targetRPE || 8,
+        // [ACTIVE-WEEK-PARITY] Persist EFFECTIVE target RPE and total
+        // prescribed sets so the logged target prescription matches the
+        // scaled dosage the user actually trained against (Week 2 = 5 sets
+        // instead of base 3), and the adaptive summary sees the right
+        // denominators for completion-rate calculations.
+        targetRPE: activeEffectiveContract.effectiveTargetRPE,
         recommendedBand: localRecommendedBand,
         // Exercise context for action planning
         exerciseName: safeCurrentExercise?.name || '',
-        totalPrescribedSets: safeCurrentExercise?.sets || 3,
+        totalPrescribedSets: activeEffectiveContract.effectiveSets,
         // [RPE-REST-AUTHORITY] Doctrine-backed rest seconds (category + RPE +
         // fatigue). Undefined when no RPE was logged; machine falls back to 120s.
         interExerciseRestSeconds: computedInterExerciseRest,
       })
     // [CRASH-FIX] Removed liveSession dep, use machine-derived values
     // [LOGGED-VALUE-FIX] Added safeCurrentExercise to deps for prescription seed derivation
-    }, [validatedSetNumber, safeRepsValue, safeHoldValue, safeSelectedRPE, safeBandUsed, safeCurrentExercise, safeExerciseIndex, isHoldExercise, exercises, machineSessionContract, machineState, machineDispatch])
+    // [ACTIVE-WEEK-PARITY] activeEffectiveContract feeds the seed parse source
+  // and isLastSet comparison above.
+  }, [validatedSetNumber, safeRepsValue, safeHoldValue, safeSelectedRPE, safeBandUsed, safeCurrentExercise, safeExerciseIndex, isHoldExercise, exercises, machineSessionContract, machineState, machineDispatch, activeEffectiveContract])
   
   // [UNIFIED-REST-HANDLER] Single handler for all rest completion
   // Checks machine phase to determine correct transition
@@ -5657,9 +5737,12 @@ function InterExerciseRestCountdown({
     // [ISOLATED-ACTIVE-CORRIDOR] Derive simple safe values for the corridor
     // These are plain reads from machine state - no complex derivations
     
-    // [DEFAULT-INPUT-SEEDING] Parse target values from exercise prescription
-    // Use authoritative prescription truth to seed defaults
-    const exerciseRepsOrTime = safeCurrentExercise?.repsOrTime || '8-12 reps'
+    // [DEFAULT-INPUT-SEEDING] + [ACTIVE-WEEK-PARITY] Parse target values from
+    // the EFFECTIVE (scaled) prescription text. This is what paints the
+    // default hold/reps input the user first sees; using raw base text would
+    // seed Week-1 defaults ("6" for Planche Leans) even when Week 2/3/4
+    // scaled truth calls for a different value.
+    const exerciseRepsOrTime = activeEffectiveContract.effectiveRepsOrTime
     // [LIVE-UNIT-CONTRACT] Canonical hold detector replaces previous local
     // regex (`.includes('sec') || .includes('hold') || .includes('s ')`)
     // which still missed terminal-s shorthand like "6s" and could disagree
@@ -5905,18 +5988,23 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
             restValue = rec.adjustedSeconds
           } catch {
             restSource = 'rpe_aware_threw_fallback'
-            restValue = safeCurrentExercise?.restSeconds || 90
+            // [ACTIVE-WEEK-PARITY] Prefer scaled rest when loader scaled it
+            restValue = activeEffectiveContract.effectiveRestSeconds ?? 90
           }
-        } else if (safeCurrentExercise?.restSeconds && safeCurrentExercise.restSeconds > 0) {
+        } else if (activeEffectiveContract.effectiveRestSeconds && activeEffectiveContract.effectiveRestSeconds > 0) {
           // Priority 2: current exercise's prescribed rest
+          // [ACTIVE-WEEK-PARITY] Use effective rest so scaledRestPeriod wins
+          // when the loader applied week scaling; otherwise this falls back
+          // to base restSeconds identically to before.
           restSource = 'current_exercise_prescribed_restSeconds'
-          restValue = safeCurrentExercise.restSeconds
+          restValue = activeEffectiveContract.effectiveRestSeconds
         } else {
           // Priority 3: doctrine-aligned derivation.
-          // [LIVE-UNIT-CONTRACT] Use canonical hold detector so rest doctrine
-          // sees hold-based classification for "6s" style prescriptions too.
+          // [LIVE-UNIT-CONTRACT] + [ACTIVE-WEEK-PARITY] Use canonical hold
+          // detector on EFFECTIVE repsOrTime so doctrine sees the scaled
+          // prescription text for "6s"/"8s" style classification.
           const isHoldBased = isHoldUnit({
-            repsOrTime: safeCurrentExercise?.repsOrTime,
+            repsOrTime: activeEffectiveContract.effectiveRepsOrTime,
             name: safeCurrentExercise?.name,
             category: safeCurrentExercise?.category,
           })
@@ -5924,7 +6012,8 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
             restType: 'between_sets',
             exerciseCategory: (safeCurrentExercise?.category || 'general'),
             exerciseName: safeCurrentExercise?.name || '',
-            targetRPE: safeCurrentExercise?.targetRPE || 8,
+            // [ACTIVE-WEEK-PARITY] Prefer scaledTargetRPE when present
+            targetRPE: activeEffectiveContract.effectiveTargetRPE,
             actualRPE: lastRPE,
             isHoldBased,
             groupType: null,
@@ -5956,9 +6045,16 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
         sessionLabel={safeDisplayLabel || 'Workout'}
         exerciseName={safeCurrentExercise?.name || 'Exercise'}
         exerciseCategory={safeCurrentExercise?.category || 'general'}
-        exerciseSets={safeCurrentExercise?.sets || 3}
-        exerciseRepsOrTime={safeCurrentExercise?.repsOrTime || '8-12 reps'}
-        targetRPE={safeCurrentExercise?.targetRPE || 8}
+        // [ACTIVE-WEEK-PARITY] These three props paint the visible live
+        // session: set progress bar + "Set X / Y" label + prescription
+        // target text + RPE target. They MUST come from the same effective
+        // contract the pre-start shell now uses, otherwise the active UI
+        // reverts to raw Week-1 base dosage (e.g. "Set 1/3 - 6s hold")
+        // while the Program card and pre-start correctly show Week 2
+        // scaled dosage ("Set 1/5 - 8s hold").
+        exerciseSets={activeEffectiveContract.effectiveSets}
+        exerciseRepsOrTime={activeEffectiveContract.effectiveRepsOrTime}
+        targetRPE={activeEffectiveContract.effectiveTargetRPE}
         prescribedLoad={safeCurrentExercise?.prescribedLoad?.load && safeCurrentExercise.prescribedLoad.load > 0 ? {
           load: safeCurrentExercise.prescribedLoad.load,
           unit: safeCurrentExercise.prescribedLoad.unit || 'lbs',
@@ -6575,15 +6671,19 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     unitStatus.shell.rendered = true
     
     // Read ONLY from machine-derived safe values - no complex derivations
+    // [ACTIVE-WEEK-PARITY] Stage-1 is a visible active render; it must use
+    // the same effective dosage as the full-stage render. Otherwise the live
+    // shell would flash raw Week-1 values (e.g. "Set 1/3 - 6s hold") between
+    // mount and stage-6 promotion even on Week 2/3/4 sessions.
     const s1ExerciseName = safeCurrentExercise?.name || 'Exercise'
     const s1ExerciseCategory = safeCurrentExercise?.category || 'general'
-    const s1ExerciseSets = safeCurrentExercise?.sets || 3
-    const s1ExerciseRepsOrTime = safeCurrentExercise?.repsOrTime || '8-12 reps'
+    const s1ExerciseSets = activeEffectiveContract.effectiveSets
+    const s1ExerciseRepsOrTime = activeEffectiveContract.effectiveRepsOrTime
     const s1SetNumber = validatedSetNumber || 1
     const s1ExerciseIndex = safeExerciseIndex || 0
     const s1TotalExercises = exercises?.length || 1
     const s1CompletedSets = normalizedCompletedSets?.length || 0
-    const s1TotalSets = (exercises || []).reduce((sum, ex) => sum + (ex?.sets || 3), 0) || 3
+    const s1TotalSets = (exercises || []).reduce((sum, ex) => sum + getEffectiveExerciseValues(ex).sets, 0) || 3
     const s1Elapsed = safeElapsedSeconds || 0
     // [LIVE-UNIT-CONTRACT] Canonical hold detector for Stage1 summary.
     const s1IsHold = isHoldUnit({

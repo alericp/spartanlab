@@ -1073,6 +1073,93 @@ export function ActiveWorkoutStartCorridor({
                 </div>
               </Card>
               
+              {/* Last Set Snapshot - immediate coaching-oriented summary of the just-finished set */}
+              {mode === 'resting' && recentSets.length > 0 && (() => {
+                const latestSet = recentSets[recentSets.length - 1]
+                const trimmedLatestNote = typeof latestSet.note === 'string' ? latestSet.note.trim() : ''
+                const hasLatestNote = trimmedLatestNote.length > 0
+                const actualLabel = latestSet.holdSeconds
+                  ? `${latestSet.holdSeconds}s`
+                  : `${latestSet.actualReps}${latestSet.isPerSide ? '/side' : ''} reps`
+                const latestRPE = latestSet.actualRPE
+                // Outcome classification vs target RPE. Lower RPE than target = easier than
+                // intended (below target); higher = harder than intended (above target).
+                let outcomeLabel: string | null = null
+                let outcomeClasses = ''
+                if (typeof latestRPE === 'number') {
+                  if (latestRPE < targetRPE) {
+                    outcomeLabel = 'Below target'
+                    outcomeClasses = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                  } else if (latestRPE === targetRPE) {
+                    outcomeLabel = 'On target'
+                    outcomeClasses = 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                  } else {
+                    outcomeLabel = 'Above target'
+                    outcomeClasses = 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                  }
+                }
+                return (
+                  <Card className="bg-[#1A1F26]/50 border-[#2B313A]/50 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs text-[#6B7280] uppercase tracking-wide">Last Set Snapshot</p>
+                      {outcomeLabel && (
+                        <Badge variant="outline" className={`text-[10px] ${outcomeClasses}`}>
+                          {outcomeLabel}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#6B7280]">Actual</span>
+                        <span className="text-[#E6E9EF] font-medium tabular-nums">{actualLabel}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#6B7280]">Target</span>
+                        <span className="text-[#A4ACB8] truncate ml-2" title={exerciseRepsOrTime}>{exerciseRepsOrTime}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#6B7280]">RPE</span>
+                        <span className="text-[#E6E9EF] font-medium tabular-nums">
+                          {typeof latestRPE === 'number' ? latestRPE : '—'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#6B7280]">Target RPE</span>
+                        <span className="text-[#A4ACB8] tabular-nums">{targetRPE}</span>
+                      </div>
+                    </div>
+                    {(latestSet.actualLoadUsed !== undefined && latestSet.actualLoadUsed > 0) ||
+                     (latestSet.selectedBands && latestSet.selectedBands.length > 0) ||
+                     (latestSet.bandUsed && latestSet.bandUsed !== 'none') ? (
+                      <div className="flex items-center flex-wrap gap-1.5 mt-2 pt-2 border-t border-[#2B313A]/50">
+                        {latestSet.actualLoadUsed !== undefined && latestSet.actualLoadUsed > 0 && (
+                          <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-400 bg-amber-500/10">
+                            +{latestSet.actualLoadUsed}{latestSet.actualLoadUnit || 'lbs'}
+                          </Badge>
+                        )}
+                        {latestSet.selectedBands && latestSet.selectedBands.length > 0 ? (
+                          <Badge variant="outline" className="text-[10px] border-[#C1121F]/40 text-[#C1121F] bg-[#C1121F]/10">
+                            {latestSet.selectedBands.map(b => BAND_SHORT_LABELS[b]).join('+')}
+                          </Badge>
+                        ) : latestSet.bandUsed && latestSet.bandUsed !== 'none' ? (
+                          <Badge variant="outline" className="text-[10px] border-[#C1121F]/40 text-[#C1121F] bg-[#C1121F]/10">
+                            {BAND_SHORT_LABELS[latestSet.bandUsed]}
+                          </Badge>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {hasLatestNote && (
+                      <p
+                        className="text-xs text-[#6B7280] truncate mt-2 pt-2 border-t border-[#2B313A]/50"
+                        title={trimmedLatestNote}
+                      >
+                        {trimmedLatestNote}
+                      </p>
+                    )}
+                  </Card>
+                )
+              })()}
+              
               {/* Recent Sets Ledger (during rest) */}
               {recentSets.length > 0 && (
                 <Card className="bg-[#1A1F26]/50 border-[#2B313A]/50 p-3">

@@ -1520,6 +1520,7 @@ interface StreamlinedWorkoutSessionProps {
   variantIndex?: number
 }
 
+// MERGE_LANE_REACTIVATE_V1
 export function StreamlinedWorkoutSession({
   session,
   reasoningSummary,

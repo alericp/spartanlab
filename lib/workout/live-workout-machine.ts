@@ -567,6 +567,23 @@ export function workoutMachineReducer(
     // =========================================================================
     
     case 'COMPLETE_SET': {
+      // [LIVE-LOG-CORRIDOR-PROOF] Stage 4: reducer COMPLETE_SET case entered.
+      // Paired with stage-3 dispatch log in StreamlinedWorkoutSession.tsx.
+      // If this log prints but a stage-3 log did not, the dispatch was
+      // somehow wrong type. If stage-3 printed but this did not, the
+      // reducer is not receiving the action (impossible with useReducer
+      // but proves store wiring). Post-state values are logged by a
+      // component-level effect (stage 5) because COMPLETE_SET returns
+      // from many branches and we avoid touching each.
+      console.log('[v0] [log-corridor] stage4 reducer COMPLETE_SET entered', {
+        exerciseIndex: action.completedSet.exerciseIndex,
+        setNumber: action.completedSet.setNumber,
+        isLastSetOfExercise: action.isLastSetOfExercise,
+        priorCompletedSetsLength: state.completedSets.length,
+        priorCurrentSetNumber: state.currentSetNumber,
+        priorPhase: state.phase,
+      })
+      
       // [LIVE-WORKOUT-AUTHORITY] Track consecutive high RPE for recommendations
       const rpeValue = action.completedSet.actualRPE as number
       const isHighRPE = rpeValue >= 9

@@ -47,20 +47,6 @@ import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
 // via its real rich / raw-fallback / flat dispatch.
 // ============================================================================
 
-// [TEMP-INSTRUMENTATION] Module-level dedupe guard for the fire-and-forget
-// POST to /api/_funnel-audit. Keys are `${dayNumber}|${verdict}|${variantLabel}`.
-// Prevents re-posting on every render/re-mount within a single tab session.
-// Remove along with the fetch block and the /api/_funnel-audit/route.ts file
-// once the tested session's first-failing-stage verdict has been captured.
-const __funnelAuditPostedKeys: Set<string> = new Set()
-
-// [TEMP-GROUPED-VERDICT] Single on/off switch for the on-screen grouped-body
-// verdict row rendered inside the existing "Method decisions" disclosure.
-// Flip to `false` (or delete the surrounding JSX) in the cleanup turn to
-// remove the diagnostic surface. The diagnostic never renders anything to
-// non-expanded cards and does not change body ownership.
-const SHOW_GROUPED_DEBUG_VERDICT = true
-
 // [DOCTRINE-STRENGTHENING] Week character flags for visible differentiation
 interface WeekCharacter {
   densityAllowed: boolean
@@ -682,57 +668,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   }
 
   // ==========================================================================
-  // [FUNNEL-AUDIT] Outer-scope snapshot of the ENTIRE render-population
-  // corridor (Stage 1 session prop -> Stage 6 fullVisibleExercises -> Stage 7
-  // grouped display adapter output -> Stage 8 render branch decision). The
-  // snapshot is computed at outer render scope so:
-  //   (1) the client console.log + POST below can read it,
-  //   (2) the [TEMP-GROUPED-VERDICT] in-card diagnostic row (inside the
-  //       existing "Method decisions" disclosure) can display it on-screen
-  //       for the exact card the user is looking at.
-  // ==========================================================================
-  const s1Ex = Array.isArray(rawSession.exercises) ? rawSession.exercises : []
-  const s1StyledGroups = sessionStyleMetadata?.styledGroups ?? []
-  const s1NonStraight = s1StyledGroups.filter(g => g.groupType !== 'straight').length
-  const s1ExWithBlockId = s1Ex.filter(e => !!(e as { blockId?: string }).blockId).length
-  const s1ExWithNonStraightMethod = s1Ex.filter(e => {
-    const m = (e as { method?: string }).method
-    return !!m && m !== 'straight'
-  }).length
-  const s6ExWithBlockId = fullVisibleExercises.filter(
-    e => !!(e as unknown as { blockId?: string }).blockId
-  ).length
-  const s6ExWithNonStraightMethod = fullVisibleExercises.filter(e => {
-    const m = (e as unknown as { method?: string }).method
-    return !!m && m !== 'straight'
-  }).length
-  const s7Model = groupedRenderContract
-
-  // Final verdict: the exact first failing stage (or honest flat attribution).
-  let funnelVerdict: string
-  if (!sessionStyleMetadata && s1ExWithBlockId === 0 && s1ExWithNonStraightMethod === 0) {
-    funnelVerdict = 'STAGE1_FLAT_NO_UPSTREAM_GROUPED_TRUTH'
-  } else if (s1NonStraight === 0 && s1ExWithNonStraightMethod === 0) {
-    funnelVerdict = 'STAGE1_ONLY_STRAIGHT_GROUPED_TRUTH'
-  } else if (s6ExWithBlockId < s1ExWithBlockId || s6ExWithNonStraightMethod < s1ExWithNonStraightMethod) {
-    funnelVerdict = 'STAGE5_6_BRIDGE_LOST_PER_EXERCISE_GROUPED_FIELDS'
-  } else if ((s1NonStraight > 0 || s1ExWithNonStraightMethod > 0) && !s7Model.hasGroups) {
-    funnelVerdict = 'STAGE7_ADAPTER_REJECTED_GROUPED_TRUTH'
-  } else if (s7Model.hasGroups && s7Model.nonStraightGroupCount === 0) {
-    funnelVerdict = 'STAGE7_ADAPTER_RETURNED_ONLY_STRAIGHT_GROUPS'
-  } else if (s7Model.hasGroups && s7Model.nonStraightGroupCount > 0 && !hasRenderableGroups) {
-    funnelVerdict = 'STAGE8_CONTRACT_SAYS_GROUPED_BUT_RENDER_BRANCH_FLAT'
-  } else if (hasRichRenderableGroups) {
-    funnelVerdict = 'STAGE8_RICH_GROUPED_RENDER_BRANCH_ACTIVE'
-  } else if (hasGroupedTruth && s7Model.rawFallbackBlocks.length > 0) {
-    funnelVerdict = 'STAGE8_RAW_GROUPED_FALLBACK_BRANCH_ACTIVE'
-  } else if (hasGroupedTruth) {
-    funnelVerdict = 'STAGE8_GROUPED_TRUTH_EXISTS_BUT_NO_FALLBACK_BLOCKS'
-  } else {
-    funnelVerdict = 'STAGE1_THROUGH_STAGE8_UNCLASSIFIED'
-  }
-
-  // ==========================================================================
   // [FINAL-VISIBLE-BODY-MODEL] THE SINGLE AUTHORITATIVE final visible body
   // object. This replaces the prior parallel-boolean dispatch
   // (`hasRenderableGroups` / `hasGroupedTruth` / `rawFallbackBlocks.length`
@@ -863,62 +798,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       hasRichRenderableGroups: false,
     }
   })()
-  // Back-compat alias retained only for the audit payload key name.
-  const finalVisibleBodyMode: FinalBodyMode = finalVisibleBodyModel.mode
-
-  const funnelAuditPayload = {
-    day: session.dayNumber,
-    s1_hasStyleMeta: !!sessionStyleMetadata,
-    s1_styledGroups: s1StyledGroups.length,
-    s1_nonStraight: s1NonStraight,
-    s1_exCount: s1Ex.length,
-    s1_exWithBlockId: s1ExWithBlockId,
-    s1_exWithNonStraightMethod: s1ExWithNonStraightMethod,
-    s6_exCount: fullVisibleExercises.length,
-    s6_exWithBlockId: s6ExWithBlockId,
-    s6_exWithNonStraightMethod: s6ExWithNonStraightMethod,
-    s7_sourceUsed: s7Model.sourceUsed,
-    s7_flatReason: s7Model.flatReason,
-    s7_hasGroups: s7Model.hasGroups,
-    s7_totalGroups: s7Model.totalGroupCount,
-    s7_nonStraightGroups: s7Model.nonStraightGroupCount,
-    s7_supersetCount: s7Model.supersetCount,
-    s7_circuitCount: s7Model.circuitCount,
-    s7_densityCount: s7Model.densityCount,
-    s7_clusterCount: s7Model.clusterCount,
-    s8_useGroupedRender: hasRenderableGroups,
-    s8_hasGroupedTruth: hasGroupedTruth,
-    s8_hasRichRenderableGroups: hasRichRenderableGroups,
-    s8_rawFallbackBlockCount: s7Model.rawFallbackBlocks.length,
-    finalVisibleBodyMode,
-    selectedVariant: activeSessionView.variantLabel,
-    verdict: funnelVerdict,
-  }
-
-  // Client-only telemetry (console + POST). The snapshot itself is computed
-  // unconditionally above so the on-screen verdict row never desyncs from it.
-  if (typeof window !== 'undefined' && session.dayNumber) {
-    console.log('[v0] [FUNNEL-AUDIT] Day', session.dayNumber, funnelAuditPayload)
-
-    // [TEMP-INSTRUMENTATION] Fire-and-forget POST to the public audit sink.
-    // No longer the primary diagnostic mechanism -- the on-screen verdict row
-    // below is. Kept only because it is already wired; remove together with
-    // the [TEMP-GROUPED-VERDICT] surface in the cleanup turn.
-    const dedupeKey = `${session.dayNumber}|${funnelVerdict}|${activeSessionView.variantLabel}`
-    if (!__funnelAuditPostedKeys.has(dedupeKey)) {
-      __funnelAuditPostedKeys.add(dedupeKey)
-      try {
-        void fetch('/api/public/_funnel-audit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(funnelAuditPayload),
-          keepalive: true,
-        }).catch(() => { /* swallow: telemetry is best-effort */ })
-      } catch {
-        /* swallow: telemetry is best-effort */
-      }
-    }
-  }
   
   // ==========================================================================
   // [TASK 5] VARIANT TRUTH AUDIT
@@ -1311,9 +1190,17 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   />
 
           {/* [METHOD-DECISIONS-DISCLOSURE] Clean athlete-facing explanation of structure choices.
-              [TRUTH-CONTRACT] Applied methods MUST derive from actual final styledGroups with
-              non-straight blocks, NOT from upstream intent metadata. This prevents false-positive
-              "Supersets applied" messages when the final session is actually flat. */}
+              [SINGLE-BODY-OWNER] Applied methods MUST derive from the SAME authoritative
+              pruned grouped contract (`groupedRenderContract`) that owns the card body,
+              not from raw `session.styleMetadata.styledGroups`. Prior behavior: the
+              disclosure read raw styledGroups unfiltered, so on variant-prune / partial-
+              validity / identity-drift cases the body rendered honestly flat via
+              `finalVisibleBodyModel.mode === 'flat_category'` while this surface still
+              announced "Supersets applied" + "Today's structure: supersets applied to
+              accessory work". That was a parallel flat/grouped-overclaim corridor
+              visually winning over the body. Now the disclosure consumes the exact same
+              pruned grouped truth the body consumes, so chip/summary and body can never
+              disagree for the same rendered card instance. */}
           {(() => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const styleMeta: any = (session as any).styleMetadata
@@ -1322,26 +1209,31 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             // Only surface grouped-corridor methods; top_set/drop_set are per-exercise, not this corridor
             const groupedCorridor = ['supersets', 'circuits', 'density_blocks', 'cluster_sets']
             const userSelectedGrouped = userSelected.filter((m: string) => groupedCorridor.includes(m))
-            
+
             // =================================================================
-            // [TRUTH-CONTRACT-FIX] Derive applied methods from ACTUAL final
-            // styledGroups with non-straight blocks, NOT from intent metadata.
-            // This enforces: GROUPED METHOD APPLIED = FINAL SESSION HAS NON-STRAIGHT GROUPED STRUCTURE
+            // [SINGLE-BODY-OWNER] Derive `applied` from the authoritative pruned
+            // grouped render contract (same object that drives the production
+            // chip row AND `finalVisibleBodyModel` AND MainExercisesRenderer).
+            // Not from raw session.styleMetadata.styledGroups, which is the
+            // pre-prune, pre-partial-validity list and overclaims grouped
+            // structure for variant-pruned / drift-dropped cards whose actual
+            // body renders flat_category.
             // =================================================================
-            const styledGroups: Array<{ groupType: string }> = styleMeta.styledGroups || []
-            const actualNonStraightGroups = styledGroups.filter(g => g.groupType !== 'straight')
-            
-            // Map group types to method names for truthful "applied" reporting
             const groupTypeToMethod: Record<string, string> = {
               'superset': 'supersets',
               'circuit': 'circuits',
               'density_block': 'density_blocks',
               'cluster': 'cluster_sets',
             }
-            
-            // Build applied array from ACTUAL final grouped truth only
+
+            // Build applied array from the SAME pruned grouped truth the body
+            // consumes. `groupedRenderContract.groups` is the post-prune,
+            // post-partial-validity list (only non-straight groups with enough
+            // resolved members to still be meaningful as their method). This is
+            // the single body-owner source.
             const applied: string[] = [...new Set(
-              actualNonStraightGroups
+              groupedRenderContract.groups
+                .filter(g => g.groupType !== 'straight')
                 .map(g => groupTypeToMethod[g.groupType])
                 .filter((m): m is string => !!m && groupedCorridor.includes(m))
             )]
@@ -1382,21 +1274,23 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               }
             }
 
-            // One-sentence summary of why the applied structure was chosen
+            // [SINGLE-BODY-OWNER] Summary narrative MUST match what the body
+            // renders. `applied` already reflects the authoritative pruned
+            // grouped contract; `styleMeta.primaryStyle` is pre-prune and is
+            // NOT consulted here -- using it would let the narrative claim
+            // "Supersets applied to accessory work" for a body that renders
+            // honestly flat after variant prune / partial-validity drop.
             let appliedSummary = ''
-            if (applied.length > 0) {
-              const primary = styleMeta.primaryStyle || applied[0]
-              if (primary === 'supersets' || applied.includes('supersets')) {
-                appliedSummary = 'Supersets applied to accessory work to save time without compromising the main quality exposure.'
-              } else if (primary === 'circuits' || applied.includes('circuits')) {
-                appliedSummary = 'Circuits applied to the accessory tail for conditioning density.'
-              } else if (primary === 'cluster_sets' || applied.includes('cluster_sets')) {
-                appliedSummary = 'Cluster sets applied to preserve output on heavy or skill work.'
-              } else if (primary === 'density_blocks' || applied.includes('density_blocks')) {
-                appliedSummary = 'Density block applied to the accessory tail to build work capacity.'
-              }
-            } else {
+            if (applied.length === 0) {
               appliedSummary = 'Straight sets today — today\'s composition favors focused quality over grouping.'
+            } else if (applied.includes('supersets')) {
+              appliedSummary = 'Supersets applied to accessory work to save time without compromising the main quality exposure.'
+            } else if (applied.includes('circuits')) {
+              appliedSummary = 'Circuits applied to the accessory tail for conditioning density.'
+            } else if (applied.includes('cluster_sets')) {
+              appliedSummary = 'Cluster sets applied to preserve output on heavy or skill work.'
+            } else if (applied.includes('density_blocks')) {
+              appliedSummary = 'Density block applied to the accessory tail to build work capacity.'
             }
 
             return (
@@ -1463,65 +1357,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               </div>
             )
           })()}
-
-          {/* ==============================================================
-              [TEMP-GROUPED-VERDICT] ON-SCREEN VERDICT ROW
-              Rendered as a sibling of the "Method decisions" disclosure so
-              it is visible even when Method decisions early-returns (e.g.
-              sessions missing `styleMetadata`, which is precisely the
-              honest-flat case where the user most needs to see the
-              verdict). Reads the same outer-scope `funnelAuditPayload`
-              snapshot used by the client console.log + POST, so on-screen
-              verdict, logs, and DB audit can never disagree.
-              Remove this block + `SHOW_GROUPED_DEBUG_VERDICT` +
-              /api/public/_funnel-audit in the cleanup turn.
-              ============================================================== */}
-          {SHOW_GROUPED_DEBUG_VERDICT && (
-            <div className="mt-4 border-t border-dashed border-amber-500/25 pt-3">
-              <div className="text-[10px] uppercase tracking-wide text-amber-500/90 mb-1.5 font-semibold">
-                [TEMP] Grouped-body verdict · Day {session.dayNumber}
-              </div>
-              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[10px] font-mono text-[#C5C5C5]">
-                <span className="text-[#8A8A8A]">verdict</span>
-                <span className="text-amber-400/90 break-all">{funnelVerdict}</span>
-                <span className="text-[#8A8A8A]">finalBodyMode</span>
-                <span className="text-cyan-400/90 font-semibold">{finalVisibleBodyModel.mode}</span>
-                <span className="text-[#8A8A8A]">sourceUsed</span>
-                <span>{finalVisibleBodyModel.sourceUsed}</span>
-                <span className="text-[#8A8A8A]">reasonIfNotRich</span>
-                <span className="break-all">{finalVisibleBodyModel.reasonIfNotRich ?? '—'}</span>
-                <span className="text-[#8A8A8A]">hasGroupedTruth</span>
-                <span className={hasGroupedTruth ? 'text-emerald-400' : 'text-[#6A6A6A]'}>
-                  {String(hasGroupedTruth)}
-                </span>
-                <span className="text-[#8A8A8A]">hasRichRenderable</span>
-                <span className={hasRichRenderableGroups ? 'text-emerald-400' : 'text-[#6A6A6A]'}>
-                  {String(hasRichRenderableGroups)}
-                </span>
-                <span className="text-[#8A8A8A]">rawFallbackBlocks</span>
-                <span>{s7Model.rawFallbackBlocks.length}</span>
-                <span className="text-[#8A8A8A]">nonStraightGroups</span>
-                <span>{s7Model.nonStraightGroupCount}</span>
-                <span className="text-[#8A8A8A]">s1 styleMeta</span>
-                <span className={sessionStyleMetadata ? 'text-emerald-400' : 'text-[#6A6A6A]'}>
-                  {String(!!sessionStyleMetadata)} · styledGroups={s1StyledGroups.length} · nonStraight={s1NonStraight}
-                </span>
-                <span className="text-[#8A8A8A]">s1 exWithBlockId</span>
-                <span>{s1ExWithBlockId} / {s1Ex.length}</span>
-                <span className="text-[#8A8A8A]">s1 nonStraightMethod</span>
-                <span>{s1ExWithNonStraightMethod} / {s1Ex.length}</span>
-                <span className="text-[#8A8A8A]">s6 exWithBlockId</span>
-                <span>{s6ExWithBlockId} / {fullVisibleExercises.length}</span>
-                <span className="text-[#8A8A8A]">s6 nonStraightMethod</span>
-                <span>{s6ExWithNonStraightMethod} / {fullVisibleExercises.length}</span>
-                <span className="text-[#8A8A8A]">variant</span>
-                <span>{activeSessionView.variantLabel}</span>
-              </div>
-              <p className="mt-2 text-[10px] text-[#6A6A6A] italic leading-relaxed">
-                Temporary diagnostic. The body rendered above reflects <span className="text-cyan-400/90 font-semibold">{finalVisibleBodyModel.mode}</span>. <span className="font-semibold">rich_grouped</span> = contract-owned renderBlocks; <span className="font-semibold">raw_grouped_fallback</span> = grouped headers from rawFallbackBlocks; <span className="font-semibold">simple_order_grouped</span> = grouped truth existed but no renderable block members; <span className="font-semibold">flat_category</span> = no grouped truth upstream.
-              </p>
-            </div>
-          )}
 
           {/* Finisher Block */}
           {session.finisher && session.finisherIncluded && (

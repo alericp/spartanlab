@@ -1795,9 +1795,56 @@ export function ActiveWorkoutStartCorridor({
               </button>
             </div>
             
-            <p className="text-sm text-[#A4ACB8] mb-5">
+            <p className="text-sm text-[#A4ACB8] mb-4">
               Choose how you want to exit this workout session.
             </p>
+            
+            {/* Progress summary panel - lets the user see exactly what is at stake */}
+            <div className="mb-4 rounded-md border border-[#2B313A] bg-[#0F1317] p-3">
+              <p className="text-xs font-medium text-[#6B7280] uppercase tracking-wide mb-2">
+                Current progress
+              </p>
+              <div className="space-y-1.5 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[#A4ACB8]">Session</span>
+                  <span className="text-[#E6E9EF] font-medium truncate max-w-[55%] text-right" title={sessionLabel}>
+                    {sessionLabel}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[#A4ACB8]">Exercise</span>
+                  <span className="text-[#E6E9EF] font-medium truncate max-w-[55%] text-right" title={exerciseName}>
+                    {exerciseName}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[#A4ACB8]">Position</span>
+                  <span className="text-[#E6E9EF] tabular-nums">
+                    Exercise {currentExerciseIndex + 1} of {totalExercises}
+                    <span className="text-[#6B7280]"> · </span>
+                    Set {currentSetNumber} of {exerciseSets}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[#A4ACB8]">Logged</span>
+                  <span className="text-[#E6E9EF] tabular-nums">
+                    {completedSetsCount} / {totalSetsCount} sets
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Outcome clarity rows - subtle, not a long explanation block */}
+            <div className="mb-4 space-y-1.5 text-xs text-[#6B7280]">
+              <p>
+                <span className="text-[#E6E9EF] font-medium">Save &amp; Exit</span>
+                {' · Keeps this workout resumable from your current progress'}
+              </p>
+              <p>
+                <span className="text-[#E6E9EF] font-medium">Discard Workout</span>
+                {' · Clears this workout session and removes resumable progress'}
+              </p>
+            </div>
             
             {/* Single clean button stack with inline explanations */}
             <div className="space-y-3">

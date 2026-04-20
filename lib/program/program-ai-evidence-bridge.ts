@@ -978,16 +978,79 @@ export function buildFullSessionRoutineSurface(
     }
   })
 
+  // [GROUPED-TRUTH-CONTRACT] Track which session exercises have already been
+  // claimed by an earlier (higher-priority) variant member lookup. The
+  // positional rescue tier (tier 4, below) consults this set so a single
+  // session exercise cannot be double-assigned across two variant rows --
+  // double-assignment would forge a grouped pairing where only one genuine
+  // member exists and silently overstate group membership in the pruned
+  // style metadata.
+  const claimedSessionOrders = new Set<number>()
+
   const findSessionSource = (
     id: string | undefined,
-    name: string | undefined
+    name: string | undefined,
+    // [GROUPED-TRUTH-CONTRACT] Positional-index rescue source. The caller
+    // (variant main loop) supplies the variant's own index here so we can
+    // reach across id/name drift and still recover grouped identity from
+    // the canonically-ordered session.exercises[] array. Cluster/superset
+    // members that a variant renamed AND re-ID'd (e.g. variant-specific
+    // accessory regression or style-contract rewrites) have no other way
+    // to rejoin their styledGroup.
+    positionalIdx?: number
   ): SessionLookupEntry | undefined => {
-    if (id && sessionLookup.has(id)) return sessionLookup.get(id)
+    if (id && sessionLookup.has(id)) {
+      const hit = sessionLookup.get(id)
+      if (hit) claimedSessionOrders.add(hit.order)
+      return hit
+    }
     if (name) {
       const lower = name.toLowerCase()
-      if (sessionLookup.has(lower)) return sessionLookup.get(lower)
+      if (sessionLookup.has(lower)) {
+        const hit = sessionLookup.get(lower)
+        if (hit) claimedSessionOrders.add(hit.order)
+        return hit
+      }
       const norm = normalizeNameKey(name)
-      if (norm && sessionLookup.has(norm)) return sessionLookup.get(norm)
+      if (norm && sessionLookup.has(norm)) {
+        const hit = sessionLookup.get(norm)
+        if (hit) claimedSessionOrders.add(hit.order)
+        return hit
+      }
+    }
+    // [GROUPED-TRUTH-CONTRACT] TIER 4: POSITIONAL RESCUE
+    //
+    // When tiers 1-3 (id, lowercased name, normalized name) all miss, fall
+    // back to the session exercise at the variant's own positional index.
+    // This only fires when:
+    //   - positionalIdx is in bounds of session.exercises,
+    //   - that session exercise carries actual grouped truth (blockId OR
+    //     method set by the builder -- we do NOT rescue purely "straight"
+    //     positional matches because those cannot add grouped identity
+    //     and would only risk forging an identity link that doesn't exist),
+    //   - that session exercise hasn't been claimed by an earlier higher-
+    //     priority lookup from another variant row (no double-binding).
+    //
+    // Why this is safe end-to-end:
+    //   The downstream variant-prune in AdaptiveSessionCard matches
+    //   styledGroup members by survivingIds / survivingNames /
+    //   survivingBlockIds. Tier 4 only ever injects the original session
+    //   exercise's blockId/method/methodLabel onto the variant's
+    //   FullRoutineExercise -- it never rewrites the variant row's id or
+    //   name. So the rescued grouped identity flows through without any
+    //   fabricated name or id hitting the visible body.
+    if (
+      typeof positionalIdx === 'number' &&
+      session.exercises &&
+      positionalIdx >= 0 &&
+      positionalIdx < session.exercises.length
+    ) {
+      const candidate = session.exercises[positionalIdx]
+      const hasGroupedTruth = !!(candidate.blockId || candidate.method)
+      if (hasGroupedTruth && !claimedSessionOrders.has(positionalIdx)) {
+        claimedSessionOrders.add(positionalIdx)
+        return { ex: candidate, order: positionalIdx }
+      }
     }
     return undefined
   }
@@ -1081,7 +1144,7 @@ export function buildFullSessionRoutineSurface(
     }
     
     // Main exercises from variant - determine families
-    sel.main.forEach(m => {
+    sel.main.forEach((m, mIdx) => {
       const family = determineFamily(m.exercise.category, undefined, m.selectionReason)
       const loadCue = m.prescribedLoad?.load 
         ? `${m.prescribedLoad.load}${m.prescribedLoad.unit || 'kg'}`
@@ -1092,8 +1155,10 @@ export function buildFullSessionRoutineSurface(
       // we can preserve its blockId/method/methodLabel ONTO the RoutineItem.
       // Variant selection often renames/re-IDs exercises and its type doesn't
       // carry grouped fields -- this lookup is the only place grouped truth
-      // survives for variant-main items.
-      const sessionSrc = findSessionSource(m.exercise.id, m.exercise.name)
+      // survives for variant-main items. `mIdx` feeds the positional TIER 4
+      // rescue so drift-heavy variants (both id AND name rewritten) still
+      // rejoin their session-truth styledGroup via canonical order.
+      const sessionSrc = findSessionSource(m.exercise.id, m.exercise.name, mIdx)
       
       routineItems.push({
         id: m.exercise.id,

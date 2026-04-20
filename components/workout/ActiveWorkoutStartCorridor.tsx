@@ -50,6 +50,42 @@ export type SetReasonTag = CoachingSignalTag
 // [LIVE-WORKOUT-NORMALIZERS] Use canonical labels with local fallback for backwards compat
 export const SET_REASON_TAG_LABELS: Record<SetReasonTag, string> = COACHING_SIGNAL_LABELS
 
+// [LIVE-WORKOUT-SIGNAL-CHIPS] Flatten + dedupe the coaching signals present on a
+// completed set so they can be rendered as visible chips in the live ledgers.
+// Reads only what is truly on the set (no fabrication); maps reason-tag enum
+// keys through SET_REASON_TAG_LABELS and passes structuredCoachingInputs
+// through the same map when they happen to be enum keys, otherwise falls back
+// to the raw string. Pure function — safe to call during render.
+function collectSetSignalLabels(set: {
+  reasonTags?: SetReasonTag[]
+  structuredCoachingInputs?: string[]
+}): string[] {
+  const collected: string[] = []
+  if (set.reasonTags && set.reasonTags.length > 0) {
+    for (const tag of set.reasonTags) {
+      const label = SET_REASON_TAG_LABELS[tag]
+      if (label) collected.push(label)
+    }
+  }
+  if (set.structuredCoachingInputs && set.structuredCoachingInputs.length > 0) {
+    for (const input of set.structuredCoachingInputs) {
+      if (typeof input !== 'string' || input.length === 0) continue
+      const mapped = SET_REASON_TAG_LABELS[input as SetReasonTag]
+      collected.push(mapped || input)
+    }
+  }
+  if (collected.length === 0) return collected
+  // Dedupe preserving first-seen order
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const label of collected) {
+    if (seen.has(label)) continue
+    seen.add(label)
+    out.push(label)
+  }
+  return out
+}
+
 // [LIVE-WORKOUT-NORMALIZERS] Primary signals shown in quick-tag UI (keep UI clean)
 // Full signal list available via COACHING_SIGNAL_TAGS for advanced use
 export const PRIMARY_SIGNAL_TAGS: CoachingSignalTag[] = [
@@ -1148,6 +1184,24 @@ export function ActiveWorkoutStartCorridor({
                         ) : null}
                       </div>
                     ) : null}
+                    {/* [LIVE-WORKOUT-SIGNAL-CHIPS] Actual coaching signal labels for the latest set */}
+                    {(() => {
+                      const latestSignals = collectSetSignalLabels(latestSet)
+                      if (latestSignals.length === 0) return null
+                      return (
+                        <div className="flex items-center flex-wrap gap-1 mt-2 pt-2 border-t border-[#2B313A]/50">
+                          {latestSignals.map((label) => (
+                            <Badge
+                              key={label}
+                              variant="outline"
+                              className="text-[10px] border-amber-500/30 text-amber-400 bg-amber-500/10"
+                            >
+                              {label}
+                            </Badge>
+                          ))}
+                        </div>
+                      )
+                    })()}
                     {hasLatestNote && (
                       <p
                         className="text-xs text-[#6B7280] truncate mt-2 pt-2 border-t border-[#2B313A]/50"
@@ -1168,6 +1222,7 @@ export function ActiveWorkoutStartCorridor({
                     {recentSets.map((set, idx) => {
                       const trimmedNote = typeof set.note === 'string' ? set.note.trim() : ''
                       const hasNote = trimmedNote.length > 0
+                      const signalLabels = collectSetSignalLabels(set)
                       return (
                         <div key={idx} className="text-sm">
                           <div className="flex items-center justify-between">
@@ -1189,6 +1244,20 @@ export function ActiveWorkoutStartCorridor({
                               )}
                             </div>
                           </div>
+                          {/* [LIVE-WORKOUT-SIGNAL-CHIPS] Actual coaching signal labels for this logged set */}
+                          {signalLabels.length > 0 && (
+                            <div className="flex items-center flex-wrap gap-1 mt-1">
+                              {signalLabels.map((label) => (
+                                <Badge
+                                  key={label}
+                                  variant="outline"
+                                  className="text-[10px] border-amber-500/30 text-amber-400 bg-amber-500/10"
+                                >
+                                  {label}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
                           {hasNote && (
                             <p className="text-xs text-[#6B7280] truncate mt-0.5" title={trimmedNote}>
                               {trimmedNote}
@@ -1702,6 +1771,7 @@ export function ActiveWorkoutStartCorridor({
                 {recentSets.map((set, idx) => {
                   const trimmedNote = typeof set.note === 'string' ? set.note.trim() : ''
                   const hasNote = trimmedNote.length > 0
+                  const signalLabels = collectSetSignalLabels(set)
                   return (
                     <div key={idx} className="px-2 py-1.5 bg-[#2B313A]/50 rounded">
                       <div className="flex items-center justify-between">
@@ -1729,12 +1799,6 @@ export function ActiveWorkoutStartCorridor({
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <span className="text-[#A4ACB8]">RPE {set.actualRPE}</span>
-                          {/* Coaching signals indicator */}
-                          {((set.reasonTags && set.reasonTags.length > 0) || (set.structuredCoachingInputs && set.structuredCoachingInputs.length > 0)) && (
-                            <span className="text-amber-400 text-[10px]">
-                              +{(set.reasonTags?.length || 0) + (set.structuredCoachingInputs?.length || 0)}
-                            </span>
-                          )}
                           {/* Free-text note indicator */}
                           {hasNote && (
                             <MessageSquare
@@ -1744,6 +1808,20 @@ export function ActiveWorkoutStartCorridor({
                           )}
                         </div>
                       </div>
+                      {/* [LIVE-WORKOUT-SIGNAL-CHIPS] Actual coaching signal labels replace the previous +N count */}
+                      {signalLabels.length > 0 && (
+                        <div className="flex items-center flex-wrap gap-1 mt-1 pl-14">
+                          {signalLabels.map((label) => (
+                            <Badge
+                              key={label}
+                              variant="outline"
+                              className="text-[10px] border-amber-500/30 text-amber-400 bg-amber-500/10 px-1.5 py-0 h-4 leading-none"
+                            >
+                              {label}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                       {/* One-line muted note preview */}
                       {hasNote && (
                         <p className="text-[10px] text-[#6B7280] truncate mt-0.5 pl-14" title={trimmedNote}>

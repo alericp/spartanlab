@@ -616,9 +616,17 @@ export function workoutMachineReducer(
       // base set append, phase transition, or currentSetNumber advance.
       // =====================================================================
       
-      // [LIVE-LOG-CORRIDOR-PROOF] Stage 4: reducer COMPLETE_SET case entered.
-      // Paired with stage-3 dispatch log in StreamlinedWorkoutSession.tsx.
-      console.log('[v0] [log-corridor] stage4 reducer COMPLETE_SET entered', {
+      // [POST-COMMIT-FREEZE-TRACE-R3] STAGE D.
+      // Reducer COMPLETE_SET case entered. Reads the current tap trace id
+      // from the window mirror set by Stage A in the corridor. If
+      // tapTraceId is null here, Stage A never fired and the dispatch
+      // arrived via a non-authoritative path.
+      const __tapTraceId_D =
+        typeof window !== 'undefined'
+          ? ((window as unknown as { __spartanlabCurrentTapTraceId?: number }).__spartanlabCurrentTapTraceId ?? null)
+          : null
+      console.log('[v0] [log-corridor] stageD reducer COMPLETE_SET entered', {
+        tapTraceId: __tapTraceId_D,
         exerciseIndex: action.completedSet.exerciseIndex,
         setNumber: action.completedSet.setNumber,
         isLastSetOfExercise: action.isLastSetOfExercise,
@@ -826,7 +834,9 @@ export function workoutMachineReducer(
       if (action.isLastSetOfExercise) {
         const isLastExercise = state.currentExerciseIndex >= action.exerciseCount - 1
         if (isLastExercise) {
-          console.log('[v0] [log-corridor] COMPLETE_SET base commit -> last set / last exercise', {
+          // [POST-COMMIT-FREEZE-TRACE-R3] STAGE E (workout-complete branch).
+          console.log('[v0] [log-corridor] stageE reducer COMPLETE_SET returned -> last set / last exercise / workout complete', {
+            tapTraceId: __tapTraceId_D,
             phase: 'completed',
             currentExerciseIndex: state.currentExerciseIndex,
             currentSetNumber: state.currentSetNumber,
@@ -859,7 +869,9 @@ export function workoutMachineReducer(
           action.interExerciseRestSeconds > 0
             ? Math.round(action.interExerciseRestSeconds)
             : 120
-        console.log('[v0] [log-corridor] COMPLETE_SET base commit -> last set / next exercise', {
+        // [POST-COMMIT-FREEZE-TRACE-R3] STAGE E (last-set branch).
+        console.log('[v0] [log-corridor] stageE reducer COMPLETE_SET returned -> last set / between-exercise rest', {
+          tapTraceId: __tapTraceId_D,
           phase: 'between_exercise_rest',
           currentExerciseIndex: state.currentExerciseIndex,
           currentSetNumber: state.currentSetNumber,
@@ -887,8 +899,16 @@ export function workoutMachineReducer(
         }
       }
       
-      // Not last set - transition to resting for same-exercise continuation
-      console.log('[v0] [log-corridor] COMPLETE_SET base commit -> not-last-set / same-exercise rest', {
+      // [POST-COMMIT-FREEZE-TRACE-R3] STAGE E (non-final-set branch).
+      // Reducer is returning the non-final-set commit. currentExerciseIndex
+      // stays, currentSetNumber advances by +1, phase becomes 'resting'.
+      // This is the AUTHORITATIVE contract for "user tapped Log Set on a
+      // non-last set of a straight exercise". If Stage F in the parent
+      // does NOT see this exact shape (same exercise index, set +1,
+      // phase=resting) on the next render, a second owner is overwriting
+      // reducer output between reducer return and parent render.
+      console.log('[v0] [log-corridor] stageE reducer COMPLETE_SET returned -> not-last-set / same-exercise rest', {
+        tapTraceId: __tapTraceId_D,
         phase: 'resting',
         currentExerciseIndex: state.currentExerciseIndex,
         newCurrentSetNumber: state.currentSetNumber + 1,

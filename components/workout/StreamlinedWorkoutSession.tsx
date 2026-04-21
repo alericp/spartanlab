@@ -6317,6 +6317,13 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
         // output handleCompleteSet uses for persistence. Render branch and
         // persist branch cannot disagree.
         isHoldExercise={activeCorridorSnapshot.isHoldExercise}
+        // [LIVE-LOG-COMMIT-SURVIVAL] Authoritative commit revision. Derived
+        // from normalizedCompletedSets.length (machine-direct) - increments
+        // once per real reducer commit. The corridor uses this as the ONLY
+        // proof of a successful logged set. No local in-flight flag can
+        // fake success; if this value does not advance after a Log Set tap,
+        // nothing committed and the corridor cannot pretend otherwise.
+        lastCommitRevision={normalizedCompletedSets.length}
         selectedRPE={activeCorridorSnapshot.selectedRPE}
         bandUsed={safeBandUsed || 'none'}
         currentSetNote={activeCorridorSnapshot.currentSetNote}

@@ -30,7 +30,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
-import { ChevronLeft, ChevronDown, ChevronUp, ChevronRight, Check, SkipForward, X, MessageSquare, Play, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronDown, ChevronUp, ChevronRight, Check, SkipForward, X, MessageSquare, Play } from 'lucide-react'
 import { MethodInfoBubble } from '@/components/coaching'
 import type { RPEValue } from '@/lib/rpe-adjustment-engine'
 import type { ResistanceBandColor } from '@/lib/band-progression-engine'
@@ -219,6 +219,15 @@ export interface ActiveWorkoutCorridorProps {
   // a hold or a rep. When this prop is omitted, the corridor falls back to a
   // defensive local check that now also recognizes "8s"/"6s" shorthand.
   isHoldExercise?: boolean
+  
+  // [LIVE-LOG-COMMIT-SURVIVAL] Parent-owned authoritative commit revision.
+  // This is the ONLY proof of a successful committed set. Increments once
+  // per real reducer commit (normalizedCompletedSets.length in the parent).
+  // The corridor never invents its own "was the commit successful?" state;
+  // it derives a brief visual pulse from this prop transitioning upward.
+  // If this prop does not change after a Log Set tap, no set was committed
+  // and no local state here can mask that fact into a fake success.
+  lastCommitRevision?: number
   
   // Callbacks (passed from parent)
   onCompleteSet: () => void
@@ -705,6 +714,8 @@ export function ActiveWorkoutStartCorridor({
   coachingExpression,
   // [ACTIVE-SET-SAVE-PARITY] Authoritative primary-input kind from parent
   isHoldExercise: isHoldExerciseProp,
+  // [LIVE-LOG-COMMIT-SURVIVAL] Authoritative commit revision from parent
+  lastCommitRevision,
   onCompleteSet,
   onSetReps,
   onSetHold,
@@ -839,74 +850,75 @@ export function ActiveWorkoutStartCorridor({
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [showSetNotes, setShowSetNotes] = useState(false)
   
-  // [LOG-SET-SAVING-STATE] Local in-flight flag for the Log Set button only.
-  // Flips true on tap, flips false when the parent commits (completedSetsCount
-  // or currentSetNumber advances) OR after an 800ms safety window if the
-  // commit didn't land (e.g. validation refused it). Does NOT own any
-  // workout state - reducer/machine remain source of truth.
-  const [isSaving, setIsSaving] = useState(false)
-  const lastCommitSignatureRef = useRef<string>(`${completedSetsCount}:${currentSetNumber}`)
+  // =========================================================================
+  // [LIVE-LOG-COMMIT-SURVIVAL] PARENT-OWNED COMMIT AUTHORITY
+  //
+  // The corridor has ZERO local ownership of "did the set commit?" state.
+  // The previous local `isSaving` flag + 800ms safety timeout + signature
+  // ref formed a parallel mini-state machine around commit success that
+  // could mask, delay, or drop a healthy commit (e.g. by swallowing the
+  // next tap because isSaving was still true after a commit that did
+  // advance state but whose signature change the effect hadn't observed
+  // yet in render order).
+  //
+  // NEW RULE (single owner):
+  //   - The parent's machine reducer is the ONLY owner of commit success.
+  //   - The parent increments `lastCommitRevision` once per real commit
+  //     (it's `normalizedCompletedSets.length`, which only changes when
+  //     the reducer actually appended a set).
+  //   - The corridor button is gated ONLY by hard-invalid input (no RPE).
+  //   - A brief visual "just logged" pulse is DERIVED from the revision
+  //     transitioning upward - it's feedback, not an owner of truth.
+  //
+  // If the parent does not advance the revision after a Log Set tap,
+  // NOTHING in the corridor can invent a fake success state. That is the
+  // exact guarantee the surgery is enforcing.
+  // =========================================================================
+  const [justLoggedPulse, setJustLoggedPulse] = useState(false)
+  const lastSeenRevisionRef = useRef<number>(
+    typeof lastCommitRevision === 'number' ? lastCommitRevision : completedSetsCount
+  )
   
-  // Reset saving flag when parent confirms commit landed (count or set number
-  // advanced), and as a safety net 800ms after tap if nothing advanced.
+  // Derive the pulse from authoritative parent revision transitioning upward.
+  // This fires exactly once per real commit (reducer-backed), never on stale
+  // renders and never as a synthetic local signal.
   useEffect(() => {
-    const signature = `${completedSetsCount}:${currentSetNumber}`
-    if (signature !== lastCommitSignatureRef.current) {
-      // [LIVE-LOG-CORRIDOR-PROOF] stage_live_rerender_received_advanced_state
-      // Fires exactly once per reducer advancement. If stage_reducer_entered
-      // and the COMPLETE_SET base-commit logs print but this log does NOT
-      // print for the same tap, the reducer returned new state but the
-      // authoritative corridor rerender did not consume it -- meaning a
-      // stale snapshot owner or a post-dispatch overwrite is blocking the
-      // advanced truth from reaching the visible screen. If this log DOES
-      // print, the full chain executed end-to-end and any remaining user-
-      // visible inertness is in cosmetic state, not the commit corridor.
-      console.log('[v0] [log-corridor] stage_live_rerender_received_advanced_state', {
-        priorSignature: lastCommitSignatureRef.current,
-        nextSignature: signature,
+    const currentRevision =
+      typeof lastCommitRevision === 'number' ? lastCommitRevision : completedSetsCount
+    if (currentRevision > lastSeenRevisionRef.current) {
+      console.log('[v0] [log-corridor] authoritative commit revision advanced', {
+        priorRevision: lastSeenRevisionRef.current,
+        nextRevision: currentRevision,
         currentSetNumber,
         completedSetsCount,
       })
-      lastCommitSignatureRef.current = signature
-      if (isSaving) setIsSaving(false)
+      lastSeenRevisionRef.current = currentRevision
+      setJustLoggedPulse(true)
     }
-  }, [completedSetsCount, currentSetNumber, isSaving])
+  }, [lastCommitRevision, completedSetsCount, currentSetNumber])
   
+  // Visual pulse is purely cosmetic feedback - 500ms window then clears.
   useEffect(() => {
-    if (!isSaving) return
-    const t = setTimeout(() => setIsSaving(false), 800)
+    if (!justLoggedPulse) return
+    const t = setTimeout(() => setJustLoggedPulse(false), 500)
     return () => clearTimeout(t)
-  }, [isSaving])
+  }, [justLoggedPulse])
   
   const handleLogSet = useCallback(() => {
-    // [LIVE-LOG-CORRIDOR-PROOF] Stage 1: prove the Log Set tap reached the
-    // corridor handler. If this log is MISSING after a user tap, the button
-    // itself never dispatched a click (disabled state, pointer-events block,
-    // or an overlay swallowing the tap) -- the bug is upstream of this
-    // handler. If this log PRINTS but stage 2 below does not, the early
-    // return below swallowed the tap and its reason is logged with it.
-    console.log('[v0] [log-corridor] stage1 corridor handleLogSet entered', {
-      isSaving,
+    // [LIVE-LOG-COMMIT-SURVIVAL] Corridor tap handler. Validates ONLY hard-
+    // invalid input (no RPE selected). No local in-flight gate - the parent
+    // authoritative commit path is the only arbiter of success.
+    console.log('[v0] [log-corridor] corridor handleLogSet entered', {
       selectedRPE,
-      willReturnEarly: isSaving || selectedRPE === null,
+      willReturnEarly: selectedRPE === null,
     })
-    if (isSaving || selectedRPE === null) {
-      console.log('[v0] [log-corridor] stage1 corridor handleLogSet returned early', {
-        reason: isSaving ? 'in_flight_save_pending' : 'no_rpe_selected',
-        isSaving,
-        selectedRPE,
-      })
+    if (selectedRPE === null) {
+      console.log('[v0] [log-corridor] corridor handleLogSet returned early: no_rpe_selected')
       return
     }
-    setIsSaving(true)
-    // [LIVE-LOG-CORRIDOR-PROOF] Stage 2: corridor forwarded tap to parent
-    // authoritative commit function. Paired with parent-side stage log in
-    // StreamlinedWorkoutSession.handleCompleteSet. If stage 2 prints but the
-    // parent's `stage1 handleCompleteSet entered` log does not, the
-    // onCompleteSet prop is not wired to the parent authoritative handler.
-    console.log('[v0] [log-corridor] stage2 corridor forwarded to parent onCompleteSet')
+    console.log('[v0] [log-corridor] corridor forwarded to parent onCompleteSet')
     onCompleteSet()
-  }, [isSaving, selectedRPE, onCompleteSet])
+  }, [selectedRPE, onCompleteSet])
   
   // Rest timer state (for resting mode)
   const [restTimeRemaining, setRestTimeRemaining] = useState(restDurationSeconds)
@@ -987,8 +999,10 @@ export function ActiveWorkoutStartCorridor({
       </div>
       
       {/* ========== MAIN CONTENT ========== */}
-      <div className="flex-1 px-4 py-3">
-        <div className="max-w-lg mx-auto space-y-3">
+      {/* [UI-DENSITY] Reduced vertical padding + section gap so the primary
+          live controls fit closer to one screen on common Android heights. */}
+      <div className="flex-1 px-4 py-2">
+        <div className="max-w-lg mx-auto space-y-2">
           
           {/* ========== RESTING MODE UI ========== */}
           {mode === 'resting' && (
@@ -1487,9 +1501,11 @@ export function ActiveWorkoutStartCorridor({
           {mode === 'active' && (
             <>
               {/* ========== EXERCISE CARD ========== */}
-              <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
+              {/* [UI-DENSITY] Card and internal spacing trimmed to reduce
+                  dead vertical space above the primary input controls. */}
+              <Card className="bg-[#1A1F26] border-[#2B313A] px-3 py-2.5">
                 {/* Category badge + Grouped member indicator */}
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
                       {exerciseCategory}
@@ -1510,7 +1526,7 @@ export function ActiveWorkoutStartCorridor({
                 </h2>
             
             {/* Target prescription */}
-            <div className="flex items-center gap-2 mt-1.5 text-sm flex-wrap">
+            <div className="flex items-center gap-2 mt-1 text-sm flex-wrap">
               <span className="text-[#A4ACB8]">Target:</span>
               <span className="text-[#E6E9EF] font-medium">{exerciseRepsOrTime}</span>
               <span className="text-[#6B7280]">·</span>
@@ -1523,11 +1539,12 @@ export function ActiveWorkoutStartCorridor({
               )}
             </div>
             
-            {/* Subtle progress-persistence helper line */}
-            <p className="text-xs text-[#6B7280] mt-1">Hold to adjust faster</p>
+            {/* [UI-DENSITY] "Hold to adjust faster" helper line removed;
+                the press-and-hold behavior is still active on the +/- buttons,
+                but the standalone hint sprawled the card vertically on mobile. */}
             
             {/* Set progress dots */}
-            <div className="flex items-center gap-3 mt-3">
+            <div className="flex items-center gap-3 mt-2">
               <div className="flex items-center gap-1.5 flex-1">
                 {Array.from({ length: exerciseSets }).map((_, idx) => (
                   <div 
@@ -1597,7 +1614,10 @@ export function ActiveWorkoutStartCorridor({
           
           {/* ========== INPUT CARD ========== */}
           {/* [LIVE-WORKOUT-AUTHORITY] Authoritative execution-fact inputs driven by inputMode */}
-          <Card className="bg-[#1A1F26] border-[#2B313A] p-3 space-y-4">
+          {/* [UI-DENSITY] Reduced space-y from 4 to 3 to tighten the stack
+              between reps/hold, RPE selector, band selector, and coaching
+              feedback accordion. */}
+          <Card className="bg-[#1A1F26] border-[#2B313A] p-3 space-y-3">
             
             {/* [LIVE-WORKOUT-AUTHORITY] Input mode label for clarity */}
             {inputMode && (
@@ -1891,24 +1911,22 @@ export function ActiveWorkoutStartCorridor({
             See: handleGoBack, handleSkipSet, handleEndExercise, handleDiscardAndExit
           */}
           <div className="sticky bottom-0 bg-[#0F1115] pt-3 pb-2 pb-safe border-t border-[#2B313A]/50">
-            {/* Primary Action: Log Set */}
+            {/* Primary Action: Log Set
+                [LIVE-LOG-COMMIT-SURVIVAL] Disabled only by hard-invalid input
+                (no RPE selected). No local in-flight gate. Brief green flash
+                on `justLoggedPulse` is derived from authoritative parent
+                commit revision - pure visual feedback, not a commit owner. */}
             <Button 
               onClick={handleLogSet} 
-              disabled={selectedRPE === null || isSaving}
-              aria-busy={isSaving}
-              className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] disabled:bg-[#C1121F]/50 disabled:cursor-not-allowed text-white text-base font-bold"
+              disabled={selectedRPE === null}
+              className={`w-full h-12 disabled:bg-[#C1121F]/50 disabled:cursor-not-allowed text-white text-base font-bold transition-colors ${
+                justLoggedPulse
+                  ? 'bg-green-600 hover:bg-green-600'
+                  : 'bg-[#C1121F] hover:bg-[#A30F1A]'
+              }`}
             >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Check className="w-5 h-5 mr-2" />
-                  Log Set
-                </>
-              )}
+              <Check className="w-5 h-5 mr-2" />
+              {justLoggedPulse ? 'Logged' : 'Log Set'}
             </Button>
             
             {/* Secondary Actions: Back | Skip | Next | End */}

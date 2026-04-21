@@ -6114,8 +6114,60 @@ function InterExerciseRestCountdown({
       machineDispatch({ type: 'TOGGLE_REASON_TAG', tag })
     }
     
-    // Determine rest type and next exercise for between-exercise transitions
-    const isBetweenExerciseRest = machineState.phase === 'between_exercise_rest'
+    // =====================================================================
+    // [LIVE-LOG-PHASE-OWNER-SURGERY] SINGLE-OWNER REST SUBTYPE DERIVATION
+    //
+    // PROBLEM OBSERVED (from screen recording):
+    //   After Log Set on Planche Leans Set 1/5, the UI momentarily flashes
+    //   through the green "Exercise Complete! Up Next Tuck Front Lever Hold"
+    //   between-exercise rest card before stabilizing. The reducer can only
+    //   produce phase:'between_exercise_rest' for the FINAL set of an
+    //   exercise, so this flash implies a stale / re-entrant dispatch path
+    //   was briefly forcing that phase even with only 1 of 5 sets completed.
+    //
+    // SINGLE-OWNER CONTRACT APPLIED HERE:
+    //   The between-exercise rest card is allowed to render IFF both:
+    //     (a) machineState.phase === 'between_exercise_rest', AND
+    //     (b) the ACTUAL completed-set history proves this exercise is done
+    //         (i.e. completedSets.filter(exerciseIndex === current).length
+    //          is >= the effective prescribed sets for the current exercise)
+    //
+    //   This invariant is a render-time truth filter, NOT a parallel owner.
+    //   It reads ONLY from machineState (completedSets) and the effective
+    //   contract (prescribed sets). It cannot produce a false positive and
+    //   cannot mutate state. If a second owner somehow flips phase to
+    //   between_exercise_rest prematurely, the invariant denies the render
+    //   and the user continues to see the correct same-exercise rest card.
+    //
+    //   Conversely, on the LEGITIMATE last-set path, completedSets already
+    //   contains the just-logged final set (reducer appends before returning
+    //   between_exercise_rest), so the invariant passes bit-identically to
+    //   the prior behavior - zero regression for real between-exercise rest.
+    // =====================================================================
+    const currentExerciseCompletedCount = normalizedCompletedSets.filter(
+      s => s.exerciseIndex === safeExerciseIndex
+    ).length
+    const currentExerciseFullyCompleted =
+      currentExerciseCompletedCount >= activeEffectiveContract.effectiveSets
+    const rawPhaseIsBetweenExercise = machineState.phase === 'between_exercise_rest'
+    const isBetweenExerciseRest = rawPhaseIsBetweenExercise && currentExerciseFullyCompleted
+    
+    // Diagnostic: if the reducer produced between_exercise_rest but the
+    // completed-set history disagrees, log the exact mismatch so the
+    // upstream dispatch responsible for the premature phase flip becomes
+    // visible in logs. The invariant above still protects the render.
+    if (rawPhaseIsBetweenExercise && !currentExerciseFullyCompleted) {
+      console.warn('[v0] [log-corridor] BETWEEN_EXERCISE_REST_PREMATURE_PHASE_FILTERED', {
+        currentExerciseIndex: safeExerciseIndex,
+        exerciseName: safeCurrentExercise?.name,
+        currentExerciseCompletedCount,
+        prescribedSets: activeEffectiveContract.effectiveSets,
+        machinePhase: machineState.phase,
+        completedSetsTotal: normalizedCompletedSets.length,
+        hint: 'render filter denied Exercise-Complete rest card because current exercise has not reached its final set. Root cause upstream.',
+      })
+    }
+    
     const restType = isBlockRoundRest ? 'block_round' as const :
                      isBetweenExerciseRest ? 'between_exercise' as const : 'same_exercise' as const
     

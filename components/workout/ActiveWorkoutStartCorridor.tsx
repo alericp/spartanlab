@@ -999,10 +999,12 @@ export function ActiveWorkoutStartCorridor({
       </div>
       
       {/* ========== MAIN CONTENT ========== */}
-      {/* [UI-DENSITY] Reduced vertical padding + section gap so the primary
-          live controls fit closer to one screen on common Android heights. */}
-      <div className="flex-1 px-4 py-2">
-        <div className="max-w-lg mx-auto space-y-2">
+      {/* [UI-DENSITY] Third pass: top padding dropped to py-1.5 and section
+          gap to space-y-1.5 so the exercise card, input card, coaching row,
+          Log Set, and bottom rail all fit closer to one common-Android
+          screen height without hiding any control. */}
+      <div className="flex-1 px-4 py-1.5">
+        <div className="max-w-lg mx-auto space-y-1.5">
           
           {/* ========== RESTING MODE UI ========== */}
           {mode === 'resting' && (
@@ -1529,6 +1531,7 @@ export function ActiveWorkoutStartCorridor({
                 </h2>
             
             {/* Target prescription */}
+            {/* [UI-DENSITY] mt-1 preserved; dot height reduced below. */}
             <div className="flex items-center gap-2 mt-1 text-sm flex-wrap">
               <span className="text-[#A4ACB8]">Target:</span>
               <span className="text-[#E6E9EF] font-medium">{exerciseRepsOrTime}</span>
@@ -1547,12 +1550,14 @@ export function ActiveWorkoutStartCorridor({
                 but the standalone hint sprawled the card vertically on mobile. */}
             
             {/* Set progress dots */}
-            <div className="flex items-center gap-3 mt-2">
+            {/* [UI-DENSITY] mt-2 -> mt-1.5; bar height 2 -> 1.5 so the card
+                is visibly shorter without losing progress legibility. */}
+            <div className="flex items-center gap-3 mt-1.5">
               <div className="flex items-center gap-1.5 flex-1">
                 {Array.from({ length: exerciseSets }).map((_, idx) => (
                   <div 
                     key={idx} 
-                    className={`h-2 flex-1 rounded-full transition-colors ${
+                    className={`h-1.5 flex-1 rounded-full transition-colors ${
                       idx < currentSetNumber - 1 
                         ? 'bg-green-500' 
                         : idx === currentSetNumber - 1 

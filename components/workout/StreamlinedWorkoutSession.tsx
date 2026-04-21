@@ -3904,9 +3904,27 @@ if (styledGroups && styledGroups.length > 0) {
       ? (machineHoldIsDefault ? prescriptionSeedValue : safeHoldValue)
       : undefined
     
-    // Build completed set data with notes and grouped context
-      const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, currentIndex)
-      
+    // [LIVE-LOG-CORRIDOR-SINGLE-OWNER] Compute blockInfo ONCE up front. The
+    // payload builder reads it (for blockId/memberIndex) and the dispatch
+    // decision reads it (for grouped vs straight). Two sites, one read -- no
+    // split-brain on block identity between payload and routing.
+    const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, currentIndex)
+
+    // [LIVE-LOG-CORRIDOR-SINGLE-OWNER] Pure payload builder local to
+    // handleCompleteSet. Replaces the prior inline setData literal (~50
+    // lines mixed with the grouped-decision logic) so the commit corridor
+    // shape is now explicit:
+    //   handleCompleteSet = validate (button-disabled upstream)
+    //                     + build payload  (this function, called ONCE)
+    //                     + choose dispatch (grouped vs straight, below)
+    //                     + dispatch       (exactly one machineDispatch)
+    // Pure: reads only authoritative values captured in the enclosing
+    // closure (machineState, safeCurrentExercise, corridor-seeded logged
+    // values, blockInfo). Does NOT mutate state. Must not be called more
+    // than once per tap -- multiple calls would only produce identical
+    // payloads, but the pattern prevents any future caller from using this
+    // as a second commit path.
+    const buildSetDataPayload = (): CompletedSetData => {
       // [LIVE-WORKOUT-AUTHORITY] Resolve input mode for execution fact capture
       const inputMode = resolveExerciseInputMode({
         name: safeCurrentExercise?.name || '',
@@ -3915,14 +3933,14 @@ if (styledGroups && styledGroups.length > 0) {
         executionTruth: safeCurrentExercise?.executionTruth,
         prescribedLoad: safeCurrentExercise?.prescribedLoad,
       })
-      
+
       // [LIVE-WORKOUT-AUTHORITY] Capture structured coaching signals from reason tags
       const structuredCoachingInputs = (machineState.currentSetReasonTags || [])
-        .filter((tag): tag is import('@/lib/workout/live-workout-authority-contract').CoachingSignalTag => 
+        .filter((tag): tag is import('@/lib/workout/live-workout-authority-contract').CoachingSignalTag =>
           ['too_easy', 'too_hard', 'pain_discomfort', 'form_issue', 'fatigue', 'grip_limited', 'balance_issue', 'lost_focus', 'load_adjustment_used', 'mixed_band_assistance_used'].includes(tag)
         )
-      
-      const setData: CompletedSetData = {
+
+      return {
         exerciseIndex: currentIndex,
         setNumber: validatedSetNumber,
         actualReps: loggedRepsValue,
@@ -3941,8 +3959,8 @@ if (styledGroups && styledGroups.length > 0) {
         // [LIVE-WORKOUT-AUTHORITY] Extended execution facts
         inputMode: inputMode.mode,
         // Multi-band support - use selectedBands array directly, fall back to multiBandSelection for compatibility
-        selectedBands: (machineState.selectedBands && machineState.selectedBands.length > 0) 
-          ? machineState.selectedBands 
+        selectedBands: (machineState.selectedBands && machineState.selectedBands.length > 0)
+          ? machineState.selectedBands
           : machineState.multiBandSelection?.bands,
         multiBandSelection: machineState.multiBandSelection,
         // Weighted exercise facts
@@ -3955,6 +3973,10 @@ if (styledGroups && styledGroups.length > 0) {
         // Structured coaching inputs
         structuredCoachingInputs: structuredCoachingInputs.length > 0 ? structuredCoachingInputs : undefined,
       }
+    }
+
+    // Build exactly once per tap. Downstream dispatch branches reuse this.
+    const setData: CompletedSetData = buildSetDataPayload()
       
       // [LIVE-LOG-CORRIDOR-FIX] Single authoritative grouped boolean.
       //
@@ -6801,7 +6823,20 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
       unitStatus.actions.rendered = true
       return (
         <>
-          <Button onClick={handleCompleteSet} disabled={safeSelectedRPE === null} className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-base font-bold">
+          {/* [LIVE-LOG-CORRIDOR-SINGLE-OWNER] NON-AUTHORITATIVE. Legacy unit-
+              based render Log Set button. The authoritative Log Set button
+              lives in ActiveWorkoutStartCorridor.tsx and reaches this file via
+              the corridor's onCompleteSet prop (wired to handleCompleteSet).
+              This button is unreachable in the active-logging path because the
+              'active'/'resting' status branch at line ~5835 returns the
+              corridor component before this render runs. If this onClick ever
+              fires in production, the dev warning below makes it visible so we
+              can re-assert the single-owner contract. It still routes through
+              the SAME handleCompleteSet so no silent duplicate path can form. */}
+          <Button onClick={() => {
+            console.warn('[v0] [log-corridor] NON-AUTHORITATIVE legacy unit-Actions Log Set click - commit corridor single-owner contract says this should be unreachable')
+            handleCompleteSet()
+          }} disabled={safeSelectedRPE === null} className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-base font-bold">
             <Check className="w-5 h-5 mr-2" />Log Set
           </Button>
           <div className="flex items-center justify-between pt-2">
@@ -7001,10 +7036,20 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
               </CardContent>
             </Card>
             
-            {/* Action Button */}
+            {/* [LIVE-LOG-CORRIDOR-SINGLE-OWNER] NON-AUTHORITATIVE. Legacy
+                Stage-1 active-screen Complete Set button. Only renders when
+                ACTIVE_DERIVATION_STAGE === 1 AND the safeStatus is NOT active
+                or resting (which is impossible during the live Log Set
+                corridor because the active/resting branch returns the
+                authoritative corridor at line ~5835). Routed through
+                handleCompleteSet so behavior is consistent if ever reached,
+                but the warning makes a stale re-entry observable. */}
             <Button
               className="w-full h-14 text-lg font-bold bg-[#C1121F] hover:bg-[#A10F1A] text-white"
-              onClick={handleCompleteSet}
+              onClick={() => {
+                console.warn('[v0] [log-corridor] NON-AUTHORITATIVE legacy Stage-1 Complete Set click - commit corridor single-owner contract says this should be unreachable')
+                handleCompleteSet()
+              }}
             >
               Complete Set
             </Button>

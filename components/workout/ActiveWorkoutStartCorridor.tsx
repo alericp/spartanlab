@@ -864,8 +864,32 @@ export function ActiveWorkoutStartCorridor({
   }, [isSaving])
   
   const handleLogSet = useCallback(() => {
-    if (isSaving || selectedRPE === null) return
+    // [LIVE-LOG-CORRIDOR-PROOF] Stage 1: prove the Log Set tap reached the
+    // corridor handler. If this log is MISSING after a user tap, the button
+    // itself never dispatched a click (disabled state, pointer-events block,
+    // or an overlay swallowing the tap) -- the bug is upstream of this
+    // handler. If this log PRINTS but stage 2 below does not, the early
+    // return below swallowed the tap and its reason is logged with it.
+    console.log('[v0] [log-corridor] stage1 corridor handleLogSet entered', {
+      isSaving,
+      selectedRPE,
+      willReturnEarly: isSaving || selectedRPE === null,
+    })
+    if (isSaving || selectedRPE === null) {
+      console.log('[v0] [log-corridor] stage1 corridor handleLogSet returned early', {
+        reason: isSaving ? 'in_flight_save_pending' : 'no_rpe_selected',
+        isSaving,
+        selectedRPE,
+      })
+      return
+    }
     setIsSaving(true)
+    // [LIVE-LOG-CORRIDOR-PROOF] Stage 2: corridor forwarded tap to parent
+    // authoritative commit function. Paired with parent-side stage log in
+    // StreamlinedWorkoutSession.handleCompleteSet. If stage 2 prints but the
+    // parent's `stage1 handleCompleteSet entered` log does not, the
+    // onCompleteSet prop is not wired to the parent authoritative handler.
+    console.log('[v0] [log-corridor] stage2 corridor forwarded to parent onCompleteSet')
     onCompleteSet()
   }, [isSaving, selectedRPE, onCompleteSet])
   

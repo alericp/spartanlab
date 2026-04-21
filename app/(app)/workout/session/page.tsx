@@ -14,6 +14,13 @@
 // =============================================================================
 const WORKOUT_SESSION_ROUTE_VERSION = 'phase_lw2_boot_safe_v1'
 
+// [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Route-level build chip. Always visible
+// fingerprint (NOT dev-only) that the authoritative active workout corridor
+// renders as the first segment of its three-part fingerprint
+// (WS-R3 | SWS-R3 | AWC-R3). If the user's live workout screen does not show
+// this exact chip prefix, the phone is running a stale build.
+export const WORKOUT_ROUTE_BUILD_CHIP = 'WS-R3'
+
 // [PHASE LW2] Route-level boot stage marker
 function markRouteStage(stage: string, data?: Record<string, unknown>): void {
   if (typeof window === 'undefined') return
@@ -1063,6 +1070,11 @@ function WorkoutSessionContent() {
         // [LIVE-WORKOUT-AUTHORITY] Pass execution mode to component
         executionMode={executionMode}
         variantIndex={variantIndex}
+        // [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Forward the route-level build chip
+        // so the authoritative corridor can render the WS-R3 segment of its
+        // three-part fingerprint. If the chip does not reach the user's screen,
+        // the build pipeline is stale.
+        routeBuildChip={WORKOUT_ROUTE_BUILD_CHIP}
       />
       {/* [PHASE-X+1] Dev badge for session source - only in development */}
       {process.env.NODE_ENV === 'development' && sessionMeta?.recovered && (

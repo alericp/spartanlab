@@ -10,6 +10,43 @@
 // identity marker so the user can verify a pull landed the landing commit
 // without chasing v0 branch hashes.
 
+// [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Session-layer build chip. Always
+// visible (not dev-only). Rendered by the authoritative corridor as the
+// middle segment of its three-part fingerprint (WS-R3 | SWS-R3 | AWC-R3).
+// If the user's live workout does not show this chip, the session-layer
+// code on their device is stale.
+export const SWS_BUILD_CHIP = 'SWS-R3'
+
+// [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Legacy/fallback fingerprint. ONLY
+// rendered by the hard-blocked legacy unit-based and Stage-1 return paths
+// when they somehow paint. If the user ever sees this chip on a live
+// workout screen, the authoritative single-owner contract broke and a
+// legacy active surface leaked through.
+export const LEGACY_ACTIVE_BUILD_CHIP = 'LEGACY-ACTIVE-R3'
+
+// [POST-COMMIT-FREEZE-TRACE-R3] Module-level monotonic tap trace counter.
+// One tap of Log Set on the authoritative corridor advances this counter
+// once via allocateTapTraceId(), then emits that id through stages
+// A (corridor), B-E (parent + reducer), F (parent render after commit),
+// G (corridor re-render with new props). This is the canonical per-tap
+// correlation id - not a per-render random id. Window-mirrored so the
+// reducer/machine file can read it without importing from this module.
+let __nextTapTraceId = 0
+export function allocateTapTraceId(): number {
+  __nextTapTraceId += 1
+  if (typeof window !== 'undefined') {
+    ;(window as unknown as { __spartanlabCurrentTapTraceId?: number }).__spartanlabCurrentTapTraceId = __nextTapTraceId
+  }
+  return __nextTapTraceId
+}
+export function readCurrentTapTraceId(): number | null {
+  if (typeof window !== 'undefined') {
+    const w = window as unknown as { __spartanlabCurrentTapTraceId?: number }
+    return typeof w.__spartanlabCurrentTapTraceId === 'number' ? w.__spartanlabCurrentTapTraceId : null
+  }
+  return null
+}
+
 import { useState, useEffect, useCallback, useRef, useMemo, useReducer } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
@@ -1518,6 +1555,11 @@ interface StreamlinedWorkoutSessionProps {
   // [LIVE-WORKOUT-AUTHORITY] Execution mode locked at workout start
   executionMode?: '30_min' | '45_min' | 'full'
   variantIndex?: number
+  // [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Route-level build chip forwarded
+  // from app/(app)/workout/session/page.tsx so the corridor can render
+  // the full three-part fingerprint. Optional - corridor falls back to
+  // '?' if absent.
+  routeBuildChip?: string
 }
 
 // MERGE_LANE_REACTIVATE_V1
@@ -1531,6 +1573,8 @@ export function StreamlinedWorkoutSession({
   // [LIVE-WORKOUT-AUTHORITY] Default to full if not specified
   executionMode = 'full',
   variantIndex = 0,
+  // [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Route-level build chip (WS-R3)
+  routeBuildChip = '?',
 }: StreamlinedWorkoutSessionProps) {
   // [PHASE LW2-FIX] DO NOT CALL markBootStage() BEFORE HOOKS
   // React rules of hooks require all hooks to be called unconditionally and in the same order
@@ -6063,6 +6107,142 @@ function InterExerciseRestCountdown({
     livePhase === 'block_round_rest' ||
     livePhase === 'transitioning'
   
+  // =========================================================================
+  // [POST-COMMIT-FREEZE-TRACE-R3] Stage F observability + reversion guard.
+  //
+  // Diagnostic-only. Does not dispatch, does not mutate state. Runs on every
+  // relevant machine-state change so we can reconstruct the exact sequence
+  // of phase + set-number transitions that follow a Log Set commit.
+  //
+  // STAGE F - "Parent re-render after commit"
+  //   Fires any time (phase, currentSetNumber, currentExerciseIndex,
+  //   completedSets.length) changes. Correlates with the current
+  //   __spartanlabCurrentTapTraceId so one Log Set tap maps cleanly to
+  //   its subsequent render chain.
+  //
+  // POST_COMMIT_REVERSION_CONFIRMED guard:
+  //   Detects the observed bug pattern where the UI enters rest after a
+  //   Log Set commit and then snaps back to ACTIVE at the pre-commit
+  //   (exerciseIndex, setNumber) WITHOUT a legitimate COMPLETE_REST or
+  //   ADVANCE_TO_NEXT_EXERCISE having advanced the pointer. This is a
+  //   read-only high-signal error that names the exact reversion stage.
+  // =========================================================================
+  const postCommitObservationRef = useRef<{
+    phase: string
+    currentExerciseIndex: number
+    currentSetNumber: number
+    completedSetsLength: number
+    lastSeenTapTraceId: number | null
+  }>({
+    phase: machineState.phase,
+    currentExerciseIndex: machineState.currentExerciseIndex,
+    currentSetNumber: machineState.currentSetNumber,
+    completedSetsLength: normalizedCompletedSets.length,
+    lastSeenTapTraceId: null,
+  })
+  
+  useEffect(() => {
+    const prev = postCommitObservationRef.current
+    const curr = {
+      phase: machineState.phase,
+      currentExerciseIndex: machineState.currentExerciseIndex,
+      currentSetNumber: machineState.currentSetNumber,
+      completedSetsLength: normalizedCompletedSets.length,
+    }
+    const tapTraceId = readCurrentTapTraceId()
+    
+    // Only emit if something actually moved - avoid log spam on unrelated renders.
+    const something_changed =
+      prev.phase !== curr.phase ||
+      prev.currentExerciseIndex !== curr.currentExerciseIndex ||
+      prev.currentSetNumber !== curr.currentSetNumber ||
+      prev.completedSetsLength !== curr.completedSetsLength
+    
+    if (something_changed) {
+      // Determine render surface authoritatively from the same gate the
+      // actual render branch uses - never guess.
+      const surface =
+        curr.phase === 'active' ||
+        curr.phase === 'resting' ||
+        curr.phase === 'between_exercise_rest' ||
+        curr.phase === 'block_round_rest' ||
+        curr.phase === 'transitioning'
+          ? 'authoritative_active_corridor'
+          : 'non_live_surface'
+      
+      console.log('[v0] [log-corridor] stageF post-commit render observed', {
+        tapTraceId,
+        priorPhase: prev.phase,
+        currPhase: curr.phase,
+        priorExerciseIndex: prev.currentExerciseIndex,
+        currExerciseIndex: curr.currentExerciseIndex,
+        priorSetNumber: prev.currentSetNumber,
+        currSetNumber: curr.currentSetNumber,
+        priorCompletedLength: prev.completedSetsLength,
+        currCompletedLength: curr.completedSetsLength,
+        renderSurface: surface,
+      })
+      
+      // REVERSION DETECTION
+      // --------------------------------------------------------------------
+      // A legitimate sequence after a non-last-set COMPLETE_SET is:
+      //   active(setN) -> resting(setN+1) -> [COMPLETE_REST] -> active(setN+1)
+      // The set number advances ONCE (inside COMPLETE_SET). It must not
+      // return to setN unless the user explicitly went back.
+      //
+      // The buggy pattern we are instrumenting for is:
+      //   active(setN) -> resting(setN+1) -> active(setN)
+      // i.e. phase reverts to active AND the set number REGRESSES AT THE
+      // SAME (exerciseIndex) without a legitimate cause. completedSets
+      // length either stays the same or decreases.
+      const revertedToActive =
+        prev.phase === 'resting' &&
+        curr.phase === 'active' &&
+        prev.currentExerciseIndex === curr.currentExerciseIndex &&
+        curr.currentSetNumber < prev.currentSetNumber
+      
+      if (revertedToActive) {
+        console.error('[v0] [log-corridor] POST_COMMIT_REVERSION_CONFIRMED', {
+          tapTraceId,
+          priorPhase: prev.phase,
+          nextPhase: curr.phase,
+          exerciseIndex: curr.currentExerciseIndex,
+          priorSetNumber: prev.currentSetNumber,
+          currentSetNumber: curr.currentSetNumber,
+          priorCompletedSetsLength: prev.completedSetsLength,
+          currentCompletedSetsLength: curr.completedSetsLength,
+          renderSurface: surface,
+          hint: 'Phase reverted resting -> active at same exercise with DECREASED currentSetNumber. A second owner is overwriting reducer output.',
+        })
+      }
+      
+      // Secondary reversion shape: completedSets length DECREASED (a real
+      // commit was rolled back).
+      if (curr.completedSetsLength < prev.completedSetsLength) {
+        console.error('[v0] [log-corridor] POST_COMMIT_REVERSION_CONFIRMED', {
+          tapTraceId,
+          reason: 'completedSets_length_decreased',
+          priorCompletedSetsLength: prev.completedSetsLength,
+          currentCompletedSetsLength: curr.completedSetsLength,
+          priorPhase: prev.phase,
+          nextPhase: curr.phase,
+          renderSurface: surface,
+          hint: 'completedSets ledger shrank after a commit - a second owner replaced machineState with a stale snapshot.',
+        })
+      }
+    }
+    
+    postCommitObservationRef.current = {
+      ...curr,
+      lastSeenTapTraceId: tapTraceId,
+    }
+  }, [
+    machineState.phase,
+    machineState.currentExerciseIndex,
+    machineState.currentSetNumber,
+    normalizedCompletedSets.length,
+  ])
+  
   if (isLiveExecutionPhase) {
     // [LIVE-LOG-COMMIT-SURVIVAL] corridorMode is derived DIRECTLY from
     // machineState.phase. No safeStatus compatibility layer.
@@ -6553,6 +6733,13 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     
     return (
       <ActiveWorkoutStartCorridor
+        // [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Three-segment always-visible
+        // build fingerprint. The corridor renders these as a tiny muted
+        // chip (WS-R3 | SWS-R3 | AWC-R3) at the top of the main content
+        // area in preview AND production. If this chip is missing on a
+        // live workout, the phone is not running the latest bundle.
+        routeBuildChip={routeBuildChip}
+        parentBuildChip={SWS_BUILD_CHIP}
         mode={activeCorridorSnapshot.mode}
         sessionLabel={safeDisplayLabel || 'Workout'}
         exerciseName={activeCorridorSnapshot.exerciseName}
@@ -7329,6 +7516,17 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                   <span className="text-xs text-[#6B7280]">{s1ExerciseIndex + 1}/{s1TotalExercises}</span>
                 </div>
                 <div className="flex items-center gap-3">
+                  {/* [PRODUCTION-VISIBLE-BUILD-PROOF-R3] LEGACY fingerprint.
+                      If the user sees this chip during a live workout, the
+                      Stage-1 legacy surface leaked past the isLiveExecutionPhase
+                      gate - that is a single-owner contract violation and
+                      means the wrong component is rendering. */}
+                  <span
+                    className="text-[9px] font-mono uppercase tracking-wider px-1 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                    aria-hidden
+                  >
+                    {LEGACY_ACTIVE_BUILD_CHIP}
+                  </span>
                   <span className="text-xs text-[#6B7280]">{s1CompletedSets}/{s1TotalSets}</span>
                   <span className="font-mono text-sm font-bold text-[#E6E9EF] tabular-nums">{formatDuration(s1Elapsed)}</span>
                 </div>
@@ -7434,6 +7632,20 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
   
   return (
     <div className="min-h-screen bg-[#0F1115] flex flex-col overflow-x-hidden">
+      {/* [PRODUCTION-VISIBLE-BUILD-PROOF-R3] LEGACY fingerprint for the
+          unit-based Stage-2+ render path. If this chip appears during a
+          live workout, the isLiveExecutionPhase gate at line ~6110 did not
+          short-circuit and the unit-based legacy surface leaked through.
+          Placed at the root so it is visible regardless of which unit
+          renderers chose to return null. */}
+      <div className="fixed top-1 right-1 z-50 pointer-events-none">
+        <span
+          className="text-[9px] font-mono uppercase tracking-wider px-1 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40"
+          aria-hidden
+        >
+          {LEGACY_ACTIVE_BUILD_CHIP}
+        </span>
+      </div>
       {/* UNIT 1: Header */}
       {renderHeaderUnit()}
       

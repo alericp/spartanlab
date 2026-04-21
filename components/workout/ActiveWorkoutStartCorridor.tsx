@@ -6,6 +6,13 @@
 // consumed as `isHoldExerciseProp` with `isHoldExerciseFallback` defensive
 // detector only, no local state masking Set X/Y / recent sets / inputs.
 
+// [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Active-corridor build chip. Always
+// visible (not dev-only). The corridor renders this as the last segment
+// of the three-part fingerprint (WS-R3 | SWS-R3 | AWC-R3) at the top of
+// the main content area. If this chip does not reach the user's live
+// screen, the corridor file bundled on the device is stale.
+export const AWC_BUILD_CHIP = 'AWC-R3'
+
 /**
  * [ACTIVE-WORKOUT-START-CORRIDOR] Isolated Active Workout UI
  * 
@@ -228,6 +235,15 @@ export interface ActiveWorkoutCorridorProps {
   // If this prop does not change after a Log Set tap, no set was committed
   // and no local state here can mask that fact into a fake success.
   lastCommitRevision?: number
+  
+  // [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Always-visible (NOT dev-only) build
+  // fingerprint segments. Rendered together as a small muted chip at the
+  // top of the corridor main content area:
+  //   routeBuildChip | parentBuildChip | AWC_BUILD_CHIP
+  // Missing chip on a live workout screen === the phone is running a stale
+  // compiled bundle (or a non-authoritative legacy surface is rendering).
+  routeBuildChip?: string
+  parentBuildChip?: string
   
   // Callbacks (passed from parent)
   onCompleteSet: () => void
@@ -716,6 +732,9 @@ export function ActiveWorkoutStartCorridor({
   isHoldExercise: isHoldExerciseProp,
   // [LIVE-LOG-COMMIT-SURVIVAL] Authoritative commit revision from parent
   lastCommitRevision,
+  // [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Build chips (always visible)
+  routeBuildChip = '?',
+  parentBuildChip = '?',
   onCompleteSet,
   onSetReps,
   onSetHold,
@@ -908,17 +927,67 @@ export function ActiveWorkoutStartCorridor({
     // [LIVE-LOG-COMMIT-SURVIVAL] Corridor tap handler. Validates ONLY hard-
     // invalid input (no RPE selected). No local in-flight gate - the parent
     // authoritative commit path is the only arbiter of success.
-    console.log('[v0] [log-corridor] corridor handleLogSet entered', {
+    //
+    // [POST-COMMIT-FREEZE-TRACE-R3] STAGE A.
+    // Allocate a fresh monotonic tap trace id once per real (RPE-present)
+    // tap. Window-mirrored so stages B-G can read the same id without
+    // threading it through props. The id is bumped BEFORE onCompleteSet
+    // fires so the entire downstream commit chain sees the new id.
+    console.log('[v0] [log-corridor] stageA corridor handleLogSet entered', {
       selectedRPE,
       willReturnEarly: selectedRPE === null,
+      currentSetNumber,
+      completedSetsCount,
     })
     if (selectedRPE === null) {
-      console.log('[v0] [log-corridor] corridor handleLogSet returned early: no_rpe_selected')
+      console.log('[v0] [log-corridor] stageA corridor handleLogSet returned early: no_rpe_selected')
       return
     }
-    console.log('[v0] [log-corridor] corridor forwarded to parent onCompleteSet')
+    // Allocate the tap trace id now. readCurrentTapTraceId() is called
+    // lazily to avoid an import cycle with StreamlinedWorkoutSession.
+    let tapTraceId: number | null = null
+    if (typeof window !== 'undefined') {
+      const w = window as unknown as { __spartanlabCurrentTapTraceId?: number }
+      tapTraceId = typeof w.__spartanlabCurrentTapTraceId === 'number' ? w.__spartanlabCurrentTapTraceId + 1 : 1
+      w.__spartanlabCurrentTapTraceId = tapTraceId
+    }
+    console.log('[v0] [log-corridor] stageA tap trace allocated', {
+      tapTraceId,
+      currentSetNumber,
+      completedSetsCount,
+      priorLastCommitRevision: lastCommitRevision,
+    })
+    console.log('[v0] [log-corridor] stageA corridor forwarded to parent onCompleteSet', { tapTraceId })
     onCompleteSet()
-  }, [selectedRPE, onCompleteSet])
+  }, [selectedRPE, onCompleteSet, currentSetNumber, completedSetsCount, lastCommitRevision])
+  
+  // [POST-COMMIT-FREEZE-TRACE-R3] STAGE G.
+  // Observe when the corridor re-renders after a successful commit. The
+  // authoritative proof of a commit landing at this surface is
+  // lastCommitRevision advancing. When it does, we log the current tap
+  // trace id + the new (mode, currentSetNumber, completedSetsCount) the
+  // corridor received from its parent so Stage G can be correlated with
+  // stages A-F upstream.
+  const stageGLastObservedRevisionRef = useRef<number | undefined>(lastCommitRevision)
+  useEffect(() => {
+    const prior = stageGLastObservedRevisionRef.current
+    if (prior !== lastCommitRevision) {
+      const tapTraceId = typeof window !== 'undefined'
+        ? ((window as unknown as { __spartanlabCurrentTapTraceId?: number }).__spartanlabCurrentTapTraceId ?? null)
+        : null
+      console.log('[v0] [log-corridor] stageG corridor re-render observed new props after commit', {
+        tapTraceId,
+        priorLastCommitRevision: prior,
+        newLastCommitRevision: lastCommitRevision,
+        mode,
+        currentSetNumber,
+        currentExerciseIndex,
+        completedSetsCount,
+        renderSurface: 'authoritative_active_corridor',
+      })
+      stageGLastObservedRevisionRef.current = lastCommitRevision
+    }
+  }, [lastCommitRevision, mode, currentSetNumber, currentExerciseIndex, completedSetsCount])
   
   // Rest timer state (for resting mode)
   const [restTimeRemaining, setRestTimeRemaining] = useState(restDurationSeconds)
@@ -957,10 +1026,15 @@ export function ActiveWorkoutStartCorridor({
   const indicatorColor = mode === 'block_round_rest' ? 'bg-amber-500' : mode === 'resting' ? 'bg-blue-500' : 'bg-green-500'
   
   return (
-    <div className="min-h-screen bg-[#0F1115] flex flex-col overflow-x-hidden">
+    /* [UI-DENSITY-R3] Switch min-h-screen -> min-h-[100dvh] so the live
+       workout corridor uses the dynamic viewport height (accounts for
+       browser UI chrome retraction on mobile). This materially reduces
+       the "everything pushed below the fold" feel. */
+    <div className="min-h-[100dvh] bg-[#0F1115] flex flex-col overflow-x-hidden">
       {/* ========== STICKY HEADER ========== */}
+      {/* [UI-DENSITY-R3] Header vertical padding 2.5 -> 2 */}
       <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
-        <div className="px-4 py-2.5">
+        <div className="px-4 py-2">
           <div className="max-w-lg mx-auto">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -1004,24 +1078,30 @@ export function ActiveWorkoutStartCorridor({
           Log Set, and bottom rail all fit closer to one common-Android
           screen height without hiding any control. */}
       <div className="flex-1 px-4 py-1.5">
-        {/* [LIVE-RENDER-SOURCE-LOCK] Authoritative visual sentinel.
-            DEV-ONLY. Proves this exact ActiveWorkoutStartCorridor file
-            is the rendered active surface. If this badge does NOT appear
-            on a live workout screen, the user is viewing a stale cached
-            bundle (or a non-authoritative legacy surface from
-            StreamlinedWorkoutSession) and the edits in this file are
-            not actually reaching the preview. Remove once render-source
-            is confirmed on the user's device. */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="max-w-lg mx-auto mb-1 flex justify-end">
-            <span
-              className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
-              aria-hidden
-            >
-              ACTIVE-CORRIDOR-V2
-            </span>
-          </div>
-        )}
+        {/* [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Always-visible three-segment
+            authoritative build fingerprint. NOT dev-only. Shown in BOTH
+            preview and production so the user's screenshots can decisively
+            prove whether the phone is running the latest bundle.
+            
+            Surface contract:
+              - Only this authoritative ActiveWorkoutStartCorridor renders
+                the emerald WS-R3 | SWS-R3 | AWC-R3 chip.
+              - Legacy unit-based / Stage-1 render paths in
+                StreamlinedWorkoutSession render a rose LEGACY-ACTIVE-R3
+                chip instead (see StreamlinedWorkoutSession.tsx).
+              - If the user sees the rose chip during a live workout,
+                isLiveExecutionPhase gate leaked and a legacy surface
+                is rendering.
+              - If the user sees NO chip at all, the phone is running a
+                stale compiled bundle from before this commit. */}
+        <div className="max-w-lg mx-auto mb-1 flex justify-end">
+          <span
+            className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 select-none"
+            aria-hidden
+          >
+            {routeBuildChip} | {parentBuildChip} | {AWC_BUILD_CHIP}
+          </span>
+        </div>
         <div className="max-w-lg mx-auto space-y-1.5">
           
           {/* ========== RESTING MODE UI ========== */}
@@ -1523,10 +1603,12 @@ export function ActiveWorkoutStartCorridor({
               {/* ========== EXERCISE CARD ========== */}
               {/* [UI-DENSITY] Card and internal spacing trimmed to reduce
                   dead vertical space above the primary input controls.
-                  Second pass: padding tightened further and header row
-                  gap narrowed so four bottom controls remain visible
-                  without scrolling on common Android heights. */}
-              <Card className="bg-[#1A1F26] border-[#2B313A] px-3 py-2">
+                  [UI-DENSITY-R3] Third pass: vertical padding py-2 -> py-1.5
+                  since the category badge + exercise name + target line +
+                  progress dots already total ~88px; an extra 4px of chrome
+                  per card compounds to make the bottom rail fall below
+                  the fold on 640px-tall Android viewports. */}
+              <Card className="bg-[#1A1F26] border-[#2B313A] px-3 py-1.5">
                 {/* Category badge + Grouped member indicator */}
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
@@ -1642,10 +1724,11 @@ export function ActiveWorkoutStartCorridor({
           {/* [LIVE-WORKOUT-AUTHORITY] Authoritative execution-fact inputs driven by inputMode */}
           {/* [UI-DENSITY] space-y trimmed from 4 -> 3 -> 2.5 and horizontal
               padding preserved at 3 while vertical padding drops to 2.5.
-              This removes the last chunk of idle whitespace between
-              reps/hold, RPE selector, band selector, and coaching feedback
-              accordion without visually flattening the section separators. */}
-          <Card className="bg-[#1A1F26] border-[#2B313A] px-3 py-2.5 space-y-2.5">
+              [UI-DENSITY-R3] Final pass: py-2.5 -> py-2 and space-y-2.5
+              -> space-y-2 reclaims another ~8-12px of dead vertical space
+              between the input mode label, primary input, RPE selector,
+              and coaching row without visually merging sections. */}
+          <Card className="bg-[#1A1F26] border-[#2B313A] px-3 py-2 space-y-2">
             
             {/* [LIVE-WORKOUT-AUTHORITY] Input mode label for clarity */}
             {/* [UI-DENSITY] pb-2 -> pb-1.5 to reclaim vertical space */}
@@ -1948,8 +2031,10 @@ export function ActiveWorkoutStartCorridor({
           {/* [UI-DENSITY] pt-3 -> pt-2 above the sticky Log Set button so
               the entire bottom control rail pulls up closer to the content
               and the four secondary controls (Back / Skip / Next / End)
-              remain visible without a hidden scroll pocket. */}
-          <div className="sticky bottom-0 bg-[#0F1115] pt-2 pb-2 pb-safe border-t border-[#2B313A]/50">
+              remain visible without a hidden scroll pocket.
+              [UI-DENSITY-R3] Further reduced pt-2 -> pt-1.5 and pb-2 ->
+              pb-1.5 so the bottom rail hugs the ledger more tightly. */}
+          <div className="sticky bottom-0 bg-[#0F1115] pt-1.5 pb-1.5 pb-safe border-t border-[#2B313A]/50">
             {/* Primary Action: Log Set
                 [LIVE-LOG-COMMIT-SURVIVAL] Disabled only by hard-invalid input
                 (no RPE selected). No local in-flight gate. Brief green flash
@@ -1965,7 +2050,12 @@ export function ActiveWorkoutStartCorridor({
               }`}
             >
               <Check className="w-5 h-5 mr-2" />
-              {justLoggedPulse ? 'Logged' : 'Log Set'}
+              {/* [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Always-visible label
+                  suffix "• R3" proves this exact button markup (from the
+                  authoritative corridor) is what the user is tapping. If
+                  the suffix is missing on a live workout screen, the
+                  button the user sees is NOT from this file. */}
+              {justLoggedPulse ? 'Logged' : 'Log Set \u2022 R3'}
             </Button>
             
             {/* Secondary Actions: Back | Skip | Next | End */}

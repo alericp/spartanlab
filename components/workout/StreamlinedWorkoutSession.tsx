@@ -6703,6 +6703,16 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
   // UNIT 1: Header - renders progress bar, timer, workout label
   // [ACTIVE-ENTRY-CONTRACT] Now reads from activeEntryContract for progress values
   const renderHeaderUnit = (): React.ReactNode => {
+    // [LIVE-RENDER-SOURCE-LOCK] Belt-and-suspenders single-owner guard.
+    // The isLiveExecutionPhase early-return at line ~6066 already returns
+    // <ActiveWorkoutStartCorridor/> before this function can run during a
+    // live workout. This hard-block prevents any future regression where
+    // a legacy unit header could silently render above the authoritative
+    // corridor during active/resting/transitioning phases.
+    if (isLiveExecutionPhase) {
+      console.warn('[v0] [log-corridor] LEGACY_UNIT_HEADER_BLOCKED_DURING_LIVE_PHASE', { livePhase })
+      return null
+    }
     if (!unitStatus.header.enabled) return null
     try {
       unitStatus.header.rendered = true
@@ -6755,6 +6765,11 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
   // UNIT 2: Exercise - renders current exercise card with grouped block indicator
   // [ACTIVE-ENTRY-CONTRACT] Now reads from activeEntryContract for all values
   const renderExerciseUnit = (): React.ReactNode => {
+    // [LIVE-RENDER-SOURCE-LOCK] Belt-and-suspenders single-owner guard.
+    if (isLiveExecutionPhase) {
+      console.warn('[v0] [log-corridor] LEGACY_UNIT_EXERCISE_BLOCKED_DURING_LIVE_PHASE', { livePhase })
+      return null
+    }
     if (!unitStatus.exercise.enabled) return null
     try {
       unitStatus.exercise.rendered = true
@@ -6958,6 +6973,11 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
   }
   
   const renderInputsUnit = (): React.ReactNode => {
+    // [LIVE-RENDER-SOURCE-LOCK] Belt-and-suspenders single-owner guard.
+    if (isLiveExecutionPhase) {
+      console.warn('[v0] [log-corridor] LEGACY_UNIT_INPUTS_BLOCKED_DURING_LIVE_PHASE', { livePhase })
+      return null
+    }
     if (!unitStatus.inputs.enabled) return null
     try {
       unitStatus.inputs.rendered = true
@@ -7109,6 +7129,13 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
   
   // UNIT 4: Actions - renders complete button and secondary actions
   const renderActionsUnit = (): React.ReactNode => {
+    // [LIVE-RENDER-SOURCE-LOCK] Belt-and-suspenders single-owner guard.
+    // Authoritative Log Set button lives in ActiveWorkoutStartCorridor. This
+    // legacy Log Set surface must never render during any live execution phase.
+    if (isLiveExecutionPhase) {
+      console.warn('[v0] [log-corridor] LEGACY_UNIT_ACTIONS_BLOCKED_DURING_LIVE_PHASE (non-authoritative Log Set suppressed)', { livePhase })
+      return null
+    }
     if (!unitStatus.actions.enabled) return null
     try {
       unitStatus.actions.rendered = true
@@ -7211,6 +7238,19 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
   // No grouped context resolution. No activeWorkoutViewModel dependency.
   // ==========================================================================
   if (ACTIVE_DERIVATION_STAGE === 1) {
+    // [LIVE-RENDER-SOURCE-LOCK] Belt-and-suspenders single-owner guard.
+    // The isLiveExecutionPhase early-return at ~line 6066 already returns
+    // <ActiveWorkoutStartCorridor/> before this Stage-1 legacy branch can
+    // run during any live workout phase. This hard-block makes it
+    // structurally impossible for the Stage-1 legacy active screen (which
+    // has its own header + exercise card + input + RPE + Complete Set
+    // button) to paint while the user is in a live execution phase. If
+    // this warn ever prints, the upstream early-return is no longer the
+    // authoritative gate and the single-owner contract is broken.
+    if (isLiveExecutionPhase) {
+      console.warn('[v0] [log-corridor] LEGACY_STAGE1_BRANCH_BLOCKED_DURING_LIVE_PHASE', { livePhase })
+      return null
+    }
     // [LIVE-LOG-CORRIDOR-PROOF] stage_screen_rendered_LEGACY_STAGE1
     // If this code executes when safeStatus is 'active' or 'resting', the
     // authoritative corridor early-return at line ~5857 failed to short-

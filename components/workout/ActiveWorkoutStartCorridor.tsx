@@ -1004,6 +1004,24 @@ export function ActiveWorkoutStartCorridor({
           Log Set, and bottom rail all fit closer to one common-Android
           screen height without hiding any control. */}
       <div className="flex-1 px-4 py-1.5">
+        {/* [LIVE-RENDER-SOURCE-LOCK] Authoritative visual sentinel.
+            DEV-ONLY. Proves this exact ActiveWorkoutStartCorridor file
+            is the rendered active surface. If this badge does NOT appear
+            on a live workout screen, the user is viewing a stale cached
+            bundle (or a non-authoritative legacy surface from
+            StreamlinedWorkoutSession) and the edits in this file are
+            not actually reaching the preview. Remove once render-source
+            is confirmed on the user's device. */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="max-w-lg mx-auto mb-1 flex justify-end">
+            <span
+              className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+              aria-hidden
+            >
+              ACTIVE-CORRIDOR-V2
+            </span>
+          </div>
+        )}
         <div className="max-w-lg mx-auto space-y-1.5">
           
           {/* ========== RESTING MODE UI ========== */}

@@ -1502,10 +1502,13 @@ export function ActiveWorkoutStartCorridor({
             <>
               {/* ========== EXERCISE CARD ========== */}
               {/* [UI-DENSITY] Card and internal spacing trimmed to reduce
-                  dead vertical space above the primary input controls. */}
-              <Card className="bg-[#1A1F26] border-[#2B313A] px-3 py-2.5">
+                  dead vertical space above the primary input controls.
+                  Second pass: padding tightened further and header row
+                  gap narrowed so four bottom controls remain visible
+                  without scrolling on common Android heights. */}
+              <Card className="bg-[#1A1F26] border-[#2B313A] px-3 py-2">
                 {/* Category badge + Grouped member indicator */}
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
                       {exerciseCategory}
@@ -1614,14 +1617,17 @@ export function ActiveWorkoutStartCorridor({
           
           {/* ========== INPUT CARD ========== */}
           {/* [LIVE-WORKOUT-AUTHORITY] Authoritative execution-fact inputs driven by inputMode */}
-          {/* [UI-DENSITY] Reduced space-y from 4 to 3 to tighten the stack
-              between reps/hold, RPE selector, band selector, and coaching
-              feedback accordion. */}
-          <Card className="bg-[#1A1F26] border-[#2B313A] p-3 space-y-3">
+          {/* [UI-DENSITY] space-y trimmed from 4 -> 3 -> 2.5 and horizontal
+              padding preserved at 3 while vertical padding drops to 2.5.
+              This removes the last chunk of idle whitespace between
+              reps/hold, RPE selector, band selector, and coaching feedback
+              accordion without visually flattening the section separators. */}
+          <Card className="bg-[#1A1F26] border-[#2B313A] px-3 py-2.5 space-y-2.5">
             
             {/* [LIVE-WORKOUT-AUTHORITY] Input mode label for clarity */}
+            {/* [UI-DENSITY] pb-2 -> pb-1.5 to reclaim vertical space */}
             {inputMode && (
-              <div className="flex items-center justify-between pb-2 border-b border-[#2B313A]/50">
+              <div className="flex items-center justify-between pb-1.5 border-b border-[#2B313A]/50">
                 <span className="text-xs text-[#6B7280] uppercase tracking-wide">
                   {inputMode === 'band_assisted_skill' && 'Band-Assisted'}
                   {inputMode === 'weighted_strength' && 'Weighted'}
@@ -1750,8 +1756,11 @@ export function ActiveWorkoutStartCorridor({
             )}
             
             {/* [LIVE-WORKOUT-AUTHORITY] Adaptive Input Section - coaching signals that drive adaptation */}
+            {/* [UI-DENSITY] pt-3 -> pt-2 so the collapsed Coaching Feedback
+                row hugs the band selector above rather than adding another
+                bar-and-a-half of empty space. Expanded panel keeps mt-3. */}
             {onSetNote && onToggleReasonTag && (
-              <div className="border-t border-[#2B313A] pt-3">
+              <div className="border-t border-[#2B313A] pt-2">
                 <button
                   onClick={() => setShowSetNotes(!showSetNotes)}
                   className="flex items-center justify-between w-full text-left"
@@ -1823,10 +1832,13 @@ export function ActiveWorkoutStartCorridor({
           {/* ========== RECENT SETS LEDGER ========== */}
           {/* [MOBILE-FIX] Constrained height with internal scroll to prevent pushing action rail too low */}
           {/* [LIVE-WORKOUT-AUTHORITY] Now displays extended execution facts */}
+          {/* [UI-DENSITY] p-3 -> px-3 py-2, header mb-2 -> mb-1, inner
+              max-h-24 -> max-h-20 so the ledger is visible without being
+              the reason the bottom control rail falls off-screen. */}
           {recentSets.length > 0 && (
-            <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
-              <div className="text-xs font-medium text-[#A4ACB8] mb-2">Recent Sets</div>
-              <div className="space-y-1 text-xs max-h-24 overflow-y-auto">
+            <Card className="bg-[#1A1F26] border-[#2B313A] px-3 py-2">
+              <div className="text-xs font-medium text-[#A4ACB8] mb-1">Recent Sets</div>
+              <div className="space-y-1 text-xs max-h-20 overflow-y-auto">
                 {recentSets.map((set, idx) => {
                   const trimmedNote = typeof set.note === 'string' ? set.note.trim() : ''
                   const hasNote = trimmedNote.length > 0
@@ -1910,7 +1922,11 @@ export function ActiveWorkoutStartCorridor({
             DO NOT hide controls via overflow - use responsive sizing instead.
             See: handleGoBack, handleSkipSet, handleEndExercise, handleDiscardAndExit
           */}
-          <div className="sticky bottom-0 bg-[#0F1115] pt-3 pb-2 pb-safe border-t border-[#2B313A]/50">
+          {/* [UI-DENSITY] pt-3 -> pt-2 above the sticky Log Set button so
+              the entire bottom control rail pulls up closer to the content
+              and the four secondary controls (Back / Skip / Next / End)
+              remain visible without a hidden scroll pocket. */}
+          <div className="sticky bottom-0 bg-[#0F1115] pt-2 pb-2 pb-safe border-t border-[#2B313A]/50">
             {/* Primary Action: Log Set
                 [LIVE-LOG-COMMIT-SURVIVAL] Disabled only by hard-invalid input
                 (no RPE selected). No local in-flight gate. Brief green flash
@@ -1931,7 +1947,9 @@ export function ActiveWorkoutStartCorridor({
             
             {/* Secondary Actions: Back | Skip | Next | End */}
             {/* [MOBILE-OVERFLOW-FIX] Use flex-wrap and gap for mobile containment */}
-            <div className="flex items-center justify-between flex-wrap gap-1 pt-2">
+            {/* [UI-DENSITY] pt-2 -> pt-1.5 to keep the row hugged up to
+                Log Set without losing tap separation. */}
+            <div className="flex items-center justify-between flex-wrap gap-1 pt-1.5">
               {/* Control 1: Back button (conditional) */}
               {canGoBack && onGoBack ? (
                 <Button 

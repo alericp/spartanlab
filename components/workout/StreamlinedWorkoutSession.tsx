@@ -1988,6 +1988,88 @@ if (styledGroups && styledGroups.length > 0) {
     machineState.completedSets,
   ])
   
+  // =========================================================================
+  // [LIVE-LOG-REVERSION-DETECTOR] PHASE-TRANSITION WATCHDOG
+  //
+  // Purpose: prove or disprove the user-reported "flash rest then snap back
+  // to active" symptom by recording every phase transition in a ref and
+  // logging any transition back to `active` that did NOT come from a
+  // legitimate transition action (COMPLETE_REST, ADVANCE_TO_NEXT_EXERCISE,
+  // SKIP_SET, etc.). If this fires, the exact surrounding dispatch has
+  // re-asserted `phase: 'active'` on stale pointers.
+  //
+  // The ref-pair lets us compare (priorPhase, nextPhase, priorCompletedLen,
+  // nextCompletedLen) across exactly one render boundary without owning
+  // any state itself.
+  // =========================================================================
+  const phaseHistoryRef = useRef<{
+    phase: typeof machineState.phase
+    completedLen: number
+    currentSetNumber: number
+    currentExerciseIndex: number
+    timestamp: number
+  } | null>(null)
+  
+  useEffect(() => {
+    const prior = phaseHistoryRef.current
+    const nextSnapshot = {
+      phase: machineState.phase,
+      completedLen: machineState.completedSets?.length ?? 0,
+      currentSetNumber: machineState.currentSetNumber,
+      currentExerciseIndex: machineState.currentExerciseIndex,
+      timestamp: Date.now(),
+    }
+    
+    if (prior) {
+      // Suspicious reversion pattern: resting -> active on same exercise
+      // with NO change to currentSetNumber means COMPLETE_REST-like
+      // transition happened without the user's input AND without advancing
+      // the set pointer (legitimate COMPLETE_REST keeps set number, but the
+      // ONLY legitimate caller of COMPLETE_REST is handleRestComplete via
+      // user Skip Rest click or rest-timer completion). If this fires
+      // within ~500ms of a phase=resting transition, the "brief flash
+      // then snap back" is real and this log pinpoints the timing.
+      if (
+        prior.phase === 'resting' &&
+        machineState.phase === 'active' &&
+        prior.currentExerciseIndex === machineState.currentExerciseIndex &&
+        prior.completedLen === nextSnapshot.completedLen
+      ) {
+        const dwellMs = nextSnapshot.timestamp - prior.timestamp
+        console.warn('[v0] [log-corridor] REVERSION_DETECTED resting->active without COMPLETE_REST advance', {
+          priorPhase: prior.phase,
+          nextPhase: machineState.phase,
+          dwellMs,
+          currentExerciseIndex: machineState.currentExerciseIndex,
+          currentSetNumber: machineState.currentSetNumber,
+          priorCompletedLen: prior.completedLen,
+          nextCompletedLen: nextSnapshot.completedLen,
+          hint: 'If dwellMs < 800 this is the user-reported flash-and-snapback; inspect the next dispatch after COMPLETE_SET in the same tap.',
+        })
+      }
+      
+      // Log every phase change for post-commit forensics
+      if (prior.phase !== machineState.phase) {
+        console.log('[v0] [log-corridor] phase_transition', {
+          from: prior.phase,
+          to: machineState.phase,
+          dwellMs: nextSnapshot.timestamp - prior.timestamp,
+          priorSet: prior.currentSetNumber,
+          nextSet: machineState.currentSetNumber,
+          priorCompletedLen: prior.completedLen,
+          nextCompletedLen: nextSnapshot.completedLen,
+        })
+      }
+    }
+    
+    phaseHistoryRef.current = nextSnapshot
+  }, [
+    machineState.phase,
+    machineState.currentExerciseIndex,
+    machineState.currentSetNumber,
+    machineState.completedSets,
+  ])
+  
   // ==========================================================================
   // [LIVE-WORKOUT-MACHINE] Derive view model from machine state
   // This is the ONLY source for render values - no scattered ad hoc derivations
@@ -5850,15 +5932,36 @@ function InterExerciseRestCountdown({
   // This returns the isolated ActiveWorkoutStartCorridor component BEFORE
   // any of the complex derivation chains (unit status, render functions, etc.)
   // execute. This is the key fix - we must return EARLY to avoid the hooks.
-  // 
-  // EXPANDED: Now handles BOTH 'active' AND 'resting' states for same-exercise
-  // continuation. This prevents post-log render drift to the start shell.
+  //
+  // [LIVE-LOG-COMMIT-SURVIVAL] GATE READS machineState.phase DIRECTLY.
+  // Previously this gate read `safeStatus`, which is a backward-compat
+  // mapping that collapses 4+ live execution phases into 2 values. That
+  // mapping is harmless as a read, but using it as the corridor-render
+  // gate meant a backward-compat layer was deciding which live screen
+  // mounted. Any render-tick where `safeStatus` lagged behind
+  // machineState.phase (e.g. memo recomputation order) could briefly
+  // remount a different branch. Reading machineState.phase directly
+  // guarantees the gate decision is bit-identical to the authoritative
+  // reducer output with zero intermediate ownership.
   // ==========================================================================
-  if (safeStatus === 'active' || safeStatus === 'resting') {
-    // Determine corridor mode - check machineState.phase directly for block_round_rest
-    const isBlockRoundRest = machineState.phase === 'block_round_rest'
-    const corridorMode = isBlockRoundRest ? 'block_round_rest' as const : 
-                         safeStatus === 'resting' ? 'resting' as const : 'active' as const
+  const livePhase = machineState.phase
+  const isLiveExecutionPhase =
+    livePhase === 'active' ||
+    livePhase === 'resting' ||
+    livePhase === 'between_exercise_rest' ||
+    livePhase === 'block_round_rest' ||
+    livePhase === 'transitioning'
+  
+  if (isLiveExecutionPhase) {
+    // [LIVE-LOG-COMMIT-SURVIVAL] corridorMode is derived DIRECTLY from
+    // machineState.phase. No safeStatus compatibility layer.
+    const corridorMode =
+      livePhase === 'block_round_rest'
+        ? ('block_round_rest' as const)
+        : livePhase === 'resting' || livePhase === 'between_exercise_rest'
+          ? ('resting' as const)
+          : ('active' as const)
+    const isBlockRoundRest = livePhase === 'block_round_rest'
 
     // [LIVE-LOG-CORRIDOR-PROOF] stage_screen_rendered_authoritative
     // Proves which render branch is actually mounting. If this log prints

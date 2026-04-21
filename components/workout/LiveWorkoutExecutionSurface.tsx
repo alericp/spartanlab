@@ -41,7 +41,7 @@
 //   - does NOT own any reducer state, autosave, or normalization
 // =============================================================================
 
-import { Component, type ReactNode, type ErrorInfo } from 'react'
+import { Component, useEffect, useRef, type ReactNode, type ErrorInfo } from 'react'
 import { ActiveWorkoutStartCorridor } from './ActiveWorkoutStartCorridor'
 import type {
   CompletedSetInfo,
@@ -79,6 +79,13 @@ export interface LiveWorkoutSnapshot {
   // Mode & labels
   mode: 'active' | 'resting' | 'block_round_rest'
   sessionLabel: string
+
+  // [HOOK-CONTRACT-FIX] Raw machine phase forwarded from the parent so the
+  // live-only post-commit observability effect (moved here from the parent
+  // to eliminate the ready-shell hook-order violation) can detect the
+  // reversion shape `resting -> active` with a regressed setNumber without
+  // relying on the lossy `mode` projection.
+  machinePhase: string
 
   // Exercise identity
   exerciseName: string
@@ -325,6 +332,131 @@ export function LiveWorkoutExecutionSurface({
   snapshot,
   handlers,
 }: LiveWorkoutExecutionSurfaceProps) {
+  // =========================================================================
+  // [HOOK-CONTRACT-FIX] POST-COMMIT OBSERVABILITY (Stage F)
+  //
+  // These two hooks (useRef + useEffect) previously lived in
+  // StreamlinedWorkoutSession BELOW the `if (safeStatus === 'ready')` and
+  // `if (safeStatus === 'completed')` component-level early returns. That
+  // produced React error #310 (rendered fewer hooks than expected) the
+  // instant `safeStatus` transitioned between 'ready' and any live phase,
+  // because the parent's hook count changed between renders.
+  //
+  // They are live-only concerns (post Log-Set commit reversion detection)
+  // so they belong here: this surface is ONLY mounted during live execution
+  // phases (active / resting / block_round_rest). Moving them here makes
+  // the hook contract in the parent uniform across every render path.
+  //
+  // Diagnostic-only. No dispatch. No mutation. Read-only.
+  // =========================================================================
+  const postCommitObservationRef = useRef<{
+    phase: string
+    currentExerciseIndex: number
+    currentSetNumber: number
+    completedSetsLength: number
+    lastSeenTapTraceId: number | null
+  }>({
+    phase: snapshot.machinePhase,
+    currentExerciseIndex: snapshot.currentExerciseIndex,
+    currentSetNumber: snapshot.currentSetNumber,
+    completedSetsLength: snapshot.completedSetsCount,
+    lastSeenTapTraceId: null,
+  })
+
+  useEffect(() => {
+    const prev = postCommitObservationRef.current
+    const curr = {
+      phase: snapshot.machinePhase,
+      currentExerciseIndex: snapshot.currentExerciseIndex,
+      currentSetNumber: snapshot.currentSetNumber,
+      completedSetsLength: snapshot.completedSetsCount,
+    }
+    // Read tap-trace id defensively - never throw from diagnostic code.
+    let tapTraceId: number | null = null
+    try {
+      if (typeof window !== 'undefined') {
+        const w = window as unknown as { __spartanlabCurrentTapTraceId?: number }
+        tapTraceId = typeof w.__spartanlabCurrentTapTraceId === 'number' ? w.__spartanlabCurrentTapTraceId : null
+      }
+    } catch {
+      tapTraceId = null
+    }
+
+    const something_changed =
+      prev.phase !== curr.phase ||
+      prev.currentExerciseIndex !== curr.currentExerciseIndex ||
+      prev.currentSetNumber !== curr.currentSetNumber ||
+      prev.completedSetsLength !== curr.completedSetsLength
+
+    if (something_changed) {
+      const surface =
+        curr.phase === 'active' ||
+        curr.phase === 'resting' ||
+        curr.phase === 'between_exercise_rest' ||
+        curr.phase === 'block_round_rest' ||
+        curr.phase === 'transitioning'
+          ? 'authoritative_active_corridor'
+          : 'non_live_surface'
+
+      console.log('[v0] [log-corridor] stageF post-commit render observed', {
+        tapTraceId,
+        priorPhase: prev.phase,
+        currPhase: curr.phase,
+        priorExerciseIndex: prev.currentExerciseIndex,
+        currExerciseIndex: curr.currentExerciseIndex,
+        priorSetNumber: prev.currentSetNumber,
+        currSetNumber: curr.currentSetNumber,
+        priorCompletedLength: prev.completedSetsLength,
+        currCompletedLength: curr.completedSetsLength,
+        renderSurface: surface,
+      })
+
+      const revertedToActive =
+        prev.phase === 'resting' &&
+        curr.phase === 'active' &&
+        prev.currentExerciseIndex === curr.currentExerciseIndex &&
+        curr.currentSetNumber < prev.currentSetNumber
+
+      if (revertedToActive) {
+        console.error('[v0] [log-corridor] POST_COMMIT_REVERSION_CONFIRMED', {
+          tapTraceId,
+          priorPhase: prev.phase,
+          nextPhase: curr.phase,
+          exerciseIndex: curr.currentExerciseIndex,
+          priorSetNumber: prev.currentSetNumber,
+          currentSetNumber: curr.currentSetNumber,
+          priorCompletedSetsLength: prev.completedSetsLength,
+          currentCompletedSetsLength: curr.completedSetsLength,
+          renderSurface: surface,
+          hint: 'Phase reverted resting -> active at same exercise with DECREASED currentSetNumber. A second owner is overwriting reducer output.',
+        })
+      }
+
+      if (curr.completedSetsLength < prev.completedSetsLength) {
+        console.error('[v0] [log-corridor] POST_COMMIT_REVERSION_CONFIRMED', {
+          tapTraceId,
+          reason: 'completedSets_length_decreased',
+          priorCompletedSetsLength: prev.completedSetsLength,
+          currentCompletedSetsLength: curr.completedSetsLength,
+          priorPhase: prev.phase,
+          nextPhase: curr.phase,
+          renderSurface: surface,
+          hint: 'completedSets ledger shrank after a commit - a second owner replaced machineState with a stale snapshot.',
+        })
+      }
+    }
+
+    postCommitObservationRef.current = {
+      ...curr,
+      lastSeenTapTraceId: tapTraceId,
+    }
+  }, [
+    snapshot.machinePhase,
+    snapshot.currentExerciseIndex,
+    snapshot.currentSetNumber,
+    snapshot.completedSetsCount,
+  ])
+
   // Stage marker fires on every render of the surface - proves the adapter
   // itself mounted successfully even if the corridor fails below.
   markLiveStage(LIVE_EXECUTION_SURFACE_STAGE, {

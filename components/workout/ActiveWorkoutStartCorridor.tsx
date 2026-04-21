@@ -852,6 +852,21 @@ export function ActiveWorkoutStartCorridor({
   useEffect(() => {
     const signature = `${completedSetsCount}:${currentSetNumber}`
     if (signature !== lastCommitSignatureRef.current) {
+      // [LIVE-LOG-CORRIDOR-PROOF] stage_live_rerender_received_advanced_state
+      // Fires exactly once per reducer advancement. If stage_reducer_entered
+      // and the COMPLETE_SET base-commit logs print but this log does NOT
+      // print for the same tap, the reducer returned new state but the
+      // authoritative corridor rerender did not consume it -- meaning a
+      // stale snapshot owner or a post-dispatch overwrite is blocking the
+      // advanced truth from reaching the visible screen. If this log DOES
+      // print, the full chain executed end-to-end and any remaining user-
+      // visible inertness is in cosmetic state, not the commit corridor.
+      console.log('[v0] [log-corridor] stage_live_rerender_received_advanced_state', {
+        priorSignature: lastCommitSignatureRef.current,
+        nextSignature: signature,
+        currentSetNumber,
+        completedSetsCount,
+      })
       lastCommitSignatureRef.current = signature
       if (isSaving) setIsSaving(false)
     }

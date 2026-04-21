@@ -5859,6 +5859,24 @@ function InterExerciseRestCountdown({
     const isBlockRoundRest = machineState.phase === 'block_round_rest'
     const corridorMode = isBlockRoundRest ? 'block_round_rest' as const : 
                          safeStatus === 'resting' ? 'resting' as const : 'active' as const
+
+    // [LIVE-LOG-CORRIDOR-PROOF] stage_screen_rendered_authoritative
+    // Proves which render branch is actually mounting. If this log prints
+    // during a user's live workout, the authoritative ActiveWorkoutStartCorridor
+    // path is live. If instead a `stage_screen_rendered_LEGACY_UNIT_contract_violation`
+    // or `stage_screen_rendered_LEGACY_STAGE1_contract_violation` log prints
+    // for the same render tick, the single-owner contract is broken and the
+    // corridor early-return above is no longer short-circuiting the legacy
+    // paths. This is the first log that must appear in any Log Set chain.
+    console.log('[v0] [log-corridor] stage_screen_rendered_authoritative', {
+      safeStatus,
+      corridorMode,
+      exerciseName: safeCurrentExercise?.name,
+      exerciseIndex: safeExerciseIndex,
+      currentSetNumber: validatedSetNumber,
+      completedSetsCount: normalizedCompletedSets?.length ?? 0,
+      phase: machineState.phase,
+    })
     
     // [ISOLATED-ACTIVE-CORRIDOR] Derive simple safe values for the corridor
     // These are plain reads from machine state - no complex derivations
@@ -6821,6 +6839,23 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     if (!unitStatus.actions.enabled) return null
     try {
       unitStatus.actions.rendered = true
+      // [LIVE-LOG-CORRIDOR-PROOF] stage_screen_rendered_LEGACY_UNIT
+      // Fires ONLY if the legacy unit-based active-Actions renderer ever
+      // executes during a live workout. The authoritative corridor early-
+      // return at line ~5857 MUST fire first for any active/resting status,
+      // which makes this renderer structurally unreachable in the commit
+      // corridor. If this warn prints while safeStatus is 'active' or
+      // 'resting', the single-owner contract is broken -- the user is
+      // tapping a NON-AUTHORITATIVE button that will still route through
+      // handleCompleteSet (so commits still work) but the UI they see is
+      // the wrong render branch. Filterable with [log-corridor] prefix.
+      if (safeStatus === 'active' || safeStatus === 'resting') {
+        console.warn('[v0] [log-corridor] stage_screen_rendered_LEGACY_UNIT_contract_violation', {
+          safeStatus,
+          exerciseName: safeCurrentExercise?.name,
+          explanation: 'authoritative corridor early-return at line ~5857 should have prevented this render',
+        })
+      }
       return (
         <>
           {/* [LIVE-LOG-CORRIDOR-SINGLE-OWNER] NON-AUTHORITATIVE. Legacy unit-
@@ -6903,6 +6938,25 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
   // No grouped context resolution. No activeWorkoutViewModel dependency.
   // ==========================================================================
   if (ACTIVE_DERIVATION_STAGE === 1) {
+    // [LIVE-LOG-CORRIDOR-PROOF] stage_screen_rendered_LEGACY_STAGE1
+    // If this code executes when safeStatus is 'active' or 'resting', the
+    // authoritative corridor early-return at line ~5857 failed to short-
+    // circuit, which means the user is looking at the wrong live screen.
+    // In normal operation this block only runs for non-active statuses
+    // (e.g. 'ready', 'complete', 'paused'). The warn surfaces contract
+    // violations explicitly; the log below proves non-violation entries.
+    if (safeStatus === 'active' || safeStatus === 'resting') {
+      console.warn('[v0] [log-corridor] stage_screen_rendered_LEGACY_STAGE1_contract_violation', {
+        safeStatus,
+        exerciseName: safeCurrentExercise?.name,
+        explanation: 'authoritative corridor early-return at line ~5857 should have prevented this render',
+      })
+    } else {
+      console.log('[v0] [log-corridor] stage_screen_rendered_LEGACY_STAGE1_non_active', {
+        safeStatus,
+        note: 'legacy Stage-1 render is only authoritative for non-active/non-resting statuses',
+      })
+    }
     console.log('[v0] [Stage1] Rendering minimal active UI - ENTRY')
     console.log('[v0] [Stage1_deps]', {
       safeCurrentExercise: !!safeCurrentExercise,

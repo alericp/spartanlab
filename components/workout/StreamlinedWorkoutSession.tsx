@@ -116,6 +116,10 @@ import {
   type LiveWorkoutSnapshot,
   type LiveWorkoutHandlers,
 } from '@/components/workout/LiveWorkoutExecutionSurface'
+// [LIVE-STATE-SCANNER-R1] Parent latches Stage B onto the on-screen scanner
+// at the same point Stage B console instrumentation fires. No reducer
+// semantics change - this is pure diagnostic surfacing.
+import { recordScannerEvent as recordScannerStage } from '@/components/workout/LiveWorkoutStateScanner'
 import { ExerciseOptionsMenu } from '@/components/workout/ExerciseOptionsMenu'
 import {
   addOverride,
@@ -4004,6 +4008,11 @@ if (styledGroups && styledGroups.length > 0) {
       priorPhase: machineState.phase,
       priorCompletedSetsLength: normalizedCompletedSets.length,
     })
+    // [LIVE-STATE-SCANNER-R1] Latch parent-received onto the on-screen
+    // scanner so screenshots prove the tap reached handleCompleteSet.
+    // If the scanner stays on `stageA_only` after a tap, the click
+    // never reached the parent handler.
+    recordScannerStage('parent_received')
     
     const currentIndex = safeExerciseIndex
     

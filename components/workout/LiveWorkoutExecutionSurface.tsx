@@ -42,7 +42,7 @@
 // =============================================================================
 
 import { Component, useEffect, useRef, type ReactNode, type ErrorInfo } from 'react'
-import { ActiveWorkoutStartCorridor } from './ActiveWorkoutStartCorridor'
+import { ActiveWorkoutStartCorridor, AWC_BUILD_CHIP } from './ActiveWorkoutStartCorridor'
 import type {
   CompletedSetInfo,
   SetReasonTag,
@@ -51,6 +51,15 @@ import type { ExerciseInputMode } from '@/lib/workout/live-workout-authority-con
 import type { CoachingExpression } from '@/lib/workout/live-workout-action-planner'
 import type { RPEValue } from '@/lib/rpe-adjustment-engine'
 import type { ResistanceBandColor } from '@/lib/band-progression-engine'
+// [LIVE-STATE-SCANNER-R1] Event bus helpers. Called at the same
+// instrumentation points where Stage F/G console.logs already fire so the
+// on-screen scanner receives the same authoritative truth with no new
+// state derivation.
+import {
+  recordScannerEvent,
+  recordScannerReversion,
+  type ScannerInput,
+} from './LiveWorkoutStateScanner'
 
 // [PRODUCTION-VISIBLE-BUILD-PROOF] Keeps the R3 fingerprint system intact.
 // If the corridor renders the WS-R3 | SWS-R3 | AWC-R3 chip, this adapter
@@ -411,6 +420,22 @@ export function LiveWorkoutExecutionSurface({
         renderSurface: surface,
       })
 
+      // [LIVE-STATE-SCANNER-R1] Infer the reducer return shape from the
+      // observed phase transition and the ledger advancing. We don't
+      // touch the reducer file; we read the same delta the corridor is
+      // about to render from.
+      const commitLanded = curr.completedSetsLength > prev.completedSetsLength
+      if (commitLanded) {
+        if (curr.phase === 'resting' || curr.phase === 'block_round_rest') {
+          recordScannerEvent('reducer_returned_resting')
+        } else if (curr.phase === 'between_exercise_rest') {
+          recordScannerEvent('reducer_returned_between_exercise_rest')
+        }
+        // The surface rendering this effect is, by construction, the
+        // authoritative live corridor receiving post-commit props.
+        recordScannerEvent('corridor_received_post_commit')
+      }
+
       const revertedToActive =
         prev.phase === 'resting' &&
         curr.phase === 'active' &&
@@ -430,6 +455,15 @@ export function LiveWorkoutExecutionSurface({
           renderSurface: surface,
           hint: 'Phase reverted resting -> active at same exercise with DECREASED currentSetNumber. A second owner is overwriting reducer output.',
         })
+        recordScannerReversion({
+          confirmed: true,
+          priorPhase: prev.phase,
+          nextPhase: curr.phase,
+          priorSet: prev.currentSetNumber,
+          nextSet: curr.currentSetNumber,
+          priorCompleted: prev.completedSetsLength,
+          nextCompleted: curr.completedSetsLength,
+        })
       }
 
       if (curr.completedSetsLength < prev.completedSetsLength) {
@@ -442,6 +476,15 @@ export function LiveWorkoutExecutionSurface({
           nextPhase: curr.phase,
           renderSurface: surface,
           hint: 'completedSets ledger shrank after a commit - a second owner replaced machineState with a stale snapshot.',
+        })
+        recordScannerReversion({
+          confirmed: true,
+          priorPhase: prev.phase,
+          nextPhase: curr.phase,
+          priorSet: prev.currentSetNumber,
+          nextSet: curr.currentSetNumber,
+          priorCompleted: prev.completedSetsLength,
+          nextCompleted: curr.completedSetsLength,
         })
       }
     }
@@ -493,12 +536,39 @@ export function LiveWorkoutExecutionSurface({
   const safeHoldValue = clampInt(snapshot.holdValue, 0, 0, 99999)
   const safeRecentSets = Array.isArray(snapshot.recentSets) ? snapshot.recentSets : []
 
+  // [LIVE-STATE-SCANNER-R1] Build the compact ScannerInput from the SAME
+  // validated fields the corridor renders from. This is the single
+  // authoritative scanner truth source - no independent derivation.
+  const scannerInput: ScannerInput = {
+    routeBuildChip: snapshot.routeBuildChip ?? '?',
+    parentBuildChip: snapshot.parentBuildChip ?? '?',
+    awcBuildChip: AWC_BUILD_CHIP,
+    rawPhase: snapshot.machinePhase,
+    mode: safeMode,
+    exerciseName: safeExerciseName,
+    currentExerciseIndex: safeCurrentExerciseIndex,
+    totalExercises: safeTotalExercises,
+    currentSetNumber: safeCurrentSetNumber,
+    exerciseSets: safeExerciseSets,
+    completedSetsCount: safeCompletedSetsCount,
+    totalSetsCount: safeTotalSetsCount,
+    lastCommitRevision: snapshot.lastCommitRevision ?? safeCompletedSetsCount,
+    repsValue: safeRepsValue,
+    holdValue: safeHoldValue,
+    isHoldExercise: !!snapshot.isHoldExercise,
+    selectedRPE: typeof snapshot.selectedRPE === 'number' ? snapshot.selectedRPE : null,
+    recentSetsLength: safeRecentSets.length,
+    restType: snapshot.restType ?? 'none',
+  }
+
   return (
     <LiveCorridorErrorBoundary fallback={<LiveCorridorFallback />}>
       <ActiveWorkoutStartCorridor
         // Build proof (unchanged chip contract)
         routeBuildChip={snapshot.routeBuildChip}
         parentBuildChip={snapshot.parentBuildChip}
+        // [LIVE-STATE-SCANNER-R1] Scanner truth forwarded to the corridor
+        scannerInput={scannerInput}
         // Mode + identity
         mode={safeMode}
         sessionLabel={safeSessionLabel}

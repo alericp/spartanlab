@@ -7429,214 +7429,41 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
   }
   
   // ==========================================================================
-  // STAGE 1: MINIMAL WORKING ACTIVE UI
-  // [SURGICAL-FIX] This is the narrow, known-good first active render path.
-  // Uses ONLY machine-derived safe values. No complex derivation chains.
-  // No grouped context resolution. No activeWorkoutViewModel dependency.
+  // [LIVE-SESSION-CRASH-FIX-R4] LEGACY STAGE-1 BRANCH REMOVED.
+  //
+  // Root cause that tripped the Workout Session Issue boundary:
+  //   This component mounts in phase 'ready' (see live-workout-machine.ts
+  //   initialState). 'ready' is NOT a live execution phase, so the
+  //   authoritative corridor early-return at line ~6256 does NOT fire.
+  //   Control then fell into the legacy Stage-1 active render branch,
+  //   whose JSX referenced `CardContent` and `Input` - neither of which
+  //   is imported in this file. On first render we threw a client-side
+  //   ReferenceError and the error boundary caught it before Start
+  //   Workout could finish wiring.
+  //
+  // Surgical fix:
+  //   Removed the entire Stage-1 legacy branch. The single-owner contract
+  //   is now strictly:
+  //     - live phases (active / resting / between_exercise_rest /
+  //       block_round_rest / transitioning)
+  //         -> authoritative <ActiveWorkoutStartCorridor /> at the early-
+  //            return around line ~6256.
+  //     - all non-live phases (ready / paused / complete / transitional
+  //       boot states)
+  //         -> fall through to the Stage-2+ unit-based return below,
+  //            whose renderers use ONLY imports that actually exist in
+  //            this file (Card, Button, Badge, RepsHoldInput, etc.).
+  //
+  //   No legacy active render surface remains reachable during live
+  //   execution. The removed branch was the ONLY place in this file
+  //   that referenced `CardContent` or `Input`, so the ReferenceError
+  //   surface is eliminated entirely rather than patched around.
   // ==========================================================================
-  if (ACTIVE_DERIVATION_STAGE === 1) {
-    // [LIVE-RENDER-SOURCE-LOCK] Belt-and-suspenders single-owner guard.
-    // The isLiveExecutionPhase early-return at ~line 6066 already returns
-    // <ActiveWorkoutStartCorridor/> before this Stage-1 legacy branch can
-    // run during any live workout phase. This hard-block makes it
-    // structurally impossible for the Stage-1 legacy active screen (which
-    // has its own header + exercise card + input + RPE + Complete Set
-    // button) to paint while the user is in a live execution phase. If
-    // this warn ever prints, the upstream early-return is no longer the
-    // authoritative gate and the single-owner contract is broken.
-    if (isLiveExecutionPhase) {
-      console.warn('[v0] [log-corridor] LEGACY_STAGE1_BRANCH_BLOCKED_DURING_LIVE_PHASE', { livePhase })
-      return null
-    }
-    // [LIVE-LOG-CORRIDOR-PROOF] stage_screen_rendered_LEGACY_STAGE1
-    // If this code executes when safeStatus is 'active' or 'resting', the
-    // authoritative corridor early-return at line ~5857 failed to short-
-    // circuit, which means the user is looking at the wrong live screen.
-    // In normal operation this block only runs for non-active statuses
-    // (e.g. 'ready', 'complete', 'paused'). The warn surfaces contract
-    // violations explicitly; the log below proves non-violation entries.
-    if (safeStatus === 'active' || safeStatus === 'resting') {
-      console.warn('[v0] [log-corridor] stage_screen_rendered_LEGACY_STAGE1_contract_violation', {
-        safeStatus,
-        exerciseName: safeCurrentExercise?.name,
-        explanation: 'authoritative corridor early-return at line ~5857 should have prevented this render',
-      })
-    } else {
-      console.log('[v0] [log-corridor] stage_screen_rendered_LEGACY_STAGE1_non_active', {
-        safeStatus,
-        note: 'legacy Stage-1 render is only authoritative for non-active/non-resting statuses',
-      })
-    }
-    console.log('[v0] [Stage1] Rendering minimal active UI - ENTRY')
-    console.log('[v0] [Stage1_deps]', {
-      safeCurrentExercise: !!safeCurrentExercise,
-      safeCurrentExerciseName: safeCurrentExercise?.name,
-      validatedSetNumber,
-      safeExerciseIndex,
-      exercisesLength: exercises?.length,
-      normalizedCompletedSetsLength: normalizedCompletedSets?.length,
-      safeElapsedSeconds,
-      safeDisplayLabel,
-      safeHoldValue,
-      safeRepsValue,
-      safeSelectedRPE,
-    })
-    unitStatus.shell.rendered = true
-    
-    // Read ONLY from machine-derived safe values - no complex derivations
-    // [ACTIVE-WEEK-PARITY] Stage-1 is a visible active render; it must use
-    // the same effective dosage as the full-stage render. Otherwise the live
-    // shell would flash raw Week-1 values (e.g. "Set 1/3 - 6s hold") between
-    // mount and stage-6 promotion even on Week 2/3/4 sessions.
-    const s1ExerciseName = safeCurrentExercise?.name || 'Exercise'
-    const s1ExerciseCategory = safeCurrentExercise?.category || 'general'
-    const s1ExerciseSets = activeEffectiveContract.effectiveSets
-    const s1ExerciseRepsOrTime = activeEffectiveContract.effectiveRepsOrTime
-    const s1SetNumber = validatedSetNumber || 1
-    const s1ExerciseIndex = safeExerciseIndex || 0
-    const s1TotalExercises = exercises?.length || 1
-    const s1CompletedSets = normalizedCompletedSets?.length || 0
-    const s1TotalSets = (exercises || []).reduce((sum, ex) => sum + getEffectiveExerciseValues(ex).sets, 0) || 3
-    const s1Elapsed = safeElapsedSeconds || 0
-    // [LIVE-UNIT-CONTRACT] Canonical hold detector for Stage1 summary.
-    const s1IsHold = isHoldUnit({
-      repsOrTime: s1ExerciseRepsOrTime,
-      name: s1ExerciseName,
-      category: s1ExerciseCategory,
-    })
-    
-    // Parse target value simply
-    let s1TargetValue = s1IsHold ? 30 : 8
-    const s1RepsMatch = s1ExerciseRepsOrTime.match(/(\d+)/)
-    if (s1RepsMatch) s1TargetValue = parseInt(s1RepsMatch[1], 10)
-    
-    console.log('[v0] [Stage1_vars_computed]', { s1ExerciseName, s1SetNumber, s1TotalExercises, s1IsHold })
-    console.log('[v0] [Stage1] About to return JSX')
-    
-    return (
-      <div className="min-h-screen bg-[#0F1115] flex flex-col overflow-x-hidden">
-        {/* Header */}
-        <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
-          <div className="px-4 py-2.5">
-            <div className="max-w-lg mx-auto">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                  <span className="text-sm font-medium text-[#E6E9EF] truncate max-w-[160px]">{safeDisplayLabel}</span>
-                  <span className="text-xs text-[#6B7280]">{s1ExerciseIndex + 1}/{s1TotalExercises}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  {/* [PRODUCTION-VISIBLE-BUILD-PROOF-R3] LEGACY fingerprint.
-                      If the user sees this chip during a live workout, the
-                      Stage-1 legacy surface leaked past the isLiveExecutionPhase
-                      gate - that is a single-owner contract violation and
-                      means the wrong component is rendering. */}
-                  <span
-                    className="text-[9px] font-mono uppercase tracking-wider px-1 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40"
-                    aria-hidden
-                  >
-                    {LEGACY_ACTIVE_BUILD_CHIP}
-                  </span>
-                  <span className="text-xs text-[#6B7280]">{s1CompletedSets}/{s1TotalSets}</span>
-                  <span className="font-mono text-sm font-bold text-[#E6E9EF] tabular-nums">{formatDuration(s1Elapsed)}</span>
-                </div>
-              </div>
-              <div className="h-1 bg-[#2B313A] rounded-full overflow-hidden">
-                <div className="h-full bg-[#C1121F] transition-all duration-300" style={{ width: `${(s1CompletedSets / Math.max(s1TotalSets, 1)) * 100}%` }} />
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Main content */}
-        <div className="flex-1 px-4 py-3">
-          <div className="max-w-lg mx-auto space-y-3">
-            {/* Exercise Card */}
-            <Card className="bg-[#1A1F26] border-[#2B313A]">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Badge className="bg-[#C1121F]/10 text-[#C1121F] border-0 text-[10px] uppercase px-2 py-0.5">
-                      {s1ExerciseCategory}
-                    </Badge>
-                    <span className="text-xs text-[#6B7280]">Set {s1SetNumber}/{s1ExerciseSets}</span>
-                  </div>
-                </div>
-                <h2 className="text-xl font-bold text-[#E6E9EF] mb-1">{s1ExerciseName}</h2>
-                <p className="text-sm text-[#A4ACB8]">{s1ExerciseRepsOrTime}</p>
-              </CardContent>
-            </Card>
-            
-            {/* Input Controls */}
-            <Card className="bg-[#1A1F26] border-[#2B313A]">
-              <CardContent className="p-4 space-y-4">
-                {s1IsHold ? (
-                  <div>
-                    <label className="block text-xs text-[#6B7280] mb-1.5">Hold Time (seconds)</label>
-                    <Input
-                      type="number"
-                      value={safeHoldValue}
-                      onChange={(e) => setHoldValue(parseInt(e.target.value) || 0)}
-                      className="bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] text-lg font-bold"
-                    />
-                  </div>
-                ) : (
-                  <div>
-                    <label className="block text-xs text-[#6B7280] mb-1.5">Reps Completed</label>
-                    <Input
-                      type="number"
-                      value={safeRepsValue}
-                      onChange={(e) => setRepsValue(parseInt(e.target.value) || 0)}
-                      className="bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] text-lg font-bold"
-                    />
-                  </div>
-                )}
-                
-                <div>
-                  <label className="block text-xs text-[#6B7280] mb-1.5">RPE (Effort)</label>
-                  <div className="flex gap-1">
-                    {[6, 7, 8, 9, 10].map(rpe => (
-                      <Button
-                        key={rpe}
-                        variant={safeSelectedRPE === rpe ? 'default' : 'outline'}
-                        size="sm"
-                        className={safeSelectedRPE === rpe ? 'bg-[#C1121F] border-[#C1121F]' : 'border-[#2B313A] text-[#A4ACB8]'}
-                        onClick={() => setSelectedRPE(rpe)}
-                      >
-                        {rpe}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            {/* [LIVE-LOG-CORRIDOR-SINGLE-OWNER] NON-AUTHORITATIVE. Legacy
-                Stage-1 active-screen Complete Set button. Only renders when
-                ACTIVE_DERIVATION_STAGE === 1 AND the safeStatus is NOT active
-                or resting (which is impossible during the live Log Set
-                corridor because the active/resting branch returns the
-                authoritative corridor at line ~5835). Routed through
-                handleCompleteSet so behavior is consistent if ever reached,
-                but the warning makes a stale re-entry observable. */}
-            <Button
-              className="w-full h-14 text-lg font-bold bg-[#C1121F] hover:bg-[#A10F1A] text-white"
-              onClick={() => {
-                console.warn('[v0] [log-corridor] NON-AUTHORITATIVE legacy Stage-1 Complete Set click - commit corridor single-owner contract says this should be unreachable')
-                handleCompleteSet()
-              }}
-            >
-              Complete Set
-            </Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-  
+
   // ==========================================================================
   // STAGE 2+: Unit-based render with containment
   // Shell stays alive, each unit renders inside with local error handling
+  // This is now the SOLE non-live render path.
   // ==========================================================================
   unitStatus.shell.rendered = true
   

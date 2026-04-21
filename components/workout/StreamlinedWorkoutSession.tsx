@@ -6135,141 +6135,19 @@ function InterExerciseRestCountdown({
     livePhase === 'transitioning'
   
   // =========================================================================
-  // [POST-COMMIT-FREEZE-TRACE-R3] Stage F observability + reversion guard.
-  //
-  // Diagnostic-only. Does not dispatch, does not mutate state. Runs on every
-  // relevant machine-state change so we can reconstruct the exact sequence
-  // of phase + set-number transitions that follow a Log Set commit.
-  //
-  // STAGE F - "Parent re-render after commit"
-  //   Fires any time (phase, currentSetNumber, currentExerciseIndex,
-  //   completedSets.length) changes. Correlates with the current
-  //   __spartanlabCurrentTapTraceId so one Log Set tap maps cleanly to
-  //   its subsequent render chain.
-  //
-  // POST_COMMIT_REVERSION_CONFIRMED guard:
-  //   Detects the observed bug pattern where the UI enters rest after a
-  //   Log Set commit and then snaps back to ACTIVE at the pre-commit
-  //   (exerciseIndex, setNumber) WITHOUT a legitimate COMPLETE_REST or
-  //   ADVANCE_TO_NEXT_EXERCISE having advanced the pointer. This is a
-  //   read-only high-signal error that names the exact reversion stage.
+  // [HOOK-CONTRACT-FIX] Post-commit observability (Stage F) used to live
+  // here as a `useRef` + `useEffect` pair. Those hooks were declared BELOW
+  // the component-level `if (safeStatus === 'ready') { return ... }` and
+  // `if (safeStatus === 'completed') { return ... }` early returns, which
+  // meant the parent's hook count changed between renders whenever the
+  // status transitioned across those branches - the exact shape of React
+  // error #310 that the production diagnostic footer reported as
+  // `ready_shell_render`. Since those hooks are strictly live-only
+  // concerns, they now live inside LiveWorkoutExecutionSurface, which is
+  // only mounted during live execution phases. The parent component now
+  // declares NO hooks after any conditional component-level return.
   // =========================================================================
-  const postCommitObservationRef = useRef<{
-    phase: string
-    currentExerciseIndex: number
-    currentSetNumber: number
-    completedSetsLength: number
-    lastSeenTapTraceId: number | null
-  }>({
-    phase: machineState.phase,
-    currentExerciseIndex: machineState.currentExerciseIndex,
-    currentSetNumber: machineState.currentSetNumber,
-    completedSetsLength: normalizedCompletedSets.length,
-    lastSeenTapTraceId: null,
-  })
-  
-  useEffect(() => {
-    const prev = postCommitObservationRef.current
-    const curr = {
-      phase: machineState.phase,
-      currentExerciseIndex: machineState.currentExerciseIndex,
-      currentSetNumber: machineState.currentSetNumber,
-      completedSetsLength: normalizedCompletedSets.length,
-    }
-    const tapTraceId = readCurrentTapTraceId()
-    
-    // Only emit if something actually moved - avoid log spam on unrelated renders.
-    const something_changed =
-      prev.phase !== curr.phase ||
-      prev.currentExerciseIndex !== curr.currentExerciseIndex ||
-      prev.currentSetNumber !== curr.currentSetNumber ||
-      prev.completedSetsLength !== curr.completedSetsLength
-    
-    if (something_changed) {
-      // Determine render surface authoritatively from the same gate the
-      // actual render branch uses - never guess.
-      const surface =
-        curr.phase === 'active' ||
-        curr.phase === 'resting' ||
-        curr.phase === 'between_exercise_rest' ||
-        curr.phase === 'block_round_rest' ||
-        curr.phase === 'transitioning'
-          ? 'authoritative_active_corridor'
-          : 'non_live_surface'
-      
-      console.log('[v0] [log-corridor] stageF post-commit render observed', {
-        tapTraceId,
-        priorPhase: prev.phase,
-        currPhase: curr.phase,
-        priorExerciseIndex: prev.currentExerciseIndex,
-        currExerciseIndex: curr.currentExerciseIndex,
-        priorSetNumber: prev.currentSetNumber,
-        currSetNumber: curr.currentSetNumber,
-        priorCompletedLength: prev.completedSetsLength,
-        currCompletedLength: curr.completedSetsLength,
-        renderSurface: surface,
-      })
-      
-      // REVERSION DETECTION
-      // --------------------------------------------------------------------
-      // A legitimate sequence after a non-last-set COMPLETE_SET is:
-      //   active(setN) -> resting(setN+1) -> [COMPLETE_REST] -> active(setN+1)
-      // The set number advances ONCE (inside COMPLETE_SET). It must not
-      // return to setN unless the user explicitly went back.
-      //
-      // The buggy pattern we are instrumenting for is:
-      //   active(setN) -> resting(setN+1) -> active(setN)
-      // i.e. phase reverts to active AND the set number REGRESSES AT THE
-      // SAME (exerciseIndex) without a legitimate cause. completedSets
-      // length either stays the same or decreases.
-      const revertedToActive =
-        prev.phase === 'resting' &&
-        curr.phase === 'active' &&
-        prev.currentExerciseIndex === curr.currentExerciseIndex &&
-        curr.currentSetNumber < prev.currentSetNumber
-      
-      if (revertedToActive) {
-        console.error('[v0] [log-corridor] POST_COMMIT_REVERSION_CONFIRMED', {
-          tapTraceId,
-          priorPhase: prev.phase,
-          nextPhase: curr.phase,
-          exerciseIndex: curr.currentExerciseIndex,
-          priorSetNumber: prev.currentSetNumber,
-          currentSetNumber: curr.currentSetNumber,
-          priorCompletedSetsLength: prev.completedSetsLength,
-          currentCompletedSetsLength: curr.completedSetsLength,
-          renderSurface: surface,
-          hint: 'Phase reverted resting -> active at same exercise with DECREASED currentSetNumber. A second owner is overwriting reducer output.',
-        })
-      }
-      
-      // Secondary reversion shape: completedSets length DECREASED (a real
-      // commit was rolled back).
-      if (curr.completedSetsLength < prev.completedSetsLength) {
-        console.error('[v0] [log-corridor] POST_COMMIT_REVERSION_CONFIRMED', {
-          tapTraceId,
-          reason: 'completedSets_length_decreased',
-          priorCompletedSetsLength: prev.completedSetsLength,
-          currentCompletedSetsLength: curr.completedSetsLength,
-          priorPhase: prev.phase,
-          nextPhase: curr.phase,
-          renderSurface: surface,
-          hint: 'completedSets ledger shrank after a commit - a second owner replaced machineState with a stale snapshot.',
-        })
-      }
-    }
-    
-    postCommitObservationRef.current = {
-      ...curr,
-      lastSeenTapTraceId: tapTraceId,
-    }
-  }, [
-    machineState.phase,
-    machineState.currentExerciseIndex,
-    machineState.currentSetNumber,
-    normalizedCompletedSets.length,
-  ])
-  
+
   if (isLiveExecutionPhase) {
     // [LIVE-TRUE-ISOLATION-R5] Stage marker fired the instant we enter the
     // live render branch. If this stage is set on crash, the parent hook
@@ -6714,6 +6592,12 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           // Mode & labels
           mode: corridorMode,
           sessionLabel: safeDisplayLabel || 'Workout',
+          // [HOOK-CONTRACT-FIX] Raw machine phase handed to the live surface
+          // so its post-commit observability effect (previously a parent-body
+          // hook below the ready-shell conditional return - root cause of
+          // React error #310) can do reversion detection without relying on
+          // the lossy `mode` projection.
+          machinePhase: machineState.phase,
           // Exercise identity
           exerciseName: safeCurrentExercise?.name || 'Exercise',
           exerciseCategory: safeCurrentExercise?.category || 'general',

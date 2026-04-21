@@ -104,7 +104,18 @@ import {
 } from '@/lib/adaptive-performance-evaluator'
 import { RPE_QUICK_OPTIONS, type RPEValue } from '@/lib/rpe-adjustment-engine'
 import { InlineRestTimer } from '@/components/workout/InlineRestTimer'
-import { ActiveWorkoutStartCorridor } from '@/components/workout/ActiveWorkoutStartCorridor'
+// [LIVE-TRUE-ISOLATION-R5] Isolated live-execution adapter. Sole owner of
+// live-phase rendering - wraps ActiveWorkoutStartCorridor in its own error
+// boundary and validates every snapshot field at the handoff boundary.
+// Direct value import of ActiveWorkoutStartCorridor is no longer needed
+// here - the surface is the only renderer. Type-only imports remain for
+// SetReasonTag cross-references below.
+import {
+  LiveWorkoutExecutionSurface,
+  markLiveBootStage,
+  type LiveWorkoutSnapshot,
+  type LiveWorkoutHandlers,
+} from '@/components/workout/LiveWorkoutExecutionSurface'
 import { ExerciseOptionsMenu } from '@/components/workout/ExerciseOptionsMenu'
 import {
   addOverride,
@@ -5530,6 +5541,12 @@ if (shouldShowLocalFallback) {
   
   // [LIVE-WORKOUT-MACHINE] Use safeStatus from machine
   if (safeStatus === 'ready') {
+    // [LIVE-TRUE-ISOLATION-R5] Mark that we entered the ready shell branch.
+    // If the route-level boundary fires while this is the last known stage,
+    // the failure happened during pre-start shell rendering, not live.
+    markLiveBootStage('ready_shell_render', {
+      phase: machineState.phase,
+    })
     // [LIVE-PHASE-ASSERTION] Guard against ready render during live execution
     if (machineState.completedSets.length > 0 || machineState.startTime !== null) {
       console.error('[v0] [LIVE-PHASE-ASSERTION] BUG: Ready shell entered with active progress!', {
@@ -6254,6 +6271,17 @@ function InterExerciseRestCountdown({
   ])
   
   if (isLiveExecutionPhase) {
+    // [LIVE-TRUE-ISOLATION-R5] Stage marker fired the instant we enter the
+    // live render branch. If this stage is set on crash, the parent hook
+    // chain ran successfully and the failure is downstream (snapshot
+    // build, live surface, or corridor). If this stage is NOT set on
+    // crash, the failure happened up in the parent hook/effect/useMemo
+    // chain BEFORE we ever reached the live branch.
+    markLiveBootStage('live_branch_entered', {
+      phase: machineState.phase,
+      exerciseIndex: safeExerciseIndex,
+    })
+    
     // [LIVE-LOG-COMMIT-SURVIVAL] corridorMode is derived DIRECTLY from
     // machineState.phase. No safeStatus compatibility layer.
     const corridorMode =
@@ -6648,216 +6676,188 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     }
     
     // =====================================================================
-    // [LIVE-LOG-HANDOFF-FIX] activeCorridorSnapshot - SINGLE AUTHORITATIVE
-    // RENDER SOURCE FOR ACTIVEWORKOUTSTARTCORRIDOR
+    // [LIVE-TRUE-ISOLATION-R5] BUILD THE FLAT LIVE SNAPSHOT + HAND OFF TO
+    // LiveWorkoutExecutionSurface.
     //
-    // Prior to this fix, the corridor's visible identifying props
-    // (mode, set number, completed count, recent sets, inputs) were
-    // scattered inline across 40+ JSX lines. Every individual field was
-    // already machine-derived - there was no literal mixing with
-    // liveSession / existingSession / viewModel - but the scattered reads
-    // made the handoff surface opaque: there was no single observable
-    // point at which we could prove "the parent is handing the corridor
-    // exactly these post-commit machine values."
+    // This is the ONLY live-render handoff surface. The surface is a
+    // narrow adapter that renders ActiveWorkoutStartCorridor behind its
+    // own error boundary and validates every field at the boundary.
     //
-    // This snapshot consolidates every field named in LIVE-LOG-HANDOFF
-    // C2 into ONE object, sourced only from:
-    //   - machineState        (phase, completedSets, currentSetNumber,
-    //                          currentExerciseIndex, selectedRPE,
-    //                          repsValue, holdValue, selectedBands,
-    //                          actualLoadUsed, actualLoadUnit,
-    //                          isPerSide, currentSetNote,
-    //                          currentSetReasonTags)
-    //   - safeCurrentExercise (the indexed exercise from the contract
-    //                          using machineState.currentExerciseIndex)
-    //   - activeEffectiveContract (effective sets / repsOrTime / RPE
-    //                          driven off machineState-owned current
-    //                          exercise)
-    //   - corridor-scoped derivations already in this block
+    // Snapshot construction is wrapped in try/catch so that a degenerate
+    // value (a throw inside any of the machine-pure derivations above)
+    // can be attributed to `live_snapshot_build` rather than to the
+    // surface render or to the corridor render itself. The route-level
+    // error footer reads this stage attribution to narrow diagnosis.
+    //
+    // Fields consolidated here were previously scattered inline across
+    // 40+ corridor JSX props. Every source is machine-pure:
+    //   - machineState
+    //   - safeCurrentExercise (indexed by machineState.currentExerciseIndex)
+    //   - activeEffectiveContract (week-scaled effective prescription)
+    //   - corridor-scoped derivations from earlier in this block
     //     (corridorRepsValue, corridorHoldValue, corridorRecentSets,
-    //      isHoldExerciseForDefault, corridorMode, etc.) which are
-    //     themselves machine-pure.
+    //      isHoldExerciseForDefault, corridorMode, corridorInputMode,
+    //      corridorBandSelectable, corridorRecommendedBand, etc.)
     //
-    // It explicitly DOES NOT read from:
-    //   - liveSession (legacy flattener used by autosave only)
-    //   - existingSession (pre-start saved-session hint)
-    //   - viewModel (used for pre-start shell only)
-    //   - any "safeStatus" route that masks machineState.phase
-    //
-    // The corridor receives these fields as individual props below so
-    // its public API is unchanged; the snapshot is purely a consolidation
-    // boundary for proof logging and future audits.
+    // Explicitly NOT sourced from: liveSession, existingSession,
+    // viewModel, or any safeStatus compatibility mapping.
     // =====================================================================
-    const activeCorridorSnapshot = {
-      // Mode & labels
-      mode: corridorMode,
-      exerciseName: safeCurrentExercise?.name || 'Exercise',
-      exerciseCategory: safeCurrentExercise?.category || 'general',
-      // Week-scaled prescription (effective contract)
-      exerciseSets: activeEffectiveContract.effectiveSets,
-      exerciseRepsOrTime: activeEffectiveContract.effectiveRepsOrTime,
-      targetRPE: activeEffectiveContract.effectiveTargetRPE,
-      // Flat progression (machine-direct)
-      currentSetNumber: validatedSetNumber || 1,
-      currentExerciseIndex: safeExerciseIndex || 0,
-      totalExercises: exercises?.length || 1,
-      completedSetsCount: normalizedCompletedSets?.length || 0,
-      totalSetsCount: totalSets || 3,
-      // Inputs (machine-direct via seeding helpers)
-      repsValue: corridorRepsValue,
-      holdValue: corridorHoldValue,
-      selectedRPE: safeSelectedRPE,
-      // Notes (machine-direct)
-      currentSetNote: corridorCurrentSetNote,
-      currentSetReasonTags: corridorCurrentSetReasonTags,
-      // Ledger (machine-direct)
-      recentSets: corridorRecentSets,
-      // Input-kind contract (canonical isHoldUnit same detector as persistence)
-      isHoldExercise: isHoldExerciseForDefault,
-      // Load + bands (machine-direct)
-      selectedBands: corridorBandSelectable ? (machineState.selectedBands || []) : [],
-      actualLoadUsed: machineState.actualLoadUsed,
-      actualLoadUnit: machineState.actualLoadUnit,
-      isPerSide: machineState.isPerSide,
-    } as const
-    
-    // [log-corridor] Stage 6: snapshot passed to corridor. Proves the
-    // parent handoff values AFTER reducer commit. If this log shows
-    // currentSetNumber=2 and completedSetsCount=1 but the screen still
-    // shows Set 1/5, the bug is downstream (stage 7 inside the corridor
-    // or later). If this log ALSO shows Set 1/5 + 0, the bug is upstream
-    // of the handoff (reducer return not landing, or an overwrite effect
-    // rewriting machineState before this snapshot).
-    console.log('[v0] [log-corridor] stage6 active snapshot passed to corridor', {
-      mode: activeCorridorSnapshot.mode,
+    markLiveBootStage('live_snapshot_build', {
       phase: machineState.phase,
-      currentExerciseIndex: activeCorridorSnapshot.currentExerciseIndex,
-      currentSetNumber: activeCorridorSnapshot.currentSetNumber,
-      completedSetsCount: activeCorridorSnapshot.completedSetsCount,
-      recentSetsLength: activeCorridorSnapshot.recentSets.length,
-      selectedRPE: activeCorridorSnapshot.selectedRPE,
-      repsValue: activeCorridorSnapshot.repsValue,
-      holdValue: activeCorridorSnapshot.holdValue,
-      isHoldExercise: activeCorridorSnapshot.isHoldExercise,
+      currentSetNumber: validatedSetNumber,
+      completedSetsCount: normalizedCompletedSets?.length ?? 0,
     })
     
-    return (
-      <ActiveWorkoutStartCorridor
-        // [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Three-segment always-visible
-        // build fingerprint. The corridor renders these as a tiny muted
-        // chip (WS-R3 | SWS-R3 | AWC-R3) at the top of the main content
-        // area in preview AND production. If this chip is missing on a
-        // live workout, the phone is not running the latest bundle.
-        routeBuildChip={routeBuildChip}
-        parentBuildChip={SWS_BUILD_CHIP}
-        mode={activeCorridorSnapshot.mode}
-        sessionLabel={safeDisplayLabel || 'Workout'}
-        exerciseName={activeCorridorSnapshot.exerciseName}
-        exerciseCategory={activeCorridorSnapshot.exerciseCategory}
-        // [ACTIVE-WEEK-PARITY] exerciseSets / exerciseRepsOrTime / targetRPE
-        // flow from activeCorridorSnapshot which pulls from
-        // activeEffectiveContract (the same week-scaled contract used by
-        // the pre-start shell). Never route these through raw base dosage.
-        exerciseSets={activeCorridorSnapshot.exerciseSets}
-        exerciseRepsOrTime={activeCorridorSnapshot.exerciseRepsOrTime}
-        targetRPE={activeCorridorSnapshot.targetRPE}
-        prescribedLoad={safeCurrentExercise?.prescribedLoad?.load && safeCurrentExercise.prescribedLoad.load > 0 ? {
-          load: safeCurrentExercise.prescribedLoad.load,
-          unit: safeCurrentExercise.prescribedLoad.unit || 'lbs',
-          confidenceLevel: safeCurrentExercise.prescribedLoad.confidenceLevel,
-        } : undefined}
-        currentSetNumber={activeCorridorSnapshot.currentSetNumber}
-        currentExerciseIndex={activeCorridorSnapshot.currentExerciseIndex}
-        totalExercises={activeCorridorSnapshot.totalExercises}
-        completedSetsCount={activeCorridorSnapshot.completedSetsCount}
-        totalSetsCount={activeCorridorSnapshot.totalSetsCount}
-        elapsedSeconds={safeElapsedSeconds || 0}
-        repsValue={activeCorridorSnapshot.repsValue}
-        holdValue={activeCorridorSnapshot.holdValue}
-        // [ACTIVE-SET-SAVE-PARITY] Single authoritative primary-input kind.
-        // Sourced from activeCorridorSnapshot.isHoldExercise which equals
-        // isHoldExerciseForDefault - the IDENTICAL canonical isHoldUnit()
-        // output handleCompleteSet uses for persistence. Render branch and
-        // persist branch cannot disagree.
-        isHoldExercise={activeCorridorSnapshot.isHoldExercise}
-        // [LIVE-LOG-COMMIT-SURVIVAL] Authoritative commit revision. Derived
-        // from normalizedCompletedSets.length (machine-direct) - increments
-        // once per real reducer commit. The corridor uses this as the ONLY
-        // proof of a successful logged set. No local in-flight flag can
-        // fake success; if this value does not advance after a Log Set tap,
-        // nothing committed and the corridor cannot pretend otherwise.
-        lastCommitRevision={normalizedCompletedSets.length}
-        selectedRPE={activeCorridorSnapshot.selectedRPE}
-        bandUsed={safeBandUsed || 'none'}
-        currentSetNote={activeCorridorSnapshot.currentSetNote}
-        currentSetReasonTags={activeCorridorSnapshot.currentSetReasonTags}
-        recentSets={activeCorridorSnapshot.recentSets}
-        // [LIVE-WORKOUT-AUTHORITY] Input mode contract
-        inputMode={corridorInputMode.mode}
-        showLoadInput={corridorInputMode.showLoadInput}
-        // [AUTHORITATIVE-BAND-GATE] Both band gates collapse to the same
-        // contract-owned flag. If the contract says no band UI, the corridor
-        // cannot render band controls regardless of any other prop.
-        showMultiBandSelector={corridorBandSelectable && corridorInputMode.showMultiBandSelector}
-        showPerSideToggle={corridorInputMode.showPerSideToggle}
-        primaryInputLabel={corridorInputMode.primaryInputLabel}
-        bandSelectable={corridorBandSelectable}
-        recommendedBand={corridorBandSelectable ? corridorRecommendedBand : undefined}
-        // [LIVE-WORKOUT-AUTHORITY] Multi-band selection
-        // [STALE-BAND-HANDOFF-GUARD] If the contract forbids band UI (weighted
-        // exercise), never hand stale selectedBands down to the corridor.
-        // This is a belt-and-suspenders guard on top of the machine-level
-        // clearing in ADVANCE_TO_NEXT_* reducers: even if a render fires
-        // before the next advance dispatch, the contract-forbidden surface
-        // cannot display stale colored band chips from the prior exercise.
-        // [LIVE-LOG-HANDOFF-FIX] Route through activeCorridorSnapshot. Value
-        // already applies the `corridorBandSelectable` suppression rule
-        // (weighted/unilateral-weighted modes -> empty array) so the
-        // belt-and-suspenders guard against stale colored band chips
-        // travels with the snapshot, not as a second inline rule.
-        selectedBands={activeCorridorSnapshot.selectedBands}
-        onSetSelectedBands={(bands) => machineDispatch({ type: 'SET_SELECTED_BANDS', bands })}
-        // [LIVE-WORKOUT-AUTHORITY] Weighted exercise inputs (machine-direct via snapshot)
-        actualLoadUsed={activeCorridorSnapshot.actualLoadUsed}
-        actualLoadUnit={activeCorridorSnapshot.actualLoadUnit}
-        onSetActualLoad={(load, unit) => machineDispatch({ type: 'SET_ACTUAL_LOAD', load, unit })}
-        // [LIVE-WORKOUT-AUTHORITY] Per-side tracking (machine-direct via snapshot)
-        isPerSide={activeCorridorSnapshot.isPerSide}
-        onSetIsPerSide={(isPerSide) => machineDispatch({ type: 'SET_IS_PER_SIDE', isPerSide })}
-        restDurationSeconds={getRestDuration()}
-        lastSetRPE={safeLastSetRPE}
-        restType={restType}
-        nextExerciseName={nextExerciseName}
-        // Block round rest props
-        blockLabel={blockLabel}
-        blockGroupType={blockGroupType}
-        currentRound={currentRound}
-        targetRounds={targetRounds}
-        blockMemberExercises={blockMemberExercises}
-        blockRoundRestSeconds={blockRoundRestSeconds}
-        onBlockRoundRestComplete={handleBlockRoundRestComplete}
-        groupedMemberIndex={groupedMemberIndex}
-        // [LIVE-WORKOUT-ACTION-PLANNER] Pass coaching expression from planner
-        coachingExpression={buildCoachingExpression(machineState.currentActionPlan)}
-        onCompleteSet={handleCompleteSet}
-        onSetReps={setRepsValue}
-        onSetHold={setHoldValue}
-        onSetRPE={setSelectedRPE}
-        onSetBand={setBandUsed}
-        onSetNote={handleSetNote}
-        onToggleReasonTag={handleToggleReasonTag}
-        onExit={() => setShowExitConfirm(true)}
-        onSaveAndExit={handleSaveAndExit}
-        onDiscardWorkout={handleDiscardAndExit}
-        // [LIVE-WORKOUT-AUTHORITY] Distinct skip actions
-        onSkipSet={handleSkipSet}
-        onEndExercise={handleEndExercise}
-        onSkip={handleSkipExercise} // Legacy fallback
-        onRestComplete={handleRestComplete}
-        onGoBack={handleGoBack}
-        canGoBack={canGoBack}
-      />
-    )
+    const liveSnapshot: LiveWorkoutSnapshot = (() => {
+      try {
+        const snapshot: LiveWorkoutSnapshot = {
+          // Mode & labels
+          mode: corridorMode,
+          sessionLabel: safeDisplayLabel || 'Workout',
+          // Exercise identity
+          exerciseName: safeCurrentExercise?.name || 'Exercise',
+          exerciseCategory: safeCurrentExercise?.category || 'general',
+          // Week-scaled prescription (effective contract)
+          exerciseSets: activeEffectiveContract.effectiveSets,
+          exerciseRepsOrTime: activeEffectiveContract.effectiveRepsOrTime,
+          targetRPE: activeEffectiveContract.effectiveTargetRPE,
+          // Optional prescribed weighted load
+          prescribedLoad:
+            safeCurrentExercise?.prescribedLoad?.load &&
+            safeCurrentExercise.prescribedLoad.load > 0
+              ? {
+                  load: safeCurrentExercise.prescribedLoad.load,
+                  unit: safeCurrentExercise.prescribedLoad.unit || 'lbs',
+                  confidenceLevel: safeCurrentExercise.prescribedLoad.confidenceLevel,
+                }
+              : undefined,
+          // Flat progression (machine-direct)
+          currentSetNumber: validatedSetNumber || 1,
+          currentExerciseIndex: safeExerciseIndex || 0,
+          totalExercises: exercises?.length || 1,
+          completedSetsCount: normalizedCompletedSets?.length || 0,
+          totalSetsCount: totalSets || 3,
+          elapsedSeconds: safeElapsedSeconds || 0,
+          // Inputs (machine-direct via seeding helpers)
+          repsValue: corridorRepsValue,
+          holdValue: corridorHoldValue,
+          selectedRPE: safeSelectedRPE,
+          bandUsed: safeBandUsed || 'none',
+          // Notes (machine-direct)
+          currentSetNote: corridorCurrentSetNote,
+          currentSetReasonTags: corridorCurrentSetReasonTags,
+          // Ledger (machine-direct)
+          recentSets: corridorRecentSets,
+          // Hold primary-input contract (same isHoldUnit() as persistence)
+          isHoldExercise: isHoldExerciseForDefault,
+          // Commit survival (machine-direct)
+          lastCommitRevision: normalizedCompletedSets.length,
+          // Input mode contract
+          inputMode: corridorInputMode.mode,
+          showLoadInput: corridorInputMode.showLoadInput,
+          showMultiBandSelector:
+            corridorBandSelectable && corridorInputMode.showMultiBandSelector,
+          showPerSideToggle: corridorInputMode.showPerSideToggle,
+          primaryInputLabel: corridorInputMode.primaryInputLabel,
+          // Band config
+          bandSelectable: corridorBandSelectable,
+          recommendedBand: corridorBandSelectable ? corridorRecommendedBand : undefined,
+          selectedBands: corridorBandSelectable ? (machineState.selectedBands || []) : [],
+          // Weighted inputs (machine-direct)
+          actualLoadUsed: machineState.actualLoadUsed,
+          actualLoadUnit: machineState.actualLoadUnit,
+          isPerSide: machineState.isPerSide,
+          // Rest
+          restDurationSeconds: getRestDuration(),
+          lastSetRPE: safeLastSetRPE,
+          restType,
+          nextExerciseName,
+          // Block round rest
+          blockLabel,
+          blockGroupType,
+          currentRound,
+          targetRounds,
+          blockMemberExercises,
+          blockRoundRestSeconds,
+          groupedMemberIndex,
+          // Coaching
+          coachingExpression: buildCoachingExpression(machineState.currentActionPlan),
+          // Build chips (unchanged contract)
+          routeBuildChip,
+          parentBuildChip: SWS_BUILD_CHIP,
+          // Back nav
+          canGoBack,
+        }
+        
+        // [log-corridor] Stage 6: snapshot passed to corridor. Proves the
+        // parent handoff values AFTER reducer commit.
+        console.log('[v0] [log-corridor] stage6 active snapshot passed to corridor', {
+          mode: snapshot.mode,
+          phase: machineState.phase,
+          currentExerciseIndex: snapshot.currentExerciseIndex,
+          currentSetNumber: snapshot.currentSetNumber,
+          completedSetsCount: snapshot.completedSetsCount,
+          recentSetsLength: snapshot.recentSets?.length ?? 0,
+          selectedRPE: snapshot.selectedRPE,
+          repsValue: snapshot.repsValue,
+          holdValue: snapshot.holdValue,
+          isHoldExercise: snapshot.isHoldExercise,
+        })
+        
+        markLiveBootStage('live_snapshot_build_succeeded', {
+          mode: snapshot.mode,
+          currentSetNumber: snapshot.currentSetNumber,
+        })
+        return snapshot
+      } catch (snapshotError) {
+        const err = snapshotError as Error
+        markLiveBootStage('live_snapshot_build_failed', {
+          errorName: err?.name,
+          errorMessage: err?.message?.slice(0, 200),
+        })
+        try {
+          if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.setItem(
+              'spartanlab_live_boot_failure',
+              JSON.stringify({
+                stage: 'live_snapshot_build',
+                errorName: err?.name ?? 'Error',
+                errorMessage: err?.message?.slice(0, 200) ?? '',
+                timestamp: Date.now(),
+              })
+            )
+          }
+        } catch {}
+        throw snapshotError
+      }
+    })()
+    
+    // [LIVE-TRUE-ISOLATION-R5] All handlers flattened into one plain object.
+    // The surface forwards these to the corridor verbatim. No handler
+    // creation or memoization happens inside the surface itself.
+    const liveHandlers: LiveWorkoutHandlers = {
+      onCompleteSet: handleCompleteSet,
+      onSetReps: setRepsValue,
+      onSetHold: setHoldValue,
+      onSetRPE: setSelectedRPE,
+      onSetBand: setBandUsed,
+      onSetNote: handleSetNote,
+      onToggleReasonTag: handleToggleReasonTag,
+      onSetSelectedBands: (bands) => machineDispatch({ type: 'SET_SELECTED_BANDS', bands }),
+      onSetActualLoad: (load, unit) => machineDispatch({ type: 'SET_ACTUAL_LOAD', load, unit }),
+      onSetIsPerSide: (isPerSide) => machineDispatch({ type: 'SET_IS_PER_SIDE', isPerSide }),
+      onExit: () => setShowExitConfirm(true),
+      onSaveAndExit: handleSaveAndExit,
+      onDiscardWorkout: handleDiscardAndExit,
+      onSkipSet: handleSkipSet,
+      onEndExercise: handleEndExercise,
+      onSkip: handleSkipExercise,
+      onRestComplete: handleRestComplete,
+      onGoBack: handleGoBack,
+      onBlockRoundRestComplete: handleBlockRoundRestComplete,
+    }
+    
+    return <LiveWorkoutExecutionSurface snapshot={liveSnapshot} handlers={liveHandlers} />
   }
 
   // ==========================================================================

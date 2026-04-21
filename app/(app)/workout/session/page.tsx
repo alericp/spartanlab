@@ -290,6 +290,53 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
 
   render() {
     if (this.state.hasError) {
+      // [LIVE-TRUE-ISOLATION-R5] Narrowed diagnostic footer. Reads the live
+      // boot stage marker set by StreamlinedWorkoutSession and the
+      // LiveWorkoutExecutionSurface. Buckets each crash into exactly one
+      // of: parent_pre_live (no live stage set), ready_shell_render,
+      // live_branch_entered, live_snapshot_build, live_execution_surface_render,
+      // or active_workout_corridor_render. Also reads any sessionStorage
+      // failure record written before a throw so the bucket survives HMR.
+      let liveStage: string = 'unset'
+      let liveFailureRecord: { stage?: string; errorName?: string; errorMessage?: string } | null = null
+      try {
+        if (typeof window !== 'undefined') {
+          liveStage = (window as unknown as { __spartanlabLiveBootStage?: string }).__spartanlabLiveBootStage || 'unset'
+        }
+        if (typeof sessionStorage !== 'undefined') {
+          const rec = sessionStorage.getItem('spartanlab_live_boot_failure')
+          if (rec) liveFailureRecord = JSON.parse(rec)
+        }
+      } catch {}
+      
+      // Authoritative bucket: failure record from inner boundaries wins
+      // over the last-seen stage marker, then fall back to stage marker.
+      const failureBucket: string = (liveFailureRecord?.stage) || liveStage
+      
+      // Layer attribution for the one-line "where did it fail" answer.
+      let layerLabel = 'pre-live parent hooks'
+      if (failureBucket === 'ready_shell_render') layerLabel = 'ready shell'
+      else if (failureBucket === 'live_branch_entered') layerLabel = 'live branch entry'
+      else if (failureBucket === 'live_snapshot_build' || failureBucket === 'live_snapshot_build_failed') layerLabel = 'live snapshot build'
+      else if (failureBucket === 'live_snapshot_build_succeeded') layerLabel = 'post-snapshot (surface mount)'
+      else if (failureBucket === 'live_execution_surface_render') layerLabel = 'live execution surface'
+      else if (failureBucket === 'active_workout_corridor_render') layerLabel = 'active workout corridor'
+      
+      const errName = this.state.error?.name || 'Error'
+      const errMsg = (this.state.error?.message || '').slice(0, 140)
+      const recordedErrName = liveFailureRecord?.errorName
+      const recordedErrMsg = (liveFailureRecord?.errorMessage || '').slice(0, 140)
+      
+      // Detect crash corridor (same buckets the inner logger uses).
+      const msgForCorridor = (this.state.error?.message || recordedErrMsg || '')
+      const crashCorridor =
+        msgForCorridor.includes('is not defined') ? 'reference_error'
+        : msgForCorridor.includes('toLowerCase') || msgForCorridor.includes('toUpperCase') ? 'unsafe_string_op'
+        : msgForCorridor.includes('undefined') || msgForCorridor.includes('null') ? 'null_reference'
+        : msgForCorridor.includes('map') || msgForCorridor.includes('filter') || msgForCorridor.includes('reduce') ? 'array_op'
+        : this.state.error?.name === 'ReferenceError' ? 'reference_error'
+        : 'unknown'
+      
       return (
         <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
           <div className="text-center max-w-sm">
@@ -318,6 +365,33 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
                   Return to Dashboard
                 </Button>
               </Link>
+            </div>
+            {/* [LIVE-TRUE-ISOLATION-R5] Narrowed diagnostic footer. Production
+                visible, compact, no stack dumps. Tells the next prompt exactly
+                which of the three post-isolation buckets tore down. */}
+            <div className="mt-6 text-left text-[10px] font-mono text-[#6B7280] bg-[#12161C] border border-[#2B313A] rounded px-3 py-2 space-y-0.5">
+              <div className="flex justify-between gap-2">
+                <span className="text-[#4B5563] uppercase tracking-wider">Layer</span>
+                <span className="text-[#A4ACB8] truncate">{layerLabel}</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-[#4B5563] uppercase tracking-wider">Stage</span>
+                <span className="text-[#A4ACB8] truncate">{failureBucket}</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-[#4B5563] uppercase tracking-wider">Corridor</span>
+                <span className="text-[#A4ACB8] truncate">{crashCorridor}</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-[#4B5563] uppercase tracking-wider">Error</span>
+                <span className="text-[#A4ACB8] truncate">{recordedErrName || errName}</span>
+              </div>
+              {(recordedErrMsg || errMsg) && (
+                <div className="pt-1 border-t border-[#2B313A]">
+                  <span className="text-[#4B5563] uppercase tracking-wider">Msg</span>{' '}
+                  <span className="text-[#A4ACB8] break-words">{recordedErrMsg || errMsg}</span>
+                </div>
+              )}
             </div>
             {/* [PHASE LW4] Dev-only diagnostic info */}
             {process.env.NODE_ENV === 'development' && (

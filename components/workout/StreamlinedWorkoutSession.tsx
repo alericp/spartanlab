@@ -4215,8 +4215,116 @@ if (styledGroups && styledGroups.length > 0) {
   // and isLastSet comparison above.
   }, [validatedSetNumber, safeRepsValue, safeHoldValue, safeSelectedRPE, safeBandUsed, safeCurrentExercise, safeExerciseIndex, isHoldExercise, exercises, machineSessionContract, machineState, machineDispatch, activeEffectiveContract])
   
+  // =========================================================================
+  // [LIVE-LOG-FINAL-PHASE-OWNER-SURGERY] MACHINE-DIRECT ADVANCE HELPER
+  //
+  // PROBLEM THIS REMOVES:
+  //   Prior post-log rest-completion paths routed through executeUnifiedAdvance,
+  //   which (a) read liveSession (the legacy flattener), (b) built an
+  //   UnifiedTransitionSnapshot, and (c) re-dispatched through the legacy
+  //   `dispatch` wrapper. That meant the live post-log transition corridor
+  //   had TWO transition owners:
+  //     1. the machine reducer (authoritative)
+  //     2. the legacy wrapper (via executeUnifiedAdvance)
+  //   Any drift in liveSession or snapshot computation could make the visible
+  //   post-rest state disagree with reducer truth for one or more renders.
+  //
+  // WHAT THIS HELPER DOES:
+  //   A single authoritative advance path that reads ONLY from:
+  //     - machineState.currentExerciseIndex (authoritative exercise pointer)
+  //     - exercises[] (contract exercise list)
+  //     - normalizedCompletedSets (machine-derived completed-set ledger)
+  //     - safeLastSetRPE (machine-derived RPE of last completed set)
+  //   and dispatches ONLY through machineDispatch (never through the legacy
+  //   dispatch wrapper).
+  //
+  //   Cleanups (clearRestTimerState, clearSessionStorage on workout-complete)
+  //   and diagnostic transition traces are preserved bit-identical to the
+  //   executeUnifiedAdvance behavior so no external observer sees a change
+  //   in side effects.
+  // =========================================================================
+  const advanceToNextExerciseMachineDirect = useCallback((
+    reason: 'inter_exercise_complete' | 'skip_inter_exercise'
+  ) => {
+    const currentIdx = machineState.currentExerciseIndex
+    const nextIdx = currentIdx + 1
+    const isWorkoutComplete = nextIdx >= exercises.length
+    
+    // Diagnostic breadcrumb (same stage names the prior executeUnifiedAdvance used)
+    writeTransitionTrace({
+      reason,
+      transitionStage: 'requested',
+      timestamp: Date.now(),
+      safeIndexUsed: true,
+    })
+    writeTransitionTrace({
+      transitionStage: 'computed',
+      fromExerciseIndex: currentIdx,
+      toExerciseIndex: isWorkoutComplete ? currentIdx : nextIdx,
+      fromExerciseName: exercises[currentIdx]?.name ?? null,
+      toExerciseName: isWorkoutComplete ? null : exercises[nextIdx]?.name ?? null,
+      transitionType: isWorkoutComplete ? 'workout_complete' : 'next_exercise',
+      beforeStateStatus: machineState.phase === 'between_exercise_rest' ? 'resting' : 'active',
+      afterStateStatus: isWorkoutComplete ? 'completed' : 'active',
+      safeExerciseCount: exercises.length,
+      safeNextExerciseExists: !isWorkoutComplete && nextIdx < exercises.length,
+    })
+    
+    console.log('[v0] [machine-direct-advance] start', {
+      reason,
+      fromIndex: currentIdx,
+      toIndex: isWorkoutComplete ? currentIdx : nextIdx,
+      isWorkoutComplete,
+      phase: machineState.phase,
+    })
+    
+    if (isWorkoutComplete) {
+      // Dispatch authoritative COMPLETE_WORKOUT via machineDispatch only.
+      // The reducer owns the state transition to phase:'completed' and the
+      // final completedSets ledger.
+      machineDispatch({
+        type: 'COMPLETE_WORKOUT',
+        finalCompletedSets: normalizedCompletedSets,
+      })
+      writeTransitionTrace({ transitionStage: 'committed' })
+      clearRestTimerState()
+      clearSessionStorage()
+      return
+    }
+    
+    // Parse target value from NEXT exercise's repsOrTime. Same parse the
+    // reducer's ADVANCE_TO_NEXT_EXERCISE case expects in `targetValue`.
+    const nextExercise = exercises[nextIdx]
+    const nextRepsOrTime = nextExercise?.repsOrTime || ''
+    const nextTargetMatch = nextRepsOrTime.match(/(\d+)/)
+    const nextTargetValue = nextTargetMatch ? parseInt(nextTargetMatch[1], 10) : 5
+    
+    // Single authoritative dispatch. The reducer's ADVANCE_TO_NEXT_EXERCISE
+    // case handles phase transition, set-number reset, band reset, etc.
+    machineDispatch({
+      type: 'ADVANCE_TO_NEXT_EXERCISE',
+      nextIndex: nextIdx,
+      targetValue: nextTargetValue,
+    })
+    
+    writeTransitionTrace({ transitionStage: 'committed' })
+    clearRestTimerState()
+    
+    console.log('[v0] [machine-direct-advance] complete', {
+      toIndex: nextIdx,
+      toExerciseName: nextExercise?.name,
+      nextTargetValue,
+    })
+  }, [machineState.currentExerciseIndex, machineState.phase, exercises, normalizedCompletedSets, machineDispatch])
+  
   // [UNIFIED-REST-HANDLER] Single handler for all rest completion
-  // Checks machine phase to determine correct transition
+  // Checks machine phase to determine correct transition.
+  //
+  // [LIVE-LOG-FINAL-PHASE-OWNER-SURGERY] Both branches now dispatch ONLY
+  // through machineDispatch. The between-exercise branch previously used
+  // executeUnifiedAdvance (legacy dispatch + liveSession); it now uses
+  // advanceToNextExerciseMachineDirect (machineDispatch + machineState).
+  // Same-exercise rest was already machine-direct and is unchanged.
   const handleRestComplete = useCallback(() => {
     const currentPhase = machineState.phase
     
@@ -4226,22 +4334,25 @@ if (styledGroups && styledGroups.length > 0) {
       playTimerCompletionAlert()
       machineDispatch({ type: 'COMPLETE_REST' })
     } else if (currentPhase === 'between_exercise_rest') {
-      // Between-exercise rest -> advance to next exercise
+      // Between-exercise rest -> advance to next exercise (machine-direct)
       playTimerCompletionAlert()
-      executeUnifiedAdvance('inter_exercise_complete')
+      advanceToNextExerciseMachineDirect('inter_exercise_complete')
     }
-  }, [machineState.phase, machineDispatch, executeUnifiedAdvance])
+  }, [machineState.phase, machineDispatch, advanceToNextExerciseMachineDirect])
   
-  // Legacy handlers for backward compatibility
+  // [LIVE-LOG-FINAL-PHASE-OWNER-SURGERY] Legacy aliases kept for call-site
+  // compatibility, but both now route through the machine-direct advance
+  // helper. The legacy `dispatch` wrapper no longer participates in any
+  // live post-log rest-completion path.
   const handleInterExerciseRestComplete = useCallback(() => {
     playTimerCompletionAlert()
-    executeUnifiedAdvance('inter_exercise_complete')
-  }, [executeUnifiedAdvance])
+    advanceToNextExerciseMachineDirect('inter_exercise_complete')
+  }, [advanceToNextExerciseMachineDirect])
   
   const handleSkipInterExerciseRest = useCallback(() => {
-    console.log('[UNIFIED-HANDOFF] handleSkipInterExerciseRest triggered')
-    executeUnifiedAdvance('skip_inter_exercise')
-  }, [executeUnifiedAdvance])
+    console.log('[LIVE-LOG-FINAL-PHASE-OWNER-SURGERY] handleSkipInterExerciseRest triggered (machine-direct)')
+    advanceToNextExerciseMachineDirect('skip_inter_exercise')
+  }, [advanceToNextExerciseMachineDirect])
   
   // [EXECUTION-TRUTH-FIX] Back navigation - review previous exercise
   // [LIVE-WORKOUT-MACHINE] Use safeExerciseIndex from machine

@@ -46,6 +46,15 @@ import {
   COACHING_SIGNAL_LABELS,
   type CoachingSignalTag,
 } from '@/lib/workout/live-workout-authority-contract'
+// [LIVE-STATE-SCANNER-R1] Production-visible diagnostic strip mounted only
+// inside this authoritative corridor. See LiveWorkoutStateScanner.tsx for
+// contract. Scanner truth is forwarded by the live execution surface via
+// the scannerInput prop - corridor does not derive scanner state itself.
+import {
+  LiveWorkoutStateScanner,
+  recordScannerEvent,
+  type ScannerInput,
+} from './LiveWorkoutStateScanner'
 
 // =============================================================================
 // TYPES - Plain props only, no complex dependencies
@@ -244,7 +253,13 @@ export interface ActiveWorkoutCorridorProps {
   // compiled bundle (or a non-authoritative legacy surface is rendering).
   routeBuildChip?: string
   parentBuildChip?: string
-  
+
+  // [LIVE-STATE-SCANNER-R1] Compact production scanner input. When present,
+  // the corridor renders a small monospace diagnostic strip directly below
+  // the build chip. Input is derived by LiveWorkoutExecutionSurface from
+  // the same flat snapshot the corridor renders from - single-owner truth.
+  scannerInput?: ScannerInput
+
   // Callbacks (passed from parent)
   onCompleteSet: () => void
   onSetReps: (value: number) => void
@@ -735,6 +750,8 @@ export function ActiveWorkoutStartCorridor({
   // [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Build chips (always visible)
   routeBuildChip = '?',
   parentBuildChip = '?',
+  // [LIVE-STATE-SCANNER-R1] Optional production scanner input
+  scannerInput,
   onCompleteSet,
   onSetReps,
   onSetHold,
@@ -957,6 +974,11 @@ export function ActiveWorkoutStartCorridor({
       completedSetsCount,
       priorLastCommitRevision: lastCommitRevision,
     })
+    // [LIVE-STATE-SCANNER-R1] Latch stage A onto the on-screen scanner so
+    // a screenshot taken immediately after the tap proves the corridor
+    // handler fired. Clears any prior reversion latch so the scanner
+    // reflects the NEW tap cycle, not the previous one.
+    recordScannerEvent('stageA_only')
     console.log('[v0] [log-corridor] stageA corridor forwarded to parent onCompleteSet', { tapTraceId })
     onCompleteSet()
   }, [selectedRPE, onCompleteSet, currentSetNumber, completedSetsCount, lastCommitRevision])
@@ -1102,6 +1124,12 @@ export function ActiveWorkoutStartCorridor({
             {routeBuildChip} | {parentBuildChip} | {AWC_BUILD_CHIP}
           </span>
         </div>
+        {/* [LIVE-STATE-SCANNER-R1] Compact production diagnostic strip. Only
+            renders when scannerInput is provided (live surface always
+            provides it). Sits directly under the build chip so a single
+            screenshot captures build fingerprint + authoritative state +
+            last-commit verdict. */}
+        {scannerInput && <LiveWorkoutStateScanner input={scannerInput} />}
         <div className="max-w-lg mx-auto space-y-1.5">
           
           {/* ========== RESTING MODE UI ========== */}

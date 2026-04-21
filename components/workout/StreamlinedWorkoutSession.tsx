@@ -3978,14 +3978,20 @@ if (styledGroups && styledGroups.length > 0) {
   // The user sees a seeded value (e.g., 6s from prescription) but machine holdValue might still be 30 (default)
   // So we must compute the same displayed value here to log what the user actually saw
   const handleCompleteSet = useCallback(() => {
-    // [LIVE-LOG-CORRIDOR-PROOF] Stage 1: prove the click reached the parent.
-    // onCompleteSet is wired from ActiveWorkoutStartCorridor's Log Set button.
-    // If this log is missing, the click never reached the parent handler and
-    // the bug is upstream of handleCompleteSet (corridor button wiring).
-    console.log('[v0] [log-corridor] stage1 handleCompleteSet entered', {
+    // [POST-COMMIT-FREEZE-TRACE-R3] STAGE B.
+    // Prove the click reached the parent handler. Read (not allocate) the
+    // tap trace id allocated by Stage A inside the corridor's handleLogSet
+    // so the entire A -> G chain correlates on the same id. If tapTraceId
+    // is null here, Stage A never fired -- meaning the click did not reach
+    // the authoritative corridor button.
+    const tapTraceId = readCurrentTapTraceId()
+    console.log('[v0] [log-corridor] stageB handleCompleteSet entered (parent)', {
+      tapTraceId,
       exerciseName: safeCurrentExercise?.name,
       exerciseIndex: safeExerciseIndex,
       setNumber: validatedSetNumber,
+      priorPhase: machineState.phase,
+      priorCompletedSetsLength: normalizedCompletedSets.length,
     })
     
     const currentIndex = safeExerciseIndex
@@ -4133,11 +4139,15 @@ if (styledGroups && styledGroups.length > 0) {
           rawGroupType === 'cluster' ||
           rawGroupType === 'density_block')
       
-      // [LIVE-LOG-CORRIDOR-PROOF] Stage 2: pre-dispatch assertion log. Proves
-      // which branch handleCompleteSet chose and why. If this prints
-      // `dispatch: 'COMPLETE_SET'` for Planche Leans, the branch decision is
-      // correct and any remaining failure is downstream (reducer or rerender).
-      console.log('[v0] [log-corridor] stage2 pre-dispatch decision', {
+      // [POST-COMMIT-FREEZE-TRACE-R3] STAGE C.
+      // Pre-dispatch decision. Carries the same tapTraceId captured at
+      // Stage B so downstream reducer logs can correlate. Proves which
+      // branch handleCompleteSet chose and why. If this prints
+      // chosenDispatch: 'COMPLETE_SET' for a straight exercise, the branch
+      // decision is correct and any remaining failure is downstream
+      // (reducer entry/return or post-commit render).
+      console.log('[v0] [log-corridor] stageC pre-dispatch decision', {
+        tapTraceId,
         exerciseName: safeCurrentExercise?.name,
         exerciseIndex: currentIndex,
         effectiveRepsOrTime: activeEffectiveContract.effectiveRepsOrTime,

@@ -2423,6 +2423,52 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                       )}
                     </div>
 
+                    {/* [CLUSTER-DECISION-EVIDENCE] Concrete proof of the cluster
+                        choice for this session: target exercise, reason, and
+                        method-cue vs grouped-block type. Reads the single
+                        authoritative truth the builder persisted on
+                        session.styleMetadata.clusterDecision -- no guessed
+                        text, no hardcoded fallback copy. Rendered only when
+                        cluster was actually applied. */}
+                    {(() => {
+                      const cd = (session as unknown as {
+                        styleMetadata?: {
+                          clusterDecision?: {
+                            targetExerciseName: string
+                            reasonSummary: string
+                            type: 'method_cue' | 'grouped_block'
+                          }
+                        }
+                      }).styleMetadata?.clusterDecision
+                      if (!cd) return null
+                      const typeLabel = cd.type === 'grouped_block' ? 'Grouped block' : 'Method cue'
+                      const typeHint = cd.type === 'grouped_block'
+                        ? 'Renders as a framed grouped block with shared pacing.'
+                        : 'Body stays flat; only the targeted row runs cluster execution.'
+                      return (
+                        <div className="rounded-md border border-purple-500/30 bg-purple-500/5 px-3 py-2">
+                          <div className="text-[10px] uppercase tracking-wide text-purple-300/80 mb-1.5">
+                            Cluster decision
+                          </div>
+                          <div className="space-y-1 text-[#C5C5C5] leading-relaxed">
+                            <div>
+                              <span className="text-[#8A8A8A]">Applied to:</span>{' '}
+                              <span className="font-medium text-[#E6E6E6]">{cd.targetExerciseName}</span>
+                            </div>
+                            <div>
+                              <span className="text-[#8A8A8A]">Why:</span>{' '}
+                              <span className="text-[#C5C5C5]">{cd.reasonSummary}</span>
+                            </div>
+                            <div>
+                              <span className="text-[#8A8A8A]">Type:</span>{' '}
+                              <span className="font-medium text-purple-300">{typeLabel}</span>
+                              <span className="text-[#7A7A7A]"> — {typeHint}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })()}
+
                     {/* Rejected methods (only those the user selected) */}
                     {rejected.length > 0 && (
                       <div>

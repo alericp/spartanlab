@@ -338,11 +338,24 @@ export function GroupedProgramScannerStrip({
               <span>
                 EX:<span className="text-[#E6E9EF]">{s.exerciseCount}</span>
               </span>
-              {s.reasonToken && (
-                <span>
-                  WHY:<span className="text-[#E6E9EF]"> {s.reasonToken}</span>
-                </span>
-              )}
+              {s.reasonToken && (() => {
+                // [SCANNER-REASON-HUMANIZATION] Map machine tokens to compact
+                // human phrases so a glance at the scanner reads honestly:
+                // "method-only cluster (not grouped)" cannot be misread as
+                // a broken grouped render. Machine tokens themselves remain
+                // stable on `s.reasonToken` for audit/tests.
+                const humanWhy =
+                  s.reasonToken === 'method_only_cluster'
+                    ? 'method-only cluster (not grouped)'
+                    : s.reasonToken === 'grouped_cluster_requires_multi_member_block'
+                      ? 'cluster block needs 2+ members'
+                      : s.reasonToken
+                return (
+                  <span>
+                    WHY:<span className="text-[#E6E9EF]"> {humanWhy}</span>
+                  </span>
+                )
+              })()}
               <span className="truncate text-[#6B7280]">· {labelToken}</span>
             </li>
           )

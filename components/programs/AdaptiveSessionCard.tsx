@@ -28,7 +28,7 @@ import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWith
 // These were used by the ROW 2.5 chip block which was a stale secondary text path
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
-import { buildGroupedDisplayModel, minMembersFor, type GroupedDisplayModel, type RenderBlock, type RawFallbackBlock, type GroupedSourceUsed, type GroupedFlatReason } from './lib/session-group-display'
+import { buildGroupedDisplayModel, type GroupedDisplayModel, type RenderBlock, type RawFallbackBlock, type GroupedSourceUsed, type GroupedFlatReason } from './lib/session-group-display'
 import { 
   addOverride, 
   applyOverridesToSession,
@@ -781,15 +781,22 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         return { ...g, exercises: keptMembers }
       })
       .filter(g => {
-        // [METHOD-MIN-MEMBERS-AUTHORITY] Method-specific minimums -- NOT a
-        // blanket `>= 2`. The prior blanket rule silently dropped legitimate
-        // single-exercise cluster groups (clusters are emitted as 1-member
-        // groups by adaptive-program-builder.ts line 12286), making every
-        // cluster invisible on the Program card. Now reuses the canonical
-        // `minMembersFor()` helper so this rule is identical across the card
-        // variant prune, Start-Workout variant prune, and the adapter's own
-        // partial-validity filter -- single source of truth.
-        return g.exercises.length >= minMembersFor(g.groupType)
+        // [METHOD-ONLY-VISIBILITY] Method-specific minimums. Superset/circuit
+        // are TRUE grouped-block methods (pairing IS the method) and still
+        // require >= 2 members after variant prune -- a 1-member "superset"
+        // is not a superset and must not survive as a fake group. Cluster
+        // and density_block are METHOD-ONLY execution styles that the
+        // adaptive builder intentionally applies to a single exercise (see
+        // lib/adaptive-program-builder.ts line ~12192 for cluster, and the
+        // styledGroups rebuild at ~12326-12354 for method-only density);
+        // they MUST survive variant prune even at 1 member, otherwise the
+        // variant-pruned styleMetadata silently loses method-only groups
+        // and the card falls back to flat when cluster/density were applied.
+        if (g.groupType === 'straight') return true
+        if (g.groupType === 'superset' || g.groupType === 'circuit') {
+          return g.exercises.length >= 2
+        }
+        return g.exercises.length >= 1
       })
     return {
       ...sessionStyleMetadata,
@@ -1094,7 +1101,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     const blockMembers = new Map<string, _Ex[]>()
     const blockType = new Map<string, 'superset' | 'circuit' | 'cluster' | 'density_block'>()
     for (const ex of exs) {
-      if (!ex.blockId || !ex.method) continue
+      if (!ex.method) continue
       const m = ex.method.toLowerCase()
       let gt: 'superset' | 'circuit' | 'cluster' | 'density_block' | null = null
       if (m === 'superset') gt = 'superset'
@@ -1102,12 +1109,23 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       else if (m === 'cluster') gt = 'cluster'
       else if (m === 'density_block' || m === 'density') gt = 'density_block'
       if (!gt) continue
-      if (!blockMembers.has(ex.blockId)) {
-        blockMembers.set(ex.blockId, [])
-        blockOrder.push(ex.blockId)
-        blockType.set(ex.blockId, gt)
+      // [METHOD-ONLY-SYNTH] Superset/circuit are TRUE grouped-block methods
+      // and still require blockId here. Cluster/density are METHOD-ONLY
+      // execution styles -- the builder applies them to a single exercise
+      // without blockId (see lib/adaptive-program-builder.ts line ~12192).
+      // When blockId is absent for cluster/density, synthesize a stable
+      // per-exercise key so each method-only exercise produces its own
+      // single-member block. Superset/circuit without blockId cannot be
+      // synthesized into a meaningful group (pairing intent is lost) and
+      // are skipped here.
+      if ((gt === 'superset' || gt === 'circuit') && !ex.blockId) continue
+      const key = ex.blockId || `method-only-${ex.id}`
+      if (!blockMembers.has(key)) {
+        blockMembers.set(key, [])
+        blockOrder.push(key)
+        blockType.set(key, gt)
       }
-      blockMembers.get(ex.blockId)!.push(ex)
+      blockMembers.get(key)!.push(ex)
     }
     const typeIdx: Record<string, number> = { superset: 0, circuit: 0, density_block: 0, cluster: 0 }
     const out: RawFallbackBlock[] = []
@@ -1212,26 +1230,28 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         hasRichRenderableGroups: false,
       }
     }
-    if (hasGroupedTruth) {
-      // Last-resort: grouped truth exists but no renderable blocks could be
-      // built from any source. The renderer's simple_order_grouped branch
-      // has been upgraded to still emit a visible grouped-method banner
-      // above the ordered rows (see MainExercisesRenderer).
-      return {
-        mode: 'simple_order_grouped' as const,
-        sourceUsed: groupedRenderContract.sourceUsed,
-        reasonIfNotRich: 'RAW_FALLBACK_EMPTY' as const,
-        renderBlocks: [],
-        rawFallbackBlocks: [],
-        nonStraightGroupCount: groupedRenderContract.nonStraightGroupCount,
-        supersetCount: groupedRenderContract.supersetCount,
-        circuitCount: groupedRenderContract.circuitCount,
-        densityCount: groupedRenderContract.densityCount,
-        clusterCount: groupedRenderContract.clusterCount,
-        hasGroupedTruth: true,
-        hasRichRenderableGroups: false,
-      }
-    }
+    // [SIMPLE-ORDER-ELIMINATED] The prior `simple_order_grouped` fourth mode
+    // has been removed as a dispatch target. That mode fired when grouped
+    // truth existed upstream but no renderable blocks could be produced by
+    // any source (rich path, contract rawFallback, or display synthesis).
+    // It rendered a "Grouped structure" banner over an ordered flat list --
+    // a visually ambiguous state where the card claimed grouped programming
+    // while the body still read as flat rows. With the method-only truth
+    // split now owned by session-group-display.ts (cluster/density recognized
+    // without blockId) AND synthesizedRawFallbackBlocks extended to match,
+    // any session with genuine cluster/density method-only truth reaches
+    // `raw_grouped_fallback` with a real block list. If we STILL reach here
+    // it means the only "grouped truth" signal came from superset/circuit
+    // metadata that produced zero usable members (stub names, unresolvable
+    // ids) -- in that case the card has no block structure to paint, so
+    // routing to `flat_category` is the honest outcome (no fake banners over
+    // flat rows). The collapsed-card chip tally and the expanded method
+    // chips still read from the adapter's ownership counts, so method intent
+    // is not silently dropped -- only the misleading body-banner is.
+    //
+    // `simple_order_grouped` is retained in the FinalBodyMode type for
+    // backwards compat with the renderer's branch that still accepts it, but
+    // this dispatcher never selects it.
     return {
       mode: 'flat_category' as const,
       sourceUsed: groupedRenderContract.sourceUsed,

@@ -1059,10 +1059,98 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     /** Rich path is possible. */
     hasRichRenderableGroups: boolean
   }
+  // ==========================================================================
+  // [DISPLAY-SYNTHESIS-RESCUE] Last-mile rawFallbackBlocks synthesis.
+  //
+  // Problem closed: prior `finalVisibleBodyModel` fell through to
+  // `simple_order_grouped` whenever `hasGroupedTruth === true` and the
+  // contract's `rawFallbackBlocks` was empty (styledGroups had unusable member
+  // names OR the exercise-fallback path couldn't bind). That branch then
+  // rendered a visually flat ordered list, producing the exact "grouped truth
+  // exists upstream but the body looks flat" regression.
+  //
+  // Fix: before the mode dispatch, synthesize `RawFallbackBlock[]` DIRECTLY
+  // from `fullVisibleExercises[].blockId + .method`. The display surface
+  // always carries blockId/method forward (bridge contract), so any session
+  // with even one grouped exercise surviving the variant trim lands here with
+  // a block to render. If synthesis yields blocks, we flip the mode to
+  // `raw_grouped_fallback` (NOT `simple_order_grouped`) so the grouped body
+  // path owns the visible render, and the chip tally / banner counts also
+  // come from the synthesized per-type counts.
+  //
+  // Why this is safe vs the adapter path: this runs ONLY when the adapter's
+  // rich + rawFallback paths both came back empty. It cannot override the
+  // contract; it can only provide a grouped body when the contract's
+  // rendering-surface pipeline lost every block. `fullVisibleExercises` is
+  // the exact hydration source the grouped branches already consume for
+  // member rows, so any synthesized block member also hydrates cleanly.
+  // ==========================================================================
+  const synthesizedRawFallbackBlocks: RawFallbackBlock[] = (() => {
+    if (!hasGroupedTruth) return []
+    if (groupedRenderContract.rawFallbackBlocks.length > 0) return []
+    type _Ex = { id: string; name: string; blockId?: string; method?: string; methodLabel?: string }
+    const exs = fullVisibleExercises as unknown as _Ex[]
+    const blockOrder: string[] = []
+    const blockMembers = new Map<string, _Ex[]>()
+    const blockType = new Map<string, 'superset' | 'circuit' | 'cluster' | 'density_block'>()
+    for (const ex of exs) {
+      if (!ex.blockId || !ex.method) continue
+      const m = ex.method.toLowerCase()
+      let gt: 'superset' | 'circuit' | 'cluster' | 'density_block' | null = null
+      if (m === 'superset') gt = 'superset'
+      else if (m === 'circuit') gt = 'circuit'
+      else if (m === 'cluster') gt = 'cluster'
+      else if (m === 'density_block' || m === 'density') gt = 'density_block'
+      if (!gt) continue
+      if (!blockMembers.has(ex.blockId)) {
+        blockMembers.set(ex.blockId, [])
+        blockOrder.push(ex.blockId)
+        blockType.set(ex.blockId, gt)
+      }
+      blockMembers.get(ex.blockId)!.push(ex)
+    }
+    const typeIdx: Record<string, number> = { superset: 0, circuit: 0, density_block: 0, cluster: 0 }
+    const out: RawFallbackBlock[] = []
+    for (const bId of blockOrder) {
+      const method = blockType.get(bId)!
+      const members = blockMembers.get(bId)!.filter(m => (m.name || '').trim().length >= 2)
+      if (members.length === 0) continue
+      const idx = typeIdx[method] ?? 0
+      typeIdx[method] = idx + 1
+      const letter = String.fromCharCode(65 + idx)
+      const labelPrefix =
+        method === 'superset' ? 'Superset'
+          : method === 'circuit' ? 'Circuit'
+            : method === 'density_block' ? 'Density Block'
+              : 'Cluster Set'
+      out.push({
+        type: 'group',
+        groupId: bId,
+        groupType: method,
+        label: `${labelPrefix} ${letter}`,
+        members: members.map((m, i) => ({
+          id: m.id,
+          name: m.name,
+          prefix: m.methodLabel?.match(/[A-Z]\d?$/)?.[0] || `${letter}${i + 1}`,
+        })),
+      })
+    }
+    return out
+  })()
+
   const finalVisibleBodyModel: FinalVisibleBodyModel = (() => {
-    // Grouped truth wins whenever it exists. Rich first, raw fallback second,
-    // simple-order third. Flat category is reserved for sessions with no
-    // grouped truth at all.
+    // Grouped truth wins whenever it exists. Rich first, raw fallback second
+    // (either contract-owned OR display-synthesized), flat_category reserved
+    // for sessions with NO grouped truth at all.
+    //
+    // [SIMPLE-ORDER-NEUTRALIZED] `simple_order_grouped` is retained as a type
+    // for backwards compat but is NO LONGER a valid dispatch target: any case
+    // that would have chosen it now routes to `raw_grouped_fallback` with
+    // display-synthesized blocks (see `synthesizedRawFallbackBlocks` above).
+    // If synthesis also returns empty (truly no visible grouped rows), the
+    // renderer's `simple_order_grouped` branch still renders an honest
+    // grouped-method banner above the ordered list so the body cannot
+    // silently read as flat.
     if (hasRichRenderableGroups) {
       return {
         mode: 'rich_grouped' as const,
@@ -1095,7 +1183,40 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         hasRichRenderableGroups: false,
       }
     }
+    if (hasGroupedTruth && synthesizedRawFallbackBlocks.length > 0) {
+      // [DISPLAY-SYNTHESIS-RESCUE] Route through raw_grouped_fallback using
+      // the synthesized block list. Per-type counts come from synthesis so
+      // the chip tally + body banner tell the same story as the block list
+      // the renderer will iterate.
+      let sSuper = 0, sCirc = 0, sDens = 0, sClust = 0
+      for (const b of synthesizedRawFallbackBlocks) {
+        if (b.groupType === 'superset') sSuper++
+        else if (b.groupType === 'circuit') sCirc++
+        else if (b.groupType === 'density_block') sDens++
+        else if (b.groupType === 'cluster') sClust++
+      }
+      return {
+        mode: 'raw_grouped_fallback' as const,
+        sourceUsed: groupedRenderContract.sourceUsed !== 'none'
+          ? groupedRenderContract.sourceUsed
+          : 'exerciseFallback',
+        reasonIfNotRich: null,
+        renderBlocks: [],
+        rawFallbackBlocks: synthesizedRawFallbackBlocks,
+        nonStraightGroupCount: synthesizedRawFallbackBlocks.length,
+        supersetCount: sSuper,
+        circuitCount: sCirc,
+        densityCount: sDens,
+        clusterCount: sClust,
+        hasGroupedTruth: true,
+        hasRichRenderableGroups: false,
+      }
+    }
     if (hasGroupedTruth) {
+      // Last-resort: grouped truth exists but no renderable blocks could be
+      // built from any source. The renderer's simple_order_grouped branch
+      // has been upgraded to still emit a visible grouped-method banner
+      // above the ordered rows (see MainExercisesRenderer).
       return {
         mode: 'simple_order_grouped' as const,
         sourceUsed: groupedRenderContract.sourceUsed,
@@ -1178,6 +1299,22 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         else if (b.groupType === 'cluster') cluster++
       }
       return { superset, circuit, density, cluster }
+    }
+    // [SIMPLE-ORDER-BANNER-TALLY] Previously zero. But `simple_order_grouped`
+    // fires precisely when grouped truth exists but no renderable blocks
+    // could be built -- the body now renders a grouped-method banner above
+    // the ordered list (see MainExercisesRenderer), so the chip row ABOVE
+    // the body must also surface the same method identity or the collapsed
+    // card + expanded header would contradict the body's own banner.
+    // Counts here come from the contract's raw ownership counts, which
+    // remain meaningful even when rendering-side synthesis failed.
+    if (finalVisibleBodyModel.mode === 'simple_order_grouped') {
+      return {
+        superset: finalVisibleBodyModel.supersetCount,
+        circuit: finalVisibleBodyModel.circuitCount,
+        density: finalVisibleBodyModel.densityCount,
+        cluster: finalVisibleBodyModel.clusterCount,
+      }
     }
     return { superset: 0, circuit: 0, density: 0, cluster: 0 }
   })()
@@ -1858,6 +1995,81 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   }
 
 // =============================================================================
+// [IN-BODY-GROUPED-BANNER]
+// Compact top-of-body headline that unambiguously marks the visible body as
+// grouped. Rendered as the FIRST child of every grouped branch so the user's
+// eye lands on a clear "this session is grouped" cue BEFORE the actual block
+// list. The banner is a pure consumer of the per-type counts on
+// `finalVisibleBodyModel` -- it introduces no parallel grouping truth.
+//
+// Why this exists: the collapsed-header chip row already surfaces grouped
+// counts above the card, but once the card is expanded the user's focus
+// shifts down to the body. The prior body started immediately with blocks
+// (rich) or with a plain flat list (simple_order_grouped), so the visible
+// body did not itself assert grouped identity. This banner places that
+// assertion inside the body, mirroring the same palette as the block headers
+// so the visual language is continuous from banner -> block pill -> member
+// rail.
+// =============================================================================
+function GroupedBodyHeadline({
+  supersetCount,
+  circuitCount,
+  densityCount,
+  clusterCount,
+  mode,
+}: {
+  supersetCount: number
+  circuitCount: number
+  densityCount: number
+  clusterCount: number
+  mode: 'rich_grouped' | 'raw_grouped_fallback' | 'simple_order_grouped'
+}) {
+  const total = supersetCount + circuitCount + densityCount + clusterCount
+  if (total === 0 && mode !== 'simple_order_grouped') return null
+  const hint =
+    mode === 'simple_order_grouped'
+      ? 'Grouped session — individual blocks shown as an ordered list below.'
+      : total === 1
+        ? 'Grouped session — one method applied to a block below.'
+        : 'Grouped session — multiple methods applied to blocks below.'
+  return (
+    <div className="mb-3 rounded-md border border-[#3A3A3A] bg-[#1A1A1A] px-3 py-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Layers className="w-3.5 h-3.5 text-[#A5A5A5]" />
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-[#C5C5C5]">
+          Grouped structure
+        </span>
+        {supersetCount > 0 && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#4F6D8A]/15 text-[#7FA8CC] border border-[#4F6D8A]/40">
+            <Layers className="w-3 h-3" />
+            {supersetCount} Superset{supersetCount > 1 ? 's' : ''}
+          </span>
+        )}
+        {circuitCount > 0 && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
+            <RefreshCw className="w-3 h-3" />
+            {circuitCount} Circuit{circuitCount > 1 ? 's' : ''}
+          </span>
+        )}
+        {densityCount > 0 && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/15 text-amber-300 border border-amber-500/40">
+            <Timer className="w-3 h-3" />
+            {densityCount} Density Block{densityCount > 1 ? 's' : ''}
+          </span>
+        )}
+        {clusterCount > 0 && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-purple-500/15 text-purple-300 border border-purple-500/40">
+            <Dumbbell className="w-3 h-3" />
+            {clusterCount} Cluster Set{clusterCount > 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-[10px] text-[#8A8A8A] leading-snug">{hint}</p>
+    </div>
+  )
+}
+
+// =============================================================================
 // [PHASE 7B] MAIN EXERCISES RENDERER
 // Handles both grouped (styled) and flat exercise rendering
 // =============================================================================
@@ -1892,10 +2104,20 @@ interface MainExercisesRendererProps {
   // renderer's entire branch selection is `switch (finalVisibleBodyModel.mode)`
   // with no parallel boolean re-derivation. Grouped modes consume the block
   // lists carried here; flat/simple modes consume `displayExercises` directly.
+  //
+  // [IN-BODY-GROUPED-BANNER] Per-type counts are now REQUIRED because the
+  // renderer paints a top-of-body grouped-method headline in every grouped
+  // branch (rich / raw / simple-order), and that banner's chips are derived
+  // from these counts so banner + chip row + block headers cannot disagree.
   finalVisibleBodyModel: {
     mode: 'rich_grouped' | 'raw_grouped_fallback' | 'simple_order_grouped' | 'flat_category'
     renderBlocks: RenderBlock[]
     rawFallbackBlocks: RawFallbackBlock[]
+    nonStraightGroupCount: number
+    supersetCount: number
+    circuitCount: number
+    densityCount: number
+    clusterCount: number
   }
 }
 
@@ -2009,8 +2231,25 @@ function MainExercisesRenderer({
       }
     })
     let rawIdx = 0
+    // [IN-BODY-GROUPED-BANNER] Compute per-type counts directly from the
+    // block list the renderer iterates, so banner + block headers cannot
+    // disagree for this exact render.
+    let hSuper = 0, hCirc = 0, hDens = 0, hClust = 0
+    for (const b of fallbackBlocks) {
+      if (b.groupType === 'superset') hSuper++
+      else if (b.groupType === 'circuit') hCirc++
+      else if (b.groupType === 'density_block') hDens++
+      else if (b.groupType === 'cluster') hClust++
+    }
     return (
       <div className="space-y-4">
+        <GroupedBodyHeadline
+          supersetCount={hSuper}
+          circuitCount={hCirc}
+          densityCount={hDens}
+          clusterCount={hClust}
+          mode="raw_grouped_fallback"
+        />
         {fallbackBlocks.map((block, bIdx) => {
           const colors = getGroupTypeColors(block.groupType)
           const icon = getGroupTypeIcon(block.groupType)
@@ -2021,7 +2260,12 @@ function MainExercisesRenderer({
               // the rich grouped path so the raw-fallback branch (grouped truth
               // exists upstream but rich hydration incomplete) still visibly
               // wins ownership of the card body instead of looking flat.
-              className={`rounded-lg border ${colors.border} ${colors.blockBg} p-2`}
+              // [GROUPED-BLOCK-FRAME-STRENGTHENED] Added `border-l-4` left
+              // accent so the grouped block visibly reads as a framed
+              // structural unit even on low-contrast card backgrounds. The
+              // accent color is the method color at full opacity (overriding
+              // the thin all-sides border for the left edge specifically).
+              className={`rounded-lg border border-l-4 ${colors.border} ${colors.blockBg} p-2`}
             >
               <div className={`mb-2 flex items-center gap-2 flex-wrap px-2.5 py-1.5 rounded-md ${colors.bg}`}>
                 <span className={colors.text}>{icon}</span>

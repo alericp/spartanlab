@@ -2494,9 +2494,25 @@ function MainExercisesRenderer({
   // no fake category headers, no fake group headers.
   // ==========================================================================
   if (bodyMode === 'simple_order_grouped') {
+    // [IN-BODY-GROUPED-BANNER] `simple_order_grouped` is the last-resort
+    // branch where grouped truth exists but no renderable blocks could be
+    // built from any source (rich, raw contract, or display-synthesized).
+    // Prior behavior rendered a bare ordered list that looked identical to
+    // a flat session. Now the body opens with an honest grouped-method
+    // banner so the user is never misled into thinking the session was
+    // ungrouped. The rows below keep their normal ExerciseRow format --
+    // we don't invent fake block containers when there's no renderable
+    // block truth to back them.
     let globalIdx = 0
     return (
       <div className="space-y-2">
+        <GroupedBodyHeadline
+          supersetCount={finalVisibleBodyModel.supersetCount}
+          circuitCount={finalVisibleBodyModel.circuitCount}
+          densityCount={finalVisibleBodyModel.densityCount}
+          clusterCount={finalVisibleBodyModel.clusterCount}
+          mode="simple_order_grouped"
+        />
         {displayExercises.map((exercise) => {
           globalIdx++
           return (
@@ -2635,8 +2651,29 @@ function MainExercisesRenderer({
     return null
   }
 
+  // [IN-BODY-GROUPED-BANNER] Per-type counts come directly from the
+  // contract-owned block list the renderer is iterating, so banner +
+  // block headers cannot disagree for this exact render.
+  let richSuper = 0, richCirc = 0, richDens = 0, richClust = 0
+  for (const b of renderBlocks) {
+    if (b.type === 'group') {
+      const gt = b.group.groupType
+      if (gt === 'superset') richSuper++
+      else if (gt === 'circuit') richCirc++
+      else if (gt === 'density_block') richDens++
+      else if (gt === 'cluster') richClust++
+    }
+  }
+
   return (
     <div className="space-y-4">
+      <GroupedBodyHeadline
+        supersetCount={richSuper}
+        circuitCount={richCirc}
+        densityCount={richDens}
+        clusterCount={richClust}
+        mode="rich_grouped"
+      />
       {renderBlocks.map((block, blockIdx) => {
         // [GROUPED-RENDER-CONTRACT] Handle ungrouped exercise -- hydrate the
         // row from exerciseDataMap (pure enrichment; NOT block ownership).
@@ -2699,7 +2736,11 @@ function MainExercisesRenderer({
             // superset inside a 7-row session read as "mostly flat with a colored
             // pill". With a container tint + padding, the group is unmistakably
             // a distinct structural block.
-            className={isSpecialGroup ? `rounded-lg border ${colors.border} ${colors.blockBg} p-2` : ''}
+            // [GROUPED-BLOCK-FRAME-STRENGTHENED] Added `border-l-4` so the
+            // grouped block visibly reads as a framed structural unit. Matches
+            // the raw-fallback branch so grouped containers look identical
+            // across both render paths.
+            className={isSpecialGroup ? `rounded-lg border border-l-4 ${colors.border} ${colors.blockBg} p-2` : ''}
           >
             {/* [CLEAN-GROUP-HEADER-RESTORED] Compact but clearly visible header.
                 Previous pass made it too quiet (text-xs + opacity-80) which flattened grouped

@@ -19,6 +19,146 @@ export const AWC_BUILD_CHIP = 'AWC-R3'
 // to true re-mounts the full diagnostic strip with no other code change.
 const SHOW_DIAGNOSTIC_HEADER = false
 
+// =============================================================================
+// [GROUP-SCANNER-R1] Off-by-default grouped-method scanner header.
+//
+// When true, renders a compact read-only diagnostic chip strip that exposes
+// the authoritative grouped-method state for the CURRENT live slice - block
+// type, position, next member, phase, owner branch. When false, renders
+// NOTHING (no layout hole).
+//
+// This is a diagnostic-visibility tool only. It does NOT:
+//   - compute grouped membership itself
+//   - mutate state
+//   - register any event handlers
+//   - alter workout flow in any way
+//
+// It reads ONLY from props already destructured by the corridor, which are
+// themselves derived upstream by StreamlinedWorkoutSession from the
+// authoritative sources:
+//   - currentBlock.block.groupType            -> blockGroupType
+//   - liveExecutionContract.groupedContext    -> groupedMemberIndex
+//   - currentBlock.block.label                -> blockLabel
+//   - session round/target state               -> currentRound / targetRounds
+//   - currentBlock.block.members               -> blockMemberExercises
+//   - rest dispatcher                          -> restType
+//   - local branch selection                   -> mode (active|resting|block_round_rest)
+//
+// Flip to true to debug grouped-method truth flow; flip to false to ship.
+// =============================================================================
+const SHOW_GROUP_SCANNER = false
+
+// Pure read-only diagnostic strip. No state, no effects, no handlers.
+type GroupScannerOwner = 'ACTIVE_SURFACE' | 'REST_SURFACE' | 'GROUP_TRANSITION'
+interface GroupScannerProps {
+  owner: GroupScannerOwner
+  // All fields below are pass-through of already-resolved corridor props.
+  exerciseName: string
+  blockLabel?: string
+  blockGroupType?: 'superset' | 'circuit' | 'cluster' | 'emom'
+  groupedMemberIndex: number | null
+  blockMemberExercises: Array<{ id: string; name: string }>
+  currentRound: number
+  targetRounds: number
+  mode: 'active' | 'resting' | 'block_round_rest'
+  restType?: 'same_exercise' | 'between_exercise' | 'block_round'
+}
+function GroupedMethodScannerStrip({
+  owner,
+  exerciseName,
+  blockLabel,
+  blockGroupType,
+  groupedMemberIndex,
+  blockMemberExercises,
+  currentRound,
+  targetRounds,
+  mode,
+  restType,
+}: GroupScannerProps) {
+  if (!SHOW_GROUP_SCANNER) return null
+
+  // GROUP - upper-cased canonical group type or NONE. We do not invent group
+  // types not already produced upstream; cluster and emom are surfaced
+  // verbatim because the corridor prop type already admits them.
+  const group = blockGroupType ? blockGroupType.toUpperCase() : 'NONE'
+
+  // BLOCK - stable label (e.g. "A1") if upstream supplied one, else "?".
+  const block = blockLabel || (blockGroupType ? '?' : '-')
+
+  // POS - 1-based member index within block, formatted as "n/total".
+  const memberTotal = blockMemberExercises.length
+  const pos =
+    groupedMemberIndex !== null && groupedMemberIndex >= 0 && memberTotal > 0
+      ? `${groupedMemberIndex + 1}/${memberTotal}`
+      : '-'
+
+  // STEP - current member short token. For supersets we prefer the A/B
+  // letter already used by the corridor's grouped-identity badge; for
+  // circuit/cluster/emom the 1-based index is the canonical display.
+  const step =
+    groupedMemberIndex !== null && groupedMemberIndex >= 0
+      ? blockGroupType === 'superset'
+        ? String.fromCharCode(65 + groupedMemberIndex)
+        : String(groupedMemberIndex + 1)
+      : '-'
+
+  // NEXT - next grouped member's short label (A/B or 1/2). If the current
+  // member is the last one in the block, next wraps to the first member
+  // for grouped types that cycle (superset/circuit), matching the round-
+  // based iteration the session engine uses. For non-grouped, "-".
+  let next = '-'
+  if (
+    groupedMemberIndex !== null &&
+    groupedMemberIndex >= 0 &&
+    memberTotal > 1 &&
+    blockGroupType
+  ) {
+    const nextIdx = (groupedMemberIndex + 1) % memberTotal
+    next =
+      blockGroupType === 'superset'
+        ? String.fromCharCode(65 + nextIdx)
+        : String(nextIdx + 1)
+  }
+
+  // PHASE - derived from the corridor's own branch selector plus restType.
+  // We only use values already represented in the live corridor; we do
+  // NOT introduce BETWEEN_MEMBERS / BETWEEN_ROUNDS unless the underlying
+  // truth is present (restType === 'between_exercise' / 'block_round').
+  let phase: string
+  if (mode === 'active') {
+    phase = 'ACTIVE'
+  } else if (mode === 'block_round_rest') {
+    phase = 'BETWEEN_ROUNDS'
+  } else if (restType === 'between_exercise') {
+    phase = 'BETWEEN_MEMBERS'
+  } else {
+    phase = 'REST'
+  }
+
+  const round =
+    blockGroupType && targetRounds > 0 ? `${currentRound}/${targetRounds}` : null
+
+  return (
+    <div
+      role="note"
+      aria-label="Grouped method scanner (debug)"
+      className="font-mono text-[10px] leading-tight text-[#A4ACB8] bg-[#0F1115] border border-[#2B313A] rounded px-2 py-1 flex flex-wrap items-center gap-x-2 gap-y-0.5"
+    >
+      <span>GROUP:<span className="text-[#E6E9EF]">{group}</span></span>
+      <span>BLOCK:<span className="text-[#E6E9EF]">{block}</span></span>
+      <span>POS:<span className="text-[#E6E9EF]">{pos}</span></span>
+      <span>STEP:<span className="text-[#E6E9EF]">{step}</span></span>
+      <span>NEXT:<span className="text-[#E6E9EF]">{next}</span></span>
+      <span>PHASE:<span className="text-[#E6E9EF]">{phase}</span></span>
+      {round && (
+        <span>ROUND:<span className="text-[#E6E9EF]">{round}</span></span>
+      )}
+      <span>OWNER:<span className="text-[#E6E9EF]">{owner}</span></span>
+      <span className="text-[#6B7280] truncate">· {exerciseName}</span>
+    </div>
+  )
+}
+
 /**
  * [ACTIVE-WORKOUT-START-CORRIDOR] Isolated Active Workout UI
  * 
@@ -1164,6 +1304,24 @@ export function ActiveWorkoutStartCorridor({
           {/* ========== RESTING MODE UI ========== */}
           {mode === 'resting' && (
             <>
+              {/* [GROUP-SCANNER-R1] Scanner in rest branch. Reports
+                  OWNER:REST_SURFACE and surfaces restType-derived PHASE
+                  (BETWEEN_MEMBERS vs plain REST) so we can see whether
+                  grouped rest is correctly entering a between-member
+                  phase rather than a same-exercise phase. */}
+              <GroupedMethodScannerStrip
+                owner="REST_SURFACE"
+                exerciseName={exerciseName}
+                blockLabel={blockLabel}
+                blockGroupType={blockGroupType}
+                groupedMemberIndex={groupedMemberIndex}
+                blockMemberExercises={blockMemberExercises}
+                currentRound={currentRound}
+                targetRounds={targetRounds}
+                mode="resting"
+                restType={restType}
+              />
+
               {/* Last Set RPE Summary */}
               {/* [BAND-TRUTH-R6] Rest-mode "Last set RPE" card now also
                   carries a compact used-band chip when the just-logged
@@ -1607,6 +1765,25 @@ export function ActiveWorkoutStartCorridor({
           {/* ========== BLOCK ROUND REST MODE UI (grouped methods) ========== */}
           {mode === 'block_round_rest' && (
             <>
+              {/* [GROUP-SCANNER-R1] Scanner in block-round-rest branch.
+                  Reports OWNER:GROUP_TRANSITION and PHASE:BETWEEN_ROUNDS
+                  so it's immediately obvious when the corridor has
+                  selected the transition surface instead of the regular
+                  rest surface - the single most common grouped-method
+                  confusion point. */}
+              <GroupedMethodScannerStrip
+                owner="GROUP_TRANSITION"
+                exerciseName={exerciseName}
+                blockLabel={blockLabel}
+                blockGroupType={blockGroupType}
+                groupedMemberIndex={groupedMemberIndex}
+                blockMemberExercises={blockMemberExercises}
+                currentRound={currentRound}
+                targetRounds={targetRounds}
+                mode="block_round_rest"
+                restType={restType}
+              />
+
               {/* Round Completed Message */}
               <Card className={`p-4 ${restTimeRemaining === 0 ? 'bg-amber-500/15 border-amber-500/40' : 'bg-amber-500/10 border-amber-500/30'}`}>
                 <div className="flex items-center gap-3">
@@ -1774,7 +1951,23 @@ export function ActiveWorkoutStartCorridor({
               </span>
             </div>
           </Card>
-          
+
+          {/* [GROUP-SCANNER-R1] Grouped-method scanner (debug-gated).
+              Placed directly under the Exercise card and above the
+              Input card per the diagnostic-visibility contract. Renders
+              nothing when SHOW_GROUP_SCANNER is false. */}
+          <GroupedMethodScannerStrip
+            owner="ACTIVE_SURFACE"
+            exerciseName={exerciseName}
+            blockLabel={blockLabel}
+            blockGroupType={blockGroupType}
+            groupedMemberIndex={groupedMemberIndex}
+            blockMemberExercises={blockMemberExercises}
+            currentRound={currentRound}
+            targetRounds={targetRounds}
+            mode="active"
+          />
+
           {/* [LIVE-WORKOUT-ACTION-PLANNER] Compact Inline Coaching Hint (active mode) */}
           {coachingExpression?.shouldShow && coachingExpression.isProtective && (
             <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${

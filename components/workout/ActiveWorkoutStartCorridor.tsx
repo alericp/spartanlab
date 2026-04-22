@@ -1165,22 +1165,52 @@ export function ActiveWorkoutStartCorridor({
           {mode === 'resting' && (
             <>
               {/* Last Set RPE Summary */}
-              {lastSetRPE && (
-                <Card className="bg-[#0F1115]/50 border-[#2B313A]/50 p-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-[#6B7280]">Last set RPE</span>
-                    <Badge className={`${
-                      lastSetRPE >= 9 
-                        ? 'bg-orange-500/10 text-orange-400 border-0' 
-                        : lastSetRPE >= 8
-                          ? 'bg-blue-500/10 text-blue-400 border-0'
-                          : 'bg-green-500/10 text-green-400 border-0'
-                    }`}>
-                      RPE {lastSetRPE}
-                    </Badge>
-                  </div>
-                </Card>
-              )}
+              {/* [BAND-TRUTH-R6] Rest-mode "Last set RPE" card now also
+                  carries a compact used-band chip when the just-logged
+                  set had bands selected. Without this, band truth
+                  disappeared at exactly the moment the user wants to
+                  confirm what they just did - the fuller Last Set
+                  Snapshot card below covers the long-form view, but
+                  this top summary is the at-a-glance artifact that
+                  should not drop band truth. */}
+              {lastSetRPE && (() => {
+                const lastLogged = recentSets[recentSets.length - 1]
+                const hasMultiBand =
+                  lastLogged?.selectedBands && lastLogged.selectedBands.length > 0
+                const hasSingleBand =
+                  lastLogged?.bandUsed && lastLogged.bandUsed !== 'none'
+                const bandLabel = hasMultiBand
+                  ? lastLogged!.selectedBands!.map(b => BAND_SHORT_LABELS[b]).join('+')
+                  : hasSingleBand
+                    ? BAND_SHORT_LABELS[lastLogged!.bandUsed as ResistanceBandColor]
+                    : null
+                return (
+                  <Card className="bg-[#0F1115]/50 border-[#2B313A]/50 p-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-[#6B7280]">Last set RPE</span>
+                      <div className="flex items-center gap-1.5">
+                        {bandLabel && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] border-[#C1121F]/40 text-[#C1121F] bg-[#C1121F]/10"
+                          >
+                            {bandLabel}
+                          </Badge>
+                        )}
+                        <Badge className={`${
+                          lastSetRPE >= 9
+                            ? 'bg-orange-500/10 text-orange-400 border-0'
+                            : lastSetRPE >= 8
+                              ? 'bg-blue-500/10 text-blue-400 border-0'
+                              : 'bg-green-500/10 text-green-400 border-0'
+                        }`}>
+                          RPE {lastSetRPE}
+                        </Badge>
+                      </div>
+                    </div>
+                  </Card>
+                )
+              })()}
               
               {/* [LIVE-WORKOUT-ACTION-PLANNER] Adaptive Coaching Panel */}
               {coachingExpression?.shouldShow && (
@@ -1695,6 +1725,15 @@ export function ActiveWorkoutStartCorridor({
                 </div>
 
             {/* Target prescription */}
+            {/* [BAND-TRUTH-R6] When the authoritative contract marks this
+                exercise as bandSelectable and a recommendedBand is present,
+                surface it inline as a compact prescription chip here so
+                the user sees the prescribed band BEFORE they scroll to
+                the band selector. Matches the existing load-prescription
+                pattern; does NOT imply the band was used, because the
+                `Rec:` prefix keeps it clearly labeled as recommendation,
+                distinct from the used-band badges rendered in the
+                Last Set Snapshot / Recent Sets surfaces. */}
             <div className="flex items-center gap-2 mt-1 text-sm flex-wrap">
               <span className="text-[#A4ACB8]">Target:</span>
               <span className="text-[#E6E9EF] font-medium">{exerciseRepsOrTime}</span>
@@ -1704,6 +1743,12 @@ export function ActiveWorkoutStartCorridor({
                 <>
                   <span className="text-[#6B7280]">·</span>
                   <span className="text-amber-400 font-medium">+{prescribedLoad.load}{prescribedLoad.unit}</span>
+                </>
+              )}
+              {bandSelectable && recommendedBand && (
+                <>
+                  <span className="text-[#6B7280]">·</span>
+                  <span className="text-[#C1121F] font-medium">Rec: {BAND_SHORT_LABELS[recommendedBand]}</span>
                 </>
               )}
             </div>
@@ -2038,13 +2083,28 @@ export function ActiveWorkoutStartCorridor({
                           {set.actualLoadUsed !== undefined && set.actualLoadUsed > 0 && (
                             <span className="text-amber-400 text-[10px]">+{set.actualLoadUsed}{set.actualLoadUnit || 'lbs'}</span>
                           )}
-                          {/* Multi-band - show combined */}
+                          {/* [BAND-TRUTH-R6] Band truth for each logged set.
+                              Upgraded from bare red text to a styled Badge
+                              matching the Last Set Snapshot and the rest
+                              "Last set RPE" surfaces, so band readouts
+                              render identically across all three consumer
+                              surfaces. Multi-band renders combined
+                              (e.g. YLW+RED); single-band renders as a
+                              single chip; no band selected renders nothing. */}
                           {set.selectedBands && set.selectedBands.length > 0 ? (
-                            <span className="text-[#C1121F] text-[10px] truncate max-w-[60px]">
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] border-[#C1121F]/40 text-[#C1121F] bg-[#C1121F]/10 px-1.5 py-0 h-4 leading-none truncate max-w-[80px]"
+                            >
                               {set.selectedBands.map(b => BAND_SHORT_LABELS[b]).join('+')}
-                            </span>
+                            </Badge>
                           ) : set.bandUsed && set.bandUsed !== 'none' && (
-                            <span className="text-[#C1121F] text-[10px]">{BAND_SHORT_LABELS[set.bandUsed]}</span>
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] border-[#C1121F]/40 text-[#C1121F] bg-[#C1121F]/10 px-1.5 py-0 h-4 leading-none"
+                            >
+                              {BAND_SHORT_LABELS[set.bandUsed]}
+                            </Badge>
                           )}
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">

@@ -2189,12 +2189,16 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     )
   }
   // Method-only -- body stays flat, tell the user what methods are present.
+  // [STATUS-LINE-LABEL-NORMALIZATION] Labels here MUST match the row-level
+  // chip wording above and the grouped-body banner wording so the three
+  // surfaces read as one vocabulary. No raw enum keys (cluster_sets,
+  // density_block) may leak into the visible string.
   const prettyMethod = (m: string) =>
     m === 'superset' ? 'Superset'
       : m === 'circuit' ? 'Circuit'
-        : m === 'density' ? 'Density'
+        : m === 'density' ? 'Density Block'
           : m === 'cluster' ? 'Cluster'
-            : m.charAt(0).toUpperCase() + m.slice(1)
+            : m.charAt(0).toUpperCase() + m.slice(1).replace(/_/g, ' ')
   const methodList = Array.from(methodSet).map(prettyMethod).join(', ')
   return (
     <div className="mb-2 flex items-center gap-2 rounded-md border border-[#3A3A3A] bg-[#1A1A1A] px-3 py-1.5 text-xs text-[#A5A5A5]">
@@ -3767,20 +3771,31 @@ function ExerciseRow({
             if (prefix) return null  // grouped frame already labels method
             const exMethod = ((exercise as unknown as { method?: string }).method || '').toLowerCase()
             if (!exMethod || exMethod === 'straight') return null
-            const methodLabelFromEx = (exercise as unknown as { methodLabel?: string }).methodLabel
+            // [ROW-CHIP-LABEL-NORMALIZATION] Ignore `methodLabelFromEx` here.
+            // The builder stamps labels like `'Cluster Sets'` on the
+            // exercise (`lib/adaptive-program-builder.ts` ~12289) and
+            // `'Superset A1'` / `'Circuit C'` positional labels for grouped
+            // rows. For FLAT rows rendering the row-level method chip we
+            // want a clean, single-word human label that matches the
+            // card-level "Method cues present: Cluster" status line and the
+            // grouped-body banner vocabulary. Positional variants belong
+            // only on grouped-frame rows (which hit the `prefix` short-
+            // circuit above); raw verbose variants like "Cluster Sets"
+            // leak verbatim otherwise -- this is the "Cluster_set"-shaped
+            // symptom reported on the card.
             let label = ''
             let chipClass = ''
             if (exMethod === 'cluster' || exMethod === 'cluster_sets') {
-              label = methodLabelFromEx || 'Cluster'
+              label = 'Cluster'
               chipClass = 'bg-purple-500/12 text-purple-300 border border-purple-500/35'
             } else if (exMethod === 'density_block' || exMethod === 'density') {
-              label = methodLabelFromEx || 'Density'
+              label = 'Density Block'
               chipClass = 'bg-amber-500/12 text-amber-300 border border-amber-500/35'
             } else if (exMethod === 'superset') {
-              label = methodLabelFromEx || 'Superset'
+              label = 'Superset'
               chipClass = 'bg-[#4F6D8A]/15 text-[#7FA8CC] border border-[#4F6D8A]/40'
             } else if (exMethod === 'circuit' || exMethod === 'circuits') {
-              label = methodLabelFromEx || 'Circuit'
+              label = 'Circuit'
               chipClass = 'bg-emerald-500/12 text-emerald-300 border border-emerald-500/35'
             } else {
               return null
@@ -3823,6 +3838,38 @@ function ExerciseRow({
           <span className="text-[10px] text-[#5A5A5A]">{card.restGuidance}</span>
         )}
       </div>
+
+      {/* ROW 2b: [METHOD-ONLY-EXECUTION-MICROCOPY] Compact execution-cue line
+          rendered ONLY for flat rows (no grouped `prefix`) that carry a
+          non-straight method. The row-level chip above identifies the
+          method; this line materializes WHAT that method means for
+          execution so a method-only cluster row no longer reads like a
+          plain straight-sets row. A subtle left-border accent matches the
+          method's palette (purple/amber) to visually distinguish without
+          creating a fake grouped frame. Warm-up rows and grouped-frame
+          rows (which already carry their own method rail + header) are
+          excluded. Copy is intentionally short and execution-focused --
+          no banners, no boxes, no vertical bloat. */}
+      {!isWarmupCooldown && !prefix && (() => {
+        const exMethod = ((exercise as unknown as { method?: string }).method || '').toLowerCase()
+        if (exMethod === 'cluster' || exMethod === 'cluster_sets') {
+          return (
+            <div className="mt-1 border-l-2 border-purple-500/40 pl-2 text-[10px] text-purple-300/90">
+              <span className="font-semibold">Cluster execution</span>
+              <span className="text-purple-300/70"> — brief 10-20s intra-set rests to preserve rep quality, full rest between sets.</span>
+            </div>
+          )
+        }
+        if (exMethod === 'density_block' || exMethod === 'density') {
+          return (
+            <div className="mt-1 border-l-2 border-amber-500/40 pl-2 text-[10px] text-amber-300/90">
+              <span className="font-semibold">Density block</span>
+              <span className="text-amber-300/70"> — complete prescribed work within the timed window, short rests between rounds.</span>
+            </div>
+          )
+        }
+        return null
+      })()}
 
       {/* ROW 3a: [WARM-UP-ROW-CONTRACT-RESTORED] Per-row warm-up selectionReason.
           This is the "prior supporting subtitle / intent line behavior" that the

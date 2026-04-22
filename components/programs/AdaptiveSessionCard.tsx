@@ -1050,7 +1050,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
      *   but rawFallbackBlocks came back empty, so we render honestly ordered)
      * - rich / raw grouped -> null
      */
-    reasonIfNotRich: GroupedFlatReason | 'RAW_FALLBACK_EMPTY' | null
+    reasonIfNotRich: GroupedFlatReason | 'RAW_FALLBACK_EMPTY' | 'METHOD_ONLY_FLAT' | null
     /** Block list consumed by the rich grouped render path (mode 1). */
     renderBlocks: RenderBlock[]
     /** Block list consumed by the raw grouped fallback path (mode 2). */
@@ -1145,17 +1145,27 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         else if (m === 'cluster') gt = 'cluster'
         else if (m === 'density_block' || m === 'density') gt = 'density_block'
         if (!gt) continue
-        // [METHOD-ONLY-SYNTH] Superset/circuit are TRUE grouped-block methods
-        // and still require blockId here. Cluster/density are METHOD-ONLY
-        // execution styles -- the builder applies them to a single exercise
-        // without blockId (see lib/adaptive-program-builder.ts line ~12192).
-        // When blockId is absent for cluster/density, synthesize a stable
-        // per-exercise key so each method-only exercise produces its own
-        // single-member block. Superset/circuit without blockId cannot be
-        // synthesized into a meaningful group (pairing intent is lost) and
-        // are skipped here.
-        if ((gt === 'superset' || gt === 'circuit') && !ex.blockId) continue
-        const key = ex.blockId || `method-only-${ex.id}`
+        // [RENDERABLE-BLOCK-ONLY-SYNTH] A grouped block MUST be backed by a
+        // real `blockId` -- that is the builder's authoritative signal that
+        // multiple exercises are grouped together for coordinated execution
+        // (superset pair, circuit group, multi-member cluster/density).
+        //
+        // Single-row cluster/density *without* a blockId are METHOD CUES on
+        // one exercise, not grouped blocks (see governor prompt section C/E).
+        // Previously we synthesized a `method-only-${ex.id}` fake block key
+        // so each single-row cluster/density painted its own block header.
+        // That conflated "renderable grouped structure" with "row-level
+        // method cue" and caused the card body to wrap a single row in a
+        // fake "Cluster Set A" header -- misleading when the session should
+        // read as flat rows with a simple method chip.
+        //
+        // New rule: ANY method without a blockId is skipped from synthesis.
+        // The row still renders (below) with its row-level method chip, and
+        // the card-level status line at the top of the body reports the
+        // session as `method_only` so the user understands why the body is
+        // flat.
+        if (!ex.blockId) continue
+        const key = ex.blockId
         if (!blockMembers.has(key)) {
           blockMembers.set(key, [])
           blockOrder.push(key)
@@ -1312,6 +1322,74 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     //
     // Cards where grouped rendering succeeded never reach this branch, so
     // the failure surface never fires for healthy cards.
+    // [METHOD-ONLY-PRECHECK] Before entering the `simple_order_grouped`
+    // failure-attribution branch, determine whether the grouped truth
+    // claimed by `hasGroupedTruth` is actually rooted in RENDERABLE grouped
+    // block structure -- i.e. something with multi-exercise coordination
+    // that would paint a real block frame. The criteria here mirror the
+    // scanner's Priority-1/Priority-2 rules:
+    //   - any styledGroups entry with a non-straight groupType and >= 2
+    //     usable-named members, OR
+    //   - any blockId shared by >= 2 exercises with non-straight methods.
+    // If NEITHER is true but there ARE non-straight methods on individual
+    // rows, the session's only grouped-ish signal is method cues on single
+    // rows. That must read as FLAT with row-level method chips per section
+    // C/E of the governor prompt, not as a `simple_order_grouped` banner
+    // over a list (which implies renderable grouped structure).
+    const hasRenderableGroupedBlockStructure = (() => {
+      // Priority-1: multi-member styled groups
+      for (const g of sessionStyleMetadata?.styledGroups ?? []) {
+        if (g.groupType === 'straight') continue
+        const members = Array.isArray(g.exercises) ? g.exercises : []
+        const usable = members.filter(
+          m => typeof m?.name === 'string' && m.name.trim().length >= 2
+        )
+        if (usable.length >= 2) return true
+      }
+      // Priority-2: blockId shared by >=2 non-straight-method exercises
+      const blockMethodMembers = new Map<string, number>()
+      for (const ex of safeExercises) {
+        const b = (ex as unknown as { blockId?: string }).blockId
+        const m = ((ex as unknown as { method?: string }).method || '').toLowerCase()
+        if (!b) continue
+        if (!m || m === 'straight' || m === 'straight_sets') continue
+        blockMethodMembers.set(b, (blockMethodMembers.get(b) ?? 0) + 1)
+      }
+      for (const count of blockMethodMembers.values()) {
+        if (count >= 2) return true
+      }
+      return false
+    })()
+
+    if (hasGroupedTruth && !hasRenderableGroupedBlockStructure) {
+      // [METHOD-ONLY-FLAT] Session carries non-straight methods on individual
+      // rows but NO renderable grouped block structure (no multi-member
+      // styled group, no multi-member blockId). Route to flat_category so
+      // the body paints a clean flat row list with row-level method chips,
+      // and rely on the card-local status line above the body to tell the
+      // user "Method cues present: ..." so the absence of a grouped frame
+      // is never ambiguous.
+      return {
+        mode: 'flat_category' as const,
+        sourceUsed: groupedRenderContract.sourceUsed,
+        reasonIfNotRich: 'METHOD_ONLY_FLAT' as const,
+        renderBlocks: [],
+        rawFallbackBlocks: [],
+        nonStraightGroupCount: 0,
+        supersetCount: 0,
+        circuitCount: 0,
+        densityCount: 0,
+        clusterCount: 0,
+        // `hasGroupedTruth` stays false from the card's dispatch perspective
+        // -- there is no grouped block to render -- even though non-straight
+        // methods exist on individual rows. Those render via the existing
+        // row-level method chip path unchanged.
+        hasGroupedTruth: false,
+        hasRichRenderableGroups: false,
+        groupedFailureStage: null,
+      }
+    }
+
     if (hasGroupedTruth) {
       // [RAW-PRE-FILTER-METHOD-COUNTS] Chip counts for simple_order_grouped
       // come from the RAW upstream signal (styleMetadata.styledGroups types
@@ -1477,10 +1555,18 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       // renderable block list. Banner + failure-stage surface are shown
       // in the body so the card cannot read as silently flat.
       s5Verdict = `CARD_FELL_TO_SIMPLE_ORDER_GROUPED:${finalVisibleBodyModel.groupedFailureStage ?? 'unknown'}`
+    } else if (finalVisibleBodyModel.reasonIfNotRich === 'METHOD_ONLY_FLAT') {
+      // [METHOD-ONLY-FLAT] Dispatcher intentionally routed to flat_category
+      // because the session's non-straight methods live only on individual
+      // rows (no multi-member styled groups, no multi-member blockId
+      // methods). The card body stays flat with row-level method chips and
+      // the card-level status line says "Method cues present: ..." so the
+      // user is never misled about missing grouped structure.
+      s5Verdict = 'CARD_METHOD_ONLY_FLAT_INTENTIONAL'
     } else {
-      // hasGroupedTruth was true but dispatcher landed on flat_category. This
-      // is the precise "grouped truth exists but body renders flat" symptom
-      // the user has been reporting.
+      // hasGroupedTruth was true but dispatcher landed on flat_category with
+      // no METHOD_ONLY_FLAT reason. This is an unexpected dispatch state --
+      // keep the explicit verdict so any regression surfaces in logs.
       s5Verdict = 'CARD_HAS_GROUPED_TRUTH_BUT_DISPATCHED_TO_FLAT_CATEGORY'
     }
     console.log('[v0] [FUNNEL-AUDIT-S5] Day', session.dayNumber, {
@@ -2040,6 +2126,85 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               </div>
             )}
           </div>
+
+{/* =========================================================================
+    [CARD-TRUTH-STATUS-LINE] Authoritative card-local display kind status.
+    Resolves the session to exactly one of three explicit states so the
+    user never has to infer from chips or scanner whether the body is
+    supposed to paint grouped structure:
+      1. grouped_blocks  -> body will render renderable grouped block(s)
+      2. method_only     -> body stays flat with row-level method cues
+      3. flat            -> honestly flat, no status line rendered
+    Reads `finalVisibleBodyModel.mode` directly (same contract the body
+    renderer consumes), so chip row, body, and status line can never
+    disagree.
+    ========================================================================= */}
+{(() => {
+  const mode = finalVisibleBodyModel.mode
+  // `simple_order_grouped` now only fires from the dispatcher when
+  // `hasRenderableGroupedBlockStructure === true` (multi-member styled
+  // group OR multi-member blockId methods) AND synthesis produced no
+  // block list -- i.e. the grouped-block truth-lost failure case. That
+  // still counts as grouped_blocks for the status line because the body
+  // will render a grouped banner + failure-stage surface.
+  const isGroupedBlocks =
+    mode === 'rich_grouped' ||
+    mode === 'raw_grouped_fallback' ||
+    mode === 'simple_order_grouped'
+  // Method cues: any non-straight method on any row, NOT counted as a block.
+  let hasAnyNonStraightMethod = false
+  const methodSet = new Set<string>()
+  for (const ex of safeExercises) {
+    const m = ((ex as unknown as { method?: string }).method || '').toLowerCase()
+    if (!m || m === 'straight' || m === 'straight_sets') continue
+    hasAnyNonStraightMethod = true
+    if (m === 'superset') methodSet.add('superset')
+    else if (m === 'circuit') methodSet.add('circuit')
+    else if (m === 'cluster') methodSet.add('cluster')
+    else if (m === 'density' || m === 'density_block') methodSet.add('density')
+    else methodSet.add(m)
+  }
+  const isMethodOnly = !isGroupedBlocks && hasAnyNonStraightMethod
+  if (!isGroupedBlocks && !isMethodOnly) return null
+  if (isGroupedBlocks) {
+    // Per-type counts come from the same finalVisibleBodyModel the body
+    // paints, so counts match exactly what the user is about to see below.
+    const tokens: string[] = []
+    const s = finalVisibleBodyModel.supersetCount
+    const c = finalVisibleBodyModel.circuitCount
+    const d = finalVisibleBodyModel.densityCount
+    const cl = finalVisibleBodyModel.clusterCount
+    if (s > 0) tokens.push(`${s} Superset${s > 1 ? 's' : ''}`)
+    if (c > 0) tokens.push(`${c} Circuit${c > 1 ? 's' : ''}`)
+    if (d > 0) tokens.push(`${d} Density Block${d > 1 ? 's' : ''}`)
+    if (cl > 0) tokens.push(`${cl} Cluster${cl > 1 ? 's' : ''}`)
+    const summary = tokens.length > 0 ? tokens.join(' · ') : 'grouped'
+    return (
+      <div className="mb-2 flex items-center gap-2 rounded-md border border-[#4F6D8A]/40 bg-[#4F6D8A]/10 px-3 py-1.5 text-xs text-[#7FA8CC]">
+        <Layers className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        <span>
+          <span className="font-semibold">Grouped structure:</span> {summary}
+        </span>
+      </div>
+    )
+  }
+  // Method-only -- body stays flat, tell the user what methods are present.
+  const prettyMethod = (m: string) =>
+    m === 'superset' ? 'Superset'
+      : m === 'circuit' ? 'Circuit'
+        : m === 'density' ? 'Density'
+          : m === 'cluster' ? 'Cluster'
+            : m.charAt(0).toUpperCase() + m.slice(1)
+  const methodList = Array.from(methodSet).map(prettyMethod).join(', ')
+  return (
+    <div className="mb-2 flex items-center gap-2 rounded-md border border-[#3A3A3A] bg-[#1A1A1A] px-3 py-1.5 text-xs text-[#A5A5A5]">
+      <Dumbbell className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      <span>
+        <span className="font-semibold text-[#C5C5C5]">Method cues present:</span> {methodList}
+      </span>
+    </div>
+  )
+})()}
 
 {/* =========================================================================
     [GROUPED-METHOD-SUMMARY] Visible session methodology indicator

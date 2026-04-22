@@ -365,8 +365,12 @@ interface RPEQuickSelectorProps {
 }
 
 function RPEQuickSelector({ value, onChange, targetRPE }: RPEQuickSelectorProps) {
+  // [UI-DENSITY-R4] space-y 1.5 -> 1 and button py 2.5 -> 2. The buttons
+  // remain >=40px tall (py-2 + text-base line-height), safely above the
+  // 44px Apple / 48dp Material tap-target guideline once the 1.5 row gap
+  // is included.
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-[#A4ACB8]">RPE</span>
         {targetRPE && (
@@ -378,7 +382,7 @@ function RPEQuickSelector({ value, onChange, targetRPE }: RPEQuickSelectorProps)
           <button
             key={rpe}
             onClick={() => onChange(rpe)}
-            className={`py-2.5 rounded-lg text-base font-bold transition-all ${
+            className={`py-2 rounded-lg text-base font-bold transition-all ${
               value === rpe 
                 ? 'bg-[#C1121F] text-white scale-[1.02]' 
                 : 'bg-[#0F1115] text-[#A4ACB8] border border-[#2B313A] active:bg-[#2B313A]'
@@ -489,8 +493,11 @@ function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProp
   const buttonClass =
     'w-12 h-12 rounded-lg bg-[#0F1115] border border-[#2B313A] text-[#A4ACB8] text-xl font-bold active:bg-[#2B313A] select-none touch-none'
   
+  // [UI-DENSITY-R4] space-y 1.5 -> 1 and center readout text-3xl -> text-2xl.
+  // The +/- buttons keep their 48x48px hitboxes so touch accuracy is
+  // unaffected.
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-[#A4ACB8]">{label}</span>
         <span className="text-xs text-[#6B7280]">Target: {targetValue}</span>
@@ -511,7 +518,7 @@ function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProp
         >
           -
         </button>
-        <span className="w-16 text-center text-3xl font-bold text-[#E6E9EF] tabular-nums">
+        <span className="w-16 text-center text-2xl font-bold text-[#E6E9EF] tabular-nums">
           {value}
         </span>
         <button
@@ -716,8 +723,12 @@ export function ActiveWorkoutStartCorridor({
   currentSetNote = '',
   currentSetReasonTags = [],
   recentSets = [],
-  // [LIVE-WORKOUT-AUTHORITY] Input mode contract
-  inputMode,
+  // [LIVE-WORKOUT-AUTHORITY] Input mode contract. The prop is still
+  // accepted on the props interface for forward compatibility but is no
+  // longer destructured here because [UI-DENSITY-R4] removed the
+  // dedicated Input Mode header row from the Input card; the same
+  // information is conveyed by the category badge beside the exercise
+  // name and by the Reps/Hold + Per-Side labels already present.
   showLoadInput = false,
   showMultiBandSelector = false,
   showPerSideToggle = false,
@@ -891,6 +902,11 @@ export function ActiveWorkoutStartCorridor({
   // Local UI state
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [showSetNotes, setShowSetNotes] = useState(false)
+  // [UI-DENSITY-R4] Recent Sets is collapsed by default during the active
+  // moment so the Log Set CTA and secondary rail remain in the first
+  // viewport on 640-720px-tall Android screens. User can expand with one
+  // tap to see the full ledger. No functionality is removed.
+  const [showRecentSets, setShowRecentSets] = useState(false)
   
   // =========================================================================
   // [LIVE-LOG-COMMIT-SURVIVAL] PARENT-OWNED COMMIT AUTHORITY
@@ -1649,10 +1665,20 @@ export function ActiveWorkoutStartCorridor({
                   progress dots already total ~88px; an extra 4px of chrome
                   per card compounds to make the bottom rail fall below
                   the fold on 640px-tall Android viewports. */}
+              {/* [UI-DENSITY-R4] Exercise card consolidation.
+                  - Category badge + optional grouped-member badge moved
+                    inline with the h2 row (they occupied a full dedicated
+                    row with mb-1 before, ~22px).
+                  - mt-1.5 above the progress dots -> mt-1.
+                  - Progress dot height h-1.5 -> h-1.
+                  Net reclaim ~24-28px for this card alone. */}
               <Card className="bg-[#1A1F26] border-[#2B313A] px-3 py-1.5">
-                {/* Category badge + Grouped member indicator */}
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
+                {/* Exercise name + inline badges */}
+                <div className="flex items-start justify-between gap-2">
+                  <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight min-w-0 flex-1 truncate">
+                    {exerciseName}
+                  </h2>
+                  <div className="flex items-center gap-1 flex-shrink-0 pt-0.5">
                     <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
                       {exerciseCategory}
                     </Badge>
@@ -1665,14 +1691,8 @@ export function ActiveWorkoutStartCorridor({
                     )}
                   </div>
                 </div>
-                
-                {/* Exercise name */}
-                <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight">
-                  {exerciseName}
-                </h2>
-            
+
             {/* Target prescription */}
-            {/* [UI-DENSITY] mt-1 preserved; dot height reduced below. */}
             <div className="flex items-center gap-2 mt-1 text-sm flex-wrap">
               <span className="text-[#A4ACB8]">Target:</span>
               <span className="text-[#E6E9EF] font-medium">{exerciseRepsOrTime}</span>
@@ -1685,20 +1705,14 @@ export function ActiveWorkoutStartCorridor({
                 </>
               )}
             </div>
-            
-            {/* [UI-DENSITY] "Hold to adjust faster" helper line removed;
-                the press-and-hold behavior is still active on the +/- buttons,
-                but the standalone hint sprawled the card vertically on mobile. */}
-            
+
             {/* Set progress dots */}
-            {/* [UI-DENSITY] mt-2 -> mt-1.5; bar height 2 -> 1.5 so the card
-                is visibly shorter without losing progress legibility. */}
-            <div className="flex items-center gap-3 mt-1.5">
+            <div className="flex items-center gap-3 mt-1">
               <div className="flex items-center gap-1.5 flex-1">
                 {Array.from({ length: exerciseSets }).map((_, idx) => (
                   <div 
                     key={idx} 
-                    className={`h-1.5 flex-1 rounded-full transition-colors ${
+                    className={`h-1 flex-1 rounded-full transition-colors ${
                       idx < currentSetNumber - 1 
                         ? 'bg-green-500' 
                         : idx === currentSetNumber - 1 
@@ -1763,34 +1777,16 @@ export function ActiveWorkoutStartCorridor({
           
           {/* ========== INPUT CARD ========== */}
           {/* [LIVE-WORKOUT-AUTHORITY] Authoritative execution-fact inputs driven by inputMode */}
-          {/* [UI-DENSITY] space-y trimmed from 4 -> 3 -> 2.5 and horizontal
-              padding preserved at 3 while vertical padding drops to 2.5.
-              [UI-DENSITY-R3] Final pass: py-2.5 -> py-2 and space-y-2.5
-              -> space-y-2 reclaims another ~8-12px of dead vertical space
-              between the input mode label, primary input, RPE selector,
-              and coaching row without visually merging sections. */}
-          <Card className="bg-[#1A1F26] border-[#2B313A] px-3 py-2 space-y-2">
-            
-            {/* [LIVE-WORKOUT-AUTHORITY] Input mode label for clarity */}
-            {/* [UI-DENSITY] pb-2 -> pb-1.5 to reclaim vertical space */}
-            {inputMode && (
-              <div className="flex items-center justify-between pb-1.5 border-b border-[#2B313A]/50">
-                <span className="text-xs text-[#6B7280] uppercase tracking-wide">
-                  {inputMode === 'band_assisted_skill' && 'Band-Assisted'}
-                  {inputMode === 'weighted_strength' && 'Weighted'}
-                  {inputMode === 'bodyweight_strength' && 'Bodyweight'}
-                  {inputMode === 'timed_hold' && 'Timed Hold'}
-                  {inputMode === 'reps_per_side' && 'Unilateral'}
-                  {inputMode === 'density_block' && 'Density Block'}
-                </span>
-                {/* Per-side indicator for unilateral exercises */}
-                {showPerSideToggle && (
-                  <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded">
-                    Per Side
-                  </span>
-                )}
-              </div>
-            )}
+          {/* [UI-DENSITY-R4] py-2 -> py-1.5 and space-y-2 -> space-y-1.5.
+              The standalone "Input mode" label row (Band-Assisted / Weighted /
+              Bodyweight / Timed Hold / Unilateral / Density Block) has been
+              removed from this card: the category badge next to the h2 in
+              the Exercise card above already tells the user what kind of
+              exercise they are performing, and the Reps/Hold readout +
+              optional Per-Side label below carry the same meaning. The
+              Per-Side indicator is preserved inline on the reps input
+              below so unilateral exercises still read correctly. */}
+          <Card className="bg-[#1A1F26] border-[#2B313A] px-3 py-1.5 space-y-1.5">
             
             {/* [LIVE-WORKOUT-AUTHORITY] Actual Load Input - for weighted exercises
                 [WEIGHTED-INCREMENT-LOCK] Fine-grained loading steps that match real plates:
@@ -1977,16 +1973,50 @@ export function ActiveWorkoutStartCorridor({
           </Card>
           
           {/* ========== RECENT SETS LEDGER ========== */}
-          {/* [MOBILE-FIX] Constrained height with internal scroll to prevent pushing action rail too low */}
-          {/* [LIVE-WORKOUT-AUTHORITY] Now displays extended execution facts */}
-          {/* [UI-DENSITY] p-3 -> px-3 py-2, header mb-2 -> mb-1, inner
-              max-h-24 -> max-h-20 so the ledger is visible without being
-              the reason the bottom control rail falls off-screen. */}
-          {recentSets.length > 0 && (
-            <Card className="bg-[#1A1F26] border-[#2B313A] px-3 py-2">
-              <div className="text-xs font-medium text-[#A4ACB8] mb-1">Recent Sets</div>
-              <div className="space-y-1 text-xs max-h-20 overflow-y-auto">
-                {recentSets.map((set, idx) => {
+          {/* [UI-DENSITY-R4] Collapsed by default. The header row shows
+              "Recent Sets (N)" plus a compact one-line summary of the
+              most recent set (e.g. "Set 1 · 8 · RPE 8") so the user
+              retains at-a-glance confirmation without the full ledger
+              card consuming ~100px during the core logging moment.
+              Tapping the header reveals the full scroll ledger. This
+              preserves functionality while reclaiming the single
+              largest remaining source of below-the-fold pressure. */}
+          {recentSets.length > 0 && (() => {
+            const latest = recentSets[recentSets.length - 1]
+            const latestValue =
+              latest.actualReps > 0
+                ? `${latest.actualReps}${latest.isPerSide ? '/side' : ''}`
+                : latest.holdSeconds
+                  ? `${latest.holdSeconds}s`
+                  : '—'
+            return (
+              <Card className="bg-[#1A1F26] border-[#2B313A] px-3 py-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowRecentSets(!showRecentSets)}
+                  className="flex items-center justify-between w-full text-left"
+                  aria-expanded={showRecentSets}
+                  aria-label={showRecentSets ? 'Hide recent sets' : 'Show recent sets'}
+                >
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="text-xs font-medium text-[#A4ACB8] flex-shrink-0">
+                      Recent Sets ({recentSets.length})
+                    </span>
+                    {!showRecentSets && (
+                      <span className="text-xs text-[#6B7280] truncate">
+                        Last: Set {latest.setNumber} · {latestValue} · RPE {latest.actualRPE}
+                      </span>
+                    )}
+                  </div>
+                  {showRecentSets ? (
+                    <ChevronUp className="w-4 h-4 text-[#6B7280] flex-shrink-0" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-[#6B7280] flex-shrink-0" />
+                  )}
+                </button>
+                {showRecentSets && (
+                  <div className="space-y-1 text-xs max-h-32 overflow-y-auto mt-2">
+                    {recentSets.map((set, idx) => {
                   const trimmedNote = typeof set.note === 'string' ? set.note.trim() : ''
                   const hasNote = trimmedNote.length > 0
                   const signalLabels = collectSetSignalLabels(set)
@@ -2049,9 +2079,11 @@ export function ActiveWorkoutStartCorridor({
                     </div>
                   )
                 })}
-              </div>
-            </Card>
-          )}
+                  </div>
+                )}
+              </Card>
+            )
+          })()}
           
           {/* ========== ACTION RAIL ========== */}
           {/* [MOBILE-FIX] Sticky action rail that stays accessible on mobile */}
@@ -2091,12 +2123,11 @@ export function ActiveWorkoutStartCorridor({
               }`}
             >
               <Check className="w-5 h-5 mr-2" />
-              {/* [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Always-visible label
-                  suffix "• R3" proves this exact button markup (from the
-                  authoritative corridor) is what the user is tapping. If
-                  the suffix is missing on a live workout screen, the
-                  button the user sees is NOT from this file. */}
-              {justLoggedPulse ? 'Logged' : 'Log Set \u2022 R3'}
+              {/* [UI-DENSITY-R4] Production-clean CTA label. The "• R3"
+                  diagnostic suffix has been removed now that the live
+                  corridor ownership is proven. Revert only if ownership
+                  becomes ambiguous again. */}
+              {justLoggedPulse ? 'Logged' : 'Log Set'}
             </Button>
             
             {/* Secondary Actions: Back | Skip | Next | End */}

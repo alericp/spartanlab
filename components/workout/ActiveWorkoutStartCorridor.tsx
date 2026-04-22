@@ -46,7 +46,7 @@ const SHOW_DIAGNOSTIC_HEADER = false
 //
 // Flip to true to debug grouped-method truth flow; flip to false to ship.
 // =============================================================================
-const SHOW_GROUP_SCANNER = false
+const SHOW_GROUP_SCANNER = true // temporary grouped-corridor debug
 
 // Pure read-only diagnostic strip. No state, no effects, no handlers.
 type GroupScannerOwner = 'ACTIVE_SURFACE' | 'REST_SURFACE' | 'GROUP_TRANSITION'
@@ -76,6 +76,22 @@ function GroupedMethodScannerStrip({
   restType,
 }: GroupScannerProps) {
   if (!SHOW_GROUP_SCANNER) return null
+
+  // [GROUP-SCANNER-R2] Grouped-only visibility guard. During this debug
+  // pass we only want the scanner to paint when the current slice is
+  // actually inside a grouped corridor (any of: block has a groupType,
+  // a grouped member index is resolved, or we're in the block-round
+  // transition branch). For ordinary non-grouped exercises we short-
+  // circuit to null so the default live screen stays clean. No spacing
+  // hole is produced because the parent render sites render this
+  // component directly with no wrapping div - a null return contributes
+  // zero layout. This also removes any risk of shifting the primary CTA
+  // on non-grouped sessions.
+  const isGroupedSlice =
+    Boolean(blockGroupType) ||
+    groupedMemberIndex !== null ||
+    mode === 'block_round_rest'
+  if (!isGroupedSlice) return null
 
   // GROUP - upper-cased canonical group type or NONE. We do not invent group
   // types not already produced upstream; cluster and emom are surfaced

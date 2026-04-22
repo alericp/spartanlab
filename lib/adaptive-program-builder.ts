@@ -1023,6 +1023,22 @@ export interface AdaptiveSession {
   hasCircuitsApplied: boolean
   hasDensityApplied: boolean
   hasClusterApplied?: boolean  // [METHOD-MATERIALIZATION] Cluster sets for quality on skill holds
+  // [CLUSTER-DECISION-EVIDENCE] Concrete, card-consumable proof of the
+  // cluster decision for this session. Populated only when cluster was
+  // actually applied (hasClusterApplied === true). Single source of truth
+  // the Program card reads to prove cluster choice/target/reason/type --
+  // no more generic "Cluster sets applied to preserve output" fallback
+  // copy. Absent when cluster was rejected or not evaluated.
+  clusterDecision?: {
+    targetExerciseId: string
+    targetExerciseName: string
+    score: number            // final scored value from the candidate loop
+    position: number         // 0-indexed slot in the session (primary-effort zone: 0 or 1)
+    kind: 'skill_hold' | 'heavy_compound'
+    reasonTokens: string[]   // stable machine tokens for audit/tests
+    reasonSummary: string    // clean human copy for the card
+    type: 'method_cue' | 'grouped_block'  // today always 'method_cue' -- future multi-member blocks flip this
+  }
   structureDescription: string
   appliedMethods: TrainingMethodPreference[]
   rejectedMethods: Array<{ method: string; reason: string }>
@@ -12295,6 +12311,70 @@ async function generateAdaptiveProgramImpl(
           rationale: `Cluster format applied to ${clusterTarget.ex.name} (score ${clusterTarget.score}) for quality maintenance on primary-effort work`,
         })
         
+        // [CLUSTER-DECISION-EVIDENCE] Capture the concrete decision on the
+        // session so the Program card can prove cluster choice, target,
+        // reason, and method-cue vs grouped-block type WITHOUT the card
+        // re-deriving any of this or falling back to generic copy.
+        //
+        // Reason tokens are built from the same facts the scoring used, so
+        // the visible surface and the scoring are structurally aligned:
+        //
+        //   kind:
+        //     skill_hold       -> category==='skill' + concrete hold root
+        //                         (planche/lever/handstand/...)
+        //     heavy_compound   -> category==='strength' + 'weighted' +
+        //                         approved compound root (pull-up/dip/...)
+        //
+        //   position:
+        //     0 -> primary slot        -> 'primary_slot'
+        //     1 -> early slot          -> 'early_slot'
+        //
+        //   quality_preservation       -> always present (the intrinsic
+        //                                 purpose of cluster)
+        //
+        //   best_of_N                  -> only when there were multiple
+        //                                 candidates to choose between, so
+        //                                 the user sees that cluster was
+        //                                 the best pick, not the only pick
+        //
+        // `type` is 'method_cue' for single-exercise cluster (today's only
+        // path -- builder never emits cluster with a shared blockId). When a
+        // future multi-member cluster block is introduced, the card's
+        // grouped-body renderer will flip this to 'grouped_block' via the
+        // same contract without touching the card's decision surface.
+        const clusterKind: 'skill_hold' | 'heavy_compound' = clusterTarget.ex.category === 'skill'
+          ? 'skill_hold'
+          : 'heavy_compound'
+        const reasonTokens: string[] = []
+        reasonTokens.push(clusterKind === 'skill_hold' ? 'primary_skill_hold' : 'heavy_weighted_compound')
+        reasonTokens.push(clusterTarget.index === 0 ? 'primary_slot' : 'early_slot')
+        reasonTokens.push('quality_preservation')
+        if (candidates.length > 1) reasonTokens.push(`best_of_${candidates.length}`)
+        
+        const reasonPhrases: string[] = []
+        reasonPhrases.push(clusterKind === 'skill_hold' ? 'primary skill hold' : 'heavy weighted compound')
+        reasonPhrases.push(clusterTarget.index === 0 ? 'primary slot' : 'early slot')
+        reasonPhrases.push('quality preservation')
+        const reasonSummary = reasonPhrases.join(' · ')
+        
+        // Stashed on methodMaterializationResult and threaded into
+        // session.styleMetadata.clusterDecision at the styleMetadata write
+        // below (line ~12604). Typed loose here to avoid cross-cutting the
+        // declared MethodMaterializationResult shape -- the styleMetadata
+        // write reads this property defensively.
+        ;(methodMaterializationResult as unknown as {
+          clusterDecision?: NonNullable<NonNullable<typeof session.styleMetadata>['clusterDecision']>
+        }).clusterDecision = {
+          targetExerciseId: String(clusterTarget.ex.id),
+          targetExerciseName: String(clusterTarget.ex.name),
+          score: clusterTarget.score,
+          position: clusterTarget.index,
+          kind: clusterKind,
+          reasonTokens,
+          reasonSummary,
+          type: 'method_cue', // single-exercise cluster today -- see comment above
+        }
+        
         console.log('[TRAINING-METHOD-MATERIALIZED] Cluster sets applied:', {
           dayNumber: session.dayNumber,
           exercise: clusterTarget.ex.name,
@@ -12302,6 +12382,7 @@ async function generateAdaptiveProgramImpl(
           score: clusterTarget.score,
           position: clusterTarget.index,
           candidatesConsidered: candidates.length,
+          reasonTokens,
         })
         
         session.adaptationNotes = session.adaptationNotes || []
@@ -12601,6 +12682,14 @@ async function generateAdaptiveProgramImpl(
     // not applied even when they were successfully created.
     const currentSupersetsApplied = session.styleMetadata?.hasSupersetsApplied || false
     
+    // [CLUSTER-DECISION-EVIDENCE] Pull the stashed decision from the
+    // materialization result (captured inside the `if (clusterTarget)`
+    // block above). Undefined when cluster was not applied -- the card
+    // uses its presence as the single gate for rendering the evidence row.
+    const stashedClusterDecision = (methodMaterializationResult as unknown as {
+      clusterDecision?: NonNullable<NonNullable<typeof session.styleMetadata>['clusterDecision']>
+    }).clusterDecision
+    
     session.styleMetadata = {
       ...existingStyleMeta,
       primaryStyle,
@@ -12608,6 +12697,7 @@ async function generateAdaptiveProgramImpl(
       hasCircuitsApplied,
       hasDensityApplied,
       hasClusterApplied,
+      clusterDecision: stashedClusterDecision,
       structureDescription: methodMaterializationResult.structureDecisions.length > 0
         ? methodMaterializationResult.structureDecisions.map(d => d.rationale).join('; ')
         : existingStyleMeta.structureDescription || 'Standard straight sets',

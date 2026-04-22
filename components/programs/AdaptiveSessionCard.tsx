@@ -1065,6 +1065,36 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     hasGroupedTruth: boolean
     /** Rich path is possible. */
     hasRichRenderableGroups: boolean
+    /**
+     * [CARD-LOCAL-FAILURE-SURFACE] When grouped truth exists but no grouped
+     * block list could be produced by any source (rich path, contract raw
+     * fallback, or display synthesis), this codes the exact final losing
+     * stage so the simple_order_grouped body can expose ONE precise failure
+     * reason on the affected card only. Null for any card whose body paints
+     * real grouped blocks -- the surface never appears when grouped rendering
+     * succeeded.
+     *
+     * Stages:
+     *   - 'bridge_lost_group_fields'  : raw ownership had grouped truth but
+     *                                   fullVisibleExercises lost every
+     *                                   blockId/method carry -- the bridge
+     *                                   weakened the display surface.
+     *   - 'grouped_contract_empty'    : raw AND display both saw grouped
+     *                                   truth, but the adapter returned zero
+     *                                   renderable groups (member names
+     *                                   unusable or all pruned out).
+     *   - 'final_mode_flattened'      : grouped truth reached the final
+     *                                   dispatcher but no block source
+     *                                   produced anything renderable.
+     *   - 'hydration_render_loss'     : blocks existed but zero members
+     *                                   survived usable-name filtering.
+     */
+    groupedFailureStage:
+      | 'bridge_lost_group_fields'
+      | 'grouped_contract_empty'
+      | 'final_mode_flattened'
+      | 'hydration_render_loss'
+      | null
   }
   // ==========================================================================
   // [DISPLAY-SYNTHESIS-RESCUE] Last-mile rawFallbackBlocks synthesis.
@@ -1208,6 +1238,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         clusterCount: groupedRenderContract.clusterCount,
         hasGroupedTruth: true,
         hasRichRenderableGroups: true,
+        groupedFailureStage: null,
       }
     }
     if (hasGroupedTruth && groupedRenderContract.rawFallbackBlocks.length > 0) {
@@ -1224,6 +1255,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         clusterCount: groupedRenderContract.clusterCount,
         hasGroupedTruth: true,
         hasRichRenderableGroups: false,
+        groupedFailureStage: null,
       }
     }
     if (hasGroupedTruth && synthesizedRawFallbackBlocks.length > 0) {
@@ -1253,30 +1285,118 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         clusterCount: sClust,
         hasGroupedTruth: true,
         hasRichRenderableGroups: false,
+        groupedFailureStage: null,
       }
     }
-    // [SIMPLE-ORDER-ELIMINATED] The prior `simple_order_grouped` fourth mode
-    // has been removed as a dispatch target. That mode fired when grouped
-    // truth existed upstream but no renderable blocks could be produced by
-    // any source (rich path, contract rawFallback, or display synthesis).
-    // It rendered a "Grouped structure" banner over an ordered flat list --
-    // a visually ambiguous state where the card claimed grouped programming
-    // while the body still read as flat rows. With the method-only truth
-    // split now owned by session-group-display.ts (cluster/density recognized
-    // without blockId) AND synthesizedRawFallbackBlocks extended to match,
-    // any session with genuine cluster/density method-only truth reaches
-    // `raw_grouped_fallback` with a real block list. If we STILL reach here
-    // it means the only "grouped truth" signal came from superset/circuit
-    // metadata that produced zero usable members (stub names, unresolvable
-    // ids) -- in that case the card has no block structure to paint, so
-    // routing to `flat_category` is the honest outcome (no fake banners over
-    // flat rows). The collapsed-card chip tally and the expanded method
-    // chips still read from the adapter's ownership counts, so method intent
-    // is not silently dropped -- only the misleading body-banner is.
+    // [DISPLAY-CORRIDOR-TERMINAL] Final dispatch arm.
     //
-    // `simple_order_grouped` is retained in the FinalBodyMode type for
-    // backwards compat with the renderer's branch that still accepts it, but
-    // this dispatcher never selects it.
+    // Prior behavior collapsed to `flat_category` whenever no block source
+    // (rich path, contract rawFallback, display synthesis) produced a
+    // renderable block list, EVEN if `hasGroupedTruth === true`. That was
+    // the last silent corridor where grouped truth existed upstream but the
+    // card body still read as a flat category layout -- the exact visible
+    // regression this pass fixes.
+    //
+    // New rule: `flat_category` is ONLY selected when `hasGroupedTruth ===
+    // false`. When grouped truth exists but no block list could be produced,
+    // the dispatcher routes to `simple_order_grouped` with:
+    //   - a strong "Grouped structure" banner + method chips (via
+    //     GroupedBodyHeadline in the renderer)
+    //   - per-type counts sourced from the RAW pre-filter styledGroups +
+    //     session-exercise method truth (so chips surface claimed grouped
+    //     structure even when post-filter usable-member counts would have
+    //     been zero)
+    //   - a populated `groupedFailureStage` code that the renderer surfaces
+    //     inline as the ONE card-local failure reason (section F of the
+    //     governor prompt) so the broken card is never silently ambiguous.
+    //
+    // Cards where grouped rendering succeeded never reach this branch, so
+    // the failure surface never fires for healthy cards.
+    if (hasGroupedTruth) {
+      // [RAW-PRE-FILTER-METHOD-COUNTS] Chip counts for simple_order_grouped
+      // come from the RAW upstream signal (styleMetadata.styledGroups types
+      // + session.exercises method truth) -- not from post-filter
+      // rawGroupedOwnership, which may have zeroed counts when member names
+      // were unusable. This is the same signal the FUNNEL-AUDIT uses to
+      // claim grouped truth exists at all, so banner chips cannot
+      // contradict the grouped ownership verdict.
+      let rawSuper = 0, rawCirc = 0, rawDens = 0, rawClust = 0
+      for (const g of sessionStyleMetadata?.styledGroups ?? []) {
+        if (g.groupType === 'superset') rawSuper++
+        else if (g.groupType === 'circuit') rawCirc++
+        else if (g.groupType === 'density_block') rawDens++
+        else if (g.groupType === 'cluster') rawClust++
+      }
+      const seenBlockIds = new Set<string>()
+      for (const ex of safeExercises) {
+        const m = ((ex as unknown as { method?: string }).method || '').toLowerCase()
+        const b = (ex as unknown as { blockId?: string }).blockId
+        if (b && seenBlockIds.has(b)) continue
+        if (b) seenBlockIds.add(b)
+        // Only tally method-only cluster/density execution (no blockId);
+        // superset/circuit require blockId and were already counted from
+        // the styledGroups signal above.
+        if (!b && m === 'cluster') rawClust++
+        else if (!b && (m === 'density_block' || m === 'density')) rawDens++
+      }
+
+      // [FAILURE-STAGE-ATTRIBUTION] Pick the ONE final losing stage. Each
+      // stage answers a different "why did this card reach simple_order
+      // despite grouped truth?" question and is chosen from the governor-
+      // prompt enumeration (superset/circuit/density_block/cluster taxonomy
+      // only; no top_set/drop_set contamination).
+      let failureStage:
+        | 'bridge_lost_group_fields'
+        | 'grouped_contract_empty'
+        | 'final_mode_flattened'
+        | 'hydration_render_loss'
+      const displayHasAnyCarry = fullVisibleExercises.some(e => {
+        const anyE = e as unknown as { blockId?: string; method?: string }
+        return !!anyE.blockId || (!!anyE.method && anyE.method !== 'straight' && anyE.method !== 'straight_sets')
+      })
+      if (rawGroupedOwnership.hasGroupedTruth && !displayHasAnyCarry) {
+        // Raw says grouped but the display surface dropped every
+        // blockId/method -- the bridge weakened the corridor.
+        failureStage = 'bridge_lost_group_fields'
+      } else if (
+        rawGroupedOwnership.hasGroupedTruth &&
+        rawGroupedOwnership.nonStraightGroupCount === 0
+      ) {
+        // Raw truth exists but the adapter could not form ANY non-straight
+        // group (every member's name was unusable or below the method minimum).
+        failureStage = 'hydration_render_loss'
+      } else if (
+        !rawGroupedOwnership.hasRichRenderableGroups &&
+        !displayGroupedRendering.hasRichRenderableGroups
+      ) {
+        // Both independent model builds came back without rich groups.
+        failureStage = 'grouped_contract_empty'
+      } else {
+        // Rich contract existed but was lost between contract merge and
+        // final dispatch.
+        failureStage = 'final_mode_flattened'
+      }
+
+      return {
+        mode: 'simple_order_grouped' as const,
+        sourceUsed: groupedRenderContract.sourceUsed,
+        reasonIfNotRich: 'RAW_FALLBACK_EMPTY' as const,
+        renderBlocks: [],
+        rawFallbackBlocks: [],
+        nonStraightGroupCount:
+          rawSuper + rawCirc + rawDens + rawClust || rawGroupedOwnership.nonStraightGroupCount,
+        supersetCount: rawSuper || rawGroupedOwnership.supersetCount,
+        circuitCount: rawCirc || rawGroupedOwnership.circuitCount,
+        densityCount: rawDens || rawGroupedOwnership.densityCount,
+        clusterCount: rawClust || rawGroupedOwnership.clusterCount,
+        hasGroupedTruth: true,
+        hasRichRenderableGroups: false,
+        groupedFailureStage: failureStage,
+      }
+    }
+
+    // Honest flat: NO grouped truth at all reached the card. The flat
+    // category layout is the correct outcome for these sessions.
     return {
       mode: 'flat_category' as const,
       sourceUsed: groupedRenderContract.sourceUsed,
@@ -1290,6 +1410,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       clusterCount: 0,
       hasGroupedTruth: false,
       hasRichRenderableGroups: false,
+      groupedFailureStage: null,
     }
   })()
 
@@ -1351,9 +1472,11 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     } else if (finalVisibleBodyModel.mode === 'raw_grouped_fallback') {
       s5Verdict = 'CARD_WILL_PAINT_RAW_FALLBACK_BLOCKS'
     } else if (finalVisibleBodyModel.mode === 'simple_order_grouped') {
-      // Should never fire after the SIMPLE-ORDER-ELIMINATED change above, but
-      // logged distinctly so any regression surfaces loudly.
-      s5Verdict = 'CARD_FELL_TO_SIMPLE_ORDER_GROUPED_REGRESSION'
+      // [DISPLAY-CORRIDOR-TERMINAL] simple_order_grouped is the intentional
+      // terminal when grouped truth exists but no block source produced a
+      // renderable block list. Banner + failure-stage surface are shown
+      // in the body so the card cannot read as silently flat.
+      s5Verdict = `CARD_FELL_TO_SIMPLE_ORDER_GROUPED:${finalVisibleBodyModel.groupedFailureStage ?? 'unknown'}`
     } else {
       // hasGroupedTruth was true but dispatcher landed on flat_category. This
       // is the precise "grouped truth exists but body renders flat" symptom
@@ -2349,6 +2472,16 @@ interface MainExercisesRendererProps {
     circuitCount: number
     densityCount: number
     clusterCount: number
+    // [CARD-LOCAL-FAILURE-SURFACE] Final losing stage for the simple_order
+    // grouped body. Renderer surfaces this as a single inline line ONLY on
+    // cards where grouped truth existed but no renderable block list could
+    // be produced. Null for every successful grouped render path.
+    groupedFailureStage?:
+      | 'bridge_lost_group_fields'
+      | 'grouped_contract_empty'
+      | 'final_mode_flattened'
+      | 'hydration_render_loss'
+      | null
   }
 }
 
@@ -2734,6 +2867,29 @@ function MainExercisesRenderer({
     // ungrouped. The rows below keep their normal ExerciseRow format --
     // we don't invent fake block containers when there's no renderable
     // block truth to back them.
+    //
+    // [CARD-LOCAL-FAILURE-SURFACE] When the dispatcher landed here with a
+    // groupedFailureStage populated, surface that exact stage inline. This
+    // is the tiny, card-local failure surface required by section F: it
+    // appears ONLY on cards that reached simple_order_grouped with a code,
+    // never on rich/raw grouped cards, and never on honestly flat cards.
+    // Copy is derived directly from the enumerated stage codes -- no
+    // invented language, no generic counts, no top-page spam.
+    const failureStage = finalVisibleBodyModel.groupedFailureStage
+    const failureCopy = (() => {
+      switch (failureStage) {
+        case 'bridge_lost_group_fields':
+          return 'Bridge lost group fields — grouped methods exist upstream but blockId/method did not reach this card body.'
+        case 'grouped_contract_empty':
+          return 'Grouped contract empty — the grouped render model produced no block list for this session.'
+        case 'final_mode_flattened':
+          return 'Final mode flattened — grouped truth reached the dispatcher but no block source produced renderable groups.'
+        case 'hydration_render_loss':
+          return 'Hydration render loss — grouped blocks existed but every member failed the usable-name filter.'
+        default:
+          return null
+      }
+    })()
     let globalIdx = 0
     return (
       <div className="space-y-2">
@@ -2744,6 +2900,18 @@ function MainExercisesRenderer({
           clusterCount={finalVisibleBodyModel.clusterCount}
           mode="simple_order_grouped"
         />
+        {failureCopy && failureStage && (
+          <div
+            className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] leading-snug"
+            role="status"
+            aria-label={`Grouped display fallback: ${failureStage}`}
+          >
+            <span className="font-mono text-amber-400/90 font-semibold">
+              {failureStage}
+            </span>
+            <span className="text-[#A0A0A0]"> — {failureCopy}</span>
+          </div>
+        )}
         {displayExercises.map((exercise) => {
           globalIdx++
           return (

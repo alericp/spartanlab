@@ -108,6 +108,9 @@ function normalizeExercise(raw: unknown, index: number): WorkoutExerciseContract
     restSeconds: typeof ex.restSeconds === 'number' ? ex.restSeconds : undefined,
     
     // Method/block context
+    // [METHOD-TAXONOMY-LOCK] `method` + `blockId` = grouped-structure
+    // membership. `setExecutionMethod` (attached below, outside this strict
+    // object literal) = per-exercise set-execution method.
     method: typeof ex.method === 'string' ? ex.method : undefined,
     methodLabel: typeof ex.methodLabel === 'string' ? ex.methodLabel : undefined,
     blockId: typeof ex.blockId === 'string' ? ex.blockId : undefined,
@@ -129,6 +132,21 @@ function normalizeExercise(raw: unknown, index: number): WorkoutExerciseContract
       load: normalized.prescribedLoad.load,
       unit: normalized.prescribedLoad.unit,
     })
+  }
+
+  // [METHOD-TAXONOMY-LOCK] Preserve per-exercise set-execution method across
+  // the normalize boundary. `setExecutionMethod` is an authoritative
+  // taxonomy field (see lib/workout/execution-unit-contract.ts) that is NOT
+  // yet declared on `WorkoutExerciseContract` (that contract lives outside
+  // this prompt's scope). Attaching it as an extra property keeps the field
+  // alive for downstream consumers that read via an extended shape, without
+  // modifying the contract type in this pass. The normalizer MUST preserve
+  // this field — dropping it here would silently flatten cluster/rest-pause/
+  // top-set/drop-set identity on the way into the live workout corridor.
+  const validSetExecMethods = ['cluster', 'rest_pause', 'top_set', 'drop_set'] as const
+  const rawSetExec = (ex as { setExecutionMethod?: unknown }).setExecutionMethod
+  if (typeof rawSetExec === 'string' && (validSetExecMethods as readonly string[]).includes(rawSetExec)) {
+    ;(normalized as unknown as { setExecutionMethod: string }).setExecutionMethod = rawSetExec
   }
   
   return normalized

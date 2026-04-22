@@ -228,12 +228,30 @@ function hasUsableName(ex: { name?: string }): boolean {
  * Build grouped display model from styledGroups (authoritative source)
  */
 function buildFromStyledGroups(styledGroups: StyledGroupInput[]): GroupedDisplayModel {
+  // [METHOD-TAXONOMY-LOCK] Defensive invariant: no upstream source may emit
+  // a styledGroup with `groupType: 'cluster'`. Cluster is a SET-EXECUTION
+  // METHOD (see lib/workout/execution-unit-contract.ts taxonomy). Any cluster
+  // styledGroup that reaches here is a contract violation and is stripped
+  // BEFORE partial-validity filtering so it cannot inflate grouped counters
+  // or reach the renderer. A dev warning is logged so the offending
+  // upstream path can be found and fixed. This guard protects the display
+  // corridor even if a future builder change incorrectly emits cluster as
+  // a grouped type.
+  const clusterStyledGroupCount = styledGroups.filter(g => g.groupType === 'cluster').length
+  if (clusterStyledGroupCount > 0 && typeof console !== 'undefined') {
+    console.warn(
+      '[METHOD-TAXONOMY-LOCK] Stripped cluster styledGroup(s) from display input — cluster is a set-execution method, not a grouped structure.',
+      { count: clusterStyledGroupCount },
+    )
+  }
+  const taxonomyCleanGroups = styledGroups.filter(g => g.groupType !== 'cluster')
+
   // [PARTIAL-VALIDITY] Filter each group's members to those that actually
   // resolve, then keep the block only when enough real members remain for the
   // method to be meaningful. This stops us from rendering a "Superset" header
   // over a single lonely row (prior behavior) while preserving the block when
   // one of several members fails to resolve (desired behavior).
-  const filteredGroups: StyledGroupInput[] = styledGroups
+  const filteredGroups: StyledGroupInput[] = taxonomyCleanGroups
     .map(g => ({ ...g, exercises: g.exercises.filter(hasUsableName) }))
     .filter(g => {
       if (g.groupType === 'straight') return true
@@ -346,11 +364,22 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
     // was missing/unusable, which produced the "method wrote density but body
     // rendered flat" symptom. The builder writes method='density_block' at
     // training-style-service.ts:921, so the adapter must honor it here.
+    //
+    // [METHOD-TAXONOMY-LOCK] 'cluster' is deliberately EXCLUDED from this
+    // recognized-grouped-method set. Per the taxonomy split in
+    // lib/workout/execution-unit-contract.ts, cluster is a SET-EXECUTION
+    // METHOD, not a grouped structure. A row with method='cluster' must
+    // fall through to `standaloneExercises` and render as a flat row with
+    // a row-level cluster chip + execution microcopy — never as a grouped
+    // block. Previously this branch tried to recognize cluster as a group
+    // type; that path was then gated out by `minMembersFor('cluster')=2`
+    // downstream, but leaving the branch here kept a drift surface alive.
+    // Removing the branch makes it impossible for cluster to re-enter the
+    // grouped-render corridor through this fallback.
     if (
       ex.blockId &&
       (method === 'superset' ||
         method === 'circuit' ||
-        method === 'cluster' ||
         method === 'density_block' ||
         method === 'density')
     ) {
@@ -363,9 +392,10 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
   }
   
   // Convert to display groups
+  // [METHOD-TAXONOMY-LOCK] No clusterIndex — cluster is a set-execution
+  // method, never materialized as a grouped block from this fallback path.
   let supersetIndex = 0
   let circuitIndex = 0
-  let clusterIndex = 0
   let densityIndex = 0
   
   const displayGroups: DisplayGroup[] = []
@@ -380,12 +410,15 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
     let groupType: GroupType = 'straight'
     let index = 0
     
+    // [METHOD-TAXONOMY-LOCK] Only TRUE grouped structures are recognized
+    // here. Cluster is a SET-EXECUTION METHOD and cannot reach this block
+    // anyway (the method filter above excludes it), but we also do not
+    // enumerate it as a groupType case here — that would leave a zombie
+    // branch that a future code change could reactivate.
     if (method === 'superset') {
       groupType = 'superset'
     } else if (method === 'circuit') {
       groupType = 'circuit'
-    } else if (method === 'cluster') {
-      groupType = 'cluster'
     } else if (method === 'density_block' || method === 'density') {
       groupType = 'density_block'
     }
@@ -398,14 +431,12 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
 
     if (groupType === 'superset') index = supersetIndex++
     else if (groupType === 'circuit') index = circuitIndex++
-    else if (groupType === 'cluster') index = clusterIndex++
     else if (groupType === 'density_block') index = densityIndex++
 
     if (groupType !== 'straight') {
       // [GROUPED-RENDER-FIX] Include prefix and restProtocol for render
       const restProtocol = groupType === 'circuit' ? '60-90s after full circuit'
         : groupType === 'superset' ? '0-15s between, 90-120s after pair'
-        : groupType === 'cluster' ? '10-20s intra-set, 120-180s inter-set'
         : '60-120s between sets'
       
       displayGroups.push({

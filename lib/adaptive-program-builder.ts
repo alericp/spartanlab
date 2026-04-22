@@ -1173,9 +1173,21 @@ export interface AdaptiveExercise {
   // Database enforcement: marks exercise as DB-backed
   source?: 'database'
   // Training method information
+  // [METHOD-TAXONOMY-LOCK] `method` + `blockId` carry GROUPED STRUCTURE membership
+  // (superset / circuit / density_block). `setExecutionMethod` below carries
+  // SET-EXECUTION METHOD identity (cluster / rest-pause / top set / drop set)
+  // which applies to this single exercise and is orthogonal to grouping. See
+  // taxonomy comment in lib/workout/execution-unit-contract.ts.
   method?: TrainingMethod
   methodLabel?: string
   blockId?: string // Groups exercises in the same block (e.g., superset)
+  // [METHOD-TAXONOMY-LOCK] Per-exercise set-execution method. Populated when a
+  // set-execution method applies (e.g. cluster) — does NOT imply grouped
+  // structure. Card/UI code should read this field in preference to inferring
+  // set-execution identity from the overloaded `method` field. Legacy paths
+  // that still read `method === 'cluster'` continue to work; new consumers
+  // should prefer `setExecutionMethod === 'cluster'`.
+  setExecutionMethod?: 'cluster' | 'rest_pause' | 'top_set' | 'drop_set'
   // Session override tracking (runtime only, not persisted to program)
   originalName?: string // Set when exercise is replaced
   isSkipped?: boolean // Set when exercise is skipped
@@ -12301,8 +12313,16 @@ async function generateAdaptiveProgramImpl(
       
       if (clusterTarget) {
         const idx = clusterTarget.index
+        // [METHOD-TAXONOMY-LOCK] Stamp BOTH the legacy overloaded `method`
+        // field (kept for row-chip back-compat in AdaptiveSessionCard) AND
+        // the authoritative `setExecutionMethod` field. Downstream consumers
+        // (ai-evidence bridge, normalize, cards) should prefer
+        // `setExecutionMethod === 'cluster'` so grouped-method tokens
+        // (superset / circuit / density_block) and set-execution method
+        // tokens (cluster) no longer share one field.
         session.exercises[idx].method = 'cluster'
         session.exercises[idx].methodLabel = 'Cluster Sets'
+        session.exercises[idx].setExecutionMethod = 'cluster'
         
         methodMaterializationResult.appliedMethods.push('cluster_sets')
         methodMaterializationResult.structureDecisions.push({

@@ -501,11 +501,22 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
   }
 
   // Build summary
+  // [METHOD-TAXONOMY-LOCK] No cluster entry in the summary: the exercise
+  // fallback branch deliberately does NOT materialize cluster as a grouped
+  // block (cluster is a set-execution method, not a grouped structure).
+  // Prior to the taxonomy refactor this branch declared `let clusterIndex = 0`
+  // and pushed a "X Cluster Sets" summary part here; that declaration was
+  // removed when cluster was taken out of grouped ownership, but two stale
+  // references remained alive (the `if (clusterIndex > 0)` push below and
+  // the `clusterCount: clusterIndex` in the return). Those produced a
+  // `ReferenceError: clusterIndex is not defined` at runtime and crashed
+  // the Program page. Both references are now removed at the root rather
+  // than masked with a redeclared zero-valued variable, which would have
+  // kept a zombie ownership concept alive.
   const summaryParts: string[] = []
   if (supersetIndex > 0) summaryParts.push(`${supersetIndex} Superset${supersetIndex > 1 ? 's' : ''}`)
   if (circuitIndex > 0) summaryParts.push(`${circuitIndex} Circuit${circuitIndex > 1 ? 's' : ''}`)
   if (densityIndex > 0) summaryParts.push(`${densityIndex} Density Block${densityIndex > 1 ? 's' : ''}`)
-  if (clusterIndex > 0) summaryParts.push(`${clusterIndex} Cluster Set${clusterIndex > 1 ? 's' : ''}`)
   
   return {
     hasGroups: displayGroups.length > 0,
@@ -514,7 +525,13 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
     supersetCount: supersetIndex,
     circuitCount: circuitIndex,
     densityCount: densityIndex,
-    clusterCount: clusterIndex,
+    // [METHOD-TAXONOMY-LOCK] Always 0 in the exercise fallback branch. This
+    // branch cannot produce grouped cluster blocks by design (cluster is a
+    // set-execution method). Single-exercise cluster truth is carried by the
+    // row-level method chip and the card's "Method cues present" status
+    // line, not by this grouped-count field. Any downstream consumer that
+    // treats clusterCount as "grouped cluster blocks exist" stays correct.
+    clusterCount: 0,
     groups: displayGroups,
     methodSummary: summaryParts.length > 0 ? summaryParts.join(' · ') : null,
     // sourceUsed, flatReason, renderBlocks, and the display-first fallback

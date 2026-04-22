@@ -1365,25 +1365,47 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       // [METHOD-ONLY-FLAT] Session carries non-straight methods on individual
       // rows but NO renderable grouped block structure (no multi-member
       // styled group, no multi-member blockId). Route to flat_category so
-      // the body paints a clean flat row list with row-level method chips,
-      // and rely on the card-local status line above the body to tell the
-      // user "Method cues present: ..." so the absence of a grouped frame
-      // is never ambiguous.
+      // the body paints a clean flat row list with row-level method chips.
+      //
+      // [SET-EXECUTION-TRUTH-VISIBILITY] Count per-row set-execution methods
+      // directly from `safeExercises` and carry them on the model. This is
+      // the authoritative tally of set-execution methods applied to
+      // individual rows -- it is NOT a grouped-block count. Downstream:
+      //   - `visibleMethodTally` reads these counts so the top-of-body chip
+      //     row re-surfaces (prior behavior hid it because all counts were
+      //     zeroed here, leaving the taxonomy refactor's set-execution
+      //     stamping invisible at session level).
+      //   - The `flat_category` renderer reads these counts + the
+      //     `METHOD_ONLY_FLAT` reason to paint an honest "Set-execution
+      //     methods applied to individual rows" headline at the top of the
+      //     body. That headline is NOT a grouped-structure banner; its copy
+      //     explicitly says the methods live on single rows.
+      // `hasGroupedTruth` stays false so nothing in the grouped render
+      // corridor can be reactivated by these counts.
+      let meoSuper = 0, meoCirc = 0, meoDens = 0, meoClust = 0
+      for (const ex of safeExercises) {
+        const raw = (ex as unknown as { method?: string }).method
+        const m = (raw || '').toLowerCase()
+        if (!m || m === 'straight' || m === 'straight_sets') continue
+        if (m === 'cluster' || m === 'cluster_sets') meoClust++
+        else if (m === 'density_block' || m === 'density') meoDens++
+        else if (m === 'superset') meoSuper++
+        else if (m === 'circuit' || m === 'circuits') meoCirc++
+      }
       return {
         mode: 'flat_category' as const,
         sourceUsed: groupedRenderContract.sourceUsed,
         reasonIfNotRich: 'METHOD_ONLY_FLAT' as const,
         renderBlocks: [],
         rawFallbackBlocks: [],
+        // nonStraightGroupCount is GROUPED-BLOCK semantics; stays 0 because
+        // no grouped blocks exist. Per-type counts below are SET-EXECUTION
+        // semantics (per-row), which is a distinct concept.
         nonStraightGroupCount: 0,
-        supersetCount: 0,
-        circuitCount: 0,
-        densityCount: 0,
-        clusterCount: 0,
-        // `hasGroupedTruth` stays false from the card's dispatch perspective
-        // -- there is no grouped block to render -- even though non-straight
-        // methods exist on individual rows. Those render via the existing
-        // row-level method chip path unchanged.
+        supersetCount: meoSuper,
+        circuitCount: meoCirc,
+        densityCount: meoDens,
+        clusterCount: meoClust,
         hasGroupedTruth: false,
         hasRichRenderableGroups: false,
         groupedFailureStage: null,
@@ -1652,6 +1674,25 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     // Counts here come from the contract's raw ownership counts, which
     // remain meaningful even when rendering-side synthesis failed.
     if (finalVisibleBodyModel.mode === 'simple_order_grouped') {
+      return {
+        superset: finalVisibleBodyModel.supersetCount,
+        circuit: finalVisibleBodyModel.circuitCount,
+        density: finalVisibleBodyModel.densityCount,
+        cluster: finalVisibleBodyModel.clusterCount,
+      }
+    }
+    // [SET-EXECUTION-TRUTH-VISIBILITY] flat_category + METHOD_ONLY_FLAT
+    // carries per-row set-execution tallies on the model (see the
+    // METHOD_ONLY_FLAT branch of finalVisibleBodyModel). Surface them here
+    // so the top-of-body chip row re-appears for cluster/density/etc. rows
+    // that live on single exercises. The chip labels remain generic
+    // ("Cluster Set", "Density Block") because those are the method names;
+    // the NEW headline inside the body makes it explicit they apply to
+    // individual rows rather than grouped blocks.
+    if (
+      finalVisibleBodyModel.mode === 'flat_category' &&
+      finalVisibleBodyModel.reasonIfNotRich === 'METHOD_ONLY_FLAT'
+    ) {
       return {
         superset: finalVisibleBodyModel.supersetCount,
         circuit: finalVisibleBodyModel.circuitCount,
@@ -2580,6 +2621,63 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
 // so the visual language is continuous from banner -> block pill -> member
 // rail.
 // =============================================================================
+// =============================================================================
+// [SET-EXECUTION-BODY-HEADLINE]
+// Honest session-body surface for METHOD_ONLY_FLAT cards -- where one or more
+// rows carry a set-execution method (cluster / density_block / etc.) applied
+// at the SINGLE-EXERCISE level, not as a multi-member grouped block. The copy
+// explicitly says "applied to individual exercise rows" so the user is never
+// misled into thinking the session has grouped structure.
+//
+// Taxonomy-aligned with lib/workout/execution-unit-contract.ts:
+//   - GROUPED STRUCTURE METHOD (multi-exercise)   -> GroupedBodyHeadline below
+//   - SET-EXECUTION METHOD     (per-row)          -> THIS component
+//   - CONTEXTUAL CUE           (informational)    -> row-level microcopy only
+// =============================================================================
+function SetExecutionBodyHeadline({
+  supersetCount: _supersetCount,
+  circuitCount: _circuitCount,
+  densityCount,
+  clusterCount,
+}: {
+  // superset/circuit not expected on this surface (they're grouped structures)
+  // but the signature is kept symmetric with GroupedBodyHeadline for safety.
+  supersetCount: number
+  circuitCount: number
+  densityCount: number
+  clusterCount: number
+}) {
+  const total = densityCount + clusterCount
+  if (total === 0) return null
+  const hint =
+    total === 1
+      ? 'One exercise in this session uses a set-execution method — applied to that single row, not as a grouped block.'
+      : 'Some exercises in this session use set-execution methods — applied to individual rows, not as grouped blocks.'
+  return (
+    <div className="mb-3 rounded-md border border-[#3A3A3A] bg-[#1A1A1A] px-3 py-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Dumbbell className="w-3.5 h-3.5 text-[#A5A5A5]" />
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-[#C5C5C5]">
+          Set-execution methods
+        </span>
+        {clusterCount > 0 && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-purple-500/15 text-purple-300 border border-purple-500/40">
+            <Repeat className="w-3 h-3" />
+            {clusterCount} Cluster {clusterCount > 1 ? 'rows' : 'row'}
+          </span>
+        )}
+        {densityCount > 0 && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/15 text-amber-300 border border-amber-500/40">
+            <Timer className="w-3 h-3" />
+            {densityCount} Density {densityCount > 1 ? 'rows' : 'row'}
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-[10px] text-[#8A8A8A] leading-snug">{hint}</p>
+    </div>
+  )
+}
+
 function GroupedBodyHeadline({
   supersetCount,
   circuitCount,
@@ -2687,6 +2785,13 @@ interface MainExercisesRendererProps {
     circuitCount: number
     densityCount: number
     clusterCount: number
+    // [SET-EXECUTION-TRUTH-VISIBILITY] Required by the flat_category branch
+    // so the renderer can distinguish an honestly flat session (no methods
+    // anywhere) from a METHOD_ONLY_FLAT session (non-straight methods live
+    // on single rows -- no grouped blocks). Only the latter paints the
+    // "Set-execution methods applied" in-body headline. Values other than
+    // 'METHOD_ONLY_FLAT' leave the flat body unchanged.
+    reasonIfNotRich?: GroupedFlatReason | 'RAW_FALLBACK_EMPTY' | 'METHOD_ONLY_FLAT' | null
     // [CARD-LOCAL-FAILURE-SURFACE] Final losing stage for the simple_order
     // grouped body. Renderer surfaces this as a single inline line ONLY on
     // cards where grouped truth existed but no renderable block list could
@@ -3017,9 +3122,29 @@ function MainExercisesRenderer({
       return ['skill', 'strength', 'accessory'].includes(cat) ? cat : 'other'
     }
 
+    // [SET-EXECUTION-TRUTH-VISIBILITY] Honest in-body headline for sessions
+    // where grouped truth does not exist but per-row set-execution methods
+    // do. Gated strictly on `reasonIfNotRich === 'METHOD_ONLY_FLAT'` so the
+    // headline never fires for genuinely flat sessions (no methods anywhere).
+    // Counts come straight off the authoritative `finalVisibleBodyModel`
+    // (populated by the METHOD_ONLY_FLAT dispatcher branch) -- same source
+    // the top chip row reads -- so banner / chip row / row-level microcopy
+    // cannot disagree.
+    const showSetExecHeadline =
+      finalVisibleBodyModel.reasonIfNotRich === 'METHOD_ONLY_FLAT' &&
+      (finalVisibleBodyModel.clusterCount > 0 || finalVisibleBodyModel.densityCount > 0)
+
     let lastCat: string | null = null
     return (
       <div className="space-y-4">
+        {showSetExecHeadline && (
+          <SetExecutionBodyHeadline
+            supersetCount={finalVisibleBodyModel.supersetCount}
+            circuitCount={finalVisibleBodyModel.circuitCount}
+            densityCount={finalVisibleBodyModel.densityCount}
+            clusterCount={finalVisibleBodyModel.clusterCount}
+          />
+        )}
         {displayExercises.map((exercise, idx) => {
           const thisCat = normalizeCat(exercise.category)
           const emitHeader = thisCat !== lastCat

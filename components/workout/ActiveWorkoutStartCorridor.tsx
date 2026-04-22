@@ -1514,21 +1514,23 @@ export function ActiveWorkoutStartCorridor({
                   business logic is duplicated here - this is purely a UI
                   surface that reuses the authoritative handlers.
                   ============================================================ */}
-              <div className="flex items-center justify-between flex-wrap gap-1 pt-2">
-                {canGoBack && onGoBack ? (
-                  <Button 
-                    variant="ghost" 
-                    onClick={onGoBack}
-                    className="text-[#6B7280] text-xs h-8 px-2 hover:text-[#A4ACB8] shrink-0"
-                  >
-                    <ChevronLeft className="w-3 h-3 mr-0.5" />
-                    Back
-                  </Button>
-                ) : (
-                  <div className="w-12" />
-                )}
-                <Button 
-                  variant="ghost" 
+              {/* [UI-BOTTOM-BAR-R5] Rest-screen action rail mirrors the
+                  active-screen toolbar exactly (grid grid-cols-4,
+                  deterministic equal-width slots, always-rendered Back
+                  slot). Keeping both rails in lockstep preserves the
+                  "rest/active parity" contract called out above. */}
+              <div className="grid grid-cols-4 gap-0.5 pt-2">
+                <Button
+                  variant="ghost"
+                  onClick={onGoBack}
+                  disabled={!canGoBack || !onGoBack}
+                  className="h-9 w-full px-1 text-xs font-medium flex items-center justify-center gap-1 text-[#6B7280] hover:text-[#A4ACB8] hover:bg-[#1A1F26] disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#6B7280] rounded-md"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  Back
+                </Button>
+                <Button
+                  variant="ghost"
                   onClick={() => {
                     console.log('[LIVE-WORKOUT-CORRIDOR] Rest Skip Set clicked', {
                       restType,
@@ -1538,13 +1540,13 @@ export function ActiveWorkoutStartCorridor({
                     if (onSkipSet) onSkipSet()
                     else if (onSkip) onSkip()
                   }}
-                  className="text-[#6B7280] text-xs h-8 px-2 hover:text-[#A4ACB8] shrink-0"
+                  className="h-9 w-full px-1 text-xs font-medium flex items-center justify-center gap-1 text-[#6B7280] hover:text-[#A4ACB8] hover:bg-[#1A1F26] rounded-md"
                 >
-                  <SkipForward className="w-3 h-3 mr-1" />
+                  <SkipForward className="w-3.5 h-3.5" />
                   Skip
                 </Button>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   onClick={() => {
                     console.log('[LIVE-WORKOUT-CORRIDOR] Rest End Exercise clicked', {
                       restType,
@@ -1555,17 +1557,17 @@ export function ActiveWorkoutStartCorridor({
                     if (onEndExercise) onEndExercise()
                     else setShowExitConfirm(true)
                   }}
-                  className="text-amber-500/80 text-xs h-8 px-2 hover:text-amber-400 shrink-0"
+                  className="h-9 w-full px-1 text-xs font-medium flex items-center justify-center gap-1 text-amber-500/80 hover:text-amber-400 hover:bg-amber-500/5 rounded-md"
                 >
-                  <ChevronRight className="w-3 h-3 mr-0.5" />
+                  <ChevronRight className="w-3.5 h-3.5" />
                   Next
                 </Button>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   onClick={() => setShowExitConfirm(true)}
-                  className="text-[#6B7280] text-xs h-8 px-2 hover:text-[#A4ACB8] shrink-0"
+                  className="h-9 w-full px-1 text-xs font-medium flex items-center justify-center gap-1 text-[#6B7280] hover:text-[#A4ACB8] hover:bg-[#1A1F26] rounded-md"
                 >
-                  <X className="w-3 h-3 mr-0.5" />
+                  <X className="w-3.5 h-3.5" />
                   End
                 </Button>
               </div>
@@ -2130,48 +2132,63 @@ export function ActiveWorkoutStartCorridor({
               {justLoggedPulse ? 'Logged' : 'Log Set'}
             </Button>
             
-            {/* Secondary Actions: Back | Skip | Next | End */}
-            {/* [MOBILE-OVERFLOW-FIX] Use flex-wrap and gap for mobile containment */}
-            {/* [UI-DENSITY] pt-2 -> pt-1.5 to keep the row hugged up to
-                Log Set without losing tap separation. */}
-            <div className="flex items-center justify-between flex-wrap gap-1 pt-1.5">
-              {/* Control 1: Back button (conditional) */}
-              {canGoBack && onGoBack ? (
-                <Button 
-                  variant="ghost" 
-                  onClick={onGoBack}
-                  className="text-[#6B7280] text-xs h-8 px-2 hover:text-[#A4ACB8] shrink-0"
-                >
-                  <ChevronLeft className="w-3 h-3 mr-0.5" />
-                  Back
-                </Button>
-              ) : (
-                <div className="w-12" /> // Spacer when back not available
-              )}
-              
-              {/* [LIVE-WORKOUT-AUTHORITY] Distinct Skip Actions */}
-              {/* Skip Set: Skip only current set, continue to next set of same exercise */}
-              <Button 
-                variant="ghost" 
+            {/* Secondary Actions: Back | Skip | Next | End
+                [UI-BOTTOM-BAR-R5] Converted from a loose
+                `flex justify-between flex-wrap + w-12 spacer` row into a
+                deterministic `grid grid-cols-4` toolbar so the four
+                utility controls occupy stable equal-width slots under
+                the primary CTA. Benefits:
+                  - Back no longer needs a phantom `<div className="w-12" />`
+                    spacer when unavailable; its slot is always present
+                    and simply renders a disabled button instead.
+                  - Every cell has identical width so Skip, Next, and End
+                    stop shifting horizontally as the available-width
+                    changes (e.g. when the Back control conditionally
+                    renders).
+                  - The row now reads as a single intentional toolbar,
+                    visually anchored by the shared sticky wrapper, and
+                    stays clearly subordinate to the primary red CTA
+                    above it.
+                Height kept minimal: h-9 buttons inside a pt-1.5 wrapper
+                yields ~42px total, only 4px taller than the previous
+                h-8 row, in exchange for a comfortable ~80x36 tap area
+                per cell. */}
+            <div className="grid grid-cols-4 gap-0.5 pt-1.5">
+              {/* Slot 1: Back (always rendered, disabled when unavailable) */}
+              <Button
+                variant="ghost"
+                onClick={onGoBack}
+                disabled={!canGoBack || !onGoBack}
+                className="h-9 w-full px-1 text-xs font-medium flex items-center justify-center gap-1 text-[#6B7280] hover:text-[#A4ACB8] hover:bg-[#1A1F26] disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#6B7280] rounded-md"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                Back
+              </Button>
+
+              {/* Slot 2: Skip Set - skip only current set, continue same exercise */}
+              <Button
+                variant="ghost"
                 onClick={() => {
                   console.log('[LIVE-WORKOUT-AUTHORITY] Skip Set clicked', {
                     exerciseName,
                     currentSetNumber,
                     exerciseSets,
                   })
-                  // Use distinct handler if provided, else fallback to legacy
                   if (onSkipSet) onSkipSet()
                   else if (onSkip) onSkip()
                 }}
-                className="text-[#6B7280] text-xs h-8 px-2 hover:text-[#A4ACB8] shrink-0"
+                className="h-9 w-full px-1 text-xs font-medium flex items-center justify-center gap-1 text-[#6B7280] hover:text-[#A4ACB8] hover:bg-[#1A1F26] rounded-md"
               >
-                <SkipForward className="w-3 h-3 mr-1" />
+                <SkipForward className="w-3.5 h-3.5" />
                 Skip
               </Button>
-              
-              {/* End Exercise: Skip all remaining sets, advance to next exercise */}
-              <Button 
-                variant="ghost" 
+
+              {/* Slot 3: End Exercise - skip remaining sets, advance to next exercise.
+                  Keeps the amber accent because Next is semantically the
+                  forward-advance action and needs to be differentiable
+                  from a passive Skip. */}
+              <Button
+                variant="ghost"
                 onClick={() => {
                   console.log('[LIVE-WORKOUT-AUTHORITY] End Exercise clicked', {
                     exerciseName,
@@ -2180,21 +2197,21 @@ export function ActiveWorkoutStartCorridor({
                     remainingSets: exerciseSets - currentSetNumber + 1,
                   })
                   if (onEndExercise) onEndExercise()
-                  else setShowExitConfirm(true) // Fallback to exit confirm
+                  else setShowExitConfirm(true)
                 }}
-                className="text-amber-500/80 text-xs h-8 px-2 hover:text-amber-400 shrink-0"
+                className="h-9 w-full px-1 text-xs font-medium flex items-center justify-center gap-1 text-amber-500/80 hover:text-amber-400 hover:bg-amber-500/5 rounded-md"
               >
-                <ChevronRight className="w-3 h-3 mr-0.5" />
+                <ChevronRight className="w-3.5 h-3.5" />
                 Next
               </Button>
-              
-              {/* End Workout: Opens exit modal */}
-              <Button 
-                variant="ghost" 
+
+              {/* Slot 4: End Workout - opens exit confirm modal */}
+              <Button
+                variant="ghost"
                 onClick={() => setShowExitConfirm(true)}
-                className="text-[#6B7280] text-xs h-8 px-2 hover:text-[#A4ACB8] shrink-0"
+                className="h-9 w-full px-1 text-xs font-medium flex items-center justify-center gap-1 text-[#6B7280] hover:text-[#A4ACB8] hover:bg-[#1A1F26] rounded-md"
               >
-                <X className="w-3 h-3 mr-0.5" />
+                <X className="w-3.5 h-3.5" />
                 End
               </Button>
             </div>

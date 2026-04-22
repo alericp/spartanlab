@@ -3967,32 +3967,31 @@ function ExerciseRow({
             circuit=emerald) so the visual language is continuous across
             flat rows, grouped-body headlines, and block headers.
           */}
+          {/*
+            [ROW-HEADER-METHOD-CHIP-DELEGATED]
+            Cluster and density method identity is OWNED by the dedicated
+            MethodOwnershipPanel below the prescription line (see ROW 2b).
+            That panel paints a strong colored rail + icon + uppercase label
+            + execution sentence and is the single authoritative visible
+            method surface for flat method-only rows.
+            Rendering a second tiny 8px chip here would fragment ownership
+            and is exactly why the earlier "row still looks like a plain
+            straight row" symptom persisted.
+            Superset / circuit flat-row chips retained as 8px fallback --
+            those methods are grouped-structure by doctrine and almost
+            never land on a flat row; when they do, the compact chip is an
+            honest fallback marker until the builder produces a real group.
+          */}
           {(() => {
             if (isWarmupCooldown) return null
-            if (prefix) return null  // grouped frame already labels method
+            if (prefix) return null
             const exMethod = ((exercise as unknown as { method?: string }).method || '').toLowerCase()
-            if (!exMethod || exMethod === 'straight') return null
-            // [ROW-CHIP-LABEL-NORMALIZATION] Ignore `methodLabelFromEx` here.
-            // The builder stamps labels like `'Cluster Sets'` on the
-            // exercise (`lib/adaptive-program-builder.ts` ~12289) and
-            // `'Superset A1'` / `'Circuit C'` positional labels for grouped
-            // rows. For FLAT rows rendering the row-level method chip we
-            // want a clean, single-word human label that matches the
-            // card-level "Method cues present: Cluster" status line and the
-            // grouped-body banner vocabulary. Positional variants belong
-            // only on grouped-frame rows (which hit the `prefix` short-
-            // circuit above); raw verbose variants like "Cluster Sets"
-            // leak verbatim otherwise -- this is the "Cluster_set"-shaped
-            // symptom reported on the card.
+            if (!exMethod || exMethod === 'straight' || exMethod === 'straight_sets') return null
+            if (exMethod === 'cluster' || exMethod === 'cluster_sets') return null
+            if (exMethod === 'density' || exMethod === 'density_block') return null
             let label = ''
             let chipClass = ''
-            if (exMethod === 'cluster' || exMethod === 'cluster_sets') {
-              label = 'Cluster'
-              chipClass = 'bg-purple-500/12 text-purple-300 border border-purple-500/35'
-            } else if (exMethod === 'density_block' || exMethod === 'density') {
-              label = 'Density Block'
-              chipClass = 'bg-amber-500/12 text-amber-300 border border-amber-500/35'
-            } else if (exMethod === 'superset') {
+            if (exMethod === 'superset') {
               label = 'Superset'
               chipClass = 'bg-[#4F6D8A]/15 text-[#7FA8CC] border border-[#4F6D8A]/40'
             } else if (exMethod === 'circuit' || exMethod === 'circuits') {
@@ -4040,36 +4039,71 @@ function ExerciseRow({
         )}
       </div>
 
-      {/* ROW 2b: [METHOD-ONLY-EXECUTION-MICROCOPY] Compact execution-cue line
-          rendered ONLY for flat rows (no grouped `prefix`) that carry a
-          non-straight method. The row-level chip above identifies the
-          method; this line materializes WHAT that method means for
-          execution so a method-only cluster row no longer reads like a
-          plain straight-sets row. A subtle left-border accent matches the
-          method's palette (purple/amber) to visually distinguish without
-          creating a fake grouped frame. Warm-up rows and grouped-frame
-          rows (which already carry their own method rail + header) are
-          excluded. Copy is intentionally short and execution-focused --
-          no banners, no boxes, no vertical bloat. */}
+      {/* ROW 2b: [METHOD-OWNERSHIP-PANEL]
+          ONE authoritative visible method surface for flat method-only rows
+          (no grouped `prefix`). Replaces the prior weak 8px chip + 10px
+          muted italic microcopy that the user reported as "basically still
+          looks flat." Design contract:
+            - 4px solid colored rail (not a dashed / soft accent): the rail
+              is the primary eye-catcher, locks the row as "special" at a
+              glance without faking a grouped header.
+            - Icon tile (colored background, 20px) carrying the method icon
+              (Repeat for cluster, Timer for density): matches the grouped
+              body headline and the session-level chip row palette so the
+              visual vocabulary is consistent across all method surfaces.
+            - Uppercase 11px label ("CLUSTER SET" / "DENSITY BLOCK") --
+              noticeably larger and more prominent than the prior 8px chip
+              and 10px italic microcopy, using full-opacity brand text.
+            - 11px execution sentence on the second line: readable, not
+              muted into the grey-on-grey band the prior microcopy used.
+            - Compact: ~36px tall total, inside the existing row container.
+              No fake grouped frame, no member rails, no extra vertical
+              bloat that would over-promise grouped structure.
+          Rendered ONLY when:
+            (a) not a warm-up/cooldown row,
+            (b) no grouped `prefix` is set (grouped frames already own
+                method identity via their own header + rail),
+            (c) the exercise carries `method: 'cluster' | 'cluster_sets'`
+                or `method: 'density' | 'density_block'`.
+          Superset/circuit do not paint this panel -- those are grouped-
+          structure methods and should only appear inside a real grouped
+          frame; if they leak onto a flat row the small fallback chip in
+          Row 1 remains. Straight rows render zero method surface. */}
       {!isWarmupCooldown && !prefix && (() => {
         const exMethod = ((exercise as unknown as { method?: string }).method || '').toLowerCase()
-        if (exMethod === 'cluster' || exMethod === 'cluster_sets') {
-          return (
-            <div className="mt-1 border-l-2 border-purple-500/40 pl-2 text-[10px] text-purple-300/90">
-              <span className="font-semibold">Cluster execution</span>
-              <span className="text-purple-300/70"> — brief 10-20s intra-set rests to preserve rep quality, full rest between sets.</span>
+        const isCluster = exMethod === 'cluster' || exMethod === 'cluster_sets'
+        const isDensity = exMethod === 'density' || exMethod === 'density_block'
+        if (!isCluster && !isDensity) return null
+        const label = isCluster ? 'Cluster Set' : 'Density Block'
+        const Icon = isCluster ? Repeat : Timer
+        const execLine = isCluster
+          ? 'Brief 10-20s intra-set rests to preserve rep quality, full rest between sets.'
+          : 'Complete prescribed work within the timed window, short rests between rounds.'
+        const railColor = isCluster ? 'bg-purple-500' : 'bg-amber-500'
+        const iconTileBg = isCluster ? 'bg-purple-500/20' : 'bg-amber-500/20'
+        const iconColor = isCluster ? 'text-purple-300' : 'text-amber-300'
+        const labelColor = isCluster ? 'text-purple-200' : 'text-amber-200'
+        const execColor = isCluster ? 'text-purple-300/90' : 'text-amber-300/90'
+        return (
+          <div
+            className="mt-2 flex items-stretch gap-2 rounded-md bg-[#121212] border border-[#262626] overflow-hidden"
+            role="note"
+            aria-label={`Execution method: ${label}`}
+          >
+            <div className={`w-1 shrink-0 ${railColor}`} aria-hidden="true" />
+            <div className={`flex items-center justify-center w-7 my-1.5 ${iconTileBg} rounded`} aria-hidden="true">
+              <Icon className={`w-3.5 h-3.5 ${iconColor}`} />
             </div>
-          )
-        }
-        if (exMethod === 'density_block' || exMethod === 'density') {
-          return (
-            <div className="mt-1 border-l-2 border-amber-500/40 pl-2 text-[10px] text-amber-300/90">
-              <span className="font-semibold">Density block</span>
-              <span className="text-amber-300/70"> — complete prescribed work within the timed window, short rests between rounds.</span>
+            <div className="flex-1 py-1.5 pr-2 min-w-0">
+              <div className={`text-[11px] font-bold uppercase tracking-wider ${labelColor} leading-tight`}>
+                {label}
+              </div>
+              <div className={`text-[11px] ${execColor} leading-snug mt-0.5`}>
+                {execLine}
+              </div>
             </div>
-          )
-        }
-        return null
+          </div>
+        )
       })()}
 
       {/* ROW 3a: [WARM-UP-ROW-CONTRACT-RESTORED] Per-row warm-up selectionReason.

@@ -11632,8 +11632,13 @@ async function generateAdaptiveProgramImpl(
     const isSkillPrimarySession = skillExerciseCount >= 3 && skillExerciseCount >= totalExercises * 0.5
     
     // [STRENGTHENED] Compute whether skill work needs protection (separate from blocking all grouping)
-    // This protects skill exercises themselves but allows accessory grouping
-    const hasSkillWorkToProtect = skillExerciseCount >= 1
+    // This protects skill exercises themselves but allows accessory grouping.
+    // [CLUSTER-DOCTRINE-TIGHTENED] No longer the cluster gate -- cluster now
+    // requires `hasPrimaryEffortClusterCandidate` (below). Prefixed with _
+    // to silence unused-const warnings; kept for future auditors who expect
+    // this rolled-up signal to exist.
+    const _hasSkillWorkToProtect = skillExerciseCount >= 1
+    void _hasSkillWorkToProtect
     
     // [STRENGTHENED] Compute groupable tail size - includes more exercise types
     // Support strength work (non-primary, non-weighted-compound) can be grouped
@@ -11689,6 +11694,47 @@ async function generateAdaptiveProgramImpl(
     const blueprintCircuitEligibility = sessionCompositionBlueprint?.methodEligibility?.circuits
     const blueprintDensityEligibility = sessionCompositionBlueprint?.methodEligibility?.density
     
+    // [CLUSTER-DOCTRINE-TIGHTENED] Cluster eligibility now requires an actual
+    // cluster-appropriate candidate to EXIST in the session's primary-effort
+    // zone (position 0 or 1). Previously `hasSkillWorkToProtect` (any skill
+    // exercise anywhere in the session) was the only gate, which caused
+    // cluster to fire on nearly every session that carried any skill work --
+    // the candidate loop at ~12192 then always found something scoring >=60
+    // (heavy-weighted compound at position 0 scored 70; skill hold at any
+    // position scored 100+). Result: cluster appeared generically across
+    // almost every skill day and the user read the Program page as
+    // "everything is a cluster set".
+    //
+    // New gate: the session must contain either a PRIMARY-EFFORT SKILL HOLD
+    // (category='skill' + concrete hold-root keyword, position 0-1) or a
+    // PRIMARY-EFFORT HEAVY WEIGHTED COMPOUND (category='strength' +
+    // "weighted" + approved compound root, position 0-1). Accessory
+    // positions (2+) no longer qualify because cluster is intrinsically a
+    // primary-effort quality-preservation method -- applying it to a
+    // position-2 row is the "marginally qualifies" case the prompt flagged.
+    //
+    // The same keyword roots are reused by the candidate loop at ~12192 so
+    // eligibility here and selection there stay consistent.
+    const CLUSTER_SKILL_HOLD_ROOTS = [
+      'planche', 'lever', 'handstand', 'iron cross', 'l-sit', 'lsit',
+      'v-sit', 'vsit', 'flag', 'maltese', 'victorian',
+    ]
+    const CLUSTER_HEAVY_COMPOUND_ROOTS = [
+      'pull-up', 'pullup', 'chin-up', 'chinup', 'dip', 'muscle-up', 'muscleup',
+      'squat', 'deadlift', 'press', 'row', 'ring',
+    ]
+    const hasPrimaryEffortClusterCandidate = (session.exercises || []).some((ex, position) => {
+      if (position > 1) return false // primary-effort zone only
+      if (ex.blockId) return false    // already in a grouped block -- cluster must not steal
+      const nameLower = ex.name?.toLowerCase() || ''
+      const isSkillHold = ex.category === 'skill' &&
+        CLUSTER_SKILL_HOLD_ROOTS.some(root => nameLower.includes(root))
+      const isHeavyWork = ex.category === 'strength' &&
+        nameLower.includes('weighted') &&
+        CLUSTER_HEAVY_COMPOUND_ROOTS.some(root => nameLower.includes(root))
+      return isSkillHold || isHeavyWork
+    })
+    
     // Build the authoritative session method intent contract
     const sessionMethodIntentContract = {
       sessionId: `day_${session.dayNumber}`,
@@ -11719,15 +11765,20 @@ async function generateAdaptiveProgramImpl(
       // Density: same as circuits
       densityAllowed: accessoryTailSize >= 3,
       densityEarned: accessoryTailSize >= 3,
-      // Cluster: for skill work quality preservation
-      clusterAllowed: hasSkillWorkToProtect,
+      // [CLUSTER-DOCTRINE-TIGHTENED] Cluster eligibility now requires a
+      // concrete primary-effort quality-preservation candidate to exist in
+      // the session (see `hasPrimaryEffortClusterCandidate` above).
+      clusterAllowed: hasPrimaryEffortClusterCandidate,
       
       // [STRENGTHENED] Final method selection - lower thresholds, trust user preferences
       shouldApplySupersets: methodPrefsForGrouping.includes('supersets') && accessoryTailSize >= 2,
       // Circuits allowed even on skill days - we protect skill exercises separately
       shouldApplyCircuits: methodPrefsForGrouping.includes('circuits') && accessoryTailSize >= 3,
       shouldApplyDensity: methodPrefsForGrouping.includes('density_blocks') && accessoryTailSize >= 3,
-      shouldApplyCluster: methodPrefsForGrouping.includes('cluster_sets') && hasSkillWorkToProtect,
+      // [CLUSTER-DOCTRINE-TIGHTENED] Now uses the stricter `clusterAllowed`
+      // gate (primary-effort candidate must truly exist) instead of
+      // `hasSkillWorkToProtect` (any skill exercise).
+      shouldApplyCluster: methodPrefsForGrouping.includes('cluster_sets') && hasPrimaryEffortClusterCandidate,
       
       // Packaging priority (what to try first)
       preferredPackagingOrder: [
@@ -12190,39 +12241,29 @@ async function generateAdaptiveProgramImpl(
     const shouldEvaluateCluster = sessionMethodIntentContract.shouldApplyCluster
     
     if (shouldEvaluateCluster && session.exercises && session.exercises.length > 0) {
-      // Approved heavy-compound roots for weighted-strength cluster targets.
-      // Scoped tight on purpose -- loose substring matching on "weighted" was
-      // the primary false-positive source in the prior build.
-      const HEAVY_COMPOUND_ROOTS = [
-        'pull-up', 'pullup', 'chin-up', 'chinup', 'dip', 'muscle-up', 'muscleup',
-        'squat', 'deadlift', 'press', 'row', 'ring',
-      ]
-      // Concrete skill-hold keywords. A row called "skill hold accessory" with
-      // no lever/planche/handstand/front-lever/iron-cross/l-sit root should
-      // NOT qualify just because it matches `.category === 'skill'`.
-      const SKILL_HOLD_ROOTS = [
-        'planche', 'lever', 'handstand', 'iron cross', 'l-sit', 'lsit',
-        'v-sit', 'vsit', 'flag', 'maltese', 'victorian',
-      ]
+      // [CLUSTER-DOCTRINE-TIGHTENED] Keyword roots hoisted to the eligibility
+      // gate above (`CLUSTER_SKILL_HOLD_ROOTS` / `CLUSTER_HEAVY_COMPOUND_ROOTS`
+      // at ~11688). Reusing them here guarantees eligibility and selection
+      // agree on the same keyword set -- if eligibility said yes, selection
+      // will find the same candidate; if eligibility said no, selection will
+      // short-circuit (it never enters this block because `shouldEvaluateCluster`
+      // is false).
       type ClusterCandidate = { ex: NonNullable<typeof session.exercises>[number]; score: number; index: number }
       const candidates: ClusterCandidate[] = []
       session.exercises.forEach((ex, position) => {
         if (ex.blockId) return // already grouped -- cluster must not steal a block member
         const nameLower = ex.name?.toLowerCase() || ''
-        // Skill hold: category MUST be skill AND the name must carry a real
-        // hold-root keyword. Bare "hold" alone no longer qualifies (it caught
-        // generic accessory "hold" cues in prior build).
         const isSkillHold = ex.category === 'skill' &&
-          SKILL_HOLD_ROOTS.some(root => nameLower.includes(root))
-        // Heavy weighted compound: strength + "weighted" + approved root.
+          CLUSTER_SKILL_HOLD_ROOTS.some(root => nameLower.includes(root))
         const isHeavyWork = ex.category === 'strength' &&
           nameLower.includes('weighted') &&
-          HEAVY_COMPOUND_ROOTS.some(root => nameLower.includes(root))
+          CLUSTER_HEAVY_COMPOUND_ROOTS.some(root => nameLower.includes(root))
         if (!isSkillHold && !isHeavyWork) return
-        // Position gate: cluster only belongs on the session's primary effort.
-        // Beyond position 2 (0-indexed: slots 0/1/2) the exercise is an
-        // accessory and no longer deserves cluster even if its name qualifies.
-        if (position > 2) return
+        // [CLUSTER-DOCTRINE-TIGHTENED] Position gate narrowed from 0-2 to 0-1.
+        // Cluster is intrinsically a primary-effort quality-preservation
+        // method -- applying it to a position-2 row was the "marginally
+        // qualifies" case that bloated cluster into most skill days.
+        if (position > 1) return
         // Score: skill holds outrank heavy weighted work (their quality loss
         // per rep is higher); earlier-position outranks later within a tier.
         const baseScore = isSkillHold ? 100 : 60
@@ -12232,7 +12273,12 @@ async function generateAdaptiveProgramImpl(
       
       // Rank and require minimum quality before applying.
       candidates.sort((a, b) => b.score - a.score)
-      const MIN_CLUSTER_SCORE = 60 // at least a position-0 heavy-compound OR any skill-hold
+      // [CLUSTER-DOCTRINE-TIGHTENED] Threshold unchanged at 60 -- the position
+      // gate does the primary tightening. With position <= 1, the lowest
+      // passing heavy-compound score is 67 (position-1 = 60 + 7 bonus) and
+      // the lowest passing skill-hold is 107 (position-1 = 100 + 7). A
+      // position-2 heavy-compound can no longer reach this block at all.
+      const MIN_CLUSTER_SCORE = 60
       const clusterTarget = candidates.length > 0 && candidates[0].score >= MIN_CLUSTER_SCORE
         ? candidates[0]
         : null
@@ -12377,11 +12423,40 @@ async function generateAdaptiveProgramImpl(
     // Add remaining ungrouped exercises as straight sets
     const ungroupedExercises = (session.exercises || []).filter(e => !e.blockId)
     for (const ex of ungroupedExercises) {
-      // [FINAL-GROUPED-TRUTH-NORMALIZER] Use the same normalizer here so an
-      // ungrouped exercise carrying a non-straight per-exercise method (most
-      // commonly 'cluster' from cluster_sets materialization, but defensively
-      // also 'density_block' / 'density') cannot silently collapse to straight.
-      const groupType = normalizeFinalGroupType(ex.method)
+      // [CLUSTER-SEMANTIC-PARITY] For ungrouped (single-exercise) rows, we
+      // apply the method-vs-structure split directly at styledGroup emission.
+      //
+      //   Cluster         -> METHOD-ONLY execution cue for a SINGLE exercise.
+      //                      Emit groupType='straight' so the scanner and the
+      //                      card adapter both read the session's grouped
+      //                      STRUCTURE honestly (zero grouped blocks). The
+      //                      execution-cue truth survives via ex.method =
+      //                      'cluster', which drives the row-level method
+      //                      chip and the card's "Method cues present:
+      //                      Cluster" status line.
+      //
+      //   Density_block   -> Stays in the grouped-structure taxonomy per the
+      //                      governor's method list. A 1-member density_block
+      //                      is a legitimate style the card can render with a
+      //                      single-member block frame (adapter's
+      //                      minMembersFor('density_block') = 2 still gates
+      //                      the final render, but we emit the structural
+      //                      intent here so the dispatcher can decide).
+      //
+      //   Superset / Circuit -> Never emit without a blockId. These are
+      //                      pairing-only methods -- a 1-member superset /
+      //                      circuit has no meaning. Fall through to
+      //                      'straight'.
+      //
+      // Without this split, a single-row cluster exercise produced a
+      // non-straight styledGroup that set `hasAnyStyledNonStraightRaw = true`
+      // in the card adapter, forcing the card through a defensive
+      // METHOD_ONLY_FLAT reroute. Now the card reaches honest flat_category
+      // directly and the scanner reports BLOCKS: 0 / METHODS: 1x cluster
+      // without any ambiguity.
+      const normalized = normalizeFinalGroupType(ex.method)
+      const groupType: 'straight' | 'density_block' =
+        normalized === 'density_block' ? 'density_block' : 'straight'
       finalStyledGroups.push({
         id: `straight_${ex.id}`,
         groupType,
@@ -12392,14 +12467,10 @@ async function generateAdaptiveProgramImpl(
           trainingMethod: ex.method || 'straight_sets',
           methodRationale: ex.methodLabel || ex.selectionReason || 'Standard execution',
         }],
-        instruction: groupType === 'cluster' 
-          ? 'Use brief 10-20s intra-set rest to maintain quality'
-          : groupType === 'density_block'
+        instruction: groupType === 'density_block'
           ? 'Complete prescribed work within the timed block'
           : 'Complete all sets before moving on',
-        restProtocol: groupType === 'cluster'
-          ? '10-20s intra-set, 120-180s inter-set'
-          : groupType === 'density_block'
+        restProtocol: groupType === 'density_block'
           ? '30-60s between rounds'
           : ex.category === 'skill' ? '120-180s' : '60-90s',
       })
@@ -12416,14 +12487,31 @@ async function generateAdaptiveProgramImpl(
     // promotes fake grouping to the UI.
     const finalNonStraightStyledGroupsCount = finalStyledGroups.filter(g => g.groupType !== 'straight').length
     const finalExerciseBlockIdCount = (session.exercises || []).filter(e => !!e.blockId).length
+    // [CLUSTER-SEMANTIC-PARITY] Method-only cluster (ex.method='cluster'
+    // without blockId) is intentionally emitted as groupType='straight' in
+    // the ungrouped rebuild above -- it is a row-level execution cue, not
+    // grouped structure. Excluding it from this count so the invariant does
+    // not falsely report FLATTENED for the honest method-only case.
     const finalExerciseNonStraightMethodCount = (session.exercises || []).filter(e => {
       const m = e.method
-      return !!m && m !== 'straight' && m !== 'straight_sets'
+      if (!m || m === 'straight' || m === 'straight_sets') return false
+      // Method-only cluster on an ungrouped exercise is not structural.
+      if (m === 'cluster' && !e.blockId) return false
+      return true
     }).length
+    // Cluster application is method-only when it did not land on a grouped
+    // block -- treat it the same way for the "grouped methods applied"
+    // signal so the invariant does not warn purely because cluster_sets was
+    // applied as an execution cue.
+    const clusterAppliedAsStructuralBlock = (session.exercises || []).some(
+      e => e.method === 'cluster' && !!e.blockId,
+    )
     const groupedMethodsAppliedForSession =
       methodMaterializationResult.appliedMethods.some(m =>
-        m === 'supersets' || m === 'circuits' || m === 'density_blocks' || m === 'cluster_sets',
-      ) || (session.styleMetadata?.hasSupersetsApplied === true)
+        m === 'supersets' || m === 'circuits' || m === 'density_blocks',
+      ) ||
+      (methodMaterializationResult.appliedMethods.includes('cluster_sets') && clusterAppliedAsStructuralBlock) ||
+      (session.styleMetadata?.hasSupersetsApplied === true)
     const hasGroupedExerciseEvidence =
       finalExerciseBlockIdCount > 0 || finalExerciseNonStraightMethodCount > 0
     let finalGroupedTruthVerdict: 'FINAL_GROUPED_TRUTH_PRESENT' | 'FINAL_GROUPED_TRUTH_FLATTENED' | 'FINAL_GROUPED_TRUTH_HONESTLY_STRAIGHT'

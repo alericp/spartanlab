@@ -1361,7 +1361,37 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       return false
     })()
 
-    if (hasGroupedTruth && !hasRenderableGroupedBlockStructure) {
+    // [SET-EXECUTION-TRUTH-GATE] Detect non-straight methods living on
+    // INDIVIDUAL exercise rows (cluster / density / etc.), independent of
+    // blockId and independent of `hasGroupedTruth`.
+    //
+    // Why this is a distinct signal from `hasGroupedTruth`:
+    //   After the taxonomy lock at components/programs/lib/session-group-display.ts
+    //   (~L820), `hasAnyExerciseMethodTruth` requires a blockId for cluster/
+    //   superset/circuit -- correctly excluding single-row cluster from the
+    //   GROUPED-STRUCTURE truth signal. The side-effect: when the builder
+    //   writes `method:'cluster'` onto a single primary-effort exercise (the
+    //   common set-execution case), `hasGroupedTruth` resolves to false, the
+    //   card never entered the METHOD_ONLY_FLAT branch, `reasonIfNotRich`
+    //   stayed at the generic flatReason, and the prior prompt's visible
+    //   surfaces (top chip row + in-body "Set-execution methods" headline)
+    //   silently stayed hidden. The only surviving surface was the tiny
+    //   8px row-level chip and 10px microcopy -- the exact "basically looks
+    //   unchanged" symptom the user reported.
+    //
+    // This gate re-captures that truth WITHOUT reopening grouped ownership:
+    //   - reads straight from `safeExercises[].method`,
+    //   - requires NO blockId (set-execution is a per-row concept),
+    //   - feeds only the METHOD_ONLY_FLAT dispatch arm (which returns
+    //     `hasGroupedTruth: false` / `hasRichRenderableGroups: false` so
+    //     nothing in the grouped corridor can be reactivated).
+    const hasAnySetExecutionMethodOnRows = safeExercises.some(ex => {
+      const m = ((ex as unknown as { method?: string }).method || '').toLowerCase()
+      if (!m || m === 'straight' || m === 'straight_sets') return false
+      return true
+    })
+
+    if ((hasGroupedTruth || hasAnySetExecutionMethodOnRows) && !hasRenderableGroupedBlockStructure) {
       // [METHOD-ONLY-FLAT] Session carries non-straight methods on individual
       // rows but NO renderable grouped block structure (no multi-member
       // styled group, no multi-member blockId). Route to flat_category so

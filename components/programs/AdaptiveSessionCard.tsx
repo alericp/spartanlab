@@ -3177,6 +3177,59 @@ function ExerciseRow({
               {card.intentLabel}
             </span>
           )}
+          {/*
+            [ROW-LEVEL-METHOD-CUE]
+            Single-exercise execution methods (cluster, density) sometimes land
+            on a row that is NOT wrapped in a grouped block frame -- typically
+            when the builder emits the method without a blockId, or when a
+            density has only one visible member (density min=2 in the grouped
+            adapter). Before this pill existed, those rows rendered as plain
+            flat rows while the scanner + method-summary chips were still
+            asserting grouped/method truth upstream, producing the "flat-lie"
+            symptom.
+
+            This pill is the honest row-level method cue: rendered ONLY when
+              (a) the exercise carries a non-straight `method`, AND
+              (b) no grouped `prefix` is set (i.e., the row is NOT inside a
+                  grouped block frame -- grouped frames already own the
+                  method identity via their pill header + colored rail).
+            It never appears on warm-up rows. Colors match the grouped
+            palette (cluster=purple, density=amber, superset=blue,
+            circuit=emerald) so the visual language is continuous across
+            flat rows, grouped-body headlines, and block headers.
+          */}
+          {(() => {
+            if (isWarmupCooldown) return null
+            if (prefix) return null  // grouped frame already labels method
+            const exMethod = ((exercise as unknown as { method?: string }).method || '').toLowerCase()
+            if (!exMethod || exMethod === 'straight') return null
+            const methodLabelFromEx = (exercise as unknown as { methodLabel?: string }).methodLabel
+            let label = ''
+            let chipClass = ''
+            if (exMethod === 'cluster' || exMethod === 'cluster_sets') {
+              label = methodLabelFromEx || 'Cluster'
+              chipClass = 'bg-purple-500/12 text-purple-300 border border-purple-500/35'
+            } else if (exMethod === 'density_block' || exMethod === 'density') {
+              label = methodLabelFromEx || 'Density'
+              chipClass = 'bg-amber-500/12 text-amber-300 border border-amber-500/35'
+            } else if (exMethod === 'superset') {
+              label = methodLabelFromEx || 'Superset'
+              chipClass = 'bg-[#4F6D8A]/15 text-[#7FA8CC] border border-[#4F6D8A]/40'
+            } else if (exMethod === 'circuit' || exMethod === 'circuits') {
+              label = methodLabelFromEx || 'Circuit'
+              chipClass = 'bg-emerald-500/12 text-emerald-300 border border-emerald-500/35'
+            } else {
+              return null
+            }
+            return (
+              <span
+                className={`text-[8px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded shrink-0 ${chipClass}`}
+                title={`Execution method: ${label}`}
+              >
+                {label}
+              </span>
+            )
+          })()}
           {adjustedName && (
             <span className="text-[8px] px-1 rounded bg-[#4F6D8A]/10 text-[#4F6D8A] shrink-0">adj</span>
           )}

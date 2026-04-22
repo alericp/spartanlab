@@ -797,7 +797,60 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     }
   })()
 
-  const groupedRenderContract: GroupedDisplayModel = buildGroupedDisplayModel(
+  // ==========================================================================
+  // [RAW-VS-DISPLAY-TRUTH-SPLIT] Grouped OWNERSHIP is decided from RAW session
+  // truth; grouped RENDERING order is derived from the DISPLAY surface. These
+  // are two separate concerns and must not share a single input.
+  //
+  // Why: prior behavior fed `variantPrunedStyleMetadata` + `fullVisibleExercises`
+  // (a downstream-prepared display surface) into a single `buildGroupedDisplayModel`
+  // call. That meant any weakening of the display pipeline -- a dropped blockId
+  // during `buildFullVisibleRoutineExercises`, an aggressive variant prune that
+  // stranded a surviving group below its minimum, a RoutineItem that never carried
+  // method/methodLabel forward -- silently degraded `hasGroupedTruth` /
+  // `hasRichRenderableGroups` for the FINAL visible body decision. The scanner
+  // strip, meanwhile, reads raw `session.styleMetadata.styledGroups[].groupType`
+  // and `session.exercises[].method` and honestly reports "grouped." The user
+  // sees "scanner says grouped, card body still flat."
+  //
+  // Fix: two independent model builds, then one authoritative merge.
+  //
+  //   1. `rawGroupedOwnership` -- built from THE RAW SESSION TRUTH
+  //      (`sessionStyleMetadata` + `safeExercises` with full blockId/method/
+  //      methodLabel fidelity). This is the FIRST-CLASS determinant of whether
+  //      the card is grouped at all. Cannot be weakened by any downstream
+  //      display weakening.
+  //
+  //   2. `displayGroupedRendering` -- built from THE DISPLAY SURFACE
+  //      (`variantPrunedStyleMetadata` + `fullVisibleExercises`). Used ONLY
+  //      to produce a render-block ordering that matches what the card
+  //      actually shows on screen (variant-pruned, hydration-aware).
+  //
+  //   3. `groupedRenderContract` -- the merged model downstream consumers
+  //      read. Ownership fields (hasGroupedTruth, hasRichRenderableGroups,
+  //      counts) come FROM RAW first; rendering fields (renderBlocks,
+  //      rawFallbackBlocks, groups) prefer display when display produced
+  //      them, falling back to raw when display lost them. This guarantees
+  //      the card cannot silently collapse to flat just because the
+  //      downstream display surface weakened the signal, and it also
+  //      guarantees the visible rows still match what the variant allows.
+  //
+  //  `fullVisibleExercises` remains the hydration source for row CONTENT
+  //  (sets/reps/RPE/rest) inside `MainExercisesRenderer`; this split does
+  //  not change that.
+  // ==========================================================================
+  const rawGroupedOwnership: GroupedDisplayModel = buildGroupedDisplayModel(
+    sessionStyleMetadata,
+    safeExercises.map(ex => ({
+      id: ex.id,
+      name: ex.name,
+      blockId: (ex as unknown as { blockId?: string }).blockId,
+      method: (ex as unknown as { method?: string }).method,
+      methodLabel: (ex as unknown as { methodLabel?: string }).methodLabel,
+    }))
+  )
+
+  const displayGroupedRendering: GroupedDisplayModel = buildGroupedDisplayModel(
     variantPrunedStyleMetadata,
     fullVisibleExercises.map(ex => ({
       id: ex.id,
@@ -807,6 +860,86 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       methodLabel: (ex as unknown as { methodLabel?: string }).methodLabel,
     }))
   )
+
+  const groupedRenderContract: GroupedDisplayModel = (() => {
+    // [RAW-OWNERSHIP-WINS] Grouped-truth detection is owned by RAW source.
+    // Display path can only ADD to grouped truth (not subtract) because
+    // display is a downstream derivative -- if raw says grouped, the card
+    // must honor that even if the display surface cannot rehydrate every
+    // member cleanly.
+    const hasGroupedTruth =
+      rawGroupedOwnership.hasGroupedTruth || displayGroupedRendering.hasGroupedTruth
+    const hasRichRenderableGroups =
+      displayGroupedRendering.hasRichRenderableGroups ||
+      rawGroupedOwnership.hasRichRenderableGroups
+
+    // [DISPLAY-PREFERRED-RENDERING] Rendering fields prefer the display
+    // path because the renderer hydrates rows from `fullVisibleExercises`
+    // and its canonical walk already matches what the variant exposes.
+    // Raw is the fallback -- it owns rendering ONLY when display returned
+    // empty (variant pruned too aggressively, downstream weakening erased
+    // all rich groups, etc.). This keeps the card honestly grouped
+    // instead of collapsing to flat.
+    const renderBlocks =
+      displayGroupedRendering.renderBlocks.length > 0
+        ? displayGroupedRendering.renderBlocks
+        : rawGroupedOwnership.renderBlocks
+    const rawFallbackBlocks =
+      displayGroupedRendering.rawFallbackBlocks.length > 0
+        ? displayGroupedRendering.rawFallbackBlocks
+        : rawGroupedOwnership.rawFallbackBlocks
+    const groups =
+      displayGroupedRendering.groups.length > 0
+        ? displayGroupedRendering.groups
+        : rawGroupedOwnership.groups
+
+    // [COUNTS-TRACK-OWNERSHIP] Method counts track the rendering source
+    // that actually produced the blocks (so chips/tally never outrun the
+    // body). If display produced rich groups, display counts. Otherwise
+    // raw counts -- which matches the block list the renderer will now
+    // iterate. When both are empty we report zeros honestly.
+    const countsSource = displayGroupedRendering.hasRichRenderableGroups
+      ? displayGroupedRendering
+      : rawGroupedOwnership.hasRichRenderableGroups
+        ? rawGroupedOwnership
+        : displayGroupedRendering
+
+    // [SOURCE-USED-ATTRIBUTION] Attribute to whichever model owns the
+    // visible rendering. 'none' is only emitted when neither model has
+    // grouped truth at all.
+    const sourceUsed =
+      displayGroupedRendering.sourceUsed !== 'none'
+        ? displayGroupedRendering.sourceUsed
+        : rawGroupedOwnership.sourceUsed
+
+    // [FLAT-REASON] Only meaningful if neither raw nor display found
+    // grouped truth. Otherwise raw owns the truth and flatReason is null.
+    const flatReason = hasGroupedTruth
+      ? null
+      : displayGroupedRendering.flatReason
+
+    return {
+      hasGroups: groups.length > 0 || rawGroupedOwnership.hasGroups,
+      totalGroupCount: Math.max(
+        displayGroupedRendering.totalGroupCount,
+        rawGroupedOwnership.totalGroupCount
+      ),
+      nonStraightGroupCount: countsSource.nonStraightGroupCount,
+      supersetCount: countsSource.supersetCount,
+      circuitCount: countsSource.circuitCount,
+      densityCount: countsSource.densityCount,
+      clusterCount: countsSource.clusterCount,
+      groups,
+      methodSummary:
+        displayGroupedRendering.methodSummary ?? rawGroupedOwnership.methodSummary,
+      sourceUsed,
+      flatReason,
+      renderBlocks,
+      hasGroupedTruth,
+      hasRichRenderableGroups,
+      rawFallbackBlocks,
+    }
+  })()
   // [DISPLAY-FIRST-FALLBACK] Two separate gates, each with a precise meaning:
   //   - hasGroupedTruth:         upstream grouped truth exists (raw signal,
   //                              pre-partial-validity filtering).

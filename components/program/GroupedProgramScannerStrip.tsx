@@ -25,16 +25,20 @@
 //           usable members, OR
 //        b. session.exercises sharing the same blockId + non-straight
 //           method with >= minMembersFor(type) usable members.
-//      Mirrors the adapter's Priority 1 + Priority 2 gates exactly,
-//      including the cluster=1 / superset/circuit/density=2 minimums.
+//      Mirrors the adapter's Priority 1 + Priority 2 gates exactly.
+//      All grouped-block methods now require >=2 members -- cluster
+//      joined the >=2 gate in the CLUSTER-DOCTRINE-CORRECTION so that
+//      single-exercise cluster stops masquerading as grouped structure.
 //
 //   2. singleExerciseMethods -- exercises that carry a non-straight
 //      method but do NOT contribute to a renderable grouped block.
-//      Typical cause: cluster/density emitted as an execution method
-//      on a single exercise without a blockId, or density emitted on a
-//      single exercise (density min is 2). These render as ordinary
-//      rows in the card body today; the scanner surfaces them as a
-//      separate METHODS token so it neither lies nor hides the truth.
+//      Typical cause: cluster emitted as a primary-effort execution cue
+//      on a single exercise (no blockId); density emitted on a single
+//      exercise (density min is 2). These render as ordinary rows in
+//      the card body with an inline method pill, and the card's
+//      "Method cues present: ..." status line names them explicitly.
+//      The scanner surfaces them as a separate METHODS token so it
+//      neither conflates them with grouped structure nor hides them.
 //
 // SHIPPING GATE
 // Controlled by a single local constant `SHOW_PROGRAM_GROUP_SCANNER`.
@@ -217,6 +221,32 @@ function summarizeSession(sess: ProgramSession) {
 
   const hasAny = groupedBlockCount > 0 || singleMethodTokens.length > 0
 
+  // [SCANNER-REASON-TOKEN] Precise dev-readable reason for the common
+  // "cluster present on the card but BLOCKS says 0" case. Compact, single
+  // token, shown only when it genuinely explains the split so the scanner
+  // does not become a wall of noise.
+  //
+  //   method_only_cluster        -> cluster exists only as a row-level cue
+  //                                 (no blockId). Card renders the row flat
+  //                                 with an inline method pill; scanner
+  //                                 correctly reports BLOCKS:0 METHODS:1x
+  //                                 cluster. NOT a bug.
+  //
+  //   grouped_cluster_requires_multi_member_block
+  //                              -> cluster carries a blockId but the block
+  //                                 has fewer than minMembersFor('cluster')
+  //                                 usable members, so the adapter cannot
+  //                                 render it as a framed block.
+  let reasonToken: string | null = null
+  if (groupedBlockCount === 0 && singleMethodCounts.cluster > 0) {
+    const hasClusterWithBlockId = exercises.some(
+      e => (e?.method || '').toLowerCase() === 'cluster' && !!e?.blockId,
+    )
+    reasonToken = hasClusterWithBlockId
+      ? 'grouped_cluster_requires_multi_member_block'
+      : 'method_only_cluster'
+  }
+
   return {
     day: typeof sess.dayNumber === 'number' ? sess.dayNumber : null,
     name: typeof sess.name === 'string' && sess.name.length > 0 ? sess.name : null,
@@ -226,6 +256,7 @@ function summarizeSession(sess: ProgramSession) {
     groupedBlockLabelTokens,
     singleMethodTokens,
     exerciseCount: exercises.length,
+    reasonToken,
   }
 }
 
@@ -263,6 +294,21 @@ export function GroupedProgramScannerStrip({
           active:<span className="text-[#E6E9EF]"> {activeOnly.length}</span>
         </span>
       </div>
+      {/*
+        [SCANNER-LEGEND] Explicit BLOCKS vs METHODS legend so the two
+        tokens cannot be misread as the same thing. BLOCKS = multi-member
+        grouped structure that the card body paints as a framed block
+        (e.g. a real superset pair). METHODS = single-row execution cues
+        that render as an inline method pill on an ordinary flat row
+        (e.g. a primary-effort cluster on one exercise). A session with
+        BLOCKS:0 and METHODS:1x cluster is NOT a broken grouped render;
+        it is an honestly flat session with a method cue. The card
+        surfaces the same distinction via its "Method cues present:"
+        status line.
+      */}
+      <div className="mb-1 text-[9px] uppercase tracking-wide text-[#6B7280]">
+        BLOCKS = grouped multi-exercise structure &nbsp;·&nbsp; METHODS = single-row execution cues
+      </div>
       <ul className="flex flex-col gap-0.5">
         {activeOnly.map((s, idx) => {
           const dayToken = s.day !== null ? `D${s.day}` : `#${idx + 1}`
@@ -292,6 +338,11 @@ export function GroupedProgramScannerStrip({
               <span>
                 EX:<span className="text-[#E6E9EF]">{s.exerciseCount}</span>
               </span>
+              {s.reasonToken && (
+                <span>
+                  WHY:<span className="text-[#E6E9EF]"> {s.reasonToken}</span>
+                </span>
+              )}
               <span className="truncate text-[#6B7280]">· {labelToken}</span>
             </li>
           )

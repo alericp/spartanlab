@@ -4750,22 +4750,39 @@ if (styledGroups && styledGroups.length > 0) {
   // That is a corridor ownership failure: during a live session, system
   // back MUST map to the same in-app Back control the user sees on screen.
   //
-  // Strategy:
-  //   1. On mount (while session is live and has any progress), push a
-  //      sentinel history entry so the first system-back press hits us,
-  //      not the underlying /program entry.
-  //   2. In popstate, route to handleGoBack when the user has progress to
-  //      undo. When at the first set of the first exercise (nothing to
-  //      unwind), show the exit confirm modal instead of silently leaving.
-  //   3. After handling, re-push the sentinel so the NEXT system-back
-  //      press is intercepted too. True exit only happens through the
-  //      intentional Save & Exit / Discard paths (which call onCancel ->
-  //      router navigation and do NOT pop through this interceptor).
-  //   4. Cleanup removes the listener and (if we're the top entry) pops
-  //      our own sentinel so we don't leak history noise.
+  // [POST-COMMIT-REWIND-FIX] The previous revision of this effect caused
+  // the proven post-commit rewind (resting set 2 / completed 1 -> active
+  // set 1 / completed 0) immediately after a successful Log Set:
   //
-  // We use refs so the effect doesn't re-bind on every render and every
-  // popstate always reads the latest canGoBack / handler.
+  //   1. Effect had dependency `[safeStatus]`, so every active <-> resting
+  //      transition (the normal post-COMPLETE_SET flow) caused React to
+  //      tear down the old effect and re-run a new one.
+  //   2. The teardown's cleanup called `window.history.back()` whenever
+  //      its sentinel was still on the stack.
+  //   3. The next effect immediately re-armed the sentinel and registered
+  //      a fresh popstate listener BEFORE the async popstate from the
+  //      cleanup history.back() arrived.
+  //   4. That synthesized popstate was indistinguishable from a real
+  //      system back press to the new listener, which then called
+  //      handleGoBackRef.current() -> dispatch({ type: 'GO_BACK', ... })
+  //      -> set 2 -> set 1, completed 1 -> 0. Exact observed shape.
+  //
+  // FIX:
+  //   A. Depend on a stable `isInteractivePhase` boolean instead of the
+  //      raw status, so the effect does NOT re-run on active <-> resting
+  //      transitions (or any other transition between live phases). It
+  //      arms once when the session first becomes interactive and tears
+  //      down once when the session leaves the interactive domain
+  //      (completed / ready / unmount).
+  //   B. Remove the cleanup-time `window.history.back()` entirely. Even
+  //      if a phantom sentinel entry is left on the history stack after
+  //      unmount, it is harmless: by then the popstate listener is gone
+  //      and a later back press simply resolves against normal app
+  //      history. There is NO safe cleanup-time history mutation during
+  //      React teardown.
+  //   C. Popstate handler still reads the latest canGoBack / handler /
+  //      status via refs, so responsiveness to in-progress user state is
+  //      preserved without binding the effect to those values.
   // ==========================================================================
   const canGoBackRef = useRef(canGoBack)
   canGoBackRef.current = canGoBack
@@ -4773,31 +4790,38 @@ if (styledGroups && styledGroups.length > 0) {
   handleGoBackRef.current = handleGoBack
   const safeStatusRef = useRef(safeStatus)
   safeStatusRef.current = safeStatus
-  
+
+  // [POST-COMMIT-REWIND-FIX] Stable boolean across normal live phase
+  // transitions. Any phase that keeps the user inside the live workout
+  // corridor counts as "interactive" so this flag does NOT flip on a
+  // Log-Set-driven active -> resting transition, and the effect below
+  // therefore does NOT tear down + re-arm during a commit.
+  const isInteractivePhase =
+    safeStatus === 'active' ||
+    safeStatus === 'resting' ||
+    safeStatus === 'between_exercise_rest' ||
+    safeStatus === 'block_round_rest' ||
+    safeStatus === 'transitioning'
+
   useEffect(() => {
     if (typeof window === 'undefined') return
-    // Only arm the interceptor while the session is interactive. If we
-    // haven't reached active/resting/etc yet (ready) or we're already at
-    // completed, let normal navigation happen.
-    const interactiveStatuses = ['active', 'resting']
-    if (!interactiveStatuses.includes(safeStatus)) return
-    
+    if (!isInteractivePhase) return
+
     const SENTINEL = 'spartan_workout_session_sentinel'
-    let sentinelArmed = false
-    
+
     const armSentinel = () => {
       try {
         window.history.pushState({ [SENTINEL]: true }, '')
-        sentinelArmed = true
+        console.log('[LIVE-WORKOUT-CORRIDOR] sentinel_armed')
       } catch {
         // no-op: some embedded browsers restrict pushState
       }
     }
-    
+
     armSentinel()
-    
+
     const onPopState = () => {
-      console.log('[LIVE-WORKOUT-CORRIDOR] system back intercepted', {
+      console.log('[LIVE-WORKOUT-CORRIDOR] popstate_intercepted', {
         canGoBack: canGoBackRef.current,
         status: safeStatusRef.current,
       })
@@ -4806,22 +4830,24 @@ if (styledGroups && styledGroups.length > 0) {
       } else {
         setShowExitConfirm(true)
       }
-      // Re-arm so the next system-back press is also intercepted.
+      // Re-arm so the next system-back press is also intercepted. This
+      // only runs in response to a real popstate event, never during
+      // React effect cleanup.
       armSentinel()
     }
-    
+
     window.addEventListener('popstate', onPopState)
-    
+
     return () => {
       window.removeEventListener('popstate', onPopState)
-      // If we armed a sentinel and we're leaving while it's still on
-      // the stack, pop it so we don't leave a phantom entry behind.
-      if (sentinelArmed && typeof window.history.state === 'object' &&
-          window.history.state?.[SENTINEL]) {
-        try { window.history.back() } catch { /* no-op */ }
-      }
+      // [POST-COMMIT-REWIND-FIX] INTENTIONAL: no window.history.back()
+      // here. See the multi-paragraph comment above for the full failure
+      // mode. Any phantom sentinel entry left behind is benign because
+      // the listener is detached by the line above. This is the single
+      // most important behavioral change in this fix.
+      console.log('[LIVE-WORKOUT-CORRIDOR] cleanup_no_navigation')
     }
-  }, [safeStatus])
+  }, [isInteractivePhase])
   
   // Save completed workout with full logging
   const handleSaveWorkout = useCallback(async (difficulty?: PerceivedDifficulty) => {

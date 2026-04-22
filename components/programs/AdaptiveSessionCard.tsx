@@ -169,6 +169,86 @@ function getGroupTypeIcon(groupType: StyledGroup['groupType']) {
 // Border goes to `/60` so the left-border accent on members is unmistakable.
 // Text colors stay on-brand (superset uses blue-gray palette tone instead of
 // a flat muted hex so contrast lifts without adding a new color family).
+// =============================================================================
+// [GROUPED-MEMBER-FRAME] Local grouped member row presenter.
+//
+// Scope: renders ONLY inside the grouped branches of MainExercisesRenderer
+// (rich_grouped + raw_grouped_fallback). Flat / non-grouped rows never reach
+// this component and their visual contract is untouched.
+//
+// Why this exists: prior to this, grouped members rendered as raw
+// <ExerciseRow /> panels inside a thin `pl-4 border-l-2` left line, and the
+// only grouped cue per row was `ExerciseRow`'s internal `text-[10px]
+// text-[#4A4A4A] font-mono` prefix span -- practically invisible at a
+// glance. So a Superset A1/A2 pair visually read as "two normal rows under
+// a colored pill" and a 1-member cluster read as "a normal row with
+// decoration above it." The grouped truth survived the model but died at
+// the row-identity surface.
+//
+// What this does: paints a method-colored, row-height rail to the left of
+// every grouped member row. The rail owns:
+//   - the paired prefix (A1/A2, B1/B2, C1/C2/C3) as a first-class badge
+//   - OR the 1-based position for grouped blocks without paired prefixes
+//     (density rotation members: "1", "2", "3")
+//   - OR the method glyph for single-member grouped blocks (most commonly
+//     cluster-1: the Repeat icon in method purple makes the block visibly
+//     read as a cluster method, not a decorated plain row)
+//
+// The rail sits as a flex sibling of the row via `items-stretch`, so it
+// auto-matches the row height. No double-box: the existing `ExerciseRow`
+// panel is preserved byte-for-byte, we just stop asking it to render the
+// now-redundant tiny prefix (`prefix={undefined}` at the call sites).
+//
+// Hydrated rows and minimal fallback text rows both route through this
+// frame so the two surfaces speak the same grouped language even when
+// hydration is incomplete.
+// =============================================================================
+function GroupedMemberFrame({
+  colors,
+  groupType,
+  prefix,
+  positionIndex,
+  totalMembers,
+  children,
+}: {
+  colors: { border: string; bg: string; blockBg: string; text: string }
+  groupType: StyledGroup['groupType']
+  prefix?: string
+  positionIndex: number
+  totalMembers: number
+  children: React.ReactNode
+}) {
+  // Method glyph used when a single-member grouped block has no prefix, so
+  // the rail still carries method semantics instead of a bare "1".
+  const GlyphIcon =
+    groupType === 'superset'
+      ? Layers
+      : groupType === 'circuit'
+        ? RefreshCw
+        : groupType === 'cluster'
+          ? Repeat
+          : groupType === 'density_block'
+            ? Timer
+            : Layers
+
+  const railContent = prefix
+    ? <span className={`text-xs font-bold font-mono ${colors.text}`}>{prefix}</span>
+    : totalMembers === 1
+      ? <GlyphIcon className={`w-3.5 h-3.5 ${colors.text}`} />
+      : <span className={`text-xs font-bold font-mono ${colors.text}`}>{positionIndex}</span>
+
+  return (
+    <div className="flex items-stretch gap-2">
+      <div
+        className={`shrink-0 w-9 flex items-center justify-center rounded-md border ${colors.border} ${colors.bg}`}
+      >
+        {railContent}
+      </div>
+      <div className="flex-1 min-w-0">{children}</div>
+    </div>
+  )
+}
+
 function getGroupTypeColors(groupType: StyledGroup['groupType']): { border: string; bg: string; blockBg: string; text: string } {
   switch (groupType) {
     case 'superset':
@@ -1777,7 +1857,14 @@ function MainExercisesRenderer({
                 )
               })()}
 
-              <div className={`space-y-2 pl-4 border-l-2 ${colors.border}`}>
+              {/* [GROUPED-MEMBER-FRAME] Replaced the old `pl-4 border-l-2`
+                  thin-line wrapper with `space-y-1.5`: grouped identity is
+                  now owned per-row by GroupedMemberFrame's method-colored
+                  rail, so the outer left line was redundant and visually
+                  weak. Each member (hydrated row or minimal fallback row)
+                  is wrapped in the frame so grouped ownership survives
+                  regardless of hydration. */}
+              <div className="space-y-1.5">
                 {block.members.map((member, mIdx) => {
                   rawIdx++
                   const hydrated =
@@ -1787,39 +1874,53 @@ function MainExercisesRenderer({
                     (member.name ? hydrateMap.get(normalizeKey(member.name)) : undefined)
                   if (hydrated) {
                     return (
-                      <ExerciseRow
+                      <GroupedMemberFrame
                         key={hydrated.id}
-                        exercise={hydrated}
-                        index={rawIdx}
+                        colors={colors}
+                        groupType={block.groupType}
                         prefix={member.prefix}
-                        sessionId={sessionId}
-                        isSkipped={skippedExercises.has(hydrated.id)}
-                        adjustedName={adjustedExercises.get(hydrated.id)}
-                        sessionContext={sessionContextForRows}
-                        sessionEvidence={sessionEvidence}
-                        coachingExplanation={coachingExplanation}
-                        onReplace={onReplace}
-                        onSkip={onSkip}
-                        onProgressionAdjust={onProgressionAdjust}
-                      />
+                        positionIndex={mIdx + 1}
+                        totalMembers={block.members.length}
+                      >
+                        <ExerciseRow
+                          exercise={hydrated}
+                          index={rawIdx}
+                          // [GROUPED-MEMBER-FRAME] Suppress the row's
+                          // internal tiny 10px mono prefix -- the frame's
+                          // rail is now the authoritative prefix surface.
+                          prefix={undefined}
+                          sessionId={sessionId}
+                          isSkipped={skippedExercises.has(hydrated.id)}
+                          adjustedName={adjustedExercises.get(hydrated.id)}
+                          sessionContext={sessionContextForRows}
+                          sessionEvidence={sessionEvidence}
+                          coachingExplanation={coachingExplanation}
+                          onReplace={onReplace}
+                          onSkip={onSkip}
+                          onProgressionAdjust={onProgressionAdjust}
+                        />
+                      </GroupedMemberFrame>
                     )
                   }
                   // Minimal text fallback row. Display-first: name must be
                   // visible even when rich hydration cannot resolve it.
+                  // [GROUPED-MEMBER-FRAME] Fallback row is also framed, so
+                  // hydration-incomplete members still read as grouped.
                   const safeName = (member.name || '').trim()
                   if (safeName.length < 2) return null
                   return (
-                    <div
+                    <GroupedMemberFrame
                       key={member.id || `${block.groupId}-${mIdx}`}
-                      className="flex items-baseline gap-2 py-1.5 text-sm text-[#C8C8C8]"
+                      colors={colors}
+                      groupType={block.groupType}
+                      prefix={member.prefix}
+                      positionIndex={mIdx + 1}
+                      totalMembers={block.members.length}
                     >
-                      {member.prefix && (
-                        <span className={`text-[11px] font-semibold ${colors.text} shrink-0`}>
-                          {member.prefix}
-                        </span>
-                      )}
-                      <span className="truncate">{safeName}</span>
-                    </div>
+                      <div className="flex items-center py-2 px-3 rounded-lg border bg-[#171717] border-[#282828] text-sm text-[#C8C8C8]">
+                        <span className="truncate">{safeName}</span>
+                      </div>
+                    </GroupedMemberFrame>
                   )
                 })}
               </div>
@@ -2192,7 +2293,11 @@ function MainExercisesRenderer({
             })()}
 
             {/* Exercises in this group */}
-            <div className={`space-y-2 ${isSpecialGroup ? `pl-4 border-l-2 ${colors.border}` : ''}`}>
+            {/* [GROUPED-MEMBER-FRAME] Replaced the old `pl-4 border-l-2`
+                thin-line wrapper with `space-y-1.5`: grouped identity is
+                owned per-row by GroupedMemberFrame. Flat groups (straight)
+                keep the plain `space-y-2` they had before. */}
+            <div className={isSpecialGroup ? 'space-y-1.5' : 'space-y-2'}>
               {group.exercises.map((groupExercise, exIdx) => {
                 globalExerciseIndex++
                 
@@ -2214,7 +2319,7 @@ function MainExercisesRenderer({
                   || exerciseDataMap.get(groupExercise.name)
                   || exerciseDataMap.get(groupExercise.name.toLowerCase())
                   || exerciseDataMap.get(normalizeExerciseKey(groupExercise.name))
-                
+
                 if (!fullExercise) {
                   // Exercise in styled groups but not in displayExercises.
                   // [GROUPED-TRUTH-RESCUE] Render a minimal row from styledGroups'
@@ -2226,27 +2331,76 @@ function MainExercisesRenderer({
                   if (!safeName || safeName.length < 2) {
                     return null
                   }
+                  // [GROUPED-MEMBER-FRAME] Even the hydration-miss fallback
+                  // row is framed for this (special) group type so grouped
+                  // identity survives. Flat 'straight' groups never enter
+                  // this branch so they are unaffected.
+                  if (isSpecialGroup) {
+                    return (
+                      <GroupedMemberFrame
+                        key={groupExercise.id || `${safeName}-${exIdx}`}
+                        colors={colors}
+                        groupType={group.groupType}
+                        prefix={groupExercise.prefix}
+                        positionIndex={exIdx + 1}
+                        totalMembers={group.exercises.length}
+                      >
+                        <div className="flex items-center py-2 px-3 rounded-lg border bg-[#171717] border-[#282828] text-sm text-[#C8C8C8]">
+                          <span className="truncate">{safeName}</span>
+                        </div>
+                      </GroupedMemberFrame>
+                    )
+                  }
                   return (
                     <div
                       key={groupExercise.id || `${safeName}-${exIdx}`}
                       className="flex items-baseline gap-2 py-1.5 text-sm text-[#C8C8C8]"
                     >
-                      {groupExercise.prefix && (
-                        <span className={`text-[11px] font-semibold ${colors.text} shrink-0`}>
-                          {groupExercise.prefix}
-                        </span>
-                      )}
                       <span className="truncate">{safeName}</span>
                     </div>
                   )
                 }
-                
+
+                // [GROUPED-MEMBER-FRAME] Special (grouped) members sit in a
+                // frame that owns prefix/position/method-glyph identity.
+                // The inner ExerciseRow receives `prefix={undefined}` so
+                // its faint 10px mono prefix no longer competes with the
+                // rail. Flat 'straight' groups render ExerciseRow directly
+                // to preserve their existing visual contract.
+                if (isSpecialGroup) {
+                  return (
+                    <GroupedMemberFrame
+                      key={fullExercise.id}
+                      colors={colors}
+                      groupType={group.groupType}
+                      prefix={groupExercise.prefix}
+                      positionIndex={exIdx + 1}
+                      totalMembers={group.exercises.length}
+                    >
+                      <ExerciseRow
+                        exercise={fullExercise}
+                        index={globalExerciseIndex}
+                        prefix={undefined}
+                        sessionId={sessionId}
+                        isSkipped={skippedExercises.has(fullExercise.id)}
+                        adjustedName={adjustedExercises.get(fullExercise.id)}
+                        sessionContext={sessionContextForRows}
+                        sessionEvidence={sessionEvidence}
+                        coachingExplanation={coachingExplanation}
+                        onReplace={onReplace}
+                        onSkip={onSkip}
+                        onProgressionAdjust={onProgressionAdjust}
+                      />
+                    </GroupedMemberFrame>
+                  )
+                }
+
                 return (
                   <ExerciseRow
                     key={fullExercise.id}
                     exercise={fullExercise}
                     index={globalExerciseIndex}
-                    prefix={groupExercise.prefix} // Pass superset prefix (A1, A2, etc)
+                    prefix={groupExercise.prefix}
                     sessionId={sessionId}
                     isSkipped={skippedExercises.has(fullExercise.id)}
                     adjustedName={adjustedExercises.get(fullExercise.id)}

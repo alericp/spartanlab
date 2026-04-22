@@ -794,10 +794,100 @@ function ProgramDisplayWrapper({
   )
   
   // [PHASE 9] Safe error handling via proper ErrorBoundary
+  //
+  // ==========================================================================
+  // [PROGRAM-RUNTIME-PARITY-PROBE] Compact, local, removable runtime probe.
+  //
+  // PURPOSE
+  // Prove the exact `program` object this render function is mounting for
+  // both `<GroupedProgramScannerStrip>` and `<AdaptiveProgramDisplay>` --
+  // reading directly from the live prop, not from the builder result, not
+  // from any audit object, not from any preserved snapshot. If the scanner
+  // returns null because no session carries grouped truth, this row proves
+  // that the page-mounted object itself is flat at runtime; if the row
+  // shows grouped_sessions > 0 while the scanner is still hidden, the
+  // scanner's internal min-members gate is the blocker.
+  //
+  // HARD CONSTRAINTS
+  //   - Reads only `program` (the exact prop name passed to both children)
+  //   - Does NOT memoize, transform, or cache -- fresh read per render
+  //   - Does NOT display per-session detail -- that's the scanner's job
+  //   - One visible line of text; mono, small, monochrome
+  //   - No effect on layout below it
+  //   - Safe to delete by removing just this block
+  // ==========================================================================
+  const runtimeParity = (() => {
+    const sessions = Array.isArray(program?.sessions) ? program.sessions : []
+    let groupedSessionCount = 0
+    let superset = 0, circuit = 0, density = 0, cluster = 0
+    for (const sess of sessions) {
+      const sessAny = sess as unknown as {
+        exercises?: Array<{ method?: string | null; blockId?: string | null }> | null
+        styleMetadata?: { styledGroups?: Array<{ groupType?: string | null }> | null } | null
+      }
+      const exs = Array.isArray(sessAny?.exercises) ? sessAny.exercises! : []
+      const styled = Array.isArray(sessAny?.styleMetadata?.styledGroups)
+        ? sessAny.styleMetadata!.styledGroups!
+        : []
+      let sessionHasGrouped = false
+      // Session-level non-straight styledGroups
+      for (const g of styled) {
+        const t = (g?.groupType || '').toLowerCase()
+        if (t && t !== 'straight') sessionHasGrouped = true
+      }
+      // Exercise-level method tally -- counts every non-straight method
+      // occurrence so a single cluster application is visible even without
+      // a styledGroups entry.
+      for (const ex of exs) {
+        const m = (ex?.method || '').toLowerCase()
+        if (!m || m === 'straight' || m === 'straight_sets') continue
+        sessionHasGrouped = true
+        if (m === 'superset') superset += 1
+        else if (m === 'circuit') circuit += 1
+        else if (m === 'cluster') cluster += 1
+        else if (m === 'density' || m === 'density_block') density += 1
+      }
+      if (sessionHasGrouped) groupedSessionCount += 1
+    }
+    return {
+      sessionCount: sessions.length,
+      groupedSessionCount,
+      superset,
+      circuit,
+      density,
+      cluster,
+    }
+  })()
+
   return (
     <div>
       {/* [PROGRAM-DECISION-SUMMARY] Display doctrine-driven decisions above the program */}
       <ProgramDecisionSummary program={program} />
+
+      {/* [PROGRAM-RUNTIME-PARITY-PROBE] Compact runtime parity row. Reads the
+          exact same `program` prop fed to the scanner and AdaptiveProgramDisplay
+          below. Gives a single authoritative truth about what this page is
+          actually mounting right now. */}
+      <div
+        role="note"
+        aria-label="Program runtime object parity probe"
+        className="mb-2 rounded border border-[#2B313A] bg-[#0A0C10] px-2 py-1 font-mono text-[10px] leading-tight text-[#A4ACB8]"
+      >
+        <span className="text-[#E6E9EF]">PROGRAM_RUNTIME_PARITY</span>
+        <span className="mx-1 text-[#6B7280]">·</span>
+        <span>sessions:<span className="text-[#E6E9EF]"> {runtimeParity.sessionCount}</span></span>
+        <span className="mx-1 text-[#6B7280]">·</span>
+        <span>grouped_sessions:<span className={runtimeParity.groupedSessionCount > 0 ? 'text-emerald-400' : 'text-[#E6E9EF]'}> {runtimeParity.groupedSessionCount}</span></span>
+        <span className="mx-1 text-[#6B7280]">·</span>
+        <span>
+          methods: superset=<span className="text-[#E6E9EF]">{runtimeParity.superset}</span>
+          {' | '}circuit=<span className="text-[#E6E9EF]">{runtimeParity.circuit}</span>
+          {' | '}density=<span className="text-[#E6E9EF]">{runtimeParity.density}</span>
+          {' | '}cluster=<span className="text-[#E6E9EF]">{runtimeParity.cluster}</span>
+        </span>
+        <span className="mx-1 text-[#6B7280]">·</span>
+        <span>source:<span className="text-[#E6E9EF]"> CURRENT_PROGRAM_PAGE_OBJECT</span></span>
+      </div>
 
       {/* [PROGRAM-GROUP-SCANNER-R1] Program-surface grouped diagnostic strip.
           Pure consumer of existing program.sessions truth (same canonical

@@ -12163,57 +12163,109 @@ async function generateAdaptiveProgramImpl(
     
     // -------------------------------------------------------------------------
     // CLUSTER SET MATERIALIZATION
-    // Applies to high-skill or heavy strength work to maintain quality
-    // Uses the authoritative session method intent contract for eligibility
+    // Applies to high-skill or heavy strength work to maintain quality.
+    //
+    // [CLUSTER-DOCTRINE-CORRECTION]
+    // 1. REST-PAUSE LEAK REMOVED. Previously `methodPrefsForGrouping.includes(
+    //    'rest_pause')` silently widened cluster evaluation -- rest-pause is a
+    //    distinct intra-set technique, NOT cluster-sets, and its preference
+    //    must not conscript cluster materialization for the Program grouped
+    //    corridor. Rest-pause remains handled by its own path.
+    //
+    // 2. ELIGIBILITY HARDENED. `isSkillHold` now requires the exercise to be
+    //    an actual primary-effort skill hold (category === 'skill' with a
+    //    concrete hold/lever keyword AND in the first 2 positions of the
+    //    session so accessory drills don't accidentally qualify). `isHeavyWork`
+    //    now requires strength category + "weighted" + one of the approved
+    //    compound roots (pull-up/chin-up/dip/muscle-up/squat/deadlift/press/
+    //    row/ring), so generic rows that happen to contain "weighted" in
+    //    their name are no longer swept up.
+    //
+    // 3. CANDIDATE RANKING. We no longer pick the first qualifying exercise.
+    //    Candidates are scored (skill-hold > heavy-weighted; earlier session
+    //    position > later) and only the top candidate receives cluster -- and
+    //    only if its score clears a minimum threshold. This prevents cluster
+    //    from being applied to a marginal "vaguely qualifies" row.
     // -------------------------------------------------------------------------
-    // [FIX] Use method intent contract for cluster eligibility
-    const shouldEvaluateCluster = sessionMethodIntentContract.shouldApplyCluster ||
-      methodPrefsForGrouping.includes('rest_pause')
+    const shouldEvaluateCluster = sessionMethodIntentContract.shouldApplyCluster
     
     if (shouldEvaluateCluster && session.exercises && session.exercises.length > 0) {
-      // Find cluster-eligible exercises (skill isometrics, heavy strength holds)
-      const clusterCandidates = session.exercises.filter(ex => {
-        if (ex.blockId) return false // Already grouped
+      // Approved heavy-compound roots for weighted-strength cluster targets.
+      // Scoped tight on purpose -- loose substring matching on "weighted" was
+      // the primary false-positive source in the prior build.
+      const HEAVY_COMPOUND_ROOTS = [
+        'pull-up', 'pullup', 'chin-up', 'chinup', 'dip', 'muscle-up', 'muscleup',
+        'squat', 'deadlift', 'press', 'row', 'ring',
+      ]
+      // Concrete skill-hold keywords. A row called "skill hold accessory" with
+      // no lever/planche/handstand/front-lever/iron-cross/l-sit root should
+      // NOT qualify just because it matches `.category === 'skill'`.
+      const SKILL_HOLD_ROOTS = [
+        'planche', 'lever', 'handstand', 'iron cross', 'l-sit', 'lsit',
+        'v-sit', 'vsit', 'flag', 'maltese', 'victorian',
+      ]
+      type ClusterCandidate = { ex: NonNullable<typeof session.exercises>[number]; score: number; index: number }
+      const candidates: ClusterCandidate[] = []
+      session.exercises.forEach((ex, position) => {
+        if (ex.blockId) return // already grouped -- cluster must not steal a block member
         const nameLower = ex.name?.toLowerCase() || ''
-        // INCLUDE: High-skill isometric work that benefits from intra-set rest
-        const isSkillHold = ex.category === 'skill' && 
-          (nameLower.includes('hold') || nameLower.includes('lever') || nameLower.includes('planche'))
-        // INCLUDE: Heavy weighted work
-        const isHeavyWork = nameLower.includes('weighted') && ex.category === 'strength'
-        return isSkillHold || isHeavyWork
+        // Skill hold: category MUST be skill AND the name must carry a real
+        // hold-root keyword. Bare "hold" alone no longer qualifies (it caught
+        // generic accessory "hold" cues in prior build).
+        const isSkillHold = ex.category === 'skill' &&
+          SKILL_HOLD_ROOTS.some(root => nameLower.includes(root))
+        // Heavy weighted compound: strength + "weighted" + approved root.
+        const isHeavyWork = ex.category === 'strength' &&
+          nameLower.includes('weighted') &&
+          HEAVY_COMPOUND_ROOTS.some(root => nameLower.includes(root))
+        if (!isSkillHold && !isHeavyWork) return
+        // Position gate: cluster only belongs on the session's primary effort.
+        // Beyond position 2 (0-indexed: slots 0/1/2) the exercise is an
+        // accessory and no longer deserves cluster even if its name qualifies.
+        if (position > 2) return
+        // Score: skill holds outrank heavy weighted work (their quality loss
+        // per rep is higher); earlier-position outranks later within a tier.
+        const baseScore = isSkillHold ? 100 : 60
+        const positionBonus = Math.max(0, 10 - position * 3)
+        candidates.push({ ex, score: baseScore + positionBonus, index: position })
       })
       
-      // Apply cluster to first qualifying exercise only (to preserve quality)
-      if (clusterCandidates.length > 0) {
-        const clusterTarget = clusterCandidates[0]
-        const idx = session.exercises.findIndex(e => e.id === clusterTarget.id)
+      // Rank and require minimum quality before applying.
+      candidates.sort((a, b) => b.score - a.score)
+      const MIN_CLUSTER_SCORE = 60 // at least a position-0 heavy-compound OR any skill-hold
+      const clusterTarget = candidates.length > 0 && candidates[0].score >= MIN_CLUSTER_SCORE
+        ? candidates[0]
+        : null
+      
+      if (clusterTarget) {
+        const idx = clusterTarget.index
+        session.exercises[idx].method = 'cluster'
+        session.exercises[idx].methodLabel = 'Cluster Sets'
         
-        if (idx !== -1) {
-          session.exercises[idx].method = 'cluster'
-          session.exercises[idx].methodLabel = 'Cluster Sets'
-          // Cluster sets use brief intra-set rest (10-20s)
-          // Keep longer inter-set rest
-          
-          methodMaterializationResult.appliedMethods.push('cluster_sets')
-          methodMaterializationResult.structureDecisions.push({
-            block: 'primary_skill',
-            method: 'cluster',
-            rationale: `Cluster format applied to ${clusterTarget.name} for quality maintenance on high-demand work`,
-          })
-          
-          console.log('[TRAINING-METHOD-MATERIALIZED] Cluster sets applied:', {
-            dayNumber: session.dayNumber,
-            exercise: clusterTarget.name,
-            category: clusterTarget.category,
-          })
-          
-          session.adaptationNotes = session.adaptationNotes || []
-          session.adaptationNotes.push(`Cluster set format applied to ${clusterTarget.name} for quality`)
-        }
+        methodMaterializationResult.appliedMethods.push('cluster_sets')
+        methodMaterializationResult.structureDecisions.push({
+          block: 'primary_skill',
+          method: 'cluster',
+          rationale: `Cluster format applied to ${clusterTarget.ex.name} (score ${clusterTarget.score}) for quality maintenance on primary-effort work`,
+        })
+        
+        console.log('[TRAINING-METHOD-MATERIALIZED] Cluster sets applied:', {
+          dayNumber: session.dayNumber,
+          exercise: clusterTarget.ex.name,
+          category: clusterTarget.ex.category,
+          score: clusterTarget.score,
+          position: clusterTarget.index,
+          candidatesConsidered: candidates.length,
+        })
+        
+        session.adaptationNotes = session.adaptationNotes || []
+        session.adaptationNotes.push(`Cluster set format applied to ${clusterTarget.ex.name} for quality`)
       } else {
         methodMaterializationResult.rejectedMethods.push({
           method: 'cluster_sets',
-          reason: 'No qualifying exercises for cluster format (requires skill holds or weighted strength)',
+          reason: candidates.length === 0
+            ? 'No qualifying exercises for cluster format (requires primary-effort skill hold or heavy weighted compound)'
+            : `Best candidate score ${candidates[0].score} below cluster threshold (${MIN_CLUSTER_SCORE}) -- honest straight sets preferred over marginal cluster application`,
         })
       }
     }

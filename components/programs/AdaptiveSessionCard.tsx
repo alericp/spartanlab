@@ -1095,65 +1095,90 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const synthesizedRawFallbackBlocks: RawFallbackBlock[] = (() => {
     if (!hasGroupedTruth) return []
     if (groupedRenderContract.rawFallbackBlocks.length > 0) return []
+    // [SYNTHESIS-SOURCE-PAIR] Try display-surface exercises first (so synthesized
+    // block members resolve cleanly against the same list the renderer hydrates
+    // from). Fall back to raw `safeExercises` when the display surface has lost
+    // `blockId`/`method` via variant-prune or hydration drift. This closes the
+    // last corridor where `rawGroupedOwnership.hasGroupedTruth === true` could
+    // silently route to `flat_category` when the display-side lost grouping.
     type _Ex = { id: string; name: string; blockId?: string; method?: string; methodLabel?: string }
-    const exs = fullVisibleExercises as unknown as _Ex[]
-    const blockOrder: string[] = []
-    const blockMembers = new Map<string, _Ex[]>()
-    const blockType = new Map<string, 'superset' | 'circuit' | 'cluster' | 'density_block'>()
-    for (const ex of exs) {
-      if (!ex.method) continue
-      const m = ex.method.toLowerCase()
-      let gt: 'superset' | 'circuit' | 'cluster' | 'density_block' | null = null
-      if (m === 'superset') gt = 'superset'
-      else if (m === 'circuit') gt = 'circuit'
-      else if (m === 'cluster') gt = 'cluster'
-      else if (m === 'density_block' || m === 'density') gt = 'density_block'
-      if (!gt) continue
-      // [METHOD-ONLY-SYNTH] Superset/circuit are TRUE grouped-block methods
-      // and still require blockId here. Cluster/density are METHOD-ONLY
-      // execution styles -- the builder applies them to a single exercise
-      // without blockId (see lib/adaptive-program-builder.ts line ~12192).
-      // When blockId is absent for cluster/density, synthesize a stable
-      // per-exercise key so each method-only exercise produces its own
-      // single-member block. Superset/circuit without blockId cannot be
-      // synthesized into a meaningful group (pairing intent is lost) and
-      // are skipped here.
-      if ((gt === 'superset' || gt === 'circuit') && !ex.blockId) continue
-      const key = ex.blockId || `method-only-${ex.id}`
-      if (!blockMembers.has(key)) {
-        blockMembers.set(key, [])
-        blockOrder.push(key)
-        blockType.set(key, gt)
+    const buildFromSource = (source: _Ex[]): RawFallbackBlock[] => {
+      const blockOrder: string[] = []
+      const blockMembers = new Map<string, _Ex[]>()
+      const blockType = new Map<string, 'superset' | 'circuit' | 'cluster' | 'density_block'>()
+      for (const ex of source) {
+        if (!ex.method) continue
+        const m = ex.method.toLowerCase()
+        let gt: 'superset' | 'circuit' | 'cluster' | 'density_block' | null = null
+        if (m === 'superset') gt = 'superset'
+        else if (m === 'circuit') gt = 'circuit'
+        else if (m === 'cluster') gt = 'cluster'
+        else if (m === 'density_block' || m === 'density') gt = 'density_block'
+        if (!gt) continue
+        // [METHOD-ONLY-SYNTH] Superset/circuit are TRUE grouped-block methods
+        // and still require blockId here. Cluster/density are METHOD-ONLY
+        // execution styles -- the builder applies them to a single exercise
+        // without blockId (see lib/adaptive-program-builder.ts line ~12192).
+        // When blockId is absent for cluster/density, synthesize a stable
+        // per-exercise key so each method-only exercise produces its own
+        // single-member block. Superset/circuit without blockId cannot be
+        // synthesized into a meaningful group (pairing intent is lost) and
+        // are skipped here.
+        if ((gt === 'superset' || gt === 'circuit') && !ex.blockId) continue
+        const key = ex.blockId || `method-only-${ex.id}`
+        if (!blockMembers.has(key)) {
+          blockMembers.set(key, [])
+          blockOrder.push(key)
+          blockType.set(key, gt)
+        }
+        blockMembers.get(key)!.push(ex)
       }
-      blockMembers.get(key)!.push(ex)
+      const typeIdx: Record<string, number> = { superset: 0, circuit: 0, density_block: 0, cluster: 0 }
+      const out: RawFallbackBlock[] = []
+      for (const bId of blockOrder) {
+        const method = blockType.get(bId)!
+        const members = blockMembers.get(bId)!.filter(m => (m.name || '').trim().length >= 2)
+        if (members.length === 0) continue
+        const idx = typeIdx[method] ?? 0
+        typeIdx[method] = idx + 1
+        const letter = String.fromCharCode(65 + idx)
+        const labelPrefix =
+          method === 'superset' ? 'Superset'
+            : method === 'circuit' ? 'Circuit'
+              : method === 'density_block' ? 'Density Block'
+                : 'Cluster Set'
+        out.push({
+          type: 'group',
+          groupId: bId,
+          groupType: method,
+          label: `${labelPrefix} ${letter}`,
+          members: members.map((m, i) => ({
+            id: m.id,
+            name: m.name,
+            prefix: m.methodLabel?.match(/[A-Z]\d?$/)?.[0] || `${letter}${i + 1}`,
+          })),
+        })
+      }
+      return out
     }
-    const typeIdx: Record<string, number> = { superset: 0, circuit: 0, density_block: 0, cluster: 0 }
-    const out: RawFallbackBlock[] = []
-    for (const bId of blockOrder) {
-      const method = blockType.get(bId)!
-      const members = blockMembers.get(bId)!.filter(m => (m.name || '').trim().length >= 2)
-      if (members.length === 0) continue
-      const idx = typeIdx[method] ?? 0
-      typeIdx[method] = idx + 1
-      const letter = String.fromCharCode(65 + idx)
-      const labelPrefix =
-        method === 'superset' ? 'Superset'
-          : method === 'circuit' ? 'Circuit'
-            : method === 'density_block' ? 'Density Block'
-              : 'Cluster Set'
-      out.push({
-        type: 'group',
-        groupId: bId,
-        groupType: method,
-        label: `${labelPrefix} ${letter}`,
-        members: members.map((m, i) => ({
-          id: m.id,
-          name: m.name,
-          prefix: m.methodLabel?.match(/[A-Z]\d?$/)?.[0] || `${letter}${i + 1}`,
-        })),
-      })
-    }
-    return out
+    const fromDisplay = buildFromSource(fullVisibleExercises as unknown as _Ex[])
+    if (fromDisplay.length > 0) return fromDisplay
+    // [RAW-SYNTH-BACKSTOP] The display surface couldn't produce a grouped
+    // block list (variant prune removed every grouped member, or hydration
+    // lost method/blockId on the FullRoutineExercise pass). Synthesize from
+    // the raw session exercises -- this is the same input `rawGroupedOwnership`
+    // consumed to claim grouped truth in the first place, so it cannot
+    // contradict the authoritative ownership signal.
+    const fromRaw = buildFromSource(
+      safeExercises.map(ex => ({
+        id: ex.id,
+        name: ex.name,
+        blockId: (ex as unknown as { blockId?: string }).blockId,
+        method: (ex as unknown as { method?: string }).method,
+        methodLabel: (ex as unknown as { methodLabel?: string }).methodLabel,
+      }))
+    )
+    return fromRaw
   })()
 
   const finalVisibleBodyModel: FinalVisibleBodyModel = (() => {
@@ -1569,6 +1594,103 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 )}
               </div>
             )}
+
+            {/* ==========================================================================
+                [CARD-LOCAL-GROUPED-MISMATCH-PROBE]
+                Compact, card-scoped, mismatch-only diagnostic. Renders ONLY when:
+                  - `rawGroupedOwnership.hasGroupedTruth === true` (raw session
+                     truth carries grouped methods) AND
+                  - `finalVisibleBodyModel.mode === 'flat_category'` (the body
+                     nevertheless chose to paint flat rows).
+                On healthy grouped sessions this entire block is null -- no layout
+                change, no visual noise. On healthy flat sessions it is also null
+                (raw has no grouped truth, so there is nothing to mismatch).
+                When it DOES render, it classifies the remaining failure bucket
+                from the six allowed classifications so the next fix is narrowly
+                localized instead of broad. Removable by deleting just this block.
+                ========================================================================== */}
+            {rawGroupedOwnership.hasGroupedTruth &&
+              finalVisibleBodyModel.mode === 'flat_category' && (() => {
+                const visibleWithBlockId = fullVisibleExercises.filter(
+                  ex => typeof (ex as unknown as { blockId?: string }).blockId === 'string' &&
+                    !!(ex as unknown as { blockId?: string }).blockId
+                ).length
+                const visibleWithNonStraightMethod = fullVisibleExercises.filter(ex => {
+                  const m = (ex as unknown as { method?: string }).method
+                  return typeof m === 'string' && m.length > 0 && m !== 'straight' && m !== 'straight_sets'
+                }).length
+                const rawWithBlockId = safeExercises.filter(
+                  ex => typeof (ex as unknown as { blockId?: string }).blockId === 'string' &&
+                    !!(ex as unknown as { blockId?: string }).blockId
+                ).length
+                const rawWithNonStraightMethod = safeExercises.filter(ex => {
+                  const m = (ex as unknown as { method?: string }).method
+                  return typeof m === 'string' && m.length > 0 && m !== 'straight' && m !== 'straight_sets'
+                }).length
+                // ====================================================================
+                // [BUCKET-CLASSIFIER] One of six allowed buckets. Strictest-first
+                // ordering so the bucket reflects the FIRST stage where truth was
+                // lost or bypassed for this exact card instance.
+                //   1. LOST_IN_VISIBLE_ROW_SURFACE     -- raw has grouped fields,
+                //                                         visible row surface does not
+                //   2. LOST_IN_VARIANT_PRUNE           -- visible rows kept method,
+                //                                         but variantPrune stripped
+                //                                         styledGroups to all-straight
+                //   3. LOST_IN_CARD_CONTRACT_MERGE    -- display lost grouped,
+                //                                         raw kept it, merge should
+                //                                         have rescued but didn't
+                //   4. LOST_IN_FINAL_VISIBLE_BODY_DECISION -- contract has grouped
+                //                                         truth, but dispatcher
+                //                                         still routed to flat
+                //   5. PRESENT_BUT_NOT_RENDERED_BY_CARD_UI -- model has blocks,
+                //                                         body picked flat anyway
+                //   6. NO_REAL_GROUPED_TRUTH_FOR_THIS_SESSION -- raw said grouped
+                //                                         but no renderable members
+                // ====================================================================
+                let bucket: string
+                if (rawGroupedOwnership.rawFallbackBlocks.length === 0 &&
+                    rawGroupedOwnership.renderBlocks.length === 0) {
+                  bucket = 'NO_REAL_GROUPED_TRUTH_FOR_THIS_SESSION'
+                } else if (rawWithNonStraightMethod > 0 && visibleWithNonStraightMethod === 0) {
+                  bucket = 'LOST_IN_VISIBLE_ROW_SURFACE'
+                } else if (
+                  (sessionStyleMetadata?.styledGroups?.some(g => g.groupType !== 'straight') ?? false) &&
+                  !(variantPrunedStyleMetadata?.styledGroups?.some(g => g.groupType !== 'straight') ?? false)
+                ) {
+                  bucket = 'LOST_IN_VARIANT_PRUNE'
+                } else if (!groupedRenderContract.hasGroupedTruth) {
+                  bucket = 'LOST_IN_CARD_CONTRACT_MERGE'
+                } else if (groupedRenderContract.rawFallbackBlocks.length === 0 &&
+                           synthesizedRawFallbackBlocks.length === 0 &&
+                           !groupedRenderContract.hasRichRenderableGroups) {
+                  bucket = 'LOST_IN_FINAL_VISIBLE_BODY_DECISION'
+                } else {
+                  bucket = 'PRESENT_BUT_NOT_RENDERED_BY_CARD_UI'
+                }
+                return (
+                  <div
+                    role="note"
+                    aria-label="Card grouped-truth mismatch probe"
+                    className="mt-2 rounded border border-amber-500/50 bg-amber-500/[0.08] px-2 py-1 font-mono text-[10px] leading-tight text-amber-200"
+                  >
+                    <div className="font-semibold text-amber-100">
+                      CARD_GROUPED_MISMATCH · day {session.dayNumber}
+                    </div>
+                    <div className="text-amber-200/90">
+                      raw_grouped_truth: YES · display_grouped_truth: {displayGroupedRendering.hasGroupedTruth ? 'YES' : 'NO'} · final_body_mode: <span className="text-amber-100">{finalVisibleBodyModel.mode}</span>
+                    </div>
+                    <div className="text-amber-200/80">
+                      raw_exs_with_blockId: {rawWithBlockId} · raw_exs_with_method: {rawWithNonStraightMethod} · visible_exs_with_blockId: {visibleWithBlockId} · visible_exs_with_method: {visibleWithNonStraightMethod}
+                    </div>
+                    <div className="text-amber-200/80">
+                      contract.renderBlocks: {groupedRenderContract.renderBlocks.length} · contract.rawFallbackBlocks: {groupedRenderContract.rawFallbackBlocks.length} · synthesized: {synthesizedRawFallbackBlocks.length}
+                    </div>
+                    <div className="mt-0.5 text-amber-100 font-semibold">
+                      bucket: {bucket}
+                    </div>
+                  </div>
+                )
+              })()}
 
             {/* [DOCTRINE-STRENGTHENING] Week-specific character badges */}
             {weekCharacter && (

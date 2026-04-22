@@ -1744,6 +1744,39 @@ function MainExercisesRenderer({
                   · {block.members.length} {block.members.length === 1 ? 'exercise' : 'exercises'}
                 </span>
               </div>
+
+              {/* [METHOD-BODY-CUE] Same cluster/density in-body cue as the
+                  rich branch, rendered here so rich and raw-fallback
+                  surfaces paint identical method semantics. Null for every
+                  other groupType -- no layout change for superset/circuit
+                  fallbacks. */}
+              {(() => {
+                if (block.groupType !== 'cluster' && block.groupType !== 'density_block') return null
+                const cue =
+                  block.groupType === 'cluster'
+                    ? {
+                        Icon: Repeat,
+                        primary: 'Intra-set rest',
+                        secondary:
+                          'Mini-efforts with a short pause, then full rest between clusters.',
+                      }
+                    : {
+                        Icon: Timer,
+                        primary: 'Work capacity',
+                        secondary:
+                          'Rotate movements within the time cap — quality reps, rest as needed.',
+                      }
+                return (
+                  <div className={`mb-2 flex items-start gap-2 px-2.5 py-1.5 rounded-md border ${colors.border} bg-black/20`}>
+                    <cue.Icon className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${colors.text}`} />
+                    <div className="flex-1 min-w-0 text-[11px] leading-snug">
+                      <span className={`${colors.text} font-medium`}>{cue.primary}</span>
+                      <span className="text-[#A0A0A0]"> — {cue.secondary}</span>
+                    </div>
+                  </div>
+                )
+              })()}
+
               <div className={`space-y-2 pl-4 border-l-2 ${colors.border}`}>
                 {block.members.map((member, mIdx) => {
                   rawIdx++
@@ -1983,8 +2016,47 @@ function MainExercisesRenderer({
     }
   }
 
-  let globalExerciseIndex = 0
-  
+      let globalExerciseIndex = 0
+
+  // ==========================================================================
+  // [METHOD-BODY-CUE] Compact, method-specific semantics strip rendered
+  // INSIDE the tinted group container, between the pill header and the
+  // member spine. Painted ONLY for groupType === 'cluster' and
+  // 'density_block' because those are the methods the pill + ExerciseRow
+  // combination cannot express structurally (superset/circuit already
+  // communicate via A1/A2/B1/B2 prefixes on their paired member rows and
+  // are intentionally left unchanged here).
+  //
+  // Copy is derived from the canonical method definition in the adapter's
+  // authoritative restProtocol strings (cluster = intra-set rest, density
+  // = work-capacity rotation within a time cap) -- no invented wording,
+  // no invented rule. Returns null for every other groupType so the strip
+  // renders nothing (no layout hole) when the method is already self-
+  // expressing. A 1-member cluster now gets a body line that explicitly
+  // says this is a cluster set, not just "a row with a small label above
+  // it."
+  // ==========================================================================
+  const getMethodBodyCue = (
+    groupType: string
+  ): { Icon: typeof Timer; primary: string; secondary: string } | null => {
+    if (groupType === 'cluster') {
+      return {
+        Icon: Repeat,
+        primary: 'Intra-set rest',
+        secondary:
+          'Mini-efforts with a short pause, then full rest between clusters.',
+      }
+    }
+    if (groupType === 'density_block') {
+      return {
+        Icon: Timer,
+        primary: 'Work capacity',
+        secondary: 'Rotate movements within the time cap — quality reps, rest as needed.',
+      }
+    }
+    return null
+  }
+
   return (
     <div className="space-y-4">
       {renderBlocks.map((block, blockIdx) => {
@@ -2096,7 +2168,29 @@ function MainExercisesRenderer({
                 />
               </div>
             )}
-            
+
+            {/* [METHOD-BODY-CUE] Cluster / density in-body semantics strip.
+                Renders only when the method cannot be expressed by member
+                structure alone (cluster = single-member possible; density =
+                time-capped rotation without paired prefixes). Placed here so
+                the user reads the method's nature BEFORE the member rows,
+                which removes the "normal row with decoration" feel on
+                1-member cluster blocks. Null-returns for every other
+                groupType -- no layout hole for superset / circuit. */}
+            {(() => {
+              const cue = getMethodBodyCue(group.groupType)
+              if (!cue) return null
+              return (
+                <div className={`mb-2 flex items-start gap-2 px-2.5 py-1.5 rounded-md border ${colors.border} bg-black/20`}>
+                  <cue.Icon className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${colors.text}`} />
+                  <div className="flex-1 min-w-0 text-[11px] leading-snug">
+                    <span className={`${colors.text} font-medium`}>{cue.primary}</span>
+                    <span className="text-[#A0A0A0]"> — {cue.secondary}</span>
+                  </div>
+                </div>
+              )
+            })()}
+
             {/* Exercises in this group */}
             <div className={`space-y-2 ${isSpecialGroup ? `pl-4 border-l-2 ${colors.border}` : ''}`}>
               {group.exercises.map((groupExercise, exIdx) => {

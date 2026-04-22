@@ -146,6 +146,8 @@ const AdaptiveProgramDisplay = dynamic(
 )
 
 import { ProgramAdjustmentModal } from '@/components/programs/ProgramAdjustmentModal'
+// [PROGRAM-GROUP-SCANNER-R1] Read-only Program-surface grouped diagnostic strip.
+import { GroupedProgramScannerStrip } from '@/components/program/GroupedProgramScannerStrip'
 
 // [canonical-rebuild] Import type for adjustment rebuild requests
 import type { AdjustmentRebuildRequest, AdjustmentRebuildResult } from '@/components/programs/ProgramAdjustmentModal'
@@ -796,7 +798,15 @@ function ProgramDisplayWrapper({
     <div>
       {/* [PROGRAM-DECISION-SUMMARY] Display doctrine-driven decisions above the program */}
       <ProgramDecisionSummary program={program} />
-      
+
+      {/* [PROGRAM-GROUP-SCANNER-R1] Program-surface grouped diagnostic strip.
+          Pure consumer of existing program.sessions truth (same canonical
+          fields read by the [FUNNEL-AUDIT-S1S2] probe elsewhere on this
+          page). Renders nothing when no session carries grouped truth;
+          renders a compact per-session strip otherwise. Does NOT modify
+          program state, card layout, CTA placement, or AdaptiveProgramDisplay. */}
+      <GroupedProgramScannerStrip program={program} />
+
       <ErrorBoundary
         fallback={renderFallback()}
         onError={handleDisplayError}

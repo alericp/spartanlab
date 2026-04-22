@@ -218,7 +218,23 @@ function buildFromStyledGroups(styledGroups: StyledGroupInput[]): GroupedDisplay
     .map(g => ({ ...g, exercises: g.exercises.filter(hasUsableName) }))
     .filter(g => {
       if (g.groupType === 'straight') return true
-      return g.exercises.length >= minMembersFor(g.groupType)
+      // [METHOD-ONLY-VISIBILITY] Superset/circuit are TRUE grouped-block
+      // methods -- pairing is the method, so a 1-member "superset" is not
+      // a superset and must not render a group header. Cluster and
+      // density_block are METHOD-ONLY execution styles that the adaptive
+      // builder can apply to a single exercise (see
+      // lib/adaptive-program-builder.ts line ~12192 for cluster, and the
+      // ungrouped-exercise styledGroups rebuild at line ~12326-12354 which
+      // wraps any method-only cluster/density into a 1-member group with
+      // id `straight_${ex.id}`). Gating both at >= 2 silently dropped
+      // every method-only density_block before it could reach the card
+      // and produced the "method wrote density but body rendered flat"
+      // symptom. Accept >= 1 for cluster/density_block so method-only
+      // execution is preserved; superset/circuit keep the pair minimum.
+      if (g.groupType === 'superset' || g.groupType === 'circuit') {
+        return g.exercises.length >= 2
+      }
+      return g.exercises.length >= 1
     })
   const nonStraightGroups = filteredGroups.filter(g => g.groupType !== 'straight')
   
@@ -390,7 +406,63 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
       })
     }
   }
-  
+
+  // [METHOD-ONLY-VISIBILITY] Second pass: exercises carrying method='cluster'
+  // or method='density_block'/'density' WITHOUT a blockId. These are
+  // EXECUTION-METHOD mutations, not grouped blocks -- the adaptive builder
+  // intentionally applies cluster to a single qualifying exercise (see
+  // lib/adaptive-program-builder.ts line ~12188-12193) without writing any
+  // blockId, so they fail the blockId-gated grouping above. Render them as
+  // single-member method-only groups so the Program card visibly communicates
+  // the execution method instead of flattening them into a straight row.
+  //
+  // The synthetic `method-only-${ex.id}` group id:
+  //   - is stable across renders (keyed by the authoritative exercise id)
+  //   - is matched by buildRenderBlocks' `ex.id && group.exercises.some(m =>
+  //     m.id === ex.id)` branch (no blockId dependency), so the group slots
+  //     into canonical render order at the exercise's position
+  //   - does not collide with real blockIds (the 'method-only-' prefix is
+  //     reserved for this path)
+  for (const ex of exercises) {
+    if (ex.blockId) continue // already handled by the blockId loop above
+    if (!hasUsableName(ex)) continue
+    const method = ex.method?.toLowerCase()
+    let groupType: GroupType | null = null
+    if (method === 'cluster') groupType = 'cluster'
+    else if (method === 'density_block' || method === 'density') groupType = 'density_block'
+    if (!groupType) continue
+
+    let index = 0
+    if (groupType === 'cluster') index = clusterIndex++
+    else index = densityIndex++
+
+    // Method-only execution rest protocols mirror the in-block copy so the
+    // rendered method band reads identically to a "real" grouped density or
+    // cluster block. No invented language -- same strings the builder uses.
+    const restProtocol = groupType === 'cluster'
+      ? '10-20s intra-set, 120-180s inter-set'
+      : '30-60s between rounds'
+
+    displayGroups.push({
+      id: `method-only-${ex.id}`,
+      groupType,
+      label: getGroupLabel(groupType, index),
+      exercises: [{
+        id: ex.id,
+        name: ex.name,
+        methodLabel: ex.methodLabel,
+        // No A1/A2 prefix for single-member method-only execution -- the
+        // method pill + in-body cue communicate the identity instead.
+        prefix: undefined,
+      }],
+      restProtocol,
+    })
+    // Drop from standaloneExercises so the canonical walk does not also emit
+    // this exercise as a loose row; it now belongs to the method group.
+    const sIdx = standaloneExercises.findIndex(s => s.id === ex.id)
+    if (sIdx !== -1) standaloneExercises.splice(sIdx, 1)
+  }
+
   // Build summary
   const summaryParts: string[] = []
   if (supersetIndex > 0) summaryParts.push(`${supersetIndex} Superset${supersetIndex > 1 ? 's' : ''}`)
@@ -600,24 +672,30 @@ function buildRawFallbackBlocks(
     if (blocks.length > 0) return blocks
   }
 
-  // Priority 2: exercises with blockId + non-straight method
+  // Priority 2: exercises with blockId + non-straight method,
+  // OR exercises with method='cluster'/'density_block' WITHOUT blockId
+  // (method-only execution style; see METHOD-ONLY-VISIBILITY note in
+  // buildFromExercises for the builder emission source).
   const blockOrder: string[] = []
   const blockMembers = new Map<string, ExerciseInput[]>()
   const blockMethod = new Map<string, GroupType>()
   for (const ex of exercises) {
     const m = ex.method?.toLowerCase()
-    if (
-      ex.blockId &&
-      m &&
-      (m === 'superset' || m === 'circuit' || m === 'cluster' || m === 'density_block' || m === 'density')
-    ) {
-      if (!blockMembers.has(ex.blockId)) {
-        blockMembers.set(ex.blockId, [])
-        blockOrder.push(ex.blockId)
-        blockMethod.set(ex.blockId, (m === 'density' ? 'density_block' : m) as GroupType)
-      }
-      blockMembers.get(ex.blockId)!.push(ex)
+    if (!m) continue
+    // Superset/circuit are TRUE grouped-block methods and still require blockId.
+    if ((m === 'superset' || m === 'circuit') && !ex.blockId) continue
+    // Recognize all non-straight methods we can emit as raw blocks.
+    if (!(m === 'superset' || m === 'circuit' || m === 'cluster' || m === 'density_block' || m === 'density')) continue
+    // Method-only cluster/density without blockId use a synthetic, per-exercise
+    // id so they do not collide with real blockIds and so each qualifying
+    // exercise produces its own single-member method block.
+    const key = ex.blockId || `method-only-${ex.id}`
+    if (!blockMembers.has(key)) {
+      blockMembers.set(key, [])
+      blockOrder.push(key)
+      blockMethod.set(key, (m === 'density' ? 'density_block' : m) as GroupType)
     }
+    blockMembers.get(key)!.push(ex)
   }
   const typeIndex: Record<string, number> = {
     superset: 0,
@@ -662,13 +740,24 @@ export function buildGroupedDisplayModel(
   // [GROUPED-RENDER-CONTRACT] Priority 1: authoritative styledGroups from builder.
   // Priority 2: per-exercise blockId+method fallback. Priority 1 wins only when
   // it actually produced usable non-straight groups; otherwise Priority 2 runs.
+  //
+  // [METHOD-ONLY-TRUTH-SPLIT] Superset/circuit are TRUE GROUPED BLOCK methods --
+  // they require real grouped members via blockId to be meaningful, so they
+  // still gate on `!!e.blockId`. Cluster and density_block are METHOD-ONLY
+  // EXECUTION methods -- the adaptive builder at lib/adaptive-program-builder.ts
+  // line ~12192 intentionally emits cluster as `ex.method = 'cluster'` WITHOUT
+  // any blockId (single-exercise execution-style mutation). The previous
+  // `!!e.blockId` gate here silently hid that truth whenever the session's
+  // styledGroups were missing or failed to reach the card (older saved data,
+  // stripped metadata paths), producing the "cluster applied in code but
+  // Program card still looks flat" regression. Method-only cluster/density
+  // truth must count as grouped truth without requiring blockId.
   const hasAnyExerciseMethodTruth = exercises.some(e => {
     const m = e.method?.toLowerCase()
-    return (
-      !!e.blockId &&
-      !!m &&
-      (m === 'superset' || m === 'circuit' || m === 'cluster' || m === 'density_block' || m === 'density')
-    )
+    if (!m) return false
+    if (m === 'superset' || m === 'circuit') return !!e.blockId
+    if (m === 'cluster' || m === 'density_block' || m === 'density') return true
+    return false
   })
   const styledGroupsPresent = !!(styleMetadata?.styledGroups && styleMetadata.styledGroups.length > 0)
   // [DISPLAY-FIRST-FALLBACK] Detect RAW upstream grouped truth BEFORE any
@@ -676,6 +765,12 @@ export function buildGroupedDisplayModel(
   // even if the rich path can't hydrate" and must be computed from pre-filter
   // signals only.
   const hasAnyStyledNonStraightRaw = !!(styleMetadata?.styledGroups?.some(g => g.groupType !== 'straight'))
+  // [METHOD-ONLY-TRUTH-SPLIT] `hasAnyExerciseMethodTruth` now includes the
+  // method-only cluster/density path above, so `hasGroupedTruth` fires for
+  // sessions where the builder wrote method='cluster' onto a single exercise
+  // even when styledGroups did not survive into the card. This is the signal
+  // that forces the card off the honest-flat branch and into a visible
+  // method-programming body.
   const hasGroupedTruth = hasAnyStyledNonStraightRaw || hasAnyExerciseMethodTruth
 
   let fromStyledGroups: GroupedDisplayModel | null = null

@@ -13,6 +13,12 @@
 // screen, the corridor file bundled on the device is stale.
 export const AWC_BUILD_CHIP = 'AWC-R3'
 
+// [UI-CLEANUP-R1] Off-by-default gate for the top-of-screen diagnostic
+// surfaces (emerald build chip + LiveWorkoutStateScanner). The underlying
+// event bus, props, and instrumentation remain active so flipping this
+// to true re-mounts the full diagnostic strip with no other code change.
+const SHOW_DIAGNOSTIC_HEADER = false
+
 /**
  * [ACTIVE-WORKOUT-START-CORRIDOR] Isolated Active Workout UI
  * 
@@ -1116,20 +1122,27 @@ export function ActiveWorkoutStartCorridor({
                 is rendering.
               - If the user sees NO chip at all, the phone is running a
                 stale compiled bundle from before this commit. */}
-        <div className="max-w-lg mx-auto mb-1 flex justify-end">
-          <span
-            className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 select-none"
-            aria-hidden
-          >
-            {routeBuildChip} | {parentBuildChip} | {AWC_BUILD_CHIP}
-          </span>
-        </div>
-        {/* [LIVE-STATE-SCANNER-R1] Compact production diagnostic strip. Only
-            renders when scannerInput is provided (live surface always
-            provides it). Sits directly under the build chip so a single
-            screenshot captures build fingerprint + authoritative state +
-            last-commit verdict. */}
-        {scannerInput && <LiveWorkoutStateScanner input={scannerInput} />}
+        {/* [UI-CLEANUP-R1] The emerald build chip row and the compact
+            LiveWorkoutStateScanner strip are now suppressed from the normal
+            production live workout UI. All underlying wiring (props,
+            scanner event bus, Stage A/B/E/F instrumentation calls,
+            post-commit rewind fix, corridor ownership) is intentionally
+            left fully intact - only the visible JSX is gated off. Flip
+            SHOW_DIAGNOSTIC_HEADER to true to re-mount both surfaces
+            without any other code change. */}
+        {SHOW_DIAGNOSTIC_HEADER && (
+          <>
+            <div className="max-w-lg mx-auto mb-1 flex justify-end">
+              <span
+                className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 select-none"
+                aria-hidden
+              >
+                {routeBuildChip} | {parentBuildChip} | {AWC_BUILD_CHIP}
+              </span>
+            </div>
+            {scannerInput && <LiveWorkoutStateScanner input={scannerInput} />}
+          </>
+        )}
         <div className="max-w-lg mx-auto space-y-1.5">
           
           {/* ========== RESTING MODE UI ========== */}

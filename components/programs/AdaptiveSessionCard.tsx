@@ -1269,6 +1269,95 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   })()
 
   // ==========================================================================
+  // [FUNNEL-AUDIT-S5] CHECKPOINT E (card input) + CHECKPOINT F (final body mode)
+  //
+  // Completes the end-to-end grouped-truth funnel audit that already covers:
+  //   - STAGE 1/2 : builder output + current program object (logged from
+  //                 app/(app)/program/page.tsx FUNNEL-AUDIT-S1S2)
+  //   - STAGE 3   : normalizeProgramForDisplay output (logged from same site)
+  //   - STAGE 3/4 : normalized -> scaled session (logged from
+  //                 AdaptiveProgramDisplay FUNNEL-AUDIT-S3S4)
+  //
+  // This adds STAGE 5: scaled session -> actual card body mode. If S3/S4 say
+  // `hasGroupedTruth: true` but S5 logs `card_input_has_nonstraight_groups:
+  // false` OR `final_body_mode: 'flat_category'`, the weakening is inside THIS
+  // card (normalizeSessionForDisplay, variantPrune, rawGroupedOwnership/
+  // displayGroupedRendering merge, or finalVisibleBodyModel dispatch). If S5
+  // says `final_body_mode: 'rich_grouped' | 'raw_grouped_fallback'`, the body
+  // WILL paint visible grouped blocks and the user's "Program page still looks
+  // flat" complaint narrows to one of:
+  //   (a) a stale screenshot / expanded vs collapsed view confusion
+  //   (b) a CSS issue in the rendered grouped JSX (unlikely)
+  //   (c) the user genuinely has no grouped methods in their program (builder
+  //       never applied them - honest flat state)
+  //
+  // One compact log per card mount per session day. Keyed on session identity
+  // so repeated renders (state updates) do not spam; this fires exactly once
+  // per day number when the card first paints.
+  // ==========================================================================
+  const funnelAuditS5Ref = useRef<string>('')
+  if (typeof window !== 'undefined' && funnelAuditS5Ref.current !== currentSessionIdentity) {
+    funnelAuditS5Ref.current = currentSessionIdentity
+    const s5StyledGroups = sessionStyleMetadata?.styledGroups || []
+    const s5NonStraightStyled = s5StyledGroups.filter(g => g.groupType !== 'straight').length
+    const s5ExWithBlockId = safeExercises.filter(
+      e => typeof (e as unknown as { blockId?: string }).blockId === 'string' &&
+        !!(e as unknown as { blockId?: string }).blockId
+    ).length
+    const s5ExWithNonStraightMethod = safeExercises.filter(e => {
+      const m = (e as unknown as { method?: string }).method
+      return typeof m === 'string' && m.length > 0 && m !== 'straight' && m !== 'straight_sets'
+    }).length
+    const s5NonStraightMethods = Array.from(
+      new Set(
+        safeExercises
+          .map(e => (e as unknown as { method?: string }).method)
+          .filter((m): m is string => typeof m === 'string' && m.length > 0 && m !== 'straight' && m !== 'straight_sets')
+      )
+    )
+    let s5Verdict: string
+    if (!groupedRenderContract.hasGroupedTruth) {
+      // Stage 5 says "no grouped truth reached the card." If S3/S4 said truth
+      // existed, the weakening is inside THIS card's raw/display ownership
+      // merge. If S3/S4 also said none, the session is honestly flat.
+      s5Verdict = 'CARD_INPUT_HAS_NO_GROUPED_TRUTH'
+    } else if (finalVisibleBodyModel.mode === 'rich_grouped') {
+      s5Verdict = 'CARD_WILL_PAINT_RICH_GROUPED_BLOCKS'
+    } else if (finalVisibleBodyModel.mode === 'raw_grouped_fallback') {
+      s5Verdict = 'CARD_WILL_PAINT_RAW_FALLBACK_BLOCKS'
+    } else if (finalVisibleBodyModel.mode === 'simple_order_grouped') {
+      // Should never fire after the SIMPLE-ORDER-ELIMINATED change above, but
+      // logged distinctly so any regression surfaces loudly.
+      s5Verdict = 'CARD_FELL_TO_SIMPLE_ORDER_GROUPED_REGRESSION'
+    } else {
+      // hasGroupedTruth was true but dispatcher landed on flat_category. This
+      // is the precise "grouped truth exists but body renders flat" symptom
+      // the user has been reporting.
+      s5Verdict = 'CARD_HAS_GROUPED_TRUTH_BUT_DISPATCHED_TO_FLAT_CATEGORY'
+    }
+    console.log('[v0] [FUNNEL-AUDIT-S5] Day', session.dayNumber, {
+      card_input_styledGroups_count: s5StyledGroups.length,
+      card_input_nonstraight_styledGroups: s5NonStraightStyled,
+      card_input_ex_count: safeExercises.length,
+      card_input_ex_with_blockId: s5ExWithBlockId,
+      card_input_ex_with_nonstraight_method: s5ExWithNonStraightMethod,
+      card_input_nonstraight_methods: s5NonStraightMethods,
+      card_input_has_grouped_truth: groupedRenderContract.hasGroupedTruth,
+      card_input_has_rich_renderable_groups: groupedRenderContract.hasRichRenderableGroups,
+      final_body_mode: finalVisibleBodyModel.mode,
+      source_used: finalVisibleBodyModel.sourceUsed,
+      reason_if_not_rich: finalVisibleBodyModel.reasonIfNotRich,
+      render_block_count: finalVisibleBodyModel.renderBlocks.length,
+      raw_fallback_block_count: finalVisibleBodyModel.rawFallbackBlocks.length,
+      superset_count: finalVisibleBodyModel.supersetCount,
+      circuit_count: finalVisibleBodyModel.circuitCount,
+      density_count: finalVisibleBodyModel.densityCount,
+      cluster_count: finalVisibleBodyModel.clusterCount,
+      verdict: s5Verdict,
+    })
+  }
+
+  // ==========================================================================
   // [COLLAPSED-HEADER-METHOD-TRUTH] The Program card is collapsed by default.
   // Prior behavior: every grouped-method signal (colored "Cluster Set" /
   // "Density Block" pill header AND the method-summary chip row) lived inside

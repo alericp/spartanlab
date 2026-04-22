@@ -840,7 +840,67 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       hasRichRenderableGroups: false,
     }
   })()
-  
+
+  // ==========================================================================
+  // [COLLAPSED-HEADER-METHOD-TRUTH] The Program card is collapsed by default.
+  // Prior behavior: every grouped-method signal (colored "Cluster Set" /
+  // "Density Block" pill header AND the method-summary chip row) lived inside
+  // the `{isExpanded && (...)}` gate. So on the exact surface the user is
+  // actually looking at -- the collapsed card list on the Program screen --
+  // nothing visibly communicated grouped structure, even when the session
+  // genuinely rendered a Cluster Set or Density Block in its body once opened.
+  //
+  // `visibleMethodTally` is a PURE CONSUMER of `finalVisibleBodyModel`. It
+  // does NOT introduce parallel grouped truth, it does NOT re-decide
+  // grouped-vs-flat, and it cannot overclaim a method the body will not
+  // render -- the tally is derived from the EXACT block list the renderer
+  // consumes per mode:
+  //
+  //   mode === 'rich_grouped'           -> carry the model's per-type counts
+  //                                        (same counts the rich renderer will
+  //                                        paint as "Cluster Set A", etc.)
+  //   mode === 'raw_grouped_fallback'   -> tally from rawFallbackBlocks so the
+  //                                        collapsed chip matches the grouped
+  //                                        headers the raw-fallback branch
+  //                                        paints in the body.
+  //   mode === 'simple_order_grouped'   -> zero (the body paints no grouped
+  //                                        headers, so the chip must not
+  //                                        claim any).
+  //   mode === 'flat_category'          -> zero (no grouped truth exists).
+  //
+  // This is the single authoritative tally consumed by BOTH the new collapsed
+  // header chip row and the existing expanded chip row, which eliminates the
+  // prior gap where the expanded chip row gated on `hasRichRenderableGroups`
+  // alone (under-claiming for raw_grouped_fallback sessions whose body did
+  // paint grouped headers).
+  // ==========================================================================
+  const visibleMethodTally: { superset: number; circuit: number; density: number; cluster: number } = (() => {
+    if (finalVisibleBodyModel.mode === 'rich_grouped') {
+      return {
+        superset: finalVisibleBodyModel.supersetCount,
+        circuit: finalVisibleBodyModel.circuitCount,
+        density: finalVisibleBodyModel.densityCount,
+        cluster: finalVisibleBodyModel.clusterCount,
+      }
+    }
+    if (finalVisibleBodyModel.mode === 'raw_grouped_fallback') {
+      let superset = 0, circuit = 0, density = 0, cluster = 0
+      for (const b of finalVisibleBodyModel.rawFallbackBlocks) {
+        if (b.groupType === 'superset') superset++
+        else if (b.groupType === 'circuit') circuit++
+        else if (b.groupType === 'density_block') density++
+        else if (b.groupType === 'cluster') cluster++
+      }
+      return { superset, circuit, density, cluster }
+    }
+    return { superset: 0, circuit: 0, density: 0, cluster: 0 }
+  })()
+  const hasAnyVisibleMethod =
+    visibleMethodTally.superset > 0 ||
+    visibleMethodTally.circuit > 0 ||
+    visibleMethodTally.density > 0 ||
+    visibleMethodTally.cluster > 0
+
   // ==========================================================================
   // [TASK 5] VARIANT TRUTH AUDIT
   // Log whether 45 and 30 variants are actually different or collapsing together
@@ -935,6 +995,48 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 now visibly recognized through the production method-summary
                 chips (Superset/Circuit/Density/Cluster) and the colored grouped
                 block headers inside MainExercisesRenderer, not via a debug chip. */}
+
+            {/* [COLLAPSED-HEADER-METHOD-TRUTH] Visible grouped-method chips on
+                the collapsed card header. This is the surface the user is
+                actually checking on the Program page (cards open collapsed by
+                default). Chip counts come from `visibleMethodTally`, which is
+                a pure consumer of `finalVisibleBodyModel`; a chip renders if
+                and only if the body WILL render a matching grouped header
+                block when the card is expanded. If the body will not render
+                a method's header (simple_order_grouped / flat_category), no
+                chip appears here -- honest non-claim. Palette intentionally
+                mirrors the colored block headers inside the body
+                (Superset blue, Circuit emerald, Density amber, Cluster purple)
+                so the collapsed chip and the in-body pill read as the same
+                visual language. */}
+            {hasAnyVisibleMethod && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {visibleMethodTally.superset > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#4F6D8A]/15 text-[#7FA8CC] border border-[#4F6D8A]/40">
+                    <Layers className="w-3 h-3" />
+                    {visibleMethodTally.superset} Superset{visibleMethodTally.superset > 1 ? 's' : ''}
+                  </span>
+                )}
+                {visibleMethodTally.circuit > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
+                    <RefreshCw className="w-3 h-3" />
+                    {visibleMethodTally.circuit} Circuit{visibleMethodTally.circuit > 1 ? 's' : ''}
+                  </span>
+                )}
+                {visibleMethodTally.density > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/15 text-amber-300 border border-amber-500/40">
+                    <Timer className="w-3 h-3" />
+                    {visibleMethodTally.density} Density Block{visibleMethodTally.density > 1 ? 's' : ''}
+                  </span>
+                )}
+                {visibleMethodTally.cluster > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-purple-500/15 text-purple-300 border border-purple-500/40">
+                    <Dumbbell className="w-3 h-3" />
+                    {visibleMethodTally.cluster} Cluster Set{visibleMethodTally.cluster > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* [DOCTRINE-STRENGTHENING] Week-specific character badges */}
             {weekCharacter && (
@@ -1166,43 +1268,44 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     [GROUPED-METHOD-SUMMARY] Visible session methodology indicator
     Uses the unified display adapter for consistent grouped truth consumption
     ========================================================================= */}
-{(() => {
-  // [GROUPED-RENDER-CONTRACT] Consume the SINGLE authoritative grouped render
-  // contract hoisted above. The chip and the body are now guaranteed to agree:
-  // chip visibility is gated by the EXACT same object that drives the body's
-  // grouped-vs-flat decision. No parallel computation, no drift.
-  const groupedDisplay = groupedRenderContract
-  if (!hasRenderableGroups) return null
-  
-  return (
-    <div className="mb-3 flex flex-wrap items-center gap-2">
-      {groupedDisplay.supersetCount > 0 && (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-purple-500/15 text-purple-300 border border-purple-500/25">
-          <Layers className="w-3.5 h-3.5" />
-          {groupedDisplay.supersetCount} Superset{groupedDisplay.supersetCount > 1 ? 's' : ''}
-        </span>
-      )}
-      {groupedDisplay.circuitCount > 0 && (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-orange-500/15 text-orange-300 border border-orange-500/25">
-          <Zap className="w-3.5 h-3.5" />
-          {groupedDisplay.circuitCount} Circuit{groupedDisplay.circuitCount > 1 ? 's' : ''}
-        </span>
-      )}
-      {groupedDisplay.densityCount > 0 && (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/25">
-          <Timer className="w-3.5 h-3.5" />
-          {groupedDisplay.densityCount} Density Block{groupedDisplay.densityCount > 1 ? 's' : ''}
-        </span>
-      )}
-      {groupedDisplay.clusterCount > 0 && (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-cyan-500/15 text-cyan-300 border border-cyan-500/25">
-          <Layers className="w-3.5 h-3.5" />
-          {groupedDisplay.clusterCount} Cluster Set{groupedDisplay.clusterCount > 1 ? 's' : ''}
-        </span>
-      )}
-    </div>
-  )
-})()}
+{hasAnyVisibleMethod && (
+  // [COLLAPSED-HEADER-METHOD-TRUTH] Expanded chip row now consumes the SAME
+  // `visibleMethodTally` as the collapsed header, locked to
+  // `finalVisibleBodyModel`. Prior behavior gated on `hasRenderableGroups`
+  // alone (rich path only) and used `groupedRenderContract` counts, which
+  // under-claimed for `raw_grouped_fallback` sessions whose body DID paint
+  // grouped Cluster/Density headers but whose rich counts were zero. Now
+  // chip and body are structurally locked: a chip appears iff the body will
+  // paint a matching grouped header. Palette mirrors the in-body block
+  // headers (Superset blue, Circuit emerald, Density amber, Cluster purple)
+  // so chip colors read as the same visual language as the body.
+  <div className="mb-3 flex flex-wrap items-center gap-2">
+    {visibleMethodTally.superset > 0 && (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-[#4F6D8A]/15 text-[#7FA8CC] border border-[#4F6D8A]/40">
+        <Layers className="w-3.5 h-3.5" />
+        {visibleMethodTally.superset} Superset{visibleMethodTally.superset > 1 ? 's' : ''}
+      </span>
+    )}
+    {visibleMethodTally.circuit > 0 && (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
+        <RefreshCw className="w-3.5 h-3.5" />
+        {visibleMethodTally.circuit} Circuit{visibleMethodTally.circuit > 1 ? 's' : ''}
+      </span>
+    )}
+    {visibleMethodTally.density > 0 && (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/40">
+        <Timer className="w-3.5 h-3.5" />
+        {visibleMethodTally.density} Density Block{visibleMethodTally.density > 1 ? 's' : ''}
+      </span>
+    )}
+    {visibleMethodTally.cluster > 0 && (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-purple-500/15 text-purple-300 border border-purple-500/40">
+        <Dumbbell className="w-3.5 h-3.5" />
+        {visibleMethodTally.cluster} Cluster Set{visibleMethodTally.cluster > 1 ? 's' : ''}
+      </span>
+    )}
+  </div>
+)}
 
 {/* Main Exercises - [FULL-VISIBLE-ROUTINE] Uses full routine truth, not narrowed displayExercises */}
 <MainExercisesRenderer

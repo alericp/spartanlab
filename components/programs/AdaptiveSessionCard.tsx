@@ -203,12 +203,72 @@ function getGroupTypeIcon(groupType: StyledGroup['groupType']) {
 // frame so the two surfaces speak the same grouped language even when
 // hydration is incomplete.
 // =============================================================================
+// =============================================================================
+// [GROUPED-MEMBER-SEMANTIC-LINE] Pure helper that produces a compact,
+// method-specific one-liner for each grouped member.
+//
+// Why it exists: even with the method-colored rail + outer pill header, the
+// inner ExerciseRow content (sets / reps / RPE / rest) still reads exactly
+// like a flat row. For grouped days specifically, the athlete needs the row
+// itself to visibly carry method intent. This helper returns the single
+// compact line rendered directly below the row inside GroupedMemberFrame.
+//
+// Authoritative input only: groupType, prefix, 1-based positionIndex,
+// totalMembers, and (for superset) partnerName resolved from the SAME
+// grouped truth already consumed by the grouped branch (block.members or
+// group.exercises). No new truth source, no parallel eligibility logic, no
+// decoration from display text. Returns null when no meaningful line can
+// be derived (e.g. groupType === 'straight'), which is the contract the
+// caller and the frame both rely on to keep flat rows unchanged.
+//
+// Copy is terse and method-differentiated:
+//   superset       -> paired-with-partner framing
+//   circuit        -> "Station N of M — cycle, rest after round"
+//   density_block  -> "Rotation N of M — rotate within time cap, quality"
+//   cluster        -> "Cluster set — intra-set mini-rests, full rest after"
+//                     (1-member cluster explicitly still reads as cluster)
+// =============================================================================
+function buildGroupedMemberSemanticLine(args: {
+  groupType: StyledGroup['groupType']
+  prefix?: string
+  positionIndex: number
+  totalMembers: number
+  partnerName?: string
+}): string | null {
+  const { groupType, positionIndex, totalMembers, partnerName } = args
+  switch (groupType) {
+    case 'superset': {
+      const safePartner = (partnerName || '').trim()
+      if (safePartner.length >= 2) {
+        return `Paired with ${safePartner} — minimal rest between, full rest after the pair.`
+      }
+      return 'Paired superset — minimal rest between, full rest after the pair.'
+    }
+    case 'circuit':
+      return totalMembers > 1
+        ? `Circuit station ${positionIndex} of ${totalMembers} — cycle through, rest after the full round.`
+        : 'Circuit station — cycle through, rest after the full round.'
+    case 'density_block':
+      return totalMembers > 1
+        ? `Density rotation ${positionIndex} of ${totalMembers} — rotate within the time cap, quality over speed.`
+        : 'Density block — work within the time cap, quality over speed.'
+    case 'cluster':
+      if (totalMembers === 1) {
+        return 'Cluster set — mini-efforts with short intra-set rest, full rest between clusters.'
+      }
+      return `Cluster ${positionIndex} of ${totalMembers} — mini-efforts with short intra-set rest, full rest between clusters.`
+    default:
+      return null
+  }
+}
+
 function GroupedMemberFrame({
   colors,
   groupType,
   prefix,
   positionIndex,
   totalMembers,
+  semanticLine,
   children,
 }: {
   colors: { border: string; bg: string; blockBg: string; text: string }
@@ -216,6 +276,12 @@ function GroupedMemberFrame({
   prefix?: string
   positionIndex: number
   totalMembers: number
+  // [GROUPED-MEMBER-SEMANTIC-LINE] Optional compact one-liner rendered
+  // directly below the row content in the frame's content column. When
+  // null/undefined, nothing renders (flat rows + edge cases stay byte-
+  // identical). Tinted with the method color family so it visibly belongs
+  // to the same method block as the rail badge and the outer pill header.
+  semanticLine?: string | null
   children: React.ReactNode
 }) {
   // Method glyph used when a single-member grouped block has no prefix, so
@@ -244,7 +310,14 @@ function GroupedMemberFrame({
       >
         {railContent}
       </div>
-      <div className="flex-1 min-w-0">{children}</div>
+      <div className="flex-1 min-w-0">
+        {children}
+        {semanticLine && (
+          <div className={`mt-1 pl-1 text-[11px] leading-snug ${colors.text}`}>
+            {semanticLine}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -1872,6 +1945,31 @@ function MainExercisesRenderer({
                     (member.name ? hydrateMap.get(member.name) : undefined) ||
                     (member.name ? hydrateMap.get(member.name.toLowerCase()) : undefined) ||
                     (member.name ? hydrateMap.get(normalizeKey(member.name)) : undefined)
+                  // [GROUPED-MEMBER-SEMANTIC-LINE] Resolve partner name for
+                  // supersets from the SAME block.members list the block
+                  // already consumes. Only surfaces when pair length is 2,
+                  // otherwise the helper falls back to its generic paired
+                  // copy. Hydrated row name is preferred when the adjacent
+                  // member resolves; otherwise we use the raw grouped name.
+                  let partnerName: string | undefined
+                  if (block.groupType === 'superset' && block.members.length === 2) {
+                    const partner = block.members[mIdx === 0 ? 1 : 0]
+                    if (partner) {
+                      const partnerHydrated =
+                        (partner.id ? hydrateMap.get(partner.id) : undefined) ||
+                        (partner.name ? hydrateMap.get(partner.name) : undefined) ||
+                        (partner.name ? hydrateMap.get(partner.name.toLowerCase()) : undefined) ||
+                        (partner.name ? hydrateMap.get(normalizeKey(partner.name)) : undefined)
+                      partnerName = (partnerHydrated?.name || partner.name || '').trim() || undefined
+                    }
+                  }
+                  const semanticLine = buildGroupedMemberSemanticLine({
+                    groupType: block.groupType,
+                    prefix: member.prefix,
+                    positionIndex: mIdx + 1,
+                    totalMembers: block.members.length,
+                    partnerName,
+                  })
                   if (hydrated) {
                     return (
                       <GroupedMemberFrame
@@ -1881,6 +1979,7 @@ function MainExercisesRenderer({
                         prefix={member.prefix}
                         positionIndex={mIdx + 1}
                         totalMembers={block.members.length}
+                        semanticLine={semanticLine}
                       >
                         <ExerciseRow
                           exercise={hydrated}
@@ -1916,6 +2015,7 @@ function MainExercisesRenderer({
                       prefix={member.prefix}
                       positionIndex={mIdx + 1}
                       totalMembers={block.members.length}
+                      semanticLine={semanticLine}
                     >
                       <div className="flex items-center py-2 px-3 rounded-lg border bg-[#171717] border-[#282828] text-sm text-[#C8C8C8]">
                         <span className="truncate">{safeName}</span>
@@ -2320,6 +2420,36 @@ function MainExercisesRenderer({
                   || exerciseDataMap.get(groupExercise.name.toLowerCase())
                   || exerciseDataMap.get(normalizeExerciseKey(groupExercise.name))
 
+                // [GROUPED-MEMBER-SEMANTIC-LINE] Resolve partner name for
+                // supersets from the SAME group.exercises list. Partner
+                // prefers the render-surface hydrated name, then the
+                // exerciseDataMap hydrated name, then the raw grouped name,
+                // so the line stays meaningful even when one half of the
+                // pair is hydration-missed.
+                let partnerName: string | undefined
+                if (group.groupType === 'superset' && group.exercises.length === 2) {
+                  const partnerIdx = exIdx === 0 ? 1 : 0
+                  const partner = group.exercises[partnerIdx]
+                  if (partner) {
+                    const partnerHydrated =
+                      (renderSurfaceMembers && renderSurfaceMembers[partnerIdx])
+                      || exerciseDataMap.get(partner.id)
+                      || exerciseDataMap.get(partner.name)
+                      || exerciseDataMap.get(partner.name.toLowerCase())
+                      || exerciseDataMap.get(normalizeExerciseKey(partner.name))
+                    partnerName = (partnerHydrated?.name || partner.name || '').trim() || undefined
+                  }
+                }
+                const semanticLine = isSpecialGroup
+                  ? buildGroupedMemberSemanticLine({
+                      groupType: group.groupType,
+                      prefix: groupExercise.prefix,
+                      positionIndex: exIdx + 1,
+                      totalMembers: group.exercises.length,
+                      partnerName,
+                    })
+                  : null
+
                 if (!fullExercise) {
                   // Exercise in styled groups but not in displayExercises.
                   // [GROUPED-TRUTH-RESCUE] Render a minimal row from styledGroups'
@@ -2344,6 +2474,7 @@ function MainExercisesRenderer({
                         prefix={groupExercise.prefix}
                         positionIndex={exIdx + 1}
                         totalMembers={group.exercises.length}
+                        semanticLine={semanticLine}
                       >
                         <div className="flex items-center py-2 px-3 rounded-lg border bg-[#171717] border-[#282828] text-sm text-[#C8C8C8]">
                           <span className="truncate">{safeName}</span>
@@ -2376,6 +2507,7 @@ function MainExercisesRenderer({
                       prefix={groupExercise.prefix}
                       positionIndex={exIdx + 1}
                       totalMembers={group.exercises.length}
+                      semanticLine={semanticLine}
                     >
                       <ExerciseRow
                         exercise={fullExercise}

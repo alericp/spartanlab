@@ -1,39 +1,48 @@
 // =============================================================================
-// [PROGRAM-GROUP-SCANNER-R1] Program-surface grouped diagnostic strip
+// [PROGRAM-GROUP-SCANNER-R2] Program-surface grouped diagnostic strip
 //
 // PURPOSE
 // Pure READ-ONLY diagnostic visibility for grouped-method truth on the
-// Program screen. Mirrors the live-workout corridor grouped scanner, but
-// consumes Program-surface authoritative truth instead of live-session
-// truth. Fixes the surface mismatch where the user was checking the
-// Program screen but the existing grouped scanner was mounted only in
-// the live workout corridor.
+// Program screen. Now mirrors the EXACT same rule the Program card's
+// adapter (`buildGroupedDisplayModel`) uses, so the scanner cannot
+// overclaim grouped structure that the visible card body would not
+// render. The previous R1 behavior treated any non-straight exercise
+// method as equivalent to grouped-block truth and surfaced the first
+// non-straight method as a `GROUP: <METHOD>` label; that was the root
+// cause of the "scanner says grouped, card looks flat" symptom the user
+// verified. Those labels have been removed.
 //
 // AUTHORITATIVE TRUTH (pure consumer only)
-// Reads the EXACT canonical fields already used on `app/(app)/program/page.tsx`
-// by the `[FUNNEL-AUDIT-S1S2]` helper (see line ~3189 of that file):
-//   - session.styleMetadata.styledGroups[].groupType
-//   - session.exercises[].method
-// A session is treated as grouped iff any styledGroup has a groupType !=
-// 'straight' OR any exercise has a method that is truthy AND != 'straight'.
-// This is the same rule `hasGroupedTruth` already uses in the probe.
+// Reads the same canonical fields the adapter consumes:
+//   - session.styleMetadata.styledGroups[].groupType + .exercises[]
+//   - session.exercises[].blockId + .method + .methodLabel
 //
-// STRICT CONSTRAINTS
-//   - No hooks, no effects, no local state, no handlers, no mutation.
-//   - Zero behavior change.
-//   - Does NOT normalize, infer, or re-derive grouped truth in a new way.
-//   - Returns null (no DOM, no layout gap) when no session carries
-//     grouped truth AND when input is missing/malformed.
-//   - Null-safe across every optional field (sessions, styleMetadata,
-//     styledGroups, exercises, method, dayNumber, etc.).
-//   - Small visual footprint: one compact line per grouped session,
-//     wrapped in a single small panel. No card restyle, no CTA impact.
+// Classification now distinguishes two honest shapes:
+//
+//   1. groupedBlocks -- paired/multi-member grouped structure the card
+//      renders as a framed block. Requires either
+//        a. styledGroups non-straight group with >= minMembersFor(type)
+//           usable members, OR
+//        b. session.exercises sharing the same blockId + non-straight
+//           method with >= minMembersFor(type) usable members.
+//      Mirrors the adapter's Priority 1 + Priority 2 gates exactly,
+//      including the cluster=1 / superset/circuit/density=2 minimums.
+//
+//   2. singleExerciseMethods -- exercises that carry a non-straight
+//      method but do NOT contribute to a renderable grouped block.
+//      Typical cause: cluster/density emitted as an execution method
+//      on a single exercise without a blockId, or density emitted on a
+//      single exercise (density min is 2). These render as ordinary
+//      rows in the card body today; the scanner surfaces them as a
+//      separate METHODS token so it neither lies nor hides the truth.
 //
 // SHIPPING GATE
 // Controlled by a single local constant `SHOW_PROGRAM_GROUP_SCANNER`.
 // Defaults to true for this debug pass. Flip to false to hide without
-// removing code. Independent from the live corridor's SHOW_GROUP_SCANNER.
+// removing code.
 // =============================================================================
+
+import { minMembersFor } from '@/components/programs/lib/session-group-display'
 
 // Local debug gate - independent from live-corridor diagnostics.
 const SHOW_PROGRAM_GROUP_SCANNER = true
@@ -42,13 +51,23 @@ const SHOW_PROGRAM_GROUP_SCANNER = true
 // We deliberately declare the minimum shape we read. We do NOT import the
 // richer program type to avoid type coupling and to stay resilient if
 // the upstream type shifts. Every field is optional and null-guarded.
-type StyledGroup = { groupType?: string | null }
-type SessionExercise = { blockId?: string | null; method?: string | null }
+type StyledGroupMemberLike = { name?: string | null }
+type StyledGroupLike = {
+  id?: string | null
+  groupType?: string | null
+  exercises?: StyledGroupMemberLike[] | null
+}
+type SessionExercise = {
+  name?: string | null
+  blockId?: string | null
+  method?: string | null
+  methodLabel?: string | null
+}
 type ProgramSession = {
   dayNumber?: number | null
   name?: string | null
   focus?: string | null
-  styleMetadata?: { styledGroups?: StyledGroup[] | null } | null
+  styleMetadata?: { styledGroups?: StyledGroupLike[] | null } | null
   exercises?: SessionExercise[] | null
 }
 type ProgramLike = {
@@ -59,46 +78,153 @@ interface GroupedProgramScannerStripProps {
   program: ProgramLike
 }
 
+// --- Method normalization (mirrors adapter) -------------------------------
+// The adapter folds 'density' to 'density_block'; the scanner must too so
+// per-type counts and min-members gates line up exactly.
+type SupportedMethod = 'superset' | 'circuit' | 'density_block' | 'cluster'
+function normalizeMethod(raw: string | null | undefined): SupportedMethod | null {
+  if (!raw) return null
+  const m = raw.toLowerCase()
+  if (m === 'superset') return 'superset'
+  if (m === 'circuit') return 'circuit'
+  if (m === 'cluster') return 'cluster'
+  if (m === 'density_block' || m === 'density') return 'density_block'
+  return null
+}
+
+function hasUsableName(n: string | null | undefined): boolean {
+  return typeof n === 'string' && n.trim().length >= 2
+}
+
+function titleForMethod(m: SupportedMethod): string {
+  switch (m) {
+    case 'superset': return 'superset'
+    case 'circuit': return 'circuit'
+    case 'density_block': return 'density'
+    case 'cluster': return 'cluster'
+  }
+}
+
 // --- Per-session summary (pure) ------------------------------------------
-// Mirrors the shape already produced by the `[FUNNEL-AUDIT-S1S2]` summarize
-// helper on app/(app)/program/page.tsx. We intentionally do NOT import that
-// helper because the probe is inline inside a useEffect on the page; this
-// reimplementation is a pure consumer that reads the SAME canonical fields.
+// Produces the same two tokens the card actually renders into:
+//   groupedBlocks      -> grouped-block body slot
+//   singleMethodTokens -> method badge on the row (or absent when truly straight)
 function summarizeSession(sess: ProgramSession) {
-  const styled: StyledGroup[] = Array.isArray(sess.styleMetadata?.styledGroups)
-    ? (sess.styleMetadata!.styledGroups as StyledGroup[])
+  const styled: StyledGroupLike[] = Array.isArray(sess.styleMetadata?.styledGroups)
+    ? (sess.styleMetadata!.styledGroups as StyledGroupLike[])
     : []
   const exercises: SessionExercise[] = Array.isArray(sess.exercises)
     ? (sess.exercises as SessionExercise[])
     : []
 
-  // Non-straight grouped structures at the styleMetadata level.
-  const nonStraightGroups = styled.filter(
-    (g) => !!g && typeof g.groupType === 'string' && g.groupType !== 'straight',
-  )
-  // Non-straight methods at the exercise level (same rule as the probe).
-  const nonStraightExercises = exercises.filter(
-    (e) => !!e && typeof e.method === 'string' && e.method.length > 0 && e.method !== 'straight',
-  )
+  // --- Count renderable grouped blocks (adapter-identical rule) ---
+  // Priority 1: styledGroups filtered to non-straight + usable-name + min-members.
+  const groupedBlockTokens: SupportedMethod[] = []
+  const consumedByGroupBlockIds = new Set<string>()
 
-  const hasGroupedTruth =
-    nonStraightGroups.length > 0 || nonStraightExercises.length > 0
+  for (const g of styled) {
+    const type = normalizeMethod(g?.groupType)
+    if (!type) continue
+    const usable = Array.isArray(g?.exercises)
+      ? g!.exercises!.filter((m): m is StyledGroupMemberLike => !!m && hasUsableName(m.name))
+      : []
+    if (usable.length < minMembersFor(type)) continue
+    groupedBlockTokens.push(type)
+  }
 
-  // First canonical group-type token (upper-cased). If none, fall back to
-  // the first non-straight exercise method. Never invent a type.
-  const firstGroupType =
-    nonStraightGroups[0]?.groupType ||
-    nonStraightExercises[0]?.method ||
-    null
+  // If Priority 1 produced any block, the adapter wins with styledGroups and
+  // does NOT fall to the exercise-fallback. Scanner mirrors that.
+  const priorityOneWins = groupedBlockTokens.length > 0
+
+  if (!priorityOneWins) {
+    // Priority 2: exercises sharing the same blockId + non-straight method.
+    const blockMembers = new Map<string, { method: SupportedMethod; names: string[] }>()
+    for (const ex of exercises) {
+      if (!ex?.blockId) continue
+      const method = normalizeMethod(ex.method)
+      if (!method) continue
+      const entry = blockMembers.get(ex.blockId) || { method, names: [] }
+      if (hasUsableName(ex.name)) entry.names.push(ex.name as string)
+      blockMembers.set(ex.blockId, entry)
+    }
+    for (const [bId, { method, names }] of blockMembers) {
+      if (names.length < minMembersFor(method)) continue
+      groupedBlockTokens.push(method)
+      consumedByGroupBlockIds.add(bId)
+    }
+  } else {
+    // Priority 1 won; still track which blockIds the card's rich renderer
+    // considers consumed so single-method accounting below doesn't double-
+    // report a member that IS visibly grouped. Matching is by blockId when
+    // the exercise carries one and the styledGroup id matches, else by
+    // usable-name equality with any styled member.
+    const styledBlockIds = new Set<string>(
+      styled.map(g => (typeof g?.id === 'string' ? g!.id! : '')).filter(Boolean)
+    )
+    const styledMemberNames = new Set<string>()
+    for (const g of styled) {
+      for (const m of g?.exercises || []) {
+        if (hasUsableName(m?.name)) styledMemberNames.add((m!.name as string).toLowerCase().trim())
+      }
+    }
+    for (const ex of exercises) {
+      if (ex?.blockId && styledBlockIds.has(ex.blockId)) consumedByGroupBlockIds.add(ex.blockId)
+      if (hasUsableName(ex?.name) && styledMemberNames.has((ex!.name as string).toLowerCase().trim())) {
+        if (ex?.blockId) consumedByGroupBlockIds.add(ex.blockId)
+      }
+    }
+  }
+
+  // --- Single-exercise method cues ---
+  // Exercises that carry a non-straight method but whose blockId (if any)
+  // did NOT contribute to a renderable grouped block. These are exactly the
+  // rows the card will render with an inline method pill rather than inside
+  // a grouped frame. Tracked as a deduped token list per method type.
+  const singleMethodCounts: Record<SupportedMethod, number> = {
+    superset: 0,
+    circuit: 0,
+    density_block: 0,
+    cluster: 0,
+  }
+  for (const ex of exercises) {
+    const method = normalizeMethod(ex?.method)
+    if (!method) continue
+    if (ex?.blockId && consumedByGroupBlockIds.has(ex.blockId)) continue
+    // If no blockId, it's intrinsically a single-exercise method cue.
+    singleMethodCounts[method] += 1
+  }
+
+  const groupedBlockCount = groupedBlockTokens.length
+  const singleMethodTokens: string[] = []
+  ;(Object.keys(singleMethodCounts) as SupportedMethod[]).forEach(m => {
+    const n = singleMethodCounts[m]
+    if (n > 0) singleMethodTokens.push(`${n}×${titleForMethod(m)}`)
+  })
+
+  // Per-type grouped block tally for the row label.
+  const groupedBlockLabelTokens: string[] = (() => {
+    const c: Record<SupportedMethod, number> = {
+      superset: 0, circuit: 0, density_block: 0, cluster: 0,
+    }
+    for (const t of groupedBlockTokens) c[t] += 1
+    const out: string[] = []
+    if (c.superset > 0) out.push(`${c.superset}×superset`)
+    if (c.circuit > 0) out.push(`${c.circuit}×circuit`)
+    if (c.density_block > 0) out.push(`${c.density_block}×density`)
+    if (c.cluster > 0) out.push(`${c.cluster}×cluster`)
+    return out
+  })()
+
+  const hasAny = groupedBlockCount > 0 || singleMethodTokens.length > 0
 
   return {
     day: typeof sess.dayNumber === 'number' ? sess.dayNumber : null,
     name: typeof sess.name === 'string' && sess.name.length > 0 ? sess.name : null,
     focus: typeof sess.focus === 'string' && sess.focus.length > 0 ? sess.focus : null,
-    hasGroupedTruth,
-    groupType: firstGroupType ? firstGroupType.toUpperCase() : null,
-    groupBlockCount: nonStraightGroups.length,
-    memberCount: nonStraightExercises.length,
+    hasAny,
+    groupedBlockCount,
+    groupedBlockLabelTokens,
+    singleMethodTokens,
     exerciseCount: exercises.length,
   }
 }
@@ -115,10 +241,10 @@ export function GroupedProgramScannerStrip({
   if (sessions.length === 0) return null
 
   const summaries = sessions.map(summarizeSession)
-  const groupedOnly = summaries.filter((s) => s.hasGroupedTruth)
+  const activeOnly = summaries.filter(s => s.hasAny)
 
-  // No grouped truth across any session -> render nothing, reserve no space.
-  if (groupedOnly.length === 0) return null
+  // Nothing non-straight anywhere -> render nothing, reserve no space.
+  if (activeOnly.length === 0) return null
 
   return (
     <div
@@ -134,11 +260,11 @@ export function GroupedProgramScannerStrip({
         </span>
         <span className="text-[#6B7280]">·</span>
         <span>
-          grouped:<span className="text-[#E6E9EF]"> {groupedOnly.length}</span>
+          active:<span className="text-[#E6E9EF]"> {activeOnly.length}</span>
         </span>
       </div>
       <ul className="flex flex-col gap-0.5">
-        {groupedOnly.map((s, idx) => {
+        {activeOnly.map((s, idx) => {
           const dayToken = s.day !== null ? `D${s.day}` : `#${idx + 1}`
           const labelToken = s.name || s.focus || '-'
           return (
@@ -150,13 +276,18 @@ export function GroupedProgramScannerStrip({
                 DAY:<span className="text-[#E6E9EF]">{dayToken}</span>
               </span>
               <span>
-                GROUP:<span className="text-[#E6E9EF]">{s.groupType || '?'}</span>
+                BLOCKS:<span className="text-[#E6E9EF]">
+                  {' '}
+                  {s.groupedBlockCount > 0
+                    ? `${s.groupedBlockCount} (${s.groupedBlockLabelTokens.join(', ')})`
+                    : '0'}
+                </span>
               </span>
               <span>
-                BLOCKS:<span className="text-[#E6E9EF]">{s.groupBlockCount}</span>
-              </span>
-              <span>
-                MEMBERS:<span className="text-[#E6E9EF]">{s.memberCount}</span>
+                METHODS:<span className="text-[#E6E9EF]">
+                  {' '}
+                  {s.singleMethodTokens.length > 0 ? s.singleMethodTokens.join(', ') : '-'}
+                </span>
               </span>
               <span>
                 EX:<span className="text-[#E6E9EF]">{s.exerciseCount}</span>

@@ -2222,26 +2222,75 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   ================================================================= */}
               {/* Start Button - Primary Action (above detailed workout) */}
               <div className="mb-4">
-                {/* [SELECTED-SESSION-CONTRACT-PROOF] DEV-only launch-proof strip.
-                    Proves that the Start Workout payload is the selected
-                    visible-session truth, not a re-derivation. If this strip
-                    ever disagrees with the body above it or the live pre-start
-                    shell, the corridor is split again. Removed in production. */}
-                {process.env.NODE_ENV === 'development' && (
-                  <div className="mb-2 rounded-md border border-[#4F6D8A]/40 bg-[#12161C] px-2 py-1.5 text-[10px] font-mono text-[#7FA8CC] leading-tight">
-                    <div className="text-[#A4ACB8] uppercase tracking-wider text-[9px] mb-0.5">
-                      Launch proof
+                {/* [SELECTED-SESSION-CONTRACT-PROOF] Launch-proof strip.
+                    PRODUCTION-VISIBLE (was dev-only). Proves that the Start
+                    Workout payload is the selected visible-session truth, not
+                    a re-derivation. If this strip ever disagrees with the body
+                    above it or the live pre-start Shell proof, the corridor
+                    is split again and the CORRIDOR token below will flip to
+                    `MISMATCH`, preserving visible mode-mismatch evidence per
+                    [SELECTED-SESSION-OWNERSHIP-LOCK].
+
+                    CORRIDOR token semantics:
+                      OK        -> variant selected AND visible body is
+                                   meaningfully narrowed (trim > 0 OR raw
+                                   session has <= fullVisibleExercises i.e.
+                                   variant intentionally preserved all rows)
+                      OK_FULL   -> Full Session selected (idx 0); no trim
+                                   expected
+                      MISMATCH  -> variant selected (idx > 0) but the card's
+                                   variant-aware body has the same exercise
+                                   count as the raw full session AND the
+                                   variant's declared duration equals the full
+                                   session's duration. This means the card
+                                   launched 45/30 but the selected session
+                                   truth never actually narrowed. Upstream
+                                   (session-compression-engine /
+                                   session.variants[i].selection.main) must
+                                   be populated. */}
+                {(() => {
+                  const idx = selectedSessionContract.selectedVariantIndex
+                  const rawCount = safeExercises.length
+                  const visCount = fullVisibleExercises.length
+                  const trim = Math.max(0, rawCount - visCount)
+                  const fullMin = typeof session.estimatedMinutes === 'number'
+                    ? session.estimatedMinutes
+                    : null
+                  const selMin = typeof selectedSessionContract.selectedEstimatedMinutes === 'number'
+                    ? selectedSessionContract.selectedEstimatedMinutes
+                    : null
+                  const durationDiffers = fullMin !== null && selMin !== null && selMin !== fullMin
+                  let corridor: 'OK' | 'OK_FULL' | 'MISMATCH' = 'OK_FULL'
+                  if (idx > 0) {
+                    corridor = (trim > 0 || durationDiffers) ? 'OK' : 'MISMATCH'
+                  }
+                  return (
+                    <div className="mb-2 rounded-md border border-[#4F6D8A]/40 bg-[#12161C] px-2 py-1.5 text-[10px] font-mono text-[#7FA8CC] leading-tight">
+                      <div className="text-[#A4ACB8] uppercase tracking-wider text-[9px] mb-0.5 flex items-center gap-2">
+                        <span>Launch proof</span>
+                        <span
+                          className={
+                            corridor === 'MISMATCH'
+                              ? 'rounded-sm bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1'
+                              : 'rounded-sm bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-1'
+                          }
+                        >
+                          CORRIDOR:{corridor}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                        <span>idx={idx}</span>
+                        <span>mode={selectedSessionContract.selectedExecutionMode}</span>
+                        <span>label={selectedSessionContract.selectedVariantLabel}</span>
+                        <span>min={selectedSessionContract.selectedEstimatedMinutes}</span>
+                        <span>raw={rawCount}</span>
+                        <span>vis={visCount}</span>
+                        <span>trim={trim}</span>
+                        <span>body={finalVisibleBodyModel.mode}</span>
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                      <span>idx={selectedSessionContract.selectedVariantIndex}</span>
-                      <span>mode={selectedSessionContract.selectedExecutionMode}</span>
-                      <span>label={selectedSessionContract.selectedVariantLabel}</span>
-                      <span>min={selectedSessionContract.selectedEstimatedMinutes}</span>
-                      <span>ex={fullVisibleExercises.length}</span>
-                      <span>vis={finalVisibleBodyModel.mode}</span>
-                    </div>
-                  </div>
-                )}
+                  )
+                })()}
                 <Button
                   onClick={handleStartWorkout}
                   className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2 h-10"

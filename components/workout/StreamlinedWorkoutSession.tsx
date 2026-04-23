@@ -5677,40 +5677,76 @@ if (shouldShowLocalFallback) {
                 </Badge>
               )}
             </div>
-            {/* [SELECTED-SESSION-CONTRACT-PROOF] DEV-only pre-start shell proof
-                strip. Sits directly above the Today's Plan rows so the user can
-                see, at a glance, whether the shell is reading the SAME session
-                prop the route already variant-narrowed. If `mode`/`variant` here
-                agree with the Route proof chip at the top of the page but
-                `sessionEx` / `totalSets` disagree (e.g. show the FULL session's
-                larger count), then this shell is silently re-deriving from a
-                different truth source. Removed in production. */}
-            {process.env.NODE_ENV === 'development' && (
-              <div className="mb-3 rounded-md border border-[#4F6D8A]/40 bg-[#12161C] px-2 py-1.5 text-[10px] font-mono text-[#7FA8CC] leading-tight">
-                <div className="text-[#A4ACB8] uppercase tracking-wider text-[9px] mb-0.5">
-                  Shell proof
+            {/* [SELECTED-SESSION-CONTRACT-PROOF] Pre-start shell proof strip.
+                PRODUCTION-VISIBLE (was dev-only). Sits directly above the
+                Today's Plan rows so the user can see, at a glance, whether
+                the shell is reading the SAME session prop the route already
+                variant-narrowed. If `mode` / `variant` here agree with the
+                Card's Launch proof but the CORRIDOR token below flips to
+                `MISMATCH`, the URL requested 45/30 but the live session still
+                carries full-session dimensions -- exactly the silent full-
+                session fallback [SELECTED-SESSION-OWNERSHIP-LOCK] blocks at
+                the route layer.
+
+                CORRIDOR token semantics here:
+                  OK        -> URL mode is 45/30, variant > 0, AND the live
+                               session's estimatedMinutes is consistent with
+                               the declared mode (<= 50 for 45_min, <= 35
+                               for 30_min).
+                  OK_FULL   -> URL mode is full (idx 0); no narrowing
+                               expected.
+                  MISMATCH  -> URL mode is 45/30 but the live session's
+                               estimatedMinutes still looks like the full
+                               session, OR variant was requested (idx > 0)
+                               but the route did not narrow (see route-level
+                               CRITICAL console.error for upstream cause). */}
+            {(() => {
+              const exCount = safeSession.exercises?.length ?? 0
+              const min = typeof safeSession.estimatedMinutes === 'number'
+                ? safeSession.estimatedMinutes
+                : null
+              const groupCount = safeSession.styleMetadata?.styledGroups?.filter(
+                (g) => g.groupType !== 'straight'
+              ).length ?? 0
+              const totalSets = (safeSession.exercises ?? []).reduce(
+                (s, e) => s + (typeof e.sets === 'number' ? e.sets : 0),
+                0
+              )
+              let corridor: 'OK' | 'OK_FULL' | 'MISMATCH' = 'OK_FULL'
+              if (executionMode === '45_min') {
+                corridor = (min !== null && min <= 50) ? 'OK' : 'MISMATCH'
+              } else if (executionMode === '30_min') {
+                corridor = (min !== null && min <= 35) ? 'OK' : 'MISMATCH'
+              } else if (executionMode === 'full') {
+                // Full mode: variant index should be 0. If variant > 0 leaked
+                // through on full mode, that is a launch-builder corridor bug.
+                corridor = variantIndex === 0 ? 'OK_FULL' : 'MISMATCH'
+              }
+              return (
+                <div className="mb-3 rounded-md border border-[#4F6D8A]/40 bg-[#12161C] px-2 py-1.5 text-[10px] font-mono text-[#7FA8CC] leading-tight">
+                  <div className="text-[#A4ACB8] uppercase tracking-wider text-[9px] mb-0.5 flex items-center gap-2">
+                    <span>Shell proof</span>
+                    <span
+                      className={
+                        corridor === 'MISMATCH'
+                          ? 'rounded-sm bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1'
+                          : 'rounded-sm bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-1'
+                      }
+                    >
+                      CORRIDOR:{corridor}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                    <span>mode={executionMode}</span>
+                    <span>variant={variantIndex}</span>
+                    <span>sessionEx={exCount}</span>
+                    <span>totalSets={totalSets}</span>
+                    <span>groups={groupCount}</span>
+                    <span>min={min ?? '?'}</span>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                  <span>mode={executionMode}</span>
-                  <span>variant={variantIndex}</span>
-                  <span>sessionEx={safeSession.exercises?.length ?? 0}</span>
-                  <span>
-                    totalSets=
-                    {(safeSession.exercises ?? []).reduce(
-                      (s, e) => s + (typeof e.sets === 'number' ? e.sets : 0),
-                      0
-                    )}
-                  </span>
-                  <span>
-                    groups=
-                    {safeSession.styleMetadata?.styledGroups?.filter(
-                      (g) => g.groupType !== 'straight'
-                    ).length ?? 0}
-                  </span>
-                  <span>min={safeSession.estimatedMinutes ?? '?'}</span>
-                </div>
-              </div>
-            )}
+              )
+            })()}
             {/* [GROUPED-PLAN-FIX] Render grouped structure in Today's Plan */}
             {/* [JSX-STABILIZED] Precomputed rows for stable JSX ownership */}
             {renderTodayPlanRows()}

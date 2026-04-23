@@ -940,6 +940,23 @@ type AdaptiveSessionContext = {
   // This is passed explicitly to avoid out-of-scope reference errors
   // ==========================================================================
   sessionIntent?: SessionIntent | null
+  // ==========================================================================
+  // [WEEKLY-METHOD-DISTRIBUTION, prompt 7] Week-level anti-overconcentration
+  // tracker. A SINGLE mutable object is created once per program build and
+  // shared across every session in the loop (see the week loop at ~L10956).
+  // Each session reads `clusterSessionsUsed` / `maxClusterSessionsPerWeek`
+  // BEFORE scoring cluster and writes `clusterSessionsUsed++` AFTER a cluster
+  // is applied. This is how the builder enforces "cluster is an uncommon,
+  // intentional tool -- not a per-session decoration." Wired exactly the
+  // way `outerDoctrineRecoveryTracker` is wired (see L11154 / L11174), so
+  // we stay inside an established mutation pattern for session-level writes
+  // that need to accumulate across the week.
+  // ==========================================================================
+  weeklyMethodBudget?: {
+    clusterSessionsUsed: number
+    maxClusterSessionsPerWeek: number
+    clusterAppliedDays: number[] // dayNumbers that received cluster -- for audit logs
+  } | null
   }
 
 export interface AdaptiveProgramInputs {
@@ -10950,7 +10967,35 @@ async function generateAdaptiveProgramImpl(
     sessionsWithRelaxation: [] as number[],
     lastKnownRecoveryCandidate: null as number | null,
   }
-  
+
+  // ==========================================================================
+  // [WEEKLY-METHOD-DISTRIBUTION, prompt 7] Initialize the shared cluster budget.
+  //
+  // Doctrine goal: cluster is an intentional, uncommon tool. It must NOT appear
+  // on every session. Cap per week ≈ one third of sessions, minimum 1, maximum 2.
+  //
+  //   week = 2-3 sessions  -> max 1 cluster session
+  //   week = 4-6 sessions  -> max 2 cluster sessions
+  //   week = 7+ sessions   -> max 2 cluster sessions (still capped; two is
+  //                          plenty to demonstrate accumulation exposure
+  //                          without turning the week into method-spam)
+  //
+  // The tracker is a single mutable object. Every `sessionContext` for this
+  // program receives a reference to the SAME object, so session N's cluster
+  // application is visible to session N+1's materialization block.
+  // ==========================================================================
+  const totalWeekSessions = structure.days.length
+  const weeklyMethodBudget = {
+    clusterSessionsUsed: 0,
+    maxClusterSessionsPerWeek: Math.min(2, Math.max(1, Math.floor(totalWeekSessions / 3))),
+    clusterAppliedDays: [] as number[],
+  }
+  console.log('[weekly-method-budget-init]', {
+    totalWeekSessions,
+    maxClusterSessionsPerWeek: weeklyMethodBudget.maxClusterSessionsPerWeek,
+    doctrine: 'cluster_is_uncommon_intentional_tool',
+  })
+
   try {
     // [PHASE 16C TASK 4] Convert to async for loop with yields inside
     for (let index = 0; index < structure.days.length; index++) {
@@ -11154,6 +11199,11 @@ async function generateAdaptiveProgramImpl(
   outerDoctrineRecoveryTracker: null as any, // Will be set below
   // [SESSION-SURVIVAL-CONTRACT-LOOP] Loop-level tracker ref for outer catch access
   loopLevelDoctrineTracker: loopLevelDoctrineTracker as any,
+  // [WEEKLY-METHOD-DISTRIBUTION, prompt 7] Shared cluster budget -- the SAME
+  // object reference is handed to every session this build, so session N's
+  // cluster application is visible to session N+1's cluster materializer.
+  // See the initialization block directly above the week loop (~L10958).
+  weeklyMethodBudget,
   }
   
   // ==========================================================================
@@ -12343,7 +12393,20 @@ async function generateAdaptiveProgramImpl(
     // -------------------------------------------------------------------------
     const shouldEvaluateCluster = sessionMethodIntentContract.shouldApplyCluster
 
-    if (shouldEvaluateCluster && session.exercises && session.exercises.length > 0) {
+    // [WEEKLY-METHOD-DISTRIBUTION, prompt 7] Week-level saturation check.
+    // If this week has already used its cluster budget, short-circuit BEFORE
+    // scoring. Doctrine: cluster is an intentional, uncommon tool across the
+    // week -- not a per-session accessory decoration.
+    const weeklyBudget = context?.weeklyMethodBudget ?? null
+    const weekClusterSaturated = !!weeklyBudget
+      && weeklyBudget.clusterSessionsUsed >= weeklyBudget.maxClusterSessionsPerWeek
+
+    if (weekClusterSaturated) {
+      methodMaterializationResult.rejectedMethods.push({
+        method: 'cluster_sets',
+        reason: `Week-level cluster budget saturated (${weeklyBudget!.clusterSessionsUsed}/${weeklyBudget!.maxClusterSessionsPerWeek}) -- cluster is an intentional, uncommon tool and this week has already placed it on day(s) ${weeklyBudget!.clusterAppliedDays.join(', ')}. Straight sets preserved here.`,
+      })
+    } else if (shouldEvaluateCluster && session.exercises && session.exercises.length > 0) {
       type ClusterCandidate = {
         ex: NonNullable<typeof session.exercises>[number]
         score: number
@@ -12353,6 +12416,24 @@ async function generateAdaptiveProgramImpl(
       }
       const candidates: ClusterCandidate[] = []
       const rejectLog: Array<{ name: string; reason: string }> = []
+
+      // [SESSION-FRAGMENTATION-PENALTY, prompt 7] If another non-straight
+      // method has already been applied to this session (supersets, circuits,
+      // density_block), adding cluster on top fragments the session's method
+      // signal. Doctrine: "pick one intentional method per session when
+      // possible, avoid stacking methods just because they all happen to
+      // qualify." Subtract 15 points from every candidate so only an
+      // extraordinarily well-placed cluster target can still clear the bar
+      // in a session that already has a method.
+      const sessionAlreadyHasMethod = methodMaterializationResult.appliedMethods.length > 0
+      const sessionFragmentationPenalty = sessionAlreadyHasMethod ? -15 : 0
+
+      // [SHORT-SESSION-PENALTY, prompt 7] On short sessions (<5 exercises)
+      // the overhead of cluster's intra-set rest structure isn't worth the
+      // accumulation benefit -- the session is too small to need fatigue-
+      // managed completion. Reduce every candidate by 10.
+      const totalExs = session.exercises.length
+      const shortSessionPenalty = totalExs < 5 ? -10 : 0
 
       session.exercises.forEach((ex, position) => {
         const { role, positionTier, isPrimary, isGrouped } = classifyForCluster(ex, position)
@@ -12375,12 +12456,24 @@ async function generateAdaptiveProgramImpl(
           return
         }
 
-        // Base score by role (accumulation/completion-friendly > quality roles)
+        // [ROLE BASE RECALIBRATION, prompt 7] Lowered across the board so
+        // only *accessory* rows at *genuinely deep late* positions comfortably
+        // clear the new higher bar. The user's doctrine: "Cluster is most
+        // appropriate when quality exposure is needed but continuous
+        // prescription would degrade too much, OR where accumulated high-
+        // quality reps/seconds are desired with short intra-set relief."
+        // That is most plausibly the accessory-tail case, not the
+        // secondary-strength completion case (which was getting swept in
+        // too readily).
+        //   accessory           : 80 -> 75  (canonical target; still highest)
+        //   secondary_strength  : 70 -> 60  (still eligible but rarely clears)
+        //   core_or_support     : 55 -> 40  (effectively unreachable w/o very late)
+        //   skill_accumulation  : 45 -> 30  (effectively unreachable)
         const baseByRole: Record<ClusterRole, number> = {
-          accessory: 80,
-          secondary_strength: 70,
-          core_or_support: 55,
-          skill_accumulation: 45,
+          accessory: 75,
+          secondary_strength: 60,
+          core_or_support: 40,
+          skill_accumulation: 30,
           // Unreachable (rejected above), kept for exhaustiveness:
           skill_primary: 0,
           primary_strength: 0,
@@ -12396,22 +12489,35 @@ async function generateAdaptiveProgramImpl(
           positionAdj = (position - _earliestLateIndex + 1) * 5
         }
 
-        const score = base + positionAdj
+        const score = base + positionAdj + sessionFragmentationPenalty + shortSessionPenalty
         candidates.push({ ex, score, index: position, role, positionTier })
       })
 
       candidates.sort((a, b) => b.score - a.score)
 
-      // Raised from 60 -> 75. With the new scoring:
-      //   accessory@late (pos = earliestLate)         = 80 + 5  = 85  (OK)
-      //   secondary_strength@late                     = 70 + 5  = 75  (borderline OK)
-      //   core_or_support@late                        = 55 + 5  = 60  (REJECTED)
-      //   skill_accumulation@late                     = 45 + 5  = 50  (REJECTED)
-      //   accessory@mid                               = 80 - 20 = 60  (REJECTED)
-      // This keeps cluster narrowed to the doctrinal canonical case (late
-      // accessory) plus selective secondary-strength completion -- the two
-      // cases the user's saved doctrine names as acceptable.
-      const MIN_CLUSTER_SCORE = 75
+      // [THRESHOLD RAISED 75 -> 85, prompt 7] Combined with the lower role
+      // bases, the penalty terms, and the week-level cap, this produces the
+      // intended doctrine distribution. With new scoring (no penalties):
+      //   accessory@earliestLate      = 75 + 5  = 80  (REJECTED -- need deeper)
+      //   accessory@earliestLate+1    = 75 + 10 = 85  (OK -- second-from-end)
+      //   accessory@earliestLate+2    = 75 + 15 = 90  (OK -- tail)
+      //   secondary_strength@deep_late (+4)   = 60 + 25 = 85  (borderline OK)
+      //   secondary_strength@earliestLate     = 60 + 5  = 65  (REJECTED)
+      //   core_or_support: never reaches 85 under normal session lengths
+      //   skill_accumulation: never reaches 85
+      //
+      // With session-fragmentation penalty active (-15):
+      //   accessory@earliestLate+1    = 85 - 15 = 70  (REJECTED)
+      //   accessory@earliestLate+3    = 75 + 20 - 15 = 80 (REJECTED)
+      //   -> in sessions that already have supersets/circuits/density,
+      //      cluster is effectively suppressed except at very deep positions.
+      //
+      // With short-session penalty active (-10, sessions with <5 exercises):
+      //   accessory cannot practically clear 85 in a 4-exercise session
+      //   because `earliestLate = max(2, ceil(4/2)) = 2`, so the deepest
+      //   accessory at position 3 scores only 75 + 10 - 10 = 75 < 85.
+      //   -> short sessions stay straight, matching doctrine.
+      const MIN_CLUSTER_SCORE = 85
       const clusterTarget = candidates.length > 0 && candidates[0].score >= MIN_CLUSTER_SCORE
         ? candidates[0]
         : null
@@ -12494,12 +12600,27 @@ async function generateAdaptiveProgramImpl(
 
         session.adaptationNotes = session.adaptationNotes || []
         session.adaptationNotes.push(`Cluster sets applied to ${clusterTarget.ex.name} for fatigue-managed completion`)
+
+        // [WEEKLY-METHOD-DISTRIBUTION, prompt 7] Record this cluster against
+        // the week's shared budget so subsequent sessions see the running
+        // total. The `weeklyBudget` reference points at the SAME object held
+        // by every other sessionContext in this build (see week-loop init).
+        if (weeklyBudget) {
+          weeklyBudget.clusterSessionsUsed += 1
+          weeklyBudget.clusterAppliedDays.push(session.dayNumber)
+          console.log('[weekly-method-budget-increment]', {
+            dayNumber: session.dayNumber,
+            clusterSessionsUsed: weeklyBudget.clusterSessionsUsed,
+            maxClusterSessionsPerWeek: weeklyBudget.maxClusterSessionsPerWeek,
+            appliedOnDays: [...weeklyBudget.clusterAppliedDays],
+          })
+        }
       } else {
         methodMaterializationResult.rejectedMethods.push({
           method: 'cluster_sets',
           reason: candidates.length === 0
             ? `No qualifying cluster candidates (doctrine requires late-session non-primary accessory / secondary-strength / skill-accumulation row). Rejected: ${rejectLog.slice(0, 3).map(r => `${r.name}(${r.reason})`).join(', ')}`
-            : `Best candidate score ${candidates[0].score} below inverted-doctrine threshold (${MIN_CLUSTER_SCORE}) -- honest straight sets preferred over marginal cluster application`,
+            : `Best candidate score ${candidates[0].score} below threshold (${MIN_CLUSTER_SCORE}) -- honest straight sets preferred. Top candidate: ${candidates[0].ex.name} (${candidates[0].role} @ ${candidates[0].positionTier} pos ${candidates[0].index}); fragmentation=${sessionFragmentationPenalty}, shortSession=${shortSessionPenalty}`,
         })
       }
     }

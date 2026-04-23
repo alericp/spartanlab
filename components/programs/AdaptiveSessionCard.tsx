@@ -476,38 +476,85 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   // Count RPE-enabled exercises - [PHASE 10] Safe access with fallback
   const safeExercises = Array.isArray(session.exercises) ? session.exercises : []
   const rpeExerciseCount = safeExercises.filter((e) => exerciseSupportsRPE(e.name)).length
-  
+
+  // ==========================================================================
+  // [SELECTED-SESSION-CONTRACT] SINGLE AUTHORITATIVE SELECTED-VISIBLE-SESSION
+  // TRUTH. This is the ONE and ONLY owner of what Full / 45 Min / 30 Min means
+  // for this card. Every downstream consumer in this corridor (Program card
+  // body, grouped/method status line, Start Workout launch payload, live route,
+  // StreamlinedWorkoutSession pre-start shell) derives from this contract --
+  // either directly, or by reading the URL params this contract constructs.
+  //
+  // Canonical variant-index semantics:
+  //   - `selectedVariant` state may legally be `null | 0 | 1 | 2`.
+  //   - `null` and `0` both mean "Full Session" and MUST resolve to the same
+  //     canonical index 0 for every consumer. Previously different consumers
+  //     interpreted them independently (body used `selectedVariant !== null`,
+  //     launch used `selectedVariant ?? 0`, status used `safeExercises`).
+  //     That split is what allowed "visible card looks 45" but "Start Workout
+  //     boots full" to coexist without either side being wrong in isolation.
+  //
+  // Fields (all canonical, all derived here, ALL read downstream):
+  //   - selectedVariantIndex   : 0-based canonical index (null resolved to 0)
+  //   - selectedVariantLabel   : human label from variants[idx].label
+  //   - selectedExecutionMode  : 'full' | '45_min' | '30_min', derived from
+  //                              variants[idx].duration (not from raw session)
+  //   - selectedEstimatedMinutes: variants[idx].duration ?? session default
+  //   - selectedLaunchUrl      : the EXACT URL Start Workout will push, with
+  //                              mode + variant + week all locked to the above
+  //   - isFullSession          : canonical idx === 0
+  //   - isVariantSelected      : canonical idx > 0
+  //   - hasMultipleVariants    : variants array has Full + at least one mini
+  //
+  // ==========================================================================
+  const selectedSessionContract = (() => {
+    const variantsArr = Array.isArray(session.variants) ? session.variants : []
+    const canonicalIdx = selectedVariant ?? 0
+    const variantObj = variantsArr[canonicalIdx]
+    const variantLabel = variantObj?.label ?? 'Full Session'
+    const estimatedMinutes =
+      typeof variantObj?.duration === 'number' ? variantObj.duration : session.estimatedMinutes
+    let executionMode: '30_min' | '45_min' | 'full' = 'full'
+    if (typeof estimatedMinutes === 'number') {
+      if (estimatedMinutes <= 35) executionMode = '30_min'
+      else if (estimatedMinutes <= 50) executionMode = '45_min'
+    }
+    const weekParam =
+      typeof currentWeekNumber === 'number' && currentWeekNumber >= 1
+        ? `&week=${currentWeekNumber}`
+        : ''
+    const selectedLaunchUrl = `/workout/session?day=${session.dayNumber || 1}&mode=${executionMode}&variant=${canonicalIdx}${weekParam}`
+    return {
+      selectedVariantIndex: canonicalIdx,
+      selectedVariantLabel: variantLabel,
+      selectedExecutionMode: executionMode,
+      selectedEstimatedMinutes: estimatedMinutes,
+      selectedLaunchUrl,
+      isFullSession: canonicalIdx === 0,
+      isVariantSelected: canonicalIdx > 0,
+      hasMultipleVariants: variantsArr.length > 1,
+    }
+  })()
+
   const handleStartWorkout = () => {
     // [workout-route] UNIFIED ENTRY: Route to canonical workout session page
     // This ensures all "Start Workout" paths use the same StreamlinedWorkoutSession experience
     // The embedded WorkoutExecutionCard is no longer used for full workout execution
-    
-    // ==========================================================================
-    // [LIVE-WORKOUT-AUTHORITY] Determine execution mode from selected variant
-    // ==========================================================================
-    const variant = selectedVariant !== null ? session.variants?.[selectedVariant] : session.variants?.[0]
-    const variantDuration = variant?.duration || session.estimatedMinutes
-    
-    // Map variant duration to execution mode
-    let executionMode: '30_min' | '45_min' | 'full' = 'full'
-    if (variantDuration && variantDuration <= 35) {
-      executionMode = '30_min'
-    } else if (variantDuration && variantDuration <= 50) {
-      executionMode = '45_min'
-    }
-    
+    //
+    // [SELECTED-SESSION-CONTRACT] Launch payload is now read AS-IS from the
+    // authoritative selectedSessionContract. No independent re-derivation of
+    // executionMode / variant index / week param here. If the contract says
+    // 45_min + variant=1, the URL is 45_min + variant=1. Full stop.
     trackWorkoutStarted(session.name)
-    // [WEEK-AUTHORITY-HANDOFF] Carry the Program page's AUTHORITATIVE selected
-    // week into the live workout route. The live runner uses this week as the
-    // exclusive source of truth for dosage scaling. If absent we fall back to
-    // the program baseline, but when the user is viewing Week 2/3/4 this param
-    // is the only way to guarantee parity between Program card dosage and
-    // the workout that actually boots.
-    const weekParam = typeof currentWeekNumber === 'number' && currentWeekNumber >= 1
-      ? `&week=${currentWeekNumber}`
-      : ''
-    // [LIVE-WORKOUT-AUTHORITY] Pass execution mode and variant index to workout route
-    router.push(`/workout/session?day=${session.dayNumber || 1}&mode=${executionMode}&variant=${selectedVariant ?? 0}${weekParam}`)
+    console.log('[SELECTED-SESSION-CONTRACT] Start Workout launch', {
+      dayNumber: session.dayNumber,
+      selectedVariantIndex: selectedSessionContract.selectedVariantIndex,
+      selectedVariantLabel: selectedSessionContract.selectedVariantLabel,
+      selectedExecutionMode: selectedSessionContract.selectedExecutionMode,
+      selectedEstimatedMinutes: selectedSessionContract.selectedEstimatedMinutes,
+      selectedLaunchUrl: selectedSessionContract.selectedLaunchUrl,
+    })
+    router.push(selectedSessionContract.selectedLaunchUrl)
   }
 
   const handleWorkoutComplete = () => {
@@ -2175,6 +2222,26 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   ================================================================= */}
               {/* Start Button - Primary Action (above detailed workout) */}
               <div className="mb-4">
+                {/* [SELECTED-SESSION-CONTRACT-PROOF] DEV-only launch-proof strip.
+                    Proves that the Start Workout payload is the selected
+                    visible-session truth, not a re-derivation. If this strip
+                    ever disagrees with the body above it or the live pre-start
+                    shell, the corridor is split again. Removed in production. */}
+                {process.env.NODE_ENV === 'development' && (
+                  <div className="mb-2 rounded-md border border-[#4F6D8A]/40 bg-[#12161C] px-2 py-1.5 text-[10px] font-mono text-[#7FA8CC] leading-tight">
+                    <div className="text-[#A4ACB8] uppercase tracking-wider text-[9px] mb-0.5">
+                      Launch proof
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                      <span>idx={selectedSessionContract.selectedVariantIndex}</span>
+                      <span>mode={selectedSessionContract.selectedExecutionMode}</span>
+                      <span>label={selectedSessionContract.selectedVariantLabel}</span>
+                      <span>min={selectedSessionContract.selectedEstimatedMinutes}</span>
+                      <span>ex={fullVisibleExercises.length}</span>
+                      <span>vis={finalVisibleBodyModel.mode}</span>
+                    </div>
+                  </div>
+                )}
                 <Button
                   onClick={handleStartWorkout}
                   className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2 h-10"
@@ -2294,7 +2361,17 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   // in the status line even though the builder applied cluster set-execution.
   let hasAnyNonStraightMethod = false
   const methodSet = new Set<string>()
-  for (const ex of safeExercises) {
+  // [SELECTED-SESSION-CONTRACT] Method cues are now detected from the
+  // variant-narrowed visible exercise list (`fullVisibleExercises`), NOT from
+  // raw `safeExercises`. Previously this loop iterated raw safeExercises, so
+  // when the user selected 45 Min / 30 Min the status line kept reporting the
+  // FULL session's method cues even though the body below had been trimmed to
+  // the variant's smaller set. That was the exact "status line and body
+  // disagree" split the corridor lock is removing. `fullVisibleExercises`
+  // carries `method` + `blockId` through `buildFullVisibleRoutineExercises`
+  // for every surviving row, so iterating it produces cues that match the
+  // variant truth one-for-one.
+  for (const ex of fullVisibleExercises) {
     const e = ex as unknown as { method?: string; setExecutionMethod?: string }
     const se = (e.setExecutionMethod || '').toLowerCase()
     const mm = (e.method || '').toLowerCase()

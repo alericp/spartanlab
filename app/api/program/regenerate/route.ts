@@ -126,10 +126,8 @@ export async function POST(request: Request) {
       regenerationReason,
     })
     
-    // [METHOD-PREFERENCE-BRIDGE, prompt 11] Mandated receipt audit #2.
-    // Prove whether trainingMethodPreferences truth actually crossed the
-    // HTTP boundary from the program page. The builder reads this field
-    // directly; if it is empty, grouped methods are blocked downstream.
+    // [METHOD-PREFERENCE-BRIDGE] Receipt audit: prove trainingMethodPreferences
+    // truth crossed the HTTP boundary. Empty here → grouped methods blocked downstream.
     {
       const rcvTrainingMethodPreferences: string[] = Array.isArray(canonicalProfile?.trainingMethodPreferences)
         ? canonicalProfile.trainingMethodPreferences

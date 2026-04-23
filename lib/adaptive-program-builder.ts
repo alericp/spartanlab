@@ -11702,15 +11702,11 @@ async function generateAdaptiveProgramImpl(
     // It computes eligibility from real user truth, not focus string matching.
     // All downstream materialization must use this contract, not ad-hoc gates.
     // =========================================================================
-    // [METHOD-PREFERENCE-BRIDGE, prompt 11] Narrow defensive fallback.
-    // The authoritative source remains `canonicalProfile.trainingMethodPreferences`.
-    // The program page's rebuild path now explicitly bridges the UI-local
-    // `selectedStyles` into this field, so this fallback should almost never
-    // activate. It is kept only as corridor safety for alternate entry paths
-    // (e.g. adjustments, tests, or stale canonical objects) where
-    // `trainingMethodPreferences` is empty but the same canonical object
-    // still carries a method-shaped `selectedStyles`. Vocabularies match
-    // (both use the `TrainingMethodPreference` enum).
+    // [METHOD-PREFERENCE-BRIDGE] Narrow defensive fallback. The authoritative
+    // source is `canonicalProfile.trainingMethodPreferences`. Rebuild already
+    // bridges that field explicitly; this fallback only activates for alternate
+    // entry paths (adjustments, tests, stale canonical) where prefs are empty
+    // but `selectedStyles` is present. Vocabularies match (TrainingMethodPreference).
     const METHOD_PREF_BRIDGE_VOCAB = new Set([
       'straight_sets',
       'supersets',
@@ -11736,7 +11732,7 @@ async function generateAdaptiveProgramImpl(
         : canonicalSelectedStyles.filter(s => typeof s === 'string' && METHOD_PREF_BRIDGE_VOCAB.has(s))
     ) as unknown as typeof canonicalProfile.trainingMethodPreferences
 
-    // [METHOD-PREFERENCE-BRIDGE, prompt 11] Mandated entry audit #3.
+    // [METHOD-PREFERENCE-BRIDGE] Entry audit.
     {
       const effective: string[] = Array.isArray(methodPrefsForGrouping)
         ? (methodPrefsForGrouping as unknown as string[])
@@ -12096,43 +12092,12 @@ async function generateAdaptiveProgramImpl(
       })
     }
     
-    // =========================================================================
-    // [PRE-MATERIALIZATION-METHOD-SCRUB] Prompt 9 fix.
-    //
-    // WHY: The method materialization corridor (supersets → circuits →
-    // density → cluster) is the SINGLE authoritative owner of per-row method
-    // identity. Any `.method` / `.methodLabel` / `.setExecutionMethod` /
-    // `.blockId` values present on session.exercises at this point are, by
-    // definition, carry-forward from an upstream source -- either:
-    //   a) a prior build whose exercise objects were reused through any of
-    //      the recovery / rollback / substitution branches above
-    //      (preCorridorBaseline, preRerankSnapshot, preSubstitutionCandidates,
-    //      weekAdaptationAdjusted, etc. -- any of these can reintroduce
-    //      method metadata from an earlier mutation if a later branch
-    //      reassigns back to it),
-    //   b) a selector / evidence bridge that decorated the exercise pool
-    //      with grouped truth for variant reconciliation (see decoration
-    //      pass at ~L13060) and handed those decorated exercises back in,
-    //   c) a saved-program regeneration path where the previous plan's
-    //      method writes survived into the new build's candidate pool.
-    //
-    // Symptom the user observed: runtime parity header reporting
-    // `cluster=18` across a program where the current builder pass caps
-    // cluster at 1-2 sessions for the entire program (weekly budget in
-    // prompt 7). 18 vs 2 is mathematically impossible without stale carry
-    // OR flat-count semantics -- prompt 9 addresses both.
-    //
-    // WHAT: Wipe method-ownership fields on every exercise right here,
-    // before the first writer (supersets) runs. Do NOT touch prescription
-    // (sets/reps/tempo/rpe/rest) or selection truth (id/name/category/
-    // exercise/equipment/selectionReason) -- only the four fields that the
-    // materialization corridor itself owns and rewrites.
-    //
-    // SAFETY: The scrub is idempotent. On a fresh build with clean
-    // candidates it is a no-op. On any build where carry existed, it
-    // guarantees that downstream row tallies reflect this build's
-    // decisions only.
-    // =========================================================================
+    // [PRE-MATERIALIZATION-METHOD-SCRUB] The method materialization corridor
+    // (supersets → circuits → density → cluster) is the single authoritative
+    // owner of per-row method identity. Wipe any carry-forward .method /
+    // .methodLabel / .blockId / .setExecutionMethod on session.exercises
+    // before the first writer runs. Idempotent: no-op on a clean build.
+    // Does NOT touch prescription, selection truth, or unrelated fields.
     if (Array.isArray(session.exercises) && session.exercises.length > 0) {
       let scrubbedCount = 0
       const scrubbedSample: Array<{ name?: string; prevMethod?: string | null; prevBlockId?: string | null; prevSetExec?: string | null }> = []

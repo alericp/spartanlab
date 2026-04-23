@@ -12397,7 +12397,19 @@ async function generateAdaptiveProgramImpl(
     // If this week has already used its cluster budget, short-circuit BEFORE
     // scoring. Doctrine: cluster is an intentional, uncommon tool across the
     // week -- not a per-session accessory decoration.
-    const weeklyBudget = context?.weeklyMethodBudget ?? null
+    //
+    // [HOTFIX, prompt 8] This block lives inside `generateAdaptiveProgramImpl`
+    // (not `generateAdaptiveSession` -- see L5050 vs L22290). There is NO
+    // `context` parameter at this scope; referencing `context?.weeklyMethodBudget`
+    // here threw `ReferenceError: context is not defined` and degraded regenerate
+    // into the previous-plan fallback corridor at post_session/superset_grouping_applied.
+    // The `weeklyMethodBudget` const is created once inside this same function
+    // (just before the week loop, ~L10970) and is directly in lexical scope,
+    // so we reference it by its local name. Every other consumer below
+    // (`weeklyBudget.clusterSessionsUsed` / `.clusterAppliedDays` / the
+    // increment block) was already using the destructured `weeklyBudget`
+    // alias correctly -- only this one line was the leak.
+    const weeklyBudget = weeklyMethodBudget ?? null
     const weekClusterSaturated = !!weeklyBudget
       && weeklyBudget.clusterSessionsUsed >= weeklyBudget.maxClusterSessionsPerWeek
 

@@ -780,8 +780,43 @@ function WorkoutSessionContent() {
         demoMode,
       })
       
-      // [PHASE-VARIANT-TRUTH] Apply variant selection if specified
-      // This ensures Today page's selected variant (Full/45/30) flows through to live workout
+      // =======================================================================
+      // [SELECTED-SESSION-OWNERSHIP-LOCK] Authoritative variant application.
+      //
+      // The URL params read at the top of this component (`dayParam`,
+      // `executionMode`, `variantIndex`, `weekOverride`) are the EXCLUSIVE
+      // downstream authority for this corridor. They are written by
+      // AdaptiveSessionCard's `selectedSessionContract.selectedLaunchUrl` and
+      // MUST be honored here without any independent re-derivation from
+      // program state, storage, or defaults. The three jobs this block is
+      // allowed to do:
+      //
+      //   1. If `variantIndex > 0` AND a usable `variant.selection.main`
+      //      exists on the loaded session, replace `finalSession.exercises`
+      //      with the variant-narrowed, authoritative-identity-preserved
+      //      list (SESSION-TRUTH-UNITY) and prune styleMetadata exactly
+      //      the way the Program card does (SELECTED-SESSION-OWNERSHIP-LOCK
+      //      prune parity below).
+      //
+      //   2. If `variantIndex > 0` BUT the variant cannot be materialized
+      //      (variants array missing, or variant has no `selection.main`),
+      //      DO NOT silently fall back to the full session. Stamp at least
+      //      `estimatedMinutes` from the variant's declared duration so the
+      //      mode chip does not lie, and LOG CRITICAL so the upstream break
+      //      is auditable. See the two `else` branches below.
+      //
+      //   3. If `variantIndex === 0` (Full Session) do nothing - full
+      //      session is the correct booted shape.
+      //
+      // There is exactly ONE owner of selected-session truth in this
+      // corridor: AdaptiveSessionCard's `selectedSessionContract`. It
+      // writes the URL, this block reads the URL. No other code path in
+      // this route is allowed to derive, default, or replace the selected
+      // variant -- the useEffect dep array at the bottom of this function
+      // (dayParam, demoMode, isFirstSession, variantIndex, executionMode,
+      // weekOverride) ensures any change to the contract re-enters this
+      // resolver and no stale render can survive.
+      // =======================================================================
       let finalSession = result.session
       if (variantIndex > 0 && result.session.variants && result.session.variants[variantIndex]) {
         const variant = result.session.variants[variantIndex]
@@ -874,43 +909,73 @@ function WorkoutSessionContent() {
           })
 
           // ===================================================================
-          // [SESSION-TRUTH-UNITY] Prune styleMetadata.styledGroups so runtime
-          // grouped-plan derivation only references exercises present in the
-          // selected variant. Without this, a superset whose second member
-          // was dropped by compression would still tell StreamlinedWorkoutSession
-          // to execute both members (it reads groups.exercises, not the
-          // exercise list), producing an execution that disagrees with the
-          // Program card and the variant itself.
+          // [SELECTED-SESSION-OWNERSHIP-LOCK] Prune styleMetadata.styledGroups
+          // so runtime grouped-plan derivation only references exercises
+          // present in the selected variant. Without this, a superset whose
+          // second member was dropped by compression would still tell
+          // StreamlinedWorkoutSession to execute both members (it reads
+          // groups.exercises, not the exercise list), producing an execution
+          // that disagrees with the Program card and the variant itself.
+          //
+          // [SELECTED-SESSION-OWNERSHIP-LOCK] This prune MUST exactly mirror
+          // AdaptiveSessionCard's `variantPrunedStyleMetadata` (see
+          // components/programs/AdaptiveSessionCard.tsx:786-852). Previously
+          // this route's prune diverged from the card in two material ways:
+          //   1. The card matches surviving members on id OR normalized name
+          //      OR `blockId` (VARIANT-PRUNE-BLOCKID-MATCH). This route only
+          //      matched id + name, so any group whose member survived only
+          //      via shared blockId on the card was silently DROPPED on the
+          //      live workout boot. Result: cluster/superset chip visible on
+          //      Program card, but flat execution in live workout.
+          //   2. The card's method minimums are `straight` always kept,
+          //      `superset`/`circuit` >= 2, `cluster`/`density_block`/default
+          //      >= 1 (METHOD-ONLY-VISIBILITY). This route required
+          //      `density_block` >= 2, so 1-member method-only density blocks
+          //      survived card prune but were silently dropped here.
+          // Both divergences are now closed -- route prune uses the same
+          // three-signal survivor set (id + normalized name + blockId) and
+          // the same per-method minimums as the card.
           // ===================================================================
           let prunedStyleMetadata = result.session.styleMetadata
           if (result.session.styleMetadata?.styledGroups) {
             const survivingIds = new Set(variantExercises.map((e) => e.id))
             const survivingNames = new Set(variantExercises.map((e) => normKey(e.name)))
+            // [SELECTED-SESSION-OWNERSHIP-LOCK] blockId survivor signal -
+            // matches AdaptiveSessionCard's VARIANT-PRUNE-BLOCKID-MATCH so a
+            // group whose member retains its originating blockId under the
+            // selected variant is not silently stranded below its method
+            // minimum.
+            const survivingBlockIds = new Set(
+              variantExercises
+                .map((e) => (e as unknown as { blockId?: string }).blockId)
+                .filter((b): b is string => typeof b === 'string' && b.length > 0)
+            )
             const prunedGroups = result.session.styleMetadata.styledGroups
               .map((g) => {
+                const groupBlockSurvives =
+                  typeof g.id === 'string' && g.id.length > 0 && survivingBlockIds.has(g.id)
                 const keptMembers = g.exercises.filter(
-                  (m) => survivingIds.has(m.id) || survivingNames.has(normKey(m.name))
+                  (m) =>
+                    survivingIds.has(m.id) ||
+                    survivingNames.has(normKey(m.name)) ||
+                    groupBlockSurvives
                 )
                 return { ...g, exercises: keptMembers }
               })
-              // [METHOD-MIN-MEMBERS-AUTHORITY] Method-specific minimums so we
-              // don't accidentally drop legitimate single-exercise cluster
-              // groups. Inlined to match the canonical `minMembersFor()` in
-              // components/programs/lib/session-group-display.ts without
-              // adding a top-level import to this boot-sensitive route. Rule
-              // MUST stay in sync with that helper (and with the identical
-              // prune in AdaptiveSessionCard's variantPrunedStyleMetadata).
-              //   superset / circuit / density_block -> 2 members minimum
-              //   cluster                             -> 1 member minimum
-              //   straight / default                  -> 1 member minimum
+              // [SELECTED-SESSION-OWNERSHIP-LOCK] Method-specific minimums.
+              // MUST stay byte-for-byte in sync with AdaptiveSessionCard's
+              // variantPrunedStyleMetadata (METHOD-ONLY-VISIBILITY).
+              //   straight                            -> always kept
+              //   superset / circuit                  -> >= 2 members
+              //   cluster / density_block / default   -> >= 1 member
               .filter((g) => {
-                const minMembers =
-                  g.groupType === 'superset' ||
-                  g.groupType === 'circuit' ||
-                  g.groupType === 'density_block'
-                    ? 2
-                    : 1
-                return g.exercises.length >= minMembers
+                if (g.groupType === 'straight') return true
+                if (g.groupType === 'superset' || g.groupType === 'circuit') {
+                  return g.exercises.length >= 2
+                }
+                // cluster, density_block, and any other method-only style
+                // the card keeps at >= 1
+                return g.exercises.length >= 1
               })
 
             prunedStyleMetadata = {
@@ -918,10 +983,15 @@ function WorkoutSessionContent() {
               styledGroups: prunedGroups,
             }
 
-            console.log('[SESSION-TRUTH-UNITY] Pruned styledGroups for variant', {
+            console.log('[SELECTED-SESSION-OWNERSHIP-LOCK] Pruned styledGroups for variant (card-parity)', {
               variantIndex,
               originalGroupCount: result.session.styleMetadata.styledGroups.length,
               prunedGroupCount: prunedGroups.length,
+              survivorSignals: {
+                idCount: survivingIds.size,
+                nameCount: survivingNames.size,
+                blockIdCount: survivingBlockIds.size,
+              },
             })
           }
 
@@ -931,7 +1001,76 @@ function WorkoutSessionContent() {
             estimatedMinutes: variant.duration,
             styleMetadata: prunedStyleMetadata,
           }
+        } else {
+          // =================================================================
+          // [SELECTED-SESSION-OWNERSHIP-LOCK] Stale-fallback CUT-OFF.
+          //
+          // Prior behavior: when `variantIndex > 0` but the variant object
+          // had no `selection.main` payload (corrupt/old cached program,
+          // partially regenerated variant, etc.), this block was entirely
+          // skipped and `finalSession` silently reverted to the FULL session
+          // from `result.session`. That was the single biggest silent
+          // divergence in the corridor: the user pressed 45/30 on the
+          // Program card, the Card's launch payload correctly emitted
+          // `variant=1&mode=45_min`, the route parsed both, but the live
+          // workout booted the full session anyway -- with no log, no user
+          // signal, and no way to tell from the live workout screen that a
+          // variant was ever requested.
+          //
+          // The cut-off: if variant was requested but cannot be materialized,
+          // we refuse to let full-session truth win silently. We:
+          //   (a) KEEP `result.session` exercises (we have no variant body
+          //       to substitute in - the variant had no selection.main), but
+          //   (b) STAMP `estimatedMinutes` to `variant.duration` when the
+          //       variant object at least declared a duration, so the mode
+          //       label and duration on the live workout stay consistent
+          //       with what the Program card launched, and
+          //   (c) LOG LOUDLY with CRITICAL severity so upstream (program
+          //       generation / variant selection.main population) can be
+          //       traced and fixed. This is intentionally NOT a fallback
+          //       replacement for missing variant data - it is a visible
+          //       divergence marker so the failure is auditable instead of
+          //       silent.
+          // =================================================================
+          const variantDuration =
+            typeof variant?.duration === 'number' && variant.duration > 0
+              ? variant.duration
+              : result.session.estimatedMinutes
+          finalSession = {
+            ...result.session,
+            estimatedMinutes: variantDuration,
+          }
+          console.error('[SELECTED-SESSION-OWNERSHIP-LOCK] CRITICAL variant divergence - selection.main missing', {
+            variantIndex,
+            variantLabel: variant?.label,
+            variantDurationDeclared: variant?.duration,
+            hasSelectionObject: !!variant?.selection,
+            hasMainArray: Array.isArray(variant?.selection?.main),
+            mainArrayLength: Array.isArray(variant?.selection?.main)
+              ? variant!.selection.main.length
+              : 'not_array',
+            fullSessionExerciseCount: result.session.exercises.length,
+            action: 'kept_full_session_exercises_stamped_variant_duration',
+            note: 'Variant was requested by URL but variant.selection.main was unusable. Full-session exercises were kept (no variant body to substitute) but estimatedMinutes was stamped to the variant\'s declared duration so the live workout does not silently claim to be full mode. Upstream program generation must populate variant.selection.main.',
+          })
         }
+      } else if (variantIndex > 0) {
+        // =================================================================
+        // [SELECTED-SESSION-OWNERSHIP-LOCK] Second stale-fallback CUT-OFF.
+        // Variant index was requested but the variants array is missing or
+        // too short entirely. Previously this silently reverted to full
+        // session with no trace. Now logged as CRITICAL so the upstream
+        // break (variants never generated, stale session cached) is visible.
+        // =================================================================
+        console.error('[SELECTED-SESSION-OWNERSHIP-LOCK] CRITICAL variant divergence - variants array unusable', {
+          variantIndex,
+          hasVariantsArray: Array.isArray(result.session.variants),
+          variantsLength: Array.isArray(result.session.variants)
+            ? result.session.variants.length
+            : 'not_array',
+          action: 'kept_full_session',
+          note: 'Variant was requested by URL but result.session.variants[variantIndex] is missing. This indicates the loaded program has no variants or the index is out of range. Live workout will boot full session - upstream must populate session.variants.',
+        })
       }
       
       // Set session and meta - GUARANTEED to have valid session

@@ -66,6 +66,10 @@ type SessionExercise = {
   blockId?: string | null
   method?: string | null
   methodLabel?: string | null
+  // [SET-EXECUTION-TRUTH] Authoritative row-level set-execution identity.
+  // Cluster / rest-pause / top-set etc. live here; `.method` stays as the
+  // legacy grouped-structure field (see `resolveRowExecMethod`).
+  setExecutionMethod?: string | null
 }
 type ProgramSession = {
   dayNumber?: number | null
@@ -91,9 +95,24 @@ function normalizeMethod(raw: string | null | undefined): SupportedMethod | null
   const m = raw.toLowerCase()
   if (m === 'superset') return 'superset'
   if (m === 'circuit') return 'circuit'
-  if (m === 'cluster') return 'cluster'
+  if (m === 'cluster' || m === 'cluster_set' || m === 'cluster_sets') return 'cluster'
   if (m === 'density_block' || m === 'density') return 'density_block'
   return null
+}
+
+// [SET-EXECUTION-TRUTH-RESOLVER] Single row-level method resolver.
+// Priority: `setExecutionMethod` (authoritative row-level set-execution
+// truth) FIRST, then `method` (legacy grouped-structure field) as fallback.
+// `'straight' | 'straight_sets' | ''` return null. Used only for method-cue
+// visibility gates below -- the grouped-structure detection (Priority 1
+// styledGroups and Priority 2 blockId+method) intentionally still reads
+// `.method` only, because the builder writes grouped identity onto `.method`
+// (per `lib/adaptive-program-builder.ts`). This resolver exists purely so
+// single-row cluster (`setExecutionMethod='cluster'`, no blockId, possibly
+// empty `.method`) surfaces as a method cue in the scanner.
+function resolveRowExecMethod(ex: SessionExercise | null | undefined): SupportedMethod | null {
+  if (!ex) return null
+  return normalizeMethod(ex.setExecutionMethod) || normalizeMethod(ex.method)
 }
 
 function hasUsableName(n: string | null | undefined): boolean {
@@ -191,7 +210,12 @@ function summarizeSession(sess: ProgramSession) {
     cluster: 0,
   }
   for (const ex of exercises) {
-    const method = normalizeMethod(ex?.method)
+    // [SET-EXECUTION-TRUTH-GATE] Single-exercise method cues honor
+    // `setExecutionMethod` first. Without this, a row carrying
+    // `setExecutionMethod='cluster'` (no blockId, empty `.method`) would
+    // read as zero method cues in the scanner -- exactly the "Program
+    // page looks flat" regression.
+    const method = resolveRowExecMethod(ex)
     if (!method) continue
     if (ex?.blockId && consumedByGroupBlockIds.has(ex.blockId)) continue
     // If no blockId, it's intrinsically a single-exercise method cue.
@@ -239,6 +263,9 @@ function summarizeSession(sess: ProgramSession) {
   //                                 render it as a framed block.
   let reasonToken: string | null = null
   if (groupedBlockCount === 0 && singleMethodCounts.cluster > 0) {
+    // Grouped-structure test here still reads `.method` because that's the
+    // field the builder writes for grouped-member identity; `setExecutionMethod`
+    // without a blockId is by definition single-row set-execution, not grouped.
     const hasClusterWithBlockId = exercises.some(
       e => (e?.method || '').toLowerCase() === 'cluster' && !!e?.blockId,
     )

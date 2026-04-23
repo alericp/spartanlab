@@ -1361,6 +1361,31 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       return false
     })()
 
+    // [SET-EXECUTION-TRUTH-RESOLVER] Single row-level method family resolver
+    // used by the visibility gates + tallies below. Priority:
+    //   1. `setExecutionMethod` (authoritative row-level set-execution truth)
+    //   2. `method` (legacy; still written by the builder for grouped members)
+    // Returns a collapsed family string or null when the row is straight.
+    // Only used for row-level method-cue surfaces -- grouped-STRUCTURE
+    // detection (`hasGroupedTruth`, synthesis of grouped blocks, blockId+method
+    // membership) intentionally still reads `.method` alone because the
+    // builder writes grouped identity onto `.method`. That keeps single-row
+    // cluster from reactivating fake grouped blocks.
+    const resolveRowExecFamily = (ex: unknown): 'superset' | 'circuit' | 'cluster' | 'density' | null => {
+      const e = ex as { method?: string; setExecutionMethod?: string }
+      const se = (e?.setExecutionMethod || '').toLowerCase().trim()
+      const mm = (e?.method || '').toLowerCase().trim()
+      const pick = (raw: string): 'superset' | 'circuit' | 'cluster' | 'density' | null => {
+        if (!raw || raw === 'straight' || raw === 'straight_sets') return null
+        if (raw === 'superset') return 'superset'
+        if (raw === 'circuit' || raw === 'circuits') return 'circuit'
+        if (raw === 'cluster' || raw === 'cluster_set' || raw === 'cluster_sets') return 'cluster'
+        if (raw === 'density' || raw === 'density_block') return 'density'
+        return null
+      }
+      return pick(se) || pick(mm)
+    }
+
     // [SET-EXECUTION-TRUTH-GATE] Detect non-straight methods living on
     // INDIVIDUAL exercise rows (cluster / density / etc.), independent of
     // blockId and independent of `hasGroupedTruth`.
@@ -1386,9 +1411,11 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     //     `hasGroupedTruth: false` / `hasRichRenderableGroups: false` so
     //     nothing in the grouped corridor can be reactivated).
     const hasAnySetExecutionMethodOnRows = safeExercises.some(ex => {
-      const m = ((ex as unknown as { method?: string }).method || '').toLowerCase()
-      if (!m || m === 'straight' || m === 'straight_sets') return false
-      return true
+      // [SET-EXECUTION-TRUTH-GATE] Read `setExecutionMethod` FIRST so a
+      // single-row cluster (builder writes `.setExecutionMethod='cluster'`
+      // but leaves legacy `.method` empty/straight) still activates the
+      // METHOD_ONLY_FLAT dispatch and its visible surfaces.
+      return resolveRowExecFamily(ex) !== null
     })
 
     if ((hasGroupedTruth || hasAnySetExecutionMethodOnRows) && !hasRenderableGroupedBlockStructure) {
@@ -1414,13 +1441,17 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       // corridor can be reactivated by these counts.
       let meoSuper = 0, meoCirc = 0, meoDens = 0, meoClust = 0
       for (const ex of safeExercises) {
-        const raw = (ex as unknown as { method?: string }).method
-        const m = (raw || '').toLowerCase()
-        if (!m || m === 'straight' || m === 'straight_sets') continue
-        if (m === 'cluster' || m === 'cluster_sets') meoClust++
-        else if (m === 'density_block' || m === 'density') meoDens++
-        else if (m === 'superset') meoSuper++
-        else if (m === 'circuit' || m === 'circuits') meoCirc++
+        // [SET-EXECUTION-TRUTH-TALLY] Count per-row set-execution families
+        // via the resolver so single-row cluster / density are counted even
+        // when only `setExecutionMethod` carries the truth. These feed the
+        // top-of-body chip tally + "Set-execution methods applied to
+        // individual rows" headline.
+        const fam = resolveRowExecFamily(ex)
+        if (!fam) continue
+        if (fam === 'cluster') meoClust++
+        else if (fam === 'density') meoDens++
+        else if (fam === 'superset') meoSuper++
+        else if (fam === 'circuit') meoCirc++
       }
       return {
         mode: 'flat_category' as const,
@@ -1459,15 +1490,16 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       }
       const seenBlockIds = new Set<string>()
       for (const ex of safeExercises) {
-        const m = ((ex as unknown as { method?: string }).method || '').toLowerCase()
+        const fam = resolveRowExecFamily(ex)
         const b = (ex as unknown as { blockId?: string }).blockId
         if (b && seenBlockIds.has(b)) continue
         if (b) seenBlockIds.add(b)
         // Only tally method-only cluster/density execution (no blockId);
         // superset/circuit require blockId and were already counted from
-        // the styledGroups signal above.
-        if (!b && m === 'cluster') rawClust++
-        else if (!b && (m === 'density_block' || m === 'density')) rawDens++
+        // the styledGroups signal above. Reads authoritative row-level
+        // set-execution first so single-row cluster is never silently lost.
+        if (!b && fam === 'cluster') rawClust++
+        else if (!b && fam === 'density') rawDens++
       }
 
       // [FAILURE-STAGE-ATTRIBUTION] Pick the ONE final losing stage. Each
@@ -2223,17 +2255,27 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     mode === 'raw_grouped_fallback' ||
     mode === 'simple_order_grouped'
   // Method cues: any non-straight method on any row, NOT counted as a block.
+  // [SET-EXECUTION-TRUTH-STATUS] Read `setExecutionMethod` FIRST then fall back
+  // to legacy `.method`. Without this, a session whose only non-straight signal
+  // is a single-row `setExecutionMethod='cluster'` would show "No method cues"
+  // in the status line even though the builder applied cluster set-execution.
   let hasAnyNonStraightMethod = false
   const methodSet = new Set<string>()
   for (const ex of safeExercises) {
-    const m = ((ex as unknown as { method?: string }).method || '').toLowerCase()
-    if (!m || m === 'straight' || m === 'straight_sets') continue
+    const e = ex as unknown as { method?: string; setExecutionMethod?: string }
+    const se = (e.setExecutionMethod || '').toLowerCase()
+    const mm = (e.method || '').toLowerCase()
+    const raw =
+      se && se !== 'straight' && se !== 'straight_sets'
+        ? se
+        : (mm && mm !== 'straight' && mm !== 'straight_sets' ? mm : '')
+    if (!raw) continue
     hasAnyNonStraightMethod = true
-    if (m === 'superset') methodSet.add('superset')
-    else if (m === 'circuit') methodSet.add('circuit')
-    else if (m === 'cluster') methodSet.add('cluster')
-    else if (m === 'density' || m === 'density_block') methodSet.add('density')
-    else methodSet.add(m)
+    if (raw === 'superset') methodSet.add('superset')
+    else if (raw === 'circuit' || raw === 'circuits') methodSet.add('circuit')
+    else if (raw === 'cluster' || raw === 'cluster_set' || raw === 'cluster_sets') methodSet.add('cluster')
+    else if (raw === 'density' || raw === 'density_block') methodSet.add('density')
+    else methodSet.add(raw)
   }
   const isMethodOnly = !isGroupedBlocks && hasAnyNonStraightMethod
   if (!isGroupedBlocks && !isMethodOnly) return null

@@ -1034,7 +1034,15 @@ export interface AdaptiveSession {
     targetExerciseName: string
     score: number            // final scored value from the candidate loop
     position: number         // 0-indexed slot in the session (primary-effort zone: 0 or 1)
-    kind: 'skill_hold' | 'heavy_compound'
+    // [CLUSTER-DOCTRINE-INVERSION] New doctrine emits late/accumulation kinds.
+    // Legacy 'skill_hold' / 'heavy_compound' retained so saved sessions
+    // materialized under the prior (inverted) doctrine still type-check.
+    kind:
+      | 'late_accessory_accumulation'   // canonical case: late accessory completion
+      | 'secondary_strength_completion' // non-primary strength, late in session
+      | 'late_skill_accumulation'       // skill drill that is NOT the primary skill slot
+      | 'skill_hold'                    // legacy (pre-inversion saved sessions)
+      | 'heavy_compound'                // legacy (pre-inversion saved sessions)
     reasonTokens: string[]   // stable machine tokens for audit/tests
     reasonSummary: string    // clean human copy for the card
     type: 'method_cue' | 'grouped_block'  // today always 'method_cue' -- future multi-member blocks flip this
@@ -11661,10 +11669,11 @@ async function generateAdaptiveProgramImpl(
     
     // [STRENGTHENED] Compute whether skill work needs protection (separate from blocking all grouping)
     // This protects skill exercises themselves but allows accessory grouping.
-    // [CLUSTER-DOCTRINE-TIGHTENED] No longer the cluster gate -- cluster now
-    // requires `hasPrimaryEffortClusterCandidate` (below). Prefixed with _
-    // to silence unused-const warnings; kept for future auditors who expect
-    // this rolled-up signal to exist.
+    // [CLUSTER-DOCTRINE-INVERSION] No longer the cluster gate. Cluster now
+    // requires `hasLateAccumulationClusterCandidate` (below, via the role/
+    // position/intent ladder). This signal is kept only for other auditors
+    // (session composition, materiality) and is not consumed by the cluster
+    // decision path.
     const _hasSkillWorkToProtect = skillExerciseCount >= 1
     void _hasSkillWorkToProtect
     
@@ -11722,46 +11731,115 @@ async function generateAdaptiveProgramImpl(
     const blueprintCircuitEligibility = sessionCompositionBlueprint?.methodEligibility?.circuits
     const blueprintDensityEligibility = sessionCompositionBlueprint?.methodEligibility?.density
     
-    // [CLUSTER-DOCTRINE-TIGHTENED] Cluster eligibility now requires an actual
-    // cluster-appropriate candidate to EXIST in the session's primary-effort
-    // zone (position 0 or 1). Previously `hasSkillWorkToProtect` (any skill
-    // exercise anywhere in the session) was the only gate, which caused
-    // cluster to fire on nearly every session that carried any skill work --
-    // the candidate loop at ~12192 then always found something scoring >=60
-    // (heavy-weighted compound at position 0 scored 70; skill hold at any
-    // position scored 100+). Result: cluster appeared generically across
-    // almost every skill day and the user read the Program page as
-    // "everything is a cluster set".
+    // =========================================================================
+    // [CLUSTER-DOCTRINE-INVERSION]  Prompt 5 of the method checklist.
     //
-    // New gate: the session must contain either a PRIMARY-EFFORT SKILL HOLD
-    // (category='skill' + concrete hold-root keyword, position 0-1) or a
-    // PRIMARY-EFFORT HEAVY WEIGHTED COMPOUND (category='strength' +
-    // "weighted" + approved compound root, position 0-1). Accessory
-    // positions (2+) no longer qualify because cluster is intrinsically a
-    // primary-effort quality-preservation method -- applying it to a
-    // position-2 row is the "marginally qualifies" case the prompt flagged.
+    // Previous doctrine (CLUSTER-DOCTRINE-TIGHTENED) gated cluster onto the
+    // session's EARLY position-0/1 primary skill holds and heavy compounds.
+    // That is precisely the "weak / usually wrong" cluster usage the user's
+    // saved doctrine names: early freshness-dependent primary work must stay
+    // STRAIGHT for quality. Cluster is a completion / accumulation tool that
+    // belongs LATE in a session on accessory / secondary-strength / late
+    // skill-accumulation work where clean rep targets matter more than
+    // uninterrupted straight-set purity.
     //
-    // The same keyword roots are reused by the candidate loop at ~12192 so
-    // eligibility here and selection there stay consistent.
-    const CLUSTER_SKILL_HOLD_ROOTS = [
-      'planche', 'lever', 'handstand', 'iron cross', 'l-sit', 'lsit',
-      'v-sit', 'vsit', 'flag', 'maltese', 'victorian',
-    ]
-    const CLUSTER_HEAVY_COMPOUND_ROOTS = [
-      'pull-up', 'pullup', 'chin-up', 'chinup', 'dip', 'muscle-up', 'muscleup',
-      'squat', 'deadlift', 'press', 'row', 'ring',
-    ]
-    const hasPrimaryEffortClusterCandidate = (session.exercises || []).some((ex, position) => {
-      if (position > 1) return false // primary-effort zone only
-      if (ex.blockId) return false    // already in a grouped block -- cluster must not steal
-      const nameLower = ex.name?.toLowerCase() || ''
-      const isSkillHold = ex.category === 'skill' &&
-        CLUSTER_SKILL_HOLD_ROOTS.some(root => nameLower.includes(root))
-      const isHeavyWork = ex.category === 'strength' &&
-        nameLower.includes('weighted') &&
-        CLUSTER_HEAVY_COMPOUND_ROOTS.some(root => nameLower.includes(root))
-      return isSkillHold || isHeavyWork
-    })
+    // NEW DECISION LADDER (kept in a single place so eligibility here and
+    // scoring below agree by construction -- they share `classifyForCluster`):
+    //
+    //   LAYER 1 - ROLE
+    //     skill_primary         : category='skill' + selectionReason~'primary'
+    //     skill_accumulation    : category='skill' + NOT primary
+    //     primary_strength      : category='strength' + selectionReason~'primary'
+    //     secondary_strength    : category='strength' + NOT primary
+    //     accessory             : category='accessory'
+    //     core_or_support       : category='core' | 'support'
+    //
+    //   LAYER 2 - POSITION TIER  (earliestLateIndex = max(2, ceil(total/2)))
+    //     early : position <= 1                  (freshness zone)
+    //     mid   : 2 <= position < earliestLate   (transitional)
+    //     late  : position >= earliestLate       (fatigue-tolerant zone)
+    //
+    //   LAYER 3 - OUTPUT INTENT  (baked into role base score)
+    //     quality   : skill_primary / primary_strength   (cluster REJECTED)
+    //     strength  : secondary_strength                  (cluster bonus low)
+    //     accumulation / completion : accessory + late    (cluster bonus high)
+    //     hypertrophy : core_or_support + late            (cluster bonus low)
+    //
+    //   LAYER 4 - ELIGIBILITY (hard gates, before scoring):
+    //     reject if isGrouped                  (don't steal block members)
+    //     reject if role ∈ {skill_primary, primary_strength}  (doctrine: quality)
+    //     reject if selectionReason~'primary'  (explicit primary-effort guard)
+    //     reject if positionTier === 'early'   (doctrine: freshness-critical)
+    //
+    //   LAYER 5 - SCORING (eligible candidates only):
+    //     base by role:
+    //       accessory           = 80   (canonical cluster target per doctrine)
+    //       secondary_strength  = 70
+    //       core_or_support     = 55
+    //       skill_accumulation  = 45   (only narrow late skill-accum case)
+    //     positionAdj:
+    //       mid  : -20                 (still close to primary-effort energy)
+    //       late : +(position - earliestLate + 1) * 5   (later = better)
+    //
+    //   MIN_CLUSTER_SCORE raised 60 -> 75 so only strong picks stick.
+    //
+    // Session-level sanity: exactly one cluster per session (top candidate
+    // only), preserving the prior "cluster doesn't swallow the program" goal
+    // by construction rather than by post-hoc demotion.
+    // =========================================================================
+    const _totalSessionExercises = session.exercises?.length || 0
+    const _earliestLateIndex = Math.max(2, Math.ceil(_totalSessionExercises / 2))
+
+    type ClusterRole =
+      | 'skill_primary' | 'skill_accumulation'
+      | 'primary_strength' | 'secondary_strength'
+      | 'accessory' | 'core_or_support'
+    type ClusterPositionTier = 'early' | 'mid' | 'late'
+
+    const classifyForCluster = (
+      ex: NonNullable<typeof session.exercises>[number],
+      position: number
+    ): {
+      role: ClusterRole
+      positionTier: ClusterPositionTier
+      isPrimary: boolean
+      isGrouped: boolean
+    } => {
+      const isPrimary = !!ex.selectionReason?.includes('primary')
+      const isGrouped = !!ex.blockId
+      let role: ClusterRole
+      if (ex.category === 'skill') {
+        role = isPrimary ? 'skill_primary' : 'skill_accumulation'
+      } else if (ex.category === 'strength') {
+        role = isPrimary ? 'primary_strength' : 'secondary_strength'
+      } else if (ex.category === 'core' || ex.category === 'support') {
+        role = 'core_or_support'
+      } else {
+        role = 'accessory'
+      }
+      let positionTier: ClusterPositionTier
+      if (position <= 1) positionTier = 'early'
+      else if (position < _earliestLateIndex) positionTier = 'mid'
+      else positionTier = 'late'
+      return { role, positionTier, isPrimary, isGrouped }
+    }
+
+    const isClusterEligible = (
+      ex: NonNullable<typeof session.exercises>[number],
+      position: number
+    ): boolean => {
+      const { role, positionTier, isPrimary, isGrouped } = classifyForCluster(ex, position)
+      if (isGrouped) return false                                       // don't steal block members
+      if (isPrimary) return false                                       // explicit primary-effort guard
+      if (role === 'skill_primary' || role === 'primary_strength') return false  // freshness-critical
+      if (positionTier === 'early') return false                        // freshness zone
+      return true
+    }
+
+    // Eligibility flag: does ANY exercise pass the new doctrine gate?
+    // Replaces the old inverted `hasPrimaryEffortClusterCandidate`.
+    const hasLateAccumulationClusterCandidate =
+      (session.exercises || []).some((ex, position) => isClusterEligible(ex, position))
     
     // Build the authoritative session method intent contract
     const sessionMethodIntentContract = {
@@ -11793,20 +11871,22 @@ async function generateAdaptiveProgramImpl(
       // Density: same as circuits
       densityAllowed: accessoryTailSize >= 3,
       densityEarned: accessoryTailSize >= 3,
-      // [CLUSTER-DOCTRINE-TIGHTENED] Cluster eligibility now requires a
-      // concrete primary-effort quality-preservation candidate to exist in
-      // the session (see `hasPrimaryEffortClusterCandidate` above).
-      clusterAllowed: hasPrimaryEffortClusterCandidate,
+      // [CLUSTER-DOCTRINE-INVERSION] Cluster eligibility now requires a
+      // concrete LATE-SESSION accessory / secondary-strength / skill-
+      // accumulation candidate to exist (not an early primary-effort slot).
+      // See `hasLateAccumulationClusterCandidate` and the decision-ladder
+      // comment directly above it.
+      clusterAllowed: hasLateAccumulationClusterCandidate,
       
       // [STRENGTHENED] Final method selection - lower thresholds, trust user preferences
       shouldApplySupersets: methodPrefsForGrouping.includes('supersets') && accessoryTailSize >= 2,
       // Circuits allowed even on skill days - we protect skill exercises separately
       shouldApplyCircuits: methodPrefsForGrouping.includes('circuits') && accessoryTailSize >= 3,
       shouldApplyDensity: methodPrefsForGrouping.includes('density_blocks') && accessoryTailSize >= 3,
-      // [CLUSTER-DOCTRINE-TIGHTENED] Now uses the stricter `clusterAllowed`
-      // gate (primary-effort candidate must truly exist) instead of
-      // `hasSkillWorkToProtect` (any skill exercise).
-      shouldApplyCluster: methodPrefsForGrouping.includes('cluster_sets') && hasPrimaryEffortClusterCandidate,
+      // [CLUSTER-DOCTRINE-INVERSION] Now uses the inverted-doctrine gate
+      // (late-accumulation candidate must truly exist) rather than the
+      // prior primary-effort gate.
+      shouldApplyCluster: methodPrefsForGrouping.includes('cluster_sets') && hasLateAccumulationClusterCandidate,
       
       // Packaging priority (what to try first)
       preferredPackagingOrder: [
@@ -12241,147 +12321,152 @@ async function generateAdaptiveProgramImpl(
     }
     
     // -------------------------------------------------------------------------
-    // CLUSTER SET MATERIALIZATION
-    // Applies to high-skill or heavy strength work to maintain quality.
+    // CLUSTER SET MATERIALIZATION  [CLUSTER-DOCTRINE-INVERSION]
     //
-    // [CLUSTER-DOCTRINE-CORRECTION]
-    // 1. REST-PAUSE LEAK REMOVED. Previously `methodPrefsForGrouping.includes(
-    //    'rest_pause')` silently widened cluster evaluation -- rest-pause is a
-    //    distinct intra-set technique, NOT cluster-sets, and its preference
-    //    must not conscript cluster materialization for the Program grouped
-    //    corridor. Rest-pause remains handled by its own path.
+    // See the full decision-ladder comment above `classifyForCluster`
+    // (~L11725). This block consumes that ladder:
+    //   - `isClusterEligible` applies the hard gates (role, position, primary,
+    //     grouped) BEFORE scoring.
+    //   - Scoring then weights role base + position-tier adjustment so late
+    //     accessories win and secondary strength / core / skill-accumulation
+    //     are admitted selectively.
+    //   - MIN_CLUSTER_SCORE = 75 (up from 60) so marginal picks don't stick.
+    //   - Exactly one cluster per session (top candidate only) -- session-
+    //     level monoculture prevention is enforced by construction.
     //
-    // 2. ELIGIBILITY HARDENED. `isSkillHold` now requires the exercise to be
-    //    an actual primary-effort skill hold (category === 'skill' with a
-    //    concrete hold/lever keyword AND in the first 2 positions of the
-    //    session so accessory drills don't accidentally qualify). `isHeavyWork`
-    //    now requires strength category + "weighted" + one of the approved
-    //    compound roots (pull-up/chin-up/dip/muscle-up/squat/deadlift/press/
-    //    row/ring), so generic rows that happen to contain "weighted" in
-    //    their name are no longer swept up.
-    //
-    // 3. CANDIDATE RANKING. We no longer pick the first qualifying exercise.
-    //    Candidates are scored (skill-hold > heavy-weighted; earlier session
-    //    position > later) and only the top candidate receives cluster -- and
-    //    only if its score clears a minimum threshold. This prevents cluster
-    //    from being applied to a marginal "vaguely qualifies" row.
+    // All method-carry stamping (ex.method / ex.methodLabel /
+    // ex.setExecutionMethod / styleMetadata.clusterDecision) is preserved
+    // verbatim so the row-level method visibility corridor (AdaptiveSession-
+    // Card panel, row method truth log, session chip row) keeps rendering
+    // whenever cluster fires -- the visual corridor proven in prompts 1-4 is
+    // untouched; only WHICH exercise becomes the cluster target changes.
     // -------------------------------------------------------------------------
     const shouldEvaluateCluster = sessionMethodIntentContract.shouldApplyCluster
-    
+
     if (shouldEvaluateCluster && session.exercises && session.exercises.length > 0) {
-      // [CLUSTER-DOCTRINE-TIGHTENED] Keyword roots hoisted to the eligibility
-      // gate above (`CLUSTER_SKILL_HOLD_ROOTS` / `CLUSTER_HEAVY_COMPOUND_ROOTS`
-      // at ~11688). Reusing them here guarantees eligibility and selection
-      // agree on the same keyword set -- if eligibility said yes, selection
-      // will find the same candidate; if eligibility said no, selection will
-      // short-circuit (it never enters this block because `shouldEvaluateCluster`
-      // is false).
-      type ClusterCandidate = { ex: NonNullable<typeof session.exercises>[number]; score: number; index: number }
+      type ClusterCandidate = {
+        ex: NonNullable<typeof session.exercises>[number]
+        score: number
+        index: number
+        role: ClusterRole
+        positionTier: ClusterPositionTier
+      }
       const candidates: ClusterCandidate[] = []
+      const rejectLog: Array<{ name: string; reason: string }> = []
+
       session.exercises.forEach((ex, position) => {
-        if (ex.blockId) return // already grouped -- cluster must not steal a block member
-        const nameLower = ex.name?.toLowerCase() || ''
-        const isSkillHold = ex.category === 'skill' &&
-          CLUSTER_SKILL_HOLD_ROOTS.some(root => nameLower.includes(root))
-        const isHeavyWork = ex.category === 'strength' &&
-          nameLower.includes('weighted') &&
-          CLUSTER_HEAVY_COMPOUND_ROOTS.some(root => nameLower.includes(root))
-        if (!isSkillHold && !isHeavyWork) return
-        // [CLUSTER-DOCTRINE-TIGHTENED] Position gate narrowed from 0-2 to 0-1.
-        // Cluster is intrinsically a primary-effort quality-preservation
-        // method -- applying it to a position-2 row was the "marginally
-        // qualifies" case that bloated cluster into most skill days.
-        if (position > 1) return
-        // Score: skill holds outrank heavy weighted work (their quality loss
-        // per rep is higher); earlier-position outranks later within a tier.
-        const baseScore = isSkillHold ? 100 : 60
-        const positionBonus = Math.max(0, 10 - position * 3)
-        candidates.push({ ex, score: baseScore + positionBonus, index: position })
+        const { role, positionTier, isPrimary, isGrouped } = classifyForCluster(ex, position)
+
+        // Hard eligibility gates (mirror `isClusterEligible` so keep in sync).
+        if (isGrouped) {
+          rejectLog.push({ name: ex.name || '?', reason: 'already_grouped' })
+          return
+        }
+        if (isPrimary) {
+          rejectLog.push({ name: ex.name || '?', reason: 'primary_effort_protected' })
+          return
+        }
+        if (role === 'skill_primary' || role === 'primary_strength') {
+          rejectLog.push({ name: ex.name || '?', reason: `freshness_critical_role:${role}` })
+          return
+        }
+        if (positionTier === 'early') {
+          rejectLog.push({ name: ex.name || '?', reason: 'early_position_freshness_zone' })
+          return
+        }
+
+        // Base score by role (accumulation/completion-friendly > quality roles)
+        const baseByRole: Record<ClusterRole, number> = {
+          accessory: 80,
+          secondary_strength: 70,
+          core_or_support: 55,
+          skill_accumulation: 45,
+          // Unreachable (rejected above), kept for exhaustiveness:
+          skill_primary: 0,
+          primary_strength: 0,
+        }
+        const base = baseByRole[role] ?? 0
+
+        // Position adjustment: mid penalizes, late bonuses scaled by how-late.
+        let positionAdj = 0
+        if (positionTier === 'mid') {
+          positionAdj = -20
+        } else {
+          // 'late'
+          positionAdj = (position - _earliestLateIndex + 1) * 5
+        }
+
+        const score = base + positionAdj
+        candidates.push({ ex, score, index: position, role, positionTier })
       })
-      
-      // Rank and require minimum quality before applying.
+
       candidates.sort((a, b) => b.score - a.score)
-      // [CLUSTER-DOCTRINE-TIGHTENED] Threshold unchanged at 60 -- the position
-      // gate does the primary tightening. With position <= 1, the lowest
-      // passing heavy-compound score is 67 (position-1 = 60 + 7 bonus) and
-      // the lowest passing skill-hold is 107 (position-1 = 100 + 7). A
-      // position-2 heavy-compound can no longer reach this block at all.
-      const MIN_CLUSTER_SCORE = 60
+
+      // Raised from 60 -> 75. With the new scoring:
+      //   accessory@late (pos = earliestLate)         = 80 + 5  = 85  (OK)
+      //   secondary_strength@late                     = 70 + 5  = 75  (borderline OK)
+      //   core_or_support@late                        = 55 + 5  = 60  (REJECTED)
+      //   skill_accumulation@late                     = 45 + 5  = 50  (REJECTED)
+      //   accessory@mid                               = 80 - 20 = 60  (REJECTED)
+      // This keeps cluster narrowed to the doctrinal canonical case (late
+      // accessory) plus selective secondary-strength completion -- the two
+      // cases the user's saved doctrine names as acceptable.
+      const MIN_CLUSTER_SCORE = 75
       const clusterTarget = candidates.length > 0 && candidates[0].score >= MIN_CLUSTER_SCORE
         ? candidates[0]
         : null
-      
+
       if (clusterTarget) {
         const idx = clusterTarget.index
-        // [METHOD-TAXONOMY-LOCK] Stamp BOTH the legacy overloaded `method`
-        // field (kept for row-chip back-compat in AdaptiveSessionCard) AND
-        // the authoritative `setExecutionMethod` field. Downstream consumers
-        // (ai-evidence bridge, normalize, cards) should prefer
-        // `setExecutionMethod === 'cluster'` so grouped-method tokens
-        // (superset / circuit / density_block) and set-execution method
-        // tokens (cluster) no longer share one field.
+
+        // [METHOD-TAXONOMY-LOCK] Same dual-write as before: legacy `.method`
+        // for row-chip back-compat + authoritative `.setExecutionMethod` for
+        // new consumers. Preserved so the visibility corridor renders.
         session.exercises[idx].method = 'cluster'
         session.exercises[idx].methodLabel = 'Cluster Sets'
         session.exercises[idx].setExecutionMethod = 'cluster'
-        
+
         methodMaterializationResult.appliedMethods.push('cluster_sets')
+
+        // Structure decision block name reflects the new doctrinal kind.
+        const structureBlockName =
+          clusterTarget.role === 'accessory' ? 'late_accessory' :
+          clusterTarget.role === 'secondary_strength' ? 'secondary_strength' :
+          clusterTarget.role === 'skill_accumulation' ? 'late_skill_accumulation' :
+          'accessory_tail'
         methodMaterializationResult.structureDecisions.push({
-          block: 'primary_skill',
+          block: structureBlockName,
           method: 'cluster',
-          rationale: `Cluster format applied to ${clusterTarget.ex.name} (score ${clusterTarget.score}) for quality maintenance on primary-effort work`,
+          rationale: `Cluster format applied to ${clusterTarget.ex.name} (${clusterTarget.role}, ${clusterTarget.positionTier}, score ${clusterTarget.score}) for fatigue-managed completion`,
         })
-        
-        // [CLUSTER-DECISION-EVIDENCE] Capture the concrete decision on the
-        // session so the Program card can prove cluster choice, target,
-        // reason, and method-cue vs grouped-block type WITHOUT the card
-        // re-deriving any of this or falling back to generic copy.
-        //
-        // Reason tokens are built from the same facts the scoring used, so
-        // the visible surface and the scoring are structurally aligned:
-        //
-        //   kind:
-        //     skill_hold       -> category==='skill' + concrete hold root
-        //                         (planche/lever/handstand/...)
-        //     heavy_compound   -> category==='strength' + 'weighted' +
-        //                         approved compound root (pull-up/dip/...)
-        //
-        //   position:
-        //     0 -> primary slot        -> 'primary_slot'
-        //     1 -> early slot          -> 'early_slot'
-        //
-        //   quality_preservation       -> always present (the intrinsic
-        //                                 purpose of cluster)
-        //
-        //   best_of_N                  -> only when there were multiple
-        //                                 candidates to choose between, so
-        //                                 the user sees that cluster was
-        //                                 the best pick, not the only pick
-        //
-        // `type` is 'method_cue' for single-exercise cluster (today's only
-        // path -- builder never emits cluster with a shared blockId). When a
-        // future multi-member cluster block is introduced, the card's
-        // grouped-body renderer will flip this to 'grouped_block' via the
-        // same contract without touching the card's decision surface.
-        const clusterKind: 'skill_hold' | 'heavy_compound' = clusterTarget.ex.category === 'skill'
-          ? 'skill_hold'
-          : 'heavy_compound'
+
+        // [CLUSTER-DECISION-EVIDENCE] Proof of choice consumed by the card.
+        // `kind` now reflects the inverted doctrine; `reasonTokens` /
+        // `reasonSummary` describe WHY this late-accumulation row is the
+        // right cluster target (not the old "primary slot / quality
+        // preservation" copy which was doctrinally wrong).
+        const clusterKind:
+          | 'late_accessory_accumulation'
+          | 'secondary_strength_completion'
+          | 'late_skill_accumulation' =
+          clusterTarget.role === 'accessory' || clusterTarget.role === 'core_or_support'
+            ? 'late_accessory_accumulation'
+            : clusterTarget.role === 'secondary_strength'
+              ? 'secondary_strength_completion'
+              : 'late_skill_accumulation'
+
         const reasonTokens: string[] = []
-        reasonTokens.push(clusterKind === 'skill_hold' ? 'primary_skill_hold' : 'heavy_weighted_compound')
-        reasonTokens.push(clusterTarget.index === 0 ? 'primary_slot' : 'early_slot')
-        reasonTokens.push('quality_preservation')
+        reasonTokens.push(clusterKind)
+        reasonTokens.push(`position_tier:${clusterTarget.positionTier}`)
+        reasonTokens.push('fatigue_managed_completion')
         if (candidates.length > 1) reasonTokens.push(`best_of_${candidates.length}`)
-        
-        const reasonPhrases: string[] = []
-        reasonPhrases.push(clusterKind === 'skill_hold' ? 'primary skill hold' : 'heavy weighted compound')
-        reasonPhrases.push(clusterTarget.index === 0 ? 'primary slot' : 'early slot')
-        reasonPhrases.push('quality preservation')
-        const reasonSummary = reasonPhrases.join(' · ')
-        
-        // Stashed on methodMaterializationResult and threaded into
-        // session.styleMetadata.clusterDecision at the styleMetadata write
-        // below (line ~12604). Typed loose here to avoid cross-cutting the
-        // declared MethodMaterializationResult shape -- the styleMetadata
-        // write reads this property defensively.
+
+        const kindPhrase =
+          clusterKind === 'late_accessory_accumulation' ? 'late accessory accumulation' :
+          clusterKind === 'secondary_strength_completion' ? 'secondary strength completion' :
+          'late skill accumulation'
+        const reasonSummary = `${kindPhrase} · ${clusterTarget.positionTier} position · fatigue-managed completion`
+
         ;(methodMaterializationResult as unknown as {
           clusterDecision?: NonNullable<NonNullable<typeof session.styleMetadata>['clusterDecision']>
         }).clusterDecision = {
@@ -12392,27 +12477,29 @@ async function generateAdaptiveProgramImpl(
           kind: clusterKind,
           reasonTokens,
           reasonSummary,
-          type: 'method_cue', // single-exercise cluster today -- see comment above
+          type: 'method_cue',
         }
-        
+
         console.log('[TRAINING-METHOD-MATERIALIZED] Cluster sets applied:', {
           dayNumber: session.dayNumber,
           exercise: clusterTarget.ex.name,
           category: clusterTarget.ex.category,
+          role: clusterTarget.role,
+          positionTier: clusterTarget.positionTier,
           score: clusterTarget.score,
           position: clusterTarget.index,
           candidatesConsidered: candidates.length,
           reasonTokens,
         })
-        
+
         session.adaptationNotes = session.adaptationNotes || []
-        session.adaptationNotes.push(`Cluster set format applied to ${clusterTarget.ex.name} for quality`)
+        session.adaptationNotes.push(`Cluster sets applied to ${clusterTarget.ex.name} for fatigue-managed completion`)
       } else {
         methodMaterializationResult.rejectedMethods.push({
           method: 'cluster_sets',
           reason: candidates.length === 0
-            ? 'No qualifying exercises for cluster format (requires primary-effort skill hold or heavy weighted compound)'
-            : `Best candidate score ${candidates[0].score} below cluster threshold (${MIN_CLUSTER_SCORE}) -- honest straight sets preferred over marginal cluster application`,
+            ? `No qualifying cluster candidates (doctrine requires late-session non-primary accessory / secondary-strength / skill-accumulation row). Rejected: ${rejectLog.slice(0, 3).map(r => `${r.name}(${r.reason})`).join(', ')}`
+            : `Best candidate score ${candidates[0].score} below inverted-doctrine threshold (${MIN_CLUSTER_SCORE}) -- honest straight sets preferred over marginal cluster application`,
         })
       }
     }

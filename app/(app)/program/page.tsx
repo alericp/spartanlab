@@ -7704,6 +7704,55 @@ export default function ProgramPage() {
         // [PHASE 17W] Reuse earlier canonicalProfileNow from handleRegenerate scope.
         // Do not redeclare here or Turbopack build will fail with duplicate identifier.
         // [PHASE 17Y] TASK 4 - Use strongestRegenerateTruth for canonical override
+        //
+        // [METHOD-PREFERENCE-BRIDGE, prompt 11]
+        // The authoritative builder reads grouped-method truth from
+        // `canonicalProfile.trainingMethodPreferences` (see
+        // `lib/adaptive-program-builder.ts` L11705). Before this bridge,
+        // rebuild only forwarded `selectedStyles` on `rebuildBuilderInput`
+        // (L7608) and relied on the canonical inference-at-reconcile to
+        // produce `trainingMethodPreferences`. That inference is heuristic
+        // (driven by `trainingStyle` / `sessionStyle` / `experience`) and
+        // can legitimately return just `['straight_sets']`, at which point
+        // grouped methods are blocked even if the user's actual UI style
+        // selections said supersets/circuits/density/cluster.
+        //
+        // Fix (one authoritative boundary, no shadow split):
+        //   strongest preference priority
+        //   1) inputs.selectedStyles (live UI truth, same vocab as the
+        //      `TrainingMethodPreference` enum)
+        //   2) freshRebuildInput.selectedStyles (entry-derived)
+        //   3) canonicalProfileNow.trainingMethodPreferences (reconciled,
+        //      inferred from trainingStyle/sessionStyle/experience)
+        // `'straight_sets'` is always kept/added so the builder always has
+        // a legal baseline.
+        // ==========================================================================
+        const METHOD_PREF_VOCAB = new Set([
+          'straight_sets',
+          'supersets',
+          'circuits',
+          'density_blocks',
+          'cluster_sets',
+          'drop_sets',
+          'rest_pause',
+          'ladder_sets',
+        ])
+        const pageStylesTruth: string[] = Array.isArray(inputs?.selectedStyles) && inputs!.selectedStyles!.length > 0
+          ? (inputs!.selectedStyles as string[])
+          : (Array.isArray((freshRebuildInput as unknown as { selectedStyles?: string[] })?.selectedStyles)
+              ? ((freshRebuildInput as unknown as { selectedStyles?: string[] }).selectedStyles as string[])
+              : [])
+        const pageStylesFiltered = pageStylesTruth.filter(s => typeof s === 'string' && METHOD_PREF_VOCAB.has(s))
+        const canonicalMethodPrefs = Array.isArray(canonicalProfileNow?.trainingMethodPreferences)
+          ? (canonicalProfileNow!.trainingMethodPreferences as unknown as string[])
+          : []
+        // Merge: user UI truth wins when present, otherwise canonical inference.
+        // Always include 'straight_sets' as the universal baseline.
+        const mergedBase = pageStylesFiltered.length > 0 ? pageStylesFiltered : canonicalMethodPrefs
+        const mergedSet = new Set<string>(mergedBase)
+        mergedSet.add('straight_sets')
+        const mergedMethodPreferences = Array.from(mergedSet)
+
         const rebuildCanonicalOverride = {
           ...canonicalProfileNow,
           // [PHASE 17Y/18B] Material identity fields - use strongestRegenerateTruth
@@ -7723,7 +7772,30 @@ export default function ProgramPage() {
           goalCategories: strongestRegenerateTruth.goalCategories,
           selectedFlexibility: strongestRegenerateTruth.selectedFlexibility,
           experienceLevel: strongestRegenerateTruth.experienceLevel,
+          // [METHOD-PREFERENCE-BRIDGE, prompt 11] Explicit grouped-method truth.
+          // This is the field the builder actually reads.
+          trainingMethodPreferences: mergedMethodPreferences,
         }
+
+        // [METHOD-PREFERENCE-BRIDGE, prompt 11] Mandated pre-fetch audit #1.
+        console.log('[rebuild-method-preference-truth-entry-audit]', {
+          source: 'handleRegenerate:program_page_before_fetch',
+          inputs_selectedStyles: inputs?.selectedStyles ?? [],
+          inputs_selectedStyles_count: Array.isArray(inputs?.selectedStyles) ? inputs!.selectedStyles!.length : 0,
+          freshRebuildInput_selectedStyles: (freshRebuildInput as unknown as { selectedStyles?: string[] })?.selectedStyles ?? [],
+          canonical_trainingMethodPreferences: canonicalMethodPrefs,
+          canonical_trainingMethodPreferences_count: canonicalMethodPrefs.length,
+          pageStylesTruth_filtered: pageStylesFiltered,
+          mergedMethodPreferences,
+          mergedMethodPreferences_count: mergedMethodPreferences.length,
+          // Will the builder treat grouped-method truth as EMPTY or PRESENT?
+          // "PRESENT" means at least one non-straight-sets preference exists,
+          // which is the trigger condition for grouped method application.
+          builderWillSeeMethodTruthAs:
+            mergedMethodPreferences.filter(m => m !== 'straight_sets').length > 0
+              ? 'PRESENT'
+              : 'EMPTY',
+        })
         
         // [PHASE 17V] TASK 6A - Rebuild canonical override audit
         console.log('[phase17v-rebuild-canonical-override-audit]', {

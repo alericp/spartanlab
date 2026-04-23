@@ -11702,7 +11702,58 @@ async function generateAdaptiveProgramImpl(
     // It computes eligibility from real user truth, not focus string matching.
     // All downstream materialization must use this contract, not ad-hoc gates.
     // =========================================================================
-    const methodPrefsForGrouping = canonicalProfile.trainingMethodPreferences || []
+    // [METHOD-PREFERENCE-BRIDGE, prompt 11] Narrow defensive fallback.
+    // The authoritative source remains `canonicalProfile.trainingMethodPreferences`.
+    // The program page's rebuild path now explicitly bridges the UI-local
+    // `selectedStyles` into this field, so this fallback should almost never
+    // activate. It is kept only as corridor safety for alternate entry paths
+    // (e.g. adjustments, tests, or stale canonical objects) where
+    // `trainingMethodPreferences` is empty but the same canonical object
+    // still carries a method-shaped `selectedStyles`. Vocabularies match
+    // (both use the `TrainingMethodPreference` enum).
+    const METHOD_PREF_BRIDGE_VOCAB = new Set([
+      'straight_sets',
+      'supersets',
+      'circuits',
+      'density_blocks',
+      'cluster_sets',
+      'drop_sets',
+      'rest_pause',
+      'ladder_sets',
+    ])
+    const rawMethodPrefs: string[] = Array.isArray(canonicalProfile.trainingMethodPreferences)
+      ? (canonicalProfile.trainingMethodPreferences as unknown as string[])
+      : []
+    const canonicalSelectedStyles: string[] = Array.isArray(
+      (canonicalProfile as unknown as { selectedStyles?: unknown }).selectedStyles
+    )
+      ? ((canonicalProfile as unknown as { selectedStyles?: string[] }).selectedStyles as string[])
+      : []
+    const didBridgeFromSelectedStyles = rawMethodPrefs.length === 0 && canonicalSelectedStyles.length > 0
+    const methodPrefsForGrouping = (
+      rawMethodPrefs.length > 0
+        ? rawMethodPrefs
+        : canonicalSelectedStyles.filter(s => typeof s === 'string' && METHOD_PREF_BRIDGE_VOCAB.has(s))
+    ) as unknown as typeof canonicalProfile.trainingMethodPreferences
+
+    // [METHOD-PREFERENCE-BRIDGE, prompt 11] Mandated entry audit #3.
+    {
+      const effective: string[] = Array.isArray(methodPrefsForGrouping)
+        ? (methodPrefsForGrouping as unknown as string[])
+        : []
+      const nonBaseline = effective.filter(m => m !== 'straight_sets')
+      console.log('[builder-method-preference-truth-entry-audit]', {
+        source: 'adaptive-program-builder:session_method_intent_contract_entry',
+        canonical_trainingMethodPreferences: rawMethodPrefs,
+        canonical_trainingMethodPreferences_count: rawMethodPrefs.length,
+        canonical_selectedStyles: canonicalSelectedStyles,
+        canonical_selectedStyles_count: canonicalSelectedStyles.length,
+        didBridgeFromSelectedStyles,
+        methodPrefsForGrouping: effective,
+        methodPrefsForGrouping_count: effective.length,
+        builderWillTreatMethodTruthAs: nonBaseline.length > 0 ? 'PRESENT' : 'EMPTY',
+      })
+    }
     
     // Count exercise categories to understand session composition
     const skillExerciseCount = session.exercises?.filter(e => e.category === 'skill').length || 0

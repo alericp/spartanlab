@@ -683,21 +683,63 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   
   // Get exercises to display based on variant selection
   // [weighted-prescription-truth] Preserve prescribedLoad through variant mapping
+  // [GROUPED-TRUTH-CARRY-VARIANT] When a variant is selected, this mapper is the
+  // FIRST STAGE that drops per-row grouped/cluster truth. The builder writes
+  // `method` (e.g. 'cluster') and `setExecutionMethod: 'cluster'` onto
+  // `session.exercises[idx]` at adaptive-program-builder.ts L12654-12656. The
+  // VARIANT-PARENT-TRUTH-RECONCILE pass (same file L13180-13185) decorates
+  // variant.selection.main[j].exercise with `blockId` / `method` / `methodLabel`
+  // when session.exercises carries grouped truth, but NOT `setExecutionMethod`.
+  // Prior behavior here whitelisted only prescription fields, silently dropping
+  // method / methodLabel / blockId / setExecutionMethod from the row object that
+  // ExerciseRow.resolveRowMethodTruth reads (AdaptiveSessionCard.tsx L4008).
+  // Result: selecting any variant tab made the per-row cluster chip AND the
+  // Cluster Set panel disappear -- the exact "Program card still looks flat /
+  // cluster not visibly populating" symptom.
+  //
+  // Fix: carry the four row-level method-truth fields forward from the variant's
+  // SelectedExercise wrapper, falling back to the matching raw session exercise
+  // by id when the variant wrapper is missing a field (notably
+  // `setExecutionMethod`, which the parent-truth-reconcile pass does not
+  // propagate). No new truth is invented; when neither source carries a field,
+  // it stays undefined and the row honestly renders without a method surface.
   const displayExercises = selectedVariant !== null && session.variants?.[selectedVariant]
-    ? session.variants[selectedVariant].selection.main.map(s => ({
-        id: s.exercise.id,
-        name: s.exercise.name,
-        category: s.exercise.category,
-        sets: s.sets,
-        repsOrTime: s.repsOrTime,
-        note: s.note,
-        isOverrideable: s.isOverrideable,
-        selectionReason: s.selectionReason,
-        // Preserve prescription fields from variant selection
-        prescribedLoad: s.prescribedLoad,
-        targetRPE: s.targetRPE,
-        restSeconds: s.restSeconds,
-      }))
+    ? session.variants[selectedVariant].selection.main.map(s => {
+        const rawEx = safeExercises.find(e => e.id === s.exercise.id)
+        const variantEx = s.exercise as unknown as {
+          method?: string
+          methodLabel?: string
+          blockId?: string
+          setExecutionMethod?: 'cluster' | 'rest_pause' | 'top_set' | 'drop_set'
+        }
+        const rawExTyped = rawEx as unknown as {
+          method?: string
+          methodLabel?: string
+          blockId?: string
+          setExecutionMethod?: 'cluster' | 'rest_pause' | 'top_set' | 'drop_set'
+        } | undefined
+        return {
+          id: s.exercise.id,
+          name: s.exercise.name,
+          category: s.exercise.category,
+          sets: s.sets,
+          repsOrTime: s.repsOrTime,
+          note: s.note,
+          isOverrideable: s.isOverrideable,
+          selectionReason: s.selectionReason,
+          // Preserve prescription fields from variant selection
+          prescribedLoad: s.prescribedLoad,
+          targetRPE: s.targetRPE,
+          restSeconds: s.restSeconds,
+          // [GROUPED-TRUTH-CARRY-VARIANT] Per-row grouped/cluster truth.
+          // Variant-decorated value wins; raw session exercise is the fallback.
+          method: variantEx.method ?? rawExTyped?.method,
+          methodLabel: variantEx.methodLabel ?? rawExTyped?.methodLabel,
+          blockId: variantEx.blockId ?? rawExTyped?.blockId,
+          setExecutionMethod:
+            variantEx.setExecutionMethod ?? rawExTyped?.setExecutionMethod,
+        }
+      })
         : safeExercises
   
   // [TASK 3] Build unified active session view

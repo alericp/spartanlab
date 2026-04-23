@@ -1771,6 +1771,39 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     visibleMethodTally.cluster > 0
 
   // ==========================================================================
+  // [METHOD-ONLY-VISIBILITY-CONTRACT] Card-level label truth.
+  //
+  // Chip labels must tell the user whether the body will render a grouped
+  // block or a method-only row cue. Prior behavior used "Cluster Set" /
+  // "Density Block" on BOTH paths -- the collapsed chip said "1 Cluster Set"
+  // even when the body had no Cluster Set block to paint (METHOD_ONLY_FLAT),
+  // so users expected a grouped block, expanded the card, found none, and
+  // concluded cluster "disappeared." The status line and in-body headline
+  // already use honest method-only language ("Method cues present: Cluster",
+  // "1 Cluster row"); only the two chip sites were out of contract.
+  //
+  // This is a pure label/vocabulary fix. No counter changes, no gate changes,
+  // no dispatch changes. Grouped paths (rich_grouped / raw_grouped_fallback /
+  // simple_order_grouped) keep the structural noun ("Cluster Set",
+  // "Density Block"). Method-only path (flat_category + METHOD_ONLY_FLAT)
+  // uses the row noun ("Cluster row", "Density row"), matching the
+  // SetExecutionBodyHeadline inside the body exactly. Superset/Circuit stay
+  // unchanged because they require blockId by doctrine and therefore never
+  // appear in the method-only path.
+  // ==========================================================================
+  const methodOnlyFlatActive =
+    finalVisibleBodyModel.mode === 'flat_category' &&
+    finalVisibleBodyModel.reasonIfNotRich === 'METHOD_ONLY_FLAT'
+  const clusterChipLabel = (n: number): string =>
+    methodOnlyFlatActive
+      ? `${n} Cluster ${n > 1 ? 'rows' : 'row'}`
+      : `${n} Cluster Set${n > 1 ? 's' : ''}`
+  const densityChipLabel = (n: number): string =>
+    methodOnlyFlatActive
+      ? `${n} Density ${n > 1 ? 'rows' : 'row'}`
+      : `${n} Density Block${n > 1 ? 's' : ''}`
+
+  // ==========================================================================
   // [TASK 5] VARIANT TRUTH AUDIT
   // Log whether 45 and 30 variants are actually different or collapsing together
   // ==========================================================================
@@ -1895,13 +1928,13 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 {visibleMethodTally.density > 0 && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/15 text-amber-300 border border-amber-500/40">
                     <Timer className="w-3 h-3" />
-                    {visibleMethodTally.density} Density Block{visibleMethodTally.density > 1 ? 's' : ''}
+                    {densityChipLabel(visibleMethodTally.density)}
                   </span>
                 )}
                 {visibleMethodTally.cluster > 0 && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-purple-500/15 text-purple-300 border border-purple-500/40">
                     <Dumbbell className="w-3 h-3" />
-                    {visibleMethodTally.cluster} Cluster Set{visibleMethodTally.cluster > 1 ? 's' : ''}
+                    {clusterChipLabel(visibleMethodTally.cluster)}
                   </span>
                 )}
               </div>
@@ -2302,14 +2335,15 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     )
   }
   // Method-only -- body stays flat, tell the user what methods are present.
-  // [STATUS-LINE-LABEL-NORMALIZATION] Labels here MUST match the row-level
-  // chip wording above and the grouped-body banner wording so the three
-  // surfaces read as one vocabulary. No raw enum keys (cluster_sets,
-  // density_block) may leak into the visible string.
+  // [STATUS-LINE-LABEL-NORMALIZATION] Labels here MUST match the method-only
+  // chip wording above (Cluster / Density row) and avoid grouped structural
+  // nouns (Cluster Set / Density Block) because the body is flat -- no
+  // grouped block is being painted. Keeps the three surfaces (status line,
+  // collapsed chip, in-body headline) reading as one honest vocabulary.
   const prettyMethod = (m: string) =>
     m === 'superset' ? 'Superset'
       : m === 'circuit' ? 'Circuit'
-        : m === 'density' ? 'Density Block'
+        : m === 'density' ? 'Density'
           : m === 'cluster' ? 'Cluster'
             : m.charAt(0).toUpperCase() + m.slice(1).replace(/_/g, ' ')
   const methodList = Array.from(methodSet).map(prettyMethod).join(', ')
@@ -2354,13 +2388,13 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     {visibleMethodTally.density > 0 && (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/40">
         <Timer className="w-3.5 h-3.5" />
-        {visibleMethodTally.density} Density Block{visibleMethodTally.density > 1 ? 's' : ''}
+        {densityChipLabel(visibleMethodTally.density)}
       </span>
     )}
     {visibleMethodTally.cluster > 0 && (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-purple-500/15 text-purple-300 border border-purple-500/40">
         <Dumbbell className="w-3.5 h-3.5" />
-        {visibleMethodTally.cluster} Cluster Set{visibleMethodTally.cluster > 1 ? 's' : ''}
+        {clusterChipLabel(visibleMethodTally.cluster)}
       </span>
     )}
   </div>

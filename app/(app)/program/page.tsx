@@ -850,10 +850,43 @@ function ProgramDisplayWrapper({
   // This probe now reads from the same single authoritative truth source
   // as the rows. They cannot disagree on counts vs visible labels.
   // ==========================================================================
+  // ==========================================================================
+  // [PARITY-SEMANTIC-HONESTY] Prompt 9 fix.
+  //
+  // BEFORE: the probe reported a single `cluster=N` (and same for the other
+  // three methods). N was a flat sum of BOTH session-level styledGroup
+  // frames AND row-level method tags across the ENTIRE program.sessions
+  // array. That conflates two very different numbers:
+  //   - doctrine semantics: "how many sessions this program applies
+  //     cluster to" (weekly budget caps this at 1-2 for the whole build)
+  //   - row-surface semantics: "how many rows in the program are tagged
+  //     cluster" (can legally be higher than doctrine if any row carried
+  //     stale method truth from an earlier build)
+  //
+  // Reading cluster=18 in that mixed label is indistinguishable from
+  // "doctrine is broken" vs "stale row metadata needs scrubbing". That is
+  // exactly the user-reported ambiguity.
+  //
+  // AFTER: the probe returns TWO explicit counts per method:
+  //   - `<method>Sessions` = number of sessions carrying ANY signal of
+  //     that method (the doctrine-meaningful denominator vs sessionCount)
+  //   - `<method>Rows`     = number of row-level tags across the program
+  //     (the stale-carry detector; diverges from Sessions only when
+  //     multiple rows in a single session are tagged with the same method
+  //     -- for cluster specifically this means stale carry because the
+  //     builder writes cluster to exactly ONE row per session).
+  //
+  // If `<method>Rows > <method>Sessions`, there is extra row-level method
+  // metadata that the current build's doctrine did not intend. For
+  // cluster, with the pre-materialization scrub now in place (builder
+  // prompt 9), `clusterRows` should converge to `clusterSessions` on any
+  // fresh regenerate.
+  // ==========================================================================
   const runtimeParity = (() => {
     const sessions = Array.isArray(program?.sessions) ? program.sessions : []
     let groupedSessionCount = 0
-    let superset = 0, circuit = 0, density = 0, cluster = 0
+    let supersetSessions = 0, circuitSessions = 0, densitySessions = 0, clusterSessions = 0
+    let supersetRows = 0, circuitRows = 0, densityRows = 0, clusterRows = 0
     for (const sess of sessions) {
       const sessAny = sess as unknown as {
         exercises?: Array<{
@@ -872,16 +905,26 @@ function ProgramDisplayWrapper({
         : []
       const clusterDecision = sessAny?.styleMetadata?.clusterDecision
       let sessionHasAnyMethod = false
+      // Per-session "did we see this method on ANY signal" flags. These
+      // drive the `<method>Sessions` doctrine counts, which are +1 per
+      // session MAX regardless of how many rows/frames carry the tag.
+      let sessionHasSuperset = false
+      let sessionHasCircuit = false
+      let sessionHasDensity = false
+      let sessionHasCluster = false
 
       // Session-level non-straight styledGroups (grouped frame identity).
+      // Frames contribute to Rows because the frame IS the row-surface for
+      // grouped methods; row-level pass below skips grouped members so we
+      // never double-count.
       for (const g of styled) {
         const t = (g?.groupType || '').toLowerCase()
         if (t && t !== 'straight') {
           sessionHasAnyMethod = true
-          if (t === 'superset') superset += 1
-          else if (t === 'circuit') circuit += 1
-          else if (t === 'density' || t === 'density_block') density += 1
-          else if (t === 'cluster') cluster += 1
+          if (t === 'superset') { supersetRows += 1; sessionHasSuperset = true }
+          else if (t === 'circuit') { circuitRows += 1; sessionHasCircuit = true }
+          else if (t === 'density' || t === 'density_block') { densityRows += 1; sessionHasDensity = true }
+          else if (t === 'cluster') { clusterRows += 1; sessionHasCluster = true }
         }
       }
 
@@ -897,35 +940,41 @@ function ProgramDisplayWrapper({
         else if (legacy && legacy !== 'straight' && legacy !== 'straight_sets') resolved = legacy
         if (!resolved) continue
         sessionHasAnyMethod = true
-        if (resolved === 'superset') superset += 1
-        else if (resolved === 'circuit' || resolved === 'circuits') circuit += 1
-        else if (resolved === 'cluster' || resolved === 'cluster_set' || resolved === 'cluster_sets') cluster += 1
-        else if (resolved === 'density' || resolved === 'density_block') density += 1
+        if (resolved === 'superset') { supersetRows += 1; sessionHasSuperset = true }
+        else if (resolved === 'circuit' || resolved === 'circuits') { circuitRows += 1; sessionHasCircuit = true }
+        else if (resolved === 'cluster' || resolved === 'cluster_set' || resolved === 'cluster_sets') { clusterRows += 1; sessionHasCluster = true }
+        else if (resolved === 'density' || resolved === 'density_block') { densityRows += 1; sessionHasDensity = true }
       }
 
-      // Session-level cluster sidecar. Builder writes `clusterDecision` when a
-      // cluster is materialized (prompt 5). If for some reason the per-exercise
-      // `setExecutionMethod` / `method` both got stripped downstream but this
-      // sidecar survived, counting it keeps the header honest. Guarded so we
-      // never double-count: only fires if we didn't already tally a cluster
-      // from row-level truth above.
+      // Session-level cluster sidecar. Builder writes `clusterDecision` when
+      // a cluster is materialized. It is SESSION-level truth, so it only
+      // promotes `clusterSessions`, never `clusterRows` -- counting it as a
+      // row would recreate the exact semantic conflation this refactor is
+      // fixing. If the per-exercise tags were stripped downstream but this
+      // sidecar survived, clusterSessions still reflects the doctrine
+      // decision honestly.
       if (clusterDecision && typeof clusterDecision.targetExerciseId === 'string' && clusterDecision.targetExerciseId) {
-        const alreadyCounted = cluster > 0 && sessionHasAnyMethod
-        if (!alreadyCounted) {
-          cluster += 1
-          sessionHasAnyMethod = true
-        }
+        sessionHasCluster = true
+        sessionHasAnyMethod = true
       }
 
+      if (sessionHasSuperset) supersetSessions += 1
+      if (sessionHasCircuit) circuitSessions += 1
+      if (sessionHasDensity) densitySessions += 1
+      if (sessionHasCluster) clusterSessions += 1
       if (sessionHasAnyMethod) groupedSessionCount += 1
     }
     return {
       sessionCount: sessions.length,
       groupedSessionCount,
-      superset,
-      circuit,
-      density,
-      cluster,
+      supersetSessions,
+      circuitSessions,
+      densitySessions,
+      clusterSessions,
+      supersetRows,
+      circuitRows,
+      densityRows,
+      clusterRows,
     }
   })()
 
@@ -949,11 +998,17 @@ function ProgramDisplayWrapper({
         <span className="mx-1 text-[#6B7280]">·</span>
         <span>grouped_sessions:<span className={runtimeParity.groupedSessionCount > 0 ? 'text-emerald-400' : 'text-[#E6E9EF]'}> {runtimeParity.groupedSessionCount}</span></span>
         <span className="mx-1 text-[#6B7280]">·</span>
+        {/* [PARITY-SEMANTIC-HONESTY] Each method now shows sessions/rows.
+            - sessions = how many sessions applied this method (doctrine)
+            - rows     = total row-level tags across the program (carry)
+            Divergence between the two on `cluster` is a direct
+            stale-carry signal now that the builder writes at most 1
+            cluster row per session and caps sessions per week. */}
         <span>
-          methods: superset=<span className="text-[#E6E9EF]">{runtimeParity.superset}</span>
-          {' | '}circuit=<span className="text-[#E6E9EF]">{runtimeParity.circuit}</span>
-          {' | '}density=<span className="text-[#E6E9EF]">{runtimeParity.density}</span>
-          {' | '}cluster=<span className="text-[#E6E9EF]">{runtimeParity.cluster}</span>
+          methods: superset=<span className="text-[#E6E9EF]">{runtimeParity.supersetSessions}s/{runtimeParity.supersetRows}r</span>
+          {' | '}circuit=<span className="text-[#E6E9EF]">{runtimeParity.circuitSessions}s/{runtimeParity.circuitRows}r</span>
+          {' | '}density=<span className="text-[#E6E9EF]">{runtimeParity.densitySessions}s/{runtimeParity.densityRows}r</span>
+          {' | '}cluster=<span className={runtimeParity.clusterRows > runtimeParity.clusterSessions ? 'text-amber-400' : 'text-[#E6E9EF]'}>{runtimeParity.clusterSessions}s/{runtimeParity.clusterRows}r</span>
         </span>
         <span className="mx-1 text-[#6B7280]">·</span>
         <span>source:<span className="text-[#E6E9EF]"> CURRENT_PROGRAM_PAGE_OBJECT</span></span>

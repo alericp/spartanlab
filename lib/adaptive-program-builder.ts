@@ -12046,6 +12046,101 @@ async function generateAdaptiveProgramImpl(
     }
     
     // =========================================================================
+    // [PRE-MATERIALIZATION-METHOD-SCRUB] Prompt 9 fix.
+    //
+    // WHY: The method materialization corridor (supersets → circuits →
+    // density → cluster) is the SINGLE authoritative owner of per-row method
+    // identity. Any `.method` / `.methodLabel` / `.setExecutionMethod` /
+    // `.blockId` values present on session.exercises at this point are, by
+    // definition, carry-forward from an upstream source -- either:
+    //   a) a prior build whose exercise objects were reused through any of
+    //      the recovery / rollback / substitution branches above
+    //      (preCorridorBaseline, preRerankSnapshot, preSubstitutionCandidates,
+    //      weekAdaptationAdjusted, etc. -- any of these can reintroduce
+    //      method metadata from an earlier mutation if a later branch
+    //      reassigns back to it),
+    //   b) a selector / evidence bridge that decorated the exercise pool
+    //      with grouped truth for variant reconciliation (see decoration
+    //      pass at ~L13060) and handed those decorated exercises back in,
+    //   c) a saved-program regeneration path where the previous plan's
+    //      method writes survived into the new build's candidate pool.
+    //
+    // Symptom the user observed: runtime parity header reporting
+    // `cluster=18` across a program where the current builder pass caps
+    // cluster at 1-2 sessions for the entire program (weekly budget in
+    // prompt 7). 18 vs 2 is mathematically impossible without stale carry
+    // OR flat-count semantics -- prompt 9 addresses both.
+    //
+    // WHAT: Wipe method-ownership fields on every exercise right here,
+    // before the first writer (supersets) runs. Do NOT touch prescription
+    // (sets/reps/tempo/rpe/rest) or selection truth (id/name/category/
+    // exercise/equipment/selectionReason) -- only the four fields that the
+    // materialization corridor itself owns and rewrites.
+    //
+    // SAFETY: The scrub is idempotent. On a fresh build with clean
+    // candidates it is a no-op. On any build where carry existed, it
+    // guarantees that downstream row tallies reflect this build's
+    // decisions only.
+    // =========================================================================
+    if (Array.isArray(session.exercises) && session.exercises.length > 0) {
+      let scrubbedCount = 0
+      const scrubbedSample: Array<{ name?: string; prevMethod?: string | null; prevBlockId?: string | null; prevSetExec?: string | null }> = []
+      for (const ex of session.exercises) {
+        const exAny = ex as unknown as {
+          name?: string
+          method?: string | null
+          methodLabel?: string | null
+          blockId?: string | null
+          setExecutionMethod?: string | null
+        }
+        const hadMethod = !!(exAny.method && exAny.method !== 'straight' && exAny.method !== 'straight_sets')
+        const hadBlockId = !!exAny.blockId
+        const hadSetExec = !!(exAny.setExecutionMethod && exAny.setExecutionMethod !== 'straight' && exAny.setExecutionMethod !== 'straight_sets')
+        const hadAny = hadMethod || hadBlockId || hadSetExec || !!exAny.methodLabel
+        if (hadAny) {
+          if (scrubbedSample.length < 3) {
+            scrubbedSample.push({
+              name: exAny.name,
+              prevMethod: exAny.method ?? null,
+              prevBlockId: exAny.blockId ?? null,
+              prevSetExec: exAny.setExecutionMethod ?? null,
+            })
+          }
+          scrubbedCount++
+        }
+        // Reset the four method-ownership fields. The materialization passes
+        // below are the ONLY legitimate writers from this point forward.
+        exAny.method = undefined
+        exAny.methodLabel = undefined
+        exAny.blockId = undefined
+        exAny.setExecutionMethod = undefined
+      }
+      // Also clear any stale cluster evidence sidecar on the incoming
+      // styleMetadata. This is recomputed later from `stashedClusterDecision`
+      // (see L12940) only when THIS build applies cluster, so wiping it here
+      // guarantees it never survives from a prior build into a session where
+      // the current doctrine would reject cluster.
+      if (session.styleMetadata) {
+        const styleAny = session.styleMetadata as unknown as {
+          clusterDecision?: unknown
+        }
+        if (styleAny.clusterDecision !== undefined) {
+          styleAny.clusterDecision = undefined
+        }
+      }
+      if (scrubbedCount > 0) {
+        console.log('[PRE-MATERIALIZATION-METHOD-SCRUB]', {
+          dayNumber: session.dayNumber,
+          focus: session.focus,
+          exerciseCount: session.exercises.length,
+          scrubbedCount,
+          scrubbedSample,
+          verdict: 'STALE_METHOD_CARRY_CLEARED_BEFORE_FRESH_MATERIALIZATION',
+        })
+      }
+    }
+
+    // =========================================================================
     // [PHASE 8] STEP D2: Apply superset grouping using method intent contract
     // This materially changes exercise packaging based on user's style preferences
     // =========================================================================

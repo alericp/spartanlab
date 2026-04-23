@@ -816,38 +816,108 @@ function ProgramDisplayWrapper({
   //   - No effect on layout below it
   //   - Safe to delete by removing just this block
   // ==========================================================================
+  // ==========================================================================
+  // [PARITY-RESOLVER-ALIGNMENT] Prompt 6 fix.
+  //
+  // BEFORE: this probe read ONLY `ex.method`. The row renderer
+  // (AdaptiveSessionCard.resolveRowMethodTruth, ~L3820) reads
+  // `ex.setExecutionMethod` FIRST, then `ex.method`. That difference means
+  // a row can legitimately paint the purple Method Ownership Panel (because
+  // setExecutionMethod='cluster' survived) while this header counts zero
+  // (because the legacy overloaded `.method` field was dropped anywhere
+  // along save/load). That is exactly the user-reported symptom
+  // "cluster is visible but the parity header says nothing".
+  //
+  // AFTER: the probe uses the SAME resolver priority as the row renderer:
+  //   1. ex.setExecutionMethod  (authoritative per-row set-execution)
+  //   2. ex.method              (legacy overloaded / grouped identity)
+  //   3. session.styleMetadata.clusterDecision  (session-level cluster
+  //      evidence sidecar written by the builder at ~L12465; survives even
+  //      when per-exercise fields are stripped by a narrow save whitelist)
+  //
+  // SEMANTIC CLEANUP:
+  //   - An exercise inside a grouped frame (blockId present OR a matching
+  //     styledGroups entry) is NOT double-counted as a row-level method.
+  //     The grouped frame owns identity; counting the inner members too
+  //     would inflate superset/circuit tallies in lockstep with grouped
+  //     tallies and make the header lie in the opposite direction.
+  //   - `groupedSessionCount` now increments when EITHER a non-straight
+  //     styledGroup exists OR any resolved row-level non-straight method
+  //     exists OR a clusterDecision sidecar exists. This is what "does
+  //     this session carry any non-straight method truth at all" really
+  //     means for the user.
+  //
+  // This probe now reads from the same single authoritative truth source
+  // as the rows. They cannot disagree on counts vs visible labels.
+  // ==========================================================================
   const runtimeParity = (() => {
     const sessions = Array.isArray(program?.sessions) ? program.sessions : []
     let groupedSessionCount = 0
     let superset = 0, circuit = 0, density = 0, cluster = 0
     for (const sess of sessions) {
       const sessAny = sess as unknown as {
-        exercises?: Array<{ method?: string | null; blockId?: string | null }> | null
-        styleMetadata?: { styledGroups?: Array<{ groupType?: string | null }> | null } | null
+        exercises?: Array<{
+          method?: string | null
+          setExecutionMethod?: string | null
+          blockId?: string | null
+        }> | null
+        styleMetadata?: {
+          styledGroups?: Array<{ groupType?: string | null }> | null
+          clusterDecision?: { kind?: string | null; targetExerciseId?: string | null } | null
+        } | null
       }
       const exs = Array.isArray(sessAny?.exercises) ? sessAny.exercises! : []
       const styled = Array.isArray(sessAny?.styleMetadata?.styledGroups)
         ? sessAny.styleMetadata!.styledGroups!
         : []
-      let sessionHasGrouped = false
-      // Session-level non-straight styledGroups
+      const clusterDecision = sessAny?.styleMetadata?.clusterDecision
+      let sessionHasAnyMethod = false
+
+      // Session-level non-straight styledGroups (grouped frame identity).
       for (const g of styled) {
         const t = (g?.groupType || '').toLowerCase()
-        if (t && t !== 'straight') sessionHasGrouped = true
+        if (t && t !== 'straight') {
+          sessionHasAnyMethod = true
+          if (t === 'superset') superset += 1
+          else if (t === 'circuit') circuit += 1
+          else if (t === 'density' || t === 'density_block') density += 1
+          else if (t === 'cluster') cluster += 1
+        }
       }
-      // Exercise-level method tally -- counts every non-straight method
-      // occurrence so a single cluster application is visible even without
-      // a styledGroups entry.
+
+      // Row-level truth. Priority: setExecutionMethod > method.
+      // Skip grouped-frame members -- the frame already counted them above.
       for (const ex of exs) {
-        const m = (ex?.method || '').toLowerCase()
-        if (!m || m === 'straight' || m === 'straight_sets') continue
-        sessionHasGrouped = true
-        if (m === 'superset') superset += 1
-        else if (m === 'circuit') circuit += 1
-        else if (m === 'cluster') cluster += 1
-        else if (m === 'density' || m === 'density_block') density += 1
+        const hasBlockId = typeof ex?.blockId === 'string' && ex.blockId.length > 0
+        if (hasBlockId) continue // grouped frame owns identity; don't double-count
+        const setExec = (ex?.setExecutionMethod || '').toLowerCase()
+        const legacy = (ex?.method || '').toLowerCase()
+        let resolved = ''
+        if (setExec && setExec !== 'straight' && setExec !== 'straight_sets') resolved = setExec
+        else if (legacy && legacy !== 'straight' && legacy !== 'straight_sets') resolved = legacy
+        if (!resolved) continue
+        sessionHasAnyMethod = true
+        if (resolved === 'superset') superset += 1
+        else if (resolved === 'circuit' || resolved === 'circuits') circuit += 1
+        else if (resolved === 'cluster' || resolved === 'cluster_set' || resolved === 'cluster_sets') cluster += 1
+        else if (resolved === 'density' || resolved === 'density_block') density += 1
       }
-      if (sessionHasGrouped) groupedSessionCount += 1
+
+      // Session-level cluster sidecar. Builder writes `clusterDecision` when a
+      // cluster is materialized (prompt 5). If for some reason the per-exercise
+      // `setExecutionMethod` / `method` both got stripped downstream but this
+      // sidecar survived, counting it keeps the header honest. Guarded so we
+      // never double-count: only fires if we didn't already tally a cluster
+      // from row-level truth above.
+      if (clusterDecision && typeof clusterDecision.targetExerciseId === 'string' && clusterDecision.targetExerciseId) {
+        const alreadyCounted = cluster > 0 && sessionHasAnyMethod
+        if (!alreadyCounted) {
+          cluster += 1
+          sessionHasAnyMethod = true
+        }
+      }
+
+      if (sessionHasAnyMethod) groupedSessionCount += 1
     }
     return {
       sessionCount: sessions.length,

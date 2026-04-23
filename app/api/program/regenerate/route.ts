@@ -126,6 +126,26 @@ export async function POST(request: Request) {
       regenerationReason,
     })
     
+    // [METHOD-PREFERENCE-BRIDGE] Receipt audit: prove trainingMethodPreferences
+    // truth crossed the HTTP boundary. Empty here → grouped methods blocked downstream.
+    {
+      const rcvTrainingMethodPreferences: string[] = Array.isArray(canonicalProfile?.trainingMethodPreferences)
+        ? canonicalProfile.trainingMethodPreferences
+        : []
+      const rcvSelectedStyles: string[] = Array.isArray(programInputs?.selectedStyles)
+        ? programInputs.selectedStyles
+        : []
+      const nonBaseline = rcvTrainingMethodPreferences.filter((m: string) => m !== 'straight_sets')
+      console.log('[regenerate-route-method-preference-truth-receipt-audit]', {
+        source: 'POST_/api/program/regenerate:after_body_parse',
+        canonical_trainingMethodPreferences: rcvTrainingMethodPreferences,
+        canonical_trainingMethodPreferences_count: rcvTrainingMethodPreferences.length,
+        programInputs_selectedStyles: rcvSelectedStyles,
+        programInputs_selectedStyles_count: rcvSelectedStyles.length,
+        builderWillSeeMethodTruthAs: nonBaseline.length > 0 ? 'PRESENT' : 'EMPTY',
+      })
+    }
+    
     if (!canonicalProfile || !programInputs) {
       return NextResponse.json({
         success: false,

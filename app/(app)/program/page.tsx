@@ -850,38 +850,11 @@ function ProgramDisplayWrapper({
   // This probe now reads from the same single authoritative truth source
   // as the rows. They cannot disagree on counts vs visible labels.
   // ==========================================================================
-  // ==========================================================================
-  // [PARITY-SEMANTIC-HONESTY] Prompt 9 fix.
-  //
-  // BEFORE: the probe reported a single `cluster=N` (and same for the other
-  // three methods). N was a flat sum of BOTH session-level styledGroup
-  // frames AND row-level method tags across the ENTIRE program.sessions
-  // array. That conflates two very different numbers:
-  //   - doctrine semantics: "how many sessions this program applies
-  //     cluster to" (weekly budget caps this at 1-2 for the whole build)
-  //   - row-surface semantics: "how many rows in the program are tagged
-  //     cluster" (can legally be higher than doctrine if any row carried
-  //     stale method truth from an earlier build)
-  //
-  // Reading cluster=18 in that mixed label is indistinguishable from
-  // "doctrine is broken" vs "stale row metadata needs scrubbing". That is
-  // exactly the user-reported ambiguity.
-  //
-  // AFTER: the probe returns TWO explicit counts per method:
-  //   - `<method>Sessions` = number of sessions carrying ANY signal of
-  //     that method (the doctrine-meaningful denominator vs sessionCount)
-  //   - `<method>Rows`     = number of row-level tags across the program
-  //     (the stale-carry detector; diverges from Sessions only when
-  //     multiple rows in a single session are tagged with the same method
-  //     -- for cluster specifically this means stale carry because the
-  //     builder writes cluster to exactly ONE row per session).
-  //
-  // If `<method>Rows > <method>Sessions`, there is extra row-level method
-  // metadata that the current build's doctrine did not intend. For
-  // cluster, with the pre-materialization scrub now in place (builder
-  // prompt 9), `clusterRows` should converge to `clusterSessions` on any
-  // fresh regenerate.
-  // ==========================================================================
+  // [PARITY-SEMANTIC-HONESTY] Per-method counts are split into
+  // `<method>Sessions` (doctrine-meaningful; sessions carrying any signal)
+  // and `<method>Rows` (row-level tags across the program). Divergence
+  // (rows > sessions) is a stale-carry signal on `cluster` specifically
+  // since the builder writes cluster to at most one row per session.
   const runtimeParity = (() => {
     const sessions = Array.isArray(program?.sessions) ? program.sessions : []
     let groupedSessionCount = 0
@@ -7704,6 +7677,36 @@ export default function ProgramPage() {
         // [PHASE 17W] Reuse earlier canonicalProfileNow from handleRegenerate scope.
         // Do not redeclare here or Turbopack build will fail with duplicate identifier.
         // [PHASE 17Y] TASK 4 - Use strongestRegenerateTruth for canonical override
+        // [METHOD-PREFERENCE-BRIDGE] Explicitly derive `trainingMethodPreferences`
+        // for the override. Priority: inputs.selectedStyles (live UI truth) →
+        // freshRebuildInput.selectedStyles → canonicalProfileNow.trainingMethodPreferences.
+        // `straight_sets` is always included as the universal baseline.
+        const METHOD_PREF_VOCAB = new Set([
+          'straight_sets',
+          'supersets',
+          'circuits',
+          'density_blocks',
+          'cluster_sets',
+          'drop_sets',
+          'rest_pause',
+          'ladder_sets',
+        ])
+        const pageStylesTruth: string[] = Array.isArray(inputs?.selectedStyles) && inputs!.selectedStyles!.length > 0
+          ? (inputs!.selectedStyles as string[])
+          : (Array.isArray((freshRebuildInput as unknown as { selectedStyles?: string[] })?.selectedStyles)
+              ? ((freshRebuildInput as unknown as { selectedStyles?: string[] }).selectedStyles as string[])
+              : [])
+        const pageStylesFiltered = pageStylesTruth.filter(s => typeof s === 'string' && METHOD_PREF_VOCAB.has(s))
+        const canonicalMethodPrefs = Array.isArray(canonicalProfileNow?.trainingMethodPreferences)
+          ? (canonicalProfileNow!.trainingMethodPreferences as unknown as string[])
+          : []
+        // Merge: user UI truth wins when present, otherwise canonical inference.
+        // Always include 'straight_sets' as the universal baseline.
+        const mergedBase = pageStylesFiltered.length > 0 ? pageStylesFiltered : canonicalMethodPrefs
+        const mergedSet = new Set<string>(mergedBase)
+        mergedSet.add('straight_sets')
+        const mergedMethodPreferences = Array.from(mergedSet)
+
         const rebuildCanonicalOverride = {
           ...canonicalProfileNow,
           // [PHASE 17Y/18B] Material identity fields - use strongestRegenerateTruth
@@ -7723,7 +7726,29 @@ export default function ProgramPage() {
           goalCategories: strongestRegenerateTruth.goalCategories,
           selectedFlexibility: strongestRegenerateTruth.selectedFlexibility,
           experienceLevel: strongestRegenerateTruth.experienceLevel,
+          // [METHOD-PREFERENCE-BRIDGE] The builder reads this field directly.
+          trainingMethodPreferences: mergedMethodPreferences,
         }
+
+        // [METHOD-PREFERENCE-BRIDGE] Pre-fetch audit.
+        console.log('[rebuild-method-preference-truth-entry-audit]', {
+          source: 'handleRegenerate:program_page_before_fetch',
+          inputs_selectedStyles: inputs?.selectedStyles ?? [],
+          inputs_selectedStyles_count: Array.isArray(inputs?.selectedStyles) ? inputs!.selectedStyles!.length : 0,
+          freshRebuildInput_selectedStyles: (freshRebuildInput as unknown as { selectedStyles?: string[] })?.selectedStyles ?? [],
+          canonical_trainingMethodPreferences: canonicalMethodPrefs,
+          canonical_trainingMethodPreferences_count: canonicalMethodPrefs.length,
+          pageStylesTruth_filtered: pageStylesFiltered,
+          mergedMethodPreferences,
+          mergedMethodPreferences_count: mergedMethodPreferences.length,
+          // Will the builder treat grouped-method truth as EMPTY or PRESENT?
+          // "PRESENT" means at least one non-straight-sets preference exists,
+          // which is the trigger condition for grouped method application.
+          builderWillSeeMethodTruthAs:
+            mergedMethodPreferences.filter(m => m !== 'straight_sets').length > 0
+              ? 'PRESENT'
+              : 'EMPTY',
+        })
         
         // [PHASE 17V] TASK 6A - Rebuild canonical override audit
         console.log('[phase17v-rebuild-canonical-override-audit]', {

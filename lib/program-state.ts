@@ -111,11 +111,28 @@ function preserveSessionGroupedContract(session: AdaptiveSession): AdaptiveSessi
   //     methodLabel` and reconstruct grouped shape from that authoritative
   //     per-exercise data.
   // --------------------------------------------------------------------------
+  // [TRUTH-TO-UI-OWNERSHIP, prompt 6] Also check `setExecutionMethod`.
+  // Previously this detector read ONLY `.method` + `.blockId`. `setExecutionMethod`
+  // (cluster / rest_pause / top_set / drop_set) is the authoritative per-row
+  // set-execution field per METHOD-TAXONOMY-LOCK (adaptive-program-builder.ts
+  // ~L1180-1198). If a save/load roundtrip delivered an exercise with a valid
+  // `setExecutionMethod: 'cluster'` but no legacy `.method` (because a stricter
+  // whitelist elsewhere dropped the overloaded field), this detector would
+  // return `false` and PRIORITY 3 below would fabricate `'straight'` styledGroups
+  // -- destroying authoritative cluster truth at the load boundary exactly the
+  // way the [FUNNEL-RULE] comment warns against. Now cluster / rest-pause /
+  // top-set / drop-set truth keeps the session on the preservation path.
   const hasExerciseLevelGroupedTruth = session.exercises.some(ex => {
     const m = ex?.method
     const methodIsNonStraight = typeof m === 'string' && m.length > 0 && m !== 'straight_sets'
+    const setExec = (ex as unknown as { setExecutionMethod?: string })?.setExecutionMethod
+    const setExecIsNonStraight =
+      typeof setExec === 'string' &&
+      setExec.length > 0 &&
+      setExec !== 'straight' &&
+      setExec !== 'straight_sets'
     const hasBlockId = typeof ex?.blockId === 'string' && ex.blockId.length > 0
-    return hasBlockId || methodIsNonStraight
+    return hasBlockId || methodIsNonStraight || setExecIsNonStraight
   })
 
   if (hasExerciseLevelGroupedTruth) {
@@ -1296,6 +1313,18 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
                         blockId: typeof ex.blockId === 'string' && ex.blockId ? ex.blockId : ex.blockId,
                         method: ex.method,
                         methodLabel: typeof ex.methodLabel === 'string' && ex.methodLabel ? ex.methodLabel : ex.methodLabel,
+                        // [TRUTH-TO-UI-OWNERSHIP, prompt 6] Pin `setExecutionMethod`
+                        // to the explicit contract list alongside `method`. The
+                        // `...ex` spread above already carries it through at
+                        // runtime, but naming it explicitly protects it from
+                        // any future refactor that swaps this map for a picked
+                        // subset -- same contract rationale the comment above
+                        // cites for `method` / `blockId` / `methodLabel`.
+                        // `AdaptiveExercise` declares setExec as a narrow
+                        // union at adaptive-program-builder.ts L1198; the cast
+                        // just reassures TS across this mapper's inferred
+                        // return type.
+                        setExecutionMethod: (ex as AdaptiveExercise).setExecutionMethod,
                       }))
                   : [],
                 warmup: Array.isArray(s.warmup) ? s.warmup : [],

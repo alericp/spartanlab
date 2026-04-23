@@ -1134,6 +1134,39 @@ function WorkoutSessionContent() {
   
   return (
     <WorkoutErrorBoundary>
+      {/* [SELECTED-SESSION-CONTRACT-PROOF] DEV-only route-level visible proof.
+          Proves the EXACT values the route received from the Program card's
+          launch payload AND the finalSession it actually built for the live
+          component. If this chip says `mode=45_min variant=1 finalEx=6
+          groups=2` but the Program card's dev Launch strip said idx=2 / 30_min,
+          the route layer is mis-parsing URL params. If this chip says
+          mode=45_min variant=1 but finalEx matches the full session's exercise
+          count, the route built finalSession from raw full-session truth
+          instead of the selected variant. Removed in production. */}
+      {process.env.NODE_ENV === 'development' && session && (
+        <div className="fixed top-2 left-2 z-[9999] rounded-md border border-[#4F6D8A]/40 bg-[#12161C]/95 px-2 py-1.5 text-[10px] font-mono text-[#7FA8CC] leading-tight max-w-[60vw]">
+          <div className="text-[#A4ACB8] uppercase tracking-wider text-[9px] mb-0.5">
+            Route proof
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+            <span>mode={executionMode}</span>
+            <span>variant={variantIndex}</span>
+            <span>finalEx={session.exercises?.length ?? 0}</span>
+            <span>
+              finalSets=
+              {(session.exercises ?? []).reduce(
+                (s: number, e: { sets?: number }) => s + (typeof e.sets === 'number' ? e.sets : 0),
+                0
+              )}
+            </span>
+            <span>
+              groups=
+              {session.styleMetadata?.styledGroups?.filter((g) => g.groupType !== 'straight').length ?? 0}
+            </span>
+            <span>min={session.estimatedMinutes ?? '?'}</span>
+          </div>
+        </div>
+      )}
       <StreamlinedWorkoutSession
         session={session}
         reasoningSummary={reasoningSummary}

@@ -5677,6 +5677,40 @@ if (shouldShowLocalFallback) {
                 </Badge>
               )}
             </div>
+            {/* [SELECTED-SESSION-CONTRACT-PROOF] DEV-only pre-start shell proof
+                strip. Sits directly above the Today's Plan rows so the user can
+                see, at a glance, whether the shell is reading the SAME session
+                prop the route already variant-narrowed. If `mode`/`variant` here
+                agree with the Route proof chip at the top of the page but
+                `sessionEx` / `totalSets` disagree (e.g. show the FULL session's
+                larger count), then this shell is silently re-deriving from a
+                different truth source. Removed in production. */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="mb-3 rounded-md border border-[#4F6D8A]/40 bg-[#12161C] px-2 py-1.5 text-[10px] font-mono text-[#7FA8CC] leading-tight">
+                <div className="text-[#A4ACB8] uppercase tracking-wider text-[9px] mb-0.5">
+                  Shell proof
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                  <span>mode={executionMode}</span>
+                  <span>variant={variantIndex}</span>
+                  <span>sessionEx={safeSession.exercises?.length ?? 0}</span>
+                  <span>
+                    totalSets=
+                    {(safeSession.exercises ?? []).reduce(
+                      (s, e) => s + (typeof e.sets === 'number' ? e.sets : 0),
+                      0
+                    )}
+                  </span>
+                  <span>
+                    groups=
+                    {safeSession.styleMetadata?.styledGroups?.filter(
+                      (g) => g.groupType !== 'straight'
+                    ).length ?? 0}
+                  </span>
+                  <span>min={safeSession.estimatedMinutes ?? '?'}</span>
+                </div>
+              </div>
+            )}
             {/* [GROUPED-PLAN-FIX] Render grouped structure in Today's Plan */}
             {/* [JSX-STABILIZED] Precomputed rows for stable JSX ownership */}
             {renderTodayPlanRows()}

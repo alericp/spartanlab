@@ -1057,19 +1057,58 @@ function WorkoutSessionContent() {
       } else if (variantIndex > 0) {
         // =================================================================
         // [SELECTED-SESSION-OWNERSHIP-LOCK] Second stale-fallback CUT-OFF.
+        //
         // Variant index was requested but the variants array is missing or
-        // too short entirely. Previously this silently reverted to full
-        // session with no trace. Now logged as CRITICAL so the upstream
-        // break (variants never generated, stale session cached) is visible.
+        // too short entirely (variants never generated, stale session
+        // cached, or idx out of range). Previously this branch silently
+        // reverted to full session with NO change to `finalSession` at all
+        // - not even an estimatedMinutes stamp - so the live workout booted
+        // full exercises AND full minutes, while the Program card had
+        // rendered 45/30 and the URL contract was `mode=45_min` /
+        // `mode=30_min`. That was the last remaining silent corridor
+        // divergence: mode chip said 45, minutes said 60, exercises were
+        // the full session, and nothing on-screen proved the variant had
+        // ever been requested.
+        //
+        // The cut-off mirrors the sibling `selection.main`-missing branch
+        // above:
+        //   (a) KEEP `result.session` exercises (no variant body to swap
+        //       in - variants array itself is unusable), and
+        //   (b) STAMP `estimatedMinutes` from the URL's authoritative
+        //       `executionMode` (45_min -> 45, 30_min -> 30) so the live
+        //       workout's duration matches what the Program card launched
+        //       instead of the full session's duration, and
+        //   (c) LOG CRITICAL so the upstream break (variants never
+        //       generated / out-of-range index) remains auditable.
+        //
+        // This is NOT a replacement for a real variant - it is a visible
+        // divergence marker. The mode chip and the estimatedMinutes agree;
+        // the exercises disagreeing is the visible signal that variant
+        // data is missing, which is exactly the intent of rule #4
+        // ("surface an explicit divergence") in the selected-session
+        // corridor lock.
         // =================================================================
+        const intendedVariantDuration =
+          executionMode === '45_min'
+            ? 45
+            : executionMode === '30_min'
+              ? 30
+              : result.session.estimatedMinutes
+        finalSession = {
+          ...result.session,
+          estimatedMinutes: intendedVariantDuration,
+        }
         console.error('[SELECTED-SESSION-OWNERSHIP-LOCK] CRITICAL variant divergence - variants array unusable', {
           variantIndex,
+          executionMode,
           hasVariantsArray: Array.isArray(result.session.variants),
           variantsLength: Array.isArray(result.session.variants)
             ? result.session.variants.length
             : 'not_array',
-          action: 'kept_full_session',
-          note: 'Variant was requested by URL but result.session.variants[variantIndex] is missing. This indicates the loaded program has no variants or the index is out of range. Live workout will boot full session - upstream must populate session.variants.',
+          fullSessionExerciseCount: result.session.exercises.length,
+          stampedEstimatedMinutes: intendedVariantDuration,
+          action: 'kept_full_session_exercises_stamped_mode_duration',
+          note: 'Variant was requested by URL but result.session.variants[variantIndex] is missing. Full-session exercises were kept (no variant body to substitute) but estimatedMinutes was stamped from the URL executionMode so the live workout does not silently claim full mode. Upstream must populate session.variants.',
         })
       }
       

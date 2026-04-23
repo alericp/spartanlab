@@ -3741,6 +3741,132 @@ function MainExercisesRenderer({
 }
 
 // =============================================================================
+// [ROW-METHOD-RESOLVER] Single authoritative resolver for row-level display
+// method truth. Consolidates what was previously two separate inline IIFEs
+// (Row 1 chip block and Row 2b MethodOwnershipPanel block) that each read
+// `exercise.method` alone and each accepted a narrow label set. That split
+// was the hidden uncertainty source: if one gating loop accepted a label
+// the other rejected, the row would silently show a half-painted method
+// state. It was also fragile to the save/load/normalize cycle because
+// `.method` is, per `lib/adaptive-program-builder.ts:1176-1190` and
+// `lib/workout/execution-unit-contract.ts:130-132`, the LEGACY field that
+// carries GROUPED-STRUCTURE membership -- while SET-EXECUTION identity
+// (cluster / rest-pause / top-set / drop-set) is authoritatively carried
+// on `.setExecutionMethod` on the single-row exercise.
+//
+// Resolution order (taxonomy-correct):
+//   1. If grouped `prefix` is set OR a non-empty `blockId` is present, the
+//      row is INSIDE a grouped frame. Return `isGroupedMember: true`. The
+//      grouped frame (or the Row 1 `prefix` mono tag in simple_order
+//      fallback) owns method identity; the row-level panel stays silent.
+//   2. Read `exercise.setExecutionMethod` FIRST. If present and in the
+//      taxonomy-approved set-execution set, that is the authoritative
+//      per-row set-execution method. This beats a stale legacy `.method`
+//      field on save/load roundtrips that may not have re-applied the
+//      builder's dual-write.
+//   3. Otherwise read `exercise.method`. Accept every documented label
+//      spelling: `'cluster' | 'cluster_set' | 'cluster_sets'` collapse to
+//      cluster, `'density' | 'density_block'` collapse to density, etc.
+//      `'straight' | 'straight_sets'` and empty return no method.
+//
+// Return shape is the single truth the ExerciseRow paints from. There
+// MUST NOT be any other inline reads of `.method` / `.setExecutionMethod`
+// anywhere inside ExerciseRow after this refactor -- the two old IIFEs
+// call this resolver so the Row 1 chip and Row 2b panel cannot disagree.
+// =============================================================================
+type RowMethodFamily = 'cluster' | 'density' | 'superset' | 'circuit' | 'rest_pause' | 'top_set' | 'drop_set' | null
+
+interface RowMethodTruth {
+  /** Present (raw) method string found on the exercise, lowercased. Null if none. */
+  raw: string | null
+  /** The raw field we trusted: 'setExecutionMethod' | 'method' | null. */
+  source: 'setExecutionMethod' | 'method' | null
+  /** Collapsed taxonomy family. Null = render as straight row. */
+  family: RowMethodFamily
+  /** True when this row sits inside a grouped structure (prefix or blockId). */
+  isGroupedMember: boolean
+  /**
+   * True when the row should paint the flat METHOD OWNERSHIP PANEL below its
+   * prescription line. Strictly: family ∈ {cluster, density} AND not grouped
+   * AND not warm-up. Superset/circuit are grouped-structure by doctrine and
+   * intentionally never paint the flat panel; if they leak onto a flat row
+   * (builder bug / variant drift), the tiny 8px fallback chip in Row 1 handles
+   * them and does NOT promote to a full panel -- promotion would be dishonest
+   * because those methods' meaning requires a grouped partner.
+   */
+  shouldPaintPanel: boolean
+  /** 'cluster' or 'density' when shouldPaintPanel, else null. */
+  panelVariant: 'cluster' | 'density' | null
+  /** Uppercase-ready label for panel or chip. */
+  label: string | null
+  /** One-sentence execution-focused description for the panel. */
+  execLine: string | null
+}
+
+function resolveRowMethodTruth(
+  exercise: AdaptiveExercise,
+  opts: { prefix?: string; isWarmupCooldown?: boolean }
+): RowMethodTruth {
+  const prefix = opts.prefix
+  const isWarmup = opts.isWarmupCooldown === true
+
+  const rawExercise = exercise as unknown as {
+    method?: string
+    setExecutionMethod?: string
+    blockId?: string
+  }
+  const blockId = rawExercise.blockId
+  const isGroupedMember = !!prefix || !!(blockId && blockId.trim().length > 0)
+
+  // Authoritative per-row set-execution field wins when present.
+  const setExec = (rawExercise.setExecutionMethod || '').toLowerCase().trim()
+  // Legacy overloaded method field (grouped-structure identity by doctrine,
+  // but still dual-written for cluster/density for back-compat).
+  const legacy = (rawExercise.method || '').toLowerCase().trim()
+
+  let raw: string | null = null
+  let source: 'setExecutionMethod' | 'method' | null = null
+  if (setExec && setExec !== 'straight' && setExec !== 'straight_sets') {
+    raw = setExec
+    source = 'setExecutionMethod'
+  } else if (legacy && legacy !== 'straight' && legacy !== 'straight_sets') {
+    raw = legacy
+    source = 'method'
+  }
+
+  let family: RowMethodFamily = null
+  if (raw === 'cluster' || raw === 'cluster_set' || raw === 'cluster_sets') family = 'cluster'
+  else if (raw === 'density' || raw === 'density_block') family = 'density'
+  else if (raw === 'superset') family = 'superset'
+  else if (raw === 'circuit' || raw === 'circuits') family = 'circuit'
+  else if (raw === 'rest_pause') family = 'rest_pause'
+  else if (raw === 'top_set') family = 'top_set'
+  else if (raw === 'drop_set') family = 'drop_set'
+
+  const paintableFamily = family === 'cluster' || family === 'density'
+  const shouldPaintPanel = paintableFamily && !isGroupedMember && !isWarmup
+
+  let label: string | null = null
+  let execLine: string | null = null
+  let panelVariant: 'cluster' | 'density' | null = null
+  if (family === 'cluster') {
+    label = 'Cluster Set'
+    execLine = 'Brief 10-20s intra-set rests to preserve rep quality, full rest between sets.'
+    if (shouldPaintPanel) panelVariant = 'cluster'
+  } else if (family === 'density') {
+    label = 'Density Block'
+    execLine = 'Complete prescribed work within the timed window, short rests between rounds.'
+    if (shouldPaintPanel) panelVariant = 'density'
+  } else if (family === 'superset') {
+    label = 'Superset'
+  } else if (family === 'circuit') {
+    label = 'Circuit'
+  }
+
+  return { raw, source, family, isGroupedMember, shouldPaintPanel, panelVariant, label, execLine }
+}
+
+// =============================================================================
 // EXERCISE ROW
 // =============================================================================
 
@@ -3858,7 +3984,30 @@ function ExerciseRow({
   const alignedRowSurface = rowSurface && sessionEvidence 
     ? alignRowWithSessionEvidence(rowSurface, sessionEvidence)
     : rowSurface
-  
+
+  // [ROW-METHOD-TRUTH] Resolve the single authoritative method truth for this
+  // row ONCE per render. Both the Row 1 fallback chip and the Row 2b Method
+  // Ownership Panel read from this object -- they cannot go out of sync.
+  //
+  // The log below is the observability surface required to answer the prompt-
+  // level question "is the displayed row actually carrying non-straight
+  // method truth, or is the lack of visual change expected?" Open devtools,
+  // filter `[v0] row-method-truth`, and every paint of the Program page
+  // emits one row per visible exercise with its resolved `family`, the field
+  // we trusted (`source`), and whether the flat panel fired. That is the
+  // authoritative answer to the uncertainty this prompt was written for.
+  const rowMethodTruth = resolveRowMethodTruth(exercise, { prefix, isWarmupCooldown })
+  if (rowMethodTruth.family || rowMethodTruth.isGroupedMember) {
+    console.log('[v0] row-method-truth', {
+      name: exercise.name,
+      family: rowMethodTruth.family,
+      source: rowMethodTruth.source,
+      raw: rowMethodTruth.raw,
+      isGroupedMember: rowMethodTruth.isGroupedMember,
+      shouldPaintPanel: rowMethodTruth.shouldPaintPanel,
+    })
+  }
+
   const hasRPE = !isWarmupCooldown && exerciseSupportsRPE(card.displayTitle)
   const exerciseId = card.displayTitle.toLowerCase().replace(/[\s-]+/g, '_')
   const hasKnowledge = hasExerciseKnowledge(exerciseId)
@@ -3969,43 +4118,29 @@ function ExerciseRow({
           */}
           {/*
             [ROW-HEADER-METHOD-CHIP-DELEGATED]
-            Cluster and density method identity is OWNED by the dedicated
-            MethodOwnershipPanel below the prescription line (see ROW 2b).
-            That panel paints a strong colored rail + icon + uppercase label
-            + execution sentence and is the single authoritative visible
-            method surface for flat method-only rows.
-            Rendering a second tiny 8px chip here would fragment ownership
-            and is exactly why the earlier "row still looks like a plain
-            straight row" symptom persisted.
-            Superset / circuit flat-row chips retained as 8px fallback --
-            those methods are grouped-structure by doctrine and almost
-            never land on a flat row; when they do, the compact chip is an
-            honest fallback marker until the builder produces a real group.
+            Cluster / density identity is OWNED by the dedicated Method
+            Ownership Panel below the prescription line (Row 2b). This
+            Row 1 slot only paints a small fallback chip for flat-row
+            superset / circuit leaks, which are grouped-structure by
+            doctrine and should almost never appear on a bare flat row.
+            All method resolution goes through the single authoritative
+            `resolveRowMethodTruth` helper so chip and panel cannot
+            disagree or disagree on label casing.
           */}
           {(() => {
             if (isWarmupCooldown) return null
             if (prefix) return null
-            const exMethod = ((exercise as unknown as { method?: string }).method || '').toLowerCase()
-            if (!exMethod || exMethod === 'straight' || exMethod === 'straight_sets') return null
-            if (exMethod === 'cluster' || exMethod === 'cluster_sets') return null
-            if (exMethod === 'density' || exMethod === 'density_block') return null
-            let label = ''
-            let chipClass = ''
-            if (exMethod === 'superset') {
-              label = 'Superset'
-              chipClass = 'bg-[#4F6D8A]/15 text-[#7FA8CC] border border-[#4F6D8A]/40'
-            } else if (exMethod === 'circuit' || exMethod === 'circuits') {
-              label = 'Circuit'
-              chipClass = 'bg-emerald-500/12 text-emerald-300 border border-emerald-500/35'
-            } else {
-              return null
-            }
+            if (rowMethodTruth.isGroupedMember) return null
+            if (rowMethodTruth.family !== 'superset' && rowMethodTruth.family !== 'circuit') return null
+            const chipClass = rowMethodTruth.family === 'superset'
+              ? 'bg-[#4F6D8A]/15 text-[#7FA8CC] border border-[#4F6D8A]/40'
+              : 'bg-emerald-500/12 text-emerald-300 border border-emerald-500/35'
             return (
               <span
                 className={`text-[8px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded shrink-0 ${chipClass}`}
-                title={`Execution method: ${label}`}
+                title={`Execution method: ${rowMethodTruth.label}`}
               >
-                {label}
+                {rowMethodTruth.label}
               </span>
             )
           })()}
@@ -4069,16 +4204,9 @@ function ExerciseRow({
           structure methods and should only appear inside a real grouped
           frame; if they leak onto a flat row the small fallback chip in
           Row 1 remains. Straight rows render zero method surface. */}
-      {!isWarmupCooldown && !prefix && (() => {
-        const exMethod = ((exercise as unknown as { method?: string }).method || '').toLowerCase()
-        const isCluster = exMethod === 'cluster' || exMethod === 'cluster_sets'
-        const isDensity = exMethod === 'density' || exMethod === 'density_block'
-        if (!isCluster && !isDensity) return null
-        const label = isCluster ? 'Cluster Set' : 'Density Block'
+      {rowMethodTruth.shouldPaintPanel && rowMethodTruth.panelVariant && (() => {
+        const isCluster = rowMethodTruth.panelVariant === 'cluster'
         const Icon = isCluster ? Repeat : Timer
-        const execLine = isCluster
-          ? 'Brief 10-20s intra-set rests to preserve rep quality, full rest between sets.'
-          : 'Complete prescribed work within the timed window, short rests between rounds.'
         const railColor = isCluster ? 'bg-purple-500' : 'bg-amber-500'
         const iconTileBg = isCluster ? 'bg-purple-500/20' : 'bg-amber-500/20'
         const iconColor = isCluster ? 'text-purple-300' : 'text-amber-300'
@@ -4088,7 +4216,7 @@ function ExerciseRow({
           <div
             className="mt-2 flex items-stretch gap-2 rounded-md bg-[#121212] border border-[#262626] overflow-hidden"
             role="note"
-            aria-label={`Execution method: ${label}`}
+            aria-label={`Execution method: ${rowMethodTruth.label}`}
           >
             <div className={`w-1 shrink-0 ${railColor}`} aria-hidden="true" />
             <div className={`flex items-center justify-center w-7 my-1.5 ${iconTileBg} rounded`} aria-hidden="true">
@@ -4096,10 +4224,10 @@ function ExerciseRow({
             </div>
             <div className="flex-1 py-1.5 pr-2 min-w-0">
               <div className={`text-[11px] font-bold uppercase tracking-wider ${labelColor} leading-tight`}>
-                {label}
+                {rowMethodTruth.label}
               </div>
               <div className={`text-[11px] ${execColor} leading-snug mt-0.5`}>
-                {execLine}
+                {rowMethodTruth.execLine}
               </div>
             </div>
           </div>

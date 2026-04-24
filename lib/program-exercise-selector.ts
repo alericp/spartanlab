@@ -5784,7 +5784,13 @@ const added = addExercise(
   }
   
   // TASK 6: Final deduplication pass to remove any duplicate exercises
-  const deduplicatedSelected = dedupeSelectedExercises(selected)
+  // [SELECTED-SKILL-EXPRESSION-ENFORCEMENT] Converted to `let` so that both the
+  // skill-floor pass and the advanced-skill enforcement pass below can inject
+  // missing exercises into `selected` and then refresh this view. Previously
+  // this was `const`, and every `addExercise(...)` call after this point was
+  // silently lost because the architecture-slot enforcement reads from
+  // `deduplicatedSelected`, not `selected`.
+  let deduplicatedSelected = dedupeSelectedExercises(selected)
   if (deduplicatedSelected.length !== selected.length) {
     console.log('[exercise-selector] TASK 6: Removed', selected.length - deduplicatedSelected.length, 'duplicate exercises')
   }
@@ -5841,7 +5847,144 @@ const added = addExercise(
       console.log('[skill-exposure-check] Added skill floor exercise:', candidate.id)
     }
   }
-  
+
+  // ==========================================================================
+  // [SELECTED-SKILL-EXPRESSION-ENFORCEMENT]
+  // AUDITED FIRST DILUTION OWNER: The helper `getAdvancedSkillExercises` was
+  // authored specifically to guarantee that selected advanced skills
+  // (back_lever, dragon_flag, planche_pushup, one_arm_pull_up,
+  // one_arm_chin_up, one_arm_push_up) get a direct expression slot whenever
+  // the per-session allocator has scheduled them as `primary` or `technical`
+  // for this day. Before this fix, the helper was dead code -- declared and
+  // fully implemented, but never invoked by `selectMainExercises`. Advanced
+  // skill truth from the onboarding selection therefore relied entirely on
+  // generic scoring, where rare advanced families lost to broader support
+  // candidates on almost every day, making the user's selection feel
+  // "diluted" or "generic."
+  //
+  // This pass is strictly additive and respects overlap-aware doctrine:
+  //   - It ONLY injects exercises for skills the session-level allocator
+  //     (`getSkillsForSession`) already classified as primary/technical for
+  //     this specific session. Skills the allocator deferred to other days
+  //     are not forced in.
+  //   - It only injects candidates that exist in the already-filtered
+  //     `availableSkills`/`availableStrength` pools (equipment, joint
+  //     cautions, prerequisite gates have already pruned the pool).
+  //   - `addExercise` still performs the doctrine/prerequisite/load-budget
+  //     checks internally, so nothing that would normally be blocked
+  //     survives.
+  //   - `selected.length >= maxExercises` is enforced by `addExercise`
+  //     itself, so this pass never inflates the session past the session
+  //     duration budget. If the session is already full, missing advanced
+  //     skills are logged (visible under-expression) but not forced,
+  //     preserving compressibility for 45/30 variants.
+  // ==========================================================================
+  if (skillsForSession && skillsForSession.length > 0) {
+    const selectedAdvancedAllocations = skillsForSession.filter(
+      a => isAdvancedSkill(a.skill) &&
+      (a.expressionMode === 'primary' || a.expressionMode === 'technical')
+    )
+
+    if (selectedAdvancedAllocations.length > 0) {
+      const advancedRecommendations = getAdvancedSkillExercises(
+        selectedAdvancedAllocations,
+        availableSkills,
+        availableStrength,
+        day.focus || 'mixed_upper'
+      )
+
+      // Sort so higher-priority recommendations (primary > technical > support)
+      // get their slot first when session budget is tight.
+      const sortedRecommendations = [...advancedRecommendations].sort(
+        (a, b) => b.priority - a.priority
+      )
+
+      const advancedPool = [...availableSkills, ...availableStrength]
+      const injectedAdvancedIds: string[] = []
+      const skippedAdvanced: Array<{ id: string; reason: string }> = []
+
+      for (const rec of sortedRecommendations) {
+        if (selected.length >= maxExercises) {
+          skippedAdvanced.push({ id: rec.exerciseId, reason: 'session_budget_full' })
+          continue
+        }
+        if (usedIds.has(rec.exerciseId)) {
+          skippedAdvanced.push({ id: rec.exerciseId, reason: 'already_selected' })
+          continue
+        }
+        const candidate = advancedPool.find(e => safeExerciseId(e) === safeLower(rec.exerciseId))
+        if (!candidate) {
+          skippedAdvanced.push({ id: rec.exerciseId, reason: 'not_in_available_pool' })
+          continue
+        }
+
+        const ownerSkill = selectedAdvancedAllocations.find(a => {
+          const family = getAdvancedSkillFamily(a.skill)
+          return family?.directProgressions?.some(p => safeLower(p) === safeLower(rec.exerciseId))
+        })
+
+        const added = addExercise(
+          selectorCtx,
+          candidate,
+          `[Advanced Skill Enforcement] ${rec.reason}`,
+          undefined,
+          undefined,
+          undefined,
+          'standalone',
+          {
+            primarySelectionReason: 'selected_skill_direct_expression',
+            sessionRole: rec.priority >= 3 ? 'skill_primary' : 'skill_secondary',
+            expressionMode: rec.priority >= 3 ? 'direct_intensity' : 'technical_focus',
+            influencingSkills: ownerSkill ? [{
+              skillId: ownerSkill.skill,
+              influence: 'selected',
+              expressionMode: ownerSkill.expressionMode === 'primary' ? 'direct' : 'technical',
+            }] : undefined,
+          }
+        )
+        if (added) {
+          injectedAdvancedIds.push(candidate.id)
+        } else {
+          skippedAdvanced.push({ id: rec.exerciseId, reason: 'addExercise_rejected_doctrine_or_load' })
+        }
+      }
+
+      console.log('[SELECTED-SKILL-EXPRESSION-ENFORCEMENT]', {
+        dayFocus: day.focus,
+        selectedAdvancedSkillsForSession: selectedAdvancedAllocations.map(a => ({
+          skill: a.skill,
+          mode: a.expressionMode,
+        })),
+        recommendationsComputed: sortedRecommendations.length,
+        injectedCount: injectedAdvancedIds.length,
+        injectedIds: injectedAdvancedIds,
+        skipped: skippedAdvanced,
+        verdict: injectedAdvancedIds.length > 0
+          ? 'ADVANCED_SKILL_DIRECT_EXPRESSION_ENFORCED'
+          : sortedRecommendations.length > 0
+            ? 'ADVANCED_SKILL_UNDER_EXPRESSED_THIS_SESSION'
+            : 'NO_ADVANCED_RECOMMENDATIONS_FOR_THIS_DAY',
+      })
+    }
+  }
+
+  // [SELECTED-SKILL-EXPRESSION-ENFORCEMENT] Refresh deduplicatedSelected so
+  // that both the skill-floor pass and the advanced-skill enforcement pass
+  // above (which mutate `selected` via addExercise) actually propagate to
+  // the architecture-slot enforcement below. Without this refresh, any
+  // injection after the original dedupe at line ~5787 is invisible to
+  // downstream logic because `deduplicatedSelected` was a new array
+  // returned by `.filter()`.
+  if (selected.length !== deduplicatedSelected.length) {
+    const beforeCount = deduplicatedSelected.length
+    deduplicatedSelected = dedupeSelectedExercises(selected)
+    console.log('[SELECTED-SKILL-EXPRESSION-ENFORCEMENT] Refreshed deduplicatedSelected', {
+      beforeCount,
+      afterCount: deduplicatedSelected.length,
+      injectedDelta: deduplicatedSelected.length - beforeCount,
+    })
+  }
+
   // [session-assembly] ISSUE C: Log warning if exercise pool is too thin
   if (deduplicatedSelected.length === 0) {
     console.warn('[session-assembly] WARNING: selectMainExercises returned 0 exercises after all fallbacks', {

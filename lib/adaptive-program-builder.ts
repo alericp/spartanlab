@@ -11751,6 +11751,11 @@ async function generateAdaptiveProgramImpl(
       'drop_sets',
       'rest_pause',
       'ladder_sets',
+      // [PHASE 3C PACKAGING-TRUTH-LOCK] top_sets was missing from the bridge
+      // vocab, so users who selected it via selectedStyles had their preference
+      // silently dropped before reaching the intent contract. setExecutionMethod
+      // type already supports 'top_set' (L1220) but there was no entry path.
+      'top_sets',
     ])
     const rawMethodPrefs: string[] = Array.isArray(canonicalProfile.trainingMethodPreferences)
       ? (canonicalProfile.trainingMethodPreferences as unknown as string[])
@@ -12033,6 +12038,18 @@ async function generateAdaptiveProgramImpl(
       userWantsCircuits: methodPrefsForGrouping.includes('circuits'),
       userWantsDensity: methodPrefsForGrouping.includes('density_blocks'),
       userWantsCluster: methodPrefsForGrouping.includes('cluster_sets'),
+      // [PHASE 3C PACKAGING-TRUTH-LOCK] Set-execution method preferences (per-row
+      // cues, not grouped structure — parity with cluster's method-only pattern).
+      // These were entirely absent from the intent contract, so the materializer
+      // had no authoritative signal to stamp them onto exercises even when the
+      // user had explicitly selected them.
+      userWantsDropSets:
+        methodPrefsForGrouping.includes('drop_sets') ||
+        methodPrefsForGrouping.includes('drop_set'),
+      userWantsRestPause: methodPrefsForGrouping.includes('rest_pause'),
+      userWantsTopSets:
+        methodPrefsForGrouping.includes('top_sets') ||
+        methodPrefsForGrouping.includes('top_set'),
       
       // Session composition analysis
       skillExerciseCount,
@@ -12080,7 +12097,7 @@ async function generateAdaptiveProgramImpl(
       // Why pre-3A preferences-only was wrong:
       //   A user who never opened the "training method preferences" step
       //   received straight sets even when the session was a 60-min advanced
-      //   hybrid day with full recovery — i.e. a doctrine-perfect superset
+      //   hybrid day with full recovery �� i.e. a doctrine-perfect superset
       //   opportunity. That is *underexpression*, not doctrine-correct purity.
       // =======================================================================
       shouldApplySupersets:
@@ -12370,8 +12387,22 @@ async function generateAdaptiveProgramImpl(
       // explicitly selected supersets actually look grouped in the body instead of leaving
       // only two pairs buried at the very end. Primary/skill work stays protected because
       // upstream candidate filtering already excludes it.
+      // [PHASE 3C PACKAGING-TRUTH-LOCK] Ladder extended upward for genuinely large
+      // tails so an advanced hybrid session with 8-10 exercises and 7-9 eligible
+      // accessory candidates doesn't truncate to only 3 pairs. The ladder still
+      // caps at floor(candidates/2) so we never exhaust the tail entirely, and
+      // the candidate filter above still protects primary/skill/heavy/power work.
+      //   candidates >= 10 -> 5 pairs max (e.g. 10 eligible -> 5 pairs use all 10)
+      //   candidates >= 8  -> 4 pairs max
+      //   candidates >= 6  -> 3 pairs max (previous top)
+      //   candidates >= 4  -> 2 pairs max
+      //   candidates >= 2  -> 1 pair  max
       if (supersetCandidates.length >= 2) {
-        const pairCap = supersetCandidates.length >= 6 ? 3 : 2
+        const pairCap =
+          supersetCandidates.length >= 10 ? 5 :
+          supersetCandidates.length >= 8  ? 4 :
+          supersetCandidates.length >= 6  ? 3 :
+          2
         const pairsToCreate = Math.min(pairCap, Math.floor(supersetCandidates.length / 2))
         let pairsCreated = 0
         
@@ -12564,42 +12595,168 @@ async function generateAdaptiveProgramImpl(
                (ex.category === 'strength' && !ex.selectionReason?.includes('primary'))
       })
       
-      // Apply circuit grouping if we have 3+ candidates (not already supersetted)
+      // =====================================================================
+      // [PHASE 3C PACKAGING-TRUTH-LOCK] Multi-block density + circuit emission
+      //
+      // Pre-3C failure: this pass emitted a SINGLE circuit block of up to 4
+      // exercises, then stopped — even when 7–9 eligible candidates remained.
+      // Downstream code then aliased `hasDensityApplied = hasCircuitsApplied`
+      // (L12902), so a user who explicitly selected density_blocks saw only a
+      // circuit block and never a density_block styledGroup. That was the
+      // "conceptually present but not materially attached" failure the phase
+      // brief called out.
+      //
+      // Fix: two-block materializer with doctrine-correct block-type selection.
+      //   - PRIMARY BLOCK: first 3-4 deepest-tail candidates.
+      //       * circuit  when user wants circuits (or circuits blueprint-earned)
+      //       * density  when user wants density but NOT circuits, OR both are
+      //         earned but session is conditioning-compatible and this block
+      //         is conceptually a timed density work block rather than a
+      //         round-based circuit (see kind selection below).
+      //   - SECONDARY BLOCK: triggered ONLY on large tails (>= 6 eligible
+      //     AFTER primary block is placed, i.e. >= 9-10 original candidates).
+      //     Emits the OTHER block type so a session with both preferences
+      //     actually shows both styles, not two of the same.
+      //
+      // Doctrine safety preserved:
+      //   - tail-end slicing unchanged (deepest accessory/core work only)
+      //   - candidate filter unchanged (no skill, no primary, no heavy,
+      //     no power, no weighted compounds)
+      //   - blueprint 'blocked' veto at sessionMethodIntentContract level
+      //     still suppresses the entire pass upstream
+      //   - cluster pass later skips already-blockId'd exercises (unchanged)
+      // =====================================================================
       if (circuitCandidates.length >= 3 && (circuitsEarned || densityEarned)) {
-        const circuitSize = Math.min(4, circuitCandidates.length)
-        const circuitExercises = circuitCandidates.slice(-circuitSize) // Take from the end (true tail)
-        const circuitBlockId = `circuit_${session.dayNumber}_1`
-        
-        for (let i = 0; i < circuitExercises.length; i++) {
-          const ex = circuitExercises[i]
+        const userWantsCircuits = sessionMethodIntentContract.userWantsCircuits
+        const userWantsDensity = sessionMethodIntentContract.userWantsDensity
+
+        // [3C] Block kind selection for primary block:
+        //   - user selected circuits -> circuit (preserves explicit user truth)
+        //   - user selected density only -> density_block (fixes the alias bug)
+        //   - neither selected, both earned by blueprint -> circuit (preserves
+        //     prior default behavior when user did not opt in explicitly)
+        //   - only density earned (no circuit earn) -> density_block
+        const primaryKind: 'circuit' | 'density_block' =
+          userWantsCircuits ? 'circuit'
+          : userWantsDensity ? 'density_block'
+          : circuitsEarned ? 'circuit'
+          : 'density_block'
+
+        const primarySize = Math.min(4, circuitCandidates.length)
+        const primaryExercises = circuitCandidates.slice(-primarySize) // Deepest tail
+        const primaryBlockId = primaryKind === 'circuit'
+          ? `circuit_${session.dayNumber}_1`
+          : `density_${session.dayNumber}_1`
+        const primaryMethodLabel = primaryKind === 'circuit' ? 'Circuit' : 'Density'
+
+        for (let i = 0; i < primaryExercises.length; i++) {
+          const ex = primaryExercises[i]
           const idx = session.exercises.findIndex(e => e.id === ex.id)
           if (idx !== -1) {
-            session.exercises[idx].blockId = circuitBlockId
-            session.exercises[idx].method = 'circuit'
-            session.exercises[idx].methodLabel = `Circuit ${String.fromCharCode(65 + i)}`
-            // Adjust rest for circuit format
+            session.exercises[idx].blockId = primaryBlockId
+            session.exercises[idx].method = primaryKind
+            session.exercises[idx].methodLabel = `${primaryMethodLabel} ${String.fromCharCode(65 + i)}`
+            // Adjust rest for grouped format. Density holds slightly longer
+            // intra-round rest than circuits, which run near-continuous.
             if (session.exercises[idx].restSeconds && session.exercises[idx].restSeconds > 30) {
-              session.exercises[idx].restSeconds = 15 // Minimal rest between circuit exercises
+              session.exercises[idx].restSeconds = primaryKind === 'circuit' ? 15 : 20
             }
           }
         }
-        
-        methodMaterializationResult.appliedMethods.push('circuits')
+
+        const primaryAppliedMethod = primaryKind === 'circuit' ? 'circuits' : 'density_blocks'
+        methodMaterializationResult.appliedMethods.push(primaryAppliedMethod)
         methodMaterializationResult.structureDecisions.push({
           block: 'accessory_tail',
-          method: 'circuit',
-          rationale: `${circuitSize} exercises grouped for density - user selected circuits/density_blocks and session is conditioning-compatible`,
+          method: primaryKind,
+          rationale: `${primarySize} exercises grouped as ${primaryKind} — ${
+            userWantsCircuits ? 'user selected circuits'
+            : userWantsDensity ? 'user selected density_blocks'
+            : circuitsEarned ? 'circuits blueprint-earned'
+            : 'density blueprint-earned'
+          }`,
         })
-        
-        console.log('[TRAINING-METHOD-MATERIALIZED] Circuit applied:', {
+
+        console.log('[TRAINING-METHOD-MATERIALIZED] Primary block applied:', {
           dayNumber: session.dayNumber,
-          circuitSize,
-          exercises: circuitExercises.map(e => e.name),
-          eligibility: { circuitsEarned, densityEarned },
+          blockKind: primaryKind,
+          size: primarySize,
+          exercises: primaryExercises.map(e => e.name),
+          eligibility: { circuitsEarned, densityEarned, userWantsCircuits, userWantsDensity },
         })
-        
+
         session.adaptationNotes = session.adaptationNotes || []
-        session.adaptationNotes.push(`${circuitSize}-exercise circuit applied to accessory tail for density`)
+        session.adaptationNotes.push(
+          `${primarySize}-exercise ${primaryKind} applied to accessory tail for ${
+            primaryKind === 'circuit' ? 'round-based conditioning density' : 'timed density work'
+          }`,
+        )
+
+        // [3C] SECONDARY BLOCK on large tails.
+        // Only fires when (a) at least 6 candidates remain AFTER the primary
+        // block was placed (i.e. original tail was 9–10+), and (b) both styles
+        // are earned or selected. This prevents force-stacking on any tail
+        // that isn't genuinely large enough to support two grouped blocks
+        // while leaving at least 2 ungrouped exercises for session finishers
+        // or support rows that read better as straight sets.
+        const remainingCandidates = circuitCandidates.slice(0, circuitCandidates.length - primarySize)
+        const bothStylesActive =
+          (userWantsCircuits || circuitsEarned) &&
+          (userWantsDensity || densityEarned)
+        const canPlaceSecondaryBlock =
+          remainingCandidates.length >= 6 && bothStylesActive
+
+        if (canPlaceSecondaryBlock) {
+          // Secondary block is the OTHER kind so the session shows real variety,
+          // not two circuits or two density blocks in a row.
+          const secondaryKind: 'circuit' | 'density_block' =
+            primaryKind === 'circuit' ? 'density_block' : 'circuit'
+          const secondarySize = Math.min(3, remainingCandidates.length - 2)
+          const secondaryExercises = remainingCandidates.slice(-secondarySize)
+          const secondaryBlockId = secondaryKind === 'circuit'
+            ? `circuit_${session.dayNumber}_2`
+            : `density_${session.dayNumber}_2`
+          const secondaryMethodLabel = secondaryKind === 'circuit' ? 'Circuit' : 'Density'
+
+          let secondaryAppliedCount = 0
+          for (let i = 0; i < secondaryExercises.length; i++) {
+            const ex = secondaryExercises[i]
+            const idx = session.exercises.findIndex(e => e.id === ex.id)
+            if (idx !== -1 && !session.exercises[idx].blockId) {
+              session.exercises[idx].blockId = secondaryBlockId
+              session.exercises[idx].method = secondaryKind
+              session.exercises[idx].methodLabel = `${secondaryMethodLabel} ${String.fromCharCode(65 + i)}`
+              if (session.exercises[idx].restSeconds && session.exercises[idx].restSeconds > 30) {
+                session.exercises[idx].restSeconds = secondaryKind === 'circuit' ? 15 : 20
+              }
+              secondaryAppliedCount++
+            }
+          }
+
+          if (secondaryAppliedCount >= 2) {
+            const secondaryAppliedMethod = secondaryKind === 'circuit' ? 'circuits' : 'density_blocks'
+            if (!methodMaterializationResult.appliedMethods.includes(secondaryAppliedMethod)) {
+              methodMaterializationResult.appliedMethods.push(secondaryAppliedMethod)
+            }
+            methodMaterializationResult.structureDecisions.push({
+              block: 'secondary_accessory_block',
+              method: secondaryKind,
+              rationale: `Secondary ${secondaryKind} block of ${secondaryAppliedCount} exercises — large tail (${circuitCandidates.length} candidates) and both circuit/density earned so session shows real method variety`,
+            })
+
+            console.log('[TRAINING-METHOD-MATERIALIZED] Secondary block applied:', {
+              dayNumber: session.dayNumber,
+              primaryKind,
+              secondaryKind,
+              secondarySize: secondaryAppliedCount,
+              exercises: secondaryExercises.slice(0, secondaryAppliedCount).map(e => e.name),
+            })
+
+            session.adaptationNotes.push(
+              `${secondaryAppliedCount}-exercise ${secondaryKind} added as secondary block for method variety`,
+            )
+          }
+        }
       } else if (circuitCandidates.length < 3) {
         methodMaterializationResult.rejectedMethods.push({
           method: 'circuits',
@@ -12892,14 +13049,248 @@ async function generateAdaptiveProgramImpl(
         })
       }
     }
-    
+
+    // -------------------------------------------------------------------------
+    // [PHASE 3C PACKAGING-TRUTH-LOCK]
+    // SET-EXECUTION METHOD MATERIALIZATION (top_set / drop_set / rest_pause)
+    //
+    // These are PER-ROW execution cues, not grouped structure — same shape
+    // as cluster's method-only emission (no blockId, just ex.method +
+    // ex.setExecutionMethod). Pre-3C the registry supported them
+    // (training-methods.ts L368-L525, setExecutionMethod type at L1220) and
+    // the bridge vocab accepted them, but the materialization layer never
+    // stamped them onto any exercise. Result: "conceptually present but not
+    // materially attached," exactly the failure the phase brief diagnoses.
+    //
+    // Doctrine guards (each method gets ONE assignment per session at most,
+    // and only on a safe target):
+    //
+    //   TOP_SET — applied to the SESSION PILLAR (index 0) when it is a
+    //     non-skill primary strength row that benefits from a heavy single
+    //     followed by back-off sets. Skipped when pillar is skill-primary
+    //     (planche / lever / handstand), already grouped (shouldn't happen
+    //     since pillar is always protected by the superset filter), or
+    //     already carrying cluster.
+    //
+    //   DROP_SET — applied to a LATE accessory exercise (deeper than the
+    //     mid-tier boundary) that is NOT skill, NOT primary, NOT already
+    //     grouped (blockId), NOT already carrying cluster, and NOT a heavy
+    //     weighted compound. Drop sets are an accumulation finisher; they
+    //     belong on the deepest reasonable accessory row.
+    //
+    //   REST_PAUSE — applied to a LATE secondary-strength or accessory row
+    //     that is NOT skill, NOT primary, NOT grouped, NOT cluster, NOT
+    //     drop_set (avoid double-stamping the same row). Rest-pause works
+    //     well on sub-maximal strength accumulation.
+    //
+    // Both drop_set and rest_pause cannot land on the SAME exercise (they
+    // are mutually exclusive set-execution methods). top_set CAN coexist
+    // with a downstream drop_set / rest_pause on a different row — they are
+    // independent decisions for different positions in the session.
+    //
+    // The output is a single ex.method = '<name>' + ex.setExecutionMethod
+    // stamp, exactly mirroring the cluster method-only pattern at L12799.
+    // The finalStyledGroups rebuild's ungrouped path treats these as
+    // groupType='straight' (single-row method cue), and the row-level
+    // method chip corridor renders them through the existing methodLabel
+    // path. No grouped truth is fabricated.
+    // -------------------------------------------------------------------------
+    {
+      const userWantsTop = sessionMethodIntentContract.userWantsTopSets
+      const userWantsDrop = sessionMethodIntentContract.userWantsDropSets
+      const userWantsRP = sessionMethodIntentContract.userWantsRestPause
+
+      if ((userWantsTop || userWantsDrop || userWantsRP) && Array.isArray(session.exercises) && session.exercises.length > 0) {
+        const exs = session.exercises
+
+        // Helper: row already carries a non-straight method or is grouped?
+        const rowHasMethodOrGroup = (ex: typeof exs[number]): boolean => {
+          if (ex.blockId) return true
+          const m = ex.method
+          if (!m) return false
+          if (m === 'straight' || m === 'straight_sets') return false
+          return true // already cluster, superset, circuit, density, etc.
+        }
+
+        const isSkillPillar = (ex: typeof exs[number]): boolean => {
+          if (ex.category === 'skill') return true
+          const n = (ex.name || '').toLowerCase()
+          return (
+            n.includes('planche') ||
+            n.includes('front lever') ||
+            n.includes('back lever') ||
+            n.includes('handstand') ||
+            n.includes('iron cross') ||
+            n.includes('v-sit') ||
+            n.includes('manna') ||
+            n.includes('muscle-up')
+          )
+        }
+
+        const isHeavyOrPower = (ex: typeof exs[number]): boolean => {
+          const n = (ex.name || '').toLowerCase()
+          return (
+            n.includes('weighted pull') ||
+            n.includes('weighted dip') ||
+            n.includes('explosive') ||
+            n.includes('plyometric') ||
+            n.includes('ballistic') ||
+            n.includes('clapping')
+          )
+        }
+
+        const lateBoundary = Math.max(2, Math.ceil(exs.length / 2))
+
+        // -------- TOP_SET on session pillar --------
+        if (userWantsTop) {
+          const pillar = exs[0]
+          if (
+            pillar &&
+            !isSkillPillar(pillar) &&
+            !rowHasMethodOrGroup(pillar) &&
+            // Pillar must be a true primary strength role to benefit from
+            // a heavy single + back-off — skill-primary rows must use straight
+            // sets for neural quality.
+            (pillar.category === 'strength' || (pillar.selectionReason || '').includes('primary'))
+          ) {
+            pillar.method = 'top_set'
+            pillar.methodLabel = 'Top Set + Back-Off'
+            pillar.setExecutionMethod = 'top_set'
+            methodMaterializationResult.appliedMethods.push('top_sets')
+            methodMaterializationResult.structureDecisions.push({
+              block: 'session_pillar',
+              method: 'top_set',
+              rationale: `Top set + back-off applied to ${pillar.name} — user selected top_sets and pillar is primary strength (heavy single → back-off accumulation honors the loading intent without grouping)`,
+            })
+            console.log('[TRAINING-METHOD-MATERIALIZED] Top set applied:', {
+              dayNumber: session.dayNumber,
+              exercise: pillar.name,
+              category: pillar.category,
+            })
+          } else {
+            methodMaterializationResult.rejectedMethods.push({
+              method: 'top_sets',
+              reason: pillar
+                ? isSkillPillar(pillar)
+                  ? `Pillar is skill-primary (${pillar.name}); top sets compromise neural quality on skill work`
+                  : rowHasMethodOrGroup(pillar)
+                    ? `Pillar already carries a method (${pillar.method ?? 'grouped'}); top set cannot stack`
+                    : `Pillar is not primary strength role (category=${pillar.category}); top set format requires loaded primary effort`
+                : 'Session has no exercises',
+            })
+          }
+        }
+
+        // -------- DROP_SET on deepest safe accessory --------
+        // Walk from the END backward to find the deepest row that passes
+        // all guards. Skip rows already touched by top_set above (different
+        // position so this rarely conflicts).
+        let dropSetTarget: typeof exs[number] | null = null
+        let dropSetIdx = -1
+        if (userWantsDrop) {
+          for (let i = exs.length - 1; i >= lateBoundary; i--) {
+            const ex = exs[i]
+            if (!ex) continue
+            if (isSkillPillar(ex)) continue
+            if (isHeavyOrPower(ex)) continue
+            if ((ex.selectionReason || '').includes('primary')) continue
+            if (rowHasMethodOrGroup(ex)) continue
+            // Prefer accessory / core / non-primary strength
+            if (
+              ex.category === 'accessory' ||
+              ex.category === 'core' ||
+              ex.category === 'strength'
+            ) {
+              dropSetTarget = ex
+              dropSetIdx = i
+              break
+            }
+          }
+          if (dropSetTarget && dropSetIdx !== -1) {
+            dropSetTarget.method = 'drop_set'
+            dropSetTarget.methodLabel = 'Drop Set Finisher'
+            dropSetTarget.setExecutionMethod = 'drop_set'
+            methodMaterializationResult.appliedMethods.push('drop_sets')
+            methodMaterializationResult.structureDecisions.push({
+              block: 'late_accessory',
+              method: 'drop_set',
+              rationale: `Drop set applied to ${dropSetTarget.name} (position ${dropSetIdx}/${exs.length - 1}) — user selected drop_sets and this is a late safe accessory row for hypertrophy accumulation`,
+            })
+            console.log('[TRAINING-METHOD-MATERIALIZED] Drop set applied:', {
+              dayNumber: session.dayNumber,
+              exercise: dropSetTarget.name,
+              position: dropSetIdx,
+              category: dropSetTarget.category,
+            })
+          } else {
+            methodMaterializationResult.rejectedMethods.push({
+              method: 'drop_sets',
+              reason: 'No safe late-accessory candidate available (all qualifying rows are skill-primary, heavy compounds, primary-tagged, or already grouped/methoded)',
+            })
+          }
+        }
+
+        // -------- REST_PAUSE on deepest remaining safe row --------
+        if (userWantsRP) {
+          let rpTarget: typeof exs[number] | null = null
+          let rpIdx = -1
+          for (let i = exs.length - 1; i >= lateBoundary; i--) {
+            const ex = exs[i]
+            if (!ex) continue
+            if (ex === dropSetTarget) continue // Don't double-stamp
+            if (isSkillPillar(ex)) continue
+            if (isHeavyOrPower(ex)) continue
+            if ((ex.selectionReason || '').includes('primary')) continue
+            if (rowHasMethodOrGroup(ex)) continue
+            if (
+              ex.category === 'strength' ||
+              ex.category === 'accessory'
+            ) {
+              rpTarget = ex
+              rpIdx = i
+              break
+            }
+          }
+          if (rpTarget && rpIdx !== -1) {
+            rpTarget.method = 'rest_pause'
+            rpTarget.methodLabel = 'Rest-Pause Sets'
+            rpTarget.setExecutionMethod = 'rest_pause'
+            methodMaterializationResult.appliedMethods.push('rest_pause')
+            methodMaterializationResult.structureDecisions.push({
+              block: 'late_accessory',
+              method: 'rest_pause',
+              rationale: `Rest-pause applied to ${rpTarget.name} (position ${rpIdx}/${exs.length - 1}) — user selected rest_pause and this is a late safe accumulation row`,
+            })
+            console.log('[TRAINING-METHOD-MATERIALIZED] Rest-pause applied:', {
+              dayNumber: session.dayNumber,
+              exercise: rpTarget.name,
+              position: rpIdx,
+              category: rpTarget.category,
+            })
+          } else {
+            methodMaterializationResult.rejectedMethods.push({
+              method: 'rest_pause',
+              reason: 'No safe late-accessory candidate available (all qualifying rows are skill-primary, heavy compounds, primary-tagged, already grouped/methoded, or claimed by drop_set)',
+            })
+          }
+        }
+      }
+    }
+
     // -------------------------------------------------------------------------
     // UPDATE STYLE METADATA WITH FULL METHOD MATERIALIZATION RESULTS
     // This ensures durable truth survives save/load/render cycles
     // -------------------------------------------------------------------------
     const existingStyleMeta = session.styleMetadata || {}
     const hasCircuitsApplied = methodMaterializationResult.appliedMethods.includes('circuits')
-    const hasDensityApplied = hasCircuitsApplied // Circuits are a form of density
+    // [PHASE 3C PACKAGING-TRUTH-LOCK] Honest density signal.
+    // Pre-3C: `hasDensityApplied = hasCircuitsApplied` aliased these two
+    // distinct grouped-method styles together, so a session with circuits
+    // (round-based) silently reported density (timed work block) as applied
+    // even though no density_block styledGroup ever emitted. The new
+    // multi-block materializer above can emit real density_block blockIds
+    // independently, so this signal must reflect what actually materialized.
+    const hasDensityApplied = methodMaterializationResult.appliedMethods.includes('density_blocks')
     const hasClusterApplied = methodMaterializationResult.appliedMethods.includes('cluster_sets')
     
     // Rebuild styledGroups from final exercise state
@@ -12950,6 +13341,18 @@ async function generateAdaptiveProgramImpl(
         case 'density':
         case 'density_blocks':
           return 'density_block'
+        // [PHASE 3C PACKAGING-TRUTH-LOCK] Set-execution methods are PER-ROW
+        // execution cues, not grouped structure. They map to 'straight' so
+        // the styledGroup contract honestly reports zero grouped blocks for
+        // a single-row method cue, exactly mirroring the cluster method-only
+        // behavior at L13034 below. The row-level method chip corridor still
+        // renders the cue via ex.method + ex.methodLabel + ex.setExecutionMethod.
+        case 'top_set':
+        case 'top_sets':
+        case 'drop_set':
+        case 'drop_sets':
+        case 'rest_pause':
+          return 'straight'
         default:
           return 'straight'
       }
@@ -13074,6 +13477,11 @@ async function generateAdaptiveProgramImpl(
       if (!m || m === 'straight' || m === 'straight_sets') return false
       // Method-only cluster on an ungrouped exercise is not structural.
       if (m === 'cluster' && !e.blockId) return false
+      // [PHASE 3C PACKAGING-TRUTH-LOCK] Set-execution methods (top_set,
+      // drop_set, rest_pause) are per-row execution cues, never structural.
+      // Excluding them here so the invariant does not falsely report
+      // FLATTENED for an honest method-only single-row stamp.
+      if ((m === 'top_set' || m === 'drop_set' || m === 'rest_pause') && !e.blockId) return false
       return true
     }).length
     // Cluster application is method-only when it did not land on a grouped
@@ -13114,8 +13522,14 @@ async function generateAdaptiveProgramImpl(
     
     // Determine primary style based on applied methods
     // [ROOT-CAUSE-FIX] Check CURRENT session.styleMetadata for supersets, not stale existingStyleMeta
+    // [PHASE 3C PACKAGING-TRUTH-LOCK] Include density_blocks in the priority
+    // ladder so a session whose only grouped method is a real density block
+    // (now possible thanks to the multi-block materializer) reports
+    // primaryStyle='density_blocks' instead of silently demoting to
+    // straight_sets. Order: circuits > supersets > density > cluster > straight.
     const primaryStyle = hasCircuitsApplied ? 'circuits' :
       session.styleMetadata?.hasSupersetsApplied ? 'supersets' :
+      hasDensityApplied ? 'density_blocks' :
       hasClusterApplied ? 'cluster_sets' : 'straight_sets'
     
     // [DOCTRINE-REJECTION-COMPLETION] Fill in truthful rejection reasons for user-selected

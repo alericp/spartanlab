@@ -722,6 +722,27 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         // MainExercisesRenderer (same reference path via displayExercises
         // + activeSessionView). Serializable: plain objects only.
         exercises: cardResolvedBody.exercises,
+        // [MIRROR-CORRIDOR-LOCKDOWN] Stamp the card's already-pruned
+        // styleMetadata. This is what eliminates the "grouped metadata
+        // shadow owner" failure where variant snapshot-boot used the
+        // full-session styledGroups -- causing the live machine's
+        // member-advance path to jump to wrong exercise indexes because
+        // the groups referenced members that weren't in the variant body.
+        //
+        // Semantics (mirrored in SelectedBodySnapshot contract comment):
+        //   - object (with styledGroups.length > 0) : pass to route as-is
+        //   - object (with styledGroups.length === 0) : pass as null to
+        //     explicitly tell the route "no groups in this selected body,
+        //     clear finalSession.styleMetadata so executionPlan derives
+        //     flat from the snapshot exercises"
+        //   - undefined upstream (no metadata at all) : pass null for
+        //     the same reason
+        styleMetadata:
+          variantPrunedStyleMetadata &&
+          Array.isArray(variantPrunedStyleMetadata.styledGroups) &&
+          variantPrunedStyleMetadata.styledGroups.length > 0
+            ? variantPrunedStyleMetadata
+            : null,
       },
     })
 

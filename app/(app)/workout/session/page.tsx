@@ -1162,11 +1162,48 @@ function WorkoutSessionContent() {
       // ---- Mirror boot branch ----
       if (validation.valid && expectedPayload?.selectedBody) {
         const sb = expectedPayload.selectedBody
-        finalSession = {
-          ...finalSession,
+        // [MIRROR-CORRIDOR-LOCKDOWN] Resolve the styleMetadata override.
+        //
+        // This is the critical missing piece that allowed grouped metadata
+        // to remain a shadow owner of exercise order even after snapshot
+        // exercise-boot succeeded. The card's variant body is narrow, but
+        // `result.session.styleMetadata` from the loader still carries the
+        // full-session styledGroups. StreamlinedWorkoutSession's executionPlan
+        // builder reads `safeSession.styleMetadata?.styledGroups`, matches
+        // group members against the snapshot exercises by id/name, and
+        // builds blocks whose `memberExerciseIndexes` point at (or miss)
+        // variant exercises -- live-workout-machine.ts:1208 then advances
+        // via those indexes, producing wrong-order or ghost-exercise boots.
+        //
+        // Three cases:
+        //   1. sb.styleMetadata is an object        -> use it as-is (the
+        //      card's variantPrunedStyleMetadata, groups narrowed to
+        //      surviving variant members).
+        //   2. sb.styleMetadata === null            -> clear finalSession
+        //      styleMetadata. Executes the "no grouped owner; derive a
+        //      flat executionPlan from snapshot exercises" contract.
+        //   3. sb.styleMetadata === undefined       -> pre-lockdown stamp.
+        //      Keep finalSession.styleMetadata from the loader; the
+        //      StreamlinedWorkoutSession safety-net filter (added in
+        //      this lockdown) will drop under-minimum blocks defensively.
+        const snapshotHasExplicitMeta = 'styleMetadata' in sb
+        const snapshotMeta = (sb as { styleMetadata?: unknown }).styleMetadata
+        const mergedSession: Record<string, unknown> = {
+          ...(finalSession as unknown as Record<string, unknown>),
           exercises: sb.exercises,
           estimatedMinutes: sb.estimatedMinutes,
         }
+        if (snapshotHasExplicitMeta) {
+          if (snapshotMeta && typeof snapshotMeta === 'object') {
+            mergedSession.styleMetadata = snapshotMeta
+          } else {
+            // null -> clear. Deleting the key is cleaner than `undefined`
+            // because the safe-contract normalizer re-reads via
+            // `sessionAny.styleMetadata` and absence triggers the flat path.
+            delete mergedSession.styleMetadata
+          }
+        }
+        finalSession = mergedSession as typeof finalSession
         setBootSource('visible_snapshot')
         console.log('[PROGRAM-TO-LIVE MIRROR CONTRACT] BOOT_FROM_SNAPSHOT', {
           variantIndex,
@@ -1178,6 +1215,22 @@ function WorkoutSessionContent() {
           snapshotEstimatedMinutes: sb.estimatedMinutes,
           snapshotWeekNumber: sb.weekNumber,
           snapshotVariantLabel: sb.variantLabel,
+          // [MIRROR-CORRIDOR-LOCKDOWN] styleMetadata override audit
+          snapshotHasExplicitStyleMetadata: snapshotHasExplicitMeta,
+          snapshotStyleMetadataShape:
+            snapshotMeta && typeof snapshotMeta === 'object'
+              ? 'object'
+              : snapshotMeta === null
+                ? 'null_cleared'
+                : 'absent_pre_lockdown',
+          snapshotStyleMetadataGroupCount:
+            snapshotMeta &&
+            typeof snapshotMeta === 'object' &&
+            Array.isArray(
+              (snapshotMeta as { styledGroups?: unknown }).styledGroups
+            )
+              ? (snapshotMeta as { styledGroups: unknown[] }).styledGroups.length
+              : 0,
           // Loader-side derivation was NOT used for boot, but we show what
           // it would have produced for diagnostic value.
           loaderDerivedExerciseCount: loaderDerivedExercises.length,

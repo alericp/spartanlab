@@ -6478,7 +6478,18 @@ export function buildFallbackSelectionForSession(
   primaryGoal: PrimaryGoal,
   equipment: EquipmentType[],
   sessionMinutes: number,
-  experienceLevel: ExperienceLevel
+  experienceLevel: ExperienceLevel,
+  // [SELECTED-SKILL-FALLBACK-TRUTH] Optional list of the user's full selected
+  // skills (from onboarding / canonical profile). When provided, this helper
+  // prioritizes direct progressions and support work for the user's actual
+  // skill truth BEFORE falling through to the generic primaryGoal→focus map.
+  // This closes the dilution gap where the fallback returned only generic
+  // goal support rows even when the user had broader selected-skill truth
+  // (e.g. back_lever, dragon_flag) that should have been the first material
+  // an underbuilt-session top-up draws from. When omitted, the helper
+  // behaves exactly as before (backward compatible for rescue paths that
+  // don't have access to the selected-skills array).
+  selectedSkills: string[] = []
 ): { main: SelectedExercise[]; rescuePath: string; wasRescued: boolean } {
   console.log('[session-rescue] Starting fallback resolution:', {
     dayFocus,
@@ -6486,6 +6497,8 @@ export function buildFallbackSelectionForSession(
     equipmentCount: equipment.length,
     sessionMinutes,
     experienceLevel,
+    selectedSkillsCount: selectedSkills.length,
+    selectedSkills,
   })
   
   const rescueResult: SelectedExercise[] = []
@@ -6600,6 +6613,150 @@ export function buildFallbackSelectionForSession(
     }
   }
   
+  // ==========================================================================
+  // [SELECTED-SKILL-FALLBACK-TRUTH] RESCUE PATH 0 (NEW, HIGHEST PRIORITY):
+  // Prioritize direct progressions + support material for the user's actual
+  // selected skills, pulled from the canonical ADVANCED_SKILL_FAMILIES
+  // registry (single source of truth, no parallel data).
+  //
+  // WHY THIS PATH EXISTS: Before this path, the fallback builder's only
+  // skill-awareness was the `primaryGoal` argument -- a single skill/goal
+  // key. But the user's selected-skill set is a list (e.g. front_lever AS
+  // primary plus back_lever + dragon_flag + planche_pushup as additional
+  // selected skills). The old code returned generic pull/scapular/lat
+  // support for front_lever and never surfaced a single back_lever or
+  // dragon_flag direct progression, even when the underbuilt-session
+  // top-up was starving for truthful selected-skill material to append.
+  // That was the first dilution owner.
+  //
+  // This path ONLY activates when the caller passes a non-empty
+  // `selectedSkills` list (the top-up repair in adaptive-program-builder
+  // does). Backward compat: when the list is empty, the function still
+  // falls through to the original PATH 1 immediately.
+  //
+  // DOCTRINE SAFETY: This path does NOT bypass eligibility -- it only
+  // surfaces candidates that are already in the equipment-filtered
+  // `availableSkills` / `availableStrength` / `availableAccessory` pools.
+  // It respects overlap-aware doctrine by caller (the top-up repair
+  // enforces the `deficit` cap and dedupes against existing session rows).
+  // No hardcoded exercises -- every candidate is looked up from canonical
+  // ADVANCED_SKILL_FAMILIES.directProgressions + .supportPatterns.
+  // ==========================================================================
+  if (selectedSkills.length > 0) {
+    const skillTruthCandidates: Array<{
+      exercise: Exercise
+      ownerSkill: string
+      matchReason: string
+      priority: number // 3=direct progression, 2=support pattern, 1=transferTo
+    }> = []
+
+    const alreadyCollected = new Set<string>()
+    const combinedAvailable = [...availableSkills, ...availableStrength, ...availableAccessory]
+
+    for (const skill of selectedSkills) {
+      const family = getAdvancedSkillFamily(skill)
+      if (!family) continue // Skip non-advanced skills (generic goal fallback handles those)
+
+      const directProgressionIds = new Set(
+        (family.directProgressions || []).map(id => safeLower(id))
+      )
+      const supportPatterns = (family.supportPatterns || []).map(p => safeLower(p))
+
+      for (const ex of combinedAvailable) {
+        const exIdLower = safeLower(ex.id)
+        if (!exIdLower || alreadyCollected.has(exIdLower)) continue
+
+        // Priority 3: exact direct-progression id match
+        if (directProgressionIds.has(exIdLower)) {
+          skillTruthCandidates.push({
+            exercise: ex,
+            ownerSkill: skill,
+            matchReason: `direct_progression_for_${skill}`,
+            priority: 3,
+          })
+          alreadyCollected.add(exIdLower)
+          continue
+        }
+
+        // Priority 2: support pattern match (movementFamily / movementPattern / tags)
+        const norm = getRescueNormalized(ex)
+        if (norm && supportPatterns.length > 0) {
+          const exTags = [
+            safeLower(norm.movementFamily),
+            safeLower(norm.movementPattern),
+            ...norm.tags.map(t => safeLower(t)),
+          ].filter(Boolean)
+          if (supportPatterns.some(p => exTags.some(t => t.includes(p)))) {
+            skillTruthCandidates.push({
+              exercise: ex,
+              ownerSkill: skill,
+              matchReason: `support_pattern_for_${skill}`,
+              priority: 2,
+            })
+            alreadyCollected.add(exIdLower)
+            continue
+          }
+        }
+
+        // Priority 1: transferTo match (exercise declares it transfers to this skill)
+        if (exerciseTransfersToSkill(ex, skill)) {
+          skillTruthCandidates.push({
+            exercise: ex,
+            ownerSkill: skill,
+            matchReason: `transfers_to_${skill}`,
+            priority: 1,
+          })
+          alreadyCollected.add(exIdLower)
+        }
+      }
+    }
+
+    if (skillTruthCandidates.length > 0) {
+      // Sort by priority desc, then stable
+      skillTruthCandidates.sort((a, b) => b.priority - a.priority)
+
+      // Take up to 6 skill-truth candidates (covers sessions through 90 min
+      // where minExercises is 6). The top-up repair caps appended rows by
+      // its own `deficit`, so this cannot inflate sessions past budget.
+      const skillTruthCap = 6
+      const taken = skillTruthCandidates.slice(0, skillTruthCap)
+
+      rescuePath = 'selected_skill_truth'
+      for (const cand of taken) {
+        rescueResult.push(
+          toSelectedExercise(
+            cand.exercise,
+            `Selected-skill material (${cand.matchReason}, priority ${cand.priority})`
+          )
+        )
+      }
+
+      console.log('[SELECTED-SKILL-FALLBACK-TRUTH] Skill-truth candidates surfaced', {
+        selectedSkillsCount: selectedSkills.length,
+        candidatesFound: skillTruthCandidates.length,
+        appliedCount: taken.length,
+        byPriority: {
+          direct: skillTruthCandidates.filter(c => c.priority === 3).length,
+          supportPattern: skillTruthCandidates.filter(c => c.priority === 2).length,
+          transferTo: skillTruthCandidates.filter(c => c.priority === 1).length,
+        },
+        appliedExercises: taken.map(c => ({
+          id: c.exercise.id,
+          name: c.exercise.name,
+          ownerSkill: c.ownerSkill,
+          priority: c.priority,
+        })),
+        verdict: 'SELECTED_SKILL_TRUTH_APPLIED',
+      })
+    } else {
+      console.log('[SELECTED-SKILL-FALLBACK-TRUTH] No skill-truth candidates matched selected skills', {
+        selectedSkills,
+        advancedSkillsInSelection: selectedSkills.filter(s => !!getAdvancedSkillFamily(s)),
+        verdict: 'SELECTED_SKILL_TRUTH_NO_MATCH_FALLING_THROUGH',
+      })
+    }
+  }
+
   // RESCUE PATH 1: Goal-specific support work for the day focus
   const goalFocusMap: Record<PrimaryGoal, string[]> = {
     planche: ['straight_arm', 'push', 'shoulder'],
@@ -6641,10 +6798,23 @@ export function buildFallbackSelectionForSession(
     return targetTags.some(tag => exTags.some(et => et.includes(tag)))
   })
   
-  if (goalMatchingExercises.length >= 2) {
-    rescuePath = 'goal_support'
-    const selected = goalMatchingExercises.slice(0, Math.min(4, goalMatchingExercises.length))
-    rescueResult.push(...selected.map(ex => toSelectedExercise(ex, `Goal-aligned ${primaryGoal} support`)))
+  // [SELECTED-SKILL-FALLBACK-TRUTH] The candidate cap below is raised from 4
+  // to 6 so that sessions at 60/75/90 minutes (which declare minExercises of
+  // 5/5/6) can be satisfied by the fallback pool when the top-up repair
+  // needs more than 4 unique candidates. The top-up repair itself caps its
+  // appended rows by `deficit`, so this widening never inflates a session
+  // past its true budget -- it only ensures the top-up has enough unique
+  // material to append when the session is genuinely underbuilt. For the
+  // empty-session rescue path (separate caller), more fallback candidates
+  // means the rescue is less likely to emit a thin 2-exercise session.
+  const FALLBACK_TARGET_CAP = 6
+
+  if (goalMatchingExercises.length >= 2 && rescueResult.length < FALLBACK_TARGET_CAP) {
+    if (rescuePath === 'none') rescuePath = 'goal_support'
+    const goalSupportAdditions = goalMatchingExercises
+      .filter(ex => !rescueResult.some(r => r.exercise.id === ex.id))
+      .slice(0, Math.max(0, FALLBACK_TARGET_CAP - rescueResult.length))
+    rescueResult.push(...goalSupportAdditions.map(ex => toSelectedExercise(ex, `Goal-aligned ${primaryGoal} support`)))
     console.log('[session-rescue-success] Found goal-matching exercises:', {
       count: rescueResult.length,
       exercises: rescueResult.map(e => e.exercise.name),
@@ -6654,7 +6824,7 @@ export function buildFallbackSelectionForSession(
   // RESCUE PATH 2: Day focus compatible work
   // [PHASE15E-RESCUE-CORRIDOR-INPUT-TRUTH] Use normalized candidates for focus compatibility
   const safeDayFocus = dayFocus || 'mixed_upper'
-  if (rescueResult.length < 2) {
+  if (rescueResult.length < FALLBACK_TARGET_CAP) {
     const focusCompatible = availableStrength.filter(ex => {
       const norm = getRescueNormalized(ex)
       if (!norm) return false // Skip malformed candidates
@@ -6667,19 +6837,19 @@ export function buildFallbackSelectionForSession(
       return true
     })
     
-    if (focusCompatible.length >= 2) {
-      rescuePath = 'focus_compatible'
+    if (focusCompatible.length >= 1) {
+      if (rescuePath === 'none') rescuePath = 'focus_compatible'
       const additional = focusCompatible
         .filter(ex => !rescueResult.some(r => r.exercise.id === ex.id))
-        .slice(0, Math.max(0, 4 - rescueResult.length))
+        .slice(0, Math.max(0, FALLBACK_TARGET_CAP - rescueResult.length))
       rescueResult.push(...additional.map(ex => toSelectedExercise(ex, `Focus-compatible ${safeDayFocus}`)))
     }
   }
   
   // RESCUE PATH 3: General strength/accessory fallback
   // [PHASE15E-RESCUE-CORRIDOR-INPUT-TRUTH] Use normalized candidates for carryover sorting
-  if (rescueResult.length < 2) {
-    rescuePath = 'general_strength'
+  if (rescueResult.length < FALLBACK_TARGET_CAP) {
+    if (rescuePath === 'none') rescuePath = 'general_strength'
     const generalExercises = [...availableStrength, ...availableAccessory]
       .filter(ex => {
         const norm = getRescueNormalized(ex)
@@ -6694,22 +6864,22 @@ export function buildFallbackSelectionForSession(
         const carryoverB = normB?.carryover ?? 0
         return carryoverB - carryoverA
       })
-      .slice(0, Math.max(0, 4 - rescueResult.length))
+      .slice(0, Math.max(0, FALLBACK_TARGET_CAP - rescueResult.length))
     
     rescueResult.push(...generalExercises.map(ex => toSelectedExercise(ex, 'General strength fallback')))
   }
   
   // RESCUE PATH 4: Core work as minimum viable session
   // [PHASE15E-RESCUE-CORRIDOR-INPUT-TRUTH] Use normalized candidates for core identification
-  if (rescueResult.length < 2 && availableCore.length > 0) {
-    rescuePath = 'core_minimum'
+  if (rescueResult.length < FALLBACK_TARGET_CAP && availableCore.length > 0) {
+    if (rescuePath === 'none') rescuePath = 'core_minimum'
     const coreExercises = availableCore
       .filter(ex => {
         const norm = getRescueNormalized(ex)
         if (!norm) return false // Skip malformed candidates
         return !rescueResult.some(r => r.exercise.id === ex.id)
       })
-      .slice(0, Math.max(0, 3 - rescueResult.length))
+      .slice(0, Math.max(0, FALLBACK_TARGET_CAP - rescueResult.length))
     
     rescueResult.push(...coreExercises.map(ex => toSelectedExercise(ex, 'Core fallback')))
   }

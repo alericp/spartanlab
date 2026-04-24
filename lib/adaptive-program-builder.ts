@@ -23033,12 +23033,20 @@ function generateAdaptiveSession(
     sessionTrace.rescueAttempted = true
     
     // STEP B2: Attempt fallback rescue
+    // [SELECTED-SKILL-FALLBACK-TRUTH] Pass selectedSkills so the empty-session
+    // rescue also draws from the user's actual skill truth first (same reason
+    // as the top-up repair -- prevents emergency-rescued sessions from being
+    // generic-only).
+    const selectedSkillsForEmptyRescue = Array.isArray(selectedSkills)
+      ? selectedSkills.filter((s): s is string => typeof s === 'string' && s.length > 0)
+      : []
     const rescueResult = buildFallbackSelectionForSession(
       day.focus,
       primaryGoal,
       equipment,
       sessionMinutesResolved,
-      experienceLevel
+      experienceLevel,
+      selectedSkillsForEmptyRescue
     )
     
     if (rescueResult.wasRescued && rescueResult.main.length > 0) {
@@ -23145,12 +23153,26 @@ function generateAdaptiveSession(
         // Reuse the authoritative fallback owner. Same helper the empty-session
         // rescue uses at L22995 -- no new parallel builder, no new candidate
         // pool, same equipment filter.
+        //
+        // [SELECTED-SKILL-FALLBACK-TRUTH] Pass the user's full selected-skills
+        // list so the fallback builder can prioritize direct-progression /
+        // support material for each selected skill (back_lever, dragon_flag,
+        // planche_pushup, one_arm_pull_up, one_arm_chin_up, one_arm_push_up,
+        // hspu) via PATH 0 in buildFallbackSelectionForSession, instead of
+        // returning only generic primaryGoal support rows. This was the
+        // upstream dilution that caused the top-up repair to run successfully
+        // at the count level but produce candidates that either duplicated
+        // existing rows or were generic-flavored for the wrong goal.
+        const selectedSkillsForTopUp = Array.isArray(selectedSkills)
+          ? selectedSkills.filter((s): s is string => typeof s === 'string' && s.length > 0)
+          : []
         const topUpResult = buildFallbackSelectionForSession(
           day.focus,
           primaryGoal,
           equipment,
           sessionMinutesResolved,
-          experienceLevel
+          experienceLevel,
+          selectedSkillsForTopUp
         )
 
         if (topUpResult.wasRescued && topUpResult.main.length > 0) {
@@ -23317,12 +23339,18 @@ function generateAdaptiveSession(
     })
     
     // Attempt recovery via fallback selection with relaxed constraints
+    // [SELECTED-SKILL-FALLBACK-TRUTH] Pass selectedSkills so recovery rescue
+    // also surfaces the user's selected-skill material first.
+    const selectedSkillsForRecovery = Array.isArray(selectedSkills)
+      ? selectedSkills.filter((s): s is string => typeof s === 'string' && s.length > 0)
+      : []
     const recoveryRescue = buildFallbackSelectionForSession(
       day.focus,
       primaryGoal,
       equipment, // Use SAME equipment to ensure truth
       sessionMinutesResolved,
-      experienceLevel
+      experienceLevel,
+      selectedSkillsForRecovery
     )
     
     if (recoveryRescue.wasRescued && recoveryRescue.main.length > 0) {
@@ -25619,12 +25647,18 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       // This ensures we only fail if truly no equipment-valid path exists
       // ==========================================================================
       sessionStep = 'emergency_fallback_attempt'
+      // [SELECTED-SKILL-FALLBACK-TRUTH] Pass selectedSkills so the emergency
+      // rescue also draws from the user's selected-skill material first.
+      const selectedSkillsForEmergency = Array.isArray(selectedSkills)
+        ? selectedSkills.filter((s): s is string => typeof s === 'string' && s.length > 0)
+        : []
       const emergencyRescue = buildFallbackSelectionForSession(
         day.focus,
         primaryGoal,
         equipment,
         sessionMinutesResolved,
-        experienceLevel
+        experienceLevel,
+        selectedSkillsForEmergency
       )
       
       if (emergencyRescue.wasRescued && emergencyRescue.main.length > 0) {

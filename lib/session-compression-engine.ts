@@ -788,6 +788,53 @@ export interface SessionVariant {
   compressionLevel: 'none' | 'light' | 'moderate' | 'heavy'
 }
 
+// =============================================================================
+// [VARIANT-LAUNCHABILITY-CONTRACT] CANONICAL VARIANT VALIDITY HELPER
+// =============================================================================
+// A variant is "launchable" iff it can honestly materialize a real session
+// body. This is the ONE authoritative truth for variant validity; every
+// upstream emit site and every downstream consumer (Program card buttons,
+// reconcile pass, route variant-apply) MUST reference this helper instead of
+// its own ad hoc check. If this returns false, the variant must NOT survive
+// in `session.variants` and must NOT render a Program-card toggle button.
+//
+// Minimum invariants a launchable variant satisfies:
+//   1. variant object exists
+//   2. variant.selection exists
+//   3. variant.selection.main is an array
+//   4. variant.selection.main.length > 0 (no hollow / metadata-only variants)
+//   5. every main row has a usable SelectedExercise with exercise identity
+//      (truthy string `id` AND truthy string `name`)
+//
+// Deliberately NOT checked here (these are richer truths that belong to later
+// corridors and have their own guards):
+//   - grouped / blockId / method / methodLabel survival
+//     (that is the VARIANT-PARENT-TRUTH-RECONCILE pass's job; a variant
+//     without grouped truth is still internally valid as a flat session)
+//   - monotonicity vs Full (that is the variant-monotonicity-audit's job)
+//   - meaningful-difference duration threshold (handled by the caller)
+//
+// Keeping those out of this helper prevents it from over-rejecting perfectly
+// usable flat variants. The helper's job is ONLY "is this a real, usable
+// session body?" -- not "is this an ideal variant shape?"
+// =============================================================================
+export function isVariantLaunchable(
+  variant: SessionVariant | undefined | null
+): variant is SessionVariant {
+  if (!variant) return false
+  if (!variant.selection) return false
+  if (!Array.isArray(variant.selection.main)) return false
+  if (variant.selection.main.length === 0) return false
+  for (const row of variant.selection.main) {
+    if (!row) return false
+    if (!row.exercise) return false
+    const ex = row.exercise as unknown as { id?: unknown; name?: unknown }
+    if (typeof ex.id !== 'string' || ex.id.length === 0) return false
+    if (typeof ex.name !== 'string' || ex.name.length === 0) return false
+  }
+  return true
+}
+
 export function generateSessionVariants(
   fullSelection: ExerciseSelection,
   originalMinutes: number
@@ -817,14 +864,27 @@ export function generateSessionVariants(
   
   const fullExerciseCount = safeSelection.main.length
   
-  const variants: SessionVariant[] = [
-    {
-      duration: safeOriginalMinutes,
-      label: 'Full Session',
-      selection: safeSelection,
-      compressionLevel: 'none',
-    },
-  ]
+  // [VARIANT-LAUNCHABILITY-CONTRACT] Full is only emitted if it passes the
+  // canonical validity gate. If the caller handed us an empty or malformed
+  // full selection, we return an empty variants array rather than emitting a
+  // hollow Full. Callers (and the card's selectedSessionContract) already
+  // handle `session.variants` being empty/undefined by rendering a single
+  // honest session with `session.estimatedMinutes`.
+  const fullCandidate: SessionVariant = {
+    duration: safeOriginalMinutes,
+    label: 'Full Session',
+    selection: safeSelection,
+    compressionLevel: 'none',
+  }
+  if (!isVariantLaunchable(fullCandidate)) {
+    console.warn('[VARIANT-LAUNCHABILITY-CONTRACT] Full variant rejected - no launchable body', {
+      fullExerciseCount,
+      safeOriginalMinutes,
+      verdict: 'RETURNING_EMPTY_VARIANTS_ARRAY',
+    })
+    return []
+  }
+  const variants: SessionVariant[] = [fullCandidate]
   
   let variant45: SessionVariant | null = null
   let variant30: SessionVariant | null = null
@@ -844,19 +904,30 @@ export function generateSessionVariants(
       
       // [TASK 4] Monotonicity guard - 45 min must not be fuller than Full
       const count45 = compressed45.compressed.main.length
-      if (count45 <= fullExerciseCount) {
-        variant45 = {
-          duration: 45,
-          label: '45 Min',
-          selection: compressed45.compressed,
-          compressionLevel: compressed45.compressionLevel,
-        }
-        variants.push(variant45)
-      } else {
+      const candidate45: SessionVariant = {
+        duration: 45,
+        label: '45 Min',
+        selection: compressed45.compressed,
+        compressionLevel: compressed45.compressionLevel,
+      }
+      // [VARIANT-LAUNCHABILITY-CONTRACT] Only emit 45 Min if it has a real
+      // launchable body. `count45 <= fullExerciseCount` alone was true even
+      // when count45 was 0 (hollow compressed main), which pushed a
+      // metadata-only variant that downstream consumers treated as real.
+      if (!isVariantLaunchable(candidate45)) {
+        console.warn('[VARIANT-LAUNCHABILITY-CONTRACT] Skipping 45min variant - no launchable body', {
+          fullCount: fullExerciseCount,
+          variant45Count: count45,
+          reason: 'empty_or_unusable_selection_main',
+        })
+      } else if (count45 > fullExerciseCount) {
         console.warn('[session-variants] Skipping 45min variant - would be fuller than full session', {
           fullCount: fullExerciseCount,
           variant45Count: count45,
         })
+      } else {
+        variant45 = candidate45
+        variants.push(variant45)
       }
     } catch (err) {
       console.warn('[session-variants] Failed to generate 45min variant:', err instanceof Error ? err.message : String(err))
@@ -881,22 +952,31 @@ export function generateSessionVariants(
       
       const count30 = compressed30.compressed.main.length
       const count45ForComparison = variant45?.selection.main.length ?? fullExerciseCount
-      
-      // [TASK 4] Monotonicity guard - 30 min must not be fuller than 45 min (or Full if no 45)
-      if (count30 <= count45ForComparison && count30 <= fullExerciseCount) {
-        variant30 = {
-          duration: 30,
-          label: '30 Min',
-          selection: compressed30.compressed,
-          compressionLevel: compressed30.compressionLevel,
-        }
-        variants.push(variant30)
-      } else {
+      const candidate30: SessionVariant = {
+        duration: 30,
+        label: '30 Min',
+        selection: compressed30.compressed,
+        compressionLevel: compressed30.compressionLevel,
+      }
+      // [VARIANT-LAUNCHABILITY-CONTRACT] Same gate as 45 Min: reject hollow
+      // compressions before the monotonicity guard, since a 0-count variant
+      // would satisfy `count30 <= count45ForComparison` trivially.
+      if (!isVariantLaunchable(candidate30)) {
+        console.warn('[VARIANT-LAUNCHABILITY-CONTRACT] Skipping 30min variant - no launchable body', {
+          fullCount: fullExerciseCount,
+          count45: count45ForComparison,
+          count30,
+          reason: 'empty_or_unusable_selection_main',
+        })
+      } else if (count30 > count45ForComparison || count30 > fullExerciseCount) {
         console.warn('[session-variants] Skipping 30min variant - would be fuller than 45/full', {
           fullCount: fullExerciseCount,
           count45: count45ForComparison,
           count30,
         })
+      } else {
+        variant30 = candidate30
+        variants.push(variant30)
       }
     } catch (err) {
       console.warn('[session-variants] Failed to generate 30min variant:', err instanceof Error ? err.message : String(err))

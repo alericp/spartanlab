@@ -196,7 +196,7 @@ import {
   type ResolvedSessionIdentity,
 } from './engine-quality-contract'
 import { evaluateExerciseProgression, type ProgressionDecision as SimpleProgressionDecision } from './progression-decision-engine'
-import { generateSessionVariants, type SessionVariant } from './session-compression-engine'
+import { generateSessionVariants, isVariantLaunchable, type SessionVariant } from './session-compression-engine'
 import { analyzeEquipmentProfile, adaptSessionForEquipment, getEquipmentRecommendations, type EquipmentProfile } from './equipment-adaptation-engine'
 import { GOAL_LABELS } from './program-service'
 // [planner-truth-audit] TASK 7: Final audit for generic shell detection
@@ -11401,22 +11401,17 @@ async function generateAdaptiveProgramImpl(
         }],
         cooldown: [],
         finisher: undefined,
-        variants: [{
-          duration: 15,
-          label: 'Recovery Session',
-          selection: {
-            main: [],
-            warmup: [],
-            cooldown: [],
-            totalEstimatedTime: 15,
-            skillExpressionResult: {
-              directlyExpressedSkills: [],
-              technicalSlotSkills: [],
-              supportSkillsInjected: [],
-            },
-          },
-          compressionLevel: 'none' as const,
-        }],
+        // [VARIANT-LAUNCHABILITY-CONTRACT] Prior code attached a hollow
+        // `Recovery Session` variant with `selection.main: []` here. That
+        // metadata-only variant was the exact anti-pattern the contract
+        // forbids -- it looked like a real variant to any consumer that
+        // didn't explicitly check `selection.main.length > 0`. Recovery
+        // fallbacks honestly have no variant story, so we emit no variants
+        // at all. The card's `session.variants && session.variants.length > 1`
+        // gate already suppresses the toggle row, and selectedSessionContract
+        // gracefully falls back to `session.estimatedMinutes` when
+        // session.variants is undefined.
+        variants: undefined,
         adaptationNotes: [`[FALLBACK] Generation failed: ${errorMessage.slice(0, 80)}`],
         rationale: 'This session could not be generated. Please try regenerating your program.',
         recoveryContext: {
@@ -13196,10 +13191,42 @@ async function generateAdaptiveProgramImpl(
             // can see grouped blocks and treat them as atomic units.
             const regeneratedVariants = generateSessionVariants(decoratedFullSelection, fullDuration)
 
-            // Overwrite -- the regenerated list is strictly richer than the prior
-            // one (same Full, grouped-aware 45/30). Preserve the array reference
-            // shape by reassigning session.variants.
-            session.variants = regeneratedVariants
+            // [VARIANT-LAUNCHABILITY-CONTRACT] Belt-and-suspenders filter: the
+            // engine already gates pushes through isVariantLaunchable, so this
+            // should be a no-op in practice. It exists to guarantee that any
+            // future compressMain edge case that emits a hollow SelectedExercise
+            // row cannot survive the reconcile pass either. Rejected variants
+            // are logged so the upstream break (compressor emitted unusable
+            // rows for this day) stays auditable instead of silently
+            // propagating as a metadata-only tab.
+            const launchableRegenerated = regeneratedVariants.filter(v => {
+              const ok = isVariantLaunchable(v)
+              if (!ok) {
+                console.warn('[VARIANT-LAUNCHABILITY-CONTRACT] Dropping non-launchable regenerated variant', {
+                  dayNumber: session.dayNumber,
+                  focus: session.focus,
+                  variantLabel: v?.label,
+                  variantDuration: v?.duration,
+                  mainCount: Array.isArray(v?.selection?.main) ? v.selection.main.length : 'not_array',
+                })
+              }
+              return ok
+            })
+
+            // Overwrite -- the filtered regenerated list is strictly richer
+            // than the prior one (same Full, grouped-aware 45/30, hollow
+            // variants rejected). If every regenerated variant failed (e.g.
+            // decorated selection somehow produced unusable rows), fall back
+            // to the pre-reconcile variants rather than wiping truth away.
+            if (launchableRegenerated.length > 0) {
+              session.variants = launchableRegenerated
+            } else {
+              console.warn('[VARIANT-LAUNCHABILITY-CONTRACT] All regenerated variants rejected - keeping pre-reconcile list', {
+                dayNumber: session.dayNumber,
+                focus: session.focus,
+                priorVariantCount: Array.isArray(session.variants) ? session.variants.length : 0,
+              })
+            }
 
             console.log('[VARIANT-PARENT-TRUTH-RECONCILE]', {
               dayNumber: session.dayNumber,
@@ -13208,7 +13235,9 @@ async function generateAdaptiveProgramImpl(
               sessionExercisesWithGroupedTruth: sessionExerciseById.size,
               rowsDecoratedWithBlockId: decoratedCount,
               regeneratedVariantCount: regeneratedVariants.length,
-              regeneratedVariantMainCounts: regeneratedVariants.map(v => ({
+              launchableVariantCount: launchableRegenerated.length,
+              rejectedVariantCount: regeneratedVariants.length - launchableRegenerated.length,
+              launchableVariantMainCounts: launchableRegenerated.map(v => ({
                 label: v.label,
                 duration: v.duration,
                 mainCount: v.selection.main.length,
@@ -13492,22 +13521,9 @@ async function generateAdaptiveProgramImpl(
         }],
         cooldown: [],
         finisher: undefined,
-        variants: [{
-          duration: 15,
-          label: 'Recovery Session',
-          selection: {
-            main: [],
-            warmup: [],
-            cooldown: [],
-            totalEstimatedTime: 15,
-            skillExpressionResult: {
-              directlyExpressedSkills: [],
-              technicalSlotSkills: [],
-              supportSkillsInjected: [],
-            },
-          },
-          compressionLevel: 'none' as const,
-        }],
+        // [VARIANT-LAUNCHABILITY-CONTRACT] Post-mutation fallback; see the
+        // earlier fallback site for the full rationale. No hollow variant.
+        variants: undefined,
         adaptationNotes: [`[FALLBACK] Post-mutation failed: ${errorMessage.slice(0, 100)}`],
         rationale: `This session's post-processing encountered an error. Please try regenerating.`,
         recoveryContext: {
@@ -13702,22 +13718,9 @@ async function generateAdaptiveProgramImpl(
       ],
       cooldown: [],
       finisher: undefined,
-      variants: [{
-        duration: 15,
-        label: 'Recovery Session',
-        selection: {
-          main: [],
-          warmup: [],
-          cooldown: [],
-          totalEstimatedTime: 15,
-          skillExpressionResult: {
-            directlyExpressedSkills: [],
-            technicalSlotSkills: [],
-            supportSkillsInjected: [],
-          },
-        },
-        compressionLevel: 'none' as const,
-      }],
+      // [VARIANT-LAUNCHABILITY-CONTRACT] Outer-loop build-error fallback; see
+      // the earlier fallback site for the full rationale. No hollow variant.
+      variants: undefined,
       adaptationNotes: [`[FALLBACK] Session failed to build: ${parsedFailureReason || matchedPattern}`],
       rationale: `This session encountered a build error (${matchedPattern}). Please try regenerating your program.`,
       recoveryContext: {

@@ -569,6 +569,71 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     }
   })()
 
+  // ==========================================================================
+  // [SELECTED-DISPLAY-CONTRACT] SINGLE AUTHORITATIVE PROGRAM-CARD DISPLAY OWNER
+  //
+  // This is the ONE and ONLY final-display adapter the Program card body reads
+  // from. It bundles:
+  //   - every field of `selectedSessionContract` (canonical idx / label / mode
+  //     / estimatedMinutes / launchUrl / isFullSession / isVariantSelected)
+  //   - `variantData`: the canonical variant object (or null for full / for
+  //     an unusable variant that was coerced to full by the launchability
+  //     gate upstream). Prior code re-derived a separate `selectedVariantData`
+  //     keyed off raw `selectedVariant` state, which bypassed the launchability
+  //     coercion and allowed a non-launchable variant to still feed the visible
+  //     body while Start Workout launched Full -- exactly the split this lock
+  //     removes.
+  //   - `resolvedBody`: the authoritative selected-variant main body, produced
+  //     by the SAME `buildSelectedVariantMain` the Start Workout launch
+  //     fingerprint stamps. This is the ONE source for per-row method /
+  //     methodLabel / blockId / setExecutionMethod carry and for
+  //     variant-authoritative sets/reps/RPE/rest. The old inline
+  //     `displayExercises` mapper at L775 (which did its own variant-keyed
+  //     identity rehydration) is now a pure alias of this body.
+  //
+  // Downstream rule: NO consumer in this component is allowed to re-derive
+  // the selected variant body from raw `selectedVariant` state. Every
+  // consumer reads one of:
+  //   - selectedDisplayContract.resolvedBody.exercises
+  //       (for per-row method carry surfaces + activeSessionView)
+  //   - selectedDisplayContract.variantData
+  //       (for the canonical variant object used by downstream hydration /
+  //        style-metadata variant-pruning)
+  //   - fullVisibleExercises
+  //       (the card-body render list, computed FROM this contract's
+  //        variantData so Full / 45 / 30 visibly and materially differ on
+  //        screen whenever they differ in the stored variant body)
+  //
+  // Start Workout launch corridor is preserved: `handleStartWorkout` now
+  // reuses `selectedDisplayContract.resolvedBody` directly instead of
+  // re-calling the contract builder, so the card body and the stamped
+  // launch fingerprint are guaranteed to come from the SAME body object.
+  // ==========================================================================
+  const selectedDisplayContract = (() => {
+    const canonicalIdx = selectedSessionContract.selectedVariantIndex
+    const variantsArr = Array.isArray(session.variants) ? session.variants : []
+    const variantData =
+      canonicalIdx > 0 ? (variantsArr[canonicalIdx] ?? null) : null
+    const resolvedBody = buildSelectedVariantMain(
+      session,
+      canonicalIdx,
+      selectedSessionContract.selectedExecutionMode,
+    )
+    return {
+      ...selectedSessionContract,
+      /** Canonical variant object for the launchable selected index, or null. */
+      variantData,
+      /**
+       * Authoritative selected-variant main body.
+       * Same builder (`buildSelectedVariantMain`) the Start Workout launch
+       * fingerprint uses. Carries full per-row identity (id / blockId /
+       * method / methodLabel / setExecutionMethod) plus variant-authoritative
+       * dosage (sets / repsOrTime / targetRPE / restSeconds / note).
+       */
+      resolvedBody,
+    }
+  })()
+
   const handleStartWorkout = () => {
     // [workout-route] UNIFIED ENTRY: Route to canonical workout session page
     // This ensures all "Start Workout" paths use the same StreamlinedWorkoutSession experience
@@ -591,12 +656,13 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     // Program-card -> Start Workout corridor: the card and route now share
     // ONE variant-body builder (buildSelectedVariantMain) and ONE
     // parity-proof contract.
-    const selectedCanonicalIdx = selectedSessionContract.selectedVariantIndex
-    const cardResolvedBody = buildSelectedVariantMain(
-      session,
-      selectedCanonicalIdx,
-      selectedSessionContract.selectedExecutionMode,
-    )
+    // [SELECTED-DISPLAY-CONTRACT] Reuse the AUTHORITATIVE resolved body from
+    // the single display owner. Do NOT recompute via buildSelectedVariantMain
+    // here: the card body and the stamped launch fingerprint MUST come from
+    // the exact same body object, otherwise a silent divergence could return
+    // between "what the card shows" and "what Start Workout booted."
+    const selectedCanonicalIdx = selectedDisplayContract.selectedVariantIndex
+    const cardResolvedBody = selectedDisplayContract.resolvedBody
     const cardFingerprint = buildSessionFingerprint({
       variantIndex: selectedCanonicalIdx,
       mode: selectedSessionContract.selectedExecutionMode,
@@ -750,80 +816,40 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   // This prevents contradictory displays like "2 exercises in header / 3 in body"
   // ==========================================================================
   
-  // Get exercises to display based on variant selection
-  // [weighted-prescription-truth] Preserve prescribedLoad through variant mapping
-  // [GROUPED-TRUTH-CARRY-VARIANT] When a variant is selected, this mapper is the
-  // FIRST STAGE that drops per-row grouped/cluster truth. The builder writes
-  // `method` (e.g. 'cluster') and `setExecutionMethod: 'cluster'` onto
-  // `session.exercises[idx]` at adaptive-program-builder.ts L12654-12656. The
-  // VARIANT-PARENT-TRUTH-RECONCILE pass (same file L13180-13185) decorates
-  // variant.selection.main[j].exercise with `blockId` / `method` / `methodLabel`
-  // when session.exercises carries grouped truth, but NOT `setExecutionMethod`.
-  // Prior behavior here whitelisted only prescription fields, silently dropping
-  // method / methodLabel / blockId / setExecutionMethod from the row object that
-  // ExerciseRow.resolveRowMethodTruth reads (AdaptiveSessionCard.tsx L4008).
-  // Result: selecting any variant tab made the per-row cluster chip AND the
-  // Cluster Set panel disappear -- the exact "Program card still looks flat /
-  // cluster not visibly populating" symptom.
+  // [SELECTED-DISPLAY-CONTRACT] `displayExercises` is now a PURE ALIAS of the
+  // authoritative selected-variant main body owned by `selectedDisplayContract`.
   //
-  // Fix: carry the four row-level method-truth fields forward from the variant's
-  // SelectedExercise wrapper, falling back to the matching raw session exercise
-  // by id when the variant wrapper is missing a field (notably
-  // `setExecutionMethod`, which the parent-truth-reconcile pass does not
-  // propagate). No new truth is invented; when neither source carries a field,
-  // it stays undefined and the row honestly renders without a method surface.
-  const displayExercises = selectedVariant !== null && session.variants?.[selectedVariant]
-    ? session.variants[selectedVariant].selection.main.map(s => {
-        const rawEx = safeExercises.find(e => e.id === s.exercise.id)
-        const variantEx = s.exercise as unknown as {
-          method?: string
-          methodLabel?: string
-          blockId?: string
-          setExecutionMethod?: 'cluster' | 'rest_pause' | 'top_set' | 'drop_set'
-        }
-        const rawExTyped = rawEx as unknown as {
-          method?: string
-          methodLabel?: string
-          blockId?: string
-          setExecutionMethod?: 'cluster' | 'rest_pause' | 'top_set' | 'drop_set'
-        } | undefined
-        return {
-          id: s.exercise.id,
-          name: s.exercise.name,
-          category: s.exercise.category,
-          sets: s.sets,
-          repsOrTime: s.repsOrTime,
-          note: s.note,
-          isOverrideable: s.isOverrideable,
-          selectionReason: s.selectionReason,
-          // Preserve prescription fields from variant selection
-          prescribedLoad: s.prescribedLoad,
-          targetRPE: s.targetRPE,
-          restSeconds: s.restSeconds,
-          // [GROUPED-TRUTH-CARRY-VARIANT] Per-row grouped/cluster truth.
-          // Variant-decorated value wins; raw session exercise is the fallback.
-          method: variantEx.method ?? rawExTyped?.method,
-          methodLabel: variantEx.methodLabel ?? rawExTyped?.methodLabel,
-          blockId: variantEx.blockId ?? rawExTyped?.blockId,
-          setExecutionMethod:
-            variantEx.setExecutionMethod ?? rawExTyped?.setExecutionMethod,
-        }
-      })
-        : safeExercises
+  // Previously this was a second, independent variant-body mapper that:
+  //   (a) keyed off RAW `selectedVariant` state (not the launchability-coerced
+  //       canonical idx), so a non-launchable variant could feed the visible
+  //       body while Start Workout silently launched Full;
+  //   (b) rehydrated per-row identity with a weaker lookup (`find(e => e.id
+  //       === s.exercise.id)` only), missing rows that drifted on normalized
+  //       name.
+  // Both weaknesses are eliminated by routing through the contract's
+  // `resolvedBody`, which (1) is keyed off `selectedSessionContract`'s
+  // canonical idx and (2) uses id + normalized-name + positional lookup.
+  //
+  // Per-row grouped/cluster truth carry (`method` / `methodLabel` / `blockId`
+  // / `setExecutionMethod`) is preserved by `buildSelectedVariantMain` itself
+  // -- that contract builder decorates each variant row by looking up the
+  // original session exercise and overlaying variant-specific fields on top.
+  const displayExercises = selectedDisplayContract.resolvedBody.exercises
   
-  // [TASK 3] Build unified active session view
+  // [SELECTED-DISPLAY-CONTRACT] Labels / flags / minutes MUST come from the
+  // single display owner, not from raw `selectedVariant` state. This removes
+  // the last path where the header could advertise "45 Min" (raw state) while
+  // the launch corridor had coerced to Full (contract), or vice-versa.
   const activeSessionView: ActiveSessionView = {
     exercises: displayExercises,
     exerciseCount: displayExercises.length,
-    // Calculate estimated minutes from variant if selected, otherwise use session default
-    estimatedMinutes: selectedVariant !== null && session.variants?.[selectedVariant]
-      ? session.variants[selectedVariant].duration
-      : session.estimatedMinutes,
-    variantLabel: selectedVariant !== null && session.variants?.[selectedVariant]
-      ? session.variants[selectedVariant].label
-      : 'Full Session',
-    isFullSession: selectedVariant === null || selectedVariant === 0,
-    isVariantSelected: selectedVariant !== null && selectedVariant > 0,
+    estimatedMinutes:
+      typeof selectedDisplayContract.selectedEstimatedMinutes === 'number'
+        ? selectedDisplayContract.selectedEstimatedMinutes
+        : (session.estimatedMinutes ?? 60),
+    variantLabel: selectedDisplayContract.selectedVariantLabel,
+    isFullSession: selectedDisplayContract.isFullSession,
+    isVariantSelected: selectedDisplayContract.isVariantSelected,
   }
   
   // ==========================================================================
@@ -831,9 +857,19 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   // This is the PRIMARY authoritative output for prescription-first display
   // Replaces narrowed displayExercises with full session truth
   // ==========================================================================
-  const selectedVariantData = selectedVariant !== null && session.variants?.[selectedVariant]
-    ? session.variants[selectedVariant]
-    : null
+  // [SELECTED-DISPLAY-CONTRACT] `selectedVariantData` is a PURE ALIAS of the
+  // display owner's canonical variant object. This is the variant that matches
+  // the launchable canonical idx (launchability-coerced), NOT raw
+  // `selectedVariant` state. Downstream:
+  //   - `fullRoutineSurface` receives this for variant-aware routine building
+  //   - `fullVisibleExercises` trims + dosage-overwrites off `.selection.main`
+  //   - `variantPrunedStyleMetadata` prunes styleMetadata.styledGroups against
+  //     this variant's surviving body
+  //   - `displayGroupedRendering` reads from the pruned body above
+  // Routing all of these through the single owner is what lets Full / 45 / 30
+  // visibly and materially differ on screen when the stored variant body
+  // differs, while keeping Start Workout on the same selected-session story.
+  const selectedVariantData = selectedDisplayContract.variantData
     
   const fullRoutineSurface: FullSessionRoutineSurface = buildFullSessionRoutineSurface(
     {

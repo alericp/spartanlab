@@ -132,7 +132,20 @@ export function calculateGoalHierarchyWeights(
   // to allow meaningful tertiary skill expression without diluting primary/secondary
   const isAdvancedMultiSkill = experienceLevel === 'advanced' && (selectedSkillCount || 0) >= 5
   const supportBoost = isAdvancedMultiSkill ? 0.05 : 0
-  
+
+  // [PHASE 3B WEEKLY-ALLOCATOR-OPPORTUNITY-LOCK] Broader-profile hybrid escalation
+  // When the athlete is advanced-or-intermediate + hybrid + has 4+ selected skills,
+  // the pre-existing 0.55/0.30/0.15 split leaves only ~10-15% for 2-3 additional
+  // selected skills combined. That is the upstream reason tertiary skills showed
+  // a single exposure at the materiality floor and support-role density looked
+  // "tacked on". This explicit escalation gives additional skills a real share
+  // of the weekly budget WITHOUT weakening primary dominance below a safe floor.
+  const isBroaderHybridProfile =
+    trainingPath === 'hybrid' &&
+    (experienceLevel === 'advanced' || experienceLevel === 'intermediate') &&
+    (selectedSkillCount || 0) >= 4
+  const broaderHybridSupportBoost = isBroaderHybridProfile ? 0.10 : 0
+
   let primaryWeight = 0.55  // [PHASE 6B] Raised from 0.50
   let secondaryWeight = secondaryGoal ? 0.30 : 0
   let supportWeight = 0.15 + supportBoost // [PHASE 15B] Boost for advanced multi-skill
@@ -142,19 +155,21 @@ export function calculateGoalHierarchyWeights(
     // Hybrid: balanced skill + strength - primary still leads clearly
     if (isSkillGoal(primaryGoal) && secondaryGoal && isSkillGoal(secondaryGoal)) {
       // Both are skills - primary still leads with clear margin
-      primaryWeight = 0.50  // [PHASE 6B] Raised from 0.45
-      secondaryWeight = 0.35
-      supportWeight = 0.15 + supportBoost // [PHASE 15B]
+      // [PHASE 3B] For broader-profile hybrid: rebalance primary↓ / secondary≈ / support↑
+      // so 3-4 additional skills get a materially visible budget. Primary still leads.
+      primaryWeight = isBroaderHybridProfile ? 0.45 : 0.50  // [PHASE 6B] Raised from 0.45
+      secondaryWeight = isBroaderHybridProfile ? 0.28 : 0.35
+      supportWeight = 0.15 + supportBoost + broaderHybridSupportBoost // [PHASE 3B]
     } else if (isSkillGoal(primaryGoal)) {
       // Primary skill + strength support
-      primaryWeight = 0.55
-      secondaryWeight = secondaryGoal ? 0.30 : 0
-      supportWeight = 0.15 + supportBoost
+      primaryWeight = isBroaderHybridProfile ? 0.48 : 0.55
+      secondaryWeight = secondaryGoal ? (isBroaderHybridProfile ? 0.27 : 0.30) : 0
+      supportWeight = 0.15 + supportBoost + broaderHybridSupportBoost // [PHASE 3B]
     } else if (isStrengthGoal(primaryGoal)) {
       // Primary strength + skill support
-      primaryWeight = 0.55
-      secondaryWeight = secondaryGoal ? 0.30 : 0
-      supportWeight = 0.15 + supportBoost
+      primaryWeight = isBroaderHybridProfile ? 0.48 : 0.55
+      secondaryWeight = secondaryGoal ? (isBroaderHybridProfile ? 0.27 : 0.30) : 0
+      supportWeight = 0.15 + supportBoost + broaderHybridSupportBoost // [PHASE 3B]
     }
   } else if (trainingPath === 'skill_progression') {
     // Skill-focused: primary dominates
@@ -176,6 +191,21 @@ export function calculateGoalHierarchyWeights(
       supportBoostApplied: supportBoost,
       adjustedSupportWeight: supportWeight,
       rationale: 'Advanced athlete with 5+ skills gets more support allocation for tertiary expression',
+    })
+  }
+
+  // [PHASE 3B WEEKLY-ALLOCATOR-OPPORTUNITY-LOCK] Broader-profile audit
+  if (isBroaderHybridProfile) {
+    console.log('[phase3b-broader-hybrid-allocation-lock]', {
+      experienceLevel,
+      selectedSkillCount,
+      trainingPath,
+      broaderHybridSupportBoostApplied: broaderHybridSupportBoost,
+      preNormalizationPrimaryWeight: primaryWeight,
+      preNormalizationSecondaryWeight: secondaryWeight,
+      preNormalizationSupportWeight: supportWeight,
+      rationale: 'Broader hybrid profile (advanced/intermediate + 4+ skills): support budget raised so 3-4 additional skills get a visible weekly share without weakening primary below safe floor',
+      safetyFloor: 'primary still leads by at least 10pp vs secondary and at least 15pp vs support',
     })
   }
   

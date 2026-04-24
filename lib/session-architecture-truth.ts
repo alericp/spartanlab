@@ -329,7 +329,14 @@ export function buildSessionArchitectureTruthContract(
     trainingMethodPreferences,
     sessionStylePreference,
     complexity,
-    effectiveTrainingDays
+    effectiveTrainingDays,
+    // [PHASE 3B WEEKLY-ALLOCATOR-OPPORTUNITY-LOCK] Pass profile shape so the
+    // bias defaults can reflect advanced hybrid multi-skill truth even without
+    // an explicit doctrine runtime contract being available.
+    safeSelectedSkills.length,
+    safeExperienceLevel,
+    supportRotationSkills.length,
+    secondaryAnchorSkills.length
   )
   
   // ==========================================================================
@@ -394,20 +401,80 @@ export function buildSessionArchitectureTruthContract(
   
   // ==========================================================================
   // [PHASE 1 AI-TRUTH-ESCALATION] STEP 10: Build method packaging decision
+  // [PHASE 3B WEEKLY-ALLOCATOR-OPPORTUNITY-LOCK] Architecture-level methods now
+  // include DOCTRINE-EARNED methods, not just user-picked. Pre-3B this field
+  // silently returned ['straight_sets'] whenever the user hadn't opened the
+  // method-preferences step, which then flowed downstream (adaptive-program-
+  // builder.ts L25375 architectureAppliedMethods → short-session style gate)
+  // and suppressed grouped-method opportunity creation at the weekly layer.
+  // Phase 3A fixed per-session packaging but left this architecture signal
+  // dull. Bringing doctrine-earned methods up to this level restores parity.
   // ==========================================================================
   const preferredMethods = trainingMethodPreferences?.map(p => p.name || p.id) || ['straight_sets']
-  const methodsLimitedBySkillQuality = preferredMethods.filter(m => 
+  const methodsLimitedBySkillQuality = preferredMethods.filter(m =>
     m === 'circuits' || m === 'density_blocks'
   )
-  
+
   // Determine actual applicable methods based on skill quality protection
   const primaryIsAdvancedSkill = ['planche', 'front_lever', 'back_lever', 'iron_cross', 'maltese', 'victorian']
     .some(s => primaryGoal?.toLowerCase().includes(s))
-  
-  const actualMethodsApplied = primaryIsAdvancedSkill
+
+  // [PHASE 3B] Start from user-preference filtered by skill protection
+  const userFilteredMethods = primaryIsAdvancedSkill
     ? preferredMethods.filter(m => m !== 'circuits') // Protect skill quality
     : preferredMethods
-  
+
+  // [PHASE 3B] Layer in doctrine-earned methods when doctrine runtime permits.
+  // This is the architecture-level counterpart to Phase 3A's per-session
+  // blueprint-earned path. It does NOT force methods onto any individual session
+  // — per-session gates (accessoryTailSize, skill-primary veto, needs_deload,
+  // recovery_focus, etc.) still decide firing. It only signals the architecture
+  // layer "this week has method opportunity windows" so downstream visible-
+  // difference scoring, 30-min short-session style selection, and session
+  // variety rotation can create the right kind of upstream opportunities.
+  const doctrineEarnedMethods: string[] = []
+  if (doctrineRuntimeContract?.available && doctrineRuntimeContract.methodDoctrine) {
+    const md = doctrineRuntimeContract.methodDoctrine
+    if (md.supersetsAllowed && !userFilteredMethods.includes('supersets')) {
+      doctrineEarnedMethods.push('supersets')
+    }
+    if (md.densityAllowed && !userFilteredMethods.includes('density_blocks')) {
+      doctrineEarnedMethods.push('density_blocks')
+    }
+    if (md.circuitsAllowed && !primaryIsAdvancedSkill && !userFilteredMethods.includes('circuits')) {
+      // Still respect primary-advanced-skill protection against circuits
+      doctrineEarnedMethods.push('circuits')
+    }
+  }
+
+  // [PHASE 3B] Profile-shape fallback: when doctrine runtime is unavailable or
+  // silent, advanced/intermediate multi-skill profiles on >= 4 training days
+  // still deserve superset opportunities at the architecture level. This mirrors
+  // the per-session compression-earned path added in Phase 3A but at weekly scope.
+  const expLower = (safeExperienceLevel || '').toLowerCase()
+  const isAdvancedOrIntermediateProfile = expLower.includes('advanced') || expLower.includes('intermediate')
+  const isMultiSkillProfile = safeSelectedSkills.length >= 4
+  const profileEarnsSupersets =
+    isAdvancedOrIntermediateProfile &&
+    isMultiSkillProfile &&
+    safeEffectiveTrainingDays >= 4 &&
+    complexity !== 'low' &&
+    !doctrineEarnedMethods.includes('supersets') &&
+    !userFilteredMethods.includes('supersets')
+
+  if (profileEarnsSupersets) {
+    doctrineEarnedMethods.push('supersets')
+  }
+
+  // Merge user-filtered + doctrine-earned, de-duped, preserving user order first
+  const actualMethodsApplied = Array.from(new Set([...userFilteredMethods, ...doctrineEarnedMethods]))
+    .filter(m => m !== 'straight_sets' || userFilteredMethods.includes('straight_sets'))
+
+  // If the merged list is empty or only straight_sets, keep straight_sets present
+  if (actualMethodsApplied.length === 0) {
+    actualMethodsApplied.push('straight_sets')
+  }
+
   const methodPackaging: SessionArchitectureTruthContract['methodPackaging'] = {
     preferredMethods,
     actualMethodsApplied,
@@ -416,12 +483,35 @@ export function buildSessionArchitectureTruthContract(
       : actualMethodsApplied.includes('circuits') ? 'circuits_allowed'
       : actualMethodsApplied.includes('supersets') ? 'supersets_allowed'
       : 'straight_sets',
-    rationale: primaryIsAdvancedSkill 
+    rationale: primaryIsAdvancedSkill && doctrineEarnedMethods.length === 0 && !profileEarnsSupersets
       ? 'Skill quality protection limits high-fatigue methods for advanced skills'
-      : preferredMethods.length > 1 
-        ? `User-selected methods applied: ${actualMethodsApplied.join(', ')}`
-        : 'Default straight sets',
+      : doctrineEarnedMethods.length > 0 || profileEarnsSupersets
+        ? `Methods applied: user=${userFilteredMethods.join(',') || 'none'} + doctrine/profile-earned=${doctrineEarnedMethods.join(',') || 'none'}`
+        : preferredMethods.length > 1
+          ? `User-selected methods applied: ${actualMethodsApplied.join(', ')}`
+          : 'Default straight sets',
   }
+
+  // [PHASE 3B] Log architecture-level method opportunity creation
+  console.log('[phase3b-architecture-method-opportunity-lock]', {
+    userPreferredMethods: preferredMethods,
+    userFilteredMethods,
+    doctrineEarnedMethods,
+    profileEarnsSupersets,
+    primaryIsAdvancedSkill,
+    circuitsProtectedFromAdvancedSkill: primaryIsAdvancedSkill,
+    actualMethodsApplied,
+    packagingDecision: methodPackaging.packagingDecision,
+    complexity,
+    trainingDays: safeEffectiveTrainingDays,
+    selectedSkillCount: safeSelectedSkills.length,
+    experienceLevel: safeExperienceLevel,
+    doctrineAvailable: !!doctrineRuntimeContract?.available,
+    opportunityWindowsCreated: doctrineEarnedMethods.length + (profileEarnsSupersets ? 1 : 0),
+    verdict: actualMethodsApplied.length > 1
+      ? 'ARCHITECTURE_CREATES_METHOD_OPPORTUNITIES'
+      : 'ARCHITECTURE_STRAIGHT_SETS_ONLY',
+  })
   
   // ==========================================================================
   // [PHASE 1 AI-TRUTH-ESCALATION] STEP 11: Build visible difference targets
@@ -439,10 +529,29 @@ export function buildSessionArchitectureTruthContract(
   if (secondaryAnchorSkills.length >= 1) differenceScore += 10
   if (complexity === 'high') differenceScore += 15
   
+  // [PHASE 3B WEEKLY-ALLOCATOR-OPPORTUNITY-LOCK] Visible difference targets
+  // now reflect advanced hybrid multi-skill profile shape so downstream
+  // validation (validateWeeklyMateriality) actually requires a week to
+  // express what the athlete's saved truth justifies, not a minimal floor.
+  const isRichProfile =
+    isAdvancedOrIntermediateProfile &&
+    isMultiSkillProfile &&
+    safeEffectiveTrainingDays >= 5 &&
+    complexity === 'high'
+
   const visibleDifferenceTargets: SessionArchitectureTruthContract['visibleDifferenceTargets'] = {
     templateEscapeRequired: structuralGuards.requireVisibleDifferenceFromPrimaryOnlyTemplate,
-    minDistinctSessionRoles: complexity === 'high' ? 3 : complexity === 'moderate' ? 2 : 1,
-    minNonPrimarySkillExpression: Math.min(supportRotationSkills.length + secondaryAnchorSkills.length, 3),
+    // [PHASE 3B] Rich profiles need at least 4 distinct session roles when
+    // high-complexity 5+ day hybrid is justified by saved truth
+    minDistinctSessionRoles: isRichProfile
+      ? 4
+      : complexity === 'high' ? 3 : complexity === 'moderate' ? 2 : 1,
+    // [PHASE 3B] Raise non-primary cap from 3 to 4 for rich profiles so a
+    // 4-5-skill advanced hybrid athlete actually has all lanes expressed
+    minNonPrimarySkillExpression: Math.min(
+      supportRotationSkills.length + secondaryAnchorSkills.length,
+      isRichProfile ? 4 : 3
+    ),
     requiredMethodVariety: actualMethodsApplied.length > 1,
     requiredFlexibilityIntegration: hasFlexibilityGoals,
     differenceFromBaselineScore: Math.min(100, differenceScore),
@@ -656,27 +765,56 @@ function buildDoctrineArchitectureBias(
   methodPreferences: Array<{ id: string; name: string }> | null,
   sessionStyle: string | null,
   complexity: 'low' | 'moderate' | 'high',
-  trainingDays: number
+  trainingDays: number,
+  // [PHASE 3B WEEKLY-ALLOCATOR-OPPORTUNITY-LOCK] Profile shape inputs so
+  // bias defaults can reflect advanced hybrid multi-skill truth even when
+  // doctrine runtime contract is unavailable or minimally populated.
+  selectedSkillCount: number = 0,
+  experienceLevel: string = '',
+  supportSkillCount: number = 0,
+  secondaryAnchorCount: number = 0
 ): DoctrineArchitectureBias {
   const rationale: string[] = []
-  
+
   // Default bias
   let sessionRoleBias: DoctrineArchitectureBias['sessionRoleBias'] = 'primary_dominant'
   let supportAllocationBias: DoctrineArchitectureBias['supportAllocationBias'] = 'moderate'
   let methodPackagingBias: DoctrineArchitectureBias['methodPackagingBias'] = 'straight_sets_protected'
   let exerciseComplexityBias: DoctrineArchitectureBias['exerciseComplexityBias'] = 'moderate'
-  
-  // Apply doctrine influence
+
+  // [PHASE 3B WEEKLY-ALLOCATOR-OPPORTUNITY-LOCK] Profile-shape based bias defaults
+  // applied BEFORE doctrine so doctrine can only strengthen, never weaken, them.
+  // This removes the upstream "safe but dull" default for advanced multi-skill
+  // hybrid athletes whose saved truth justifies richer session-role variety.
+  const expLower = (experienceLevel || '').toLowerCase()
+  const isAdvancedOrIntermediate = expLower.includes('advanced') || expLower.includes('intermediate')
+  const isMultiSkillProfile = selectedSkillCount >= 4
+  const hasMultipleSupports = supportSkillCount >= 2
+  const hasSecondaryAnchor = secondaryAnchorCount >= 1
+
+  if (hasMultipleSupports && isAdvancedOrIntermediate && trainingDays >= 5 && complexity === 'high') {
+    sessionRoleBias = 'support_enriched'
+    rationale.push('Profile shape (advanced/intermediate, 5+ days, high complexity, 2+ support skills) calls for support-enriched session roles')
+  } else if (isMultiSkillProfile && (hasSecondaryAnchor || hasMultipleSupports) && trainingDays >= 4) {
+    sessionRoleBias = 'balanced_multi_skill'
+    rationale.push('Profile shape (4+ selected skills with secondary/support lanes on 4+ days) calls for balanced multi-skill session roles')
+  }
+
+  // Apply doctrine influence - can ONLY strengthen from profile defaults above
   if (doctrineContract?.available) {
-    // Session role bias based on skill doctrine
+    // Session role bias based on skill doctrine - doctrine is authoritative when richer
     if (doctrineContract.skillDoctrine.supportSkills.length > 2) {
       sessionRoleBias = 'support_enriched'
       rationale.push('Doctrine indicates multiple support skills should be expressed')
-    } else if (doctrineContract.skillDoctrine.representedSkills.length > 2) {
+    } else if (
+      doctrineContract.skillDoctrine.representedSkills.length > 2 &&
+      sessionRoleBias === 'primary_dominant'
+    ) {
+      // Only upgrade if profile didn't already upgrade further
       sessionRoleBias = 'balanced_multi_skill'
       rationale.push('Doctrine indicates balanced multi-skill representation')
     }
-    
+
     // Method packaging bias based on method doctrine
     if (doctrineContract.methodDoctrine.densityAllowed) {
       methodPackagingBias = 'density_friendly'
@@ -685,7 +823,7 @@ function buildDoctrineArchitectureBias(
       methodPackagingBias = 'method_variety_allowed'
       rationale.push('Doctrine permits circuit-based methods')
     }
-    
+
     // Exercise complexity bias based on prescription doctrine
     if (doctrineContract.prescriptionDoctrine.intensityBias === 'conservative') {
       exerciseComplexityBias = 'conservative'
@@ -695,11 +833,11 @@ function buildDoctrineArchitectureBias(
       rationale.push('Doctrine permits aggressive exercise complexity')
     }
   }
-  
+
   // Apply method preferences influence
   if (methodPreferences && methodPreferences.length > 0) {
     const methodNames = methodPreferences.map(m => m.name.toLowerCase())
-    
+
     if (methodNames.some(m => m.includes('superset') || m.includes('circuit') || m.includes('density'))) {
       if (methodPackagingBias === 'straight_sets_protected') {
         methodPackagingBias = 'method_variety_allowed'
@@ -707,16 +845,36 @@ function buildDoctrineArchitectureBias(
       }
     }
   }
-  
+
+  // [PHASE 3B] Profile-shape method packaging bias: advanced hybrid multi-skill
+  // athletes with sufficient training days should NOT default to
+  // 'straight_sets_protected' when doctrine is silent. That upstream silence is
+  // what starves the per-session packaging layer of valid opportunity windows.
+  if (
+    methodPackagingBias === 'straight_sets_protected' &&
+    isAdvancedOrIntermediate &&
+    isMultiSkillProfile &&
+    trainingDays >= 4 &&
+    complexity !== 'low'
+  ) {
+    methodPackagingBias = 'method_variety_allowed'
+    rationale.push('Profile shape (advanced/intermediate multi-skill on 4+ days) permits method variety at architecture level')
+  }
+
   // Adjust support allocation based on complexity and training days
   if (complexity === 'high' && trainingDays >= 5) {
     supportAllocationBias = 'generous'
     rationale.push('High complexity + sufficient training days allows generous support allocation')
+  } else if (complexity === 'moderate' && trainingDays >= 4 && isMultiSkillProfile) {
+    // [PHASE 3B] Multi-skill moderate-complexity weeks deserve generous support
+    // so the additional skills get visible expression rather than token carryover
+    supportAllocationBias = 'generous'
+    rationale.push('Moderate complexity multi-skill profile on 4+ days allows generous support allocation')
   } else if (complexity === 'low' || trainingDays <= 3) {
     supportAllocationBias = 'minimal'
     rationale.push('Limited schedule favors minimal support allocation')
   }
-  
+
   return {
     sessionRoleBias,
     supportAllocationBias,
@@ -736,26 +894,37 @@ function calculateWeeklyMinimums(
   // Base minimums scale with training days
   const minPrimaryTouches = Math.max(2, Math.floor(trainingDays * 0.5))
   const minSecondaryTouches = secondaryCount > 0 ? Math.max(1, Math.floor(trainingDays * 0.3)) : 0
-  
-  // Support touches based on complexity and support count
+
+  // [PHASE 3B WEEKLY-ALLOCATOR-OPPORTUNITY-LOCK] Support-touch floor raised for
+  // high-complexity weeks. Pre-3B a 5-day high-complexity week required only 2
+  // support touches, which produced "tacked on" support density even when the
+  // athlete selected 3-4 support skills. New floors create enough valid support
+  // slots for packaging/selector layers to actually express the saved truth.
   let minSupportTouches = 0
   if (supportCount > 0) {
     if (complexity === 'high') {
-      minSupportTouches = Math.max(2, Math.min(supportCount, Math.floor(trainingDays * 0.3)))
+      // Previously Math.max(2, ...). Raised to Math.max(3, floor(days * 0.4))
+      // so 5-day weeks get >= 3 support touches, 6-day weeks get >= 3, 7-day >= 3.
+      // Still clamped to supportCount so we never exceed what doctrine allocated.
+      minSupportTouches = Math.max(3, Math.min(supportCount, Math.floor(trainingDays * 0.4)))
     } else if (complexity === 'moderate') {
-      minSupportTouches = Math.max(1, Math.min(supportCount, Math.floor(trainingDays * 0.2)))
+      minSupportTouches = Math.max(1, Math.min(supportCount, Math.floor(trainingDays * 0.25)))
     }
   }
-  
-  // Distinct session roles based on training days and complexity
+
+  // [PHASE 3B] Distinct session roles - raised for 5-day high-complexity weeks.
+  // Previously 5-day high-complexity required only 3 roles, which flattened into
+  // repetitive push/pull/mixed patterns. 4 roles is the correct target for an
+  // advanced multi-skill hybrid athlete on 5+ days (e.g. primary-skill,
+  // secondary-skill, support-density, hybrid-strength).
   let minDistinctSessionRoles = 2 // At minimum: skill day + mixed/strength day
   if (trainingDays >= 5 && complexity !== 'low') {
-    minDistinctSessionRoles = 3
+    minDistinctSessionRoles = complexity === 'high' ? 4 : 3
   }
   if (trainingDays >= 6 && complexity === 'high') {
     minDistinctSessionRoles = 4
   }
-  
+
   return {
     minPrimaryTouches,
     minSecondaryTouches,

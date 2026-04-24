@@ -2675,7 +2675,104 @@ function selectMainExercises(
     
     return { filtered, blocked, audit }
   }
-  
+
+  // ==========================================================================
+  // [PHASE 1 SELECTED-SKILL DIRECT-EXPRESSION LOCK]
+  // ==========================================================================
+  // Canonical-registry-backed candidate builder for non-primary selected skills
+  // (secondary_anchor / tertiary / support from materialSkillIntent).
+  //
+  // Priority order (deterministic):
+  //   1. ADVANCED_SKILL_FAMILIES[skill].directProgressions     <- canonical direct
+  //   2. getAdvancedSkillSupport(skill).primary/secondary/trunk <- canonical support
+  //   3. Substring/transfer matching                            <- legacy fallback
+  //
+  // This function REPLACES the substring-first candidate search that previously
+  // ran inside the tertiary and support injection sites. Substring matching
+  // used `name.includes(skillLower)` which under-matches specific canonical
+  // progressions (e.g. "skin_the_cat" for back_lever doesn't include
+  // "backlever" substring) and over-matches broadly-named exercises. Sourcing
+  // from ADVANCED_SKILL_FAMILIES.directProgressions and
+  // getAdvancedSkillSupport() gives the selector the exact registered
+  // progression ladder for each selected skill.
+  //
+  // Progression-cap (Phase 2) is NOT applied here -- callers pipe the returned
+  // candidates through `filterByCurrentProgression(scored, skill)` before
+  // addExercise(). Separating the two keeps the candidate-builder pure and
+  // reusable, and ensures the single authoritative cap owner stays
+  // `filterByCurrentProgression` at line 2646.
+  const buildCanonicalSkillCandidates = (
+    skillKey: string,
+    pools: readonly Exercise[][],
+    currentUsedIds: Set<string>
+  ): {
+    candidates: Exercise[]
+    source: 'canonical_direct' | 'canonical_support' | 'transfer_fallback'
+  } => {
+    const allPool: Exercise[] = []
+    const byId = new Map<string, Exercise>()
+    for (const pool of pools) {
+      for (const ex of pool) {
+        if (!byId.has(ex.id)) {
+          byId.set(ex.id, ex)
+          allPool.push(ex)
+        }
+      }
+    }
+
+    // 1. Canonical direct progressions from ADVANCED_SKILL_FAMILIES
+    if (isAdvancedSkill(skillKey)) {
+      const family = getAdvancedSkillFamily(skillKey)
+      if (family && Array.isArray(family.directProgressions) && family.directProgressions.length > 0) {
+        const direct: Exercise[] = []
+        for (const exId of family.directProgressions) {
+          const found = byId.get(exId)
+          if (found && !currentUsedIds.has(exId)) direct.push(found)
+        }
+        if (direct.length > 0) {
+          return { candidates: direct, source: 'canonical_direct' }
+        }
+      }
+    }
+
+    // 2. Canonical support mappings from getAdvancedSkillSupport()
+    // Wrapped in try/catch because the registry throws on unknown skill ids
+    // for some callers; we must never fail the selector for a registry miss.
+    try {
+      const advSupport = getAdvancedSkillSupport(skillKey)
+      if (advSupport) {
+        const supportIds = new Set<string>()
+        for (const s of advSupport.primary) for (const id of s.exerciseIds) supportIds.add(id)
+        for (const s of advSupport.secondary) for (const id of s.exerciseIds) supportIds.add(id)
+        for (const id of advSupport.trunk.exerciseIds) supportIds.add(id)
+        const support: Exercise[] = []
+        for (const id of supportIds) {
+          const found = byId.get(id)
+          if (found && !currentUsedIds.has(id)) support.push(found)
+        }
+        if (support.length > 0) {
+          return { candidates: support, source: 'canonical_support' }
+        }
+      }
+    } catch {
+      // Silently fall through to transfer-matching fallback
+    }
+
+    // 3. Substring / transfer-matching fallback (preserves prior behavior so
+    //    a registry miss never reduces candidate pool below the old baseline).
+    const skillLower = safeLower(skillKey).replace(/_/g, '')
+    if (!skillLower) return { candidates: [], source: 'transfer_fallback' }
+    const fallback = allPool.filter(e =>
+      !currentUsedIds.has(e.id) && (
+        exerciseTransfersToSkill(e, skillLower) ||
+        safeExerciseId(e).includes(skillLower) ||
+        safeExerciseName(e).includes(skillLower) ||
+        (e.primarySkills || []).some(p => safeLower(p).includes(skillLower))
+      )
+    )
+    return { candidates: fallback, source: 'transfer_fallback' }
+  }
+
   const selected: SelectedExercise[] = []
   const usedIds = new Set<string>()
   
@@ -4379,9 +4476,31 @@ function applyMaterialityScoreAdjustments(
         exercise: e,
         score: scoreExerciseForSession(e, sessionSkillsToExpress, day.focus, hasWeightedEquipment)
       }))
-      
+
+      // [PHASE 2 PROGRESSION-CAP UNIFICATION]
+      // Apply the single authoritative progression cap to the secondary/
+      // technical candidate pool. Prior to this change, the cap ran ONLY at
+      // the primary skill site (line 4303), so a user with currentWorking=
+      // "tuck_back_lever" could surface "straddle_back_lever" via the
+      // technical/secondary path because nothing blocked it. Routing through
+      // filterByCurrentProgression keeps a single owner (no parallel gate)
+      // and the same PROGRESSION_LEVEL_ORDER ladder used for primary.
+      const { filtered: techProgressionFiltered, audit: techProgressionAudit } =
+        filterByCurrentProgression(baseScoredTech, technicalSkillAlloc.skill)
+
+      if (techProgressionAudit.blockedCount > 0) {
+        console.log('[PHASE2-PROGRESSION-CAP-UNIFY-SECONDARY]', {
+          skill: technicalSkillAlloc.skill,
+          currentWorkingProgression: getAuthoritativeProgression(technicalSkillAlloc.skill),
+          candidatesBeforeFilter: techProgressionAudit.before,
+          candidatesAfterFilter: techProgressionAudit.after,
+          blockedCount: techProgressionAudit.blockedCount,
+          verdict: 'CURRENT_WORKING_PROGRESSION_ENFORCED_ON_SECONDARY',
+        })
+      }
+
       // [EXERCISE-SELECTION-MATERIALITY] Apply materiality-aware ranking for secondary skill
-      const materialityRankedTech = rankCandidatesWithMateriality(selectorCtx, baseScoredTech, 'secondary_skill', sessionSkillsToExpress)
+      const materialityRankedTech = rankCandidatesWithMateriality(selectorCtx, techProgressionFiltered, 'secondary_skill', sessionSkillsToExpress)
       const scoredTech = applyDoctrineToPool(
         materialityRankedTech.map(c => ({ exercise: c.exercise, score: c.score })),
         day.focus
@@ -5361,134 +5480,159 @@ const added = addExercise(
   if (materialSkillIntent && materialSkillIntent.length > 0 && selected.length < maxExercises) {
     // Find tertiary skills that need expression (these have higher priority than support)
     const tertiarySkillsFromIntent = materialSkillIntent.filter(s => s.role === 'tertiary')
-    
+
     if (tertiarySkillsFromIntent.length > 0) {
-      console.log('[VISIBLE-WEEK-EXPRESSION-FIX] Tertiary skill injection starting:', {
+      // [PHASE 1 SELECTED-SKILL DIRECT-EXPRESSION LOCK]
+      // Intent-driven slot count (was: Math.min(2, remaining) hard cap).
+      // The prior 2-slot cap silently deferred 3rd+ selected tertiary skills
+      // with reason='session_slot_limit_reached'. For a user selecting e.g.
+      // planche-primary + back_lever + dragon_flag + one_arm_pull_up, the
+      // last two would never materialize as direct work. Lifting the cap to
+      // tertiarySkillsFromIntent.length (still bounded by session slots)
+      // gives every selected tertiary skill a fair attempt. The session-
+      // level load gates (canAddMore) remain the true upper bound on total
+      // work, so this cannot produce oversized sessions.
+      const maxTertiarySlots = Math.min(tertiarySkillsFromIntent.length, maxExercises - selected.length)
+      let tertiarySlotsUsed = 0
+
+      console.log('[PHASE1-SELECTED-SKILL-LOCK] Tertiary skill injection starting:', {
         dayFocus: day.focus,
         tertiarySkillCount: tertiarySkillsFromIntent.length,
         tertiarySkills: tertiarySkillsFromIntent.map(s => s.skill),
         slotsRemaining: maxExercises - selected.length,
+        slotBudgetForTertiary: maxTertiarySlots,
       })
-      
-      // Calculate how many tertiary slots we can allocate (max 2 per session for visibility)
-      const maxTertiarySlots = Math.min(2, maxExercises - selected.length)
-      let tertiarySlotsUsed = 0
-      
+
       for (const tertiaryEntry of tertiarySkillsFromIntent) {
         if (tertiarySlotsUsed >= maxTertiarySlots) {
           tertiarySkillsDeferred.push({
             skill: tertiaryEntry.skill,
-            reason: 'session_slot_limit_reached',
+            reason: 'session_slot_budget_exhausted',
           })
           continue
         }
-        
-        // Find exercises that transfer to this tertiary skill
-        // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
-        const tertiarySkillLower = safeLower(tertiaryEntry.skill).replace(/_/g, '')
-        if (!tertiarySkillLower) continue // Skip malformed tertiary skill entries
-        
-        // Search in all pools for exercises matching tertiary skill
-        const tertiaryCandidates = [
-          ...availableSkills.filter(e => 
-            exerciseTransfersToSkill(e, tertiarySkillLower) ||
-            safeExerciseId(e).includes(tertiarySkillLower) ||
-            safeExerciseName(e).includes(tertiarySkillLower) ||
-            (e.primarySkills || []).some(p => safeLower(p).includes(tertiarySkillLower))
-          ),
-          ...availableStrength.filter(e =>
-            exerciseTransfersToSkill(e, tertiarySkillLower) ||
-            safeExerciseId(e).includes(tertiarySkillLower) ||
-            (e.primarySkills || []).some(p => safeLower(p).includes(tertiarySkillLower))
-          ),
-          ...availableAccessory.filter(e =>
-            exerciseTransfersToSkill(e, tertiarySkillLower)
-          ),
-        ].filter(e => !usedIds.has(e.id))
-        
-        // Also try doctrine-backed tertiary exercises
-        const doctrineBacked = getDoctrineBackedExercisesForSkill(tertiaryEntry.skill, [
-          ...availableSkills, ...availableStrength, ...availableAccessory
-        ]).filter(d => !usedIds.has(d.exercise.id))
-        
-        // Prefer doctrine-backed, then transfer-based
-        let selectedTertiaryExercise: Exercise | null = null
-        let selectionSource = 'none'
-        
-        if (doctrineBacked.length > 0) {
-          selectedTertiaryExercise = doctrineBacked[0].exercise
-          selectionSource = doctrineBacked[0].doctrineSource
-        } else if (tertiaryCandidates.length > 0) {
-          // Sort by carryover and primary skill match
-          // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
-          const sorted = tertiaryCandidates.sort((a, b) => {
-            // Prioritize exercises with primary skill match
-            const aHasPrimary = (a.primarySkills || []).some(p => safeLower(p).includes(tertiarySkillLower)) ? 1 : 0
-            const bHasPrimary = (b.primarySkills || []).some(p => safeLower(p).includes(tertiarySkillLower)) ? 1 : 0
-            if (aHasPrimary !== bHasPrimary) return bHasPrimary - aHasPrimary
-            
-            const carryoverDiff = (b.carryover || 0) - (a.carryover || 0)
-            if (carryoverDiff !== 0) return carryoverDiff
-            return (a.fatigueCost || 3) - (b.fatigueCost || 3)
+
+        // [PHASE 1] Canonical-registry-sourced candidates (was: substring/
+        // transfer matching inline). The helper checks ADVANCED_SKILL_FAMILIES
+        // .directProgressions first, then getAdvancedSkillSupport(), then
+        // falls back to the legacy substring/transfer match so we never
+        // regress candidate pool size for skills not in the canonical
+        // registry.
+        const { candidates: canonicalCandidates, source: canonicalSource } =
+          buildCanonicalSkillCandidates(
+            tertiaryEntry.skill,
+            [availableSkills, availableStrength, availableAccessory],
+            usedIds
+          )
+
+        if (canonicalCandidates.length === 0) {
+          tertiarySkillsDeferred.push({
+            skill: tertiaryEntry.skill,
+            reason: 'no_canonical_candidates',
           })
-          selectedTertiaryExercise = sorted[0]
-          selectionSource = `transfer-to:${tertiaryEntry.skill}`
+          console.log('[PHASE1-SELECTED-SKILL-LOCK] Tertiary skill NO CANDIDATES:', {
+            skill: tertiaryEntry.skill,
+            canonicalSource,
+          })
+          continue
         }
-        
-        if (selectedTertiaryExercise) {
-const added = addExercise(
+
+        // [PHASE 2 PROGRESSION-CAP UNIFICATION]
+        // Pipe canonical candidates through the single authoritative
+        // progression cap owner. A tuck-level back-lever athlete must not
+        // surface straddle_back_lever via tertiary injection, which was
+        // previously possible because this site skipped the cap entirely.
+        const scoredForProgression = canonicalCandidates.map(e => ({ exercise: e }))
+        const { filtered: progressionSafe, audit: progressionAudit } =
+          filterByCurrentProgression(scoredForProgression, tertiaryEntry.skill)
+
+        if (progressionSafe.length === 0) {
+          tertiarySkillsDeferred.push({
+            skill: tertiaryEntry.skill,
+            reason: `progression_cap_blocked_all_candidates(blocked=${progressionAudit.blockedCount})`,
+          })
+          console.log('[PHASE1-SELECTED-SKILL-LOCK] Tertiary skill ALL BLOCKED BY PROGRESSION CAP:', {
+            skill: tertiaryEntry.skill,
+            currentWorkingProgression: tertiaryEntry.currentWorkingProgression,
+            canonicalCandidateCount: canonicalCandidates.length,
+            blockedCount: progressionAudit.blockedCount,
+            canonicalSource,
+          })
+          continue
+        }
+
+        // Rank progression-safe candidates. For canonical_direct source the
+        // registry already lists them in low→high progression order, so we
+        // preserve that order first; otherwise prefer higher carryover then
+        // lower fatigue to stay realistic on compound sessions.
+        const sorted = canonicalSource === 'canonical_direct'
+          ? progressionSafe
+          : [...progressionSafe].sort((a, b) => {
+              const carryoverDiff = (b.exercise.carryover || 0) - (a.exercise.carryover || 0)
+              if (carryoverDiff !== 0) return carryoverDiff
+              return (a.exercise.fatigueCost || 3) - (b.exercise.fatigueCost || 3)
+            })
+        const selectedTertiaryExercise = sorted[0].exercise
+
+        // Canonical doctrine source for traceability (used by auditors +
+        // OnboardingTruthExpressionAudit). canonical_direct is the strongest
+        // signal: "this exercise is registered as a direct progression rung
+        // for this selected advanced skill".
+        const doctrineSource: DoctrineSourceTrace | null =
+          canonicalSource === 'canonical_direct'
+            ? { type: 'skill_doctrine', ruleId: `ADVANCED_SKILL_FAMILIES.${tertiaryEntry.skill}.directProgressions` } as DoctrineSourceTrace
+            : canonicalSource === 'canonical_support'
+              ? { type: 'skill_doctrine', ruleId: `getAdvancedSkillSupport.${tertiaryEntry.skill}` } as DoctrineSourceTrace
+              : null
+
+        const added = addExercise(
           selectorCtx,
           selectedTertiaryExercise,
           `[Tertiary Skill] ${tertiaryEntry.skill.replace(/_/g, ' ')} development`,
-            undefined, undefined, undefined, 'standalone',
-            {
-              primarySelectionReason: 'selected_skill_tertiary',
-              sessionRole: 'skill',  // Tertiary gets skill role, not accessory
-              expressionMode: 'skill_technical',  // Technical expression for visibility
-              influencingSkills: [{
-                skillId: tertiaryEntry.skill,
-                influence: 'selected',
-                expressionMode: 'technical',
-              }],
-              doctrineSource: selectionSource.includes('skill-support-mapping') 
-                ? { type: 'skill_doctrine', ruleId: selectionSource } as DoctrineSourceTrace
-                : null,
-            }
-          )
-          
-          if (added) {
-            tertiarySlotsUsed++
-            tertiarySkillsExpressed.push(tertiaryEntry.skill)
-            console.log('[VISIBLE-WEEK-EXPRESSION-FIX] Tertiary skill exercise ADDED:', {
-              skill: tertiaryEntry.skill,
-              exerciseId: selectedTertiaryExercise.id,
-              exerciseName: selectedTertiaryExercise.name,
-              selectionSource,
-              currentWorkingProgression: tertiaryEntry.currentWorkingProgression,
-            })
-          } else {
-            tertiarySkillsDeferred.push({
-              skill: tertiaryEntry.skill,
-              reason: 'exercise_add_failed_load_limits',
-            })
+          undefined, undefined, undefined, 'standalone',
+          {
+            primarySelectionReason: 'selected_skill_tertiary',
+            sessionRole: 'skill', // Tertiary gets skill role, not accessory
+            expressionMode: 'skill_technical', // Technical expression for visibility
+            influencingSkills: [{
+              skillId: tertiaryEntry.skill,
+              influence: 'selected',
+              expressionMode: 'technical',
+            }],
+            doctrineSource,
+            candidatePoolSize: canonicalCandidates.length,
           }
+        )
+
+        if (added) {
+          tertiarySlotsUsed++
+          tertiarySkillsExpressed.push(tertiaryEntry.skill)
+          console.log('[PHASE1-SELECTED-SKILL-LOCK] Tertiary skill ADDED:', {
+            skill: tertiaryEntry.skill,
+            exerciseId: selectedTertiaryExercise.id,
+            exerciseName: selectedTertiaryExercise.name,
+            canonicalSource,
+            progressionCapBlockedCount: progressionAudit.blockedCount,
+            currentWorkingProgression: tertiaryEntry.currentWorkingProgression,
+          })
         } else {
           tertiarySkillsDeferred.push({
             skill: tertiaryEntry.skill,
-            reason: 'no_viable_exercises_found',
-          })
-          console.log('[VISIBLE-WEEK-EXPRESSION-FIX] Tertiary skill exercise NOT FOUND:', {
-            skill: tertiaryEntry.skill,
-            candidatesSearched: tertiaryCandidates.length + doctrineBacked.length,
+            reason: 'exercise_add_failed_load_limits',
           })
         }
       }
-      
-      console.log('[VISIBLE-WEEK-EXPRESSION-FIX] Tertiary skill injection complete:', {
+
+      console.log('[PHASE1-SELECTED-SKILL-LOCK] Tertiary skill injection complete:', {
         tertiarySkillsExpressed,
         tertiarySkillsDeferred,
         slotsUsed: tertiarySlotsUsed,
         remainingSlots: maxExercises - selected.length,
+        verdict: tertiarySkillsExpressed.length === tertiarySkillsFromIntent.length
+          ? 'ALL_TERTIARY_SKILLS_DIRECTLY_EXPRESSED'
+          : tertiarySkillsExpressed.length > 0
+            ? 'PARTIAL_TERTIARY_EXPRESSION'
+            : 'NO_TERTIARY_EXPRESSED',
       })
     }
   }
@@ -5499,129 +5643,136 @@ const added = addExercise(
   if (materialSkillIntent && materialSkillIntent.length > 0 && selected.length < maxExercises) {
     // Find support skills that need expression
     const supportSkillsFromIntent = materialSkillIntent.filter(s => s.role === 'support')
-    
+
     if (supportSkillsFromIntent.length > 0) {
-      console.log('[AI_TRUTH_MATERIALITY] Support skill injection starting:', {
+      // [PHASE 1] Intent-driven slot budget for support too (was hard 2-cap).
+      // Support is lower-priority than tertiary by construction (tertiary
+      // ran first and consumed available slots), so this rarely inflates
+      // sessions in practice -- it just prevents arbitrary truncation when
+      // the session has room and the user selected 3+ support skills.
+      const maxSupportSlots = Math.min(supportSkillsFromIntent.length, maxExercises - selected.length)
+      let supportSlotsUsed = 0
+
+      console.log('[PHASE1-SELECTED-SKILL-LOCK] Support skill injection starting:', {
         dayFocus: day.focus,
         supportSkillCount: supportSkillsFromIntent.length,
         supportSkills: supportSkillsFromIntent.map(s => s.skill),
         slotsRemaining: maxExercises - selected.length,
+        slotBudgetForSupport: maxSupportSlots,
       })
-      
-      // Calculate how many support slots we can allocate (max 2 per session)
-      const maxSupportSlots = Math.min(2, maxExercises - selected.length)
-      let supportSlotsUsed = 0
-      
+
       for (const supportEntry of supportSkillsFromIntent) {
         if (supportSlotsUsed >= maxSupportSlots) {
           supportSkillsDeferred.push({
             skill: supportEntry.skill,
-            reason: 'session_slot_limit_reached',
+            reason: 'session_slot_budget_exhausted',
           })
           continue
         }
-        
-        // Find exercises that transfer to this support skill
-        // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
-        const supportSkillLower = safeLower(supportEntry.skill).replace(/_/g, '')
-        if (!supportSkillLower) continue // Skip malformed support skill entries
-        
-        // Search in all pools for exercises transferring to support skill
-        const supportCandidates = [
-          ...availableSkills.filter(e => 
-            exerciseTransfersToSkill(e, supportSkillLower) ||
-            safeExerciseId(e).includes(supportSkillLower) ||
-            safeExerciseName(e).includes(supportSkillLower)
-          ),
-          ...availableStrength.filter(e =>
-            exerciseTransfersToSkill(e, supportSkillLower) ||
-            safeExerciseId(e).includes(supportSkillLower)
-          ),
-          // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
-          ...availableAccessory.filter(e =>
-            (e.transferTo || []).some(t => safeLower(t).includes(supportSkillLower))
-          ),
-        ].filter(e => !usedIds.has(e.id))
-        
-        // Also try doctrine-backed support exercises
-        const doctrineBacked = getDoctrineBackedExercisesForSkill(supportEntry.skill, [
-          ...availableSkills, ...availableStrength, ...availableAccessory
-        ]).filter(d => !usedIds.has(d.exercise.id))
-        
-        // Prefer doctrine-backed, then transfer-based
-        let selectedSupportExercise: Exercise | null = null
-        let selectionSource = 'none'
-        
-        if (doctrineBacked.length > 0) {
-          selectedSupportExercise = doctrineBacked[0].exercise
-          selectionSource = doctrineBacked[0].doctrineSource
-        } else if (supportCandidates.length > 0) {
-          // Sort by carryover and fatigue cost
-          const sorted = supportCandidates.sort((a, b) => {
-            const carryoverDiff = (b.carryover || 0) - (a.carryover || 0)
-            if (carryoverDiff !== 0) return carryoverDiff
-            return (a.fatigueCost || 3) - (b.fatigueCost || 3) // Prefer lower fatigue
+
+        // [PHASE 1] Canonical-registry-sourced candidates for support role.
+        // For support intent, canonical_support (getAdvancedSkillSupport) is
+        // the intended match; canonical_direct also qualifies when a skill
+        // is advanced and its direct ladder entries remain available.
+        const { candidates: canonicalCandidates, source: canonicalSource } =
+          buildCanonicalSkillCandidates(
+            supportEntry.skill,
+            [availableSkills, availableStrength, availableAccessory],
+            usedIds
+          )
+
+        if (canonicalCandidates.length === 0) {
+          supportSkillsDeferred.push({
+            skill: supportEntry.skill,
+            reason: 'no_canonical_candidates',
           })
-          selectedSupportExercise = sorted[0]
-          selectionSource = `transfer-to:${supportEntry.skill}`
+          console.log('[PHASE1-SELECTED-SKILL-LOCK] Support skill NO CANDIDATES:', {
+            skill: supportEntry.skill,
+            canonicalSource,
+          })
+          continue
         }
-        
-        if (selectedSupportExercise) {
-const added = addExercise(
+
+        // [PHASE 2 PROGRESSION-CAP UNIFICATION]
+        // Apply the single authoritative progression cap to support pool as
+        // well. Support is the one place where progression-cap rarely blocks
+        // anything (support patterns are deliberately sub-skill level), but
+        // routing through the unified gate guarantees a single owner across
+        // every injection site.
+        const scoredForProgression = canonicalCandidates.map(e => ({ exercise: e }))
+        const { filtered: progressionSafe, audit: progressionAudit } =
+          filterByCurrentProgression(scoredForProgression, supportEntry.skill)
+
+        if (progressionSafe.length === 0) {
+          supportSkillsDeferred.push({
+            skill: supportEntry.skill,
+            reason: `progression_cap_blocked_all_candidates(blocked=${progressionAudit.blockedCount})`,
+          })
+          continue
+        }
+
+        // Rank: prefer canonical order for registry-sourced, else carryover then lower fatigue.
+        const sorted = canonicalSource === 'canonical_direct' || canonicalSource === 'canonical_support'
+          ? progressionSafe
+          : [...progressionSafe].sort((a, b) => {
+              const carryoverDiff = (b.exercise.carryover || 0) - (a.exercise.carryover || 0)
+              if (carryoverDiff !== 0) return carryoverDiff
+              return (a.exercise.fatigueCost || 3) - (b.exercise.fatigueCost || 3)
+            })
+        const selectedSupportExercise = sorted[0].exercise
+
+        const doctrineSource: DoctrineSourceTrace | null =
+          canonicalSource === 'canonical_direct'
+            ? { type: 'skill_doctrine', ruleId: `ADVANCED_SKILL_FAMILIES.${supportEntry.skill}.directProgressions` } as DoctrineSourceTrace
+            : canonicalSource === 'canonical_support'
+              ? { type: 'skill_doctrine', ruleId: `getAdvancedSkillSupport.${supportEntry.skill}` } as DoctrineSourceTrace
+              : null
+
+        const added = addExercise(
           selectorCtx,
           selectedSupportExercise,
           `[Support Skill] ${supportEntry.skill.replace(/_/g, ' ')} development`,
-            undefined, undefined, undefined, 'standalone',
-            {
-              primarySelectionReason: 'selected_skill_support',
-              sessionRole: 'accessory',
-              expressionMode: 'skill_accessory',
-              influencingSkills: [{
-                skillId: supportEntry.skill,
-                influence: 'selected',
-                expressionMode: 'support',
-              }],
-              doctrineSource: selectionSource.includes('skill-support-mapping') 
-                ? { type: 'skill_doctrine', ruleId: selectionSource } as DoctrineSourceTrace
-                : null,
-            }
-          )
-          
-          if (added) {
-            supportSlotsUsed++
-            supportSkillsExpressed.push(supportEntry.skill)
-            console.log('[AI_TRUTH_MATERIALITY] Support skill exercise ADDED:', {
-              skill: supportEntry.skill,
-              exerciseId: selectedSupportExercise.id,
-              exerciseName: selectedSupportExercise.name,
-              selectionSource,
-              currentWorkingProgression: supportEntry.currentWorkingProgression,
-            })
-          } else {
-            supportSkillsDeferred.push({
-              skill: supportEntry.skill,
-              reason: 'exercise_add_failed_load_limits',
-            })
+          undefined, undefined, undefined, 'standalone',
+          {
+            primarySelectionReason: 'selected_skill_support',
+            sessionRole: 'accessory',
+            expressionMode: 'skill_accessory',
+            influencingSkills: [{
+              skillId: supportEntry.skill,
+              influence: 'selected',
+              expressionMode: 'support',
+            }],
+            doctrineSource,
+            candidatePoolSize: canonicalCandidates.length,
           }
+        )
+
+        if (added) {
+          supportSlotsUsed++
+          supportSkillsExpressed.push(supportEntry.skill)
+          console.log('[PHASE1-SELECTED-SKILL-LOCK] Support skill ADDED:', {
+            skill: supportEntry.skill,
+            exerciseId: selectedSupportExercise.id,
+            exerciseName: selectedSupportExercise.name,
+            canonicalSource,
+            progressionCapBlockedCount: progressionAudit.blockedCount,
+            currentWorkingProgression: supportEntry.currentWorkingProgression,
+          })
         } else {
           supportSkillsDeferred.push({
             skill: supportEntry.skill,
-            reason: 'no_viable_exercises_found',
-          })
-          console.log('[AI_TRUTH_MATERIALITY] Support skill exercise NOT FOUND:', {
-            skill: supportEntry.skill,
-            candidatesSearched: supportCandidates.length + doctrineBacked.length,
+            reason: 'exercise_add_failed_load_limits',
           })
         }
       }
-      
-      console.log('[AI_TRUTH_MATERIALITY] Support skill injection complete:', {
+
+      console.log('[PHASE1-SELECTED-SKILL-LOCK] Support skill injection complete:', {
         dayFocus: day.focus,
         expressed: supportSkillsExpressed,
         deferred: supportSkillsDeferred,
         slotsUsed: supportSlotsUsed,
-        verdict: supportSkillsExpressed.length > 0 
-          ? 'SUPPORT_SKILLS_MATERIALLY_EXPRESSED' 
+        verdict: supportSkillsExpressed.length > 0
+          ? 'SUPPORT_SKILLS_MATERIALLY_EXPRESSED'
           : 'SUPPORT_SKILLS_DEFERRED_WITH_REASONS',
       })
     }

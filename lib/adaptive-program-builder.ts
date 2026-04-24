@@ -14261,17 +14261,36 @@ async function generateAdaptiveProgramImpl(
       : durationConfig.minExercises
     
     const isUnderbuilt = exerciseCount < intendedMin
-    
+
+    // [UNDERBUILT-SESSION-TOPUP-REPAIR] Detect whether the authoritative
+    // top-up repair ran on this session by checking for the TOP-UP-REPAIR tag
+    // on any exercise's selectionReason. This flips the reserved (previously
+    // dead) `'repaired'` classification into a real signal: sessions whose
+    // upstream emission was below `minExercises` but whose top-up repair
+    // successfully refilled them to meet or exceed the floor.
+    const repairTagCount = Array.isArray(session.exercises)
+      ? session.exercises.filter(e =>
+          typeof e?.selectionReason === 'string' &&
+          e.selectionReason.includes('[TOP-UP-REPAIR]')
+        ).length
+      : 0
+    const wasTopUpRepaired = repairTagCount > 0
+
     let densityClassification: 'normal' | 'intentionally_light' | 'underbuilt' | 'repaired' = 'normal'
     let reason = 'Session meets density requirements'
-    
+
     if (isIntentionallyLight) {
       densityClassification = 'intentionally_light'
       reason = `Light/recovery session (${dayStress || sessionFocus}) - reduced minimum acceptable`
     } else if (isUnderbuilt) {
+      // Still below floor even after any repair attempt -- this is the
+      // genuinely-underbuilt case worth escalating (e.g. equipment too
+      // constrained to reach the floor, or repair unavailable for this focus).
       densityClassification = 'underbuilt'
-      reason = `Session has ${exerciseCount} exercises, expected minimum ${intendedMin}`
-      
+      reason = wasTopUpRepaired
+        ? `Session has ${exerciseCount} exercises after top-up repair (added ${repairTagCount}), still below minimum ${intendedMin}`
+        : `Session has ${exerciseCount} exercises, expected minimum ${intendedMin}`
+
       // [TASK 4] Log the underbuilt session for debugging
       console.warn('[session-density-audit] UNDERBUILT session detected:', {
         dayNumber: session.dayNumber,
@@ -14281,6 +14300,21 @@ async function generateAdaptiveProgramImpl(
         intendedMax: durationConfig.maxExercises,
         dayStress,
         isIntentionallyLight,
+        wasTopUpRepaired,
+        repairTagCount,
+      })
+    } else if (wasTopUpRepaired) {
+      // Session meets the floor BECAUSE of the top-up repair. This is the
+      // case the reserved `'repaired'` enum was designed for -- now honestly
+      // assigned.
+      densityClassification = 'repaired'
+      reason = `Session reached minimum ${intendedMin} after authoritative top-up repair added ${repairTagCount} exercise(s)`
+      console.log('[session-density-audit] REPAIRED session (top-up succeeded):', {
+        dayNumber: session.dayNumber,
+        focus: sessionFocus,
+        exerciseCount,
+        intendedMin,
+        repairTagCount,
       })
     }
     
@@ -14299,6 +14333,7 @@ async function generateAdaptiveProgramImpl(
   
   // [TASK 3] Output comprehensive session density audit
   const underbuiltSessions = sessionDensityAuditResults.filter(s => s.isUnderbuilt && !s.isIntentionallyLight)
+  const repairedSessions = sessionDensityAuditResults.filter(s => s.densityClassification === 'repaired')
   console.log('[session-density-audit]', {
     totalSessions: sessions.length,
     durationPreference: workoutDuration,
@@ -14311,6 +14346,12 @@ async function generateAdaptiveProgramImpl(
     })),
     underbuiltCount: underbuiltSessions.length,
     underbuiltDays: underbuiltSessions.map(s => s.dayNumber),
+    // [UNDERBUILT-SESSION-TOPUP-REPAIR] Report sessions where the top-up
+    // repair ran and successfully reached the floor. Non-zero values here
+    // are the auditable proof that detection → repair is now wired end to
+    // end, replacing the previous "detect but don't repair" gap.
+    repairedCount: repairedSessions.length,
+    repairedDays: repairedSessions.map(s => s.dayNumber),
     intentionallyLightCount: sessionDensityAuditResults.filter(s => s.isIntentionallyLight).length,
   })
   
@@ -23028,7 +23069,157 @@ function generateAdaptiveSession(
   
   console.log('[session-trace-post-rescue]', { ...sessionTrace, currentMainCount: rescuedMain.length })
   sessionStep = 'rescue_completed'
-  
+
+  // ==========================================================================
+  // [UNDERBUILT-SESSION-TOPUP-REPAIR] Fill underbuilt Full sessions before emit
+  //
+  // AUDITED FIRST DILUTION OWNER: The post-build session-density audit block
+  // at `[session-density-audit]` further down in this file already classifies
+  // sessions as "underbuilt" when their main exercise count is below
+  // `durationConfig.minExercises`. But that block ONLY logs the warning --
+  // it never repairs. The `'repaired'` classification it reserved was never
+  // assigned by any code path. This allowed thin Full sessions to survive
+  // unchanged, which also starved the 45/30 variant corridor of meaningful
+  // parent material (shorts are derived from Full, so when Full is thin, the
+  // compressed variants are either hollow or indistinguishable).
+  //
+  // This top-up pass is the authoritative repair owner. It runs BEFORE
+  // equipment adaptation / method assignment / mapToAdaptiveExercises so the
+  // entire downstream pipeline (including variant generation, styling, load
+  // optimization) operates on the repaired body.
+  //
+  // CONTRACT:
+  //   1. Never force-fill intentionally light sessions (recovery/mobility/
+  //      deload focus). These are supposed to be thinner by design.
+  //   2. Never exceed the session's minimum target -- only top up to the floor,
+  //      never inflate toward max. Max remains the selector's responsibility;
+  //      repair exists strictly to prevent sessions from leaving the builder
+  //      BELOW their own declared minimum.
+  //   3. Reuse the authoritative fallback owner that the empty-session rescue
+  //      already uses (`buildFallbackSelectionForSession`). No new parallel
+  //      selector, no new candidate pool, no duplicate truth -- same pools
+  //      (`STRENGTH_EXERCISES` / `ACCESSORY_EXERCISES` / `CORE_EXERCISES_POOL`
+  //      / `SKILL_EXERCISES`), same equipment filter (`hasRequiredEquipment`),
+  //      same goal→focus mapping.
+  //   4. Append only exercises whose ids are not already in the selection,
+  //      preserving every existing selection and its metadata.
+  //   5. Tag appended exercises with a clear `TOP-UP-REPAIR` selection reason
+  //      so downstream audits can see which rows were the repair and the
+  //      post-build density audit can classify the session as `'repaired'`
+  //      instead of leaving the reserved enum value as dead code.
+  //   6. If the repair attempt crashes, keep the original underbuilt selection
+  //      and continue -- never fail session generation because a repair
+  //      attempt could not proceed.
+  // ==========================================================================
+  if (rescuedMain.length > 0) {
+    // Resolve the authoritative duration budget for this session's target.
+    const sessionBudgetForTopUp = resolveSessionBudget(sessionMinutesResolved)
+    const topUpTargetMin = sessionBudgetForTopUp.mainWork.minExercises
+
+    // Intentionally light sessions (recovery/mobility/deload focus) are
+    // allowed to stay below the standard minimum. This mirrors the post-build
+    // density audit's `isIntentionallyLight` logic so the two owners agree.
+    const focusLower = (day.focus || '').toLowerCase()
+    const isIntentionallyLight =
+      focusLower.includes('recovery') ||
+      focusLower.includes('mobility') ||
+      focusLower.includes('deload')
+
+    const isUnderbuilt = rescuedMain.length < topUpTargetMin && !isIntentionallyLight
+
+    if (isUnderbuilt) {
+      const deficit = topUpTargetMin - rescuedMain.length
+      console.warn('[UNDERBUILT-SESSION-TOPUP-REPAIR] Underbuilt Full session detected - running authoritative top-up', {
+        dayNumber: day.dayNumber,
+        dayFocus: day.focus,
+        primaryGoal,
+        currentMainCount: rescuedMain.length,
+        targetMinExercises: topUpTargetMin,
+        deficit,
+        isIntentionallyLight,
+        sessionMinutes: sessionMinutesResolved,
+        verdict: 'REPAIR_ENTERING',
+      })
+
+      try {
+        // Reuse the authoritative fallback owner. Same helper the empty-session
+        // rescue uses at L22995 -- no new parallel builder, no new candidate
+        // pool, same equipment filter.
+        const topUpResult = buildFallbackSelectionForSession(
+          day.focus,
+          primaryGoal,
+          equipment,
+          sessionMinutesResolved,
+          experienceLevel
+        )
+
+        if (topUpResult.wasRescued && topUpResult.main.length > 0) {
+          const existingIds = new Set(
+            rescuedMain
+              .map(e => e?.exercise?.id)
+              .filter((id): id is string => typeof id === 'string' && id.length > 0)
+          )
+          const appended: SelectedExercise[] = []
+          for (const candidate of topUpResult.main) {
+            if (appended.length >= deficit) break
+            const cid = candidate?.exercise?.id
+            if (!cid || existingIds.has(cid)) continue
+            // Tag so downstream audits can distinguish repair rows from
+            // primary selection rows via AdaptiveExercise.selectionReason.
+            appended.push({
+              ...candidate,
+              selectionReason: `[TOP-UP-REPAIR] ${candidate.selectionReason || 'Underbuilt session filled with authoritative support'}`,
+            })
+            existingIds.add(cid)
+          }
+          if (appended.length > 0) {
+            const mainCountBefore = rescuedMain.length
+            rescuedMain = [...rescuedMain, ...appended]
+            sessionTrace.rescuedMainCount = rescuedMain.length
+            console.log('[UNDERBUILT-SESSION-TOPUP-REPAIR] Repair applied', {
+              dayNumber: day.dayNumber,
+              dayFocus: day.focus,
+              mainCountBefore,
+              mainCountAfter: rescuedMain.length,
+              targetMinExercises: topUpTargetMin,
+              appendedIds: appended.map(e => e.exercise.id),
+              appendedNames: appended.map(e => e.exercise.name),
+              rescuePath: topUpResult.rescuePath,
+              verdict: rescuedMain.length >= topUpTargetMin
+                ? 'REPAIR_SUCCESS_REACHED_MINIMUM'
+                : 'REPAIR_PARTIAL_STILL_BELOW_MINIMUM',
+            })
+          } else {
+            console.warn('[UNDERBUILT-SESSION-TOPUP-REPAIR] No eligible top-up candidates (all were duplicates of existing selection)', {
+              dayNumber: day.dayNumber,
+              dayFocus: day.focus,
+              fallbackCandidateCount: topUpResult.main.length,
+              verdict: 'REPAIR_NOOP_DUPLICATES_ONLY',
+            })
+          }
+        } else {
+          console.warn('[UNDERBUILT-SESSION-TOPUP-REPAIR] Fallback builder returned no candidates', {
+            dayNumber: day.dayNumber,
+            dayFocus: day.focus,
+            wasRescued: topUpResult.wasRescued,
+            mainCount: topUpResult.main.length,
+            verdict: 'REPAIR_UNAVAILABLE',
+          })
+        }
+      } catch (topUpErr) {
+        // Never fail session generation because of a repair attempt -- the
+        // session still has its original (underbuilt) exercises and the
+        // downstream pipeline remains valid.
+        console.error('[UNDERBUILT-SESSION-TOPUP-REPAIR] Repair attempt crashed, keeping original underbuilt selection', {
+          dayNumber: day.dayNumber,
+          dayFocus: day.focus,
+          error: topUpErr instanceof Error ? topUpErr.message : String(topUpErr),
+          verdict: 'REPAIR_CRASH_SAFE_FALLBACK',
+        })
+      }
+    }
+  }
+
   // ==========================================================================
   // Equipment adaptation with collapse detection
   // ==========================================================================

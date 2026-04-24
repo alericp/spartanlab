@@ -267,6 +267,43 @@ export function buildSelectedVariantMain(
       blockId: selEx?.blockId ?? (base as { blockId?: string }).blockId,
       setExecutionMethod:
         selEx?.setExecutionMethod ?? (base as { setExecutionMethod?: string }).setExecutionMethod,
+      // ====================================================================
+      // [SELECTED-VARIANT-PRESCRIPTION-AUTHORITY] Strip leaked week-scaled
+      // dosage fields from the full-session base.
+      //
+      // The route-side `loadAuthoritativeSession` decorates every full-session
+      // exercise with `scaledSets / scaledReps / scaledTargetRPE /
+      // scaledRestPeriod / scaledHoldDuration` (and `weekScalingApplied`)
+      // computed against the FULL-SESSION baseline. Those values are
+      // intentionally NOT computed for variant bodies (the variant's own
+      // sets/reps/RPE/rest are already the authoritative dosage for that
+      // selected length). When `buildSelectedVariantMain` runs at the route
+      // and matches a variant row to its full-session base via id/name, the
+      // `...base` spread above silently inherits those `scaled*` fields onto
+      // the variant exercise.
+      //
+      // Downstream, `getEffectiveExerciseValues` in StreamlinedWorkoutSession
+      // (and the matching helper in AdaptiveSessionCard) reads
+      //   scaled.scaledSets ?? exercise.sets
+      // i.e. scaled fields WIN over the variant's `sets`. Result: live
+      // workout 45/30 booted into full-session week-scaled dosage (5x8s /
+      // 5x4-6) instead of the variant's reduced dosage shown on the card.
+      //
+      // The card itself never hit this leak because the parent program page
+      // hands the card a raw (un-scaled) session; the card's
+      // buildSelectedVariantMain call therefore had no `scaled*` fields on
+      // its base to leak. Fixing only the route would leave the two
+      // surfaces re-derived. Fixing it inside the shared builder keeps
+      // ONE owner of selected-variant truth and guarantees parity:
+      //   - card variant body  -> no scaled*, falls through to variant.sets
+      //   - route variant body -> no scaled*, falls through to variant.sets
+      // ====================================================================
+      scaledSets: undefined,
+      scaledReps: undefined,
+      scaledTargetRPE: undefined,
+      scaledRestPeriod: undefined,
+      scaledHoldDuration: undefined,
+      weekScalingApplied: undefined,
     } as (typeof fullExercises)[number]
   })
 

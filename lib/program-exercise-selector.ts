@@ -2637,11 +2637,21 @@ function selectMainExercises(
       return { allowed: true, reason: 'no_ladder_defined' }
     }
     
-    // Find current level index - safely normalize currentProgression
+    // Find current level index - safely normalize currentProgression.
+    // [PHASE 2C] Longest-match: `advanced_tuck_back_lever` contains BOTH
+    // `tuck` and `adv_tuck`. First-match resolved to the `tuck` rung and
+    // anchored the realism cap one rung too low, which corrupted every
+    // downstream delta calculation for intermediate-tier skills.
     const currentProgressionLower = safeLower(currentProgression)
-    const currentLevelIndex = progressionLadder.findIndex(level => 
-      currentProgressionLower.includes(level)
-    )
+    let currentLevelIndex = -1
+    let currentBestLen = 0
+    for (let i = 0; i < progressionLadder.length; i++) {
+      const level = progressionLadder[i]
+      if (currentProgressionLower.includes(level) && level.length > currentBestLen) {
+        currentBestLen = level.length
+        currentLevelIndex = i
+      }
+    }
     
     if (currentLevelIndex === -1) {
       // Can't determine current level - allow by default
@@ -2916,7 +2926,19 @@ function selectMainExercises(
     }
 
     const currentLower = safeLower(currentProgression)
-    const currentLevelIndex = ladder.findIndex(level => currentLower.includes(level))
+    // [PHASE 2C] Longest-match for currentWorkingProgression → ladder index too.
+    // Athlete at `advanced_tuck_back_lever` must resolve to `adv_tuck` (index 1)
+    // not `tuck` (index 0). Without this, realism cap anchors to the wrong rung
+    // and proximity ranker's delta calculation is off-by-N.
+    let currentLevelIndex = -1
+    let currentBestLen = 0
+    for (let i = 0; i < ladder.length; i++) {
+      const level = ladder[i]
+      if (currentLower.includes(level) && level.length > currentBestLen) {
+        currentBestLen = level.length
+        currentLevelIndex = i
+      }
+    }
     if (currentLevelIndex === -1) {
       // Current level unrecognized -> degrade to registry-order + tiebreak.
       const ranked = [...candidates].sort((a, b) => {

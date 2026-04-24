@@ -835,6 +835,140 @@ export function isVariantLaunchable(
   return true
 }
 
+// =============================================================================
+// [VARIANT-MATERIAL-DISTINCTNESS-CONTRACT] CANONICAL DISTINCTNESS HELPER
+// =============================================================================
+// A short variant ("45 Min" / "30 Min") must not survive if it is effectively
+// the same body as its reference (Full, or the nearest larger emitted
+// variant). "Launchable" alone is not enough: the compressor can pass through
+// all of Full's rows unchanged (e.g. when Full is already small, or when the
+// greedy trim kept every row), producing a 45/30 tab that launches an
+// IDENTICAL body. That is the "cosmetic short variant" failure mode.
+//
+// A variant is materially distinct from its reference iff ANY of the
+// following is true:
+//   1. different number of main exercises
+//   2. different ordered exercise identity (different sequence of
+//      `exercise.id` across main)
+//   3. different total prescribed sets across main
+//   4. meaningfully different duration (>= 5 min delta, matching the
+//      threshold used by generateSessionVariants' meaningful-difference gate)
+//
+// If NONE of those hold, the variant is effectively the same as the
+// reference and must be rejected upstream so it cannot surface as a button.
+//
+// This helper is deliberately symmetric and pure (no side effects, no
+// mutation). It is the ONE authoritative distinctness check; every emit
+// site and every post-reconcile filter must reference it instead of its
+// own ad-hoc comparison.
+// =============================================================================
+export interface VariantDistinctnessReport {
+  materiallyDistinct: boolean
+  sameMainCount: boolean
+  sameOrderedIdentity: boolean
+  sameTotalSets: boolean
+  sameDurationBucket: boolean
+  candidateMainCount: number
+  referenceMainCount: number
+  candidateTotalSets: number
+  referenceTotalSets: number
+  candidateDuration: number
+  referenceDuration: number
+  durationDeltaMinutes: number
+  // If not distinct, the exact fields that matched the reference (caller
+  // surfaces this in warn logs so "why was this variant rejected" is
+  // auditable).
+  matchedFields: Array<'mainCount' | 'orderedIdentity' | 'totalSets' | 'duration'>
+}
+
+const DURATION_DISTINCTNESS_THRESHOLD_MIN = 5
+
+function orderedIdentitySignature(variant: SessionVariant): string {
+  return (variant.selection.main || [])
+    .map(row => {
+      const id = (row?.exercise as unknown as { id?: unknown })?.id
+      return typeof id === 'string' ? id : ''
+    })
+    .join('|')
+}
+
+function totalPrescribedSets(variant: SessionVariant): number {
+  let total = 0
+  for (const row of variant.selection.main || []) {
+    const sets = (row as unknown as { sets?: unknown }).sets
+    if (typeof sets === 'number' && Number.isFinite(sets)) total += sets
+  }
+  return total
+}
+
+export function areVariantsMateriallyDistinct(
+  candidate: SessionVariant | undefined | null,
+  reference: SessionVariant | undefined | null
+): VariantDistinctnessReport {
+  // If either side is missing or unlaunchable, we treat them as distinct by
+  // default so this helper never accidentally blocks emission of a valid
+  // candidate when reference is absent. The upstream launchability gate is
+  // the right place to reject hollow candidates; this helper's ONLY job is
+  // to reject two real-but-identical bodies.
+  if (!candidate || !reference || !isVariantLaunchable(candidate) || !isVariantLaunchable(reference)) {
+    return {
+      materiallyDistinct: true,
+      sameMainCount: false,
+      sameOrderedIdentity: false,
+      sameTotalSets: false,
+      sameDurationBucket: false,
+      candidateMainCount: candidate?.selection?.main?.length ?? 0,
+      referenceMainCount: reference?.selection?.main?.length ?? 0,
+      candidateTotalSets: 0,
+      referenceTotalSets: 0,
+      candidateDuration: candidate?.duration ?? 0,
+      referenceDuration: reference?.duration ?? 0,
+      durationDeltaMinutes: Math.abs((candidate?.duration ?? 0) - (reference?.duration ?? 0)),
+      matchedFields: [],
+    }
+  }
+
+  const candidateMainCount = candidate.selection.main.length
+  const referenceMainCount = reference.selection.main.length
+  const candidateTotalSets = totalPrescribedSets(candidate)
+  const referenceTotalSets = totalPrescribedSets(reference)
+  const candidateDuration = candidate.duration
+  const referenceDuration = reference.duration
+  const durationDeltaMinutes = Math.abs(candidateDuration - referenceDuration)
+
+  const sameMainCount = candidateMainCount === referenceMainCount
+  const sameOrderedIdentity = orderedIdentitySignature(candidate) === orderedIdentitySignature(reference)
+  const sameTotalSets = candidateTotalSets === referenceTotalSets
+  const sameDurationBucket = durationDeltaMinutes < DURATION_DISTINCTNESS_THRESHOLD_MIN
+
+  // Materially distinct iff at least one of the four axes differs.
+  const materiallyDistinct = !(sameMainCount && sameOrderedIdentity && sameTotalSets && sameDurationBucket)
+
+  const matchedFields: Array<'mainCount' | 'orderedIdentity' | 'totalSets' | 'duration'> = []
+  if (!materiallyDistinct) {
+    if (sameMainCount) matchedFields.push('mainCount')
+    if (sameOrderedIdentity) matchedFields.push('orderedIdentity')
+    if (sameTotalSets) matchedFields.push('totalSets')
+    if (sameDurationBucket) matchedFields.push('duration')
+  }
+
+  return {
+    materiallyDistinct,
+    sameMainCount,
+    sameOrderedIdentity,
+    sameTotalSets,
+    sameDurationBucket,
+    candidateMainCount,
+    referenceMainCount,
+    candidateTotalSets,
+    referenceTotalSets,
+    candidateDuration,
+    referenceDuration,
+    durationDeltaMinutes,
+    matchedFields,
+  }
+}
+
 export function generateSessionVariants(
   fullSelection: ExerciseSelection,
   originalMinutes: number
@@ -926,8 +1060,28 @@ export function generateSessionVariants(
           variant45Count: count45,
         })
       } else {
-        variant45 = candidate45
-        variants.push(variant45)
+        // [VARIANT-MATERIAL-DISTINCTNESS-CONTRACT] Reject a 45 Min variant
+        // whose body is effectively identical to Full (same ordered exercise
+        // identity AND same main count AND same total sets AND near-equal
+        // duration). Compression can degrade to a pass-through when Full is
+        // already short or when the greedy trim happened to keep every row;
+        // emitting such a candidate would surface a misleading 45 Min tab
+        // that loads the full body.
+        const distinctnessVsFull = areVariantsMateriallyDistinct(candidate45, fullCandidate)
+        if (!distinctnessVsFull.materiallyDistinct) {
+          console.warn('[VARIANT-MATERIAL-DISTINCTNESS-CONTRACT] Skipping 45min variant - not materially distinct from Full', {
+            fullCount: fullExerciseCount,
+            variant45Count: count45,
+            matchedFields: distinctnessVsFull.matchedFields,
+            candidateTotalSets: distinctnessVsFull.candidateTotalSets,
+            referenceTotalSets: distinctnessVsFull.referenceTotalSets,
+            durationDeltaMinutes: distinctnessVsFull.durationDeltaMinutes,
+            verdict: 'REJECTED_COSMETIC_SHORT_VARIANT',
+          })
+        } else {
+          variant45 = candidate45
+          variants.push(variant45)
+        }
       }
     } catch (err) {
       console.warn('[session-variants] Failed to generate 45min variant:', err instanceof Error ? err.message : String(err))
@@ -975,8 +1129,32 @@ export function generateSessionVariants(
           count30,
         })
       } else {
-        variant30 = candidate30
-        variants.push(variant30)
+        // [VARIANT-MATERIAL-DISTINCTNESS-CONTRACT] 30 Min must be
+        // materially distinct from Full AND from the emitted 45 (if any).
+        // Otherwise the 30 Min tab would either duplicate Full or duplicate
+        // 45 -- both are cosmetic tabs that lie to the user.
+        const distinctnessVsFull = areVariantsMateriallyDistinct(candidate30, fullCandidate)
+        const distinctnessVs45 = variant45
+          ? areVariantsMateriallyDistinct(candidate30, variant45)
+          : { materiallyDistinct: true, matchedFields: [] as Array<'mainCount' | 'orderedIdentity' | 'totalSets' | 'duration'> }
+        if (!distinctnessVsFull.materiallyDistinct) {
+          console.warn('[VARIANT-MATERIAL-DISTINCTNESS-CONTRACT] Skipping 30min variant - not materially distinct from Full', {
+            fullCount: fullExerciseCount,
+            count30,
+            matchedFields: distinctnessVsFull.matchedFields,
+            verdict: 'REJECTED_COSMETIC_SHORT_VARIANT',
+          })
+        } else if (!distinctnessVs45.materiallyDistinct) {
+          console.warn('[VARIANT-MATERIAL-DISTINCTNESS-CONTRACT] Skipping 30min variant - not materially distinct from 45 Min', {
+            count45: count45ForComparison,
+            count30,
+            matchedFields: distinctnessVs45.matchedFields,
+            verdict: 'REJECTED_DUPLICATE_SHORT_VARIANT',
+          })
+        } else {
+          variant30 = candidate30
+          variants.push(variant30)
+        }
       }
     } catch (err) {
       console.warn('[session-variants] Failed to generate 30min variant:', err instanceof Error ? err.message : String(err))

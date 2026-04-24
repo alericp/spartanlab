@@ -1850,10 +1850,73 @@ export function StreamlinedWorkoutSession({
     // Priority 1: styleMetadata.styledGroups (same source as Program screen / Today's Plan)
     // Priority 2: Fallback to flat blockId-based derivation
     const styledGroups = safeSession.styleMetadata?.styledGroups
-    
+
+    // [FINAL-MIRROR-LOCK Part 3] styleMetadata SHADOW-OWNER GUARD.
+    //
+    // The card stamps `visibleLaunchBody` (= fullVisibleExercises) as the
+    // single launch-body owner. That array is the exact ordered list the
+    // Program card rendered. styleMetadata.styledGroups, however, is a
+    // PARALLEL structure: its internal flattening (group[0].exercises,
+    // group[1].exercises, ...) can differ from fullVisibleExercises order
+    // even when membership matches. Prior code let styledGroups win
+    // unconditionally, which made live executionPlan traverse the
+    // styledGroups flattening -- NOT the visible card body -- so the
+    // live workout advanced in the wrong order for shortened flat
+    // sessions. That is exactly the verified Day 1 / Day 6 45/30 failure:
+    //
+    //   Card visible body (fullVisibleExercises):
+    //     Planche Leans -> Explosive Pull-Ups -> Tuck FL Hold -> Weighted Dips
+    //   Flattened styledGroups:
+    //     Planche Leans -> Tuck FL Hold -> Weighted Dips -> Explosive Pull-Ups
+    //   Live order followed styledGroups. FAIL.
+    //
+    // Rule enforced here:
+    //   styledGroups may OWN execution order ONLY when
+    //     (a) it contains at least one truly-grouped group (superset /
+    //         circuit / cluster / density_block), AND
+    //     (b) its flattened id-sequence matches the booted `exercises`
+    //         id-sequence byte-for-byte.
+    // Otherwise -> fall through to deriveExecutionPlanFromExercises, which
+    // builds a flat plan in the exact order of the booted exercises array
+    // (which is the mirror body). For all-straight styleMetadata, this
+    // yields the same grouped/straight visuals for real groups when they
+    // align, and preserves visible card order when they don't.
+    const styledGroupsCanOwnOrder = ((): boolean => {
+      if (!styledGroups || styledGroups.length === 0) return false
+      const hasTrulyGrouped = styledGroups.some(
+        g => g.groupType && g.groupType !== 'straight'
+      )
+      if (!hasTrulyGrouped) return false
+      const flatIds: string[] = []
+      for (const g of styledGroups) {
+        for (const ex of g.exercises) flatIds.push(ex.id)
+      }
+      if (flatIds.length !== exercises.length) return false
+      for (let i = 0; i < flatIds.length; i++) {
+        if (flatIds[i] !== exercises[i].id) return false
+      }
+      return true
+    })()
+
+    if (!styledGroupsCanOwnOrder && styledGroups && styledGroups.length > 0) {
+      console.log(
+        '[FINAL-MIRROR-LOCK] executionPlan: rejecting styledGroups as order owner',
+        {
+          reason:
+            styledGroups.every(g => !g.groupType || g.groupType === 'straight')
+              ? 'no_truly_grouped_groups'
+              : 'flattened_id_sequence_mismatch_exercises_order',
+          styledGroupFlatIds: styledGroups.flatMap(g => g.exercises.map(e => e.id)),
+          exerciseIds: exercises.map(e => e.id),
+          note:
+            'Falling through to flat-from-exercises plan so visible card order becomes live order.',
+        }
+      )
+    }
+
     let executionPlan: ExecutionPlan
-    
-if (styledGroups && styledGroups.length > 0) {
+
+    if (styledGroupsCanOwnOrder && styledGroups && styledGroups.length > 0) {
       // AUTHORITATIVE PATH: Convert styledGroups to ExecutionPlan
       console.log('[v0] [execution_plan_from_styled_groups]', {
         styledGroupCount: styledGroups.length,
@@ -5440,8 +5503,43 @@ if (shouldShowLocalFallback) {
   // [JSX-STABILIZED] Precomputed render function for Today's Plan rows
   // Extracted from inline JSX to prevent ownership drift in complex ternary branches
   const renderTodayPlanRows = (): React.ReactNode => {
+    // [FINAL-MIRROR-LOCK Part 2] Shell SHADOW-OWNER GUARD.
+    //
+    // Same contract enforced in the executionPlan builder: styleMetadata
+    // may only OWN row order when (a) it contains at least one truly-
+    // grouped group AND (b) its flattened id-sequence matches the booted
+    // `exercises` order. Otherwise we skip the styleMetadata render path
+    // and fall through to Priority 3 (flat render from `exercises`), which
+    // is the mirror body stamped by the Program card as visibleLaunchBody.
+    //
+    // This is what eliminates the verified failure where the card showed
+    // e.g. Planche -> Explosive Pull-Ups -> Tuck FL Hold -> Weighted Dips
+    // and the shell showed Planche -> Tuck FL Hold -> Weighted Dips ->
+    // Explosive Pull-Ups despite both pulling from the same underlying
+    // `styleMetadata`: the flattening order of the groups disagrees with
+    // fullVisibleExercises order for shortened sessions, and the prior
+    // code always honored the flattening.
+    const shellStyledGroups = safeSession.styleMetadata?.styledGroups
+    const shellStyledGroupsCanOwnOrder = ((): boolean => {
+      if (!shellStyledGroups || shellStyledGroups.length === 0) return false
+      const hasTrulyGrouped = shellStyledGroups.some(
+        g => g.groupType && g.groupType !== 'straight'
+      )
+      if (!hasTrulyGrouped) return false
+      const flatIds: string[] = []
+      for (const g of shellStyledGroups) {
+        for (const ex of g.exercises) flatIds.push(ex.id)
+      }
+      if (flatIds.length !== exercises.length) return false
+      for (let i = 0; i < flatIds.length; i++) {
+        if (flatIds[i] !== exercises[i].id) return false
+      }
+      return true
+    })()
+
     // Priority 1: Authoritative styleMetadata grouped render
-    if (safeSession.styleMetadata?.styledGroups && safeSession.styleMetadata.styledGroups.length > 0) {
+    // (only when styledGroups legitimately owns order per the shadow-owner guard)
+    if (shellStyledGroupsCanOwnOrder && safeSession.styleMetadata?.styledGroups && safeSession.styleMetadata.styledGroups.length > 0) {
       const previewGroupCounters: Record<string, number> = { superset: 0, circuit: 0, cluster: 0, density_block: 0 }
       
       return safeSession.styleMetadata.styledGroups.map((group, groupIdx) => {

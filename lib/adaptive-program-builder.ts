@@ -25991,6 +25991,27 @@ function generateAdaptiveSession(
   }
   
   sessionStep = 'middle_helpers_completed'
+    // [STYLE-PHASE DEGRADE CARD ROOT FIX] BREADCRUMB ACCURACY GUARD
+    // ------------------------------------------------------------------
+    // Prior failure mode: middleStep is the last value written during the
+    // middle-helper phase (e.g. 'finisher_suppressed_by_week_adaptation',
+    // 'finisher_generated', 'fatigue_adjustment_resolved'). After the
+    // middle phase completes successfully, sessionStep advances normally
+    // but middleStep was never neutralized. If a *later* phase throws —
+    // most notably 'applying_training_style' below — the lifecycle catch
+    // formats `middleStep=${middleStep}` into the classified error
+    // message, which then surfaces verbatim on the degraded-rebuild card.
+    // Users saw "step=applying_training_style middleStep=finisher_-
+    // suppressed_by_week_adaptation" even though finisher suppression
+    // had nothing to do with the actual failure.
+    //
+    // Reset to 'none' here so any later-stage throw reports the true
+    // corridor without the stale finisher/middle breadcrumb. Downstream
+    // log parsers already treat 'none' as "no middleStep" via the
+    // `middleStepMatch[1] !== 'none'` guard at lines 4932 / 14220, so
+    // this neutralization is correctly absorbed by the existing
+    // classifier.
+    middleStep = 'none'
 
     // Map exercises first, then validate/dedupe
     sessionStep = 'mapping_exercises'
@@ -26416,8 +26437,83 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       bundleSignals,
     }
     
-    const styleResult = applySessionStylePreferences(styleInput)
-    
+    // [STYLE-PHASE DEGRADE CARD ROOT FIX] SAFE POST-CORE STYLE FALLBACK
+    // ------------------------------------------------------------------
+    // Prior failure mode: applySessionStylePreferences ran unguarded after
+    // the validated session was already healthy. Any throw inside style
+    // packaging — empty pool edge cases, undefined movement patterns,
+    // method-decision evidence assembly, etc. — propagated up to the
+    // lifecycle catch and surfaced as a hard `session_generation_failed:
+    // step=applying_training_style ...` classified error. The rebuild
+    // policy then rendered the red "Last rebuild did not complete" card
+    // even though the actual session content (exercises, warmup, cooldown,
+    // dosage, prescription) was completely valid.
+    //
+    // Contract: style packaging is a *late, optional* enhancement layer.
+    // If it fails after `validatedSession.exercises` is healthy, we
+    // attach an honest straight_sets fallback styleMetadata that does
+    // NOT fake any grouped-method truth, log a precise audit, and let
+    // the validated session ship. Hard failures upstream (where the
+    // exercise list itself is invalid) are *not* changed by this guard
+    // — they continue to throw as before because validatedSession is
+    // already trusted by the time we reach this corridor.
+    //
+    // Honest fallback shape:
+    //   - primaryStyle: 'straight_sets'
+    //   - hasSupersetsApplied / hasCircuitsApplied / hasDensityApplied: false
+    //   - appliedMethods: []   (no methods actually applied)
+    //   - rejectedMethods: [] (we don't know what was rejected — be honest)
+    //   - styledGroups: []     (no grouped truth invented)
+    //   - methodDecisionEvidence: a sentinel payload marking this as a
+    //     style-corridor fallback so audit consumers can distinguish
+    //     "preference-only because bundle was absent" from "fallback
+    //     because style packaging itself failed".
+    let styleResult: ReturnType<typeof applySessionStylePreferences>
+    let stylePhaseFellBack = false
+    let stylePhaseErrorMessage: string | null = null
+    try {
+      styleResult = applySessionStylePreferences(styleInput)
+    } catch (styleErr) {
+      stylePhaseFellBack = true
+      stylePhaseErrorMessage = styleErr instanceof Error ? styleErr.message : String(styleErr)
+      console.error('[style-phase-fallback-engaged]', {
+        dayNumber: day.dayNumber,
+        dayFocus: day.focus,
+        validatedExerciseCount: validatedSession.exercises.length,
+        coreSessionWasHealthy: validatedSession.exercises.length > 0,
+        errorName: styleErr instanceof Error ? styleErr.name : 'unknown',
+        errorMessage: stylePhaseErrorMessage.slice(0, 200),
+        stack: styleErr instanceof Error ? styleErr.stack?.split('\n').slice(0, 5).join('\n') : undefined,
+        verdict: 'STYLE_FALLBACK_TO_STRAIGHT_SETS_CORE_SESSION_PRESERVED',
+      })
+      styleResult = {
+        styledGroups: [],
+        appliedMethods: [],
+        rejectedMethods: [],
+        styleMetadata: {
+          primarySessionStyle: 'straight_sets',
+          hasSupersetsApplied: false,
+          hasCircuitsApplied: false,
+          hasDensityApplied: false,
+          structureDescription:
+            'Straight sets (style packaging fallback — core session preserved)',
+        },
+        methodDecisionEvidence: {
+          bundleConfidence: bundleSignals?.bundleConfidenceLevel ?? 'none',
+          bundleSignalsAvailable: [],
+          decisions: (trainingMethodPreferences || []).map(method => ({
+            method,
+            outcome: 'deferred' as const,
+            drivers: [],
+            blockers: ['style_corridor_fallback'],
+            evidenceConfidence: bundleSignals?.bundleConfidenceLevel ?? 'none',
+            bundleSignalsConsumed: [],
+          })),
+          bundleMateriallyChangedOutcome: false,
+        },
+      }
+    }
+
     // [PHASE 7A TASK 7] Add style metadata to session
     // [PHASE 3G NEON-BACKED METHOD MATERIALITY] methodDecisionEvidence is
     // pinned onto the session here so it survives every persistence and
@@ -26435,6 +26531,13 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       rejectedMethods: styleResult.rejectedMethods,
       styledGroups: styleResult.styledGroups,
       methodDecisionEvidence: styleResult.methodDecisionEvidence,
+      // [STYLE-PHASE DEGRADE CARD ROOT FIX] Surface the fallback flag
+      // onto session metadata so downstream audit/observability can
+      // count style-fallback rates without reparsing logs.
+      stylePhaseFellBack,
+      stylePhaseFallbackReason: stylePhaseFellBack
+        ? (stylePhaseErrorMessage?.slice(0, 200) ?? 'unknown_style_fallback')
+        : null,
     }
 
     // [PHASE 3G NEON-BACKED METHOD MATERIALITY] Builder-side audit log

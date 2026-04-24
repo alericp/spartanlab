@@ -2798,6 +2798,152 @@ function selectMainExercises(
     return { candidates: fallback, source: 'transfer_fallback' }
   }
 
+  // ==========================================================================
+  // [PHASE 2B CANONICAL SPECIFICITY LOCK]
+  // ==========================================================================
+  // Picks the SINGLE best canonical candidate for a selected skill, using
+  // proximity to `currentWorkingProgression` as the dominant criterion.
+  //
+  // WHY THIS EXISTS
+  // ---------------
+  // Phase 1B guaranteed selected-skill SURVIVAL into the committed session.
+  // But every call site (tertiary injection, support injection, realism
+  // reroutes, and the PHASE1B-FINAL-SELECTED-SKILL-COMMIT pass) then picked
+  // `filtered[0]` / `sorted[0]` / first `.find(...)` match. Because
+  // `ADVANCED_SKILL_FAMILIES.directProgressions` is registered in
+  // low→high order AND `filterByCurrentProgression` lets every rung up
+  // through `currentLevelIndex + 1` survive, index 0 was always the
+  // EASIEST rung — a `straddle_planche`-capable athlete kept receiving
+  // `tuck_planche` committed rows.
+  //
+  // WHAT IT DOES
+  // ------------
+  // For each candidate, it derives the exercise's ladder position using the
+  // same substring match already used by `isExerciseWithinCurrentProgression`
+  // (so nothing drifts from the authoritative realism gate). It then scores:
+  //
+  //   +100 exact match with currentWorkingProgression     (most canonical)
+  //   +90  one rung below current (prime working-set)
+  //   +80  one rung above current (realistic bridge)
+  //   +70  two rungs below (canonical but less specific)
+  //   +60  any other ladder-matched rung
+  //   +40  exercise has no detected ladder position (accessory-class)
+  //
+  // Within the same proximity tier, carryover (desc) then fatigueCost (asc)
+  // break ties so heavier rings variants lose to the cleaner textbook rung.
+  //
+  // WHAT IT DOES NOT TOUCH
+  // ----------------------
+  //   - progression cap owner (still `filterByCurrentProgression`)
+  //   - canonical registry (still ADVANCED_SKILL_FAMILIES + getAdvancedSkillSupport)
+  //   - survival contract (Phase 1B final-commit pass still runs unchanged;
+  //     this only improves WHICH exercise represents the skill, never whether
+  //     it appears)
+  //   - mirror / UI / live runtime
+  const pickBestCanonicalCandidate = (
+    candidates: Exercise[],
+    skillKey: string
+  ): {
+    exercise: Exercise | null
+    matchQuality: 'exact' | 'one_below' | 'one_above_bridge' | 'regression' | 'other_ladder' | 'no_ladder'
+    exerciseLevel: string
+    specificityScore: number
+  } => {
+    if (candidates.length === 0) {
+      return { exercise: null, matchQuality: 'no_ladder', exerciseLevel: 'none', specificityScore: 0 }
+    }
+
+    const currentProgression = getAuthoritativeProgression(skillKey)
+    const normalizedSkill = safeLower(skillKey).replace(/_/g, '')
+    const ladder = PROGRESSION_LEVEL_ORDER[normalizedSkill]
+
+    // No ladder or no working progression data -> keep registry order but
+    // still prefer higher carryover / lower fatigue for tie-break.
+    if (!currentProgression || !ladder) {
+      const ranked = [...candidates].sort((a, b) => {
+        const coDiff = (b.carryover || 0) - (a.carryover || 0)
+        if (coDiff !== 0) return coDiff
+        return (a.fatigueCost || 3) - (b.fatigueCost || 3)
+      })
+      return {
+        exercise: ranked[0],
+        matchQuality: 'no_ladder',
+        exerciseLevel: 'unknown',
+        specificityScore: 40,
+      }
+    }
+
+    const currentLower = safeLower(currentProgression)
+    const currentLevelIndex = ladder.findIndex(level => currentLower.includes(level))
+    if (currentLevelIndex === -1) {
+      // Current level unrecognized -> degrade to registry-order + tiebreak.
+      const ranked = [...candidates].sort((a, b) => {
+        const coDiff = (b.carryover || 0) - (a.carryover || 0)
+        if (coDiff !== 0) return coDiff
+        return (a.fatigueCost || 3) - (b.fatigueCost || 3)
+      })
+      return {
+        exercise: ranked[0],
+        matchQuality: 'no_ladder',
+        exerciseLevel: 'unknown',
+        specificityScore: 40,
+      }
+    }
+
+    type Scored = {
+      exercise: Exercise
+      exerciseLevelIndex: number
+      exerciseLevel: string
+      score: number
+      quality: 'exact' | 'one_below' | 'one_above_bridge' | 'regression' | 'other_ladder' | 'no_ladder'
+    }
+
+    const scored: Scored[] = candidates.map(ex => {
+      const idLower = safeExerciseId(ex)
+      const nameLower = safeExerciseName(ex)
+      let exerciseLevelIndex = -1
+      let exerciseLevel = 'unknown'
+      for (let i = 0; i < ladder.length; i++) {
+        const level = ladder[i]
+        if (idLower.includes(level) || nameLower.includes(level.replace(/_/g, ' '))) {
+          exerciseLevelIndex = i
+          exerciseLevel = level
+          break
+        }
+      }
+
+      if (exerciseLevelIndex === -1) {
+        return { exercise: ex, exerciseLevelIndex, exerciseLevel, score: 40, quality: 'no_ladder' as const }
+      }
+
+      const delta = exerciseLevelIndex - currentLevelIndex
+      if (delta === 0) return { exercise: ex, exerciseLevelIndex, exerciseLevel, score: 100, quality: 'exact' as const }
+      if (delta === -1) return { exercise: ex, exerciseLevelIndex, exerciseLevel, score: 90, quality: 'one_below' as const }
+      if (delta === 1) return { exercise: ex, exerciseLevelIndex, exerciseLevel, score: 80, quality: 'one_above_bridge' as const }
+      if (delta === -2) return { exercise: ex, exerciseLevelIndex, exerciseLevel, score: 70, quality: 'regression' as const }
+      // delta <= -3 or delta >= 2 (delta >= 2 would have been blocked by
+      // filterByCurrentProgression upstream, but we keep the branch for
+      // direct-candidate callers that bypass the gate — they still get
+      // canonical priority over non-ladder candidates).
+      return { exercise: ex, exerciseLevelIndex, exerciseLevel, score: 60, quality: 'other_ladder' as const }
+    })
+
+    scored.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score
+      const coDiff = (b.exercise.carryover || 0) - (a.exercise.carryover || 0)
+      if (coDiff !== 0) return coDiff
+      return (a.exercise.fatigueCost || 3) - (b.exercise.fatigueCost || 3)
+    })
+
+    const best = scored[0]
+    return {
+      exercise: best.exercise,
+      matchQuality: best.quality,
+      exerciseLevel: best.exerciseLevel,
+      specificityScore: best.score,
+    }
+  }
+
   const selected: SelectedExercise[] = []
   const usedIds = new Set<string>()
   
@@ -5612,8 +5758,19 @@ const added = addExercise(
                 for (const s of advSupport.secondary) for (const id of s.exerciseIds) supportIds.add(id)
                 for (const id of advSupport.trunk.exerciseIds) supportIds.add(id)
                 const reroutePool = [...availableSkills, ...availableStrength, ...availableAccessory]
-                rerouteCandidate = reroutePool.find(e => supportIds.has(e.id) && !usedIds.has(e.id)) || null
-                if (rerouteCandidate) rerouteSource = 'canonical_support_reroute'
+                // [PHASE 2B] Collect ALL valid support candidates then proximity-rank,
+                // instead of `find(...)` which returned first-in-pool order (typically
+                // the highest-ranked-fatigue ring variant). The same pickBest helper
+                // used by direct sites keeps the reroute selection canonical and
+                // progression-closest for consistency.
+                const rerouteCandidatesAll = reroutePool.filter(
+                  e => supportIds.has(e.id) && !usedIds.has(e.id)
+                )
+                if (rerouteCandidatesAll.length > 0) {
+                  const rerouted = pickBestCanonicalCandidate(rerouteCandidatesAll, tertiaryEntry.skill)
+                  rerouteCandidate = rerouted.exercise
+                  if (rerouteCandidate) rerouteSource = 'canonical_support_reroute'
+                }
               }
             } catch {
               // canonical support lookup failed; fall through to deferral
@@ -5674,18 +5831,19 @@ const added = addExercise(
           continue
         }
 
-        // Rank progression-safe candidates. For canonical_direct source the
-        // registry already lists them in low→high progression order, so we
-        // preserve that order first; otherwise prefer higher carryover then
-        // lower fatigue to stay realistic on compound sessions.
-        const sorted = canonicalSource === 'canonical_direct'
-          ? progressionSafe
-          : [...progressionSafe].sort((a, b) => {
-              const carryoverDiff = (b.exercise.carryover || 0) - (a.exercise.carryover || 0)
-              if (carryoverDiff !== 0) return carryoverDiff
-              return (a.exercise.fatigueCost || 3) - (b.exercise.fatigueCost || 3)
-            })
-        const selectedTertiaryExercise = sorted[0].exercise
+        // [PHASE 2B CANONICAL SPECIFICITY LOCK] Rank by proximity to the user's
+        // `currentWorkingProgression`. Previously this site took `sorted[0]`
+        // where `sorted` preserved registry order for canonical_direct — which
+        // is low→high — so the LOWEST rung the realism cap permitted was
+        // always committed. pickBestCanonicalCandidate prefers: exact match
+        // (+100) > one_below (+90) > one_above_bridge (+80) > regression (+70)
+        // > other_ladder (+60) > no_ladder (+40), carryover/fatigue as tie-
+        // break. This is the direct cause of "tertiary present but weak".
+        const tertiaryPick = pickBestCanonicalCandidate(
+          progressionSafe.map(p => p.exercise),
+          tertiaryEntry.skill
+        )
+        const selectedTertiaryExercise = tertiaryPick.exercise!
 
         // Canonical doctrine source for traceability (used by auditors +
         // OnboardingTruthExpressionAudit). canonical_direct is the strongest
@@ -5739,6 +5897,10 @@ const added = addExercise(
             canonicalSource,
             progressionCapBlockedCount: progressionAudit.blockedCount,
             currentWorkingProgression: tertiaryEntry.currentWorkingProgression,
+            // [PHASE 2B] Proximity-based pick trace for visible-quality auditing.
+            matchQuality: tertiaryPick.matchQuality,
+            pickedExerciseLevel: tertiaryPick.exerciseLevel,
+            specificityScore: tertiaryPick.specificityScore,
           })
         } else {
           tertiarySkillsDeferred.push({
@@ -5845,7 +6007,14 @@ const added = addExercise(
                 for (const s of advSupport.secondary) for (const id of s.exerciseIds) supportIds.add(id)
                 for (const id of advSupport.trunk.exerciseIds) supportIds.add(id)
                 const reroutePool = [...availableSkills, ...availableStrength, ...availableAccessory]
-                rerouteCandidate = reroutePool.find(e => supportIds.has(e.id) && !usedIds.has(e.id)) || null
+                // [PHASE 2B] Collect all valid support candidates, proximity-rank.
+                const rerouteCandidatesAll = reroutePool.filter(
+                  e => supportIds.has(e.id) && !usedIds.has(e.id)
+                )
+                if (rerouteCandidatesAll.length > 0) {
+                  const rerouted = pickBestCanonicalCandidate(rerouteCandidatesAll, supportEntry.skill)
+                  rerouteCandidate = rerouted.exercise
+                }
               }
             } catch {
               // canonical support lookup failed; fall through to deferral
@@ -5896,15 +6065,19 @@ const added = addExercise(
           continue
         }
 
-        // Rank: prefer canonical order for registry-sourced, else carryover then lower fatigue.
-        const sorted = canonicalSource === 'canonical_direct' || canonicalSource === 'canonical_support'
-          ? progressionSafe
-          : [...progressionSafe].sort((a, b) => {
-              const carryoverDiff = (b.exercise.carryover || 0) - (a.exercise.carryover || 0)
-              if (carryoverDiff !== 0) return carryoverDiff
-              return (a.exercise.fatigueCost || 3) - (b.exercise.fatigueCost || 3)
-            })
-        const selectedSupportExercise = sorted[0].exercise
+        // [PHASE 2B CANONICAL SPECIFICITY LOCK] Proximity-ranked support pick.
+        // Support intent canonically maps to `canonical_support` (sub-skill /
+        // structural support patterns), but for advanced skills canonical_direct
+        // can also be returned when direct rungs overlap the support layer.
+        // Either way, we want the rung CLOSEST to currentWorkingProgression,
+        // not the easiest. Previously `sorted[0]` = first-in-registry-order
+        // silently demoted the support slot to ring rows / scapular pulls
+        // even when a straddle-level rung was fully valid.
+        const supportPick = pickBestCanonicalCandidate(
+          progressionSafe.map(p => p.exercise),
+          supportEntry.skill
+        )
+        const selectedSupportExercise = supportPick.exercise!
 
         const doctrineSource: DoctrineSourceTrace | null =
           canonicalSource === 'canonical_direct'
@@ -5942,6 +6115,10 @@ const added = addExercise(
             canonicalSource,
             progressionCapBlockedCount: progressionAudit.blockedCount,
             currentWorkingProgression: supportEntry.currentWorkingProgression,
+            // [PHASE 2B] Proximity-based pick trace for visible-quality auditing.
+            matchQuality: supportPick.matchQuality,
+            pickedExerciseLevel: supportPick.exerciseLevel,
+            specificityScore: supportPick.specificityScore,
           })
         } else {
           supportSkillsDeferred.push({
@@ -6491,7 +6668,16 @@ const added = addExercise(
   // ==========================================================================
   {
     const finalCommitRestoredRows: string[] = []
-    const finalCommitNewInjections: Array<{ skill: string; via: 'direct' | 'support' }> = []
+    // [PHASE 2B] Enriched trace: record matchQuality + specificityScore so the
+    // verdict log reveals not just WHICH skill was injected, but HOW CANONICAL
+    // the chosen exercise was relative to currentWorkingProgression.
+    const finalCommitNewInjections: Array<{
+      skill: string
+      via: 'direct' | 'support'
+      matchQuality?: string
+      specificityScore?: number
+      exerciseLevel?: string
+    }> = []
     const finalCommitEvicted: Array<{ exerciseId: string; reason: string }> = []
     const finalCommitDeferred: Array<{ skill: string; reason: string }> = []
 
@@ -6606,16 +6792,30 @@ const added = addExercise(
       let chosen: Exercise | null = null
       let via: 'direct' | 'support' = 'direct'
 
+      // [PHASE 2B CANONICAL SPECIFICITY LOCK] Final-commit direct pick now
+      // uses proximity ranking so the rescued/restored exercise matches the
+      // user's currentWorkingProgression instead of being the lowest rung
+      // permitted by the realism cap. Capturing matchQuality + specificityScore
+      // for the final-commit verdict log.
+      let finalMatchQuality: string = 'n/a'
+      let finalSpecificityScore = 0
+      let finalExerciseLevel = 'none'
       if (directCandidates.length > 0) {
         const wrapped = directCandidates.map(e => ({ exercise: e }))
         const { filtered } = filterByCurrentProgression(wrapped, entry.skill)
         if (filtered.length > 0) {
-          chosen = filtered[0].exercise
-          via = 'direct'
+          const pick = pickBestCanonicalCandidate(filtered.map(f => f.exercise), entry.skill)
+          if (pick.exercise) {
+            chosen = pick.exercise
+            via = 'direct'
+            finalMatchQuality = pick.matchQuality
+            finalSpecificityScore = pick.specificityScore
+            finalExerciseLevel = pick.exerciseLevel
+          }
         }
       }
 
-      // PART D: realism reroute to canonical_support
+      // PART D: realism reroute to canonical_support, proximity-ranked.
       if (!chosen) {
         try {
           const advSupport = getAdvancedSkillSupport(entry.skill)
@@ -6625,10 +6825,18 @@ const added = addExercise(
             for (const s of advSupport.secondary) for (const id of s.exerciseIds) supportIds.add(id)
             for (const id of advSupport.trunk.exerciseIds) supportIds.add(id)
             const reroutePool = [...availableSkills, ...availableStrength, ...availableAccessory]
-            const supportCandidate = reroutePool.find(e => supportIds.has(e.id) && !usedIds.has(e.id)) || null
-            if (supportCandidate) {
-              chosen = supportCandidate
-              via = 'support'
+            const rerouteCandidatesAll = reroutePool.filter(
+              e => supportIds.has(e.id) && !usedIds.has(e.id)
+            )
+            if (rerouteCandidatesAll.length > 0) {
+              const pick = pickBestCanonicalCandidate(rerouteCandidatesAll, entry.skill)
+              if (pick.exercise) {
+                chosen = pick.exercise
+                via = 'support'
+                finalMatchQuality = pick.matchQuality
+                finalSpecificityScore = pick.specificityScore
+                finalExerciseLevel = pick.exerciseLevel
+              }
             }
           }
         } catch {
@@ -6696,14 +6904,26 @@ const added = addExercise(
       if (enforcedExercises.length < maxExercises) {
         enforcedExercises.push(newRow)
         usedIds.add(chosen.id)
-        finalCommitNewInjections.push({ skill: entry.skill, via })
+        finalCommitNewInjections.push({
+          skill: entry.skill,
+          via,
+          matchQuality: finalMatchQuality,
+          specificityScore: finalSpecificityScore,
+          exerciseLevel: finalExerciseLevel,
+        })
       } else {
         const victimIdx = findEvictionVictimIndex()
         if (victimIdx >= 0) {
           const victim = enforcedExercises[victimIdx]
           enforcedExercises.splice(victimIdx, 1, newRow)
           usedIds.add(chosen.id)
-          finalCommitNewInjections.push({ skill: entry.skill, via })
+          finalCommitNewInjections.push({
+            skill: entry.skill,
+            via,
+            matchQuality: finalMatchQuality,
+            specificityScore: finalSpecificityScore,
+            exerciseLevel: finalExerciseLevel,
+          })
           finalCommitEvicted.push({
             exerciseId: victim.exercise.id,
             reason: `evicted_to_inject_obligation(${entry.skill}/${via})`,

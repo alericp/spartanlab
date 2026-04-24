@@ -4290,16 +4290,26 @@ interface RowMethodTruth {
   isGroupedMember: boolean
   /**
    * True when the row should paint the flat METHOD OWNERSHIP PANEL below its
-   * prescription line. Strictly: family ∈ {cluster, density} AND not grouped
-   * AND not warm-up. Superset/circuit are grouped-structure by doctrine and
+   * prescription line. Strictly: family ∈ row-level set-execution set
+   * {cluster, density, top_set, drop_set, rest_pause} AND not grouped AND not
+   * warm-up. Superset/circuit are grouped-structure by doctrine and
    * intentionally never paint the flat panel; if they leak onto a flat row
    * (builder bug / variant drift), the tiny 8px fallback chip in Row 1 handles
    * them and does NOT promote to a full panel -- promotion would be dishonest
    * because those methods' meaning requires a grouped partner.
+   *
+   * [PHASE-3E ROW-LEVEL SET-EXECUTION VISIBLE TRUTH LOCK]
+   * Previously this was hard-gated to `cluster | density` only. That meant
+   * top_set / drop_set / rest_pause truth (which the builder + selector +
+   * resolver all preserved) reached the row, was recognised by `family`, and
+   * then silently produced zero visible surface -- the user's "drop-set
+   * truth implied but invisible" symptom. The panel is the single visible
+   * owner of row-level set-execution truth, so all five row-level families
+   * paint through it.
    */
   shouldPaintPanel: boolean
-  /** 'cluster' or 'density' when shouldPaintPanel, else null. */
-  panelVariant: 'cluster' | 'density' | null
+  /** Set-execution panel variant when shouldPaintPanel, else null. */
+  panelVariant: 'cluster' | 'density' | 'top_set' | 'drop_set' | 'rest_pause' | null
   /** Uppercase-ready label for panel or chip. */
   label: string | null
   /** One-sentence execution-focused description for the panel. */
@@ -4346,12 +4356,21 @@ function resolveRowMethodTruth(
   else if (raw === 'top_set') family = 'top_set'
   else if (raw === 'drop_set') family = 'drop_set'
 
-  const paintableFamily = family === 'cluster' || family === 'density'
+  // [PHASE-3E ROW-LEVEL SET-EXECUTION VISIBLE TRUTH LOCK]
+  // The row-level set-execution family set is taxonomy-locked to these five.
+  // Superset/circuit are grouped-structure -- not row-level -- and never
+  // paint the flat panel even when they leak onto a flat row.
+  const paintableFamily =
+    family === 'cluster' ||
+    family === 'density' ||
+    family === 'top_set' ||
+    family === 'drop_set' ||
+    family === 'rest_pause'
   const shouldPaintPanel = paintableFamily && !isGroupedMember && !isWarmup
 
   let label: string | null = null
   let execLine: string | null = null
-  let panelVariant: 'cluster' | 'density' | null = null
+  let panelVariant: RowMethodTruth['panelVariant'] = null
   if (family === 'cluster') {
     label = 'Cluster Set'
     execLine = 'Brief 10-20s intra-set rests to preserve rep quality, full rest between sets.'
@@ -4360,6 +4379,26 @@ function resolveRowMethodTruth(
     label = 'Density Block'
     execLine = 'Complete prescribed work within the timed window, short rests between rounds.'
     if (shouldPaintPanel) panelVariant = 'density'
+  } else if (family === 'top_set') {
+    // Heavy single working set, then back-off volume. The panel is the only
+    // visible carrier of this truth -- prior to Phase 3E this row painted
+    // identical to a straight set even when the builder wrote top_set.
+    label = 'Top Set + Back-Off'
+    execLine = 'One heavy working set at target effort, then back-off sets at reduced load to bank volume.'
+    if (shouldPaintPanel) panelVariant = 'top_set'
+  } else if (family === 'drop_set') {
+    // Mechanical / load-drop continuation past first failure. Visible as a
+    // distinct panel so users can see drop_set truth on the program surface
+    // without entering live runtime.
+    label = 'Drop Set'
+    execLine = 'Run the prescribed set to target effort, then immediately reduce load and continue with no rest.'
+    if (shouldPaintPanel) panelVariant = 'drop_set'
+  } else if (family === 'rest_pause') {
+    // Short intra-set pauses to extend a working set past first stop. Row-
+    // level method, not a grouped block -- panel is the authoritative owner.
+    label = 'Rest-Pause'
+    execLine = 'Push the working set to target effort, rack-pause 10-20s, then resume for additional reps until cap.'
+    if (shouldPaintPanel) panelVariant = 'rest_pause'
   } else if (family === 'superset') {
     label = 'Superset'
   } else if (family === 'circuit') {
@@ -4708,13 +4747,61 @@ function ExerciseRow({
           frame; if they leak onto a flat row the small fallback chip in
           Row 1 remains. Straight rows render zero method surface. */}
       {rowMethodTruth.shouldPaintPanel && rowMethodTruth.panelVariant && (() => {
-        const isCluster = rowMethodTruth.panelVariant === 'cluster'
-        const Icon = isCluster ? Repeat : Timer
-        const railColor = isCluster ? 'bg-purple-500' : 'bg-amber-500'
-        const iconTileBg = isCluster ? 'bg-purple-500/20' : 'bg-amber-500/20'
-        const iconColor = isCluster ? 'text-purple-300' : 'text-amber-300'
-        const labelColor = isCluster ? 'text-purple-200' : 'text-amber-200'
-        const execColor = isCluster ? 'text-purple-300/90' : 'text-amber-300/90'
+        // [PHASE-3E ROW-LEVEL SET-EXECUTION VISIBLE TRUTH LOCK]
+        // Per-variant visual treatment for all five row-level set-execution
+        // methods. Each variant gets a distinct rail color + icon so the user
+        // can visibly tell apart cluster / density / top-set / drop-set /
+        // rest-pause rows at a glance, without entering live workout runtime.
+        // The structural template (rail + icon tile + label + exec line) is
+        // identical across variants -- only color and icon vary -- so the
+        // visual vocabulary stays consistent and there's no UI redesign.
+        const variant = rowMethodTruth.panelVariant
+        // Icon mapping uses already-imported lucide icons:
+        //   cluster   -> Repeat   (intra-set bursts then resume)
+        //   density   -> Timer    (timed window)
+        //   top_set   -> Dumbbell (one heavy working set)
+        //   drop_set  -> Layers   (descending load layers)
+        //   rest_pause-> Zap      (short pause then continue)
+        const Icon =
+          variant === 'cluster' ? Repeat
+          : variant === 'density' ? Timer
+          : variant === 'top_set' ? Dumbbell
+          : variant === 'drop_set' ? Layers
+          : Zap
+        // Color palette: existing cluster=purple / density=amber kept; new
+        // row-level variants use rose / orange / teal to stay distinguishable
+        // from grouped methods (superset=blue, circuit=emerald) without
+        // adding new pages of color tokens.
+        const railColor =
+          variant === 'cluster' ? 'bg-purple-500'
+          : variant === 'density' ? 'bg-amber-500'
+          : variant === 'top_set' ? 'bg-rose-500'
+          : variant === 'drop_set' ? 'bg-orange-500'
+          : 'bg-teal-500'
+        const iconTileBg =
+          variant === 'cluster' ? 'bg-purple-500/20'
+          : variant === 'density' ? 'bg-amber-500/20'
+          : variant === 'top_set' ? 'bg-rose-500/20'
+          : variant === 'drop_set' ? 'bg-orange-500/20'
+          : 'bg-teal-500/20'
+        const iconColor =
+          variant === 'cluster' ? 'text-purple-300'
+          : variant === 'density' ? 'text-amber-300'
+          : variant === 'top_set' ? 'text-rose-300'
+          : variant === 'drop_set' ? 'text-orange-300'
+          : 'text-teal-300'
+        const labelColor =
+          variant === 'cluster' ? 'text-purple-200'
+          : variant === 'density' ? 'text-amber-200'
+          : variant === 'top_set' ? 'text-rose-200'
+          : variant === 'drop_set' ? 'text-orange-200'
+          : 'text-teal-200'
+        const execColor =
+          variant === 'cluster' ? 'text-purple-300/90'
+          : variant === 'density' ? 'text-amber-300/90'
+          : variant === 'top_set' ? 'text-rose-300/90'
+          : variant === 'drop_set' ? 'text-orange-300/90'
+          : 'text-teal-300/90'
         return (
           <div
             className="mt-2 flex items-stretch gap-2 rounded-md bg-[#121212] border border-[#262626] overflow-hidden"

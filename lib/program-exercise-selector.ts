@@ -754,6 +754,31 @@ export interface SelectedExercise {
                  'fallback_after_validation' | null
   // [exercise-trace] TASK 2: Full selection traceability
   selectionTrace?: ExerciseSelectionTrace
+  // [PHASE-1B-CONTEXT-WIRE] Session-assembly classifier context.
+  // Pre-Phase-1B, ~13 read sites (lines 5209, 5326, 6096, 6310, 6458, 6690 et al.)
+  // consumed `selectionContext?.sessionRole`, `selectionContext?.influencingSkills`,
+  // and `selectionContext?.primarySelectionReason` to classify each row into
+  // primary / secondary / support / other buckets for the session-architecture
+  // enforcement pass. However, this field was NEVER populated anywhere — a
+  // dead wire. That is why selected secondary/tertiary skills appeared in
+  // upstream selector logic but invisibly collapsed into the `currentOther`
+  // bucket during architecture slot-count enforcement, which then trimmed
+  // them under `maxExercises` pressure.
+  //
+  // This field is now populated by `addExercise` directly from the same
+  // traceContext used for `selectionTrace`. Downstream classifiers require
+  // NO code changes — the existing reads simply start returning real data.
+  selectionContext?: {
+    primarySelectionReason: string
+    sessionRole: string
+    expressionMode: string
+    influencingSkills: Array<{
+      skillId: string
+      influence: 'primary' | 'secondary' | 'selected' | 'limiter_related'
+      expressionMode: string
+    }>
+    doctrineSource: DoctrineSourceTrace | null
+  }
   // [LIVE-EXECUTION-TRUTH] Authoritative runtime execution contract
   // This replaces heuristic-based band/progression detection in the live workout runner
   executionTruth?: {
@@ -3522,6 +3547,26 @@ function selectMainExercises(
     noLoadReason,
     // [exercise-trace] TASK 2: Attach the trace
     selectionTrace,
+    // [PHASE-1B-CONTEXT-WIRE] Populate the session-assembly classifier context.
+    // This is the wire the 13 downstream `selectionContext?.sessionRole` /
+    // `selectionContext?.influencingSkills` / `selectionContext?.primarySelectionReason`
+    // reads have been starving on. By projecting traceContext here (same source
+    // of truth as selectionTrace) every upstream addExercise call site
+    // automatically gets correct classification data — no per-site edits needed.
+    // When traceContext is undefined we still derive a usable fallback from
+    // the selectionTrace we just built, so legacy addExercise invocations that
+    // don't pass traceContext also benefit.
+    selectionContext: {
+      primarySelectionReason: traceContext?.primarySelectionReason ?? selectionTrace.primarySelectionReason,
+      sessionRole: traceContext?.sessionRole ?? selectionTrace.sessionRole,
+      expressionMode: traceContext?.expressionMode ?? selectionTrace.expressionMode,
+      influencingSkills: (traceContext?.influencingSkills ?? selectionTrace.influencingSkills).map(s => ({
+        skillId: s.skillId,
+        influence: s.influence,
+        expressionMode: s.expressionMode,
+      })),
+      doctrineSource: traceContext?.doctrineSource ?? selectionTrace.doctrineSource ?? null,
+    },
     // [LIVE-EXECUTION-TRUTH] Attach execution truth for live workout runner
     executionTruth,
     })
@@ -6601,21 +6646,40 @@ const added = addExercise(
 
       // Build a SelectedExercise row directly (we are past the addExercise/
       // canAddMore phase by design — this is the final commit reservation).
+      // Build a well-typed ExerciseSelectionTrace using the canonical minimal-
+      // trace helper, then override the Phase 1B-relevant fields. Using
+      // `createMinimalTrace` (exported from engine-quality-contract.ts) keeps
+      // us schema-valid across every required field (candidatePoolSummary,
+      // rejectedAlternatives, equipmentDecision, loadabilityInfluence, etc.)
+      // without duplicating the contract here.
+      const synthesizedTrace: ExerciseSelectionTrace = {
+        ...createMinimalTrace(chosen.id, chosen.name, 'main', 'final_commit_obligation'),
+        sessionRole: via === 'direct' ? 'skill_secondary' : 'accessory',
+        expressionMode: via === 'direct' ? 'technical_focus' : 'strength_support',
+        primarySelectionReason: 'selected_skill_final_obligation' as ExerciseSelectionReason,
+        influencingSkills: [{
+          skillId: entry.skill,
+          influence: 'selected',
+          expressionMode: via === 'direct' ? 'technical' : 'support',
+        }],
+        doctrineSource: {
+          doctrineSource: via === 'direct'
+            ? `ADVANCED_SKILL_FAMILIES.${entry.skill}.directProgressions(final_commit)`
+            : `getAdvancedSkillSupport.${entry.skill}(final_commit_reroute)`,
+          triggeringSkill: entry.skill,
+          doctrineType: via === 'direct' ? 'direct' : 'support',
+        },
+        confidence: 0.85,
+        traceQuality: 'partial',
+      }
       const newRow: SelectedExercise = {
         exercise: chosen,
-        sets: chosen.defaultSets || (chosen.category === 'skill' ? 3 : 3),
+        sets: chosen.defaultSets || 3,
         repsOrTime: chosen.defaultRepsOrTime || chosen.reps || chosen.time
           || (chosen.category === 'skill' ? '10-20s' : chosen.category === 'core' ? '30s' : '8-12'),
         isOverrideable: true,
         selectionReason: `[Final Skill Obligation] ${entry.skill.replace(/_/g, ' ')} (${via})`,
-        selectionTrace: {
-          exerciseId: chosen.id,
-          exerciseName: chosen.name,
-          reason: 'fallback_rescue' as const,
-          expressionMode: via === 'direct' ? 'direct' : 'support',
-          sessionRole: via === 'direct' ? 'skill_secondary' : 'accessory',
-          source: { type: 'doctrine', ruleName: `final_obligation_${entry.role}` },
-        },
+        selectionTrace: synthesizedTrace,
         selectionContext: {
           primarySelectionReason: 'selected_skill_final_obligation',
           sessionRole: via === 'direct' ? 'skill_secondary' : 'accessory',
@@ -6625,12 +6689,7 @@ const added = addExercise(
             influence: 'selected',
             expressionMode: via === 'direct' ? 'technical' : 'support',
           }],
-          doctrineSource: {
-            type: 'skill_doctrine',
-            ruleId: via === 'direct'
-              ? `ADVANCED_SKILL_FAMILIES.${entry.skill}.directProgressions(final_commit)`
-              : `getAdvancedSkillSupport.${entry.skill}(final_commit_reroute)`,
-          } as DoctrineSourceTrace,
+          doctrineSource: synthesizedTrace.doctrineSource,
         },
       }
 

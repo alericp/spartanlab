@@ -6643,42 +6643,92 @@ export function buildFallbackSelectionForSession(
   // ADVANCED_SKILL_FAMILIES.directProgressions + .supportPatterns.
   // ==========================================================================
   if (selectedSkills.length > 0) {
-    const skillTruthCandidates: Array<{
+    // ========================================================================
+    // [SELECTED-SKILL-FAIRNESS-FIX] 2-PASS FAIR CANDIDATE ASSEMBLY
+    //
+    // CONFIRMED UPSTREAM STARVATION (the first real dilution owner):
+    // The previous implementation used a SINGLE shared `alreadyCollected` set
+    // across all selected skills AND a sequential outer loop over skills. This
+    // meant the FIRST selected skill (typically the primary, e.g. front_lever)
+    // claimed every matching exercise in one pass -- including rows that
+    // would have been priority-3 direct progressions for LATER selected skills
+    // (e.g. back_lever, dragon_flag). Combined with a priority-only global
+    // sort and a fixed cap of 6, later selected skills frequently survived
+    // with ZERO rows in the taken set even when they had valid material in
+    // the equipment-filtered pool. That is why broader onboarding truth
+    // never made it to the Program page.
+    //
+    // THE FIX (first real owner only, no parallel truth, no new builder):
+    //   PASS A — collect each advanced selected skill's candidates into its
+    //   OWN per-skill bucket, WITHOUT a shared dedupe set. Same canonical
+    //   registry (ADVANCED_SKILL_FAMILIES), same equipment-filtered pools,
+    //   same 3-tier priority scoring.
+    //
+    //   PASS B — fair representation round(s): iterate selectedSkills in
+    //   order, take each skill's best-still-available candidate, dedupe by
+    //   exercise id in the taken set only (not during collection), repeat
+    //   up to a small per-skill guaranteed-representation floor.
+    //
+    //   PASS C — fill remaining cap from the globally pooled remainder
+    //   ranked by (priority desc, original order) so that once each skill
+    //   has had its fair shot, strong residual candidates still fill any
+    //   unused capacity.
+    //
+    // INVARIANTS PRESERVED:
+    //   - Equipment eligibility: unchanged (same `combinedAvailable`).
+    //   - Canonical truth: same `getAdvancedSkillFamily` / same
+    //     `exerciseTransfersToSkill`.
+    //   - Dedupe by exercise id: still enforced in the final `taken` set.
+    //   - Overall cap: still capped at 6 rows total (session budget).
+    //   - Downstream deficit cap: the caller (top-up repair) still caps
+    //     appended rows by `deficit`, so this cannot inflate past budget.
+    //   - Not equal-hard-exposure: the per-skill floor is a candidate
+    //     *opportunity*, not a dosage guarantee; final session assembly
+    //     decides actual usage.
+    // ========================================================================
+    type SkillCandidate = {
       exercise: Exercise
       ownerSkill: string
       matchReason: string
       priority: number // 3=direct progression, 2=support pattern, 1=transferTo
-    }> = []
+    }
 
-    const alreadyCollected = new Set<string>()
     const combinedAvailable = [...availableSkills, ...availableStrength, ...availableAccessory]
+
+    // PASS A: independent per-skill buckets (no cross-skill dedupe during collection)
+    const perSkillBuckets: Map<string, SkillCandidate[]> = new Map()
+    const advancedSkillsInSelection: string[] = []
 
     for (const skill of selectedSkills) {
       const family = getAdvancedSkillFamily(skill)
-      if (!family) continue // Skip non-advanced skills (generic goal fallback handles those)
+      if (!family) continue
+      advancedSkillsInSelection.push(skill)
 
       const directProgressionIds = new Set(
         (family.directProgressions || []).map(id => safeLower(id))
       )
       const supportPatterns = (family.supportPatterns || []).map(p => safeLower(p))
 
+      const bucket: SkillCandidate[] = []
+      const bucketSeen = new Set<string>() // per-skill dedupe only (intra-bucket)
+
       for (const ex of combinedAvailable) {
         const exIdLower = safeLower(ex.id)
-        if (!exIdLower || alreadyCollected.has(exIdLower)) continue
+        if (!exIdLower || bucketSeen.has(exIdLower)) continue
 
         // Priority 3: exact direct-progression id match
         if (directProgressionIds.has(exIdLower)) {
-          skillTruthCandidates.push({
+          bucket.push({
             exercise: ex,
             ownerSkill: skill,
             matchReason: `direct_progression_for_${skill}`,
             priority: 3,
           })
-          alreadyCollected.add(exIdLower)
+          bucketSeen.add(exIdLower)
           continue
         }
 
-        // Priority 2: support pattern match (movementFamily / movementPattern / tags)
+        // Priority 2: support pattern match
         const norm = getRescueNormalized(ex)
         if (norm && supportPatterns.length > 0) {
           const exTags = [
@@ -6687,39 +6737,105 @@ export function buildFallbackSelectionForSession(
             ...norm.tags.map(t => safeLower(t)),
           ].filter(Boolean)
           if (supportPatterns.some(p => exTags.some(t => t.includes(p)))) {
-            skillTruthCandidates.push({
+            bucket.push({
               exercise: ex,
               ownerSkill: skill,
               matchReason: `support_pattern_for_${skill}`,
               priority: 2,
             })
-            alreadyCollected.add(exIdLower)
+            bucketSeen.add(exIdLower)
             continue
           }
         }
 
-        // Priority 1: transferTo match (exercise declares it transfers to this skill)
+        // Priority 1: transferTo match
         if (exerciseTransfersToSkill(ex, skill)) {
-          skillTruthCandidates.push({
+          bucket.push({
             exercise: ex,
             ownerSkill: skill,
             matchReason: `transfers_to_${skill}`,
             priority: 1,
           })
-          alreadyCollected.add(exIdLower)
+          bucketSeen.add(exIdLower)
         }
       }
+
+      // Priority-sort inside each bucket so PASS B can pop the best first.
+      bucket.sort((a, b) => b.priority - a.priority)
+      perSkillBuckets.set(skill, bucket)
     }
 
-    if (skillTruthCandidates.length > 0) {
-      // Sort by priority desc, then stable
-      skillTruthCandidates.sort((a, b) => b.priority - a.priority)
+    const totalCandidatesCollected = Array.from(perSkillBuckets.values()).reduce(
+      (n, b) => n + b.length,
+      0
+    )
 
-      // Take up to 6 skill-truth candidates (covers sessions through 90 min
-      // where minExercises is 6). The top-up repair caps appended rows by
-      // its own `deficit`, so this cannot inflate sessions past budget.
+    if (totalCandidatesCollected > 0) {
       const skillTruthCap = 6
-      const taken = skillTruthCandidates.slice(0, skillTruthCap)
+
+      // Session-level dedupe — only applied while assembling `taken`.
+      const takenIds = new Set<string>()
+      const taken: SkillCandidate[] = []
+
+      // PASS B: fair per-skill representation rounds.
+      // Round 1: guarantee each skill with a non-empty bucket gets at least
+      //   its best candidate (up to cap).
+      // Round 2+: continue round-robin up to MIN_PER_SKILL_FLOOR before
+      //   falling through to global priority fill.
+      // Rationale: MIN_PER_SKILL_FLOOR=1 keeps the fix minimal. At 2 skills
+      // with cap 6 this is 2 guaranteed + 4 priority fill. At 4 skills this
+      // is 4 guaranteed + 2 priority fill. At 5+ skills, the first 5 each
+      // get 1 guaranteed slot via round-robin with no over-representation.
+      const MIN_PER_SKILL_FLOOR = 1
+
+      // Work against a mutable shallow copy of each bucket so we can pop
+      // best-first without mutating the original buckets (for auditability).
+      const workingBuckets: Map<string, SkillCandidate[]> = new Map()
+      for (const [skill, bucket] of perSkillBuckets) {
+        workingBuckets.set(skill, [...bucket])
+      }
+
+      for (let round = 0; round < MIN_PER_SKILL_FLOOR && taken.length < skillTruthCap; round++) {
+        for (const skill of advancedSkillsInSelection) {
+          if (taken.length >= skillTruthCap) break
+          const bucket = workingBuckets.get(skill)
+          if (!bucket || bucket.length === 0) continue
+          // Pop the best-not-yet-taken candidate from this skill's bucket.
+          let picked: SkillCandidate | null = null
+          while (bucket.length > 0) {
+            const cand = bucket.shift()!
+            const id = safeLower(cand.exercise.id)
+            if (id && !takenIds.has(id)) {
+              picked = cand
+              break
+            }
+          }
+          if (picked) {
+            const id = safeLower(picked.exercise.id)
+            if (id) takenIds.add(id)
+            taken.push(picked)
+          }
+        }
+      }
+
+      // PASS C: global priority fill from whatever remains in all buckets.
+      if (taken.length < skillTruthCap) {
+        const remaining: SkillCandidate[] = []
+        for (const bucket of workingBuckets.values()) {
+          for (const cand of bucket) {
+            const id = safeLower(cand.exercise.id)
+            if (id && !takenIds.has(id)) remaining.push(cand)
+          }
+        }
+        remaining.sort((a, b) => b.priority - a.priority)
+        for (const cand of remaining) {
+          if (taken.length >= skillTruthCap) break
+          const id = safeLower(cand.exercise.id)
+          if (!id || takenIds.has(id)) continue
+          takenIds.add(id)
+          taken.push(cand)
+        }
+      }
 
       rescuePath = 'selected_skill_truth'
       for (const cand of taken) {
@@ -6731,27 +6847,38 @@ export function buildFallbackSelectionForSession(
         )
       }
 
-      console.log('[SELECTED-SKILL-FALLBACK-TRUTH] Skill-truth candidates surfaced', {
+      // Auditable breakdown so callers can prove broader-skill representation.
+      const skillsWithCandidates = advancedSkillsInSelection.filter(
+        s => (perSkillBuckets.get(s) || []).length > 0
+      )
+      const skillsRepresentedInTaken = new Set(taken.map(c => c.ownerSkill))
+
+      console.log('[SELECTED-SKILL-FAIRNESS-FIX] Skill-truth candidates surfaced (2-pass fair)', {
         selectedSkillsCount: selectedSkills.length,
-        candidatesFound: skillTruthCandidates.length,
+        advancedSkillsInSelection,
+        perSkillBucketSizes: Object.fromEntries(
+          Array.from(perSkillBuckets.entries()).map(([s, b]) => [s, b.length])
+        ),
+        totalCandidatesCollected,
         appliedCount: taken.length,
-        byPriority: {
-          direct: skillTruthCandidates.filter(c => c.priority === 3).length,
-          supportPattern: skillTruthCandidates.filter(c => c.priority === 2).length,
-          transferTo: skillTruthCandidates.filter(c => c.priority === 1).length,
-        },
+        skillsWithCandidates,
+        skillsRepresentedInTaken: Array.from(skillsRepresentedInTaken),
+        skillsStarvedDespiteHavingCandidates: skillsWithCandidates.filter(
+          s => !skillsRepresentedInTaken.has(s)
+        ),
         appliedExercises: taken.map(c => ({
           id: c.exercise.id,
           name: c.exercise.name,
           ownerSkill: c.ownerSkill,
           priority: c.priority,
+          matchReason: c.matchReason,
         })),
-        verdict: 'SELECTED_SKILL_TRUTH_APPLIED',
+        verdict: 'SELECTED_SKILL_TRUTH_APPLIED_WITH_FAIRNESS',
       })
     } else {
-      console.log('[SELECTED-SKILL-FALLBACK-TRUTH] No skill-truth candidates matched selected skills', {
+      console.log('[SELECTED-SKILL-FAIRNESS-FIX] No skill-truth candidates matched selected skills', {
         selectedSkills,
-        advancedSkillsInSelection: selectedSkills.filter(s => !!getAdvancedSkillFamily(s)),
+        advancedSkillsInSelection,
         verdict: 'SELECTED_SKILL_TRUTH_NO_MATCH_FALLING_THROUGH',
       })
     }

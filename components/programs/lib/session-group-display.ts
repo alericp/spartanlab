@@ -13,6 +13,146 @@
 // Types matching what the builder produces
 export type GroupType = 'straight' | 'superset' | 'circuit' | 'density_block' | 'cluster'
 
+// =============================================================================
+// [PHASE 3F METHOD SEMANTIC TRUTH LOCK]
+// SINGLE AUTHORITATIVE SEMANTIC OWNER for visible grouped-method naming.
+//
+// Pre-3F, visible method language for Circuit / Density Block / Cluster Set /
+// Superset was scattered across four independent owners that could drift
+// from one another:
+//   1. AdaptiveSessionCard.getGroupTypeLabel()           (pill noun)
+//   2. AdaptiveSessionCard.buildGroupedMemberSemanticLine() (per-row line)
+//   3. AdaptiveSessionCard.getMethodBodyCue()            (in-body strip)
+//   4. session-group-display.ts restProtocol literals    (rest microcopy)
+//
+// Result: the user could read "Density Block" in the pill, "Timed block,
+// minimal rest" in the rest microcopy, and "Rotation 1 of 3 — rotate within
+// the time cap" in the row line, all describing the same group, without ever
+// being told at a glance the one thing that distinguishes Density Block from
+// Circuit: that Density is *time-capped work-capacity* whereas Circuit is
+// *round/station based*. That is the exact "is this a circuit or density,
+// and are they the same thing?" symptom Phase 3F locks down.
+//
+// Contract:
+//   - `label`            — full noun the pill / chip / strip use ("Density Block")
+//   - `headerTagline`    — 1-3 word distinguishing qualifier the pill carries
+//                          immediately after the label so semantic intent is
+//                          visible without needing to read the muted rest
+//                          microcopy ("timed work cap", "rounds & stations")
+//   - `bodyCue`          — optional in-body strip {primary, secondary}; reserved
+//                          for methods that *cannot* be expressed by member
+//                          structure alone (cluster + density). Superset and
+//                          circuit have null bodyCue because A1/A2/B1/B2
+//                          prefixes already carry the structural semantic;
+//                          adding a body cue for them would be duplicate
+//                          paragraph clutter.
+//   - `memberLine(args)` — per-row compact one-liner under the row content.
+//                          Only superset takes `partnerName`; the others
+//                          ignore it.
+//   - `restProtocol`     — rest microcopy shown in the pill header.
+//
+// Every visible owner (getGroupTypeLabel, buildGroupedMemberSemanticLine,
+// getMethodBodyCue, restProtocol assignment) now reads from this table. To
+// rename or reword anything, edit one entry here and the entire visible
+// program corridor updates atomically.
+//
+// Row-level set-execution methods (top_set / drop_set / rest_pause / single-
+// row cluster) are NOT in this table because they are owned by the
+// row-level resolveRowMethodTruth contract installed in Phase 3E. The two
+// owners stay strictly separated to preserve the grouped-vs-row taxonomy
+// honesty rule.
+// =============================================================================
+export interface GroupedMethodSemantics {
+  /** Full noun used in the pill header, in-body strips, and chips. */
+  label: string
+  /**
+   * Compact distinguishing qualifier rendered in the pill header
+   * immediately after the label, so the user sees what makes this method
+   * structurally distinct without parsing the rest microcopy. Kept short
+   * (1-3 words) to avoid header clutter.
+   */
+  headerTagline: string
+  /**
+   * Reserved for methods whose nature cannot be communicated by member
+   * structure alone (currently cluster + density). null for superset and
+   * circuit because A1/A2/B1/B2 prefixes already carry their semantic.
+   */
+  bodyCue: { primary: string; secondary: string } | null
+  /** Per-row compact line shown beneath the row content. */
+  memberLine: (args: {
+    positionIndex: number
+    totalMembers: number
+    partnerName?: string
+  }) => string | null
+  /** Rest microcopy shown in the pill header after the exercise count. */
+  restProtocol: string
+}
+
+export const GROUPED_METHOD_SEMANTICS: Record<
+  Exclude<GroupType, 'straight'>,
+  GroupedMethodSemantics
+> = {
+  superset: {
+    label: 'Superset',
+    headerTagline: 'paired sets',
+    bodyCue: null,
+    memberLine: ({ partnerName }) => {
+      const safePartner = (partnerName || '').trim()
+      return safePartner.length >= 2
+        ? `Paired with ${safePartner} — minimal rest between, full rest after the pair.`
+        : 'Paired superset — minimal rest between, full rest after the pair.'
+    },
+    restProtocol: '0-15s between, 90-120s after pair',
+  },
+  circuit: {
+    label: 'Circuit',
+    headerTagline: 'rounds & stations',
+    bodyCue: null,
+    memberLine: ({ positionIndex, totalMembers }) =>
+      totalMembers > 1
+        ? `Circuit station ${positionIndex} of ${totalMembers} — cycle through, rest after the full round.`
+        : 'Circuit station — cycle through, rest after the full round.',
+    restProtocol: '60-90s after full round',
+  },
+  density_block: {
+    label: 'Density Block',
+    headerTagline: 'timed work cap',
+    bodyCue: {
+      primary: 'Work capacity',
+      secondary: 'Rotate movements within the time cap — quality reps, rest as needed.',
+    },
+    memberLine: ({ positionIndex, totalMembers }) =>
+      totalMembers > 1
+        ? `Density rotation ${positionIndex} of ${totalMembers} — rotate within the time cap, quality over speed.`
+        : 'Density block — work within the time cap, quality over speed.',
+    restProtocol: 'Within window, minimal rest',
+  },
+  cluster: {
+    label: 'Cluster Set',
+    headerTagline: 'intra-set rest',
+    bodyCue: {
+      primary: 'Intra-set rest',
+      secondary: 'Mini-efforts with a short pause, then full rest between clusters.',
+    },
+    memberLine: ({ positionIndex, totalMembers }) =>
+      totalMembers === 1
+        ? 'Cluster set — mini-efforts with short intra-set rest, full rest between clusters.'
+        : `Cluster ${positionIndex} of ${totalMembers} — mini-efforts with short intra-set rest, full rest between clusters.`,
+    restProtocol: '10-20s intra-set, 120-180s inter-set',
+  },
+}
+
+/**
+ * Single accessor for grouped-method semantic truth. Returns null for
+ * 'straight' (which has no method semantic) so callers can branch cleanly.
+ */
+export function getGroupedMethodSemantics(
+  groupType: GroupType
+): GroupedMethodSemantics | null {
+  if (groupType === 'straight') return null
+  return GROUPED_METHOD_SEMANTICS[groupType] ?? null
+}
+
 export interface DisplayGroupExercise {
   id: string
   name: string
@@ -288,12 +428,14 @@ function buildFromStyledGroups(styledGroups: StyledGroupInput[]): GroupedDisplay
       case 'cluster': index = clusterIndex++; break
     }
     
-    // [GROUPED-RENDER-FIX] Include prefix derived from methodLabel and restProtocol for render
-    const restProtocol = group.groupType === 'circuit' ? '60-90s after full circuit'
-      : group.groupType === 'superset' ? '0-15s between, 90-120s after pair'
-      : group.groupType === 'density_block' ? 'Timed block, minimal rest'
-      : group.groupType === 'cluster' ? '10-20s intra-set, 120-180s inter-set'
-      : '60-120s between sets'
+    // [PHASE 3F METHOD SEMANTIC TRUTH LOCK] restProtocol now reads from the
+    // single authoritative GROUPED_METHOD_SEMANTICS table. Pre-3F these
+    // literals lived inline here and could drift from AdaptiveSessionCard's
+    // pill noun + body cue + member semantic line. Straight (non-grouped)
+    // exercises keep the legacy '60-120s between sets' fallback because
+    // straight is not represented in the semantics table.
+    const semantics = getGroupedMethodSemantics(group.groupType)
+    const restProtocol = semantics?.restProtocol ?? '60-120s between sets'
     
     return {
       id: group.id,
@@ -434,10 +576,11 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
     else if (groupType === 'density_block') index = densityIndex++
 
     if (groupType !== 'straight') {
-      // [GROUPED-RENDER-FIX] Include prefix and restProtocol for render
-      const restProtocol = groupType === 'circuit' ? '60-90s after full circuit'
-        : groupType === 'superset' ? '0-15s between, 90-120s after pair'
-        : '60-120s between sets'
+      // [PHASE 3F METHOD SEMANTIC TRUTH LOCK] Read from the single
+      // authoritative semantics table so this exercise-fallback branch
+      // stays in lockstep with the styledGroups branch above.
+      const restProtocol =
+        getGroupedMethodSemantics(groupType)?.restProtocol ?? '60-120s between sets'
       
       displayGroups.push({
         id: blockId,
@@ -482,7 +625,12 @@ function buildFromExercises(exercises: ExerciseInput[]): GroupedDisplayModel {
     if (!groupType) continue
 
     const index = densityIndex++
-    const restProtocol = '30-60s between rounds'
+    // [PHASE 3F METHOD SEMANTIC TRUTH LOCK] Read from semantics table.
+    // The legacy '30-60s between rounds' literal was a pre-3F drift point;
+    // density's authoritative microcopy is "Within window, minimal rest"
+    // because a density block is time-capped, not round-counted.
+    const restProtocol =
+      getGroupedMethodSemantics(groupType)?.restProtocol ?? '60-120s between sets'
 
     displayGroups.push({
       id: `method-only-${ex.id}`,

@@ -39,7 +39,7 @@ import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWith
 // These were used by the ROW 2.5 chip block which was a stale secondary text path
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
-import { buildGroupedDisplayModel, type GroupedDisplayModel, type RenderBlock, type RawFallbackBlock, type GroupedSourceUsed, type GroupedFlatReason } from './lib/session-group-display'
+import { buildGroupedDisplayModel, getGroupedMethodSemantics, type GroupedDisplayModel, type RenderBlock, type RawFallbackBlock, type GroupedSourceUsed, type GroupedFlatReason, type GroupType } from './lib/session-group-display'
 import { 
   addOverride, 
   applyOverridesToSession,
@@ -143,16 +143,13 @@ interface SessionStyleMetadata {
   styledGroups: StyledGroup[]
 }
 
-// Helper to get a display label for group type
+// [PHASE 3F METHOD SEMANTIC TRUTH LOCK] Pill noun reads from the single
+// authoritative GROUPED_METHOD_SEMANTICS table in session-group-display.ts.
+// Pre-3F this switch held the literal nouns inline and was free to drift
+// from the row-line semantics, body cue, and rest microcopy. Straight has
+// no semantic in the table and returns empty string by contract.
 function getGroupTypeLabel(groupType: StyledGroup['groupType']): string {
-  switch (groupType) {
-    case 'superset': return 'Superset'
-    case 'circuit': return 'Circuit'
-    case 'density_block': return 'Density Block'
-    case 'cluster': return 'Cluster Set'
-    case 'straight': return ''
-    default: return ''
-  }
+  return getGroupedMethodSemantics(groupType)?.label ?? ''
 }
 
 // Helper to get an icon for group type
@@ -246,31 +243,19 @@ function buildGroupedMemberSemanticLine(args: {
   totalMembers: number
   partnerName?: string
 }): string | null {
-  const { groupType, positionIndex, totalMembers, partnerName } = args
-  switch (groupType) {
-    case 'superset': {
-      const safePartner = (partnerName || '').trim()
-      if (safePartner.length >= 2) {
-        return `Paired with ${safePartner} — minimal rest between, full rest after the pair.`
-      }
-      return 'Paired superset — minimal rest between, full rest after the pair.'
-    }
-    case 'circuit':
-      return totalMembers > 1
-        ? `Circuit station ${positionIndex} of ${totalMembers} — cycle through, rest after the full round.`
-        : 'Circuit station — cycle through, rest after the full round.'
-    case 'density_block':
-      return totalMembers > 1
-        ? `Density rotation ${positionIndex} of ${totalMembers} — rotate within the time cap, quality over speed.`
-        : 'Density block — work within the time cap, quality over speed.'
-    case 'cluster':
-      if (totalMembers === 1) {
-        return 'Cluster set — mini-efforts with short intra-set rest, full rest between clusters.'
-      }
-      return `Cluster ${positionIndex} of ${totalMembers} — mini-efforts with short intra-set rest, full rest between clusters.`
-    default:
-      return null
-  }
+  // [PHASE 3F METHOD SEMANTIC TRUTH LOCK] Member semantic line reads from
+  // the single authoritative GROUPED_METHOD_SEMANTICS table. Pre-3F this
+  // switch encoded its own copy of the per-method copy and was free to
+  // drift from the pill noun + body cue + rest microcopy. The semantics
+  // table's `memberLine` factory takes the same arg shape so the call
+  // site is a one-liner with no behavior change.
+  const semantics = getGroupedMethodSemantics(args.groupType)
+  if (!semantics) return null
+  return semantics.memberLine({
+    positionIndex: args.positionIndex,
+    totalMembers: args.totalMembers,
+    partnerName: args.partnerName,
+  })
 }
 
 function GroupedMemberFrame({
@@ -3905,22 +3890,22 @@ function MainExercisesRenderer({
   const getMethodBodyCue = (
     groupType: string
   ): { Icon: typeof Timer; primary: string; secondary: string } | null => {
-    if (groupType === 'cluster') {
-      return {
-        Icon: Repeat,
-        primary: 'Intra-set rest',
-        secondary:
-          'Mini-efforts with a short pause, then full rest between clusters.',
-      }
+    // [PHASE 3F METHOD SEMANTIC TRUTH LOCK] Body cue reads from the single
+    // authoritative GROUPED_METHOD_SEMANTICS table. Only cluster + density
+    // have a non-null bodyCue in the table by design (superset/circuit
+    // express their semantic structurally via A1/A2/B1/B2 prefixes); the
+    // null return for those types preserves the prior contract that the
+    // strip is omitted entirely for self-expressing methods. Icon mapping
+    // stays local because lucide React components can't be serialised into
+    // the data table.
+    const semantics = getGroupedMethodSemantics(groupType as GroupType)
+    if (!semantics?.bodyCue) return null
+    const Icon = groupType === 'cluster' ? Repeat : Timer
+    return {
+      Icon,
+      primary: semantics.bodyCue.primary,
+      secondary: semantics.bodyCue.secondary,
     }
-    if (groupType === 'density_block') {
-      return {
-        Icon: Timer,
-        primary: 'Work capacity',
-        secondary: 'Rotate movements within the time cap — quality reps, rest as needed.',
-      }
-    }
-    return null
   }
 
   // [IN-BODY-GROUPED-BANNER] Per-type counts come directly from the
@@ -4045,6 +4030,27 @@ function MainExercisesRenderer({
                     return `${purposePrefix}${label}`
                   })()}
                 </span>
+                {/* [PHASE 3F METHOD SEMANTIC TRUTH LOCK] Compact semantic
+                    qualifier rendered immediately after the pill noun, in the
+                    same color family as the rail. Pre-3F the user had to read
+                    the muted-grey rest microcopy ("Rest 30-60s between rounds")
+                    or the body cue strip to figure out whether a Density Block
+                    was structurally distinct from a Circuit. The tagline puts
+                    that distinction directly under the eye on the pill itself
+                    ("Density Block · timed work cap" vs "Circuit · rounds &
+                    stations"). Reads from the same authoritative semantics
+                    source that powers the row line, body cue, and rest
+                    microcopy — so the four visible surfaces can never disagree.
+                    Hidden when the semantics table has no entry (straight). */}
+                {(() => {
+                  const tagline = getGroupedMethodSemantics(group.groupType)?.headerTagline
+                  if (!tagline) return null
+                  return (
+                    <span className={`text-[11px] ${colors.text} opacity-80`}>
+                      · {tagline}
+                    </span>
+                  )
+                })()}
                 <span className="text-[11px] text-[#8A8A8A]">
                   · {group.exercises.length} exercises
                 </span>

@@ -92,6 +92,20 @@ import {
   type SessionMeta,
   type AuthoritativeSessionResult,
 } from '@/lib/workout/load-authoritative-session'
+// [SELECTED-VARIANT-SESSION-CONTRACT] Single authoritative owner of the
+// selected-variant body and its launch fingerprint. The route uses the
+// same builder the Program card used, then diffs its resolved fingerprint
+// against the card's stamped fingerprint. Parity drift is surfaced as a
+// visible PARITY chip rather than collapsing silently to full session.
+import {
+  buildSelectedVariantMain,
+  buildSessionFingerprint,
+  compareFingerprints,
+  readLaunchFingerprint,
+  type SessionFingerprint,
+  type FingerprintComparison,
+  type LaunchFingerprintPayload,
+} from '@/lib/workout/selected-variant-session-contract'
 
 // =============================================================================
 // LOCAL ERROR BOUNDARY - Catches workout engine crashes locally
@@ -712,6 +726,24 @@ function WorkoutSessionContent() {
   // [DISPLAY-CONTRACT] Use safe display contract instead of raw reasoning
   const [reasoningSummary, setReasoningSummary] = useState<WorkoutReasoningDisplayContract | undefined>(undefined)
   const [loading, setLoading] = useState(true)
+  // [SELECTED-VARIANT-SESSION-CONTRACT] Parity state. `expectedLaunchPayload`
+  // is the fingerprint the Program card stamped before router.push;
+  // `actualFingerprint` is what this route actually built for the live
+  // session; `parityReport` is the diff between them. If parityReport.ok is
+  // false, the visible PARITY chip in the route proof panel flips from
+  // PARITY:OK to PARITY:MISMATCH with the specific field names that drifted,
+  // so the selected-variant corridor never silently collapses to full.
+  const [expectedLaunchPayload, setExpectedLaunchPayload] =
+    useState<LaunchFingerprintPayload | null>(null)
+  const [actualFingerprint, setActualFingerprint] =
+    useState<SessionFingerprint | null>(null)
+  const [parityReport, setParityReport] = useState<FingerprintComparison | null>(null)
+  // Resolved-from tag from the route's own buildSelectedVariantMain call.
+  // Exposed in the proof panel so the user can see whether the live workout
+  // boot came from a real variant or fell through to a divergence marker.
+  const [routeResolvedFrom, setRouteResolvedFrom] = useState<
+    'variant' | 'full' | 'variant_missing' | 'variant_hollow' | null
+  >(null)
   // [PHASE-X+1] Error state removed - authoritative loader handles all errors internally
   
   useEffect(() => {
@@ -817,96 +849,58 @@ function WorkoutSessionContent() {
       // weekOverride) ensures any change to the contract re-enters this
       // resolver and no stale render can survive.
       // =======================================================================
+      // =======================================================================
+      // [SELECTED-VARIANT-SESSION-CONTRACT] Route-side body resolution now
+      // delegates to the SAME `buildSelectedVariantMain` helper the Program
+      // card called before launch. This removes the historical owner split
+      // where the card mapped variant.selection.main one way and the route
+      // mapped it another way against the same input -- producing subtly
+      // different bodies for the same requested variant. Both sides now
+      // share ONE algorithm. Parity is proven by fingerprint diff below.
+      // =======================================================================
+      const routeResolved = buildSelectedVariantMain(
+        result.session,
+        variantIndex,
+        executionMode,
+      )
+      setRouteResolvedFrom(routeResolved.resolvedFrom)
+
       let finalSession = result.session
       if (variantIndex > 0 && result.session.variants && result.session.variants[variantIndex]) {
         const variant = result.session.variants[variantIndex]
-        if (variant.selection?.main) {
+        if (variant.selection?.main && routeResolved.resolvedFrom === 'variant') {
           console.log('[PHASE-VARIANT-TRUTH] Applying variant selection', {
             variantIndex,
             variantLabel: variant.label,
             variantDuration: variant.duration,
             originalExerciseCount: result.session.exercises.length,
             variantExerciseCount: variant.selection.main.length,
+            resolvedFrom: routeResolved.resolvedFrom,
           })
 
           // ===================================================================
-          // [SESSION-TRUTH-UNITY] Preserve authoritative exercise identity.
+          // [SELECTED-VARIANT-SESSION-CONTRACT] Shared-owner body.
           //
-          // Previously this branch synthesized new IDs (`variant-${i}-${idx}`)
-          // and dropped blockId/method/methodLabel/prescribedLoad, so the live
-          // runner received a flattened variant that no longer matched the
-          // Program card (which uses `variant.selection.main[i].exercise.id`,
-          // the original id, and the bridge's lookup against session.exercises
-          // to preserve grouped identity). The two surfaces consumed different
-          // session truths, which broke order parity AND stripped grouped
-          // execution in 45/30 mode.
+          // The variant's main exercise body comes from `routeResolved`
+          // above, which is the SAME `buildSelectedVariantMain(session,
+          // variantIndex, executionMode)` call the Program card made before
+          // router.push. Identity preservation (id / blockId / method /
+          // methodLabel / prescribedLoad / category) and variant
+          // prescription overlay (sets / repsOrTime / targetRPE /
+          // restSeconds / note / selectionReason / wasAdapted /
+          // coachingMeta) are both owned by the shared helper. This block
+          // used to have its own near-identical mapping; keeping a parallel
+          // copy invited owner drift (the exact failure mode this corridor
+          // lock is fixing).
           //
-          // Now: look up each variant.selection.main[i] against the original
-          // result.session.exercises by id and normalized name, carry forward
-          // the matched original exercise, and overlay variant-specific
-          // prescription fields (sets / repsOrTime / targetRPE / restSeconds
-          // / note / selectionReason / wasAdapted / coachingMeta). Original
-          // id, blockId, method, methodLabel, prescribedLoad, and category
-          // survive intact so grouped execution plan derivation in
-          // StreamlinedWorkoutSession matches what the Program card rendered.
+          // The `normKey`/`originalById`/`originalByName` rebuild below is
+          // ONLY used by the styledGroups prune downstream; the exercise
+          // body itself now flows from `routeResolved.exercises`.
           // ===================================================================
           const normKey = (s: string): string =>
             String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
 
-          const originalById = new Map<string, typeof result.session.exercises[number]>()
-          const originalByName = new Map<string, typeof result.session.exercises[number]>()
-          for (const ex of result.session.exercises) {
-            if (ex?.id) originalById.set(ex.id, ex)
-            if (ex?.name) originalByName.set(normKey(ex.name), ex)
-          }
-
-          const variantExercises = variant.selection.main.map((sel, idx) => {
-            const selExId = sel.exercise?.id
-            const selExName = sel.exercise?.name || sel.name
-            const matched =
-              (selExId && originalById.get(selExId)) ||
-              (selExName && originalByName.get(normKey(selExName))) ||
-              null
-
-            if (!matched) {
-              console.log('[SESSION-TRUTH-UNITY] No original match for variant selection', {
-                variantIndex,
-                idx,
-                selExId,
-                selExName,
-              })
-            }
-
-            // Start from original exercise truth (preserves id, blockId,
-            // method, methodLabel, prescribedLoad, category, source, etc.),
-            // then overlay variant-specific prescription fields. If no match
-            // (variant introduced a new item), fall back to a minimal shape
-            // using the variant id so at least one identity survives.
-            const base = matched ?? {
-              id: selExId || `variant-${variantIndex}-${idx}`,
-              name: selExName,
-              category: sel.category || 'general',
-              sets: sel.sets,
-              repsOrTime: sel.repsOrTime,
-              note: sel.note || '',
-              isOverrideable: true,
-              selectionReason: sel.selectionReason || '',
-            }
-
-            return {
-              ...base,
-              // Overlay variant-specific prescription. These fields are what
-              // the variant actually compressed/adjusted.
-              sets: sel.sets ?? base.sets,
-              repsOrTime: sel.repsOrTime ?? base.repsOrTime,
-              note: sel.note ?? base.note,
-              selectionReason: sel.selectionReason ?? base.selectionReason,
-              targetRPE: sel.targetRPE ?? (base as { targetRPE?: unknown }).targetRPE,
-              restSeconds: sel.restSeconds ?? (base as { restSeconds?: unknown }).restSeconds,
-              wasAdapted: sel.wasAdapted ?? (base as { wasAdapted?: unknown }).wasAdapted,
-              coachingMeta: sel.coachingMeta ?? (base as { coachingMeta?: unknown }).coachingMeta,
-            }
-          })
+          const variantExercises = routeResolved.exercises
 
           // ===================================================================
           // [SELECTED-SESSION-OWNERSHIP-LOCK] Prune styleMetadata.styledGroups
@@ -1115,7 +1109,68 @@ function WorkoutSessionContent() {
       // Set session and meta - GUARANTEED to have valid session
       setSession(finalSession)
       setSessionMeta(result.meta)
-      
+
+      // =======================================================================
+      // [SELECTED-VARIANT-SESSION-CONTRACT] Parity proof.
+      //
+      // Build the route's ACTUAL fingerprint from the session it is about
+      // to hand to StreamlinedWorkoutSession, then read the expected
+      // fingerprint the Program card stamped right before router.push, and
+      // diff them. The PARITY chip rendered in the proof panel reports:
+      //
+      //   PARITY:OK           expected and actual match on every field
+      //   PARITY:MISMATCH     one or more fields drifted - list shown
+      //   PARITY:NO_STAMP     card did not stamp (e.g. page opened directly
+      //                       via URL or sessionStorage unavailable) - not
+      //                       a corridor failure, but visibly reported
+      //
+      // This is the single authoritative parity check required by the
+      // selected-session corridor lock. It proves the live workout booted
+      // the SAME body the Program card rendered, byte-for-byte on the
+      // fingerprint surface (mode, variantIndex, exerciseCount, first/last
+      // exercise id + name, total sets, estimatedMinutes, ordered ids).
+      // =======================================================================
+      const routeFingerprint = buildSessionFingerprint({
+        variantIndex,
+        mode: executionMode,
+        exercises: finalSession.exercises,
+        estimatedMinutes: finalSession.estimatedMinutes,
+      })
+      setActualFingerprint(routeFingerprint)
+
+      // Storage key must match what the card wrote. Card writes with
+      // `session.dayNumber || 1` which is exactly what it then serialized
+      // into the URL as `?day=...`. Reading by dayParam here (the URL
+      // truth) is therefore guaranteed to hit the same key on both sides.
+      const parsedDay = dayParam ? parseInt(dayParam, 10) : NaN
+      const keyDay = Number.isFinite(parsedDay) && parsedDay >= 1 ? parsedDay : (finalSession.dayNumber ?? 1)
+      const expectedPayload = readLaunchFingerprint(keyDay, variantIndex)
+      setExpectedLaunchPayload(expectedPayload)
+
+      const report = compareFingerprints(expectedPayload?.fingerprint, routeFingerprint)
+      setParityReport(report)
+
+      console.log('[SELECTED-VARIANT-SESSION-CONTRACT] parity check', {
+        variantIndex,
+        executionMode,
+        routeResolvedFrom: routeResolved.resolvedFrom,
+        hasExpectedStamp: !!expectedPayload,
+        cardResolvedFrom: expectedPayload?.resolvedFrom ?? null,
+        parityOk: report.ok,
+        mismatches: report.mismatches,
+        routeFingerprint,
+        expectedFingerprint: expectedPayload?.fingerprint ?? null,
+      })
+      if (!report.ok && expectedPayload) {
+        console.error('[SELECTED-VARIANT-SESSION-CONTRACT] PARITY MISMATCH - Program card body and booted body disagree', {
+          variantIndex,
+          executionMode,
+          mismatches: report.mismatches,
+          expected: expectedPayload.fingerprint,
+          actual: routeFingerprint,
+        })
+      }
+
       // [workout-init] Log normalized session data for debugging
       console.log('[workout-init] session ready:', {
         dayLabel: result.session.dayLabel,
@@ -1323,8 +1378,44 @@ function WorkoutSessionContent() {
           instead of the selected variant. Removed in production. */}
       {process.env.NODE_ENV === 'development' && session && (
         <div className="fixed top-2 left-2 z-[9999] rounded-md border border-[#4F6D8A]/40 bg-[#12161C]/95 px-2 py-1.5 text-[10px] font-mono text-[#7FA8CC] leading-tight max-w-[60vw]">
-          <div className="text-[#A4ACB8] uppercase tracking-wider text-[9px] mb-0.5">
-            Route proof
+          <div className="text-[#A4ACB8] uppercase tracking-wider text-[9px] mb-0.5 flex items-center gap-2">
+            <span>Route proof</span>
+            {/* [SELECTED-VARIANT-SESSION-CONTRACT] PARITY chip. Proves the
+                live workout booted the EXACT body the Program card stamped
+                at launch. OK = every fingerprint field (mode, variantIndex,
+                exerciseCount, first/last id + name, totalSets, minutes,
+                ordered ids) matches. MISMATCH = corridor drift; hover /
+                see console for drifted fields. NO_STAMP = user opened this
+                route directly without going through a Program card launch. */}
+            {(() => {
+              const tone = !expectedLaunchPayload
+                ? 'bg-slate-500/20 text-slate-300 border-slate-500/40'
+                : parityReport?.ok
+                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                  : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+              const label = !expectedLaunchPayload
+                ? 'PARITY:NO_STAMP'
+                : parityReport?.ok
+                  ? 'PARITY:OK'
+                  : `PARITY:MISMATCH`
+              return (
+                <span
+                  className={`rounded-sm border px-1 ${tone}`}
+                  title={
+                    parityReport && !parityReport.ok
+                      ? `drifted: ${parityReport.mismatches.join(', ')}`
+                      : undefined
+                  }
+                >
+                  {label}
+                </span>
+              )
+            })()}
+            {routeResolvedFrom && routeResolvedFrom !== 'variant' && routeResolvedFrom !== 'full' && (
+              <span className="rounded-sm border border-amber-500/40 bg-amber-500/20 text-amber-300 px-1">
+                SRC:{routeResolvedFrom}
+              </span>
+            )}
           </div>
           <div className="flex flex-wrap gap-x-3 gap-y-0.5">
             <span>mode={executionMode}</span>
@@ -1342,7 +1433,18 @@ function WorkoutSessionContent() {
               {session.styleMetadata?.styledGroups?.filter((g) => g.groupType !== 'straight').length ?? 0}
             </span>
             <span>min={session.estimatedMinutes ?? '?'}</span>
+            {actualFingerprint?.firstId && (
+              <span className="text-[#6A6A6A]">first={actualFingerprint.firstId}</span>
+            )}
+            {actualFingerprint?.lastId && (
+              <span className="text-[#6A6A6A]">last={actualFingerprint.lastId}</span>
+            )}
           </div>
+          {parityReport && !parityReport.ok && expectedLaunchPayload && (
+            <div className="mt-1 text-amber-300 text-[9px] leading-tight">
+              drift: {parityReport.mismatches.slice(0, 3).join(' | ')}
+            </div>
+          )}
         </div>
       )}
       <StreamlinedWorkoutSession

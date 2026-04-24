@@ -7,6 +7,16 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { AdaptiveSession, AdaptiveExercise, TrainingMethodPreference } from '@/lib/adaptive-program-builder'
 import { isVariantLaunchable } from '@/lib/session-compression-engine'
+// [SELECTED-VARIANT-SESSION-CONTRACT] Single authoritative owner of the
+// selected-variant body and its launch fingerprint. The card stamps its
+// expected fingerprint immediately before router.push so the live workout
+// route can read it back and prove parity against the body it actually
+// booted. No parallel card-body vs route-body derivation.
+import {
+  buildSelectedVariantMain,
+  buildSessionFingerprint,
+  stampLaunchFingerprint,
+} from '@/lib/workout/selected-variant-session-contract'
 import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell } from 'lucide-react'
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
 import { exerciseSupportsRPE } from '@/lib/rpe-adjustment-engine'
@@ -569,13 +579,49 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     // executionMode / variant index / week param here. If the contract says
     // 45_min + variant=1, the URL is 45_min + variant=1. Full stop.
     trackWorkoutStarted(session.name)
+
+    // [SELECTED-VARIANT-SESSION-CONTRACT] Stamp the expected selected-variant
+    // fingerprint immediately before router.push. This is the card's promise
+    // to the route: "given this session + this variantIndex, here is the
+    // exact body I expect you to boot." The route reads this payload via
+    // readLaunchFingerprint(day, variantIndex) and diffs it against the
+    // finalSession it actually built. Any drift (count, identity, order,
+    // duration, mode) surfaces as a visible PARITY chip instead of a silent
+    // full-session fallback. This closes the last owner split in the
+    // Program-card -> Start Workout corridor: the card and route now share
+    // ONE variant-body builder (buildSelectedVariantMain) and ONE
+    // parity-proof contract.
+    const selectedCanonicalIdx = selectedSessionContract.selectedVariantIndex
+    const cardResolvedBody = buildSelectedVariantMain(
+      session,
+      selectedCanonicalIdx,
+      selectedSessionContract.selectedExecutionMode,
+    )
+    const cardFingerprint = buildSessionFingerprint({
+      variantIndex: selectedCanonicalIdx,
+      mode: selectedSessionContract.selectedExecutionMode,
+      exercises: cardResolvedBody.exercises,
+      estimatedMinutes: cardResolvedBody.estimatedMinutes,
+    })
+    stampLaunchFingerprint({
+      dayNumber: session.dayNumber || 1,
+      variantIndex: selectedCanonicalIdx,
+      stampedAt: new Date().toISOString(),
+      fingerprint: cardFingerprint,
+      resolvedFrom: cardResolvedBody.resolvedFrom,
+      launchUrl: selectedSessionContract.selectedLaunchUrl,
+    })
+
     console.log('[SELECTED-SESSION-CONTRACT] Start Workout launch', {
       dayNumber: session.dayNumber,
-      selectedVariantIndex: selectedSessionContract.selectedVariantIndex,
+      selectedVariantIndex: selectedCanonicalIdx,
       selectedVariantLabel: selectedSessionContract.selectedVariantLabel,
       selectedExecutionMode: selectedSessionContract.selectedExecutionMode,
       selectedEstimatedMinutes: selectedSessionContract.selectedEstimatedMinutes,
       selectedLaunchUrl: selectedSessionContract.selectedLaunchUrl,
+      // Parity stamp
+      cardResolvedFrom: cardResolvedBody.resolvedFrom,
+      cardFingerprint,
     })
     router.push(selectedSessionContract.selectedLaunchUrl)
   }

@@ -656,17 +656,52 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     // Program-card -> Start Workout corridor: the card and route now share
     // ONE variant-body builder (buildSelectedVariantMain) and ONE
     // parity-proof contract.
-    // [SELECTED-DISPLAY-CONTRACT] Reuse the AUTHORITATIVE resolved body from
-    // the single display owner. Do NOT recompute via buildSelectedVariantMain
-    // here: the card body and the stamped launch fingerprint MUST come from
-    // the exact same body object, otherwise a silent divergence could return
-    // between "what the card shows" and "what Start Workout booted."
+    // =====================================================================
+    // [FINAL-MIRROR-LOCK] Program card visible body is the SINGLE launch
+    // owner.
+    //
+    // Prior code stamped from `selectedDisplayContract.resolvedBody.exercises`
+    // under the assumption that it was the "exact same body feeding
+    // MainExercisesRenderer". It is NOT. The actual renderer consumes
+    // `fullVisibleExercises` (line 2782: `displayExercises={fullVisibleExercises}`),
+    // a different authoritative body built by
+    // `buildFullVisibleRoutineExercises(fullRoutineSurface, safeExercises,
+    // selectedVariantData.selection)`. For variant sessions (45 Min /
+    // 30 Min), these two bodies can differ in ORDER even when membership
+    // matches -- which is exactly the verified Day 1 / Day 6 failure
+    // pattern:
+    //   Card visible:  Planche Leans -> Explosive Pull-Ups -> Tuck FL Hold -> Weighted Dips
+    //   Shell booted:  Planche Leans -> Tuck FL Hold -> Weighted Dips -> Explosive Pull-Ups
+    //
+    // The mirror corridor's source of truth for THIS launch is the exact
+    // ordered array the user is currently looking at. We therefore derive
+    // one explicit `visibleLaunchBody` from `fullVisibleExercises` and
+    // route BOTH the fingerprint and the snapshot payload through it.
+    // No path stamps from `cardResolvedBody.exercises` anymore.
+    //
+    // Shape: `FullRoutineExercise` is a structural superset of the fields
+    // the fingerprint + route + live machine read (id, name, category,
+    // sets, repsOrTime, targetRPE, restSeconds, prescribedLoad, blockId,
+    // method, methodLabel, selectionReason, isOverrideable, note). The
+    // `AdaptiveSession['exercises']` annotation on the contract is
+    // structural, so we cast via `unknown` at the boundary rather than
+    // reshaping the rows (any reshape would re-introduce the exact
+    // "card shows one thing, launch stamps another" risk this fix is
+    // eliminating). Every downstream consumer reads by field name.
+    // =====================================================================
     const selectedCanonicalIdx = selectedDisplayContract.selectedVariantIndex
     const cardResolvedBody = selectedDisplayContract.resolvedBody
+    // The ONE visible launch body. Shallow-copy each row so the stamped
+    // object is serializable and does not hold React-owned references.
+    const visibleLaunchBody = fullVisibleExercises.map(ex => ({ ...ex })) as unknown as AdaptiveSession['exercises']
     const cardFingerprint = buildSessionFingerprint({
       variantIndex: selectedCanonicalIdx,
       mode: selectedSessionContract.selectedExecutionMode,
-      exercises: cardResolvedBody.exercises,
+      // [FINAL-MIRROR-LOCK] Fingerprint the VISIBLE body -- not the
+      // resolvedBody. This is what guarantees the PARITY chip tracks the
+      // actual rendered ordering, not a parallel resolved-body ordering
+      // that may or may not equal it.
+      exercises: visibleLaunchBody,
       estimatedMinutes: cardResolvedBody.estimatedMinutes,
     })
     // =====================================================================
@@ -718,10 +753,12 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             : typeof selectedSessionContract.selectedEstimatedMinutes === 'number'
               ? selectedSessionContract.selectedEstimatedMinutes
               : 60,
-        // resolvedBody.exercises is the EXACT body feeding the card's
-        // MainExercisesRenderer (same reference path via displayExercises
-        // + activeSessionView). Serializable: plain objects only.
-        exercises: cardResolvedBody.exercises,
+        // [FINAL-MIRROR-LOCK] Stamp the VISIBLE body (fullVisibleExercises)
+        // -- the exact ordered array `MainExercisesRenderer` is currently
+        // rendering on the card. This is the single launch owner; no other
+        // body source (resolvedBody, variant.selection.main, loader session)
+        // can end up in `selectedBody.exercises` anymore.
+        exercises: visibleLaunchBody,
         // [MIRROR-CORRIDOR-LOCKDOWN] Stamp the card's already-pruned
         // styleMetadata. This is what eliminates the "grouped metadata
         // shadow owner" failure where variant snapshot-boot used the
@@ -756,10 +793,24 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       // Parity stamp
       cardResolvedFrom: cardResolvedBody.resolvedFrom,
       cardFingerprint,
-      // Mirror stamp proof
+      // [FINAL-MIRROR-LOCK] Mirror stamp proof now reports the VISIBLE
+      // body (same array MainExercisesRenderer rendered). Also log the
+      // prior `resolvedBody` ordering for diagnostic comparison so any
+      // future order divergence between the two owners is visible in
+      // the console, even though only `visibleLaunchBody` drives boot.
       snapshotStamped: true,
-      snapshotExerciseCount: cardResolvedBody.exercises.length,
-      snapshotExerciseIds: cardResolvedBody.exercises.map(e => e.id),
+      snapshotSource: 'fullVisibleExercises',
+      snapshotExerciseCount: visibleLaunchBody.length,
+      snapshotExerciseIds: visibleLaunchBody.map(e => e.id),
+      snapshotExerciseNames: visibleLaunchBody.map(e => e.name),
+      // Diagnostic only -- NOT used for boot.
+      resolvedBodyExerciseIds: cardResolvedBody.exercises.map(e => e.id),
+      resolvedBodyExerciseNames: cardResolvedBody.exercises.map(e => e.name),
+      orderMatchesResolvedBody:
+        visibleLaunchBody.length === cardResolvedBody.exercises.length &&
+        visibleLaunchBody.every(
+          (ex, i) => ex.id === cardResolvedBody.exercises[i]?.id
+        ),
       snapshotWeekNumber:
         typeof currentWeekNumber === 'number' ? currentWeekNumber : null,
     })

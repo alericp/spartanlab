@@ -11864,6 +11864,54 @@ async function generateAdaptiveProgramImpl(
     const blueprintDensityEligibility = sessionCompositionBlueprint?.methodEligibility?.density
     
     // =========================================================================
+    // [PHASE 3A PACKAGING-OWNER-LOCK] Derive doctrine-earned methods from the
+    // blueprint as a FIRST-CLASS packaging driver.
+    //
+    // Pre-3A failure: sessionMethodIntentContract.shouldApplySupersets/Circuits/
+    // Density all required `methodPrefsForGrouping.includes('supersets')` etc.
+    // The blueprint ALREADY computed a doctrine-rich 'earned' / 'allowed' /
+    // 'discouraged' / 'blocked' status (session-composition-intelligence.ts
+    // determineMethodEligibility, L522+) accounting for:
+    //   - recoveryCapacity, sessionMinutes, experienceLevel, trainingStyle
+    //   - firstWeekProtection, weeklyLoadStrategy finisher/density bias
+    //   - day focus (support_recovery / flexibility_focus veto)
+    //   - fatigueState needs_deload veto
+    //   - doctrineRuntimeContract.methodDoctrine explicit allow flags
+    // But NONE of this reached the materializer — packaging was effectively
+    // "preferences only." Users without explicit method prefs always got
+    // straight sets regardless of how strongly doctrine earned grouping.
+    //
+    // Fix: blueprint status participates in the gate.
+    //   - 'blocked'    → HARD VETO even if user selected
+    //   - 'earned'     → FIRE even if user did not explicitly select
+    //   - 'allowed'    → fire only when user selected (preserve old behavior)
+    //   - 'discouraged'→ same as allowed baseline (user preference required)
+    //   - undefined    → fall back to user-preference-only behavior
+    // =========================================================================
+    const supersetsBlueprintBlocked = blueprintSupersetEligibility === 'blocked'
+    const supersetsBlueprintEarned = blueprintSupersetEligibility === 'earned'
+    const circuitsBlueprintBlocked = blueprintCircuitEligibility === 'blocked'
+    const circuitsBlueprintEarned = blueprintCircuitEligibility === 'earned'
+    const densityBlueprintBlocked = blueprintDensityEligibility === 'blocked'
+    const densityBlueprintEarned = blueprintDensityEligibility === 'earned'
+    
+    // [PHASE 3A COMPRESSION-EARNS-SUPERSETS] Short sessions create real
+    // doctrine pressure: fitting a quality tail into 30 min with full
+    // straight-set rest is mathematically impossible. When session duration is
+    // ≤30 min and a groupable tail exists AND the blueprint has not blocked
+    // supersets AND the session is not skill-dominated (which would demand
+    // quality protection), compression itself earns supersets. This mirrors
+    // the doctrine exposed at L25277 (shortSessionStyle) but makes it FIRST-
+    // CLASS at intent-contract time instead of a downstream cosmetic log.
+    const blueprintSessionMinutes = sessionCompositionBlueprint?.estimatedDurationMinutes ?? 0
+    const compressionEarnsSupersets =
+      blueprintSessionMinutes > 0 &&
+      blueprintSessionMinutes <= 30 &&
+      !isSkillPrimarySession &&
+      !supersetsBlueprintBlocked &&
+      accessoryTailSize >= 2
+    
+    // =========================================================================
     // [CLUSTER-DOCTRINE-INVERSION]  Prompt 5 of the method checklist.
     //
     // Previous doctrine (CLUSTER-DOCTRINE-TIGHTENED) gated cluster onto the
@@ -11994,15 +12042,18 @@ async function generateAdaptiveProgramImpl(
       isSkillDominated: isSkillPrimarySession,
       
       // [STRENGTHENED] Method eligibility decisions - more permissive for accessory tails
+      // [PHASE 3A] Blueprint 'blocked' is a HARD VETO at the *allowed* layer so
+      // downstream materializers cannot accidentally revive a method doctrine
+      // forbade (needs_deload, recovery day focus, first-week protection, etc.).
       // Supersets: allowed on any session with 2+ groupable exercises
-      supersetsAllowed: accessoryTailSize >= 2,
-      supersetsEarned: accessoryTailSize >= 2, // Always earned if tail exists
+      supersetsAllowed: accessoryTailSize >= 2 && !supersetsBlueprintBlocked,
+      supersetsEarned: accessoryTailSize >= 2 && !supersetsBlueprintBlocked,
       // Circuits: allowed if 3+ groupable exercises, even on skill days (we protect skill work separately)
-      circuitsAllowed: accessoryTailSize >= 3, // Removed !isSkillPrimarySession gate
-      circuitsEarned: accessoryTailSize >= 3,
+      circuitsAllowed: accessoryTailSize >= 3 && !circuitsBlueprintBlocked,
+      circuitsEarned: accessoryTailSize >= 3 && !circuitsBlueprintBlocked,
       // Density: same as circuits
-      densityAllowed: accessoryTailSize >= 3,
-      densityEarned: accessoryTailSize >= 3,
+      densityAllowed: accessoryTailSize >= 3 && !densityBlueprintBlocked,
+      densityEarned: accessoryTailSize >= 3 && !densityBlueprintBlocked,
       // [CLUSTER-DOCTRINE-INVERSION] Cluster eligibility now requires a
       // concrete LATE-SESSION accessory / secondary-strength / skill-
       // accumulation candidate to exist (not an early primary-effort slot).
@@ -12010,24 +12061,73 @@ async function generateAdaptiveProgramImpl(
       // comment directly above it.
       clusterAllowed: hasLateAccumulationClusterCandidate,
       
-      // [STRENGTHENED] Final method selection - lower thresholds, trust user preferences
-      shouldApplySupersets: methodPrefsForGrouping.includes('supersets') && accessoryTailSize >= 2,
+      // =======================================================================
+      // [PHASE 3A PACKAGING-OWNER-LOCK] shouldApply* now fires when EITHER:
+      //   1. User explicitly selected the method (existing behavior), OR
+      //   2. The blueprint doctrine-earned the method for this session, OR
+      //   3. (supersets only) compression pressure earned supersets on a ≤30min
+      //      session with an adequate tail and no skill-dominated veto.
+      // AND the blueprint did not 'blocked' the method.
+      //
+      // Why this is doctrine-safe:
+      //   - blueprint 'earned' already respects recovery / duration / experience
+      //     / training style / first-week protection / weekly bias / day focus
+      //   - candidate filters below still exclude primary / skill / heavy
+      //     weighted compounds / power-explosive work from any grouping
+      //   - isSkillPrimarySession sessions never get compression-earned
+      //     supersets (explicit guard in compressionEarnsSupersets)
+      //
+      // Why pre-3A preferences-only was wrong:
+      //   A user who never opened the "training method preferences" step
+      //   received straight sets even when the session was a 60-min advanced
+      //   hybrid day with full recovery — i.e. a doctrine-perfect superset
+      //   opportunity. That is *underexpression*, not doctrine-correct purity.
+      // =======================================================================
+      shouldApplySupersets:
+        (methodPrefsForGrouping.includes('supersets') || supersetsBlueprintEarned || compressionEarnsSupersets) &&
+        accessoryTailSize >= 2 &&
+        !supersetsBlueprintBlocked,
       // Circuits allowed even on skill days - we protect skill exercises separately
-      shouldApplyCircuits: methodPrefsForGrouping.includes('circuits') && accessoryTailSize >= 3,
-      shouldApplyDensity: methodPrefsForGrouping.includes('density_blocks') && accessoryTailSize >= 3,
+      shouldApplyCircuits:
+        (methodPrefsForGrouping.includes('circuits') || circuitsBlueprintEarned) &&
+        accessoryTailSize >= 3 &&
+        !circuitsBlueprintBlocked,
+      shouldApplyDensity:
+        (methodPrefsForGrouping.includes('density_blocks') || densityBlueprintEarned) &&
+        accessoryTailSize >= 3 &&
+        !densityBlueprintBlocked,
       // [CLUSTER-DOCTRINE-INVERSION] Now uses the inverted-doctrine gate
       // (late-accumulation candidate must truly exist) rather than the
       // prior primary-effort gate.
       shouldApplyCluster: methodPrefsForGrouping.includes('cluster_sets') && hasLateAccumulationClusterCandidate,
       
-      // Packaging priority (what to try first)
+      // [PHASE 3A] Packaging priority now includes doctrine-earned methods that
+      // the user did not explicitly opt into, so downstream consumers reading
+      // preferredPackagingOrder see the real post-doctrine packaging ladder.
       preferredPackagingOrder: [
-        ...(methodPrefsForGrouping.includes('supersets') ? ['supersets'] : []),
-        ...(methodPrefsForGrouping.includes('circuits') ? ['circuits'] : []),
-        ...(methodPrefsForGrouping.includes('density_blocks') ? ['density'] : []),
+        ...((methodPrefsForGrouping.includes('supersets') || supersetsBlueprintEarned || compressionEarnsSupersets) && !supersetsBlueprintBlocked ? ['supersets'] : []),
+        ...((methodPrefsForGrouping.includes('circuits') || circuitsBlueprintEarned) && !circuitsBlueprintBlocked ? ['circuits'] : []),
+        ...((methodPrefsForGrouping.includes('density_blocks') || densityBlueprintEarned) && !densityBlueprintBlocked ? ['density'] : []),
         ...(methodPrefsForGrouping.includes('cluster_sets') ? ['cluster'] : []),
         'straight_sets', // Always fallback
       ],
+      
+      // [PHASE 3A] Packaging-source audit: explain WHY each method will/won't fire
+      packagingDecisionSources: {
+        supersets: supersetsBlueprintBlocked ? 'blocked_by_blueprint_doctrine'
+          : methodPrefsForGrouping.includes('supersets') ? 'user_preference'
+          : supersetsBlueprintEarned ? 'earned_by_blueprint_doctrine'
+          : compressionEarnsSupersets ? 'earned_by_compression_pressure'
+          : 'no_trigger',
+        circuits: circuitsBlueprintBlocked ? 'blocked_by_blueprint_doctrine'
+          : methodPrefsForGrouping.includes('circuits') ? 'user_preference'
+          : circuitsBlueprintEarned ? 'earned_by_blueprint_doctrine'
+          : 'no_trigger',
+        density: densityBlueprintBlocked ? 'blocked_by_blueprint_doctrine'
+          : methodPrefsForGrouping.includes('density_blocks') ? 'user_preference'
+          : densityBlueprintEarned ? 'earned_by_blueprint_doctrine'
+          : 'no_trigger',
+      },
       
       // Complexity/safety level
       complexityLevel: isSkillPrimarySession ? 'conservative' : 
@@ -12055,6 +12155,16 @@ async function generateAdaptiveProgramImpl(
         cluster: sessionMethodIntentContract.shouldApplyCluster,
       },
       isSkillDominated: sessionMethodIntentContract.isSkillDominated,
+      // [PHASE 3A] Expose the doctrine-earned layer so the authoritative log
+      // shows WHY each method fires (user pref / blueprint earned / compression).
+      blueprintEligibility: {
+        supersets: blueprintSupersetEligibility,
+        circuits: blueprintCircuitEligibility,
+        density: blueprintDensityEligibility,
+      },
+      packagingDecisionSources: sessionMethodIntentContract.packagingDecisionSources,
+      compressionEarnsSupersets,
+      blueprintSessionMinutes,
     })
     
     // =========================================================================

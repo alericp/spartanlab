@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { AdaptiveSession, AdaptiveExercise, TrainingMethodPreference } from '@/lib/adaptive-program-builder'
+import { isVariantLaunchable } from '@/lib/session-compression-engine'
 import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell } from 'lucide-react'
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
 import { exerciseSupportsRPE } from '@/lib/rpe-adjustment-engine'
@@ -509,8 +510,22 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   // ==========================================================================
   const selectedSessionContract = (() => {
     const variantsArr = Array.isArray(session.variants) ? session.variants : []
-    const canonicalIdx = selectedVariant ?? 0
+    // [VARIANT-LAUNCHABILITY-CONTRACT] Requested index is coerced to a SAFE
+    // canonical index that points only at a launchable variant. If the user
+    // picked 30 Min but that variant failed the validity gate (empty
+    // selection.main, missing exercise identity, etc.), we collapse to idx 0
+    // (Full) so the launch URL never carries a variant index that cannot
+    // materialize a body. The button for a non-launchable variant is also
+    // not rendered (see the button map below), so in practice the user
+    // never reaches this coercion -- it exists to keep stale persisted
+    // selectedVariant state (e.g. from an older program version) honest.
+    const requestedIdx = selectedVariant ?? 0
+    const requestedLaunchable = isVariantLaunchable(variantsArr[requestedIdx])
+    const canonicalIdx = requestedLaunchable ? requestedIdx : 0
     const variantObj = variantsArr[canonicalIdx]
+    // Even idx 0 may not be launchable (e.g. fallback/recovery sessions that
+    // now emit `variants: undefined`). In that case variantObj is undefined
+    // and we render as an honest single-session card with no variant story.
     const variantLabel = variantObj?.label ?? 'Full Session'
     const estimatedMinutes =
       typeof variantObj?.duration === 'number' ? variantObj.duration : session.estimatedMinutes
@@ -524,6 +539,10 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         ? `&week=${currentWeekNumber}`
         : ''
     const selectedLaunchUrl = `/workout/session?day=${session.dayNumber || 1}&mode=${executionMode}&variant=${canonicalIdx}${weekParam}`
+    // hasMultipleVariants now counts ONLY launchable variants, so a session
+    // whose only 45/30 entries were rejected by the gate reports "no
+    // multiple variants" and the toggle row stays hidden.
+    const launchableCount = variantsArr.filter(v => isVariantLaunchable(v)).length
     return {
       selectedVariantIndex: canonicalIdx,
       selectedVariantLabel: variantLabel,
@@ -532,7 +551,11 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       selectedLaunchUrl,
       isFullSession: canonicalIdx === 0,
       isVariantSelected: canonicalIdx > 0,
-      hasMultipleVariants: variantsArr.length > 1,
+      hasMultipleVariants: launchableCount > 1,
+      // Coercion signal for auditability when stale state points at a
+      // variant that has since been invalidated upstream.
+      requestedIndexCoerced: requestedIdx !== canonicalIdx,
+      requestedIndexOriginal: requestedIdx,
     }
   })()
 
@@ -2352,11 +2375,40 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               - Full Session = null or 0 (explicitly reset to full)
               - 45 Min = idx of 45-minute variant
               - 30 Min = idx of 30-minute variant
-              - Clicking Full Session explicitly resets to null for canonical full behavior */}
-          {session.variants && session.variants.length > 1 && (
+              - Clicking Full Session explicitly resets to null for canonical full behavior
+
+              [VARIANT-LAUNCHABILITY-CONTRACT] Buttons render ONLY for variants
+              that pass the canonical validity gate (`isVariantLaunchable`). A
+              variant whose `selection.main` is empty, missing, or contains
+              unusable rows will not render a tab here -- even if the
+              variant object itself exists and carries a duration/label. This
+              means 45 / 30 controls now match true launchability: if a 45 or
+              30 variant cannot be honestly materialized by the live-workout
+              route, it simply disappears from the toggle row instead of
+              presenting a button that would silently fall back to Full. The
+              underlying `selectedVariant` state still indexes the full
+              `session.variants` array so the launch URL's `variant=idx`
+              param lines up with what the route will read after session
+              load (the engine now never emits hollow variants, so indices
+              are dense). */}
+          {session.variants && session.variants.filter(v => isVariantLaunchable(v)).length > 1 && (
             <div className="flex gap-2 flex-wrap">
               <span className="text-xs text-[#6A6A6A] self-center mr-1">Session length:</span>
               {session.variants.map((variant, idx) => {
+                // [VARIANT-LAUNCHABILITY-CONTRACT] Skip non-launchable entries
+                // without touching indices -- the idx we emit here must match
+                // the idx in `session.variants` so the launch URL and route
+                // post-load lookup agree.
+                if (!isVariantLaunchable(variant)) {
+                  console.warn('[VARIANT-LAUNCHABILITY-CONTRACT] Hiding non-launchable variant button', {
+                    sessionDay: session.dayNumber,
+                    idx,
+                    variantLabel: variant?.label,
+                    variantDuration: variant?.duration,
+                    mainCount: Array.isArray(variant?.selection?.main) ? variant.selection.main.length : 'not_array',
+                  })
+                  return null
+                }
                 // [TASK 4] Determine if this variant is the active selection
                 const isActive = selectedVariant === idx || (selectedVariant === null && idx === 0)
                 

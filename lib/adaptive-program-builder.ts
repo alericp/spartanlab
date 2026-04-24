@@ -196,7 +196,12 @@ import {
   type ResolvedSessionIdentity,
 } from './engine-quality-contract'
 import { evaluateExerciseProgression, type ProgressionDecision as SimpleProgressionDecision } from './progression-decision-engine'
-import { generateSessionVariants, isVariantLaunchable, type SessionVariant } from './session-compression-engine'
+import {
+  generateSessionVariants,
+  isVariantLaunchable,
+  areVariantsMateriallyDistinct,
+  type SessionVariant,
+} from './session-compression-engine'
 import { analyzeEquipmentProfile, adaptSessionForEquipment, getEquipmentRecommendations, type EquipmentProfile } from './equipment-adaptation-engine'
 import { GOAL_LABELS } from './program-service'
 // [planner-truth-audit] TASK 7: Final audit for generic shell detection
@@ -13234,9 +13239,21 @@ async function generateAdaptiveProgramImpl(
             // are logged so the upstream break (compressor emitted unusable
             // rows for this day) stays auditable instead of silently
             // propagating as a metadata-only tab.
-            const launchableRegenerated = regeneratedVariants.filter(v => {
-              const ok = isVariantLaunchable(v)
-              if (!ok) {
+            //
+            // [VARIANT-MATERIAL-DISTINCTNESS-CONTRACT] Second gate: after
+            // grouped-truth decoration, compressMain's atomic-unit awareness
+            // can legitimately preserve MORE exercises than the pre-reconcile
+            // compression (groups survive as intact units instead of being
+            // half-broken). If that preservation is strong enough that the
+            // regenerated 45/30 ends up identical in body to Full, we must
+            // reject the short variant here rather than propagate a cosmetic
+            // tab downstream. The filter walks the regenerated list in order
+            // (Full is always first, then 45, then 30) and keeps each
+            // candidate only if it is materially distinct from every
+            // already-accepted larger variant.
+            const launchableRegenerated: SessionVariant[] = []
+            for (const v of regeneratedVariants) {
+              if (!isVariantLaunchable(v)) {
                 console.warn('[VARIANT-LAUNCHABILITY-CONTRACT] Dropping non-launchable regenerated variant', {
                   dayNumber: session.dayNumber,
                   focus: session.focus,
@@ -13244,9 +13261,37 @@ async function generateAdaptiveProgramImpl(
                   variantDuration: v?.duration,
                   mainCount: Array.isArray(v?.selection?.main) ? v.selection.main.length : 'not_array',
                 })
+                continue
               }
-              return ok
-            })
+              // The first accepted variant is always Full (compressionLevel
+              // 'none' or largest duration); subsequent shorts must be
+              // materially distinct from every accepted-larger variant to
+              // earn their place in the emitted list.
+              let rejectedAsCosmetic: { matchedFields: string[]; against: string } | null = null
+              for (const accepted of launchableRegenerated) {
+                const distinctness = areVariantsMateriallyDistinct(v, accepted)
+                if (!distinctness.materiallyDistinct) {
+                  rejectedAsCosmetic = {
+                    matchedFields: distinctness.matchedFields,
+                    against: accepted.label,
+                  }
+                  break
+                }
+              }
+              if (rejectedAsCosmetic) {
+                console.warn('[VARIANT-MATERIAL-DISTINCTNESS-CONTRACT] Dropping cosmetic regenerated variant', {
+                  dayNumber: session.dayNumber,
+                  focus: session.focus,
+                  variantLabel: v.label,
+                  variantDuration: v.duration,
+                  against: rejectedAsCosmetic.against,
+                  matchedFields: rejectedAsCosmetic.matchedFields,
+                  verdict: 'REJECTED_POST_RECONCILE_COSMETIC_SHORT',
+                })
+                continue
+              }
+              launchableRegenerated.push(v)
+            }
 
             // Overwrite -- the filtered regenerated list is strictly richer
             // than the prior one (same Full, grouped-aware 45/30, hollow
@@ -13263,6 +13308,19 @@ async function generateAdaptiveProgramImpl(
               })
             }
 
+            // Compute total prescribed sets for each accepted variant so the
+            // log surfaces every axis of material distinctness (count, sets,
+            // duration). This makes "why did 45 survive but 30 didn't" or
+            // "why did both shorts get dropped as cosmetic" auditable from
+            // one log entry, without needing to re-derive the comparison.
+            const totalSetsOf = (v: SessionVariant): number => {
+              let total = 0
+              for (const row of v.selection.main || []) {
+                const sets = (row as unknown as { sets?: unknown }).sets
+                if (typeof sets === 'number' && Number.isFinite(sets)) total += sets
+              }
+              return total
+            }
             console.log('[VARIANT-PARENT-TRUTH-RECONCILE]', {
               dayNumber: session.dayNumber,
               focus: session.focus,
@@ -13276,11 +13334,12 @@ async function generateAdaptiveProgramImpl(
                 label: v.label,
                 duration: v.duration,
                 mainCount: v.selection.main.length,
+                totalSets: totalSetsOf(v),
                 groupedRowCount: v.selection.main.filter(m =>
                   !!(m.exercise as unknown as { blockId?: string }).blockId
                 ).length,
               })),
-              verdict: 'FULL_IS_PARENT_TRUTH__SHORTS_DERIVED_WITH_ATOMIC_GROUPS',
+              verdict: 'FULL_IS_PARENT_TRUTH__SHORTS_DERIVED_WITH_ATOMIC_GROUPS__COSMETIC_REJECTED',
             })
 
             postSessionStep = 'variant_parent_truth_reconciled'

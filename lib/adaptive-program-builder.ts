@@ -4621,6 +4621,18 @@ export interface ServerGenerationOptions {
    * contract instead of treating fresh builds as adaptive recalculations.
    */
   isFreshBaselineBuild?: boolean
+  
+  /**
+   * [AUTHORITATIVE-INGRESS-UNIFICATION] Pre-built Programming Truth Bundle
+   * from the authoritative generation service. When provided, the builder
+   * MUST reuse this bundle instead of rebuilding it. This eliminates the
+   * parallel-ingress-truth-owner problem where the service ingestion and the
+   * builder each independently read Neon.
+   *
+   * If null/undefined: legacy path — builder builds its own bundle (client flow).
+   * If provided:       unified path — builder reuses the authoritative bundle.
+   */
+  preBuiltProgrammingTruthBundle?: ProgrammingTruthBundle | null
 }
 
 // ==========================================================================
@@ -5429,43 +5441,66 @@ async function generateAdaptiveProgramImpl(
   // Built ONCE here, consumed by all downstream dosage/load/progression decisions.
   // ==========================================================================
   let programmingTruthBundle: ProgrammingTruthBundle | null = null
-  try {
-    // Resolve athlete ID for bundle building - use canonical profile userId
-    const bundleUserId = canonicalProfile.userId || 'unknown'
-    
-    // Build the truth bundle - this fetches from Neon in parallel
-    programmingTruthBundle = await buildProgrammingTruthBundle(
-      bundleUserId,
-      canonicalProfile as unknown as import('./canonical-profile-service').CanonicalProgrammingProfile
-    )
-    
-    // Log bundle diagnostics for dev verification
-    console.log('[programming-truth-bundle-built]', {
-      bundleVersion: programmingTruthBundle.version,
-      sectionsAvailable: programmingTruthBundle.diagnostics.sectionsAvailable,
-      sectionsUnavailable: programmingTruthBundle.diagnostics.sectionsUnavailable,
-      totalDataPoints: programmingTruthBundle.diagnostics.totalDataPointsAcrossSections,
-      buildDurationMs: programmingTruthBundle.diagnostics.buildDurationMs,
+  // [AUTHORITATIVE-INGRESS-UNIFICATION] If authoritative service already built a bundle,
+  // REUSE it rather than rebuilding a parallel one. This is the single-ingress guarantee.
+  const preBuiltBundle = serverOptions?.preBuiltProgrammingTruthBundle ?? null
+  if (preBuiltBundle) {
+    programmingTruthBundle = preBuiltBundle
+    console.log('[programming-truth-bundle-reused-from-authoritative-service]', {
+      bundleVersion: preBuiltBundle.version,
+      sectionsAvailable: preBuiltBundle.diagnostics.sectionsAvailable,
+      sectionsUnavailable: preBuiltBundle.diagnostics.sectionsUnavailable,
+      totalDataPoints: preBuiltBundle.diagnostics.totalDataPointsAcrossSections,
       derivedSignals: {
-        dosageConfidence: programmingTruthBundle.derivedSignals.dosageConfidence,
-        progressionConfidence: programmingTruthBundle.derivedSignals.progressionConfidence,
-        loadingConfidence: programmingTruthBundle.derivedSignals.loadingConfidence,
-        hasActiveConstraints: programmingTruthBundle.derivedSignals.hasActiveConstraints,
-        constraintInformedSelection: programmingTruthBundle.derivedSignals.constraintInformedSelection,
+        dosageConfidence: preBuiltBundle.derivedSignals.dosageConfidence,
+        progressionConfidence: preBuiltBundle.derivedSignals.progressionConfidence,
+        loadingConfidence: preBuiltBundle.derivedSignals.loadingConfidence,
       },
-      hasMeaningfulBenchmarks: hasMeaningfulBenchmarks(programmingTruthBundle),
-      hasPerformanceEnvelopes: hasPerformanceEnvelopeData(programmingTruthBundle),
-      hasEarnedHistory: hasEarnedTrainingHistory(programmingTruthBundle),
-      bundleConfidenceLevel: getBundleConfidenceLevel(programmingTruthBundle),
-      verdict: 'PROGRAMMING_TRUTH_BUNDLE_BUILT_SUCCESSFULLY',
+      hasMeaningfulBenchmarks: hasMeaningfulBenchmarks(preBuiltBundle),
+      hasPerformanceEnvelopes: hasPerformanceEnvelopeData(preBuiltBundle),
+      hasEarnedHistory: hasEarnedTrainingHistory(preBuiltBundle),
+      bundleConfidenceLevel: getBundleConfidenceLevel(preBuiltBundle),
+      verdict: 'AUTHORITATIVE_BUNDLE_REUSED__NO_PARALLEL_INGRESS',
     })
-  } catch (bundleErr) {
-    // Non-fatal: If bundle fails, generation continues with canonical profile only
-    console.warn('[programming-truth-bundle-build-failed]', {
-      error: bundleErr instanceof Error ? bundleErr.message : 'Unknown error',
-      fallbackBehavior: 'GENERATION_CONTINUES_WITH_CANONICAL_PROFILE_ONLY',
-    })
-    programmingTruthBundle = null
+  } else {
+    try {
+      // Resolve athlete ID for bundle building - use canonical profile userId
+      const bundleUserId = canonicalProfile.userId || 'unknown'
+      
+      // Build the truth bundle - this fetches from Neon in parallel
+      programmingTruthBundle = await buildProgrammingTruthBundle(
+        bundleUserId,
+        canonicalProfile as unknown as import('./canonical-profile-service').CanonicalProgrammingProfile
+      )
+      
+      // Log bundle diagnostics for dev verification
+      console.log('[programming-truth-bundle-built]', {
+        bundleVersion: programmingTruthBundle.version,
+        sectionsAvailable: programmingTruthBundle.diagnostics.sectionsAvailable,
+        sectionsUnavailable: programmingTruthBundle.diagnostics.sectionsUnavailable,
+        totalDataPoints: programmingTruthBundle.diagnostics.totalDataPointsAcrossSections,
+        buildDurationMs: programmingTruthBundle.diagnostics.buildDurationMs,
+        derivedSignals: {
+          dosageConfidence: programmingTruthBundle.derivedSignals.dosageConfidence,
+          progressionConfidence: programmingTruthBundle.derivedSignals.progressionConfidence,
+          loadingConfidence: programmingTruthBundle.derivedSignals.loadingConfidence,
+          hasActiveConstraints: programmingTruthBundle.derivedSignals.hasActiveConstraints,
+          constraintInformedSelection: programmingTruthBundle.derivedSignals.constraintInformedSelection,
+        },
+        hasMeaningfulBenchmarks: hasMeaningfulBenchmarks(programmingTruthBundle),
+        hasPerformanceEnvelopes: hasPerformanceEnvelopeData(programmingTruthBundle),
+        hasEarnedHistory: hasEarnedTrainingHistory(programmingTruthBundle),
+        bundleConfidenceLevel: getBundleConfidenceLevel(programmingTruthBundle),
+        verdict: 'PROGRAMMING_TRUTH_BUNDLE_BUILT_SUCCESSFULLY',
+      })
+    } catch (bundleErr) {
+      // Non-fatal: If bundle fails, generation continues with canonical profile only
+      console.warn('[programming-truth-bundle-build-failed]', {
+        error: bundleErr instanceof Error ? bundleErr.message : 'Unknown error',
+        fallbackBehavior: 'GENERATION_CONTINUES_WITH_CANONICAL_PROFILE_ONLY',
+      })
+      programmingTruthBundle = null
+    }
   }
   
   // TASK 6: Log schedule/duration truth consumption

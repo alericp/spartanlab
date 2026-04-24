@@ -307,6 +307,9 @@ export async function POST(request: Request) {
       timings: result.timings,
       summary: result.summary,
       parityVerdict: result.parityVerdict,
+      // [AUTHORITATIVE-INGRESS-UNIFICATION] Surface ingress proof so consumers can verify
+      // the program was built from canonical + bundle truth, not vague fallback logic.
+      generationIngressProof: result.generationIngressProof,
     })
     
   } catch (error) {

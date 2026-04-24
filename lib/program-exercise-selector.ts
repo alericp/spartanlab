@@ -5547,17 +5547,85 @@ const added = addExercise(
           filterByCurrentProgression(scoredForProgression, tertiaryEntry.skill)
 
         if (progressionSafe.length === 0) {
-          tertiarySkillsDeferred.push({
-            skill: tertiaryEntry.skill,
-            reason: `progression_cap_blocked_all_candidates(blocked=${progressionAudit.blockedCount})`,
-          })
-          console.log('[PHASE1-SELECTED-SKILL-LOCK] Tertiary skill ALL BLOCKED BY PROGRESSION CAP:', {
-            skill: tertiaryEntry.skill,
-            currentWorkingProgression: tertiaryEntry.currentWorkingProgression,
-            canonicalCandidateCount: canonicalCandidates.length,
-            blockedCount: progressionAudit.blockedCount,
-            canonicalSource,
-          })
+          // [PHASE-1B-REALISM-REROUTE] Direct progressions all blocked by realism
+          // cap. Per Phase 1B doctrine "REALISM REROUTE, NOT JUST CAP", we MUST
+          // try canonical_support (sub-skill regressions / structural support)
+          // for this same skill BEFORE deferring. Previously the skill silently
+          // disappeared whenever the user's currentWorkingProgression was below
+          // every direct rung available in the equipment-filtered pool — for a
+          // tuck-back-lever athlete on a session pool with only straddle/half-lay
+          // back-lever entries, back-lever vanished entirely instead of getting
+          // its support row (e.g. ring rows, scapular pulls).
+          let rerouteCandidate: Exercise | null = null
+          let rerouteSource: 'canonical_support_reroute' | null = null
+          if (canonicalSource === 'canonical_direct') {
+            try {
+              const advSupport = getAdvancedSkillSupport(tertiaryEntry.skill)
+              if (advSupport) {
+                const supportIds = new Set<string>()
+                for (const s of advSupport.primary) for (const id of s.exerciseIds) supportIds.add(id)
+                for (const s of advSupport.secondary) for (const id of s.exerciseIds) supportIds.add(id)
+                for (const id of advSupport.trunk.exerciseIds) supportIds.add(id)
+                const reroutePool = [...availableSkills, ...availableStrength, ...availableAccessory]
+                rerouteCandidate = reroutePool.find(e => supportIds.has(e.id) && !usedIds.has(e.id)) || null
+                if (rerouteCandidate) rerouteSource = 'canonical_support_reroute'
+              }
+            } catch {
+              // canonical support lookup failed; fall through to deferral
+            }
+          }
+
+          if (!rerouteCandidate) {
+            tertiarySkillsDeferred.push({
+              skill: tertiaryEntry.skill,
+              reason: `progression_cap_blocked_all_candidates_no_support_reroute(blocked=${progressionAudit.blockedCount})`,
+            })
+            console.log('[PHASE1-SELECTED-SKILL-LOCK] Tertiary skill ALL BLOCKED BY PROGRESSION CAP (reroute also empty):', {
+              skill: tertiaryEntry.skill,
+              currentWorkingProgression: tertiaryEntry.currentWorkingProgression,
+              canonicalCandidateCount: canonicalCandidates.length,
+              blockedCount: progressionAudit.blockedCount,
+              canonicalSource,
+            })
+            continue
+          }
+
+          // Reroute success: inject the support candidate as the tertiary row
+          const rerouteAdded = addExercise(
+            selectorCtx,
+            rerouteCandidate,
+            `[Tertiary Skill Reroute] ${tertiaryEntry.skill.replace(/_/g, ' ')} support (direct blocked by realism cap)`,
+            undefined, undefined, undefined, 'standalone',
+            {
+              primarySelectionReason: 'selected_skill_tertiary',
+              sessionRole: 'skill_secondary',
+              expressionMode: 'technical_focus',
+              influencingSkills: [{
+                skillId: tertiaryEntry.skill,
+                influence: 'selected',
+                expressionMode: 'support',
+              }],
+              doctrineSource: { type: 'skill_doctrine', ruleId: `getAdvancedSkillSupport.${tertiaryEntry.skill}` } as DoctrineSourceTrace,
+              candidatePoolSize: canonicalCandidates.length,
+            }
+          )
+          if (rerouteAdded) {
+            tertiarySlotsUsed++
+            tertiarySkillsExpressed.push(tertiaryEntry.skill)
+            console.log('[PHASE1B-REALISM-REROUTE-TERTIARY] Direct blocked, support reroute injected:', {
+              skill: tertiaryEntry.skill,
+              exerciseId: rerouteCandidate.id,
+              currentWorkingProgression: tertiaryEntry.currentWorkingProgression,
+              blockedDirectCount: progressionAudit.blockedCount,
+              rerouteSource,
+              verdict: 'REREROUTED_TO_SUPPORT_INSTEAD_OF_DEFERRING',
+            })
+          } else {
+            tertiarySkillsDeferred.push({
+              skill: tertiaryEntry.skill,
+              reason: 'reroute_candidate_rejected_load_or_doctrine',
+            })
+          }
           continue
         }
 
@@ -5592,8 +5660,20 @@ const added = addExercise(
           undefined, undefined, undefined, 'standalone',
           {
             primarySelectionReason: 'selected_skill_tertiary',
-            sessionRole: 'skill', // Tertiary gets skill role, not accessory
-            expressionMode: 'skill_technical', // Technical expression for visibility
+            // [PHASE-1B-SESSION-ASSEMBLY-LOCK] Use 'skill_secondary' (NOT 'skill').
+            // The architecture-slot enforcement at the bottom of selectMainExercises
+            // classifies rows by sessionRole into primary/secondary/support/other
+            // buckets. The legacy value 'skill' fell into `currentOther` and was
+            // silently erased whenever primary+secondary+support targets summed
+            // to maxExercises (typical 30/45-min compression). Routing tertiary
+            // injections through the secondary bucket is the canonical match
+            // (they ARE selected-skill secondary work) and is what allows the
+            // tertiary obligation to actually survive into the final committed
+            // session. The trace influence 'selected' below is what the
+            // FINAL-SELECTED-SKILL-COMMIT pass uses to identify these rows
+            // for protection / restoration.
+            sessionRole: 'skill_secondary',
+            expressionMode: 'technical_focus',
             influencingSkills: [{
               skillId: tertiaryEntry.skill,
               influence: 'selected',
@@ -5704,10 +5784,70 @@ const added = addExercise(
           filterByCurrentProgression(scoredForProgression, supportEntry.skill)
 
         if (progressionSafe.length === 0) {
-          supportSkillsDeferred.push({
-            skill: supportEntry.skill,
-            reason: `progression_cap_blocked_all_candidates(blocked=${progressionAudit.blockedCount})`,
-          })
+          // [PHASE-1B-REALISM-REROUTE] Support-role reroute. When the canonical
+          // builder returned canonical_direct (which happens for advanced skills
+          // whose support layer also overlaps direct rungs) and the realism cap
+          // blocked all of them, fall back to canonical_support PROPER (lower
+          // sub-skill regressions). This mirrors the tertiary-block reroute and
+          // is what prevents the support obligation from silently disappearing.
+          let rerouteCandidate: Exercise | null = null
+          if (canonicalSource === 'canonical_direct') {
+            try {
+              const advSupport = getAdvancedSkillSupport(supportEntry.skill)
+              if (advSupport) {
+                const supportIds = new Set<string>()
+                for (const s of advSupport.primary) for (const id of s.exerciseIds) supportIds.add(id)
+                for (const s of advSupport.secondary) for (const id of s.exerciseIds) supportIds.add(id)
+                for (const id of advSupport.trunk.exerciseIds) supportIds.add(id)
+                const reroutePool = [...availableSkills, ...availableStrength, ...availableAccessory]
+                rerouteCandidate = reroutePool.find(e => supportIds.has(e.id) && !usedIds.has(e.id)) || null
+              }
+            } catch {
+              // canonical support lookup failed; fall through to deferral
+            }
+          }
+
+          if (!rerouteCandidate) {
+            supportSkillsDeferred.push({
+              skill: supportEntry.skill,
+              reason: `progression_cap_blocked_all_candidates_no_support_reroute(blocked=${progressionAudit.blockedCount})`,
+            })
+            continue
+          }
+
+          const rerouteAdded = addExercise(
+            selectorCtx,
+            rerouteCandidate,
+            `[Support Skill Reroute] ${supportEntry.skill.replace(/_/g, ' ')} support (direct blocked by realism cap)`,
+            undefined, undefined, undefined, 'standalone',
+            {
+              primarySelectionReason: 'selected_skill_support',
+              sessionRole: 'accessory',
+              expressionMode: 'skill_accessory',
+              influencingSkills: [{
+                skillId: supportEntry.skill,
+                influence: 'selected',
+                expressionMode: 'support',
+              }],
+              doctrineSource: { type: 'skill_doctrine', ruleId: `getAdvancedSkillSupport.${supportEntry.skill}` } as DoctrineSourceTrace,
+              candidatePoolSize: canonicalCandidates.length,
+            }
+          )
+          if (rerouteAdded) {
+            supportSlotsUsed++
+            supportSkillsExpressed.push(supportEntry.skill)
+            console.log('[PHASE1B-REALISM-REROUTE-SUPPORT] Direct blocked, support reroute injected:', {
+              skill: supportEntry.skill,
+              exerciseId: rerouteCandidate.id,
+              blockedDirectCount: progressionAudit.blockedCount,
+              verdict: 'REREROUTED_TO_SUPPORT_INSTEAD_OF_DEFERRING',
+            })
+          } else {
+            supportSkillsDeferred.push({
+              skill: supportEntry.skill,
+              reason: 'reroute_candidate_rejected_load_or_doctrine',
+            })
+          }
           continue
         }
 
@@ -6260,7 +6400,285 @@ const added = addExercise(
     
     enforcedExercises = assembledExercises
   }
-  
+
+  // ==========================================================================
+  // [PHASE-1B-FINAL-SELECTED-SKILL-COMMIT] AUTHORITATIVE FINAL-COMMIT GUARANTEE
+  // ==========================================================================
+  // This is the LAST authoritative session-assembly step before audit / return.
+  // It exists because the architecture-slot enforcement above categorizes rows
+  // into primary/secondary/support/other buckets and silently drops rows that
+  // land in `currentOther` whenever primary+secondary+support targets saturate
+  // maxExercises. Even with the tertiary `sessionRole` fix above, edge cases
+  // remain (skills injected by upstream passes that didn't yet land in
+  // selected; skill rows demoted by .slice() when secondaryLimit < count).
+  //
+  // CONTRACT (Phase 1B Parts A-E):
+  //   A. For each materially-eligible selected skill (role !== 'deferred' in
+  //      materialSkillIntent OR present in selectedSkills), confirm the final
+  //      session committed at least one row representing that skill.
+  //   B. Reserved-budget protection: if a selected-skill row was injected into
+  //      `selected` but NOT in `enforcedExercises` (silent eviction), restore
+  //      it. If the budget is full, evict the lowest-priority NON-selected row
+  //      (accessory/core/support_volume; never a primary/spine; never another
+  //      selected-skill row).
+  //   C. Direct-before-support-before-erasure: when a skill never made it
+  //      into `selected` at all, run canonical_direct (cap by progression)
+  //      → canonical_support reroute → defer with reason. NEVER silently
+  //      erase.
+  //   D. Realism reroute: the canonical_support fallback IS the reroute. If
+  //      the realism cap blocks every direct rung for this skill, the support
+  //      pattern (sub-skill regressions) is what gets injected so the skill
+  //      stays visible.
+  //   E. Final commit visibility guarantee: the audit log below this block
+  //      records exactly which obligations were satisfied / restored / newly
+  //      injected / explicitly deferred for downstream materiality auditors.
+  //
+  // SCOPE GUARDS:
+  //   - This pass NEVER touches mirror corridor / live-session shell / UI.
+  //   - This pass NEVER inflates the session past maxExercises (eviction
+  //     swap is 1:1).
+  //   - This pass NEVER removes a primary-spine row, a row already tied to
+  //     a selected skill, or a row whose primaryGoal-related transferTo
+  //     marks it as the spine carrier.
+  //   - This pass uses ONLY the existing canonical sources
+  //     (ADVANCED_SKILL_FAMILIES + getAdvancedSkillSupport). No parallel
+  //     truth, no hardcoded exercise lists.
+  // ==========================================================================
+  {
+    const finalCommitRestoredRows: string[] = []
+    const finalCommitNewInjections: Array<{ skill: string; via: 'direct' | 'support' }> = []
+    const finalCommitEvicted: Array<{ exerciseId: string; reason: string }> = []
+    const finalCommitDeferred: Array<{ skill: string; reason: string }> = []
+
+    // Helper: does enforcedExercises already represent this skill?
+    const isSkillRepresented = (skill: string): boolean => {
+      const skillLower = safeLower(skill)
+      const skillNoUnderscore = skillLower.replace(/_/g, '')
+      return enforcedExercises.some(ex => {
+        const inf = ex.selectionContext?.influencingSkills?.[0]
+        if (inf?.skillId === skill || safeLower(inf?.skillId || '') === skillLower) return true
+        // Also accept transfer-tag-based representation (covers primary site
+        // injections that may not always set influencingSkills.skillId exactly)
+        if (exerciseTransfersToSkill(ex.exercise, skill)) return true
+        if (safeExerciseId(ex.exercise).includes(skillNoUnderscore)) return true
+        return false
+      })
+    }
+
+    // Helper: pick the lowest-priority eviction victim. NEVER evicts:
+    //   - selected-skill rows (would defeat the purpose)
+    //   - primary-spine / strength-primary rows
+    //   - rows whose transferTo already serves the primary goal (spine carrier)
+    const findEvictionVictimIndex = (): number => {
+      // Pass 1: prefer generic accessory / support_volume / no-role rows
+      let idx = enforcedExercises.findIndex((e) => {
+        const inf = e.selectionContext?.influencingSkills?.[0]
+        if (inf?.influence === 'selected') return false
+        const role = e.selectionContext?.sessionRole
+        const isPrimary = role === 'skill_primary' || role === 'strength_primary' || role === 'direct_skill'
+        if (isPrimary) return false
+        if (exerciseTransfersToSkill(e.exercise, primaryGoal)) return false
+        return role === 'accessory' || role === 'support_volume' || role === 'core' || !role
+      })
+      if (idx >= 0) return idx
+      // Pass 2: any non-primary, non-selected, non-spine-carrier row
+      idx = enforcedExercises.findIndex((e) => {
+        const inf = e.selectionContext?.influencingSkills?.[0]
+        if (inf?.influence === 'selected') return false
+        const role = e.selectionContext?.sessionRole
+        const isPrimary = role === 'skill_primary' || role === 'strength_primary' || role === 'direct_skill'
+        if (isPrimary) return false
+        if (exerciseTransfersToSkill(e.exercise, primaryGoal)) return false
+        return true
+      })
+      return idx
+    }
+
+    // PART B: restore selected-skill rows that were silently evicted by the
+    // architecture-slot enforcement above.
+    const enforcedIdsBefore = new Set(enforcedExercises.map(e => e.exercise.id))
+    const evictedSelectedSkillRows = selected.filter(row => {
+      if (enforcedIdsBefore.has(row.exercise.id)) return false
+      const inf = row.selectionContext?.influencingSkills?.[0]
+      return inf?.influence === 'selected'
+    })
+
+    for (const row of evictedSelectedSkillRows) {
+      const inf = row.selectionContext?.influencingSkills?.[0]!
+      const skillId = inf.skillId
+      // Skip if skill is already otherwise represented
+      if (isSkillRepresented(skillId)) continue
+
+      if (enforcedExercises.length < maxExercises) {
+        enforcedExercises.push(row)
+        finalCommitRestoredRows.push(skillId)
+        continue
+      }
+
+      const victimIdx = findEvictionVictimIndex()
+      if (victimIdx >= 0) {
+        const victim = enforcedExercises[victimIdx]
+        enforcedExercises.splice(victimIdx, 1, row)
+        finalCommitRestoredRows.push(skillId)
+        finalCommitEvicted.push({
+          exerciseId: victim.exercise.id,
+          reason: `evicted_to_restore_selected_skill_row(${skillId})`,
+        })
+      } else {
+        finalCommitDeferred.push({
+          skill: skillId,
+          reason: 'restoration_blocked_no_safe_eviction_target',
+        })
+      }
+    }
+
+    // PARTS A + C + D: catch skills that never made it into `selected` at all.
+    // Use materialSkillIntent (per-week role assignment) when available, else
+    // fall back to selectedSkills (full onboarding list).
+    const eligibleIntentEntries: Array<{ skill: string; role: string }> = []
+    if (materialSkillIntent && materialSkillIntent.length > 0) {
+      for (const e of materialSkillIntent) {
+        if (e.role === 'deferred' || e.role === 'primary_spine') continue
+        eligibleIntentEntries.push({ skill: e.skill, role: e.role })
+      }
+    } else if (selectedSkills && selectedSkills.length > 0) {
+      for (const s of selectedSkills) {
+        if (s === primaryGoal) continue
+        eligibleIntentEntries.push({ skill: s, role: 'tertiary' })
+      }
+    }
+
+    for (const entry of eligibleIntentEntries) {
+      if (isSkillRepresented(entry.skill)) continue
+
+      // PART C: canonical direct → reroute support → defer
+      const { candidates: directCandidates } = buildCanonicalSkillCandidates(
+        entry.skill,
+        [availableSkills, availableStrength, availableAccessory],
+        usedIds,
+      )
+
+      let chosen: Exercise | null = null
+      let via: 'direct' | 'support' = 'direct'
+
+      if (directCandidates.length > 0) {
+        const wrapped = directCandidates.map(e => ({ exercise: e }))
+        const { filtered } = filterByCurrentProgression(wrapped, entry.skill)
+        if (filtered.length > 0) {
+          chosen = filtered[0].exercise
+          via = 'direct'
+        }
+      }
+
+      // PART D: realism reroute to canonical_support
+      if (!chosen) {
+        try {
+          const advSupport = getAdvancedSkillSupport(entry.skill)
+          if (advSupport) {
+            const supportIds = new Set<string>()
+            for (const s of advSupport.primary) for (const id of s.exerciseIds) supportIds.add(id)
+            for (const s of advSupport.secondary) for (const id of s.exerciseIds) supportIds.add(id)
+            for (const id of advSupport.trunk.exerciseIds) supportIds.add(id)
+            const reroutePool = [...availableSkills, ...availableStrength, ...availableAccessory]
+            const supportCandidate = reroutePool.find(e => supportIds.has(e.id) && !usedIds.has(e.id)) || null
+            if (supportCandidate) {
+              chosen = supportCandidate
+              via = 'support'
+            }
+          }
+        } catch {
+          // canonical support lookup failed; fall through to defer
+        }
+      }
+
+      if (!chosen) {
+        finalCommitDeferred.push({
+          skill: entry.skill,
+          reason: 'no_canonical_candidate_after_realism_reroute',
+        })
+        continue
+      }
+
+      // Build a SelectedExercise row directly (we are past the addExercise/
+      // canAddMore phase by design — this is the final commit reservation).
+      const newRow: SelectedExercise = {
+        exercise: chosen,
+        sets: chosen.defaultSets || (chosen.category === 'skill' ? 3 : 3),
+        repsOrTime: chosen.defaultRepsOrTime || chosen.reps || chosen.time
+          || (chosen.category === 'skill' ? '10-20s' : chosen.category === 'core' ? '30s' : '8-12'),
+        isOverrideable: true,
+        selectionReason: `[Final Skill Obligation] ${entry.skill.replace(/_/g, ' ')} (${via})`,
+        selectionTrace: {
+          exerciseId: chosen.id,
+          exerciseName: chosen.name,
+          reason: 'fallback_rescue' as const,
+          expressionMode: via === 'direct' ? 'direct' : 'support',
+          sessionRole: via === 'direct' ? 'skill_secondary' : 'accessory',
+          source: { type: 'doctrine', ruleName: `final_obligation_${entry.role}` },
+        },
+        selectionContext: {
+          primarySelectionReason: 'selected_skill_final_obligation',
+          sessionRole: via === 'direct' ? 'skill_secondary' : 'accessory',
+          expressionMode: via === 'direct' ? 'technical_focus' : 'skill_accessory',
+          influencingSkills: [{
+            skillId: entry.skill,
+            influence: 'selected',
+            expressionMode: via === 'direct' ? 'technical' : 'support',
+          }],
+          doctrineSource: {
+            type: 'skill_doctrine',
+            ruleId: via === 'direct'
+              ? `ADVANCED_SKILL_FAMILIES.${entry.skill}.directProgressions(final_commit)`
+              : `getAdvancedSkillSupport.${entry.skill}(final_commit_reroute)`,
+          } as DoctrineSourceTrace,
+        },
+      }
+
+      if (enforcedExercises.length < maxExercises) {
+        enforcedExercises.push(newRow)
+        usedIds.add(chosen.id)
+        finalCommitNewInjections.push({ skill: entry.skill, via })
+      } else {
+        const victimIdx = findEvictionVictimIndex()
+        if (victimIdx >= 0) {
+          const victim = enforcedExercises[victimIdx]
+          enforcedExercises.splice(victimIdx, 1, newRow)
+          usedIds.add(chosen.id)
+          finalCommitNewInjections.push({ skill: entry.skill, via })
+          finalCommitEvicted.push({
+            exerciseId: victim.exercise.id,
+            reason: `evicted_to_inject_obligation(${entry.skill}/${via})`,
+          })
+        } else {
+          finalCommitDeferred.push({
+            skill: entry.skill,
+            reason: 'session_budget_full_no_safe_eviction_target',
+          })
+        }
+      }
+    }
+
+    console.log('[PHASE1B-FINAL-SELECTED-SKILL-COMMIT] Final-commit enforcement summary:', {
+      dayFocus: day.focus,
+      primaryGoal,
+      maxExercises,
+      enforcedExerciseCountBefore: enforcedIdsBefore.size,
+      enforcedExerciseCountAfter: enforcedExercises.length,
+      restoredEvictedRows: finalCommitRestoredRows,
+      newObligationInjections: finalCommitNewInjections,
+      evictedToMakeRoom: finalCommitEvicted,
+      deferredWithReason: finalCommitDeferred,
+      verdict:
+        finalCommitRestoredRows.length === 0 &&
+        finalCommitNewInjections.length === 0 &&
+        finalCommitDeferred.length === 0
+          ? 'ALL_SELECTED_SKILL_OBLIGATIONS_ALREADY_SATISFIED'
+          : (finalCommitDeferred.length === 0
+              ? 'SELECTED_SKILL_OBLIGATIONS_ENFORCED_AT_FINAL_COMMIT'
+              : 'PARTIAL_OBLIGATION_ENFORCEMENT_WITH_EXPLICIT_DEFERRALS'),
+    })
+  }
+
   // ==========================================================================
   // [SESSION-ARCHITECTURE-MATERIALIZATION] AUTHORITATIVE TRACE AUDIT
   // This audit tracks whether broader skill truth actually materialized into exercises

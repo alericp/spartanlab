@@ -431,6 +431,45 @@ export interface SelectedBodySnapshot {
   variantLabel: string
   estimatedMinutes: number
   exercises: AdaptiveSession['exercises']
+  /**
+   * [MIRROR-CORRIDOR-LOCKDOWN] The card's already-pruned styleMetadata for
+   * this exact selected body. When the card's selected body narrows to a
+   * variant, the full-session `styleMetadata.styledGroups` still references
+   * exercises that have been dropped from the visible body. Feeding the
+   * unpruned metadata downstream makes StreamlinedWorkoutSession's
+   * executionPlan builder produce blocks whose `memberExerciseIndexes`
+   * don't correspond to the visible exercise array, and the live machine's
+   * member-advance path (live-workout-machine.ts:1208) then jumps to
+   * wrong/ghost exercises -- i.e. grouped metadata becomes a SHADOW OWNER
+   * of exercise order, which is exactly the failure mode the mirror
+   * contract must eliminate.
+   *
+   * The card already computes `variantPrunedStyleMetadata` (see
+   * AdaptiveSessionCard.tsx) which filters styledGroups to only members
+   * present in the visible body and drops under-minimum groups. Stamping
+   * that pruned object into the snapshot is what lets the live workout's
+   * executionPlan builder derive from the SAME grouped owner the card
+   * rendered from -- byte-identical order and grouping in live runtime.
+   *
+   * Semantics:
+   *   - undefined : snapshot was stamped before mirror-lockdown, or no
+   *                 styleMetadata exists upstream at all. Route falls back
+   *                 to whatever `finalSession.styleMetadata` is already
+   *                 populated from the loader (the pre-lockdown behavior).
+   *   - null      : card intentionally has no grouped metadata for this
+   *                 selected body (e.g. all groups were pruned away, or
+   *                 the session is all-straight). Route should CLEAR
+   *                 finalSession.styleMetadata so downstream derives a
+   *                 flat executionPlan from the snapshot exercises only.
+   *   - object    : card's authoritative pruned styleMetadata. Route
+   *                 should assign it directly into finalSession.
+   *
+   * Loose `unknown` typing here matches the optional/session-level shape
+   * already used by `sessionAny.styleMetadata` in StreamlinedWorkoutSession's
+   * safe-contract normalizer. No type coupling on the upstream
+   * SessionStyleMetadata shape is added by this module.
+   */
+  styleMetadata?: unknown | null
 }
 
 export interface LaunchFingerprintPayload {

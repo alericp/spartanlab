@@ -1927,6 +1927,54 @@ if (styledGroups && styledGroups.length > 0) {
           : groupType === 'density_block' ? 0  // Density blocks are timed, not rest-based
           : 15
         
+        // [MIRROR-CORRIDOR-LOCKDOWN] Defensive drop of under-minimum blocks.
+        //
+        // When a snapshot-boot carries a pruned styleMetadata (the happy
+        // mirror-lockdown path), every kept group already has >= 1 surviving
+        // member by construction -- this filter is a no-op. It exists for
+        // two fallback cases:
+        //
+        //   1. Pre-lockdown stamped snapshot (styleMetadata left as the
+        //      loader's full-session metadata): grouped members that don't
+        //      exist in the narrow variant body produce empty
+        //      memberExercises / memberExerciseIndexes arrays. Pushing such
+        //      blocks into the plan causes live-workout-machine.ts:1208
+        //      (currentExerciseIndex: block.memberExerciseIndexes[i+1]) to
+        //      dereference `undefined` and advance to NaN -> the machine
+        //      strands on a ghost exercise.
+        //
+        //   2. Fallback-boot (no valid snapshot, loader body used): grouped
+        //      groups all materialize, so this is also a no-op.
+        //
+        // Method-minimum rules match the card's variantPrunedStyleMetadata
+        // filter for consistency:
+        //   - superset / circuit : >= 2 members (pairing IS the method)
+        //   - cluster / density_block : >= 1 member (method-only execution
+        //     styles applied to single exercises are legitimate)
+        //   - straight (null groupType) : >= 1 member
+        const isUnderMinimum =
+          memberExercises.length === 0 ||
+          ((groupType === 'superset' || groupType === 'circuit') &&
+            memberExercises.length < 2)
+
+        if (isUnderMinimum) {
+          console.warn(
+            '[MIRROR-CORRIDOR-LOCKDOWN] Dropping under-minimum block from executionPlan',
+            {
+              blockId: group.id,
+              groupType,
+              memberCount: memberExercises.length,
+              reason:
+                memberExercises.length === 0
+                  ? 'no members matched snapshot exercises (shadow-owner guard)'
+                  : 'under method minimum (superset/circuit < 2)',
+              note:
+                'Pre-lockdown snapshot or loader fallback. Safely dropped to avoid live-workout-machine member-advance referencing ghost exercises.',
+            }
+          )
+          continue
+        }
+
         blocks.push({
           blockId: group.id,
           groupType,
@@ -1939,7 +1987,14 @@ if (styledGroups && styledGroups.length > 0) {
           postBlockRestSeconds: 120,
         })
       }
-      
+
+      // [MIRROR-CORRIDOR-LOCKDOWN] If every group was under-minimum and
+      // got dropped, `hasGroupedBlocks` was already flipped to true above
+      // by the first grouped group seen. Recompute it against the actually-
+      // kept blocks so downstream `executionPlan.hasGroupedBlocks` reflects
+      // real structure, not the pre-filter intent.
+      hasGroupedBlocks = blocks.some(b => b.groupType !== null)
+
       executionPlan = { blocks, hasGroupedBlocks, totalSets }
     } else {
       // FALLBACK PATH: Derive from flat exercise blockId fields

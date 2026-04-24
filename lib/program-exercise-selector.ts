@@ -2189,9 +2189,33 @@ function getAdvancedSkillExercises(
     }
     
     // [advanced-skill-expression] ISSUE C: Other advanced skills
-    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
-    if (skill === 'back_lever' || skill === 'dragon_flag' || skill === 'planche_pushup' ||
-        skill === 'one_arm_pull_up' || skill === 'one_arm_chin_up' || skill === 'one_arm_push_up') {
+    // [PHASE 3D REGISTRY-BREADTH-LOCK] Pre-3D this branch was a hardcoded
+    // allow-list:
+    //   if (skill === 'back_lever' || skill === 'dragon_flag' ||
+    //       skill === 'planche_pushup' || skill === 'one_arm_pull_up' ||
+    //       skill === 'one_arm_chin_up' || skill === 'one_arm_push_up')
+    // That list silently EXCLUDED `planche`, `front_lever`, `handstand`,
+    // `v_sit`, `l_sit`, `muscle_up` — the exact families the saved athlete
+    // truth selects (planche primary, FL secondary, plus handstand and
+    // v-sit). Even when the registry contained their entries, this gate
+    // never let them through, so the recommendation pass returned nothing
+    // and generic scoring took over. That was the dominant reason the
+    // visible output kept feeling underexpressed despite truth gains.
+    //
+    // Fix: the recommendation pass now runs for ANY advanced family that
+    // isn't HSPU (HSPU stays in its own branch above because it carries a
+    // doctrine-specific day-focus gate). The single source of truth is
+    // `ADVANCED_SKILL_FAMILIES`. Future additions to the registry will
+    // automatically reach this pass without requiring a parallel edit
+    // here — closing the class of bug entirely, not just the instance.
+    //
+    // Doctrine safety preserved:
+    //   - `isAdvancedSkill(skill)` already gates entry at L2163
+    //   - Pool availability still filters via the .find() below
+    //   - One recommendation per skill (the `break` statement)
+    //   - expressionMode priority weighting unchanged
+    //   - HSPU's day-focus gate above unchanged
+    else if (skill !== 'hspu') {
       const progressions = advancedFamily.directProgressions
       for (const exId of progressions) {
         if (!exId) continue // Skip undefined exercise IDs

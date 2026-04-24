@@ -2804,8 +2804,30 @@ export const ADVANCED_SKILL_FAMILIES: Record<string, {
     maxFrequencyPerWeek: 4,
     supportPatterns: ['planche_lean', 'straight_arm_push', 'protraction'],
     technicalSlotWeight: 0.5,
-    // Pool IDs: `planche_lean`, `tuck_planche`, `adv_tuck_planche`, `straddle_planche`, `banded_planche_hold`
-    directProgressions: ['planche_lean', 'tuck_planche', 'adv_tuck_planche', 'straddle_planche', 'banded_planche_hold'],
+    // [PHASE 3D REGISTRY-BREADTH-LOCK] Planche directProgressions previously
+    // shipped only static holds. For an advanced planche-primary athlete,
+    // the dynamic pseudo-planche pressing rows ARE direct planche expression
+    // — they live in the same skill family and contribute the same straight-
+    // arm push pattern under load. The pre-3D registry forced advanced
+    // athletes into the static-hold ladder only, even when the pool already
+    // shipped the dynamic rows that this exact level needs.
+    //
+    // Verified pool IDs added:
+    //   • `pppu`                (L783) — pseudo planche push-up (canonical)
+    //   • `planche_lean_pushup` (L800) — planche-lean range pushup, direct
+    //                                    bridge from lean → tuck planche
+    //
+    // Static holds remain at the front for proximity-ranking when athlete
+    // current-working-level is below the dynamic-press tier.
+    directProgressions: [
+      'planche_lean',
+      'planche_lean_pushup',
+      'tuck_planche',
+      'pppu',
+      'adv_tuck_planche',
+      'straddle_planche',
+      'banded_planche_hold',
+    ],
     requiresPrerequisites: true,
   },
   front_lever: {
@@ -2817,8 +2839,35 @@ export const ADVANCED_SKILL_FAMILIES: Record<string, {
     maxFrequencyPerWeek: 3,
     supportPatterns: ['straight_arm_pull', 'horizontal_pull', 'core_anti_extension'],
     technicalSlotWeight: 0.4,
-    // Pool IDs: `tuck_fl`, `adv_tuck_fl`, `one_leg_fl`, `straddle_fl`, `banded_fl_hold`
-    directProgressions: ['tuck_fl', 'adv_tuck_fl', 'one_leg_fl', 'straddle_fl', 'banded_fl_hold'],
+    // [PHASE 3D REGISTRY-BREADTH-LOCK] Front lever directProgressions previously
+    // contained STATIC HOLDS ONLY — `tuck_fl`, `adv_tuck_fl`, `one_leg_fl`,
+    // `straddle_fl`, `banded_fl_hold`. For an advanced athlete with FL as a
+    // selected skill, dynamic FL carryover (rows, raises, ice cream makers,
+    // tuck FL pulls) IS direct expression of the skill — the same way a
+    // weighted-pullup is direct pull-up expression. The pre-3D registry forced
+    // all FL athletes onto static holds even when the pool already shipped
+    // the dynamic rows.
+    //
+    // Verified pool IDs added (all from adaptive-exercise-pool.ts):
+    //   • `tuck_front_lever_pull` (L678) — dynamic tuck FL pull carryover
+    //   • `fl_rows`                (L848) — front lever row, the canonical
+    //                                       FL strength accumulation row
+    //   • `ice_cream_maker`        (L862) — eccentric tuck-to-FL control,
+    //                                       direct pre-FL-pullup carryover
+    //
+    // Order is low → high difficulty. Static holds remain at the front so the
+    // proximity-ranker still surfaces them for athletes whose current working
+    // level is below the dynamic tier.
+    directProgressions: [
+      'tuck_fl',
+      'adv_tuck_fl',
+      'fl_rows',
+      'tuck_front_lever_pull',
+      'one_leg_fl',
+      'ice_cream_maker',
+      'straddle_fl',
+      'banded_fl_hold',
+    ],
     requiresPrerequisites: true,
   },
   hspu: {
@@ -2941,6 +2990,139 @@ export const ADVANCED_SKILL_FAMILIES: Record<string, {
     // `pppu`. `one_arm_push_up_*` dropped (not in pool).
     directProgressions: ['push_up', 'diamond_pushup', 'ring_push_up', 'archer_push_up', 'pppu'],
     requiresPrerequisites: false,
+  },
+
+  // ===========================================================================
+  // [PHASE 3D REGISTRY-BREADTH-LOCK] Four advanced skill families ADDED.
+  //
+  // These four skills (handstand, v_sit, l_sit, muscle_up) all had:
+  //   • full pool ID coverage in lib/adaptive-exercise-pool.ts
+  //   • full readiness factor coverage in advanced-skills-integration.ts
+  //   • full progression node coverage in skill graphs
+  // ...but were entirely MISSING from `ADVANCED_SKILL_FAMILIES`. Because
+  // `isAdvancedSkill()` reads from this registry's keys, the advanced-skill
+  // enforcement pass at program-exercise-selector.ts L6442+ silently
+  // skipped any athlete who selected ONLY these skills — the very families
+  // our advanced hybrid athlete profile most depends on (handstand and v-sit
+  // are explicitly in the saved athlete truth).
+  //
+  // Result pre-3D: athlete selects handstand + v-sit, generic scoring
+  // takes over, sessions surface generic pull-ups / push-ups / leg raises
+  // instead of skill-specific direct progressions. Exactly the
+  // "shallow / underexpressed" symptom diagnosed in the phase brief.
+  //
+  // Each entry below uses ONLY pool IDs verified to exist in
+  // adaptive-exercise-pool.ts. directProgressions ordered low → high.
+  // ===========================================================================
+
+  handstand: {
+    displayName: 'Handstand',
+    category: 'push',
+    subcategory: 'vertical',
+    tendonSensitive: false,
+    minFrequencyPerWeek: 3,
+    maxFrequencyPerWeek: 5, // Handstand benefits from high frequency
+    supportPatterns: ['vertical_push', 'overhead_press', 'shoulder_stability'],
+    technicalSlotWeight: 0.4,
+    // Pool IDs verified (low → high):
+    //   `wall_hs_hold`              (L282)
+    //   `wall_handstand_hold`       (L1212) — alias of wall_hs_hold variant
+    //   `handstand_shoulder_taps`   (L1230)
+    //   `freestanding_hs_hold`      (L337)
+    //   `freestanding_handstand_hold` (L1264)
+    directProgressions: [
+      'wall_hs_hold',
+      'wall_handstand_hold',
+      'handstand_shoulder_taps',
+      'freestanding_hs_hold',
+      'freestanding_handstand_hold',
+    ],
+    requiresPrerequisites: false,
+  },
+
+  v_sit: {
+    displayName: 'V-Sit',
+    category: 'core',
+    subcategory: 'compression',
+    tendonSensitive: false,
+    minFrequencyPerWeek: 3,
+    maxFrequencyPerWeek: 5,
+    supportPatterns: ['compression_core', 'hip_flexibility', 'scapular_control'],
+    technicalSlotWeight: 0.3,
+    // Pool IDs verified (low → high):
+    //   `tuck_l_sit`        (L1873) — foundation compression
+    //   `single_leg_l_sit`  (L1891) — unilateral compression
+    //   `l_sit_skill`       (L1909) — full l-sit (v-sit prerequisite)
+    //   `advanced_l_sit`    (L1927) — straddle/elevated variants
+    //   `v_sit_progression` (L1947) — direct v-sit
+    //   `v_sit_hold`        (L1965) — full v-sit
+    //   `manna_progression` (L1984) — terminal compression skill
+    directProgressions: [
+      'tuck_l_sit',
+      'single_leg_l_sit',
+      'l_sit_skill',
+      'advanced_l_sit',
+      'v_sit_progression',
+      'v_sit_hold',
+      'manna_progression',
+    ],
+    requiresPrerequisites: true,
+  },
+
+  l_sit: {
+    displayName: 'L-Sit',
+    category: 'core',
+    subcategory: 'compression',
+    tendonSensitive: false,
+    minFrequencyPerWeek: 3,
+    maxFrequencyPerWeek: 5,
+    supportPatterns: ['compression_core', 'dip_pattern', 'scapular_control'],
+    technicalSlotWeight: 0.25,
+    // Pool IDs verified (low → high):
+    //   `tuck_l_sit`        (L1873)
+    //   `single_leg_l_sit`  (L1891)
+    //   `l_sit_core`        (L1697) — l-sit as a core anchor row
+    //   `l_sit_skill`       (L1909) — full floor l-sit
+    //   `advanced_l_sit`    (L1927)
+    //   `hanging_l_sit`     (L1569) — hanging l-sit (advanced variant)
+    directProgressions: [
+      'tuck_l_sit',
+      'single_leg_l_sit',
+      'l_sit_core',
+      'l_sit_skill',
+      'advanced_l_sit',
+      'hanging_l_sit',
+    ],
+    requiresPrerequisites: false,
+  },
+
+  muscle_up: {
+    displayName: 'Muscle-Up',
+    category: 'pull',
+    subcategory: 'bent_arm',
+    tendonSensitive: false,
+    minFrequencyPerWeek: 2,
+    maxFrequencyPerWeek: 3,
+    supportPatterns: ['vertical_pull', 'dip_pattern', 'transition_control'],
+    technicalSlotWeight: 0.4,
+    // Pool IDs verified (low → high):
+    //   `chest_to_bar_pull_up`        (L610) — height prerequisite
+    //   `explosive_pull_up`           (L999) — explosive pulling base
+    //   `muscle_up_negative`          (L1016)
+    //   `muscle_up_negative_skill`    (L516) — skill-tier negative
+    //   `muscle_up_transition_drill`  (L1034)
+    //   `strict_muscle_up`            (L534)
+    //   `ring_muscle_up`              (L551) — ring variant
+    directProgressions: [
+      'chest_to_bar_pull_up',
+      'explosive_pull_up',
+      'muscle_up_negative',
+      'muscle_up_negative_skill',
+      'muscle_up_transition_drill',
+      'strict_muscle_up',
+      'ring_muscle_up',
+    ],
+    requiresPrerequisites: true,
   },
 }
 

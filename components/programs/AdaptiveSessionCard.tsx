@@ -669,6 +669,32 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       exercises: cardResolvedBody.exercises,
       estimatedMinutes: cardResolvedBody.estimatedMinutes,
     })
+    // =====================================================================
+    // [PROGRAM-TO-LIVE MIRROR CONTRACT] Stamp the FULL visible main-body
+    // snapshot -- not just the fingerprint.
+    //
+    // Prior behavior stamped only a thin fingerprint (ordered ids + counts)
+    // and let the live workout route re-call `buildSelectedVariantMain`
+    // against `loadAuthoritativeSession` result. Two problems with that:
+    //
+    //   (a) program-state (card input) vs loadAuthoritativeSession (route
+    //       input) read session data through different paths. Any subtle
+    //       hydration / week-scaling / normalizer drift between them
+    //       produced two different session skeletons into the same shared
+    //       builder -- same algorithm, different inputs -> different
+    //       bodies -> the fingerprint parity chip flipped to MISMATCH,
+    //       but the live workout still booted the re-derived body.
+    //   (b) Full-session launches additionally pick up loader-applied
+    //       `scaled*` dosage fields on each row, while the card renders
+    //       raw (unscaled) dosage for the same session. For non-week-1
+    //       Full launches this alone causes a visible row-level drift.
+    //
+    // The fix is: the card stamps the exact exercise array it resolved
+    // (same as what fed `MainExercisesRenderer`), and the route boots
+    // from that snapshot directly when valid. If snapshot is absent or
+    // structurally invalid, route falls back to the loader+builder
+    // re-derivation so nothing regresses.
+    // =====================================================================
     stampLaunchFingerprint({
       dayNumber: session.dayNumber || 1,
       variantIndex: selectedCanonicalIdx,
@@ -676,9 +702,30 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       fingerprint: cardFingerprint,
       resolvedFrom: cardResolvedBody.resolvedFrom,
       launchUrl: selectedSessionContract.selectedLaunchUrl,
+      selectedBody: {
+        executionMode: selectedSessionContract.selectedExecutionMode,
+        // currentWeekNumber is the exact week the Program page selected for
+        // dosage display (prop threaded in from app/(app)/program/page.tsx).
+        // Null-tolerant: live route will ignore it for snapshot-boot
+        // validation and only use it as an audit field.
+        weekNumber:
+          typeof currentWeekNumber === 'number' ? currentWeekNumber : null,
+        variantIndex: selectedCanonicalIdx,
+        variantLabel: selectedSessionContract.selectedVariantLabel,
+        estimatedMinutes:
+          typeof cardResolvedBody.estimatedMinutes === 'number'
+            ? cardResolvedBody.estimatedMinutes
+            : typeof selectedSessionContract.selectedEstimatedMinutes === 'number'
+              ? selectedSessionContract.selectedEstimatedMinutes
+              : 60,
+        // resolvedBody.exercises is the EXACT body feeding the card's
+        // MainExercisesRenderer (same reference path via displayExercises
+        // + activeSessionView). Serializable: plain objects only.
+        exercises: cardResolvedBody.exercises,
+      },
     })
 
-    console.log('[SELECTED-SESSION-CONTRACT] Start Workout launch', {
+    console.log('[PROGRAM-TO-LIVE MIRROR CONTRACT] Start Workout launch stamp', {
       dayNumber: session.dayNumber,
       selectedVariantIndex: selectedCanonicalIdx,
       selectedVariantLabel: selectedSessionContract.selectedVariantLabel,
@@ -688,6 +735,12 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       // Parity stamp
       cardResolvedFrom: cardResolvedBody.resolvedFrom,
       cardFingerprint,
+      // Mirror stamp proof
+      snapshotStamped: true,
+      snapshotExerciseCount: cardResolvedBody.exercises.length,
+      snapshotExerciseIds: cardResolvedBody.exercises.map(e => e.id),
+      snapshotWeekNumber:
+        typeof currentWeekNumber === 'number' ? currentWeekNumber : null,
     })
     router.push(selectedSessionContract.selectedLaunchUrl)
   }

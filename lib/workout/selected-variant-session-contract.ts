@@ -399,6 +399,40 @@ export function compareFingerprints(
 // SESSION STORAGE BRIDGE
 // ============================================================================
 
+/**
+ * [PROGRAM-TO-LIVE MIRROR CONTRACT] The exact visible main-body snapshot the
+ * Program card resolved right before router.push. This is NOT a fingerprint
+ * (thin audit surface) -- it is the authoritative boot payload the live
+ * workout route consumes DIRECTLY when valid. It exists so the card and the
+ * route no longer independently call `buildSelectedVariantMain` against
+ * potentially-diverging session inputs (program-state vs loadAuthoritativeSession)
+ * and silently end up with two different bodies for the same requested
+ * (day, variantIndex, week, mode) tuple.
+ *
+ * Required fields:
+ *   - executionMode : 'full' | '45_min' | '30_min' authoritative mode
+ *   - weekNumber    : selected week the card displayed dosage for
+ *   - variantIndex  : canonical variant idx (mirrors URL ?variant=)
+ *   - variantLabel  : "Full Session" / "45 Min" / "30 Min"
+ *   - estimatedMinutes : the exact minutes shown on the card for this mode
+ *   - exercises     : the card's visible main-body exercises in render order,
+ *                     with every field the live workout reads
+ *                     (id, name, category, sets, repsOrTime, note,
+ *                      isOverrideable, selectionReason, prescribedLoad,
+ *                      targetRPE, restSeconds, method, methodLabel, blockId,
+ *                      setExecutionMethod, wasAdapted, coachingMeta). Scaled
+ *                      dosage is NOT re-applied downstream -- the snapshot
+ *                      already reflects the card's authoritative display.
+ */
+export interface SelectedBodySnapshot {
+  executionMode: 'full' | '45_min' | '30_min'
+  weekNumber: number | null
+  variantIndex: number
+  variantLabel: string
+  estimatedMinutes: number
+  exercises: AdaptiveSession['exercises']
+}
+
 export interface LaunchFingerprintPayload {
   dayNumber: number | string
   variantIndex: number
@@ -408,6 +442,133 @@ export interface LaunchFingerprintPayload {
   resolvedFrom: SelectedVariantMainResult['resolvedFrom']
   /** The exact URL pushed by the card; pure audit surface. */
   launchUrl: string
+  /**
+   * [PROGRAM-TO-LIVE MIRROR CONTRACT] Full visible main-body snapshot, used
+   * by the live workout route as the primary boot source. Absent (undefined)
+   * is tolerated for backward-compat with older stamps (payload.fingerprint
+   * alone still yields the parity diagnostic); when absent, the route falls
+   * back to loader + buildSelectedVariantMain re-derivation. When present
+   * AND structurally valid, the route boots from this payload directly.
+   */
+  selectedBody?: SelectedBodySnapshot
+}
+
+// ============================================================================
+// SNAPSHOT VALIDATION
+// ============================================================================
+
+export interface SnapshotValidation {
+  valid: boolean
+  /** Null when valid. One short reason string when invalid. */
+  reason:
+    | null
+    | 'snapshot_missing'
+    | 'snapshot_not_object'
+    | 'exercises_not_array'
+    | 'exercises_empty'
+    | 'exercise_row_missing_id_or_name'
+    | 'exercises_order_mismatch_fingerprint'
+    | 'resolvedFrom_divergent'
+    | 'variantIndex_mismatch'
+    | 'executionMode_invalid'
+  /** Diagnostic counters for the log. */
+  detail: {
+    hasSelectedBody: boolean
+    exerciseCount: number | null
+    fingerprintIdCount: number | null
+    firstMismatchIndex: number | null
+  }
+}
+
+/**
+ * Validate a stamped launch payload for direct snapshot-boot.
+ *
+ * Strictness is intentional: any structural weakness drops the route back
+ * to its legacy loader+builder fallback path. A "close but not exact"
+ * snapshot is NOT allowed to boot the live workout because the whole point
+ * of the mirror contract is exact parity with the visible Program card.
+ *
+ * Checks:
+ *   1. selectedBody exists and is an object
+ *   2. selectedBody.exercises is a non-empty array
+ *   3. every exercise row has a non-empty id AND a non-empty name
+ *   4. the ordered ids in selectedBody.exercises match the ordered ids in
+ *      the companion fingerprint (internal consistency)
+ *   5. resolvedFrom is 'variant' or 'full' (NOT 'variant_missing' /
+ *      'variant_hollow' -- those are explicit divergence markers and must
+ *      not snapshot-boot)
+ *   6. variantIndex matches between snapshot and payload
+ *   7. executionMode is a known value
+ */
+export function validateSelectedBodySnapshot(
+  payload: LaunchFingerprintPayload | null | undefined
+): SnapshotValidation {
+  const detail: SnapshotValidation['detail'] = {
+    hasSelectedBody: false,
+    exerciseCount: null,
+    fingerprintIdCount: null,
+    firstMismatchIndex: null,
+  }
+  if (!payload) return { valid: false, reason: 'snapshot_missing', detail }
+  const sb = payload.selectedBody
+  if (!sb || typeof sb !== 'object') {
+    return { valid: false, reason: 'snapshot_missing', detail }
+  }
+  detail.hasSelectedBody = true
+
+  if (!Array.isArray(sb.exercises)) {
+    return { valid: false, reason: 'exercises_not_array', detail }
+  }
+  detail.exerciseCount = sb.exercises.length
+  if (sb.exercises.length === 0) {
+    return { valid: false, reason: 'exercises_empty', detail }
+  }
+
+  for (let i = 0; i < sb.exercises.length; i++) {
+    const row = sb.exercises[i] as unknown as { id?: unknown; name?: unknown }
+    const hasId = typeof row?.id === 'string' && row.id.length > 0
+    const hasName = typeof row?.name === 'string' && row.name.length > 0
+    if (!hasId || !hasName) {
+      detail.firstMismatchIndex = i
+      return { valid: false, reason: 'exercise_row_missing_id_or_name', detail }
+    }
+  }
+
+  // Internal consistency vs fingerprint (same stamp, same card build).
+  const fpIds = Array.isArray(payload.fingerprint?.exerciseIds)
+    ? payload.fingerprint.exerciseIds
+    : []
+  detail.fingerprintIdCount = fpIds.length
+  // Fingerprint only stamps non-empty ids; snapshot iterator above already
+  // guaranteed every row has a non-empty id, so lengths must match.
+  if (fpIds.length !== sb.exercises.length) {
+    return { valid: false, reason: 'exercises_order_mismatch_fingerprint', detail }
+  }
+  for (let i = 0; i < fpIds.length; i++) {
+    const snapId = (sb.exercises[i] as unknown as { id?: string })?.id
+    if (fpIds[i] !== snapId) {
+      detail.firstMismatchIndex = i
+      return { valid: false, reason: 'exercises_order_mismatch_fingerprint', detail }
+    }
+  }
+
+  if (payload.resolvedFrom !== 'variant' && payload.resolvedFrom !== 'full') {
+    return { valid: false, reason: 'resolvedFrom_divergent', detail }
+  }
+
+  if (sb.variantIndex !== payload.variantIndex) {
+    return { valid: false, reason: 'variantIndex_mismatch', detail }
+  }
+
+  if (
+    sb.executionMode !== 'full' &&
+    sb.executionMode !== '45_min' &&
+    sb.executionMode !== '30_min'
+  ) {
+    return { valid: false, reason: 'executionMode_invalid', detail }
+  }
+
+  return { valid: true, reason: null, detail }
 }
 
 export function stampLaunchFingerprint(payload: LaunchFingerprintPayload): void {

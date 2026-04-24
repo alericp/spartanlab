@@ -102,9 +102,11 @@ import {
   buildSessionFingerprint,
   compareFingerprints,
   readLaunchFingerprint,
+  validateSelectedBodySnapshot,
   type SessionFingerprint,
   type FingerprintComparison,
   type LaunchFingerprintPayload,
+  type SnapshotValidation,
 } from '@/lib/workout/selected-variant-session-contract'
 
 // =============================================================================
@@ -744,6 +746,24 @@ function WorkoutSessionContent() {
   const [routeResolvedFrom, setRouteResolvedFrom] = useState<
     'variant' | 'full' | 'variant_missing' | 'variant_hollow' | null
   >(null)
+  // [PROGRAM-TO-LIVE MIRROR CONTRACT] Which source actually drove the boot:
+  //   visible_snapshot          -> snapshot passed validation; live body IS
+  //                                the exact array the Program card rendered
+  //   fallback_loaded_session   -> snapshot missing/invalid; live body came
+  //                                from loadAuthoritativeSession +
+  //                                buildSelectedVariantMain re-derivation
+  //   recovery_fallback         -> reserved for future recovery path (not
+  //                                currently emitted; included for contract
+  //                                completeness)
+  // This is the single source of truth for "was the mirror honored?". The
+  // parity chip still reports the diagnostic diff between card-stamped and
+  // route-re-derived fingerprints so any silent drift in the fallback path
+  // remains visible, but the actual live body now prefers the snapshot.
+  const [bootSource, setBootSource] = useState<
+    'visible_snapshot' | 'fallback_loaded_session' | 'recovery_fallback' | null
+  >(null)
+  const [snapshotValidation, setSnapshotValidation] =
+    useState<SnapshotValidation | null>(null)
   // [PHASE-X+1] Error state removed - authoritative loader handles all errors internally
   
   useEffect(() => {
@@ -1106,48 +1126,116 @@ function WorkoutSessionContent() {
         })
       }
       
+      // =======================================================================
+      // [PROGRAM-TO-LIVE MIRROR CONTRACT] Mirror-boot decision.
+      //
+      // Before `setSession(finalSession)` runs, read the Program-card launch
+      // snapshot and, if it passes strict structural validation, OVERRIDE
+      // finalSession.exercises + finalSession.estimatedMinutes with the
+      // exact visible array the card rendered. This closes the remaining
+      // owner split where both sides called the same builder but fed it
+      // subtly different input sessions (program-state vs loader) and
+      // therefore produced drifted bodies.
+      //
+      // Storage key must match what the card wrote. Card writes with
+      // `session.dayNumber || 1`, which is exactly what it then serialized
+      // into the URL as `?day=...`. Reading by dayParam here (the URL
+      // truth) is therefore guaranteed to hit the same key on both sides.
+      // =======================================================================
+      const parsedDay = dayParam ? parseInt(dayParam, 10) : NaN
+      const keyDay =
+        Number.isFinite(parsedDay) && parsedDay >= 1
+          ? parsedDay
+          : (finalSession.dayNumber ?? 1)
+      const expectedPayload = readLaunchFingerprint(keyDay, variantIndex)
+      setExpectedLaunchPayload(expectedPayload)
+
+      const validation = validateSelectedBodySnapshot(expectedPayload)
+      setSnapshotValidation(validation)
+
+      // Capture the loader-derived body BEFORE any override so the parity
+      // diagnostic fingerprint reports what re-derivation WOULD have
+      // produced (critical audit surface even when snapshot boot succeeds).
+      const loaderDerivedExercises = finalSession.exercises
+      const loaderDerivedEstimatedMinutes = finalSession.estimatedMinutes
+
+      // ---- Mirror boot branch ----
+      if (validation.valid && expectedPayload?.selectedBody) {
+        const sb = expectedPayload.selectedBody
+        finalSession = {
+          ...finalSession,
+          exercises: sb.exercises,
+          estimatedMinutes: sb.estimatedMinutes,
+        }
+        setBootSource('visible_snapshot')
+        console.log('[PROGRAM-TO-LIVE MIRROR CONTRACT] BOOT_FROM_SNAPSHOT', {
+          variantIndex,
+          executionMode,
+          snapshotExerciseCount: sb.exercises.length,
+          snapshotExerciseIds: sb.exercises.map(
+            (e: { id?: string }) => e.id ?? null
+          ),
+          snapshotEstimatedMinutes: sb.estimatedMinutes,
+          snapshotWeekNumber: sb.weekNumber,
+          snapshotVariantLabel: sb.variantLabel,
+          // Loader-side derivation was NOT used for boot, but we show what
+          // it would have produced for diagnostic value.
+          loaderDerivedExerciseCount: loaderDerivedExercises.length,
+          loaderDerivedEstimatedMinutes,
+          loaderDerivedFirstId: loaderDerivedExercises[0]?.id ?? null,
+          loaderDerivedLastId:
+            loaderDerivedExercises[loaderDerivedExercises.length - 1]?.id ?? null,
+        })
+      } else {
+        setBootSource('fallback_loaded_session')
+        console.log('[PROGRAM-TO-LIVE MIRROR CONTRACT] BOOT_FROM_LOADER (snapshot unusable)', {
+          variantIndex,
+          executionMode,
+          validationReason: validation.reason,
+          validationDetail: validation.detail,
+          hasStampedPayload: !!expectedPayload,
+          resolvedFrom: expectedPayload?.resolvedFrom ?? null,
+          loaderDerivedExerciseCount: loaderDerivedExercises.length,
+          note:
+            'No snapshot or snapshot failed validation; fell back to loader + buildSelectedVariantMain re-derivation. Parity chip below will surface any drift between the card stamp and the re-derived body.',
+        })
+      }
+
       // Set session and meta - GUARANTEED to have valid session
       setSession(finalSession)
       setSessionMeta(result.meta)
 
       // =======================================================================
-      // [SELECTED-VARIANT-SESSION-CONTRACT] Parity proof.
+      // [SELECTED-VARIANT-SESSION-CONTRACT] Parity diagnostic.
       //
-      // Build the route's ACTUAL fingerprint from the session it is about
-      // to hand to StreamlinedWorkoutSession, then read the expected
-      // fingerprint the Program card stamped right before router.push, and
-      // diff them. The PARITY chip rendered in the proof panel reports:
+      // The parity chip continues to report the diff between the card's
+      // stamped fingerprint and the route's re-derived fingerprint (built
+      // from `loaderDerivedExercises`, NOT from the mirrored body). This
+      // keeps the diagnostic honest: PARITY:OK means the loader and the
+      // card agree byte-for-byte on the fingerprint surface. PARITY:MISMATCH
+      // means the loader would have produced a different body than the
+      // card did -- important to surface even when the mirror boot rescued
+      // the live workout, because it signals an upstream owner drift that
+      // will silently re-appear if the snapshot stamp is ever lost
+      // (sessionStorage unavailable, direct URL navigation, etc.).
       //
-      //   PARITY:OK           expected and actual match on every field
-      //   PARITY:MISMATCH     one or more fields drifted - list shown
-      //   PARITY:NO_STAMP     card did not stamp (e.g. page opened directly
-      //                       via URL or sessionStorage unavailable) - not
-      //                       a corridor failure, but visibly reported
-      //
-      // This is the single authoritative parity check required by the
-      // selected-session corridor lock. It proves the live workout booted
-      // the SAME body the Program card rendered, byte-for-byte on the
-      // fingerprint surface (mode, variantIndex, exerciseCount, first/last
-      // exercise id + name, total sets, estimatedMinutes, ordered ids).
+      // The fingerprint built here is intentionally from the loader-derived
+      // body, NOT from the (possibly overridden) finalSession.exercises,
+      // so the diagnostic reflects the re-derivation drift rather than
+      // trivially returning OK whenever snapshot-boot succeeded.
       // =======================================================================
       const routeFingerprint = buildSessionFingerprint({
         variantIndex,
         mode: executionMode,
-        exercises: finalSession.exercises,
-        estimatedMinutes: finalSession.estimatedMinutes,
+        exercises: loaderDerivedExercises,
+        estimatedMinutes: loaderDerivedEstimatedMinutes,
       })
       setActualFingerprint(routeFingerprint)
 
-      // Storage key must match what the card wrote. Card writes with
-      // `session.dayNumber || 1` which is exactly what it then serialized
-      // into the URL as `?day=...`. Reading by dayParam here (the URL
-      // truth) is therefore guaranteed to hit the same key on both sides.
-      const parsedDay = dayParam ? parseInt(dayParam, 10) : NaN
-      const keyDay = Number.isFinite(parsedDay) && parsedDay >= 1 ? parsedDay : (finalSession.dayNumber ?? 1)
-      const expectedPayload = readLaunchFingerprint(keyDay, variantIndex)
-      setExpectedLaunchPayload(expectedPayload)
-
-      const report = compareFingerprints(expectedPayload?.fingerprint, routeFingerprint)
+      const report = compareFingerprints(
+        expectedPayload?.fingerprint,
+        routeFingerprint
+      )
       setParityReport(report)
 
       console.log('[SELECTED-VARIANT-SESSION-CONTRACT] parity check', {
@@ -1160,15 +1248,31 @@ function WorkoutSessionContent() {
         mismatches: report.mismatches,
         routeFingerprint,
         expectedFingerprint: expectedPayload?.fingerprint ?? null,
+        // Mirror-contract telemetry
+        bootSource:
+          validation.valid && expectedPayload?.selectedBody
+            ? 'visible_snapshot'
+            : 'fallback_loaded_session',
+        snapshotValidation: validation,
       })
       if (!report.ok && expectedPayload) {
-        console.error('[SELECTED-VARIANT-SESSION-CONTRACT] PARITY MISMATCH - Program card body and booted body disagree', {
-          variantIndex,
-          executionMode,
-          mismatches: report.mismatches,
-          expected: expectedPayload.fingerprint,
-          actual: routeFingerprint,
-        })
+        console.error(
+          '[SELECTED-VARIANT-SESSION-CONTRACT] PARITY MISMATCH - Program card body and booted body disagree',
+          {
+            variantIndex,
+            executionMode,
+            mismatches: report.mismatches,
+            expected: expectedPayload.fingerprint,
+            actual: routeFingerprint,
+            // If snapshot boot succeeded, the user-visible live body still
+            // matches the card -- this log records the fallback-path drift
+            // that WOULD have occurred without the mirror contract.
+            bootSource:
+              validation.valid && expectedPayload?.selectedBody
+                ? 'visible_snapshot_rescued_from_loader_drift'
+                : 'fallback_loaded_session_drifted',
+          }
+        )
       }
 
       // [workout-init] Log normalized session data for debugging
@@ -1414,6 +1518,32 @@ function WorkoutSessionContent() {
             {routeResolvedFrom && routeResolvedFrom !== 'variant' && routeResolvedFrom !== 'full' && (
               <span className="rounded-sm border border-amber-500/40 bg-amber-500/20 text-amber-300 px-1">
                 SRC:{routeResolvedFrom}
+              </span>
+            )}
+            {/* [PROGRAM-TO-LIVE MIRROR CONTRACT] bootSource chip. Reports
+                whether the live workout body came from the Program card's
+                visible snapshot (BOOT:SNAPSHOT, green) or from the
+                loader+builder re-derivation fallback (BOOT:FALLBACK,
+                amber). If snapshot validation failed, the reason is in
+                title text. This is the authoritative mirror-contract
+                proof: BOOT:SNAPSHOT means whatever the card rendered is
+                EXACTLY what the live workout is rendering. */}
+            {bootSource && (
+              <span
+                className={`rounded-sm border px-1 ${
+                  bootSource === 'visible_snapshot'
+                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                    : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                }`}
+                title={
+                  bootSource !== 'visible_snapshot' && snapshotValidation?.reason
+                    ? `fallback reason: ${snapshotValidation.reason}`
+                    : undefined
+                }
+              >
+                {bootSource === 'visible_snapshot'
+                  ? 'BOOT:SNAPSHOT'
+                  : 'BOOT:FALLBACK'}
               </span>
             )}
           </div>

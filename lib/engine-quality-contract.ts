@@ -2742,6 +2742,55 @@ export const ADVANCED_SKILL_FAMILIES: Record<string, {
   directProgressions: string[] // Exercise IDs that are direct progressions
   requiresPrerequisites: boolean
 }> = {
+  // =============================================================================
+  // [PHASE 2C CANONICAL REGISTRY ALIGNMENT]
+  // Every `directProgressions` entry below is a REAL selectable ID from
+  // `lib/adaptive-exercise-pool.ts → getAllExercises()`. The pool is the
+  // single authoritative naming owner; this registry aligns to it, not the
+  // other way around. Rungs are ordered low → high so low-index = easiest.
+  // Phase 2B's `pickBestCanonicalCandidate` uses proximity to the athlete's
+  // `currentWorkingProgression` to rank — a complete, pool-aligned ladder
+  // here is the precondition that unlocks the best-in-class committed row.
+  //
+  // Entries restored or added in Phase 2C:
+  //   • `planche`           — was MISSING (only `planche_pushup` existed)
+  //   • `front_lever`       — was MISSING
+  //   • `back_lever`        — pool IDs now exist; registry aligns to them
+  //   • `dragon_flag`       — registry used inverse naming (`tuck_dragon_flag`);
+  //                           pool uses `dragon_flag_tuck` / `dragon_flag_neg` /
+  //                           `dragon_flag_assisted` / `dragon_flag`
+  //   • `hspu`              — registry used `pike_push_up` / `freestanding_hspu`;
+  //                           pool uses `pike_pushup` / `freestanding_hs_hold`
+  //   • `planche_pushup`    — drops non-existent `pseudo_planche_pushup`,
+  //                           `straddle_planche_pushup`; adds real pool IDs
+  //   • `one_arm_*`         — drops non-existent negative/assisted variants
+  // =============================================================================
+  planche: {
+    displayName: 'Planche',
+    category: 'push',
+    subcategory: 'straight_arm',
+    tendonSensitive: true,
+    minFrequencyPerWeek: 2,
+    maxFrequencyPerWeek: 4,
+    supportPatterns: ['planche_lean', 'straight_arm_push', 'protraction'],
+    technicalSlotWeight: 0.5,
+    // Pool IDs: `planche_lean`, `tuck_planche`, `adv_tuck_planche`, `straddle_planche`, `banded_planche_hold`
+    directProgressions: ['planche_lean', 'tuck_planche', 'adv_tuck_planche', 'straddle_planche', 'banded_planche_hold'],
+    requiresPrerequisites: true,
+  },
+  front_lever: {
+    displayName: 'Front Lever',
+    category: 'pull',
+    subcategory: 'straight_arm',
+    tendonSensitive: true,
+    minFrequencyPerWeek: 2,
+    maxFrequencyPerWeek: 3,
+    supportPatterns: ['straight_arm_pull', 'horizontal_pull', 'core_anti_extension'],
+    technicalSlotWeight: 0.4,
+    // Pool IDs: `tuck_fl`, `adv_tuck_fl`, `one_leg_fl`, `straddle_fl`, `banded_fl_hold`
+    directProgressions: ['tuck_fl', 'adv_tuck_fl', 'one_leg_fl', 'straddle_fl', 'banded_fl_hold'],
+    requiresPrerequisites: true,
+  },
   hspu: {
     displayName: 'Handstand Push-Up',
     category: 'push',
@@ -2751,7 +2800,19 @@ export const ADVANCED_SKILL_FAMILIES: Record<string, {
     maxFrequencyPerWeek: 4,
     supportPatterns: ['vertical_push', 'overhead_press', 'pike_push'],
     technicalSlotWeight: 0.3,
-    directProgressions: ['pike_push_up', 'elevated_pike_push_up', 'wall_hspu', 'deficit_hspu', 'freestanding_hspu'],
+    // Pool IDs: `pike_pushup`, `pike_pushup_elevated`, `wall_hspu_partial`,
+    // `wall_hspu_negative`, `wall_hspu`, `wall_hspu_full`, `deficit_hspu`, `freestanding_hs_hold`.
+    // Ordered low → high.
+    directProgressions: [
+      'pike_pushup',
+      'pike_pushup_elevated',
+      'wall_hspu_partial',
+      'wall_hspu_negative',
+      'wall_hspu',
+      'wall_hspu_full',
+      'deficit_hspu',
+      'freestanding_hs_hold',
+    ],
     requiresPrerequisites: true,
   },
   back_lever: {
@@ -2763,7 +2824,18 @@ export const ADVANCED_SKILL_FAMILIES: Record<string, {
     maxFrequencyPerWeek: 3,
     supportPatterns: ['shoulder_extension', 'straight_arm_pull', 'german_hang'],
     technicalSlotWeight: 0.4,
-    directProgressions: ['german_hang', 'skin_the_cat', 'tuck_back_lever', 'adv_tuck_back_lever', 'straddle_back_lever', 'full_back_lever'],
+    // Pool IDs (added in Phase 2C to adaptive-exercise-pool SKILL_EXERCISES):
+    // `skin_the_cat`, `german_hang`, `tuck_back_lever`, `advanced_tuck_back_lever`,
+    // `straddle_back_lever`, `full_back_lever`. Note: `advanced_tuck_back_lever`
+    // is authoritative (matches back-lever-training-system.ts) — NOT `adv_tuck_back_lever`.
+    directProgressions: [
+      'skin_the_cat',
+      'german_hang',
+      'tuck_back_lever',
+      'advanced_tuck_back_lever',
+      'straddle_back_lever',
+      'full_back_lever',
+    ],
     requiresPrerequisites: true,
   },
   dragon_flag: {
@@ -2775,7 +2847,10 @@ export const ADVANCED_SKILL_FAMILIES: Record<string, {
     maxFrequencyPerWeek: 4,
     supportPatterns: ['anti_extension', 'eccentric_core', 'compression'],
     technicalSlotWeight: 0.25,
-    directProgressions: ['hollow_body_hold', 'tuck_dragon_flag', 'one_leg_dragon_flag', 'straddle_dragon_flag', 'full_dragon_flag'],
+    // Pool IDs: `dragon_flag_tuck`, `dragon_flag_neg`, `dragon_flag_assisted`, `dragon_flag`.
+    // Low → high. `hollow_body` was removed (it is support / prerequisite, not
+    // direct progression — belongs in supportPatterns, not directProgressions).
+    directProgressions: ['dragon_flag_tuck', 'dragon_flag_neg', 'dragon_flag_assisted', 'dragon_flag'],
     requiresPrerequisites: false,
   },
   planche_pushup: {
@@ -2787,7 +2862,10 @@ export const ADVANCED_SKILL_FAMILIES: Record<string, {
     maxFrequencyPerWeek: 3,
     supportPatterns: ['planche_lean', 'pseudo_planche', 'straight_arm_push'],
     technicalSlotWeight: 0.5,
-    directProgressions: ['planche_lean', 'pseudo_planche_pushup', 'tuck_planche_pushup', 'straddle_planche_pushup'],
+    // Pool IDs: `planche_lean`, `planche_lean_pushup`, `pppu`, `tuck_planche_pushup`.
+    // `pseudo_planche_pushup` & `straddle_planche_pushup` dropped (not in pool).
+    // `pppu` ("pseudo planche push-up") is the canonical pseudo-planche pushup row.
+    directProgressions: ['planche_lean', 'planche_lean_pushup', 'pppu', 'tuck_planche_pushup'],
     requiresPrerequisites: true,
   },
   one_arm_pull_up: {
@@ -2799,7 +2877,11 @@ export const ADVANCED_SKILL_FAMILIES: Record<string, {
     maxFrequencyPerWeek: 3,
     supportPatterns: ['archer_pull', 'weighted_pull', 'unilateral_pull', 'eccentric_pull'],
     technicalSlotWeight: 0.4,
-    directProgressions: ['weighted_pull_up', 'archer_pull_up', 'one_arm_pull_up_negative', 'assisted_one_arm_pull_up', 'one_arm_pull_up'],
+    // Pool IDs: `pull_up`, `chin_up`, `chest_to_bar_pull_up`, `archer_pull_up`,
+    // `typewriter_pull_up`, `weighted_pull_up`. `one_arm_pull_up` / `_negative` /
+    // `assisted_one_arm_pull_up` dropped (not in pool). `typewriter_pull_up` is
+    // the closest unilateral pulling row currently selectable.
+    directProgressions: ['pull_up', 'chest_to_bar_pull_up', 'weighted_pull_up', 'archer_pull_up', 'typewriter_pull_up'],
     requiresPrerequisites: true,
   },
   one_arm_chin_up: {
@@ -2811,7 +2893,9 @@ export const ADVANCED_SKILL_FAMILIES: Record<string, {
     maxFrequencyPerWeek: 3,
     supportPatterns: ['archer_chin', 'weighted_chin', 'unilateral_pull', 'eccentric_chin'],
     technicalSlotWeight: 0.4,
-    directProgressions: ['weighted_chin_up', 'archer_chin_up', 'one_arm_chin_up_negative', 'assisted_one_arm_chin_up', 'one_arm_chin_up'],
+    // Pool has no chin-specific variants; map to the canonical unilateral and
+    // weighted pulling rows that transfer to chin-up strength.
+    directProgressions: ['chin_up', 'chest_to_bar_pull_up', 'weighted_pull_up', 'archer_pull_up', 'typewriter_pull_up'],
     requiresPrerequisites: true,
   },
   one_arm_push_up: {
@@ -2823,7 +2907,9 @@ export const ADVANCED_SKILL_FAMILIES: Record<string, {
     maxFrequencyPerWeek: 4,
     supportPatterns: ['leverage_push', 'anti_rotation', 'archer_push', 'asymmetric_push'],
     technicalSlotWeight: 0.3,
-    directProgressions: ['archer_push_up', 'one_arm_push_up_elevated', 'one_arm_push_up_negative', 'one_arm_push_up'],
+    // Pool IDs: `push_up`, `diamond_pushup`, `archer_push_up`, `ring_push_up`,
+    // `pppu`. `one_arm_push_up_*` dropped (not in pool).
+    directProgressions: ['push_up', 'diamond_pushup', 'ring_push_up', 'archer_push_up', 'pppu'],
     requiresPrerequisites: false,
   },
 }

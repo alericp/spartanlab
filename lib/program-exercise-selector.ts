@@ -2552,24 +2552,57 @@ function selectMainExercises(
   // unless they are explicitly safe bridge/prep variants.
   // ==========================================================================
   
-  // Define progression level ordering for common progressions
+  // ==========================================================================
+  // [PHASE 2C CANONICAL REGISTRY ALIGNMENT]
+  // Keys are registered in BOTH underscored and normalized (no-underscore)
+  // forms because the lookup below normalizes skillKey via `.replace(/_/g, '')`.
+  // Pre-Phase-2C, only `planche` / `hspu` / `manna` matched because they have
+  // no underscore — every multi-word skill (`front_lever`, `back_lever`,
+  // `l_sit`, `v_sit`, `muscle_up`) silently returned `no_ladder_defined`,
+  // which meant the realism-cap was effectively a no-op for those skills and
+  // the Phase 2B proximity ranker collapsed into carryover/fatigue tiebreak.
+  // ==========================================================================
   const PROGRESSION_LEVEL_ORDER: Record<string, string[]> = {
     // Planche progression
     planche: ['tuck', 'adv_tuck', 'straddle', 'half_lay', 'full'],
-    // Front lever progression
-    front_lever: ['tuck', 'adv_tuck', 'straddle', 'half_lay', 'full'],
-    // Back lever progression
-    back_lever: ['tuck', 'adv_tuck', 'straddle', 'half_lay', 'full'],
-    // HSPU progression
-    hspu: ['pike', 'elevated_pike', 'wall', 'freestanding'],
+    // Front lever progression (normalized key only — skill has underscore)
+    frontlever: ['tuck', 'adv_tuck', 'one_leg', 'straddle', 'half_lay', 'full'],
+    front_lever: ['tuck', 'adv_tuck', 'one_leg', 'straddle', 'half_lay', 'full'],
+    // Back lever progression (normalized key only — skill has underscore)
+    // Note: ladder tokens substring-match BOTH `advanced_tuck_back_lever` and
+    // any future `adv_tuck_back_lever` alias, because `advanced_tuck` contains
+    // `adv_tuck`.
+    backlever: ['tuck', 'adv_tuck', 'one_leg', 'straddle', 'half_lay', 'full'],
+    back_lever: ['tuck', 'adv_tuck', 'one_leg', 'straddle', 'half_lay', 'full'],
+    // HSPU progression. Ladder tokens match pool IDs:
+    //   `pike_pushup` → `pike`
+    //   `pike_pushup_elevated` → `elevated_pike` (substring of `_elevated`)
+    //   `wall_hspu_partial` / `wall_hspu_negative` / `wall_hspu` / `wall_hspu_full` → `wall`
+    //   `deficit_hspu` → `deficit`
+    //   `freestanding_hs_hold` → `freestanding`
+    hspu: ['pike', 'elevated_pike', 'wall', 'deficit', 'freestanding'],
     // Muscle up progression
+    muscleup: ['transition_negative', 'transition_band', 'kipping', 'strict'],
     muscle_up: ['transition_negative', 'transition_band', 'kipping', 'strict'],
     // L-sit progression
+    lsit: ['tuck', 'one_leg', 'full'],
     l_sit: ['tuck', 'one_leg', 'full'],
     // V-sit progression
+    vsit: ['tuck', 'straddle', 'full'],
     v_sit: ['tuck', 'straddle', 'full'],
     // Manna progression
     manna: ['l_sit', 'elevated_l', 'low_manna', 'full'],
+    // Dragon flag progression (Phase 2C — previously missing entirely).
+    // Pool IDs: `dragon_flag_tuck`, `dragon_flag_neg`, `dragon_flag_assisted`, `dragon_flag`.
+    // Final rung uses the literal `dragon_flag` token to match the pure id;
+    // earlier iteration order ensures `_tuck` / `_neg` / `_assisted` match
+    // their respective rungs first (they all also contain `dragon_flag`).
+    dragonflag: ['tuck', 'neg', 'assisted', 'dragon_flag'],
+    dragon_flag: ['tuck', 'neg', 'assisted', 'dragon_flag'],
+    // Planche push-up progression (Phase 2C — previously missing entirely).
+    // Pool IDs: `planche_lean`, `planche_lean_pushup`, `pppu`, `tuck_planche_pushup`.
+    planchepushup: ['lean', 'pppu', 'tuck'],
+    planche_pushup: ['lean', 'pppu', 'tuck'],
   }
   
   // Track blocked exercises for audit
@@ -2619,15 +2652,24 @@ function selectMainExercises(
     const exerciseIdLower = safeExerciseId(exercise)
     const exerciseNameLower = safeExerciseName(exercise)
     
+    // [PHASE 2C CANONICAL REGISTRY ALIGNMENT] Longest-match resolution.
+    // See `pickBestCanonicalCandidate` for rationale — both matchers must
+    // use the same longest-match rule so the realism cap and the proximity
+    // ranker agree on each exercise's rung. First-match-wins mis-classified
+    // `adv_tuck_planche` as the `tuck` rung, which meant the cap permitted
+    // it at current=`tuck_planche` (delta 0 → allowed) while the ranker
+    // scored it +100 exact — silently bypassing realism enforcement.
     let exerciseLevelIndex = -1
     let exerciseLevel = 'unknown'
-    
+    let bestMatchLen = 0
     for (let i = 0; i < progressionLadder.length; i++) {
       const level = progressionLadder[i]
       if (exerciseIdLower.includes(level) || exerciseNameLower.includes(level.replace(/_/g, ' '))) {
-        exerciseLevelIndex = i
-        exerciseLevel = level
-        break
+        if (level.length > bestMatchLen) {
+          bestMatchLen = level.length
+          exerciseLevelIndex = i
+          exerciseLevel = level
+        }
       }
     }
     
@@ -2901,14 +2943,26 @@ function selectMainExercises(
     const scored: Scored[] = candidates.map(ex => {
       const idLower = safeExerciseId(ex)
       const nameLower = safeExerciseName(ex)
+      // [PHASE 2C CANONICAL REGISTRY ALIGNMENT] Longest-match resolution.
+      // Pre-Phase-2C this loop used first-match-wins, which mis-resolved
+      // every substring-prefix case: `adv_tuck_planche` contains both
+      // `tuck` and `adv_tuck`, so `['tuck', 'adv_tuck', ...]` iteration
+      // always resolved the adv-tuck rung to the plain tuck rung, collapsing
+      // delta = +1 into delta = 0 and silently flattening the realism cap +
+      // proximity ranker. Longest-match guarantees the most-specific ladder
+      // token wins regardless of ladder order.
       let exerciseLevelIndex = -1
       let exerciseLevel = 'unknown'
+      let bestMatchLen = 0
       for (let i = 0; i < ladder.length; i++) {
         const level = ladder[i]
-        if (idLower.includes(level) || nameLower.includes(level.replace(/_/g, ' '))) {
-          exerciseLevelIndex = i
-          exerciseLevel = level
-          break
+        const nameToken = level.replace(/_/g, ' ')
+        if (idLower.includes(level) || nameLower.includes(nameToken)) {
+          if (level.length > bestMatchLen) {
+            bestMatchLen = level.length
+            exerciseLevelIndex = i
+            exerciseLevel = level
+          }
         }
       }
 

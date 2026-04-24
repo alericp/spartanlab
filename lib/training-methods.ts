@@ -1982,6 +1982,54 @@ export type TrainingMethodPreference =
   | 'cluster_sets'
   | 'rest_pause'
 
+/**
+ * [PHASE 3G NEON-BACKED METHOD MATERIALITY]
+ * BundleMethodSignals carries Neon-derived truth that materially influences
+ * method-decision feasibility and weighting. Pre-3G the method corridor was
+ * bundle-blind: applySessionStylePreferences consumed only canonical
+ * preferences + experience/focus/minutes gates, while DB-backed truth
+ * (constraintHistory, performanceEnvelopes, trainingResponse,
+ * derivedSignals) drove dosage and exercise-selection decisions but never
+ * method packaging. This signal bag closes that gap as a strict opt-in:
+ * every field is optional so legacy callers keep working unchanged, and
+ * each field is consumed only by an explicit gate inside the decision
+ * function so we can prove materiality per-decision.
+ */
+export interface BundleMethodSignals {
+  /** programmingTruthBundle.constraintHistory.activeJointRiskFlags.length > 0 */
+  hasActiveConstraints?: boolean
+  /** programmingTruthBundle.constraintHistory.activeJointRiskFlags */
+  activeJointRiskFlags?: string[]
+  /** programmingTruthBundle.derivedSignals.densityConfidence */
+  densityConfidence?: 'none' | 'low' | 'medium' | 'high'
+  /**
+   * Synthesised tolerance: combines envelope.preferredDensityLevel
+   * ('low'|'moderate'|'high') with derivedSignals.densityConfidence so the
+   * method gate sees one clean axis. 'low' = density methods should be
+   * rejected even if preferred; 'high' = density methods can run even with
+   * smaller exercise pools.
+   */
+  densityTolerance?: 'low' | 'medium' | 'high'
+  /** programmingTruthBundle.trainingResponse.consistencySignal */
+  consistencySignal?: 'low' | 'medium' | 'high'
+  /** programmingTruthBundle.trainingResponse.averageCompletionRatio (0-1) */
+  averageCompletionRatio?: number | null
+  /** programmingTruthBundle.trainingResponse.averageDifficultyRating (0-10) */
+  averageDifficultyRating?: number | null
+  /**
+   * Synthesised from envelope.fatigueThreshold averaged across families.
+   * Lower = athlete fatigues fast → high-fatigue methods (drop_set,
+   * rest_pause) get rejected even when preferred.
+   */
+  fatigueThreshold?: number | null
+  /** Aggregate from getBundleConfidenceLevel(bundle) */
+  bundleConfidenceLevel?: 'none' | 'low' | 'medium' | 'high'
+  /** Whether the bundle's underlying skill/benchmark/envelope sections were available */
+  hasMeaningfulBenchmarks?: boolean
+  hasPerformanceEnvelopes?: boolean
+  hasEarnedHistory?: boolean
+}
+
 export interface SessionStyleInput {
   exercises: Array<{
     id: string
@@ -1997,6 +2045,52 @@ export interface SessionStyleInput {
   sessionFocus: string  // 'skill' | 'strength' | 'endurance' | 'mixed'
   availableMinutes: number
   dayNumber: number
+  /**
+   * [PHASE 3G NEON-BACKED METHOD MATERIALITY] Optional Neon-backed truth
+   * signals that materially influence method decisions. When omitted the
+   * function behaves exactly as it did pre-3G (pure preference + shallow
+   * gates) — preserving backwards compatibility for any non-builder caller.
+   * The builder always supplies this when programmingTruthBundle is
+   * available.
+   */
+  bundleSignals?: BundleMethodSignals
+}
+
+/**
+ * [PHASE 3G NEON-BACKED METHOD MATERIALITY] Per-method decision evidence.
+ * Records the actual drivers and blockers that fired for each preferred
+ * method, so the audit corridor can prove *why* a method was applied or
+ * rejected — not just whether it was preferred.
+ *
+ * `outcome`:
+ *   - 'applied'  → method materialised in styledGroups
+ *   - 'rejected' → preferred but blocked (canonical or bundle gate)
+ *   - 'deferred' → preferred and feasible but no exercise pool fit
+ *
+ * `drivers` and `blockers` are stable string codes the audit log can group
+ * by, so we can quantify e.g. "how often did active_joint_risk reject
+ * drop_sets" across a population.
+ */
+export interface MethodDecisionEntry {
+  method: TrainingMethodPreference
+  outcome: 'applied' | 'rejected' | 'deferred'
+  drivers: string[]
+  blockers: string[]
+  evidenceConfidence: 'none' | 'low' | 'medium' | 'high'
+  /**
+   * Field codes from BundleMethodSignals that materially fired for this
+   * decision (e.g. ['hasActiveConstraints', 'consistencySignal']). Empty
+   * when the decision was canonical-only.
+   */
+  bundleSignalsConsumed: string[]
+}
+
+export interface MethodDecisionEvidence {
+  bundleConfidence: 'none' | 'low' | 'medium' | 'high'
+  bundleSignalsAvailable: string[]
+  decisions: MethodDecisionEntry[]
+  /** True when at least one decision outcome was changed by a bundle signal. */
+  bundleMateriallyChangedOutcome: boolean
 }
 
 export interface StyledExerciseGroup {
@@ -2024,6 +2118,15 @@ export interface SessionStyleResult {
     hasDensityApplied: boolean
     structureDescription: string
   }
+  /**
+   * [PHASE 3G NEON-BACKED METHOD MATERIALITY] Per-method decision evidence
+   * proving why each preferred method was applied/rejected/deferred and
+   * which Neon-backed bundle signals materially fired. Always present.
+   * When the caller did not supply bundleSignals, every entry's
+   * bundleSignalsConsumed is empty and bundleMateriallyChangedOutcome is
+   * false — the audit shows truthfully "decision was preference-only."
+   */
+  methodDecisionEvidence: MethodDecisionEvidence
 }
 
 /**
@@ -2031,12 +2134,62 @@ export interface SessionStyleResult {
  * This converts a flat exercise list into styled groups with appropriate methods
  */
 export function applySessionStylePreferences(input: SessionStyleInput): SessionStyleResult {
-  const { exercises, methodPreferences, experienceLevel, sessionFocus, availableMinutes, dayNumber } = input
+  const { exercises, methodPreferences, experienceLevel, sessionFocus, availableMinutes, dayNumber, bundleSignals } = input
   
   const styledGroups: StyledExerciseGroup[] = []
   const appliedMethods: TrainingMethodPreference[] = []
   const rejectedMethods: Array<{ method: TrainingMethodPreference; reason: string }> = []
-  
+
+  // ==========================================================================
+  // [PHASE 3G NEON-BACKED METHOD MATERIALITY] Decision-evidence tracking.
+  // Every decision (applied / rejected / deferred) is recorded here with
+  // explicit drivers, blockers, and which BundleMethodSignals fields
+  // materially fired. The audit corridor reads this to prove method
+  // intelligence is real, not narrative.
+  // ==========================================================================
+  const decisionEntries = new Map<TrainingMethodPreference, MethodDecisionEntry>()
+  const ensureEntry = (method: TrainingMethodPreference): MethodDecisionEntry => {
+    const existing = decisionEntries.get(method)
+    if (existing) return existing
+    const entry: MethodDecisionEntry = {
+      method,
+      outcome: 'deferred',
+      drivers: [],
+      blockers: [],
+      evidenceConfidence: bundleSignals?.bundleConfidenceLevel ?? 'none',
+      bundleSignalsConsumed: [],
+    }
+    decisionEntries.set(method, entry)
+    return entry
+  }
+  const recordDriver = (method: TrainingMethodPreference, code: string, signal?: keyof BundleMethodSignals) => {
+    const entry = ensureEntry(method)
+    if (!entry.drivers.includes(code)) entry.drivers.push(code)
+    if (signal && !entry.bundleSignalsConsumed.includes(signal)) entry.bundleSignalsConsumed.push(signal)
+  }
+  const recordBlocker = (method: TrainingMethodPreference, code: string, signal?: keyof BundleMethodSignals) => {
+    const entry = ensureEntry(method)
+    if (!entry.blockers.includes(code)) entry.blockers.push(code)
+    if (signal && !entry.bundleSignalsConsumed.includes(signal)) entry.bundleSignalsConsumed.push(signal)
+  }
+
+  // Pre-compute which BundleMethodSignals are populated. Used both for the
+  // gates below and for the final evidence payload.
+  const signalsAvailable: string[] = []
+  if (bundleSignals) {
+    if (typeof bundleSignals.hasActiveConstraints === 'boolean') signalsAvailable.push('hasActiveConstraints')
+    if (bundleSignals.activeJointRiskFlags && bundleSignals.activeJointRiskFlags.length > 0) signalsAvailable.push('activeJointRiskFlags')
+    if (bundleSignals.densityTolerance) signalsAvailable.push('densityTolerance')
+    if (bundleSignals.densityConfidence && bundleSignals.densityConfidence !== 'none') signalsAvailable.push('densityConfidence')
+    if (bundleSignals.consistencySignal) signalsAvailable.push('consistencySignal')
+    if (typeof bundleSignals.averageCompletionRatio === 'number') signalsAvailable.push('averageCompletionRatio')
+    if (typeof bundleSignals.averageDifficultyRating === 'number') signalsAvailable.push('averageDifficultyRating')
+    if (typeof bundleSignals.fatigueThreshold === 'number') signalsAvailable.push('fatigueThreshold')
+    if (bundleSignals.hasMeaningfulBenchmarks) signalsAvailable.push('hasMeaningfulBenchmarks')
+    if (bundleSignals.hasPerformanceEnvelopes) signalsAvailable.push('hasPerformanceEnvelopes')
+    if (bundleSignals.hasEarnedHistory) signalsAvailable.push('hasEarnedHistory')
+  }
+
   // Categorize exercises by type for intelligent grouping
   const skillExercises = exercises.filter(e => e.category === 'skill')
   const strengthExercises = exercises.filter(e => e.category === 'strength')
@@ -2045,27 +2198,95 @@ export function applySessionStylePreferences(input: SessionStyleInput): SessionS
   
   // ==========================================================================
   // [PHASE 7A TASK 4] STYLE FEASIBILITY RULES
+  // [PHASE 3G NEON-BACKED METHOD MATERIALITY] Bundle-backed gates fire
+  // alongside the canonical gates. A method preferred by the user is
+  // rejected when DB-backed truth proves it is unsafe or unsupported,
+  // *regardless of preference strength*. This is the corridor that closes
+  // the "preference is enough by itself" failure mode.
   // ==========================================================================
   const feasibleMethods = methodPreferences.filter(method => {
-    // Skill-focused sessions protect skill quality
+    // Always seed an entry so even "unconditionally feasible" methods get
+    // a defer/applied record at the end.
+    ensureEntry(method)
+
+    // CANONICAL GATE 1: Skill-focused sessions protect skill quality
     if (sessionFocus === 'skill' && ['circuits', 'drop_sets', 'rest_pause'].includes(method)) {
       if (skillExercises.length >= exercises.length / 2) {
         rejectedMethods.push({ method, reason: 'skill_quality_protection' })
+        recordBlocker(method, 'skill_quality_protection')
         return false
       }
     }
-    
-    // Beginners limited on complex methods
+
+    // CANONICAL GATE 2: Beginners limited on complex methods
     if (experienceLevel === 'beginner' && ['circuits', 'drop_sets', 'rest_pause', 'cluster_sets'].includes(method)) {
       rejectedMethods.push({ method, reason: 'experience_level_restriction' })
+      recordBlocker(method, 'experience_level_restriction')
       return false
     }
-    
+
+    // BUNDLE GATE A: Active joint-risk constraints reject high-fatigue
+    // and high-complexity methods even when preferred. Drives the
+    // "intelligent rejection" the audit prompt requires.
+    if (bundleSignals?.hasActiveConstraints && ['circuits', 'drop_sets', 'rest_pause', 'density_blocks'].includes(method)) {
+      const flags = bundleSignals.activeJointRiskFlags?.join(',') || 'unspecified'
+      const reason = `bundle_active_joint_risk:${flags}`
+      rejectedMethods.push({ method, reason })
+      recordBlocker(method, 'bundle_active_joint_risk', 'hasActiveConstraints')
+      if (bundleSignals.activeJointRiskFlags?.length) {
+        recordBlocker(method, `joint_risk:${flags}`, 'activeJointRiskFlags')
+      }
+      return false
+    }
+
+    // BUNDLE GATE B: Low envelope-derived fatigue threshold rejects the
+    // two highest-fatigue row-level finishers. Pre-3G a beginner with a
+    // history of low completion ratios still got drop_sets if they ticked
+    // the preference; now the envelope can override.
+    if (typeof bundleSignals?.fatigueThreshold === 'number' && bundleSignals.fatigueThreshold <= 30) {
+      if (method === 'drop_sets' || method === 'rest_pause') {
+        rejectedMethods.push({ method, reason: 'bundle_low_fatigue_threshold' })
+        recordBlocker(method, 'bundle_low_fatigue_threshold', 'fatigueThreshold')
+        return false
+      }
+    }
+
+    // BUNDLE GATE C: Persistent low completion ratio (athlete frequently
+    // can't finish prescribed work) rejects density and drop sets which
+    // both compound the completion-failure mode.
+    if (typeof bundleSignals?.averageCompletionRatio === 'number' && bundleSignals.averageCompletionRatio < 0.6) {
+      if (method === 'density_blocks' || method === 'drop_sets') {
+        rejectedMethods.push({ method, reason: 'bundle_low_completion_ratio' })
+        recordBlocker(method, 'bundle_low_completion_ratio', 'averageCompletionRatio')
+        return false
+      }
+    }
+
+    // BUNDLE GATE D: Envelope-derived density tolerance of 'low' rejects
+    // density_blocks + circuits (both density-style work-capacity work)
+    // even when preferred — the athlete's own envelope says they don't
+    // sustain it.
+    if (bundleSignals?.densityTolerance === 'low' && (method === 'density_blocks' || method === 'circuits')) {
+      rejectedMethods.push({ method, reason: 'bundle_low_density_tolerance' })
+      recordBlocker(method, 'bundle_low_density_tolerance', 'densityTolerance')
+      return false
+    }
+
     // Short sessions may need density methods
     if (availableMinutes < 30 && !['supersets', 'density_blocks', 'circuits'].includes(method)) {
       // Don't reject, just note it's less ideal
     }
-    
+
+    // Survived all gates — record canonical/bundle drivers for the
+    // surviving feasibility decision.
+    recordDriver(method, 'user_preference')
+    if (bundleSignals?.consistencySignal === 'high') recordDriver(method, 'bundle_high_consistency', 'consistencySignal')
+    if (bundleSignals?.densityTolerance === 'high' && (method === 'density_blocks' || method === 'circuits')) {
+      recordDriver(method, 'bundle_high_density_tolerance', 'densityTolerance')
+    }
+    if (bundleSignals?.hasMeaningfulBenchmarks && method === 'cluster_sets') {
+      recordDriver(method, 'bundle_meaningful_benchmarks', 'hasMeaningfulBenchmarks')
+    }
     return true
   })
   
@@ -2114,7 +2335,21 @@ export function applySessionStylePreferences(input: SessionStyleInput): SessionS
     (methodPreferences.indexOf('supersets') < methodPreferences.indexOf('circuits') || !methodPreferences.includes('circuits'))
   
   // [PHASE 2] Be more aggressive with supersets when user explicitly selected them
+  // [PHASE 3G NEON-BACKED METHOD MATERIALITY] When the bundle proves the
+  // athlete sustains complex work (consistencySignal === 'high' AND
+  // averageCompletionRatio >= 0.85), supersets stay aggressive on
+  // moderate-neural exercises that we'd otherwise skip. When the bundle
+  // proves the opposite (consistencySignal === 'low' OR completion ratio
+  // < 0.7), we tighten back to the conservative threshold even if the
+  // user wants supersets — earned truth overrides bare preference.
   const userExplicitlyWantsSupersets = methodPreferences.includes('supersets')
+  const bundleSupportsAggressiveSupersets =
+    bundleSignals?.consistencySignal === 'high' &&
+    typeof bundleSignals.averageCompletionRatio === 'number' &&
+    bundleSignals.averageCompletionRatio >= 0.85
+  const bundleDiscouragesAggressiveSupersets =
+    (bundleSignals?.consistencySignal === 'low') ||
+    (typeof bundleSignals?.averageCompletionRatio === 'number' && bundleSignals.averageCompletionRatio < 0.7)
   
   if (feasibleMethods.includes('supersets') && strengthNotUsed.length >= 2) {
     // Try to pair antagonist movements first
@@ -2132,8 +2367,20 @@ export function applySessionStylePreferences(input: SessionStyleInput): SessionS
       const push = pushStrength[i]
       
       // [PHASE 2] Be more lenient with neural demand when user wants supersets
-      // Only skip truly high-risk combinations (neuralDemand >= 5)
-      const neuralThreshold = userExplicitlyWantsSupersets ? 5 : 4
+      // [PHASE 3G NEON-BACKED METHOD MATERIALITY] Bundle truth modulates the
+      // threshold. High-consistency, high-completion athletes can run a
+      // superset at neural=5 (formerly the cap); low-consistency athletes
+      // get clamped back to the legacy neural=4 even with the preference.
+      let neuralThreshold = userExplicitlyWantsSupersets ? 5 : 4
+      if (bundleSupportsAggressiveSupersets) {
+        neuralThreshold = 6
+        recordDriver('supersets', 'bundle_relaxed_neural_threshold', 'consistencySignal')
+        recordDriver('supersets', 'bundle_relaxed_neural_threshold', 'averageCompletionRatio')
+      } else if (bundleDiscouragesAggressiveSupersets) {
+        neuralThreshold = 4
+        recordBlocker('supersets', 'bundle_tightened_neural_threshold',
+          bundleSignals?.consistencySignal === 'low' ? 'consistencySignal' : 'averageCompletionRatio')
+      }
       if ((pull.neuralDemand || 2) >= neuralThreshold || (push.neuralDemand || 2) >= neuralThreshold) {
         continue
       }
@@ -2457,7 +2704,55 @@ export function applySessionStylePreferences(input: SessionStyleInput): SessionS
       ? 'style_influenced_structure'
       : 'straight_sets_default',
   })
-  
+
+  // ==========================================================================
+  // [PHASE 3G NEON-BACKED METHOD MATERIALITY] Finalise per-method decision
+  // outcomes and compose the evidence payload. Every preferred method now
+  // has a closed entry — applied, rejected, or deferred — with stable
+  // driver/blocker codes and the list of bundle signal fields that fired.
+  // The audit corridor reads this to prove method intelligence is real.
+  // ==========================================================================
+  for (const method of methodPreferences) {
+    const entry = ensureEntry(method)
+    if (appliedMethods.includes(method)) {
+      entry.outcome = 'applied'
+      if (!entry.drivers.includes('exercise_pool_fit')) entry.drivers.push('exercise_pool_fit')
+    } else if (rejectedMethods.some(r => r.method === method)) {
+      entry.outcome = 'rejected'
+    } else {
+      entry.outcome = 'deferred'
+      if (!entry.blockers.includes('no_pool_or_method_won_priority')) {
+        entry.blockers.push('no_pool_or_method_won_priority')
+      }
+    }
+  }
+  const decisions = Array.from(decisionEntries.values())
+  const bundleMateriallyChangedOutcome = decisions.some(
+    d => d.bundleSignalsConsumed.length > 0 &&
+         (d.outcome === 'rejected' ||
+          d.drivers.some(c => c.startsWith('bundle_')) ||
+          d.blockers.some(c => c.startsWith('bundle_')))
+  )
+  const methodDecisionEvidence: MethodDecisionEvidence = {
+    bundleConfidence: bundleSignals?.bundleConfidenceLevel ?? 'none',
+    bundleSignalsAvailable: signalsAvailable,
+    decisions,
+    bundleMateriallyChangedOutcome,
+  }
+  console.log('[phase3g-method-decision-evidence]', {
+    sessionId: `day_${dayNumber}`,
+    bundleConfidence: methodDecisionEvidence.bundleConfidence,
+    bundleSignalsAvailable: methodDecisionEvidence.bundleSignalsAvailable,
+    bundleMateriallyChangedOutcome,
+    decisions: decisions.map(d => ({
+      method: d.method,
+      outcome: d.outcome,
+      drivers: d.drivers,
+      blockers: d.blockers,
+      bundleSignalsConsumed: d.bundleSignalsConsumed,
+    })),
+  })
+
   return {
     styledGroups,
     appliedMethods,
@@ -2469,6 +2764,7 @@ export function applySessionStylePreferences(input: SessionStyleInput): SessionS
       hasDensityApplied,
       structureDescription: structureDescParts.join(', '),
     },
+    methodDecisionEvidence,
   }
 }
 

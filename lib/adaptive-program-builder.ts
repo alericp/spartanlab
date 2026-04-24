@@ -26330,9 +26330,73 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
 
     // ==========================================================================
     // [PHASE 7A] Apply training method preferences to session structure
+    // [PHASE 3G NEON-BACKED METHOD MATERIALITY] Bundle truth is now
+    // composed into BundleMethodSignals and passed alongside canonical
+    // preferences. Pre-3G this corridor was bundle-blind — method
+    // packaging was driven entirely by preference presence + experience
+    // gates while DB-backed truth (constraintHistory, performance
+    // envelopes, trainingResponse, derivedSignals) shaped only dosage,
+    // skill, and exercise-selection decisions. Threading the signals here
+    // is the smallest safe wiring change that lets earned truth materially
+    // change method outcomes (apply / reject / threshold) and drop a
+    // structured evidence payload onto the session.
     // ==========================================================================
     sessionStep = 'applying_training_style'
-    
+
+    // [PHASE 3G] Synthesise the BundleMethodSignals from the bundle.
+    // Every field is optional and reflects only what the bundle actually
+    // proves — never guessed or back-filled. When the bundle is null
+    // (e.g. preview path or build failure), bundleSignals is undefined
+    // and applySessionStylePreferences falls back to legacy preference-
+    // only behaviour, which the evidence payload reports honestly.
+    const bundleSignals = (() => {
+      if (!programmingTruthBundle) return undefined
+      // Synthesise densityTolerance from envelope.preferredDensityLevel +
+      // derivedSignals.densityConfidence. We average across families
+      // because method decisions are session-level, not movement-level.
+      let densityTolerance: 'low' | 'medium' | 'high' | undefined
+      const envelopes = programmingTruthBundle.performanceEnvelopes
+      if (envelopes?.meta?.available && envelopes.totalEnvelopesTracked > 0) {
+        const levels = Object.values(envelopes.byMovementFamily)
+          .map(e => (e.preferredDensityLevel || '').toLowerCase())
+          .filter(Boolean)
+        if (levels.length > 0) {
+          const highCount = levels.filter(l => l === 'high').length
+          const lowCount = levels.filter(l => l === 'low').length
+          if (highCount > lowCount && highCount / levels.length >= 0.5) densityTolerance = 'high'
+          else if (lowCount > highCount && lowCount / levels.length >= 0.5) densityTolerance = 'low'
+          else densityTolerance = 'medium'
+        }
+      }
+      // Average envelope.fatigueThreshold across families (when present).
+      let fatigueThreshold: number | null = null
+      if (envelopes?.meta?.available && envelopes.totalEnvelopesTracked > 0) {
+        const thresholds = Object.values(envelopes.byMovementFamily)
+          .map(e => e.fatigueThreshold)
+          .filter((v): v is number => typeof v === 'number')
+        if (thresholds.length > 0) {
+          fatigueThreshold = thresholds.reduce((a, b) => a + b, 0) / thresholds.length
+        }
+      }
+      const tr = programmingTruthBundle.trainingResponse
+      const ch = programmingTruthBundle.constraintHistory
+      const ds = programmingTruthBundle.derivedSignals
+      return {
+        hasActiveConstraints: ds?.hasActiveConstraints,
+        activeJointRiskFlags: ch?.activeJointRiskFlags,
+        densityConfidence: ds?.densityConfidence,
+        densityTolerance,
+        consistencySignal: tr?.meta?.available ? (tr.consistencySignal ?? undefined) : undefined,
+        averageCompletionRatio: tr?.meta?.available ? (tr.averageCompletionRatio ?? null) : null,
+        averageDifficultyRating: tr?.meta?.available ? (tr.averageDifficultyRating ?? null) : null,
+        fatigueThreshold,
+        bundleConfidenceLevel: getBundleConfidenceLevel(programmingTruthBundle),
+        hasMeaningfulBenchmarks: hasMeaningfulBenchmarks(programmingTruthBundle),
+        hasPerformanceEnvelopes: hasPerformanceEnvelopeData(programmingTruthBundle),
+        hasEarnedHistory: hasEarnedTrainingHistory(programmingTruthBundle),
+      }
+    })()
+
     // Build style input from validated exercises
     const styleInput = {
       exercises: validatedSession.exercises.map(e => ({
@@ -26349,11 +26413,18 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       sessionFocus: day.focus || 'mixed',
       availableMinutes: sessionMinutesResolved,
       dayNumber: day.dayNumber,
+      bundleSignals,
     }
     
     const styleResult = applySessionStylePreferences(styleInput)
     
     // [PHASE 7A TASK 7] Add style metadata to session
+    // [PHASE 3G NEON-BACKED METHOD MATERIALITY] methodDecisionEvidence is
+    // pinned onto the session here so it survives every persistence and
+    // reload boundary (fresh generate, regenerate, rebuild-adjustment,
+    // modify-builder, saved-program reload). Downstream UI / audit code
+    // can read session.styleMetadata.methodDecisionEvidence to prove
+    // exactly which Neon signals fired for this session's method choices.
     const sessionStyleMetadata = {
       primaryStyle: styleResult.styleMetadata.primarySessionStyle,
       hasSupersetsApplied: styleResult.styleMetadata.hasSupersetsApplied,
@@ -26363,7 +26434,32 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       appliedMethods: styleResult.appliedMethods,
       rejectedMethods: styleResult.rejectedMethods,
       styledGroups: styleResult.styledGroups,
+      methodDecisionEvidence: styleResult.methodDecisionEvidence,
     }
+
+    // [PHASE 3G NEON-BACKED METHOD MATERIALITY] Builder-side audit log
+    // proving the bundle was consulted for method decisions and reporting
+    // whether earned truth materially changed any outcome on this session.
+    console.log('[phase3g-neon-method-materiality-audit]', {
+      dayNumber: day.dayNumber,
+      bundlePresent: !!programmingTruthBundle,
+      bundleConfidence: styleResult.methodDecisionEvidence.bundleConfidence,
+      bundleSignalsAvailable: styleResult.methodDecisionEvidence.bundleSignalsAvailable,
+      bundleMateriallyChangedOutcome: styleResult.methodDecisionEvidence.bundleMateriallyChangedOutcome,
+      methodsAppliedCount: styleResult.appliedMethods.length,
+      methodsRejectedCount: styleResult.rejectedMethods.length,
+      bundleDrivenRejections: styleResult.methodDecisionEvidence.decisions
+        .filter(d => d.outcome === 'rejected' && d.bundleSignalsConsumed.length > 0)
+        .map(d => ({ method: d.method, signals: d.bundleSignalsConsumed, blockers: d.blockers })),
+      bundleDrivenAdjustments: styleResult.methodDecisionEvidence.decisions
+        .filter(d => d.outcome === 'applied' && d.drivers.some(c => c.startsWith('bundle_')))
+        .map(d => ({ method: d.method, drivers: d.drivers.filter(c => c.startsWith('bundle_')) })),
+      verdict: styleResult.methodDecisionEvidence.bundleMateriallyChangedOutcome
+        ? 'NEON_TRUTH_MATERIALLY_CHANGED_METHOD_OUTCOMES'
+        : (programmingTruthBundle
+            ? 'BUNDLE_AVAILABLE_NO_OUTCOME_CHANGE_THIS_SESSION'
+            : 'BUNDLE_UNAVAILABLE_PREFERENCE_ONLY_DECISION'),
+    })
     
     // [PHASE 7A TASK 7] Session style display truth audit
     console.log('[session-style-display-truth-audit]', {

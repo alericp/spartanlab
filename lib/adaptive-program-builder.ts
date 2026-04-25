@@ -1354,6 +1354,31 @@ export interface AdaptiveExercise {
     // Explanation for coaching display
     explanationNote: string | null
   }
+  // ==========================================================================
+  // [DB-TRUTH-WINNER-PROVENANCE-LOCK]
+  // Canonical, durable winner-rationale stamp. Built ONLY from final post-rerank
+  // truth (not eligibility, not preferences, not bundle availability alone).
+  // Combines the per-exercise rerank result (`dbTruth*` transients) with the
+  // per-skill progressionDepthAdjustments row (currentVsHistorical, readiness
+  // gating, precedence) into one owned object that survives mapToAdaptiveExercises
+  // and the save/load corridor instead of being dropped at the field-whitelist
+  // boundary in mapToAdaptiveExercises.
+  // ==========================================================================
+  dbTruthWinnerProvenance?: {
+    rankingApplied: boolean
+    rankingChanged: boolean
+    precedenceUsed: 'current' | 'response' | 'historical' | 'default' | 'readiness_gate' | 'none' | null
+    skillFamilyUsed: string | null
+    depthBias: number | null
+    depthDelta: number | null
+    adjustedScoreFinal: number | null
+    currentBeatsHistorical: boolean | null
+    readinessGated: boolean | null
+    readinessPermission: string | null
+    conservativeByCurrentTruth: boolean | null
+    sourceOfTruth: 'db_truth_final_winner'
+    generatedAtBuildTime: true
+  }
 }
 
 export interface AdaptiveProgram {
@@ -2035,6 +2060,30 @@ exerciseExplanations?: {
         visibleAuditSkillCount: number
         visiblyExpressedCount: number
       }
+    } | null
+    // ========================================================================
+    // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Lightweight session/program rollup of
+    // the canonical per-exercise dbTruthWinnerProvenance stamps. Derived
+    // ENTIRELY from final stamped exercises post-save — never from transient
+    // scorer arrays or live recomputation. Surfaces honest counts of how many
+    // chosen exercises were materially shaped by working-state truth so
+    // ProgramTruthSummary can render one small "Working state truth" decision
+    // without rebuilding the rationale from scratch.
+    // ========================================================================
+    dbTruthWinnerSummary?: {
+      totalExercisesWithDbTruthInfluence: number
+      exercisesReorderedByDbTruth: number
+      exercisesConservativeByCurrentTruth: number
+      exercisesReadinessGated: number
+      exercisesWhereCurrentBeatHistorical: number
+      precedenceBreakdown: {
+        current: number
+        response: number
+        historical: number
+        readinessGate: number
+        default: number
+      }
+      sourceOfTruth: 'db_truth_final_winner_rollup'
     } | null
   }
   // ==========================================================================
@@ -24708,6 +24757,54 @@ function generateAdaptiveSession(
           })
         }
         
+        // ==========================================================================
+        // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Build the canonical winner-provenance
+        // object for THIS exercise. We join the per-exercise rerank result with
+        // the per-skill `progressionDepthAdjustments[skillKey]` row (built at
+        // L7558+) so the durable stamp carries the rich "why" — current-vs-
+        // historical precedence, readiness gating verdict, conservative-by-
+        // current-truth flag — that previously only existed keyed by skill in
+        // an in-memory map and never reached the chosen exercise. Every field
+        // here is *materialized* truth: it represents what actually happened to
+        // THIS exercise during the final winner stage. We do NOT stamp
+        // eligibility-only ideas, raw preferences, or theoretical modifiers
+        // that did not survive into the rerank result.
+        //
+        // The rerank stage is where we have BOTH inputs simultaneously:
+        //   - the per-exercise rerank result (`result.*` + `depthDelta`)
+        //   - the per-skill adjustments map (`progressionDepthAdjustments`)
+        // After this stage, only the candidate flows downstream and the map
+        // is no longer consulted, so this is the canonical join site.
+        // ==========================================================================
+        const matchedAdjForProvenance =
+          (depthSkillKeyUsed && progressionDepthAdjustments[depthSkillKeyUsed]) ||
+          progressionDepthAdjustments[normalized.skillHint] ||
+          progressionDepthAdjustments[normalized.skillHint.replace(/_/g, '')] ||
+          null
+        const winnerProvenance: AdaptiveExercise['dbTruthWinnerProvenance'] = {
+          rankingApplied: true,
+          rankingChanged: result.changed || depthDelta !== 0,
+          precedenceUsed: (matchedAdjForProvenance?.precedenceUsed as
+            'current' | 'response' | 'historical' | 'default' | 'readiness_gate' | 'none' | null
+          ) ?? (result.precedenceUsed as 'current' | 'response' | 'historical' | 'default' | 'readiness_gate' | 'none' | null) ?? null,
+          skillFamilyUsed: result.skillFamilyUsed ?? null,
+          depthBias: depthBiasUsed,
+          depthDelta,
+          adjustedScoreFinal: depthAdjustedScore,
+          currentBeatsHistorical: matchedAdjForProvenance?.currentBeatsHistorical ?? null,
+          readinessGated: matchedAdjForProvenance?.readinessGated ?? null,
+          readinessPermission: matchedAdjForProvenance?.readinessPermission ?? null,
+          // [conservativeByCurrentTruth] True when current working state earned
+          // a conservative bias either directly (skillTruth resolved to
+          // conservative) OR indirectly via readiness gating capping the
+          // pre-gate bias. Both routes mean "current truth softened the pick."
+          conservativeByCurrentTruth: matchedAdjForProvenance
+            ? (matchedAdjForProvenance.adjustedBias < 0)
+            : null,
+          sourceOfTruth: 'db_truth_final_winner',
+          generatedAtBuildTime: true,
+        }
+
         return {
           ...ex,
           dbTruthAdjustedScore: depthAdjustedScore,
@@ -24718,6 +24815,9 @@ function generateAdaptiveSession(
           dbTruthPrecedenceUsed: result.precedenceUsed,
           dbTruthDepthBias: depthBiasUsed,
           dbTruthDepthDelta: depthDelta,
+          // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Durable canonical owner stamp.
+          // Survives mapToAdaptiveExercises explicit pass-through (L27486+).
+          dbTruthWinnerProvenance: winnerProvenance,
         }
       })
       
@@ -27461,6 +27561,18 @@ function mapToAdaptiveExercises(
       }
     }
     
+    // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Read the durable winner-provenance
+    // stamp off the candidate. Pre-lock, this field-whitelist mapping was
+    // the exact site where transient `dbTruth*` rerank fields were dropped:
+    // mapToAdaptiveExercises rebuilds each AdaptiveExercise from a closed
+    // set of fields, so anything not explicitly pulled through here ceased
+    // to exist on the final saved program. The stamp is now an explicit
+    // pass-through entry below, which is the canonical save/load handoff
+    // for winner rationale.
+    const candidateWithProvenance = s as SelectedExercise & {
+      dbTruthWinnerProvenance?: AdaptiveExercise['dbTruthWinnerProvenance']
+    }
+
     return {
       id: s.exercise.id,
       name: s.exercise.name,
@@ -27483,6 +27595,12 @@ function mapToAdaptiveExercises(
     coachingMeta: buildExerciseCoachingMetaFromSelection(s, primaryGoal),
     // [LIVE-EXECUTION-TRUTH] Pass through execution truth contract from selection
     executionTruth: s.executionTruth,
+    // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Durable canonical winner-rationale.
+    // Stamped during the rerank stage (~L24711) and explicitly preserved
+    // here at the only field-whitelist boundary in the build path. Without
+    // this line the stamp would be silently dropped exactly the way the
+    // transient `dbTruth*` rerank fields were before this lock.
+    dbTruthWinnerProvenance: candidateWithProvenance.dbTruthWinnerProvenance,
     }
   }).filter((e): e is AdaptiveExercise => e !== null)
 }

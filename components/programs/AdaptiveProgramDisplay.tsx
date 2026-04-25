@@ -1040,145 +1040,127 @@ export function AdaptiveProgramDisplay({
         {scaledSessions.length > 0 ? (
           scaledSessions.map((session, sessionIndex) => {
             // ================================================================
-            // [GROUPED-TRUTH-FUNNEL-AUDIT] STAGE 3 -> STAGE 4 PROBE
-            // Logs grouped-truth presence on (a) the validSessions[i] entry
-            // (Stage 3, post-normalize, pre-week-scaling) and (b) the
-            // scaledSessions[i] entry being passed into AdaptiveSessionCard
-            // (Stage 4). If Stage 3 has truth and Stage 4 does not, the loss
-            // is in scaleSessionForWeek. If both are false, grouped truth was
-            // already absent before this component received the program.
+            // [FINAL-DAY-CARD-OWNERSHIP-LOCK]
+            //
+            // The day-card visible header now consumes ONE owner: an
+            // enriched `cardSurface` derived from `SessionCardSurface`. The
+            // previously-parallel `intelligenceContract.coachingExplanation`,
+            // `intelligenceContract.dayRationales` and raw
+            // `getSessionSurfaceSignals(session)` reads are folded into
+            // surface fields here, once per session, and the JSX below
+            // never references those parallel paths again.
+            //
+            // The previous in-render `[FUNNEL-AUDIT-S3S4]` console probe
+            // that read raw `session.exercises` / `session.styleMetadata`
+            // on every render is removed (debug leakage in the visible
+            // card body render path). The probes still exist elsewhere
+            // for QA and the underlying truth was never depending on
+            // those logs.
             // ================================================================
-            if (typeof window !== 'undefined') {
-              const s3Source = validSessions[sessionIndex] as unknown as {
-                styleMetadata?: { styledGroups?: Array<{ groupType: string }> }
-                exercises?: Array<{ blockId?: string; method?: string }>
-              } | undefined
-              const s3Styled = s3Source?.styleMetadata?.styledGroups ?? []
-              const s3NonStraight = s3Styled.filter(g => g.groupType !== 'straight').length
-              const s3Ex = Array.isArray(s3Source?.exercises) ? s3Source.exercises : []
-              const s3ExWithBlockId = s3Ex.filter(e => !!e.blockId).length
-              const s3ExWithNonStraightMethod = s3Ex.filter(e => !!e.method && e.method !== 'straight').length
-              const s3HasGroupedTruth = s3NonStraight > 0 || s3ExWithNonStraightMethod > 0
+            const baseSurface = sessionCardSurfaces[sessionIndex]
 
-              const s4Source = session as unknown as {
-                styleMetadata?: { styledGroups?: Array<{ groupType: string }> }
-                exercises?: Array<{ blockId?: string; method?: string }>
-              }
-              const s4Styled = s4Source.styleMetadata?.styledGroups ?? []
-              const s4NonStraight = s4Styled.filter(g => g.groupType !== 'straight').length
-              const s4Ex = Array.isArray(s4Source.exercises) ? s4Source.exercises : []
-              const s4ExWithBlockId = s4Ex.filter(e => !!e.blockId).length
-              const s4ExWithNonStraightMethod = s4Ex.filter(e => !!e.method && e.method !== 'straight').length
-              const s4HasGroupedTruth = s4NonStraight > 0 || s4ExWithNonStraightMethod > 0
-
-              let stage34Verdict: string
-              if (!s3HasGroupedTruth && !s4HasGroupedTruth) {
-                stage34Verdict = 'STAGE3_ALREADY_FLAT_BEFORE_DISPLAY'
-              } else if (s3HasGroupedTruth && !s4HasGroupedTruth) {
-                stage34Verdict = 'STAGE3_TO_STAGE4_LOSS_IN_SCALE_SESSION_FOR_WEEK'
-              } else {
-                stage34Verdict = 'STAGE3_AND_STAGE4_BOTH_HAVE_GROUPED_TRUTH'
-              }
-
-              console.log('[v0] [FUNNEL-AUDIT-S3S4] Day', session.dayNumber, {
-                s3_styledGroups: s3Styled.length,
-                s3_nonStraight: s3NonStraight,
-                s3_exCount: s3Ex.length,
-                s3_exWithBlockId: s3ExWithBlockId,
-                s3_exWithNonStraightMethod: s3ExWithNonStraightMethod,
-                s3_hasGroupedTruth: s3HasGroupedTruth,
-                s4_styledGroups: s4Styled.length,
-                s4_nonStraight: s4NonStraight,
-                s4_exCount: s4Ex.length,
-                s4_exWithBlockId: s4ExWithBlockId,
-                s4_exWithNonStraightMethod: s4ExWithNonStraightMethod,
-                s4_hasGroupedTruth: s4HasGroupedTruth,
-                verdict: stage34Verdict,
-              })
-            }
-
-            // [SESSION-CARD-SURFACE] Get authoritative card surface for this session
-            const cardSurface = sessionCardSurfaces[sessionIndex]
-            
-            // Get day rationale for this session (fallback/supplementary)
+            // Enrich the surface ONCE per session. All visible-claim
+            // overlap collapses here so the JSX cannot accidentally
+            // double-source a header line.
             const dayRationale = intelligenceContract?.dayRationales?.find(
               r => r.dayNumber === session.dayNumber
             )
-            
-            // [SURFACE-SIGNALS] Get session-level surface signals for prescription changes
-            const sessionSurfaceSignals = getSessionSurfaceSignals(session as Parameters<typeof getSessionSurfaceSignals>[0])
-            
-            // [COACHING-EXPLANATION-CONTRACT] Get authoritative session explanation
-            const coachingSessionExpl = intelligenceContract?.coachingExplanation 
-              ? getCompactSessionExplanation(intelligenceContract.coachingExplanation, session.dayNumber) 
+            const compactCoaching = intelligenceContract?.coachingExplanation
+              ? getCompactSessionExplanation(intelligenceContract.coachingExplanation, session.dayNumber)
               : null
-            
-            // Determine if we have authoritative card surface to show
+            const surfaceSignals = getSessionSurfaceSignals(session as Parameters<typeof getSessionSurfaceSignals>[0])
+
+            const cardSurface: SessionCardSurface | undefined = baseSurface
+              ? {
+                  ...baseSurface,
+                  coachingPurpose: compactCoaching?.purpose ?? baseSurface.coachingPurpose ?? null,
+                  fallbackWeeklyRole: dayRationale?.weeklyRole ?? baseSurface.fallbackWeeklyRole ?? null,
+                  fallbackRationale: dayRationale?.rationale ?? baseSurface.fallbackRationale ?? null,
+                  microSignals: surfaceSignals.microSignals.length > 0
+                    ? surfaceSignals.microSignals
+                    : baseSurface.microSignals ?? [],
+                }
+              : undefined
+
             const hasAuthoritativeSurface = cardSurface && cardSurface.source === 'authoritative'
-            const hasAnyChips = cardSurface && (
-              cardSurface.primaryIntentChips.length > 0 || 
+            const hasAnyChips = !!cardSurface && (
+              cardSurface.primaryIntentChips.length > 0 ||
               cardSurface.protectionSignals.length > 0 ||
               cardSurface.methodSignals.length > 0
             )
-            const hasCoachingExplanation = !!coachingSessionExpl?.purpose
-            
+            const headerHasContent = !!cardSurface && (
+              !!cardSurface.sessionHeadline ||
+              hasAnyChips ||
+              !!cardSurface.coachingPurpose ||
+              !!cardSurface.evidenceLabel ||
+              !!cardSurface.fallbackWeeklyRole ||
+              !!cardSurface.fallbackRationale ||
+              (cardSurface.microSignals?.length ?? 0) > 0
+            )
+
             return (
               <div key={`${program.id}-${session.dayNumber}-${session.name || session.focusLabel}-week${currentWeekNumber}`}>
-                {/* [SESSION-CARD-SURFACE] Authoritative per-card identity display */}
-                {/* [COACHING-EXPLANATION-CONTRACT] Show header when we have coaching explanation */}
-                {(hasAuthoritativeSurface || hasAnyChips || hasCoachingExplanation || sessionSurfaceSignals.hasPrescriptionChanges || (dayRationale && dayRationale.source !== 'unavailable')) ? (
+                {/* [FINAL-DAY-CARD-OWNERSHIP-LOCK] Visible header reads ONLY
+                    `cardSurface.*`. Border / badge styling derive from the
+                    same surface; nothing here re-reads `session` or
+                    `intelligenceContract` for visible truth. */}
+                {headerHasContent && cardSurface ? (
                   <div className={`mb-2 px-2 py-1.5 bg-[#1A1A1A]/40 rounded-md border-l-2 ${
-                    cardSurface?.protectionSignals.length 
-                      ? 'border-[#E63946]/40' 
+                    cardSurface.protectionSignals.length
+                      ? 'border-[#E63946]/40'
                       : hasAuthoritativeSurface
                         ? 'border-[#E63946]/30'
                         : 'border-[#E63946]/20'
                   }`}>
                     <div className="flex items-start gap-2">
                       <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 mt-0.5 ${
-                        cardSurface?.protectionSignals.length 
-                          ? 'bg-[#E63946]/15' 
+                        cardSurface.protectionSignals.length
+                          ? 'bg-[#E63946]/15'
                           : 'bg-[#E63946]/10'
                       }`}>
                         <span className={`text-[8px] font-bold ${
-                          cardSurface?.protectionSignals.length 
-                            ? 'text-[#E63946]/90' 
+                          cardSurface.protectionSignals.length
+                            ? 'text-[#E63946]/90'
                             : 'text-[#E63946]/70'
                         }`}>{session.dayNumber}</span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        {/* A. Session headline - authoritative identity line */}
-                        {cardSurface?.sessionHeadline && (
+                        {/* A. Headline (surface-owned) OR last-resort weekly-role
+                            label, never both — single visible identity line. */}
+                        {cardSurface.sessionHeadline ? (
                           <p className="text-[11px] text-[#9A9A9A] font-medium leading-snug">
                             {cardSurface.sessionHeadline}
                           </p>
-                        )}
-                        
-                        {/* B. Truth chips row - primary intent + protection + method signals */}
+                        ) : cardSurface.fallbackWeeklyRole ? (
+                          <p className="text-[11px] text-[#9A9A9A] font-medium leading-snug">
+                            {cardSurface.fallbackWeeklyRole}
+                          </p>
+                        ) : null}
+
+                        {/* B. Truth chips: primary intent + protection + method
+                            (surface-owned only; method labels were already
+                            materiality-gated upstream). */}
                         {hasAnyChips && (
                           <div className="flex flex-wrap gap-x-1.5 gap-y-1 mt-1">
-                            {/* Primary intent chips */}
                             {cardSurface.primaryIntentChips.map((chip, i) => (
-                              <span 
-                                key={`intent-${i}`} 
+                              <span
+                                key={`intent-${i}`}
                                 className="text-[9px] px-1.5 py-0.5 rounded bg-[#E63946]/8 text-[#C8C8C8] font-medium"
                               >
                                 {chip}
                               </span>
                             ))}
-                            {/* Protection signals */}
                             {cardSurface.protectionSignals.map((chip, i) => (
-                              <span 
-                                key={`protect-${i}`} 
+                              <span
+                                key={`protect-${i}`}
                                 className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400/80 font-medium"
                               >
                                 {chip}
                               </span>
                             ))}
-                            {/* Method signals */}
                             {cardSurface.methodSignals.map((chip, i) => (
-                              <span 
-                                key={`method-${i}`} 
+                              <span
+                                key={`method-${i}`}
                                 className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400/70 font-medium"
                               >
                                 {chip}
@@ -1186,41 +1168,34 @@ export function AdaptiveProgramDisplay({
                             ))}
                           </div>
                         )}
-                        
-                        {/* [COACHING-EXPLANATION-CONTRACT] Session purpose - prefer coaching explanation */}
-                        {coachingSessionExpl?.purpose && (
+
+                        {/* C. Coaching purpose (surface-owned). Falls back to
+                            evidence label, then to last-resort rationale.
+                            At most ONE of these renders. */}
+                        {cardSurface.coachingPurpose ? (
                           <p className="text-[10px] text-[#8A8A8A] mt-1 leading-relaxed">
-                            {coachingSessionExpl.purpose}
+                            {cardSurface.coachingPurpose}
                           </p>
-                        )}
-                        
-                        {/* C. Evidence label - only show if no coaching purpose */}
-                        {!coachingSessionExpl?.purpose && cardSurface?.evidenceLabel && (
+                        ) : cardSurface.evidenceLabel ? (
                           <p className="text-[10px] text-[#6A6A6A] mt-1 leading-relaxed">
                             {cardSurface.evidenceLabel}
                           </p>
-                        )}
-                        
-                        {/* D. Fallback to day rationale if no authoritative surface */}
-                        {!cardSurface?.sessionHeadline && !coachingSessionExpl?.purpose && dayRationale?.weeklyRole && (
-                          <p className="text-[11px] text-[#9A9A9A] font-medium leading-snug">
-                            {dayRationale.weeklyRole}
+                        ) : cardSurface.fallbackRationale ? (
+                          <p className="text-[10px] text-[#6A6A6A] mt-1 leading-relaxed">
+                            {cardSurface.fallbackRationale}
                           </p>
-                        )}
-                        {!hasAnyChips && sessionSurfaceSignals.microSignals.length > 0 && (
+                        ) : null}
+
+                        {/* D. Micro-signals (surface-owned). Suppressed when
+                            chips already render to avoid visual repetition. */}
+                        {!hasAnyChips && (cardSurface.microSignals?.length ?? 0) > 0 && (
                           <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
-                            {sessionSurfaceSignals.microSignals.map((signal, i) => (
+                            {cardSurface.microSignals!.map((signal, i) => (
                               <span key={i} className="text-[9px] text-[#E63946]/70 font-medium">
                                 {signal}
                               </span>
                             ))}
                           </div>
-                        )}
-                        {/* [COACHING-EXPLANATION-CONTRACT] Only show day rationale as last fallback */}
-                        {!coachingSessionExpl?.purpose && !cardSurface?.evidenceLabel && !sessionSurfaceSignals.hasPrescriptionChanges && dayRationale?.rationale && (
-                          <p className="text-[10px] text-[#6A6A6A] mt-0.5 leading-relaxed">
-                            {dayRationale.rationale}
-                          </p>
                         )}
                       </div>
                     </div>

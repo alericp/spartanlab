@@ -47,31 +47,65 @@ export const REST_TIMES_BY_CATEGORY: Record<ExerciseRestCategory, { min: number;
 
 /**
  * Map exercise category/type to rest category
+ *
+ * [LIVE-CORRIDOR-TRUTH-CONSOLIDATION] Recognizes weighted compound movements
+ * by name AND by the presence of a real prescribed external load. Previously
+ * a "Weighted Pull-Up" with category "skill" or "calisthenics" fell through
+ * to the `accessory` bucket, whose default 90s + RPE-9 +45s adjustment was
+ * then clamped to the accessory max of 120s -> the user got ~2:00 of rest
+ * after a maximal-effort weighted compound pull. That undershoots strength
+ * doctrine. Now any exercise with prescribedLoad > 0 OR a "weighted ___"
+ * style name is routed to heavy_strength (default 180s, max 240s) so the
+ * RPE-aware extension produces doctrine-aligned rest (e.g. RPE 9 -> 225s).
  */
 export function getRestCategory(exercise: AdaptiveExercise): ExerciseRestCategory {
   const category = exercise.category?.toLowerCase() || ''
   const name = exercise.name?.toLowerCase() || ''
   const repsOrTime = exercise.repsOrTime?.toLowerCase() || ''
-  
+
+  // [LIVE-CORRIDOR-TRUTH-CONSOLIDATION] Authoritative weighted-compound check.
+  // Has to run BEFORE the skill_work / accessory branches so that a weighted
+  // pull-up does not get misrouted to skill_work just because its category
+  // string happens to be "skill", or to accessory just because its category
+  // string is empty/generic.
+  const prescribedLoad =
+    typeof (exercise as { prescribedLoad?: { load?: number } }).prescribedLoad?.load === 'number'
+      ? ((exercise as { prescribedLoad?: { load?: number } }).prescribedLoad?.load ?? 0)
+      : 0
+  const isWeightedByLoad = prescribedLoad > 0
+  const isWeightedByName =
+    name.includes('weighted ') ||
+    /\bweighted\b/.test(name) ||
+    name.startsWith('weighted')
+
   // Check for density/circuit indicators
   if (category.includes('density') || category.includes('circuit') || category.includes('finisher')) {
     return 'density_circuit'
   }
-  
+
   // Check for flexibility
   if (category.includes('flex') || category.includes('stretch') || category.includes('mobility')) {
     return 'flexibility'
   }
-  
+
   // Check for core work
   if (category.includes('core') || category.includes('abs')) {
     return 'core'
   }
-  
+
+  // [LIVE-CORRIDOR-TRUTH-CONSOLIDATION] Heavy strength FIRST when a real
+  // external load is prescribed or the exercise name explicitly says
+  // "weighted". This catches "Weighted Pull-Up", "Weighted Dip",
+  // "Weighted Chin-Up", "Weighted Push-Up" (when load > 0), and any future
+  // weighted variant tagged with category="skill"/"pull"/"push"/etc.
+  if (isWeightedByLoad || isWeightedByName) {
+    return 'heavy_strength'
+  }
+
   // Check for skill work (isometric holds, progressions)
-  if (category.includes('skill') || 
-      name.includes('lever') || 
-      name.includes('planche') || 
+  if (category.includes('skill') ||
+      name.includes('lever') ||
+      name.includes('planche') ||
       name.includes('handstand') ||
       name.includes('l-sit') ||
       name.includes('v-sit') ||
@@ -79,10 +113,10 @@ export function getRestCategory(exercise: AdaptiveExercise): ExerciseRestCategor
       repsOrTime.includes('sec')) {
     return 'skill_work'
   }
-  
+
   // Check for heavy strength (pull, push with low reps)
-  if (category.includes('strength') || 
-      category.includes('pull') || 
+  if (category.includes('strength') ||
+      category.includes('pull') ||
       category.includes('push') ||
       category.includes('legs')) {
     // Check rep range - lower reps = more rest needed
@@ -93,7 +127,7 @@ export function getRestCategory(exercise: AdaptiveExercise): ExerciseRestCategor
     }
     return 'accessory'
   }
-  
+
   // Default to accessory
   return 'accessory'
 }

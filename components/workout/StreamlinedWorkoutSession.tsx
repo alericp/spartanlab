@@ -85,6 +85,12 @@ import type { ScaledExercise } from '@/lib/week-dosage-scaling'
 // history surface). Replaces 4+ divergent inline regex variants that missed
 // bare-second shorthand like "6s" and silently logged hold exercises as reps.
 import { isHoldUnit } from '@/lib/workout/execution-unit-contract'
+// [LIVE-CORRIDOR-TRUTH-CONSOLIDATION] Single authoritative helper for
+// resolving the default seed value the user sees on a fresh logging card.
+// Returns the LOW END of the prescribed range (e.g. "4-6" -> 4) and
+// strips leading set-count prefixes like "3 sets x" so they cannot be
+// mistaken for the rep low-end.
+import { getPrescriptionSeedValue, parseLowEndReps } from '@/lib/workout/prescription-defaults'
 // [LIVE-WORKOUT-CORRIDOR-FIX] getLatestAdaptiveProgram loaded dynamically - post-completion only
 // The adaptive-program-builder is a MASSIVE file (18,000+ lines) that can crash module evaluation
 // We only need it for the "next session" preview in PostWorkoutSummary
@@ -929,10 +935,12 @@ function buildUnifiedTransitionSnapshot(
     }
   }
   
-  // Parse target value from NEXT exercise
+  // [LIVE-CORRIDOR-TRUTH-CONSOLIDATION] Use canonical low-end-of-range
+  // helper here too. The legacy `match(/(\d+)/)` regex grabbed the first
+  // number anywhere, leaking leading set counts ("3 sets x 4-6" -> 3)
+  // into the next exercise's nextRepsValue/nextHoldValue snapshot fields.
   const nextRepsOrTime = nextExercise.repsOrTime || ''
-  const nextTargetMatch = nextRepsOrTime.match(/(\d+)/)
-  const nextTargetValue = nextTargetMatch ? parseInt(nextTargetMatch[1], 10) : 5
+  const nextTargetValue = parseLowEndReps(nextRepsOrTime) || 5
   
   // Determine recommended band for NEXT exercise
   let nextBand: ResistanceBandColor | 'none' = 'none'
@@ -4150,8 +4158,14 @@ export function StreamlinedWorkoutSession({
       name: safeCurrentExercise?.name,
       category: safeCurrentExercise?.category,
     })
-    const targetMatch = exerciseRepsOrTime.match(/(\d+)/)
-    const prescriptionSeedValue = targetMatch ? parseInt(targetMatch[1], 10) : (isHoldExerciseForLog ? 30 : 8)
+    // [LIVE-CORRIDOR-TRUTH-CONSOLIDATION] Use the canonical low-end resolver
+    // so the log path agrees bit-identically with the corridor seed path.
+    // Both must read from the same source of truth, otherwise the user's
+    // SAW value (corridor seed) and LOGGED value (log seed) can drift.
+    const prescriptionSeedValue = getPrescriptionSeedValue({
+      repsOrTime: exerciseRepsOrTime,
+      isHold: isHoldExerciseForLog,
+    })
     
     // [LIVE-INPUT-SEED-FIX] Only the explicit 0 sentinel (set by the machine on
     // init, set completion, or exercise advance) triggers re-seeding from the
@@ -4210,13 +4224,74 @@ export function StreamlinedWorkoutSession({
           ['too_easy', 'too_hard', 'pain_discomfort', 'form_issue', 'fatigue', 'grip_limited', 'balance_issue', 'lost_focus', 'load_adjustment_used', 'mixed_band_assistance_used'].includes(tag)
         )
 
+      // [LIVE-CORRIDOR-TRUTH-CONSOLIDATION] STRICT INPUT-MODE GATING
+      //
+      // Band metadata and load metadata are exercise-scoped and set-scoped.
+      // The authoritative input-mode contract decides which fields are
+      // permitted to be captured. Any leftover machineState band / load
+      // fields from a previous exercise MUST be filtered here even if the
+      // ADVANCE_TO_NEXT_EXERCISE reducer reset failed to clear them, so
+      // the persisted CompletedSet ledger for the CURRENT exercise can
+      // never carry band tags or load values that the input-mode contract
+      // does not authorize.
+      //
+      // Why this is a belt-and-suspenders fix on top of the reducer reset:
+      //   - Reducer reset prevents leftover state from being captured.
+      //   - This gate prevents capture even if someone re-introduces a
+      //     pre-fill or carry-forward path in the future.
+      //   - Combined, the two guarantee `recentSets` and the Last Set
+      //     Snapshot can never display a band tag on a weighted exercise
+      //     or a load value on a bodyweight exercise.
+      const bandsAllowed = inputMode.showBandSelector || inputMode.showMultiBandSelector
+      const loadAllowed = inputMode.showLoadInput
+
+      // Gated band capture (strict).
+      const gatedBandUsed = bandsAllowed ? safeBandUsed : 'none'
+      const rawSelectedBands =
+        machineState.selectedBands && machineState.selectedBands.length > 0
+          ? machineState.selectedBands
+          : machineState.multiBandSelection?.bands
+      const gatedSelectedBands = bandsAllowed ? rawSelectedBands : undefined
+      const gatedMultiBandSelection = bandsAllowed ? machineState.multiBandSelection : null
+
+      // Gated load capture (strict). Prescribed load and prescribed unit
+      // are exercise-scoped truth and are always captured for traceability,
+      // but actualLoadUsed/Unit only flow through when the input mode is
+      // load-bearing. Otherwise we record undefined so the persistence
+      // layer never carries a stale load value to a non-weighted set.
+      const gatedActualLoadUsed = loadAllowed
+        ? (machineState.actualLoadUsed ?? safeCurrentExercise?.prescribedLoad?.load)
+        : undefined
+      const gatedActualLoadUnit = loadAllowed
+        ? (machineState.actualLoadUnit || safeCurrentExercise?.prescribedLoad?.unit)
+        : undefined
+
+      if (process.env.NODE_ENV === 'development' && (!bandsAllowed || !loadAllowed)) {
+        const wouldHaveLeakedBand = !bandsAllowed && (
+          (rawSelectedBands?.length ?? 0) > 0 || (safeBandUsed && safeBandUsed !== 'none')
+        )
+        const wouldHaveLeakedLoad = !loadAllowed && machineState.actualLoadUsed != null
+        if (wouldHaveLeakedBand || wouldHaveLeakedLoad) {
+          console.log('[v0] [log-corridor] strict_input_mode_gate_filtered_stale_state', {
+            exerciseName: safeCurrentExercise?.name,
+            inputMode: inputMode.mode,
+            bandsAllowed,
+            loadAllowed,
+            wouldHaveLeakedBand,
+            wouldHaveLeakedLoad,
+            droppedBands: wouldHaveLeakedBand ? rawSelectedBands : undefined,
+            droppedLoad: wouldHaveLeakedLoad ? machineState.actualLoadUsed : undefined,
+          })
+        }
+      }
+
       return {
         exerciseIndex: currentIndex,
         setNumber: validatedSetNumber,
         actualReps: loggedRepsValue,
         holdSeconds: loggedHoldValue,
         actualRPE: safeSelectedRPE || 8,
-        bandUsed: safeBandUsed,
+        bandUsed: gatedBandUsed,
         timestamp: Date.now(),
         // Per-set notes from machine state
         // [CRASH-FIX] Added null safety for currentSetReasonTags
@@ -4228,16 +4303,14 @@ export function StreamlinedWorkoutSession({
         round: machineState.currentRound || undefined,
         // [LIVE-WORKOUT-AUTHORITY] Extended execution facts
         inputMode: inputMode.mode,
-        // Multi-band support - use selectedBands array directly, fall back to multiBandSelection for compatibility
-        selectedBands: (machineState.selectedBands && machineState.selectedBands.length > 0)
-          ? machineState.selectedBands
-          : machineState.multiBandSelection?.bands,
-        multiBandSelection: machineState.multiBandSelection,
-        // Weighted exercise facts
-        prescribedLoad: safeCurrentExercise?.prescribedLoad?.load,
-        prescribedLoadUnit: safeCurrentExercise?.prescribedLoad?.unit,
-        actualLoadUsed: machineState.actualLoadUsed ?? safeCurrentExercise?.prescribedLoad?.load,
-        actualLoadUnit: machineState.actualLoadUnit || safeCurrentExercise?.prescribedLoad?.unit,
+        // [LIVE-CORRIDOR-TRUTH-CONSOLIDATION] Strict input-mode gating
+        selectedBands: gatedSelectedBands,
+        multiBandSelection: gatedMultiBandSelection,
+        // Weighted exercise facts (prescribed values are exercise-scoped truth)
+        prescribedLoad: loadAllowed ? safeCurrentExercise?.prescribedLoad?.load : undefined,
+        prescribedLoadUnit: loadAllowed ? safeCurrentExercise?.prescribedLoad?.unit : undefined,
+        actualLoadUsed: gatedActualLoadUsed,
+        actualLoadUnit: gatedActualLoadUnit,
         // Unilateral exercise facts
         isPerSide: inputMode.showPerSideToggle || machineState.isPerSide,
         // Structured coaching inputs
@@ -4484,12 +4557,16 @@ export function StreamlinedWorkoutSession({
       return
     }
     
-    // Parse target value from NEXT exercise's repsOrTime. Same parse the
-    // reducer's ADVANCE_TO_NEXT_EXERCISE case expects in `targetValue`.
+    // [LIVE-CORRIDOR-TRUTH-CONSOLIDATION] Resolve the NEXT exercise's seed
+    // value via the canonical helper. Note: the reducer's
+    // ADVANCE_TO_NEXT_EXERCISE case now stores 0 as the re-seed sentinel
+    // (so the corridor's prescriptionSeedValue derivation owns the actual
+    // displayed default), but we still pass nextTargetValue here for
+    // legacy diagnostic visibility and so any older consumer that reads
+    // `action.targetValue` directly still sees the low-end-of-range value.
     const nextExercise = exercises[nextIdx]
     const nextRepsOrTime = nextExercise?.repsOrTime || ''
-    const nextTargetMatch = nextRepsOrTime.match(/(\d+)/)
-    const nextTargetValue = nextTargetMatch ? parseInt(nextTargetMatch[1], 10) : 5
+    const nextTargetValue = parseLowEndReps(nextRepsOrTime) || 5
     
     // Single authoritative dispatch. The reducer's ADVANCE_TO_NEXT_EXERCISE
     // case handles phase transition, set-number reset, band reset, etc.
@@ -6465,10 +6542,17 @@ function InterExerciseRestCountdown({
       name: safeCurrentExercise?.name,
       category: safeCurrentExercise?.category,
     })
-    const targetMatch = exerciseRepsOrTime.match(/(\d+)/)
-    const prescriptionSeedValue = targetMatch
-      ? parseInt(targetMatch[1], 10)
-      : (isHoldExerciseForDefault ? 30 : 8)
+    // [LIVE-CORRIDOR-TRUTH-CONSOLIDATION] Use the canonical low-end-of-range
+    // resolver instead of `match(/(\d+)/)`. The previous regex grabbed the
+    // FIRST number anywhere in the prescription text, so prescriptions like
+    // "3 sets x 4-6 reps" yielded 3 (the set count) and the active card
+    // opened at 3 even though the prescribed RANGE was 4-6. The helper
+    // strips leading set-count prefixes and prefers the range LOW end,
+    // which is the contractually correct default seed.
+    const prescriptionSeedValue = getPrescriptionSeedValue({
+      repsOrTime: exerciseRepsOrTime,
+      isHold: isHoldExerciseForDefault,
+    })
     
     // [DEFAULT_SEED_DECISION] Deterministic seeding rule:
     // The machine sets repsValue/holdValue to 0 on init, on COMPLETE_SET, and

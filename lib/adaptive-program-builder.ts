@@ -178,6 +178,16 @@ import {
   type SessionBlockRole,
   type WeekAdaptationInput,
 } from './program-generation/session-composition-intelligence'
+// [WEEKLY-SESSION-ROLE-CONTRACT] Authoritative per-day weekly role distribution.
+// Built ONCE per program build, BEFORE the day loop. Each session receives its
+// dayRole from this contract to differentiate breadth / intensity / progression
+// character / method allowance across days within the same week.
+import {
+  buildWeeklySessionRoleContract,
+  type WeeklySessionRoleContract,
+  type WeeklyDayRole,
+  type WeekPhaseTag,
+} from './program/weekly-session-role-contract'
 // [exercise-trace] TASK 8: Import comparison utilities for build-to-build traceability
 import {
   type ProgramSelectionTrace,
@@ -1242,6 +1252,26 @@ export interface AdaptiveSession {
       methodsEarned: boolean
       templateEscaped: boolean
     }
+    // [WEEKLY-SESSION-ROLE-CONTRACT] Authoritative per-day weekly role
+    // summary. The single owner of "what role does this day play in the
+    // week" — drives display differentiation (label, intensity class,
+    // breadth target, progression character, method allowance) without
+    // re-deriving truth on the consumer side.
+    weeklyRole?: {
+      roleId: string
+      roleLabel: string
+      intensityClass: string
+      progressionCharacter: string
+      breadthTarget: { min: number; target: number; max: number }
+      weeklyRationale: string
+      methodAllowance: {
+        density: string
+        supersets: string
+        circuits: string
+        finisher: string
+        cluster: string
+      }
+    } | null
   }
   // [PRESCRIPTION-PROPAGATION] Track what week adaptation actually changed in this session
   prescriptionPropagationAudit?: {
@@ -10889,6 +10919,78 @@ async function generateAdaptiveProgramImpl(
   
   // Generate repetition justifications
   const repetitionJustifications = generateRepetitionJustifications(sessionIntents)
+
+  // ==========================================================================
+  // [WEEKLY-SESSION-ROLE-CONTRACT] Build the authoritative per-day role
+  // distribution for THIS week. ONE call, ONE owner. Each day's role flows
+  // into:
+  //   - session-composition-intelligence  (complexity bias, method gating,
+  //                                        breadth target nudge)
+  //   - session.compositionMetadata        (so the Program page card surface
+  //                                        can read role label + signals)
+  //
+  // This is the layer that makes a 6-day flexible week visibly differentiate
+  // by role (heavier strength / skill quality / broad mixed / secondary /
+  // density / supportive) instead of producing six structurally identical
+  // sessions.
+  //
+  // Honest about week phase: builder always materializes week-1 dosage, so
+  // we tag weekPhase as 'acclimation' here. Week-dosage-scaling later
+  // re-derives display dosage for week 2/3/4 — the ROLE distribution stays
+  // stable across the cycle (each role's intensity caps stay protected for
+  // week-1 build, but the role labels persist regardless).
+  // ==========================================================================
+  const weeklyRoleWeekPhase: WeekPhaseTag = (() => {
+    // Builder is currently always producing week-1 dosage for the saved
+    // program object. We do NOT lie about this — even when the user is
+    // viewing later weeks, the saved generation is week-1.
+    return 'acclimation'
+  })()
+
+  const weeklyRoleComplexityScore = (() => {
+    // Lightweight proxy of the same complexity inputs that
+    // calculate-content-complexity uses, so we don't have to thread the
+    // full complexity audit through this code path. This is a HINT that
+    // only widens breadth bands for broad-mixed / secondary / density days.
+    const skillsCount = (canonicalProfile.selectedSkills || []).length
+    const stylesCount = (canonicalProfile.trainingMethodPreferences || []).length
+    let s = 0
+    if (skillsCount >= 5) s += 3
+    else if (skillsCount >= 3) s += 2
+    else if (skillsCount >= 2) s += 1
+    if (experienceLevel === 'advanced') s += 2
+    else if (experienceLevel === 'intermediate') s += 1
+    if (stylesCount >= 2) s += 1
+    if (effectiveTrainingDays >= 6) s += 1
+    return Math.min(10, s)
+  })()
+
+  const weeklyRoleHasWeightedEquipment = (canonicalProfile.equipmentAvailable || []).some((eq: string) =>
+    ['barbell', 'dumbbells', 'kettlebell', 'weight_plates', 'cable_machine'].includes(eq)
+  )
+
+  const weeklySessionRoleContract: WeeklySessionRoleContract = buildWeeklySessionRoleContract({
+    days: structure.days,
+    sessionIntents,
+    weekPhase: weeklyRoleWeekPhase,
+    weekAdaptationPhase: weekAdaptationDecision?.phase || null,
+    firstWeekActive: isFirstWeek,
+    experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
+    trainingStyleMode: String(trainingStyleMode || 'mixed'),
+    complexityScore: weeklyRoleComplexityScore,
+    hasJointCautions: (canonicalProfile.jointCautions || []).length > 0,
+    hasWeightedEquipment: weeklyRoleHasWeightedEquipment,
+  })
+
+  console.log('[weekly-session-role-contract-built]', {
+    totalDays: weeklySessionRoleContract.audit.totalDays,
+    differentiationScore: weeklySessionRoleContract.audit.differentiationScore,
+    rolesAssigned: weeklySessionRoleContract.audit.rolesAssigned,
+    protectedWeek: weeklySessionRoleContract.protectedWeek,
+    protectionReason: weeklySessionRoleContract.protectionReason,
+    distribution: weeklySessionRoleContract.distribution,
+    verdict: 'WEEKLY_ROLE_CONTRACT_AUTHORITATIVE',
+  })
   
   // Generate each session with variety info
   // Build context object for session generation (explicit dependency passing)
@@ -11278,6 +11380,13 @@ async function generateAdaptiveProgramImpl(
     
     // Build composition context with all canonical truth
     // [WEEKLY-COMPOSITION-UPGRADE] Now includes week-level adaptation decisions
+    // [WEEKLY-SESSION-ROLE-CONTRACT] Resolve THIS day's authoritative role
+    // from the contract built once before the session loop. Falls back to
+    // null safely if for any reason the index is out of bounds (shouldn't
+    // happen — contract is built from the same `structure.days` we iterate).
+    const weeklyRoleForThisSession: WeeklyDayRole | null =
+      weeklySessionRoleContract.dayRoles[index] || null
+
     const compositionContext = buildSessionCompositionContext(
       day,
       index,
@@ -11295,7 +11404,8 @@ async function generateAdaptiveProgramImpl(
       doctrineRuntimeContract || null,
       fatigueStateForComposition,
       undefined, // recentSessionShapes
-      weekAdaptationInputForSession // [WEEKLY-COMPOSITION-UPGRADE] Pass week-level decisions
+      weekAdaptationInputForSession, // [WEEKLY-COMPOSITION-UPGRADE] Pass week-level decisions
+      weeklyRoleForThisSession // [WEEKLY-SESSION-ROLE-CONTRACT] Per-day authoritative role
     )
     
     // Build the authoritative composition blueprint
@@ -27309,6 +27419,11 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
           description: r.description,
         })),
         audit: sessionCompositionBlueprint.audit,
+        // [WEEKLY-SESSION-ROLE-CONTRACT] Authoritative per-day role summary.
+        // This is what makes the Program page card visibly differentiate
+        // days by role label, intensity class, breadth target, progression
+        // character, and the "why this day looks like this" rationale.
+        weeklyRole: sessionCompositionBlueprint.weeklyRoleSummary || null,
       } : undefined,
       // [PRESCRIPTION-PROPAGATION] Track what week adaptation actually changed in this session
       prescriptionPropagationAudit: weekAdaptation ? {

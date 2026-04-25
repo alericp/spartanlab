@@ -970,14 +970,51 @@ export function workoutMachineReducer(
         currentExerciseIndex: action.nextIndex,
         currentSetNumber: 1,
         selectedRPE: null,
-        repsValue: action.targetValue,
-        holdValue: action.targetValue,
+        // [LIVE-INPUT-SEED-FIX] Use the 0 sentinel so the corridor's
+        // re-seed logic in StreamlinedWorkoutSession picks the canonical
+        // low-end-of-range value from the NEW exercise's prescription,
+        // not whatever number the dispatcher happened to parse for the
+        // legacy `targetValue` field. The dispatcher's parse path was the
+        // exact site where "3 sets x 4-6" leaked a leading 3 into reps.
+        // Holding 0 here forces the next render to consult
+        // getPrescriptionSeedValue, which is the single authoritative
+        // owner of "default reps for a fresh set on a fresh exercise".
+        repsValue: 0,
+        holdValue: 0,
+        // [STALE-EXERCISE-STATE-CLEAR] Every per-exercise execution fact
+        // captured during the PREVIOUS exercise MUST NOT leak into the
+        // next exercise. Whether the next exercise is weighted, band-
+        // assisted, bodyweight, hold, or unilateral, it needs a clean
+        // slate so the contract-authorized input UI (and only that UI)
+        // drives what the user sees AND what `buildSetDataPayload`
+        // captures on the first Log Set of the new exercise.
+        //
+        // ROOT CAUSE THIS FIXES (band leak, load leak, per-side leak):
+        //   - selectedBands: previously reset, but if the prior exercise
+        //     used MultiBandSelector and only `multiBandSelection` carried
+        //     the bands, payload builder fell back to it -> red+yellow
+        //     band tags showed on a brand new weighted pull-up's first
+        //     logged set.
+        //   - actualLoadUsed/actualLoadUnit: previously NOT reset, so the
+        //     load input on the next weighted exercise opened at the
+        //     prior exercise's used load (e.g. +25 lbs) instead of the
+        //     new prescribed load (e.g. +42.5 lbs).
+        //   - isPerSide: previously NOT reset, so a unilateral exercise's
+        //     per-side flag could carry into a bilateral exercise.
+        //
+        // After this clear, the snapshot's per-exercise display values
+        // are sourced from the NEW exercise's prescription via the
+        // canonical authority resolvers, not from leftover machine state.
         bandUsed: 'none',
-        // [STALE-BAND-CLEAR] Band state from the previous exercise MUST NOT
-        // leak into the next exercise. Whether the next exercise is weighted
-        // or band-assisted, it needs a clean slate so the contract-authorized
-        // input UI (and only that UI) drives what the user sees.
         selectedBands: [],
+        multiBandSelection: null,
+        actualLoadUsed: null,
+        actualLoadUnit: 'lbs',
+        isPerSide: false,
+        // Per-set notes/tags live with the previous set; clear them so
+        // the new exercise's first set starts unannotated.
+        currentSetNote: '',
+        currentSetReasonTags: [],
         interExerciseRestSeconds: 0,
       }
     

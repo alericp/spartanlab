@@ -13686,11 +13686,59 @@ async function generateAdaptiveProgramImpl(
       structureDescription: methodMaterializationResult.structureDecisions.length > 0
         ? methodMaterializationResult.structureDecisions.map(d => d.rationale).join('; ')
         : existingStyleMeta.structureDescription || 'Standard straight sets',
-      appliedMethods: [...new Set([
-        ...(session.styleMetadata?.appliedMethods || existingStyleMeta.appliedMethods || []), // [FIX] Also use current
-        ...methodMaterializationResult.appliedMethods,
-        'straight_sets', // Always include as baseline
-      ])],
+      // [PACKAGING-TRUTH-OWNERSHIP-LOCK] appliedMethods is now derived strictly
+      // from MATERIALIZATION-TRUTH — i.e. the single authoritative owner the
+      // pre-materialization scrub (L12332) and the finalStyledGroups rebuild
+      // (L13386) install. Pre-lock, this field UNION'd
+      // `existingStyleMeta.appliedMethods` / `session.styleMetadata.appliedMethods`
+      // — both of which carry the LATE-CORRIDOR `applySessionStylePreferences`
+      // claim from `generateAdaptiveSession` (L26798) — with the upstream
+      // materializer's output. That union let preference-only claims survive
+      // as "applied" even when the upstream materializer rejected the method
+      // (rotation handed the day to a different style, feasibility gate failed,
+      // session was skill-dominated, etc.). Result: `styleMeta.appliedMethods`
+      // claimed e.g. "circuits applied" while `finalStyledGroups` contained
+      // zero circuit blocks — the exact "method eligibility mistaken for
+      // method materialization" symptom (Section 5.3 of the audit prompt).
+      // The card already detected this drift downstream (see
+      // AdaptiveSessionCard L2884-L2912 `falsePositiveApplied`) but had to
+      // re-classify the leaked methods as rejected with a generic stub reason
+      // instead of trusting the upstream materializer's truth in the first
+      // place. By locking ownership here, every consumer of
+      // `styleMetadata.appliedMethods` (Method decisions surface, scanner
+      // strip, audit logs, save/route/page) reads the same materialization-
+      // truth the visible body renders.
+      //
+      // The late-corridor's per-decision evidence (drivers, blockers, bundle
+      // signals consumed) is NOT discarded — it remains preserved on
+      // `styleMetadata.methodDecisionEvidence` via `...existingStyleMeta`
+      // above, so the audit trail proving "why each preferred method was
+      // applied/rejected/deferred" survives intact. Only the *binary*
+      // applied/rejected verdict now defers to the upstream owner.
+      appliedMethods: (() => {
+        const result: string[] = []
+        const hasSupersetGroup = finalStyledGroups.some(g => g.groupType === 'superset')
+        const hasCircuitGroup = finalStyledGroups.some(g => g.groupType === 'circuit')
+        const hasDensityGroup = finalStyledGroups.some(g => g.groupType === 'density_block')
+        // Supersets: trust the upstream superset writer's flag OR the rebuilt
+        // grouped truth. Both sources are written by the materialization owner.
+        if (currentSupersetsApplied || hasSupersetGroup) result.push('supersets')
+        // Circuits / density: trust the materialization pass's appliedMethods
+        // signal cross-checked against rebuilt grouped truth, so a method
+        // that materialized as a structural block is reported applied even
+        // if a downstream rename of the materialization signal drifts.
+        if (hasCircuitsApplied || hasCircuitGroup) result.push('circuits')
+        if (hasDensityApplied || hasDensityGroup) result.push('density_blocks')
+        // Cluster is a SET-EXECUTION METHOD, not a grouped structure. The
+        // method-vs-structure split (taxonomy-lock at L13483-L13514) means
+        // single-row cluster does NOT emit a grouped block; trust the
+        // materialization pass's hasClusterApplied signal which fires when
+        // ex.method='cluster' was actually written onto a session exercise.
+        if (hasClusterApplied) result.push('cluster_sets')
+        // Baseline always present.
+        result.push('straight_sets')
+        return [...new Set(result)]
+      })(),
       rejectedMethods: completedRejectedMethods,
       styledGroups: finalStyledGroups,
       // Audit trail for materialization
@@ -13731,6 +13779,36 @@ async function generateAdaptiveProgramImpl(
       styledGroupsCount: finalStyledGroups.length,
       primaryStyle,
     })
+
+    // [PACKAGING-TRUTH-OWNERSHIP-LOCK] Verdict log proving the late-corridor
+    // leak is suppressed. `lateCorridorClaim` is whatever
+    // applySessionStylePreferences (run inside generateAdaptiveSession) wrote
+    // onto session.styleMetadata.appliedMethods before the upstream
+    // materialization scrub+rebuild ran. `materializedTruth` is the new
+    // upstream-owned, finalStyledGroups-cross-checked appliedMethods.
+    // `leakSuppressed` lists any method the late corridor claimed as applied
+    // that the materializer did NOT confirm — these are now correctly absent
+    // from `materializedTruth` rather than surviving as false positives.
+    {
+      const lateCorridorClaim: string[] = Array.isArray(existingStyleMeta.appliedMethods)
+        ? existingStyleMeta.appliedMethods
+        : []
+      const materializedTruth: string[] = session.styleMetadata.appliedMethods || []
+      const leakSuppressed = lateCorridorClaim.filter(
+        m => m !== 'straight_sets' && !materializedTruth.includes(m),
+      )
+      console.log('[PACKAGING-TRUTH-OWNERSHIP-LOCK-VERDICT]', {
+        dayNumber: session.dayNumber,
+        focus: session.focus,
+        lateCorridorClaim,
+        materializedTruth,
+        leakSuppressed,
+        finalNonStraightStyledGroupsCount: finalStyledGroups.filter(g => g.groupType !== 'straight').length,
+        verdict: leakSuppressed.length > 0
+          ? 'LEAK_SUPPRESSED_LATE_CLAIM_NOT_BACKED_BY_MATERIALIZATION'
+          : 'NO_LEAK_LATE_CLAIM_AND_MATERIALIZATION_AGREE',
+      })
+    }
     
     postSessionStep = 'training_method_materialization_complete'
 

@@ -38,19 +38,19 @@
 -- 1) NEW DOCTRINE SOURCES
 -- -----------------------------------------------------------------------------
 INSERT INTO training_doctrine_sources (id, source_key, title, source_type, description, version, is_active) VALUES
-('src-weighted-calisthenics-v1', 'weighted_calisthenics_doctrine', 'Weighted Calisthenics Strength Doctrine', 'reference_synthesis',
+('src-weighted-calisthenics-v1', 'weighted_calisthenics_doctrine', 'Weighted Calisthenics Strength Doctrine', 'system_seeded',
  'Top-set / back-off / cluster doctrine for weighted pull-ups, dips, ring rows, and weighted gymnastic strength. 2 warm-up sets to top-set, 1-2 heavy working sets, then back-off volume. Long rest between heavy efforts. Movement-family conservative.',
  '1.0.0', true),
 
-('src-movement-balance-v1', 'movement_balance_doctrine', 'Movement Family Balance Doctrine', 'reference_synthesis',
+('src-movement-balance-v1', 'movement_balance_doctrine', 'Movement Family Balance Doctrine', 'system_seeded',
  'Straight-arm vs bent-arm balance, horizontal vs vertical balance, push/pull ratio targets, primary/secondary/support exposure ratios. Rotates skill exposures intelligently across the week.',
  '1.0.0', true),
 
-('src-method-toolbox-v1', 'method_toolbox_doctrine', 'Training Method Toolbox Doctrine', 'reference_synthesis',
+('src-method-toolbox-v1', 'method_toolbox_doctrine', 'Training Method Toolbox Doctrine', 'system_seeded',
  'Top-set, back-off, cluster, drop-set, rest-pause, superset, circuit, density (EMOM/AMRAP), finisher, isometric hold, paused rep, tempo. Each carries explicit eligibility, exercise-family safety, and dose-shape rules.',
  '1.0.0', true),
 
-('src-recovery-tissue-v1', 'recovery_tissue_doctrine', 'Recovery & Tissue Management Doctrine', 'reference_synthesis',
+('src-recovery-tissue-v1', 'recovery_tissue_doctrine', 'Recovery & Tissue Management Doctrine', 'system_seeded',
  'Recovery-supportive day construction, tendon-management dosing for elbows / shoulders / wrists, deload rules, RPE caps for low-stress days.',
  '1.0.0', true)
 ON CONFLICT (id) DO NOTHING;
@@ -763,59 +763,59 @@ INSERT INTO skill_carryover_rules
   (id, source_id, source_exercise_or_skill_key, target_skill_key, carryover_type, carryover_strength, rationale)
 VALUES
 ('cry-weighted-pullup-muscleup', 'src-weighted-calisthenics-v1', 'weighted_pull_up', 'muscle_up',
- 'strength_carryover', 1.3,
+ 'indirect', 0.85,
  'Weighted pull-ups build the high-pull strength reserve required to clear the bar for muscle-up transitions.'),
 
 ('cry-weighted-pullup-c2b', 'src-weighted-calisthenics-v1', 'weighted_pull_up', 'chest_to_bar_pull_up',
- 'strength_carryover', 1.4,
+ 'direct', 0.9,
  'Weighted pull-ups directly carry to chest-to-bar — same movement, more strength in reserve = higher rep.'),
 
 ('cry-weighted-pullup-fl', 'src-weighted-calisthenics-v1', 'weighted_pull_up', 'front_lever',
- 'strength_carryover', 1.0,
+ 'indirect', 0.7,
  'Bent-arm pull strength supports straight-arm front lever holds via shared lat/teres engagement and overall pull capacity.'),
 
 ('cry-tuck-fl-fl', 'src-spartan-foundation-v1', 'tuck_front_lever_hold', 'front_lever',
- 'progression_carryover', 1.5,
+ 'prerequisite', 0.95,
  'Direct progression carryover. Tuck FL is the prerequisite isometric for straddle and full FL.'),
 
 ('cry-fl-row-fl', 'src-movement-balance-v1', 'front_lever_row', 'front_lever',
- 'strength_carryover', 1.3,
+ 'direct', 0.85,
  'Front lever rows build the dynamic horizontal pulling strength that strengthens the FL hold itself.'),
 
 ('cry-weighted-dip-rmu', 'src-weighted-calisthenics-v1', 'weighted_dip', 'ring_muscle_up',
- 'strength_carryover', 1.2,
+ 'indirect', 0.8,
  'Weighted dips build the lockout / dip-out strength of the ring muscle-up.'),
 
 ('cry-tuck-planche-planche', 'src-spartan-foundation-v1', 'tuck_planche_hold', 'planche',
- 'progression_carryover', 1.5,
+ 'prerequisite', 0.95,
  'Direct progression. Tuck planche is the prerequisite isometric.'),
 
 ('cry-planche-lean-planche', 'src-movement-balance-v1', 'planche_lean', 'planche',
- 'positional_carryover', 1.3,
+ 'accessory', 0.8,
  'Planche leans build the straight-arm shoulder strength, scapular protraction, and wrist conditioning the planche requires.'),
 
 ('cry-pike-pp-hspu', 'src-spartan-foundation-v1', 'pike_push_up', 'handstand_push_up',
- 'progression_carryover', 1.4,
+ 'prerequisite', 0.9,
  'Direct progression toward HSPU. Builds vertical push strength in increasingly inverted positions.'),
 
 ('cry-archer-pullup-oapu', 'src-spartan-foundation-v1', 'archer_pull_up', 'one_arm_pull_up',
- 'progression_carryover', 1.4,
+ 'prerequisite', 0.9,
  'Archer pull-up shifts load progressively toward one arm. Direct progression toward OAP.'),
 
 ('cry-l-sit-compression-fl', 'src-movement-balance-v1', 'l_sit_hold', 'front_lever',
- 'positional_carryover', 1.0,
+ 'accessory', 0.65,
  'L-sit builds the active compression and hip-flexor strength that supports the FL straight-body line.'),
 
 ('cry-hollow-hold-fl', 'src-movement-balance-v1', 'hollow_hold', 'front_lever',
- 'positional_carryover', 0.9,
+ 'accessory', 0.55,
  'Hollow hold trains the body line FL requires without the pull demand.'),
 
 ('cry-pistol-bulgarian', 'src-spartan-foundation-v1', 'bulgarian_split_squat', 'pistol_squat',
- 'strength_carryover', 1.1,
+ 'indirect', 0.75,
  'Bulgarian split squat builds the unilateral leg strength pistol squat needs.'),
 
 ('cry-pullup-c2b', 'src-spartan-foundation-v1', 'pull_up', 'chest_to_bar_pull_up',
- 'progression_carryover', 1.3,
+ 'prerequisite', 0.9,
  'Pull-up is the strict precursor. Higher rep capacity at strict pull-up = easier transition to C2B.')
 
 ON CONFLICT (id) DO NOTHING;
@@ -878,48 +878,48 @@ VALUES
  '["shoulder_pain","shoulder_impingement"]'::jsonb,
  '{"acute_pain":true,"unresolved_impingement":true}'::jsonb,
  'Substitute strict pull-up to sternum-aware ROM tolerated. Resolve shoulder issue with mobility work and scapular strength before reintroducing C2B.',
- 'block'),
+ 'blocked'),
 
 ('ctr-weighted-pullup-elbow', 'src-weighted-calisthenics-v1', 'weighted_pull_up',
  '["elbow_pain","medial_epicondylitis","lateral_epicondylitis"]'::jsonb,
  '{"acute_elbow_pain":true,"tendon_irritation":true}'::jsonb,
  'Replace with bodyweight pull-up at RPE ≤7. Add eccentric tendon-loading wrist/forearm work. Reintroduce weighted only after 2 weeks pain-free.',
- 'block'),
+ 'blocked'),
 
 ('ctr-weighted-dip-shoulder', 'src-weighted-calisthenics-v1', 'weighted_dip',
  '["shoulder_pain","anterior_shoulder_impingement"]'::jsonb,
  '{"acute_pain":true,"depth_painful":true}'::jsonb,
  'Replace with parallel-bar dip to ROM tolerated, or ring dips at higher angle. Avoid going below parallel until pain resolves.',
- 'block'),
+ 'blocked'),
 
 ('ctr-muscle-up-shoulder', 'src-spartan-foundation-v1', 'bar_muscle_up',
  '["shoulder_pain","shoulder_instability"]'::jsonb,
  '{"acute_pain":true,"instability_history":true}'::jsonb,
  'Substitute slow-negative muscle-up only with assistance, or replace with explosive C2B work. Resolve shoulder before transition.',
- 'block'),
+ 'blocked'),
 
 ('ctr-pistol-knee', 'src-spartan-foundation-v1', 'pistol_squat',
  '["knee_pain","patellar_tendinitis"]'::jsonb,
  '{"acute_knee_pain":true,"patellar_irritation":true}'::jsonb,
  'Replace with split squat at depth tolerated, or box pistol to manageable height.',
- 'block'),
+ 'blocked'),
 
 ('ctr-planche-wrist', 'src-spartan-foundation-v1', 'tuck_planche_hold',
  '["wrist_pain"]'::jsonb,
  '{"acute_wrist_pain":true,"unresolved_wrist_strain":true}'::jsonb,
  'Replace with parallette tuck planche or knuckle support. Resolve wrist with conditioning work before flat-palm planche.',
- 'block'),
+ 'blocked'),
 
 ('ctr-fl-row-lower-back', 'src-movement-balance-v1', 'front_lever_row',
  '["lower_back_pain"]'::jsonb,
  '{"acute_pain":true,"hyperextension_painful":true}'::jsonb,
  'Maintain hollow body throughout. If hollow cannot be held painlessly, regress to tuck FL row.',
- 'modify'),
+ 'caution'),
 
 ('ctr-hspu-wrist', 'src-spartan-foundation-v1', 'handstand_push_up',
  '["wrist_pain"]'::jsonb,
  '{"acute_pain":true,"unresolved_wrist_strain":true}'::jsonb,
  'Replace with parallette HSPU or pike push-up on parallettes. Add wrist conditioning.',
- 'block')
+ 'blocked')
 
 ON CONFLICT (id) DO NOTHING;

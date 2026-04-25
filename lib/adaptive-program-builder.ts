@@ -536,6 +536,10 @@ import {
   type WeekLoadBalance,
 } from './engine-quality-contract'
 import { yieldToMainThread, createGenerationContext, assertNotAborted, type GenerationContext } from './utils/yield-control'
+// [METHOD-MATERIALIZATION-SUMMARY-LOCK] Pure helper that owns derivation of
+// the canonical session-level method verdict. Imported as ESM to avoid the
+// CommonJS require() pattern in this otherwise-ESM module.
+import { deriveMethodMaterializationSummary } from './program/method-materialization-summary'
 // [WEEK-ADAPTATION-CONTRACT] Canonical week-level adaptation decision authority
 import {
   buildWeekAdaptationDecision,
@@ -1173,6 +1177,13 @@ export interface AdaptiveSession {
   }
   complexityLevel: string
   }
+  // [METHOD-MATERIALIZATION-SUMMARY-LOCK] Single canonical session-level
+  // method verdict, stamped by the builder AFTER finalStyledGroups +
+  // appliedMethods + clusterDecision are locked. Visible-program consumers
+  // (page parity header, scanner strip, AdaptiveSessionCard) read this
+  // FIRST and only fall back to scattered-field derivation when absent.
+  // See lib/program/method-materialization-summary.ts for the contract.
+  methodMaterializationSummary?: import('./program/method-materialization-summary').MethodMaterializationSummary
   }
   // [AI_SESSION_MATERIALITY_PHASE] Session-level skill expression metadata
   // This makes the ACTUAL skill materiality visible in each session
@@ -13770,7 +13781,48 @@ async function generateAdaptiveProgramImpl(
       },
       complexityLevel: sessionMethodIntentContract.complexityLevel,
     }
-    
+
+    // =========================================================================
+    // [METHOD-MATERIALIZATION-SUMMARY-LOCK]
+    // Stamp the SINGLE CANONICAL session-level method verdict the visible
+    // program corridor consumes. Built strictly from FINAL post-materialization
+    // truth:
+    //   - finalStyledGroups (already locked above as the materialized owner)
+    //   - session.exercises[].method / .setExecutionMethod / .blockId
+    //     (already written by superset / circuit / cluster / density passes)
+    //   - styleMetadata.clusterDecision (already written when cluster applied)
+    //
+    // NOT populated from preferences, eligibility, intent contract, or
+    // blueprint-allowed flags. Those signals stay where they already live
+    // (methodIntentContract above) for evidence/audit purposes; this object
+    // is strictly the visible-outcome verdict every UI consumer reads first.
+    // =========================================================================
+    {
+      const summary = deriveMethodMaterializationSummary({
+        exercises: session.exercises as Array<{
+          blockId?: string | null
+          method?: string | null
+          setExecutionMethod?: string | null
+          name?: string | null
+        }>,
+        styleMetadata: {
+          styledGroups: finalStyledGroups,
+          clusterDecision: session.styleMetadata.clusterDecision,
+        },
+      })
+      session.styleMetadata.methodMaterializationSummary = summary
+      console.log('[METHOD-MATERIALIZATION-SUMMARY-STAMPED]', {
+        dayNumber: session.dayNumber,
+        focus: session.focus,
+        dominantRenderMode: summary.dominantRenderMode,
+        groupedBlockCount: summary.groupedBlockCount,
+        groupedMethodCounts: summary.groupedMethodCounts,
+        rowExecutionCounts: summary.rowExecutionCounts,
+        materializedMethods: summary.materializedMethods,
+        primaryPackagingOutcome: summary.primaryPackagingOutcome,
+      })
+    }
+
     console.log('[TRAINING-METHOD-MATERIALIZATION-COMPLETE]', {
       dayNumber: session.dayNumber,
       focus: session.focus,

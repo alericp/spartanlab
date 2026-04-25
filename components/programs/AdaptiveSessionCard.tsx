@@ -1172,14 +1172,49 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     }))
   )
 
+  // [METHOD-MATERIALIZATION-SUMMARY-LOCK] Primary session-level method verdict.
+  // The builder stamps a canonical session-level summary onto styleMetadata
+  // at materialization-complete time. When present, this summary OWNS the
+  // session-level grouped-vs-flat-vs-method-only decision -- the card
+  // cannot disagree with the page parity header or scanner because all
+  // three read the same single owner.
+  //
+  // The variant-narrowed body below (driven by displayGroupedRendering /
+  // fullVisibleExercises) still owns the visible row layout because the
+  // user may have picked a 30/45 min variant that prunes some grouped
+  // members; that variant scope is correct for the body and the summary
+  // is intentionally not used to override variant-narrowed render blocks.
+  // The summary's role is purely the SESSION-LEVEL truth verdict.
+  const sessionMethodMaterializationSummary =
+    (sessionStyleMetadata as unknown as {
+      methodMaterializationSummary?: {
+        groupedStructurePresent?: boolean
+        rowLevelMethodCuesPresent?: boolean
+        dominantRenderMode?: 'grouped' | 'flat_with_method_cues' | 'flat'
+        groupedBlockCount?: number
+        primaryPackagingOutcome?: string | null
+      } | null
+    } | null)?.methodMaterializationSummary || null
+
   const groupedRenderContract: GroupedDisplayModel = (() => {
     // [RAW-OWNERSHIP-WINS] Grouped-truth detection is owned by RAW source.
     // Display path can only ADD to grouped truth (not subtract) because
     // display is a downstream derivative -- if raw says grouped, the card
     // must honor that even if the display surface cannot rehydrate every
     // member cleanly.
+    //
+    // [METHOD-MATERIALIZATION-SUMMARY-LOCK] When the canonical summary is
+    // present, its `groupedStructurePresent` flag is the FIRST authority on
+    // session-level grouped truth. Raw + display readings remain as
+    // additive support so the existing variant-aware grouped rendering
+    // path still produces visible blocks; we never use the summary to
+    // suppress grouped truth that raw or display can prove.
+    const summaryGrouped =
+      sessionMethodMaterializationSummary?.groupedStructurePresent === true
     const hasGroupedTruth =
-      rawGroupedOwnership.hasGroupedTruth || displayGroupedRendering.hasGroupedTruth
+      summaryGrouped ||
+      rawGroupedOwnership.hasGroupedTruth ||
+      displayGroupedRendering.hasGroupedTruth
     const hasRichRenderableGroups =
       displayGroupedRendering.hasRichRenderableGroups ||
       rawGroupedOwnership.hasRichRenderableGroups
@@ -1267,6 +1302,26 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const hasGroupedTruth = groupedRenderContract.hasGroupedTruth
   const hasRichRenderableGroups = groupedRenderContract.hasRichRenderableGroups
   const hasRenderableGroups = hasRichRenderableGroups
+
+  // [METHOD-MATERIALIZATION-SUMMARY-LOCK] Verdict log proving the canonical
+  // session-level summary survived save/load and is the first owner of the
+  // session-level grouped verdict. If `summaryPresent` is true, the page
+  // parity header, scanner strip, and this card all read the same single
+  // verdict source; raw/display reconstructions are reduced to fallback.
+  // If `summaryPresent` is false, the session was built before this lock or
+  // the summary was stripped along the save/load corridor and the card is
+  // operating on legacy raw/display reconstruction.
+  if (typeof window !== 'undefined') {
+    console.log('[METHOD-MATERIALIZATION-SUMMARY-CARD-CONSUMER]', {
+      sessionDay: (sessionStyleMetadata as unknown as { dayNumber?: number })?.dayNumber,
+      summaryPresent: !!sessionMethodMaterializationSummary,
+      summaryDominantRenderMode: sessionMethodMaterializationSummary?.dominantRenderMode || null,
+      summaryGroupedBlockCount: sessionMethodMaterializationSummary?.groupedBlockCount ?? null,
+      rawHasGroupedTruth: rawGroupedOwnership.hasGroupedTruth,
+      displayHasGroupedTruth: displayGroupedRendering.hasGroupedTruth,
+      finalHasGroupedTruth: hasGroupedTruth,
+    })
+  }
 
   // ==========================================================================
   // [OUTER-BODY-DECISION] SINGLE AUTHORITATIVE OWNER

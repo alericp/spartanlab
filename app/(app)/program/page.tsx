@@ -870,8 +870,58 @@ function ProgramDisplayWrapper({
         styleMetadata?: {
           styledGroups?: Array<{ groupType?: string | null }> | null
           clusterDecision?: { kind?: string | null; targetExerciseId?: string | null } | null
+          // [METHOD-MATERIALIZATION-SUMMARY-LOCK] Canonical session-level
+          // method verdict stamped by the builder. When present, it is the
+          // authoritative source for this header and the legacy scattered-
+          // field derivation below is skipped entirely.
+          methodMaterializationSummary?: {
+            groupedStructurePresent?: boolean
+            rowLevelMethodCuesPresent?: boolean
+            groupedMethodCounts?: { superset?: number; circuit?: number; density_block?: number }
+            rowExecutionCounts?: { superset?: number; circuit?: number; density?: number; cluster?: number }
+          } | null
         } | null
       }
+
+      // ----------------------------------------------------------------------
+      // [METHOD-MATERIALIZATION-SUMMARY-LOCK] Primary read.
+      // If the builder stamped the canonical summary onto this session,
+      // count from it directly. The legacy reconstruction below stays as
+      // backward-compatible fallback for older saved programs whose
+      // styleMetadata predates this lock.
+      // ----------------------------------------------------------------------
+      const canonicalSummary = sessAny?.styleMetadata?.methodMaterializationSummary
+      if (canonicalSummary && (canonicalSummary.groupedStructurePresent || canonicalSummary.rowLevelMethodCuesPresent)) {
+        const gmc = canonicalSummary.groupedMethodCounts || {}
+        const rec = canonicalSummary.rowExecutionCounts || {}
+        const supG = (gmc.superset || 0)
+        const circG = (gmc.circuit || 0)
+        const denG = (gmc.density_block || 0)
+        const supR = (rec.superset || 0)
+        const circR = (rec.circuit || 0)
+        const denR = (rec.density || 0)
+        const clusR = (rec.cluster || 0)
+        // Rows: grouped frames contribute, plus row-level cues outside frames
+        // (the summary already de-duplicates frame-owned members from row
+        // cues, so the two are additive without double-counting).
+        supersetRows += supG + supR
+        circuitRows += circG + circR
+        densityRows += denG + denR
+        clusterRows += clusR
+        // Sessions: +1 per session per method that is present in EITHER
+        // grouped or row form.
+        if (supG > 0 || supR > 0) supersetSessions += 1
+        if (circG > 0 || circR > 0) circuitSessions += 1
+        if (denG > 0 || denR > 0) densitySessions += 1
+        if (clusR > 0) clusterSessions += 1
+        groupedSessionCount += 1
+        continue
+      }
+
+      // ----------------------------------------------------------------------
+      // [BACKWARD-COMPAT FALLBACK] Legacy scattered-field derivation. Runs
+      // only when the canonical summary is absent (older saved programs).
+      // ----------------------------------------------------------------------
       const exs = Array.isArray(sessAny?.exercises) ? sessAny.exercises! : []
       const styled = Array.isArray(sessAny?.styleMetadata?.styledGroups)
         ? sessAny.styleMetadata!.styledGroups!

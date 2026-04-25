@@ -71,11 +71,39 @@ type SessionExercise = {
   // legacy grouped-structure field (see `resolveRowExecMethod`).
   setExecutionMethod?: string | null
 }
+// [METHOD-MATERIALIZATION-SUMMARY-LOCK] Narrow shape of the canonical
+// session-level method verdict the builder stamps. Pure consumer here --
+// the scanner reads it as primary truth and falls back to the legacy
+// scattered-field derivation only when absent.
+type MethodMaterializationSummaryLike = {
+  groupedStructurePresent?: boolean
+  rowLevelMethodCuesPresent?: boolean
+  dominantRenderMode?: 'grouped' | 'flat_with_method_cues' | 'flat'
+  groupedBlockCount?: number
+  groupedMethodCounts?: {
+    superset?: number
+    circuit?: number
+    density_block?: number
+    cluster?: number
+  }
+  rowExecutionCounts?: {
+    superset?: number
+    circuit?: number
+    density?: number
+    cluster?: number
+    top_set?: number
+    drop_set?: number
+    rest_pause?: number
+  }
+}
 type ProgramSession = {
   dayNumber?: number | null
   name?: string | null
   focus?: string | null
-  styleMetadata?: { styledGroups?: StyledGroupLike[] | null } | null
+  styleMetadata?: {
+    styledGroups?: StyledGroupLike[] | null
+    methodMaterializationSummary?: MethodMaterializationSummaryLike | null
+  } | null
   exercises?: SessionExercise[] | null
 }
 type ProgramLike = {
@@ -133,6 +161,53 @@ function titleForMethod(m: SupportedMethod): string {
 //   groupedBlocks      -> grouped-block body slot
 //   singleMethodTokens -> method badge on the row (or absent when truly straight)
 function summarizeSession(sess: ProgramSession) {
+  // [METHOD-MATERIALIZATION-SUMMARY-LOCK] Primary read.
+  // The builder stamps a canonical session-level method verdict at
+  // materialization-complete time. When present, the scanner uses it
+  // directly so BLOCKS / METHODS tokens cannot disagree with the page
+  // parity header or the card's status line. Legacy reconstruction
+  // remains below as backward-compatible fallback for older saved
+  // programs that predate this lock.
+  const canonical = sess.styleMetadata?.methodMaterializationSummary
+  if (canonical && (canonical.groupedStructurePresent || canonical.rowLevelMethodCuesPresent)) {
+    const gmc = canonical.groupedMethodCounts || {}
+    const rec = canonical.rowExecutionCounts || {}
+    const groupedBlockCount = (gmc.superset || 0) + (gmc.circuit || 0) + (gmc.density_block || 0)
+    const groupedBlockLabelTokens: string[] = []
+    if ((gmc.superset || 0) > 0) groupedBlockLabelTokens.push(`${gmc.superset}×superset`)
+    if ((gmc.circuit || 0) > 0) groupedBlockLabelTokens.push(`${gmc.circuit}×circuit`)
+    if ((gmc.density_block || 0) > 0) groupedBlockLabelTokens.push(`${gmc.density_block}×density`)
+    const singleMethodTokens: string[] = []
+    if ((rec.superset || 0) > 0) singleMethodTokens.push(`${rec.superset}×superset`)
+    if ((rec.circuit || 0) > 0) singleMethodTokens.push(`${rec.circuit}×circuit`)
+    if ((rec.density || 0) > 0) singleMethodTokens.push(`${rec.density}×density`)
+    if ((rec.cluster || 0) > 0) singleMethodTokens.push(`${rec.cluster}×cluster`)
+    if ((rec.top_set || 0) > 0) singleMethodTokens.push(`${rec.top_set}×top_set`)
+    if ((rec.drop_set || 0) > 0) singleMethodTokens.push(`${rec.drop_set}×drop_set`)
+    if ((rec.rest_pause || 0) > 0) singleMethodTokens.push(`${rec.rest_pause}×rest_pause`)
+
+    // Reason token: surface the same diagnostic the legacy path emits when
+    // grouped count is 0 but cluster is present as a row-level cue.
+    let reasonToken: string | null = null
+    if (groupedBlockCount === 0 && (rec.cluster || 0) > 0) {
+      reasonToken = 'method_only_cluster'
+    }
+
+    return {
+      day: typeof sess.dayNumber === 'number' ? sess.dayNumber : null,
+      name: typeof sess.name === 'string' && sess.name.length > 0 ? sess.name : null,
+      focus: typeof sess.focus === 'string' && sess.focus.length > 0 ? sess.focus : null,
+      hasAny: groupedBlockCount > 0 || singleMethodTokens.length > 0,
+      groupedBlockCount,
+      groupedBlockLabelTokens,
+      singleMethodTokens,
+      exerciseCount: Array.isArray(sess.exercises) ? sess.exercises.length : 0,
+      reasonToken,
+    }
+  }
+
+  // [BACKWARD-COMPAT FALLBACK] Legacy reconstruction from scattered fields.
+  // Runs only when the canonical summary is absent (older saved programs).
   const styled: StyledGroupLike[] = Array.isArray(sess.styleMetadata?.styledGroups)
     ? (sess.styleMetadata!.styledGroups as StyledGroupLike[])
     : []

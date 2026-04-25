@@ -23,6 +23,12 @@ import type { ExperienceLevel, SessionLength, PrimaryGoal } from '../program-ser
 import type { EquipmentType } from '../equipment'
 import type { SessionArchitectureTruthContract } from '../session-architecture-truth'
 import type { DoctrineRuntimeContract } from '../doctrine-runtime-contract'
+// [WEEKLY-SESSION-ROLE-CONTRACT] Authoritative per-day weekly role.
+// This is the single owner of "what role does THIS day play in the week" —
+// it differentiates breadth target, intensity class, progression character,
+// and method allowance ACROSS the week so days are not flat copies.
+import type { WeeklyDayRole } from '../program/weekly-session-role-contract'
+import { isMethodPermittedByRole } from '../program/weekly-session-role-contract'
 
 // =============================================================================
 // TYPES
@@ -99,6 +105,28 @@ export interface SessionCompositionBlueprint {
     methodsEarned: boolean
     templateEscaped: boolean
   }
+
+  // ==========================================================================
+  // [WEEKLY-SESSION-ROLE-CONTRACT] Compact summary of the day role this
+  // blueprint was generated against. Surfaced to the program-display
+  // contract / session card so the visible Program page can differentiate
+  // days by role without re-deriving truth.
+  // ==========================================================================
+  weeklyRoleSummary?: {
+    roleId: string
+    roleLabel: string
+    intensityClass: string
+    progressionCharacter: string
+    breadthTarget: { min: number; target: number; max: number }
+    weeklyRationale: string
+    methodAllowance: {
+      density: string
+      supersets: string
+      circuits: string
+      finisher: string
+      cluster: string
+    }
+  } | null
 }
 
 /**
@@ -231,6 +259,21 @@ export interface SessionCompositionContext {
   // Week-level complexity context
   weeklyComplexity?: 'low' | 'moderate' | 'high'
   adaptationPhase?: 'initial_acclimation' | 'normal_progression' | 'recovery_constrained' | 'rebuild_after_disruption'
+
+  // ==========================================================================
+  // [WEEKLY-SESSION-ROLE-CONTRACT] Authoritative day role for THIS session.
+  // When present, this controls:
+  //   - complexity tier biasing (skill_quality / recovery_supportive narrow it,
+  //     broad_mixed / density_capacity widen it)
+  //   - method eligibility gating (a recovery_supportive day cannot earn
+  //     density even if everything else qualifies)
+  //   - primary block exerciseSlots (nudged toward role.breadthTarget.target)
+  //
+  // If absent, composition falls back to its prior heuristics so the contract
+  // is a strict ENHANCEMENT, never a regression for any caller that hasn't
+  // adopted weekly roles yet.
+  // ==========================================================================
+  weeklyRole?: WeeklyDayRole | null
 }
 
 // =============================================================================
@@ -370,7 +413,12 @@ export function buildSessionCompositionContext(
   doctrineRuntimeContract: DoctrineRuntimeContract | null,
   fatigueState?: 'fresh' | 'moderate' | 'accumulated' | 'needs_deload',
   recentSessionShapes?: string[],
-  weekAdaptation?: WeekAdaptationInput | null
+  weekAdaptation?: WeekAdaptationInput | null,
+  // [WEEKLY-SESSION-ROLE-CONTRACT] Optional authoritative day role.
+  // Caller (adaptive-program-builder) builds the contract once for the week
+  // and passes dayRoles[index] here. When provided, it is the strongest
+  // upstream signal for breadth / method gating / complexity tier.
+  weeklyRole?: WeeklyDayRole | null
 ): SessionCompositionContext {
   // Determine training style from equipment and profile
   const hasWeightedEquipment = equipment.some(eq => 
@@ -437,6 +485,8 @@ export function buildSessionCompositionContext(
     firstWeekProtection: weekAdaptation?.firstWeekProtection || null,
     weeklyComplexity: weekAdaptation?.weeklyComplexity,
     adaptationPhase: weekAdaptation?.adaptationPhase,
+    // [WEEKLY-SESSION-ROLE-CONTRACT] Pass through authoritative day role
+    weeklyRole: weeklyRole ?? null,
   }
 }
 
@@ -512,6 +562,222 @@ export function determineSessionComplexity(
   }
   
   return 'minimal'
+}
+
+/**
+ * [WEEKLY-SESSION-ROLE-CONTRACT] Bias the resolved complexity tier by the
+ * weekly role assigned to this day. This is what makes day-to-day
+ * differentiation visible: two 60-min sessions in the same week phase will
+ * NOT both come out as `standard` if one is a `recovery_supportive` day
+ * and the other is a `broad_mixed_volume` day.
+ *
+ * Bias rules (intentionally conservative — never widens past `comprehensive`):
+ *  - `skill_quality_emphasis`     -> at most `standard` (CNS-fresh quality, narrower)
+ *  - `recovery_supportive`        -> always `minimal`
+ *  - `broad_mixed_volume`         -> bumps `minimal` -> `standard` if duration allows
+ *  - `density_capacity`           -> bumps `standard` -> `comprehensive` only when
+ *                                    duration + recovery already permitted it
+ *  - `primary_strength_emphasis`  -> kept at `standard` even on long sessions to
+ *                                    preserve heavy-day quality (no comprehensive)
+ *  - `secondary_support`          -> no change
+ */
+function applyWeeklyRoleComplexityBias(
+  base: 'minimal' | 'standard' | 'comprehensive',
+  ctx: SessionCompositionContext
+): 'minimal' | 'standard' | 'comprehensive' {
+  const role = ctx.weeklyRole
+  if (!role) return base
+
+  const tierRank = { minimal: 0, standard: 1, comprehensive: 2 }
+  const rankToTier = ['minimal', 'standard', 'comprehensive'] as const
+
+  let next = base
+
+  switch (role.roleId) {
+    case 'recovery_supportive':
+      next = 'minimal'
+      break
+    case 'skill_quality_emphasis':
+      // Cap at standard so the skill-quality day stays clean.
+      if (tierRank[next] > tierRank.standard) next = 'standard'
+      break
+    case 'primary_strength_emphasis':
+      // Heavy day must stay clean — never comprehensive.
+      if (tierRank[next] > tierRank.standard) next = 'standard'
+      break
+    case 'broad_mixed_volume':
+      // Broader day bumps a notch UP when duration allows.
+      if (tierRank[next] < tierRank.standard && ctx.sessionMinutes >= 45) {
+        next = 'standard'
+      }
+      break
+    case 'density_capacity':
+      // Density home bumps to comprehensive when already at standard and
+      // duration / recovery / experience all allow it.
+      if (
+        tierRank[next] === tierRank.standard &&
+        ctx.sessionMinutes >= 60 &&
+        ctx.recoveryCapacity !== 'limited' &&
+        ctx.experienceLevel !== 'beginner'
+      ) {
+        next = 'comprehensive'
+      }
+      break
+    case 'secondary_support':
+    default:
+      break
+  }
+
+  if (next !== base) {
+    console.log('[weekly-role-complexity-bias]', {
+      sessionIndex: ctx.sessionIndex,
+      dayFocus: ctx.day.focus,
+      role: role.roleId,
+      baseTier: base,
+      biasedTier: next,
+      breadthTarget: role.breadthTarget,
+      reason: 'weekly_session_role_contract',
+    })
+  }
+
+  return next
+}
+
+/**
+ * [WEEKLY-SESSION-ROLE-CONTRACT] Tighten method eligibility by per-day role.
+ *
+ * The global `determineMethodEligibility` already accounts for fatigue,
+ * recovery, training style, week-phase, etc. This function APPLIES the
+ * per-day role on top so methods that the global rules would have allowed
+ * are downgraded on days where the weekly role disallows them.
+ *
+ * Direction is one-way: ROLE CAN ONLY DOWNGRADE, never upgrade. This
+ * preserves all the existing safety / acclimation / recovery rules that
+ * the global function already enforces — we never bypass them.
+ */
+function applyWeeklyRoleMethodGating(
+  base: ReturnType<typeof determineMethodEligibility>,
+  ctx: SessionCompositionContext
+): ReturnType<typeof determineMethodEligibility> {
+  const role = ctx.weeklyRole
+  if (!role) return base
+
+  // Map role gate -> max allowed eligibility. `earned` lets global decide
+  // (no change), `allowed` caps at `allowed`, `discouraged` caps at
+  // `discouraged`, `blocked` forces `blocked`.
+  function downgrade(method: keyof typeof base, gate: 'blocked' | 'discouraged' | 'allowed' | 'earned'): typeof base.density {
+    const current = base[method]
+    if (gate === 'blocked') return 'blocked'
+    if (current === 'blocked') return 'blocked'
+    if (gate === 'discouraged' && current === 'earned') return 'discouraged'
+    if (gate === 'allowed' && current === 'earned') return 'allowed'
+    return current
+  }
+
+  const next = {
+    supersets: downgrade('supersets', role.methodAllowance.supersets),
+    circuits: downgrade('circuits', role.methodAllowance.circuits),
+    density: downgrade('density', role.methodAllowance.density),
+    finisher: downgrade('finisher', role.methodAllowance.finisher),
+  }
+
+  const downgraded =
+    next.supersets !== base.supersets ||
+    next.circuits !== base.circuits ||
+    next.density !== base.density ||
+    next.finisher !== base.finisher
+
+  if (downgraded) {
+    console.log('[weekly-role-method-gating]', {
+      sessionIndex: ctx.sessionIndex,
+      dayFocus: ctx.day.focus,
+      role: role.roleId,
+      base,
+      gated: next,
+      reason: 'weekly_role_method_allowance_capped_eligibility',
+    })
+  }
+
+  return next
+}
+
+/**
+ * [WEEKLY-SESSION-ROLE-CONTRACT] Apply the role's breadth target to the
+ * primary block(s) of the plan as a nudge — never breaking the budget for
+ * the chosen complexity tier.
+ *
+ * We use the role's `breadthTarget` as a SOFT TARGET for primary + secondary
+ * exercise slots combined. Days with broader role get +1 slot on the primary
+ * block when complexity allows it. Days with narrower role get -1 slot. This
+ * is what makes the visible exercise count differ across days even when
+ * complexity tier is the same.
+ */
+function applyWeeklyRoleBreadthBias(
+  blocks: SessionBlockPlan[],
+  ctx: SessionCompositionContext
+): SessionBlockPlan[] {
+  const role = ctx.weeklyRole
+  if (!role) return blocks
+
+  const target = role.breadthTarget.target
+  const min = role.breadthTarget.min
+  const max = role.breadthTarget.max
+
+  const next = blocks.map((b) => ({ ...b, constraints: b.constraints }))
+
+  // Compute current planned body slot count (warmup / cooldown / prehab excluded).
+  const bodyRoles: SessionBlockRole[] = [
+    'primary_skill',
+    'primary_strength',
+    'secondary_skill',
+    'secondary_strength',
+    'support_carryover',
+    'accessory_targeted',
+    'method_density',
+  ]
+  const totalBodySlots = next
+    .filter((b) => bodyRoles.includes(b.role))
+    .reduce((s, b) => s + b.exerciseSlots, 0)
+
+  let delta = 0
+  if (totalBodySlots < min) {
+    delta = min - totalBodySlots
+  } else if (totalBodySlots > max) {
+    delta = max - totalBodySlots // negative
+  } else if (totalBodySlots < target) {
+    // pull toward target by up to 1 slot
+    delta = 1
+  } else if (totalBodySlots > target) {
+    delta = -1
+  }
+
+  if (delta === 0) return blocks
+
+  // Apply delta to the largest body block (prefer primary blocks first).
+  const primaryBlock = next.find(
+    (b) => b.role === 'primary_skill' || b.role === 'primary_strength'
+  )
+  const supportBlock = next.find((b) => b.role === 'support_carryover' || b.role === 'accessory_targeted')
+
+  if (delta > 0) {
+    // Prefer adding to support (so heavy day stays clean).
+    const target = supportBlock || primaryBlock
+    if (target) target.exerciseSlots = Math.max(1, target.exerciseSlots + delta)
+  } else {
+    // Trim from accessory / support first.
+    const trimTarget = supportBlock || primaryBlock
+    if (trimTarget) trimTarget.exerciseSlots = Math.max(1, trimTarget.exerciseSlots + delta)
+  }
+
+  console.log('[weekly-role-breadth-bias]', {
+    sessionIndex: ctx.sessionIndex,
+    role: role.roleId,
+    breadthTarget: role.breadthTarget,
+    bodySlotsBefore: totalBodySlots,
+    delta,
+  })
+
+  return next
 }
 
 /**
@@ -930,13 +1196,26 @@ export function buildSessionCompositionBlueprint(
   ctx: SessionCompositionContext
 ): SessionCompositionBlueprint {
   // Determine complexity
-  const complexity = determineSessionComplexity(ctx)
+  const baseComplexity = determineSessionComplexity(ctx)
+  // [WEEKLY-SESSION-ROLE-CONTRACT] Bias complexity by weekly role so days
+  // in the SAME week phase / sessionMinutes can still diverge structurally.
+  const complexity = applyWeeklyRoleComplexityBias(baseComplexity, ctx)
   
   // Determine method eligibility
-  const methodEligibility = determineMethodEligibility(ctx)
+  let methodEligibility = determineMethodEligibility(ctx)
+  // [WEEKLY-SESSION-ROLE-CONTRACT] Apply role gating AFTER global rules.
+  // The role can BLOCK methods (e.g. a recovery_supportive day cannot earn
+  // density even if the global gates allowed it) but cannot upgrade past
+  // what the global rules already permitted — global is the floor, role is
+  // the per-day ceiling.
+  methodEligibility = applyWeeklyRoleMethodGating(methodEligibility, ctx)
   
   // Build block plan
-  const blocks = buildSessionBlockPlan(ctx, complexity, methodEligibility)
+  const baseBlocks = buildSessionBlockPlan(ctx, complexity, methodEligibility)
+  // [WEEKLY-SESSION-ROLE-CONTRACT] Nudge block exerciseSlots toward the
+  // weekly role's breadth target so visible exercise count differs across
+  // days even when complexity tier matches.
+  const blocks = applyWeeklyRoleBreadthBias(baseBlocks, ctx)
   
   // Calculate workload distribution
   const totalMinutes = blocks.reduce((sum, b) => sum + b.estimatedMinutes, 0)
@@ -1105,6 +1384,27 @@ export function buildSessionCompositionBlueprint(
   // Build session intent string
   const sessionIntent = buildSessionIntentString(ctx, blocks)
   
+  // [WEEKLY-SESSION-ROLE-CONTRACT] Build compact role summary for downstream
+  // display + session-card differentiation. `null` when the caller did not
+  // pass a weekly role (legacy / partial builders).
+  const weeklyRoleSummary: SessionCompositionBlueprint['weeklyRoleSummary'] = ctx.weeklyRole
+    ? {
+        roleId: ctx.weeklyRole.roleId,
+        roleLabel: ctx.weeklyRole.roleLabel,
+        intensityClass: ctx.weeklyRole.intensityClass,
+        progressionCharacter: ctx.weeklyRole.progressionCharacter,
+        breadthTarget: ctx.weeklyRole.breadthTarget,
+        weeklyRationale: ctx.weeklyRole.weeklyRationale,
+        methodAllowance: {
+          density: ctx.weeklyRole.methodAllowance.density,
+          supersets: ctx.weeklyRole.methodAllowance.supersets,
+          circuits: ctx.weeklyRole.methodAllowance.circuits,
+          finisher: ctx.weeklyRole.methodAllowance.finisher,
+          cluster: ctx.weeklyRole.methodAllowance.cluster,
+        },
+      }
+    : null
+
   const blueprint: SessionCompositionBlueprint = {
     sessionIntent,
     sessionComplexity: complexity,
@@ -1120,6 +1420,7 @@ export function buildSessionCompositionBlueprint(
     },
     compositionReasons,
     audit,
+    weeklyRoleSummary,
   }
   
   console.log('[SESSION-COMPOSITION-BLUEPRINT]', {
@@ -1214,10 +1515,17 @@ function buildSessionIntentString(
   
   // Build the final intent string with more specific language
   const parts: string[] = []
-  
-  // Add session role as primary intent
-  const roleLabel = SESSION_ROLE_LABELS[sessionRole] || sessionRole.replace(/_/g, ' ')
-  parts.push(roleLabel)
+
+  // [WEEKLY-SESSION-ROLE-CONTRACT] When a weekly role is present, lead with
+  // the role label so each day in the week reads as a distinct purpose
+  // rather than echoing only the structural focus.
+  if (ctx.weeklyRole) {
+    parts.push(ctx.weeklyRole.roleLabel)
+  } else {
+    // Fall back to legacy session-role mapping when no weekly contract.
+    const roleLabel = SESSION_ROLE_LABELS[sessionRole] || sessionRole.replace(/_/g, ' ')
+    parts.push(roleLabel)
+  }
   
   // Add secondary goal if present and contained
   if (ctx.secondaryGoal && blocks.some(b => b.role === 'secondary_skill' || b.role === 'secondary_strength')) {

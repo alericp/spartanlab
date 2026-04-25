@@ -1137,67 +1137,29 @@ export function AdaptiveProgramDisplay({
                         }`}>{session.dayNumber}</span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        {/* A. Headline (surface-owned) OR last-resort weekly-role
-                            label, never both — single visible identity line.
-                            [WEEKLY-SESSION-ROLE-CONTRACT — VISIBLE PRIMACY]
-                            When `weeklyRoleLabel` is present, the headline IS
-                            the role label (promoted upstream in the contract)
-                            so we lift its visual weight: 12px instead of 11px,
-                            brighter foreground (#D5D5D5 vs #9A9A9A), bolder.
-                            This is what makes day-to-day differentiation
-                            readable at a glance instead of buried as a chip. */}
-                        {cardSurface.sessionHeadline ? (
-                          <p className={
-                            cardSurface.weeklyRoleLabel
-                              ? 'text-[12px] text-[#D5D5D5] font-semibold leading-snug'
-                              : 'text-[11px] text-[#9A9A9A] font-medium leading-snug'
-                          }>
+                        {/* [DOMINANT-CARD-OWNERSHIP-LOCK]
+                            The role headline + intensity·progression·breadth
+                            supporting line + per-day rationale are now OWNED
+                            by the dominant <AdaptiveSessionCard /> below
+                            (which receives the same `cardSurface` prop).
+                            Rendering them here as well would violate the
+                            "NO COSMETIC DOUBLING" rule — same statement in
+                            two places with slightly different styling. So we
+                            ONLY render the headline here as a tiny upstream
+                            tag for legacy sessions where `weeklyRoleLabel`
+                            is absent, to preserve the prior wrapper strip
+                            behavior for those. When weeklyRoleLabel IS
+                            present, the dominant card owns the identity
+                            and this slot stays silent. */}
+                        {!cardSurface.weeklyRoleLabel && cardSurface.sessionHeadline ? (
+                          <p className="text-[11px] text-[#9A9A9A] font-medium leading-snug">
                             {cardSurface.sessionHeadline}
                           </p>
-                        ) : cardSurface.fallbackWeeklyRole ? (
+                        ) : !cardSurface.weeklyRoleLabel && cardSurface.fallbackWeeklyRole ? (
                           <p className="text-[11px] text-[#9A9A9A] font-medium leading-snug">
                             {cardSurface.fallbackWeeklyRole}
                           </p>
                         ) : null}
-
-                        {/* A2. [WEEKLY-SESSION-ROLE-CONTRACT] Single supporting
-                            character line surfacing intensity • progression •
-                            breadth from authoritative role truth. Renders ONLY
-                            when role is present, so older saved sessions are
-                            visually unchanged. Plain text (not chips) — keeps
-                            the visual hierarchy clean and avoids chip clutter
-                            duplicating the role identity. */}
-                        {cardSurface.weeklyRoleLabel && (() => {
-                          const intensityLabels: Record<string, string> = {
-                            high: 'High intensity',
-                            moderate_high: 'Moderate-high intensity',
-                            moderate: 'Moderate intensity',
-                            moderate_low: 'Moderate-low intensity',
-                            low: 'Low intensity',
-                          }
-                          const progressionLabels: Record<string, string> = {
-                            direct_load: 'Direct load progression',
-                            banded_support: 'Band-supported progression',
-                            conservative_skill: 'Conservative skill progression',
-                            mixed_breadth: 'Mixed-breadth progression',
-                            volume_direct: 'Volume-direct progression',
-                            recovery_quality: 'Recovery quality',
-                          }
-                          const intensityLabel = cardSurface.weeklyIntensityClass
-                            ? intensityLabels[cardSurface.weeklyIntensityClass] ?? null
-                            : null
-                          const progressionLabel = cardSurface.weeklyProgressionCharacter
-                            ? progressionLabels[cardSurface.weeklyProgressionCharacter] ?? null
-                            : null
-                          const breadthLabel = cardSurface.weeklyBreadthLabel || null
-                          const parts = [intensityLabel, progressionLabel, breadthLabel].filter(Boolean)
-                          if (parts.length === 0) return null
-                          return (
-                            <p className="text-[10px] text-[#A8A8A8] mt-0.5 leading-snug">
-                              {parts.join(' \u00B7 ')}
-                            </p>
-                          )
-                        })()}
 
                         {/* B. Truth chips: primary intent + protection + method
                             (surface-owned only; method labels were already
@@ -1233,8 +1195,13 @@ export function AdaptiveProgramDisplay({
 
                         {/* C. Coaching purpose (surface-owned). Falls back to
                             evidence label, then to last-resort rationale.
-                            At most ONE of these renders. */}
-                        {cardSurface.coachingPurpose ? (
+                            At most ONE of these renders.
+                            [DOMINANT-CARD-OWNERSHIP-LOCK] Suppressed entirely
+                            when `weeklyRoleRationale` is present, because the
+                            dominant <AdaptiveSessionCard /> below now renders
+                            the per-day rationale itself — duplicating it here
+                            would violate the "NO COSMETIC DOUBLING" rule. */}
+                        {cardSurface.weeklyRoleRationale ? null : cardSurface.coachingPurpose ? (
                           <p className="text-[10px] text-[#8A8A8A] mt-1 leading-relaxed">
                             {cardSurface.coachingPurpose}
                           </p>
@@ -1278,6 +1245,13 @@ export function AdaptiveProgramDisplay({
   coachingExplanation={intelligenceContract?.coachingExplanation || null}
   // [DOCTRINE-STRENGTHENING] Pass week character for visible differentiation badges
   weekCharacter={session.weekCharacter}
+  // [DOMINANT-CARD-OWNERSHIP-LOCK] Pass the SAME authoritative SessionCardSurface
+  // that the wrapper strip currently consumes. Without this prop, the dominant
+  // visible card silently re-derives identity from raw `session.focusLabel` /
+  // `session.dayLabel` while the strengthened weekly-role truth lives only in
+  // the small wrapper strip above it. Single source of truth for visible day
+  // identity is now this `cardSurface`.
+  cardSurface={cardSurface}
   // [PREVIEW-VISIBLE-PROBE] Pass probe flag
   showProbe={showProbe}
   // [ALWAYS-VISIBLE-PROBE] Pass force probe flag

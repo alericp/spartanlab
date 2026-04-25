@@ -537,6 +537,22 @@ export interface SessionCardSurface {
   fallbackRationale?: string | null
   /** Tiny chips like "Sets ↓", "RPE ↓" — surface-owned, not raw-derived. */
   microSignals?: string[]
+  // ===========================================================================
+  // [WEEKLY-SESSION-ROLE-CONTRACT] Authoritative per-day role display fields.
+  // Surfaced once here so renderers do not re-derive from raw composition
+  // metadata. Empty/null when the saved session predates the weekly role
+  // contract — renderers should fall back to existing behavior in that case.
+  // ===========================================================================
+  /** "Primary strength day", "Skill quality day", "Density / capacity day", etc. */
+  weeklyRoleLabel?: string | null
+  /** "How this day differs from the rest of the week" — short, plain-language. */
+  weeklyRoleRationale?: string | null
+  /** "heavier_strength" | "skill_quality" | "moderate_mixed" | "supportive_lower" | "density_capacity" */
+  weeklyIntensityClass?: string | null
+  /** "harder_progression" | "current_progression" | "easier_progression_or_assist" | "moderate" */
+  weeklyProgressionCharacter?: string | null
+  /** Compact target breadth e.g. "5-6 exercises" — empty when not authored. */
+  weeklyBreadthLabel?: string | null
 }
 
 /**
@@ -577,6 +593,17 @@ export function buildSessionCardSurface(
         finisher?: string
         density?: string
       }
+      // [WEEKLY-SESSION-ROLE-CONTRACT] Authoritative per-day role.
+      // Optional/null when the session predates the contract — surface
+      // falls back to existing behavior in that case.
+      weeklyRole?: {
+        roleId?: string
+        roleLabel?: string
+        intensityClass?: string
+        progressionCharacter?: string
+        breadthTarget?: { min?: number; target?: number; max?: number }
+        weeklyRationale?: string
+      } | null
     }
     skillExpressionMetadata?: {
       directlyExpressedSkills?: string[]
@@ -615,6 +642,9 @@ export function buildSessionCardSurface(
   const composition = session.compositionMetadata
   const skillMeta = session.skillExpressionMetadata
   const styleMeta = session.styleMetadata
+  // [WEEKLY-SESSION-ROLE-CONTRACT] Authoritative per-day role view (may be null
+  // for sessions saved before the contract existed).
+  const weeklyRole = composition?.weeklyRole || null
   
   const primaryIntentChips: string[] = []
   const protectionSignals: string[] = []
@@ -684,7 +714,15 @@ export function buildSessionCardSurface(
   // ==========================================================================
   // B. Build primary intent chips from real metadata
   // ==========================================================================
-  
+
+  // [WEEKLY-SESSION-ROLE-CONTRACT] Lead with the authoritative day role chip
+  // so the visible Program page reflects per-day differentiation. Falls back
+  // silently when the role is not present (older saved sessions).
+  if (weeklyRole?.roleLabel) {
+    primaryIntentChips.push(weeklyRole.roleLabel)
+    source = 'authoritative'
+  }
+
   // From compositionMetadata.workloadDistribution
   if (composition?.workloadDistribution?.primaryWorkPercent) {
     if (composition.workloadDistribution.primaryWorkPercent >= 70) {
@@ -859,6 +897,16 @@ export function buildSessionCardSurface(
     evidenceLabel = 'Built from profile + doctrine'
   }
   
+  // [WEEKLY-SESSION-ROLE-CONTRACT] When the per-day weekly role provides a
+  // rationale, prefer it as the evidence label so each day in the week has
+  // a different "why this day looks like this" sentence — not six identical
+  // "Built from profile + doctrine" copies. Protection labels (week-1 /
+  // recovery-constrained) still take precedence above this.
+  if (!evidenceLabel && weeklyRole?.weeklyRationale) {
+    evidenceLabel = weeklyRole.weeklyRationale
+    source = 'authoritative'
+  }
+
   // [PHASE-RECONNECT] Ensure evidence label shows even for standard sessions
   // If we have authoritative session metadata but no special conditions, still show baseline evidence
   if (!evidenceLabel && (composition || skillMeta || styleMeta)) {
@@ -876,6 +924,19 @@ export function buildSessionCardSurface(
     session.dayNumber,
   ].filter(Boolean).join('|')
   
+  // [WEEKLY-SESSION-ROLE-CONTRACT] Compose human-readable breadth label.
+  const weeklyBreadthLabel: string | null = (() => {
+    const t = weeklyRole?.breadthTarget
+    if (!t) return null
+    if (typeof t.min === 'number' && typeof t.max === 'number' && t.min !== t.max) {
+      return `${t.min}-${t.max} exercises`
+    }
+    if (typeof t.target === 'number') {
+      return `${t.target} exercises`
+    }
+    return null
+  })()
+
   return {
     sessionHeadline,
     sessionSubheadline,
@@ -885,6 +946,12 @@ export function buildSessionCardSurface(
     evidenceLabel,
     repetitionKey,
     source,
+    // [WEEKLY-SESSION-ROLE-CONTRACT] Per-day role visible-display fields
+    weeklyRoleLabel: weeklyRole?.roleLabel || null,
+    weeklyRoleRationale: weeklyRole?.weeklyRationale || null,
+    weeklyIntensityClass: weeklyRole?.intensityClass || null,
+    weeklyProgressionCharacter: weeklyRole?.progressionCharacter || null,
+    weeklyBreadthLabel,
   }
 }
 

@@ -188,7 +188,6 @@ import {
   type WeeklyDayRole,
   type WeekPhaseTag,
 } from './program/weekly-session-role-contract'
-import { getWeekDosageScaling } from './week-dosage-scaling'
 // [exercise-trace] TASK 8: Import comparison utilities for build-to-build traceability
 import {
   type ProgramSelectionTrace,
@@ -1253,6 +1252,26 @@ export interface AdaptiveSession {
       methodsEarned: boolean
       templateEscaped: boolean
     }
+    // [WEEKLY-SESSION-ROLE-CONTRACT] Authoritative per-day weekly role
+    // summary. The single owner of "what role does this day play in the
+    // week" — drives display differentiation (label, intensity class,
+    // breadth target, progression character, method allowance) without
+    // re-deriving truth on the consumer side.
+    weeklyRole?: {
+      roleId: string
+      roleLabel: string
+      intensityClass: string
+      progressionCharacter: string
+      breadthTarget: { min: number; target: number; max: number }
+      weeklyRationale: string
+      methodAllowance: {
+        density: string
+        supersets: string
+        circuits: string
+        finisher: string
+        cluster: string
+      }
+    } | null
   }
   // [PRESCRIPTION-PROPAGATION] Track what week adaptation actually changed in this session
   prescriptionPropagationAudit?: {
@@ -11361,6 +11380,13 @@ async function generateAdaptiveProgramImpl(
     
     // Build composition context with all canonical truth
     // [WEEKLY-COMPOSITION-UPGRADE] Now includes week-level adaptation decisions
+    // [WEEKLY-SESSION-ROLE-CONTRACT] Resolve THIS day's authoritative role
+    // from the contract built once before the session loop. Falls back to
+    // null safely if for any reason the index is out of bounds (shouldn't
+    // happen — contract is built from the same `structure.days` we iterate).
+    const weeklyRoleForThisSession: WeeklyDayRole | null =
+      weeklySessionRoleContract.dayRoles[index] || null
+
     const compositionContext = buildSessionCompositionContext(
       day,
       index,
@@ -11378,7 +11404,8 @@ async function generateAdaptiveProgramImpl(
       doctrineRuntimeContract || null,
       fatigueStateForComposition,
       undefined, // recentSessionShapes
-      weekAdaptationInputForSession // [WEEKLY-COMPOSITION-UPGRADE] Pass week-level decisions
+      weekAdaptationInputForSession, // [WEEKLY-COMPOSITION-UPGRADE] Pass week-level decisions
+      weeklyRoleForThisSession // [WEEKLY-SESSION-ROLE-CONTRACT] Per-day authoritative role
     )
     
     // Build the authoritative composition blueprint
@@ -27392,6 +27419,11 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
           description: r.description,
         })),
         audit: sessionCompositionBlueprint.audit,
+        // [WEEKLY-SESSION-ROLE-CONTRACT] Authoritative per-day role summary.
+        // This is what makes the Program page card visibly differentiate
+        // days by role label, intensity class, breadth target, progression
+        // character, and the "why this day looks like this" rationale.
+        weeklyRole: sessionCompositionBlueprint.weeklyRoleSummary || null,
       } : undefined,
       // [PRESCRIPTION-PROPAGATION] Track what week adaptation actually changed in this session
       prescriptionPropagationAudit: weekAdaptation ? {

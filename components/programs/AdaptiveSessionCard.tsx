@@ -2246,6 +2246,87 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 <span className="text-[#E63946]/70">({activeSessionView.variantLabel})</span>
               )}
             </div>
+
+            {/* ====================================================================
+                [MATERIAL-COMPOSITION-TRUTH-LOCK]
+                Structural per-day programming-difference strip. Renders only
+                when authoritative composition / adaptation truth is present
+                on the surface — null/empty leaves legacy sessions visually
+                unchanged. Three components, each guarded:
+                  1. Workload split bar (primary vs support %) — varies day to
+                     day based on real composition.workloadDistribution.
+                  2. Material adaptation chips — only TRUE reductions actually
+                     applied to this day (sets/RPE/secondary/density/finisher).
+                  3. Spine expression mini-tag — direct_intensity /
+                     technical_focus / strength_support classification.
+                Together they make programming difference visibly STRUCTURAL,
+                not descriptive. No prose added.
+                ==================================================================== */}
+            {cardSurface && (() => {
+              const hasWorkload =
+                typeof cardSurface.workloadPrimaryPercent === 'number' &&
+                typeof cardSurface.workloadSupportPercent === 'number' &&
+                cardSurface.workloadPrimaryPercent + cardSurface.workloadSupportPercent > 0
+              const hasAdaptations = (cardSurface.materialAdaptations?.length ?? 0) > 0
+              const spineLabels: Record<string, string> = {
+                direct_intensity: 'Direct intensity',
+                technical_focus: 'Technical focus',
+                strength_support: 'Strength support',
+              }
+              const spineLabel = cardSurface.spineExpression
+                ? spineLabels[cardSurface.spineExpression] ?? null
+                : null
+              const hasSpine = !!spineLabel
+              if (!hasWorkload && !hasAdaptations && !hasSpine) return null
+              return (
+                <div className="mt-2 space-y-1.5">
+                  {/* Workload split bar — structural, not prose */}
+                  {hasWorkload && (
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-[#1A1A1A] rounded-full overflow-hidden flex">
+                        <div
+                          className="h-full bg-[#E63946] transition-all"
+                          style={{ width: `${cardSurface.workloadPrimaryPercent}%` }}
+                          aria-label={`Primary work ${cardSurface.workloadPrimaryPercent}%`}
+                        />
+                        <div
+                          className="h-full bg-[#5A5A5A] transition-all"
+                          style={{ width: `${cardSurface.workloadSupportPercent}%` }}
+                          aria-label={`Support work ${cardSurface.workloadSupportPercent}%`}
+                        />
+                      </div>
+                      <span className="text-[10px] text-[#A8A8A8] tabular-nums shrink-0">
+                        {cardSurface.workloadPrimaryPercent}
+                        <span className="text-[#6A6A6A]">% primary</span>
+                      </span>
+                    </div>
+                  )}
+                  {/* Material adaptation chips + spine expression tag */}
+                  {(hasAdaptations || hasSpine) && (
+                    <div className="flex flex-wrap gap-x-1.5 gap-y-1">
+                      {hasSpine && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#E63946]/10 text-[#C8C8C8] font-medium">
+                          {spineLabel}
+                        </span>
+                      )}
+                      {cardSurface.materialAdaptations!.map((adaptation) => (
+                        <span
+                          key={`adapt-${adaptation.key}`}
+                          className={
+                            adaptation.tone === 'reduction'
+                              ? 'text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300/90 font-medium'
+                              : 'text-[9px] px-1.5 py-0.5 rounded bg-[#3A3A3A] text-[#B8B8B8] font-medium'
+                          }
+                        >
+                          {adaptation.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
             {/* [DOMINANT-CARD-OWNERSHIP-LOCK] One-line per-day "why" from the
                 authoritative role rationale. Demotes generic compactCoaching
                 purpose for non-role-aware sessions to fallback only. */}

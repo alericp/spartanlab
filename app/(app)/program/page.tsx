@@ -148,6 +148,12 @@ const AdaptiveProgramDisplay = dynamic(
 import { ProgramAdjustmentModal } from '@/components/programs/ProgramAdjustmentModal'
 // [PROGRAM-GROUP-SCANNER-R1] Read-only Program-surface grouped diagnostic strip.
 import { GroupedProgramScannerStrip } from '@/components/program/GroupedProgramScannerStrip'
+// [PROGRAM-TRUTH-SURFACE-CONNECTION-LOCK] Visible authoritative truth summary.
+// Static import is safe here because the page is 'use client' and the summary
+// is a lightweight, null-tolerant consumer. It is rendered inside
+// ProgramDisplayWrapper, which is the single canonical render point for every
+// visible program surface, so a static import cannot widen the render graph.
+import { ProgramTruthSummary } from '@/components/programs/ProgramTruthSummary'
 
 // [canonical-rebuild] Import type for adjustment rebuild requests
 import type { AdjustmentRebuildRequest, AdjustmentRebuildResult } from '@/components/programs/ProgramAdjustmentModal'
@@ -717,6 +723,54 @@ function ProgramDisplayWrapper({
   // Build the single authoritative truth object for all visible surfaces
   // ==========================================================================
   const canonicalDisplayTruth = buildCanonicalProgramDisplayTruth(program)
+
+  // ==========================================================================
+  // [PROGRAM-TRUTH-SURFACE-CONNECTION-LOCK] Resolve the single authoritative
+  // `truthExplanation` that the visible ProgramTruthSummary consumes.
+  //
+  // Priority (single-source-of-truth rule, enforced by this hook):
+  //   1. `program.truthExplanation` — the canonical stamp written by
+  //      `attachTruthExplanation` during server-side generation. Already
+  //      contains the dbTruthWinnerSummary rollup built from final stamped
+  //      exercises, the authoritativeMultiSkillIntentContract, and every
+  //      other field the summary surface renders. Preferred whenever
+  //      present because it reflects build-time truth, not render-time
+  //      recomputation.
+  //   2. Synchronous fallback via `buildProgramTruthExplanation(program,
+  //      getCanonicalProfile())` for older saved programs that were
+  //      generated before the attach step existed, or for programs whose
+  //      persisted truth was stripped. This uses the SAME extractor the
+  //      builder uses — it is not a second truth source, only a
+  //      regeneration of the same truth from the same inputs.
+  //   3. `null` → ProgramTruthSummary returns null internally, no crash,
+  //      no fake content. The user simply sees no summary on that program.
+  //
+  // This resolver is the ONLY site that materializes truth for the visible
+  // surface. The dev-only `logProgramTruthExplanation` call elsewhere on
+  // the page is a side-effect log, not a render feeder.
+  // ==========================================================================
+  const resolvedTruthExplanation = useMemo(() => {
+    // Step 1: saved canonical stamp (preferred)
+    const stamped = (program as AdaptiveProgram & {
+      truthExplanation?: ProgramTruthExplanation | null
+    }).truthExplanation
+    if (stamped && typeof stamped === 'object' && stamped.identityLabel) {
+      return stamped
+    }
+    // Step 2: synchronous fallback via the same builder the extractor uses
+    try {
+      const profile = getCanonicalProfile()
+      return buildProgramTruthExplanation(program, profile)
+    } catch (err) {
+      // Step 3: honest null → summary renders nothing rather than invented content
+      console.warn('[PROGRAM-TRUTH-SURFACE-CONNECTION-LOCK] truth fallback failed', err)
+      return null
+    }
+    // Rebuild truth only when the underlying program identity changes — this
+    // is the right granularity because truth is a function of the saved
+    // program, not of unrelated parent-component state churn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [program?.id, program?.updatedAt, program?.truthExplanation])
   
   // ==========================================================================
   // [VISIBLE-PROGRAM-TRUTH-CONTRACT] AUDIT - Verify unified ownership
@@ -1003,6 +1057,24 @@ function ProgramDisplayWrapper({
 
   return (
     <div>
+      {/* ==========================================================================
+          [PROGRAM-TRUTH-SURFACE-CONNECTION-LOCK] Visible authoritative truth.
+          Consumes the single canonical `resolvedTruthExplanation` computed
+          above — either the build-time stamp preserved on the saved program
+          OR the same-extractor fallback for legacy programs. The component
+          internally null-renders when truth is absent, so no extra guard
+          is needed here and no fake content can be invented. This is the
+          primary user-facing proof surface for everything the truth
+          pipeline (identity, skill coverage, schedule adaptation, method
+          materiality, working-state / DB-truth winner rollup, authoritative
+          multi-skill intent contract) has been computing. Placed above
+          ProgramDecisionSummary deliberately: decisions read BELOW, the
+          full truthful explanation reads ABOVE.
+          ========================================================================== */}
+      <ProgramTruthSummary
+        truthExplanation={resolvedTruthExplanation as unknown as Parameters<typeof ProgramTruthSummary>[0]['truthExplanation']}
+      />
+
       {/* [PROGRAM-DECISION-SUMMARY] Display doctrine-driven decisions above the program */}
       <ProgramDecisionSummary program={program} />
 

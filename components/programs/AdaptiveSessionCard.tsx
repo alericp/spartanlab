@@ -31,7 +31,10 @@ import { trackWorkoutStarted, trackWorkoutCompleted } from '@/lib/analytics'
 import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
-import { buildExerciseCardContract, buildExerciseRowSurface, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
+// [DOMINANT-CARD-OWNERSHIP-LOCK] Import SessionCardSurface so this dominant
+// visible card can read from the SAME strengthened authoritative truth that
+// the Program-page wrapper strip already consumes. No parallel re-derivation.
+import { buildExerciseCardContract, buildExerciseRowSurface, type ExerciseRowSurface, type SessionCardSurface } from '@/lib/program/program-display-contract'
 import type { ProgramExplanationSurface } from '@/lib/coaching-explanation-contract'
 // [SINGLE-TRUTH-FIX] Removed: getCompactExerciseExplanation - was source of contradictory text
 import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, buildSessionMainPreviewSurface, buildFullVisibleRoutineExercises, type SessionAiEvidenceSurface, type FullSessionRoutineSurface, type SessionMainPreviewSurface, type FullRoutineExercise } from '@/lib/program/program-ai-evidence-bridge'
@@ -87,6 +90,14 @@ interface AdaptiveSessionCardProps {
   coachingExplanation?: ProgramExplanationSurface | null
   // [DOCTRINE-STRENGTHENING] Week-specific training character for visible differentiation
   weekCharacter?: WeekCharacter
+  // [DOMINANT-CARD-OWNERSHIP-LOCK] Authoritative SessionCardSurface — the SAME
+  // strengthened-truth surface the Program-page wrapper consumes. When present,
+  // its `weeklyRoleLabel` / `weeklyIntensityClass` / `weeklyProgressionCharacter`
+  // / `weeklyBreadthLabel` / `weeklyRoleRationale` OWN the dominant visible
+  // identity slot in this card (not a peer to `session.focusLabel`).
+  // Optional + null-safe: older callers / saved sessions without role truth
+  // continue to render with the legacy focusLabel-driven identity unchanged.
+  cardSurface?: SessionCardSurface | null
   // [PREVIEW-VISIBLE-PROBE] Enable visible truth probe via ?programProbe=1 query param
   // This bypasses NODE_ENV checks to show diagnostics in Preview/production
   showProbe?: boolean
@@ -363,7 +374,7 @@ function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
   }
 }
 
-export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter, showProbe: _showProbe = false, forceProbe: _forceProbe = false, currentWeekNumber }: AdaptiveSessionCardProps) {
+export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter, cardSurface, showProbe: _showProbe = false, forceProbe: _forceProbe = false, currentWeekNumber }: AdaptiveSessionCardProps) {
   // [PROBES-HARD-DISABLED] Session truth probes are retired. They caused
   // debug-looking text ("PROBE ACTIVE", instance-id letter fragments, etc.)
   // to leak into production UI when accidentally enabled via query param.
@@ -2155,10 +2166,75 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 </Badge>
               )}
             </div>
-            {/* [PHASE 15F] Display resolved identity if available, otherwise fall back to focusLabel */}
-            <p className="text-sm text-[#E63946]">
-              {(session as any).resolvedSessionIdentity || session.focusLabel}
-            </p>
+            {/* ====================================================================
+                [DOMINANT-CARD-OWNERSHIP-LOCK]
+                The dominant visible identity slot now reads from the SAME
+                authoritative SessionCardSurface that the Program-page wrapper
+                consumes. Hierarchy:
+                  1. weeklyRoleLabel    -> primary red sm bold identity line
+                                           ("Heavier strength day", "Skill quality
+                                            day", etc.) — the per-day role from
+                                           the strengthened weekly contract.
+                  2. focusLabel         -> demoted to secondary smaller line as
+                                           legitimate skill/movement context
+                                           ("Pull skill — bar muscle-up").
+                When weeklyRoleLabel is absent (legacy / pre-contract sessions),
+                focusLabel keeps the dominant slot exactly as before — fully
+                backward compatible.
+                ==================================================================== */}
+            {cardSurface?.weeklyRoleLabel ? (
+              <>
+                <p className="text-sm text-[#E63946] font-semibold">
+                  {cardSurface.weeklyRoleLabel}
+                </p>
+                {/* Secondary skill/movement context (demoted, not removed) */}
+                {((session as any).resolvedSessionIdentity || session.focusLabel) && (
+                  <p className="text-xs text-[#9A9A9A] mt-0.5">
+                    {(session as any).resolvedSessionIdentity || session.focusLabel}
+                  </p>
+                )}
+              </>
+            ) : (
+              /* [PHASE 15F] Legacy path: resolved identity if available, else focusLabel */
+              <p className="text-sm text-[#E63946]">
+                {(session as any).resolvedSessionIdentity || session.focusLabel}
+              </p>
+            )}
+            {/* [DOMINANT-CARD-OWNERSHIP-LOCK] Supporting character line:
+                intensity * progression * breadth from authoritative role truth.
+                Plain text below the dominant identity — no chip-spam. Absent
+                when role truth is absent (legacy sessions unchanged). */}
+            {cardSurface?.weeklyRoleLabel && (() => {
+              const intensityLabels: Record<string, string> = {
+                high: 'High intensity',
+                moderate_high: 'Moderate-high intensity',
+                moderate: 'Moderate intensity',
+                moderate_low: 'Moderate-low intensity',
+                low: 'Low intensity',
+              }
+              const progressionLabels: Record<string, string> = {
+                direct_load: 'Direct load',
+                banded_support: 'Band-supported',
+                conservative_skill: 'Conservative skill',
+                mixed_breadth: 'Mixed breadth',
+                volume_direct: 'Volume-direct',
+                recovery_quality: 'Recovery quality',
+              }
+              const intensityLabel = cardSurface.weeklyIntensityClass
+                ? intensityLabels[cardSurface.weeklyIntensityClass] ?? null
+                : null
+              const progressionLabel = cardSurface.weeklyProgressionCharacter
+                ? progressionLabels[cardSurface.weeklyProgressionCharacter] ?? null
+                : null
+              const breadthLabel = cardSurface.weeklyBreadthLabel || null
+              const parts = [intensityLabel, progressionLabel, breadthLabel].filter(Boolean)
+              if (parts.length === 0) return null
+              return (
+                <p className="text-[11px] text-[#A8A8A8] mt-1 leading-snug">
+                  {parts.join(' \u00B7 ')}
+                </p>
+              )
+            })()}
             {/* Compact meta line - time + exercise count only */}
             <div className="flex items-center gap-3 mt-1 text-xs text-[#6A6A6A]">
               <span className="flex items-center gap-1">
@@ -2170,6 +2246,14 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 <span className="text-[#E63946]/70">({activeSessionView.variantLabel})</span>
               )}
             </div>
+            {/* [DOMINANT-CARD-OWNERSHIP-LOCK] One-line per-day "why" from the
+                authoritative role rationale. Demotes generic compactCoaching
+                purpose for non-role-aware sessions to fallback only. */}
+            {cardSurface?.weeklyRoleRationale && (
+              <p className="text-[11px] text-[#8A8A8A] mt-1 leading-relaxed italic">
+                {cardSurface.weeklyRoleRationale}
+              </p>
+            )}
             {/* [REMOVED] GROUPED_TRUTH s4/s5/s7 breadcrumb chip. Grouped days are
                 now visibly recognized through the production method-summary
                 chips (Superset/Circuit/Density/Cluster) and the colored grouped

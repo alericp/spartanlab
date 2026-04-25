@@ -52,6 +52,14 @@ INSERT INTO training_doctrine_sources (id, source_key, title, source_type, descr
 
 ('src-recovery-tissue-v1', 'recovery_tissue_doctrine', 'Recovery & Tissue Management Doctrine', 'system_seeded',
  'Recovery-supportive day construction, tendon-management dosing for elbows / shoulders / wrists, deload rules, RPE caps for low-stress days.',
+ '1.0.0', true),
+
+-- Spartan calisthenics foundation: skill-frequency dosing, progression-conservative
+-- doctrine, day-shape architecture, primary/secondary/accessory/support
+-- prescription bands. Distinct from the bare-bones script-013 foundation row;
+-- this is the dedicated home for doctrine that drives session shape.
+('src-spartan-foundation-v1', 'spartan_calisthenics_foundation', 'Spartan Calisthenics Foundation Doctrine', 'system_seeded',
+ 'Skill-frequency, progression-conservative dosing, day-shape architecture (heavy / broad / skill-quality / recovery), and primary/secondary/accessory/support prescription bands per athlete level.',
  '1.0.0', true)
 ON CONFLICT (id) DO NOTHING;
 

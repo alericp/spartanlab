@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -1303,25 +1303,10 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const hasRichRenderableGroups = groupedRenderContract.hasRichRenderableGroups
   const hasRenderableGroups = hasRichRenderableGroups
 
-  // [METHOD-MATERIALIZATION-SUMMARY-LOCK] Verdict log proving the canonical
-  // session-level summary survived save/load and is the first owner of the
-  // session-level grouped verdict. If `summaryPresent` is true, the page
-  // parity header, scanner strip, and this card all read the same single
-  // verdict source; raw/display reconstructions are reduced to fallback.
-  // If `summaryPresent` is false, the session was built before this lock or
-  // the summary was stripped along the save/load corridor and the card is
-  // operating on legacy raw/display reconstruction.
-  if (typeof window !== 'undefined') {
-    console.log('[METHOD-MATERIALIZATION-SUMMARY-CARD-CONSUMER]', {
-      sessionDay: (sessionStyleMetadata as unknown as { dayNumber?: number })?.dayNumber,
-      summaryPresent: !!sessionMethodMaterializationSummary,
-      summaryDominantRenderMode: sessionMethodMaterializationSummary?.dominantRenderMode || null,
-      summaryGroupedBlockCount: sessionMethodMaterializationSummary?.groupedBlockCount ?? null,
-      rawHasGroupedTruth: rawGroupedOwnership.hasGroupedTruth,
-      displayHasGroupedTruth: displayGroupedRendering.hasGroupedTruth,
-      finalHasGroupedTruth: hasGroupedTruth,
-    })
-  }
+  // [FINAL-VISIBLE-OWNERSHIP-LOCK] METHOD-MATERIALIZATION-SUMMARY render-loop
+  // verdict log removed. It fired once per card render with no athlete-facing
+  // value; the same verdict is structurally enforced by the grouped render
+  // contract that drives the visible body below.
 
   // ==========================================================================
   // [OUTER-BODY-DECISION] SINGLE AUTHORITATIVE OWNER
@@ -1962,77 +1947,10 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   // so repeated renders (state updates) do not spam; this fires exactly once
   // per day number when the card first paints.
   // ==========================================================================
-  const funnelAuditS5Ref = useRef<string>('')
-  if (typeof window !== 'undefined' && funnelAuditS5Ref.current !== currentSessionIdentity) {
-    funnelAuditS5Ref.current = currentSessionIdentity
-    const s5StyledGroups = sessionStyleMetadata?.styledGroups || []
-    const s5NonStraightStyled = s5StyledGroups.filter(g => g.groupType !== 'straight').length
-    const s5ExWithBlockId = safeExercises.filter(
-      e => typeof (e as unknown as { blockId?: string }).blockId === 'string' &&
-        !!(e as unknown as { blockId?: string }).blockId
-    ).length
-    const s5ExWithNonStraightMethod = safeExercises.filter(e => {
-      const m = (e as unknown as { method?: string }).method
-      return typeof m === 'string' && m.length > 0 && m !== 'straight' && m !== 'straight_sets'
-    }).length
-    const s5NonStraightMethods = Array.from(
-      new Set(
-        safeExercises
-          .map(e => (e as unknown as { method?: string }).method)
-          .filter((m): m is string => typeof m === 'string' && m.length > 0 && m !== 'straight' && m !== 'straight_sets')
-      )
-    )
-    let s5Verdict: string
-    if (!groupedRenderContract.hasGroupedTruth) {
-      // Stage 5 says "no grouped truth reached the card." If S3/S4 said truth
-      // existed, the weakening is inside THIS card's raw/display ownership
-      // merge. If S3/S4 also said none, the session is honestly flat.
-      s5Verdict = 'CARD_INPUT_HAS_NO_GROUPED_TRUTH'
-    } else if (finalVisibleBodyModel.mode === 'rich_grouped') {
-      s5Verdict = 'CARD_WILL_PAINT_RICH_GROUPED_BLOCKS'
-    } else if (finalVisibleBodyModel.mode === 'raw_grouped_fallback') {
-      s5Verdict = 'CARD_WILL_PAINT_RAW_FALLBACK_BLOCKS'
-    } else if (finalVisibleBodyModel.mode === 'simple_order_grouped') {
-      // [DISPLAY-CORRIDOR-TERMINAL] simple_order_grouped is the intentional
-      // terminal when grouped truth exists but no block source produced a
-      // renderable block list. Banner + failure-stage surface are shown
-      // in the body so the card cannot read as silently flat.
-      s5Verdict = `CARD_FELL_TO_SIMPLE_ORDER_GROUPED:${finalVisibleBodyModel.groupedFailureStage ?? 'unknown'}`
-    } else if (finalVisibleBodyModel.reasonIfNotRich === 'METHOD_ONLY_FLAT') {
-      // [METHOD-ONLY-FLAT] Dispatcher intentionally routed to flat_category
-      // because the session's non-straight methods live only on individual
-      // rows (no multi-member styled groups, no multi-member blockId
-      // methods). The card body stays flat with row-level method chips and
-      // the card-level status line says "Method cues present: ..." so the
-      // user is never misled about missing grouped structure.
-      s5Verdict = 'CARD_METHOD_ONLY_FLAT_INTENTIONAL'
-    } else {
-      // hasGroupedTruth was true but dispatcher landed on flat_category with
-      // no METHOD_ONLY_FLAT reason. This is an unexpected dispatch state --
-      // keep the explicit verdict so any regression surfaces in logs.
-      s5Verdict = 'CARD_HAS_GROUPED_TRUTH_BUT_DISPATCHED_TO_FLAT_CATEGORY'
-    }
-    console.log('[v0] [FUNNEL-AUDIT-S5] Day', session.dayNumber, {
-      card_input_styledGroups_count: s5StyledGroups.length,
-      card_input_nonstraight_styledGroups: s5NonStraightStyled,
-      card_input_ex_count: safeExercises.length,
-      card_input_ex_with_blockId: s5ExWithBlockId,
-      card_input_ex_with_nonstraight_method: s5ExWithNonStraightMethod,
-      card_input_nonstraight_methods: s5NonStraightMethods,
-      card_input_has_grouped_truth: groupedRenderContract.hasGroupedTruth,
-      card_input_has_rich_renderable_groups: groupedRenderContract.hasRichRenderableGroups,
-      final_body_mode: finalVisibleBodyModel.mode,
-      source_used: finalVisibleBodyModel.sourceUsed,
-      reason_if_not_rich: finalVisibleBodyModel.reasonIfNotRich,
-      render_block_count: finalVisibleBodyModel.renderBlocks.length,
-      raw_fallback_block_count: finalVisibleBodyModel.rawFallbackBlocks.length,
-      superset_count: finalVisibleBodyModel.supersetCount,
-      circuit_count: finalVisibleBodyModel.circuitCount,
-      density_count: finalVisibleBodyModel.densityCount,
-      cluster_count: finalVisibleBodyModel.clusterCount,
-      verdict: s5Verdict,
-    })
-  }
+  // [FINAL-VISIBLE-OWNERSHIP-LOCK] FUNNEL-AUDIT-S5 verdict computation +
+  // once-per-mount log removed. The dead computation produced no athlete-
+  // facing surface; grouped-vs-flat dispatch is already structurally enforced
+  // by `groupedRenderContract` and `finalVisibleBodyModel` below.
 
   // ==========================================================================
   // [COLLAPSED-HEADER-METHOD-TRUTH] The Program card is collapsed by default.
@@ -2301,19 +2219,15 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
 
             {/* ==========================================================================
                 [CARD-LOCAL-GROUPED-MISMATCH-PROBE]
-                Compact, card-scoped, mismatch-only diagnostic. Renders ONLY when:
-                  - `rawGroupedOwnership.hasGroupedTruth === true` (raw session
-                     truth carries grouped methods) AND
-                  - `finalVisibleBodyModel.mode === 'flat_category'` (the body
-                     nevertheless chose to paint flat rows).
-                On healthy grouped sessions this entire block is null -- no layout
-                change, no visual noise. On healthy flat sessions it is also null
-                (raw has no grouped truth, so there is nothing to mismatch).
-                When it DOES render, it classifies the remaining failure bucket
-                from the six allowed classifications so the next fix is narrowly
-                localized instead of broad. Removable by deleting just this block.
+                [FINAL-VISIBLE-OWNERSHIP-LOCK] Diagnostic strip moved off the
+                athlete-facing card surface. Gated behind the existing
+                `probeActive` flag (hard-disabled in production by the prior
+                [PROBES-HARD-DISABLED] phase). The bucket classifier remains
+                intact for QA without leaking debug-style amber font-mono
+                content into the production card body.
                 ========================================================================== */}
-            {rawGroupedOwnership.hasGroupedTruth &&
+            {probeActive &&
+              rawGroupedOwnership.hasGroupedTruth &&
               finalVisibleBodyModel.mode === 'flat_category' && (() => {
                 const visibleWithBlockId = fullVisibleExercises.filter(
                   ex => typeof (ex as unknown as { blockId?: string }).blockId === 'string' &&
@@ -2535,32 +2449,18 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               {/* Start Button - Primary Action (above detailed workout) */}
               <div className="mb-4">
                 {/* [SELECTED-SESSION-CONTRACT-PROOF] Launch-proof strip.
-                    PRODUCTION-VISIBLE (was dev-only). Proves that the Start
-                    Workout payload is the selected visible-session truth, not
-                    a re-derivation. If this strip ever disagrees with the body
-                    above it or the live pre-start Shell proof, the corridor
-                    is split again and the CORRIDOR token below will flip to
-                    `MISMATCH`, preserving visible mode-mismatch evidence per
-                    [SELECTED-SESSION-OWNERSHIP-LOCK].
+                    [FINAL-VISIBLE-OWNERSHIP-LOCK] No longer renders in the
+                    athlete-facing card surface. The strip is preserved behind
+                    the existing `probeActive` flag (hard-disabled in
+                    production by the prior [PROBES-HARD-DISABLED] phase) so
+                    QA can still verify selected-variant ↔ visible-body parity.
+                    Athletes never see the `idx / mode / label / min / raw /
+                    vis / trim / body` mono-spaced debug row above the Start
+                    Workout button.
 
-                    CORRIDOR token semantics:
-                      OK        -> variant selected AND visible body is
-                                   meaningfully narrowed (trim > 0 OR raw
-                                   session has <= fullVisibleExercises i.e.
-                                   variant intentionally preserved all rows)
-                      OK_FULL   -> Full Session selected (idx 0); no trim
-                                   expected
-                      MISMATCH  -> variant selected (idx > 0) but the card's
-                                   variant-aware body has the same exercise
-                                   count as the raw full session AND the
-                                   variant's declared duration equals the full
-                                   session's duration. This means the card
-                                   launched 45/30 but the selected session
-                                   truth never actually narrowed. Upstream
-                                   (session-compression-engine /
-                                   session.variants[i].selection.main) must
-                                   be populated. */}
-                {(() => {
+                    CORRIDOR token semantics (probe-only):
+                      OK / OK_FULL / MISMATCH — see selected-variant contract. */}
+                {probeActive && (() => {
                   const idx = selectedSessionContract.selectedVariantIndex
                   const rawCount = safeExercises.length
                   const visCount = fullVisibleExercises.length
@@ -3813,7 +3713,16 @@ function MainExercisesRenderer({
           clusterCount={finalVisibleBodyModel.clusterCount}
           mode="simple_order_grouped"
         />
-        {failureCopy && failureStage && (
+        {/* [FINAL-VISIBLE-OWNERSHIP-LOCK] Grouped-fallback failure banner moved
+            off the athlete-facing surface. Both the raw stage token (font-mono
+            "HYDRATION_RENDER_LOSS" etc.) and the implementation-leaning failure
+            copy were diagnostic content in the production card body. The
+            simple_order_grouped path still renders the exercises in canonical
+            order via the GroupedBodyHeadline above, so users see a coherent
+            session story instead of an amber implementation note. The banner
+            is preserved for QA via the inner-renderer probe props (already
+            hard-disabled in production by the outer card's `probeActive`). */}
+        {(_innerShowProbe || _innerForceProbe) && failureCopy && failureStage && (
           <div
             className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] leading-snug"
             role="status"
@@ -4592,24 +4501,12 @@ function ExerciseRow({
   // row ONCE per render. Both the Row 1 fallback chip and the Row 2b Method
   // Ownership Panel read from this object -- they cannot go out of sync.
   //
-  // The log below is the observability surface required to answer the prompt-
-  // level question "is the displayed row actually carrying non-straight
-  // method truth, or is the lack of visual change expected?" Open devtools,
-  // filter `[v0] row-method-truth`, and every paint of the Program page
-  // emits one row per visible exercise with its resolved `family`, the field
-  // we trusted (`source`), and whether the flat panel fired. That is the
-  // authoritative answer to the uncertainty this prompt was written for.
+  // [FINAL-VISIBLE-OWNERSHIP-LOCK] The previous render-loop console.log
+  // (`[v0] row-method-truth`) emitted one entry per visible exercise per paint
+  // of the Program page -- pure dev observability with no athlete-facing
+  // surface. Removed; the row's truth is already structurally consumed by the
+  // chip + panel below.
   const rowMethodTruth = resolveRowMethodTruth(exercise, { prefix, isWarmupCooldown })
-  if (rowMethodTruth.family || rowMethodTruth.isGroupedMember) {
-    console.log('[v0] row-method-truth', {
-      name: exercise.name,
-      family: rowMethodTruth.family,
-      source: rowMethodTruth.source,
-      raw: rowMethodTruth.raw,
-      isGroupedMember: rowMethodTruth.isGroupedMember,
-      shouldPaintPanel: rowMethodTruth.shouldPaintPanel,
-    })
-  }
 
   const hasRPE = !isWarmupCooldown && exerciseSupportsRPE(card.displayTitle)
   const exerciseId = card.displayTitle.toLowerCase().replace(/[\s-]+/g, '_')

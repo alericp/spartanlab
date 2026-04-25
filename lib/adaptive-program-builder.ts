@@ -920,6 +920,30 @@ type AdaptiveSessionContext = {
   // ==========================================================================
   weekAdaptation?: SessionWeekAdaptation | null
   // ==========================================================================
+  // [STYLE-CORRIDOR-CLUSTER-FIX] PRIMARY ROOT-CAUSE OWNER
+  // Pre-fix: `generateAdaptiveSession` (top-level fn at L23075) referenced
+  // bare `programmingTruthBundle` on 21+ lines (smart substitution L24689,
+  // pattern-specific prescription L25141, the entire style corridor
+  // L26434-L26688). The variable is a `let` declared inside
+  // `generateAdaptiveProgramImpl` (L5448) — a sibling function, not an
+  // enclosing one — so every reference was an out-of-scope read producing
+  // a runtime ReferenceError. Earlier reads (L24689, L25141) were silenced
+  // by surrounding try/catch blocks. The style corridor's references were
+  // partially guarded by the outer try added in the previous prompt, but
+  // the *catch handler* of that guard at L26683-L26695 itself referenced
+  // `programmingTruthBundle`, so the catch handler crashed and escaped
+  // the guard, surfacing as `step=applying_training_style middleStep=none
+  // reason=programmingTruthBundle is not defined` on the red rebuild card.
+  //
+  // Fix: thread the bundle through the context as an optional field, pass
+  // it from the single construction site at L11194, destructure it inside
+  // `generateAdaptiveSession`. This resolves ALL 21+ references at once
+  // — not just the style corridor — turning silent-but-already-broken
+  // bundle-driven code paths into legitimately bundle-aware paths and
+  // permanently eliminating the ReferenceError as a class of bug.
+  // ==========================================================================
+  programmingTruthBundle?: ProgrammingTruthBundle | null
+  // ==========================================================================
   // [PROGRAMMING-TRUTH-BUNDLE] Bundle-derived decision signals
   // These inform dosage/load, progression, and constraint-aware selection
   // ==========================================================================
@@ -11223,6 +11247,11 @@ async function generateAdaptiveProgramImpl(
   canonicalSessionSpine,
   // [WEEKLY-COMPOSITION-UPGRADE] Pass week-level adaptation decisions for session-level enforcement
   weekAdaptation: weekAdaptationInputForSession,
+  // [STYLE-CORRIDOR-CLUSTER-FIX] Pass the actual bundle (not just the
+  // decision summary) so generateAdaptiveSession's pre-existing 21+ bare
+  // references resolve to the real local at L5448 instead of throwing
+  // ReferenceError. This is the single ingress that closes the cluster.
+  programmingTruthBundle,
   // [PROGRAMMING-TRUTH-BUNDLE] Pass bundle-derived decisions for dosage/progression/constraint
   bundleDecisions: bundleDecisionSummary || null,
   // [UNIFIED DOCTRINE DECISION] Pass doctrine decision for exercise selection enforcement
@@ -23123,6 +23152,20 @@ function generateAdaptiveSession(
   // This was previously accessed from outer scope closure, causing reference errors
   // ==========================================================================
   sessionIntent,
+  // ==========================================================================
+  // [STYLE-CORRIDOR-CLUSTER-FIX] Destructure the bundle so the 21+ bare
+  // `programmingTruthBundle` references throughout this function (smart
+  // substitution L24689, pattern-specific prescription L25141, the entire
+  // style corridor L26434-L26688 including the outer-guard catch handler
+  // log at L26688) finally resolve to a real binding. Pre-fix every one
+  // of those reads was an out-of-scope ReferenceError; most were silenced
+  // by surrounding try/catches but the style corridor's catch handler
+  // re-referenced the variable and crashed the rebuild end-to-end.
+  // Default to null when the caller did not pass a bundle so all
+  // downstream `programmingTruthBundle?.…` and `if (programmingTruthBundle)`
+  // checks behave correctly.
+  // ==========================================================================
+  programmingTruthBundle = null,
   } = context
   
   // ==========================================================================
@@ -26679,22 +26722,50 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       // (already initialized above), tag it with the precise reason,
       // and continue. The lifecycle catch downstream will not see a
       // throw and the rebuild will not be classified as degraded.
-      const reason = lateStyleErr instanceof Error ? lateStyleErr.message : String(lateStyleErr)
-      console.error('[late-style-corridor-fallback-engaged]', {
-        dayNumber: day.dayNumber,
-        dayFocus: day.focus,
-        validatedExerciseCount: validatedSession.exercises.length,
-        coreSessionWasHealthy: validatedSession.exercises.length > 0,
-        bundlePresent: !!programmingTruthBundle,
-        errorName: lateStyleErr instanceof Error ? lateStyleErr.name : 'unknown',
-        errorMessage: reason.slice(0, 200),
-        stack: lateStyleErr instanceof Error
-          ? lateStyleErr.stack?.split('\n').slice(0, 6).join('\n')
-          : undefined,
-        verdict: 'OUTER_STYLE_CORRIDOR_FALLBACK_CORE_SESSION_PRESERVED',
-      })
-      sessionStyleMetadata.stylePhaseFellBack = true
-      sessionStyleMetadata.stylePhaseFallbackReason = reason.slice(0, 200)
+      //
+      // [STYLE-CORRIDOR-CLUSTER-FIX] OBSERVER OWNERSHIP HARDENING.
+      // Pre-fix this handler itself read `programmingTruthBundle` (out of
+      // scope at the time), so when the inner code threw a ReferenceError
+      // for that same variable, the handler re-threw the SAME
+      // ReferenceError on its own log line and escaped the guard,
+      // collapsing the rebuild into a degraded card. The reference is
+      // now properly destructured (Edit 3 above), but as a defense-in-
+      // depth principle for an observer-only block, the entire handler
+      // body is wrapped in a nested try/catch that swallows any future
+      // failure in audit/log/metadata code. Logs are observers, not
+      // owners — under no circumstance may a logging line collapse a
+      // healthy validated session.
+      try {
+        const reason = lateStyleErr instanceof Error ? lateStyleErr.message : String(lateStyleErr)
+        console.error('[late-style-corridor-fallback-engaged]', {
+          dayNumber: day.dayNumber,
+          dayFocus: day.focus,
+          validatedExerciseCount: validatedSession.exercises.length,
+          coreSessionWasHealthy: validatedSession.exercises.length > 0,
+          bundlePresent: !!programmingTruthBundle,
+          errorName: lateStyleErr instanceof Error ? lateStyleErr.name : 'unknown',
+          errorMessage: reason.slice(0, 200),
+          stack: lateStyleErr instanceof Error
+            ? lateStyleErr.stack?.split('\n').slice(0, 6).join('\n')
+            : undefined,
+          verdict: 'OUTER_STYLE_CORRIDOR_FALLBACK_CORE_SESSION_PRESERVED',
+        })
+        sessionStyleMetadata.stylePhaseFellBack = true
+        sessionStyleMetadata.stylePhaseFallbackReason = reason.slice(0, 200)
+      } catch (handlerErr) {
+        // Observer-of-last-resort: even the fallback log itself failed.
+        // Silently mark the fallback flag so downstream consumers know
+        // the corridor degraded, and never re-throw — the validated
+        // session must still ship.
+        try {
+          sessionStyleMetadata.stylePhaseFellBack = true
+          sessionStyleMetadata.stylePhaseFallbackReason =
+            handlerErr instanceof Error ? handlerErr.message.slice(0, 200) : 'handler_failure'
+        } catch {
+          // No-op. Even mutating the metadata failed; nothing more we
+          // can safely do without risking the rebuild.
+        }
+      }
     }
 
     sessionStep = 'returning_validated_session'

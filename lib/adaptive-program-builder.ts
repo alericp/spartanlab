@@ -26364,6 +26364,66 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
     // ==========================================================================
     sessionStep = 'applying_training_style'
 
+    // [PHASE 3-STYLE-TRUE-ROOT-FIX] OUTER LATE-STYLE CORRIDOR GUARD
+    // ------------------------------------------------------------------
+    // Prior fix only protected `applySessionStylePreferences(styleInput)`
+    // itself with a tight inner try/catch. The actual throw sits *before*
+    // that call: the bundleSignals IIFE invokes four bundle helpers
+    // (`hasMeaningfulBenchmarks`, `hasPerformanceEnvelopeData`,
+    // `hasEarnedTrainingHistory`, `getBundleConfidenceLevel`) that each
+    // dereference a specific top-level bundle section without optional
+    // chaining (e.g. `bundle.benchmarks.meta.available`,
+    // `bundle.diagnostics.sectionsAvailable.length`). A partially-built
+    // bundle missing any one of those sections — which is a real
+    // observed shape on the rebuild path — throws TypeError before the
+    // inner guard can engage. The post-style audit logs at the bottom
+    // of this block also dereference deep into
+    // `styleResult.methodDecisionEvidence.decisions[].bundleSignals-
+    // Consumed`, which can fail similarly if any consumer ever returns
+    // a malformed payload.
+    //
+    // Contract: this entire late-style corridor (bundle signal synthesis,
+    // styleInput construction, applySessionStylePreferences invocation,
+    // sessionStyleMetadata assembly, observability audit logs) is an
+    // *optional enhancement layer*. By the time we enter it,
+    // validatedSession is already trusted. Any throw inside it must
+    // degrade to an honest straight-sets sessionStyleMetadata and let
+    // the validated session ship — never collapse the rebuild into a
+    // degraded card. Logs are observers, not owners.
+    //
+    // Honest outer-fallback shape (kept identical to the inner fallback
+    // for diagnostic uniformity):
+    //   primaryStyle: 'straight_sets', has*Applied: false, styledGroups:
+    //   [], appliedMethods: [], rejectedMethods: [],
+    //   methodDecisionEvidence with `style_corridor_fallback` blocker.
+    let sessionStyleMetadata: any = {
+      primaryStyle: 'straight_sets' as const,
+      hasSupersetsApplied: false,
+      hasCircuitsApplied: false,
+      hasDensityApplied: false,
+      structureDescription:
+        'Straight sets (late-style corridor fallback — core session preserved)',
+      appliedMethods: [],
+      rejectedMethods: [],
+      styledGroups: [],
+      methodDecisionEvidence: {
+        bundleConfidence: 'none' as const,
+        bundleSignalsAvailable: [],
+        decisions: (trainingMethodPreferences || []).map(method => ({
+          method,
+          outcome: 'deferred' as const,
+          drivers: [],
+          blockers: ['style_corridor_fallback'],
+          evidenceConfidence: 'none' as const,
+          bundleSignalsConsumed: [],
+        })),
+        bundleMateriallyChangedOutcome: false,
+      },
+      stylePhaseFellBack: false,
+      stylePhaseFallbackReason: null as string | null,
+    }
+    try {
+
     // [PHASE 3G] Synthesise the BundleMethodSignals from the bundle.
     // Every field is optional and reflects only what the bundle actually
     // proves — never guessed or back-filled. When the bundle is null
@@ -26521,7 +26581,8 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
     // modify-builder, saved-program reload). Downstream UI / audit code
     // can read session.styleMetadata.methodDecisionEvidence to prove
     // exactly which Neon signals fired for this session's method choices.
-    const sessionStyleMetadata = {
+    // [PHASE 3-STYLE-TRUE-ROOT-FIX] Reassigning the outer-guard `let`.
+    sessionStyleMetadata = {
       primaryStyle: styleResult.styleMetadata.primarySessionStyle,
       hasSupersetsApplied: styleResult.styleMetadata.hasSupersetsApplied,
       hasCircuitsApplied: styleResult.styleMetadata.hasCircuitsApplied,
@@ -26607,14 +26668,48 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       materialityVerdict: styleMateriality,
     })
     
+    } catch (lateStyleErr) {
+      // [PHASE 3-STYLE-TRUE-ROOT-FIX] Outer late-style corridor catch.
+      // Engaged when anything outside the inner applySessionStylePreferences
+      // guard throws — most commonly the bundleSignals IIFE (helpers
+      // dereferencing missing top-level bundle sections), the styleInput
+      // mapping, the post-style audit logs, or the materiality audit
+      // calculation. The validated session is already healthy at this
+      // point, so we attach the honest fallback sessionStyleMetadata
+      // (already initialized above), tag it with the precise reason,
+      // and continue. The lifecycle catch downstream will not see a
+      // throw and the rebuild will not be classified as degraded.
+      const reason = lateStyleErr instanceof Error ? lateStyleErr.message : String(lateStyleErr)
+      console.error('[late-style-corridor-fallback-engaged]', {
+        dayNumber: day.dayNumber,
+        dayFocus: day.focus,
+        validatedExerciseCount: validatedSession.exercises.length,
+        coreSessionWasHealthy: validatedSession.exercises.length > 0,
+        bundlePresent: !!programmingTruthBundle,
+        errorName: lateStyleErr instanceof Error ? lateStyleErr.name : 'unknown',
+        errorMessage: reason.slice(0, 200),
+        stack: lateStyleErr instanceof Error
+          ? lateStyleErr.stack?.split('\n').slice(0, 6).join('\n')
+          : undefined,
+        verdict: 'OUTER_STYLE_CORRIDOR_FALLBACK_CORE_SESSION_PRESERVED',
+      })
+      sessionStyleMetadata.stylePhaseFellBack = true
+      sessionStyleMetadata.stylePhaseFallbackReason = reason.slice(0, 200)
+    }
+
     sessionStep = 'returning_validated_session'
     console.log('[session-lifecycle-success]', {
       dayNumber: day.dayNumber,
       dayFocus: day.focus,
       sessionStep,
       finalExerciseCount: validatedSession.exercises.length,
-      styleApplied: styleResult.styleMetadata.primarySessionStyle,
-      methodsApplied: styleResult.appliedMethods,
+      // [PHASE 3-STYLE-TRUE-ROOT-FIX] Read style truth off the hoisted
+      // metadata so the lifecycle-success log works in both the normal
+      // path and the outer-fallback path (where local `styleResult` is
+      // not in scope).
+      styleApplied: sessionStyleMetadata.primaryStyle,
+      methodsApplied: sessionStyleMetadata.appliedMethods,
+      stylePhaseFellBack: sessionStyleMetadata.stylePhaseFellBack === true,
     })
     
     // [AI_SESSION_MATERIALITY_PHASE] Log skill expression materiality for debugging

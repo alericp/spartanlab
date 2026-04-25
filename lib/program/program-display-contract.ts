@@ -2484,9 +2484,18 @@ export function buildExerciseCardContract(
   
   // [AUTHORITATIVE] Intensity badge - compact effort reasoning from single source of truth
   // [WEEK-SCALING-FIX] exercise.targetRPE contains week-scaled value from caller
+  // [RPE-DISPLAY-CLEANLINESS-LOCK] Round to a clean coaching integer for display.
+  // Internally targetRPE may be 7.7 / 8.4 / etc. (week-scaling math, recovery
+  // adjustments, role-cap softening), but user-facing prescription must read
+  // as an integer in {6,7,8,9,10}. Branching below uses === comparisons so
+  // decimals would route to the FALLBACK and look incoherent ("RPE 7.7 ·
+  // sustainable challenge" beside a row that says "RPE 8 · hard set"). All
+  // 16 template strings below now consume `rpe` (rounded), not the raw value.
+  // Floor to keep the prescription on the conservative side of any half-step.
   let intensityBadge: string | null = null
   if (exercise.targetRPE) {
-  const rpe = exercise.targetRPE
+    const rawRpe = exercise.targetRPE
+    const rpe = Math.max(5, Math.min(10, Math.round(rawRpe)))
     const catLower = categoryLower
     const exprMode = expressionMode
     const roleSession = (exercise.coachingMeta?.roleInSession || '').toLowerCase()
@@ -4217,7 +4226,10 @@ export function buildExerciseEffortReasonLine(
     isRecoveryConstrained?: boolean
   }
 ): string {
-  const targetRPE = exercise.targetRPE ?? 8
+  // [RPE-DISPLAY-CLEANLINESS-LOCK] Round to clean coaching integer (5-10) so
+  // user-facing reasoning strings ("Held at RPE 8 — ...") never leak decimals.
+  const rawTargetRPE = exercise.targetRPE ?? 8
+  const targetRPE = Math.max(5, Math.min(10, Math.round(rawTargetRPE)))
   const categoryLower = (exercise.category || '').toLowerCase()
   const expressionMode = (exercise.coachingMeta?.expressionMode || '').toLowerCase()
   const roleInSession = (exercise.coachingMeta?.roleInSession || '').toLowerCase()

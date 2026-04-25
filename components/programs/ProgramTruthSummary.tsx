@@ -260,6 +260,26 @@ interface TruthExplanation {
     deferredSkills: string[]
     finalVerdict: 'VISIBLE_WEEK_EXPRESSION_STRONG' | 'VISIBLE_WEEK_EXPRESSION_ADEQUATE' | 'VISIBLE_WEEK_EXPRESSION_NARROW'
   } | null
+  // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Lightweight rollup of the canonical
+  // per-exercise winner-rationale stamp. Built ONLY from final saved
+  // exercises (program.sessions[].exercises[].dbTruthWinnerProvenance).
+  // The summary surface reads this rollup directly — it never recomputes
+  // rationale or consults transient scorer state.
+  dbTruthWinnerSummary?: {
+    totalExercisesWithDbTruthInfluence: number
+    exercisesReorderedByDbTruth: number
+    exercisesConservativeByCurrentTruth: number
+    exercisesReadinessGated: number
+    exercisesWhereCurrentBeatHistorical: number
+    precedenceBreakdown: {
+      current: number
+      response: number
+      historical: number
+      readinessGate: number
+      default: number
+    }
+    sourceOfTruth: 'db_truth_final_winner_rollup'
+  } | null
 }
 
 // [CHECKLIST 1 OF 4] Selected Skill Trace Contract
@@ -533,6 +553,59 @@ export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, clas
         label: 'Progression',
         value: 'Conservative start',
         type: 'warning',
+      })
+    }
+  }
+
+  // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Surface ONE small honest key decision
+  // when the final saved program shows that working-state truth materially
+  // shaped exercise winner selection. Built strictly from the rollup, which
+  // is itself built strictly from final stamped exercises — so this surface
+  // can never claim influence the program does not actually carry.
+  //
+  // The chosen visible message prefers the strongest honest signal in this
+  // priority order:
+  //   1. readiness gating (the rarest + most specific outcome)
+  //   2. current working state beat historical ceiling (override happened)
+  //   3. conservative softening from current truth (most common gentle case)
+  //   4. order reordered without the above signals (rerank changed picks)
+  // No message is added when zero exercises were influenced — silence is
+  // honest when the program genuinely had no working-state pressure.
+  const dbTruthRollup = (truthExplanation as TruthExplanation & {
+    dbTruthWinnerSummary?: TruthExplanation['dbTruthWinnerSummary']
+  }).dbTruthWinnerSummary
+  if (dbTruthRollup && dbTruthRollup.totalExercisesWithDbTruthInfluence > 0) {
+    const n = dbTruthRollup.totalExercisesWithDbTruthInfluence
+    const ex = (count: number) => `${count} exercise${count === 1 ? '' : 's'}`
+    if (dbTruthRollup.exercisesReadinessGated > 0) {
+      keyDecisions.push({
+        label: 'Working State Truth',
+        value: `Readiness softened ${ex(dbTruthRollup.exercisesReadinessGated)}`,
+        type: 'warning',
+      })
+    } else if (dbTruthRollup.exercisesWhereCurrentBeatHistorical > 0) {
+      keyDecisions.push({
+        label: 'Working State Truth',
+        value: `Current state overrode historical on ${ex(dbTruthRollup.exercisesWhereCurrentBeatHistorical)}`,
+        type: 'success',
+      })
+    } else if (dbTruthRollup.exercisesConservativeByCurrentTruth > 0) {
+      keyDecisions.push({
+        label: 'Working State Truth',
+        value: `Current state softened ${ex(dbTruthRollup.exercisesConservativeByCurrentTruth)}`,
+        type: 'info',
+      })
+    } else if (dbTruthRollup.exercisesReorderedByDbTruth > 0) {
+      keyDecisions.push({
+        label: 'Working State Truth',
+        value: `Reordered ${ex(dbTruthRollup.exercisesReorderedByDbTruth)} by working data`,
+        type: 'info',
+      })
+    } else {
+      keyDecisions.push({
+        label: 'Working State Truth',
+        value: `Influenced ${ex(n)}`,
+        type: 'info',
       })
     }
   }

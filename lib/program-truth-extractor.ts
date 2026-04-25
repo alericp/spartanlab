@@ -407,6 +407,72 @@ export function attachTruthExplanation(
     } | null
   }).authoritativeMultiSkillIntentContract || null
   
+  // ==========================================================================
+  // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Build the rollup ENTIRELY from final
+  // saved exercises (`program.sessions[].exercises[].dbTruthWinnerProvenance`).
+  // We do NOT recompute rationale here, do NOT consult transient scorer
+  // arrays, and do NOT consult the in-memory `progressionDepthAdjustments`
+  // map. The whole point of this lock is that the rollup reflects what
+  // actually survived into the saved program — if the per-exercise stamp
+  // was dropped along the way, the rollup will honestly report zero
+  // influence rather than synthesize fake provenance.
+  // ==========================================================================
+  const dbTruthWinnerSummary: NonNullable<typeof program.truthExplanation>['dbTruthWinnerSummary'] = (() => {
+    const sessions = Array.isArray(program.sessions) ? program.sessions : []
+    let influenced = 0
+    let reordered = 0
+    let conservativeByCurrent = 0
+    let readinessGated = 0
+    let currentBeatHistorical = 0
+    const precedence = { current: 0, response: 0, historical: 0, readinessGate: 0, default: 0 }
+    for (const sess of sessions) {
+      const exs = Array.isArray(sess?.exercises) ? sess.exercises : []
+      for (const ex of exs) {
+        const prov = (ex as { dbTruthWinnerProvenance?: NonNullable<typeof ex.dbTruthWinnerProvenance> }).dbTruthWinnerProvenance
+        if (!prov || prov.sourceOfTruth !== 'db_truth_final_winner') continue
+        // An exercise counts as "influenced" when *something* in the canonical
+        // winner stage materially shaped its final placement: the rerank
+        // changed order, OR a non-zero depth bias/delta was applied, OR a
+        // per-skill precedence/readiness signal was joined into the stamp.
+        const hadDepthDelta = typeof prov.depthDelta === 'number' && prov.depthDelta !== 0
+        const hadDepthBias = typeof prov.depthBias === 'number' && prov.depthBias !== 0
+        const hadPrecedenceSignal = !!prov.precedenceUsed && prov.precedenceUsed !== 'none' && prov.precedenceUsed !== 'default'
+        const hadCurrentVsHistory = prov.currentBeatsHistorical === true
+        const wasGated = prov.readinessGated === true
+        const wasConservative = prov.conservativeByCurrentTruth === true
+        if (
+          prov.rankingChanged ||
+          hadDepthDelta || hadDepthBias ||
+          hadPrecedenceSignal || hadCurrentVsHistory ||
+          wasGated || wasConservative
+        ) {
+          influenced += 1
+        }
+        if (prov.rankingChanged) reordered += 1
+        if (wasConservative) conservativeByCurrent += 1
+        if (wasGated) readinessGated += 1
+        if (hadCurrentVsHistory) currentBeatHistorical += 1
+        switch (prov.precedenceUsed) {
+          case 'current': precedence.current += 1; break
+          case 'response': precedence.response += 1; break
+          case 'historical': precedence.historical += 1; break
+          case 'readiness_gate': precedence.readinessGate += 1; break
+          case 'default': precedence.default += 1; break
+          default: break
+        }
+      }
+    }
+    return {
+      totalExercisesWithDbTruthInfluence: influenced,
+      exercisesReorderedByDbTruth: reordered,
+      exercisesConservativeByCurrentTruth: conservativeByCurrent,
+      exercisesReadinessGated: readinessGated,
+      exercisesWhereCurrentBeatHistorical: currentBeatHistorical,
+      precedenceBreakdown: precedence,
+      sourceOfTruth: 'db_truth_final_winner_rollup' as const,
+    }
+  })()
+
   return {
     ...program,
     truthExplanation: {
@@ -415,6 +481,8 @@ export function attachTruthExplanation(
       triggerSource,
       // [SESSION-ARCHITECTURE-MATERIALIZATION] Include materialization verdict if available
       materializationVerdict: program.materializationVerdict || null,
+      // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Rollup derived from final stamped exercises.
+      dbTruthWinnerSummary,
       // [CHECKLIST 1 OF 5] Include authoritative multi-skill intent contract if available
       authoritativeMultiSkillIntentContract: authoritativeContract ? {
         selectedSkills: authoritativeContract.selectedSkills,

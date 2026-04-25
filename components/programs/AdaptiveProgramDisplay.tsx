@@ -74,6 +74,14 @@ interface AdaptiveProgramDisplayProps {
   showProbe?: boolean
   // [ALWAYS-VISIBLE-PROBE] Force probe to render unconditionally
   forceProbe?: boolean
+  // [VISIBLE-SESSION-TRUTH-LOCK] Authoritative per-card surfaces built by the
+  // page-level CanonicalProgramDisplayTruth contract. When provided, the
+  // visible day cards render from these directly instead of recomputing
+  // the same surfaces locally -- enforcing single ownership of visible
+  // session truth at the page level. Optional for backward compatibility:
+  // when undefined, the component falls back to building surfaces locally
+  // via the same canonical helper (no semantic divergence is possible).
+  sessionCardSurfaces?: SessionCardSurface[]
   }
 
 export function AdaptiveProgramDisplay({
@@ -85,6 +93,8 @@ export function AdaptiveProgramDisplay({
   unifiedStaleness, // [TASK 1] Consume parent's staleness evaluation
   showProbe = false, // [PREVIEW-VISIBLE-PROBE] Truth probe visibility
   forceProbe = false, // [ALWAYS-VISIBLE-PROBE] Force probe unconditionally
+  // [VISIBLE-SESSION-TRUTH-LOCK] Page-built per-card visible surfaces
+  sessionCardSurfaces: injectedSessionCardSurfaces,
   }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
@@ -201,19 +211,28 @@ export function AdaptiveProgramDisplay({
     ? rawWeeklyRepresentation
     : null
   
-  // Build authoritative per-card display surfaces
-  const sessionCardSurfaces: SessionCardSurface[] = validSessions.length > 0
-    ? buildAllSessionCardSurfaces(
-        validSessions as Parameters<typeof buildAllSessionCardSurfaces>[0],
-        {
-          isFirstWeek: program.weekAdaptationDecision?.firstWeekGovernor?.active ?? false,
-          adaptationPhase: program.weekAdaptationDecision?.phase,
-          totalSessions: validSessions.length,
-          primaryGoal: program.primaryGoal,
-          secondaryGoal: program.secondaryGoal,
-        }
-      )
-    : []
+  // [VISIBLE-SESSION-TRUTH-LOCK] Build authoritative per-card display surfaces.
+  // Prefer surfaces injected by the page-level CanonicalProgramDisplayTruth
+  // contract -- when provided, the page is the single owner of visible
+  // session truth. Fall back to the same canonical builder when the parent
+  // does not inject (older callers / standalone usage), so semantics never
+  // diverge regardless of which path produced the array.
+  const sessionCardSurfaces: SessionCardSurface[] = (
+    injectedSessionCardSurfaces && injectedSessionCardSurfaces.length === validSessions.length
+      ? injectedSessionCardSurfaces
+      : validSessions.length > 0
+        ? buildAllSessionCardSurfaces(
+            validSessions as Parameters<typeof buildAllSessionCardSurfaces>[0],
+            {
+              isFirstWeek: program.weekAdaptationDecision?.firstWeekGovernor?.active ?? false,
+              adaptationPhase: program.weekAdaptationDecision?.phase,
+              totalSessions: validSessions.length,
+              primaryGoal: program.primaryGoal,
+              secondaryGoal: program.secondaryGoal,
+            }
+          )
+        : []
+  )
   
   // Build render context for skills
   const renderPrimaryGoal = program.primaryGoal

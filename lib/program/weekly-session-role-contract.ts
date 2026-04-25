@@ -93,6 +93,42 @@ export type WeeklyProgressionCharacter =
   | 'recovery_quality' // Range / form / technique only.
 
 /**
+ * [WEEKLY-ROLE-PRESCRIPTION-SHAPING-LOCK]
+ * Authoritative prescription-shape policy per role. This is the truth that
+ * makes weekly role MATERIALLY change downstream prescriptions (sets / reps /
+ * RPE / progression aggressiveness) — not just labels, chips, or rationale
+ * text. Consumed once by the builder's prescription-shaping pass that mutates
+ * `session.exercises[i].sets / repsOrTime / targetRPE` according to role.
+ *
+ * Rules:
+ *  - `setsBias` is added to each non-grouped, non-skill row's `sets`, then
+ *    clamped to [1, 6]. Skill / cluster / top-set / drop-set rows are left
+ *    alone (their dosage is already doctrine-owned by their method).
+ *  - `repIntent` shifts numeric rep ranges only (e.g. "5-8" -> "4-6"); time
+ *    holds and "each side" prescriptions are left alone (too risky to mutate).
+ *  - `rpeCap` is enforced as a maximum on `targetRPE`; if the row had no
+ *    explicit RPE, the cap is written so the visible card shows the doctrine.
+ *  - `progressionAggressiveness` is metadata for downstream progression
+ *    decision logic (e.g. whether to bump variant difficulty next week).
+ */
+export type PrescriptionRepIntent =
+  | 'lower_heavy' // Push the heavy/strength end (range -1 to -2 reps).
+  | 'midrange' // Standard productive range (no shift).
+  | 'higher_volume' // Volume / accumulation bias (range +2 to +4 reps).
+  | 'technical_quality' // Don't change reps; rely on RPE cap to enforce quality.
+  | 'recovery_short' // Drop ranges by 1 to keep stress low (recovery day).
+
+export interface WeeklyPrescriptionShape {
+  /** Net delta applied to non-grouped, non-skill, non-method rows' set counts. */
+  setsBias: -2 | -1 | 0 | 1
+  repIntent: PrescriptionRepIntent
+  /** Maximum allowed targetRPE for this day's rows. null = no cap. */
+  rpeCap: number | null
+  /** Hint for progression decision systems — does NOT change selection here. */
+  progressionAggressiveness: 'aggressive' | 'standard' | 'conservative' | 'recovery_only'
+}
+
+/**
  * Method allowance per role.
  *
  * `blocked`     — must NOT appear on this day (e.g., density on a recovery day).
@@ -136,6 +172,12 @@ export interface WeeklyDayRole {
 
   // ----- Progression / load character -----
   progressionCharacter: WeeklyProgressionCharacter
+
+  // ----- [WEEKLY-ROLE-PRESCRIPTION-SHAPING-LOCK] Material prescription shape -----
+  // The authoritative policy that the builder applies to actual rows (sets /
+  // reps / RPE) so this day reads materially differently in execution, not
+  // just in labels. See WeeklyPrescriptionShape doc for semantics.
+  prescriptionShape: WeeklyPrescriptionShape
 
   // ----- Method gating -----
   methodAllowance: WeeklyMethodAllowance
@@ -327,7 +369,7 @@ function templateForRole(
   ctx: { experienceLevel: WeeklySessionRoleInput['experienceLevel']; complexityScore: number; hasWeightedEquipment: boolean }
 ): Pick<
   WeeklyDayRole,
-  'roleId' | 'roleLabel' | 'roleDescription' | 'intensityClass' | 'breadthTarget' | 'progressionCharacter' | 'methodAllowance'
+  'roleId' | 'roleLabel' | 'roleDescription' | 'intensityClass' | 'breadthTarget' | 'progressionCharacter' | 'methodAllowance' | 'prescriptionShape'
 > {
   const labels = ROLE_LABELS[roleId]
 
@@ -420,6 +462,66 @@ function templateForRole(
     },
   }
 
+  // ===========================================================================
+  // [WEEKLY-ROLE-PRESCRIPTION-SHAPING-LOCK] Per-role authoritative prescription
+  // shape. This is what makes the heavier strength day actually read with
+  // fewer, lower-rep, higher-RPE rows; the recovery day actually read with
+  // fewer, technical, RPE-capped rows; the broad mixed day actually read with
+  // moderate full-range volume. The builder consumes this exactly once via
+  // the prescription-shaping pass — no other code may re-derive shape.
+  // ===========================================================================
+  const shapeByRole: Record<WeeklySessionRoleId, WeeklyPrescriptionShape> = {
+    primary_strength_emphasis: {
+      // Heavy day: keep full set count for strength accumulation, drop reps to
+      // the strength end of each range, allow top-end RPE.
+      setsBias: 0,
+      repIntent: 'lower_heavy',
+      rpeCap: 9,
+      progressionAggressiveness: 'aggressive',
+    },
+    skill_quality_emphasis: {
+      // Skill day: trim one set off accessory rows so CNS stays fresh; keep
+      // reps as authored (skill prescriptions are intentional); cap RPE so
+      // quality > grind.
+      setsBias: -1,
+      repIntent: 'technical_quality',
+      rpeCap: 7,
+      progressionAggressiveness: 'conservative',
+    },
+    broad_mixed_volume: {
+      // Broad day: full sets, mid-range reps, moderate RPE. Standard productive.
+      setsBias: 0,
+      repIntent: 'midrange',
+      rpeCap: 8,
+      progressionAggressiveness: 'standard',
+    },
+    secondary_support: {
+      // Support day: full sets, mid-range reps, moderate RPE. Like broad but
+      // typically less direct primary expression upstream in selection.
+      setsBias: 0,
+      repIntent: 'midrange',
+      rpeCap: 8,
+      progressionAggressiveness: 'standard',
+    },
+    density_capacity: {
+      // Density day: keep set count (density methods do the work), bias toward
+      // higher-volume reps for accumulation, cap RPE moderate-low so density
+      // doesn't grind into failure-budget territory.
+      setsBias: 0,
+      repIntent: 'higher_volume',
+      rpeCap: 7,
+      progressionAggressiveness: 'standard',
+    },
+    recovery_supportive: {
+      // Recovery day: drop one set off everything, drop one rep off ranges,
+      // hard cap RPE low. This is the day the user should clearly see is easier.
+      setsBias: -1,
+      repIntent: 'recovery_short',
+      rpeCap: 6,
+      progressionAggressiveness: 'recovery_only',
+    },
+  }
+
   return {
     roleId,
     roleLabel: labels.label,
@@ -428,6 +530,7 @@ function templateForRole(
     breadthTarget,
     progressionCharacter: progressionByRole[roleId],
     methodAllowance: methodByRole[roleId],
+    prescriptionShape: shapeByRole[roleId],
   }
 }
 

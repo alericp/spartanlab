@@ -562,6 +562,17 @@ export function buildSessionCardSurface(
       hasCircuitsApplied?: boolean
       hasDensityApplied?: boolean
       structureDescription?: string
+      // [METHOD-MATERIALITY-LOCK] When present, these are the authoritative
+      // post-materialization counts the visible card actually renders. The
+      // surface gates method signals on these so a label like "Supersets
+      // active" cannot appear unless the visible session prescription
+      // actually contains a renderable grouped block of that method.
+      styledGroups?: Array<{ groupType?: string | null; exercises?: Array<{ name?: string | null } | null> | null } | null> | null
+      methodMaterializationSummary?: {
+        groupedStructurePresent?: boolean
+        rowLevelMethodCuesPresent?: boolean
+        groupedMethodCounts?: { superset?: number; circuit?: number; density_block?: number; cluster?: number }
+      } | null
     }
   },
   weekContext: {
@@ -716,17 +727,72 @@ export function buildSessionCardSurface(
   }
   
   // ==========================================================================
-  // D. Build method signals from style metadata
+  // D. Build method signals from style metadata.
+  //
+  // [METHOD-MATERIALITY-LOCK] A method label only surfaces on the visible
+  // session header when it is materially represented by the prescription
+  // the user is actually seeing. Materiality is verified in this priority:
+  //   1. Canonical post-materialization summary (`methodMaterializationSummary`)
+  //      stamped by the builder. Counts > 0 => the visible card body renders
+  //      a grouped block of that method.
+  //   2. styledGroups carrying a non-straight `groupType` with at least 2
+  //      usable members (mirrors the same minMembersFor=2 rule the card
+  //      adapter and grouped scanner use). A 1-member styledGroup is NOT
+  //      a renderable grouped block and must not produce a header label.
+  //   3. As a last-resort fallback, the legacy `hasXApplied` flag, but
+  //      only when the parent did not provide either canonical counts or
+  //      styledGroups. This keeps older saved programs (pre-summary) from
+  //      losing all method visibility while preventing modern programs
+  //      from surfacing labels that aren't materially backed.
   // ==========================================================================
-  if (styleMeta?.hasDensityApplied) {
+  const canonicalMethodCounts = styleMeta?.methodMaterializationSummary?.groupedMethodCounts
+  const styledGroupsArr = Array.isArray(styleMeta?.styledGroups) ? styleMeta!.styledGroups! : null
+  const hasCanonicalCounts = !!canonicalMethodCounts
+  const hasStyledGroupsEvidence = styledGroupsArr !== null
+
+  function styledGroupHasRenderable(method: 'superset' | 'circuit' | 'density_block'): boolean {
+    if (!styledGroupsArr) return false
+    for (const g of styledGroupsArr) {
+      const t = (g?.groupType || '').toLowerCase()
+      const matches =
+        method === 'density_block'
+          ? (t === 'density' || t === 'density_block')
+          : t === method
+      if (!matches) continue
+      const usable = Array.isArray(g?.exercises)
+        ? g!.exercises!.filter(m => !!m && typeof m.name === 'string' && m.name!.trim().length >= 2)
+        : []
+      if (usable.length >= 2) return true
+    }
+    return false
+  }
+
+  // Density
+  const densityMaterial =
+    (canonicalMethodCounts?.density_block || 0) > 0 ||
+    (hasStyledGroupsEvidence && styledGroupHasRenderable('density_block')) ||
+    (!hasCanonicalCounts && !hasStyledGroupsEvidence && !!styleMeta?.hasDensityApplied)
+  if (densityMaterial) {
     methodSignals.push('Density applied')
     source = 'authoritative'
   }
-  if (styleMeta?.hasSupersetsApplied) {
+
+  // Supersets
+  const supersetsMaterial =
+    (canonicalMethodCounts?.superset || 0) > 0 ||
+    (hasStyledGroupsEvidence && styledGroupHasRenderable('superset')) ||
+    (!hasCanonicalCounts && !hasStyledGroupsEvidence && !!styleMeta?.hasSupersetsApplied)
+  if (supersetsMaterial) {
     methodSignals.push('Supersets active')
     source = 'authoritative'
   }
-  if (styleMeta?.hasCircuitsApplied) {
+
+  // Circuits
+  const circuitsMaterial =
+    (canonicalMethodCounts?.circuit || 0) > 0 ||
+    (hasStyledGroupsEvidence && styledGroupHasRenderable('circuit')) ||
+    (!hasCanonicalCounts && !hasStyledGroupsEvidence && !!styleMeta?.hasCircuitsApplied)
+  if (circuitsMaterial) {
     methodSignals.push('Circuits active')
     source = 'authoritative'
   }

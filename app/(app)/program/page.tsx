@@ -154,6 +154,14 @@ import { GroupedProgramScannerStrip } from '@/components/program/GroupedProgramS
 // ProgramDisplayWrapper, which is the single canonical render point for every
 // visible program surface, so a static import cannot widen the render graph.
 import { ProgramTruthSummary } from '@/components/programs/ProgramTruthSummary'
+// [VISIBLE-SESSION-TRUTH-LOCK] Single canonical visible-card display contract.
+// The page-level CanonicalProgramDisplayTruth now embeds these surfaces so
+// every visible day card consumes one authoritative contract owned by the
+// page, not a per-component recomputation.
+import {
+  buildAllSessionCardSurfaces,
+  type SessionCardSurface,
+} from '@/lib/program/program-display-contract'
 
 // [canonical-rebuild] Import type for adjustment rebuild requests
 import type { AdjustmentRebuildRequest, AdjustmentRebuildResult } from '@/components/programs/ProgramAdjustmentModal'
@@ -469,6 +477,13 @@ interface CanonicalProgramDisplayTruth {
   // Session cards source - canonical session array
   visibleSessionsSource: 'program.sessions'
   visibleSessionCount: number
+  // [VISIBLE-SESSION-TRUTH-LOCK] One authoritative per-card surface array.
+  // Built by the canonical helper `buildAllSessionCardSurfaces` so the
+  // visible day cards never read raw session/program structures for
+  // overlapping claims (headline, intent chips, protection signals,
+  // method signals, evidence). This is the SINGLE owner the JSX must
+  // consume. Length matches `visibleSessionCount` 1:1.
+  visibleSessionCards: SessionCardSurface[]
   // Ownership audit
   contractSource: 'saved_program_canonical_truth'
   noMixedOwnership: boolean
@@ -490,19 +505,41 @@ function buildCanonicalProgramDisplayTruth(program: AdaptiveProgram): CanonicalP
     .map(p => p.skill)
   
   const visibleBuiltAroundSkills = [...headlineSkills, ...materiallyRepresentedOtherSkills]
-  
+
+  // [VISIBLE-SESSION-TRUTH-LOCK] Build the per-card visible surfaces ONCE,
+  // here, from the canonical helper. AdaptiveProgramDisplay accepts these
+  // pre-built surfaces and consumes them directly, so the page is the
+  // single visible-truth owner for every day card.
+  const validSessions = Array.isArray(program.sessions)
+    ? program.sessions.filter(s => s && typeof s === 'object' && Array.isArray((s as { exercises?: unknown }).exercises))
+    : []
+  const secondaryGoal = (program as unknown as { secondaryGoal?: string }).secondaryGoal || null
+  const visibleSessionCards: SessionCardSurface[] = validSessions.length > 0
+    ? buildAllSessionCardSurfaces(
+        validSessions as Parameters<typeof buildAllSessionCardSurfaces>[0],
+        {
+          isFirstWeek: program.weekAdaptationDecision?.firstWeekGovernor?.active ?? false,
+          adaptationPhase: program.weekAdaptationDecision?.phase,
+          totalSessions: validSessions.length,
+          primaryGoal: program.primaryGoal,
+          secondaryGoal,
+        }
+      )
+    : []
+
   return {
     visiblePrimaryGoal: program.primaryGoal || '',
-    visibleSecondaryGoal: (program as unknown as { secondaryGoal?: string }).secondaryGoal || null,
+    visibleSecondaryGoal: secondaryGoal,
     visibleBuiltAroundSkills,
     visibleSummaryText: summaryTruth?.truthfulHybridSummary || program.programRationale || '',
     visibleSummarySource: summaryTruth?.truthfulHybridSummary 
       ? 'summaryTruth.truthfulHybridSummary' 
       : 'programRationale_fallback',
     visibleWhyThisPlanPrimaryFocus: program.primaryGoal || '',
-    visibleWhyThisPlanSecondaryFocus: (program as unknown as { secondaryGoal?: string }).secondaryGoal || null,
+    visibleWhyThisPlanSecondaryFocus: secondaryGoal,
     visibleSessionsSource: 'program.sessions',
     visibleSessionCount: program.sessions?.length || 0,
+    visibleSessionCards,
     contractSource: 'saved_program_canonical_truth',
     noMixedOwnership: true,
   }
@@ -603,20 +640,10 @@ function formatStressPattern(pattern: string | null): string {
 // ==========================================================================
 function ProgramDecisionSummary({ program }: { program: AdaptiveProgram }) {
   const summary = extractProgramDecisionSummary(program)
-  
-  // Log for corridor verification
-  console.log('[PROGRAM-DECISION-SUMMARY-RENDER]', {
-    programId: program.id,
-    doctrineAvailable: summary.available,
-    dominantSpine: summary.dominantSpine,
-    intensityBias: summary.intensityBias,
-    volumeBias: summary.volumeBias,
-    stressPattern: summary.stressPattern,
-    verdict: summary.available 
-      ? 'DOCTRINE_TRUTH_VISIBLE_IN_SUMMARY' 
-      : 'DOCTRINE_NOT_ATTACHED_USING_DEFAULTS',
-  })
-  
+
+  // [DEBUG-LEAKAGE-REMOVAL] Render-time corridor verification log removed.
+  // It produced a console entry on every render with no user-visible value.
+
   // Only render if doctrine truth is available
   if (!summary.available) {
     return null
@@ -772,31 +799,11 @@ function ProgramDisplayWrapper({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [program?.id, program?.updatedAt, program?.truthExplanation])
   
-  // ==========================================================================
-  // [VISIBLE-PROGRAM-TRUTH-CONTRACT] AUDIT - Verify unified ownership
-  // ==========================================================================
-  console.log('[VISIBLE-PROGRAM-TRUTH-CONTRACT-AUDIT]', {
-    programId: program.id,
-    // Identity surfaces
-    visiblePrimaryGoal: canonicalDisplayTruth.visiblePrimaryGoal,
-    visibleSecondaryGoal: canonicalDisplayTruth.visibleSecondaryGoal,
-    // Built around chips
-    visibleBuiltAroundSkillsCount: canonicalDisplayTruth.visibleBuiltAroundSkills.length,
-    visibleBuiltAroundSkills: canonicalDisplayTruth.visibleBuiltAroundSkills,
-    // Summary
-    visibleSummarySource: canonicalDisplayTruth.visibleSummarySource,
-    visibleSummaryTextSnippet: canonicalDisplayTruth.visibleSummaryText.slice(0, 100),
-    // Sessions
-    visibleSessionCount: canonicalDisplayTruth.visibleSessionCount,
-    visibleSessionsSource: canonicalDisplayTruth.visibleSessionsSource,
-    // Contract ownership
-    contractSource: canonicalDisplayTruth.contractSource,
-    noMixedOwnership: canonicalDisplayTruth.noMixedOwnership,
-    // Verdict
-    verdict: canonicalDisplayTruth.noMixedOwnership 
-      ? 'DISPLAY_CONTRACT_UNIFIED_ALL_SURFACES_FROM_CANONICAL_PROGRAM'
-      : 'DISPLAY_CONTRACT_SPLIT_OWNERSHIP_DETECTED',
-  })
+  // [VISIBLE-PROGRAM-TRUTH-CONTRACT] Render-time ownership audit removed.
+  // Truth ownership is now structurally enforced by `canonicalDisplayTruth`
+  // owning `visibleSessionCards` and feeding them into the visible display.
+  // The previous render-loop console audit produced noise on every render
+  // without surfacing user-visible value.
   // [PHASE 10C] State to capture error details for fallback display
   const [capturedError, setCapturedError] = useState<{
     name: string
@@ -1078,44 +1085,38 @@ function ProgramDisplayWrapper({
       {/* [PROGRAM-DECISION-SUMMARY] Display doctrine-driven decisions above the program */}
       <ProgramDecisionSummary program={program} />
 
-      {/* [PROGRAM-RUNTIME-PARITY-PROBE] Compact runtime parity row. Reads the
-          exact same `program` prop fed to the scanner and AdaptiveProgramDisplay
-          below. Gives a single authoritative truth about what this page is
-          actually mounting right now. */}
-      <div
-        role="note"
-        aria-label="Program runtime object parity probe"
-        className="mb-2 rounded border border-[#2B313A] bg-[#0A0C10] px-2 py-1 font-mono text-[10px] leading-tight text-[#A4ACB8]"
-      >
-        <span className="text-[#E6E9EF]">PROGRAM_RUNTIME_PARITY</span>
-        <span className="mx-1 text-[#6B7280]">·</span>
-        <span>sessions:<span className="text-[#E6E9EF]"> {runtimeParity.sessionCount}</span></span>
-        <span className="mx-1 text-[#6B7280]">·</span>
-        <span>grouped_sessions:<span className={runtimeParity.groupedSessionCount > 0 ? 'text-emerald-400' : 'text-[#E6E9EF]'}> {runtimeParity.groupedSessionCount}</span></span>
-        <span className="mx-1 text-[#6B7280]">·</span>
-        {/* [PARITY-SEMANTIC-HONESTY] Each method now shows sessions/rows.
-            - sessions = how many sessions applied this method (doctrine)
-            - rows     = total row-level tags across the program (carry)
-            Divergence between the two on `cluster` is a direct
-            stale-carry signal now that the builder writes at most 1
-            cluster row per session and caps sessions per week. */}
-        <span>
-          methods: superset=<span className="text-[#E6E9EF]">{runtimeParity.supersetSessions}s/{runtimeParity.supersetRows}r</span>
-          {' | '}circuit=<span className="text-[#E6E9EF]">{runtimeParity.circuitSessions}s/{runtimeParity.circuitRows}r</span>
-          {' | '}density=<span className="text-[#E6E9EF]">{runtimeParity.densitySessions}s/{runtimeParity.densityRows}r</span>
-          {' | '}cluster=<span className={runtimeParity.clusterRows > runtimeParity.clusterSessions ? 'text-amber-400' : 'text-[#E6E9EF]'}>{runtimeParity.clusterSessions}s/{runtimeParity.clusterRows}r</span>
-        </span>
-        <span className="mx-1 text-[#6B7280]">·</span>
-        <span>source:<span className="text-[#E6E9EF]"> CURRENT_PROGRAM_PAGE_OBJECT</span></span>
-      </div>
-
-      {/* [PROGRAM-GROUP-SCANNER-R1] Program-surface grouped diagnostic strip.
-          Pure consumer of existing program.sessions truth (same canonical
-          fields read by the [FUNNEL-AUDIT-S1S2] probe elsewhere on this
-          page). Renders nothing when no session carries grouped truth;
-          renders a compact per-session strip otherwise. Does NOT modify
-          program state, card layout, CTA placement, or AdaptiveProgramDisplay. */}
-      <GroupedProgramScannerStrip program={program} />
+      {/* [DEBUG-LEAKAGE-REMOVAL] PROGRAM_RUNTIME_PARITY parity probe + grouped
+          diagnostic scanner strip are diagnostic surfaces and were leaking
+          into the normal user-facing Program page. They now render only
+          when the existing probe gate is explicitly enabled
+          (`?programProbe=1` -> showProbe, or forceProbe). The athlete-facing
+          path stays clean; the probes remain available for QA without
+          deleting useful internal tooling. */}
+      {(showProbe || forceProbe) && (
+        <>
+          <div
+            role="note"
+            aria-label="Program runtime object parity probe"
+            className="mb-2 rounded border border-[#2B313A] bg-[#0A0C10] px-2 py-1 font-mono text-[10px] leading-tight text-[#A4ACB8]"
+          >
+            <span className="text-[#E6E9EF]">PROGRAM_RUNTIME_PARITY</span>
+            <span className="mx-1 text-[#6B7280]">·</span>
+            <span>sessions:<span className="text-[#E6E9EF]"> {runtimeParity.sessionCount}</span></span>
+            <span className="mx-1 text-[#6B7280]">·</span>
+            <span>grouped_sessions:<span className={runtimeParity.groupedSessionCount > 0 ? 'text-emerald-400' : 'text-[#E6E9EF]'}> {runtimeParity.groupedSessionCount}</span></span>
+            <span className="mx-1 text-[#6B7280]">·</span>
+            <span>
+              methods: superset=<span className="text-[#E6E9EF]">{runtimeParity.supersetSessions}s/{runtimeParity.supersetRows}r</span>
+              {' | '}circuit=<span className="text-[#E6E9EF]">{runtimeParity.circuitSessions}s/{runtimeParity.circuitRows}r</span>
+              {' | '}density=<span className="text-[#E6E9EF]">{runtimeParity.densitySessions}s/{runtimeParity.densityRows}r</span>
+              {' | '}cluster=<span className={runtimeParity.clusterRows > runtimeParity.clusterSessions ? 'text-amber-400' : 'text-[#E6E9EF]'}>{runtimeParity.clusterSessions}s/{runtimeParity.clusterRows}r</span>
+            </span>
+            <span className="mx-1 text-[#6B7280]">·</span>
+            <span>source:<span className="text-[#E6E9EF]"> CURRENT_PROGRAM_PAGE_OBJECT</span></span>
+          </div>
+          <GroupedProgramScannerStrip program={program} />
+        </>
+      )}
 
       <ErrorBoundary
         fallback={renderFallback()}
@@ -1129,6 +1130,11 @@ function ProgramDisplayWrapper({
           unifiedStaleness={unifiedStaleness}
           showProbe={showProbe}
           forceProbe={forceProbe}
+          /* [VISIBLE-SESSION-TRUTH-LOCK] Pass page-built per-card surfaces.
+             AdaptiveProgramDisplay consumes these directly so the visible
+             day cards have one authoritative source of truth owned by the
+             page-level CanonicalProgramDisplayTruth contract. */
+          sessionCardSurfaces={canonicalDisplayTruth.visibleSessionCards}
         />
       </ErrorBoundary>
     </div>
@@ -13218,8 +13224,20 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     )
   }
 
-  // [PHASE 24D] Enable diagnostic strip only in development/preview
-  const showDiagnosticStrip = process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview'
+  // [DEBUG-LEAKAGE-REMOVAL] The bottom diagnostic strip used to render in
+  // BOTH local dev AND every preview deploy, which meant athletes saw
+  // `modifyFlow / showBuilder / program / modalOpen / truth: G/Y/R` debug
+  // text on the user-facing program page. It is now opt-in via the same
+  // `?programProbe=1` gate already used for other internal probes, with a
+  // dedicated `?diagnostics=1` alias kept so QA can request it explicitly.
+  // Local dev still shows it automatically. The internal tooling is fully
+  // preserved -- only its default visibility changed.
+  const showDiagnosticStrip = (() => {
+    if (process.env.NODE_ENV === 'development') return true
+    if (typeof window === 'undefined') return false
+    const params = new URLSearchParams(window.location.search)
+    return params.get('diagnostics') === '1' || params.get('programProbe') === '1'
+  })()
   
   // [AI-TRUTH-MATERIALITY] Log materiality audit on mount (dev only)
   // This provides compact verification of which fields are GREEN/YELLOW/RED

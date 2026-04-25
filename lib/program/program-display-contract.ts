@@ -509,6 +509,34 @@ export interface SessionCardSurface {
   repetitionKey: string
   /** Source marker for debugging */
   source: 'authoritative' | 'fallback_minimal'
+
+  // ===========================================================================
+  // [FINAL-DAY-CARD-OWNERSHIP-LOCK] Visible-header ownership extensions.
+  //
+  // These optional fields fold every previously-parallel visible-truth
+  // claim into ONE surface so the day-card header has exactly one owner:
+  //   - `coachingPurpose` replaces the JSX-side
+  //     `getCompactSessionExplanation(intelligenceContract.coachingExplanation, day)`
+  //     read (the visible "what this session is for" sentence).
+  //   - `fallbackWeeklyRole` / `fallbackRationale` replace the JSX-side
+  //     `intelligenceContract.dayRationales.find(...).weeklyRole / .rationale`
+  //     reads (the visible role + rationale fallbacks).
+  //   - `microSignals` replaces the JSX-side `getSessionSurfaceSignals(session)`
+  //     read (the visible micro-chip row beneath the headline).
+  //
+  // The JSX must NOT bypass these by reading `intelligenceContract.*` or
+  // `getSessionSurfaceSignals(session)` for any visible claim. Renderers
+  // enrich the surface once per session at the top of the day-card loop;
+  // every visible block downstream consumes only `cardSurface.*`.
+  // ===========================================================================
+  /** Coaching-style "what this session is for" sentence. Null if not authored. */
+  coachingPurpose?: string | null
+  /** Last-resort weekly role label (e.g. "Primary push") when no headline. */
+  fallbackWeeklyRole?: string | null
+  /** Last-resort prose rationale when no headline / purpose / evidence exists. */
+  fallbackRationale?: string | null
+  /** Tiny chips like "Sets ↓", "RPE ↓" — surface-owned, not raw-derived. */
+  microSignals?: string[]
 }
 
 /**

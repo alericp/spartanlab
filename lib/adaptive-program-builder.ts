@@ -944,6 +944,45 @@ type AdaptiveSessionContext = {
   // ==========================================================================
   programmingTruthBundle?: ProgrammingTruthBundle | null
   // ==========================================================================
+  // [PHASE-NEXT-FINAL-DECISION-OWNER-LOCK] VARIANT DEPTH WINNER LOCK
+  // ------------------------------------------------------------------
+  // Pre-fix: `progressionDepthAdjustments` is computed at L7508 inside
+  // `generateAdaptiveProgramImpl` from `currentWorkingProgression`,
+  // historical ceiling, exposure readiness, and skillFamilyTruth — and
+  // is the ONLY place where readiness gating decides
+  // conservative/moderate/progressive depth per skill. All 6 references
+  // to its key field `adjustedBias` are write/log only (lines 7510,
+  // 7587, 7633, 7646, 7650, 7651). The actual final exercise scorer
+  // lives at L24385 inside `generateAdaptiveSession` — a sibling
+  // function — so the bias is structurally invisible to the winner
+  // selection. Same scope-leak class as the previous
+  // `programmingTruthBundle` cluster.
+  //
+  // Fix: thread the per-skill bias map through this context as an
+  // optional field. The rerank site (L24385) reads exercise.skill /
+  // .skillFamily, looks up the bias, and applies a bounded depth
+  // adjustment that decisively softens advanced variants for
+  // conservative-bias skills and decisively favours them for
+  // progressive-bias skills. Bounded by the same -30/+30 clamp inside
+  // `applySkillSpecificRankingModifier` so total influence stays
+  // within authoritative material limits.
+  //
+  // Field shape mirrors the source declaration at L7508 verbatim so
+  // there is no impedance mismatch at construction or read time.
+  // ==========================================================================
+  progressionDepthAdjustments?: Record<string, {
+    originalDepth: string | null
+    adjustedBias: number
+    reason: string
+    precedenceUsed: string
+    currentScore: number | null
+    historicalLevel: number | null
+    currentBeatsHistorical: boolean
+    readinessGated: boolean
+    readinessPermission: string
+    preGateBias: number
+  }> | null
+  // ==========================================================================
   // [PROGRAMMING-TRUTH-BUNDLE] Bundle-derived decision signals
   // These inform dosage/load, progression, and constraint-aware selection
   // ==========================================================================
@@ -11252,6 +11291,13 @@ async function generateAdaptiveProgramImpl(
   // references resolve to the real local at L5448 instead of throwing
   // ReferenceError. This is the single ingress that closes the cluster.
   programmingTruthBundle,
+  // [PHASE-NEXT-FINAL-DECISION-OWNER-LOCK] Pass per-skill progression
+  // depth bias map (declared at L7508 inside this function) so the
+  // sibling `generateAdaptiveSession` rerank corridor at L24385 can
+  // finally apply the readiness/exposure/current-vs-history truth that
+  // was already computed but stranded. This is the single ingress that
+  // closes the variant-depth winner-lock gap.
+  progressionDepthAdjustments,
   // [PROGRAMMING-TRUTH-BUNDLE] Pass bundle-derived decisions for dosage/progression/constraint
   bundleDecisions: bundleDecisionSummary || null,
   // [UNIFIED DOCTRINE DECISION] Pass doctrine decision for exercise selection enforcement
@@ -23166,6 +23212,16 @@ function generateAdaptiveSession(
   // checks behave correctly.
   // ==========================================================================
   programmingTruthBundle = null,
+  // ==========================================================================
+  // [PHASE-NEXT-FINAL-DECISION-OWNER-LOCK] Destructure the per-skill
+  // progression depth bias map computed at L7508. Default `{}` so the
+  // rerank site at L24385 can do `progressionDepthAdjustments[skill]`
+  // safely on every call regardless of whether the caller provided
+  // bias data. Empty map means no bias is applied — identical to
+  // the prior behaviour. Populated map means readiness/exposure/
+  // current-vs-history truth becomes decisive at the final winner stage.
+  // ==========================================================================
+  progressionDepthAdjustments = {},
   } = context
   
   // ==========================================================================
@@ -24434,14 +24490,104 @@ function generateAdaptiveSession(
           })
         }
         
+        // ==========================================================================
+        // [PHASE-NEXT-FINAL-DECISION-OWNER-LOCK] APPLY VARIANT-DEPTH BIAS
+        // ----------------------------------------------------------------
+        // `progressionDepthAdjustments[skill].adjustedBias` is the readiness-
+        // gated current-vs-history truth value (-1 conservative,
+        // 0 moderate, +1 progressive). Pre-fix this was logged and
+        // discarded. Post-fix the bias is mapped to a bounded score
+        // delta and applied here, *after* the skill-family/envelope/
+        // constraint/fatigue/adherence corridor but *before* the resort,
+        // so it directly affects which exercise wins the final order.
+        //
+        // Bias-to-delta mapping (chosen to be material but bounded —
+        // small enough to be subordinate to a strong base/canonical
+        // signal, large enough to flip a tied or near-tied advanced/
+        // basic pair, and within the existing -30/+30 modifier envelope):
+        //
+        //   conservative skill (-1):
+        //     advanced variant: -10 (decisively softens advanced picks)
+        //     basic variant:    +4  (gently favours basic alternatives)
+        //   progressive skill (+1):
+        //     advanced variant: +6  (favours challenging picks when
+        //                            current ability + readiness justify it)
+        //     basic variant:    -2  (gently de-emphasises basics)
+        //   moderate skill (0): no change
+        //
+        // These deltas are added to `result.adjustedScore` directly;
+        // they don't go through the bridge clamp because the bridge
+        // already returned a clamped modifier. This is intentional: the
+        // depth bias is a SECOND axis of authoritative truth (variant
+        // depth) layered on top of the FIRST axis (ranking modifier),
+        // and combining them in the score space is what makes Neon
+        // truth decisive at the final winner stage.
+        //
+        // Honest behaviour: if `adjustedBias = 0` (no readiness gating,
+        // moderate depth, or no skill match) nothing changes. If the
+        // map is empty (no bundle / no skill data), nothing changes.
+        // No fake variant depth is invented.
+        // ==========================================================================
+        let depthDelta = 0
+        let depthBiasUsed: number | null = null
+        let depthSkillKeyUsed: string | null = null
+        try {
+          // Match by skill key with both raw and underscore-stripped form
+          // (the bias map uses `intent.skill` which can be either form
+          // depending on canonicalProfile shape — see L3268-3269).
+          const skillKey = normalized.skillHint || ''
+          const skillKeyAlt = skillKey.replace(/_/g, '')
+          const adj =
+            progressionDepthAdjustments[skillKey] ||
+            progressionDepthAdjustments[skillKeyAlt] ||
+            null
+          if (adj && typeof adj.adjustedBias === 'number' && adj.adjustedBias !== 0) {
+            depthBiasUsed = adj.adjustedBias
+            depthSkillKeyUsed = adj === progressionDepthAdjustments[skillKey] ? skillKey : skillKeyAlt
+            if (adj.adjustedBias < 0) {
+              // Conservative skill
+              depthDelta = isAdvanced ? -10 : 4
+            } else if (adj.adjustedBias > 0) {
+              // Progressive skill
+              depthDelta = isAdvanced ? 6 : -2
+            }
+          }
+        } catch (depthErr) {
+          // Observer-only failure: never collapse a healthy session
+          // because depth-bias lookup threw. Reset to zero and continue.
+          depthDelta = 0
+          depthBiasUsed = null
+          if (exIndex < 3) {
+            console.error('[db-truth-variant-depth-lookup-failed]', {
+              exerciseName: normalized.name,
+              errorMessage: depthErr instanceof Error ? depthErr.message.slice(0, 200) : 'unknown',
+            })
+          }
+        }
+        const depthAdjustedScore = result.adjustedScore + depthDelta
+        if (depthDelta !== 0 && exIndex < 5) {
+          console.log('[db-truth-variant-depth-applied]', {
+            exerciseName: normalized.name,
+            skillKey: depthSkillKeyUsed,
+            isAdvanced,
+            biasUsed: depthBiasUsed,
+            depthDelta,
+            preDepthScore: result.adjustedScore,
+            postDepthScore: depthAdjustedScore,
+            verdict: 'VARIANT_DEPTH_BIAS_APPLIED_AT_WINNER_STAGE',
+          })
+        }
+        
         return {
           ...ex,
-          dbTruthAdjustedScore: result.adjustedScore,
-          dbTruthModifier: result.totalModifier,
+          dbTruthAdjustedScore: depthAdjustedScore,
+          dbTruthModifier: result.totalModifier + depthDelta,
           dbTruthModifierBreakdown: result.modifierBreakdown,
-          dbTruthRankingChanged: result.changed,
+          dbTruthRankingChanged: result.changed || depthDelta !== 0,
           dbTruthSkillFamily: result.skillFamilyUsed,
           dbTruthPrecedenceUsed: result.precedenceUsed,
+          dbTruthDepthBias: depthBiasUsed,
+          dbTruthDepthDelta: depthDelta,
         }
       })
       
@@ -24469,6 +24615,15 @@ function generateAdaptiveSession(
       const skillFamilyModCount = scoredExercises.filter(e => e.dbTruthSkillFamily).length
       const globalFallbackCount = scoredExercises.filter(e => !e.dbTruthSkillFamily && e.dbTruthRankingChanged).length
       
+      // [PHASE-NEXT-FINAL-DECISION-OWNER-LOCK] Variant-depth winner-lock
+      // session-level rollup. Counts how many exercises had a non-zero
+      // depth delta and whether any of those flipped order.
+      const depthShiftedCount = scoredExercises.filter(e => (e.dbTruthDepthDelta || 0) !== 0).length
+      const depthBiasMapSize = Object.keys(progressionDepthAdjustments).length
+      const depthBiasNonZeroCount = Object.values(progressionDepthAdjustments).filter(
+        (a) => a && typeof a.adjustedBias === 'number' && a.adjustedBias !== 0
+      ).length
+      
       console.log('[db-truth-main-ranking]', {
         sessionIndex,
         dayFocus: day.focus,
@@ -24479,15 +24634,24 @@ function generateAdaptiveSession(
         skillFamilySpecificMods: skillFamilyModCount,
         globalFallbackMods: globalFallbackCount,
         totalModifiersApplied: scoredExercises.reduce((sum, e) => sum + (e.dbTruthModifier || 0), 0),
+        // [PHASE-NEXT-FINAL-DECISION-OWNER-LOCK] depth-bias instrumentation
+        depthBiasMapSize,
+        depthBiasNonZeroCount,
+        depthShiftedCount,
+        depthDeltaSum: scoredExercises.reduce((sum, e) => sum + (e.dbTruthDepthDelta || 0), 0),
         modifierBreakdowns: scoredExercises.slice(0, 3).map(e => ({
           name: e?.exercise?.name,
           skillFamily: e.dbTruthSkillFamily,
           precedence: e.dbTruthPrecedenceUsed,
           modifier: e.dbTruthModifier,
           breakdown: e.dbTruthModifierBreakdown,
+          depthBias: e.dbTruthDepthBias,
+          depthDelta: e.dbTruthDepthDelta,
         })),
         verdict: rankingChanged 
-          ? (skillFamilyModCount > 0 ? 'DB_TRUTH_SKILL_SPECIFIC_RANKING_CHANGED' : 'DB_TRUTH_GLOBAL_RANKING_CHANGED')
+          ? (depthShiftedCount > 0 
+              ? 'DB_TRUTH_VARIANT_DEPTH_DECISIVE'
+              : (skillFamilyModCount > 0 ? 'DB_TRUTH_SKILL_SPECIFIC_RANKING_CHANGED' : 'DB_TRUTH_GLOBAL_RANKING_CHANGED'))
           : 'DB_TRUTH_RANKING_NO_ORDER_CHANGE',
       })
       

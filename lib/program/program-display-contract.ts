@@ -712,16 +712,28 @@ export function buildSessionCardSurface(
   }
   
   // ==========================================================================
-  // B. Build primary intent chips from real metadata
+  // [WEEKLY-SESSION-ROLE-CONTRACT — VISIBLE PRIMACY LOCK]
+  // The role label MUST own the strongest visible slot (sessionHeadline)
+  // when present, not a 9px chip alongside other 9px chips. Without this
+  // promotion the strengthened weekly role truth lives in the data but
+  // dies at the visible surface.
+  //
+  // Order is critical:
+  //   1. Override sessionHeadline FIRST so it wins over the legacy
+  //      derivation paths above (skillMeta / composition.sessionIntent /
+  //      session.rationale / focusLabel).
+  //   2. Do NOT also push the same label into primaryIntentChips —
+  //      duplicate visible claims (headline says X, chip says X) violate
+  //      the "no duplicate or cosmetic redundancy" display rule.
   // ==========================================================================
-
-  // [WEEKLY-SESSION-ROLE-CONTRACT] Lead with the authoritative day role chip
-  // so the visible Program page reflects per-day differentiation. Falls back
-  // silently when the role is not present (older saved sessions).
   if (weeklyRole?.roleLabel) {
-    primaryIntentChips.push(weeklyRole.roleLabel)
+    sessionHeadline = weeklyRole.roleLabel
     source = 'authoritative'
   }
+
+  // ==========================================================================
+  // B. Build primary intent chips from real metadata
+  // ==========================================================================
 
   // From compositionMetadata.workloadDistribution
   if (composition?.workloadDistribution?.primaryWorkPercent) {

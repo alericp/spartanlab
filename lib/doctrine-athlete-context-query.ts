@@ -205,23 +205,39 @@ async function fetchAllV2Atoms(): Promise<V2AtomRow[]> {
   //   2. applies_when_json IS NOT NULL (atom is retrievable)
   //   3. s.is_active = TRUE AND s.ingestion_status = 'ingested'
   //      (source is fully through the gate, not awaiting extraction)
+  // [V2 RETRIEVAL — REAL COLUMN MAP]
+  // Atom-table column names verified against information_schema:
+  //   method_rules:                 method_key, plain_language_rule
+  //   prescription_rules:           level_scope, goal_scope, exercise_role_scope, plain_language_rule
+  //   exercise_selection_rules:     exercise_key, role_key, level_scope, plain_language_rule
+  //   exercise_contraindication_rules: exercise_key, plain_language_rule, modification_guidance
+  //   exercise_prerequisite_rules:  target_exercise_key, prerequisite_exercise_key, plain_language_rule
+  //   progression_rules:            skill_key, current_level_key, next_level_key, plain_language_rule
+  //   skill_carryover_rules:        source_exercise_or_skill_key, target_skill_key, plain_language_rule
+  //   training_doctrine_principles: principle_title, principle_summary, plain_language_rule
+  //
+  // Confidence weight in the V2 ranker comes from the SOURCE
+  // (s.confidence_weight_default in the outer SELECT below), NOT from atom rows
+  // — atom-level confidence is not yet a column on most tables and we don't
+  // invent one here. The ranker still works because it multiplies source weight
+  // by priority_type tier and recency.
   const rows = (await sql`
     WITH v2_atoms AS (
       SELECT
         m.id::text AS id,
         m.source_id,
-        m.method_name AS title,
-        m.description AS plain_language_rule,
+        m.method_key AS title,
+        m.plain_language_rule,
         m.applies_when_json,
         m.does_not_apply_when_json,
         m.computation_friendly_rule_json,
         m.priority_type,
-        m.intelligence_tier,
-        m.confidence_weight,
+        'base_week_intelligence'::text AS intelligence_tier,
+        NULL::numeric AS confidence_weight,
         m.conflict_group_id,
         m.evidence_snippet,
-        ('method:' || m.method_name) AS doctrine_category,
-        CASE m.method_name
+        ('method:' || m.method_key) AS doctrine_category,
+        CASE m.method_key
           WHEN 'top_set' THEN 'top_set_logic'
           WHEN 'cluster' THEN 'top_set_logic'
           WHEN 'drop_set' THEN 'drop_set_logic'
@@ -242,17 +258,21 @@ async function fetchAllV2Atoms(): Promise<V2AtomRow[]> {
       SELECT
         p.id::text,
         p.source_id,
-        p.role_target AS title,
-        p.notes AS plain_language_rule,
+        -- Synthesize a stable display title from the (level, goal, role) tuple
+        -- because prescription_rules has no single name column.
+        ('rx:' || COALESCE(p.level_scope, 'any') || ':' || COALESCE(p.goal_scope, 'any')
+                || ':' || COALESCE(p.exercise_role_scope, 'any')) AS title,
+        p.plain_language_rule,
         p.applies_when_json,
         p.does_not_apply_when_json,
         p.computation_friendly_rule_json,
         p.priority_type,
-        p.intelligence_tier,
-        p.confidence_weight,
+        CASE WHEN p.is_phase_modulation = TRUE THEN 'phase_week_modulation' ELSE 'base_week_intelligence' END AS intelligence_tier,
+        NULL::numeric AS confidence_weight,
         p.conflict_group_id,
         p.evidence_snippet,
-        ('prescription:' || p.role_target || ':' || COALESCE(p.athlete_level, 'any')) AS doctrine_category,
+        ('prescription:' || COALESCE(p.exercise_role_scope, 'any')
+                          || ':' || COALESCE(p.level_scope, 'any')) AS doctrine_category,
         'set_count_logic' AS doctrine_domain,
         'prescription_rules'::text,
         NULL::text[], NULL::text[], NULL::text[]
@@ -264,17 +284,17 @@ async function fetchAllV2Atoms(): Promise<V2AtomRow[]> {
       SELECT
         e.id::text,
         e.source_id,
-        e.rule_type AS title,
-        e.notes AS plain_language_rule,
+        e.exercise_key AS title,
+        e.plain_language_rule,
         e.applies_when_json,
         e.does_not_apply_when_json,
         e.computation_friendly_rule_json,
         e.priority_type,
-        e.intelligence_tier,
-        e.confidence_weight,
+        'base_week_intelligence'::text AS intelligence_tier,
+        NULL::numeric AS confidence_weight,
         e.conflict_group_id,
         e.evidence_snippet,
-        ('selection:' || e.rule_type) AS doctrine_category,
+        ('selection:' || e.exercise_key) AS doctrine_category,
         'exercise_selection_logic' AS doctrine_domain,
         'exercise_selection_rules'::text,
         NULL::text[], NULL::text[], NULL::text[]
@@ -286,20 +306,20 @@ async function fetchAllV2Atoms(): Promise<V2AtomRow[]> {
       SELECT
         c.id::text,
         c.source_id,
-        c.exercise_name AS title,
-        c.notes AS plain_language_rule,
+        c.exercise_key AS title,
+        COALESCE(c.plain_language_rule, c.modification_guidance) AS plain_language_rule,
         c.applies_when_json,
         c.does_not_apply_when_json,
         c.computation_friendly_rule_json,
         c.priority_type,
-        c.intelligence_tier,
-        c.confidence_weight,
+        'base_week_intelligence'::text AS intelligence_tier,
+        NULL::numeric AS confidence_weight,
         c.conflict_group_id,
         c.evidence_snippet,
-        ('contraindication:' || c.exercise_name) AS doctrine_category,
+        ('contraindication:' || c.exercise_key) AS doctrine_category,
         'pain_modification_logic' AS doctrine_domain,
         'exercise_contraindication_rules'::text,
-        ARRAY[c.exercise_name]::text[] AS contraindicated_exercise_families,
+        ARRAY[c.exercise_key]::text[] AS contraindicated_exercise_families,
         NULL::text[], NULL::text[]
       FROM exercise_contraindication_rules c
       WHERE c.priority_type IS NOT NULL AND c.applies_when_json IS NOT NULL
@@ -309,17 +329,17 @@ async function fetchAllV2Atoms(): Promise<V2AtomRow[]> {
       SELECT
         pr.id::text,
         pr.source_id,
-        pr.exercise_name AS title,
-        pr.notes AS plain_language_rule,
+        pr.target_exercise_key AS title,
+        COALESCE(pr.plain_language_rule, pr.rationale) AS plain_language_rule,
         pr.applies_when_json,
         pr.does_not_apply_when_json,
         pr.computation_friendly_rule_json,
         pr.priority_type,
-        pr.intelligence_tier,
-        pr.confidence_weight,
+        'base_week_intelligence'::text AS intelligence_tier,
+        NULL::numeric AS confidence_weight,
         pr.conflict_group_id,
         pr.evidence_snippet,
-        ('prerequisite:' || pr.exercise_name) AS doctrine_category,
+        ('prerequisite:' || pr.target_exercise_key) AS doctrine_category,
         'athlete_prerequisites' AS doctrine_domain,
         'exercise_prerequisite_rules'::text,
         NULL::text[], NULL::text[], NULL::text[]
@@ -331,17 +351,17 @@ async function fetchAllV2Atoms(): Promise<V2AtomRow[]> {
       SELECT
         pg.id::text,
         pg.source_id,
-        pg.exercise_name AS title,
-        pg.notes AS plain_language_rule,
+        pg.skill_key AS title,
+        COALESCE(pg.plain_language_rule, pg.progression_rule_summary) AS plain_language_rule,
         pg.applies_when_json,
         pg.does_not_apply_when_json,
         pg.computation_friendly_rule_json,
         pg.priority_type,
-        pg.intelligence_tier,
+        'phase_week_modulation'::text AS intelligence_tier,
         pg.confidence_weight,
         pg.conflict_group_id,
         pg.evidence_snippet,
-        ('progression:' || pg.exercise_name) AS doctrine_category,
+        ('progression:' || pg.skill_key) AS doctrine_category,
         'progression_selection_logic' AS doctrine_domain,
         'progression_rules'::text,
         NULL::text[], NULL::text[], NULL::text[]
@@ -353,14 +373,14 @@ async function fetchAllV2Atoms(): Promise<V2AtomRow[]> {
       SELECT
         sc.id::text,
         sc.source_id,
-        (sc.from_exercise || '_to_' || sc.to_exercise) AS title,
-        sc.notes AS plain_language_rule,
+        (sc.source_exercise_or_skill_key || '__to__' || sc.target_skill_key) AS title,
+        COALESCE(sc.plain_language_rule, sc.rationale) AS plain_language_rule,
         sc.applies_when_json,
         sc.does_not_apply_when_json,
         sc.computation_friendly_rule_json,
         sc.priority_type,
-        sc.intelligence_tier,
-        sc.confidence_weight,
+        'base_week_intelligence'::text AS intelligence_tier,
+        NULL::numeric AS confidence_weight,
         sc.conflict_group_id,
         sc.evidence_snippet,
         'carryover' AS doctrine_category,
@@ -375,18 +395,18 @@ async function fetchAllV2Atoms(): Promise<V2AtomRow[]> {
       SELECT
         tp.id::text,
         tp.source_id,
-        tp.principle_name AS title,
-        tp.description AS plain_language_rule,
+        tp.principle_title AS title,
+        COALESCE(tp.plain_language_rule, tp.principle_summary) AS plain_language_rule,
         tp.applies_when_json,
         tp.does_not_apply_when_json,
         tp.computation_friendly_rule_json,
         tp.priority_type,
-        tp.intelligence_tier,
-        tp.confidence_weight,
+        CASE WHEN tp.is_phase_modulation = TRUE THEN 'phase_week_modulation' ELSE 'base_week_intelligence' END AS intelligence_tier,
+        tp.priority_weight AS confidence_weight,
         tp.conflict_group_id,
         tp.evidence_snippet,
         'principle' AS doctrine_category,
-        'movement_pattern_logic' AS doctrine_domain,
+        COALESCE(tp.doctrine_family, 'movement_pattern_logic') AS doctrine_domain,
         'training_doctrine_principles'::text,
         NULL::text[], NULL::text[], NULL::text[]
       FROM training_doctrine_principles tp

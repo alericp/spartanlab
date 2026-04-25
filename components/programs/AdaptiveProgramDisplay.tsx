@@ -1073,7 +1073,19 @@ export function AdaptiveProgramDisplay({
             const cardSurface: SessionCardSurface | undefined = baseSurface
               ? {
                   ...baseSurface,
-                  coachingPurpose: compactCoaching?.purpose ?? baseSurface.coachingPurpose ?? null,
+                  // [WEEKLY-SESSION-ROLE-CONTRACT — WHY-LINE PRIMACY]
+                  // When the per-day weekly role provides a rationale, it is
+                  // the strongest authoritative why source for THIS specific
+                  // day. Compact coaching purpose tends to be program-level
+                  // and reads identically across all six days — letting it
+                  // win the why-line slot was the dominant dilution path.
+                  // Order: weeklyRoleRationale > compactCoaching.purpose >
+                  // baseSurface.coachingPurpose > null.
+                  coachingPurpose:
+                    baseSurface.weeklyRoleRationale ??
+                    compactCoaching?.purpose ??
+                    baseSurface.coachingPurpose ??
+                    null,
                   fallbackWeeklyRole: dayRationale?.weeklyRole ?? baseSurface.fallbackWeeklyRole ?? null,
                   fallbackRationale: dayRationale?.rationale ?? baseSurface.fallbackRationale ?? null,
                   microSignals: surfaceSignals.microSignals.length > 0
@@ -1126,9 +1138,20 @@ export function AdaptiveProgramDisplay({
                       </div>
                       <div className="flex-1 min-w-0">
                         {/* A. Headline (surface-owned) OR last-resort weekly-role
-                            label, never both — single visible identity line. */}
+                            label, never both — single visible identity line.
+                            [WEEKLY-SESSION-ROLE-CONTRACT — VISIBLE PRIMACY]
+                            When `weeklyRoleLabel` is present, the headline IS
+                            the role label (promoted upstream in the contract)
+                            so we lift its visual weight: 12px instead of 11px,
+                            brighter foreground (#D5D5D5 vs #9A9A9A), bolder.
+                            This is what makes day-to-day differentiation
+                            readable at a glance instead of buried as a chip. */}
                         {cardSurface.sessionHeadline ? (
-                          <p className="text-[11px] text-[#9A9A9A] font-medium leading-snug">
+                          <p className={
+                            cardSurface.weeklyRoleLabel
+                              ? 'text-[12px] text-[#D5D5D5] font-semibold leading-snug'
+                              : 'text-[11px] text-[#9A9A9A] font-medium leading-snug'
+                          }>
                             {cardSurface.sessionHeadline}
                           </p>
                         ) : cardSurface.fallbackWeeklyRole ? (
@@ -1136,6 +1159,45 @@ export function AdaptiveProgramDisplay({
                             {cardSurface.fallbackWeeklyRole}
                           </p>
                         ) : null}
+
+                        {/* A2. [WEEKLY-SESSION-ROLE-CONTRACT] Single supporting
+                            character line surfacing intensity • progression •
+                            breadth from authoritative role truth. Renders ONLY
+                            when role is present, so older saved sessions are
+                            visually unchanged. Plain text (not chips) — keeps
+                            the visual hierarchy clean and avoids chip clutter
+                            duplicating the role identity. */}
+                        {cardSurface.weeklyRoleLabel && (() => {
+                          const intensityLabels: Record<string, string> = {
+                            high: 'High intensity',
+                            moderate_high: 'Moderate-high intensity',
+                            moderate: 'Moderate intensity',
+                            moderate_low: 'Moderate-low intensity',
+                            low: 'Low intensity',
+                          }
+                          const progressionLabels: Record<string, string> = {
+                            direct_load: 'Direct load progression',
+                            banded_support: 'Band-supported progression',
+                            conservative_skill: 'Conservative skill progression',
+                            mixed_breadth: 'Mixed-breadth progression',
+                            volume_direct: 'Volume-direct progression',
+                            recovery_quality: 'Recovery quality',
+                          }
+                          const intensityLabel = cardSurface.weeklyIntensityClass
+                            ? intensityLabels[cardSurface.weeklyIntensityClass] ?? null
+                            : null
+                          const progressionLabel = cardSurface.weeklyProgressionCharacter
+                            ? progressionLabels[cardSurface.weeklyProgressionCharacter] ?? null
+                            : null
+                          const breadthLabel = cardSurface.weeklyBreadthLabel || null
+                          const parts = [intensityLabel, progressionLabel, breadthLabel].filter(Boolean)
+                          if (parts.length === 0) return null
+                          return (
+                            <p className="text-[10px] text-[#A8A8A8] mt-0.5 leading-snug">
+                              {parts.join(' \u00B7 ')}
+                            </p>
+                          )
+                        })()}
 
                         {/* B. Truth chips: primary intent + protection + method
                             (surface-owned only; method labels were already

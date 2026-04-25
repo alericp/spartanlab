@@ -11975,7 +11975,179 @@ async function generateAdaptiveProgramImpl(
     } else {
       postSessionStep = 'session_load_skipped_no_exercises'
     }
-    
+
+    // =========================================================================
+    // [WEEKLY-ROLE-PRESCRIPTION-SHAPING-LOCK]
+    // Apply this day's authoritative WeeklyPrescriptionShape to the actual
+    // exercise rows. This is THE place where weekly role becomes MATERIAL
+    // programming (not just labels / chips / rationale). It mutates:
+    //   - ex.sets       (clamped to [1,6])
+    //   - ex.repsOrTime (numeric ranges only; "Xs" holds and "each side" left alone)
+    //   - ex.targetRPE  (capped at the role's rpeCap)
+    //
+    // Doctrine guards:
+    //   * Skill / skill-adjacent rows (category === 'skill', or row already
+    //     carrying a setExecutionMethod / blockId) are LEFT ALONE — their
+    //     dosage is already owned by their method (cluster / top set / drop set
+    //     / superset / circuit / density).
+    //   * Time-based holds and "each side" prescriptions are left alone
+    //     (mutating those is too risky given the variety of authored formats).
+    //   * Runs BEFORE grouping & method materialization so that:
+    //       - the grouped-block harmonization later (after drop/top/RP) sees
+    //         shape-consistent member sets,
+    //       - the method materializer reads a row whose sets/RPE already
+    //         reflect role-doctrine.
+    //   * Protection: when the contract is `protectedWeek`, rpeCap is softened
+    //     by -1 (min 6) so week-1 / recovery-constrained heavy days don't push
+    //     RPE 9 even though the role intent is still "heavier-relative".
+    //
+    // SINGLE OWNER: nothing downstream re-derives shape from role. Display
+    // surfaces (program-display-contract) READ what this pass wrote.
+    // =========================================================================
+    if (
+      weeklyRoleForThisSession &&
+      Array.isArray(session.exercises) &&
+      session.exercises.length > 0
+    ) {
+      const shape = weeklyRoleForThisSession.prescriptionShape
+      const isProtected = weeklySessionRoleContract.protectedWeek
+      const effectiveRpeCap =
+        shape.rpeCap == null
+          ? null
+          : isProtected
+            ? Math.max(6, shape.rpeCap - 1)
+            : shape.rpeCap
+
+      // Numeric-range nudge: matches "5-8" / "8-12" / "5 - 8". Leaves alone
+      // anything ending in 's', 'sec', 'min', or containing 'each' / 'side'.
+      const NUMERIC_RANGE_RE = /^\s*(\d+)\s*[-–]\s*(\d+)\s*$/
+      const shiftRange = (input: string): string => {
+        if (!input) return input
+        const lower = input.toLowerCase()
+        if (
+          lower.includes('s') ||
+          lower.includes('min') ||
+          lower.includes('each') ||
+          lower.includes('side') ||
+          lower.includes('hold')
+        ) {
+          return input
+        }
+        const m = NUMERIC_RANGE_RE.exec(input)
+        if (!m) return input
+        const lo = parseInt(m[1], 10)
+        const hi = parseInt(m[2], 10)
+        if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo <= 0 || hi <= 0 || hi < lo) return input
+        let dLo = 0
+        let dHi = 0
+        switch (shape.repIntent) {
+          case 'lower_heavy':
+            dLo = -1
+            dHi = -2
+            break
+          case 'higher_volume':
+            dLo = +2
+            dHi = +4
+            break
+          case 'recovery_short':
+            dLo = -1
+            dHi = -1
+            break
+          case 'midrange':
+          case 'technical_quality':
+          default:
+            return input
+        }
+        const newLo = Math.max(1, lo + dLo)
+        const newHi = Math.max(newLo, hi + dHi)
+        if (newLo === lo && newHi === hi) return input
+        return `${newLo}-${newHi}`
+      }
+
+      let mutationsApplied = 0
+      const auditRows: Array<{ name: string; before: { sets: number; reps: string; rpe?: number }; after: { sets: number; reps: string; rpe?: number }; skipped?: string }> = []
+
+      for (const ex of session.exercises) {
+        if (!ex) continue
+        const before = {
+          sets: typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets || 3)) || 3,
+          reps: ex.repsOrTime || '',
+          rpe: ex.targetRPE,
+        }
+
+        // Doctrine guard 1: skill rows left alone (their dosage is intentional).
+        if (ex.category === 'skill') {
+          auditRows.push({ name: ex.name, before, after: before, skipped: 'skill_category_protected' })
+          continue
+        }
+        // Doctrine guard 2: rows already carrying a set-execution method
+        // (cluster / top_set / drop_set / rest_pause) are owned by that method.
+        if (ex.setExecutionMethod) {
+          auditRows.push({ name: ex.name, before, after: before, skipped: `setExecutionMethod=${ex.setExecutionMethod}` })
+          continue
+        }
+        // Doctrine guard 3: rows already grouped (blockId) are owned by the
+        // group's method; harmonization later will equalize their set counts.
+        if (ex.blockId) {
+          auditRows.push({ name: ex.name, before, after: before, skipped: `grouped_block=${ex.blockId}` })
+          continue
+        }
+
+        // Apply setsBias (clamp [1, 6]).
+        if (typeof ex.sets === 'number' && shape.setsBias !== 0) {
+          const next = Math.max(1, Math.min(6, ex.sets + shape.setsBias))
+          if (next !== ex.sets) {
+            ex.sets = next
+            mutationsApplied++
+          }
+        }
+
+        // Apply rep range shift (numeric ranges only).
+        if (typeof ex.repsOrTime === 'string') {
+          const shifted = shiftRange(ex.repsOrTime)
+          if (shifted !== ex.repsOrTime) {
+            ex.repsOrTime = shifted
+            mutationsApplied++
+          }
+        }
+
+        // Apply RPE cap.
+        if (effectiveRpeCap != null) {
+          const currentRpe = typeof ex.targetRPE === 'number' ? ex.targetRPE : null
+          if (currentRpe == null) {
+            ex.targetRPE = effectiveRpeCap
+            mutationsApplied++
+          } else if (currentRpe > effectiveRpeCap) {
+            ex.targetRPE = effectiveRpeCap
+            mutationsApplied++
+          }
+        }
+
+        const after = {
+          sets: typeof ex.sets === 'number' ? ex.sets : before.sets,
+          reps: ex.repsOrTime || before.reps,
+          rpe: ex.targetRPE,
+        }
+        if (after.sets !== before.sets || after.reps !== before.reps || after.rpe !== before.rpe) {
+          auditRows.push({ name: ex.name, before, after })
+        }
+      }
+
+      if (mutationsApplied > 0) {
+        console.log('[WEEKLY-ROLE-PRESCRIPTION-SHAPING]', {
+          dayNumber: session.dayNumber,
+          roleId: weeklyRoleForThisSession.roleId,
+          shape,
+          isProtected,
+          effectiveRpeCap,
+          mutationsApplied,
+          changedRows: auditRows.filter((r) => !r.skipped).slice(0, 8),
+          skippedRows: auditRows.filter((r) => r.skipped).map((r) => `${r.name}:${r.skipped}`).slice(0, 8),
+        })
+      }
+      postSessionStep = 'weekly_role_prescription_shape_applied'
+    }
+
     // =========================================================================
     // [AUTHORITATIVE SESSION METHOD INTENT CONTRACT]
     // This is the SINGLE OWNER of per-session method decisions.
@@ -13430,22 +13602,86 @@ async function generateAdaptiveProgramImpl(
         // Walk from the END backward to find the deepest row that passes
         // all guards. Skip rows already touched by top_set above (different
         // position so this rarely conflicts).
+        //
+        // [DROP-SET-DOCTRINE-LOCK]
+        // Hardened doctrine. Pre-lock the gate was too permissive:
+        //   * `isHeavyOrPower` only filtered by 4 explosive keywords
+        //     (explosive/plyometric/ballistic/clapping), so skill-adjacent
+        //     strength like Chest-to-Bar Pull-Ups, Archer Pull-Ups, Typewriter
+        //     Pull-Ups, Muscle-Ups slipped through and got an unjustified
+        //     "Drop Set Finisher" stamp without a truthful regression pathway.
+        //   * `category === 'strength'` was allowed, which let primary-strength
+        //     compounds qualify as drop-set targets.
+        //   * No check against the weekly role's intensity or method allowance.
+        //
+        // New doctrine gates (all must pass for a row to qualify):
+        //   1. Not skill-pillar (existing).
+        //   2. Not heavy/power AS DEFINED BY EXPANDED NAME LIST + transition
+        //      movement keywords + skill-target keywords.
+        //   3. Not selectionReason 'primary' (existing).
+        //   4. Not already grouped/methoded (existing).
+        //   5. CATEGORY: `accessory` or `core` ONLY. `strength` is removed —
+        //      strength rows are doctrine-protected from generic drop-stamping.
+        //   6. WEEKLY-ROLE: weeklyRole.intensityClass !== 'low' AND weeklyRole
+        //      .methodAllowance.density !== 'blocked' (skill-quality and
+        //      recovery days don't earn drop sets even if user prefs include).
+        // ----------------------------------------------------------------------
+        const SKILL_ADJACENT_NAME_TOKENS = [
+          'chest-to-bar', 'chest to bar', 'c2b',
+          'archer', 'typewriter', 'one-arm', 'one arm', 'single arm', 'single-arm',
+          'muscle-up', 'muscle up',
+          'pistol', 'shrimp',
+          'planche', 'iron cross', 'maltese',
+          'front lever', 'back lever',
+          'handstand push', 'hspu',
+          'weighted',
+          // explosive/power tokens (already partially in isHeavyOrPower; restate
+          // here for symmetry so this gate is the single source of truth).
+          'explosive', 'plyometric', 'ballistic', 'clapping', 'kipping',
+        ]
+        const isSkillAdjacentOrSkillTarget = (ex: typeof exs[number]): boolean => {
+          if (!ex) return true
+          const n = (ex.name || '').toLowerCase()
+          if (SKILL_ADJACENT_NAME_TOKENS.some((tok) => n.includes(tok))) return true
+          // Defensive: any row whose selectionReason / note hints at primary
+          // skill expression or transition movement.
+          const reason = (ex.selectionReason || '').toLowerCase()
+          if (
+            reason.includes('skill') ||
+            reason.includes('transition') ||
+            reason.includes('muscle_up') ||
+            reason.includes('front_lever') ||
+            reason.includes('planche')
+          ) {
+            return true
+          }
+          return false
+        }
+
+        const roleBlocksDropSet =
+          !!weeklyRoleForThisSession &&
+          (weeklyRoleForThisSession.intensityClass === 'low' ||
+            weeklyRoleForThisSession.methodAllowance.density === 'blocked')
+
         let dropSetTarget: typeof exs[number] | null = null
         let dropSetIdx = -1
-        if (userWantsDrop) {
+        let dropSetRejectionReason: string | null = null
+        if (userWantsDrop && roleBlocksDropSet) {
+          dropSetRejectionReason = `weekly_role_blocks_drop_sets (role=${weeklyRoleForThisSession?.roleId} intensity=${weeklyRoleForThisSession?.intensityClass} densityGate=${weeklyRoleForThisSession?.methodAllowance.density})`
+        }
+        if (userWantsDrop && !roleBlocksDropSet) {
           for (let i = exs.length - 1; i >= lateBoundary; i--) {
             const ex = exs[i]
             if (!ex) continue
             if (isSkillPillar(ex)) continue
             if (isHeavyOrPower(ex)) continue
+            if (isSkillAdjacentOrSkillTarget(ex)) continue
             if ((ex.selectionReason || '').includes('primary')) continue
             if (rowHasMethodOrGroup(ex)) continue
-            // Prefer accessory / core / non-primary strength
-            if (
-              ex.category === 'accessory' ||
-              ex.category === 'core' ||
-              ex.category === 'strength'
-            ) {
+            // [DROP-SET-DOCTRINE-LOCK] Tightened category allow-list.
+            // `strength` removed — primary/secondary strength rows are
+            // doctrine-protected from a generic drop-set stamp.
+            if (ex.category === 'accessory' || ex.category === 'core') {
               dropSetTarget = ex
               dropSetIdx = i
               break
@@ -13459,20 +13695,37 @@ async function generateAdaptiveProgramImpl(
             methodMaterializationResult.structureDecisions.push({
               block: 'late_accessory',
               method: 'drop_set',
-              rationale: `Drop set applied to ${dropSetTarget.name} (position ${dropSetIdx}/${exs.length - 1}) — user selected drop_sets and this is a late safe accessory row for hypertrophy accumulation`,
+              rationale: `Drop set applied to ${dropSetTarget.name} (position ${dropSetIdx}/${exs.length - 1}) — user selected drop_sets, doctrine gates passed (category=${dropSetTarget.category}, role=${weeklyRoleForThisSession?.roleId ?? 'none'}, no skill-adjacent / no primary / no transition tokens) and this is a late safe accumulation row`,
             })
             console.log('[TRAINING-METHOD-MATERIALIZED] Drop set applied:', {
               dayNumber: session.dayNumber,
               exercise: dropSetTarget.name,
               position: dropSetIdx,
               category: dropSetTarget.category,
+              roleId: weeklyRoleForThisSession?.roleId,
             })
           } else {
+            const reason = dropSetRejectionReason || 'No safe late-accessory candidate available (all qualifying rows are skill-primary, heavy/power, skill-adjacent (chest-to-bar / archer / typewriter / muscle-up / etc.), primary-tagged, strength-category, or already grouped/methoded)'
             methodMaterializationResult.rejectedMethods.push({
               method: 'drop_sets',
-              reason: 'No safe late-accessory candidate available (all qualifying rows are skill-primary, heavy compounds, primary-tagged, or already grouped/methoded)',
+              reason,
+            })
+            console.log('[TRAINING-METHOD-REJECTED] Drop set rejected:', {
+              dayNumber: session.dayNumber,
+              roleId: weeklyRoleForThisSession?.roleId,
+              reason,
             })
           }
+        } else if (userWantsDrop && roleBlocksDropSet) {
+          methodMaterializationResult.rejectedMethods.push({
+            method: 'drop_sets',
+            reason: dropSetRejectionReason!,
+          })
+          console.log('[TRAINING-METHOD-REJECTED] Drop set blocked by weekly role:', {
+            dayNumber: session.dayNumber,
+            roleId: weeklyRoleForThisSession?.roleId,
+            reason: dropSetRejectionReason,
+          })
         }
 
         // -------- REST_PAUSE on deepest remaining safe row --------
@@ -13519,6 +13772,75 @@ async function generateAdaptiveProgramImpl(
             })
           }
         }
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // [GROUPED-BLOCK-COHERENCE-LOCK]
+    // Harmonize set counts across all members of every grouped block (any
+    // exercises sharing a `blockId`). The live workout consumer at
+    // components/workout/StreamlinedWorkoutSession.tsx:347 reads
+    // `firstEx.sets` as `targetRounds` for the entire grouped block, so
+    // members with mismatched `sets` would silently force the user to perform
+    // the FIRST member's count regardless of their own (e.g. block of A1:6
+    // sets pull-ups + A2:3 sets dips → 6 rounds total, where A2 was authored
+    // for 3). The fix: at materialization time, equalize all members' `sets`
+    // to the FIRST member's count. The first member is the writer-intended
+    // owner of the block's rounds (it's the leader prefixed A1/B1/etc.).
+    //
+    // Doctrine notes:
+    //   * This runs AFTER drop_set/top_set/rest_pause materialization, so
+    //     set-execution methods (which carry their own dosage) are unaffected
+    //     because they do NOT share blockId with grouped members.
+    //   * If a block has only one member (degenerate), nothing happens.
+    //   * Cluster groupings written upstream ALSO benefit from this — cluster
+    //     members share blockId and should share rounds.
+    //   * No new blockId taxonomy. We trust the existing writer.
+    // -------------------------------------------------------------------------
+    if (Array.isArray(session.exercises) && session.exercises.length > 0) {
+      const blockMembers = new Map<string, typeof session.exercises>()
+      for (const ex of session.exercises) {
+        if (!ex || !ex.blockId) continue
+        const list = blockMembers.get(ex.blockId) || []
+        list.push(ex)
+        blockMembers.set(ex.blockId, list)
+      }
+      const harmonizationAudit: Array<{ blockId: string; leader: string; targetRounds: number; harmonizedMembers: Array<{ name: string; before: number; after: number }> }> = []
+      for (const [blockId, members] of blockMembers) {
+        if (members.length < 2) continue
+        const leader = members[0]
+        const targetRounds =
+          typeof leader.sets === 'number' && leader.sets >= 1
+            ? leader.sets
+            : parseInt(String(leader.sets || 3), 10) || 3
+        const changed: Array<{ name: string; before: number; after: number }> = []
+        for (let i = 1; i < members.length; i++) {
+          const m = members[i]
+          const before =
+            typeof m.sets === 'number' && m.sets >= 1
+              ? m.sets
+              : parseInt(String(m.sets || 3), 10) || 3
+          if (before !== targetRounds) {
+            m.sets = targetRounds
+            changed.push({ name: m.name, before, after: targetRounds })
+          }
+        }
+        if (changed.length > 0) {
+          harmonizationAudit.push({
+            blockId,
+            leader: leader.name,
+            targetRounds,
+            harmonizedMembers: changed,
+          })
+        }
+      }
+      if (harmonizationAudit.length > 0) {
+        console.log('[GROUPED-BLOCK-COHERENCE-LOCK] grouped-rounds harmonized', {
+          dayNumber: session.dayNumber,
+          roleId: weeklyRoleForThisSession?.roleId ?? 'none',
+          blocksHarmonized: harmonizationAudit.length,
+          details: harmonizationAudit,
+        })
       }
     }
 

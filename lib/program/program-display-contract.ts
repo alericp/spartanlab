@@ -553,7 +553,45 @@ export interface SessionCardSurface {
   weeklyProgressionCharacter?: string | null
   /** Compact target breadth e.g. "5-6 exercises" — empty when not authored. */
   weeklyBreadthLabel?: string | null
-}
+
+  // ===========================================================================
+  // [MATERIAL-COMPOSITION-TRUTH-LOCK] Surface fields exposing real, already-
+  // computed programming decisions per session. These are NOT new prose; they
+  // are pass-throughs of authoritative composition / adaptation truth that
+  // currently exists in the surface INPUT (compositionMetadata,
+  // prescriptionPropagationAudit) but was never propagated to the visible
+  // card. Renders ONLY when truth is present — null/empty leaves legacy
+  // sessions visually unchanged. The dominant `AdaptiveSessionCard` consumes
+  // these to render structural (not descriptive) per-day differentiation.
+  // ===========================================================================
+  /** Authoritative primary-work share for this day (0-100) — drives the
+   *  workload split bar. Null when composition didn't author it. */
+  workloadPrimaryPercent?: number | null
+  /** Authoritative support-work share for this day (0-100). Falls back to
+   *  100 - primaryPercent when only the primary share was authored. */
+  workloadSupportPercent?: number | null
+  /** Spine-derived session expression mode for this position in the week.
+   *  "direct_intensity" | "technical_focus" | "strength_support" — drives a
+   *  small expression badge on the card. */
+  spineExpression?: string | null
+  /** Material adaptations actually applied by week-adaptation to THIS day's
+   *  prescription. Each entry corresponds to a TRUE flag in
+   *  prescriptionPropagationAudit.appliedReductions — i.e., a real change
+   *  the program made (not "no change"). Empty array when adaptation made
+   *  no material reductions. */
+  materialAdaptations?: Array<{
+    /** Stable key matching the source flag (sets / rpe / sec / den / fin). */
+    key: 'sets' | 'rpe' | 'secondary' | 'density' | 'finisher'
+    /** Short human-readable label e.g. "Sets reduced", "RPE capped". */
+    label: string
+    /** Visual tone hint: 'reduction' = the day was trimmed; 'protection'
+     *  = a method/element was suppressed for safety. */
+    tone: 'reduction' | 'protection'
+  }>
+  /** Authoritative verdict from prescriptionPropagationAudit.verdict —
+   *  whether week-adaptation MATERIALLY changed this day's prescription. */
+  adaptationVerdict?: 'changed' | 'unchanged' | null
+  }
 
 /**
  * Build a compact session card surface from session metadata.
@@ -949,6 +987,56 @@ export function buildSessionCardSurface(
     return null
   })()
 
+  // ==========================================================================
+  // [MATERIAL-COMPOSITION-TRUTH-LOCK] Pass authoritative composition /
+  // adaptation truth straight through to the surface so the dominant card can
+  // render REAL per-day programming difference structurally (workload split
+  // bar, spine expression badge, material adaptation chips), not as prose.
+  // No transformation, no derivation, no fabrication — every value below is
+  // a direct read of an already-computed field on the saved session.
+  // ==========================================================================
+  const rawPrimaryPercent = composition?.workloadDistribution?.primaryWorkPercent
+  const rawSupportPercent = composition?.workloadDistribution?.supportWorkPercent
+  const workloadPrimaryPercent: number | null =
+    typeof rawPrimaryPercent === 'number' ? rawPrimaryPercent : null
+  const workloadSupportPercent: number | null =
+    typeof rawSupportPercent === 'number'
+      ? rawSupportPercent
+      : workloadPrimaryPercent != null
+        ? Math.max(0, 100 - workloadPrimaryPercent)
+        : null
+
+  const spineExpression: string | null = composition?.spineSessionType ?? null
+
+  // Build material adaptation list ONLY from TRUE flags. An empty list means
+  // week-adaptation made no material reductions for this day — perfectly
+  // valid; we render nothing rather than fabricate a "no change" chip.
+  const reductions = prescriptionAudit?.appliedReductions
+  const materialAdaptations: SessionCardSurface['materialAdaptations'] = []
+  if (reductions?.setsReduced) {
+    materialAdaptations!.push({ key: 'sets', label: 'Sets reduced', tone: 'reduction' })
+  }
+  if (reductions?.rpeReduced) {
+    materialAdaptations!.push({ key: 'rpe', label: 'RPE capped', tone: 'reduction' })
+  }
+  if (reductions?.secondaryTrimmed) {
+    materialAdaptations!.push({ key: 'secondary', label: 'Secondary trimmed', tone: 'reduction' })
+  }
+  if (reductions?.densityReduced) {
+    materialAdaptations!.push({ key: 'density', label: 'Density reduced', tone: 'reduction' })
+  }
+  if (reductions?.finisherSuppressed) {
+    materialAdaptations!.push({ key: 'finisher', label: 'Finisher omitted', tone: 'protection' })
+  }
+
+  // Adaptation verdict — direct map from authoritative source string.
+  const adaptationVerdict: 'changed' | 'unchanged' | null =
+    prescriptionAudit?.verdict?.includes('MATERIALLY_CHANGED')
+      ? 'changed'
+      : prescriptionAudit?.verdict?.includes('UNCHANGED')
+        ? 'unchanged'
+        : null
+
   return {
     sessionHeadline,
     sessionSubheadline,
@@ -964,6 +1052,12 @@ export function buildSessionCardSurface(
     weeklyIntensityClass: weeklyRole?.intensityClass || null,
     weeklyProgressionCharacter: weeklyRole?.progressionCharacter || null,
     weeklyBreadthLabel,
+    // [MATERIAL-COMPOSITION-TRUTH-LOCK] Real programming-decision fields
+    workloadPrimaryPercent,
+    workloadSupportPercent,
+    spineExpression,
+    materialAdaptations,
+    adaptationVerdict,
   }
 }
 

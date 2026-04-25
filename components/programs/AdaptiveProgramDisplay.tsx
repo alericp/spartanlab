@@ -1216,16 +1216,25 @@ export function AdaptiveProgramDisplay({
                         ) : null}
 
                         {/* D. Micro-signals (surface-owned). Suppressed when
-                            chips already render to avoid visual repetition. */}
-                        {!hasAnyChips && (cardSurface.microSignals?.length ?? 0) > 0 && (
-                          <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
-                            {cardSurface.microSignals!.map((signal, i) => (
-                              <span key={i} className="text-[9px] text-[#E63946]/70 font-medium">
-                                {signal}
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                            chips already render to avoid visual repetition.
+                            [MATERIAL-COMPOSITION-TRUTH-LOCK] Also suppressed
+                            when the dominant card is rendering material
+                            adaptations — those chips are concrete programming
+                            decisions ("Sets reduced", "RPE capped"), while
+                            microSignals are generic prose ("Volume adjusted")
+                            describing the same source flags. NO COSMETIC
+                            DOUBLING — the dominant card owns this slot. */}
+                        {!hasAnyChips &&
+                          (cardSurface.materialAdaptations?.length ?? 0) === 0 &&
+                          (cardSurface.microSignals?.length ?? 0) > 0 && (
+                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
+                              {cardSurface.microSignals!.map((signal, i) => (
+                                <span key={i} className="text-[9px] text-[#E63946]/70 font-medium">
+                                  {signal}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                       </div>
                     </div>
                   </div>

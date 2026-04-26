@@ -824,13 +824,14 @@ function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
   const sourceCount = cov.sourcesCount ?? rc.activeSourceKeys?.length ?? 0
   const batchCount = rc.batchCoverage?.batchCount ?? 0
 
-  // [BATCH-05/06/07-PROOF] Surface Batch 5/6/7 inclusion compactly when
+  // [BATCH-05/06/07/08-PROOF] Surface Batch 5/6/7/8 inclusion compactly when
   // active so the proof strip visibly changes after each ingestion. Reads only
   // the final program object's batchCoverage.batchKeys; no DB / network query.
   const batchKeys = rc.batchCoverage?.batchKeys ?? []
   const batchFiveActive = batchKeys.includes('batch_05')
   const batchSixActive = batchKeys.includes('batch_06')
   const batchSevenActive = batchKeys.includes('batch_07')
+  const batchEightActive = batchKeys.includes('batch_08')
   const batchFiveLine = batchFiveActive
     ? 'Batch 5 active: BL/FL, handstand, foundations, hypertrophy splits, circuits, theory/recovery'
     : null
@@ -839,6 +840,9 @@ function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
     : null
   const batchSevenLine = batchSevenActive
     ? 'Batch 7 active: lower-body skill (pistol/dragon), leg-dose preference, military/tactical (Army AFT, Marine PFT/CFT, Navy PRT, AF/SF PFA, ruck, run engine)'
+    : null
+  const batchEightLine = batchEightActive
+    ? "Batch 8 active: elite rings + advanced calisthenics (Victorian, Maltese, OAFL, OABL, Azarian, Nakayama) classified by support level — direct vs carryover vs source-gap"
     : null
 
   return (
@@ -888,6 +892,9 @@ function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
       )}
       {batchSevenLine && (
         <p className="mt-1 text-xs text-sky-400/80 italic">{batchSevenLine}</p>
+      )}
+      {batchEightLine && (
+        <p className="mt-1 text-xs text-amber-400/80 italic">{batchEightLine}</p>
       )}
       {summaryLines.length > 0 && (
         <ul className="mt-2 space-y-0.5">

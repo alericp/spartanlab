@@ -824,13 +824,17 @@ function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
   const sourceCount = cov.sourcesCount ?? rc.activeSourceKeys?.length ?? 0
   const batchCount = rc.batchCoverage?.batchCount ?? 0
 
-  // [BATCH-05-PROOF] Surface Batch 5 inclusion compactly when active so the
-  // proof strip visibly changes after Batch 5 ingestion. Reads only the final
-  // program object's batchCoverage.batchKeys; no DB / network query.
+  // [BATCH-05/06-PROOF] Surface Batch 5 and Batch 6 inclusion compactly when
+  // active so the proof strip visibly changes after each ingestion. Reads only
+  // the final program object's batchCoverage.batchKeys; no DB / network query.
   const batchKeys = rc.batchCoverage?.batchKeys ?? []
   const batchFiveActive = batchKeys.includes('batch_05')
+  const batchSixActive = batchKeys.includes('batch_06')
   const batchFiveLine = batchFiveActive
     ? 'Batch 5 active: BL/FL, handstand, foundations, hypertrophy splits, circuits, theory/recovery'
+    : null
+  const batchSixLine = batchSixActive
+    ? 'Batch 6 active: OTZ beginner/intermediate, Iron Cross, full planche, front lever, muscle-up + legal source gate'
     : null
 
   return (
@@ -874,6 +878,9 @@ function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
       )}
       {batchFiveLine && (
         <p className="mt-1 text-xs text-cyan-400/80 italic">{batchFiveLine}</p>
+      )}
+      {batchSixLine && (
+        <p className="mt-1 text-xs text-emerald-400/80 italic">{batchSixLine}</p>
       )}
       {summaryLines.length > 0 && (
         <ul className="mt-2 space-y-0.5">

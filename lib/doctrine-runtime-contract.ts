@@ -42,6 +42,20 @@ import {
   type DoctrineCoverageSummary,
 } from './doctrine-db'
 
+// [DOCTRINE-BATCH-01] In-code fallback atoms used only when the DB returns
+// zero atoms (DB unavailable, tables empty, or live read failed). When the DB
+// has live atoms, this import is loaded but unused.
+import {
+  getBatch01Sources,
+  getBatch01Principles,
+  getBatch01ProgressionRules,
+  getBatch01MethodRules,
+  getBatch01PrescriptionRules,
+  getBatch01CarryoverRules,
+  getBatch01ExerciseSelectionRules,
+  getBatch01Counts,
+} from './doctrine/source-batches'
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -57,7 +71,7 @@ export interface SkillProgressionDoctrine {
 
 export interface DoctrineRuntimeContract {
   available: boolean
-  source: 'db_live' | 'fallback_none'
+  source: 'db_live' | 'fallback_batch_01' | 'fallback_none'
   builtAt: string
   contractVersion: string
 
@@ -155,13 +169,13 @@ export async function buildDoctrineRuntimeContract(
     // Query all doctrine data once up front
     const [
       coverage,
-      sources,
-      principles,
-      progressionRules,
-      methodRules,
-      prescriptionRules,
-      carryoverRules,
-      exerciseSelectionRules,
+      dbSources,
+      dbPrinciples,
+      dbProgressionRules,
+      dbMethodRules,
+      dbPrescriptionRules,
+      dbCarryoverRules,
+      dbExerciseSelectionRules,
     ] = await Promise.all([
       getDoctrineCoverageSummary(),
       getDoctrineSources(),
@@ -173,7 +187,40 @@ export async function buildDoctrineRuntimeContract(
       getExerciseSelectionRules({}),
     ])
     
-    const hasLiveRules = coverage.totalRulesCount > 0
+    // [DOCTRINE-BATCH-01-FALLBACK]
+    // If the DB returned zero atoms, swap in the in-code Batch 1 atom store.
+    // This changes a previously silent-empty failure mode into a loud, logged
+    // fallback. The DB-live path is unchanged when atoms exist.
+    const dbHadAtoms = coverage.totalRulesCount > 0
+    let contractSource: DoctrineRuntimeContract['source'] = 'db_live'
+    let sources = dbSources
+    let principles = dbPrinciples
+    let progressionRules = dbProgressionRules
+    let methodRules = dbMethodRules
+    let prescriptionRules = dbPrescriptionRules
+    let carryoverRules = dbCarryoverRules
+    let exerciseSelectionRules = dbExerciseSelectionRules
+
+    if (!dbHadAtoms) {
+      const batch01Counts = getBatch01Counts()
+      contractSource = 'fallback_batch_01'
+      sources = getBatch01Sources()
+      principles = getBatch01Principles()
+      progressionRules = getBatch01ProgressionRules()
+      methodRules = getBatch01MethodRules()
+      prescriptionRules = getBatch01PrescriptionRules()
+      carryoverRules = getBatch01CarryoverRules()
+      exerciseSelectionRules = getBatch01ExerciseSelectionRules()
+
+      console.log('[DOCTRINE-RUNTIME-CONTRACT-BATCH01-FALLBACK]', {
+        reason: 'doctrine_db_returned_zero_atoms',
+        batch01Counts,
+        verdict: 'DOCTRINE_RUNTIME_CONTRACT_BATCH01_FALLBACK_ACTIVE',
+      })
+    }
+
+    const hasLiveRules = principles.length + progressionRules.length + methodRules.length +
+      prescriptionRules.length + carryoverRules.length + exerciseSelectionRules.length > 0
     
     // Build progression doctrine per skill
     const progressionDoctrine = buildProgressionDoctrine(
@@ -224,7 +271,7 @@ export async function buildDoctrineRuntimeContract(
     
     const contract: DoctrineRuntimeContract = {
       available: true,
-      source: 'db_live',
+      source: contractSource,
       builtAt: new Date().toISOString(),
       contractVersion: '1.0.0',
       
@@ -249,7 +296,7 @@ export async function buildDoctrineRuntimeContract(
     
     console.log('[DOCTRINE-RUNTIME-CONTRACT-BUILT]', {
       available: true,
-      source: 'db_live',
+      source: contractSource,
       buildTimeMs: Date.now() - startTime,
       coverage: contract.doctrineCoverage,
       progressionSkillCount: Object.keys(progressionDoctrine.perSkill).length,

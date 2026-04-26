@@ -23,6 +23,11 @@
  */
 
 import { generateAdaptiveProgram, type AdaptiveProgram, type AdaptiveProgramInputs } from '@/lib/adaptive-program-builder'
+import {
+  buildDoctrineIntegrationProof,
+  mapRuntimeContractToBuilderContext,
+  type DoctrineIntegrationProof,
+} from '@/lib/doctrine/doctrine-builder-integration-contract'
 import { attachTruthExplanation, extractProgramTruth, logMaterialInputPresence } from '@/lib/program-truth-extractor'
 import type { CanonicalProgrammingProfile } from '@/lib/canonical-profile-service'
 import { calibrateAthleteProfile, resolveCurrentWorkingProgressions, type CurrentWorkingProgressionsContract } from '@/lib/athlete-calibration'
@@ -1497,7 +1502,63 @@ export async function executeAuthoritativeGeneration(
     }
     
     console.log('[generation-ingress-proof]', generationIngressProof)
-    
+
+    // ==========================================================================
+    // [DOCTRINE-TO-BUILDER PHASE 2] Attach compact doctrineIntegration proof
+    // ==========================================================================
+    // Single seam — every generation path (onboarding, fresh, regenerate,
+    // rebuild, modify, restart) flows through this wrapper, so attaching here
+    // gives consistent route parity without touching the builder internals.
+    //
+    // Reads ONLY from `program.doctrineRuntimeContract` (which the builder has
+    // already attached) — does not re-build the runtime contract, does not
+    // query the doctrine DB, does not change exercise selection / sets / reps
+    // / methods. Phase 2 wires *context proof*; Phase 3 will wire actual
+    // doctrine-driven decisions.
+    //
+    // Persistence: `setActiveProgram` JSON-serializes the entire program
+    // object, so `doctrineIntegration` survives save/load/restart with no
+    // normalize-helper changes required.
+    // ==========================================================================
+    markStage('doctrine_integration_proof_start')
+
+    let doctrineIntegrationProof: DoctrineIntegrationProof | null = null
+    try {
+      const runtimeFromBuilder =
+        (program as unknown as { doctrineRuntimeContract?: unknown }).doctrineRuntimeContract ?? null
+      const decisionContext = mapRuntimeContractToBuilderContext(
+        runtimeFromBuilder as Parameters<typeof mapRuntimeContractToBuilderContext>[0],
+      )
+      doctrineIntegrationProof = buildDoctrineIntegrationProof(
+        runtimeFromBuilder as Parameters<typeof buildDoctrineIntegrationProof>[0],
+        decisionContext,
+      )
+      ;(program as unknown as { doctrineIntegration: DoctrineIntegrationProof }).doctrineIntegration =
+        doctrineIntegrationProof
+
+      console.log('[doctrine-integration-proof-attached]', {
+        generationIntent: request.generationIntent,
+        triggerSource: request.triggerSource,
+        contextStatus: doctrineIntegrationProof.contextStatus,
+        sourceMode: doctrineIntegrationProof.sourceMode,
+        presentBatchCount: doctrineIntegrationProof.presentBatches.length,
+        missingBatchCount: doctrineIntegrationProof.missingBatches.length,
+        selectedCounts: doctrineIntegrationProof.selectedCounts,
+        decisionFlags: doctrineIntegrationProof.decisionFlags,
+        diagnostics: doctrineIntegrationProof.diagnostics,
+        contextId: doctrineIntegrationProof.contextId,
+      })
+    } catch (proofError) {
+      // Never block generation on proof attachment — log and continue.
+      console.log('[doctrine-integration-proof-attach-failed]', {
+        generationIntent: request.generationIntent,
+        triggerSource: request.triggerSource,
+        error: String(proofError),
+      })
+    }
+
+    markStage('doctrine_integration_proof_done')
+
     // ==========================================================================
     // STAGE: Success
     // ==========================================================================

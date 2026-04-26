@@ -916,6 +916,147 @@ function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
   )
 }
 
+// ==========================================================================
+// [DOCTRINE-INTEGRATION-PROOF-PHASE2] Compact program-specific proof that the
+// doctrine *decision context* reached the builder for THIS generation.
+//
+// This is intentionally distinct from the global doctrine availability proof
+// rendered above (DoctrineRuntimeProof). The runtime-proof strip says
+// "doctrine exists in the app and was loaded for the build". This block says
+// "for THIS specific saved program, the decision context was wired into
+// the builder".
+//
+// Reads only `program.doctrineIntegration` (attached by
+// `executeAuthoritativeGeneration` after the builder returns). Renders nothing
+// when absent so legacy programs degrade gracefully. Never claims that
+// exercise selection / sets / reps / methods are doctrine-driven yet — that
+// claim is reserved for Phase 3, and `disclaimer` enforces the contract.
+// ==========================================================================
+function DoctrineIntegrationProofBlock({ program }: { program: AdaptiveProgram }) {
+  const anyProgram = program as unknown as { doctrineIntegration?: unknown }
+  const di = anyProgram.doctrineIntegration as
+    | {
+        phase?: string
+        contextStatus?: 'active' | 'degraded' | 'unavailable'
+        sourceMode?: string
+        presentBatches?: string[]
+        missingBatches?: string[]
+        selectedCounts?: {
+          principles?: number
+          progressionRules?: number
+          exerciseSelectionRules?: number
+          contraindicationRules?: number
+          methodRules?: number
+          prescriptionRules?: number
+          carryoverRules?: number
+        }
+        decisionFlags?: Record<string, boolean>
+        diagnostics?: { usable?: boolean; blocker?: string | null; warnings?: string[] }
+        disclaimer?: string
+      }
+    | undefined
+
+  // No proof on this program object → render nothing. Do NOT invent claims.
+  if (!di || !di.contextStatus) return null
+
+  const status = di.contextStatus
+  const counts = di.selectedCounts ?? {}
+  const flags = di.decisionFlags ?? {}
+  const presentBatchCount = di.presentBatches?.length ?? 0
+  const missingBatchCount = di.missingBatches?.length ?? 0
+  const warnings = di.diagnostics?.warnings ?? []
+
+  const statusLabel =
+    status === 'active'
+      ? 'Active'
+      : status === 'degraded'
+      ? 'Degraded'
+      : 'Unavailable'
+
+  const statusColor =
+    status === 'active'
+      ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20'
+      : status === 'degraded'
+      ? 'text-amber-400 bg-amber-400/10 border-amber-400/20'
+      : 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20'
+
+  const sourceLabel =
+    di.sourceMode === 'db_live'
+      ? 'DB live'
+      : di.sourceMode === 'hybrid_db_plus_uploaded_fallback'
+      ? 'Hybrid (DB + fallback)'
+      : di.sourceMode === 'fallback_uploaded_batches'
+      ? 'Uploaded PDF fallback'
+      : 'Unavailable'
+
+  const totalSelected =
+    (counts.principles ?? 0) +
+    (counts.progressionRules ?? 0) +
+    (counts.exerciseSelectionRules ?? 0) +
+    (counts.contraindicationRules ?? 0) +
+    (counts.methodRules ?? 0) +
+    (counts.prescriptionRules ?? 0) +
+    (counts.carryoverRules ?? 0)
+
+  return (
+    <div className="mt-3 p-3 rounded-lg border border-zinc-800/60 bg-zinc-950/40">
+      <div className="flex items-center gap-2 mb-2">
+        <span
+          className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-medium ${statusColor}`}
+        >
+          Doctrine context reached builder · {statusLabel}
+        </span>
+        <span className="text-xs text-zinc-500">Source: {sourceLabel}</span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-zinc-800/60 text-zinc-300">
+          <span className="text-zinc-500">Batches present:</span>
+          <span className="font-medium">{presentBatchCount}/10</span>
+        </span>
+        {missingBatchCount > 0 && (
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-amber-900/40 text-amber-300/80">
+            <span className="text-amber-500/80">Missing:</span>
+            <span className="font-medium">{missingBatchCount}</span>
+          </span>
+        )}
+        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-zinc-800/60 text-zinc-300">
+          <span className="text-zinc-500">Selected rules:</span>
+          <span className="font-medium">{totalSelected}</span>
+        </span>
+      </div>
+
+      <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1 text-[11px] text-zinc-400">
+        <span>Principles: <span className="text-zinc-200 font-medium">{counts.principles ?? 0}</span></span>
+        <span>Methods: <span className="text-zinc-200 font-medium">{counts.methodRules ?? 0}</span></span>
+        <span>Prescriptions: <span className="text-zinc-200 font-medium">{counts.prescriptionRules ?? 0}</span></span>
+        <span>Selection: <span className="text-zinc-200 font-medium">{counts.exerciseSelectionRules ?? 0}</span></span>
+        <span>Progression: <span className="text-zinc-200 font-medium">{counts.progressionRules ?? 0}</span></span>
+        <span>Carryover: <span className="text-zinc-200 font-medium">{counts.carryoverRules ?? 0}</span></span>
+        <span>Contra.: <span className="text-zinc-200 font-medium">{counts.contraindicationRules ?? 0}</span></span>
+        <span>
+          Skill protect:{' '}
+          <span className="text-zinc-200 font-medium">{flags.protectsPrimarySkill ? 'yes' : 'no'}</span>
+        </span>
+      </div>
+
+      {warnings.length > 0 && (
+        <p className="mt-2 text-[11px] text-amber-400/80 italic">
+          {warnings.slice(0, 2).join(' · ')}
+        </p>
+      )}
+
+      <p className="mt-2 text-[11px] text-zinc-500 italic">
+        {di.disclaimer ??
+          'Doctrine context reached the builder. Phase 2 does not yet allow doctrine to change exercise selection or prescriptions.'}
+      </p>
+      <p className="mt-1 text-[11px] text-zinc-600 italic">
+        Next phase: apply doctrine to actual method/exercise/session decisions.
+      </p>
+    </div>
+  )
+}
+
 // TASK 1: Error boundary wrapper for AdaptiveProgramDisplay
 // [PHASE 9] Now uses true React ErrorBoundary - NO setState in render catch
 // [PHASE 10C] Enhanced with exact error capture and display in fallback
@@ -1275,10 +1416,17 @@ function ProgramDisplayWrapper({
         truthExplanation={resolvedTruthExplanation as unknown as Parameters<typeof ProgramTruthSummary>[0]['truthExplanation']}
       />
 
-      {/* [DOCTRINE-RUNTIME-PROOF] Compact visible proof that the generated
-          program actually consumed the doctrine runtime contract. Reads only
-          from program.doctrineRuntimeContract; renders nothing when absent. */}
-      <DoctrineRuntimeProof program={program} />
+        {/* [DOCTRINE-RUNTIME-PROOF] Compact visible proof that the generated
+            program actually consumed the doctrine runtime contract. Reads only
+            from program.doctrineRuntimeContract; renders nothing when absent. */}
+        <DoctrineRuntimeProof program={program} />
+
+        {/* [DOCTRINE-INTEGRATION-PROOF-PHASE2] Program-specific proof that the
+            doctrine decision context reached the builder for THIS generation.
+            Reads only program.doctrineIntegration. Distinct from the runtime
+            proof above (which proves doctrine availability at the app level).
+            Renders nothing for legacy programs that lack the field. */}
+        <DoctrineIntegrationProofBlock program={program} />
 
       {/* [PROGRAM-DECISION-SUMMARY] Display doctrine-driven decisions above the program */}
       <ProgramDecisionSummary program={program} />

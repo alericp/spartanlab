@@ -284,8 +284,14 @@ export async function buildDoctrineRuntimeContract(
     //   • all batches filled from DB     → 'db_live'
     //   • some batches filled from FB    → 'hybrid_db_plus_uploaded_fallback'
 
-    const fallbackCountsByBatch = getUploadedDoctrineBatchCountsByBatch() as
-      Record<string, { principles: number; progression: number; method: number; prescription: number; selection: number; carryover: number }>
+    // [GATE-TYPE-FIX] `getUploadedDoctrineBatchCountsByBatch()` returns
+    // `Record<UploadedDoctrineBatchKey, number>` (one total per batch), NOT
+    // a per-category breakdown. The previous `as Record<string, {principles,
+    // progression, ...}>` cast was a lie: at runtime `fb.principles` etc.
+    // were undefined, so `fbTotal` summed to `NaN` and `dbTotal >= NaN` was
+    // always false — making `db_live` unreachable even when DB held complete
+    // coverage. Use the returned numbers directly.
+    const fallbackCountsByBatch: Record<string, number> = getUploadedDoctrineBatchCountsByBatch()
     const REGISTERED_BATCH_KEYS = Object.keys(fallbackCountsByBatch)
 
     const batchKeyFromSourceId = (sid: string | null | undefined): string | null => {
@@ -299,8 +305,7 @@ export async function buildDoctrineRuntimeContract(
     type PerBatchStat = { dbTotal: number; fallbackTotal: number; filled: 'db' | 'fallback' }
     const perBatch: Record<string, PerBatchStat> = {}
     for (const bk of REGISTERED_BATCH_KEYS) {
-      const fb = fallbackCountsByBatch[bk]
-      const fbTotal = fb.principles + fb.progression + fb.method + fb.prescription + fb.selection + fb.carryover
+      const fbTotal = fallbackCountsByBatch[bk] ?? 0
       const dbTotal =
         countAtomsByBatch(dbPrinciples, bk) +
         countAtomsByBatch(dbProgressionRules, bk) +

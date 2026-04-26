@@ -93,6 +93,22 @@ export {
   type Batch04Provenance,
 } from "./batch-04-uploaded-pdf-doctrine"
 
+// Batch 05 — added in Batch 5 ingestion pass.
+export {
+  getBatch05Sources,
+  getBatch05Principles,
+  getBatch05ProgressionRules,
+  getBatch05ExerciseSelectionRules,
+  getBatch05ContraindicationRules,
+  getBatch05MethodRules,
+  getBatch05PrescriptionRules,
+  getBatch05CarryoverRules,
+  getBatch05Counts,
+  getBatch05CountsBySource,
+  getBatch05ProvenanceFor,
+  type Batch05Provenance,
+} from "./batch-05-uploaded-pdf-doctrine"
+
 import {
   getBatch01Sources,
   getBatch01Principles,
@@ -149,6 +165,20 @@ import {
   type Batch04Provenance,
 } from "./batch-04-uploaded-pdf-doctrine"
 
+import {
+  getBatch05Sources,
+  getBatch05Principles,
+  getBatch05ProgressionRules,
+  getBatch05ExerciseSelectionRules,
+  getBatch05ContraindicationRules,
+  getBatch05MethodRules,
+  getBatch05PrescriptionRules,
+  getBatch05CarryoverRules,
+  getBatch05CountsBySource,
+  getBatch05ProvenanceFor,
+  type Batch05Provenance,
+} from "./batch-05-uploaded-pdf-doctrine"
+
 import type {
   DoctrineSource,
   DoctrinePrinciple,
@@ -163,7 +193,7 @@ import type {
 // Unified uploaded-PDF doctrine aggregator
 // =============================================================================
 
-const BATCHES = ["batch_01", "batch_02", "batch_03", "batch_04"] as const
+const BATCHES = ["batch_01", "batch_02", "batch_03", "batch_04", "batch_05"] as const
 export type UploadedDoctrineBatchKey = (typeof BATCHES)[number]
 
 export function getUploadedDoctrineBatchKeys(): readonly UploadedDoctrineBatchKey[] {
@@ -171,7 +201,13 @@ export function getUploadedDoctrineBatchKeys(): readonly UploadedDoctrineBatchKe
 }
 
 export function getUploadedDoctrineBatchSources(): DoctrineSource[] {
-  return [...getBatch01Sources(), ...getBatch02Sources(), ...getBatch03Sources(), ...getBatch04Sources()]
+  return [
+    ...getBatch01Sources(),
+    ...getBatch02Sources(),
+    ...getBatch03Sources(),
+    ...getBatch04Sources(),
+    ...getBatch05Sources(),
+  ]
 }
 
 export function getUploadedDoctrineBatchPrinciples(): DoctrinePrinciple[] {
@@ -180,6 +216,7 @@ export function getUploadedDoctrineBatchPrinciples(): DoctrinePrinciple[] {
     ...getBatch02Principles(),
     ...getBatch03Principles(),
     ...getBatch04Principles(),
+    ...getBatch05Principles(),
   ]
 }
 
@@ -189,6 +226,7 @@ export function getUploadedDoctrineBatchProgressionRules(): ProgressionRule[] {
     ...getBatch02ProgressionRules(),
     ...getBatch03ProgressionRules(),
     ...getBatch04ProgressionRules(),
+    ...getBatch05ProgressionRules(),
   ]
 }
 
@@ -198,6 +236,7 @@ export function getUploadedDoctrineBatchExerciseSelectionRules(): ExerciseSelect
     ...getBatch02ExerciseSelectionRules(),
     ...getBatch03ExerciseSelectionRules(),
     ...getBatch04ExerciseSelectionRules(),
+    ...getBatch05ExerciseSelectionRules(),
   ]
 }
 
@@ -209,6 +248,7 @@ export function getUploadedDoctrineBatchContraindicationRules(): unknown[] {
     ...getBatch02ContraindicationRules(),
     ...getBatch03ContraindicationRules(),
     ...getBatch04ContraindicationRules(),
+    ...getBatch05ContraindicationRules(),
   ]
 }
 
@@ -218,6 +258,7 @@ export function getUploadedDoctrineBatchMethodRules(): MethodRule[] {
     ...getBatch02MethodRules(),
     ...getBatch03MethodRules(),
     ...getBatch04MethodRules(),
+    ...getBatch05MethodRules(),
   ]
 }
 
@@ -227,17 +268,19 @@ export function getUploadedDoctrineBatchPrescriptionRules(): PrescriptionRule[] 
     ...getBatch02PrescriptionRules(),
     ...getBatch03PrescriptionRules(),
     ...getBatch04PrescriptionRules(),
+    ...getBatch05PrescriptionRules(),
   ]
 }
 
 export function getUploadedDoctrineBatchCarryoverRules(): CarryoverRule[] {
-  // Batches return CarryoverRule-shaped objects (Batch 02/04 use looser
+  // Batches return CarryoverRule-shaped objects (Batch 02/04/05 use looser
   // typing — kept compatible via structural cast for downstream coverage).
   return [
     ...(getBatch01CarryoverRules() as CarryoverRule[]),
     ...(getBatch02CarryoverRules() as unknown as CarryoverRule[]),
     ...(getBatch03CarryoverRules() as CarryoverRule[]),
     ...(getBatch04CarryoverRules() as unknown as CarryoverRule[]),
+    ...(getBatch05CarryoverRules() as unknown as CarryoverRule[]),
   ]
 }
 
@@ -326,6 +369,15 @@ export function getUploadedDoctrineBatchCounts(): UploadedDoctrineBatchCounts {
         getBatch04PrescriptionRules().length,
         getBatch04CarryoverRules().length,
       ),
+      batch_05: batchAtomCount(
+        getBatch05Principles().length,
+        getBatch05ProgressionRules().length,
+        getBatch05ExerciseSelectionRules().length,
+        getBatch05ContraindicationRules().length,
+        getBatch05MethodRules().length,
+        getBatch05PrescriptionRules().length,
+        getBatch05CarryoverRules().length,
+      ),
     },
   }
 }
@@ -348,17 +400,21 @@ export function getUploadedDoctrineBatchCountsBySource(): Record<string, number>
   for (const [k, v] of Object.entries(getBatch04CountsBySource())) {
     out[k] = (out[k] ?? 0) + v
   }
+  for (const [k, v] of Object.entries(getBatch05CountsBySource())) {
+    out[k] = (out[k] ?? 0) + v
+  }
   return out
 }
 
 export function getUploadedDoctrineProvenanceFor(
   atomId: string,
-): Batch01Provenance | Batch02Provenance | Batch03Provenance | Batch04Provenance | null {
+): Batch01Provenance | Batch02Provenance | Batch03Provenance | Batch04Provenance | Batch05Provenance | null {
   return (
     getBatch01ProvenanceFor(atomId) ??
     getBatch02ProvenanceFor(atomId) ??
     getBatch03ProvenanceFor(atomId) ??
     getBatch04ProvenanceFor(atomId) ??
+    getBatch05ProvenanceFor(atomId) ??
     null
   )
 }

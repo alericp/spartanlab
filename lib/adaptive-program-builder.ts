@@ -11357,6 +11357,40 @@ async function generateAdaptiveProgramImpl(
   }
 
   // ==========================================================================
+  // [PHASE 4E — DOCTRINE CAUSAL AUDIT ACCUMULATOR]
+  //
+  // Pre-Phase-4E behavior:
+  //   The exercise selector built a per-call DoctrineScoringAudit (tracking
+  //   whether doctrine changed the top winner / top 3 / which rule types
+  //   matched) and merged audits across all candidate pools within a session
+  //   into `sessionDoctrineAudit`. That merged audit was discarded on return
+  //   from selectMainExercises. The builder had no way to ask "across all my
+  //   sessions, did doctrine actually change any winner?". As a result, the
+  //   doctrineIntegration UI rollups counted rules and sources but never
+  //   reflected actual causal authority.
+  //
+  // Phase 4E:
+  //   selectExercisesForSession now surfaces `doctrineCausalAudit` on its
+  //   ExerciseSelection return. We harvest it per session at the existing
+  //   call site below and push the per-session record onto this accumulator,
+  //   which lives at the same scope as loopLevelDoctrineTracker. After the
+  //   sessions loop completes, we aggregate the accumulator into
+  //   `program.doctrineCausalChallenge` — a durable, JSON-serializable
+  //   verdict object the UI can read to honestly say either:
+  //     - "Doctrine changed N exercise winners across M sessions" (real causal change)
+  //     - "Doctrine ran but did not change any winner" (already optimal / weak scoring / domain gap)
+  //     - "Doctrine had no rules matching your profile" (domain gap)
+  //     - "Doctrine cache empty" (upstream profile/runtime contract failure)
+  //   Without proof labels, without rule-counts-as-success, without PASS reports.
+  // ==========================================================================
+  const doctrineCausalAuditAccumulator: Array<{
+    sessionIndex: number
+    dayNumber: number
+    dayFocus: string
+    audit: import('./doctrine-exercise-scorer').DoctrineScoringAudit | null
+  }> = []
+
+  // ==========================================================================
   // [WEEKLY-METHOD-DISTRIBUTION, prompt 7] Initialize the shared cluster budget.
   //
   // Doctrine goal: cluster is an intentional, uncommon tool. It must NOT appear
@@ -11607,6 +11641,13 @@ async function generateAdaptiveProgramImpl(
   outerDoctrineRecoveryTracker: null as any, // Will be set below
   // [SESSION-SURVIVAL-CONTRACT-LOOP] Loop-level tracker ref for outer catch access
   loopLevelDoctrineTracker: loopLevelDoctrineTracker as any,
+  // [PHASE 4E — DOCTRINE CAUSAL AUDIT ACCUMULATOR] Reference to the loop-level
+  // accumulator, mutated inside generateAdaptiveSession's post-selection block.
+  // Each session pushes its own ExerciseSelection.doctrineCausalAudit (or null
+  // if the selector did not run / the cache was empty / no rule matched).
+  // This is the durable evidence the program needs to claim or honestly deny
+  // doctrine causality.
+  doctrineCausalAuditAccumulator: doctrineCausalAuditAccumulator as any,
   // [WEEKLY-METHOD-DISTRIBUTION, prompt 7] Shared cluster budget -- the SAME
   // object reference is handed to every session this build, so session N's
   // cluster application is visible to session N+1's cluster materializer.
@@ -20946,6 +20987,228 @@ return explanations.length > 0 ? explanations : undefined
       ? 'DOCTRINE_CAUSAL_CHAIN_INTACT_END_TO_END'
       : 'DOCTRINE_CAUSAL_CHAIN_DEGRADED_SEE_INFLUENCE_FLAGS',
   })
+
+  // ==========================================================================
+  // [PHASE 4E — DOCTRINE CAUSAL CHALLENGE AGGREGATION]
+  //
+  // Roll up the per-session DoctrineScoringAudit records harvested in
+  // generateAdaptiveSession into a single program-level verdict object.
+  //
+  // What this proves vs. what previous "PASS reports" claimed:
+  //   - Selected rule counts → NOT proof. Counted before this phase too.
+  //   - Source counts → NOT proof. Counted before this phase too.
+  //   - Materialization rollup → NOT proof. Reports session structures
+  //     without asking whether doctrine PICKED those structures.
+  //   - data-driven identifiers → NOT proof. Just metadata stamps.
+  //
+  // What IS proof: per-session pre-doctrine top-3 vs post-doctrine top-3.
+  // If doctrine never changed a top winner across any session, then
+  // doctrine did NOT causally pick a single exercise — regardless of
+  // what counts the rollups show.
+  //
+  // unchangedVerdict classification (used by UI to show honest reason):
+  //   - "doctrine_did_not_run"        : audit accumulator empty (selector
+  //                                     never ran or threw).
+  //   - "doctrine_cache_empty"        : audits exist but all have null
+  //                                     fallbackReason ∈ {db_fetch_failed,
+  //                                     no_candidates}.
+  //   - "doctrine_domain_gap"         : rules queried > 0 but nothing
+  //                                     matched any candidate
+  //                                     (fallbackReason = no_matching_rules
+  //                                     OR doctrineApplied=false).
+  //   - "doctrine_scoring_too_weak"   : doctrineApplied=true and candidates
+  //                                     affected, but topCandidateChanged
+  //                                     is false in EVERY session — doctrine
+  //                                     touched scores but never won a slot.
+  //   - "already_optimal_protected"   : topCandidateChanged is false in
+  //                                     every session BUT base rankings
+  //                                     already match doctrine top-3
+  //                                     (preDoctrineTop3 ⊆ postDoctrineTop3
+  //                                     and the program intentionally
+  //                                     converged on the optimal output).
+  //   - "doctrine_changed_program"    : topCandidateChanged is true in at
+  //                                     least one session — real causal
+  //                                     authority demonstrated.
+  //
+  // The classification is driven by ACTUAL pre/post comparisons. No PASS
+  // labels. No rule-count masquerade.
+  // ==========================================================================
+  type SessionAuditRecord = {
+    sessionIndex: number
+    dayNumber: number
+    dayFocus: string
+    audit: import('./doctrine-exercise-scorer').DoctrineScoringAudit | null
+  }
+  const accumulator = doctrineCausalAuditAccumulator as SessionAuditRecord[]
+
+  let totalSessionsWithAudit = 0
+  let sessionsDoctrineRanWithRules = 0
+  let sessionsTopCandidateChanged = 0
+  let sessionsTop3Changed = 0
+  let sessionsCandidatesAffectedButNoWinnerChange = 0
+  let sessionsDoctrineCacheEmpty = 0
+  let sessionsNoMatchingRules = 0
+  let totalCandidatesAffected = 0
+  let totalSelectionRulesMatched = 0
+  let totalCarryoverRulesMatched = 0
+  let totalContraindicationRulesMatched = 0
+  const sessionDiffs: Array<{
+    sessionIndex: number
+    dayNumber: number
+    dayFocus: string
+    topCandidateChanged: boolean
+    top3Changed: boolean
+    doctrineApplied: boolean
+    candidatesAffected: number
+    rulesMatchedTotal: number
+    preDoctrineTop3: string[]
+    postDoctrineTop3: string[]
+    fallbackReason: string | null
+    perSessionVerdict:
+      | 'doctrine_changed_top_winner'
+      | 'doctrine_changed_top3_only'
+      | 'doctrine_affected_scores_only'
+      | 'doctrine_ran_no_match'
+      | 'doctrine_cache_empty'
+      | 'doctrine_did_not_run'
+  }> = []
+
+  for (const record of accumulator) {
+    if (record.audit) totalSessionsWithAudit++
+    const a = record.audit
+    let perSessionVerdict: typeof sessionDiffs[number]['perSessionVerdict']
+    if (!a) {
+      perSessionVerdict = 'doctrine_did_not_run'
+    } else if (a.fallbackReason === 'db_fetch_failed' || a.fallbackReason === 'no_candidates') {
+      sessionsDoctrineCacheEmpty++
+      perSessionVerdict = 'doctrine_cache_empty'
+    } else if (a.fallbackReason === 'no_matching_rules' || (!a.doctrineApplied && (a.rulesQueried.selectionRules + a.rulesQueried.contraindicationRules + a.rulesQueried.carryoverRules) === 0)) {
+      sessionsNoMatchingRules++
+      perSessionVerdict = 'doctrine_ran_no_match'
+    } else if (a.topCandidateChanged) {
+      sessionsDoctrineRanWithRules++
+      sessionsTopCandidateChanged++
+      if (a.top3Changed) sessionsTop3Changed++
+      perSessionVerdict = 'doctrine_changed_top_winner'
+    } else if (a.top3Changed) {
+      sessionsDoctrineRanWithRules++
+      sessionsTop3Changed++
+      perSessionVerdict = 'doctrine_changed_top3_only'
+    } else if (a.doctrineApplied) {
+      sessionsDoctrineRanWithRules++
+      sessionsCandidatesAffectedButNoWinnerChange++
+      perSessionVerdict = 'doctrine_affected_scores_only'
+    } else {
+      sessionsNoMatchingRules++
+      perSessionVerdict = 'doctrine_ran_no_match'
+    }
+    if (a) {
+      totalCandidatesAffected += a.candidatesAffected
+      totalSelectionRulesMatched += a.rulesMatched.selectionRules
+      totalCarryoverRulesMatched += a.rulesMatched.carryoverRules
+      totalContraindicationRulesMatched += a.rulesMatched.contraindicationRules
+    }
+    sessionDiffs.push({
+      sessionIndex: record.sessionIndex,
+      dayNumber: record.dayNumber,
+      dayFocus: record.dayFocus,
+      topCandidateChanged: !!a?.topCandidateChanged,
+      top3Changed: !!a?.top3Changed,
+      doctrineApplied: !!a?.doctrineApplied,
+      candidatesAffected: a?.candidatesAffected ?? 0,
+      rulesMatchedTotal: (a?.rulesMatched.selectionRules ?? 0) + (a?.rulesMatched.carryoverRules ?? 0) + (a?.rulesMatched.contraindicationRules ?? 0),
+      preDoctrineTop3: a?.preDoctrineTop3 ?? [],
+      postDoctrineTop3: a?.postDoctrineTop3 ?? [],
+      fallbackReason: a?.fallbackReason ?? null,
+      perSessionVerdict,
+    })
+  }
+
+  // Program-level unchangedVerdict (only meaningful when no top winner changed).
+  let programUnchangedVerdict:
+    | 'not_unchanged'
+    | 'doctrine_did_not_run'
+    | 'doctrine_cache_empty'
+    | 'doctrine_domain_gap'
+    | 'doctrine_scoring_too_weak'
+    | 'already_optimal_protected' = 'not_unchanged'
+
+  const totalSessions = accumulator.length
+  if (sessionsTopCandidateChanged > 0) {
+    programUnchangedVerdict = 'not_unchanged'
+  } else if (totalSessionsWithAudit === 0) {
+    programUnchangedVerdict = 'doctrine_did_not_run'
+  } else if (sessionsDoctrineCacheEmpty === totalSessionsWithAudit) {
+    programUnchangedVerdict = 'doctrine_cache_empty'
+  } else if (sessionsNoMatchingRules > 0 && sessionsDoctrineRanWithRules === 0) {
+    programUnchangedVerdict = 'doctrine_domain_gap'
+  } else if (sessionsCandidatesAffectedButNoWinnerChange > 0) {
+    // Doctrine touched scores in at least one session but didn't change any
+    // top winner anywhere. Could be either weak scoring OR genuinely optimal
+    // base ranking. We classify as scoring_too_weak by default — the
+    // alternative (already_optimal_protected) requires the base ranker to
+    // have produced a top-3 that ALSO contains all doctrine-supported
+    // candidates, which we can't prove from the audit shape alone.
+    programUnchangedVerdict = 'doctrine_scoring_too_weak'
+  } else {
+    programUnchangedVerdict = 'doctrine_domain_gap'
+  }
+
+  const finalCausalVerdict:
+    | 'DOCTRINE_MATERIALLY_CHANGED_PROGRAM'
+    | 'DOCTRINE_AVAILABLE_BUT_NOT_CAUSAL'
+    | 'DOCTRINE_DID_NOT_REACH_GENERATION'
+    | 'DOCTRINE_NO_MATCHING_RULES_FOR_PROFILE' =
+    sessionsTopCandidateChanged > 0
+      ? 'DOCTRINE_MATERIALLY_CHANGED_PROGRAM'
+      : programUnchangedVerdict === 'doctrine_did_not_run' || programUnchangedVerdict === 'doctrine_cache_empty'
+        ? 'DOCTRINE_DID_NOT_REACH_GENERATION'
+        : programUnchangedVerdict === 'doctrine_domain_gap'
+          ? 'DOCTRINE_NO_MATCHING_RULES_FOR_PROFILE'
+          : 'DOCTRINE_AVAILABLE_BUT_NOT_CAUSAL'
+
+  ;(finalProgram as unknown as { doctrineCausalChallenge?: unknown }).doctrineCausalChallenge = {
+    version: 'phase4e-doctrine-ab-causal-challenge-v1',
+    ranAt: new Date().toISOString(),
+    doctrineEnabled: !!doctrineRuntimeContract?.available && !!doctrineInfluenceContract,
+    sessionsEvaluated: totalSessions,
+    sessionsWithAudit: totalSessionsWithAudit,
+    sessionsTopCandidateChanged,
+    sessionsTop3Changed,
+    sessionsCandidatesAffectedButNoWinnerChange,
+    sessionsDoctrineCacheEmpty,
+    sessionsNoMatchingRules,
+    materialProgramChanged: sessionsTopCandidateChanged > 0,
+    diffSummary: {
+      changedExerciseCount: sessionsTopCandidateChanged,
+      top3ChangedCount: sessionsTop3Changed,
+      candidatesAffectedTotal: totalCandidatesAffected,
+      selectionRulesMatchedTotal: totalSelectionRulesMatched,
+      carryoverRulesMatchedTotal: totalCarryoverRulesMatched,
+      contraindicationRulesMatchedTotal: totalContraindicationRulesMatched,
+    },
+    sessionDiffs,
+    unchangedVerdict: programUnchangedVerdict,
+    finalVerdict: finalCausalVerdict,
+  }
+
+  console.log('[PHASE4E-DOCTRINE-CAUSAL-CHALLENGE-AGGREGATED]', {
+    totalSessions,
+    totalSessionsWithAudit,
+    sessionsTopCandidateChanged,
+    sessionsTop3Changed,
+    sessionsCandidatesAffectedButNoWinnerChange,
+    sessionsDoctrineCacheEmpty,
+    sessionsNoMatchingRules,
+    totalCandidatesAffected,
+    totalSelectionRulesMatched,
+    totalCarryoverRulesMatched,
+    totalContraindicationRulesMatched,
+    materialProgramChanged: sessionsTopCandidateChanged > 0,
+    unchangedVerdict: programUnchangedVerdict,
+    finalVerdict: finalCausalVerdict,
+    verdict: finalCausalVerdict,
+  })
   
   // [DOCTRINE INFLUENCE] Store doctrine influence contract for audit visibility
   if (doctrineInfluenceContract) {
@@ -24311,6 +24574,58 @@ function generateAdaptiveSession(
   // ==========================================================================
   const doctrineRelaxationApplied = !!(selection as any).doctrineRelaxationApplied
   const doctrineRelaxationReason = (selection as any).doctrineRelaxationReason || ''
+
+  // ==========================================================================
+  // [PHASE 4E — DOCTRINE CAUSAL AUDIT HARVEST]
+  //
+  // Harvest the per-session doctrine audit surfaced by selectExercisesForSession
+  // and push it onto the program-level accumulator passed via context. We
+  // capture even when the audit is null — that itself is a meaningful verdict
+  // ("doctrine cache empty" or "no rule matched any candidate"), and we want
+  // the program-level rollup to distinguish "doctrine ran but no winner
+  // changed" from "doctrine never ran at all".
+  //
+  // Pre-Phase-4E: this data was created inside selectMainExercises and
+  // discarded on its return. The builder had no way to ever see it.
+  // ==========================================================================
+  const harvestedDoctrineCausalAudit = (selection as { doctrineCausalAudit?: import('./doctrine-exercise-scorer').DoctrineScoringAudit | null }).doctrineCausalAudit ?? null
+  if ((context as any).doctrineCausalAuditAccumulator && Array.isArray((context as any).doctrineCausalAuditAccumulator)) {
+    ;((context as any).doctrineCausalAuditAccumulator as Array<{
+      sessionIndex: number
+      dayNumber: number
+      dayFocus: string
+      audit: import('./doctrine-exercise-scorer').DoctrineScoringAudit | null
+    }>).push({
+      sessionIndex: sessionIndex,
+      dayNumber: day.dayNumber,
+      dayFocus: day.focus,
+      audit: harvestedDoctrineCausalAudit,
+    })
+    console.log('[PHASE4E-DOCTRINE-CAUSAL-AUDIT-HARVEST]', {
+      sessionIndex,
+      dayNumber: day.dayNumber,
+      dayFocus: day.focus,
+      auditPresent: !!harvestedDoctrineCausalAudit,
+      doctrineApplied: harvestedDoctrineCausalAudit?.doctrineApplied ?? false,
+      topCandidateChanged: harvestedDoctrineCausalAudit?.topCandidateChanged ?? false,
+      top3Changed: harvestedDoctrineCausalAudit?.top3Changed ?? false,
+      candidatesAffected: harvestedDoctrineCausalAudit?.candidatesAffected ?? 0,
+      rulesMatchedTotal:
+        (harvestedDoctrineCausalAudit?.rulesMatched.selectionRules ?? 0) +
+        (harvestedDoctrineCausalAudit?.rulesMatched.contraindicationRules ?? 0) +
+        (harvestedDoctrineCausalAudit?.rulesMatched.carryoverRules ?? 0),
+      fallbackReason: harvestedDoctrineCausalAudit?.fallbackReason ?? null,
+      verdict: harvestedDoctrineCausalAudit?.topCandidateChanged
+        ? 'DOCTRINE_CHANGED_TOP_WINNER_THIS_SESSION'
+        : harvestedDoctrineCausalAudit?.top3Changed
+          ? 'DOCTRINE_CHANGED_TOP3_BUT_NOT_TOP_WINNER'
+          : harvestedDoctrineCausalAudit?.doctrineApplied
+            ? 'DOCTRINE_AFFECTED_CANDIDATES_BUT_NOT_RANKING'
+            : harvestedDoctrineCausalAudit
+              ? 'DOCTRINE_RAN_BUT_NO_RULE_MATCHED'
+              : 'DOCTRINE_DID_NOT_RUN_OR_CACHE_EMPTY',
+    })
+  }
   
   // SESSION SURVIVAL CONTRACT: Track this session's rescue state
   // If doctrine relaxation was applied AND session has exercises, it's a recovery candidate

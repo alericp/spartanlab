@@ -163,7 +163,7 @@ import { ProgramMaterializationStaleNotice } from '@/components/programs/Program
 // visibility on the athlete-facing page. Reads only the Phase 4A rollup the
 // wrapper already writes. Does NOT show selected-rule counts, batch keys,
 // source labels, or Phase-disclaimer copy.
-import { MaterializationStatusLine } from '@/components/programs/MaterializationStatusLine'
+import { MaterializationStatusLine, DoctrineCausalLine } from '@/components/programs/MaterializationStatusLine'
 // [VISIBLE-SESSION-TRUTH-LOCK] Single canonical visible-card display contract.
 // The page-level CanonicalProgramDisplayTruth now embeds these surfaces so
 // every visible day card consumes one authoritative contract owned by the
@@ -1471,6 +1471,19 @@ function ProgramDisplayWrapper({
             notice owns that state). Does NOT show selected-rule counts,
             batch keys, source labels, or Phase-disclaimer copy. */}
         <MaterializationStatusLine program={program} />
+
+        {/* [PHASE 4E] DOCTRINE CAUSAL CHALLENGE LINE — athlete-facing.
+            Reads ONLY `program.doctrineCausalChallenge` (the rollup of
+            per-session pre-doctrine top-3 vs post-doctrine top-3 audits
+            harvested from the exercise selector). Answers the distinct
+            question "did doctrine actually pick a different exercise?"
+            that materialization rollup does not answer. Honest states:
+              - emerald: doctrine changed N exercise selections (causal)
+              - amber:   doctrine did not run / domain gap (real failure)
+              - zinc:    doctrine evaluated alternatives, base ranking won
+              - hidden:  legacy program without challenge object
+            Never claims doctrine "applied" without an actual winner change. */}
+        <DoctrineCausalLine program={program} />
 
         {/* [PHASE 4C — PROOF DEMOTION] DoctrineRuntimeProof and
             DoctrineIntegrationProofBlock are diagnostic surfaces. They

@@ -2126,6 +2126,254 @@ addCarryover({
 })
 
 // =============================================================================
+// REPAIR APPENDIX — added to meet original prompt minimums (>=74 atoms total
+// and per-source minima). Provenance: derived_from_prompt_section_3_summary,
+// same as the rest of Batch 1. Uses n>=800 to guarantee no ID collision.
+// =============================================================================
+
+// --- Hybrid PPL repair (+2) ---
+addRx({
+  n: 800,
+  sourceId: "src_batch_01_hybrid_ppl",
+  sourceKey: "hybrid_ppl_uploaded_pdf_batch_01",
+  levelScope: ["intermediate", "advanced"],
+  goalScope: ["hybrid", "hypertrophy"],
+  exerciseRoleScope: ["accessory", "isolation"],
+  repRangeJson: { min: 8, max: 20 },
+  setRangeJson: { min: 2, max: 4 },
+  holdRangeJson: null,
+  restRangeJson: { minMinutes: 1, maxMinutes: 2 },
+  rpeGuidanceJson: { rpe: { min: 7, max: 9 } },
+  progressionGuidance:
+    "Hybrid PPL accessories/isolation: 2–4 sets x 8–20 reps, 1–2 min rest. Week progression by adding reps before sets.",
+  priorityType: "strong_preference",
+  intelligenceTier: "base_week_intelligence",
+  appliesWhen: { templateStyle: "ppl_hybrid", role: "accessory" },
+  doesNotApplyWhen: { role: "primary_compound" },
+  computationFriendlyRule: { repRange: { min: 8, max: 20 }, restMinutes: { min: 1, max: 2 }, sets: { min: 2, max: 4 } },
+  userVisibleEvidenceLabel: "PPL accessories: 8–20 reps, short rest",
+})
+addRx({
+  n: 801,
+  sourceId: "src_batch_01_hybrid_ppl",
+  sourceKey: "hybrid_ppl_uploaded_pdf_batch_01",
+  levelScope: ["intermediate", "advanced"],
+  goalScope: ["hybrid", "hypertrophy"],
+  exerciseRoleScope: null,
+  repRangeJson: null,
+  setRangeJson: null,
+  holdRangeJson: null,
+  restRangeJson: null,
+  rpeGuidanceJson: null,
+  progressionGuidance:
+    "Hybrid PPL weekly progression: add sets or reps within the prescribed range while preserving exercise identity. Do not swap exercises just to make progression numbers look different.",
+  priorityType: "strong_preference",
+  intelligenceTier: "phase_week_modulation",
+  appliesWhen: { templateStyle: "ppl_hybrid", weekIndex: { gte: 1 } },
+  doesNotApplyWhen: { deloadWeek: true },
+  computationFriendlyRule: { progressionMode: "add_sets_or_reps_within_range_preserve_exercise_identity" },
+  userVisibleEvidenceLabel: "PPL progression preserves exercise identity",
+})
+
+// --- Forearm Health repair (+1) ---
+addRx({
+  n: 802,
+  sourceId: "src_batch_01_forearm_health",
+  sourceKey: "forearm_health_uploaded_pdf_batch_01",
+  levelScope: null,
+  goalScope: null,
+  exerciseRoleScope: ["prehab"],
+  repRangeJson: { min: 15, max: 15 },
+  setRangeJson: { min: 2, max: 2 },
+  holdRangeJson: null,
+  restRangeJson: { minSeconds: 30, maxSeconds: 60 },
+  rpeGuidanceJson: null,
+  progressionGuidance:
+    "Forearm prehab dosage: 2 sets x 15 reps for each of pronation/extension/supination/flexion, paired with 30–60s rest or as a short circuit. Place near warm-up or end of session, not as a primary block.",
+  priorityType: "strong_preference",
+  intelligenceTier: "cross_cutting",
+  appliesWhen: { goalsIncludeAny: ["pulling", "rings", "lever", "planche", "grip", "front_lever"] },
+  doesNotApplyWhen: { wristPainAcute: true },
+  computationFriendlyRule: { sets: 2, reps: 15, restSeconds: { min: 30, max: 60 }, placement: ["warmup", "end_of_session"], notPrimaryBlock: true },
+  userVisibleEvidenceLabel: "Forearm prehab placed as support, not primary block",
+})
+
+// --- Pull-Up Pro Phase 2 repair (+2) ---
+addSelection({
+  n: 800,
+  sourceId: "src_batch_01_pup_phase_2",
+  sourceKey: "pull_up_pro_phase_2_uploaded_pdf_batch_01",
+  goalKey: "one_arm_pull_up",
+  skillKey: "one_arm_pull_up",
+  exerciseKey: "scap_pull_up",
+  roleKey: "support_scap",
+  levelScope: ["intermediate", "advanced"],
+  equipmentRequirementsJson: { pull_up_bar: true },
+  preferredWhenJson: { selectedSkillsIncludes: "one_arm_pull_up", phase: "phase_2_assisted" },
+  avoidWhenJson: { acuteShoulderPain: true },
+  selectionWeight: 0.7,
+  priorityType: "strong_preference",
+  intelligenceTier: "base_week_intelligence",
+  plainLanguageRule:
+    "Phase 2 (assisted one-arm) keeps scap pull-ups as a support exercise to preserve scap-pull capacity while assisted volume rises.",
+  computationFriendlyRule: { role: "support_scap", repRange: { min: 6, max: 10 }, sets: { min: 2, max: 3 } },
+  userVisibleEvidenceLabel: "Phase 2: scap pull-ups retained as scap-pull support",
+})
+addSelection({
+  n: 801,
+  sourceId: "src_batch_01_pup_phase_2",
+  sourceKey: "pull_up_pro_phase_2_uploaded_pdf_batch_01",
+  goalKey: "one_arm_pull_up",
+  skillKey: "one_arm_pull_up",
+  exerciseKey: "band_assisted_one_arm_pull_up",
+  roleKey: "primary_assisted_one_arm",
+  levelScope: ["intermediate", "advanced"],
+  equipmentRequirementsJson: { pull_up_bar: true, bands: true },
+  preferredWhenJson: { selectedSkillsIncludes: "one_arm_pull_up", phase: "phase_2_assisted", twoArmPullUpReps: { gte: 10 } },
+  avoidWhenJson: { twoArmPullUpReps: { lt: 10 } },
+  selectionWeight: 0.9,
+  priorityType: "strong_preference",
+  intelligenceTier: "base_week_intelligence",
+  plainLanguageRule:
+    "Phase 2 uses band-assisted one-arm pull-ups as the primary one-arm exposure before eccentric-heavy work. Sets stay low-rep with long rest.",
+  computationFriendlyRule: { role: "primary_assisted_one_arm", repRange: { min: 2, max: 5 }, sets: { min: 3, max: 5 }, restMinutes: { min: 3, max: 5 } },
+  userVisibleEvidenceLabel: "Phase 2: band-assisted one-arm pull-ups (primary)",
+  conflictGroup: "cg-one-arm-phase-progression",
+})
+
+// --- Pull-Up Pro Phase 3 repair (+2) ---
+addSelection({
+  n: 802,
+  sourceId: "src_batch_01_pup_phase_3",
+  sourceKey: "pull_up_pro_phase_3_uploaded_pdf_batch_01",
+  goalKey: "one_arm_pull_up",
+  skillKey: "one_arm_pull_up",
+  exerciseKey: "one_arm_negative_pull_up",
+  roleKey: "primary_eccentric_one_arm",
+  levelScope: ["advanced"],
+  equipmentRequirementsJson: { pull_up_bar: true },
+  preferredWhenJson: { selectedSkillsIncludes: "one_arm_pull_up", phase: "phase_3_eccentric", bandAssistedOneArmCompetent: true },
+  avoidWhenJson: { phase: "phase_2_assisted", elbowPain: true },
+  selectionWeight: 0.95,
+  priorityType: "strong_preference",
+  intelligenceTier: "base_week_intelligence",
+  plainLanguageRule:
+    "Phase 3 introduces one-arm negatives as the primary advanced exposure once Phase 2 assisted reps are competent. Long rest and low reps.",
+  computationFriendlyRule: { role: "primary_eccentric_one_arm", repRange: { min: 1, max: 3 }, sets: { min: 3, max: 5 }, restMinutes: { min: 3, max: 5 }, eccentricSeconds: { min: 5, max: 10 } },
+  userVisibleEvidenceLabel: "Phase 3: one-arm negatives (primary eccentric)",
+  conflictGroup: "cg-one-arm-phase-progression",
+})
+addSelection({
+  n: 803,
+  sourceId: "src_batch_01_pup_phase_3",
+  sourceKey: "pull_up_pro_phase_3_uploaded_pdf_batch_01",
+  goalKey: "one_arm_pull_up",
+  skillKey: "one_arm_pull_up",
+  exerciseKey: "one_arm_dead_hang",
+  roleKey: "support_grip_scap",
+  levelScope: ["advanced"],
+  equipmentRequirementsJson: { pull_up_bar: true },
+  preferredWhenJson: { selectedSkillsIncludes: "one_arm_pull_up", phase: "phase_3_eccentric" },
+  avoidWhenJson: { wristOrElbowPainAcute: true },
+  selectionWeight: 0.7,
+  priorityType: "strong_preference",
+  intelligenceTier: "base_week_intelligence",
+  plainLanguageRule:
+    "Phase 3 supports advanced one-arm work with one-arm dead hangs to build grip/scap capacity at the bar without adding more pulling fatigue.",
+  computationFriendlyRule: { role: "support_grip_scap", holdSeconds: { min: 5, max: 20 }, sets: { min: 2, max: 4 }, restMinutes: { min: 1, max: 3 } },
+  userVisibleEvidenceLabel: "Phase 3: one-arm dead hangs (grip/scap support)",
+})
+
+// --- Front Lever repair (+2) ---
+addRx({
+  n: 803,
+  sourceId: "src_batch_01_front_lever",
+  sourceKey: "front_lever_uploaded_pdf_batch_01",
+  levelScope: ["intermediate", "advanced"],
+  goalScope: ["front_lever", "bodyweight_skill"],
+  exerciseRoleScope: ["primary_skill_iso"],
+  repRangeJson: null,
+  setRangeJson: { min: 4, max: 8 },
+  holdRangeJson: { minSeconds: 5, maxSeconds: 15 },
+  restRangeJson: { minMinutes: 2, maxMinutes: 4 },
+  rpeGuidanceJson: { rpe: { min: 7, max: 9 } },
+  progressionGuidance:
+    "Front lever direct holds: 4–8 sets x 5–15s, 2–4 min rest. Time-based holds, not reps. Progress by accumulating clean total seconds at current variation, then advance.",
+  priorityType: "strong_preference",
+  intelligenceTier: "base_week_intelligence",
+  appliesWhen: { selectedSkills: ["front_lever"], role: "primary_skill_iso" },
+  doesNotApplyWhen: { acuteElbowOrShoulderPain: true },
+  computationFriendlyRule: { holdSeconds: { min: 5, max: 15 }, sets: { min: 4, max: 8 }, restMinutes: { min: 2, max: 4 }, useTimeNotReps: true },
+  userVisibleEvidenceLabel: "Front lever: time-based holds, 2–4 min rest",
+})
+addRx({
+  n: 804,
+  sourceId: "src_batch_01_front_lever",
+  sourceKey: "front_lever_uploaded_pdf_batch_01",
+  levelScope: ["intermediate", "advanced"],
+  goalScope: ["front_lever", "bodyweight_skill"],
+  exerciseRoleScope: ["primary_skill_dynamic"],
+  repRangeJson: { min: 3, max: 6 },
+  setRangeJson: { min: 3, max: 5 },
+  holdRangeJson: null,
+  restRangeJson: { minMinutes: 2, maxMinutes: 4 },
+  rpeGuidanceJson: { rpe: { min: 7, max: 9 } },
+  progressionGuidance:
+    "Front lever pulls / eccentrics: 3–5 sets x 3–6 reps, 2–4 min rest. Eccentric tempo 3–5s. Use as the dynamic strength expression of the lever.",
+  priorityType: "strong_preference",
+  intelligenceTier: "base_week_intelligence",
+  appliesWhen: { selectedSkills: ["front_lever"], role: "primary_skill_dynamic" },
+  doesNotApplyWhen: { acuteElbowOrShoulderPain: true },
+  computationFriendlyRule: { repRange: { min: 3, max: 6 }, sets: { min: 3, max: 5 }, restMinutes: { min: 2, max: 4 }, eccentricSeconds: { min: 3, max: 5 } },
+  userVisibleEvidenceLabel: "Front lever pulls/eccentrics: 3–6 reps, controlled eccentric",
+})
+
+// --- Lower Body B repair (+2) ---
+addRx({
+  n: 805,
+  sourceId: "src_batch_01_lower_body_b",
+  sourceKey: "lower_body_b_uploaded_pdf_batch_01",
+  levelScope: null,
+  goalScope: null,
+  exerciseRoleScope: ["lower_body_unilateral", "lower_body_quad", "lower_body_posterior"],
+  repRangeJson: { min: 6, max: 15 },
+  setRangeJson: { min: 3, max: 4 },
+  holdRangeJson: null,
+  restRangeJson: { minMinutes: 1, maxMinutes: 2 },
+  rpeGuidanceJson: { rpe: { min: 7, max: 9 } },
+  progressionGuidance:
+    "Lower Body B work uses prescribed tempo and 3–4 sets x 6–15 reps with 1–2 min rest. Progress by level (assisted → unilateral → eccentric/accumulation), not by random exercise swap.",
+  priorityType: "strong_preference",
+  intelligenceTier: "base_week_intelligence",
+  appliesWhen: { templateIncludesLowerBodyB: true },
+  doesNotApplyWhen: { acuteKneePain: true },
+  computationFriendlyRule: { repRange: { min: 6, max: 15 }, sets: { min: 3, max: 4 }, restMinutes: { min: 1, max: 2 }, progressionMode: "level_based" },
+  userVisibleEvidenceLabel: "Lower Body B: tempo + level-based progression",
+})
+addRx({
+  n: 806,
+  sourceId: "src_batch_01_lower_body_b",
+  sourceKey: "lower_body_b_uploaded_pdf_batch_01",
+  levelScope: null,
+  goalScope: null,
+  exerciseRoleScope: null,
+  repRangeJson: null,
+  setRangeJson: null,
+  holdRangeJson: null,
+  restRangeJson: null,
+  rpeGuidanceJson: null,
+  progressionGuidance:
+    "When primary goal is upper-body calisthenics skill, lower-body frequency/volume must not compromise upper-body recovery. Cap lower-body sessions at 1–2 per week and prefer placing them away from primary skill days.",
+  priorityType: "strong_preference",
+  intelligenceTier: "cross_cutting",
+  appliesWhen: { primaryGoalIsUpperBodySkill: true },
+  doesNotApplyWhen: { primaryGoal: ["lower_body_strength", "general_fitness"] },
+  computationFriendlyRule: { lowerBodySessionsPerWeek: { max: 2 }, placeAwayFromPrimarySkillDays: true },
+  userVisibleEvidenceLabel: "Lower Body B sessions capped to protect upper-body skill recovery",
+  conflictGroup: "cg-lower-body-vs-skill-recovery",
+})
+
+// =============================================================================
 // PUBLIC ACCESSORS — same shape as DB accessors, used by runtime contract
 // =============================================================================
 

@@ -745,6 +745,12 @@ function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
           batchKeys?: string[]
           batchAtomCounts?: Record<string, number>
         }
+        dbCompleteness?: {
+          state?: 'empty' | 'partial' | 'complete'
+          totalDbAtoms?: number
+          totalFallbackBatchAtoms?: number
+          filledFromFallback?: string[]
+        }
         doctrineCoverage?: {
           principlesCount?: number
           progressionRuleCount?: number
@@ -778,6 +784,8 @@ function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
   const sourceLabel =
     rc.source === 'db_live'
       ? 'DB live'
+      : rc.source === 'hybrid_db_plus_uploaded_fallback'
+      ? 'Hybrid DB + uploaded fallback'
       : rc.source === 'fallback_uploaded_pdf_batches'
       ? 'Uploaded PDF fallback'
       : rc.source === 'fallback_batch_01'
@@ -785,6 +793,15 @@ function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
       : rc.source === 'fallback_none'
       ? 'No doctrine'
       : 'Unknown'
+
+  // [DOCTRINE-COMPLETENESS-HONESTY] When DB had only partial coverage and
+  // in-code fallback completed missing batches, surface that fact compactly
+  // instead of pretending the program is fully DB-driven.
+  const filledFromFallback = rc.dbCompleteness?.filledFromFallback ?? []
+  const completenessLine =
+    rc.source === 'hybrid_db_plus_uploaded_fallback' && filledFromFallback.length > 0
+      ? `Hybrid source: DB anchors completed by uploaded fallback (${filledFromFallback.join(', ')})`
+      : null
 
   const influence = exp.doctrineInfluenceLevel ?? 'none'
   const influenceLabel =
@@ -843,6 +860,9 @@ function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
           </span>
         )}
       </div>
+      {completenessLine && (
+        <p className="mt-2 text-xs text-amber-400/80 italic">{completenessLine}</p>
+      )}
       {summaryLines.length > 0 && (
         <ul className="mt-2 space-y-0.5">
           {summaryLines.map((line, idx) => (

@@ -1,174 +1,207 @@
--- ============================================================================
--- 025: Doctrine Batch 5 — Representative Anchor Atoms
--- ============================================================================
--- Seeds 9 representative principle anchor atoms (one per Batch 5 source).
--- The richer 142-atom Batch 5 set lives in
--- `lib/doctrine/source-batches/batch-05-uploaded-pdf-doctrine.ts`.
+-- =============================================================================
+-- DOCTRINE BATCH 5 — ATOM SEED (PRINCIPLE ANCHORS, schema-aligned)
+-- =============================================================================
 --
--- Runtime gate guarantee: the DB/fallback completeness gate in
--- `lib/doctrine-runtime-contract.ts` compares per-batch DB atom count vs
--- in-code fallback atom count. Because this seed inserts only 9 anchor
--- principles for Batch 5 (vs ~142 in-code atoms), the gate will always
--- mark `batch_05` as `filled: 'fallback'` and report
--- `source = 'hybrid_db_plus_uploaded_fallback'` so the full doctrine
--- remains available without suppression.
+-- ADDITIVE ONLY. ON CONFLICT (source_id, principle_key) DO NOTHING.
+-- No DROP / ALTER / DELETE / TRUNCATE. No edits to existing rows.
 --
--- Additive only:
---   • INSERT only
---   • ON CONFLICT (source_id, principle_key) DO NOTHING
---   • Each row guarded by EXISTS so it skips silently if 024 hasn't run
---   • No DROP / ALTER / DELETE / TRUNCATE
--- ============================================================================
+-- One representative principle anchor per Batch 5 source. The full Batch 5
+-- atom set (142 atoms across 9 sources, distributed over principles,
+-- progression, selection, method, prescription, and carryover) lives in the
+-- in-code fallback at:
+--   lib/doctrine/source-batches/batch-05-uploaded-pdf-doctrine.ts
+-- and is surfaced through the unified uploaded-PDF aggregator.
+--
+-- Why anchors-only is safe:
+--   The runtime contract uses a PER-BATCH completeness gate that compares
+--   DB atoms vs in-code fallback atoms for each batch and uses fallback for
+--   any batch where DB is partial. Source mode becomes
+--   `hybrid_db_plus_uploaded_fallback` and the Program UI proof strip
+--   surfaces this honestly. See:
+--     lib/doctrine-runtime-contract.ts → DOCTRINE-DB-FALLBACK-COMPLETENESS-GATE
+--     app/(app)/program/page.tsx       → DoctrineRuntimeProof completenessLine
+--
+-- Provenance: derived_from_prompt_section_5_summary. Raw PDFs not attached.
+-- Each insert guarded by EXISTS so it skips silently if the matching Batch 5
+-- source row from scripts/024 isn't present yet.
+-- =============================================================================
 
--- 1. BL/FL 3x Weekly Training
-INSERT INTO training_doctrine_principles
-  (id, source_id, doctrine_family, principle_key, principle_title, principle_summary, safety_priority, priority_type, priority_weight, is_base_intelligence, is_phase_modulation, applies_when_json, does_not_apply_when_json, scopes_json, tags_json, created_at, updated_at)
+-- 1) BL/FL 3x Weekly Training
+INSERT INTO training_doctrine_principles (
+  source_id, doctrine_family, principle_key, principle_title, principle_summary,
+  athlete_level_scope, goal_scope, tags_json,
+  is_base_intelligence, is_phase_modulation,
+  priority_weight, priority_type, safety_priority
+)
 SELECT
-  'pr_b05_anchor_bl_fl_3x',
   'src_batch_05_bl_fl_3x_weekly',
-  'bl_fl_three_day_split',
-  'lp3_anchor_direct_distribution',
-  'BL/FL 3x weekly training distributes lever stress across the week',
-  'When back/front lever is selected and readiness allows, direct lever pulls/holds/eccentrics are distributed across the 3-day week with main work resting ~3 minutes.',
-  2, 'soft_preference', 1.5, true, false,
-  '{}'::jsonb, '{}'::jsonb, '{}'::jsonb,
-  '{"provenance":"derived_from_prompt_section_5_summary","evidence_snippet":null,"anchor":true,"batch":"batch_05"}'::jsonb,
-  NOW(), NOW()
+  'bl_fl_3x_direct_expression',
+  'lever_direct_expression_3x',
+  'BL/FL 3x: distribute direct lever exposure across 3 weekly sessions',
+  'When BL/FL are selected and readiness allows, direct lever pulls, holds, and eccentrics should appear across the week with main work on long rest spacing.',
+  '["intermediate","advanced"]'::jsonb,
+  '["back_lever","front_lever","lever_strength"]'::jsonb,
+  '["bl_fl","direct_expression","derived_from_prompt_section_5_summary"]'::jsonb,
+  TRUE, FALSE, 2.0, 'soft_preference', 0
 WHERE EXISTS (SELECT 1 FROM training_doctrine_sources WHERE id = 'src_batch_05_bl_fl_3x_weekly')
 ON CONFLICT (source_id, principle_key) DO NOTHING;
 
--- 2. Gladiolus 6-Day PPL Arnold
-INSERT INTO training_doctrine_principles
-  (id, source_id, doctrine_family, principle_key, principle_title, principle_summary, safety_priority, priority_type, priority_weight, is_base_intelligence, is_phase_modulation, applies_when_json, does_not_apply_when_json, scopes_json, tags_json, created_at, updated_at)
+-- 2) Gladiolus 6-Day PPL Arnold
+INSERT INTO training_doctrine_principles (
+  source_id, doctrine_family, principle_key, principle_title, principle_summary,
+  athlete_level_scope, goal_scope, tags_json,
+  is_base_intelligence, is_phase_modulation,
+  priority_weight, priority_type, safety_priority
+)
 SELECT
-  'pr_b05_anchor_g6',
   'src_batch_05_gladiolus_6day_ppl_arnold',
-  'six_day_hypertrophy_split',
-  'g6_anchor_split_gates',
-  '6-day PPL/Arnold split is gated by recovery and skill priority',
-  'A 6-day high-frequency hypertrophy split is selected only when schedule, recovery, and goal support it; selected calisthenics skills retain direct or carryover representation.',
-  2, 'hard_constraint', 2.0, true, false,
-  '{"availableDays":6}'::jsonb, '{}'::jsonb, '{}'::jsonb,
-  '{"provenance":"derived_from_prompt_section_5_summary","evidence_snippet":null,"anchor":true,"batch":"batch_05"}'::jsonb,
-  NOW(), NOW()
+  'high_frequency_hypertrophy_split',
+  'six_day_split_recovery_gate',
+  '6-day PPL/Arnold split is gated by recovery, time, and hypertrophy goal',
+  'High-frequency hypertrophy splits should only influence programming when schedule, recovery capacity, and explicit hypertrophy/hybrid goal support 6 sessions per week.',
+  '["intermediate","advanced"]'::jsonb,
+  '["hypertrophy","hybrid"]'::jsonb,
+  '["6_day","ppl","arnold","recovery_gate","derived_from_prompt_section_5_summary"]'::jsonb,
+  TRUE, FALSE, 1.6, 'soft_preference', 0
 WHERE EXISTS (SELECT 1 FROM training_doctrine_sources WHERE id = 'src_batch_05_gladiolus_6day_ppl_arnold')
 ON CONFLICT (source_id, principle_key) DO NOTHING;
 
--- 3. Gladiolus 5-Day PPL + Upper/Lower
-INSERT INTO training_doctrine_principles
-  (id, source_id, doctrine_family, principle_key, principle_title, principle_summary, safety_priority, priority_type, priority_weight, is_base_intelligence, is_phase_modulation, applies_when_json, does_not_apply_when_json, scopes_json, tags_json, created_at, updated_at)
+-- 3) Gladiolus 5-Day PPL Upper/Lower
+INSERT INTO training_doctrine_principles (
+  source_id, doctrine_family, principle_key, principle_title, principle_summary,
+  athlete_level_scope, goal_scope, tags_json,
+  is_base_intelligence, is_phase_modulation,
+  priority_weight, priority_type, safety_priority
+)
 SELECT
-  'pr_b05_anchor_g5',
   'src_batch_05_gladiolus_5day_ppl_ul',
-  'five_day_hypertrophy_split',
-  'g5_anchor_skill_priority',
-  '5-day PPL+UL split preserves selected skill priority',
-  'A 5-day hybrid split supports rather than replaces direct calisthenics skill work; recovery shortfalls downshift to a lower-frequency split.',
-  2, 'hard_constraint', 2.0, true, false,
-  '{"availableDays":5}'::jsonb, '{}'::jsonb, '{}'::jsonb,
-  '{"provenance":"derived_from_prompt_section_5_summary","evidence_snippet":null,"anchor":true,"batch":"batch_05"}'::jsonb,
-  NOW(), NOW()
+  'hybrid_5_day_split',
+  'five_day_skill_priority_preserved',
+  '5-day hybrid split preserves skill priority',
+  'PPL combined with upper/lower can inform 5-day hybrid scheduling, but selected calisthenics skills must retain direct or labeled-carryover representation.',
+  '["intermediate","advanced"]'::jsonb,
+  '["hybrid","hypertrophy","skill"]'::jsonb,
+  '["5_day","hybrid","skill_priority","derived_from_prompt_section_5_summary"]'::jsonb,
+  TRUE, FALSE, 1.6, 'soft_preference', 0
 WHERE EXISTS (SELECT 1 FROM training_doctrine_sources WHERE id = 'src_batch_05_gladiolus_5day_ppl_ul')
 ON CONFLICT (source_id, principle_key) DO NOTHING;
 
--- 4. Gladiolus 4-Day Push/Pull/Legs/Shoulder-Arms
-INSERT INTO training_doctrine_principles
-  (id, source_id, doctrine_family, principle_key, principle_title, principle_summary, safety_priority, priority_type, priority_weight, is_base_intelligence, is_phase_modulation, applies_when_json, does_not_apply_when_json, scopes_json, tags_json, created_at, updated_at)
+-- 4) Gladiolus 4-Day PPL Shoulder-Arms
+INSERT INTO training_doctrine_principles (
+  source_id, doctrine_family, principle_key, principle_title, principle_summary,
+  athlete_level_scope, goal_scope, tags_json,
+  is_base_intelligence, is_phase_modulation,
+  priority_weight, priority_type, safety_priority
+)
 SELECT
-  'pr_b05_anchor_g4',
   'src_batch_05_gladiolus_4day_ppl_sh',
-  'four_day_hybrid_split',
-  'g4_anchor_skill_priority',
-  '4-day P/P/L/Sh-Arms split preserves selected skill priority',
-  'A 4-day push/pull/legs/shoulder-arms split supports hybrid training while preserving direct skill exposure; the shoulders/arms day concentrates accessory hypertrophy without inflating compound stress.',
-  2, 'hard_constraint', 2.0, true, false,
-  '{"availableDays":4}'::jsonb, '{}'::jsonb, '{}'::jsonb,
-  '{"provenance":"derived_from_prompt_section_5_summary","evidence_snippet":null,"anchor":true,"batch":"batch_05"}'::jsonb,
-  NOW(), NOW()
+  'hybrid_4_day_split',
+  'four_day_accessory_packaging',
+  '4-day hybrid split packages accessory/upper-isolation around skill priority',
+  'A 4-day push/pull/legs/shoulder-arms structure may inform hybrid programming, but selected calisthenics skills must retain direct or labeled-carryover representation.',
+  '["intermediate"]'::jsonb,
+  '["hybrid","hypertrophy"]'::jsonb,
+  '["4_day","hybrid","accessory","derived_from_prompt_section_5_summary"]'::jsonb,
+  TRUE, FALSE, 1.5, 'soft_preference', 0
 WHERE EXISTS (SELECT 1 FROM training_doctrine_sources WHERE id = 'src_batch_05_gladiolus_4day_ppl_sh')
 ON CONFLICT (source_id, principle_key) DO NOTHING;
 
--- 5. Gladiolus 3-Day Full Body + Upper/Lower
-INSERT INTO training_doctrine_principles
-  (id, source_id, doctrine_family, principle_key, principle_title, principle_summary, safety_priority, priority_type, priority_weight, is_base_intelligence, is_phase_modulation, applies_when_json, does_not_apply_when_json, scopes_json, tags_json, created_at, updated_at)
+-- 5) Gladiolus 3-Day Full Body Upper/Lower
+INSERT INTO training_doctrine_principles (
+  source_id, doctrine_family, principle_key, principle_title, principle_summary,
+  athlete_level_scope, goal_scope, tags_json,
+  is_base_intelligence, is_phase_modulation,
+  priority_weight, priority_type, safety_priority
+)
 SELECT
-  'pr_b05_anchor_g3',
   'src_batch_05_gladiolus_3day_fb_ul',
-  'three_day_compressed_split',
-  'g3_anchor_recompose',
-  '3-day compressed week recomposes around priority skills',
-  'On a 3-day week, priority skill work and high-ROI strength/hypertrophy support are recombined rather than dropping selected skills silently.',
-  2, 'hard_constraint', 2.0, true, false,
-  '{"availableDays":3}'::jsonb, '{}'::jsonb, '{}'::jsonb,
-  '{"provenance":"derived_from_prompt_section_5_summary","evidence_snippet":null,"anchor":true,"batch":"batch_05"}'::jsonb,
-  NOW(), NOW()
+  'compressed_3_day_recomposition',
+  'three_day_recompose_priority_skills',
+  '3-day compressed week recombines priority skill work, never silently drops it',
+  'When training days shrink to 3, the engine must recompose high-ROI skill work and essential strength/hypertrophy support rather than dropping selected skills.',
+  '["beginner","intermediate"]'::jsonb,
+  '["hybrid","skill","hypertrophy"]'::jsonb,
+  '["3_day","compressed","recomposition","derived_from_prompt_section_5_summary"]'::jsonb,
+  TRUE, FALSE, 1.8, 'soft_preference', 0
 WHERE EXISTS (SELECT 1 FROM training_doctrine_sources WHERE id = 'src_batch_05_gladiolus_3day_fb_ul')
 ON CONFLICT (source_id, principle_key) DO NOTHING;
 
--- 6. Monster Maker Total Body
-INSERT INTO training_doctrine_principles
-  (id, source_id, doctrine_family, principle_key, principle_title, principle_summary, safety_priority, priority_type, priority_weight, is_base_intelligence, is_phase_modulation, applies_when_json, does_not_apply_when_json, scopes_json, tags_json, created_at, updated_at)
+-- 6) Monster Maker Total Body Muscle Building
+INSERT INTO training_doctrine_principles (
+  source_id, doctrine_family, principle_key, principle_title, principle_summary,
+  athlete_level_scope, goal_scope, tags_json,
+  is_base_intelligence, is_phase_modulation,
+  priority_weight, priority_type, safety_priority
+)
 SELECT
-  'pr_b05_anchor_mm',
   'src_batch_05_monster_maker',
   'circuit_density_method',
-  'mm_anchor_circuit_intent',
-  'Circuit/density blocks selected by intent and preserve round structure',
-  'Monster Maker-style circuits are selected when goal/fatigue/duration support density work; circuit method preserves rounds, inter-round rest, and time caps and is never silently flattened into straight sets.',
-  1, 'soft_preference', 1.5, true, false,
-  '{}'::jsonb, '{}'::jsonb, '{}'::jsonb,
-  '{"provenance":"derived_from_prompt_section_5_summary","evidence_snippet":null,"anchor":true,"batch":"batch_05"}'::jsonb,
-  NOW(), NOW()
+  'circuit_method_eligibility',
+  'Density circuits are eligible only when goal, session duration, and fatigue support them',
+  'Monster Maker style circuits/density blocks may be selected when the user goal is hypertrophy/conditioning, session duration allows the time cap, and fatigue is not elevated.',
+  '["intermediate","advanced"]'::jsonb,
+  '["hypertrophy","conditioning","density"]'::jsonb,
+  '["circuit","density","time_cap","derived_from_prompt_section_5_summary"]'::jsonb,
+  TRUE, FALSE, 1.5, 'soft_preference', 0
 WHERE EXISTS (SELECT 1 FROM training_doctrine_sources WHERE id = 'src_batch_05_monster_maker')
 ON CONFLICT (source_id, principle_key) DO NOTHING;
 
--- 7. Nicky Lyan Theory/Recovery
-INSERT INTO training_doctrine_principles
-  (id, source_id, doctrine_family, principle_key, principle_title, principle_summary, safety_priority, priority_type, priority_weight, is_base_intelligence, is_phase_modulation, applies_when_json, does_not_apply_when_json, scopes_json, tags_json, created_at, updated_at)
+-- 7) Nicky Lyan — Actual Get Better at Calisthenics
+INSERT INTO training_doctrine_principles (
+  source_id, doctrine_family, principle_key, principle_title, principle_summary,
+  athlete_level_scope, goal_scope, tags_json,
+  is_base_intelligence, is_phase_modulation,
+  priority_weight, priority_type, safety_priority
+)
 SELECT
-  'pr_b05_anchor_nlt',
   'src_batch_05_nl_theory',
-  'calisthenics_theory_recovery',
-  'nlt_anchor_stimulus_recovery',
-  'Stimulus + recovery = adaptation; theory before brute force',
-  'Adaptation requires both stimulus and recovery; advanced skills progress through leverage/angle/tension/scapula and recovery, not repeated max attempts. Volume/intensity/frequency are co-decided.',
-  2, 'soft_preference', 2.0, true, false,
-  '{}'::jsonb, '{}'::jsonb, '{}'::jsonb,
-  '{"provenance":"derived_from_prompt_section_5_summary","evidence_snippet":null,"anchor":true,"batch":"batch_05"}'::jsonb,
-  NOW(), NOW()
+  'stimulus_recovery_adaptation',
+  'srb_balance_principle',
+  'Stimulus + recovery = adaptation; volume/intensity/frequency must balance',
+  'Increasing volume/intensity/frequency without proportional recovery support causes burnout or plateau. The engine must balance the three together and protect long-term progression on daily adjustments.',
+  '["beginner","intermediate","advanced"]'::jsonb,
+  '["recovery","progression","fatigue"]'::jsonb,
+  '["stimulus_recovery_adaptation","vif_balance","derived_from_prompt_section_5_summary"]'::jsonb,
+  TRUE, FALSE, 2.0, 'hard_constraint', 1
 WHERE EXISTS (SELECT 1 FROM training_doctrine_sources WHERE id = 'src_batch_05_nl_theory')
 ON CONFLICT (source_id, principle_key) DO NOTHING;
 
--- 8. Nicolas Lyan How to Start
-INSERT INTO training_doctrine_principles
-  (id, source_id, doctrine_family, principle_key, principle_title, principle_summary, safety_priority, priority_type, priority_weight, is_base_intelligence, is_phase_modulation, applies_when_json, does_not_apply_when_json, scopes_json, tags_json, created_at, updated_at)
+-- 8) Nicolas Lyan — How to Start Calisthenics
+INSERT INTO training_doctrine_principles (
+  source_id, doctrine_family, principle_key, principle_title, principle_summary,
+  athlete_level_scope, goal_scope, tags_json,
+  is_base_intelligence, is_phase_modulation,
+  priority_weight, priority_type, safety_priority
+)
 SELECT
-  'pr_b05_anchor_nls',
   'src_batch_05_nl_start',
-  'beginner_foundations',
-  'nls_anchor_foundations_first',
-  'Foundations precede advanced skills; beginner plans are strategic',
-  'Beginner athletes build foundation movement quality (rows, push-ups, pull-ups, dips, hollow body, squats, plank) before advanced skills become primary; sets/reps/rest/rest-days are chosen strategically.',
-  2, 'hard_constraint', 2.0, true, false,
-  '{}'::jsonb, '{}'::jsonb, '{}'::jsonb,
-  '{"provenance":"derived_from_prompt_section_5_summary","evidence_snippet":null,"anchor":true,"batch":"batch_05"}'::jsonb,
-  NOW(), NOW()
+  'beginner_foundation_calisthenics',
+  'foundation_before_advanced',
+  'Foundations come before advanced skills; classify level before selecting progressions',
+  'Beginner athletes must establish baseline strength on rows, pushups, pull-ups, dips, hollow body, toes-to-bar, skin the cat, plank, and squats before advanced skill exposure becomes primary. Classify level first; match progression/regression to current ability.',
+  '["beginner"]'::jsonb,
+  '["foundation","skill","general_strength"]'::jsonb,
+  '["beginner","foundation","level_classification","derived_from_prompt_section_5_summary"]'::jsonb,
+  TRUE, FALSE, 2.0, 'soft_preference', 0
 WHERE EXISTS (SELECT 1 FROM training_doctrine_sources WHERE id = 'src_batch_05_nl_start')
 ON CONFLICT (source_id, principle_key) DO NOTHING;
 
--- 9. Nicky Lyan Master the Handstand
-INSERT INTO training_doctrine_principles
-  (id, source_id, doctrine_family, principle_key, principle_title, principle_summary, safety_priority, priority_type, priority_weight, is_base_intelligence, is_phase_modulation, applies_when_json, does_not_apply_when_json, scopes_json, tags_json, created_at, updated_at)
+-- 9) Nicky Lyan — Master the Handstand
+INSERT INTO training_doctrine_principles (
+  source_id, doctrine_family, principle_key, principle_title, principle_summary,
+  athlete_level_scope, goal_scope, tags_json,
+  is_base_intelligence, is_phase_modulation,
+  priority_weight, priority_type, safety_priority
+)
 SELECT
-  'pr_b05_anchor_nlh',
   'src_batch_05_nl_handstand',
   'handstand_form_balance_strength',
-  'nlh_anchor_components_alignment',
-  'Handstand has three components — form, balance, strength — and stacked alignment is the form goal',
-  'Programming classifies the limiting factor (form/balance/strength/mixed); proper stack of wrists/elbows/shoulders/hips/knees/ankles is the form goal; advanced freestanding work is gated by prerequisite plank/pressing capacity.',
-  2, 'hard_constraint', 2.0, true, false,
-  '{"selectedSkills":["handstand"]}'::jsonb, '{}'::jsonb, '{}'::jsonb,
-  '{"provenance":"derived_from_prompt_section_5_summary","evidence_snippet":null,"anchor":true,"batch":"batch_05"}'::jsonb,
-  NOW(), NOW()
+  'handstand_prerequisite_and_components',
+  'Handstand has form, balance, and strength components; check 45s high plank prerequisite',
+  'Handstand programming should classify the limiter (form/balance/strength/mixed), confirm prerequisite pressing/plank capacity, prefer joint-stacked alignment as the goal, and use offset stack only as a transitional learning tool.',
+  '["beginner","intermediate"]'::jsonb,
+  '["handstand","skill","form"]'::jsonb,
+  '["handstand","prerequisite","limiter_classification","derived_from_prompt_section_5_summary"]'::jsonb,
+  TRUE, FALSE, 2.0, 'soft_preference', 0
 WHERE EXISTS (SELECT 1 FROM training_doctrine_sources WHERE id = 'src_batch_05_nl_handstand')
 ON CONFLICT (source_id, principle_key) DO NOTHING;

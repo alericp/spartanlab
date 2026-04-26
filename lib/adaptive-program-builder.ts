@@ -136,6 +136,7 @@ import { prefetchDoctrineRules, getDoctrineInfluenceSummary, getCachedDoctrineRu
 
 // [DOCTRINE RUNTIME CONTRACT] Authoritative doctrine contract for upstream generation influence
 import { buildDoctrineRuntimeContract, type DoctrineRuntimeContract } from './doctrine-runtime-contract'
+import type { DoctrineIntegrationProof } from './doctrine/doctrine-builder-integration-contract'
 // [SHADOW INTEGRATION] Doctrine Influence Contract - bridges doctrine DB → generator
 import {
 buildDoctrineInfluenceContract,
@@ -912,6 +913,14 @@ type AdaptiveSessionContext = {
   multiSkillAllocation?: MultiSkillSessionAllocationContract | null
   // [DOCTRINE RUNTIME CONTRACT] Authoritative doctrine contract for upstream generation influence
   doctrineRuntimeContract?: DoctrineRuntimeContract | null
+  // [DOCTRINE-TO-BUILDER PHASE 2] Compact program-level proof that the doctrine
+  // decision context reached the builder for THIS generation. Attached by
+  // `executeAuthoritativeGeneration` from `doctrineRuntimeContract` immediately
+  // after builder completion. Survives save/load via whole-object JSON
+  // serialization. Phase 2 wires context only — exercise selection,
+  // sets/reps/rest, and method choice are NOT yet doctrine-driven.
+  // The `disclaimer` field on the proof preserves that contract for the UI.
+  doctrineIntegration?: DoctrineIntegrationProof | null
   // [DOCTRINE INFLUENCE] Doctrine influence contract - bridges doctrine DB → generator
   // This contract explicitly separates athleteTruth, doctrineDbTruth, codeDoctrineFallbackTruth,
   // mergedInfluence, sourceAttribution, and readinessState for audit visibility.

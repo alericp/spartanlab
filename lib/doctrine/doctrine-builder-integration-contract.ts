@@ -454,3 +454,465 @@ export function isDoctrineDecisionContextUsable(
   if (!context) return false
   return context.diagnostics.usable === true && context.sourceMode !== 'unavailable'
 }
+
+// =============================================================================
+// PHASE 2 — PROGRAM-LEVEL METADATA SHAPE
+// =============================================================================
+//
+// `DoctrineIntegrationProof` is the COMPACT proof object that Phase 2 attaches
+// to the generated AdaptiveProgram (`program.doctrineIntegration`). It does
+// NOT carry raw doctrine atoms; it carries selected counts, decision flags,
+// a small set of representative `DoctrineInfluenceSummary` items per category
+// (with batch + sourceFamily provenance preserved), and an honest disclaimer
+// that Phase 2 has wired *context* — not yet doctrine-driven decisions.
+//
+// Persistence: the program is JSON.stringify'd whole by setActiveProgram, so
+// `doctrineIntegration` survives save/load with no normalize boundary needed.
+// =============================================================================
+
+export type DoctrineIntegrationContextStatus =
+  | 'active'      // doctrine context reached the builder + is usable
+  | 'degraded'    // doctrine context reached the builder but is partial / partial DB / missing batches
+  | 'unavailable' // no doctrine runtime contract was available
+
+/**
+ * Selected-counts mirror of `DoctrineBuilderDecisionContext.selectedDoctrine`.
+ * Numbers only — used for the program-UI proof strip and for fast diffs.
+ */
+export interface DoctrineIntegrationSelectedCounts {
+  principles: number
+  progressionRules: number
+  exerciseSelectionRules: number
+  contraindicationRules: number
+  methodRules: number
+  prescriptionRules: number
+  carryoverRules: number
+}
+
+/**
+ * Compact, save-safe proof object attached to every generated program.
+ * Never references the live runtime contract; everything here is a snapshot.
+ */
+export interface DoctrineIntegrationProof {
+  /** Phase tag — flips when Phase 3 starts changing actual decisions. */
+  phase: 'phase_2_context_wired'
+
+  /** Honest health label for the Program UI. */
+  contextStatus: DoctrineIntegrationContextStatus
+
+  /** Mirrors decisionContext.sourceMode (db_live | fallback | hybrid | unavailable). */
+  sourceMode: DoctrineSourceMode
+
+  /** Mirrors decisionContext.batchCoverage. */
+  batchCoverage: DoctrineBuilderDecisionContext['batchCoverage']
+  presentBatches: string[]
+  missingBatches: string[]
+
+  /** Counts of the selected (compact) doctrine arrays handed to the builder. */
+  selectedCounts: DoctrineIntegrationSelectedCounts
+
+  /** Top-N representative summaries per category — preserves batch/source provenance. */
+  selectedSummaries: {
+    principles: DoctrineInfluenceSummary[]
+    progressionRules: DoctrineInfluenceSummary[]
+    exerciseSelectionRules: DoctrineInfluenceSummary[]
+    contraindicationRules: DoctrineInfluenceSummary[]
+    methodRules: DoctrineInfluenceSummary[]
+    prescriptionRules: DoctrineInfluenceSummary[]
+    carryoverRules: DoctrineInfluenceSummary[]
+  }
+
+  /** Boolean fast-paths — copy of decisionContext.decisionFlags. */
+  decisionFlags: DoctrineBuilderDecisionContext['decisionFlags']
+
+  /** What the Program UI is allowed to claim Phase 2 reached. */
+  expectedProgramInfluences: string[]
+  missingInfluences: string[]
+
+  /** Honest health report. */
+  diagnostics: DoctrineBuilderDecisionContext['diagnostics']
+
+  /** Stable disclaimer the Program UI must display next to the proof. */
+  disclaimer: string
+
+  /** ISO timestamp of the proof attachment (set by the wrapper). */
+  attachedAt: string
+
+  /** decisionContext.contextId for log correlation. */
+  contextId: string
+  contextVersion: string
+}
+
+const PHASE2_DISCLAIMER =
+  'Doctrine context reached the builder. Phase 2 does not yet allow doctrine to change exercise selection or prescriptions.'
+
+/**
+ * Hard cap so the proof never bloats the program payload. Tuned for "enough
+ * provenance for the UI to render an honest list" and nothing more.
+ */
+const PROOF_PER_CATEGORY_CAP = 6
+
+function emptyProof(): DoctrineIntegrationProof {
+  return {
+    phase: 'phase_2_context_wired',
+    contextStatus: 'unavailable',
+    sourceMode: 'unavailable',
+    batchCoverage: {
+      expectedBatches: EXPECTED_DOCTRINE_BATCH_KEYS,
+      presentBatches: [],
+      missingBatches: [...EXPECTED_DOCTRINE_BATCH_KEYS],
+      partialBatches: [],
+    },
+    presentBatches: [],
+    missingBatches: [...EXPECTED_DOCTRINE_BATCH_KEYS],
+    selectedCounts: {
+      principles: 0,
+      progressionRules: 0,
+      exerciseSelectionRules: 0,
+      contraindicationRules: 0,
+      methodRules: 0,
+      prescriptionRules: 0,
+      carryoverRules: 0,
+    },
+    selectedSummaries: {
+      principles: [],
+      progressionRules: [],
+      exerciseSelectionRules: [],
+      contraindicationRules: [],
+      methodRules: [],
+      prescriptionRules: [],
+      carryoverRules: [],
+    },
+    decisionFlags: {
+      protectsPrimarySkill: false,
+      hasMethodDecisionRules: false,
+      hasWarmupCooldownRules: false,
+      hasLowerBodyPreferenceRules: false,
+      hasMilitaryRules: false,
+      hasAdvancedSkillRules: false,
+      hasFlexibilityRules: false,
+      hasContraindicationRules: false,
+    },
+    expectedProgramInfluences: [],
+    missingInfluences: [],
+    diagnostics: {
+      usable: false,
+      blocker: 'no_doctrine_runtime_contract',
+      warnings: [],
+    },
+    disclaimer: PHASE2_DISCLAIMER,
+    attachedAt: new Date().toISOString(),
+    contextId: 'unavailable',
+    contextVersion: 'unavailable',
+  }
+}
+
+/**
+ * Read-only summary derivation: walks the runtime contract bundles and emits
+ * a small DoctrineInfluenceSummary[] per category. Pure; no DB; no clocks
+ * beyond `attachedAt` written by the caller.
+ *
+ * IMPORTANT: this never copies raw atoms. Each summary item is a *reference
+ * line* the Program UI can render with provenance.
+ */
+function deriveSelectedSummaries(
+  runtime: DoctrineRuntimeContract,
+): DoctrineIntegrationProof['selectedSummaries'] {
+  const principles: DoctrineInfluenceSummary[] = []
+  const methodRules: DoctrineInfluenceSummary[] = []
+  const prescriptionRules: DoctrineInfluenceSummary[] = []
+  const exerciseSelectionRules: DoctrineInfluenceSummary[] = []
+  const carryoverRules: DoctrineInfluenceSummary[] = []
+  const progressionRules: DoctrineInfluenceSummary[] = []
+  // Contraindications: runtime doesn't expose a category bundle today; Phase 2
+  // surfaces 0 here and the Program UI will explicitly say so. This matches
+  // the audit-truth principle that we never invent doctrine claims.
+  const contraindicationRules: DoctrineInfluenceSummary[] = []
+
+  // ---- principles: derive from headlineReasons + userVisibleSummary
+  const headlines = runtime.explanationDoctrine?.headlineReasons ?? []
+  for (let i = 0; i < headlines.length && principles.length < PROOF_PER_CATEGORY_CAP; i++) {
+    const text = headlines[i]
+    if (!text) continue
+    principles.push({
+      id: `principle_headline_${i}`,
+      sourceId: null,
+      batch: null,
+      family: 'principle',
+      title: text,
+      summary: text,
+      visibleEvidence: text,
+    })
+  }
+
+  // ---- method rules: pull from preferred / blocked / limited
+  const md = runtime.methodDoctrine
+  if (md) {
+    for (const m of md.preferredMethods.slice(0, PROOF_PER_CATEGORY_CAP)) {
+      const reasons = md.methodReasons?.[m] ?? []
+      methodRules.push({
+        id: `method_preferred_${m}`,
+        sourceId: null,
+        batch: null,
+        family: 'method',
+        title: `Preferred: ${m}`,
+        summary: reasons[0] ?? `Method preferred by current doctrine: ${m}`,
+        appliesTo: [m],
+        visibleEvidence: `Preferred — ${m}`,
+      })
+    }
+    for (const m of md.blockedMethods.slice(0, PROOF_PER_CATEGORY_CAP - methodRules.length)) {
+      const reasons = md.methodReasons?.[m] ?? []
+      methodRules.push({
+        id: `method_blocked_${m}`,
+        sourceId: null,
+        batch: null,
+        family: 'method',
+        title: `Blocked: ${m}`,
+        summary: reasons[0] ?? `Method blocked by current doctrine: ${m}`,
+        rejectsFor: [m],
+        visibleEvidence: `Blocked — ${m}`,
+      })
+    }
+  }
+
+  // ---- prescription rules: pull from rationale lines + biases
+  const px = runtime.prescriptionDoctrine
+  if (px) {
+    const rats = px.rationale ?? []
+    for (let i = 0; i < rats.length && prescriptionRules.length < PROOF_PER_CATEGORY_CAP; i++) {
+      const text = rats[i]
+      if (!text) continue
+      prescriptionRules.push({
+        id: `prescription_rationale_${i}`,
+        sourceId: null,
+        batch: null,
+        family: 'prescription',
+        title: text,
+        summary: text,
+        visibleEvidence: text,
+      })
+    }
+    if (prescriptionRules.length < PROOF_PER_CATEGORY_CAP) {
+      const tagBits: string[] = []
+      if (px.intensityBias) tagBits.push(`intensity:${px.intensityBias}`)
+      if (px.volumeBias) tagBits.push(`volume:${px.volumeBias}`)
+      if (px.densityBias) tagBits.push(`density:${px.densityBias}`)
+      if (px.holdBias) tagBits.push(`hold:${px.holdBias}`)
+      if (tagBits.length > 0) {
+        prescriptionRules.push({
+          id: 'prescription_bias_summary',
+          sourceId: null,
+          batch: null,
+          family: 'prescription',
+          title: 'Prescription biases',
+          summary: tagBits.join(' · '),
+          tags: tagBits,
+          visibleEvidence: tagBits.join(' · '),
+        })
+      }
+    }
+  }
+
+  // ---- exercise selection rules: from exerciseDoctrine.summary
+  const ex = runtime.exerciseDoctrine
+  if (ex) {
+    const sums = ex.summary ?? []
+    for (let i = 0; i < sums.length && exerciseSelectionRules.length < PROOF_PER_CATEGORY_CAP; i++) {
+      const text = sums[i]
+      if (!text) continue
+      exerciseSelectionRules.push({
+        id: `selection_summary_${i}`,
+        sourceId: null,
+        batch: null,
+        family: 'exercise_selection',
+        title: text,
+        summary: text,
+        visibleEvidence: text,
+      })
+    }
+  }
+
+  // ---- carryover rules: from skillDoctrine.carryoverMap
+  const sk = runtime.skillDoctrine
+  if (sk?.carryoverMap) {
+    const entries = Object.entries(sk.carryoverMap)
+    for (let i = 0; i < entries.length && carryoverRules.length < PROOF_PER_CATEGORY_CAP; i++) {
+      const [skill, carriers] = entries[i]
+      if (!skill || !Array.isArray(carriers) || carriers.length === 0) continue
+      const carriersText = carriers.slice(0, 3).join(', ')
+      carryoverRules.push({
+        id: `carryover_${skill}`,
+        sourceId: null,
+        batch: null,
+        family: 'carryover',
+        title: `${skill} ← ${carriersText}`,
+        summary: `Carryover support for ${skill}: ${carriersText}`,
+        appliesTo: [skill],
+        visibleEvidence: `${skill} ← ${carriersText}`,
+      })
+    }
+  }
+
+  // ---- progression rules: from progressionDoctrine.perSkill
+  const pr = runtime.progressionDoctrine
+  if (pr?.perSkill) {
+    const entries = Object.entries(pr.perSkill)
+    for (let i = 0; i < entries.length && progressionRules.length < PROOF_PER_CATEGORY_CAP; i++) {
+      const [skill, doctrine] = entries[i]
+      if (!skill || !doctrine) continue
+      // SkillProgressionDoctrine has a free-form shape; we surface the skill name only.
+      progressionRules.push({
+        id: `progression_${skill}`,
+        sourceId: null,
+        batch: null,
+        family: 'progression',
+        title: `Progression doctrine: ${skill}`,
+        summary: `Progression policy active for ${skill}`,
+        appliesTo: [skill],
+        visibleEvidence: `Progression — ${skill}`,
+      })
+    }
+  }
+
+  return {
+    principles,
+    progressionRules,
+    exerciseSelectionRules,
+    contraindicationRules,
+    methodRules,
+    prescriptionRules,
+    carryoverRules,
+  }
+}
+
+/**
+ * Phase 2 PROGRAM-LEVEL PROOF BUILDER.
+ *
+ * Pure helper. Given the runtime contract that the builder consumed plus the
+ * compact decision context derived from it, returns the proof object that
+ * `executeAuthoritativeGeneration` attaches to `program.doctrineIntegration`.
+ *
+ * The status logic:
+ *   - 'unavailable' when runtime is null/unavailable
+ *   - 'degraded'    when sourceMode === 'unavailable' OR missingBatches.length > 0
+ *                   OR diagnostics.warnings is non-empty OR globalCoherence < 0.5
+ *   - 'active'      otherwise (decision context is usable AND coverage clean)
+ *
+ * No mutation, no DB, no async, no clocks beyond `attachedAt`.
+ */
+export function buildDoctrineIntegrationProof(
+  runtime: DoctrineRuntimeContract | null | undefined,
+  decisionContext: DoctrineBuilderDecisionContext,
+): DoctrineIntegrationProof {
+  if (!runtime || !runtime.available) {
+    const proof = emptyProof()
+    proof.diagnostics = {
+      usable: false,
+      blocker: 'doctrine_runtime_contract_unavailable',
+      warnings: decisionContext.diagnostics.warnings ?? [],
+    }
+    proof.contextId = decisionContext.contextId
+    proof.contextVersion = decisionContext.contextVersion
+    return proof
+  }
+
+  const summaries = deriveSelectedSummaries(runtime)
+  const cov = runtime.doctrineCoverage
+
+  const selectedCounts: DoctrineIntegrationSelectedCounts = {
+    principles: summaries.principles.length,
+    progressionRules: summaries.progressionRules.length,
+    exerciseSelectionRules: summaries.exerciseSelectionRules.length,
+    contraindicationRules: summaries.contraindicationRules.length,
+    methodRules: summaries.methodRules.length,
+    prescriptionRules: summaries.prescriptionRules.length,
+    carryoverRules: summaries.carryoverRules.length,
+  }
+
+  const decisionFlags: DoctrineBuilderDecisionContext['decisionFlags'] = {
+    ...decisionContext.decisionFlags,
+    // Strengthen flags with what the runtime actually reports — these are
+    // counts/booleans the runtime computes itself, not invented claims.
+    protectsPrimarySkill:
+      decisionContext.decisionFlags.protectsPrimarySkill ||
+      (runtime.skillDoctrine?.representedSkills?.length ?? 0) > 0,
+    hasMethodDecisionRules:
+      decisionContext.decisionFlags.hasMethodDecisionRules || (cov?.methodRuleCount ?? 0) > 0,
+    hasContraindicationRules:
+      decisionContext.decisionFlags.hasContraindicationRules ||
+      (runtime.methodDoctrine?.blockedMethods?.length ?? 0) > 0,
+  }
+
+  const missingBatchesFromCoverage = decisionContext.batchCoverage.missingBatches
+  const partialBatches = decisionContext.batchCoverage.partialBatches
+  const lowCoherence = (runtime.globalCoherence ?? 0) < 0.5
+  const hasMissing = missingBatchesFromCoverage.length > 0
+  const sourceUnavailable = decisionContext.sourceMode === 'unavailable'
+
+  let contextStatus: DoctrineIntegrationContextStatus
+  if (sourceUnavailable) {
+    contextStatus = 'unavailable'
+  } else if (hasMissing || lowCoherence || partialBatches.length > 0) {
+    contextStatus = 'degraded'
+  } else {
+    contextStatus = 'active'
+  }
+
+  const warnings: string[] = [...(decisionContext.diagnostics.warnings ?? [])]
+  if (lowCoherence) warnings.push(`low_global_coherence:${runtime.globalCoherence?.toFixed(2)}`)
+  if (hasMissing) warnings.push(`missing_batches:${missingBatchesFromCoverage.join(',')}`)
+
+  return {
+    phase: 'phase_2_context_wired',
+    contextStatus,
+    sourceMode: decisionContext.sourceMode,
+    batchCoverage: decisionContext.batchCoverage,
+    presentBatches: [...decisionContext.batchCoverage.presentBatches],
+    missingBatches: [...decisionContext.batchCoverage.missingBatches],
+    selectedCounts,
+    selectedSummaries: summaries,
+    decisionFlags,
+    expectedProgramInfluences: decisionContext.visibleProof.expectedProgramInfluences,
+    missingInfluences: decisionContext.visibleProof.missingInfluences,
+    diagnostics: {
+      usable: contextStatus === 'active',
+      blocker: contextStatus === 'unavailable' ? 'context_unavailable' : null,
+      warnings,
+    },
+    disclaimer: PHASE2_DISCLAIMER,
+    attachedAt: new Date().toISOString(),
+    contextId: decisionContext.contextId,
+    contextVersion: decisionContext.contextVersion,
+  }
+}
+
+/**
+ * Defensive normalizer for `program.doctrineIntegration` across save/load.
+ * Returns a fully-populated proof; missing fields fall back to safe empty
+ * values. Never throws, never invents `active` status.
+ */
+export function normalizeDoctrineIntegrationProof(
+  proof: Partial<DoctrineIntegrationProof> | null | undefined,
+): DoctrineIntegrationProof {
+  if (!proof) return emptyProof()
+  const empty = emptyProof()
+  return {
+    phase: 'phase_2_context_wired',
+    contextStatus: proof.contextStatus ?? empty.contextStatus,
+    sourceMode: proof.sourceMode ?? empty.sourceMode,
+    batchCoverage: proof.batchCoverage ?? empty.batchCoverage,
+    presentBatches: proof.presentBatches ?? empty.presentBatches,
+    missingBatches: proof.missingBatches ?? empty.missingBatches,
+    selectedCounts: proof.selectedCounts ?? empty.selectedCounts,
+    selectedSummaries: proof.selectedSummaries ?? empty.selectedSummaries,
+    decisionFlags: proof.decisionFlags ?? empty.decisionFlags,
+    expectedProgramInfluences: proof.expectedProgramInfluences ?? [],
+    missingInfluences: proof.missingInfluences ?? [],
+    diagnostics: proof.diagnostics ?? empty.diagnostics,
+    disclaimer: proof.disclaimer ?? PHASE2_DISCLAIMER,
+    attachedAt: proof.attachedAt ?? empty.attachedAt,
+    contextId: proof.contextId ?? empty.contextId,
+    contextVersion: proof.contextVersion ?? empty.contextVersion,
+  }
+}

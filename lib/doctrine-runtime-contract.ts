@@ -77,7 +77,12 @@ export interface SkillProgressionDoctrine {
 
 export interface DoctrineRuntimeContract {
   available: boolean
-  source: 'db_live' | 'fallback_uploaded_pdf_batches' | 'fallback_batch_01' | 'fallback_none'
+  source:
+    | 'db_live'
+    | 'hybrid_db_plus_uploaded_fallback'
+    | 'fallback_uploaded_pdf_batches'
+    | 'fallback_batch_01'
+    | 'fallback_none'
   builtAt: string
   contractVersion: string
 
@@ -107,13 +112,40 @@ export interface DoctrineRuntimeContract {
   activeSourceKeys: string[]
 
   /**
-   * Multi-batch coverage. Always populated; in db_live mode batchCount is 0.
+   * Multi-batch coverage. ALWAYS populated for every source mode (db_live,
+   * hybrid, fallback). Reflects the final merged atom set the contract is
+   * actually using, so the Program UI can show real batch counts in every
+   * mode (previously hardcoded to 0 in db_live, which silently hid Batch 2/3
+   * coverage when DB had only representative anchor atoms).
    */
   batchCoverage: {
     batchCount: number
     batchKeys: string[]
     batchAtomCounts: Record<string, number>
     bySource: Record<string, number>
+  }
+
+  /**
+   * DB / uploaded-PDF-fallback completeness analysis. Honest report of which
+   * uploaded-doctrine batches were filled from DB vs filled from in-code
+   * fallback. Prevents the "partial DB silently suppresses richer fallback"
+   * failure mode by making the decision visible to the runtime contract and
+   * to the Program UI proof strip.
+   *
+   * state:
+   *   - 'empty'    — DB had zero atoms; entire contract came from fallback
+   *   - 'partial'  — DB had atoms for some batches, fallback filled others
+   *   - 'complete' — every registered batch was satisfied from DB
+   */
+  dbCompleteness: {
+    state: 'empty' | 'partial' | 'complete'
+    totalDbAtoms: number
+    totalFallbackBatchAtoms: number
+    perBatch: Record<
+      string,
+      { dbTotal: number; fallbackTotal: number; filled: 'db' | 'fallback' }
+    >
+    filledFromFallback: string[]
   }
 
   doctrineCoverage: {
@@ -228,41 +260,147 @@ export async function buildDoctrineRuntimeContract(
       getExerciseSelectionRules({}),
     ])
     
-    // [DOCTRINE-UPLOADED-PDF-FALLBACK]
-    // If the DB returned zero atoms, swap in the unified uploaded-PDF batch
-    // aggregator (Batch 1 + Batch 2 + any future batches). This changes a
-    // previously silent-empty failure mode into a loud, logged fallback. The
-    // DB-live path is unchanged when atoms exist.
-    const dbHadAtoms = coverage.totalRulesCount > 0
-    let contractSource: DoctrineRuntimeContract['source'] = 'db_live'
-    let sources = dbSources
-    let principles = dbPrinciples
-    let progressionRules = dbProgressionRules
-    let methodRules = dbMethodRules
-    let prescriptionRules = dbPrescriptionRules
-    let carryoverRules = dbCarryoverRules
-    let exerciseSelectionRules = dbExerciseSelectionRules
+    // [DOCTRINE-DB-FALLBACK-COMPLETENESS-GATE]
+    // Replaces the previous global `coverage.totalRulesCount > 0` gate, which
+    // silently fell into db_live whenever ANY atoms existed in DB — even if
+    // DB only had representative anchor atoms for Batch 2 / Batch 3 (or later
+    // batches) while the in-code fallback held the richer 80–100+ atom set.
+    // That suppression made later batches look identical in the Program UI
+    // even after they were ingested.
+    //
+    // Per-batch completeness compares DB atom count vs in-code fallback atom
+    // count for every registered uploaded-PDF batch (`batch_01`, `batch_02`,
+    // `batch_03`, plus any future Batch 04+ added to the aggregator). For
+    // each batch the larger set wins:
+    //   • DB atoms ≥ fallback atoms  → keep DB rows for that batch
+    //   • DB atoms <  fallback atoms → replace with fallback rows for batch
+    // Legacy non-batch DB doctrine (no `src_batch_NN_` prefix) is always
+    // preserved.
+    //
+    // Source mode is then derived from the merge result, never from a global
+    // count threshold:
+    //   • totalDb = 0 + fallback empty   → 'fallback_none'
+    //   • totalDb = 0 + fallback present → 'fallback_uploaded_pdf_batches'
+    //   • all batches filled from DB     → 'db_live'
+    //   • some batches filled from FB    → 'hybrid_db_plus_uploaded_fallback'
 
-    if (!dbHadAtoms) {
-      const uploadedCounts = getUploadedDoctrineBatchCounts()
-      contractSource = 'fallback_uploaded_pdf_batches'
-      sources = getUploadedDoctrineBatchSources()
-      principles = getUploadedDoctrineBatchPrinciples()
-      progressionRules = getUploadedDoctrineBatchProgressionRules()
-      methodRules = getUploadedDoctrineBatchMethodRules()
-      prescriptionRules = getUploadedDoctrineBatchPrescriptionRules()
-      carryoverRules = getUploadedDoctrineBatchCarryoverRules()
-      exerciseSelectionRules = getUploadedDoctrineBatchExerciseSelectionRules()
+    const fallbackCountsByBatch = getUploadedDoctrineBatchCountsByBatch() as
+      Record<string, { principles: number; progression: number; method: number; prescription: number; selection: number; carryover: number }>
+    const REGISTERED_BATCH_KEYS = Object.keys(fallbackCountsByBatch)
 
-      console.log('[DOCTRINE-RUNTIME-CONTRACT-UPLOADED-PDF-FALLBACK]', {
-        reason: 'doctrine_db_returned_zero_atoms',
-        uploadedCounts,
-        verdict: 'DOCTRINE_RUNTIME_CONTRACT_UPLOADED_PDF_FALLBACK_ACTIVE',
-        // Legacy log key kept for any downstream observability still grepping
-        // the previous Batch-1-only message:
-        legacyLabel: 'fallback_batch_01',
-      })
+    const batchKeyFromSourceId = (sid: string | null | undefined): string | null => {
+      if (!sid) return null
+      const m = sid.match(/^src_batch_(\d{2})_/)
+      return m ? `batch_${m[1]}` : null
     }
+    const countAtomsByBatch = <T extends { source_id?: string | null }>(rows: T[], batchKey: string): number =>
+      rows.filter(r => batchKeyFromSourceId(r.source_id) === batchKey).length
+
+    type PerBatchStat = { dbTotal: number; fallbackTotal: number; filled: 'db' | 'fallback' }
+    const perBatch: Record<string, PerBatchStat> = {}
+    for (const bk of REGISTERED_BATCH_KEYS) {
+      const fb = fallbackCountsByBatch[bk]
+      const fbTotal = fb.principles + fb.progression + fb.method + fb.prescription + fb.selection + fb.carryover
+      const dbTotal =
+        countAtomsByBatch(dbPrinciples, bk) +
+        countAtomsByBatch(dbProgressionRules, bk) +
+        countAtomsByBatch(dbMethodRules, bk) +
+        countAtomsByBatch(dbPrescriptionRules, bk) +
+        countAtomsByBatch(dbExerciseSelectionRules, bk) +
+        countAtomsByBatch(dbCarryoverRules, bk)
+      perBatch[bk] = { dbTotal, fallbackTotal: fbTotal, filled: dbTotal >= fbTotal ? 'db' : 'fallback' }
+    }
+    const filledFromFallback = REGISTERED_BATCH_KEYS.filter(bk => perBatch[bk].filled === 'fallback')
+    const totalDbAtoms = coverage.totalRulesCount
+    const totalFallbackBatchAtoms = REGISTERED_BATCH_KEYS.reduce((s, bk) => s + perBatch[bk].fallbackTotal, 0)
+
+    // Per-category merge: keep DB legacy rows + per-batch DB or fallback rows
+    const fbPrinciplesAll = getUploadedDoctrineBatchPrinciples()
+    const fbProgressionAll = getUploadedDoctrineBatchProgressionRules()
+    const fbMethodAll = getUploadedDoctrineBatchMethodRules()
+    const fbPrescriptionAll = getUploadedDoctrineBatchPrescriptionRules()
+    const fbCarryoverAll = getUploadedDoctrineBatchCarryoverRules()
+    const fbSelectionAll = getUploadedDoctrineBatchExerciseSelectionRules()
+
+    const mergeForCategory = <T extends { source_id?: string | null }>(dbRows: T[], fbRows: T[]): T[] => {
+      const out: T[] = []
+      for (const r of dbRows) if (batchKeyFromSourceId(r.source_id) === null) out.push(r) // legacy non-batch
+      for (const bk of REGISTERED_BATCH_KEYS) {
+        if (perBatch[bk].filled === 'db') {
+          for (const r of dbRows) if (batchKeyFromSourceId(r.source_id) === bk) out.push(r)
+        } else {
+          for (const r of fbRows) if (batchKeyFromSourceId(r.source_id) === bk) out.push(r)
+        }
+      }
+      return out
+    }
+
+    let principles = mergeForCategory(dbPrinciples, fbPrinciplesAll)
+    let progressionRules = mergeForCategory(dbProgressionRules, fbProgressionAll)
+    let methodRules = mergeForCategory(dbMethodRules, fbMethodAll)
+    let prescriptionRules = mergeForCategory(dbPrescriptionRules, fbPrescriptionAll)
+    let carryoverRules = mergeForCategory(dbCarryoverRules, fbCarryoverAll)
+    let exerciseSelectionRules = mergeForCategory(dbExerciseSelectionRules, fbSelectionAll)
+
+    // Sources: keep all DB sources, then add fallback sources whose source_key
+    // is not already present (deduped).
+    let sources = (() => {
+      const seen = new Set<string>()
+      const out: typeof dbSources = []
+      for (const s of dbSources) {
+        const k = (s as { source_key?: string | null; id?: string | null }).source_key ?? (s as { id?: string }).id ?? ''
+        if (k && !seen.has(k)) { seen.add(k); out.push(s) }
+      }
+      if (filledFromFallback.length > 0) {
+        for (const s of getUploadedDoctrineBatchSources()) {
+          const k = (s as { source_key?: string | null; id?: string | null }).source_key ?? (s as { id?: string }).id ?? ''
+          if (k && !seen.has(k)) { seen.add(k); out.push(s) }
+        }
+      }
+      return out
+    })()
+
+    // Decide source mode from the merge result, not a global threshold.
+    let dbCompletenessState: 'empty' | 'partial' | 'complete'
+    let contractSource: DoctrineRuntimeContract['source']
+    if (totalDbAtoms === 0 && totalFallbackBatchAtoms === 0) {
+      dbCompletenessState = 'empty'
+      contractSource = 'fallback_none'
+    } else if (totalDbAtoms === 0) {
+      dbCompletenessState = 'empty'
+      contractSource = 'fallback_uploaded_pdf_batches'
+      // Replace anything that fell through with full fallback (safety).
+      sources = getUploadedDoctrineBatchSources()
+      principles = fbPrinciplesAll
+      progressionRules = fbProgressionAll
+      methodRules = fbMethodAll
+      prescriptionRules = fbPrescriptionAll
+      carryoverRules = fbCarryoverAll
+      exerciseSelectionRules = fbSelectionAll
+    } else if (filledFromFallback.length === 0) {
+      dbCompletenessState = 'complete'
+      contractSource = 'db_live'
+    } else {
+      dbCompletenessState = 'partial'
+      contractSource = 'hybrid_db_plus_uploaded_fallback'
+    }
+
+    console.log('[DOCTRINE-RUNTIME-CONTRACT-COMPLETENESS]', {
+      contractSource,
+      dbCompletenessState,
+      totalDbAtoms,
+      totalFallbackBatchAtoms,
+      filledFromFallback,
+      perBatch,
+      verdict:
+        contractSource === 'hybrid_db_plus_uploaded_fallback'
+          ? 'PARTIAL_DB_COMPLETED_BY_UPLOADED_FALLBACK'
+          : contractSource === 'db_live'
+          ? 'DB_COMPLETE_NO_FALLBACK_NEEDED'
+          : contractSource === 'fallback_uploaded_pdf_batches'
+          ? 'DB_EMPTY_USING_UPLOADED_FALLBACK'
+          : 'NO_DOCTRINE_AVAILABLE',
+    })
 
     const hasLiveRules = principles.length + progressionRules.length + methodRules.length +
       prescriptionRules.length + carryoverRules.length + exerciseSelectionRules.length > 0
@@ -317,15 +455,27 @@ export async function buildDoctrineRuntimeContract(
     // Compute deterministic doctrine coverage / family / batch metadata.
     const sourceFamiliesUsed = computeSourceFamiliesUsed(sources)
     const activeSourceKeys = computeActiveSourceKeys(sources)
-    const batchCoverage =
-      contractSource === 'db_live'
-        ? { batchCount: 0, batchKeys: [], batchAtomCounts: {}, bySource: {} }
-        : {
-            batchCount: getUploadedDoctrineBatchCounts().batchCount,
-            batchKeys: [...getUploadedDoctrineBatchCounts().batchKeys],
-            batchAtomCounts: getUploadedDoctrineBatchCountsByBatch() as unknown as Record<string, number>,
-            bySource: getUploadedDoctrineBatchCountsBySource(),
-          }
+    // Always populate batchCoverage from the FINAL merged atom set so
+    // db_live, hybrid, and fallback all expose honest batch evidence to the
+    // Program UI. Counts are derived from `perBatch` (which reflects the
+    // merge winner per batch), not from the raw aggregator alone.
+    const batchAtomCounts: Record<string, number> = {}
+    for (const bk of REGISTERED_BATCH_KEYS) {
+      batchAtomCounts[bk] = perBatch[bk].filled === 'db' ? perBatch[bk].dbTotal : perBatch[bk].fallbackTotal
+    }
+    const batchCoverage = {
+      batchCount: REGISTERED_BATCH_KEYS.length,
+      batchKeys: [...REGISTERED_BATCH_KEYS],
+      batchAtomCounts,
+      bySource: getUploadedDoctrineBatchCountsBySource(),
+    }
+    const dbCompleteness = {
+      state: dbCompletenessState,
+      totalDbAtoms,
+      totalFallbackBatchAtoms,
+      perBatch,
+      filledFromFallback,
+    }
 
     const globalCoherence = computeGlobalCoherence({
       hasLiveRules,
@@ -352,6 +502,7 @@ export async function buildDoctrineRuntimeContract(
       sourceFamiliesUsed,
       activeSourceKeys,
       batchCoverage,
+      dbCompleteness,
 
       doctrineCoverage: {
         principlesCount: principles.length,
@@ -953,6 +1104,13 @@ function buildFallbackContract(): DoctrineRuntimeContract {
     sourceFamiliesUsed: [],
     activeSourceKeys: [],
     batchCoverage: { batchCount: 0, batchKeys: [], batchAtomCounts: {}, bySource: {} },
+    dbCompleteness: {
+      state: 'empty',
+      totalDbAtoms: 0,
+      totalFallbackBatchAtoms: 0,
+      perBatch: {},
+      filledFromFallback: [],
+    },
 
     doctrineCoverage: {
       principlesCount: 0,

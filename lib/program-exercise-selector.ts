@@ -718,6 +718,47 @@ function getSessionSkillExpressionCapture(): SessionSkillExpressionCapture | nul
   return _lastSessionSkillExpressionCapture
 }
 
+// =============================================================================
+// [PHASE 4E — DOCTRINE CAUSAL AUDIT CAPTURE]
+//
+// Mirrors the skill-expression capture pattern above. Module-level mutable
+// state is safe here because session generation is sequential within a single
+// program build (the builder loops day-by-day; selectExercisesForSession is
+// not called concurrently).
+//
+// The pre-Phase-4E bug:
+//   `sessionDoctrineAudit` was a let-bound local inside selectMainExercises
+//   (L4199). It tracked topCandidateChanged / top3Changed across every
+//   applyDoctrineToPool() call within the session, then was discarded on
+//   return because selectMainExercises returns just `finalExercises: SelectedExercise[]`.
+//   Result: the builder had real doctrine causal data per scoring call, but
+//   never received any of it. Every "doctrine applied" claim downstream was
+//   derived from rule/source counts, not from "did doctrine actually pick
+//   a different winner?"
+//
+// Post-fix:
+//   selectMainExercises calls captureSessionDoctrineAudit at the same merge
+//   point that updates sessionDoctrineAudit. selectExercisesForSession resets
+//   the capture at start (mirroring resetSessionSkillExpressionCapture) and
+//   reads it into the ExerciseSelection return.
+// =============================================================================
+
+let _lastSessionDoctrineAudit: DoctrineScoringAudit | null = null
+
+function resetSessionDoctrineAudit(): void {
+  _lastSessionDoctrineAudit = null
+}
+
+function captureSessionDoctrineAudit(audit: DoctrineScoringAudit | null): void {
+  // Idempotent: callers may pass null to skip; we only capture real data.
+  if (!audit) return
+  _lastSessionDoctrineAudit = audit
+}
+
+function getSessionDoctrineAudit(): DoctrineScoringAudit | null {
+  return _lastSessionDoctrineAudit
+}
+
 export interface SelectedExercise {
   exercise: Exercise
   sets: number
@@ -1058,6 +1099,18 @@ export interface ExerciseSelection {
   // [DOCTRINE-RELAXATION-RESCUE] Track if doctrine constraints were relaxed
   doctrineRelaxationApplied?: boolean
   doctrineRelaxationReason?: string
+  // [PHASE 4E — DOCTRINE CAUSAL AUDIT SURFACE]
+  // Pre-fix bug: selectMainExercises built a `sessionDoctrineAudit` locally
+  // (L4199) tracking topCandidateChanged / top3Changed across all
+  // applyDoctrineToPool calls, then discarded it on return. The builder had
+  // no way to know whether doctrine actually changed any winner — so
+  // `doctrineIntegration` rollups were built from rule counts and source
+  // counts, never from "did doctrine actually win a slot?".
+  // Post-fix: selectExercisesForSession captures the audit via the existing
+  // module-level capture pattern (mirroring captureSkillExpressionResult)
+  // and surfaces it here so the builder can stamp it on each session and
+  // aggregate it into program.doctrineCausalChallenge.
+  doctrineCausalAudit?: DoctrineScoringAudit | null
 }
 
 interface ExerciseSelectionInputs {
@@ -1296,6 +1349,9 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   
   // [AI_SESSION_MATERIALITY_PHASE] Reset skill expression capture at start of each session
   resetSessionSkillExpressionCapture()
+  // [PHASE 4E — DOCTRINE CAUSAL AUDIT] Reset doctrine audit capture at start of each session
+  // so per-session causal data does not leak from a previous session into this one.
+  resetSessionDoctrineAudit()
   
   console.log('[exercise-resolver] selectExercisesForSession called:', {
     dayFocus: inputs.day?.focus,
@@ -2107,6 +2163,14 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
       dayRole: sessionArchitectureContract.dayRoleEnforcement.dayRole,
       workloadRatio: `${sessionArchitectureContract.workloadDistribution.primaryPercent}/${sessionArchitectureContract.workloadDistribution.secondaryPercent}/${sessionArchitectureContract.workloadDistribution.supportPercent}`,
     },
+    // [PHASE 4E — DOCTRINE CAUSAL AUDIT SURFACE]
+    // Read the per-session capture written by selectMainExercises and surface
+    // it on the return so the builder can stamp it onto the session and
+    // aggregate across all sessions into program.doctrineCausalChallenge.
+    // null means selectMainExercises ran but doctrine never even matched a
+    // candidate — this is itself a meaningful diagnostic ("no_matching_rules"
+    // or "doctrine_cache_empty"), so we do NOT default to {} here.
+    doctrineCausalAudit: getSessionDoctrineAudit(),
   }
 }
 
@@ -4265,6 +4329,14 @@ function applyMaterialityScoreAdjustments(
         if (audit.topCandidateChanged) sessionDoctrineAudit.topCandidateChanged = true
         if (audit.top3Changed) sessionDoctrineAudit.top3Changed = true
       }
+      // [PHASE 4E — DOCTRINE CAUSAL AUDIT CAPTURE]
+      // Mirror the local merged audit into the module-level capture so
+      // selectExercisesForSession can read it after this helper returns.
+      // Capture even when doctrineApplied is false so we surface honest
+      // "ran but no rule matched" verdicts (vs. "ran and changed winner").
+      // The capture function is idempotent and overwrites with the latest
+      // merged state, so calling it on every pool is safe and correct.
+      captureSessionDoctrineAudit(sessionDoctrineAudit ?? audit)
       
       // Log if doctrine made a material change
       if (audit.doctrineApplied && (audit.topCandidateChanged || audit.top3Changed)) {

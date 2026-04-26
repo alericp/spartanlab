@@ -723,6 +723,139 @@ function ProgramDecisionSummary({ program }: { program: AdaptiveProgram }) {
   )
 }
 
+// ==========================================================================
+// [DOCTRINE-RUNTIME-PROOF] Compact visible proof that the generated program
+// actually used the doctrine runtime contract. Reads exclusively from the
+// final program object (`program.doctrineRuntimeContract`). Does not query
+// the DB, does not import server code, does not invent claims.
+// ==========================================================================
+function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
+  // The contract is stamped onto the program by the adaptive builder. Use a
+  // tolerant read so we never crash if a legacy program object lacks the field.
+  const anyProgram = program as unknown as { doctrineRuntimeContract?: unknown }
+  const rc = anyProgram.doctrineRuntimeContract as
+    | {
+        available?: boolean
+        source?: string
+        globalCoherence?: number
+        sourceFamiliesUsed?: string[]
+        activeSourceKeys?: string[]
+        batchCoverage?: {
+          batchCount?: number
+          batchKeys?: string[]
+          batchAtomCounts?: Record<string, number>
+        }
+        doctrineCoverage?: {
+          principlesCount?: number
+          progressionRuleCount?: number
+          exerciseSelectionRuleCount?: number
+          methodRuleCount?: number
+          prescriptionRuleCount?: number
+          carryoverRuleCount?: number
+          sourcesCount?: number
+          hasLiveRules?: boolean
+        }
+        explanationDoctrine?: {
+          userVisibleSummary?: string[]
+          doctrineInfluenceLevel?: 'none' | 'minimal' | 'moderate' | 'strong'
+        }
+      }
+    | undefined
+
+  // No contract on this program object → render nothing. Do NOT claim doctrine.
+  if (!rc || rc.available !== true) return null
+
+  const cov = rc.doctrineCoverage ?? {}
+  const exp = rc.explanationDoctrine ?? {}
+  const totalRules =
+    (cov.principlesCount ?? 0) +
+    (cov.progressionRuleCount ?? 0) +
+    (cov.exerciseSelectionRuleCount ?? 0) +
+    (cov.methodRuleCount ?? 0) +
+    (cov.prescriptionRuleCount ?? 0) +
+    (cov.carryoverRuleCount ?? 0)
+
+  const sourceLabel =
+    rc.source === 'db_live'
+      ? 'DB live'
+      : rc.source === 'fallback_uploaded_pdf_batches'
+      ? 'Uploaded PDF fallback'
+      : rc.source === 'fallback_batch_01'
+      ? 'Uploaded PDF fallback'
+      : rc.source === 'fallback_none'
+      ? 'No doctrine'
+      : 'Unknown'
+
+  const influence = exp.doctrineInfluenceLevel ?? 'none'
+  const influenceLabel =
+    influence === 'strong'
+      ? 'Strong influence'
+      : influence === 'moderate'
+      ? 'Moderate influence'
+      : influence === 'minimal'
+      ? 'Minimal influence'
+      : 'No influence'
+
+  const influenceColor =
+    influence === 'strong'
+      ? 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20'
+      : influence === 'moderate'
+      ? 'text-amber-400 bg-amber-400/10 border-amber-400/20'
+      : 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20'
+
+  const summaryLines = (exp.userVisibleSummary ?? []).slice(0, 2)
+  const sourceCount = cov.sourcesCount ?? rc.activeSourceKeys?.length ?? 0
+  const batchCount = rc.batchCoverage?.batchCount ?? 0
+
+  return (
+    <div className="mb-4 p-3 bg-zinc-900/50 border border-zinc-800/60 rounded-lg">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">
+          Doctrine Active
+        </span>
+        <span
+          className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] ${influenceColor}`}
+        >
+          {influenceLabel}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2 text-xs">
+        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-zinc-800/60 text-zinc-300">
+          <span className="text-zinc-500">Source:</span>
+          <span className="font-medium">{sourceLabel}</span>
+        </span>
+        {sourceCount > 0 && (
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-zinc-800/60 text-zinc-300">
+            <span className="text-zinc-500">Sources:</span>
+            <span className="font-medium">{sourceCount}</span>
+          </span>
+        )}
+        {totalRules > 0 && (
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-zinc-800/60 text-zinc-300">
+            <span className="text-zinc-500">Rules:</span>
+            <span className="font-medium">{totalRules}</span>
+          </span>
+        )}
+        {batchCount > 0 && (
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-zinc-800/60 text-zinc-300">
+            <span className="text-zinc-500">Batches:</span>
+            <span className="font-medium">{batchCount}</span>
+          </span>
+        )}
+      </div>
+      {summaryLines.length > 0 && (
+        <ul className="mt-2 space-y-0.5">
+          {summaryLines.map((line, idx) => (
+            <li key={idx} className="text-xs text-zinc-500 italic">
+              {line}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 // TASK 1: Error boundary wrapper for AdaptiveProgramDisplay
 // [PHASE 9] Now uses true React ErrorBoundary - NO setState in render catch
 // [PHASE 10C] Enhanced with exact error capture and display in fallback
@@ -1081,6 +1214,11 @@ function ProgramDisplayWrapper({
       <ProgramTruthSummary
         truthExplanation={resolvedTruthExplanation as unknown as Parameters<typeof ProgramTruthSummary>[0]['truthExplanation']}
       />
+
+      {/* [DOCTRINE-RUNTIME-PROOF] Compact visible proof that the generated
+          program actually consumed the doctrine runtime contract. Reads only
+          from program.doctrineRuntimeContract; renders nothing when absent. */}
+      <DoctrineRuntimeProof program={program} />
 
       {/* [PROGRAM-DECISION-SUMMARY] Display doctrine-driven decisions above the program */}
       <ProgramDecisionSummary program={program} />

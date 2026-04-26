@@ -220,6 +220,39 @@ export {
   type FlexibilityGoalSupportEntry,
 } from "./batch-09-mobility-flexibility-warmup-cooldown-doctrine"
 
+// Batch 10 — added in Batch 10 ingestion pass: training method decision
+// governor (top set / back-off / drop set / mechanical drop / rest-pause /
+// cluster / antagonist + same-muscle superset / circuit / density block /
+// repeat-effort endurance / EMOM / AMRAP) + per-method rejection rules +
+// METHOD_COMPATIBILITY_MATRIX (12 methods × 8 exercise categories) +
+// fatigue/recovery gating + time-constrained compression + user override
+// warning logic + method materialization truth guard. Reinforces existing
+// session-shape profiles in lib/doctrine/method-profile-registry.ts and
+// existing density/endurance engines without rewriting them. Legal-source:
+// public evidence-informed strength-and-conditioning principles +
+// SpartanLab user-authored coaching doctrine (clearly marked) +
+// codebase-observed runtime (clearly marked).
+export {
+  getBatch10Sources,
+  getBatch10Principles,
+  getBatch10ProgressionRules,
+  getBatch10ExerciseSelectionRules,
+  getBatch10ContraindicationRules,
+  getBatch10MethodRules,
+  getBatch10PrescriptionRules,
+  getBatch10CarryoverRules,
+  getBatch10Counts,
+  getBatch10CountsBySource,
+  getBatch10ProvenanceFor,
+  METHOD_COMPATIBILITY_MATRIX,
+  type Batch10Provenance,
+  type MethodKey,
+  type ExerciseCategoryKey,
+  type MethodCompatibilityLevel,
+  type MethodSourceConfidence,
+  type MethodCompatibilityEntry,
+} from "./batch-10-training-method-decision-governor-doctrine"
+
 import {
   getBatch01Sources,
   getBatch01Principles,
@@ -346,6 +379,20 @@ import {
   type Batch09Provenance,
 } from "./batch-09-mobility-flexibility-warmup-cooldown-doctrine"
 
+import {
+  getBatch10Sources,
+  getBatch10Principles,
+  getBatch10ProgressionRules,
+  getBatch10ExerciseSelectionRules,
+  getBatch10ContraindicationRules,
+  getBatch10MethodRules,
+  getBatch10PrescriptionRules,
+  getBatch10CarryoverRules,
+  getBatch10CountsBySource,
+  getBatch10ProvenanceFor,
+  type Batch10Provenance,
+} from "./batch-10-training-method-decision-governor-doctrine"
+
 import type {
   DoctrineSource,
   DoctrinePrinciple,
@@ -360,7 +407,7 @@ import type {
 // Unified uploaded-PDF doctrine aggregator
 // =============================================================================
 
-const BATCHES = ["batch_01", "batch_02", "batch_03", "batch_04", "batch_05", "batch_06", "batch_07", "batch_08", "batch_09"] as const
+const BATCHES = ["batch_01", "batch_02", "batch_03", "batch_04", "batch_05", "batch_06", "batch_07", "batch_08", "batch_09", "batch_10"] as const
 export type UploadedDoctrineBatchKey = (typeof BATCHES)[number]
 
 export function getUploadedDoctrineBatchKeys(): readonly UploadedDoctrineBatchKey[] {
@@ -378,6 +425,7 @@ export function getUploadedDoctrineBatchSources(): DoctrineSource[] {
     ...getBatch07Sources(),
     ...getBatch08Sources(),
     ...getBatch09Sources(),
+    ...getBatch10Sources(),
   ]
 }
 
@@ -392,6 +440,7 @@ export function getUploadedDoctrineBatchPrinciples(): DoctrinePrinciple[] {
     ...getBatch07Principles(),
     ...getBatch08Principles(),
     ...getBatch09Principles(),
+    ...getBatch10Principles(),
   ]
 }
 
@@ -406,6 +455,7 @@ export function getUploadedDoctrineBatchProgressionRules(): ProgressionRule[] {
     ...getBatch07ProgressionRules(),
     ...getBatch08ProgressionRules(),
     ...getBatch09ProgressionRules(),
+    ...getBatch10ProgressionRules(),
   ]
 }
 
@@ -420,6 +470,7 @@ export function getUploadedDoctrineBatchExerciseSelectionRules(): ExerciseSelect
     ...getBatch07ExerciseSelectionRules(),
     ...getBatch08ExerciseSelectionRules(),
     ...getBatch09ExerciseSelectionRules(),
+    ...getBatch10ExerciseSelectionRules(),
   ]
 }
 
@@ -436,6 +487,7 @@ export function getUploadedDoctrineBatchContraindicationRules(): unknown[] {
     ...getBatch07ContraindicationRules(),
     ...getBatch08ContraindicationRules(),
     ...getBatch09ContraindicationRules(),
+    ...getBatch10ContraindicationRules(),
   ]
 }
 
@@ -450,6 +502,7 @@ export function getUploadedDoctrineBatchMethodRules(): MethodRule[] {
     ...getBatch07MethodRules(),
     ...getBatch08MethodRules(),
     ...getBatch09MethodRules(),
+    ...getBatch10MethodRules(),
   ]
 }
 
@@ -464,6 +517,7 @@ export function getUploadedDoctrineBatchPrescriptionRules(): PrescriptionRule[] 
     ...getBatch07PrescriptionRules(),
     ...getBatch08PrescriptionRules(),
     ...getBatch09PrescriptionRules(),
+    ...getBatch10PrescriptionRules(),
   ]
 }
 
@@ -481,6 +535,7 @@ export function getUploadedDoctrineBatchCarryoverRules(): CarryoverRule[] {
     ...(getBatch07CarryoverRules() as unknown as CarryoverRule[]),
     ...(getBatch08CarryoverRules() as unknown as CarryoverRule[]),
     ...(getBatch09CarryoverRules() as unknown as CarryoverRule[]),
+    ...(getBatch10CarryoverRules() as unknown as CarryoverRule[]),
   ]
 }
 
@@ -614,6 +669,15 @@ export function getUploadedDoctrineBatchCounts(): UploadedDoctrineBatchCounts {
         getBatch09PrescriptionRules().length,
         getBatch09CarryoverRules().length,
       ),
+      batch_10: batchAtomCount(
+        getBatch10Principles().length,
+        getBatch10ProgressionRules().length,
+        getBatch10ExerciseSelectionRules().length,
+        getBatch10ContraindicationRules().length,
+        getBatch10MethodRules().length,
+        getBatch10PrescriptionRules().length,
+        getBatch10CarryoverRules().length,
+      ),
     },
   }
 }
@@ -651,6 +715,9 @@ export function getUploadedDoctrineBatchCountsBySource(): Record<string, number>
   for (const [k, v] of Object.entries(getBatch09CountsBySource())) {
     out[k] = (out[k] ?? 0) + v
   }
+  for (const [k, v] of Object.entries(getBatch10CountsBySource())) {
+    out[k] = (out[k] ?? 0) + v
+  }
   return out
 }
 
@@ -666,6 +733,7 @@ export function getUploadedDoctrineProvenanceFor(
   | Batch07Provenance
   | Batch08Provenance
   | Batch09Provenance
+  | Batch10Provenance
   | null {
   return (
     getBatch01ProvenanceFor(atomId) ??
@@ -677,6 +745,7 @@ export function getUploadedDoctrineProvenanceFor(
     getBatch07ProvenanceFor(atomId) ??
     getBatch08ProvenanceFor(atomId) ??
     getBatch09ProvenanceFor(atomId) ??
+    getBatch10ProvenanceFor(atomId) ??
     null
   )
 }

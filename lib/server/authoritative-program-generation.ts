@@ -28,6 +28,12 @@ import {
   mapRuntimeContractToBuilderContext,
   type DoctrineIntegrationProof,
 } from '@/lib/doctrine/doctrine-builder-integration-contract'
+import {
+  stampMethodDecisionsOnSessions,
+  type MethodDecision,
+  type MethodDecisionSessionInput,
+  type MethodDecisionStampSummary,
+} from '@/lib/program/method-decision-engine'
 import { attachTruthExplanation, extractProgramTruth, logMaterialInputPresence } from '@/lib/program-truth-extractor'
 import type { CanonicalProgrammingProfile } from '@/lib/canonical-profile-service'
 import { calibrateAthleteProfile, resolveCurrentWorkingProgressions, type CurrentWorkingProgressionsContract } from '@/lib/athlete-calibration'
@@ -1558,6 +1564,69 @@ export async function executeAuthoritativeGeneration(
     }
 
     markStage('doctrine_integration_proof_done')
+
+    // ==========================================================================
+    // [DOCTRINE-TO-BUILDER PHASE 3] Stamp per-session MethodDecision
+    // ==========================================================================
+    // Walks the (already-materialized) sessions and attributes each one to a
+    // single doctrine-derived MethodDecision via the Batch 10 compatibility
+    // matrix + runtime methodDoctrine preferred/blocked rules. Read-only — the
+    // engine does not re-decide the materialized method, it ATTRIBUTES it.
+    // Survives save/load with no normalize step needed (whole-program JSON).
+    // ==========================================================================
+    markStage('method_decision_stamp_start')
+
+    let methodDecisionSummary: MethodDecisionStampSummary | null = null
+    try {
+      const runtimeFromBuilder =
+        (program as unknown as { doctrineRuntimeContract?: unknown }).doctrineRuntimeContract ?? null
+      const decisionContextForMethods = mapRuntimeContractToBuilderContext(
+        runtimeFromBuilder as Parameters<typeof mapRuntimeContractToBuilderContext>[0],
+      )
+      const sessionInputs = (program.sessions ?? []) as unknown as MethodDecisionSessionInput[]
+      const { decisions, summary } = stampMethodDecisionsOnSessions(
+        sessionInputs,
+        runtimeFromBuilder as Parameters<typeof stampMethodDecisionsOnSessions>[1],
+        decisionContextForMethods,
+        program.primaryGoal ? String(program.primaryGoal) : null,
+      )
+      methodDecisionSummary = summary
+
+      // Apply: shallow assignment per session — never replaces existing fields.
+      for (let i = 0; i < program.sessions.length && i < decisions.length; i++) {
+        const decision = decisions[i]
+        if (!decision) continue
+        ;(program.sessions[i] as unknown as { methodDecision: MethodDecision }).methodDecision =
+          decision
+      }
+
+      // Surface the per-session count on the program-level Phase 2 proof so
+      // `program.doctrineIntegration` continues to be the single program-wide
+      // proof object the UI reads.
+      if (doctrineIntegrationProof) {
+        ;(doctrineIntegrationProof as unknown as Record<string, unknown>).methodDecisionSummary =
+          summary
+      }
+
+      console.log('[doctrine-method-decision-stamped]', {
+        generationIntent: request.generationIntent,
+        triggerSource: request.triggerSource,
+        sessionsConsidered: summary.sessionsConsidered,
+        decisionsAttached: summary.decisionsAttached,
+        byMethod: summary.byMethod,
+        byStatus: summary.byStatus,
+        contextStatus: summary.contextStatus,
+        doctrineBatchesUsed: summary.doctrineBatchesUsed,
+      })
+    } catch (methodErr) {
+      console.log('[doctrine-method-decision-stamp-failed]', {
+        generationIntent: request.generationIntent,
+        triggerSource: request.triggerSource,
+        error: String(methodErr),
+      })
+    }
+
+    markStage('method_decision_stamp_done')
 
     // ==========================================================================
     // STAGE: Success

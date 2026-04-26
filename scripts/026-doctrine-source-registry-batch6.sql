@@ -75,7 +75,7 @@ VALUES
   ('src_batch_06_legal_source_gate',
    'legal_advanced_skill_source_gate_batch_06',
    'Legal Advanced-Skill Source Gate (governance)',
-   'governance_rule',
+   'extracted_pdf',
    'Source-legality governance: only user_uploaded_owned, official_free_creator_published, official_paid_user_owned, public_sample_creator_released, or user_summary_only sources may be active. Leaked/pirated/low-trust/unknown sources are rejected.',
    'batch_06_v1',
    TRUE)

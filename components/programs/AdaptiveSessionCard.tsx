@@ -41,6 +41,18 @@ import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWith
 // [SINGLE-TRUTH-FIX] Removed: getExerciseRowVisibility, shouldShowRowIntelligence, deduplicateRowDisplay, DEFAULT_DENSITY_MODE
 // These were used by the ROW 2.5 chip block which was a stale secondary text path
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
+// [DOCTRINE-METHOD-DECISION-PHASE3B-BRIDGE]
+// On-read bridge for legacy programs generated BEFORE the authoritative
+// wrapper started stamping `session.methodDecision`. The wrapper remains the
+// primary source for newly-generated programs; this engine call is only
+// invoked when the field is missing on the input session, so we surface the
+// same MethodDecision contract for stored programs without forcing the user
+// to regenerate. Read-only, pure function, no side effects.
+import {
+  deriveMethodDecisionForSession,
+  type MethodDecision as MethodDecisionShape,
+  type MethodDecisionSessionInput,
+} from '@/lib/program/method-decision-engine'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { buildGroupedDisplayModel, getGroupedMethodSemantics, type GroupedDisplayModel, type RenderBlock, type RawFallbackBlock, type GroupedSourceUsed, type GroupedFlatReason, type GroupType } from './lib/session-group-display'
 import { 
@@ -2262,23 +2274,40 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 doctrine. See lib/program/method-decision-engine.ts.
                 ================================================================== */}
             {(() => {
-              const md = (session as any)?.methodDecision as
-                | {
-                    methodId?: string
-                    status?: 'selected' | 'rejected' | 'not_applicable' | 'degraded'
-                    confidence?: 'high' | 'medium' | 'low'
-                    renderLabel?: string
-                    renderSummary?: string
-                    source?: {
-                      doctrineContextStatus?: 'active' | 'degraded' | 'unavailable'
-                      doctrineBatchIds?: string[]
-                    }
-                    prescriptionIntent?: {
-                      whyNotOtherMethods?: string[]
-                      contraindications?: string[]
-                    }
-                  }
-                | undefined
+              // ============================================================
+              // [DOCTRINE-METHOD-DECISION-PHASE3B] DISPLAY CORRIDOR
+              // Truth priority for the visible Method strip:
+              //   1. session.methodDecision  — stamped by the authoritative
+              //      wrapper (lib/server/authoritative-program-generation.ts)
+              //      for any program generated AFTER Phase 3 was wired.
+              //   2. ENGINE BRIDGE — for programs persisted BEFORE the
+              //      wrapper stamp existed. The materialization signals
+              //      (styleMetadata.methodMaterializationSummary, applied/
+              //      rejectedMethods, compositionMetadata, exercises[]) are
+              //      already on the stored session, so the same engine that
+              //      runs at generation time can ATTRIBUTE the materialized
+              //      method on read. No re-deciding, no fake labels, no
+              //      duplicated truth — the engine is the single owner.
+              // The stamped decision wins when both exist.
+              // ============================================================
+              const stamped = (session as unknown as { methodDecision?: MethodDecisionShape })
+                .methodDecision ?? null
+              let md: MethodDecisionShape | null = stamped
+              let bridged = false
+              if (!md) {
+                try {
+                  const bridgeInput = session as unknown as MethodDecisionSessionInput
+                  md = deriveMethodDecisionForSession({
+                    session: bridgeInput,
+                    runtimeContract: null,
+                    decisionContext: null,
+                    trainingGoal: typeof primaryGoal === 'string' ? primaryGoal : null,
+                  })
+                  bridged = !!md
+                } catch {
+                  md = null
+                }
+              }
               if (!md || !md.renderLabel) return null
               const ctx = md.source?.doctrineContextStatus ?? 'unavailable'
               const isDegraded = md.status === 'degraded' || ctx !== 'active'
@@ -2302,7 +2331,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                     )}
                     {isDegraded && (
                       <span className="text-[10px] text-amber-400/80 uppercase tracking-wide">
-                        degraded
+                        {bridged ? 'bridged' : 'degraded'}
                       </span>
                     )}
                   </div>

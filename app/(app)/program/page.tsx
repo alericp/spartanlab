@@ -832,8 +832,9 @@ function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
   const batchSixActive = batchKeys.includes('batch_06')
   const batchSevenActive = batchKeys.includes('batch_07')
   const batchEightActive = batchKeys.includes('batch_08')
+  const batchNineActive = batchKeys.includes('batch_09')
   const batchFiveLine = batchFiveActive
-    ? 'Batch 5 active: BL/FL, handstand, foundations, hypertrophy splits, circuits, theory/recovery'
+  ? 'Batch 5 active: BL/FL, handstand, foundations, hypertrophy splits, circuits, theory/recovery'
     : null
   const batchSixLine = batchSixActive
     ? 'Batch 6 active: OTZ beginner/intermediate, Iron Cross, full planche, front lever, muscle-up + legal source gate'
@@ -843,6 +844,9 @@ function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
     : null
   const batchEightLine = batchEightActive
     ? "Batch 8 active: elite rings + advanced calisthenics (Victorian, Maltese, OAFL, OABL, Azarian, Nakayama) classified by support level — direct vs carryover vs source-gap"
+    : null
+  const batchNineLine = batchNineActive
+    ? "Batch 9 active: mobility / flexibility / warm-up / cooldown / skill ramp-up — splits, pancake, toe touch, joint prep classified by warm-up vs cooldown vs micro-session role"
     : null
 
   return (
@@ -895,6 +899,9 @@ function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
       )}
       {batchEightLine && (
         <p className="mt-1 text-xs text-amber-400/80 italic">{batchEightLine}</p>
+      )}
+      {batchNineLine && (
+        <p className="mt-1 text-xs text-teal-400/80 italic">{batchNineLine}</p>
       )}
       {summaryLines.length > 0 && (
         <ul className="mt-2 space-y-0.5">

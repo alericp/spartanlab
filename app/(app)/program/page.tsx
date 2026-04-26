@@ -170,7 +170,9 @@ import { MaterializationStatusLine, DoctrineCausalLine } from '@/components/prog
 // page, not a per-component recomputation.
 import {
   buildAllSessionCardSurfaces,
+  buildProgramDisplayProjection,
   type SessionCardSurface,
+  type ProgramDisplayProjection,
 } from '@/lib/program/program-display-contract'
 
 // [canonical-rebuild] Import type for adjustment rebuild requests
@@ -1103,6 +1105,61 @@ function ProgramDisplayWrapper({
   const canonicalDisplayTruth = buildCanonicalProgramDisplayTruth(program)
 
   // ==========================================================================
+  // [PHASE 4F — DISPLAY PROJECTION OWNERSHIP LOCK]
+  //
+  // Build the page-level Program display projection ONCE, here, from the SAME
+  // `program` object that:
+  //   * staleness reads
+  //   * `canonicalDisplayTruth` reads
+  //   * `<MaterializationStatusLine>` and `<DoctrineCausalLine>` (Phase 4E) read
+  //   * `<AdaptiveProgramDisplay>` receives
+  //
+  // The projection is read-only and minimal: per-session honest doctrine
+  // causal display + source audit. It does NOT pick exercises, methods, or
+  // prescriptions — those are owned by the builder. It does NOT count rules
+  // or sources or batches as proof of causality. It uses Phase 4E
+  // `program.doctrineCausalChallenge.sessionDiffs[]` (the literal pre-doctrine
+  // vs post-doctrine top-3 audit) as the single source of truth for whether
+  // doctrine actually changed any session's exercise selection.
+  //
+  // The projection is passed down to `AdaptiveProgramDisplay`, which looks up
+  // each visible day's slice by `dayNumber` and passes it through to the
+  // matching `<AdaptiveSessionCard>` so the per-session doctrine causal line
+  // renders inside the actual card body — not just at the top of the page.
+  // ==========================================================================
+  const programDisplayProjection: ProgramDisplayProjection | null = buildProgramDisplayProjection(program)
+  if (programDisplayProjection) {
+    console.log('[phase4f-display-projection-owner]', {
+      programId: programDisplayProjection.programId,
+      projectionVersion: programDisplayProjection.projectionVersion,
+      projectionSource: programDisplayProjection.projectionSource,
+      sessionCount: programDisplayProjection.audit.sessionCount,
+      projectedSessionCount: programDisplayProjection.audit.projectedSessionCount,
+      sessionsWithCausalDisplay: programDisplayProjection.audit.sessionsWithCausalDisplay,
+      sessionsWithMaterialChange: programDisplayProjection.audit.sessionsWithMaterialChange,
+      sessionsWithVisibleChange: programDisplayProjection.audit.sessionsWithVisibleChange,
+      legacyMissingCausalChallenge: programDisplayProjection.legacyMissingCausalChallenge,
+      noMixedOwnership: programDisplayProjection.audit.noMixedOwnership,
+      lostFieldsCount: programDisplayProjection.audit.lostFields.length,
+      repairedFieldsCount: programDisplayProjection.audit.repairedFields.length,
+      firstSessionFingerprint: programDisplayProjection.sessions[0]?.fingerprint || null,
+      displayObjectSource: 'app/(app)/program/page.tsx::buildProgramDisplayProjection',
+      // [VERDICT-NARROWING] If sessionsWithCausalDisplay > 0 AND
+      // sessionsWithMaterialChange === 0, doctrine ran but never won a
+      // top selection in any session. The honest reason will surface
+      // per-session in the card body via projection.sessions[i].doctrineCausalDisplay.
+      verdict:
+        programDisplayProjection.legacyMissingCausalChallenge
+          ? 'PROGRAM_PREDATES_PHASE_4E_CAUSAL_ROLLUP_REGENERATE_TO_REFRESH'
+          : programDisplayProjection.audit.sessionsWithMaterialChange > 0
+            ? 'DOCTRINE_MATERIALLY_CHANGED_AT_LEAST_ONE_SESSION'
+            : programDisplayProjection.audit.sessionsWithCausalDisplay > 0
+              ? 'DOCTRINE_RAN_BUT_DID_NOT_CHANGE_ANY_SESSION_TOP_WINNER'
+              : 'DOCTRINE_DID_NOT_RUN_ON_ANY_SESSION',
+    })
+  }
+
+  // ==========================================================================
   // [PROGRAM-TRUTH-SURFACE-CONNECTION-LOCK] Resolve the single authoritative
   // `truthExplanation` that the visible ProgramTruthSummary consumes.
   //
@@ -1557,6 +1614,14 @@ function ProgramDisplayWrapper({
              day cards have one authoritative source of truth owned by the
              page-level CanonicalProgramDisplayTruth contract. */
           sessionCardSurfaces={canonicalDisplayTruth.visibleSessionCards}
+          /* [PHASE 4F — DISPLAY PROJECTION OWNERSHIP LOCK] Pass the page-built
+             read-only projection. AdaptiveProgramDisplay does not re-build
+             this; it only looks up the per-session slice by dayNumber and
+             passes it to the matching AdaptiveSessionCard. The card renders
+             the per-session doctrine causal line inside its body, not in a
+             wrapper strip — answering "did doctrine change THIS session?"
+             with honest copy that never claims change without Phase 4E proof. */
+          programDisplayProjection={programDisplayProjection}
         />
       </ErrorBoundary>
     </div>

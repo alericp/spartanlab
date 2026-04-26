@@ -42,6 +42,7 @@ import {
   buildAllSessionCardSurfaces,
   type ProgramIntelligenceContract,
   type SessionCardSurface,
+  type ProgramDisplayProjection,
 } from '@/lib/program/program-display-contract'
 import { getCompactSessionExplanation } from '@/lib/coaching-explanation-contract'
 import { 
@@ -82,6 +83,17 @@ interface AdaptiveProgramDisplayProps {
   // when undefined, the component falls back to building surfaces locally
   // via the same canonical helper (no semantic divergence is possible).
   sessionCardSurfaces?: SessionCardSurface[]
+  // [PHASE 4F — DISPLAY PROJECTION OWNERSHIP LOCK] Read-only program-level
+  // display projection built ONCE on the page from the same `program` object
+  // every other display surface reads. AdaptiveProgramDisplay does NOT re-build
+  // this projection; it only forwards the matching per-session slice (matched
+  // by `dayNumber`) to the corresponding AdaptiveSessionCard. The card body
+  // then surfaces the per-session honest doctrine-causal verdict (changed /
+  // evaluated / no-match / did-not-run) — a question the existing wrapper
+  // chips and the top-of-page DoctrineCausalLine cannot answer per-session.
+  // Optional + null-safe: when null/undefined the day cards render exactly
+  // as before, with no Phase 4F line.
+  programDisplayProjection?: ProgramDisplayProjection | null
   }
 
 export function AdaptiveProgramDisplay({
@@ -95,6 +107,8 @@ export function AdaptiveProgramDisplay({
   forceProbe = false, // [ALWAYS-VISIBLE-PROBE] Force probe unconditionally
   // [VISIBLE-SESSION-TRUTH-LOCK] Page-built per-card visible surfaces
   sessionCardSurfaces: injectedSessionCardSurfaces,
+  // [PHASE 4F] Page-built read-only program display projection
+  programDisplayProjection,
   }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
@@ -1280,6 +1294,18 @@ export function AdaptiveProgramDisplay({
   methodDecisionVersion={
     ((program as unknown as { doctrineIntegration?: { methodDecisionVersion?: string | null } })
       .doctrineIntegration?.methodDecisionVersion) ?? null
+  }
+  // [PHASE 4F — DISPLAY PROJECTION OWNERSHIP LOCK] Per-session projection slice.
+  // Looked up by `dayNumber` (not array index) so a filtered/sliced session
+  // array on the page level cannot mismatch this card. When the projection is
+  // null (older callers / standalone usage) or has no matching slice, the
+  // card simply renders no Phase 4F line — existing behavior unchanged.
+  displayProjectionSession={
+    programDisplayProjection
+      ? programDisplayProjection.sessions.find(
+          ps => ps.dayNumber === ((session as unknown as { dayNumber?: number }).dayNumber ?? -1)
+        ) ?? null
+      : null
   }
   />
               </div>

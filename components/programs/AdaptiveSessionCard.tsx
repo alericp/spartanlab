@@ -17,7 +17,7 @@ import {
   buildSessionFingerprint,
   stampLaunchFingerprint,
 } from '@/lib/workout/selected-variant-session-contract'
-import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell } from 'lucide-react'
+import { ChevronDown, ChevronUp, Clock, AlertCircle, AlertTriangle, MinusCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell } from 'lucide-react'
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
 import { exerciseSupportsRPE } from '@/lib/rpe-adjustment-engine'
 import { useWorkoutSession } from '@/hooks/useWorkoutSession'
@@ -34,7 +34,7 @@ import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, Protocol
 // [DOMINANT-CARD-OWNERSHIP-LOCK] Import SessionCardSurface so this dominant
 // visible card can read from the SAME strengthened authoritative truth that
 // the Program-page wrapper strip already consumes. No parallel re-derivation.
-import { buildExerciseCardContract, buildExerciseRowSurface, type ExerciseRowSurface, type SessionCardSurface } from '@/lib/program/program-display-contract'
+import { buildExerciseCardContract, buildExerciseRowSurface, type ExerciseRowSurface, type SessionCardSurface, type ProgramDisplayProjectionSession } from '@/lib/program/program-display-contract'
 import type { ProgramExplanationSurface } from '@/lib/coaching-explanation-contract'
 // [SINGLE-TRUTH-FIX] Removed: getCompactExerciseExplanation - was source of contradictory text
 import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, buildSessionMainPreviewSurface, buildFullVisibleRoutineExercises, type SessionAiEvidenceSurface, type FullSessionRoutineSurface, type SessionMainPreviewSurface, type FullRoutineExercise } from '@/lib/program/program-ai-evidence-bridge'
@@ -138,6 +138,15 @@ interface AdaptiveSessionCardProps {
   // program predates profile-aware stamping — the card shows a clean
   // "bridged" attribution instead of claiming fresh doctrine application.
   methodDecisionVersion?: string | null
+  // [PHASE 4F — DISPLAY PROJECTION OWNERSHIP LOCK] Per-session display projection
+  // slice. Built once on the page from `program.doctrineCausalChallenge.sessionDiffs[]`
+  // (Phase 4E) and matched to this card by `dayNumber`. When present, the card
+  // body renders an honest per-session line that says exactly what doctrine
+  // did to THIS session — material change with the post-doctrine top winner,
+  // base ranking won, no rules matched, or doctrine did not run. Never claims
+  // change without Phase 4E proof. Optional + null-safe: when null/undefined
+  // the card renders exactly as before with no Phase 4F line.
+  displayProjectionSession?: ProgramDisplayProjectionSession | null
 }
 
 // =============================================================================
@@ -402,7 +411,7 @@ function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
   }
 }
 
-export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter, cardSurface, showProbe: _showProbe = false, forceProbe: _forceProbe = false, currentWeekNumber, programProfileSnapshot, methodDecisionVersion }: AdaptiveSessionCardProps) {
+export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter, cardSurface, showProbe: _showProbe = false, forceProbe: _forceProbe = false, currentWeekNumber, programProfileSnapshot, methodDecisionVersion, displayProjectionSession }: AdaptiveSessionCardProps) {
   // [PROBES-HARD-DISABLED] Session truth probes are retired. They caused
   // debug-looking text ("PROBE ACTIVE", instance-id letter fragments, etc.)
   // to leak into production UI when accidentally enabled via query param.
@@ -3145,6 +3154,88 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     )}
   </div>
 )}
+
+{/* [PHASE 4F — DISPLAY PROJECTION OWNERSHIP LOCK]
+    Per-session doctrine causal line, rendered INSIDE the card body (not in
+    a wrapper strip) so the user can tell, for THIS specific session,
+    whether doctrine actually changed the top exercise pick — answered from
+    the page-built read-only projection sourced from
+    `program.doctrineCausalChallenge.sessionDiffs[]` (Phase 4E).
+
+    Honest-display contract:
+      * Renders nothing when no projection slice is available (older saved
+        programs, or sessions for which Phase 4E recorded no audit).
+      * Emerald + summary copy when `materialChanged === true`. The summary
+        names the post-doctrine top winner (and pre-doctrine alternative
+        when known). Never claimed without `topCandidateChanged === true`.
+      * Zinc + honest no-change reason when doctrine evaluated this session
+        but did not change its top winner. Reason text is mapped from the
+        per-session verdict, never derived from rule/source counts.
+      * Amber when doctrine did not run or had no rules matching this
+        session — signals an upstream condition the user should know about.
+    No proof labels. No selected-rule counts. No source counts. */}
+{displayProjectionSession?.doctrineCausalDisplay?.available ? (
+  (() => {
+    const cd = displayProjectionSession.doctrineCausalDisplay
+    if (cd.materialChanged && cd.summary) {
+      return (
+        <div
+          role="status"
+          aria-live="polite"
+          data-phase4f-causal="changed"
+          className="mt-2 mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-emerald-500/20 bg-emerald-500/[0.04] px-3 py-2 max-w-full min-w-0 overflow-hidden"
+        >
+          <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400/90" aria-hidden />
+          <span className="text-[12px] font-medium text-emerald-200 shrink-0">
+            Doctrine changed this session
+          </span>
+          <span className="text-[12px] text-emerald-200/70 break-words [overflow-wrap:anywhere] min-w-0">
+            {cd.summary}
+          </span>
+        </div>
+      )
+    }
+    if (
+      cd.noChangeReason === 'doctrine_no_matching_rules' ||
+      cd.noChangeReason === 'doctrine_cache_empty' ||
+      cd.noChangeReason === 'doctrine_did_not_run'
+    ) {
+      return (
+        <div
+          role="status"
+          aria-live="polite"
+          data-phase4f-causal="not-applicable"
+          className="mt-2 mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-amber-500/30 bg-amber-500/[0.05] px-3 py-2 max-w-full min-w-0 overflow-hidden"
+        >
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-400/90" aria-hidden />
+          <span className="text-[12px] font-medium text-amber-200 shrink-0">
+            Doctrine not applied to this session
+          </span>
+          <span className="text-[12px] text-amber-200/70 break-words [overflow-wrap:anywhere] min-w-0">
+            {cd.summary || 'See top-of-page line for details'}
+          </span>
+        </div>
+      )
+    }
+    // doctrine_evaluated_base_won OR doctrine_top3_changed_top1_did_not
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        data-phase4f-causal="evaluated-no-change"
+        className="mt-2 mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-zinc-700/40 bg-zinc-900/40 px-3 py-2 max-w-full min-w-0 overflow-hidden"
+      >
+        <MinusCircle className="w-3.5 h-3.5 shrink-0 text-zinc-400/80" aria-hidden />
+        <span className="text-[12px] font-medium text-zinc-300 shrink-0">
+          Doctrine evaluated this session
+        </span>
+        <span className="text-[12px] text-zinc-400/80 break-words [overflow-wrap:anywhere] min-w-0">
+          {cd.summary || 'Base ranking already optimal — no exercise change'}
+        </span>
+      </div>
+    )
+  })()
+) : null}
 
 {/* Main Exercises - [FULL-VISIBLE-ROUTINE] Uses full routine truth, not narrowed displayExercises */}
 <MainExercisesRenderer

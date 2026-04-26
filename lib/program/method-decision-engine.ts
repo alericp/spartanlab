@@ -106,6 +106,79 @@ export interface MethodDecisionPrescriptionIntent {
   timeEfficiencyNotes: string[]
 }
 
+// ============================================================================
+// [PHASE 3C] PROFILE-AWARE DECISION CONTEXT
+// Canonical onboarding/profile truth that the engine reads ALONGSIDE the
+// session's already-materialized signals. This is the missing wire that
+// Phase 3 / 3B did not have — the engine was attributing methods using only
+// session shape + Batch 10 matrix + runtime methodDoctrine, with NO knowledge
+// of the user's actual selectedSkills, equipment, joint cautions, schedule,
+// session-style preference, etc. Phase 3C extracts this context (preferring
+// program.profileSnapshot when available, with a typed fallback shape) and
+// surfaces a `profileInfluence` block on every MethodDecision so the visible
+// rationale on the Program card can honestly cite which profile fields
+// drove or constrained the decision.
+//
+// SOURCE PRIORITY (set by the caller, recorded on profileInfluence.source):
+//   1. 'program.profileSnapshot'  — frozen at generation time (preferred)
+//   2. 'canonicalProfile'         — if no snapshot is on the program
+//   3. 'generationInputs'         — composed input bundle
+//   4. 'legacyFallback'           — only the trainingGoal string is known
+// ============================================================================
+
+export type MethodDecisionProfileSource =
+  | 'program.profileSnapshot'
+  | 'canonicalProfile'
+  | 'generationInputs'
+  | 'legacyFallback'
+
+export interface MethodDecisionProfileContext {
+  source: MethodDecisionProfileSource
+  primaryGoal?: string | null
+  secondaryGoal?: string | null
+  experienceLevel?: string | null
+  selectedSkills?: string[] | null
+  primarySkill?: string | null
+  trainingDaysPerWeek?: number | null
+  scheduleMode?: string | null
+  sessionLengthMinutes?: number | null
+  sessionDurationMode?: string | null
+  sessionStylePreference?: string | null
+  selectedTrainingStyles?: string[] | null
+  equipmentAvailable?: string[] | null
+  jointCautions?: string[] | null
+  flexibilitySelections?: string[] | null
+  trainingPathType?: string | null
+  /** Optional skill progression markers from the snapshot (front lever / planche / hspu). */
+  skillProgressions?: {
+    frontLever?: string | null
+    planche?: string | null
+    hspu?: string | null
+  } | null
+}
+
+export interface MethodDecisionProfileInfluence {
+  /** Where the profile context came from. */
+  source: MethodDecisionProfileSource
+  /** Subset of selectedSkills the engine actually USED in attribution. */
+  selectedSkillsUsed: string[]
+  primarySkillUsed?: string | null
+  trainingGoalUsed?: string | null
+  stylePreferenceUsed?: string | null
+  equipmentUsed?: string[]
+  jointCautionsUsed?: string[]
+  flexibilityUsed?: string[]
+  scheduleUsed?: {
+    mode?: string | null
+    daysPerWeek?: number | null
+    sessionDuration?: number | null
+  }
+  /** One-line plain-English driver shown on the visible card. */
+  primaryDriverLine: string
+  /** Additional human reasons the profile field set steered selection / rejection. */
+  influenceReasons: string[]
+}
+
 export interface MethodDecision {
   methodId: MethodDecisionMethodId
   status: MethodDecisionStatus
@@ -113,11 +186,21 @@ export interface MethodDecision {
   source: MethodDecisionSource
   appliesTo: MethodDecisionAppliesTo
   prescriptionIntent: MethodDecisionPrescriptionIntent
+  /** [PHASE 3C] Profile-truth influence on this decision. Always present. */
+  profileInfluence: MethodDecisionProfileInfluence
   renderLabel: string
   renderSummary: string
   /** Stable machine-readable code for tests / analytics. */
   debugCode: string
 }
+
+/**
+ * [PHASE 3C] Stable version marker stamped onto program.doctrineIntegration
+ * so the UI can detect saved programs that predate profile-aware stamping
+ * and surface a "regenerate to apply" diagnostic without claiming false
+ * progress. Bumping this string forces a fresh stamp on regenerate.
+ */
+export const METHOD_DECISION_VERSION = 'phase_3c.profile_aware.v1'
 
 // =============================================================================
 // MINIMAL INPUT SHAPES — keeps this engine decoupled from the full
@@ -589,6 +672,262 @@ function buildRenderSummary(
 }
 
 // =============================================================================
+// [PHASE 3C] PROFILE-CONTEXT EXTRACTION
+// Builds a uniform MethodDecisionProfileContext from any of the canonical
+// sources. Callers should prefer `program.profileSnapshot` because it was
+// frozen at generation time and is the same truth the program was built
+// against; canonicalProfile / generationInputs are accepted as fallbacks.
+// =============================================================================
+
+/**
+ * Shape of program.profileSnapshot as actually constructed by
+ * adaptive-program-builder.ts (line 19510). We accept a permissive shape so
+ * future snapshot-field additions don't silently break this extractor.
+ */
+export interface MethodDecisionProfileSnapshotLike {
+  primaryGoal?: string | null
+  secondaryGoal?: string | null
+  experienceLevel?: string | null
+  trainingDaysPerWeek?: number | null
+  sessionLengthMinutes?: number | null
+  sessionDurationMode?: string | null
+  scheduleMode?: string | null
+  sessionStylePreference?: string | null
+  selectedTrainingStyles?: string[] | null
+  equipmentAvailable?: string[] | null
+  jointCautions?: string[] | null
+  selectedSkills?: string[] | null
+  selectedFlexibility?: string[] | null
+  flexibilitySelections?: string[] | null
+  trainingPathType?: string | null
+  skillProgressions?: {
+    frontLever?: string | null
+    planche?: string | null
+    hspu?: string | null
+  } | null
+}
+
+export function extractProfileContextFromSnapshot(
+  snapshot: MethodDecisionProfileSnapshotLike | null | undefined,
+  sourceLabel: MethodDecisionProfileSource = 'program.profileSnapshot',
+): MethodDecisionProfileContext | null {
+  if (!snapshot || typeof snapshot !== 'object') return null
+  const skills = Array.isArray(snapshot.selectedSkills) ? snapshot.selectedSkills.filter(Boolean) : []
+  const flex = Array.isArray(snapshot.flexibilitySelections)
+    ? snapshot.flexibilitySelections.filter(Boolean)
+    : Array.isArray(snapshot.selectedFlexibility)
+      ? snapshot.selectedFlexibility.filter(Boolean)
+      : []
+  return {
+    source: sourceLabel,
+    primaryGoal: snapshot.primaryGoal ?? null,
+    secondaryGoal: snapshot.secondaryGoal ?? null,
+    experienceLevel: snapshot.experienceLevel ?? null,
+    selectedSkills: skills,
+    primarySkill: skills[0] ?? null,
+    trainingDaysPerWeek: snapshot.trainingDaysPerWeek ?? null,
+    scheduleMode: snapshot.scheduleMode ?? null,
+    sessionLengthMinutes: snapshot.sessionLengthMinutes ?? null,
+    sessionDurationMode: snapshot.sessionDurationMode ?? null,
+    sessionStylePreference: snapshot.sessionStylePreference ?? null,
+    selectedTrainingStyles: Array.isArray(snapshot.selectedTrainingStyles)
+      ? snapshot.selectedTrainingStyles.filter(Boolean)
+      : [],
+    equipmentAvailable: Array.isArray(snapshot.equipmentAvailable)
+      ? snapshot.equipmentAvailable.filter(Boolean)
+      : [],
+    jointCautions: Array.isArray(snapshot.jointCautions)
+      ? snapshot.jointCautions.filter(Boolean)
+      : [],
+    flexibilitySelections: flex,
+    trainingPathType: snapshot.trainingPathType ?? null,
+    skillProgressions: snapshot.skillProgressions ?? null,
+  }
+}
+
+// =============================================================================
+// [PHASE 3C] PROFILE-INFLUENCE COMPUTATION
+// Given the materialized method, the classified category, the session anchor
+// name, and the user's profile context — produce concrete influence reasons
+// that prove which profile fields actually steered THIS decision. We only
+// emit reasons when the relevant field is present and applies to this method
+// — never a fake reason.
+// =============================================================================
+
+function buildProfileInfluence(
+  methodId: MethodDecisionMethodId,
+  category: ExerciseCategoryKey | null,
+  anchorName: string | null,
+  profile: MethodDecisionProfileContext | null,
+  trainingGoalFallback: string | null,
+): MethodDecisionProfileInfluence {
+  const reasons: string[] = []
+  const skillsUsed: string[] = []
+  const equipmentUsed: string[] = []
+  const jointsUsed: string[] = []
+  const flexUsed: string[] = []
+
+  // No profile at all — be honest about it.
+  if (!profile) {
+    return {
+      source: 'legacyFallback',
+      selectedSkillsUsed: [],
+      primarySkillUsed: null,
+      trainingGoalUsed: trainingGoalFallback ?? null,
+      stylePreferenceUsed: null,
+      equipmentUsed: [],
+      jointCautionsUsed: [],
+      flexibilityUsed: [],
+      scheduleUsed: undefined,
+      primaryDriverLine: trainingGoalFallback
+        ? `Goal "${trainingGoalFallback}" only — no profile snapshot was available for this saved program.`
+        : 'No profile snapshot available; method attributed from session shape alone.',
+      influenceReasons: [],
+    }
+  }
+
+  const goal = profile.primaryGoal ?? trainingGoalFallback ?? null
+  const style = profile.sessionStylePreference ?? null
+  const skills = profile.selectedSkills ?? []
+  const equipment = profile.equipmentAvailable ?? []
+  const joints = profile.jointCautions ?? []
+  const flex = profile.flexibilitySelections ?? []
+  const days = profile.trainingDaysPerWeek ?? null
+  const sessLen = profile.sessionLengthMinutes ?? null
+
+  // ---- skill influence -----------------------------------------------------
+  // Match anchor and category against selected skills to surface concrete
+  // skill-driven reasoning.
+  const anchorLower = lower(anchorName)
+  const matchedSkills = skills.filter(s => {
+    const sl = lower(s)
+    return sl && (anchorLower.includes(sl) || sl.includes(anchorLower) || sl.split(/[_\s-]+/).some(t => t && anchorLower.includes(t)))
+  })
+  if (matchedSkills.length > 0) {
+    skillsUsed.push(...matchedSkills)
+  }
+
+  if (category === 'high_skill_isometrics' && skills.length > 0) {
+    skillsUsed.push(...skills.filter(s => !skillsUsed.includes(s)).slice(0, 3))
+    if (methodId === 'skill_practice' || methodId === 'straight_sets') {
+      reasons.push(
+        `Selected skills (${skillsUsed.slice(0, 3).join(', ')}) require fresh, fatigue-free expression — straight skill practice protects technical quality.`,
+      )
+    } else {
+      reasons.push(
+        `Selected skills (${skillsUsed.slice(0, 3).join(', ')}) typically argue for skill-practice; method materialized differently because of session structure.`,
+      )
+    }
+  }
+
+  // ---- goal influence ------------------------------------------------------
+  if (goal) {
+    const gl = lower(goal)
+    if ((gl.includes('strength') || gl.includes('weighted')) && (methodId === 'top_set_backoff' || methodId === 'backoff_sets' || methodId === 'straight_sets')) {
+      reasons.push(`Strength goal "${goal}" favors quality load exposure with controlled volume.`)
+    }
+    if ((gl.includes('hypertrophy') || gl.includes('muscle')) && (methodId === 'superset' || methodId === 'accessory_pairing' || methodId === 'drop_set')) {
+      reasons.push(`Hypertrophy goal "${goal}" tolerates time-efficient pairing on accessory work.`)
+    }
+    if ((gl.includes('endurance') || gl.includes('military') || gl.includes('test') || gl.includes('conditioning')) && (methodId === 'density_block' || methodId === 'circuit' || methodId === 'endurance_density')) {
+      reasons.push(`Endurance / conditioning goal "${goal}" favors repeatable work-capacity expression.`)
+    }
+    if ((gl.includes('skill') || gl.includes('calisthenic')) && (methodId === 'skill_practice' || methodId === 'straight_sets')) {
+      reasons.push(`Skill-priority goal "${goal}" protects technical quality from fatigue interference.`)
+    }
+  }
+
+  // ---- session-style preference -------------------------------------------
+  if (style) {
+    const sl = lower(style)
+    if (sl.includes('shorter') || sl.includes('time') || sl.includes('density')) {
+      if (methodId === 'density_block' || methodId === 'superset' || methodId === 'circuit' || methodId === 'accessory_pairing') {
+        reasons.push(`Session-style preference "${style}" supports time-efficient packaging.`)
+      }
+    }
+    if (sl.includes('longer') || sl.includes('complete') || sl.includes('full')) {
+      if (methodId === 'straight_sets' || methodId === 'top_set_backoff' || methodId === 'skill_practice') {
+        reasons.push(`Session-style preference "${style}" supports complete rest and quality output.`)
+      }
+    }
+  }
+
+  // ---- joint cautions ------------------------------------------------------
+  if (joints.length > 0) {
+    jointsUsed.push(...joints)
+    if (methodId === 'drop_set' || methodId === 'circuit') {
+      reasons.push(
+        `Joint cautions (${joints.join(', ')}) argue against high-fatigue technical methods on this anchor.`,
+      )
+    }
+    if (category === 'high_skill_isometrics') {
+      reasons.push(
+        `Joint cautions (${joints.join(', ')}) reinforce conservative skill-quality protection for this category.`,
+      )
+    }
+  }
+
+  // ---- equipment -----------------------------------------------------------
+  if (equipment.length > 0) {
+    equipmentUsed.push(...equipment.slice(0, 4))
+    if (category === 'heavy_weighted_basics' && (methodId === 'top_set_backoff' || methodId === 'backoff_sets')) {
+      const loadable = equipment.filter(e => /weight|belt|barbell|dumb|kettle|plate|vest|loadable/i.test(e))
+      if (loadable.length > 0) {
+        reasons.push(`Loadable equipment available (${loadable.slice(0, 3).join(', ')}) supports top-set + back-off load progression.`)
+      }
+    }
+  }
+
+  // ---- flexibility selections ---------------------------------------------
+  if (flex.length > 0 && (category === 'flexibility_mobility' || category === 'prehab_joint_integrity')) {
+    flexUsed.push(...flex.slice(0, 4))
+    reasons.push(`Flexibility selections (${flex.slice(0, 3).join(', ')}) keep this block at low-fatigue straight work.`)
+  }
+
+  // ---- schedule constraints -----------------------------------------------
+  if (typeof days === 'number' && days >= 5 && (methodId === 'density_block' || methodId === 'circuit')) {
+    reasons.push(`High training frequency (${days} days/week) caps systemic conditioning to avoid fatigue spillover.`)
+  }
+  if (typeof sessLen === 'number' && sessLen <= 45 && (methodId === 'superset' || methodId === 'circuit' || methodId === 'density_block' || methodId === 'accessory_pairing')) {
+    reasons.push(`Short session window (${sessLen} min) favors compact packaging.`)
+  }
+  if (typeof sessLen === 'number' && sessLen >= 75 && (methodId === 'straight_sets' || methodId === 'top_set_backoff' || methodId === 'skill_practice')) {
+    reasons.push(`Long session window (${sessLen} min) supports full rest and quality output.`)
+  }
+
+  // ---- primary driver line (single visible line on the card) --------------
+  const driverParts: string[] = []
+  if (matchedSkills.length > 0) driverParts.push(`selected skill: ${matchedSkills.slice(0, 2).join(' / ')}`)
+  else if (skills.length > 0 && category === 'high_skill_isometrics') driverParts.push(`skill priorities: ${skills.slice(0, 2).join(' / ')}`)
+  if (goal) driverParts.push(`goal: ${goal}`)
+  if (style) driverParts.push(`style: ${style}`)
+  if (joints.length > 0) driverParts.push(`joint care: ${joints.slice(0, 2).join(', ')}`)
+  if (driverParts.length === 0 && equipment.length > 0) driverParts.push(`equipment: ${equipment.slice(0, 2).join(', ')}`)
+  if (driverParts.length === 0 && typeof days === 'number') driverParts.push(`schedule: ${days}d/wk`)
+  const primaryDriverLine = driverParts.length > 0
+    ? driverParts.join(' · ')
+    : 'Profile snapshot available; no field directly applied to this method.'
+
+  return {
+    source: profile.source,
+    selectedSkillsUsed: skillsUsed.length > 0 ? Array.from(new Set(skillsUsed)) : (skills.length > 0 ? skills.slice(0, 3) : []),
+    primarySkillUsed: matchedSkills[0] ?? profile.primarySkill ?? null,
+    trainingGoalUsed: goal,
+    stylePreferenceUsed: style,
+    equipmentUsed: equipmentUsed.length > 0 ? equipmentUsed : equipment.slice(0, 4),
+    jointCautionsUsed: jointsUsed,
+    flexibilityUsed: flexUsed,
+    scheduleUsed: {
+      mode: profile.scheduleMode ?? null,
+      daysPerWeek: days,
+      sessionDuration: sessLen,
+    },
+    primaryDriverLine,
+    influenceReasons: reasons.slice(0, 5),
+  }
+}
+
+// =============================================================================
 // MAIN ENGINE
 // =============================================================================
 
@@ -597,6 +936,8 @@ export interface MethodDecisionEngineInput {
   runtimeContract?: DoctrineRuntimeContract | null
   decisionContext?: DoctrineBuilderDecisionContext | null
   trainingGoal?: string | null
+  /** [PHASE 3C] Canonical profile context (preferred: program.profileSnapshot). */
+  profileContext?: MethodDecisionProfileContext | null
 }
 
 /**
@@ -609,7 +950,7 @@ export interface MethodDecisionEngineInput {
 export function deriveMethodDecisionForSession(
   input: MethodDecisionEngineInput,
 ): MethodDecision | null {
-  const { session, runtimeContract, decisionContext, trainingGoal } = input
+  const { session, runtimeContract, decisionContext, trainingGoal, profileContext } = input
 
   // --- doctrine source health -----------------------------------------------
   const doctrineActive = !!runtimeContract && runtimeContract.available === true
@@ -735,9 +1076,24 @@ export function deriveMethodDecisionForSession(
 
   const fallbackUsed = contextStatus !== 'active' || category === null
 
+  // --- [PHASE 3C] profile-driven influence ---------------------------------
+  // Computed BEFORE renderSummary so the visible "Why" line can lead with a
+  // profile-aware reason when one exists.
+  const profileInfluence = buildProfileInfluence(
+    materialized.methodId,
+    category,
+    anchorName,
+    profileContext ?? null,
+    trainingGoal ?? null,
+  )
+
+  // Profile reasons join whyThisMethod ahead of generic doctrine matrix
+  // rationale, so the rendered card surfaces the user-specific driver first.
+  const whyWithProfile: string[] = [...profileInfluence.influenceReasons, ...whyThis]
+
   // --- finalize -------------------------------------------------------------
   const renderLabel = buildRenderLabel(materialized.methodId)
-  const renderSummary = buildRenderSummary(materialized.methodId, category, whyThis)
+  const renderSummary = buildRenderSummary(materialized.methodId, category, whyWithProfile)
 
   const decision: MethodDecision = {
     methodId: materialized.methodId,
@@ -756,15 +1112,16 @@ export function deriveMethodDecisionForSession(
       exerciseCategory: category ?? undefined,
     },
     prescriptionIntent: {
-      whyThisMethod: whyThis.slice(0, 4),
+      whyThisMethod: whyWithProfile.slice(0, 5),
       whyNotOtherMethods: whyNot.slice(0, 4),
       contraindications: contraindications.slice(0, 3),
       fatigueNotes: fatigueNotes.slice(0, 3),
       timeEfficiencyNotes: timeNotes.slice(0, 3),
     },
+    profileInfluence,
     renderLabel,
     renderSummary,
-    debugCode: `${materialized.debugCode}|cat:${safeCategory}|ctx:${contextStatus}|conf:${confidence}`,
+    debugCode: `${materialized.debugCode}|cat:${safeCategory}|ctx:${contextStatus}|conf:${confidence}|prof:${profileInfluence.source}|skills:${profileInfluence.selectedSkillsUsed.length}`,
   }
 
   return decision
@@ -784,6 +1141,19 @@ export interface MethodDecisionStampSummary {
   byStatus: Partial<Record<MethodDecisionStatus, number>>
   contextStatus: MethodDecisionContextStatus
   doctrineBatchesUsed: string[]
+  /** [PHASE 3C] Profile context source actually used for stamping. */
+  profileSource: MethodDecisionProfileSource
+  /** [PHASE 3C] Number of sessions whose decision cited at least one profile-influence reason. */
+  profileInfluencedDecisions: number
+  /** [PHASE 3C] Stable version marker — the UI uses this to detect stale saved programs. */
+  methodDecisionVersion: string
+  /** [PHASE 3C] Stamp timestamp (ISO). */
+  methodDecisionStampedAt: string
+}
+
+export interface StampMethodDecisionsOptions {
+  /** [PHASE 3C] Canonical profile context (preferred: program.profileSnapshot). */
+  profileContext?: MethodDecisionProfileContext | null
 }
 
 export function stampMethodDecisionsOnSessions(
@@ -791,17 +1161,21 @@ export function stampMethodDecisionsOnSessions(
   runtimeContract: DoctrineRuntimeContract | null | undefined,
   decisionContext: DoctrineBuilderDecisionContext | null | undefined,
   trainingGoal?: string | null,
+  options?: StampMethodDecisionsOptions,
 ): { decisions: Array<MethodDecision | null>; summary: MethodDecisionStampSummary } {
   const decisions: Array<MethodDecision | null> = []
   const byMethod: Partial<Record<MethodDecisionMethodId, number>> = {}
   const byStatus: Partial<Record<MethodDecisionStatus, number>> = {}
   const batchSet = new Set<string>()
   let attached = 0
+  let profileInfluenced = 0
 
   const ctxStatus: MethodDecisionContextStatus =
     !runtimeContract || runtimeContract.available !== true || (decisionContext?.sourceMode ?? 'unavailable') === 'unavailable'
       ? 'unavailable'
       : (decisionContext?.diagnostics.usable === true ? 'active' : 'degraded')
+
+  const profileContext = options?.profileContext ?? null
 
   for (const s of sessions) {
     const decision = deriveMethodDecisionForSession({
@@ -809,6 +1183,7 @@ export function stampMethodDecisionsOnSessions(
       runtimeContract: runtimeContract ?? null,
       decisionContext: decisionContext ?? null,
       trainingGoal: trainingGoal ?? null,
+      profileContext,
     })
     decisions.push(decision)
     if (decision) {
@@ -816,6 +1191,9 @@ export function stampMethodDecisionsOnSessions(
       byMethod[decision.methodId] = (byMethod[decision.methodId] ?? 0) + 1
       byStatus[decision.status] = (byStatus[decision.status] ?? 0) + 1
       for (const b of decision.source.doctrineBatchIds) batchSet.add(b)
+      if ((decision.profileInfluence.influenceReasons?.length ?? 0) > 0) {
+        profileInfluenced += 1
+      }
     }
   }
 
@@ -828,6 +1206,10 @@ export function stampMethodDecisionsOnSessions(
       byStatus,
       contextStatus: ctxStatus,
       doctrineBatchesUsed: Array.from(batchSet).sort(),
+      profileSource: profileContext?.source ?? 'legacyFallback',
+      profileInfluencedDecisions: profileInfluenced,
+      methodDecisionVersion: METHOD_DECISION_VERSION,
+      methodDecisionStampedAt: new Date().toISOString(),
     },
   }
 }

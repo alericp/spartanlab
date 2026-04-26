@@ -1268,6 +1268,19 @@ export function AdaptiveProgramDisplay({
   // [WEEK-AUTHORITY-HANDOFF] Pass the AUTHORITATIVE selected week so Start
   // Workout carries the same week as the dosage rendered on this card.
   currentWeekNumber={currentWeekNumber}
+  // [PHASE 3C] Pass the program-level profile snapshot + stamp version so the
+  // card's Doctrine Decision panel can (a) bridge profile-aware attribution
+  // for legacy programs that pre-date the wrapper stamp and (b) honestly tag
+  // saved programs whose stamp version is older than the current engine.
+  programProfileSnapshot={
+    (program as unknown as { profileSnapshot?: unknown }).profileSnapshot as
+      | Parameters<typeof AdaptiveSessionCard>[0]['programProfileSnapshot']
+      | undefined ?? null
+  }
+  methodDecisionVersion={
+    ((program as unknown as { doctrineIntegration?: { methodDecisionVersion?: string | null } })
+      .doctrineIntegration?.methodDecisionVersion) ?? null
+  }
   />
               </div>
             )

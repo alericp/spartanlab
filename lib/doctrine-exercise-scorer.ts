@@ -547,49 +547,173 @@ export interface CachedDoctrineRules {
   carryoverRules: CarryoverRule[]
   fetchedAt: number
   primaryGoal: string
+  /** [PHASE 4G] All goal/skill keys used to query rules — primary + secondary + selectedSkills. */
+  queriedSkillKeys: string[]
+  /** [PHASE 4G] Stable cache key combining all queried keys, used for cache validity. */
+  cacheKey: string
 }
 
 let rulesCache: CachedDoctrineRules | null = null
 const CACHE_TTL_MS = 60000 // 1 minute cache
 
 /**
- * Pre-fetch doctrine rules for a primary goal.
- * Call this before synchronous scoring to enable doctrine integration.
+ * [PHASE 4G] DOCTRINE APPLICATION GATE — RULE MATCHING REPAIR
+ *
+ * Pre-fetch doctrine rules for the athlete's full skill context so they are
+ * available synchronously during exercise selection scoring.
+ *
+ * WHY THE WIDER CONTEXT EXISTS (Phase 4G root cause)
+ * --------------------------------------------------
+ * Before Phase 4G this function fetched rules by `primaryGoal` ONLY. For a
+ * hybrid athlete with `selectedSkills` like
+ * `[planche, front_lever, back_lever, handstand, hspu, v_sit]` and
+ * `primaryGoal: 'planche'`, the SQL filters in `getExerciseSelectionRules`
+ * (`r.goalKey === filters.goalKey`) and `getCarryoverRules`
+ * (`r.targetSkillKey === targetSkillKey`) silently discarded 5 of 6 skills'
+ * worth of rules. Those rules could not enter the cache, could not score
+ * candidates, could not become eligible/selected/materialized — explaining
+ * the user-visible "doctrine evaluated this session but didn't change it"
+ * pattern that motivated Phase 4G.
+ *
+ * THE FIX
+ * -------
+ * Accept the full skill context (`primaryGoal`, `secondaryGoal`,
+ * `selectedSkills`). Fetch rules for the deduplicated UNION of all those
+ * keys, then merge and dedupe by rule id. Backward compatible: callers
+ * that still pass only `primaryGoal` get the legacy single-skill behavior.
+ *
+ * SAFETY
+ * ------
+ *   * Does NOT lower any score modifier or relax any safety filter.
+ *   * Does NOT add new candidate exercises — it only allows rules for
+ *     skills the athlete actually selected to score the candidates that
+ *     already passed safety/progression/equipment gates.
+ *   * Contraindication rules are global (no goal filter), so they were
+ *     never narrowed and are unchanged.
+ *   * Cache key includes all queried keys so a wider fetch cannot be
+ *     served from a previous narrower cache entry.
+ *
+ * NON-GOALS
+ * ---------
+ *   * Does NOT add method/prescription/carryover materialization paths.
+ *     Phase 4G's surgical fix is the query gate; downstream materialization
+ *     of method and prescription rules is a separate phase.
  */
-export async function prefetchDoctrineRules(primaryGoal: string): Promise<CachedDoctrineRules | null> {
-  // Check if cached rules are still valid
-  if (rulesCache && 
-      rulesCache.primaryGoal === primaryGoal && 
-      Date.now() - rulesCache.fetchedAt < CACHE_TTL_MS) {
-    console.log('[PHASE4-DOCTRINE-CACHE] Using cached rules for:', primaryGoal)
+export interface PrefetchDoctrineRulesContext {
+  primaryGoal: string
+  secondaryGoal?: string | null
+  selectedSkills?: string[] | null
+}
+
+export async function prefetchDoctrineRules(
+  contextOrPrimaryGoal: string | PrefetchDoctrineRulesContext
+): Promise<CachedDoctrineRules | null> {
+  // Backward-compat: callers may still pass a single primaryGoal string.
+  const ctx: PrefetchDoctrineRulesContext = typeof contextOrPrimaryGoal === 'string'
+    ? { primaryGoal: contextOrPrimaryGoal }
+    : contextOrPrimaryGoal
+
+  const primaryGoal = ctx.primaryGoal
+  // Build the deduplicated union of skill keys to query. Primary first,
+  // then secondary, then selectedSkills, dropping null/empty/duplicates.
+  const queriedSkillKeysSet = new Set<string>()
+  const addKey = (k: string | null | undefined) => {
+    if (typeof k === 'string' && k.trim().length > 0) queriedSkillKeysSet.add(k.trim())
+  }
+  addKey(primaryGoal)
+  addKey(ctx.secondaryGoal)
+  if (Array.isArray(ctx.selectedSkills)) {
+    for (const s of ctx.selectedSkills) addKey(s)
+  }
+  const queriedSkillKeys = Array.from(queriedSkillKeysSet)
+  // Stable cache key — sorted so order-insensitive. Used both for validity
+  // checks and so a previous narrow fetch cannot satisfy a wider request.
+  const cacheKey = queriedSkillKeys.slice().sort().join('|')
+
+  // Reuse cache only when the FULL query key matches (Phase 4G: not just primaryGoal).
+  if (
+    rulesCache &&
+    rulesCache.cacheKey === cacheKey &&
+    Date.now() - rulesCache.fetchedAt < CACHE_TTL_MS
+  ) {
+    console.log('[PHASE4G-DOCTRINE-CACHE] Using cached rules for skill set:', {
+      primaryGoal,
+      queriedSkillKeysCount: queriedSkillKeys.length,
+      cacheKey,
+    })
     return rulesCache
   }
-  
+
   try {
-    const [selRules, contraRules, carryRules] = await Promise.all([
-      getExerciseSelectionRules({ goalKey: primaryGoal }),
+    // Issue one query per skill key in parallel for selection + carryover.
+    // Contraindication rules are global, fetched once.
+    const selectionPromises = queriedSkillKeys.map(skillKey =>
+      getExerciseSelectionRules({ goalKey: skillKey })
+    )
+    const carryoverPromises = queriedSkillKeys.map(skillKey =>
+      getCarryoverRules(skillKey)
+    )
+
+    const [selectionResults, carryoverResults, contraRules] = await Promise.all([
+      Promise.all(selectionPromises),
+      Promise.all(carryoverPromises),
       getContraindicationRules(),
-      getCarryoverRules(primaryGoal),
     ])
-    
+
+    // Merge and dedupe by rule id. A rule that legitimately matches two of
+    // the athlete's skills (e.g. a carryover from front_lever to back_lever)
+    // must appear once, not twice — otherwise the per-rule scoreDelta would
+    // be double-counted in the per-candidate scorer.
+    const selRulesById = new Map<string, ExerciseSelectionRule>()
+    for (const arr of selectionResults) {
+      for (const r of arr) {
+        if (r && typeof r.id === 'string' && !selRulesById.has(r.id)) {
+          selRulesById.set(r.id, r)
+        }
+      }
+    }
+    const carryRulesById = new Map<string, CarryoverRule>()
+    for (const arr of carryoverResults) {
+      for (const r of arr) {
+        if (r && typeof r.id === 'string' && !carryRulesById.has(r.id)) {
+          carryRulesById.set(r.id, r)
+        }
+      }
+    }
+
+    const selRules = Array.from(selRulesById.values())
+    const carryRules = Array.from(carryRulesById.values())
+
     rulesCache = {
       selectionRules: selRules,
       contraindicationRules: contraRules,
       carryoverRules: carryRules,
       fetchedAt: Date.now(),
       primaryGoal,
+      queriedSkillKeys,
+      cacheKey,
     }
-    
-    console.log('[PHASE4-DOCTRINE-CACHE] Rules prefetched:', {
+
+    console.log('[PHASE4G-DOCTRINE-CACHE] Rules prefetched (multi-skill):', {
       primaryGoal,
+      secondaryGoal: ctx.secondaryGoal ?? null,
+      queriedSkillKeysCount: queriedSkillKeys.length,
+      queriedSkillKeys,
       selectionRules: selRules.length,
       contraindicationRules: contraRules.length,
       carryoverRules: carryRules.length,
+      // [PHASE 4G ROOT-CAUSE PROOF] If selectionRules / carryoverRules grew vs
+      // the previous primary-only count, that is the literal proof that the
+      // earlier query was discarding rules for skills the athlete selected.
+      verdict:
+        queriedSkillKeys.length > 1
+          ? 'DOCTRINE_QUERY_WIDENED_TO_FULL_SKILL_SET'
+          : 'DOCTRINE_QUERY_SINGLE_SKILL_ONLY',
     })
-    
+
     return rulesCache
   } catch (error) {
-    console.log('[PHASE4-DOCTRINE-CACHE] Failed to prefetch rules:', error)
+    console.log('[PHASE4G-DOCTRINE-CACHE] Failed to prefetch rules:', error)
     return null
   }
 }

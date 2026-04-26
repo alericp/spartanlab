@@ -5306,19 +5306,42 @@ async function generateAdaptiveProgramImpl(
   }
   
   // ==========================================================================
-  // [PHASE 4] DOCTRINE DB PRE-FETCH: Cache rules before exercise selection
+  // [PHASE 4G] DOCTRINE DB PRE-FETCH: Cache rules for the FULL skill context.
+  //
+  // Before Phase 4G this prefetched only by `inputs.primaryGoal`. For a
+  // multi-skill athlete (e.g. selectedSkills = [planche, front_lever,
+  // back_lever, handstand, hspu, v_sit]) that meant 5 of 6 skills' worth of
+  // rules were silently discarded by the SQL filters in
+  // `getExerciseSelectionRules` / `getCarryoverRules`. Those rules could not
+  // enter the cache → could not score candidates → could not become eligible
+  // → could not be selected → could not be materialized → could not be
+  // visible. That was the literal root cause of "doctrine evaluated this
+  // session but didn't change it" in earlier phases.
+  //
+  // Phase 4G fix: pass the deduplicated union of primaryGoal + secondaryGoal
+  // + selectedSkills so doctrine sees rules for every skill the athlete
+  // actually selected. Backward compatible (string still accepted by
+  // prefetchDoctrineRules). Does NOT alter scoring magnitudes, safety
+  // gates, or candidate generation — it only stops discarding the
+  // athlete's own skill-targeted rules before scoring runs.
   // ==========================================================================
-  // Prefetch doctrine rules for the primary goal so they're available
-  // synchronously during exercise selection scoring.
   try {
-    await prefetchDoctrineRules(inputs.primaryGoal)
-    console.log('[PHASE4-DOCTRINE-PREFETCH]', {
+    const phase4gQueryContext = {
       primaryGoal: inputs.primaryGoal,
+      secondaryGoal: inputs.secondaryGoal ?? null,
+      selectedSkills: Array.isArray(inputs.selectedSkills) ? inputs.selectedSkills : [],
+    }
+    await prefetchDoctrineRules(phase4gQueryContext)
+    console.log('[PHASE4G-DOCTRINE-PREFETCH]', {
+      primaryGoal: phase4gQueryContext.primaryGoal,
+      secondaryGoal: phase4gQueryContext.secondaryGoal,
+      selectedSkillsCount: phase4gQueryContext.selectedSkills.length,
+      selectedSkills: phase4gQueryContext.selectedSkills,
       status: 'rules_cached',
-      verdict: 'DOCTRINE_RULES_PREFETCHED',
+      verdict: 'DOCTRINE_RULES_PREFETCHED_FOR_FULL_SKILL_SET',
     })
   } catch (err) {
-    console.log('[PHASE4-DOCTRINE-PREFETCH]', {
+    console.log('[PHASE4G-DOCTRINE-PREFETCH]', {
       primaryGoal: inputs.primaryGoal,
       status: 'prefetch_failed',
       error: String(err),

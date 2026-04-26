@@ -158,6 +158,12 @@ import { ProgramTruthSummary } from '@/components/programs/ProgramTruthSummary'
 // action. Lightweight, null-tolerant, hides on fresh programs, calls only the
 // existing canonical onRegenerate handler — no second route, no second builder.
 import { ProgramMaterializationStaleNotice } from '@/components/programs/ProgramMaterializationStaleNotice'
+// [PHASE 4C] One compact, mobile-safe, honest materialization status line.
+// Replaces the proof-only DoctrineRuntimeProof / DoctrineIntegrationProofBlock
+// visibility on the athlete-facing page. Reads only the Phase 4A rollup the
+// wrapper already writes. Does NOT show selected-rule counts, batch keys,
+// source labels, or Phase-disclaimer copy.
+import { MaterializationStatusLine } from '@/components/programs/MaterializationStatusLine'
 // [VISIBLE-SESSION-TRUTH-LOCK] Single canonical visible-card display contract.
 // The page-level CanonicalProgramDisplayTruth now embeds these surfaces so
 // every visible day card consumes one authoritative contract owned by the
@@ -854,8 +860,8 @@ function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
     : null
 
   return (
-    <div className="mb-4 p-3 bg-zinc-900/50 border border-zinc-800/60 rounded-lg">
-      <div className="flex items-center gap-2 mb-2">
+    <div className="mb-4 p-3 bg-zinc-900/50 border border-zinc-800/60 rounded-lg w-full max-w-full min-w-0 overflow-hidden">
+      <div className="flex flex-wrap items-center gap-2 mb-2 min-w-0">
         <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">
           Doctrine Active
         </span>
@@ -890,27 +896,27 @@ function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
         )}
       </div>
       {completenessLine && (
-        <p className="mt-2 text-xs text-amber-400/80 italic">{completenessLine}</p>
+        <p className="mt-2 text-xs text-amber-400/80 italic break-words [overflow-wrap:anywhere]">{completenessLine}</p>
       )}
       {batchFiveLine && (
-        <p className="mt-1 text-xs text-cyan-400/80 italic">{batchFiveLine}</p>
+        <p className="mt-1 text-xs text-cyan-400/80 italic break-words [overflow-wrap:anywhere]">{batchFiveLine}</p>
       )}
       {batchSixLine && (
-        <p className="mt-1 text-xs text-emerald-400/80 italic">{batchSixLine}</p>
+        <p className="mt-1 text-xs text-emerald-400/80 italic break-words [overflow-wrap:anywhere]">{batchSixLine}</p>
       )}
       {batchSevenLine && (
-        <p className="mt-1 text-xs text-sky-400/80 italic">{batchSevenLine}</p>
+        <p className="mt-1 text-xs text-sky-400/80 italic break-words [overflow-wrap:anywhere]">{batchSevenLine}</p>
       )}
       {batchEightLine && (
-        <p className="mt-1 text-xs text-amber-400/80 italic">{batchEightLine}</p>
+        <p className="mt-1 text-xs text-amber-400/80 italic break-words [overflow-wrap:anywhere]">{batchEightLine}</p>
       )}
       {batchNineLine && (
-        <p className="mt-1 text-xs text-teal-400/80 italic">{batchNineLine}</p>
+        <p className="mt-1 text-xs text-teal-400/80 italic break-words [overflow-wrap:anywhere]">{batchNineLine}</p>
       )}
       {summaryLines.length > 0 && (
         <ul className="mt-2 space-y-0.5">
           {summaryLines.map((line, idx) => (
-            <li key={idx} className="text-xs text-zinc-500 italic">
+            <li key={idx} className="text-xs text-zinc-500 italic break-words [overflow-wrap:anywhere]">
               {line}
             </li>
           ))}
@@ -1003,17 +1009,17 @@ function DoctrineIntegrationProofBlock({ program }: { program: AdaptiveProgram }
     (counts.carryoverRules ?? 0)
 
   return (
-    <div className="mt-3 p-3 rounded-lg border border-zinc-800/60 bg-zinc-950/40">
-      <div className="flex items-center gap-2 mb-2">
+    <div className="mt-3 p-3 rounded-lg border border-zinc-800/60 bg-zinc-950/40 w-full max-w-full min-w-0 overflow-hidden">
+      <div className="flex flex-wrap items-center gap-2 mb-2 min-w-0">
         <span
-          className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-medium ${statusColor}`}
+          className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-medium ${statusColor} break-words [overflow-wrap:anywhere] max-w-full`}
         >
           Doctrine context reached builder · {statusLabel}
         </span>
-        <span className="text-xs text-zinc-500">Source: {sourceLabel}</span>
+        <span className="text-xs text-zinc-500 break-words [overflow-wrap:anywhere] min-w-0">Source: {sourceLabel}</span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2 text-xs min-w-0">
         <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-zinc-800/60 text-zinc-300">
           <span className="text-zinc-500">Batches present:</span>
           <span className="font-medium">{presentBatchCount}/10</span>
@@ -1045,18 +1051,25 @@ function DoctrineIntegrationProofBlock({ program }: { program: AdaptiveProgram }
       </div>
 
       {warnings.length > 0 && (
-        <p className="mt-2 text-[11px] text-amber-400/80 italic">
+        <p className="mt-2 text-[11px] text-amber-400/80 italic break-words [overflow-wrap:anywhere]">
           {warnings.slice(0, 2).join(' · ')}
         </p>
       )}
 
-      <p className="mt-2 text-[11px] text-zinc-500 italic">
-        {di.disclaimer ??
-          'Doctrine context reached the builder. Phase 2 does not yet allow doctrine to change exercise selection or prescriptions.'}
-      </p>
-      <p className="mt-1 text-[11px] text-zinc-600 italic">
-        Next phase: apply doctrine to actual method/exercise/session decisions.
-      </p>
+      {/* [PHASE 4C] Disclaimer text rendered ONLY when the builder/wrapper
+          attached one. The legacy Phase 2 fallback string ("Phase 2 does
+          not yet allow doctrine to change exercise selection or
+          prescriptions.") is no longer the default — Phase 4A wired
+          doctrine into the builder's materialization decisions, and the
+          honest user-facing materialization signal is the
+          MaterializationStatusLine + per-session Phase 4A panel above.
+          This panel is also gated behind ?programProbe=1 by the Program
+          page so athletes never see proof-only diagnostics. */}
+      {di.disclaimer && (
+        <p className="mt-2 text-[11px] text-zinc-500 italic break-words [overflow-wrap:anywhere]">
+          {di.disclaimer}
+        </p>
+      )}
     </div>
   )
 }
@@ -1401,7 +1414,18 @@ function ProgramDisplayWrapper({
   })()
 
   return (
-    <div>
+    <div className="w-full max-w-full min-w-0 overflow-x-hidden">
+      {/* ==========================================================================
+          [PHASE 4C] Wrapper-level mobile-overflow safety net.
+          `overflow-x-hidden` + `max-w-full min-w-0` on the program wrapper
+          guarantees no descendant proof/scanner/parity strip can push the
+          page sideways on narrow viewports, even if a future diagnostic
+          surface adds an unbroken string. The wrapping fixes inside each
+          proof block are still the primary defense; this is belt-and-
+          suspenders so the athlete never feels horizontal scroll on the
+          Program page.
+          ========================================================================== */}
+
       {/* ==========================================================================
           [PHASE 4B] PROGRAM MATERIALIZATION STALE NOTICE
           Renders ONLY when the saved program either lacks the current Phase 4A
@@ -1439,17 +1463,33 @@ function ProgramDisplayWrapper({
         truthExplanation={resolvedTruthExplanation as unknown as Parameters<typeof ProgramTruthSummary>[0]['truthExplanation']}
       />
 
-        {/* [DOCTRINE-RUNTIME-PROOF] Compact visible proof that the generated
-            program actually consumed the doctrine runtime contract. Reads only
-            from program.doctrineRuntimeContract; renders nothing when absent. */}
-        <DoctrineRuntimeProof program={program} />
+        {/* [PHASE 4C] MATERIALIZATION STATUS LINE — athlete-facing.
+            One compact, mobile-safe, honest line built ONLY from
+            `program.doctrineIntegration.materializationRollup` (the real
+            counts the Phase 4A wrapper writes from actual session fields).
+            Renders nothing on stale/legacy programs (the Phase 4B stale
+            notice owns that state). Does NOT show selected-rule counts,
+            batch keys, source labels, or Phase-disclaimer copy. */}
+        <MaterializationStatusLine program={program} />
 
-        {/* [DOCTRINE-INTEGRATION-PROOF-PHASE2] Program-specific proof that the
-            doctrine decision context reached the builder for THIS generation.
-            Reads only program.doctrineIntegration. Distinct from the runtime
-            proof above (which proves doctrine availability at the app level).
-            Renders nothing for legacy programs that lack the field. */}
-        <DoctrineIntegrationProofBlock program={program} />
+        {/* [PHASE 4C — PROOF DEMOTION] DoctrineRuntimeProof and
+            DoctrineIntegrationProofBlock are diagnostic surfaces. They
+            were leaking onto the athlete-facing page and creating the
+            illusion that "Selected rules: 18 · Batches: 10/10" was a
+            program outcome. They are now gated behind the same
+            `?programProbe=1` probe gate as the runtime parity strip and
+            the grouped scanner strip — preserved for QA, hidden from
+            athletes. The honest user-facing materialization signal is
+            `<MaterializationStatusLine>` above + the Phase 4B stale
+            notice + the per-session Phase 4A panel inside session cards
+            (which only renders when `actualMaterialization.hasRealStructuralChange`
+            is true). */}
+        {(showProbe || forceProbe) && (
+          <>
+            <DoctrineRuntimeProof program={program} />
+            <DoctrineIntegrationProofBlock program={program} />
+          </>
+        )}
 
       {/* [PROGRAM-DECISION-SUMMARY] Display doctrine-driven decisions above the program */}
       <ProgramDecisionSummary program={program} />

@@ -824,6 +824,15 @@ function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
   const sourceCount = cov.sourcesCount ?? rc.activeSourceKeys?.length ?? 0
   const batchCount = rc.batchCoverage?.batchCount ?? 0
 
+  // [BATCH-05-PROOF] Surface Batch 5 inclusion compactly when active so the
+  // proof strip visibly changes after Batch 5 ingestion. Reads only the final
+  // program object's batchCoverage.batchKeys; no DB / network query.
+  const batchKeys = rc.batchCoverage?.batchKeys ?? []
+  const batchFiveActive = batchKeys.includes('batch_05')
+  const batchFiveLine = batchFiveActive
+    ? 'Batch 5 active: BL/FL, handstand, foundations, hypertrophy splits, circuits, theory/recovery'
+    : null
+
   return (
     <div className="mb-4 p-3 bg-zinc-900/50 border border-zinc-800/60 rounded-lg">
       <div className="flex items-center gap-2 mb-2">
@@ -862,6 +871,9 @@ function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
       </div>
       {completenessLine && (
         <p className="mt-2 text-xs text-amber-400/80 italic">{completenessLine}</p>
+      )}
+      {batchFiveLine && (
+        <p className="mt-1 text-xs text-cyan-400/80 italic">{batchFiveLine}</p>
       )}
       {summaryLines.length > 0 && (
         <ul className="mt-2 space-y-0.5">

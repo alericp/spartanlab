@@ -2247,6 +2247,79 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               )}
             </div>
 
+            {/* ==================================================================
+                [DOCTRINE-METHOD-DECISION-PHASE3]
+                Compact, doctrine-attributable method label + rationale for
+                this session. Reads ONLY `session.methodDecision` (stamped by
+                the authoritative wrapper post-builder via
+                `stampMethodDecisionsOnSessions`). Renders nothing for legacy
+                sessions that lack the field — zero impact on existing visuals.
+                The render is intentionally minimal: one method label badge +
+                one short rationale + optional rejected-method line. We do
+                NOT claim "fully doctrine-driven programming" here; the badge
+                only attributes the materialized method to its doctrine
+                source via Batch 10 compatibility matrix + runtime method
+                doctrine. See lib/program/method-decision-engine.ts.
+                ================================================================== */}
+            {(() => {
+              const md = (session as any)?.methodDecision as
+                | {
+                    methodId?: string
+                    status?: 'selected' | 'rejected' | 'not_applicable' | 'degraded'
+                    confidence?: 'high' | 'medium' | 'low'
+                    renderLabel?: string
+                    renderSummary?: string
+                    source?: {
+                      doctrineContextStatus?: 'active' | 'degraded' | 'unavailable'
+                      doctrineBatchIds?: string[]
+                    }
+                    prescriptionIntent?: {
+                      whyNotOtherMethods?: string[]
+                      contraindications?: string[]
+                    }
+                  }
+                | undefined
+              if (!md || !md.renderLabel) return null
+              const ctx = md.source?.doctrineContextStatus ?? 'unavailable'
+              const isDegraded = md.status === 'degraded' || ctx !== 'active'
+              const labelClass = isDegraded
+                ? 'text-amber-300/90 border-amber-500/30 bg-amber-500/10'
+                : 'text-[#E63946] border-[#E63946]/30 bg-[#E63946]/5'
+              const whyNot = md.prescriptionIntent?.whyNotOtherMethods?.[0]
+              const batches = md.source?.doctrineBatchIds ?? []
+              return (
+                <div className="mt-2 flex flex-col gap-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] font-medium ${labelClass}`}
+                    >
+                      Method: {md.renderLabel}
+                    </span>
+                    {ctx === 'active' && batches.length > 0 && (
+                      <span className="text-[10px] text-[#6A6A6A] uppercase tracking-wide">
+                        {batches.includes('batch_10') ? 'Batch 10' : `${batches.length} batch${batches.length === 1 ? '' : 'es'}`}
+                      </span>
+                    )}
+                    {isDegraded && (
+                      <span className="text-[10px] text-amber-400/80 uppercase tracking-wide">
+                        degraded
+                      </span>
+                    )}
+                  </div>
+                  {md.renderSummary && (
+                    <p className="text-[11px] text-[#9A9A9A] leading-snug">
+                      Why: {md.renderSummary}
+                    </p>
+                  )}
+                  {whyNot && (
+                    <p className="text-[11px] text-[#7A7A7A] leading-snug italic">
+                      Rejected: {whyNot}
+                    </p>
+                  )}
+                </div>
+              )
+            })()}
+
             {/* ====================================================================
                 [MATERIAL-COMPOSITION-TRUTH-LOCK]
                 Structural per-day programming-difference strip. Renders only

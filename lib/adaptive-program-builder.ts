@@ -1282,6 +1282,16 @@ export interface AdaptiveSession {
       }
     } | null
   }
+  // [DOCTRINE-TO-BUILDER PHASE 3] Single doctrine-attributable method decision
+  // for THIS session. Stamped by `executeAuthoritativeGeneration` AFTER the
+  // builder finishes materialization (which already wrote styledGroups,
+  // appliedMethods, methodMaterializationSummary, etc.). This field does NOT
+  // re-decide the method — it is a READ-ONLY attribution of the materialized
+  // method to its Batch 10 compatibility entry + runtime methodDoctrine
+  // preferred/blocked rules, with rejected-method rationale derived from the
+  // same doctrine sources. Survives save/load via whole-object JSON.
+  // See lib/program/method-decision-engine.ts for the contract.
+  methodDecision?: import('./program/method-decision-engine').MethodDecision | null
   // [PRESCRIPTION-PROPAGATION] Track what week adaptation actually changed in this session
   prescriptionPropagationAudit?: {
     adaptationPhase: string

@@ -7442,10 +7442,85 @@ async function generateAdaptiveProgramImpl(
   }
   
   // ==========================================================================
+  // [PHASE 4D — CAUSAL ORDER FIX] Build cwpRecord + doctrineRuntimeContract
+  // BEFORE the Phase-2 doctrine influence contract that depends on them.
+  //
+  // PRE-FIX BUG (silent for entire Phase 2/3 lifetime of this file):
+  //   `cwpRecord` was declared at L8715 and `doctrineRuntimeContract` at L8725,
+  //   but the [PHASE 2] influence build below referenced both. Because const/let
+  //   are in the temporal dead zone before their declaration, the references
+  //   threw ReferenceError ("Cannot access 'cwpRecord' before initialization").
+  //   The surrounding try/catch silently swallowed the error and continued with
+  //   `doctrineInfluenceContract = null`. That null propagated into:
+  //     - `buildUnifiedDoctrineDecision(null, ...)` → degraded decision
+  //     - `buildMaterialityContract(..., null)` → legacy scoring path
+  //     - exercise selector / weekly-role contract → no doctrine influence
+  //   Logs still showed "DOCTRINE_UPSTREAM_INFLUENCE_APPLIED" because the late
+  //   `doctrineRuntimeContract` build at L8725 actually succeeded — but that
+  //   late build never reached the influence contract. Result: doctrine was
+  //   detected and counted but never causally consumed.
+  //
+  // FIX: Build cwpRecord and doctrineRuntimeContract HERE from canonicalProfile
+  // (which is already in scope at L5563-5580). The late site at L8714+ is
+  // converted into a guarded fallback that only rebuilds if this early build
+  // failed entirely.
+  // ==========================================================================
+  let cwpRecord: Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null }> = {}
+  if (canonicalProfile.currentWorkingProgressions) {
+    for (const [skill, value] of Object.entries(canonicalProfile.currentWorkingProgressions)) {
+      cwpRecord[skill] = {
+        currentWorkingProgression:
+          typeof value === 'string'
+            ? value
+            : (typeof value === 'object' && value
+                ? (value as { currentWorkingProgression?: string | null }).currentWorkingProgression ?? null
+                : null),
+        historicalCeiling:
+          typeof value === 'object' && value
+            ? (value as { historicalCeiling?: string | null }).historicalCeiling ?? null
+            : null,
+      }
+    }
+  }
+
+  let doctrineRuntimeContract: DoctrineRuntimeContract | null = null
+  try {
+    doctrineRuntimeContract = await buildDoctrineRuntimeContract({
+      primaryGoal: canonicalProfile.primaryGoal || null,
+      secondaryGoal: canonicalProfile.secondaryGoal || null,
+      selectedSkills: canonicalProfile.selectedSkills || [],
+      experienceLevel: canonicalProfile.experienceLevel || null,
+      jointCautions: canonicalProfile.jointCautions || [],
+      equipmentAvailable: canonicalProfile.equipment || canonicalProfile.equipmentAvailable || [],
+      currentWorkingProgressions: cwpRecord,
+      trainingMethodPreferences: inputs.trainingMethodPreferences?.map(p => p.name) || [],
+      sessionStyle: inputs.sessionStyle || null,
+    })
+    console.log('[PHASE4D-DOCTRINE-RUNTIME-CONTRACT-EARLY-BUILD]', {
+      available: doctrineRuntimeContract.available,
+      source: doctrineRuntimeContract.source,
+      coverageHasLiveRules: doctrineRuntimeContract.doctrineCoverage.hasLiveRules,
+      progressionSkillCount: Object.keys(doctrineRuntimeContract.progressionDoctrine.perSkill).length,
+      methodPreferredCount: doctrineRuntimeContract.methodDoctrine.preferredMethods.length,
+      methodBlockedCount: doctrineRuntimeContract.methodDoctrine.blockedMethods.length,
+      cwpRecordSkillCount: Object.keys(cwpRecord).length,
+      verdict: 'DOCTRINE_RUNTIME_READY_FOR_INFLUENCE_CONTRACT',
+    })
+  } catch (err) {
+    console.log('[PHASE4D-DOCTRINE-RUNTIME-CONTRACT-EARLY-FALLBACK]', {
+      error: String(err),
+      verdict: 'INFLUENCE_CONTRACT_WILL_BUILD_WITHOUT_RUNTIME',
+    })
+  }
+
+  // ==========================================================================
   // [PHASE 2] BUILD DOCTRINE INFLUENCE CONTRACT EARLY
   // ==========================================================================
   // PURPOSE: Build doctrine influence contract BEFORE materiality contract so
   // it can be consumed by canonical materiality scoring.
+  //
+  // [PHASE 4D] cwpRecord and doctrineRuntimeContract are now declared above
+  // this block (was: declared 1250+ lines later, causing silent TDZ failure).
   // ==========================================================================
   let doctrineInfluenceContract: DoctrineInfluenceContract | null = null
   try {
@@ -8711,32 +8786,67 @@ async function generateAdaptiveProgramImpl(
   // prescription, skill coverage, and exercise selection.
   // ==========================================================================
   
-  // Build cwpRecord outside try block so it's accessible for doctrine influence contract
-  const cwpRecord: Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null }> = {}
-  if (multiSkillMaterialityContract.currentWorkingProgressions) {
-    for (const [skill, data] of Object.entries(multiSkillMaterialityContract.currentWorkingProgressions)) {
-      cwpRecord[skill] = {
-        currentWorkingProgression: typeof data === 'object' && data ? (data as { currentWorkingProgression?: string | null }).currentWorkingProgression ?? null : null,
-        historicalCeiling: typeof data === 'object' && data ? (data as { historicalCeiling?: string | null }).historicalCeiling ?? null : null,
+  // ==========================================================================
+  // [PHASE 4D — CAUSAL ORDER FIX] Guarded fallback for the late doctrine
+  // runtime contract build.
+  //
+  // Pre-fix: this block declared `cwpRecord` (const) and `doctrineRuntimeContract`
+  // (let) here for the first time — but the [PHASE 2] influence contract above
+  // referenced both, throwing TDZ ReferenceError that the early try/catch
+  // silently swallowed. The late build then succeeded and emitted
+  // 'DOCTRINE_UPSTREAM_INFLUENCE_APPLIED' logs, creating the false impression
+  // that doctrine was causally consumed when in fact only the late
+  // doctrineRuntimeContract reached downstream consumers — the influence
+  // contract, unified decision, and materiality contract had already run with
+  // null influence.
+  //
+  // Post-fix: cwpRecord and doctrineRuntimeContract are built EARLY (before
+  // the influence contract). This block is now a fallback that only runs if
+  // the early build failed entirely. If the early build succeeded, this is
+  // an audit checkpoint only — we do NOT rebuild from materiality-derived
+  // values because doing so would create an inconsistency: the influence
+  // contract was built from the early runtime contract, and overwriting it
+  // here would diverge influence vs runtime.
+  // ==========================================================================
+  if (!doctrineRuntimeContract) {
+    // Last-resort late build: only reached if the early build threw a
+    // non-TDZ error (e.g., DB import failure). Uses materiality-enriched
+    // values since by this point bundle-progression enrichment has run.
+    const fallbackCwpRecord: Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null }> = {}
+    if (multiSkillMaterialityContract.currentWorkingProgressions) {
+      for (const [skill, data] of Object.entries(multiSkillMaterialityContract.currentWorkingProgressions)) {
+        fallbackCwpRecord[skill] = {
+          currentWorkingProgression: typeof data === 'object' && data ? (data as { currentWorkingProgression?: string | null }).currentWorkingProgression ?? null : null,
+          historicalCeiling: typeof data === 'object' && data ? (data as { historicalCeiling?: string | null }).historicalCeiling ?? null : null,
+        }
       }
     }
-  }
-  
-  let doctrineRuntimeContract: DoctrineRuntimeContract | null = null
-  try {
-    doctrineRuntimeContract = await buildDoctrineRuntimeContract({
-      primaryGoal: multiSkillMaterialityContract.primaryGoal,
-      secondaryGoal: multiSkillMaterialityContract.secondaryGoal,
-      selectedSkills: multiSkillMaterialityContract.selectedSkills,
-      experienceLevel: multiSkillMaterialityContract.experienceLevel,
-      jointCautions: multiSkillMaterialityContract.jointCautions,
-      equipmentAvailable: multiSkillMaterialityContract.equipmentAvailable,
-      currentWorkingProgressions: cwpRecord,
-      trainingMethodPreferences: inputs.trainingMethodPreferences?.map(p => p.name) || [],
-      sessionStyle: inputs.sessionStyle || null,
-    })
-    
-    console.log('[DOCTRINE-RUNTIME-CONTRACT-UPSTREAM-INTEGRATION]', {
+    try {
+      doctrineRuntimeContract = await buildDoctrineRuntimeContract({
+        primaryGoal: multiSkillMaterialityContract.primaryGoal,
+        secondaryGoal: multiSkillMaterialityContract.secondaryGoal,
+        selectedSkills: multiSkillMaterialityContract.selectedSkills,
+        experienceLevel: multiSkillMaterialityContract.experienceLevel,
+        jointCautions: multiSkillMaterialityContract.jointCautions,
+        equipmentAvailable: multiSkillMaterialityContract.equipmentAvailable,
+        currentWorkingProgressions: fallbackCwpRecord,
+        trainingMethodPreferences: inputs.trainingMethodPreferences?.map(p => p.name) || [],
+        sessionStyle: inputs.sessionStyle || null,
+      })
+      console.log('[PHASE4D-DOCTRINE-RUNTIME-CONTRACT-LATE-FALLBACK-SUCCESS]', {
+        available: doctrineRuntimeContract.available,
+        source: doctrineRuntimeContract.source,
+        verdict: 'DOCTRINE_RUNTIME_BUILT_VIA_LATE_FALLBACK',
+        note: 'Influence contract above ran without doctrine runtime — degraded mode.',
+      })
+    } catch (err) {
+      console.log('[PHASE4D-DOCTRINE-RUNTIME-CONTRACT-LATE-FALLBACK-FAILED]', {
+        error: String(err),
+        verdict: 'DOCTRINE_RUNTIME_UNAVAILABLE',
+      })
+    }
+  } else {
+    console.log('[PHASE4D-DOCTRINE-RUNTIME-CONTRACT-LATE-AUDIT]', {
       available: doctrineRuntimeContract.available,
       source: doctrineRuntimeContract.source,
       coverageHasLiveRules: doctrineRuntimeContract.doctrineCoverage.hasLiveRules,
@@ -8747,14 +8857,8 @@ async function generateAdaptiveProgramImpl(
       skillSupportCount: doctrineRuntimeContract.skillDoctrine.supportSkills.length,
       skillDeferredCount: doctrineRuntimeContract.skillDoctrine.deferredSkills.length,
       explanationLevel: doctrineRuntimeContract.explanationDoctrine.doctrineInfluenceLevel,
-      verdict: 'DOCTRINE_UPSTREAM_INFLUENCE_APPLIED',
+      verdict: 'DOCTRINE_RUNTIME_ALREADY_BUILT_FROM_EARLY_PASS_INFLUENCE_CONTRACT_RECEIVED_IT',
     })
-  } catch (err) {
-    console.log('[DOCTRINE-RUNTIME-CONTRACT-FALLBACK-GRACEFUL]', {
-      error: String(err),
-      verdict: 'DOCTRINE_RUNTIME_CONTRACT_FALLBACK',
-    })
-    // Generation continues without doctrine influence - fallback is safe
   }
   
   // ==========================================================================
@@ -20817,6 +20921,31 @@ return explanations.length > 0 ? explanations : undefined
   verdict: 'DOCTRINE_UI_TRUTH_ALIGNED',
   })
   }
+
+  // ==========================================================================
+  // [PHASE 4D — CAUSAL VERSION STAMP]
+  // ==========================================================================
+  // This version identifies programs generated AFTER the Phase 4D causal-order
+  // fix that restored the doctrine influence contract → unified decision →
+  // materiality contract → exercise selector / weekly role contract chain.
+  //
+  // Programs without this field (or with an older value) were generated under
+  // the broken Phase-2/3 path where doctrineInfluenceContract was always null
+  // due to a TDZ ReferenceError. The Program page can detect a missing/older
+  // value and surface "Regenerate with doctrine engine" instead of pretending
+  // doctrine was applied.
+  // ==========================================================================
+  ;(finalProgram as unknown as { doctrineCausalVersion?: string }).doctrineCausalVersion = 'phase4d-causal-order-v1'
+  console.log('[PHASE4D-CAUSAL-VERSION-STAMPED]', {
+    doctrineCausalVersion: 'phase4d-causal-order-v1',
+    doctrineRuntimeAvailable: !!doctrineRuntimeContract?.available,
+    doctrineInfluenceAvailable: !!doctrineInfluenceContract,
+    doctrineInfluenceFallback: doctrineInfluenceContract?.safetyFlags?.fallbackActive ?? null,
+    causalChainHealthy: !!doctrineRuntimeContract?.available && !!doctrineInfluenceContract,
+    verdict: !!doctrineRuntimeContract?.available && !!doctrineInfluenceContract
+      ? 'DOCTRINE_CAUSAL_CHAIN_INTACT_END_TO_END'
+      : 'DOCTRINE_CAUSAL_CHAIN_DEGRADED_SEE_INFLUENCE_FLAGS',
+  })
   
   // [DOCTRINE INFLUENCE] Store doctrine influence contract for audit visibility
   if (doctrineInfluenceContract) {

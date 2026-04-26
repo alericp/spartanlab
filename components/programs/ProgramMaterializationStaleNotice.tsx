@@ -42,6 +42,20 @@ import { Loader2, Sparkles, Info } from 'lucide-react'
 import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import { METHOD_DECISION_VERSION } from '@/lib/program/method-decision-engine'
 
+/**
+ * [PHASE 4D — CAUSAL VERSION CONTRACT]
+ * Programs generated AFTER the Phase 4D causal-order fix are stamped with
+ * `doctrineCausalVersion = 'phase4d-causal-order-v1'`. Programs without this
+ * stamp predate the fix that restored the doctrine influence contract →
+ * unified decision → materiality contract chain. They must be considered
+ * stale even if they happen to have a current `methodDecisionVersion`,
+ * because the `methodDecisionVersion` stamp itself was running over a
+ * null influence contract (silent TDZ failure) — the materialization rollup
+ * counted real session structures but the structures themselves were
+ * built without doctrine influence.
+ */
+const DOCTRINE_CAUSAL_VERSION_CURRENT = 'phase4d-causal-order-v1'
+
 interface DoctrineIntegrationMaterializationView {
   methodDecisionVersion?: string | null
   methodDecisionStampedAt?: string | null
@@ -68,6 +82,12 @@ type StaleState =
   | { kind: 'legacy_no_stamp' }
   | { kind: 'stale_stamp_version'; foundVersion: string }
   | { kind: 'all_sessions_flat' }
+  // [PHASE 4D] Program lacks the causal-order-fix version stamp, meaning it
+  // was generated when doctrineInfluenceContract was always null. Highest
+  // priority — checked BEFORE methodDecisionVersion because a program can
+  // have a current methodDecisionVersion but still have been built over a
+  // null influence contract (the symptom the user reported).
+  | { kind: 'pre_causal_fix'; foundCausalVersion: string | null }
 
 /**
  * Pure read of program metadata to determine the visible stale state.
@@ -77,6 +97,19 @@ export function evaluateMaterializationStaleState(
   program: AdaptiveProgram | null,
 ): StaleState {
   if (!program) return { kind: 'fresh_with_change' } // hide on no program
+
+  // [PHASE 4D] Check causal version FIRST — before methodDecisionVersion.
+  // Programs missing this stamp were generated under the broken Phase 2/3
+  // path where doctrineInfluenceContract was always null due to TDZ.
+  // Their materialization rollups may report current `methodDecisionVersion`,
+  // but the underlying program structures were NOT shaped by doctrine
+  // influence — they were shaped by legacy fallback scoring. The honest
+  // user-facing signal is "regenerate" regardless of what the methodDecision
+  // stamp says.
+  const causalVersion = (program as unknown as { doctrineCausalVersion?: string | null }).doctrineCausalVersion ?? null
+  if (causalVersion !== DOCTRINE_CAUSAL_VERSION_CURRENT) {
+    return { kind: 'pre_causal_fix', foundCausalVersion: typeof causalVersion === 'string' ? causalVersion : null }
+  }
 
   const di = (program as unknown as { doctrineIntegration?: DoctrineIntegrationMaterializationView | null })
     .doctrineIntegration ?? null
@@ -137,7 +170,17 @@ export function ProgramMaterializationStaleNotice({ program, onRegenerate }: Pro
   let title = ''
   let body = ''
   let ariaTag = ''
-  if (state.kind === 'legacy_no_stamp') {
+  if (state.kind === 'pre_causal_fix') {
+    // [PHASE 4D] Highest-priority message — the program was generated under
+    // the broken causal path. The user MUST regenerate to receive doctrine
+    // influence on selection, materiality, and method packaging.
+    title = 'This program was generated before the doctrine engine ran end-to-end'
+    body =
+      state.foundCausalVersion
+        ? `Program causal version "${state.foundCausalVersion}" predates the current engine "${DOCTRINE_CAUSAL_VERSION_CURRENT}". Regenerate so doctrine can actually shape exercise selection, grouping, and method packaging — the previous generation only counted rules without applying them.`
+        : 'A silent ordering bug in the previous generation pipeline meant doctrine rules were detected but never applied to your program. Regenerate so doctrine influence can shape exercise selection, grouping, and method packaging.'
+    ariaTag = 'pre_causal_fix'
+  } else if (state.kind === 'legacy_no_stamp') {
     title = 'Doctrine materialization not applied to this program'
     body =
       'This saved program was generated before doctrine materialization was wired. Regenerate to receive a profile-aware program with grouped blocks, set-execution methods, and skill-quality protections.'

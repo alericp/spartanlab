@@ -50,8 +50,11 @@ import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bub
 // to regenerate. Read-only, pure function, no side effects.
 import {
   deriveMethodDecisionForSession,
+  extractProfileContextFromSnapshot,
+  METHOD_DECISION_VERSION,
   type MethodDecision as MethodDecisionShape,
   type MethodDecisionSessionInput,
+  type MethodDecisionProfileSnapshotLike,
 } from '@/lib/program/method-decision-engine'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { buildGroupedDisplayModel, getGroupedMethodSemantics, type GroupedDisplayModel, type RenderBlock, type RawFallbackBlock, type GroupedSourceUsed, type GroupedFlatReason, type GroupType } from './lib/session-group-display'
@@ -122,6 +125,19 @@ interface AdaptiveSessionCardProps {
   // silently reverts to adaptiveProgram.weekNumber (acclimation) even when
   // the user is viewing Week 2/3/4 on the Program page.
   currentWeekNumber?: number
+  // [PHASE 3C] Program-level profile snapshot — the SAME truth that was frozen
+  // at generation time and used by the authoritative wrapper to stamp
+  // session.methodDecision.profileInfluence. Passed through here so the
+  // on-read bridge (used for legacy programs that pre-date Phase 3 stamping)
+  // can also produce a profile-aware decision instead of a degraded one.
+  // Optional + null-safe: legacy callers without this prop fall back to the
+  // pre-3C attribution path with profileSource='legacyFallback'.
+  programProfileSnapshot?: MethodDecisionProfileSnapshotLike | null
+  // [PHASE 3C] Method-decision version stamped on the parent program. When
+  // present this is `phase_3c.profile_aware.v1`; when missing, the saved
+  // program predates profile-aware stamping — the card shows a clean
+  // "bridged" attribution instead of claiming fresh doctrine application.
+  methodDecisionVersion?: string | null
 }
 
 // =============================================================================
@@ -386,7 +402,7 @@ function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
   }
 }
 
-export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter, cardSurface, showProbe: _showProbe = false, forceProbe: _forceProbe = false, currentWeekNumber }: AdaptiveSessionCardProps) {
+export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter, cardSurface, showProbe: _showProbe = false, forceProbe: _forceProbe = false, currentWeekNumber, programProfileSnapshot, methodDecisionVersion }: AdaptiveSessionCardProps) {
   // [PROBES-HARD-DISABLED] Session truth probes are retired. They caused
   // debug-looking text ("PROBE ACTIVE", instance-id letter fragments, etc.)
   // to leak into production UI when accidentally enabled via query param.
@@ -2275,23 +2291,37 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 ================================================================== */}
             {(() => {
               // ============================================================
-              // [DOCTRINE-METHOD-DECISION-PHASE3B] DISPLAY CORRIDOR
-              // Truth priority for the visible Method strip:
-              //   1. session.methodDecision  — stamped by the authoritative
+              // [DOCTRINE-METHOD-DECISION-PHASE3C] DOCTRINE DECISION PANEL
+              //
+              // Truth priority for the visible decision strip:
+              //   1. session.methodDecision — stamped by the authoritative
               //      wrapper (lib/server/authoritative-program-generation.ts)
-              //      for any program generated AFTER Phase 3 was wired.
-              //   2. ENGINE BRIDGE — for programs persisted BEFORE the
-              //      wrapper stamp existed. The materialization signals
-              //      (styleMetadata.methodMaterializationSummary, applied/
-              //      rejectedMethods, compositionMetadata, exercises[]) are
-              //      already on the stored session, so the same engine that
-              //      runs at generation time can ATTRIBUTE the materialized
-              //      method on read. No re-deciding, no fake labels, no
-              //      duplicated truth — the engine is the single owner.
-              // The stamped decision wins when both exist.
+              //      for any program generated AFTER Phase 3C was wired with
+              //      profileSnapshot context.
+              //   2. ENGINE BRIDGE (profile-aware) — for programs persisted
+              //      BEFORE the Phase 3C profile-aware stamp existed. We
+              //      derive the decision on read using:
+              //        - the materialization signals already on the session,
+              //        - PLUS programProfileSnapshot (selectedSkills,
+              //          equipment, joints, schedule, style preference, …),
+              //      so even legacy programs get profile-driven attribution
+              //      without forcing a regenerate. Bridge results are
+              //      labeled `bridged`; legacy programs without a snapshot
+              //      get labeled `legacy` with an honest "Regenerate to
+              //      apply Phase 3C" hint inside this same strip.
+              //
+              // Visible structure: a clean dark panel with a label badge,
+              // a Why line, a Profile-driver line, and an Avoided line.
               // ============================================================
               const stamped = (session as unknown as { methodDecision?: MethodDecisionShape })
                 .methodDecision ?? null
+
+              // Resolve a profile context for the bridge path.
+              const bridgeProfileContext = extractProfileContextFromSnapshot(
+                programProfileSnapshot ?? null,
+                'program.profileSnapshot',
+              )
+
               let md: MethodDecisionShape | null = stamped
               let bridged = false
               if (!md) {
@@ -2302,6 +2332,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                     runtimeContract: null,
                     decisionContext: null,
                     trainingGoal: typeof primaryGoal === 'string' ? primaryGoal : null,
+                    profileContext: bridgeProfileContext,
                   })
                   bridged = !!md
                 } catch {
@@ -2309,40 +2340,83 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 }
               }
               if (!md || !md.renderLabel) return null
+
               const ctx = md.source?.doctrineContextStatus ?? 'unavailable'
-              const isDegraded = md.status === 'degraded' || ctx !== 'active'
-              const labelClass = isDegraded
-                ? 'text-amber-300/90 border-amber-500/30 bg-amber-500/10'
-                : 'text-[#E63946] border-[#E63946]/30 bg-[#E63946]/5'
-              const whyNot = md.prescriptionIntent?.whyNotOtherMethods?.[0]
+              const isDegraded = md.status === 'degraded'
+              const profileSrc = md.profileInfluence?.source ?? 'legacyFallback'
+              const profileAware = profileSrc !== 'legacyFallback'
+              const isStaleProgram =
+                !!stamped && (!methodDecisionVersion || methodDecisionVersion !== METHOD_DECISION_VERSION)
+              const isPreStampLegacy = bridged && !profileAware
+
+              const whyLine = md.renderSummary
+              const driverLine = md.profileInfluence?.primaryDriverLine
+              const avoidedLine = md.prescriptionIntent?.whyNotOtherMethods?.[0] ?? null
               const batches = md.source?.doctrineBatchIds ?? []
+
+              // Tag word + tag class — keeps the strip honest about source.
+              let tagText: string | null = null
+              let tagClass = 'text-[10px] uppercase tracking-wide font-medium'
+              if (isPreStampLegacy) {
+                tagText = 'legacy'
+                tagClass += ' text-amber-400/80'
+              } else if (bridged) {
+                tagText = 'bridged'
+                tagClass += ' text-amber-400/80'
+              } else if (isStaleProgram) {
+                tagText = 'stale stamp'
+                tagClass += ' text-amber-400/80'
+              } else if (isDegraded) {
+                tagText = 'degraded'
+                tagClass += ' text-amber-400/80'
+              } else if (ctx === 'active') {
+                tagText = profileAware ? 'profile-driven' : 'doctrine'
+                tagClass += ' text-emerald-400/90'
+              }
+
               return (
-                <div className="mt-2 flex flex-col gap-1">
+                <div
+                  className="mt-3 rounded-lg border border-[#E63946]/25 bg-[#E63946]/5 px-3 py-2.5 flex flex-col gap-1.5"
+                  data-doctrine-decision="true"
+                  data-method-id={md.methodId}
+                  data-profile-source={profileSrc}
+                >
                   <div className="flex flex-wrap items-center gap-2">
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] font-medium ${labelClass}`}
-                    >
-                      Method: {md.renderLabel}
+                    <span className="text-[10px] uppercase tracking-[0.08em] text-[#E63946]/80 font-semibold">
+                      Doctrine Decision
                     </span>
-                    {ctx === 'active' && batches.length > 0 && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md border border-[#E63946]/40 bg-[#E63946]/10 text-[12px] font-semibold text-[#E63946]">
+                      {md.renderLabel}
+                    </span>
+                    {batches.length > 0 && (
                       <span className="text-[10px] text-[#6A6A6A] uppercase tracking-wide">
                         {batches.includes('batch_10') ? 'Batch 10' : `${batches.length} batch${batches.length === 1 ? '' : 'es'}`}
                       </span>
                     )}
-                    {isDegraded && (
-                      <span className="text-[10px] text-amber-400/80 uppercase tracking-wide">
-                        {bridged ? 'bridged' : 'degraded'}
-                      </span>
-                    )}
+                    {tagText && <span className={tagClass}>{tagText}</span>}
                   </div>
-                  {md.renderSummary && (
-                    <p className="text-[11px] text-[#9A9A9A] leading-snug">
-                      Why: {md.renderSummary}
+
+                  {whyLine && (
+                    <p className="text-[12px] text-[#C8C8C8] leading-snug">
+                      <span className="text-[#9A9A9A]">Why:</span> {whyLine}
                     </p>
                   )}
-                  {whyNot && (
-                    <p className="text-[11px] text-[#7A7A7A] leading-snug italic">
-                      Rejected: {whyNot}
+
+                  {driverLine && (
+                    <p className="text-[12px] text-[#A8A8A8] leading-snug">
+                      <span className="text-[#7A7A7A]">Profile driver:</span> {driverLine}
+                    </p>
+                  )}
+
+                  {avoidedLine && (
+                    <p className="text-[12px] text-[#8A8A8A] leading-snug italic">
+                      <span className="not-italic text-[#7A7A7A]">Avoided:</span> {avoidedLine}
+                    </p>
+                  )}
+
+                  {isPreStampLegacy && (
+                    <p className="text-[10px] text-amber-300/70 leading-snug">
+                      This saved program predates profile-aware method decisions. Regenerate to apply Phase 3C decisions across all sessions.
                     </p>
                   )}
                 </div>

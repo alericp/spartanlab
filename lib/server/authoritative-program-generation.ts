@@ -30,9 +30,12 @@ import {
 } from '@/lib/doctrine/doctrine-builder-integration-contract'
 import {
   stampMethodDecisionsOnSessions,
+  extractProfileContextFromSnapshot,
+  METHOD_DECISION_VERSION,
   type MethodDecision,
   type MethodDecisionSessionInput,
   type MethodDecisionStampSummary,
+  type MethodDecisionProfileSnapshotLike,
 } from '@/lib/program/method-decision-engine'
 import { attachTruthExplanation, extractProgramTruth, logMaterialInputPresence } from '@/lib/program-truth-extractor'
 import type { CanonicalProgrammingProfile } from '@/lib/canonical-profile-service'
@@ -1584,11 +1587,26 @@ export async function executeAuthoritativeGeneration(
         runtimeFromBuilder as Parameters<typeof mapRuntimeContractToBuilderContext>[0],
       )
       const sessionInputs = (program.sessions ?? []) as unknown as MethodDecisionSessionInput[]
+
+      // [PHASE 3C] Build profile context from program.profileSnapshot — frozen
+      // at generation time and the most authoritative truth for THIS program.
+      // If absent (very old programs), the engine falls back to trainingGoal-only
+      // legacy attribution and labels source as 'legacyFallback' on each
+      // decision. We never invent profile fields that aren't on the snapshot.
+      const profileSnapshotForMethods =
+        (program as unknown as { profileSnapshot?: MethodDecisionProfileSnapshotLike | null })
+          .profileSnapshot ?? null
+      const profileContextForMethods = extractProfileContextFromSnapshot(
+        profileSnapshotForMethods,
+        'program.profileSnapshot',
+      )
+
       const { decisions, summary } = stampMethodDecisionsOnSessions(
         sessionInputs,
         runtimeFromBuilder as Parameters<typeof stampMethodDecisionsOnSessions>[1],
         decisionContextForMethods,
         program.primaryGoal ? String(program.primaryGoal) : null,
+        { profileContext: profileContextForMethods },
       )
       methodDecisionSummary = summary
 
@@ -1600,12 +1618,16 @@ export async function executeAuthoritativeGeneration(
           decision
       }
 
-      // Surface the per-session count on the program-level Phase 2 proof so
-      // `program.doctrineIntegration` continues to be the single program-wide
-      // proof object the UI reads.
+      // [PHASE 3C] Stamp version + timestamp + profileSource on the program-level
+      // doctrineIntegration proof so the UI can detect stale saved programs and
+      // honestly label bridged-vs-fresh decisions.
       if (doctrineIntegrationProof) {
-        ;(doctrineIntegrationProof as unknown as Record<string, unknown>).methodDecisionSummary =
-          summary
+        const proofRecord = doctrineIntegrationProof as unknown as Record<string, unknown>
+        proofRecord.methodDecisionSummary = summary
+        proofRecord.methodDecisionVersion = METHOD_DECISION_VERSION
+        proofRecord.methodDecisionStampedAt = summary.methodDecisionStampedAt
+        proofRecord.methodDecisionProfileSource = summary.profileSource
+        proofRecord.methodDecisionProfileAware = summary.profileSource !== 'legacyFallback'
       }
 
       console.log('[doctrine-method-decision-stamped]', {
@@ -1613,6 +1635,9 @@ export async function executeAuthoritativeGeneration(
         triggerSource: request.triggerSource,
         sessionsConsidered: summary.sessionsConsidered,
         decisionsAttached: summary.decisionsAttached,
+        profileInfluencedDecisions: summary.profileInfluencedDecisions,
+        profileSource: summary.profileSource,
+        methodDecisionVersion: summary.methodDecisionVersion,
         byMethod: summary.byMethod,
         byStatus: summary.byStatus,
         contextStatus: summary.contextStatus,

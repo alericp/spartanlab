@@ -1,5 +1,5 @@
 -- =============================================================================
--- DOCTRINE BATCH 3 — ATOM SEED (PRINCIPLE ANCHORS, schema-aligned v2)
+-- DOCTRINE BATCH 3 — ATOM SEED (PRINCIPLE ANCHORS, schema-aligned v3)
 -- =============================================================================
 --
 -- ADDITIVE ONLY. ON CONFLICT (source_id, principle_key) DO NOTHING.
@@ -13,10 +13,9 @@
 -- and is surfaced through the unified uploaded-PDF aggregator.
 --
 -- Live DB column shape used (verified 2026-04-25 against information_schema):
---   source_id, principle_key, principle_title, principle_summary,
+--   source_id, doctrine_family (NOT NULL),
+--   principle_key, principle_title, principle_summary,
 --   athlete_level_scope (jsonb), goal_scope (jsonb),
---   selected_skill_scope_includes_any (jsonb),
---   selected_skill_scope_excludes_any (jsonb),
 --   tags_json (jsonb),
 --   is_base_intelligence (bool), is_phase_modulation (bool),
 --   priority_weight (numeric, 0..2),
@@ -32,13 +31,15 @@
 
 -- 1) Lower Body A duplicate confirmation
 INSERT INTO training_doctrine_principles (
-  source_id, principle_key, principle_title, principle_summary,
+  source_id, doctrine_family,
+  principle_key, principle_title, principle_summary,
   athlete_level_scope, goal_scope, tags_json,
   is_base_intelligence, is_phase_modulation,
   priority_weight, priority_type, safety_priority
 )
 SELECT
   'src_batch_03_lower_body_a_dup',
+  'lower_body_progression',
   'lower_body_a_duplicate_confirmation',
   'Lower Body A progression confirmed by duplicate source',
   'A second Lower Body A source independently confirms the L1/L2/L3 pistol-squat / glute-ham / wall-squat / calf-raise progression. Duplicate source increases provenance confidence; it must NOT duplicate visible exercise blocks.',
@@ -51,13 +52,15 @@ ON CONFLICT (source_id, principle_key) DO NOTHING;
 
 -- 2) MZ Intermediate Weighted Calisthenics
 INSERT INTO training_doctrine_principles (
-  source_id, principle_key, principle_title, principle_summary,
+  source_id, doctrine_family,
+  principle_key, principle_title, principle_summary,
   athlete_level_scope, goal_scope, tags_json,
   is_base_intelligence, is_phase_modulation,
   priority_weight, priority_type, safety_priority
 )
 SELECT
   'src_batch_03_mz_intermediate_weighted',
+  'weighted_calisthenics_intermediate',
   'intermediate_weighted_overcomplication_guard',
   'Intermediate weighted calisthenics: keep progression stable',
   'Intermediate stage is where overcomplication kills progress. Hold a stable heavy / assistance / PR weekly cycle and progress via PR-set reps and assistance reps/RIR before introducing advanced complexity.',
@@ -70,13 +73,15 @@ ON CONFLICT (source_id, principle_key) DO NOTHING;
 
 -- 3) Forearm Health duplicate confirmation
 INSERT INTO training_doctrine_principles (
-  source_id, principle_key, principle_title, principle_summary,
+  source_id, doctrine_family,
+  principle_key, principle_title, principle_summary,
   athlete_level_scope, goal_scope, tags_json,
   is_base_intelligence, is_phase_modulation,
   priority_weight, priority_type, safety_priority
 )
 SELECT
   'src_batch_03_forearm_health_dup',
+  'forearm_prehab_duplicate',
   'forearm_prehab_duplicate_confirmation',
   'Forearm prehab confirmed by duplicate source',
   'A second Forearm Health source independently confirms wrist pronation / extension / supination / flexion at 2x15 with short rest. Duplicate source raises provenance confidence; do not duplicate visible prehab blocks.',
@@ -89,13 +94,15 @@ ON CONFLICT (source_id, principle_key) DO NOTHING;
 
 -- 4) Kinevo Bodyweight Strength Foundation
 INSERT INTO training_doctrine_principles (
-  source_id, principle_key, principle_title, principle_summary,
+  source_id, doctrine_family,
+  principle_key, principle_title, principle_summary,
   athlete_level_scope, goal_scope, tags_json,
   is_base_intelligence, is_phase_modulation,
   priority_weight, priority_type, safety_priority
 )
 SELECT
   'src_batch_03_kinevo_bw_foundation',
+  'bodyweight_strength_foundation',
   'leverage_progression_principle',
   'Calisthenics scales through leverage and body position',
   'Bodyweight strength/hypertrophy progresses primarily through leverage and position changes, not only added external load. Equipment choice (bands below 8 pull-ups, free weights above 8) follows from current strength.',
@@ -108,13 +115,15 @@ ON CONFLICT (source_id, principle_key) DO NOTHING;
 
 -- 5) No-BS Nutrition System (supportive only)
 INSERT INTO training_doctrine_principles (
-  source_id, principle_key, principle_title, principle_summary,
+  source_id, doctrine_family,
+  principle_key, principle_title, principle_summary,
   athlete_level_scope, goal_scope, tags_json,
   is_base_intelligence, is_phase_modulation,
   priority_weight, priority_type, safety_priority
 )
 SELECT
   'src_batch_03_no_bs_nutrition',
+  'nutrition_adherence',
   'nutrition_consistency_over_obsession',
   'Nutrition: calories, protein, and consistency over obsession',
   'Body composition is driven by sustained calorie/protein targets and adherence, not by tracking minutiae. Nutrition guidance supports training; it is not medical advice and does not override training generation.',
@@ -127,13 +136,15 @@ ON CONFLICT (source_id, principle_key) DO NOTHING;
 
 -- 6) BSF Training Log / Warm-up / Hypertrophy
 INSERT INTO training_doctrine_principles (
-  source_id, principle_key, principle_title, principle_summary,
+  source_id, doctrine_family,
+  principle_key, principle_title, principle_summary,
   athlete_level_scope, goal_scope, tags_json,
   is_base_intelligence, is_phase_modulation,
   priority_weight, priority_type, safety_priority
 )
 SELECT
   'src_batch_03_bsf_training_log',
+  'warmup_hypertrophy_progression',
   'progression_stability_during_hypertrophy_phase',
   'Hold progression constant; progress reps/sets in early hypertrophy phase',
   'During early hypertrophy phase advance reps or sets while keeping the chosen progression constant rather than rotating exercises every week. Warm-up reps/holds are readiness-guided, not fixed.',
@@ -146,13 +157,15 @@ ON CONFLICT (source_id, principle_key) DO NOTHING;
 
 -- 7) Ian Barseagle Weighted & Bodyweight Calisthenics
 INSERT INTO training_doctrine_principles (
-  source_id, principle_key, principle_title, principle_summary,
+  source_id, doctrine_family,
+  principle_key, principle_title, principle_summary,
   athlete_level_scope, goal_scope, tags_json,
   is_base_intelligence, is_phase_modulation,
   priority_weight, priority_type, safety_priority
 )
 SELECT
   'src_batch_03_ian_barseagle_weighted',
+  'weighted_calisthenics_ramp',
   'weighted_plan_prerequisite_gate',
   'Weighted pull-up/dip plan gated by bodyweight prerequisites',
   'Apply heavy weighted progressions only after roughly 15+ pull-ups and 20+ dips. Below threshold use band/negative/low-rep practice (1-3 reps -> low-rep sets, 3-4 min rest, ramp to 8 reps; then max-rep sets with 5-6 min rest toward 15). Always include a movement-specific ramp-up at ~50% of working load.',
@@ -165,13 +178,15 @@ ON CONFLICT (source_id, principle_key) DO NOTHING;
 
 -- 8) Flexibility Notes
 INSERT INTO training_doctrine_principles (
-  source_id, principle_key, principle_title, principle_summary,
+  source_id, doctrine_family,
+  principle_key, principle_title, principle_summary,
   athlete_level_scope, goal_scope, tags_json,
   is_base_intelligence, is_phase_modulation,
   priority_weight, priority_type, safety_priority
 )
 SELECT
   'src_batch_03_flexibility_notes',
+  'flexibility_mobility',
   'active_flexibility_for_skills',
   'Skill work demands active flexibility and mobility, not only passive stretch',
   'Street-workout skills (planche, manna/V-sit, hollowback handstand) require strength under stretched range. Active mobility supports tolerance and reduces risk but does not eliminate it; pain rules still apply. Planche forward lean specifically demands wrist mobility/prehab support.',
@@ -184,13 +199,15 @@ ON CONFLICT (source_id, principle_key) DO NOTHING;
 
 -- 9) Muscle & Strength Pyramid Training (high-level conflict resolution)
 INSERT INTO training_doctrine_principles (
-  source_id, principle_key, principle_title, principle_summary,
+  source_id, doctrine_family,
+  principle_key, principle_title, principle_summary,
   athlete_level_scope, goal_scope, tags_json,
   is_base_intelligence, is_phase_modulation,
   priority_weight, priority_type, safety_priority
 )
 SELECT
   'src_batch_03_mns_pyramid',
+  'pyramid_priority_hierarchy',
   'pyramid_priority_hierarchy',
   'Pyramid hierarchy resolves general programming conflicts',
   'When doctrine conflicts, resolve in order: adherence -> volume/intensity/frequency balance -> progression matched to training age -> exercise selection (specificity, weak points, ROM) -> rest -> tempo. Calisthenics-specific doctrine still wins on its own domain.',

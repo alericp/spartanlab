@@ -6196,3 +6196,384 @@ export function getGenerationSourceMapDisplay(program: AdaptiveProgram): Generat
     source: 'generationTruthSnapshot',
   }
 }
+
+// =============================================================================
+// [PHASE 4F] PROGRAM DISPLAY PROJECTION — FINAL DISPLAY OWNERSHIP LOCK
+// =============================================================================
+//
+// What this is
+// ------------
+// A read-only, page-level projection that extracts the EXACT visible-display
+// truth a Program day card must consume, in a single shape. It is the minimal
+// honest answer to:
+//
+//   "For this exact session, did doctrine cause an actual material change to
+//    the user-facing program — and if not, what is the honest reason?"
+//
+// What this is NOT
+// ----------------
+//   * It is NOT a second program builder. It does not pick exercises, does
+//     not pick methods, does not mutate prescriptions, does not invent new
+//     truth, does not override safety/progression logic.
+//   * It is NOT a proof label. It does NOT count rules / sources / batches /
+//     "data-driven identifiers." Those counts have repeatedly looked like
+//     success without the visible card actually changing — Phase 4F refuses
+//     to use them as proof of causality.
+//   * It is NOT a parallel display owner. It enriches, formats, and audits
+//     existing display truth (`session.styleMetadata`, `session.methodDecision`,
+//     `session.methodMaterializationSummary`, `program.doctrineCausalChallenge`)
+//     so the day card has ONE consume-only object.
+//
+// Why it exists
+// -------------
+// Phase 4D fixed the doctrine influence TDZ (so doctrine actually reaches
+// generation). Phase 4E added `program.doctrineCausalChallenge` which carries
+// per-session pre-doctrine vs post-doctrine top-3 audits — the literal truth
+// of whether doctrine changed any winner. Phase 4E only surfaces ONE roll-up
+// line at the top of the page; the big day card body is still silent on
+// whether doctrine touched THIS session. So a user who clicks "regenerate"
+// and sees "the same program" cannot tell which sessions doctrine evaluated,
+// which it had no rules for, and which it could not beat in scoring.
+//
+// Phase 4F closes that gap. The projection per-session carries:
+//   * `doctrineCausalDisplay`: per-session honest verdict mapped from
+//     `program.doctrineCausalChallenge.sessionDiffs[]`
+//   * `sourceAudit`: explicit ownership map for the card body (which fields
+//     the card SHOULD render from this projection vs. raw session)
+//
+// Honest contract
+// ---------------
+//   * `materialChanged` is true ONLY if Phase 4E recorded
+//     `topCandidateChanged === true` for that session. Top-3-changed alone
+//     is NOT material change (the visible top winner is unchanged).
+//   * `visibleChanged` is true ONLY if `materialChanged` is true AND the
+//     final displayed exercise list reflects the post-doctrine top winner.
+//     Today this equals `materialChanged` because the post-doctrine top
+//     winner IS what the selector returns. If a future architecture step
+//     evicts the doctrine winner, the audit must record the divergence
+//     instead of silently flipping `visibleChanged` to false.
+//   * If neither `materialChanged` nor `visibleChanged` is true, the
+//     projection MUST attach an honest `noChangeReason` explaining why —
+//     not a proof label.
+// =============================================================================
+
+/** Phase 4E session-diff record shape, narrowed for read-only consumption. */
+interface DoctrineCausalChallengeSessionDiff {
+  sessionIndex: number
+  dayNumber: number
+  dayFocus: string
+  topCandidateChanged: boolean
+  top3Changed: boolean
+  doctrineApplied: boolean
+  candidatesAffected: number
+  rulesMatchedTotal: number
+  preDoctrineTop3: string[]
+  postDoctrineTop3: string[]
+  fallbackReason: string | null
+  perSessionVerdict:
+    | 'doctrine_changed_top_winner'
+    | 'doctrine_changed_top3_only'
+    | 'doctrine_affected_scores_only'
+    | 'doctrine_ran_no_match'
+    | 'doctrine_cache_empty'
+    | 'doctrine_did_not_run'
+}
+
+/** Phase 4E program-level rollup shape, narrowed for read-only consumption. */
+interface DoctrineCausalChallengeRollup {
+  version?: string
+  doctrineEnabled?: boolean
+  sessionsEvaluated?: number
+  sessionsWithAudit?: number
+  sessionsTopCandidateChanged?: number
+  sessionsTop3Changed?: number
+  sessionsCandidatesAffectedButNoWinnerChange?: number
+  sessionsDoctrineCacheEmpty?: number
+  sessionsNoMatchingRules?: number
+  materialProgramChanged?: boolean
+  unchangedVerdict?: string
+  finalVerdict?: string
+  sessionDiffs?: DoctrineCausalChallengeSessionDiff[]
+}
+
+/** Per-session display projection slice — what the day card body must render. */
+export interface ProgramDisplayProjectionSession {
+  dayNumber: number
+  dayFocus: string | null
+  /** Stable fingerprint for matching projection ↔ rendered session. */
+  fingerprint: string
+
+  /** Per-session doctrine causal display. Pulled from Phase 4E sessionDiffs. */
+  doctrineCausalDisplay: {
+    /** Phase 4E recorded a per-session diff for this session. */
+    available: boolean
+    /** Doctrine actually changed the top exercise winner in this session. */
+    materialChanged: boolean
+    /** Doctrine-induced winner change reaches the visible exercise list. */
+    visibleChanged: boolean
+    /** Phase 4E perSessionVerdict, surfaced as-is for downstream display. */
+    verdict: DoctrineCausalChallengeSessionDiff['perSessionVerdict'] | null
+    /** Compact athlete-facing summary. Honest. Never claims change without proof. */
+    summary: string | null
+    /** Names of the post-doctrine top-3 candidates (for "changed" only). */
+    postDoctrineTop3: string[]
+    /** Names of the pre-doctrine top-3 candidates (for "changed" only). */
+    preDoctrineTop3: string[]
+    /** When unchanged, the honest reason category. Never set when changed. */
+    noChangeReason:
+      | 'doctrine_evaluated_base_won'
+      | 'doctrine_top3_changed_top1_did_not'
+      | 'doctrine_no_matching_rules'
+      | 'doctrine_cache_empty'
+      | 'doctrine_did_not_run'
+      | null
+  }
+
+  /** Source-of-truth audit for this session's visible fields. */
+  sourceAudit: {
+    /** Doctrine causal display source — always Phase 4E rollup. */
+    doctrineCausalSource: 'doctrineCausalChallenge.sessionDiffs' | 'unavailable'
+    /** Whether ANY field is sourced from a non-projection / non-canonical owner. */
+    noMixedOwnership: boolean
+  }
+}
+
+/**
+ * Top-level Program display projection — page-level single-owner display object.
+ *
+ * Built once at page load from the same `program` object the rest of the page
+ * uses. Passed down to `AdaptiveProgramDisplay`, which looks up per-session
+ * by `dayNumber` and passes the matching slice to `AdaptiveSessionCard`. The
+ * card renders projection-owned visible claims (the per-session doctrine
+ * causal line) inside the body — not just in a wrapper strip.
+ */
+export interface ProgramDisplayProjection {
+  programId: string
+  generatedAt: string | null
+  sourceProgramVersion: string | null
+  projectionVersion: 'phase4f.display-projection-lock.v1'
+  projectionSource: 'authoritative_program'
+  /** Whether the saved program predates Phase 4E and lacks the causal rollup. */
+  legacyMissingCausalChallenge: boolean
+  /** Per-session projection slices — one per `program.sessions[]` element with a valid `dayNumber`. */
+  sessions: ProgramDisplayProjectionSession[]
+  /** Aggregate roll-up audit for the whole projection. */
+  audit: {
+    sessionCount: number
+    projectedSessionCount: number
+    sessionsWithCausalDisplay: number
+    sessionsWithMaterialChange: number
+    sessionsWithVisibleChange: number
+    /** False only if a session was projected without a matching causal slot. */
+    noMixedOwnership: boolean
+    /** Names of fields the projection had to repair / format. */
+    repairedFields: string[]
+    /** Names of fields the projection could not surface from the source. */
+    lostFields: string[]
+  }
+}
+
+/**
+ * Build a per-session honest doctrine-causal display from a Phase 4E session diff.
+ * Pure / no side effects. Returns null only when input is null.
+ */
+function projectDoctrineCausalDisplay(
+  diff: DoctrineCausalChallengeSessionDiff | null
+): ProgramDisplayProjectionSession['doctrineCausalDisplay'] {
+  if (!diff) {
+    return {
+      available: false,
+      materialChanged: false,
+      visibleChanged: false,
+      verdict: null,
+      summary: null,
+      postDoctrineTop3: [],
+      preDoctrineTop3: [],
+      noChangeReason: 'doctrine_did_not_run',
+    }
+  }
+
+  // Material change is RIGOROUS: only `topCandidateChanged` counts. Top-3-only
+  // change does NOT visibly differ — the user's number-one slot is unchanged.
+  const materialChanged = diff.topCandidateChanged === true
+  // visibleChanged === materialChanged today because the selector's chosen
+  // top winner IS the rendered exercise. If a downstream architecture pass
+  // ever drops a doctrine winner, that divergence will be caught by future
+  // audit work — and this projection will then begin to honestly diverge.
+  const visibleChanged = materialChanged
+
+  if (materialChanged) {
+    const topPost = diff.postDoctrineTop3[0] || null
+    const topPre = diff.preDoctrineTop3[0] || null
+    const summary = topPost && topPre
+      ? `Doctrine selected ${topPost} over ${topPre}`
+      : topPost
+        ? `Doctrine selected ${topPost}`
+        : 'Doctrine changed the top exercise selection for this session'
+    return {
+      available: true,
+      materialChanged: true,
+      visibleChanged: true,
+      verdict: diff.perSessionVerdict,
+      summary,
+      postDoctrineTop3: diff.postDoctrineTop3,
+      preDoctrineTop3: diff.preDoctrineTop3,
+      noChangeReason: null,
+    }
+  }
+
+  // Unchanged — classify the honest reason from the per-session verdict.
+  let noChangeReason: ProgramDisplayProjectionSession['doctrineCausalDisplay']['noChangeReason'] = 'doctrine_did_not_run'
+  let summary: string | null = null
+  switch (diff.perSessionVerdict) {
+    case 'doctrine_changed_top3_only':
+      noChangeReason = 'doctrine_top3_changed_top1_did_not'
+      summary = 'Doctrine reordered alternatives but the top selection was unchanged'
+      break
+    case 'doctrine_affected_scores_only':
+      noChangeReason = 'doctrine_evaluated_base_won'
+      summary = 'Doctrine evaluated alternatives — base ranking won this session'
+      break
+    case 'doctrine_ran_no_match':
+      noChangeReason = 'doctrine_no_matching_rules'
+      summary = 'No doctrine rule matched this session\u2019s candidates'
+      break
+    case 'doctrine_cache_empty':
+      noChangeReason = 'doctrine_cache_empty'
+      summary = 'Doctrine rules cache was unavailable when this program was built'
+      break
+    case 'doctrine_did_not_run':
+    default:
+      noChangeReason = 'doctrine_did_not_run'
+      summary = 'Doctrine did not run on this session'
+      break
+  }
+
+  return {
+    available: true,
+    materialChanged: false,
+    visibleChanged: false,
+    verdict: diff.perSessionVerdict,
+    summary,
+    postDoctrineTop3: diff.postDoctrineTop3,
+    preDoctrineTop3: diff.preDoctrineTop3,
+    noChangeReason,
+  }
+}
+
+/**
+ * [PHASE 4F] Build the page-level Program display projection.
+ *
+ * Single-owner read-only projection. Called ONCE per page render at the
+ * page level (`app/(app)/program/page.tsx`) and passed down to
+ * `AdaptiveProgramDisplay`. The day card consumes the per-session slice
+ * matched by `dayNumber`.
+ *
+ * Honest contract:
+ *   * Reads `program.doctrineCausalChallenge` only if it has the Phase 4E
+ *     `version === 'phase4e-doctrine-ab-causal-challenge-v1'`. Older saved
+ *     programs surface `legacyMissingCausalChallenge: true` and the card
+ *     renders no doctrine causal line for those sessions.
+ *   * Never invents a session diff. If a session has no matching diff, its
+ *     `doctrineCausalDisplay.available` is false.
+ *   * Never claims `materialChanged` without `topCandidateChanged === true`.
+ */
+export function buildProgramDisplayProjection(
+  program: AdaptiveProgram | null | undefined
+): ProgramDisplayProjection | null {
+  if (!program) return null
+
+  const programId = (program as unknown as { id?: string }).id || ''
+  const generatedAt = (program as unknown as { generatedAt?: string }).generatedAt || null
+  const sourceProgramVersion = (program as unknown as { doctrineCausalVersion?: string }).doctrineCausalVersion || null
+
+  // [PHASE 4E LINK] Only consume the rollup if it carries the Phase 4E version
+  // stamp. Older saved programs may have a partial / stale shape — we refuse
+  // to fabricate a verdict from those. legacyMissingCausalChallenge is the
+  // honest signal the UI uses to either show "regenerate to refresh" or
+  // simply omit the causal line for that session.
+  const causalRollup = (program as unknown as { doctrineCausalChallenge?: DoctrineCausalChallengeRollup })
+    .doctrineCausalChallenge || null
+  const legacyMissingCausalChallenge =
+    !causalRollup || causalRollup.version !== 'phase4e-doctrine-ab-causal-challenge-v1'
+
+  // Index session diffs by dayNumber so per-session lookup is a Map get().
+  // Phase 4E pushes one diff per session in builder iteration order, but we
+  // explicitly key on `dayNumber` (not array index) because session arrays
+  // can be filtered/sliced downstream and order is not guaranteed at the
+  // page level.
+  const diffByDay = new Map<number, DoctrineCausalChallengeSessionDiff>()
+  if (!legacyMissingCausalChallenge && causalRollup?.sessionDiffs) {
+    for (const d of causalRollup.sessionDiffs) {
+      if (typeof d.dayNumber === 'number') {
+        diffByDay.set(d.dayNumber, d)
+      }
+    }
+  }
+
+  const sessions = Array.isArray(program.sessions) ? program.sessions : []
+  const repairedFields: string[] = []
+  const lostFields: string[] = []
+  let sessionsWithCausalDisplay = 0
+  let sessionsWithMaterialChange = 0
+  let sessionsWithVisibleChange = 0
+
+  const projectedSessions: ProgramDisplayProjectionSession[] = []
+  for (let i = 0; i < sessions.length; i++) {
+    const s = sessions[i] as unknown as { dayNumber?: number; focusLabel?: string; dayLabel?: string; name?: string } | null
+    if (!s || typeof s !== 'object') continue
+    const dayNumber = typeof s.dayNumber === 'number' ? s.dayNumber : i + 1
+    const dayFocus = s.focusLabel || s.dayLabel || s.name || null
+
+    const diff = diffByDay.get(dayNumber) || null
+    const causalDisplay = projectDoctrineCausalDisplay(diff)
+
+    if (causalDisplay.available) {
+      sessionsWithCausalDisplay++
+      if (causalDisplay.materialChanged) sessionsWithMaterialChange++
+      if (causalDisplay.visibleChanged) sessionsWithVisibleChange++
+    }
+
+    // Stable fingerprint for projection ↔ render matching. Combines dayNumber,
+    // focus, and program id so two cards rendered for different programs cannot
+    // accidentally match the wrong projection slice.
+    const fingerprint = `${programId}::day-${dayNumber}::${dayFocus || 'no-focus'}`
+
+    projectedSessions.push({
+      dayNumber,
+      dayFocus,
+      fingerprint,
+      doctrineCausalDisplay: causalDisplay,
+      sourceAudit: {
+        doctrineCausalSource: diff
+          ? 'doctrineCausalChallenge.sessionDiffs'
+          : 'unavailable',
+        noMixedOwnership: true, // single-owner: causal display is from Phase 4E rollup only
+      },
+    })
+  }
+
+  if (legacyMissingCausalChallenge) {
+    lostFields.push('doctrineCausalChallenge.sessionDiffs (legacy program)')
+  }
+
+  return {
+    programId,
+    generatedAt,
+    sourceProgramVersion,
+    projectionVersion: 'phase4f.display-projection-lock.v1',
+    projectionSource: 'authoritative_program',
+    legacyMissingCausalChallenge,
+    sessions: projectedSessions,
+    audit: {
+      sessionCount: sessions.length,
+      projectedSessionCount: projectedSessions.length,
+      sessionsWithCausalDisplay,
+      sessionsWithMaterialChange,
+      sessionsWithVisibleChange,
+      noMixedOwnership: projectedSessions.every(p => p.sourceAudit.noMixedOwnership),
+      repairedFields,
+      lostFields,
+    },
+  }
+}

@@ -221,7 +221,7 @@ FROM (VALUES
    'Forearm prehab is low-volume support',
    'Forearm/wrist work supports grip and tendon capacity at low volume; never replaces primary strength.',
    'Wrist pron/sup/flex/ext at 2x15 fits prehab/accessory lane.',
-   'strong_preference', TRUE, FALSE,
+   'recommendation', TRUE, FALSE,
    '{"hasGripIntenseWork":true}', '{"injuryAcuteWrist":true}',
    '{"sets":2,"reps":15,"role":"prehab","placement":"end_or_paired"}',
    '["beginner","intermediate","advanced"]', NULL,
@@ -233,7 +233,7 @@ FROM (VALUES
    'Phase 1: two pull exposures per week',
    'Foundational vertical pulling uses two pull exposures per week with rows in support.',
    'Two pull sessions per week with two-arm pull primary, rows support, hangs, external rotations, curls.',
-   'strong_preference', TRUE, FALSE,
+   'recommendation', TRUE, FALSE,
    '{"goal":["pull_up","one_arm_pull_up_prereq"],"phase":"phase_1"}', '{}',
    '{"pullExposuresPerWeek":2,"primary":"two_arm_pull","support":["rows","hangs","face_pull","curl"]}',
    '["beginner","early_intermediate"]', '["pull_up"]', NULL, NULL, 0.9, 1,
@@ -256,7 +256,7 @@ FROM (VALUES
    'Phase 3: eccentrics for advanced one-arm work',
    'Eccentrics become primary advanced exposure with one-arm rows/hangs more relevant. Frequency up to 3.',
    'Phase 3 athletes use eccentrics, one-arm hangs, one-arm rows; up to 3 pull sessions per week.',
-   'strong_preference', TRUE, FALSE,
+   'recommendation', TRUE, FALSE,
    '{"goal":"one_arm_pull_up","phase":"phase_3","experienceLevel":"advanced"}', '{"experienceLevel":["beginner","intermediate"]}',
    '{"pullExposuresPerWeek":{"min":2,"max":3},"primary":"eccentric_oapu"}',
    '["advanced"]', '["one_arm_pull_up"]', NULL, NULL, 0.9, 1,
@@ -290,7 +290,7 @@ FROM (VALUES
    'Lower body must not hijack upper-body skill recovery',
    'Lower body work scales by available days/session length and uses level-based progression with tempo.',
    'When primary goal is upper-body skill, scale lower-body volume so it does not compromise upper recovery.',
-   'strong_preference', TRUE, FALSE,
+   'recommendation', TRUE, FALSE,
    '{"primaryGoalIsUpperBodySkill":true}', '{}',
    '{"scaleByDays":true,"levelBasedProgression":true,"tempoAware":true}',
    '["beginner","intermediate","advanced"]', NULL, NULL, NULL, 0.8, 1,
@@ -323,7 +323,7 @@ FROM (VALUES
    'Dynamic warm-up pre strength/skill (~10–15 min)',
    'Dynamic, joint-specific warm-up before strength/skill work; static stretching belongs after.',
    'Dynamic prep before skill/strength; static stretching is not primary pre-strength prep.',
-   'strong_preference', TRUE, FALSE,
+   'recommendation', TRUE, FALSE,
    '{"sessionType":["strength","skill","power"]}', '{}',
    '{"dynamicMinutes":{"min":10,"max":15},"includeWristsScapShouldersForUpperRingsPullSessions":true}',
    '["beginner","intermediate","advanced"]', NULL, NULL, NULL, 0.85, 1,
@@ -345,7 +345,7 @@ FROM (VALUES
    'HIIT restricted under high fatigue/dense weeks',
    'HIIT is recovery-taxing and higher injury risk; restrict when fatigue is high or week is already dense.',
    'If fatigue/recovery risk high or strength/skill priority and week dense, prefer LISS or omit conditioning.',
-   'strong_preference', TRUE, FALSE,
+   'recommendation', TRUE, FALSE,
    '{"or":[{"recoveryCapacity":"low"},{"strengthSkillLoad":"high"},{"weeklyDensity":"high"}]}', '{}',
    '{"recommend":["liss","omit"],"avoid":["hiit"]}',
    '["beginner","intermediate","advanced"]', NULL, NULL, NULL, 0.85, 2,
@@ -400,7 +400,7 @@ FROM (VALUES
    'Heavy compounds use 6-8 reps with 3-4 min rest.',
    '{"role":"primary_compound","repRange":{"min":6,"max":8},"restMinutes":{"min":3,"max":4}}',
    '{"role":["primary_compound_pull","primary_compound_push","primary_compound_squat","primary_compound_hinge"]}',
-   '{}', TRUE, FALSE, 'strong_preference', '["ppl","heavy_compound","rest"]'),
+   '{}', TRUE, FALSE, 'recommendation', '["ppl","heavy_compound","rest"]'),
 
   -- Hybrid PPL: secondary/accessory 8-20 reps, shorter rest
   ('002', 'src_batch_01_hybrid_ppl',
@@ -412,7 +412,7 @@ FROM (VALUES
    'Secondary/accessory work uses 8-20 reps with 1-2 min rest.',
    '{"role":"accessory","repRange":{"min":8,"max":20},"restMinutes":{"min":1,"max":2}}',
    '{"role":["accessory","isolation","secondary"]}',
-   '{}', TRUE, FALSE, 'strong_preference', '["ppl","accessory","rest"]'),
+   '{}', TRUE, FALSE, 'recommendation', '["ppl","accessory","rest"]'),
 
   -- Hybrid PPL: week progression by adding sets/reps
   ('003', 'src_batch_01_hybrid_ppl',
@@ -434,7 +434,7 @@ FROM (VALUES
    'Increase load only when 2x15 feels easy with full ROM.',
    'Forearm prehab: 2 sets x 15 reps, short rest.',
    '{"sets":2,"reps":15,"role":"prehab"}',
-   '{"role":"prehab"}', '{}', TRUE, FALSE, 'strong_preference',
+   '{"role":"prehab"}', '{}', TRUE, FALSE, 'recommendation',
    '["forearm","prehab","2x15"]'),
 
   -- Pull-Up Pro Phase 1: rep ranges
@@ -446,7 +446,7 @@ FROM (VALUES
    'Add reps until top of range, then progress to harder vertical pull variation.',
    'Phase 1: two-arm pull at 4-8 reps, 2-3 min rest.',
    '{"phase":"phase_1","repRange":{"min":4,"max":8}}',
-   '{"phase":"phase_1"}', '{}', TRUE, FALSE, 'strong_preference', '["pull_up_pro","phase_1"]'),
+   '{"phase":"phase_1"}', '{}', TRUE, FALSE, 'recommendation', '["pull_up_pro","phase_1"]'),
 
   -- Pull-Up Pro Phase 2: assisted one-arm low reps
   ('006', 'src_batch_01_pull_up_pro_phase_2',
@@ -457,7 +457,7 @@ FROM (VALUES
    'Reduce assistance progressively; do not add eccentrics until assisted reps in range with low assistance.',
    'Phase 2: assisted one-arm at 2-5 reps, 3-5 min rest.',
    '{"phase":"phase_2","repRange":{"min":2,"max":5}}',
-   '{"phase":"phase_2"}', '{}', TRUE, FALSE, 'strong_preference', '["pull_up_pro","phase_2"]'),
+   '{"phase":"phase_2"}', '{}', TRUE, FALSE, 'recommendation', '["pull_up_pro","phase_2"]'),
 
   -- Pull-Up Pro Phase 3: eccentric long rest
   ('007', 'src_batch_01_pull_up_pro_phase_3',
@@ -468,7 +468,7 @@ FROM (VALUES
    'Slow eccentric (5-10s); concentric assist when needed.',
    'Phase 3 eccentrics: 1-3 reps, 4-6 min rest.',
    '{"phase":"phase_3","repRange":{"min":1,"max":3},"eccentricSeconds":{"min":5,"max":10}}',
-   '{"phase":"phase_3"}', '{}', TRUE, FALSE, 'strong_preference', '["pull_up_pro","phase_3","eccentric"]'),
+   '{"phase":"phase_3"}', '{}', TRUE, FALSE, 'recommendation', '["pull_up_pro","phase_3","eccentric"]'),
 
   -- Front lever holds and pulls
   ('008', 'src_batch_01_front_lever',
@@ -479,7 +479,7 @@ FROM (VALUES
    'Progress hold time; advance progression when 3x clean 8-10s achieved.',
    'FL holds: 4-6 sets x 3-10s, 2-3 min rest.',
    '{"role":"primary_skill_static","holdSeconds":{"min":3,"max":10}}',
-   '{"role":"primary_skill_static"}', '{}', TRUE, FALSE, 'strong_preference', '["front_lever","hold"]'),
+   '{"role":"primary_skill_static"}', '{}', TRUE, FALSE, 'recommendation', '["front_lever","hold"]'),
 
   -- Lower Body B
   ('009', 'src_batch_01_lower_body_b',
@@ -537,7 +537,7 @@ FROM (VALUES
    'Eccentric method belongs in advanced one-arm pull only after assisted phase.',
    '{"phaseGate":"phase_3","prerequisite":"assisted_oapu_proficient"}',
    '{"goal":"one_arm_pull_up","phase":"phase_3"}', '{"phase":["phase_1","phase_2"]}',
-   'strong_preference', '["eccentric","pull_up_pro","phase_3"]'),
+   'recommendation', '["eccentric","pull_up_pro","phase_3"]'),
 
   ('002', 'src_batch_01_pull_up_pro_phase_2', 'assisted', 'assistance_method',
    '["intermediate"]', '["one_arm_pull_up"]',
@@ -547,7 +547,7 @@ FROM (VALUES
    'Assistance method gates one-arm pull progression in phase 2.',
    '{"phaseGate":"phase_2"}',
    '{"goal":"one_arm_pull_up","phase":"phase_2"}', '{"phase":"phase_3"}',
-   'strong_preference', '["assisted","pull_up_pro","phase_2"]'),
+   'recommendation', '["assisted","pull_up_pro","phase_2"]'),
 
   ('003', 'src_batch_01_forearm_health', 'paired_set', 'density_method',
    '["beginner","intermediate","advanced"]', NULL,
@@ -577,7 +577,7 @@ FROM (VALUES
    'HIIT must be gated by recovery and weekly load.',
    '{"recoveryGate":"high","weeklyLoad":"not_dense"}',
    '{}', '{"or":[{"recoveryCapacity":"low"},{"weeklyDensity":"high"}]}',
-   'strong_preference', '["hiit","cardio","gating"]'),
+   'recommendation', '["hiit","cardio","gating"]'),
 
   ('006', 'src_batch_01_cardio_guide', 'liss', 'conditioning_method',
    '["beginner","intermediate","advanced"]', '["fat_loss","general_conditioning","recovery"]',
@@ -607,7 +607,7 @@ FROM (VALUES
    'Static holds are primary FL skill expression.',
    '{"role":"primary_skill_static"}',
    '{"selectedSkills":{"contains":"front_lever"}}', '{}',
-   'strong_preference', '["static_hold","front_lever"]')
+   'recommendation', '["static_hold","front_lever"]')
 ) AS v(row_id, source_id, method_key, category,
        compatible_levels_json, compatible_goals_json,
        best_use_cases_json, avoid_use_cases_json,
@@ -668,7 +668,7 @@ FROM (VALUES
    'Tuck → advanced tuck FL on clean 3x10s.',
    '{"current":"tuck_fl_hold","next":"advanced_tuck_fl"}',
    '{"goal":"front_lever"}', '{}',
-   'strong_preference', '["front_lever","progression"]'),
+   'recommendation', '["front_lever","progression"]'),
 
   ('004', 'src_batch_01_front_lever', 'front_lever',
    'advanced_tuck_fl', 'one_leg_fl',
@@ -679,7 +679,7 @@ FROM (VALUES
    'Advanced tuck → one leg FL on 3x10s.',
    '{"current":"advanced_tuck_fl","next":"one_leg_fl"}',
    '{"goal":"front_lever"}', '{}',
-   'strong_preference', '["front_lever","progression"]'),
+   'recommendation', '["front_lever","progression"]'),
 
   ('005', 'src_batch_01_front_lever', 'front_lever',
    'one_leg_fl', 'straddle_fl',
@@ -690,7 +690,7 @@ FROM (VALUES
    'One-leg → straddle FL.',
    '{"current":"one_leg_fl","next":"straddle_fl"}',
    '{"goal":"front_lever"}', '{}',
-   'strong_preference', '["front_lever","progression"]'),
+   'recommendation', '["front_lever","progression"]'),
 
   ('006', 'src_batch_01_front_lever', 'front_lever',
    'straddle_fl', 'full_fl',
@@ -702,7 +702,7 @@ FROM (VALUES
    'Straddle → full FL.',
    '{"current":"straddle_fl","next":"full_fl"}',
    '{"goal":"front_lever"}', '{}',
-   'strong_preference', '["front_lever","progression"]'),
+   'recommendation', '["front_lever","progression"]'),
 
   ('007', 'src_batch_01_pull_up_pro_phase_1', 'pull_up',
    'negatives_or_band_assisted', 'strict_pull_up',
@@ -713,7 +713,7 @@ FROM (VALUES
    'Negatives/banded → strict.',
    '{"current":"negatives_or_band_assisted","next":"strict_pull_up"}',
    '{"goal":"pull_up"}', '{}',
-   'strong_preference', '["pull_up_pro","phase_1"]'),
+   'recommendation', '["pull_up_pro","phase_1"]'),
 
   ('008', 'src_batch_01_lower_body_b', 'sissy_squat',
    'partial_sissy', 'full_rom_sissy',
@@ -755,7 +755,7 @@ FROM (VALUES
    'Dragon flag → front lever (compression carryover).',
    '{"primaryAdaptation":"anterior_compression","carryoverDomain":"front_lever_position"}',
    '{"selectedSkills":{"contains":"front_lever"}}', '{}',
-   'strong_preference', '["front_lever","carryover","compression"]'),
+   'recommendation', '["front_lever","carryover","compression"]'),
 
   ('002', 'src_batch_01_front_lever', 'horizontal_scap_pull', 'front_lever',
    'accessory', 0.6,
@@ -763,7 +763,7 @@ FROM (VALUES
    'Horizontal scap pull → front lever (scap retraction).',
    '{"primaryAdaptation":"scap_retraction"}',
    '{"selectedSkills":{"contains":"front_lever"}}', '{}',
-   'strong_preference', '["front_lever","scap"]'),
+   'recommendation', '["front_lever","scap"]'),
 
   ('003', 'src_batch_01_front_lever', 'fl_pulldown', 'front_lever',
    'direct', 0.85,
@@ -771,7 +771,7 @@ FROM (VALUES
    'FL pulldown → front lever (pattern-specific dynamic).',
    '{"primaryAdaptation":"fl_pulling_pattern"}',
    '{"selectedSkills":{"contains":"front_lever"}}', '{}',
-   'strong_preference', '["front_lever","pulldown"]'),
+   'recommendation', '["front_lever","pulldown"]'),
 
   ('004', 'src_batch_01_pull_up_pro_phase_1', 'row', 'pull_up',
    'accessory', 0.6,
@@ -811,7 +811,7 @@ FROM (VALUES
    'One-arm hang → OAPU (grip+shoulder).',
    '{"primaryAdaptation":"grip_shoulder_stability"}',
    '{"goal":"one_arm_pull_up"}', '{}',
-   'strong_preference', '["one_arm_pull_up","hang"]')
+   'recommendation', '["one_arm_pull_up","hang"]')
 ) AS v(row_id, source_id, source_exercise_or_skill_key, target_skill_key,
        carryover_type, carryover_strength, rationale, plain_language_rule,
        computation_friendly_rule_json, applies_when_json, does_not_apply_when_json,
@@ -844,35 +844,35 @@ FROM (VALUES
    '{"templateStyle":"ppl_hybrid"}', '{"primaryGoalIsSkillSpecialization":true}', 0.85,
    'Weighted pull-up: primary pull compound for hybrid PPL.',
    '{"role":"primary_compound_pull","repRange":{"min":6,"max":8},"restMinutes":{"min":3,"max":4}}',
-   '{}', '{}', 'strong_preference', '["ppl","compound","pull"]'),
+   '{}', '{}', 'recommendation', '["ppl","compound","pull"]'),
 
   ('002', 'src_batch_01_hybrid_ppl', 'hybrid', NULL, 'weighted_dip',             'primary_compound_push',
    '["intermediate","advanced"]', '{"dip_bars":true,"weight_belt":true}',
    '{"templateStyle":"ppl_hybrid"}', '{}', 0.85,
    'Weighted dip: primary push compound.',
    '{"role":"primary_compound_push","repRange":{"min":6,"max":8}}',
-   '{}', '{}', 'strong_preference', '["ppl","compound","push"]'),
+   '{}', '{}', 'recommendation', '["ppl","compound","push"]'),
 
   ('003', 'src_batch_01_hybrid_ppl', 'hybrid', NULL, 'barbell_row',              'primary_compound_pull',
    '["intermediate","advanced"]', '{"barbell":true}',
    '{"templateStyle":"ppl_hybrid"}', '{}', 0.8,
    'Barbell row: horizontal pull compound.',
    '{"role":"primary_compound_pull","repRange":{"min":6,"max":10}}',
-   '{}', '{}', 'strong_preference', '["ppl","compound","pull"]'),
+   '{}', '{}', 'recommendation', '["ppl","compound","pull"]'),
 
   ('004', 'src_batch_01_hybrid_ppl', 'hybrid', NULL, 'overhead_press',           'primary_compound_push',
    '["intermediate","advanced"]', '{"barbell":true}',
    '{"templateStyle":"ppl_hybrid"}', '{}', 0.8,
    'Overhead press: vertical push compound.',
    '{"role":"primary_compound_push","repRange":{"min":6,"max":8}}',
-   '{}', '{}', 'strong_preference', '["ppl","compound","push"]'),
+   '{}', '{}', 'recommendation', '["ppl","compound","push"]'),
 
   ('005', 'src_batch_01_hybrid_ppl', 'hybrid', NULL, 'romanian_deadlift',        'primary_compound_hinge',
    '["intermediate","advanced"]', '{"barbell":true}',
    '{"templateStyle":"ppl_hybrid"}', '{}', 0.8,
    'Romanian deadlift: hinge compound.',
    '{"role":"primary_compound_hinge","repRange":{"min":6,"max":10}}',
-   '{}', '{}', 'strong_preference', '["ppl","compound","hinge"]'),
+   '{}', '{}', 'recommendation', '["ppl","compound","hinge"]'),
 
   ('006', 'src_batch_01_hybrid_ppl', 'hybrid', NULL, 'curl',                     'accessory',
    '["intermediate","advanced"]', '{"dumbbell":true}',
@@ -901,7 +901,7 @@ FROM (VALUES
    '{"primaryGoalIsSkillSpecialization":true}', 0.85,
    'Barbell back squat: heavy compound squat.',
    '{"role":"primary_compound_squat","repRange":{"min":6,"max":8}}',
-   '{}', '{}', 'strong_preference', '["ppl","compound","squat"]'),
+   '{}', '{}', 'recommendation', '["ppl","compound","squat"]'),
 
   ('010', 'src_batch_01_hybrid_ppl', 'hybrid', NULL, 'barbell_bench_press',      'primary_compound_push',
    '["intermediate","advanced"]', '{"barbell":true,"rack":true}',
@@ -909,7 +909,7 @@ FROM (VALUES
    '{"primaryGoalIsSkillSpecialization":true}', 0.85,
    'Barbell bench press: heavy push compound.',
    '{"role":"primary_compound_push","repRange":{"min":6,"max":8}}',
-   '{}', '{}', 'strong_preference', '["ppl","compound","push"]'),
+   '{}', '{}', 'recommendation', '["ppl","compound","push"]'),
 
   -- Forearm Health
   ('011', 'src_batch_01_forearm_health', NULL, NULL, 'wrist_pronation',          'prehab',
@@ -917,28 +917,28 @@ FROM (VALUES
    '{"hasGripIntenseWork":true}', '{}', 0.85,
    'Wrist pronation 2x15.',
    '{"role":"prehab","sets":2,"reps":15}',
-   '{}', '{}', 'strong_preference', '["forearm","prehab"]'),
+   '{}', '{}', 'recommendation', '["forearm","prehab"]'),
 
   ('012', 'src_batch_01_forearm_health', NULL, NULL, 'wrist_extension',          'prehab',
    '["beginner","intermediate","advanced"]', '{"light_db":true}',
    '{}', '{}', 0.85,
    'Wrist extension 2x15.',
    '{"role":"prehab","sets":2,"reps":15}',
-   '{}', '{}', 'strong_preference', '["forearm","prehab"]'),
+   '{}', '{}', 'recommendation', '["forearm","prehab"]'),
 
   ('013', 'src_batch_01_forearm_health', NULL, NULL, 'wrist_supination',         'prehab',
    '["beginner","intermediate","advanced"]', '{"light_db":true}',
    '{}', '{}', 0.85,
    'Wrist supination 2x15.',
    '{"role":"prehab","sets":2,"reps":15}',
-   '{}', '{}', 'strong_preference', '["forearm","prehab"]'),
+   '{}', '{}', 'recommendation', '["forearm","prehab"]'),
 
   ('014', 'src_batch_01_forearm_health', NULL, NULL, 'wrist_flexion',            'prehab',
    '["beginner","intermediate","advanced"]', '{"light_db":true}',
    '{}', '{}', 0.85,
    'Wrist flexion 2x15.',
    '{"role":"prehab","sets":2,"reps":15}',
-   '{}', '{}', 'strong_preference', '["forearm","prehab"]'),
+   '{}', '{}', 'recommendation', '["forearm","prehab"]'),
 
   -- Pull-Up Pro Phase 1 (8 picks)
   ('015', 'src_batch_01_pull_up_pro_phase_1', 'pull_up', 'pull_up', 'pull_up',                    'primary_pull',
@@ -946,14 +946,14 @@ FROM (VALUES
    '{"phase":"phase_1"}', '{}', 0.95,
    'Pull-up: phase 1 primary.',
    '{"phase":"phase_1","role":"primary_pull"}',
-   '{"phase":"phase_1"}', '{}', 'strong_preference', '["pull_up_pro","phase_1"]'),
+   '{"phase":"phase_1"}', '{}', 'recommendation', '["pull_up_pro","phase_1"]'),
 
   ('016', 'src_batch_01_pull_up_pro_phase_1', 'pull_up', 'pull_up', 'inverted_row',               'support_pull',
    '["beginner","early_intermediate"]', '{"pull_up_bar":true}',
    '{}', '{}', 0.85,
    'Inverted row: phase 1 horizontal pull support.',
    '{"phase":"phase_1","role":"support_pull"}',
-   '{}', '{}', 'strong_preference', '["pull_up_pro","phase_1"]'),
+   '{}', '{}', 'recommendation', '["pull_up_pro","phase_1"]'),
 
   ('017', 'src_batch_01_pull_up_pro_phase_1', 'pull_up', 'pull_up', 'dead_hang',                  'tendon_capacity',
    '["beginner","early_intermediate"]', '{"pull_up_bar":true}',
@@ -988,14 +988,14 @@ FROM (VALUES
    '{}', '{}', 0.85,
    'Chin-up: alternative phase 1 primary.',
    '{"phase":"phase_1","role":"primary_pull"}',
-   '{}', '{}', 'strong_preference', '["pull_up_pro","phase_1"]'),
+   '{}', '{}', 'recommendation', '["pull_up_pro","phase_1"]'),
 
   ('022', 'src_batch_01_pull_up_pro_phase_1', 'pull_up', 'pull_up', 'chest_supported_row',        'support_pull',
    '["beginner","early_intermediate"]', '{"dumbbell":true}',
    '{}', '{}', 0.8,
    'Chest-supported row: stable horizontal pull.',
    '{"phase":"phase_1","role":"support_pull"}',
-   '{}', '{}', 'strong_preference', '["pull_up_pro","phase_1","row"]'),
+   '{}', '{}', 'recommendation', '["pull_up_pro","phase_1","row"]'),
 
   -- Pull-Up Pro Phase 2 (8 picks)
   ('023', 'src_batch_01_pull_up_pro_phase_2', 'one_arm_pull_up', 'one_arm_pull_up', 'assisted_oapu',          'primary_skill_pull',
@@ -1010,14 +1010,14 @@ FROM (VALUES
    '{"phase":"phase_2"}', '{}', 0.85,
    'Two-arm pull stays in support during phase 2.',
    '{"phase":"phase_2","role":"support_pull"}',
-   '{}', '{}', 'strong_preference', '["pull_up_pro","phase_2"]'),
+   '{}', '{}', 'recommendation', '["pull_up_pro","phase_2"]'),
 
   ('025', 'src_batch_01_pull_up_pro_phase_2', 'one_arm_pull_up', 'one_arm_pull_up', 'inverted_row',          'support_pull',
    '["intermediate"]', '{"pull_up_bar":true}',
    '{}', '{}', 0.8,
    'Row support during phase 2.',
    '{"phase":"phase_2","role":"support_pull"}',
-   '{}', '{}', 'strong_preference', '["pull_up_pro","phase_2","row"]'),
+   '{}', '{}', 'recommendation', '["pull_up_pro","phase_2","row"]'),
 
   ('026', 'src_batch_01_pull_up_pro_phase_2', 'one_arm_pull_up', 'one_arm_pull_up', 'scap_pull_up',          'scap_quality',
    '["intermediate"]', '{"pull_up_bar":true}',
@@ -1052,7 +1052,7 @@ FROM (VALUES
    '{"phase":"phase_2"}', '{}', 0.85,
    'Cable-assisted OAPU: alternative phase 2 primary.',
    '{"phase":"phase_2","role":"primary_skill_pull"}',
-   '{}', '{}', 'strong_preference', '["pull_up_pro","phase_2","cable"]'),
+   '{}', '{}', 'recommendation', '["pull_up_pro","phase_2","cable"]'),
 
   -- Pull-Up Pro Phase 3 (8 picks)
   ('031', 'src_batch_01_pull_up_pro_phase_3', 'one_arm_pull_up', 'one_arm_pull_up', 'eccentric_oapu',         'primary_skill_pull',
@@ -1067,21 +1067,21 @@ FROM (VALUES
    '{}', '{}', 0.85,
    'One-arm row phase 3 support.',
    '{"phase":"phase_3","role":"support_pull"}',
-   '{}', '{}', 'strong_preference', '["pull_up_pro","phase_3","row"]'),
+   '{}', '{}', 'recommendation', '["pull_up_pro","phase_3","row"]'),
 
   ('033', 'src_batch_01_pull_up_pro_phase_3', 'one_arm_pull_up', 'one_arm_pull_up', 'one_arm_hang',           'tendon_capacity',
    '["advanced"]', '{"pull_up_bar":true}',
    '{}', '{}', 0.85,
    'One-arm hang grip+shoulder.',
    '{"phase":"phase_3","role":"tendon_capacity"}',
-   '{}', '{}', 'strong_preference', '["pull_up_pro","phase_3","hang"]'),
+   '{}', '{}', 'recommendation', '["pull_up_pro","phase_3","hang"]'),
 
   ('034', 'src_batch_01_pull_up_pro_phase_3', 'one_arm_pull_up', 'one_arm_pull_up', 'pull_up',               'support_pull',
    '["advanced"]', '{"pull_up_bar":true}',
    '{}', '{}', 0.8,
    'Two-arm pull stays in support phase 3.',
    '{"phase":"phase_3","role":"support_pull"}',
-   '{}', '{}', 'strong_preference', '["pull_up_pro","phase_3"]'),
+   '{}', '{}', 'recommendation', '["pull_up_pro","phase_3"]'),
 
   ('035', 'src_batch_01_pull_up_pro_phase_3', 'one_arm_pull_up', 'one_arm_pull_up', 'scap_pull_up',          'scap_quality',
    '["advanced"]', '{"pull_up_bar":true}',
@@ -1102,14 +1102,14 @@ FROM (VALUES
    '{}', '{}', 0.8,
    'Weighted pull-up: phase 3 weighted support.',
    '{"phase":"phase_3","role":"support_pull"}',
-   '{}', '{}', 'strong_preference', '["pull_up_pro","phase_3","weighted"]'),
+   '{}', '{}', 'recommendation', '["pull_up_pro","phase_3","weighted"]'),
 
   ('038', 'src_batch_01_pull_up_pro_phase_3', 'one_arm_pull_up', 'one_arm_pull_up', 'archer_pull_up',        'primary_skill_pull',
    '["advanced"]', '{"pull_up_bar":true}',
    '{"phase":"phase_3"}', '{}', 0.85,
    'Archer pull-up: alternative phase 3 primary.',
    '{"phase":"phase_3","role":"primary_skill_pull"}',
-   '{}', '{}', 'strong_preference', '["pull_up_pro","phase_3","archer"]'),
+   '{}', '{}', 'recommendation', '["pull_up_pro","phase_3","archer"]'),
 
   -- Front Lever (10+ picks already covered partly via principles/progressions; add 8 selections)
   ('039', 'src_batch_01_front_lever', 'front_lever', 'front_lever', 'fl_hold',                'primary_skill_static',
@@ -1126,7 +1126,7 @@ FROM (VALUES
    'Front lever pull: dynamic FL strength.',
    '{"role":"dynamic_strength"}',
    '{"selectedSkills":{"contains":"front_lever"}}', '{}',
-   'strong_preference', '["front_lever","pull"]'),
+   'recommendation', '["front_lever","pull"]'),
 
   ('041', 'src_batch_01_front_lever', 'front_lever', 'front_lever', 'fl_eccentric',           'eccentric_dynamic',
    '["intermediate","advanced"]', '{"pull_up_bar":true}',
@@ -1134,7 +1134,7 @@ FROM (VALUES
    'FL eccentric: control descent.',
    '{"role":"eccentric_dynamic","eccentricSeconds":{"min":4,"max":8}}',
    '{"selectedSkills":{"contains":"front_lever"}}', '{}',
-   'strong_preference', '["front_lever","eccentric"]'),
+   'recommendation', '["front_lever","eccentric"]'),
 
   ('042', 'src_batch_01_front_lever', 'front_lever', 'front_lever', 'band_fl_hold',           'assisted_static',
    '["intermediate"]', '{"pull_up_bar":true,"band":true}',
@@ -1142,7 +1142,7 @@ FROM (VALUES
    'Band-assisted FL hold: assisted volume + position practice.',
    '{"role":"assisted_static"}',
    '{"selectedSkills":{"contains":"front_lever"}}', '{}',
-   'strong_preference', '["front_lever","band"]'),
+   'recommendation', '["front_lever","band"]'),
 
   ('043', 'src_batch_01_front_lever', 'front_lever', 'front_lever', 'dragon_flag',            'compression_carryover',
    '["intermediate","advanced"]', '{"bench":true}',
@@ -1150,7 +1150,7 @@ FROM (VALUES
    'Dragon flag: anterior chain carryover.',
    '{"role":"compression_carryover"}',
    '{"selectedSkills":{"contains":"front_lever"}}', '{}',
-   'strong_preference', '["front_lever","dragon_flag","carryover"]'),
+   'recommendation', '["front_lever","dragon_flag","carryover"]'),
 
   ('044', 'src_batch_01_front_lever', 'front_lever', 'front_lever', 'horizontal_scap_pull',   'scap_quality',
    '["intermediate","advanced"]', '{"pull_up_bar":true}',
@@ -1158,7 +1158,7 @@ FROM (VALUES
    'Horizontal scap pull: scap-specific support for FL.',
    '{"role":"scap_quality"}',
    '{"selectedSkills":{"contains":"front_lever"}}', '{}',
-   'strong_preference', '["front_lever","scap","carryover"]'),
+   'recommendation', '["front_lever","scap","carryover"]'),
 
   ('045', 'src_batch_01_front_lever', 'front_lever', 'front_lever', 'fl_pulldown',            'pattern_specific_dynamic',
    '["intermediate","advanced"]', '{"cable":true}',
@@ -1166,7 +1166,7 @@ FROM (VALUES
    'FL pulldown: lat-specific FL pattern.',
    '{"role":"pattern_specific_dynamic"}',
    '{"selectedSkills":{"contains":"front_lever"}}', '{}',
-   'strong_preference', '["front_lever","pulldown","carryover"]'),
+   'recommendation', '["front_lever","pulldown","carryover"]'),
 
   ('046', 'src_batch_01_front_lever', 'front_lever', 'front_lever', 'tuck_fl_hold',           'progression_static',
    '["intermediate"]', '{"pull_up_bar":true}',
@@ -1174,7 +1174,7 @@ FROM (VALUES
    'Tuck FL hold: progression entry.',
    '{"role":"progression_static"}',
    '{"selectedSkills":{"contains":"front_lever"}}', '{}',
-   'strong_preference', '["front_lever","tuck"]'),
+   'recommendation', '["front_lever","tuck"]'),
 
   -- Lower Body B (8 picks)
   ('047', 'src_batch_01_lower_body_b', NULL, NULL, 'step_up',                'lower_body_primary',
@@ -1239,28 +1239,28 @@ FROM (VALUES
    '{}', '{}', 0.9,
    'Ring dip.',
    '{"role":"primary_compound_push"}',
-   '{}', '{}', 'strong_preference', '["rings","push"]'),
+   '{}', '{}', 'recommendation', '["rings","push"]'),
 
   ('056', 'src_batch_01_body_by_rings', 'hypertrophy', NULL, 'ring_row',                  'primary_compound_pull',
    '["intermediate","advanced"]', '{"rings":true}',
    '{}', '{}', 0.85,
    'Ring row.',
    '{"role":"primary_compound_pull"}',
-   '{}', '{}', 'strong_preference', '["rings","pull"]'),
+   '{}', '{}', 'recommendation', '["rings","pull"]'),
 
   ('057', 'src_batch_01_body_by_rings', 'hypertrophy', NULL, 'ring_push_up',              'primary_compound_push',
    '["intermediate","advanced"]', '{"rings":true}',
    '{}', '{}', 0.8,
    'Ring push-up.',
    '{"role":"primary_compound_push"}',
-   '{}', '{}', 'strong_preference', '["rings","push"]'),
+   '{}', '{}', 'recommendation', '["rings","push"]'),
 
   ('058', 'src_batch_01_body_by_rings', 'hypertrophy', NULL, 'ring_pull_up',              'primary_compound_pull',
    '["intermediate","advanced"]', '{"rings":true}',
    '{}', '{}', 0.85,
    'Ring pull-up.',
    '{"role":"primary_compound_pull"}',
-   '{}', '{}', 'strong_preference', '["rings","pull"]'),
+   '{}', '{}', 'recommendation', '["rings","pull"]'),
 
   ('059', 'src_batch_01_body_by_rings', 'hypertrophy', NULL, 'ring_chest_fly',            'isolation',
    '["intermediate","advanced"]', '{"rings":true}',
@@ -1346,7 +1346,7 @@ FROM (VALUES
    'HIIT intervals — recovery-gated.',
    '{"role":"conditioning_high","recoveryGate":"high"}',
    '{}', '{"or":[{"recoveryCapacity":"low"},{"weeklyDensity":"high"}]}',
-   'strong_preference', '["cardio","hiit"]'),
+   'recommendation', '["cardio","hiit"]'),
 
   ('071', 'src_batch_01_cardio_guide', NULL, NULL, 'hiit_sprint',              'conditioning_high',
    '["advanced"]', '{"any":true}',

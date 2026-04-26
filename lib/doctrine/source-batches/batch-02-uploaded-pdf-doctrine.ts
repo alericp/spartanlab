@@ -2043,6 +2043,50 @@ addCarryover({
 })
 
 // =============================================================================
+// REPAIR APPENDIX — added to meet BBR Arms minimum (>=10).
+// Provenance: derived_from_prompt_section_3_summary.
+// =============================================================================
+
+addRx({
+  n: 800,
+  sourceId: "src_batch_02_bbr_arms",
+  sourceKey: "body_by_rings_arms_uploaded_pdf_batch_02",
+  levelScope: ["intermediate", "advanced"],
+  goalScope: ["hypertrophy", "rings"],
+  exerciseRoleScope: ["primary_arm_curl", "primary_arm_eccentric"],
+  repRangeJson: { min: 6, max: 10 },
+  setRangeJson: { min: 3, max: 3 },
+  holdRangeJson: null,
+  restRangeJson: { minMinutes: 1, maxMinutes: 2 },
+  rpeGuidanceJson: { rpe: { min: 7, max: 9 } },
+  progressionGuidance:
+    "BBR Arms hypertrophy: 3 sets x 6–10 reps with 1–2 min rest, controlled tempo. Negatives use 6–8s eccentrics.",
+  priorityType: "strong_preference",
+  intelligenceTier: "base_week_intelligence",
+  appliesWhen: { equipmentIncludes: "rings", goal: ["hypertrophy", "rings"] },
+  doesNotApplyWhen: { acuteElbowOrShoulderPain: true },
+  computationFriendlyRule: { sets: 3, repRange: { min: 6, max: 10 }, restMinutes: { min: 1, max: 2 }, eccentricSeconds: { min: 6, max: 8 } },
+  userVisibleEvidenceLabel: "BBR Arms: 3x6–10, controlled tempo",
+})
+addCarryover({
+  n: 800,
+  sourceId: "src_batch_02_bbr_arms",
+  sourceKey: "body_by_rings_arms_uploaded_pdf_batch_02",
+  sourceExerciseOrSkillKey: "ring_pelican_curl",
+  targetSkillKey: "biceps_strength",
+  carryoverType: "support_arm_curl",
+  carryoverStrength: 0.7,
+  rationale:
+    "Pelican curl work supports biceps/elbow capacity used in front lever rows and one-arm pulling, but it is accessory and must not replace direct skill work.",
+  priorityType: "strong_preference",
+  intelligenceTier: "cross_cutting",
+  appliesWhen: { equipmentIncludes: "rings", selectedSkillsIncludesAny: ["front_lever", "one_arm_pull_up"] },
+  doesNotApplyWhen: { armSpecializationActive: false },
+  computationFriendlyRule: { carryoverWeight: 0.7, role: "support_arm_curl", neverReplacePrimarySkill: true },
+  userVisibleEvidenceLabel: "Pelican curl supports lever/one-arm pulling capacity",
+})
+
+// =============================================================================
 // PUBLIC ACCESSORS
 // =============================================================================
 

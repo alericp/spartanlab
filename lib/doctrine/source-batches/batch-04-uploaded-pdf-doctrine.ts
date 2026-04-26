@@ -216,6 +216,17 @@ carry({ src: BWS4, fam: 'traditional_hypertrophy_upper_lower', sourceKey: 'rdl_o
 // ===== PUBLIC ACCESSORS =====
 export const BATCH_04_KEY = 'batch_04' as const
 
+// Provenance shape parity with Batch 1/2/3 (loose so aggregator unions cleanly).
+export interface Batch04Provenance {
+  atomId: string
+  sourceId: string | null
+  batch: 'batch_04'
+}
+
+// No contraindication rules in this batch — Batch 4 expresses safety as
+// hard_constraint method/selection rules. Helper exists for aggregator parity.
+export function getBatch04ContraindicationRules(): unknown[] { return [] }
+
 export function getBatch04Sources(): DoctrineSource[] { return BATCH_04_SOURCES }
 export function getBatch04Principles(): DoctrinePrinciple[] { return BATCH_04_PRINCIPLES }
 export function getBatch04ProgressionRules(): ProgressionRule[] { return BATCH_04_PROGRESSION }

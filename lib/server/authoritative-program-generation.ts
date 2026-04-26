@@ -1618,9 +1618,10 @@ export async function executeAuthoritativeGeneration(
           decision
       }
 
-      // [PHASE 3C] Stamp version + timestamp + profileSource on the program-level
-      // doctrineIntegration proof so the UI can detect stale saved programs and
-      // honestly label bridged-vs-fresh decisions.
+      // [PHASE 3C+4A] Stamp version + timestamp + profileSource + materialization
+      // roll-up on the program-level doctrineIntegration proof so the UI can
+      // detect stale / all-flat saved programs and honestly label bridged-vs-
+      // fresh decisions.
       if (doctrineIntegrationProof) {
         const proofRecord = doctrineIntegrationProof as unknown as Record<string, unknown>
         proofRecord.methodDecisionSummary = summary
@@ -1628,6 +1629,10 @@ export async function executeAuthoritativeGeneration(
         proofRecord.methodDecisionStampedAt = summary.methodDecisionStampedAt
         proofRecord.methodDecisionProfileSource = summary.profileSource
         proofRecord.methodDecisionProfileAware = summary.profileSource !== 'legacyFallback'
+        // [PHASE 4A] Real-structural-change roll-up — read by the Program page
+        // to honestly surface "all sessions flat" rather than fake doctrine.
+        proofRecord.materializationRollup = summary.materialization
+        proofRecord.allSessionsFlat = summary.materialization.allSessionsFlat
       }
 
       console.log('[doctrine-method-decision-stamped]', {
@@ -1642,6 +1647,10 @@ export async function executeAuthoritativeGeneration(
         byStatus: summary.byStatus,
         contextStatus: summary.contextStatus,
         doctrineBatchesUsed: summary.doctrineBatchesUsed,
+        // [PHASE 4A] Surface real-structural materialization counts in the
+        // generation log so we can verify per-build whether the builder
+        // actually produced grouped/method-cued sessions for this profile.
+        materialization: summary.materialization,
       })
     } catch (methodErr) {
       console.log('[doctrine-method-decision-stamp-failed]', {

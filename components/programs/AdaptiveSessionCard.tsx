@@ -2291,32 +2291,35 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 ================================================================== */}
             {(() => {
               // ============================================================
-              // [DOCTRINE-METHOD-DECISION-PHASE3C] DOCTRINE DECISION PANEL
+              // [DOCTRINE-MATERIALIZATION-EVIDENCE-PHASE4A]
               //
-              // Truth priority for the visible decision strip:
-              //   1. session.methodDecision — stamped by the authoritative
-              //      wrapper (lib/server/authoritative-program-generation.ts)
-              //      for any program generated AFTER Phase 3C was wired with
-              //      profileSnapshot context.
-              //   2. ENGINE BRIDGE (profile-aware) — for programs persisted
-              //      BEFORE the Phase 3C profile-aware stamp existed. We
-              //      derive the decision on read using:
-              //        - the materialization signals already on the session,
-              //        - PLUS programProfileSnapshot (selectedSkills,
-              //          equipment, joints, schedule, style preference, …),
-              //      so even legacy programs get profile-driven attribution
-              //      without forcing a regenerate. Bridge results are
-              //      labeled `bridged`; legacy programs without a snapshot
-              //      get labeled `legacy` with an honest "Regenerate to
-              //      apply Phase 3C" hint inside this same strip.
+              // PHASE 3C added an always-visible "Doctrine Decision" panel —
+              // it rendered on EVERY session, including pure straight-set
+              // sessions where the builder applied no grouping at all. That
+              // produced the exact fake-proof failure mode the user called
+              // out: "labels claiming density/superset/top set while rows
+              // remain plain straight sets."
               //
-              // Visible structure: a clean dark panel with a label badge,
-              // a Why line, a Profile-driver line, and an Avoided line.
+              // PHASE 4A correction: the panel now ONLY renders when the
+              // session has a real, structurally-different materialization
+              // — a non-straight grouped block, a per-row set-execution
+              // method (cluster / top_set / drop_set / rest_pause), or a
+              // cluster sidecar. The structural verdict comes from the
+              // builder-locked methodMaterializationSummary (or, on legacy
+              // programs, a faithful re-derivation from the same raw fields
+              // the builder used). Every line of visible text below cites a
+              // concrete count of changed program fields — never an
+              // abstract "data-driven" or "profile-driven" claim against an
+              // unchanged session.
+              //
+              // When the session is genuinely flat the panel HIDES, which
+              // is honest: a primary skill day with quality straight sets
+              // legitimately has no grouped doctrine to visualize, and we
+              // do not want to manufacture proof.
               // ============================================================
               const stamped = (session as unknown as { methodDecision?: MethodDecisionShape })
                 .methodDecision ?? null
 
-              // Resolve a profile context for the bridge path.
               const bridgeProfileContext = extractProfileContextFromSnapshot(
                 programProfileSnapshot ?? null,
                 'program.profileSnapshot',
@@ -2339,40 +2342,73 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   md = null
                 }
               }
-              if (!md || !md.renderLabel) return null
+              if (!md) return null
 
-              const ctx = md.source?.doctrineContextStatus ?? 'unavailable'
-              const isDegraded = md.status === 'degraded'
+              // [PHASE 4A] Strict gate: only proceed when the session has at
+              // least one real materialized change. Saved programs from
+              // before 4A may not have actualMaterialization on the stamp;
+              // recompute from the session in that case so this gate still
+              // works correctly for legacy programs.
+              const am =
+                md.actualMaterialization ??
+                (() => {
+                  try {
+                    const recomputed = deriveMethodDecisionForSession({
+                      session: session as unknown as MethodDecisionSessionInput,
+                      runtimeContract: null,
+                      decisionContext: null,
+                      trainingGoal: typeof primaryGoal === 'string' ? primaryGoal : null,
+                      profileContext: bridgeProfileContext,
+                    })
+                    return recomputed?.actualMaterialization ?? null
+                  } catch {
+                    return null
+                  }
+                })()
+
+              if (!am || !am.hasRealStructuralChange) {
+                // Honest hide: no structural change → no doctrine claim.
+                return null
+              }
+
               const profileSrc = md.profileInfluence?.source ?? 'legacyFallback'
               const profileAware = profileSrc !== 'legacyFallback'
               const isStaleProgram =
                 !!stamped && (!methodDecisionVersion || methodDecisionVersion !== METHOD_DECISION_VERSION)
-              const isPreStampLegacy = bridged && !profileAware
 
-              const whyLine = md.renderSummary
+              // Build the visible label from REAL counts.
+              const labelParts: string[] = []
+              if (am.groupedMethodCounts.density_block > 0) labelParts.push('Density Block')
+              if (am.groupedMethodCounts.superset > 0) labelParts.push('Superset')
+              if (am.groupedMethodCounts.circuit > 0) labelParts.push('Circuit')
+              if (am.rowExecutionCounts.cluster > 0) labelParts.push('Cluster Set')
+              if (am.rowExecutionCounts.top_set > 0) labelParts.push('Top Set + Back-off')
+              if (am.rowExecutionCounts.drop_set > 0) labelParts.push('Drop Set')
+              if (am.rowExecutionCounts.rest_pause > 0) labelParts.push('Rest-pause')
+              const visibleLabel = labelParts.length === 1
+                ? labelParts[0]
+                : labelParts.length > 1
+                  ? `${labelParts.length} method${labelParts.length === 1 ? '' : 's'} applied`
+                  : 'Doctrine method'
+
               const driverLine = md.profileInfluence?.primaryDriverLine
               const avoidedLine = md.prescriptionIntent?.whyNotOtherMethods?.[0] ?? null
-              const batches = md.source?.doctrineBatchIds ?? []
 
-              // Tag word + tag class — keeps the strip honest about source.
+              // Tag word — only sources that correspond to ACTUAL structural change.
               let tagText: string | null = null
               let tagClass = 'text-[10px] uppercase tracking-wide font-medium'
-              if (isPreStampLegacy) {
-                tagText = 'legacy'
-                tagClass += ' text-amber-400/80'
-              } else if (bridged) {
-                tagText = 'bridged'
+              if (bridged && am.evidenceSource === 'derived_from_session') {
+                tagText = 'legacy program'
                 tagClass += ' text-amber-400/80'
               } else if (isStaleProgram) {
                 tagText = 'stale stamp'
                 tagClass += ' text-amber-400/80'
-              } else if (isDegraded) {
-                tagText = 'degraded'
-                tagClass += ' text-amber-400/80'
-              } else if (ctx === 'active') {
-                tagText = profileAware ? 'profile-driven' : 'doctrine'
+              } else if (profileAware) {
+                tagText = 'profile-driven'
                 tagClass += ' text-emerald-400/90'
               }
+
+              const isLegacyEvidence = am.evidenceSource === 'derived_from_session' && !stamped
 
               return (
                 <div
@@ -2380,27 +2416,29 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   data-doctrine-decision="true"
                   data-method-id={md.methodId}
                   data-profile-source={profileSrc}
+                  data-render-mode={am.dominantRenderMode}
+                  data-grouped-block-count={am.groupedBlockCount}
+                  data-changed-exercise-count={am.changedExerciseCount}
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-[10px] uppercase tracking-[0.08em] text-[#E63946]/80 font-semibold">
-                      Doctrine Decision
+                      Doctrine Materialization
                     </span>
                     <span className="inline-flex items-center px-2 py-0.5 rounded-md border border-[#E63946]/40 bg-[#E63946]/10 text-[12px] font-semibold text-[#E63946]">
-                      {md.renderLabel}
+                      {visibleLabel}
                     </span>
-                    {batches.length > 0 && (
-                      <span className="text-[10px] text-[#6A6A6A] uppercase tracking-wide">
-                        {batches.includes('batch_10') ? 'Batch 10' : `${batches.length} batch${batches.length === 1 ? '' : 'es'}`}
-                      </span>
-                    )}
+                    <span className="text-[10px] text-[#6A6A6A] uppercase tracking-wide">
+                      {am.changedExerciseCount} exercise{am.changedExerciseCount === 1 ? '' : 's'} changed
+                    </span>
                     {tagText && <span className={tagClass}>{tagText}</span>}
                   </div>
 
-                  {whyLine && (
-                    <p className="text-[12px] text-[#C8C8C8] leading-snug">
-                      <span className="text-[#9A9A9A]">Why:</span> {whyLine}
+                  {/* Concrete change-set evidence — every line cites a real count. */}
+                  {am.structuralChangeDescriptions.slice(0, 3).map((line, i) => (
+                    <p key={i} className="text-[12px] text-[#C8C8C8] leading-snug">
+                      <span className="text-[#9A9A9A]">Applied:</span> {line}
                     </p>
-                  )}
+                  ))}
 
                   {driverLine && (
                     <p className="text-[12px] text-[#A8A8A8] leading-snug">
@@ -2414,9 +2452,9 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                     </p>
                   )}
 
-                  {isPreStampLegacy && (
+                  {isLegacyEvidence && (
                     <p className="text-[10px] text-amber-300/70 leading-snug">
-                      This saved program predates profile-aware method decisions. Regenerate to apply Phase 3C decisions across all sessions.
+                      Materialization read from legacy session fields. Regenerate to receive a freshly profile-aware doctrine stamp.
                     </p>
                   )}
                 </div>

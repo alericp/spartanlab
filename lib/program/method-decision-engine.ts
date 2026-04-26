@@ -188,10 +188,72 @@ export interface MethodDecision {
   prescriptionIntent: MethodDecisionPrescriptionIntent
   /** [PHASE 3C] Profile-truth influence on this decision. Always present. */
   profileInfluence: MethodDecisionProfileInfluence
+  /**
+   * [PHASE 4A] Authoritative read-only verdict of what ACTUALLY MATERIALIZED on
+   * this session — derived from `session.styleMetadata.methodMaterializationSummary`
+   * (the builder-locked single source of truth) when present, otherwise
+   * computed from the same raw fields the builder used. This is the field the
+   * Program card MUST gate the visible "Doctrine Decision" panel on, so the
+   * panel never claims doctrine on sessions whose structure is purely flat
+   * straight sets (the fake-proof failure mode of pre-4A Phase 3C). Always
+   * present; check `hasRealStructuralChange` before presenting.
+   */
+  actualMaterialization: MethodDecisionActualMaterialization
   renderLabel: string
   renderSummary: string
   /** Stable machine-readable code for tests / analytics. */
   debugCode: string
+}
+
+/**
+ * [PHASE 4A] Concrete, citable evidence of what actually materialized on the
+ * session. Every field is a count/list of fields that ALREADY exist on the
+ * session (styledGroups, blockId, setExecutionMethod, clusterDecision). No
+ * field is invented. The card uses these counts to render honest sentences
+ * like "Density Block applied · 3 accessories grouped" — never abstract
+ * "doctrine" claims.
+ */
+export interface MethodDecisionActualMaterialization {
+  /**
+   * True iff the session has at least one renderable grouped block OR a
+   * row-level set-execution method (cluster / top_set / drop_set / rest_pause).
+   * False for genuinely flat straight-set sessions — in which case the card
+   * MUST hide the doctrine panel rather than claim doctrine fired.
+   */
+  hasRealStructuralChange: boolean
+  /** Single authoritative render mode the user actually sees. */
+  dominantRenderMode: 'grouped' | 'flat_with_method_cues' | 'flat'
+  /** Count of renderable grouped blocks (superset + circuit + density_block). */
+  groupedBlockCount: number
+  /** Per-method renderable grouped block counts. */
+  groupedMethodCounts: {
+    superset: number
+    circuit: number
+    density_block: number
+  }
+  /** Per-method row-level set-execution counts (rows OUTSIDE renderable groups). */
+  rowExecutionCounts: {
+    cluster: number
+    top_set: number
+    drop_set: number
+    rest_pause: number
+  }
+  /** Total number of exercises that participate in any non-straight materialization. */
+  changedExerciseCount: number
+  /**
+   * Compact, plain-English description of WHAT structurally changed — read by
+   * the card. Empty array when `hasRealStructuralChange === false`.
+   * Examples:
+   *   "Density Block applied — 3 accessory exercises grouped"
+   *   "Top set + Back-off applied to Weighted Pull-Up"
+   *   "Cluster set applied to Front Lever Tuck"
+   */
+  structuralChangeDescriptions: string[]
+  /** Where the materialization summary came from. */
+  evidenceSource:
+    | 'builder_session_summary'   // session.styleMetadata.methodMaterializationSummary
+    | 'derived_from_session'      // computed on read from styledGroups + exercises
+    | 'unavailable'               // session has no usable signals
 }
 
 /**
@@ -928,6 +990,265 @@ function buildProfileInfluence(
 }
 
 // =============================================================================
+// [PHASE 4A] ACTUAL-MATERIALIZATION READER
+// Reads session.styleMetadata.methodMaterializationSummary (the builder's
+// canonical, post-materialization single source of truth) when present.
+// Falls back to a direct count of styledGroups + per-exercise blockId/
+// setExecutionMethod for legacy programs where the builder did not stamp the
+// summary. EVERY field cited here is a real, already-existing field — no
+// invention. Pure function; does not mutate the session.
+// =============================================================================
+
+function buildActualMaterialization(
+  session: MethodDecisionSessionInput,
+): MethodDecisionActualMaterialization {
+  const sm = (session as unknown as {
+    styleMetadata?: {
+      methodMaterializationSummary?: {
+        groupedStructurePresent?: boolean
+        rowLevelMethodCuesPresent?: boolean
+        dominantRenderMode?: 'grouped' | 'flat_with_method_cues' | 'flat'
+        groupedBlockCount?: number
+        groupedMethodCounts?: {
+          superset?: number
+          circuit?: number
+          density_block?: number
+          cluster?: number
+        }
+        rowExecutionCounts?: {
+          superset?: number
+          circuit?: number
+          density?: number
+          cluster?: number
+          top_set?: number
+          drop_set?: number
+          rest_pause?: number
+        }
+      } | null
+      styledGroups?: Array<{
+        groupType?: string | null
+        exercises?: Array<{ name?: string | null }> | null
+      }> | null
+      clusterDecision?: {
+        targetExerciseId?: string | null
+        targetExerciseName?: string | null
+      } | null
+    } | null
+  }).styleMetadata ?? null
+
+  const exercises = (session as unknown as { exercises?: Array<{
+    name?: string | null
+    blockId?: string | null
+    method?: string | null
+    setExecutionMethod?: string | null
+  }> }).exercises ?? []
+
+  // ---- PATH 1: builder-locked summary present (post-3F builds) -----------
+  const summary = sm?.methodMaterializationSummary ?? null
+  if (summary && typeof summary === 'object') {
+    const groupedSuperset = summary.groupedMethodCounts?.superset ?? 0
+    const groupedCircuit = summary.groupedMethodCounts?.circuit ?? 0
+    const groupedDensity = summary.groupedMethodCounts?.density_block ?? 0
+    const rowCluster = summary.rowExecutionCounts?.cluster ?? 0
+    const rowTopSet = summary.rowExecutionCounts?.top_set ?? 0
+    const rowDropSet = summary.rowExecutionCounts?.drop_set ?? 0
+    const rowRestPause = summary.rowExecutionCounts?.rest_pause ?? 0
+    const groupedBlockCount = summary.groupedBlockCount ?? (groupedSuperset + groupedCircuit + groupedDensity)
+    const dominant = summary.dominantRenderMode ?? (
+      groupedBlockCount > 0 ? 'grouped'
+      : (rowCluster + rowTopSet + rowDropSet + rowRestPause) > 0 ? 'flat_with_method_cues'
+      : 'flat'
+    )
+    const hasReal = dominant !== 'flat'
+
+    // Count exercises that materially changed (have a blockId in a renderable
+    // grouped block OR carry a setExecutionMethod). This is a count of REAL
+    // mutated fields on session.exercises.
+    let changedExerciseCount = 0
+    const blockIdsSeen = new Set<string>()
+    for (const ex of exercises) {
+      if (ex && typeof ex.blockId === 'string' && ex.blockId.length > 0) {
+        blockIdsSeen.add(ex.blockId)
+        changedExerciseCount += 1
+        continue
+      }
+      const sx = ex?.setExecutionMethod
+      if (typeof sx === 'string' && sx.length > 0 && sx !== 'straight' && sx !== 'straight_sets') {
+        changedExerciseCount += 1
+      }
+    }
+
+    const descriptions: string[] = []
+    if (groupedDensity > 0) {
+      descriptions.push(
+        `Density Block applied — ${groupedDensity === 1 ? 'one block' : `${groupedDensity} blocks`} of accessory exercises grouped under a timed work cap`,
+      )
+    }
+    if (groupedSuperset > 0) {
+      descriptions.push(
+        `Superset applied — ${groupedSuperset === 1 ? 'one paired block' : `${groupedSuperset} paired blocks`} with minimal rest between movements`,
+      )
+    }
+    if (groupedCircuit > 0) {
+      descriptions.push(
+        `Circuit applied — ${groupedCircuit === 1 ? 'one round-based block' : `${groupedCircuit} round-based blocks`} with rest after the full round`,
+      )
+    }
+    if (rowCluster > 0) {
+      const target = sm?.clusterDecision?.targetExerciseName
+      descriptions.push(
+        target
+          ? `Cluster set applied to ${target} — short intra-set rest to preserve quality`
+          : `Cluster set applied — short intra-set rest to preserve quality on ${rowCluster} exercise${rowCluster === 1 ? '' : 's'}`,
+      )
+    }
+    if (rowTopSet > 0) {
+      descriptions.push(
+        `Top set + Back-off applied to ${rowTopSet} exercise${rowTopSet === 1 ? '' : 's'} — quality load with controlled volume`,
+      )
+    }
+    if (rowDropSet > 0) {
+      descriptions.push(
+        `Drop set applied to ${rowDropSet} exercise${rowDropSet === 1 ? '' : 's'} — extended single-set work via load reduction`,
+      )
+    }
+    if (rowRestPause > 0) {
+      descriptions.push(
+        `Rest-pause applied to ${rowRestPause} exercise${rowRestPause === 1 ? '' : 's'} — short pause sets within a target rep total`,
+      )
+    }
+
+    return {
+      hasRealStructuralChange: hasReal,
+      dominantRenderMode: dominant,
+      groupedBlockCount,
+      groupedMethodCounts: {
+        superset: groupedSuperset,
+        circuit: groupedCircuit,
+        density_block: groupedDensity,
+      },
+      rowExecutionCounts: {
+        cluster: rowCluster,
+        top_set: rowTopSet,
+        drop_set: rowDropSet,
+        rest_pause: rowRestPause,
+      },
+      changedExerciseCount,
+      structuralChangeDescriptions: descriptions,
+      evidenceSource: 'builder_session_summary',
+    }
+  }
+
+  // ---- PATH 2: derive from raw session fields (legacy builds) -------------
+  // Mirrors the visible adapter's MIN_MEMBERS=2 + cluster-stripping rules.
+  let supersetGroups = 0
+  let circuitGroups = 0
+  let densityGroups = 0
+  const styledGroups = sm?.styledGroups ?? []
+  for (const g of styledGroups) {
+    const t = (g?.groupType ?? '').toLowerCase()
+    if (!t || t === 'straight' || t === 'cluster') continue
+    const usable = (g?.exercises ?? []).filter(m => typeof m?.name === 'string' && m!.name!.trim().length >= 2)
+    if (usable.length < 2) continue
+    if (t === 'superset') supersetGroups += 1
+    else if (t === 'circuit') circuitGroups += 1
+    else if (t === 'density' || t === 'density_block') densityGroups += 1
+  }
+  let rowCluster = 0
+  let rowTopSet = 0
+  let rowDropSet = 0
+  let rowRestPause = 0
+  let changed = 0
+  for (const ex of exercises) {
+    const sx = (ex?.setExecutionMethod ?? '').toLowerCase()
+    if (sx === 'cluster' || sx === 'cluster_sets' || sx === 'cluster_set') { rowCluster += 1; changed += 1 }
+    else if (sx === 'top_set' || sx === 'top-set') { rowTopSet += 1; changed += 1 }
+    else if (sx === 'drop_set' || sx === 'drop-set') { rowDropSet += 1; changed += 1 }
+    else if (sx === 'rest_pause' || sx === 'rest-pause') { rowRestPause += 1; changed += 1 }
+    else if (typeof ex?.blockId === 'string' && ex.blockId.length > 0) { changed += 1 }
+  }
+  // Cluster sidecar evidence — when builder wrote clusterDecision but per-row
+  // tag was stripped on save.
+  if (
+    rowCluster === 0 &&
+    sm?.clusterDecision &&
+    typeof sm.clusterDecision.targetExerciseId === 'string' &&
+    sm.clusterDecision.targetExerciseId.length > 0
+  ) {
+    rowCluster = 1
+  }
+
+  const groupedBlockCount = supersetGroups + circuitGroups + densityGroups
+  const dominant: 'grouped' | 'flat_with_method_cues' | 'flat' =
+    groupedBlockCount > 0 ? 'grouped'
+    : (rowCluster + rowTopSet + rowDropSet + rowRestPause) > 0 ? 'flat_with_method_cues'
+    : 'flat'
+  const hasReal = dominant !== 'flat'
+
+  const descriptions: string[] = []
+  if (densityGroups > 0) {
+    descriptions.push(
+      `Density Block applied — ${densityGroups === 1 ? 'one block' : `${densityGroups} blocks`} of accessory exercises grouped under a timed work cap`,
+    )
+  }
+  if (supersetGroups > 0) {
+    descriptions.push(
+      `Superset applied — ${supersetGroups === 1 ? 'one paired block' : `${supersetGroups} paired blocks`} with minimal rest between movements`,
+    )
+  }
+  if (circuitGroups > 0) {
+    descriptions.push(
+      `Circuit applied — ${circuitGroups === 1 ? 'one round-based block' : `${circuitGroups} round-based blocks`} with rest after the full round`,
+    )
+  }
+  if (rowCluster > 0) {
+    const target = sm?.clusterDecision?.targetExerciseName
+    descriptions.push(
+      target
+        ? `Cluster set applied to ${target} — short intra-set rest to preserve quality`
+        : `Cluster set applied — short intra-set rest to preserve quality on ${rowCluster} exercise${rowCluster === 1 ? '' : 's'}`,
+    )
+  }
+  if (rowTopSet > 0) {
+    descriptions.push(
+      `Top set + Back-off applied to ${rowTopSet} exercise${rowTopSet === 1 ? '' : 's'} — quality load with controlled volume`,
+    )
+  }
+  if (rowDropSet > 0) {
+    descriptions.push(
+      `Drop set applied to ${rowDropSet} exercise${rowDropSet === 1 ? '' : 's'} — extended single-set work via load reduction`,
+    )
+  }
+  if (rowRestPause > 0) {
+    descriptions.push(
+      `Rest-pause applied to ${rowRestPause} exercise${rowRestPause === 1 ? '' : 's'} — short pause sets within a target rep total`,
+    )
+  }
+
+  return {
+    hasRealStructuralChange: hasReal,
+    dominantRenderMode: dominant,
+    groupedBlockCount,
+    groupedMethodCounts: {
+      superset: supersetGroups,
+      circuit: circuitGroups,
+      density_block: densityGroups,
+    },
+    rowExecutionCounts: {
+      cluster: rowCluster,
+      top_set: rowTopSet,
+      drop_set: rowDropSet,
+      rest_pause: rowRestPause,
+    },
+    changedExerciseCount: changed,
+    structuralChangeDescriptions: descriptions,
+    evidenceSource: hasReal || styledGroups.length > 0 || exercises.length > 0
+      ? 'derived_from_session'
+      : 'unavailable',
+  }
+}
+
+// =============================================================================
 // MAIN ENGINE
 // =============================================================================
 
@@ -1091,6 +1412,15 @@ export function deriveMethodDecisionForSession(
   // rationale, so the rendered card surfaces the user-specific driver first.
   const whyWithProfile: string[] = [...profileInfluence.influenceReasons, ...whyThis]
 
+  // [PHASE 4A] Read-only verdict of what actually materialized on the session.
+  // Computed from session.styleMetadata.methodMaterializationSummary or, on
+  // legacy programs, from raw styledGroups + per-exercise blockId/
+  // setExecutionMethod fields. The card uses this to gate the visible
+  // doctrine panel — a session whose actualMaterialization.hasRealStructuralChange
+  // is false MUST NOT have a "Doctrine Decision" panel rendered, because that
+  // would be a fake-proof claim against an unchanged straight-set session.
+  const actualMaterialization = buildActualMaterialization(session)
+
   // --- finalize -------------------------------------------------------------
   const renderLabel = buildRenderLabel(materialized.methodId)
   const renderSummary = buildRenderSummary(materialized.methodId, category, whyWithProfile)
@@ -1119,9 +1449,10 @@ export function deriveMethodDecisionForSession(
       timeEfficiencyNotes: timeNotes.slice(0, 3),
     },
     profileInfluence,
+    actualMaterialization,
     renderLabel,
     renderSummary,
-    debugCode: `${materialized.debugCode}|cat:${safeCategory}|ctx:${contextStatus}|conf:${confidence}|prof:${profileInfluence.source}|skills:${profileInfluence.selectedSkillsUsed.length}`,
+    debugCode: `${materialized.debugCode}|cat:${safeCategory}|ctx:${contextStatus}|conf:${confidence}|prof:${profileInfluence.source}|skills:${profileInfluence.selectedSkillsUsed.length}|matz:${actualMaterialization.dominantRenderMode}|grp:${actualMaterialization.groupedBlockCount}|chg:${actualMaterialization.changedExerciseCount}`,
   }
 
   return decision
@@ -1149,6 +1480,27 @@ export interface MethodDecisionStampSummary {
   methodDecisionVersion: string
   /** [PHASE 3C] Stamp timestamp (ISO). */
   methodDecisionStampedAt: string
+  /**
+   * [PHASE 4A] Program-wide roll-up of ACTUAL structural changes the builder
+   * materialized — used by the UI to (a) gate honest visible proof and
+   * (b) detect "all-flat" programs that need to be regenerated rather than
+   * labeled as doctrine-driven. Every count is read from already-existing
+   * fields on session.exercises / styledGroups / clusterDecision.
+   */
+  materialization: {
+    sessionsWithStructuralChange: number
+    totalGroupedBlocks: number
+    totalGroupedSupersets: number
+    totalGroupedCircuits: number
+    totalGroupedDensityBlocks: number
+    totalRowCluster: number
+    totalRowTopSet: number
+    totalRowDropSet: number
+    totalRowRestPause: number
+    totalChangedExercises: number
+    /** True when EVERY session is flat — useful for the UI to surface a regenerate nudge. */
+    allSessionsFlat: boolean
+  }
 }
 
 export interface StampMethodDecisionsOptions {
@@ -1169,6 +1521,18 @@ export function stampMethodDecisionsOnSessions(
   const batchSet = new Set<string>()
   let attached = 0
   let profileInfluenced = 0
+
+  // [PHASE 4A] Program-wide structural-materialization roll-up counters.
+  let sessionsWithStructuralChange = 0
+  let totalGroupedBlocks = 0
+  let totalGroupedSupersets = 0
+  let totalGroupedCircuits = 0
+  let totalGroupedDensityBlocks = 0
+  let totalRowCluster = 0
+  let totalRowTopSet = 0
+  let totalRowDropSet = 0
+  let totalRowRestPause = 0
+  let totalChangedExercises = 0
 
   const ctxStatus: MethodDecisionContextStatus =
     !runtimeContract || runtimeContract.available !== true || (decisionContext?.sourceMode ?? 'unavailable') === 'unavailable'
@@ -1194,6 +1558,17 @@ export function stampMethodDecisionsOnSessions(
       if ((decision.profileInfluence.influenceReasons?.length ?? 0) > 0) {
         profileInfluenced += 1
       }
+      const am = decision.actualMaterialization
+      if (am.hasRealStructuralChange) sessionsWithStructuralChange += 1
+      totalGroupedBlocks += am.groupedBlockCount
+      totalGroupedSupersets += am.groupedMethodCounts.superset
+      totalGroupedCircuits += am.groupedMethodCounts.circuit
+      totalGroupedDensityBlocks += am.groupedMethodCounts.density_block
+      totalRowCluster += am.rowExecutionCounts.cluster
+      totalRowTopSet += am.rowExecutionCounts.top_set
+      totalRowDropSet += am.rowExecutionCounts.drop_set
+      totalRowRestPause += am.rowExecutionCounts.rest_pause
+      totalChangedExercises += am.changedExerciseCount
     }
   }
 
@@ -1210,6 +1585,19 @@ export function stampMethodDecisionsOnSessions(
       profileInfluencedDecisions: profileInfluenced,
       methodDecisionVersion: METHOD_DECISION_VERSION,
       methodDecisionStampedAt: new Date().toISOString(),
+      materialization: {
+        sessionsWithStructuralChange,
+        totalGroupedBlocks,
+        totalGroupedSupersets,
+        totalGroupedCircuits,
+        totalGroupedDensityBlocks,
+        totalRowCluster,
+        totalRowTopSet,
+        totalRowDropSet,
+        totalRowRestPause,
+        totalChangedExercises,
+        allSessionsFlat: attached > 0 && sessionsWithStructuralChange === 0,
+      },
     },
   }
 }

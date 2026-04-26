@@ -154,6 +154,10 @@ import { GroupedProgramScannerStrip } from '@/components/program/GroupedProgramS
 // ProgramDisplayWrapper, which is the single canonical render point for every
 // visible program surface, so a static import cannot widen the render graph.
 import { ProgramTruthSummary } from '@/components/programs/ProgramTruthSummary'
+// [PHASE 4B] Single visible stale-program notice + "Regenerate with Doctrine"
+// action. Lightweight, null-tolerant, hides on fresh programs, calls only the
+// existing canonical onRegenerate handler — no second route, no second builder.
+import { ProgramMaterializationStaleNotice } from '@/components/programs/ProgramMaterializationStaleNotice'
 // [VISIBLE-SESSION-TRUTH-LOCK] Single canonical visible-card display contract.
 // The page-level CanonicalProgramDisplayTruth now embeds these surfaces so
 // every visible day card consumes one authoritative contract owned by the
@@ -1398,6 +1402,25 @@ function ProgramDisplayWrapper({
 
   return (
     <div>
+      {/* ==========================================================================
+          [PHASE 4B] PROGRAM MATERIALIZATION STALE NOTICE
+          Renders ONLY when the saved program either lacks the current Phase 4A
+          materialization stamp on `program.doctrineIntegration` or the stamp
+          flagged the build as `allSessionsFlat`. Provides a single
+          "Regenerate with Doctrine" action that calls the EXISTING canonical
+          `onRegenerate` handler (handleRegenerate → /api/program/regenerate
+          → executeAuthoritativeGeneration). On success, the page calls
+          setProgram(newProgram) which causes this notice to re-evaluate its
+          state and hide itself. No new route, no new builder, no second
+          normalizer. Hides entirely on fresh, materialized programs so it
+          never claims doctrine on a stale program nor adds clutter to a
+          fresh one.
+          ========================================================================== */}
+      <ProgramMaterializationStaleNotice
+        program={program}
+        onRegenerate={onRegenerate}
+      />
+
       {/* ==========================================================================
           [PROGRAM-TRUTH-SURFACE-CONNECTION-LOCK] Visible authoritative truth.
           Consumes the single canonical `resolvedTruthExplanation` computed

@@ -30,6 +30,23 @@
  * NO IMPORT of `localStorage`, `window`, `fetch`, React, or anything stateful.
  */
 
+// [PHASE-O] Optional trend / coach-decision context. Pure deterministic layer
+// that lives in lib/program/performance-trend-intelligence-contract.ts. The
+// trend layer RECOMMENDS only — Phase L still owns final numeric mutation +
+// safety bounds. Imported here so a single mutation/stamp can carry the
+// trend proof slice that the Program card renders under the existing chip.
+import {
+  analyzePerformanceTrends,
+  deriveCoachDecisionsFromPerformanceTrends,
+  pickCoachDecisionStamp,
+  pickExerciseTrendStamp,
+  type CoachDecision,
+  type CoachDecisionStamp,
+  type ExerciseTrend,
+  type ExerciseTrendStamp,
+  type PerformanceTrendIntelligence,
+} from './performance-trend-intelligence-contract'
+
 // =============================================================================
 // PUBLIC TYPES
 // =============================================================================
@@ -149,6 +166,19 @@ export interface FuturePrescriptionMutation {
   safetyLevel: SafetyLevel
   shouldApply: boolean
   blockedReason?: string
+  /**
+   * [PHASE-O] Optional trend-intelligence slice for the affected exercise.
+   * Attached by `resolvePerformanceFeedbackAdaptation` when persistent
+   * multi-session evidence produces a deterministic trend. The mutator
+   * carries this through to the on-exercise stamp so the Program card can
+   * render concise proof under the existing chip without any parallel UI.
+   */
+  trendIntelligence?: ExerciseTrendStamp
+  /**
+   * [PHASE-O] Optional coach-decision slice. Recommend only; the resolver
+   * remains the final mutation owner and obeys its own safety bounds.
+   */
+  coachDecision?: CoachDecisionStamp
 }
 
 export type AdaptationStatus =
@@ -175,6 +205,15 @@ export interface PerformanceFeedbackAdaptationResult {
   summary: string
   blockedReasons: string[]
   proof: PerformanceFeedbackAdaptationProof
+  /**
+   * [PHASE-O] Persistent multi-session trend intelligence + coach
+   * decisions, computed deterministically from the same evidence the
+   * resolver consumes. Optional for backwards compatibility with callers
+   * that haven't been recompiled. Phase L mutation outputs and bounds are
+   * UNCHANGED — this slice is additive proof.
+   */
+  trendIntelligence?: PerformanceTrendIntelligence
+  coachDecisions?: CoachDecision[]
 }
 
 // Minimal AdaptiveExercise / AdaptiveSession / AdaptiveProgram shapes needed
@@ -254,6 +293,23 @@ export interface ExercisePerformanceAdaptationStamp {
    *  exercise already carries an adaptation for the exact same evidence and
    *  skip re-mutation. Optional for backwards compatibility. */
   evidenceHash?: string
+  /**
+   * [PHASE-O] Trend-intelligence slice — the multi-session pattern the
+   * deterministic trend layer detected for THIS exercise (e.g. repeated_high_rpe
+   * across straight-arm work, stable_on_target on weighted dips). Optional;
+   * absent on rows where the trend layer had insufficient repeated evidence
+   * OR where the resolver wasn't yet trend-aware. The Program card renders a
+   * concise "Trend: …" line beneath the existing chip when present.
+   */
+  trendIntelligence?: ExerciseTrendStamp
+  /**
+   * [PHASE-O] Coach-decision slice — the action the trend layer recommends
+   * (hold_progression / lower_rpe_target / extend_rest / small_progression /
+   * maintain_and_monitor / insufficient_data_no_change). The numeric
+   * mutation that actually shipped is still owned by Phase L safety bounds.
+   * Optional for backwards compatibility.
+   */
+  coachDecision?: CoachDecisionStamp
 }
 
 export interface PerformanceFeedbackInput {
@@ -797,6 +853,21 @@ export function deriveFuturePrescriptionMutations(
   signals: PerformanceSignal[],
   program: PhaseLProgramShape,
   completedDayNumbers: number[],
+  /**
+   * [PHASE-O] Optional trend / coach context keyed by lower(exerciseName).
+   * When present, the resolver:
+   *   - attaches the trend / coach stamp to each mutation it produces, so
+   *     the on-exercise `performanceAdaptation` stamp can carry both the
+   *     numeric change AND the trend reason chain.
+   *   - suppresses aggressive numeric trims when the trend layer reports
+   *     `single_acute_event` for the same exercise (one bad set in window
+   *     does not justify a volume cut). Pain-warning mutations are NEVER
+   *     suppressed by trend context.
+   */
+  trendContext?: {
+    trendByExerciseKey: Map<string, ExerciseTrend>
+    coachByExerciseKey: Map<string, CoachDecision>
+  },
 ): FuturePrescriptionMutation[] {
   if (!program || !Array.isArray(program.sessions) || program.sessions.length === 0) {
     return []
@@ -1018,6 +1089,48 @@ export function deriveFuturePrescriptionMutations(
       blockedReason = undefined
     }
 
+    // [PHASE-O] Trend-aware suppression: if the trend layer says this
+    // exercise has only an isolated acute event in the recent window, do
+    // NOT cut volume on top of one bad set — the existing chip + a
+    // recovery note still carry honest proof. Pain-warning signals are
+    // never suppressed (joint safety wins). Skill / tension-limiter
+    // signals also bypass suppression because they encode a doctrine
+    // protective decision, not just a fatigue dip.
+    let trendStamp: ExerciseTrendStamp | undefined
+    let coachStamp: CoachDecisionStamp | undefined
+    if (trendContext) {
+      const trend = trendContext.trendByExerciseKey.get(lower(match.exercise.name))
+        ?? trendContext.trendByExerciseKey.get(lower(signal.exerciseName))
+      const decision = trendContext.coachByExerciseKey.get(lower(match.exercise.name))
+        ?? trendContext.coachByExerciseKey.get(lower(signal.exerciseName))
+      if (trend) trendStamp = pickExerciseTrendStamp(trend)
+      if (decision) coachStamp = pickCoachDecisionStamp(decision)
+
+      const trendIsIsolatedAcute =
+        trend?.reasonCodes.includes('single_acute_event') ||
+        (trend !== undefined && trend.setCount < 2 && !trend.trendCodes.includes('repeated_high_rpe'))
+      const safeToSuppress =
+        !isPainSignal &&
+        signal.signalType !== 'note_tension_warning' &&
+        signal.signalType !== 'repeated_skill_fatigue'
+
+      if (trendIsIsolatedAcute && safeToSuppress && mutationType === 'reduce_next_exposure_volume') {
+        // Demote a volume cut into a recovery-note-only outcome and revert
+        // the numeric `after` to `before`. The chip still appears so the
+        // user sees we are tracking the rough set; we just don't trim the
+        // future prescription off one isolated event.
+        mutationType = 'add_recovery_note_only'
+        after = { ...before }
+        bounds.push('phase_o_isolated_acute_suppression')
+        reasonCodes.push('phase_o_single_acute_event_demoted')
+        userVisible =
+          'Tracked one rough set on last exposure — keeping next exposure as prescribed and monitoring.'
+        safetyLevel = 'safe'
+        shouldApply = true
+        blockedReason = undefined
+      }
+    }
+
     mutations.push({
       targetDayNumber: match.dayNumber,
       targetExerciseId: match.exercise.id,
@@ -1032,6 +1145,8 @@ export function deriveFuturePrescriptionMutations(
       safetyLevel,
       shouldApply,
       blockedReason,
+      trendIntelligence: trendStamp,
+      coachDecision: coachStamp,
     })
     if (shouldApply) claimed.add(claimKey)
   }
@@ -1135,6 +1250,12 @@ export function applyFuturePrescriptionMutations<T extends PhaseLProgramShape>(
         // 'client' / undefined so legacy callers keep working unchanged.
         appliedBy: stampProvenance?.appliedBy,
         evidenceHash: stampProvenance?.evidenceHash,
+        // [PHASE-O] Trend / coach proof slices, when the mutation was
+        // produced with trend context. Absent on legacy mutations so the
+        // existing chip rendering path is byte-identical for older saved
+        // programs.
+        trendIntelligence: m.trendIntelligence,
+        coachDecision: m.coachDecision,
       }
 
       // Spread original first so we never drop unknown fields, then assign
@@ -1243,7 +1364,33 @@ export function resolvePerformanceFeedbackAdaptation(
   const completedDayNumbers = Array.isArray(input.completedDayNumbers)
     ? input.completedDayNumbers
     : []
-  const mutations = deriveFuturePrescriptionMutations(signals, program, completedDayNumbers)
+
+  // [PHASE-O] Compute deterministic trend intelligence + coach decisions
+  // BEFORE deriving mutations so the resolver can:
+  //   1) attach the trend / coach slice to each mutation it produces
+  //   2) suppress aggressive numeric trims on isolated single-bad-set events
+  //
+  // The trend layer is pure / bounded / read-only and does not own any
+  // numeric mutation rule. Phase L safety bounds remain authoritative.
+  const trendIntelligence: PerformanceTrendIntelligence = analyzePerformanceTrends({
+    evidence,
+    nowIso: input.nowIso,
+  })
+  const coachDecisions: CoachDecision[] = deriveCoachDecisionsFromPerformanceTrends({
+    intelligence: trendIntelligence,
+    evidence,
+  })
+  const trendByExerciseKey = new Map<string, ExerciseTrend>()
+  for (const t of trendIntelligence.exerciseTrends) trendByExerciseKey.set(t.exerciseKey, t)
+  const coachByExerciseKey = new Map<string, CoachDecision>()
+  for (const c of coachDecisions) coachByExerciseKey.set(c.exerciseKey, c)
+
+  const mutations = deriveFuturePrescriptionMutations(
+    signals,
+    program,
+    completedDayNumbers,
+    { trendByExerciseKey, coachByExerciseKey },
+  )
   proof.mutationsApplied = mutations.filter((m) => m.shouldApply).length
   proof.mutationsBlocked = mutations.filter((m) => !m.shouldApply).length
 
@@ -1274,6 +1421,8 @@ export function resolvePerformanceFeedbackAdaptation(
     summary,
     blockedReasons,
     proof,
+    trendIntelligence,
+    coachDecisions,
   }
 }
 

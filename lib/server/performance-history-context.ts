@@ -96,6 +96,17 @@ export interface ServerOverlayResult<T extends PhaseLProgramShape> {
     sessionsRead: number
     signalCount: number
     status: PerformanceFeedbackAdaptationResult['status']
+    /**
+     * [PHASE-O] Trend layer audit fields. Empty / 0 when the trend layer
+     * found insufficient evidence — never fakes counts.
+     */
+    trendExerciseGroupCount: number
+    trendRepeatedPatternCount: number
+    trendIsolatedAcuteSuppressedCount: number
+    trendCautionFlagCount: number
+    trendProgressionReadyCount: number
+    trendOverallConfidence: 'low' | 'medium' | 'high'
+    trendSummary: string
   }
 }
 
@@ -265,6 +276,14 @@ export function applyServerPerformanceFeedbackOverlay<T extends PhaseLProgramSha
     sessionsRead: 0,
     signalCount: 0,
     status,
+    // [PHASE-O] Empty-state trend audit fields.
+    trendExerciseGroupCount: 0,
+    trendRepeatedPatternCount: 0,
+    trendIsolatedAcuteSuppressedCount: 0,
+    trendCautionFlagCount: 0,
+    trendProgressionReadyCount: 0,
+    trendOverallConfidence: 'low',
+    trendSummary: 'No trend evidence.',
   })
 
   if (!program || typeof program !== 'object' || !Array.isArray(program.sessions)) {
@@ -307,13 +326,22 @@ export function applyServerPerformanceFeedbackOverlay<T extends PhaseLProgramSha
     nowIso: options?.nowIso,
   })
 
-  const summary = {
+  const trendIntel = adaptation.trendIntelligence
+  const summary: ServerOverlayResult<T>['summary'] = {
     mutationsApplied: adaptation.proof.mutationsApplied,
     mutationsBlocked: adaptation.proof.mutationsBlocked,
     completedSetsRead: adaptation.proof.completedSetsRead,
     sessionsRead: adaptation.proof.sessionsRead,
     signalCount: adaptation.signals.length,
     status: adaptation.status,
+    // [PHASE-O] Real trend audit fields when intelligence is present.
+    trendExerciseGroupCount: trendIntel?.proof.exerciseGroupCount ?? 0,
+    trendRepeatedPatternCount: trendIntel?.proof.repeatedPatternCount ?? 0,
+    trendIsolatedAcuteSuppressedCount: trendIntel?.proof.isolatedAcuteSuppressedCount ?? 0,
+    trendCautionFlagCount: trendIntel?.cautionFlags.length ?? 0,
+    trendProgressionReadyCount: trendIntel?.progressionReadinessSignals.length ?? 0,
+    trendOverallConfidence: trendIntel?.confidence ?? 'low',
+    trendSummary: trendIntel?.trendSummary ?? 'No trend evidence.',
   }
 
   if (adaptation.proof.mutationsApplied === 0) {

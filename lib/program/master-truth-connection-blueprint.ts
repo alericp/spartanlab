@@ -1841,6 +1841,16 @@ export function buildMasterTruthConnectionBlueprintStatus(
     // overwrite anything earlier. The trace answers the user's question:
     // "is doctrine actually causal, or just acknowledged?"
     phaseQ(),
+    // [PHASE-R] Session-Length Truth Lock. Pure deterministic READER over
+    // `session.variants[]` (already produced by `generateSessionVariants`
+    // at build time). Stamps `session.sessionLengthTruth` and
+    // `program.sessionLengthTruth` BEFORE Phase Q runs so Phase Q's
+    // `evaluateSessionLength` can credit STRUCTURALLY_REAL shorts as
+    // ELIGIBLE_AND_APPLIED at the BUILDER stage. Does NOT build or mutate
+    // — repairs the previous PARTIALLY_CAUSAL session-length verdict by
+    // exposing the structural compression that was already happening
+    // upstream, never by inventing it.
+    phaseR(),
   ]
 
   // Active phase = the first phase whose status is not COMPLETE / DO_NOT_REDO.

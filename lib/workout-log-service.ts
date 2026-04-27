@@ -83,6 +83,14 @@ export interface WorkoutLog {
     flags: string[]
     freeText: string
   }[]
+  // [PHASE-L] Optional per-set ledger preserved at log time so future
+  // performance-feedback adaptation has actualReps/actualHold/actualRPE/note
+  // per set rather than only the per-exercise summary. The shape is the
+  // canonical CompletedSetEvidence contract from
+  // lib/program/performance-feedback-adaptation-contract.ts. Always optional
+  // — older logs that pre-date Phase L simply do not carry this field, and
+  // the contract falls back to per-exercise summary in that case.
+  completedSetEvidence?: import('./program/performance-feedback-adaptation-contract').CompletedSetEvidence[]
 }
 
 const STORAGE_KEY = 'spartanlab_workout_logs'
@@ -226,6 +234,8 @@ interface QuickLogInput {
   sourceRoute?: 'workout_session' | 'first_session' | 'quick_log' | 'demo'
   // [EXECUTION-TRUTH-FIX] Exercise-level notes and flags
   exerciseNotes?: WorkoutLog['exerciseNotes']
+  // [PHASE-L] Optional per-set evidence ledger — preserved verbatim if provided.
+  completedSetEvidence?: WorkoutLog['completedSetEvidence']
 }
 
 /**
@@ -265,6 +275,8 @@ export function quickLogWorkout(input: QuickLogInput): WorkoutLog {
     exercises: input.exercises || [], // Include exercise-level outcomes
     // [EXECUTION-TRUTH-FIX] Include exercise-level notes
     exerciseNotes: input.exerciseNotes,
+    // [PHASE-L] Pass through per-set evidence ledger when caller supplies it.
+    completedSetEvidence: input.completedSetEvidence,
     // FEEDBACK LOOP fields
     completionStatus: input.completionStatus || 'completed',
     trusted,

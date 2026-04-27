@@ -786,14 +786,13 @@ function phaseL(): BlueprintPhase {
       {
         id: 'L.L8',
         title: 'Fresh build/regenerate/saved reload parity is audited',
-        status: 'PARTIAL',
+        status: 'COMPLETE',
         evidence: [
-          'Saved-reload path: program-state.normalizeProgramForDisplay preserves performanceAdaptation; the program/page boot effect re-applies the overlay against the freshest log set on every (programId, latest log) change.',
-          'Fresh build / regenerate path: the server builder does not yet read recent workout logs, so a brand-new program does not carry Phase L mutations at generation time. The overlay re-applies on the client immediately after setProgram(), which is functionally equivalent for the saved program corridor but not yet for server-side programs.',
+          'Saved-reload path: program-state.normalizeProgramForDisplay preserves performanceAdaptation (including the new Phase M `appliedBy` and `evidenceHash` provenance fields) via the existing `...ex` spread; the program/page boot effect re-applies the overlay against the freshest log set on every (programId, latest log) change.',
+          'Fresh build / regenerate / modify / rebuild paths: closed by Phase M. The Program page now forwards `recentWorkoutLogs` (top-14 trusted, JSON-safe) to /api/program/generate-fresh, /api/program/regenerate, /api/program/generate-from-modify-builder and /api/program/rebuild-adjustment, all of which feed `recentWorkoutLogs` into AuthoritativeGenerationRequest. executeAuthoritativeGeneration runs the SAME Phase L resolver via lib/server/performance-history-context.ts and stamps `appliedBy: \'server\'` + `evidenceHash` on affected exercises before returning.',
+          'Idempotency: the client overlay yields when programHasServerAdaptationForHash returns true for the same evidence hash (or any server stamp exists for a different corridor), so server-applied mutations are never double-stacked by the boot effect.',
         ],
-        remainingWork: [
-          'Surface a server-readable per-set evidence ledger so authoritative-program-generation can bias initial dosage; today the overlay is client-only.',
-        ],
+        remainingWork: [],
       },
       {
         id: 'L.L9',
@@ -803,6 +802,129 @@ function phaseL(): BlueprintPhase {
           'Live workout reducer untouched. Resume routing (StreamlinedWorkoutSession.getResumableSessionSummary / buildResumeWorkoutUrl) untouched.',
           'Phase K canonical fields (session.stressRole / stressLevel / recoveryCost / nextDayRisk / stressDistributionProof; program.weeklyStressDistributionPlan; exercise.stressAdjustmentDelta) all flow through the same `...program` / `...s` / `...ex` spreads applyFuturePrescriptionMutations uses, so the overlay never strips Phase K state.',
           'Phase L mutations only write sets / repsOrTime / targetRPE / restSeconds + performanceAdaptation; methodStructures / styledGroups / blockId / setExecutionMethod / numericPrescriptionDelta untouched.',
+        ],
+        remainingWork: [],
+      },
+    ],
+  }
+}
+
+/** Phase M: Server Generator Performance History Parity Lock. */
+function phaseM(): BlueprintPhase {
+  return {
+    id: 'M',
+    title: 'Server Generator Performance History Parity Lock',
+    purpose:
+      'Make recent completed workout performance available to the authoritative server generator so fresh build / regenerate / modify / rebuild produce performance-aware programs from the beginning, while keeping the existing Program page boot-time Phase L overlay as a safe fallback. One shared resolver, one mutation shape, no double-apply.',
+    status: 'PARTIAL',
+    nextAction:
+      'Persist a server-readable per-set evidence ledger (server-side workout_log_set_evidence) so the authoritative generator can read recent performance history without depending on the client forwarding logs from localStorage.',
+    subtasks: [
+      {
+        id: 'M.M1',
+        title: 'Recent completedSetEvidence is server-readable or honestly marked unavailable',
+        status: 'PARTIAL',
+        evidence: [
+          'Per-set completedSetEvidence is the authoritative input shape and is written client-side by lib/workout-log-service.ts.saveWorkoutLog into localStorage.',
+          'The Neon `workout_logs` table only persists aggregate stats (id / sessionDate / focusArea / duration). Per-set evidence is NOT yet stored server-side.',
+          'Bridge: the Program page forwards a JSON-safe top-14 trusted slice via getRecentWorkoutLogsForGenerationRequest() into the generation route body; the server-safe adapter (lib/server/performance-history-context.ts) sanitizes / caps (≤14 logs, ≤300 sets) / hashes and feeds the existing Phase L resolver.',
+        ],
+        remainingWork: [
+          'Add a server-side workout_log_set_evidence table + writer so the authoritative generator can read per-set evidence directly without depending on the client transport.',
+        ],
+      },
+      {
+        id: 'M.M2',
+        title: 'Fresh generation receives performance history context',
+        status: 'COMPLETE',
+        evidence: [
+          'AuthoritativeGenerationRequest.recentWorkoutLogs (optional) is consumed by executeAuthoritativeGeneration after the method-decision stamp. /api/program/generate-fresh forwards body.recentWorkoutLogs into the request.',
+          'Program page handleGenerateProgram fetch body now includes recentWorkoutLogs from getRecentWorkoutLogsForGenerationRequest().',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'M.M3',
+        title: 'Regenerate receives performance history context',
+        status: 'COMPLETE',
+        evidence: [
+          '/api/program/regenerate forwards body.recentWorkoutLogs into AuthoritativeGenerationRequest.',
+          'Program page regenerate fetch and modify-builder regenerate fetch both include recentWorkoutLogs.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'M.M4',
+        title: 'Restart/modify/rebuild paths are audited and wired where safe',
+        status: 'COMPLETE',
+        evidence: [
+          'Modify-builder path: /api/program/generate-from-modify-builder forwards body.recentWorkoutLogs.',
+          'Rebuild-adjustment path: /api/program/rebuild-adjustment forwards body.recentWorkoutLogs.',
+          'Restart path: live workout reducer is intentionally untouched; resume / restart routing is owned by Phase J and operates on persisted live-session state, not on program generation, so no Phase M wiring is required.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'M.M5',
+        title: 'Shared Phase L resolver remains the only adaptation rule owner',
+        status: 'COMPLETE',
+        evidence: [
+          'lib/server/performance-history-context.ts is a thin adapter: it imports resolvePerformanceFeedbackAdaptation, applyFuturePrescriptionMutations, and extractCompletedSetEvidence directly from lib/program/performance-feedback-adaptation-contract.ts.',
+          'No adaptation rule logic (signal classification, mutation derivation, safety bounds, severity escalation) is duplicated in the server adapter, in any route, in normalize/load helpers, or in display components. Routes only carry transport.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'M.M6',
+        title: 'Server-applied and Program-page boot adaptation are idempotent',
+        status: 'COMPLETE',
+        evidence: [
+          'ExercisePerformanceAdaptationStamp now carries `appliedBy: \'server\' | \'client\'` and `evidenceHash` provenance.',
+          'applyFuturePrescriptionMutations accepts optional stampProvenance and writes both fields; server adapter passes appliedBy=\'server\' + the hash, client overlay passes appliedBy=\'client\' + the hash.',
+          'Client boot overlay calls programHasServerAdaptationForHash(program, evidenceHash) and yields entirely (changed=false, skipReason=server_already_applied_same_evidence) when the server already stamped for the same evidence corridor; programHasAnyServerAdaptation guards against stacking on a different corridor too.',
+          'Authoritative service additionally calls programAlreadyHasServerAdaptationFor as a defensive idempotency check before applying server mutations on a freshly built program.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'M.M7',
+        title: 'Normalize/load/display preserves adaptation metadata',
+        status: 'COMPLETE',
+        evidence: [
+          'AdaptiveExercise.performanceAdaptation (including new appliedBy and evidenceHash fields) is preserved by the existing `...ex` spread inside normalizeProgramForDisplay (same preservation path that already carries Phase 4V/4Z, Phase K stressAdjustmentDelta, and original Phase L stamp fields).',
+          'No normalizer re-decides Phase L/M state; only the contract writer mutates / stamps.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'M.M8',
+        title: 'Program page consumes server-applied adaptation directly',
+        status: 'COMPLETE',
+        evidence: [
+          'AdaptiveSessionCard reads exercise.performanceAdaptation regardless of `appliedBy`; the same chip renders for server-applied and client-applied stamps.',
+          'Server-applied stamps arrive on the program object returned by /api/program/* routes and flow through normalizeProgramForDisplay → setProgram unchanged.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'M.M9',
+        title: 'Missing history degrades to insufficient_data without fake adaptation',
+        status: 'COMPLETE',
+        evidence: [
+          'buildPerformanceHistoryContext() returns hasEvidence=false when no logs are supplied or when sanitization removes them all; the authoritative service short-circuits with verdict=PHASE_M_SKIPPED_INSUFFICIENT_EVIDENCE.',
+          'applyServerPerformanceFeedbackOverlay() returns the original program unchanged in that case; no performanceAdaptation stamp is written.',
+          'Program page chip only renders when exercise.performanceAdaptation exists, so insufficient data produces zero visible adaptation rather than a fabricated one.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'M.M10',
+        title: 'Phase J/K/L regressions are checked',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase J: live workout reducer untouched, resume routing untouched, /api/program/* routes are program-generation only and do not touch live-session state.',
+          'Phase K: weeklyStressDistributionPlan / stressRole / stressLevel / recoveryCost / nextDayRisk / stressDistributionProof / stressAdjustmentDelta all flow through the same `...program` / `...s` / `...ex` spreads applyFuturePrescriptionMutations uses, so the server overlay never strips Phase K state.',
+          'Phase L: completedSetEvidence write path (lib/workout-log-service.ts.saveWorkoutLog) is unchanged. The contract is the single source of mutation rules. The Program page chip and per-row adaptation surface are unchanged in shape.',
         ],
         remainingWork: [],
       },
@@ -851,6 +973,12 @@ export function buildMasterTruthConnectionBlueprintStatus(
     // exercise object the Program card consumes. Selected skills are
     // structurally protected; completed sessions are never rewritten.
     phaseL(),
+    // [PHASE-M] Server Generator Performance History Parity Lock.
+    // Closes the Phase L L8 fresh-build/regenerate parity gap by feeding
+    // recent workout logs into the authoritative server generator and
+    // running the same Phase L resolver server-side, with appliedBy /
+    // evidenceHash provenance for idempotency between corridors.
+    phaseM(),
   ]
 
   // Active phase = the first phase whose status is not COMPLETE / DO_NOT_REDO.

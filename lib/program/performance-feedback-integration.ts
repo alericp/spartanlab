@@ -330,3 +330,29 @@ export function applyPerformanceFeedbackOverlay<T extends PhaseLProgramShape>(
     changed: true,
   }
 }
+
+// =============================================================================
+// [PHASE-M] CLIENT-SIDE RECENT-LOG ACCESSOR FOR SERVER GENERATION ROUTES
+// -----------------------------------------------------------------------------
+// Returns the same recent-trusted-log slice the client overlay would consume,
+// shaped as a JSON-safe array for forwarding to the authoritative server
+// generator (`generate-fresh`, `regenerate`, `modify-builder`,
+// `rebuild-adjustment`). The server adapter
+// (`lib/server/performance-history-context.ts`) sanitizes / caps / hashes
+// regardless of what the client sends, so this helper is only an
+// availability/transport bridge — never a trust boundary.
+//
+// Returns `[]` on the server (no localStorage), so the route's optional
+// `recentWorkoutLogs` field is naturally omitted during prerender.
+// =============================================================================
+export function getRecentWorkoutLogsForGenerationRequest(): WorkoutLog[] {
+  if (typeof window === 'undefined') return []
+  const logs = getWorkoutLogs()
+  if (!Array.isArray(logs) || logs.length === 0) return []
+  const sortedLogs = [...logs].sort((a, b) => {
+    const ta = new Date(a.createdAt ?? a.sessionDate ?? 0).getTime()
+    const tb = new Date(b.createdAt ?? b.sessionDate ?? 0).getTime()
+    return tb - ta
+  })
+  return sortedLogs.filter((log) => log.trusted !== false).slice(0, 14)
+}

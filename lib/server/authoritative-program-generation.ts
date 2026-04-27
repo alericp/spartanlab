@@ -67,6 +67,18 @@ import {
 // `recentWorkoutLogs`, AND merges Neon evidence with route-payload evidence
 // when both are present (deduped by workout log id).
 import { getRecentWorkoutSetEvidenceForGeneration } from './workout-set-evidence-reader'
+// [PHASE-P] Program quality / doctrine sharpness audit. Pure deterministic
+// resolver that runs AFTER Phase M (Phase L+M+N+O have already produced the
+// final adapted program object). Performs five audit passes — skill carryover
+// attribution, tendon-protective RPE cap, unilateral per-side note,
+// session-length realism, cross-session straight-arm overlap — and emits
+// optional per-session / per-exercise `qualityAudit` proof slices that the
+// Program card consumes. Phase L safety bounds remain authoritative: Phase P
+// never mutates rows that already carry a Phase L stamp, never touches
+// completed days, never alters `sets` / `repsOrTime` / `restSeconds` /
+// `prescribedLoad` / `estimatedMinutes`. Only `targetRPE` (bounded ≤1 step)
+// and an optional `note` decoration may change.
+import { runProgramQualityDoctrineAudit } from '@/lib/program/program-quality-doctrine-audit-contract'
 
 // ==========================================================================
 // [CORRIDOR_KILL_V4] Version fingerprint for cache/deploy proof
@@ -2606,6 +2618,93 @@ export async function executeAuthoritativeGeneration(
     })
 
     markStage('phase_m_performance_overlay_done')
+
+    // ==========================================================================
+    // [PHASE-P] PROGRAM QUALITY / DOCTRINE SHARPNESS AUDIT
+    // Runs on the FINAL adapted program — after the base builder, after
+    // doctrine selection, after Phase J/K weekly stress + governor, after
+    // Phase L/M/N performance feedback, and after Phase O trend + coach
+    // intelligence. The resolver is pure / deterministic / side-effect-free
+    // and emits at most two bounded corrections per row: a tendon-protective
+    // targetRPE cap (≤1 step lower, never below the Phase L MIN_RPE_FLOOR)
+    // and a per-side note on unilateral exercises that lacked one. All other
+    // findings are audit-only stamps the Program card renders as a concise
+    // proof line. Selected skills are NEVER removed; completed days are NEVER
+    // mutated; rows already carrying a Phase L mutation stamp are deferred
+    // to with `phase_p_phase_l_mutation_takes_precedence`. Failure here is
+    // non-blocking: Phase P must never break the success path.
+    // ==========================================================================
+    const phasePAuditDiagnostic: {
+      attempted: boolean
+      changed: boolean
+      exerciseStampsApplied: number
+      sessionStampsApplied: number
+      skillCarryoversAttached: number
+      rpeCapsApplied: number
+      unilateralNotesAdded: number
+      sessionLengthWarnings: number
+      straightArmOverlapWarnings: number
+      completedSessionsSkipped: number
+      verdict: string
+      summary: string
+      error?: string
+    } = {
+      attempted: false,
+      changed: false,
+      exerciseStampsApplied: 0,
+      sessionStampsApplied: 0,
+      skillCarryoversAttached: 0,
+      rpeCapsApplied: 0,
+      unilateralNotesAdded: 0,
+      sessionLengthWarnings: 0,
+      straightArmOverlapWarnings: 0,
+      completedSessionsSkipped: 0,
+      verdict: 'PHASE_P_NOT_ATTEMPTED',
+      summary: '',
+    }
+    try {
+      phasePAuditDiagnostic.attempted = true
+      const phasePResult = runProgramQualityDoctrineAudit(program, {
+        // Completed-day list is tracked elsewhere in the pipeline for Phase L;
+        // we read the same structural source. When unavailable, Phase P
+        // safely audits zero completed days (none to skip).
+        completedDayNumbers: Array.isArray(
+          (program as unknown as { completedDayNumbers?: number[] }).completedDayNumbers,
+        )
+          ? (program as unknown as { completedDayNumbers?: number[] }).completedDayNumbers
+          : [],
+      })
+      program = phasePResult.program as AdaptiveProgram
+      phasePAuditDiagnostic.changed = phasePResult.audit.changed
+      phasePAuditDiagnostic.exerciseStampsApplied = phasePResult.audit.exerciseStampsApplied
+      phasePAuditDiagnostic.sessionStampsApplied = phasePResult.audit.sessionStampsApplied
+      phasePAuditDiagnostic.skillCarryoversAttached = phasePResult.audit.proof.skillCarryoversAttached
+      phasePAuditDiagnostic.rpeCapsApplied = phasePResult.audit.proof.rpeCapsApplied
+      phasePAuditDiagnostic.unilateralNotesAdded = phasePResult.audit.proof.unilateralNotesAdded
+      phasePAuditDiagnostic.sessionLengthWarnings = phasePResult.audit.proof.sessionLengthWarnings
+      phasePAuditDiagnostic.straightArmOverlapWarnings =
+        phasePResult.audit.proof.straightArmOverlapWarnings
+      phasePAuditDiagnostic.completedSessionsSkipped =
+        phasePResult.audit.proof.completedSessionsSkipped
+      phasePAuditDiagnostic.summary = phasePResult.audit.summary
+      phasePAuditDiagnostic.verdict = phasePResult.audit.changed
+        ? 'PHASE_P_APPLIED_QUALITY_DOCTRINE_AUDIT'
+        : 'PHASE_P_RAN_NO_FINDINGS'
+    } catch (auditErr) {
+      phasePAuditDiagnostic.error = String(auditErr)
+      phasePAuditDiagnostic.verdict = 'PHASE_P_AUDIT_FAILED_NON_BLOCKING'
+      console.log('[phase-p-quality-audit-failed]', {
+        generationIntent: request.generationIntent,
+        triggerSource: request.triggerSource,
+        error: String(auditErr),
+      })
+    }
+    console.log('[phase-p-program-quality-doctrine-audit]', {
+      generationIntent: request.generationIntent,
+      triggerSource: request.triggerSource,
+      ...phasePAuditDiagnostic,
+    })
+    markStage('phase_p_quality_audit_done')
 
     // ==========================================================================
     // STAGE: Success

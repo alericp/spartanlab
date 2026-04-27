@@ -288,26 +288,32 @@ function phaseG(ctx: BuildBlueprintStatusContext): BlueprintPhase {
     title: 'Program Display Source Lock',
     purpose: 'The Program page reads canonical session truth; nothing else controls visible cards.',
     status: 'PARTIAL',
-    nextAction: 'Make canonical session.methodStructures the dominant body-render source for grouped blocks (currently styledGroups drives visibleMethodTally / body rendering, while methodStructures drives the new classified summary line).',
+    nextAction: 'Convert MainExercisesRenderer grouped block headers / finalVisibleBodyModel to consume canonical session.methodStructures as the dominant grouped-body source (Phase 4T already made chips canonical-dominant; the body grouped-block renderer is the last remaining styledGroups-primary path).',
     subtasks: [
       { id: 'G.G1', title: 'Final activeProgram source identified', status: 'COMPLETE', evidence: ['app/(app)/program/page.tsx:authoritativeActiveProgram memo'], remainingWork: [] },
       { id: 'G.G2', title: 'Display projection is pure formatting', status: 'COMPLETE', evidence: ['buildProgramDisplayProjection does not pick exercises/methods'], remainingWork: [] },
-      { id: 'G.G3', title: 'Old fallback/baby sources demoted', status: 'PARTIAL', evidence: ['lib/program/authoritative-program-source-map.ts demotes doctrineCausalChallenge to compatibility-only'], remainingWork: ['Add a runtime guard that rejects display projections containing exercise selections older than canonical session'] },
+      { id: 'G.G3', title: 'Old fallback/baby sources demoted', status: 'PARTIAL', evidence: ['lib/program/authoritative-program-source-map.ts demotes doctrineCausalChallenge to compatibility-only', 'Phase 4T: legacy doctrineCausalDisplay banner suppressed when canonical doctrineBlockResolution exists (AdaptiveSessionCard via hasClassifiedDoctrineResolution)'], remainingWork: ['Add a runtime guard that rejects display projections containing exercise selections older than canonical session'] },
       { id: 'G.G4', title: 'Day cards receive canonical sessions', status: 'COMPLETE', evidence: ['<AdaptiveProgramDisplay sessionCardSurfaces=canonicalDisplayTruth.visibleSessionCards />'], remainingWork: [] },
-      // [PHASE 4S] G5 evidence updated: SessionCardSurface now carries
-      // canonical methodStructures and AdaptiveSessionCard renders them via a
-      // classified summary line. Status stays PARTIAL because styledGroups is
-      // still the primary source for grouped body rendering / visibleMethodTally
-      // chips — methodStructures is now a parallel authoritative source, not
-      // yet the dominant body-render source.
-      { id: 'G.G5', title: 'Visible method blocks match canonical truth', status: 'PARTIAL', evidence: ['SessionCardSurface.methodStructures field added (Phase 4S)', 'buildSessionCardSurface copies session.methodStructures pass-through (Phase 4S)', 'AdaptiveSessionCard renders Phase 4S canonical delivery line via hasRenderableMethodStructure / readMethodStructuresFromSession'], remainingWork: ['Make session.methodStructures the dominant source for visibleMethodTally/MainExercisesRenderer grouped headers (styledGroups currently still drives body rendering)'] },
-      // [PHASE 4S] G6 evidence updated: SessionCardSurface now carries
-      // canonical doctrineBlockResolution[] and AdaptiveSessionCard renders
-      // classified statuses (Applied / Already reflected / Blocked for safety
-      // / No matching target / Not for this day / Needs audit) plus a
-      // diagnostic line for BUG_* classifications. The runtime g6Status
-      // gate still requires the program-level rollup to confirm 0 bugs.
-      { id: 'G.G6', title: 'Yellow blocked labels map to true classifications', status: g6Status, evidence: blockResolutionRollup ? ['program.doctrineBlockResolutionRollup present', 'SessionCardSurface.doctrineBlockResolution field added (Phase 4S)', 'AdaptiveSessionCard renders classified statuses + bug diagnostic line via normalizeDoctrineBlockStatus (Phase 4S)'] : ['SessionCardSurface.doctrineBlockResolution field added (Phase 4S)', 'AdaptiveSessionCard renders classified statuses + bug diagnostic line via normalizeDoctrineBlockStatus (Phase 4S)'], remainingWork: g6Status === 'COMPLETE' ? [] : ['Resolve remaining BUG_* entries in program.doctrineBlockResolutionRollup'] },
+      // [PHASE 4T] G5 advanced: canonical methodStructures is now the DOMINANT
+      // source for the visible method chip rows (collapsed + expanded) via
+      // deriveCanonicalMethodTallyFromSurface; the legacy styledGroups-derived
+      // tally is fallback only when canonical is absent. Status stays PARTIAL
+      // because the grouped-block BODY renderer (MainExercisesRenderer headers
+      // for Superset / Circuit / Density Block / Cluster) still consumes
+      // finalVisibleBodyModel which is built off styledGroups + row-level
+      // method fields (Phase 4P sibling outputs of the same corridor that
+      // writes methodStructures, so they agree on healthy generations but
+      // canonical is not yet the load-bearing input).
+      { id: 'G.G5', title: 'Visible method blocks match canonical truth', status: 'PARTIAL', evidence: ['SessionCardSurface.methodStructures field added (Phase 4S)', 'buildSessionCardSurface copies session.methodStructures pass-through (Phase 4S)', 'AdaptiveSessionCard renders Phase 4S canonical delivery line via hasRenderableMethodStructure / readMethodStructuresFromSession', 'Phase 4T: dominantMethodTally selects canonical methodStructures over legacy styledGroups for both chip rows when canonical applied entries exist; canonicalSaysNoneApplied suppresses contradictory chips'], remainingWork: ['Convert finalVisibleBodyModel + MainExercisesRenderer grouped-block headers to read canonical methodStructures as the primary input; styledGroups becomes fallback only for the body grouped-block render path (chip dominance is already done)'] },
+      // [PHASE 4T] G6 advanced: legacy "Doctrine not applied / evaluated /
+      // changed" banner from displayProjectionSession.doctrineCausalDisplay
+      // is now demoted behind canonical doctrineBlockResolution. Generic
+      // amber/zinc banners no longer render when classified resolution
+      // exists; only the emerald `materialChanged` summary survives because
+      // it carries unique top-pick causal evidence. The runtime g6Status
+      // gate still keys on program.doctrineBlockResolutionRollup having 0
+      // BUG_* entries.
+      { id: 'G.G6', title: 'Yellow blocked labels map to true classifications', status: g6Status, evidence: blockResolutionRollup ? ['program.doctrineBlockResolutionRollup present', 'SessionCardSurface.doctrineBlockResolution field added (Phase 4S)', 'AdaptiveSessionCard renders classified statuses + bug diagnostic line via normalizeDoctrineBlockStatus (Phase 4S)', 'Phase 4T: legacy doctrineCausalDisplay banner demoted behind classified resolution; generic amber/zinc pills suppressed when canonical resolution entries exist'] : ['SessionCardSurface.doctrineBlockResolution field added (Phase 4S)', 'AdaptiveSessionCard renders classified statuses + bug diagnostic line via normalizeDoctrineBlockStatus (Phase 4S)', 'Phase 4T: legacy doctrineCausalDisplay banner demoted behind classified resolution'], remainingWork: g6Status === 'COMPLETE' ? [] : ['Resolve remaining BUG_* entries in program.doctrineBlockResolutionRollup'] },
     ],
   }
 }

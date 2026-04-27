@@ -43,6 +43,11 @@ import {
   normalizeDoctrineBlockStatus,
   readMethodStructuresFromSession,
   readDoctrineBlockResolutionFromSession,
+  // [PHASE 4T] Canonical method tally + classified-doctrine guard. Used to
+  // make `methodStructures` the dominant chip-row source and to demote the
+  // legacy `doctrineCausalDisplay` banner behind classified resolution.
+  deriveCanonicalMethodTallyFromSurface,
+  hasClassifiedDoctrineResolution,
   type ExerciseRowSurface,
   type SessionCardSurface,
   type ProgramDisplayProjectionSession,
@@ -2101,11 +2106,48 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     }
     return { superset: 0, circuit: 0, density: 0, cluster: 0 }
   })()
+
+  // ==========================================================================
+  // [PHASE 4T — METHOD-STRUCTURES-DOMINANCE] Canonical methodStructures wins
+  // over the legacy styledGroups-derived `legacyVisibleMethodTally` whenever
+  // the canonical surface has anything to say. This is the visible-side half
+  // of Phase G: legacy and canonical agree on healthy generations, but on
+  // BUG_NORMALIZER_DROPPED_TRUTH / BUG_STALE_SOURCE_WON paths only canonical
+  // is reliable, and we must not paint chips that contradict the Phase 4S
+  // classified line directly below.
+  //
+  // Resolution rules (single point):
+  //   1. Canonical applied chips exist -> canonical is the dominant tally.
+  //   2. Canonical exists but says nothing applied -> suppress all four
+  //      chips (canonicalSaysNoneApplied=true). The classified line owns
+  //      the doctrine narrative; the chip row must not contradict it.
+  //   3. Canonical absent (older saved programs / pre Phase 4P) -> the
+  //      legacy styledGroups-derived tally is the fallback so existing
+  //      programs keep rendering chips exactly as before.
+  //
+  // `legacyVisibleMethodTally` is preserved as the second-priority source
+  // (the body's `finalVisibleBodyModel` still uses styledGroups for the
+  // grouped-block render path, unchanged — fallback only for chip dominance
+  // when canonical is absent).
+  // ==========================================================================
+  const legacyVisibleMethodTally = visibleMethodTally
+  const canonicalMethodTally = deriveCanonicalMethodTallyFromSurface(cardSurface)
+  const dominantMethodTally: { superset: number; circuit: number; density: number; cluster: number } =
+    canonicalMethodTally.hasCanonicalApplied
+      ? {
+          superset: canonicalMethodTally.superset,
+          circuit: canonicalMethodTally.circuit,
+          density: canonicalMethodTally.density,
+          cluster: canonicalMethodTally.cluster,
+        }
+      : canonicalMethodTally.canonicalSaysNoneApplied
+        ? { superset: 0, circuit: 0, density: 0, cluster: 0 }
+        : legacyVisibleMethodTally
   const hasAnyVisibleMethod =
-    visibleMethodTally.superset > 0 ||
-    visibleMethodTally.circuit > 0 ||
-    visibleMethodTally.density > 0 ||
-    visibleMethodTally.cluster > 0
+    dominantMethodTally.superset > 0 ||
+    dominantMethodTally.circuit > 0 ||
+    dominantMethodTally.density > 0 ||
+    dominantMethodTally.cluster > 0
 
   // ==========================================================================
   // [METHOD-ONLY-VISIBILITY-CONTRACT] Card-level label truth.
@@ -2802,29 +2844,35 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 so the collapsed chip and the in-body pill read as the same
                 visual language. */}
             {hasAnyVisibleMethod && (
+              // [PHASE 4T] Chip counts now read from `dominantMethodTally`,
+              // which prefers canonical `cardSurface.methodStructures` over
+              // legacy styledGroups when canonical truth exists. See
+              // [METHOD-STRUCTURES-DOMINANCE] block above for the resolution
+              // rule. Older saved programs without canonical fields fall
+              // through to the legacy tally unchanged.
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                {visibleMethodTally.superset > 0 && (
+                {dominantMethodTally.superset > 0 && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#4F6D8A]/15 text-[#7FA8CC] border border-[#4F6D8A]/40">
                     <Layers className="w-3 h-3" />
-                    {visibleMethodTally.superset} Superset{visibleMethodTally.superset > 1 ? 's' : ''}
+                    {dominantMethodTally.superset} Superset{dominantMethodTally.superset > 1 ? 's' : ''}
                   </span>
                 )}
-                {visibleMethodTally.circuit > 0 && (
+                {dominantMethodTally.circuit > 0 && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
                     <RefreshCw className="w-3 h-3" />
-                    {visibleMethodTally.circuit} Circuit{visibleMethodTally.circuit > 1 ? 's' : ''}
+                    {dominantMethodTally.circuit} Circuit{dominantMethodTally.circuit > 1 ? 's' : ''}
                   </span>
                 )}
-                {visibleMethodTally.density > 0 && (
+                {dominantMethodTally.density > 0 && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/15 text-amber-300 border border-amber-500/40">
                     <Timer className="w-3 h-3" />
-                    {densityChipLabel(visibleMethodTally.density)}
+                    {densityChipLabel(dominantMethodTally.density)}
                   </span>
                 )}
-                {visibleMethodTally.cluster > 0 && (
+                {dominantMethodTally.cluster > 0 && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-purple-500/15 text-purple-300 border border-purple-500/40">
                     <Dumbbell className="w-3 h-3" />
-                    {clusterChipLabel(visibleMethodTally.cluster)}
+                    {clusterChipLabel(dominantMethodTally.cluster)}
                   </span>
                 )}
               </div>
@@ -3352,29 +3400,33 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   // paint a matching grouped header. Palette mirrors the in-body block
   // headers (Superset blue, Circuit emerald, Density amber, Cluster purple)
   // so chip colors read as the same visual language as the body.
+  // [PHASE 4T] Expanded chip row also reads from `dominantMethodTally`. The
+  // collapsed chip strip and this expanded row must agree, and both must
+  // honor canonical methodStructures over legacy styledGroups when canonical
+  // is present. See [METHOD-STRUCTURES-DOMINANCE] for the resolution rule.
   <div className="mb-3 flex flex-wrap items-center gap-2">
-    {visibleMethodTally.superset > 0 && (
+    {dominantMethodTally.superset > 0 && (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-[#4F6D8A]/15 text-[#7FA8CC] border border-[#4F6D8A]/40">
         <Layers className="w-3.5 h-3.5" />
-        {visibleMethodTally.superset} Superset{visibleMethodTally.superset > 1 ? 's' : ''}
+        {dominantMethodTally.superset} Superset{dominantMethodTally.superset > 1 ? 's' : ''}
       </span>
     )}
-    {visibleMethodTally.circuit > 0 && (
+    {dominantMethodTally.circuit > 0 && (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
         <RefreshCw className="w-3.5 h-3.5" />
-        {visibleMethodTally.circuit} Circuit{visibleMethodTally.circuit > 1 ? 's' : ''}
+        {dominantMethodTally.circuit} Circuit{dominantMethodTally.circuit > 1 ? 's' : ''}
       </span>
     )}
-    {visibleMethodTally.density > 0 && (
+    {dominantMethodTally.density > 0 && (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/40">
         <Timer className="w-3.5 h-3.5" />
-        {densityChipLabel(visibleMethodTally.density)}
+        {densityChipLabel(dominantMethodTally.density)}
       </span>
     )}
-    {visibleMethodTally.cluster > 0 && (
+    {dominantMethodTally.cluster > 0 && (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-purple-500/15 text-purple-300 border border-purple-500/40">
         <Dumbbell className="w-3.5 h-3.5" />
-        {clusterChipLabel(visibleMethodTally.cluster)}
+        {clusterChipLabel(dominantMethodTally.cluster)}
       </span>
     )}
   </div>
@@ -3398,8 +3450,28 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         per-session verdict, never derived from rule/source counts.
       * Amber when doctrine did not run or had no rules matching this
         session — signals an upstream condition the user should know about.
-    No proof labels. No selected-rule counts. No source counts. */}
-{displayProjectionSession?.doctrineCausalDisplay?.available ? (
+    No proof labels. No selected-rule counts. No source counts.
+
+    [PHASE 4T — DOCTRINE-CAUSAL-DEMOTION] When the canonical Phase 4Q
+    `doctrineBlockResolution` array exists on this card's surface, the
+    classified Phase 4S delivery line directly above this banner already
+    owns the doctrine narrative. Showing the legacy "Doctrine not applied
+    to this session" / "Doctrine evaluated this session" amber/zinc
+    pill on top of a classified line that says "Doctrine: 2 applied" is
+    the contradiction Phase 4S surfaced. This guard suppresses the
+    legacy banner whenever classified resolution exists. The single
+    exception is `materialChanged === true`: that conveys top-pick
+    causal evidence (which exercise won) the classified line does not,
+    so we keep the emerald summary chip when classified resolution
+    confirms doctrine engagement. Older saved programs without
+    `doctrineBlockResolution` still see the full legacy banner so we
+    do not regress non-Phase-4Q histories. */}
+{displayProjectionSession?.doctrineCausalDisplay?.available &&
+  // [PHASE 4T] Suppress when canonical classified resolution exists, except
+  // for the emerald `materialChanged` chip which carries unique top-pick
+  // causal evidence the classified line does not duplicate.
+  (!hasClassifiedDoctrineResolution(cardSurface) ||
+    !!displayProjectionSession.doctrineCausalDisplay.materialChanged) ? (
   (() => {
     const cd = displayProjectionSession.doctrineCausalDisplay
     if (cd.materialChanged && cd.summary) {

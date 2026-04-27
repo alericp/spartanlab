@@ -1207,6 +1207,146 @@ export function normalizeDoctrineBlockStatus(
   }
 }
 
+// =============================================================================
+// [PHASE 4T] CANONICAL METHOD TALLY — DOMINANT CHIP-ROW SOURCE
+// -----------------------------------------------------------------------------
+// `visibleMethodTally` in AdaptiveSessionCard counts grouped-method chips from
+// the body's `finalVisibleBodyModel`, which in turn reads
+// `session.styleMetadata.styledGroups` plus row-level `method` /
+// `setExecutionMethod` / `blockId` fields. Those signals are siblings of the
+// canonical `session.methodStructures` array — the Phase 4P corridor writes
+// both at the same time — so on healthy generations they agree.
+//
+// On UNHEALTHY paths (`BUG_NORMALIZER_DROPPED_TRUTH`, `BUG_STALE_SOURCE_WON`)
+// they can disagree. The Phase G dominance contract is that, when canonical
+// truth exists, the chip row reflects canonical — it does not contradict the
+// classified Phase 4S delivery line directly below.
+//
+// `deriveCanonicalMethodTallyFromSurface` is the single pure derivation. It
+// counts `applied` + `already_applied` entries by family on the canonical
+// methodStructures array. It does not look at exercise rows, does not call
+// any builder, does not mutate, and returns `hasCanonicalApplied=false`
+// whenever the canonical array is missing/empty/has no applied entries — in
+// which case the consumer keeps using legacy `visibleMethodTally` as a
+// fallback so older saved programs still render.
+// =============================================================================
+export interface CanonicalMethodTally {
+  superset: number
+  circuit: number
+  density: number
+  cluster: number
+  /**
+   * `true` when the canonical surface contains at least one `applied` or
+   * `already_applied` entry across any of the four chip-renderable families.
+   * Consumers use this as the "should canonical dominate?" gate; when false,
+   * they fall back to the legacy styledGroups-derived tally so older saved
+   * programs (pre Phase 4P) still render their existing chips.
+   */
+  hasCanonicalApplied: boolean
+  /**
+   * `true` when canonical exists but has zero applied/already_applied entries
+   * across the four chip families AND the canonical array is non-empty —
+   * doctrine considered methods on this session and decided none applied as
+   * grouped chips. Consumers use this to suppress contradictory legacy chips:
+   * when this is true, the Phase 4S classified line owns the doctrine
+   * narrative for the card.
+   */
+  canonicalSaysNoneApplied: boolean
+}
+
+/**
+ * Map a `CanonicalMethodFamily` string onto the four chip families the card
+ * actually renders. Returns `null` for row-level families that do not paint
+ * a grouped chip (top_set, drop_set, rest_pause, prescription_*, etc.).
+ *
+ * `endurance_density` collapses to the `density` chip because the body
+ * renderer paints it under the Density Block / Density Row palette.
+ */
+function mapCanonicalFamilyToChipKey(
+  family: string | null | undefined,
+): 'superset' | 'circuit' | 'density' | 'cluster' | null {
+  switch (family) {
+    case 'superset':
+      return 'superset'
+    case 'circuit':
+      return 'circuit'
+    case 'density_block':
+    case 'endurance_density':
+      return 'density'
+    case 'cluster':
+      return 'cluster'
+    default:
+      return null
+  }
+}
+
+/**
+ * Pure tally derivation. See module-level Phase 4T comment for the dominance
+ * contract. Always returns a fully-populated tally object so callers can use
+ * the result directly without null guards.
+ */
+export function deriveCanonicalMethodTallyFromSurface(
+  surface:
+    | Pick<SessionCardSurface, 'methodStructures' | 'doctrineBlockResolution'>
+    | null
+    | undefined,
+): CanonicalMethodTally {
+  const empty: CanonicalMethodTally = {
+    superset: 0,
+    circuit: 0,
+    density: 0,
+    cluster: 0,
+    hasCanonicalApplied: false,
+    canonicalSaysNoneApplied: false,
+  }
+  if (!surface) return empty
+  const list = Array.isArray(surface.methodStructures) ? surface.methodStructures : []
+  if (list.length === 0) {
+    // No canonical opinion at all — caller falls back to legacy tally.
+    return empty
+  }
+  let superset = 0
+  let circuit = 0
+  let density = 0
+  let cluster = 0
+  let appliedTotal = 0
+  for (const ms of list) {
+    if (!ms) continue
+    if (ms.status !== 'applied' && ms.status !== 'already_applied') continue
+    const chipKey = mapCanonicalFamilyToChipKey(ms.family)
+    if (!chipKey) continue
+    if (chipKey === 'superset') superset += 1
+    else if (chipKey === 'circuit') circuit += 1
+    else if (chipKey === 'density') density += 1
+    else if (chipKey === 'cluster') cluster += 1
+    appliedTotal += 1
+  }
+  return {
+    superset,
+    circuit,
+    density,
+    cluster,
+    hasCanonicalApplied: appliedTotal > 0,
+    canonicalSaysNoneApplied: appliedTotal === 0,
+  }
+}
+
+/**
+ * `true` when the surface carries any Phase 4Q classified entries. Used by
+ * the card to decide whether to demote the legacy `doctrineCausalDisplay`
+ * banner: when classified resolution exists, it owns the doctrine narrative
+ * and the legacy banner can no longer contradict it.
+ */
+export function hasClassifiedDoctrineResolution(
+  surface: Pick<SessionCardSurface, 'doctrineBlockResolution'> | null | undefined,
+): boolean {
+  if (!surface) return false
+  const list = Array.isArray(surface.doctrineBlockResolution)
+    ? surface.doctrineBlockResolution
+    : []
+  return list.length > 0
+}
+
 /**
  * Build session card surfaces for all sessions in a program.
  * Handles deduplication by adding differentiating context when cards would look identical.

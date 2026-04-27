@@ -27,6 +27,13 @@ import {
   getCompactExerciseExplanation,
   type ProgramExplanationSurface,
 } from '@/lib/coaching-explanation-contract'
+// [PHASE 4S] Canonical Phase 4P/4Q truth carried THROUGH the display contract.
+// We intentionally `import type` only — this module remains read-only and never
+// invokes builder/classifier logic. The card surface becomes a pass-through of
+// these typed structures so downstream consumers (AdaptiveSessionCard) cannot
+// re-derive method/doctrine truth from raw legacy fields.
+import type { CanonicalMethodStructure } from '@/lib/program/method-structure-contract'
+import type { DoctrineBlockResolutionEntry } from '@/lib/program/doctrine-block-resolution-contract'
 
 // =============================================================================
 // TYPES
@@ -591,6 +598,35 @@ export interface SessionCardSurface {
   /** Authoritative verdict from prescriptionPropagationAudit.verdict —
    *  whether week-adaptation MATERIALLY changed this day's prescription. */
   adaptationVerdict?: 'changed' | 'unchanged' | null
+
+  // ===========================================================================
+  // [PHASE 4S — CANONICAL METHOD/DOCTRINE DELIVERY LOCK] Read-only pass-throughs
+  // of canonical Phase 4P / 4Q truth so the visible card never has to re-derive
+  // method or doctrine state from raw legacy fields. These are the authoritative
+  // sources; `styleMetadata.styledGroups` remains as compatibility fallback only.
+  //
+  //   - methodStructures: every method considered for or applied to the session
+  //     (grouped families: superset/circuit/density_block; row-level families:
+  //     top_set/drop_set/rest_pause/cluster/endurance_density/...). Includes
+  //     APPLIED, ALREADY_APPLIED, BLOCKED, NOT_NEEDED, NO_SAFE_TARGET, and
+  //     NOT_CONNECTED entries.
+  //
+  //   - doctrineBlockResolution: per-entry classifier output that replaces
+  //     generic yellow "blocked" labels with one of:
+  //       APPLIED / ALREADY_APPLIED / TRUE_SAFETY_BLOCK / NO_RELEVANT_TARGET /
+  //       NOT_RELEVANT_TO_SESSION / BUG_MISSING_CONNECTION /
+  //       BUG_RUNTIME_CONTRACT_MISSING / BUG_DISPLAY_CONSUMER_MISSING /
+  //       BUG_NORMALIZER_DROPPED_TRUTH / BUG_STALE_SOURCE_WON / UNKNOWN_NEEDS_AUDIT
+  //
+  // Both are optional/null — older saved sessions predate Phase 4P/4Q and
+  // simply render the legacy chip path. The card is required to PREFER these
+  // over `styleMetadata.styledGroups` and the legacy generic blocked text when
+  // they exist.
+  // ===========================================================================
+  /** Canonical method structures stamped by Phase 4P corridor. Null on legacy. */
+  methodStructures?: CanonicalMethodStructure[] | null
+  /** Phase 4Q classified resolution per method structure entry. Null on legacy. */
+  doctrineBlockResolution?: DoctrineBlockResolutionEntry[] | null
   }
 
 /**
@@ -667,6 +703,11 @@ export function buildSessionCardSurface(
         groupedMethodCounts?: { superset?: number; circuit?: number; density_block?: number; cluster?: number }
       } | null
     }
+    // [PHASE 4S] Canonical Phase 4P/4Q fields — pass-through only. Optional
+    // because older saved sessions predate the corridors. The contract treats
+    // these as opaque arrays; null/empty means "use legacy fallback".
+    methodStructures?: CanonicalMethodStructure[] | null
+    doctrineBlockResolution?: DoctrineBlockResolutionEntry[] | null
   },
   weekContext: {
     isFirstWeek?: boolean
@@ -1037,6 +1078,16 @@ export function buildSessionCardSurface(
         ? 'unchanged'
         : null
 
+  // [PHASE 4S] Pass-through canonical method/doctrine truth from the session.
+  // We do not validate, normalize, or transform — the corridor that wrote
+  // these arrays is the source of truth. We only guarantee the surface field
+  // is a real array (or null) so consumers can `Array.isArray` safely without
+  // crashing on malformed saved programs.
+  const methodStructuresPassthrough: CanonicalMethodStructure[] | null =
+    Array.isArray(session.methodStructures) ? session.methodStructures : null
+  const doctrineBlockResolutionPassthrough: DoctrineBlockResolutionEntry[] | null =
+    Array.isArray(session.doctrineBlockResolution) ? session.doctrineBlockResolution : null
+
   return {
     sessionHeadline,
     sessionSubheadline,
@@ -1058,6 +1109,101 @@ export function buildSessionCardSurface(
     spineExpression,
     materialAdaptations,
     adaptationVerdict,
+    // [PHASE 4S] Canonical Phase 4P/4Q truth — pass-through, no rebuild.
+    methodStructures: methodStructuresPassthrough,
+    doctrineBlockResolution: doctrineBlockResolutionPassthrough,
+  }
+}
+
+// =============================================================================
+// [PHASE 4S] PURE HELPERS for consumers of `SessionCardSurface`.
+//
+// These are intentionally tiny and side-effect-free. They exist so the visible
+// card can answer "do I have authoritative method/doctrine truth, and how
+// should I render a classified blocked label?" without re-deriving anything.
+// =============================================================================
+
+/**
+ * Returns the typed canonical method structures from a session. Always returns
+ * an array (empty when missing/malformed) so callers can map without guards.
+ */
+export function readMethodStructuresFromSession(
+  session: { methodStructures?: CanonicalMethodStructure[] | null } | null | undefined,
+): CanonicalMethodStructure[] {
+  if (!session) return []
+  return Array.isArray(session.methodStructures) ? session.methodStructures : []
+}
+
+/**
+ * Returns the typed Phase 4Q classification entries. Always returns an array
+ * (empty when missing/malformed) so callers can map without guards.
+ */
+export function readDoctrineBlockResolutionFromSession(
+  session: { doctrineBlockResolution?: DoctrineBlockResolutionEntry[] | null } | null | undefined,
+): DoctrineBlockResolutionEntry[] {
+  if (!session) return []
+  return Array.isArray(session.doctrineBlockResolution) ? session.doctrineBlockResolution : []
+}
+
+/**
+ * `true` when the surface has at least one APPLIED or ALREADY_APPLIED canonical
+ * method structure. Used by the card to decide whether to show the canonical
+ * Phase 4P/4Q summary line vs fall back to legacy chips only. We treat
+ * BLOCKED / NOT_NEEDED / NO_SAFE_TARGET as "considered, not rendered as a
+ * real method block" — the doctrine resolution line still renders for those.
+ */
+export function hasRenderableMethodStructure(
+  surface: Pick<SessionCardSurface, 'methodStructures'> | null | undefined,
+): boolean {
+  if (!surface) return false
+  const list = Array.isArray(surface.methodStructures) ? surface.methodStructures : []
+  for (const entry of list) {
+    if (entry && (entry.status === 'applied' || entry.status === 'already_applied')) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * Maps the Phase 4Q `DoctrineBlockResolution` enum to a small, mobile-safe
+ * visible label + tone hint the card can render directly. Tones map to the
+ * existing palette: success/neutral/warning/diagnostic — the card chooses
+ * Tailwind classes from these. Pure; no JSX.
+ */
+export type ClassifiedBlockTone = 'success' | 'neutral' | 'warning' | 'diagnostic'
+
+export function normalizeDoctrineBlockStatus(
+  status: string | null | undefined,
+): { label: string; tone: ClassifiedBlockTone; isBug: boolean } {
+  switch (status) {
+    case 'APPLIED':
+      return { label: 'Doctrine applied', tone: 'success', isBug: false }
+    case 'ALREADY_APPLIED':
+      return { label: 'Already reflected', tone: 'success', isBug: false }
+    case 'TRUE_SAFETY_BLOCK':
+      return { label: 'Blocked for safety', tone: 'warning', isBug: false }
+    case 'NO_RELEVANT_TARGET':
+      return { label: 'No matching target', tone: 'neutral', isBug: false }
+    case 'NOT_RELEVANT_TO_SESSION':
+      return { label: 'Not for this day', tone: 'neutral', isBug: false }
+    case 'BUG_MISSING_CONNECTION':
+      return { label: 'Connection issue: doctrine not reaching card', tone: 'diagnostic', isBug: true }
+    case 'BUG_RUNTIME_CONTRACT_MISSING':
+      return { label: 'Runtime issue: doctrine contract missing', tone: 'diagnostic', isBug: true }
+    case 'BUG_DISPLAY_CONSUMER_MISSING':
+      return { label: 'Display issue: card not consuming doctrine', tone: 'diagnostic', isBug: true }
+    case 'BUG_NORMALIZER_DROPPED_TRUTH':
+      return { label: 'Normalizer dropped doctrine truth', tone: 'diagnostic', isBug: true }
+    case 'BUG_STALE_SOURCE_WON':
+      return { label: 'Stale source overrode doctrine', tone: 'diagnostic', isBug: true }
+    case 'UNKNOWN_NEEDS_AUDIT':
+      return { label: 'Needs audit', tone: 'warning', isBug: false }
+    default:
+      // Legacy generic blocked: explicitly demoted to "needs audit" so we
+      // never render the unclassified yellow bubble. Older saved programs
+      // without the classifier fall through here.
+      return { label: 'Legacy blocked status', tone: 'warning', isBug: false }
   }
 }
 

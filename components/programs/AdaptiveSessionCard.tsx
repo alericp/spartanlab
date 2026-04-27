@@ -34,7 +34,19 @@ import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, Protocol
 // [DOMINANT-CARD-OWNERSHIP-LOCK] Import SessionCardSurface so this dominant
 // visible card can read from the SAME strengthened authoritative truth that
 // the Program-page wrapper strip already consumes. No parallel re-derivation.
-import { buildExerciseCardContract, buildExerciseRowSurface, type ExerciseRowSurface, type SessionCardSurface, type ProgramDisplayProjectionSession } from '@/lib/program/program-display-contract'
+import {
+  buildExerciseCardContract,
+  buildExerciseRowSurface,
+  // [PHASE 4S] Pure helpers for canonical method/doctrine truth pass-through.
+  // These let the card consume Phase 4P / 4Q truth without re-deriving anything.
+  hasRenderableMethodStructure,
+  normalizeDoctrineBlockStatus,
+  readMethodStructuresFromSession,
+  readDoctrineBlockResolutionFromSession,
+  type ExerciseRowSurface,
+  type SessionCardSurface,
+  type ProgramDisplayProjectionSession,
+} from '@/lib/program/program-display-contract'
 import type { ProgramExplanationSurface } from '@/lib/coaching-explanation-contract'
 // [SINGLE-TRUTH-FIX] Removed: getCompactExerciseExplanation - was source of contradictory text
 import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, buildSessionMainPreviewSurface, buildFullVisibleRoutineExercises, type SessionAiEvidenceSurface, type FullSessionRoutineSurface, type SessionMainPreviewSurface, type FullRoutineExercise } from '@/lib/program/program-ai-evidence-bridge'
@@ -2558,6 +2570,219 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 {cardSurface.weeklyRoleRationale}
               </p>
             )}
+
+            {/* =====================================================================
+                [PHASE 4S] CANONICAL METHOD/DOCTRINE DELIVERY LINE
+                ---------------------------------------------------------------------
+                Reads `cardSurface.methodStructures` (Phase 4P) and
+                `cardSurface.doctrineBlockResolution` (Phase 4Q) — the
+                authoritative typed truth for what doctrine considered/applied
+                on this day. Renders ONE compact line classifying the result
+                so we never show a generic yellow "blocked" bubble when
+                classified entries exist.
+
+                This DOES NOT duplicate the existing visibleMethodTally chip
+                row (which is gated on `finalVisibleBodyModel` / styledGroups
+                — i.e. what the body will actually render when expanded). The
+                Phase 4S line summarizes doctrine-level resolution counts and
+                surfaces classified blocked statuses + bug-classifications
+                that the chip row could not express.
+
+                Tones (kept inside the existing palette):
+                  - applied       → muted green text                    [#7FB287]
+                  - blocked safety/audit → amber text                   [text-amber-300/85]
+                  - bug-classification  → red diagnostic chip           [text-red-300/90]
+                  - neutral classifiers → muted neutral text            [#8A8A8A]
+
+                Suppressed entirely on legacy programs that have no Phase
+                4P/4Q arrays — those keep their existing chip path.
+                ===================================================================== */}
+            {cardSurface && (() => {
+              const methodStructures = readMethodStructuresFromSession({
+                methodStructures: cardSurface.methodStructures,
+              })
+              const blockResolution = readDoctrineBlockResolutionFromSession({
+                doctrineBlockResolution: cardSurface.doctrineBlockResolution,
+              })
+              if (methodStructures.length === 0 && blockResolution.length === 0) {
+                return null
+              }
+
+              // Counts derived purely from the typed Phase 4Q classifier output.
+              // We prefer the classifier counts over methodStructures.status
+              // because the classifier is what owns the "applied vs blocked
+              // for what reason" verdict the user-facing line should reflect.
+              let appliedCount = 0
+              let trueSafetyCount = 0
+              let noTargetCount = 0
+              let notRelevantCount = 0
+              let needsAuditCount = 0
+              const bugEntries: ReturnType<typeof normalizeDoctrineBlockStatus>[] = []
+              for (const entry of blockResolution) {
+                const norm = normalizeDoctrineBlockStatus(entry?.resolvedStatus)
+                if (norm.isBug) {
+                  bugEntries.push(norm)
+                  continue
+                }
+                switch (entry?.resolvedStatus) {
+                  case 'APPLIED':
+                  case 'ALREADY_APPLIED':
+                    appliedCount += 1
+                    break
+                  case 'TRUE_SAFETY_BLOCK':
+                    trueSafetyCount += 1
+                    break
+                  case 'NO_RELEVANT_TARGET':
+                    noTargetCount += 1
+                    break
+                  case 'NOT_RELEVANT_TO_SESSION':
+                    notRelevantCount += 1
+                    break
+                  case 'UNKNOWN_NEEDS_AUDIT':
+                    needsAuditCount += 1
+                    break
+                }
+              }
+
+              // If only methodStructures exists (e.g. Phase 4P stamped but
+              // Phase 4Q rollup did not run on this saved program), derive
+              // applied count from the structure status as a graceful
+              // fallback. This keeps older saved programs informative.
+              if (blockResolution.length === 0 && methodStructures.length > 0) {
+                for (const ms of methodStructures) {
+                  if (ms?.status === 'applied' || ms?.status === 'already_applied') {
+                    appliedCount += 1
+                  }
+                }
+              }
+
+              const hasRenderableStructure = hasRenderableMethodStructure(cardSurface)
+              const totalClassifiedBlocks =
+                trueSafetyCount + noTargetCount + notRelevantCount + needsAuditCount
+              const hasBugs = bugEntries.length > 0
+
+              // No applied + no blocks + no bugs → nothing meaningful to say.
+              // (e.g. an older session with empty arrays.)
+              if (appliedCount === 0 && totalClassifiedBlocks === 0 && !hasBugs) {
+                return null
+              }
+
+              const segments: string[] = []
+              if (appliedCount > 0) {
+                segments.push(`${appliedCount} doctrine applied`)
+              }
+              if (trueSafetyCount > 0) {
+                segments.push(`${trueSafetyCount} blocked for safety`)
+              }
+              if (noTargetCount > 0) {
+                segments.push(`${noTargetCount} no matching target`)
+              }
+              if (notRelevantCount > 0) {
+                segments.push(`${notRelevantCount} not for this day`)
+              }
+              if (needsAuditCount > 0) {
+                segments.push(`${needsAuditCount} needs audit`)
+              }
+
+              return (
+                <div
+                  className="mt-2 flex flex-col gap-1 text-[11px] leading-snug min-w-0"
+                  style={{ overflowWrap: 'anywhere' }}
+                >
+                  {/* Compact doctrine resolution summary. We deliberately do
+                      not duplicate any "Superset / Circuit / Density / Cluster"
+                      chip the body will render — those come from styledGroups
+                      via visibleMethodTally above. This line is doctrine-level
+                      truth: how many methods doctrine considered, and how
+                      they classified out. Suppressed when the segments list
+                      is empty AND there is no bug to surface. */}
+                  {segments.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                      <span className="text-[#8A8A8A]">Doctrine:</span>
+                      {appliedCount > 0 && (
+                        <span className="text-[#7FB287]">
+                          {appliedCount} applied
+                        </span>
+                      )}
+                      {appliedCount > 0 &&
+                        (trueSafetyCount > 0 ||
+                          noTargetCount > 0 ||
+                          notRelevantCount > 0 ||
+                          needsAuditCount > 0) && (
+                          <span className="text-[#5A5A5A]">·</span>
+                        )}
+                      {trueSafetyCount > 0 && (
+                        <span className="text-amber-300/85">
+                          {trueSafetyCount} blocked for safety
+                        </span>
+                      )}
+                      {(trueSafetyCount > 0 &&
+                        (noTargetCount > 0 || notRelevantCount > 0 || needsAuditCount > 0)) && (
+                        <span className="text-[#5A5A5A]">·</span>
+                      )}
+                      {noTargetCount > 0 && (
+                        <span className="text-[#8A8A8A]">
+                          {noTargetCount} no target
+                        </span>
+                      )}
+                      {(noTargetCount > 0 && (notRelevantCount > 0 || needsAuditCount > 0)) && (
+                        <span className="text-[#5A5A5A]">·</span>
+                      )}
+                      {notRelevantCount > 0 && (
+                        <span className="text-[#8A8A8A]">
+                          {notRelevantCount} not for this day
+                        </span>
+                      )}
+                      {(notRelevantCount > 0 && needsAuditCount > 0) && (
+                        <span className="text-[#5A5A5A]">·</span>
+                      )}
+                      {needsAuditCount > 0 && (
+                        <span className="text-amber-300/85">
+                          {needsAuditCount} needs audit
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Bug-classification surface. We do not silently hide these
+                      — if doctrine ran but a connection/runtime/normalizer/
+                      stale-source bug prevented its truth from reaching the
+                      card, the user has a right to see WHY their session
+                      doesn't reflect doctrine. The label text is one short
+                      sentence pulled from `normalizeDoctrineBlockStatus`. We
+                      cap the displayed list to the first 2 entries to keep
+                      mobile cards compact; remaining count is summarized. */}
+                  {hasBugs && (
+                    <div className="flex flex-wrap items-start gap-x-1.5 gap-y-0.5">
+                      <span className="text-red-300/90 font-medium">
+                        Doctrine connection issue:
+                      </span>
+                      <span className="text-red-300/85">
+                        {bugEntries
+                          .slice(0, 2)
+                          .map(b => b.label.replace(/^[A-Z][a-z]+ issue: /, ''))
+                          .join(' · ')}
+                        {bugEntries.length > 2
+                          ? ` · +${bugEntries.length - 2} more`
+                          : ''}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Method-structure existence breadcrumb. ONLY rendered when
+                      the canonical Phase 4P arrays exist with at least one
+                      applied entry AND the existing styledGroups chip row
+                      above did not already cover it. Stays one short line —
+                      no exercise lists, no rounds; the body renders the full
+                      grouped block when the card is expanded. */}
+                  {hasRenderableStructure && appliedCount === 0 && (
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                      <span className="text-[#8A8A8A]">Method structure present</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
             {/* [REMOVED] GROUPED_TRUTH s4/s5/s7 breadcrumb chip. Grouped days are
                 now visibly recognized through the production method-summary
                 chips (Superset/Circuit/Density/Cluster) and the colored grouped

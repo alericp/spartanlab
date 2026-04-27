@@ -163,7 +163,7 @@ import { ProgramMaterializationStaleNotice } from '@/components/programs/Program
 // visibility on the athlete-facing page. Reads only the Phase 4A rollup the
 // wrapper already writes. Does NOT show selected-rule counts, batch keys,
 // source labels, or Phase-disclaimer copy.
-import { MaterializationStatusLine, DoctrineCausalLine } from '@/components/programs/MaterializationStatusLine'
+      import { MaterializationStatusLine, DoctrineCausalLine, WeeklyMethodChallengeLine } from '@/components/programs/MaterializationStatusLine'
 // [VISIBLE-SESSION-TRUTH-LOCK] Single canonical visible-card display contract.
 // The page-level CanonicalProgramDisplayTruth now embeds these surfaces so
 // every visible day card consumes one authoritative contract owned by the
@@ -1541,6 +1541,19 @@ function ProgramDisplayWrapper({
               - hidden:  legacy program without challenge object
             Never claims doctrine "applied" without an actual winner change. */}
         <DoctrineCausalLine program={program} />
+
+        {/* [PHASE 4L] WEEKLY METHOD CHALLENGE LINE — athlete-facing.
+            Compact per-method chip set (Top Set + Back-Off / Drop Set /
+            Rest-Pause / Cluster / Endurance Density / Superset / Circuit /
+            Density Block) showing APPLIED / BLOCKED_BY_SAFETY /
+            NOT_NEEDED_FOR_PROFILE / MATERIALIZER_NOT_CONNECTED based on
+            real audit data from `program.weeklyMethodRepresentation`
+            (Phase 4J auditor) reclassified through
+            `program.rowLevelMutatorRollup` (Phase 4L mutator) when the
+            mutator owns a method the auditor cannot see (endurance_density).
+            Includes a compact prescription-bounds summary line when the
+            mutator ran. Hidden on legacy / pre-Phase-4J programs. */}
+        <WeeklyMethodChallengeLine program={program} />
 
         {/* [PHASE 4C — PROOF DEMOTION] DoctrineRuntimeProof and
             DoctrineIntegrationProofBlock are diagnostic surfaces. They

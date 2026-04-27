@@ -148,7 +148,38 @@ function normalizeExercise(raw: unknown, index: number): WorkoutExerciseContract
   if (typeof rawSetExec === 'string' && (validSetExecMethods as readonly string[]).includes(rawSetExec)) {
     ;(normalized as unknown as { setExecutionMethod: string }).setExecutionMethod = rawSetExec
   }
-  
+
+  // [PHASE 4L] Preserve row-level mutator-attached fields across the
+  // normalize boundary. These fields are written by
+  // `lib/program/row-level-method-prescription-mutator.ts` and are NOT in
+  // `WorkoutExerciseContract`. Same extra-property pass-through pattern as
+  // `setExecutionMethod` above. Without this preservation, the live workout
+  // would lose:
+  //   - the densityPrescription instruction (time cap + quality stop) for
+  //     endurance_density rows,
+  //   - the doctrinePrescriptionDelta proof,
+  //   - the prescriptionBoundsProof witness (currentValue / doctrineMin /
+  //     doctrineMax / verdict),
+  //   - the rowLevelMethodApplied flag.
+  // We only carry plain JSON-safe shapes (objects / primitives), never
+  // functions or class instances.
+  const rawDensityPrescription = (ex as { densityPrescription?: unknown }).densityPrescription
+  if (rawDensityPrescription && typeof rawDensityPrescription === 'object') {
+    ;(normalized as unknown as { densityPrescription: unknown }).densityPrescription = rawDensityPrescription
+  }
+  const rawDoctrineDelta = (ex as { doctrinePrescriptionDelta?: unknown }).doctrinePrescriptionDelta
+  if (rawDoctrineDelta && typeof rawDoctrineDelta === 'object') {
+    ;(normalized as unknown as { doctrinePrescriptionDelta: unknown }).doctrinePrescriptionDelta = rawDoctrineDelta
+  }
+  const rawBoundsProof = (ex as { prescriptionBoundsProof?: unknown }).prescriptionBoundsProof
+  if (rawBoundsProof && typeof rawBoundsProof === 'object') {
+    ;(normalized as unknown as { prescriptionBoundsProof: unknown }).prescriptionBoundsProof = rawBoundsProof
+  }
+  const rawRowLevelApplied = (ex as { rowLevelMethodApplied?: unknown }).rowLevelMethodApplied
+  if (typeof rawRowLevelApplied === 'boolean') {
+    ;(normalized as unknown as { rowLevelMethodApplied: boolean }).rowLevelMethodApplied = rawRowLevelApplied
+  }
+
   return normalized
 }
 

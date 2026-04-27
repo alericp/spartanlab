@@ -267,10 +267,18 @@ export const DOCTRINE_MATERIALIZER_REGISTRY: ReadonlyArray<DoctrineMaterializerR
       '(lateBoundary = max(2, ceil(N/2))), weekly-role density gating ' +
       '(roleBlocksDropSet on low-intensity / density-blocked roles), ' +
       'strength-category exclusion for drop_set, and "already has method or blockId" ' +
-      'skip. endurance_density remains the only row-level method with no dedicated ' +
-      'writer (density_block grouped form is the closest representation). ' +
-      'lib/program/weekly-method-representation.ts surfaces per-method APPLIED / ' +
-      'BLOCKED_BY_SAFETY / NOT_NEEDED_FOR_PROFILE / MATERIALIZER_NOT_CONNECTED.',
+      'skip. [PHASE 4L UPDATE] endurance_density NOW has a dedicated row-level ' +
+      'writer in lib/program/row-level-method-prescription-mutator.ts ' +
+      '(applyRowLevelMethodPrescriptionMutations). It applies to a safe ' +
+      'late-position accessory / core / conditioning row when the profile asks ' +
+      'for endurance/conditioning context AND no grouped density_block was ' +
+      'already applied. lib/program/weekly-method-representation.ts surfaces ' +
+      'per-method APPLIED / BLOCKED_BY_SAFETY / NOT_NEEDED_FOR_PROFILE / ' +
+      'MATERIALIZER_NOT_CONNECTED, and the Phase 4L mutator rollup ' +
+      '(program.rowLevelMutatorRollup) is consumed by ' +
+      'WeeklyMethodChallengeLine to upgrade endurance_density to APPLIED ' +
+      'when the mutator fired (the auditor cannot see method=endurance_density ' +
+      'writes because they are not in materializationRollup totals).',
   },
 
   // ---------------------------------------------------------------------------
@@ -299,9 +307,17 @@ export const DOCTRINE_MATERIALIZER_REGISTRY: ReadonlyArray<DoctrineMaterializerR
       'densityBias / holdBias) and rationale strings consumed by method-decision-engine ' +
       'for fatigue and time-efficiency notes. The existing per-exercise sets/reps/hold/' +
       'rest/RPE resolver does NOT consume those biases as numeric mutators. Wiring ' +
-      'them requires a dedicated safety phase (4J) that respects week phase, current ' +
-      'working level, joint cautions, and method/exercise category bounds. Until then, ' +
-      'reporting this honestly as SCORING_ONLY_NO_MUTATOR.',
+      'decisive numeric dose mutation requires a dedicated safety phase that respects ' +
+      'week phase, current working level, joint cautions, and method/exercise category ' +
+      'bounds. [PHASE 4L UPDATE] lib/program/row-level-method-prescription-mutator.ts ' +
+      'now provides a per-row bounds WITNESS (currentValue + doctrineMin/Max + verdict ' +
+      'ALREADY_WITHIN_BOUNDS / OUT_OF_BOUNDS_NOT_MUTATED / MISSING_DOCTRINE_BOUNDS) ' +
+      'attached to exercise.prescriptionBoundsProof and rolled up onto ' +
+      'program.rowLevelMutatorRollup.rowsWithinBounds / rowsOutOfBounds / ' +
+      'rowsMissingBounds. The witness does not mutate dose — Phase 4L still honors the ' +
+      'safety deferral. Status remains SCORING_ONLY_NO_MUTATOR because no numeric ' +
+      'sets/reps/hold/rest/RPE field is overwritten; the bounds witness is a proof ' +
+      'surface, not a mutator.',
   },
 
   // ---------------------------------------------------------------------------

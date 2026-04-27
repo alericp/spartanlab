@@ -590,6 +590,97 @@ export function WeeklyMethodChallengeLine({ program }: Props) {
       )}
 
       <Phase4NMethodBudgetLine program={program as unknown as { weeklyMethodBudgetPlan?: BudgetPlanView | null; trainingIntentVector?: IntentVectorView | null }} />
+
+      <Phase4PMethodStructureLine program={program as unknown as { methodStructureRollup?: MethodStructureRollupView | null }} />
+    </div>
+  )
+}
+
+// =============================================================================
+// [PHASE 4P] METHOD STRUCTURE ROLLUP LINE
+// Reads `program.methodStructureRollup` (built once by
+// `lib/server/authoritative-program-generation.ts`, populated by per-session
+// `summary.structuralMaterialization`). Renders one compact line summarising
+// what the structural materialization corridor did across the whole week:
+//   "Method structure: X applied · Y already applied · Z blocked · W no safe target"
+// The verdict pill is colour-coded:
+//   STRUCTURAL_METHODS_APPLIED        → emerald
+//   ROW_METHODS_ONLY_APPLIED          → emerald-200
+//   EVALUATED_NO_SAFE_STRUCTURAL_METHODS → zinc
+//   METHOD_MATERIALIZATION_NOT_CONNECTED → zinc-dashed
+// When a sample proof exists, it shows in a hover-tooltip on the verdict pill
+// with the day, family, and member exercises. Honest no-change is honoured —
+// nothing is shown when the rollup is absent.
+// =============================================================================
+interface MethodStructureRollupView {
+  finalVerdict?: string
+  totalApplied?: number
+  totalAlreadyApplied?: number
+  totalBlocked?: number
+  totalNotNeeded?: number
+  totalNoSafeTarget?: number
+  totalNewStructuralGroupsWritten?: number
+  byFamily?: Record<string, { applied?: number; alreadyApplied?: number; blocked?: number; notNeeded?: number; noSafeTarget?: number }>
+  sampleProof?: {
+    dayNumber?: number
+    family?: string
+    exerciseNames?: string[]
+    reason?: string
+    visibleProofPath?: string
+  } | null
+}
+
+function Phase4PMethodStructureLine({ program }: { program: { methodStructureRollup?: MethodStructureRollupView | null } }) {
+  const rollup = program.methodStructureRollup
+  if (!rollup || !rollup.finalVerdict) return null
+
+  const applied = rollup.totalApplied ?? 0
+  const alreadyApplied = rollup.totalAlreadyApplied ?? 0
+  const blocked = rollup.totalBlocked ?? 0
+  const noSafeTarget = rollup.totalNoSafeTarget ?? 0
+  const notNeeded = rollup.totalNotNeeded ?? 0
+  const newWritten = rollup.totalNewStructuralGroupsWritten ?? 0
+
+  const sample = rollup.sampleProof ?? null
+  const sampleTooltip = sample
+    ? `Day ${sample.dayNumber ?? '?'} · ${sample.family ?? '—'}: ${(sample.exerciseNames ?? []).join(' + ') || '(no members)'}${sample.reason ? ` — ${sample.reason}` : ''}`
+    : ''
+
+  function verdictMicrocopy(): { label: string; tone: string } {
+    switch (rollup?.finalVerdict) {
+      case 'STRUCTURAL_METHODS_APPLIED':
+        return { label: 'structural methods applied', tone: 'text-emerald-300' }
+      case 'ROW_METHODS_ONLY_APPLIED':
+        return { label: 'row-level methods applied (no grouped structure earned)', tone: 'text-emerald-200/80' }
+      case 'EVALUATED_NO_SAFE_STRUCTURAL_METHODS':
+        return { label: 'evaluated, no safe structural methods', tone: 'text-zinc-400' }
+      case 'METHOD_MATERIALIZATION_NOT_CONNECTED':
+        return { label: 'not connected', tone: 'text-zinc-500' }
+      case 'METHOD_MATERIALIZATION_ERROR':
+        return { label: 'error during materialization', tone: 'text-amber-300' }
+      default:
+        return { label: rollup?.finalVerdict ?? '—', tone: 'text-zinc-400' }
+    }
+  }
+  const { label, tone } = verdictMicrocopy()
+
+  return (
+    <div className="mt-2 border-t border-zinc-800/60 pt-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] min-w-0" style={{ overflowWrap: 'anywhere' }}>
+        <span className="font-medium text-zinc-300">Method structure</span>
+        <span className={tone} title={sampleTooltip}>
+          {label}
+        </span>
+        <span className="text-zinc-500">·</span>
+        <span className="text-zinc-400">
+          {applied} applied
+          {newWritten > 0 ? ` (${newWritten} new)` : ''}
+          {alreadyApplied > 0 ? ` · ${alreadyApplied} already applied` : ''}
+          {blocked > 0 ? ` · ${blocked} blocked` : ''}
+          {noSafeTarget > 0 ? ` · ${noSafeTarget} no safe target` : ''}
+          {notNeeded > 0 ? ` · ${notNeeded} not needed` : ''}
+        </span>
+      </div>
     </div>
   )
 }

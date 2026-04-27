@@ -1930,6 +1930,24 @@ export async function executeAuthoritativeGeneration(
           finalStatusCounts: {} as Record<string, number>,
         }
 
+        // [PHASE 4P] Program-level rollup of every session's canonical
+        // methodStructures (the unified read-model that mirrors styledGroups +
+        // row-level set-execution methods + structural corridor materializations
+        // into one shape). Built up across every per-session call below and
+        // stamped onto `program.methodStructureRollup` after the loop.
+        const methodStructureRollupAccum = {
+          version: 'phase-4p' as const,
+          sessionsProcessed: 0,
+          totalApplied: 0,
+          totalAlreadyApplied: 0,
+          totalBlocked: 0,
+          totalNotNeeded: 0,
+          totalNoSafeTarget: 0,
+          byFamily: {} as Record<string, { applied: number; alreadyApplied: number; blocked: number; notNeeded: number; noSafeTarget: number }>,
+          totalNewStructuralGroupsWritten: 0,
+          firstAppliedSample: null as null | { dayNumber: number; family: string; exerciseNames: string[]; reason: string; visibleProofPath: string },
+        }
+
         for (let s = 0; s < program.sessions.length; s++) {
           const sess = program.sessions[s] as unknown
           try {
@@ -1979,6 +1997,55 @@ export async function executeAuthoritativeGeneration(
             }
             mutatorRollup.finalStatusCounts[summary.finalStatus] =
               (mutatorRollup.finalStatusCounts[summary.finalStatus] ?? 0) + 1
+
+            // [PHASE 4P] Accumulate per-session canonical methodStructures
+            // counts into the program-level rollup. Each session's
+            // structuralMaterialization carries the per-family applied/blocked
+            // counts; we sum them and pick the first applied entry as the
+            // sample proof for the compact program-page line.
+            const struct = summary.structuralMaterialization
+            if (struct) {
+              methodStructureRollupAccum.sessionsProcessed += 1
+              methodStructureRollupAccum.totalApplied += struct.appliedCount
+              methodStructureRollupAccum.totalAlreadyApplied += struct.alreadyAppliedCount
+              methodStructureRollupAccum.totalBlocked += struct.blockedCount
+              methodStructureRollupAccum.totalNotNeeded += struct.notNeededCount
+              methodStructureRollupAccum.totalNoSafeTarget += struct.noSafeTargetCount
+              if (struct.newStructuralGroupWritten) {
+                methodStructureRollupAccum.totalNewStructuralGroupsWritten += 1
+              }
+              for (const entry of struct.methodStructures) {
+                const fam = entry.family
+                if (!methodStructureRollupAccum.byFamily[fam]) {
+                  methodStructureRollupAccum.byFamily[fam] = {
+                    applied: 0,
+                    alreadyApplied: 0,
+                    blocked: 0,
+                    notNeeded: 0,
+                    noSafeTarget: 0,
+                  }
+                }
+                const bucket = methodStructureRollupAccum.byFamily[fam]
+                if (entry.status === 'applied') bucket.applied += 1
+                else if (entry.status === 'already_applied') bucket.alreadyApplied += 1
+                else if (entry.status === 'blocked') bucket.blocked += 1
+                else if (entry.status === 'not_needed') bucket.notNeeded += 1
+                else if (entry.status === 'no_safe_target') bucket.noSafeTarget += 1
+
+                if (
+                  methodStructureRollupAccum.firstAppliedSample === null &&
+                  (entry.status === 'applied' || entry.status === 'already_applied')
+                ) {
+                  methodStructureRollupAccum.firstAppliedSample = {
+                    dayNumber: entry.dayNumber ?? 0,
+                    family: entry.family,
+                    exerciseNames: entry.exerciseNames,
+                    reason: entry.reason,
+                    visibleProofPath: entry.visibleProofPath,
+                  }
+                }
+              }
+            }
           } catch (perSessionErr) {
             console.log('[PHASE4L-ROW-LEVEL-MUTATOR-PER-SESSION-FAILED]', {
               dayNumber: (sess as { dayNumber?: number } | null)?.dayNumber ?? null,
@@ -2019,6 +2086,58 @@ export async function executeAuthoritativeGeneration(
           totalDoctrineApplications,
           programFinalVerdict,
         }
+
+        // [PHASE 4P] Compute the canonical method structure rollup verdict.
+        // Order: STRUCTURAL_METHODS_APPLIED > ROW_METHODS_ONLY_APPLIED >
+        // EVALUATED_NO_SAFE_STRUCTURAL_METHODS > NOT_CONNECTED.
+        const totalStructuralActivity =
+          methodStructureRollupAccum.totalApplied + methodStructureRollupAccum.totalAlreadyApplied
+        const totalRowOnly = totalDoctrineApplications
+        let methodStructureFinalVerdict:
+          | 'STRUCTURAL_METHODS_APPLIED'
+          | 'ROW_METHODS_ONLY_APPLIED'
+          | 'EVALUATED_NO_SAFE_STRUCTURAL_METHODS'
+          | 'METHOD_MATERIALIZATION_NOT_CONNECTED'
+          | 'METHOD_MATERIALIZATION_ERROR'
+        // Determine whether structural (grouped) vs row-only.
+        const groupedFamilies = ['superset', 'circuit', 'density_block']
+        const groupedAppliedCount = groupedFamilies.reduce((acc, fam) => {
+          const bucket = methodStructureRollupAccum.byFamily[fam]
+          return acc + (bucket?.applied ?? 0) + (bucket?.alreadyApplied ?? 0)
+        }, 0)
+        if (methodStructureRollupAccum.sessionsProcessed === 0) {
+          methodStructureFinalVerdict = 'METHOD_MATERIALIZATION_NOT_CONNECTED'
+        } else if (groupedAppliedCount > 0) {
+          methodStructureFinalVerdict = 'STRUCTURAL_METHODS_APPLIED'
+        } else if (totalStructuralActivity > 0 || totalRowOnly > 0) {
+          methodStructureFinalVerdict = 'ROW_METHODS_ONLY_APPLIED'
+        } else {
+          methodStructureFinalVerdict = 'EVALUATED_NO_SAFE_STRUCTURAL_METHODS'
+        }
+        ;(program as unknown as { methodStructureRollup?: unknown }).methodStructureRollup = {
+          version: 'phase-4p' as const,
+          sessionsProcessed: methodStructureRollupAccum.sessionsProcessed,
+          totalApplied: methodStructureRollupAccum.totalApplied,
+          totalAlreadyApplied: methodStructureRollupAccum.totalAlreadyApplied,
+          totalBlocked: methodStructureRollupAccum.totalBlocked,
+          totalNotNeeded: methodStructureRollupAccum.totalNotNeeded,
+          totalNoSafeTarget: methodStructureRollupAccum.totalNoSafeTarget,
+          byFamily: methodStructureRollupAccum.byFamily,
+          finalVerdict: methodStructureFinalVerdict,
+          sampleProof: methodStructureRollupAccum.firstAppliedSample,
+          visibleProofPath: 'program.methodStructureRollup' as const,
+          totalNewStructuralGroupsWritten: methodStructureRollupAccum.totalNewStructuralGroupsWritten,
+        }
+        console.log('[PHASE4P-METHOD-STRUCTURE-ROLLUP]', {
+          generationIntent: request.generationIntent,
+          triggerSource: request.triggerSource,
+          finalVerdict: methodStructureFinalVerdict,
+          totalApplied: methodStructureRollupAccum.totalApplied,
+          totalAlreadyApplied: methodStructureRollupAccum.totalAlreadyApplied,
+          totalNewStructuralGroupsWritten: methodStructureRollupAccum.totalNewStructuralGroupsWritten,
+          byFamily: methodStructureRollupAccum.byFamily,
+          sampleProof: methodStructureRollupAccum.firstAppliedSample,
+        })
 
         console.log('[PHASE4M-DOCTRINE-APPLICATION-COMPLETE]', {
           generationIntent: request.generationIntent,

@@ -189,6 +189,22 @@ import {
   type WeeklyDayRole,
   type WeekPhaseTag,
 } from './program/weekly-session-role-contract'
+// =============================================================================
+// [PHASE-K] Weekly stress distribution contract.
+// Pure additive whole-week governor that classifies each composed session
+// by its actual stress source (load / volume / density / skill_tendon /
+// eccentric_isometric / mixed / recovery), detects repeated high-stress
+// adjacencies, and conservatively softens the second of any pair where
+// next-day risk evaluates to HIGH. Runs AFTER the per-session loop and
+// AFTER the role-contract prescription-shaping pass so it sees the final
+// composed exercises. Does not run during protected weeks.
+// =============================================================================
+import {
+  buildWeeklyStressDistributionPlan,
+  applyWeeklyStressGovernor,
+  type WeeklyStressDistributionPlan,
+  type WeeklyStressGovernorResult,
+} from './program/weekly-stress-distribution-contract'
 // [exercise-trace] TASK 8: Import comparison utilities for build-to-build traceability
 import {
   type ProgramSelectionTrace,
@@ -1083,6 +1099,43 @@ export interface AdaptiveSession {
   focusLabel: string
   isPrimary: boolean
   rationale: string
+  // ==========================================================================
+  // [PHASE-K] CANONICAL STRESS / RECOVERY FIELDS
+  // Hoisted top-level so every consumer (Program card, live workout loader,
+  // dashboard, normalizer) reads the same authoritative fields without
+  // having to descend into a nested classification object. The full
+  // classification + reasonCodes + plan-level summary live on
+  // `program.weeklyStressDistributionPlan` for richer surfaces; these
+  // hoisted fields are the per-session display contract.
+  // Optional - sessions saved before Phase K will not carry these.
+  // ==========================================================================
+  /** "primary_strength_emphasis" / "skill_quality_emphasis" / etc. — mirrors
+   *  the role contract's roleId for one-stop reading. */
+  stressRole?: string
+  stressLevel?: 'LOW' | 'MODERATE' | 'HIGH'
+  recoveryCost?: 'LOW' | 'MODERATE' | 'HIGH' | 'VERY_HIGH'
+  primaryStressSource?:
+    | 'LOAD'
+    | 'VOLUME'
+    | 'DENSITY'
+    | 'SKILL_TENDON'
+    | 'ECCENTRIC_ISOMETRIC'
+    | 'MIXED'
+    | 'RECOVERY'
+  secondaryStressSources?: Array<
+    'LOAD' | 'VOLUME' | 'DENSITY' | 'SKILL_TENDON' | 'ECCENTRIC_ISOMETRIC' | 'MIXED' | 'RECOVERY'
+  >
+  /** Risk against the NEXT day in the week. Used by the governor decision
+   *  trail and the visible-proof helper. */
+  nextDayRisk?: 'LOW' | 'MODERATE' | 'HIGH'
+  /** Stable machine reason codes — never user-facing. */
+  stressDistributionReasonCodes?: string[]
+  /** Compact coach-facing chip + one-line explanation produced by the
+   *  contract. Visible on the Program card when present. */
+  stressDistributionProof?: {
+    label: string
+    explanation: string
+  }
   exercises: AdaptiveExercise[]
   warmup: AdaptiveExercise[]
   cooldown: AdaptiveExercise[]
@@ -1404,6 +1457,23 @@ export interface AdaptiveExercise {
     explanationNote: string | null
   }
   // ==========================================================================
+  // [PHASE-K] STRESS ADJUSTMENT DELTA
+  // Authoritative per-row audit of the weekly stress governor's mutation.
+  // Populated ONLY when this row was actually softened by the governor pass
+  // (the second session in an adjacent (i, i+1) pair where next-day-risk
+  // evaluated to HIGH). Carries the BEFORE / AFTER values of `sets` and
+  // `targetRPE` so display surfaces and audit consumers can prove the
+  // adjustment is real, not a label. Absent on every other row.
+  // ==========================================================================
+  stressAdjustmentDelta?: {
+    setsBefore: number
+    setsAfter: number
+    rpeBefore: number | null
+    rpeAfter: number | null
+    reasonCode: string
+    reasonCoachLine: string
+  }
+  // ==========================================================================
   // [DB-TRUTH-WINNER-PROVENANCE-LOCK]
   // Canonical, durable winner-rationale stamp. Built ONLY from final post-rerank
   // truth (not eligibility, not preferences, not bundle availability alone).
@@ -1465,6 +1535,20 @@ export interface AdaptiveProgram {
   }
   structure: WeeklyStructure
   sessions: AdaptiveSession[]
+  // ===========================================================================
+  // [PHASE-K] WEEKLY STRESS DISTRIBUTION PLAN
+  // Authoritative whole-week classification + governor audit. Computed once
+  // post-session-loop by `buildWeeklyStressDistributionPlan` and stamped
+  // here. Display surfaces (Program card, dashboard) can read either this
+  // plan or the per-session hoisted fields (`session.stressRole` etc.) -
+  // both are written in the same single owner pass.
+  // Optional - programs saved before Phase K will not carry it.
+  // ===========================================================================
+  weeklyStressDistributionPlan?: WeeklyStressDistributionPlan
+  /** Audit trail of governor mutations actually applied this week. Empty
+   *  array when nothing fired (week was either protected or had no
+   *  high-risk adjacencies). */
+  weeklyStressGovernorAdjustments?: WeeklyStressGovernorResult['appliedAdjustments']
   // [PHASE 15D] Dominant spine resolution for multi-style programs
   dominantSpineResolution?: {
     primarySpine: WeeklySpineType
@@ -18674,7 +18758,96 @@ console.log('[program-generate] Generation complete:', {
     }
     ;(globalThis as unknown as { sessionStorage: Storage }).sessionStorage.setItem('regenTruthAudit', JSON.stringify(updatedAudit))
   }
-  
+
+  // ============================================================================
+  // [PHASE-K] WEEKLY STRESS DISTRIBUTION CONTRACT
+  // ----------------------------------------------------------------------------
+  // Single ingress for the whole-week stress / recovery / exposure governor.
+  // Runs ONCE here, after every session has been composed, prescribed, and
+  // numerically mutated. Job:
+  //
+  //   1. Classify each session by actual stress source (LOAD / VOLUME /
+  //      DENSITY / SKILL_TENDON / ECCENTRIC_ISOMETRIC / MIXED / RECOVERY)
+  //      from the composed exercises - not from the role label alone.
+  //   2. Compute pairwise nextDayRisk so a back-to-back heavy planche or
+  //      back-to-back density+heavy-pull is detected as HIGH risk.
+  //   3. Conservatively soften the SECOND session of a HIGH-risk pair
+  //      (cap RPE -1, drop sets -1 on overlapping accessory rows, attach
+  //      stressAdjustmentDelta audit). Gated to one session per week and
+  //      blocked entirely on protected/acclimation/recovery_constrained
+  //      weeks - those are already softened upstream.
+  //   4. Stamp canonical fields on each session (stressRole, stressLevel,
+  //      recoveryCost, primaryStressSource, secondaryStressSources,
+  //      nextDayRisk, stressDistributionReasonCodes, stressDistributionProof)
+  //      and on the program (weeklyStressDistributionPlan +
+  //      weeklyStressGovernorAdjustments) so display surfaces and the
+  //      live workout loader can read authoritative truth without
+  //      re-deriving anything.
+  //
+  // SINGLE OWNER: nothing downstream re-classifies stress or re-evaluates
+  // next-day risk. Display surfaces (program-display-contract -> Program
+  // card; live workout loader) consume what this pass writes.
+  // ============================================================================
+  const phaseKStressPlan: WeeklyStressDistributionPlan = buildWeeklyStressDistributionPlan({
+    sessions,
+    weeklyRoleContract: weeklySessionRoleContract,
+  })
+  const phaseKGovernorResult: WeeklyStressGovernorResult = applyWeeklyStressGovernor(
+    sessions,
+    phaseKStressPlan,
+    {
+      maxRowsPerSession: 2,
+      maxAdjustedSessions: 1,
+    },
+  )
+  // Replace the in-place sessions array with the governor's output. The
+  // governor only mutates rows on the second session of a HIGH-risk pair;
+  // every other session reference is preserved by identity.
+  for (let i = 0; i < sessions.length; i++) {
+    sessions[i] = phaseKGovernorResult.sessions[i]
+  }
+  // Stamp per-session canonical fields. Done AFTER governor mutation so the
+  // visibleExplanationShort reflects the post-soften coach-line where
+  // applicable. The governor itself only mutates `next.reasonCodes` and
+  // `next.visibleExplanationShort` on the local plan classification, so
+  // reading classification[i] here gets the right post-soften copy.
+  const phaseKRoleByIndex = weeklySessionRoleContract.dayRoles
+  for (let i = 0; i < sessions.length; i++) {
+    const c = phaseKStressPlan.sessionClassifications[i]
+    if (!c) continue
+    const role = phaseKRoleByIndex[i] || null
+    const proof =
+      c.visibleLabel
+        ? { label: c.visibleLabel, explanation: c.visibleExplanationShort || '' }
+        : undefined
+    sessions[i] = {
+      ...sessions[i],
+      stressRole: role?.roleId,
+      stressLevel: c.stressLevel,
+      recoveryCost: c.recoveryCost,
+      primaryStressSource: c.primaryStressSource,
+      secondaryStressSources: c.secondaryStressSources,
+      nextDayRisk: c.nextDayRisk,
+      stressDistributionReasonCodes: c.reasonCodes,
+      stressDistributionProof: proof,
+    }
+  }
+  console.log('[phase-k-stress-distribution-stamped]', {
+    totalSessions: sessions.length,
+    governorActive: phaseKStressPlan.governorActive,
+    governorSuppressedReason: phaseKStressPlan.governorSuppressedReason,
+    adjustmentsFired: phaseKGovernorResult.appliedAdjustments.length,
+    weeklyHeadline: phaseKStressPlan.summary.weeklyHeadline,
+    classifications: sessions.map(s => ({
+      day: s.dayNumber,
+      stress: s.stressLevel,
+      cost: s.recoveryCost,
+      src: s.primaryStressSource,
+      risk: s.nextDayRisk,
+    })),
+    verdict: 'PHASE_K_STRESS_DISTRIBUTION_AUTHORITATIVE',
+  })
+
   const finalProgram: AdaptiveProgram = {
     id: `adaptive-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     createdAt: new Date().toISOString(),

@@ -604,6 +604,96 @@ export function WeeklyMethodChallengeLine({ program }: Props) {
       <Phase4QAuthoritativeSourceMapLine
         program={program as unknown as { authoritativeSourceMap?: AuthoritativeProgramSourceMapView | null }}
       />
+
+      <Phase4RMasterBlueprintLine
+        program={program as unknown as Phase4RBlueprintProgramShape}
+      />
+    </div>
+  )
+}
+
+// =============================================================================
+// [PHASE 4R] MASTER BLUEPRINT LINE
+// Reads the live program (and its embedded `authoritativeSourceMap` /
+// `doctrineBlockResolutionRollup` if present) through the pure helper
+// `buildMasterTruthConnectionBlueprintStatus`. Renders one compact line:
+//
+//     "Truth blueprint: Phase G active · Display source lock in progress"
+//
+// The line is fully suppressed when the verdict is FULLY_LOCKED — the
+// blueprint is a *progress checklist*, so it goes away when there is no
+// next subtask. The active-phase tooltip exposes the next-action sentence
+// from the helper. The blueprint helper is pure / JSON-safe / has no side
+// effects, so this stays cheap to compute on every render.
+//
+// Dynamic import avoids loading the helper for users on programs that
+// crashed during generation; the line just no-ops in that case.
+// =============================================================================
+type Phase4RBlueprintProgramShape = {
+  authoritativeSourceMap?: unknown
+  doctrineBlockResolutionRollup?: unknown
+} & Record<string, unknown>
+
+function Phase4RMasterBlueprintLine({
+  program,
+}: {
+  program: Phase4RBlueprintProgramShape | null | undefined
+}) {
+  // Lazy require keeps the module out of the main render tree until the
+  // proof strip is mounted. Failure-soft: if the helper crashes for any
+  // reason on an old saved program, we render nothing rather than break
+  // the rest of the materialization status panel.
+  let blueprint:
+    | import('@/lib/program/master-truth-connection-blueprint').MasterTruthConnectionBlueprint
+    | null = null
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('@/lib/program/master-truth-connection-blueprint') as typeof import('@/lib/program/master-truth-connection-blueprint')
+    blueprint = mod.buildMasterTruthConnectionBlueprintStatus({
+      program: program ?? undefined,
+      sourceMap: program?.authoritativeSourceMap,
+    })
+  } catch {
+    return null
+  }
+  if (!blueprint) return null
+  if (blueprint.overallVerdict === 'FULLY_LOCKED') return null
+
+  // Microcopy maps the typed verdict to a one-line label. Each label is short
+  // enough to fit on a small mobile width without wrapping the whole line.
+  const verdictLabel = (() => {
+    switch (blueprint.overallVerdict) {
+      case 'DOCTRINE_FOUNDATION_INCOMPLETE':
+        return 'doctrine foundation incomplete'
+      case 'DISPLAY_SOURCE_LOCK_IN_PROGRESS':
+        return 'display source lock in progress'
+      case 'LIVE_PARITY_IN_PROGRESS':
+        return 'live parity in progress'
+      case 'FOUNDATION_READY_CONNECTIVITY_IN_PROGRESS':
+        return 'connectivity in progress'
+      default:
+        return blueprint.overallVerdict
+    }
+  })()
+
+  // Active phase title comes from the helper. The next-action sentence is
+  // surfaced via the tooltip so the surface stays compact.
+  const active = blueprint.phases.find(
+    p => p.id === blueprint.activePhaseId,
+  )
+  const tooltip = active?.nextAction ?? ''
+
+  return (
+    <div className="mt-2 border-t border-zinc-800/60 pt-2">
+      <div
+        className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] min-w-0"
+        style={{ overflowWrap: 'anywhere' }}
+      >
+        <span className="font-medium text-zinc-300">Truth blueprint</span>
+        <span className="text-zinc-400" title={tooltip}>
+          Phase {blueprint.activePhaseId} active · {verdictLabel}
+        </span>
+      </div>
     </div>
   )
 }

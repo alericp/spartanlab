@@ -1003,7 +1003,36 @@ const STORAGE_KEY = 'spartanlab_workout_session'
 // [LIVE-SESSION-FIX] Storage schema version - increment when state shape changes
 // Old saved state with different version will be discarded to prevent restore poisoning
 // [PHASE-NEXT] v3 = grouped-method runtime with execution blocks, per-set notes, reason tags
+// [PHASE-J / RESUME-IDENTITY] v3 still backward-compatible; resume identity fields
+// (dayLabel, dayNumber, executionMode, variantIndex, weekOverride) are written
+// alongside the existing payload so the dashboard Resume button can reconstruct
+// the EXACT same launch URL the Program card stamped, instead of stripping the
+// selection and forcing the live route to guess defaults.
 const STORAGE_SCHEMA_VERSION = 'workout_session_v3_grouped_runtime'
+
+// =============================================================================
+// [PHASE-J] CANONICAL RESUME IDENTITY
+// =============================================================================
+// The minimum identity needed for the dashboard Resume Workout button to
+// rebuild the same launch URL the Program card produced. Without this, Resume
+// navigates to /workout/session with no params, the route boots whatever it
+// thinks is "today" with default mode/variant, and the saved sessionId +
+// structureSignature both mismatch -> the autosaved snapshot is rejected and
+// the user is silently restarted at exercise 1, set 1.
+//
+// Stored alongside the live runtime state (status, currentExerciseIndex,
+// completedSets, RPE, notes, exerciseOverrides) inside STORAGE_KEY.
+// =============================================================================
+export interface ResumeSessionIdentity {
+  sessionId: string                         // 'session-{dayLabel}-{dayNumber}'
+  dayLabel: string                          // e.g. 'Day 6'
+  dayNumber: number                         // e.g. 6
+  executionMode: '30_min' | '45_min' | 'full'
+  variantIndex: number                      // 0 = Full Session
+  weekOverride: number | null               // selected week from URL
+  schemaVersion: string
+  savedAt: number
+}
 
 // [PHASE-X+1] Version stamp for execution proof
 const STREAMLINED_WORKOUT_VERSION = 'phase_lw2_boot_safe_v1'
@@ -1200,7 +1229,23 @@ function generateSessionStructureSignature(session: {
 // AUTO-SAVE HELPERS
 // =============================================================================
 
-function saveSessionToStorage(state: WorkoutSessionState, sessionId: string, structureSignature?: string) {
+// [PHASE-J] Resume identity bundle written alongside the runtime payload.
+// Optional so legacy callers continue to work; when omitted, the saved state
+// is still readable but the dashboard cannot rebuild a canonical Resume URL.
+interface SaveSessionIdentity {
+  dayLabel: string
+  dayNumber: number
+  executionMode: '30_min' | '45_min' | 'full'
+  variantIndex: number
+  weekOverride: number | null
+}
+
+function saveSessionToStorage(
+  state: WorkoutSessionState,
+  sessionId: string,
+  structureSignature?: string,
+  identity?: SaveSessionIdentity,
+) {
   if (typeof window === 'undefined') return
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ 
@@ -1208,7 +1253,20 @@ function saveSessionToStorage(state: WorkoutSessionState, sessionId: string, str
       sessionId,
       structureSignature, // [LIVE-SESSION-LOCK] Include structure signature
       schemaVersion: STORAGE_SCHEMA_VERSION, // [LIVE-SESSION-FIX] Include schema version for restore validation
-      savedAt: Date.now() 
+      savedAt: Date.now(),
+      // [PHASE-J / RESUME-IDENTITY] Persist enough URL identity for the
+      // dashboard Resume button to reconstruct the EXACT launch URL the
+      // Program card stamped. Required for sessionId + structureSignature
+      // matching on rehydration. When `identity` is undefined we fall back to
+      // legacy behaviour (no identity persisted) so behaviour is unchanged
+      // for callers that have not yet been updated.
+      ...(identity ? {
+        dayLabel: identity.dayLabel,
+        dayNumber: identity.dayNumber,
+        executionMode: identity.executionMode,
+        variantIndex: identity.variantIndex,
+        weekOverride: identity.weekOverride,
+      } : {}),
     }))
   } catch {}
 }
@@ -1442,6 +1500,135 @@ export function getExistingSessionInfo(): SavedSessionInfo | null {
   }
 }
 
+// =============================================================================
+// [PHASE-J] RESUME IDENTITY READER - DASHBOARD CONSUMER
+// =============================================================================
+// Reads the persisted live workout snapshot and surfaces ONLY the identity
+// bundle the dashboard needs to:
+//   1. Decide whether a resumable session exists (not just any localStorage
+//      blob - it must be schema-current AND status-in-progress AND recent).
+//   2. Reconstruct the canonical /workout/session?day=&mode=&variant=&week=
+//      launch URL the Program card originally stamped, plus a ?resume=1 flag
+//      so the route knows this is an explicit resume vs a fresh start.
+//
+// IMPORTANT: This does NOT return the full runtime state. The runtime state
+// is still hydrated by loadSessionFromStorage() inside the live workout
+// component itself - that gate is the single owner of completedSets / RPE /
+// notes / exerciseOverrides / phase. This getter is identity-only so the
+// dashboard cannot accidentally become a second hydration owner.
+// =============================================================================
+export interface ResumableSessionSummary {
+  sessionId: string
+  dayLabel: string
+  dayNumber: number
+  executionMode: '30_min' | '45_min' | 'full'
+  variantIndex: number
+  weekOverride: number | null
+  status: 'active' | 'resting' | 'completed' | string
+  savedAt: number
+  completedSetsCount: number
+  currentExerciseIndex: number
+  currentSetNumber: number
+  elapsedSeconds: number
+}
+
+export function getResumableSessionSummary(): ResumableSessionSummary | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (!saved) return null
+    const data = JSON.parse(saved)
+    if (!data || typeof data !== 'object') return null
+
+    // [PHASE-J] Schema version gate - never surface stale schema as resumable
+    if (data.schemaVersion !== STORAGE_SCHEMA_VERSION) return null
+
+    // Must be recent (4 hour cutoff matches loadSessionFromStorage)
+    if (typeof data.savedAt !== 'number') return null
+    if (Date.now() - data.savedAt > 4 * 60 * 60 * 1000) return null
+
+    // Must be a real in-progress session - 'completed' is NOT resumable, and
+    // 'ready' means the user never logged anything so there is nothing to
+    // restore. Both 'active' and 'resting' count as in-progress.
+    const status = typeof data.status === 'string' ? data.status : ''
+    if (status !== 'active' && status !== 'resting') return null
+
+    // Must have at least one completed set OR have advanced past exercise 0,
+    // otherwise the user has no progress worth resuming.
+    const completedSetsCount = Array.isArray(data.completedSets)
+      ? data.completedSets.length
+      : 0
+    const currentExerciseIndex = typeof data.currentExerciseIndex === 'number'
+      ? data.currentExerciseIndex
+      : 0
+    if (completedSetsCount === 0 && currentExerciseIndex === 0) return null
+
+    // Must carry the resume identity bundle. Legacy snapshots without this
+    // are NOT exposed as resumable - the dashboard Resume button cannot
+    // rebuild the launch URL without these fields, and surfacing them would
+    // re-create the silent-restart bug we are fixing.
+    const dayLabel = typeof data.dayLabel === 'string' ? data.dayLabel : ''
+    const dayNumber = typeof data.dayNumber === 'number' ? data.dayNumber : NaN
+    const executionMode = data.executionMode === '30_min'
+      || data.executionMode === '45_min'
+      || data.executionMode === 'full'
+        ? data.executionMode as '30_min' | '45_min' | 'full'
+        : null
+    const variantIndex = typeof data.variantIndex === 'number'
+      ? data.variantIndex
+      : null
+    const weekOverride = typeof data.weekOverride === 'number'
+      ? data.weekOverride
+      : data.weekOverride === null
+        ? null
+        : null
+    if (!dayLabel || !Number.isFinite(dayNumber) || executionMode === null || variantIndex === null) {
+      return null
+    }
+
+    return {
+      sessionId: typeof data.sessionId === 'string' ? data.sessionId : `session-${dayLabel}-${dayNumber}`,
+      dayLabel,
+      dayNumber,
+      executionMode,
+      variantIndex,
+      weekOverride,
+      status,
+      savedAt: data.savedAt,
+      completedSetsCount,
+      currentExerciseIndex,
+      currentSetNumber: typeof data.currentSetNumber === 'number' ? data.currentSetNumber : 1,
+      elapsedSeconds: typeof data.elapsedSeconds === 'number' ? data.elapsedSeconds : 0,
+    }
+  } catch {
+    return null
+  }
+}
+
+// =============================================================================
+// [PHASE-J] RESUME URL BUILDER - DASHBOARD CONSUMER
+// =============================================================================
+// Builds the canonical /workout/session?day=&mode=&variant=&week=&resume=1 URL
+// from a ResumableSessionSummary. Single source of truth so all "Resume
+// Workout" entry points produce bit-identical URLs and the live route boots
+// the SAME session shape that was saved.
+// =============================================================================
+export function buildResumeWorkoutUrl(summary: ResumableSessionSummary): string {
+  const params = new URLSearchParams()
+  params.set('day', String(summary.dayNumber))
+  params.set('mode', summary.executionMode)
+  params.set('variant', String(summary.variantIndex))
+  if (summary.weekOverride !== null && Number.isFinite(summary.weekOverride)) {
+    params.set('week', String(summary.weekOverride))
+  }
+  // [PHASE-J] Explicit resume flag so the route can distinguish a Resume
+  // intent from a Start intent. The route already hydrates from storage
+  // when sessionId + structureSignature match, but the flag is forwarded
+  // for diagnostics and as a hook for future restart-confirmation UX.
+  params.set('resume', '1')
+  return `/workout/session?${params.toString()}`
+}
+
 export function clearSessionStorage() {
   if (typeof window === 'undefined') return
   try {
@@ -1586,6 +1773,12 @@ interface StreamlinedWorkoutSessionProps {
   // [LIVE-WORKOUT-AUTHORITY] Execution mode locked at workout start
   executionMode?: '30_min' | '45_min' | 'full'
   variantIndex?: number
+  // [PHASE-J / RESUME-IDENTITY] Selected week override forwarded from the URL
+  // (?week=N). Persisted alongside the live runtime snapshot so the dashboard
+  // Resume button can rebuild the EXACT same /workout/session URL the Program
+  // card stamped, including the week selection. Optional - undefined means
+  // "use whatever week the program currently advertises".
+  weekOverride?: number | null
   // [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Route-level build chip forwarded
   // from app/(app)/workout/session/page.tsx so the corridor can render
   // the full three-part fingerprint. Optional - corridor falls back to
@@ -1604,6 +1797,10 @@ export function StreamlinedWorkoutSession({
   // [LIVE-WORKOUT-AUTHORITY] Default to full if not specified
   executionMode = 'full',
   variantIndex = 0,
+  // [PHASE-J / RESUME-IDENTITY] Default null preserves legacy "no week
+  // selection" behaviour while still allowing the route to forward the
+  // ?week= URL param.
+  weekOverride = null,
   // [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Route-level build chip (WS-R3)
   routeBuildChip = '?',
 }: StreamlinedWorkoutSessionProps) {
@@ -4113,6 +4310,12 @@ export function StreamlinedWorkoutSession({
 
     if (liveSession.status !== 'ready') {
       // Save the core workout state from the unified liveSession
+      // [PHASE-J / RESUME-IDENTITY] Persist resume identity alongside runtime
+      // state so the dashboard Resume button can rebuild the EXACT launch URL
+      // (day + mode + variant + week) the Program card stamped. Without this
+      // bundle, Resume navigates to /workout/session with no params, the
+      // route guesses defaults, sessionId/structureSignature mismatch, and
+      // the saved snapshot is rejected -> user gets silently restarted.
       saveSessionToStorage({
         status: liveSession.status,
         currentExerciseIndex: liveSession.currentExerciseIndex,
@@ -4123,9 +4326,25 @@ export function StreamlinedWorkoutSession({
         lastSetRPE: liveSession.lastSetRPE,
         workoutNotes: liveSession.workoutNotes,
         exerciseOverrides: liveSession.exerciseOverrides,
-      }, sessionId, sessionStructureSignature)
+      }, sessionId, sessionStructureSignature, {
+        dayLabel: safeWorkoutSessionContract.dayLabel,
+        dayNumber: safeWorkoutSessionContract.dayNumber,
+        executionMode,
+        variantIndex,
+        weekOverride: weekOverride ?? null,
+      })
     }
-  }, [liveSession, sessionId, isDemoSession, sessionStructureSignature])
+  }, [
+    liveSession,
+    sessionId,
+    isDemoSession,
+    sessionStructureSignature,
+    safeWorkoutSessionContract.dayLabel,
+    safeWorkoutSessionContract.dayNumber,
+    executionMode,
+    variantIndex,
+    weekOverride,
+  ])
   
   // [UNIFIED-HANDOFF] REMOVED: Exercise-change reset effect
   // This was a secondary transition system that caused race conditions.

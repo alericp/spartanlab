@@ -1640,6 +1640,12 @@ function WorkoutSessionContent() {
         // [LIVE-WORKOUT-AUTHORITY] Pass execution mode to component
         executionMode={executionMode}
         variantIndex={variantIndex}
+        // [PHASE-J / RESUME-IDENTITY] Forward the AUTHORITATIVE selected week
+        // from the URL so the live workout component can persist it inside the
+        // resumable snapshot. Required for the dashboard Resume button to
+        // rebuild the same /workout/session?...&week=N launch URL the Program
+        // card stamped. Falsy => null (legacy "no week selection").
+        weekOverride={weekOverride ?? null}
         // [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Forward the route-level build chip
         // so the authoritative corridor can render the WS-R3 segment of its
         // three-part fingerprint. If the chip does not reach the user's screen,

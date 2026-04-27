@@ -171,8 +171,10 @@ import { ProgramMaterializationStaleNotice } from '@/components/programs/Program
 import {
   buildAllSessionCardSurfaces,
   buildProgramDisplayProjection,
+  hasCanonicalProgramTruth,
   type SessionCardSurface,
   type ProgramDisplayProjection,
+  type CanonicalProgramTruthPresence,
 } from '@/lib/program/program-display-contract'
 
 // [canonical-rebuild] Import type for adjustment rebuild requests
@@ -1648,6 +1650,327 @@ function ProgramDisplayWrapper({
 // Do NOT flip this constant back to true - use the query param instead.
 // ==========================================================================
 const FORCE_VISIBLE_SESSION_PROBE = false
+
+// =============================================================================
+// [PHASE 4X] CANONICAL FRESHNESS LOCK — SINGLE WINNER DECISION HELPER
+// -----------------------------------------------------------------------------
+// Phase F.F4 ("fresh successful generation beats stale stored truth") was
+// already partially defended by the Phase 17J/17K reconciliation effect
+// + the post-build authoritative lock + Phase 26E/26F createdAt rules.
+// What was missing: the reconciliation logic only compared IDs / timestamps /
+// session counts. It did NOT consult the canonical truth contract introduced
+// in Phase 4P-4W (`methodStructures`, `doctrineBlockResolution`,
+// materialization rollups, `hasCanonicalProgramTruth`). That meant a stale
+// localStorage program with the same id/timestamp could in principle replace
+// a fresher in-memory program that had richer canonical truth.
+//
+// Phase 4X consolidates the decision into ONE pure helper used by every
+// reconciliation trigger (visibility / focus / storage / periodic) and by
+// the boot hydration path. Rules are applied in priority order:
+//
+//   1. POST_BUILD_WINNER_LOCK_ACTIVE   — auth lock blocks all replacement
+//   2. NO_CURRENT_PROGRAM              — candidate may load (boot case)
+//   3. CANDIDATE_INVALID_OR_MISSING    — never replace with garbage
+//   4. BLOCK_STORAGE_CANONICAL_DOWNGRADE
+//      — current has canonical truth, candidate does not → block
+//   5. CANDIDATE_CANONICAL_UPGRADE
+//      — current lacks canonical truth, candidate has it → allow
+//   6. CURRENT_NEWER_PROTECTED         — current strictly newer → block
+//   7. CANDIDATE_CANONICAL_NEWER       — both canonical, candidate newer
+//   8. CANDIDATE_NEWER_LEGACY_OK       — both legacy, candidate newer
+//   9. CANDIDATE_ID_DIFFERS_NOT_NEWER  — id differs, current not newer
+//  10. SESSION_COUNT_ONLY_NOT_AUTHORITY
+//      — session-count diff alone never forces replacement
+//  11. NO_MATERIAL_DIFFERENCE          — keep current
+//
+// PURE: no React state, no localStorage, no side effects. The caller decides
+// whether to act on `shouldReplace`.
+// =============================================================================
+
+interface CanonicalWinnerInputs {
+  /** Current visible program (React state). May be null at boot. */
+  currentProgram: {
+    id: string
+    createdAt?: string
+    sessions?: { length?: number }[] | unknown[]
+  } | null
+  /** Candidate program from localStorage / getProgramState. */
+  candidateProgram: {
+    id?: string
+    createdAt?: string
+    sessions?: unknown[]
+  } | null
+  /** Trigger label, only used for logging by the caller. */
+  triggerSource: string
+  /** Active post-build lock snapshot, if any. */
+  authLock: {
+    programId: string
+    sessionCount: number
+    lockExpiresAt: number
+  } | null
+  /** Pre-computed canonical-truth verdicts. Pass null if not available. */
+  currentCanonicalTruth: CanonicalProgramTruthPresence | null
+  candidateCanonicalTruth: CanonicalProgramTruthPresence | null
+  /** Optional staleness signal from `evaluateUnifiedProgramStaleness`. */
+  currentIsStaleByEvaluator?: boolean
+}
+
+interface CanonicalWinnerDecision {
+  winner: 'current' | 'candidate' | 'locked'
+  shouldReplace: boolean
+  reason:
+    | 'POST_BUILD_WINNER_LOCK_ACTIVE'
+    | 'NO_CURRENT_PROGRAM'
+    | 'CANDIDATE_INVALID_OR_MISSING'
+    | 'BLOCK_STORAGE_CANONICAL_DOWNGRADE'
+    | 'CANDIDATE_CANONICAL_UPGRADE'
+    | 'CURRENT_NEWER_PROTECTED'
+    | 'CANDIDATE_CANONICAL_NEWER'
+    | 'CANDIDATE_NEWER_LEGACY_OK'
+    | 'CANDIDATE_ID_DIFFERS_NOT_NEWER'
+    | 'SESSION_COUNT_ONLY_NOT_AUTHORITY'
+    | 'LEGACY_COMPAT_RECONCILIATION'
+    | 'NO_MATERIAL_DIFFERENCE'
+  currentProgramId: string | null
+  candidateProgramId: string | null
+  currentCreatedAt: string | null
+  candidateCreatedAt: string | null
+  currentSessionCount: number
+  candidateSessionCount: number
+  currentHasCanonicalTruth: boolean
+  candidateHasCanonicalTruth: boolean
+  currentIsNewer: boolean
+  candidateIsNewer: boolean
+  protectedByAuthoritativeLock: boolean
+  staleOverwriteBlocked: boolean
+  canonicalUpgradeAllowed: boolean
+  canonicalDowngradeBlocked: boolean
+}
+
+/**
+ * Pure single-source-of-truth decision for "should the candidate program
+ * replace the current visible program?". Used by every reconciliation
+ * trigger AND the boot hydration path so all paths share one winner rule.
+ */
+export function decideCanonicalProgramWinner(
+  inputs: CanonicalWinnerInputs,
+): CanonicalWinnerDecision {
+  const {
+    currentProgram,
+    candidateProgram,
+    authLock,
+    currentCanonicalTruth,
+    candidateCanonicalTruth,
+    currentIsStaleByEvaluator,
+  } = inputs
+
+  const now = Date.now()
+  const lockActive = !!(authLock && now < authLock.lockExpiresAt)
+
+  const currentProgramId = currentProgram?.id ?? null
+  const candidateProgramId =
+    typeof candidateProgram?.id === 'string' ? candidateProgram.id : null
+  const currentCreatedAt = currentProgram?.createdAt ?? null
+  const candidateCreatedAt = candidateProgram?.createdAt ?? null
+  const currentSessionCount = Array.isArray(currentProgram?.sessions)
+    ? (currentProgram!.sessions as unknown[]).length
+    : 0
+  const candidateSessionCount = Array.isArray(candidateProgram?.sessions)
+    ? (candidateProgram!.sessions as unknown[]).length
+    : 0
+  const currentHasCanonicalTruth =
+    currentCanonicalTruth?.programHasAnyCanonicalTruth ?? false
+  const candidateHasCanonicalTruth =
+    candidateCanonicalTruth?.programHasAnyCanonicalTruth ?? false
+
+  // Numeric timestamps, NaN-safe.
+  const currentTs = currentCreatedAt ? new Date(currentCreatedAt).getTime() : NaN
+  const candidateTs = candidateCreatedAt
+    ? new Date(candidateCreatedAt).getTime()
+    : NaN
+  const tsComparable = Number.isFinite(currentTs) && Number.isFinite(candidateTs)
+  const currentIsNewer = tsComparable && currentTs > candidateTs
+  const candidateIsNewer = tsComparable && candidateTs > currentTs
+  const idDiffers = !!candidateProgramId && candidateProgramId !== currentProgramId
+
+  const baseDecision = {
+    currentProgramId,
+    candidateProgramId,
+    currentCreatedAt,
+    candidateCreatedAt,
+    currentSessionCount,
+    candidateSessionCount,
+    currentHasCanonicalTruth,
+    candidateHasCanonicalTruth,
+    currentIsNewer,
+    candidateIsNewer,
+    protectedByAuthoritativeLock: lockActive,
+    staleOverwriteBlocked: false,
+    canonicalUpgradeAllowed: false,
+    canonicalDowngradeBlocked: false,
+  }
+
+  // Rule 1: post-build authoritative lock wins absolutely.
+  if (lockActive) {
+    return {
+      ...baseDecision,
+      winner: 'locked',
+      shouldReplace: false,
+      reason: 'POST_BUILD_WINNER_LOCK_ACTIVE',
+      staleOverwriteBlocked: true,
+    }
+  }
+
+  // Rule 3: candidate must be a real, parseable program.
+  if (
+    !candidateProgram ||
+    typeof candidateProgram !== 'object' ||
+    !candidateProgramId
+  ) {
+    return {
+      ...baseDecision,
+      winner: 'current',
+      shouldReplace: false,
+      reason: 'CANDIDATE_INVALID_OR_MISSING',
+    }
+  }
+
+  // Rule 2: nothing to protect — boot/hydration with empty state.
+  if (!currentProgram || !currentProgramId) {
+    return {
+      ...baseDecision,
+      winner: 'candidate',
+      shouldReplace: true,
+      reason: 'NO_CURRENT_PROGRAM',
+      canonicalUpgradeAllowed: candidateHasCanonicalTruth,
+    }
+  }
+
+  // Rule 4: BLOCK canonical → fallback downgrade. This is the core of
+  // F.F4 + F.F5 enforcement: a healthy canonical current cannot be
+  // replaced by a candidate that lacks canonical truth, even if the
+  // candidate looks "newer" by createdAt or has more sessions.
+  if (currentHasCanonicalTruth && !candidateHasCanonicalTruth) {
+    return {
+      ...baseDecision,
+      winner: 'current',
+      shouldReplace: false,
+      reason: 'BLOCK_STORAGE_CANONICAL_DOWNGRADE',
+      staleOverwriteBlocked: true,
+      canonicalDowngradeBlocked: true,
+    }
+  }
+
+  // Rule 6: current strictly newer → keep, even when ids differ.
+  // Phase 26E precedent. Applied BEFORE upgrade rule 5 so a freshly-built
+  // legacy-shaped program (no canonical truth yet) is not immediately
+  // replaced by a slightly-older canonical candidate that had been
+  // sitting in storage. In practice this branch only matters when the
+  // user just regenerated and the lock hasn't been set yet — extremely
+  // narrow, but explicit.
+  if (currentIsNewer) {
+    return {
+      ...baseDecision,
+      winner: 'current',
+      shouldReplace: false,
+      reason: 'CURRENT_NEWER_PROTECTED',
+      staleOverwriteBlocked: true,
+    }
+  }
+
+  // Rule 5: legitimate canonical upgrade — current legacy, candidate canonical
+  // and candidate is at least as new as current.
+  if (!currentHasCanonicalTruth && candidateHasCanonicalTruth) {
+    return {
+      ...baseDecision,
+      winner: 'candidate',
+      shouldReplace: true,
+      reason: 'CANDIDATE_CANONICAL_UPGRADE',
+      canonicalUpgradeAllowed: true,
+    }
+  }
+
+  // Rule 7: both have canonical truth, candidate genuinely newer.
+  if (
+    currentHasCanonicalTruth &&
+    candidateHasCanonicalTruth &&
+    candidateIsNewer
+  ) {
+    return {
+      ...baseDecision,
+      winner: 'candidate',
+      shouldReplace: true,
+      reason: 'CANDIDATE_CANONICAL_NEWER',
+    }
+  }
+
+  // Rule 7b: evaluator says current is stale and candidate is at least as new.
+  // Treated as supporting proof, not a blind override — only fires when the
+  // candidate is also newer or ids differ + not currentIsNewer.
+  if (
+    currentIsStaleByEvaluator &&
+    (candidateIsNewer || (idDiffers && !currentIsNewer)) &&
+    // Allow when candidate canonical-truth ≥ current canonical-truth.
+    // (true ≥ true, true ≥ false, false ≥ false; only blocks true→false).
+    !(currentHasCanonicalTruth && !candidateHasCanonicalTruth)
+  ) {
+    return {
+      ...baseDecision,
+      winner: 'candidate',
+      shouldReplace: true,
+      reason: candidateHasCanonicalTruth
+        ? 'CANDIDATE_CANONICAL_NEWER'
+        : 'CANDIDATE_NEWER_LEGACY_OK',
+    }
+  }
+
+  // Rule 8: both legacy/no-canonical, candidate genuinely newer.
+  if (
+    !currentHasCanonicalTruth &&
+    !candidateHasCanonicalTruth &&
+    candidateIsNewer
+  ) {
+    return {
+      ...baseDecision,
+      winner: 'candidate',
+      shouldReplace: true,
+      reason: 'CANDIDATE_NEWER_LEGACY_OK',
+    }
+  }
+
+  // Rule 9: ids differ, neither timestamp side is strictly newer (or
+  // timestamps not comparable). Conservative default: do NOT replace,
+  // because we cannot prove the candidate is fresher.
+  if (idDiffers) {
+    return {
+      ...baseDecision,
+      winner: 'current',
+      shouldReplace: false,
+      reason: 'CANDIDATE_ID_DIFFERS_NOT_NEWER',
+      staleOverwriteBlocked: true,
+    }
+  }
+
+  // Rule 10: session count alone is NEVER authority. If we got here,
+  // session count must be the only difference left.
+  if (currentSessionCount !== candidateSessionCount) {
+    return {
+      ...baseDecision,
+      winner: 'current',
+      shouldReplace: false,
+      reason: 'SESSION_COUNT_ONLY_NOT_AUTHORITY',
+      staleOverwriteBlocked: true,
+    }
+  }
+
+  // Rule 11: same id, same/no-newer timestamp, same session count.
+  return {
+    ...baseDecision,
+    winner: 'current',
+    shouldReplace: false,
+    reason: 'NO_MATERIAL_DIFFERENCE',
+  }
+}
 
 export default function ProgramPage() {
   // ==========================================================================
@@ -4068,7 +4391,41 @@ export default function ProgramPage() {
             
             if (displayCheck.safe) {
               loadedProgram = normalizedProgram
-              setProgram(normalizedProgram)
+              // [PHASE 4X] BOOT HYDRATION GUARD — refuse to overwrite a fresher
+              // current program with a stale storage candidate. Uses the same
+              // single-winner decision as reconcileWithCanonical so boot and
+              // reconciliation cannot disagree.
+              const bootCurrentCanonicalTruth = hasCanonicalProgramTruth(
+                program as unknown as Parameters<typeof hasCanonicalProgramTruth>[0],
+              )
+              const bootCandidateCanonicalTruth = hasCanonicalProgramTruth(
+                normalizedProgram as unknown as Parameters<typeof hasCanonicalProgramTruth>[0],
+              )
+              const bootDecision = decideCanonicalProgramWinner({
+                currentProgram: program as unknown as CanonicalWinnerInputs['currentProgram'],
+                candidateProgram: normalizedProgram as unknown as CanonicalWinnerInputs['candidateProgram'],
+                triggerSource: 'mount_hydration',
+                authLock: authoritativeSavedProgramRef.current,
+                currentCanonicalTruth: bootCurrentCanonicalTruth,
+                candidateCanonicalTruth: bootCandidateCanonicalTruth,
+              })
+              console.log('[phase4x-canonical-reconciliation-winner]', {
+                triggerSource: 'mount_hydration',
+                winner: bootDecision.winner,
+                shouldReplace: bootDecision.shouldReplace,
+                reason: bootDecision.reason,
+                currentProgramId: bootDecision.currentProgramId,
+                candidateProgramId: bootDecision.candidateProgramId,
+                currentHasCanonicalTruth: bootDecision.currentHasCanonicalTruth,
+                candidateHasCanonicalTruth: bootDecision.candidateHasCanonicalTruth,
+                protectedByAuthoritativeLock: bootDecision.protectedByAuthoritativeLock,
+                staleOverwriteBlocked: bootDecision.staleOverwriteBlocked,
+                canonicalDowngradeBlocked: bootDecision.canonicalDowngradeBlocked,
+                canonicalUpgradeAllowed: bootDecision.canonicalUpgradeAllowed,
+              })
+              if (bootDecision.shouldReplace) {
+                setProgram(normalizedProgram)
+              }
               // [PHASE 31F] INIT GUARD A - ATOMIC ENTRY AUTHORITY
               // PRIMARY: modifyBuilderEntryRef (synchronous) or modifyBuilderEntry state
               // SECONDARY: launcher entered flag, lock, flow-based checks
@@ -4155,8 +4512,37 @@ export default function ProgramPage() {
               // TASK 2: Program exists but fails display sanity - show recovery state, not fatal error
               currentInitStage = `program-malformed:${displayCheck.reason || 'unknown'}`
               setLoadStage(`program-malformed:${displayCheck.reason || 'unknown'}`)
-              // Keep program reference so we can show "Program Needs Refresh" state
-              setProgram(normalizedProgram)
+              // [PHASE 4X] BOOT HYDRATION GUARD (malformed branch) — only set
+              // the recovery program reference if there is no fresher / more
+              // canonical current program already in state. A malformed
+              // storage program must never replace a healthy canonical
+              // current program.
+              const malformedCurrentCanonicalTruth = hasCanonicalProgramTruth(
+                program as unknown as Parameters<typeof hasCanonicalProgramTruth>[0],
+              )
+              const malformedCandidateCanonicalTruth = hasCanonicalProgramTruth(
+                normalizedProgram as unknown as Parameters<typeof hasCanonicalProgramTruth>[0],
+              )
+              const malformedDecision = decideCanonicalProgramWinner({
+                currentProgram: program as unknown as CanonicalWinnerInputs['currentProgram'],
+                candidateProgram: normalizedProgram as unknown as CanonicalWinnerInputs['candidateProgram'],
+                triggerSource: 'mount_hydration_malformed',
+                authLock: authoritativeSavedProgramRef.current,
+                currentCanonicalTruth: malformedCurrentCanonicalTruth,
+                candidateCanonicalTruth: malformedCandidateCanonicalTruth,
+              })
+              console.log('[phase4x-canonical-reconciliation-winner]', {
+                triggerSource: 'mount_hydration_malformed',
+                winner: malformedDecision.winner,
+                shouldReplace: malformedDecision.shouldReplace,
+                reason: malformedDecision.reason,
+                staleOverwriteBlocked: malformedDecision.staleOverwriteBlocked,
+                canonicalDowngradeBlocked: malformedDecision.canonicalDowngradeBlocked,
+              })
+              if (malformedDecision.shouldReplace) {
+                // Keep program reference so we can show "Program Needs Refresh" state
+                setProgram(normalizedProgram)
+              }
               // ROOT-CAUSE-FIX: Check for active modify transition before resetting showBuilder
               const hasModifyBuilderEntryRef = modifyBuilderEntryRef.current !== null
               const hasModifyBuilderEntry = modifyBuilderEntry !== null
@@ -4516,7 +4902,29 @@ export default function ProgramPage() {
       // newer (just generated), keep the current program.
       // ==========================================================================
       const currentIsNewer = currentCreatedAt > canonicalCreatedAt
-      const shouldReplace = canonicalIsNewer || (idDiffers && !currentIsNewer)
+      const legacyShouldReplace = canonicalIsNewer || (idDiffers && !currentIsNewer)
+
+      // ==========================================================================
+      // [PHASE 4X] CANONICAL FRESHNESS LOCK — single winner decision is now the
+      // ONLY gate that decides replacement. The legacy id/timestamp/session-count
+      // analysis above is preserved for diagnostic continuity (phase26e/26f
+      // logs) but it no longer drives `setProgram` directly.
+      // ==========================================================================
+      const currentCanonicalTruth = hasCanonicalProgramTruth(
+        currentProgram as unknown as Parameters<typeof hasCanonicalProgramTruth>[0],
+      )
+      const candidateCanonicalTruth = hasCanonicalProgramTruth(
+        canonicalProgram as unknown as Parameters<typeof hasCanonicalProgramTruth>[0],
+      )
+      const winnerDecision = decideCanonicalProgramWinner({
+        currentProgram: currentProgram as unknown as CanonicalWinnerInputs['currentProgram'],
+        candidateProgram: canonicalProgram as unknown as CanonicalWinnerInputs['candidateProgram'],
+        triggerSource,
+        authLock: authoritativeSavedProgramRef.current,
+        currentCanonicalTruth,
+        candidateCanonicalTruth,
+      })
+      const shouldReplace = winnerDecision.shouldReplace
       
       console.log('[phase26e-canonical-modify-post-generation-overwrite-proof]', {
         stage: 'RECONCILIATION_DECISION',
@@ -4627,7 +5035,36 @@ export default function ProgramPage() {
             ? 'LOCKED_POST_BUILD_PROGRAM'
             : 'CURRENT_VISIBLE_PROGRAM',
       })
-      
+
+      // ==========================================================================
+      // [PHASE 4X] CANONICAL RECONCILIATION WINNER — single authoritative log
+      // This is the ONLY decision actually used to gate setProgram below.
+      // The earlier phase17m/26e/26f/post-build-winner-decision logs above are
+      // retained for diagnostic continuity but do not drive replacement.
+      // ==========================================================================
+      console.log('[phase4x-canonical-reconciliation-winner]', {
+        triggerSource,
+        winner: winnerDecision.winner,
+        shouldReplace: winnerDecision.shouldReplace,
+        reason: winnerDecision.reason,
+        currentProgramId: winnerDecision.currentProgramId,
+        candidateProgramId: winnerDecision.candidateProgramId,
+        currentHasCanonicalTruth: winnerDecision.currentHasCanonicalTruth,
+        candidateHasCanonicalTruth: winnerDecision.candidateHasCanonicalTruth,
+        currentCanonicalVerdict: currentCanonicalTruth.verdict,
+        candidateCanonicalVerdict: candidateCanonicalTruth.verdict,
+        protectedByAuthoritativeLock: winnerDecision.protectedByAuthoritativeLock,
+        staleOverwriteBlocked: winnerDecision.staleOverwriteBlocked,
+        canonicalDowngradeBlocked: winnerDecision.canonicalDowngradeBlocked,
+        canonicalUpgradeAllowed: winnerDecision.canonicalUpgradeAllowed,
+        currentSessionCount: winnerDecision.currentSessionCount,
+        candidateSessionCount: winnerDecision.candidateSessionCount,
+        currentIsNewer: winnerDecision.currentIsNewer,
+        candidateIsNewer: winnerDecision.candidateIsNewer,
+        legacyDecisionWouldHaveReplaced: legacyShouldReplace,
+        decisionsAgree: legacyShouldReplace === winnerDecision.shouldReplace,
+      })
+
       if (shouldReplace) {
         // [PHASE 17M] Program reconciliation replace - log the replacement with specific reason
         console.log('[phase17m-program-reconciliation-replace]', {
@@ -4737,16 +5174,27 @@ export default function ProgramPage() {
       reconcileWithCanonical('window_focus')
     }
     
-    // [PHASE 17K] Listen for storage events (cross-tab localStorage changes)
+    // [PHASE 17K → 4X] Listen for storage events (cross-tab localStorage changes).
+    // Phase 4X narrows the filter to only the keys saveAdaptiveProgram + history
+    // actually touch. Previously it reacted to *any* key containing 'adaptive' or
+    // 'program' which created false-positive reconciliation runs (and therefore
+    // false-positive overwrite attempts, which the winner helper now blocks but
+    // shouldn't even be triggered by).
+    const PHASE_4X_RECONCILE_STORAGE_KEYS = new Set([
+      'spartanlab_active_program',
+      'spartanlab_adaptive_program',
+      'spartanlab_adaptive_programs',
+    ])
     const handleStorage = (event: StorageEvent) => {
-      // Check if the change is to the adaptive program key
-      if (event.key && (event.key.includes('adaptive') || event.key.includes('program'))) {
-        console.log('[phase17k-storage-event-detected]', {
-          key: event.key,
-          currentProgramId: program?.id || 'none',
-        })
-        reconcileWithCanonical('storage_event')
+      if (!event.key || !PHASE_4X_RECONCILE_STORAGE_KEYS.has(event.key)) {
+        return
       }
+      console.log('[phase17k-storage-event-detected]', {
+        key: event.key,
+        currentProgramId: program?.id || 'none',
+        phase4xKeyAccepted: true,
+      })
+      reconcileWithCanonical('storage_event')
     }
     
     // [PHASE 17K] Periodic reconciliation check for same-tab changes

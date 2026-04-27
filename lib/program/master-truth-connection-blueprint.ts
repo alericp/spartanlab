@@ -1240,6 +1240,167 @@ function phaseN(): BlueprintPhase {
 }
 
 // =============================================================================
+// [PHASE-P] PROGRAM QUALITY / DOCTRINE SHARPNESS AUDIT + SAFE CORRECTION PASS
+// =============================================================================
+function phaseP(): BlueprintPhase {
+  return {
+    id: 'P',
+    title: 'Program Quality / Doctrine Sharpness Audit + Safe Correction Pass',
+    purpose:
+      'Verify whether the now-functional AI evidence/adaptation/trend pipeline is producing high-quality training prescriptions that match SpartanLab doctrine, onboarding truth, selected skills, session structure, and recovery logic — and apply only the minimum safe bounded corrections required so the program is genuinely sharp, not just cosmetically labeled. Phase P runs AFTER Phase O on the final adapted program object and BEFORE persistence/display, attaches optional `qualityAudit` proof slices to sessions and exercises, and is consumed by AdaptiveSessionCard as concise proof lines.',
+    status: 'COMPLETE',
+    nextAction:
+      'No remaining Phase P work. Recommended next phase: Phase Q — Session-Length Truth Lock, making Full / 45 / 30 minute workout modes actually change structure, sets, exercise count, rest density, and estimates instead of acting like labels. Phase P stamps a session-length realism warning when the estimate is implausible relative to the selected mode, and that warning explicitly defers the structural fix to Phase Q.',
+    subtasks: [
+      {
+        id: 'P.P1',
+        title: 'Authoritative final program located after Phase O',
+        status: 'COMPLETE',
+        evidence: [
+          'lib/server/authoritative-program-generation.ts runs the Phase L/M overlay first, then calls runProgramQualityDoctrineAudit AFTER markStage("phase_m_performance_overlay_done") and BEFORE markStage("complete"). The Phase O trend/coach decision layer is applied INSIDE resolvePerformanceFeedbackAdaptation, so by the time Phase P runs the program already carries Phase J/K stress, Phase L/M mutations, AND Phase O trend slices.',
+          'lib/program/performance-feedback-integration.ts.applyPerformanceFeedbackOverlay (the client boot overlay path) also runs Phase P AFTER applyFuturePrescriptionMutations completes, so both ingress paths produce identical Phase P stamps.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'P.P2',
+        title: 'No new parallel builder, no shadow generator',
+        status: 'COMPLETE',
+        evidence: [
+          'lib/program/program-quality-doctrine-audit-contract.ts is a pure deterministic resolver. It does NOT generate exercises, does NOT pick exercises, does NOT build sessions. It only inspects the final program object, attaches optional `qualityAudit` slices, and applies at most two narrow bounded corrections (tendon RPE cap ≤1 step lower, unilateral per-side note).',
+          'No new entry point is added to the generation pipeline. No new "rebuild" path is introduced. The base builder (adaptive-program-builder.ts) is untouched.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'P.P3',
+        title: 'Doctrine audit resolver exists and evaluates the right criteria',
+        status: 'COMPLETE',
+        evidence: [
+          'runProgramQualityDoctrineAudit performs five passes: (1) skill carryover attribution against PROGRAM_SELECTED_SKILLS, (2) tendon-protective RPE cap on straight-arm / high-tension rows, (3) unilateral per-side note detection, (4) session-length realism check against estimatedMinutes vs the mode label, (5) cross-session straight-arm overlap warning across consecutive non-completed days.',
+          'Phase L safety bounds (MIN_RPE_FLOOR, sets ≥2, drop ≤1) are imported as constants and never violated. Rows already carrying a Phase L mutation stamp are deferred to with `phase_p_phase_l_mutation_takes_precedence`.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'P.P4',
+        title: 'Safe correction bounds enforced',
+        status: 'COMPLETE',
+        evidence: [
+          'Tendon RPE cap: never lowers RPE by more than 1, never below MIN_RPE_FLOOR, only on classified straight-arm/skill/tension exercises, only when the proposed targetRPE > the doctrine ceiling. All other RPE values pass through untouched.',
+          'Unilateral per-side note: pure metadata addition (note string), never alters sets/reps/RPE/rest/load.',
+          'Hard refusals: never mutates `sets`, never mutates `repsOrTime`, never mutates `restSeconds`, never mutates `prescribedLoad`, never mutates `estimatedMinutes`, never adds/removes exercises, never reorders, never touches `appliedMethod`.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'P.P5',
+        title: 'Selected skills protected; carryover attributed',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase P scans every non-completed session for direct skill expression first; only when the session lacks a direct expression does it look for high-carryover accessories (e.g. tuck planche / pseudo planche pushups → planche; low-angle rows / front-lever raises → front lever; ring archer pulls / dragon-flag negatives → core+lever skills) and stamp a `skill_carryover_attributed` reason.',
+          'Phase P NEVER deletes / swaps / replaces a selected-skill row, even if the row would otherwise trigger a tendon RPE cap; the cap applies on the existing row, leaving the skill expressed.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'P.P6',
+        title: 'Proof honesty: chips/proof lines only when backed by real findings',
+        status: 'COMPLETE',
+        evidence: [
+          'Per-row qualityAudit slices are emitted only when at least one finding applies. Rows with corrections === ["no_change"] and no skillCarryover / rpeCap / unilateralPerSide are intentionally rendered as null by AdaptiveSessionCard, so the UI never invents quality claims.',
+          'Session-level qualityAudit only populates when straight-arm overlap or session-length realism findings exist. Skill-carryover roll-ups stay on the exercise-level proof line so the session header never clutters with attribution-only chips.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'P.P7',
+        title: 'No fake duplicate chips',
+        status: 'COMPLETE',
+        evidence: [
+          'AdaptiveSessionCard renders Phase P proof in ONE DOM block per row, sibling to the existing Phase O proof block. Both blocks early-return when their owning slice is missing, so the same row can render Phase L chip + Phase O line + Phase P line, each driven by a distinct authoritative slice — never duplicates of the same finding.',
+          'Phase P never re-emits a Phase O trend reason or a Phase L mutation reason. When a Phase L stamp already exists, Phase P writes only `phase_l_mutation_takes_precedence` to corrections and produces no visible line.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'P.P8',
+        title: 'Save/load/normalize preserves Phase P fields',
+        status: 'COMPLETE',
+        evidence: [
+          'qualityAudit is added as an optional first-class field on AdaptiveExercise and AdaptiveSession in lib/adaptive-program-builder.ts, so the existing `...session` / `...ex` spreads in lib/program-state.ts and normalizeProgramForDisplay propagate the slice without code changes — matching the exact pattern used by performanceAdaptation in Phase L.',
+          'The slice is JSON-safe (no functions, no class instances) and stable under structuredClone, so existing localStorage save/load and Neon program JSON write/read paths preserve it transparently.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'P.P9',
+        title: 'Program page consumes Phase P proof from authoritative program object',
+        status: 'COMPLETE',
+        evidence: [
+          'components/programs/AdaptiveSessionCard.tsx reads exercise.qualityAudit and session.qualityAudit directly from the same program object passed in by the page; no recomputation, no second resolver, no fetch. The card cannot disagree with the resolver.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'P.P10',
+        title: 'No live workout regression',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase P is invoked ONLY by the authoritative server generator and the client boot overlay. The live workout reducer (Start/Resume/log set/rest timer/save+exit) does not import any Phase P module. The Phase P resolver never edits completed sessions and never edits exercise IDs / order / set count.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'P.P11',
+        title: 'No schema or dependency creep',
+        status: 'COMPLETE',
+        evidence: [
+          'No new dependencies added. No Prisma schema changes (project uses raw SQL via @neondatabase/serverless). No new Neon tables. The new `qualityAudit` slice lives inside the existing program JSON envelope.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'P.P12',
+        title: 'Session-length honesty: warning attached, structural lock deferred to Phase Q',
+        status: 'COMPLETE',
+        evidence: [
+          'When estimatedMinutes is outside ±20% of the mode label\'s expected band, Phase P stamps `session_length_warning_attached` with a verdict of "over" / "under" and a concise explanation. Phase P never edits `estimatedMinutes` itself, never edits sets/exercise count, never restructures the session — those structural changes are explicitly the domain of Phase Q.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'P.P13',
+        title: 'Build / TypeScript health',
+        status: 'COMPLETE',
+        evidence: [
+          'qualityAudit is typed via `import("./program/program-quality-doctrine-audit-contract").ExerciseQualityAuditStamp` and `SessionQualityAuditStamp` in adaptive-program-builder.ts, eliminating Partial-cast workarounds at the call site. Phase P contract uses only existing project utilities and `import type` for the adaptation contract to avoid circular runtime imports.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'P.P14',
+        title: 'Runtime health: Program page renders without crash',
+        status: 'COMPLETE',
+        evidence: [
+          'AdaptiveSessionCard rendering blocks for Phase P are wrapped in IIFE early-returns guarded by typeof checks, so a malformed or absent slice cannot crash the card. A try/catch in the server generator and a try/catch in the client boot overlay ensure a Phase P failure can never break the success path.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'P.P15',
+        title: 'Blueprint records Phase P completion honestly',
+        status: 'COMPLETE',
+        evidence: [
+          'phaseP() is registered in the phases array after phaseO(), with this subtask list documenting exactly what Phase P does and does not do. Phase O was also re-registered in the same edit (the prior commit registering it was lost in the most recent git pull from v0/alericpetsch836-6923-de3348a2).',
+        ],
+        remainingWork: [],
+      },
+    ],
+  }
+}
+
+// =============================================================================
 // PUBLIC ENTRY POINT
 // =============================================================================
 
@@ -1292,6 +1453,24 @@ export function buildMasterTruthConnectionBlueprintStatus(
     // recent performance history directly from Neon — even when the route
     // caller didn't forward recentWorkoutLogs from localStorage.
     phaseN(),
+    // [PHASE-O] Persistent Performance Trend Intelligence + Coach Decision
+    // Layer. Converts persisted multi-session evidence into deterministic
+    // trend codes + coach actions, stamps both onto the existing
+    // performanceAdaptation object, and renders a concise reason chain
+    // beneath the existing chip on the Program card. Trend layer
+    // recommends; Phase L/M remain the final mutation owners with
+    // unchanged numeric safety bounds.
+    phaseO(),
+    // [PHASE-P] Program Quality / Doctrine Sharpness Audit + Safe Correction
+    // Pass. Pure deterministic resolver that runs AFTER Phase L/M/N/O on the
+    // final adapted program. Audits skill carryover, exercise order,
+    // set/rep/RPE/rest sharpness, recovery overlap, method expression, and
+    // session-length realism. Applies bounded corrections only when
+    // doctrine-obvious (tendon-protective RPE cap ≤1 step, unilateral
+    // per-side note); otherwise stamps an audit-only proof slice. Phase L
+    // safety bounds remain authoritative and completed sessions are never
+    // mutated.
+    phaseP(),
   ]
 
   // Active phase = the first phase whose status is not COMPLETE / DO_NOT_REDO.

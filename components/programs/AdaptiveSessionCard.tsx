@@ -2450,6 +2450,46 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 )}
               </div>
             )}
+            {/* ============================================================
+                [PHASE-P] SESSION-LEVEL QUALITY / DOCTRINE AUDIT PROOF
+                ----------------------------------------------------------------
+                Compact amber chip + one-line explanation derived from the
+                Phase P resolver's session-level findings:
+                  - cross-session straight-arm overlap warning, OR
+                  - session-length realism warning (Phase Q owns the lock).
+                Renders nothing when no Phase P session-level finding is
+                present (most sessions). Skill-carryover roll-ups stay on the
+                exercise-level proof line so the session header doesn't
+                clutter when only attribution exists.
+                ============================================================ */}
+            {(() => {
+              const sqa = (session as unknown as {
+                qualityAudit?: {
+                  shortLabel?: string
+                  conciseExplanation?: string
+                  corrections?: string[]
+                  sessionLengthRealism?: { verdict?: 'within_tolerance' | 'over' | 'under' }
+                  straightArmOverlap?: { pattern?: string; explanation?: string }
+                }
+              }).qualityAudit
+              if (!sqa) return null
+              const corr = Array.isArray(sqa.corrections) ? sqa.corrections : []
+              const hasOverlap = corr.includes('straight_arm_overlap_warning_attached')
+              const hasTimeWarn = corr.includes('session_length_warning_attached')
+              if (!hasOverlap && !hasTimeWarn) return null
+              const label = hasOverlap ? 'OVERLAP WATCH' : 'TIME REALISM'
+              const explanation = sqa.conciseExplanation || sqa.straightArmOverlap?.explanation || ''
+              return (
+                <div className="mt-1 flex flex-col gap-0.5" data-phase-p-session-proof="true">
+                  <span className="inline-flex items-center self-start gap-1 rounded-full border border-amber-500/30 bg-amber-500/5 px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-wide text-amber-300">
+                    {label}
+                  </span>
+                  {explanation && (
+                    <p className="text-[11px] text-amber-300/70 italic leading-snug">{explanation}</p>
+                  )}
+                </div>
+              )
+            })()}
             {/* Compact meta line - time + exercise count only */}
             <div className="flex items-center gap-3 mt-1 text-xs text-[#6A6A6A]">
               <span className="flex items-center gap-1">
@@ -5701,6 +5741,76 @@ function ExerciseRow({
           )
         })()}
       </div>
+
+      {/* [PHASE-P] Quality / doctrine audit proof line — concise sibling line
+          rendered under the chip row, ABOVE the Phase O line, when the Phase P
+          resolver attached a `qualityAudit` slice carrying a non-trivial
+          finding. Single DOM block to avoid stacking multiple audit surfaces:
+            - tendon RPE cap correction → "Doctrine: tendon RPE held to N"
+            - skill carryover attribution → "Skill carryover: <skill> via <rationale>"
+            - unilateral per-side hint → "Per side"
+          Renders nothing on warm-up/cooldown rows and nothing when no Phase P
+          finding applies, so the UI never invents quality claims. */}
+      {!isWarmupCooldown && (() => {
+        const qa = (exercise as unknown as {
+          qualityAudit?: {
+            applied?: boolean
+            corrections?: string[]
+            shortLabel?: string
+            conciseExplanation?: string
+            skillCarryover?: { skill?: string; confidence?: 'low' | 'medium' | 'high'; rationale?: string }
+            rpeCap?: { before?: number; after?: number; reason?: string }
+            unilateralPerSide?: { addedNote?: string }
+          }
+        }).qualityAudit
+        if (!qa) return null
+        const corrections = Array.isArray(qa.corrections) ? qa.corrections : []
+        // Insufficient-finding stamps (only ['no_change']) render nothing —
+        // matches Phase O policy of "do not invent proof."
+        const hasFinding =
+          corrections.some((c) => c !== 'no_change') ||
+          !!qa.skillCarryover ||
+          !!qa.rpeCap ||
+          !!qa.unilateralPerSide
+        if (!hasFinding) return null
+        const dominant: string = (() => {
+          if (corrections.includes('tendon_rpe_capped') && qa.rpeCap) {
+            const after = typeof qa.rpeCap.after === 'number' ? qa.rpeCap.after : null
+            return after !== null ? `Doctrine: tendon RPE held at ${after}` : 'Doctrine: tendon RPE protected'
+          }
+          if (corrections.includes('skill_carryover_attributed') && qa.skillCarryover?.skill) {
+            const niceSkill = qa.skillCarryover.skill.replace(/_/g, ' ')
+            const confTail =
+              qa.skillCarryover.confidence === 'high'
+                ? ''
+                : qa.skillCarryover.confidence === 'medium'
+                  ? ' (indirect)'
+                  : ''
+            return `Skill carryover: ${niceSkill}${confTail}`
+          }
+          if (corrections.includes('unilateral_per_side_note_added')) {
+            return 'Per side'
+          }
+          return ''
+        })()
+        if (!dominant) return null
+        const fullTitle =
+          qa.conciseExplanation ||
+          qa.skillCarryover?.rationale ||
+          qa.rpeCap?.reason ||
+          'Quality audit'
+        return (
+          <p
+            className="mt-1 text-[10px] text-amber-300/70 italic leading-snug"
+            title={fullTitle}
+            aria-label={fullTitle}
+            data-phase-p-proof="true"
+            data-phase-p-corrections={corrections.join(',') || undefined}
+          >
+            {dominant}
+          </p>
+        )
+      })()}
 
       {/* [PHASE-O] Trend / coach proof line — concise second line under
           the existing performanceAdaptation chip when the resolver attached

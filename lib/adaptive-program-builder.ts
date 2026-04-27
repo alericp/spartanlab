@@ -1364,6 +1364,15 @@ export interface AdaptiveSession {
     }
     verdict: 'PRESCRIPTION_MATERIALLY_CHANGED_BY_WEEK_ADAPTATION' | 'PRESCRIPTION_UNCHANGED_BY_WEEK_ADAPTATION'
   }
+  // ==========================================================================
+  // [PHASE-P] SESSION-LEVEL QUALITY / DOCTRINE AUDIT STAMP
+  // Roll-up of Phase P findings for this session: session-length realism,
+  // cross-session straight-arm overlap warning, and any indirect skill
+  // carryover expressed across the session. Always optional; populated only
+  // when at least one finding applies. See
+  // lib/program/program-quality-doctrine-audit-contract.ts.
+  // ==========================================================================
+  qualityAudit?: import('./program/program-quality-doctrine-audit-contract').SessionQualityAuditStamp
 }
 
 export interface AdaptiveExercise {
@@ -1483,6 +1492,18 @@ export interface AdaptiveExercise {
   // Absent on every row that did not receive a Phase L mutation.
   // ==========================================================================
   performanceAdaptation?: import('./program/performance-feedback-adaptation-contract').ExercisePerformanceAdaptationStamp
+  // ==========================================================================
+  // [PHASE-P] PROGRAM QUALITY / DOCTRINE SHARPNESS AUDIT STAMP
+  // Stamped IN PLACE on a row when the Phase P resolver either applied a
+  // bounded correction (tendon RPE cap, unilateral per-side note) or
+  // attached an audit-only proof slice (skill carryover attribution,
+  // explicit no-change reason). Numeric corrections live on
+  // `targetRPE` / `note` directly — this stamp is the audit + visible-proof
+  // surface, NOT a parallel cosmetic banner. See
+  // lib/program/program-quality-doctrine-audit-contract.ts. Absent on every
+  // row that received no Phase P attention. Optional + JSON-safe.
+  // ==========================================================================
+  qualityAudit?: import('./program/program-quality-doctrine-audit-contract').ExerciseQualityAuditStamp
   // ==========================================================================
   // [DB-TRUTH-WINNER-PROVENANCE-LOCK]
   // Canonical, durable winner-rationale stamp. Built ONLY from final post-rerank

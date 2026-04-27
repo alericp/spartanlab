@@ -23,6 +23,19 @@ import {
   type PhaseLProgramShape,
   type PhaseLSessionShape,
 } from './performance-feedback-adaptation-contract'
+// [PHASE-P] Quality / doctrine sharpness audit. Pure deterministic resolver
+// run AFTER the Phase L/M/N/O overlay finishes its bounded mutations so
+// completed-day-aware corrections (tendon RPE cap, unilateral per-side note)
+// and proof attributions (skill carryover, session-length realism, overlap
+// warnings) reach the Program card from BOTH ingress paths — server-side
+// generation and client-side boot overlay. Phase P obeys the same
+// ownership rule as Phase L: server stamps win; the client never overwrites
+// server-applied corrections. See lib/program/program-quality-doctrine-audit-contract.ts.
+import {
+  runProgramQualityDoctrineAudit,
+  type ProgramQualityAuditResult,
+} from './program-quality-doctrine-audit-contract'
+import type { AdaptiveProgram } from '../adaptive-program-builder'
 
 // =============================================================================
 // [PHASE-M] EVIDENCE HASH — same algorithm as the server adapter so
@@ -323,13 +336,33 @@ export function applyPerformanceFeedbackOverlay<T extends PhaseLProgramShape>(
     },
   )
 
+  // [PHASE-P] Run the quality / doctrine sharpness audit on the adapted
+  // program. The resolver is pure / non-blocking; if it throws we keep the
+  // Phase L mutations exactly as they are. completedDayNumbers come from
+  // the same per-log inference we built above so Phase P never edits a
+  // session the user already finished.
+  let postPhaseP: T = adapted
+  try {
+    const phasePResult = runProgramQualityDoctrineAudit(
+      adapted as unknown as AdaptiveProgram,
+      { completedDayNumbers, nowIso: options?.nowIso },
+    )
+    postPhaseP = phasePResult.program as unknown as T
+  } catch (err) {
+    console.log('[phase-p-client-overlay-failed]', { error: String(err) })
+  }
+
   return {
-    program: adapted,
+    program: postPhaseP,
     adaptation,
     signature,
     changed: true,
   }
 }
+
+// [PHASE-P] Re-export type for callers that want to inspect the audit
+// result without importing from the contract directly.
+export type { ProgramQualityAuditResult }
 
 // =============================================================================
 // [PHASE-M] CLIENT-SIDE RECENT-LOG ACCESSOR FOR SERVER GENERATION ROUTES

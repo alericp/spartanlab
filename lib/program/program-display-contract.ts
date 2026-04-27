@@ -1347,6 +1347,478 @@ export function hasClassifiedDoctrineResolution(
   return list.length > 0
 }
 
+// =============================================================================
+// [PHASE 4U] CANONICAL METHOD BODY RENDER RESOLUTION
+// -----------------------------------------------------------------------------
+// Phase 4S/4T proved that canonical `methodStructures` reach the card surface
+// and dominate the chip-tally rows + suppress the legacy doctrine banner. The
+// remaining Phase G work is to PROVE the actual visible body is consuming
+// canonical truth, not silently rendering off a parallel/stale source.
+//
+// On healthy generations, the body's render blocks (rich `renderBlocks` from
+// styledGroups, raw fallback from `safeExercises[].blockId + .method`) all
+// derive from the SAME Phase 4P corridor that writes `methodStructures`. So
+// canonical methodStructures and the body's grouped blocks should describe
+// the same exercises with the same block identities. This resolver is the
+// proof: it matches each canonical methodStructure's `exerciseIds[]` against
+// the rows the body actually renders, and reports any divergence with an
+// exact reason instead of silently falling back.
+//
+// Pure: no hooks, no state, no async, no I/O, no mutation. Inputs in, plain
+// JSON-safe object out. Consumers store the result on the card surface or
+// run it inline; either way the resolver itself does nothing observable.
+// =============================================================================
+
+/**
+ * One unmatched canonical methodStructure with the precise reason it could
+ * not bind to real exercise rows. The reason codes are stable strings so the
+ * blueprint and any future audit can pattern-match without parsing prose.
+ */
+export interface CanonicalMethodUnmatchedStructure {
+  /** `id` of the canonical methodStructure (e.g. `method-superset-day1-0`). */
+  id: string
+  /** Family the structure described. */
+  family: CanonicalMethodStructure['family']
+  /** Visible label of the structure. */
+  label: string
+  /**
+   * Exact reason the structure could not contribute a renderable group:
+   *  - `NO_EXERCISE_REFS_ON_METHOD_STRUCTURE` — `exerciseIds[]` empty AND
+   *    `exerciseNames[]` empty. Common for `not_needed` / `no_safe_target`
+   *    entries; not a bug.
+   *  - `EXERCISE_REF_NOT_FOUND_IN_SESSION_ROWS` — refs exist but none of
+   *    them resolve against the session's row list (id or name lookup).
+   *    This is the bug case: canonical truth claims exercises that the
+   *    display row list cannot find.
+   *  - `METHOD_STRUCTURE_NOT_BODY_RENDERABLE` — family is row-level
+   *    (`top_set` / `drop_set` / `rest_pause` / `prescription_*` /
+   *    `straight_sets` / `endurance_density`); not a grouped block.
+   *  - `BLOCKED_OR_NOT_APPLIED` — status is `blocked` / `not_needed` /
+   *    `no_safe_target` / `not_connected` / `error`; doctrine intentionally
+   *    did not paint a group.
+   *  - `LEGACY_STRUCTURE_WITHOUT_MEMBERS` — grouped family but only one
+   *    matched member; cannot render as a multi-member block.
+   */
+  reason:
+    | 'NO_EXERCISE_REFS_ON_METHOD_STRUCTURE'
+    | 'EXERCISE_REF_NOT_FOUND_IN_SESSION_ROWS'
+    | 'METHOD_STRUCTURE_NOT_BODY_RENDERABLE'
+    | 'BLOCKED_OR_NOT_APPLIED'
+    | 'LEGACY_STRUCTURE_WITHOUT_MEMBERS'
+  /** How many of `exerciseIds[]` matched a session row (zero unless partial). */
+  matchedRowCount: number
+  /** How many refs were declared on the structure. */
+  refCount: number
+}
+
+/**
+ * One canonical methodStructure that successfully bound to ≥2 real session
+ * rows, paired with the row IDs it owns. The consumer can use these IDs to
+ * cross-check that the body's rendered block list is in fact backed by
+ * canonical truth.
+ */
+export interface CanonicalMethodRenderableGroup {
+  /** Stable id of the source methodStructure. */
+  structureId: string
+  /** Family of the source methodStructure (always a grouped family here). */
+  family: 'superset' | 'circuit' | 'density_block' | 'cluster'
+  /** Visible label inherited from the methodStructure. */
+  label: string
+  /**
+   * Matched row IDs in the order the methodStructure declared them. The
+   * consumer trusts the methodStructure's order; it does not re-rank rows.
+   */
+  matchedRowIds: string[]
+  /** Matched display names paired 1:1 with `matchedRowIds`. */
+  matchedRowNames: string[]
+  /**
+   * `id` if every member matched by exact id, `name` if any member matched
+   * by normalized-name fallback, `mixed` if both. Useful to spot data drift.
+   */
+  matchKind: 'id' | 'name' | 'mixed'
+}
+
+export type CanonicalMethodRenderSource =
+  | 'canonical_method_structures'
+  | 'styled_groups_fallback'
+  | 'ungrouped_fallback'
+
+export type CanonicalMethodRenderStatus =
+  | 'complete'
+  | 'partial'
+  | 'fallback'
+  | 'empty'
+
+/**
+ * Output of {@link resolveCanonicalMethodBodyRender}. Consumers read `source`
+ * and `status` to make a single decision about visible body ownership; the
+ * arrays expose the underlying mapping for proof, debugging, and the
+ * blueprint's Phase G evidence.
+ */
+export interface CanonicalMethodBodyRenderResolution {
+  /**
+   * Which input drove (or would have driven, given equivalence) the visible
+   * body's grouping. `canonical_method_structures` when canonical truth
+   * exists and binds to real rows; `styled_groups_fallback` when the body's
+   * rendered blocks exist but canonical did not produce a matching group;
+   * `ungrouped_fallback` when no groups rendered and canonical has nothing
+   * grouped to say either.
+   */
+  source: CanonicalMethodRenderSource
+  /**
+   * Resolution completeness: `complete` every grouped applied structure
+   * matched rows; `partial` some matched and some didn't; `fallback` no
+   * canonical applied groups but the body still rendered something; `empty`
+   * truly nothing on either side.
+   */
+  status: CanonicalMethodRenderStatus
+  /** Canonical methodStructures that successfully bound to ≥2 rows. */
+  renderedGroups: CanonicalMethodRenderableGroup[]
+  /** Canonical methodStructures that could NOT bind, with exact reasons. */
+  unmatchedStructures: CanonicalMethodUnmatchedStructure[]
+  /** How many session rows were matched into any canonical group. */
+  matchedExerciseCount: number
+  /** Total non-empty methodStructures examined (any status, any family). */
+  canonicalStructureCount: number
+  /**
+   * `true` when the consumer fell back to `styled_groups_fallback` /
+   * `ungrouped_fallback` because canonical did not produce a renderable
+   * group set. Always `false` when `source === 'canonical_method_structures'`.
+   */
+  fallbackUsed: boolean
+  /**
+   * Stable code explaining why fallback was used. `null` when not in
+   * fallback. Possible values:
+   *  - `NO_CANONICAL_METHOD_STRUCTURES` — surface had no methodStructures.
+   *  - `NO_GROUPED_FAMILY_APPLIED` — canonical exists but no
+   *    `applied`/`already_applied` entries in grouped families.
+   *  - `ALL_CANONICAL_GROUPS_FAILED_TO_BIND` — grouped applied entries
+   *    existed but none bound to the row list (data drift or stale rows).
+   */
+  fallbackReason:
+    | 'NO_CANONICAL_METHOD_STRUCTURES'
+    | 'NO_GROUPED_FAMILY_APPLIED'
+    | 'ALL_CANONICAL_GROUPS_FAILED_TO_BIND'
+    | null
+  /**
+   * Free-form short codes the consumer can log/surface in dev probes. Stable
+   * across calls so blueprint snapshots can diff them. Examples:
+   *  `EXAMINED_3_STRUCTURES`, `BOUND_2_GROUPS`, `2_BOUND_BY_ID`,
+   *  `1_UNMATCHED_BY_REF_NOT_FOUND`.
+   */
+  debugReasons: string[]
+  /**
+   * When the consumer ALSO has the body's rendered block list available, the
+   * resolver populates this with `true` iff every rendered block correlates
+   * to at least one canonical renderable group by exercise-id intersection.
+   * `null` when the consumer did not pass `renderedBlockMembers`. This is
+   * the strongest "the visible body IS canonical" proof bit.
+   */
+  bodyBlocksMatchCanonical: boolean | null
+}
+
+/**
+ * Minimal row shape the resolver needs. Fully a subset of `safeExercises` /
+ * `fullVisibleExercises` from `AdaptiveSessionCard`, kept tiny so the
+ * resolver has no opinion about ExerciseRowSurface or full AdaptiveExercise.
+ */
+export interface CanonicalMethodResolverRow {
+  id: string
+  name: string
+}
+
+/**
+ * Optional rendered-block descriptor the consumer can pass when it has the
+ * body's actual render output handy. Lets the resolver compute the
+ * `bodyBlocksMatchCanonical` cross-check.
+ */
+export interface CanonicalMethodResolverRenderedBlock {
+  /** Member exercise IDs the body block is currently painting. */
+  memberIds: string[]
+  /** Group type the body block is painting. */
+  groupType: 'superset' | 'circuit' | 'density_block' | 'cluster' | string
+}
+
+/**
+ * Normalize a name for fallback matching. Mirrors the same shape used by the
+ * `synthesizedRawFallbackBlocks` member matcher in `AdaptiveSessionCard` so
+ * we get the same hit rate. Lowercased, alphanumerics only, single spaces.
+ */
+function normalizeNameForMatch(s: string | null | undefined): string {
+  if (typeof s !== 'string') return ''
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * Pure resolver. Given canonical methodStructures + the actual exercise rows
+ * the body is rendering (and optionally the body's already-built block list),
+ * return a {@link CanonicalMethodBodyRenderResolution} describing whether
+ * the visible body is in fact backed by canonical truth or relying on a
+ * legacy/fallback path.
+ *
+ * Rules:
+ *  1. Match priority: stable `id` first, normalized name second. No fuzzy
+ *     match. No method-type-only match. No invented rows. No reordering.
+ *  2. A grouped family with <2 matched rows is `LEGACY_STRUCTURE_WITHOUT_MEMBERS`.
+ *  3. Status is `complete` only when EVERY grouped applied/already_applied
+ *     structure bound to ≥2 rows AND (when blocks were passed) every
+ *     rendered block correlates to a canonical group.
+ *  4. The resolver never mutates inputs and never throws.
+ */
+export function resolveCanonicalMethodBodyRender(
+  methodStructures: ReadonlyArray<CanonicalMethodStructure> | null | undefined,
+  rows: ReadonlyArray<CanonicalMethodResolverRow> | null | undefined,
+  renderedBlockMembers?: ReadonlyArray<CanonicalMethodResolverRenderedBlock> | null,
+): CanonicalMethodBodyRenderResolution {
+  const debugReasons: string[] = []
+  const list = Array.isArray(methodStructures) ? methodStructures : []
+  const safeRows = Array.isArray(rows) ? rows : []
+  const blocks = Array.isArray(renderedBlockMembers) ? renderedBlockMembers : []
+  // Empty-empty fast path.
+  if (list.length === 0 && safeRows.length === 0) {
+    return {
+      source: 'ungrouped_fallback',
+      status: 'empty',
+      renderedGroups: [],
+      unmatchedStructures: [],
+      matchedExerciseCount: 0,
+      canonicalStructureCount: 0,
+      fallbackUsed: true,
+      fallbackReason: 'NO_CANONICAL_METHOD_STRUCTURES',
+      debugReasons: ['NO_CANONICAL_AND_NO_ROWS'],
+      bodyBlocksMatchCanonical: blocks.length === 0 ? null : false,
+    }
+  }
+  // Build row lookup tables.
+  const rowsById = new Map<string, CanonicalMethodResolverRow>()
+  const rowsByName = new Map<string, CanonicalMethodResolverRow>()
+  for (const r of safeRows) {
+    if (!r) continue
+    if (typeof r.id === 'string' && r.id.length > 0) rowsById.set(r.id, r)
+    const norm = normalizeNameForMatch(r.name)
+    if (norm.length >= 2 && !rowsByName.has(norm)) rowsByName.set(norm, r)
+  }
+  debugReasons.push(`EXAMINED_${list.length}_STRUCTURES`)
+  debugReasons.push(`ROW_INDEX_${safeRows.length}`)
+  // Iterate canonical structures.
+  const renderedGroups: CanonicalMethodRenderableGroup[] = []
+  const unmatchedStructures: CanonicalMethodUnmatchedStructure[] = []
+  const matchedRowIdSet = new Set<string>()
+  let groupedAppliedCount = 0
+  let boundById = 0
+  let boundByName = 0
+  for (const ms of list) {
+    if (!ms) continue
+    const isGroupedFamily =
+      ms.family === 'superset' ||
+      ms.family === 'circuit' ||
+      ms.family === 'density_block' ||
+      ms.family === 'cluster'
+    const isApplied = ms.status === 'applied' || ms.status === 'already_applied'
+    if (!isApplied) {
+      unmatchedStructures.push({
+        id: ms.id,
+        family: ms.family,
+        label: ms.label,
+        reason: 'BLOCKED_OR_NOT_APPLIED',
+        matchedRowCount: 0,
+        refCount:
+          (Array.isArray(ms.exerciseIds) ? ms.exerciseIds.length : 0) +
+          (Array.isArray(ms.exerciseNames) ? ms.exerciseNames.length : 0),
+      })
+      continue
+    }
+    if (!isGroupedFamily) {
+      unmatchedStructures.push({
+        id: ms.id,
+        family: ms.family,
+        label: ms.label,
+        reason: 'METHOD_STRUCTURE_NOT_BODY_RENDERABLE',
+        matchedRowCount: 0,
+        refCount:
+          (Array.isArray(ms.exerciseIds) ? ms.exerciseIds.length : 0) +
+          (Array.isArray(ms.exerciseNames) ? ms.exerciseNames.length : 0),
+      })
+      continue
+    }
+    groupedAppliedCount += 1
+    const refIds = Array.isArray(ms.exerciseIds) ? ms.exerciseIds : []
+    const refNames = Array.isArray(ms.exerciseNames) ? ms.exerciseNames : []
+    if (refIds.length === 0 && refNames.length === 0) {
+      unmatchedStructures.push({
+        id: ms.id,
+        family: ms.family,
+        label: ms.label,
+        reason: 'NO_EXERCISE_REFS_ON_METHOD_STRUCTURE',
+        matchedRowCount: 0,
+        refCount: 0,
+      })
+      continue
+    }
+    // Try matching: id first, then normalized name fallback when id missed.
+    // Iterate the longer of the two ref arrays so a methodStructure can
+    // declare members by id OR by name and we still bind every entry.
+    const refLen = Math.max(refIds.length, refNames.length)
+    const matchedRowIds: string[] = []
+    const matchedRowNames: string[] = []
+    let kindIds = 0
+    let kindNames = 0
+    for (let i = 0; i < refLen; i++) {
+      const refId = i < refIds.length ? refIds[i] : undefined
+      const refName = i < refNames.length ? refNames[i] : undefined
+      let row: CanonicalMethodResolverRow | undefined
+      if (refId && rowsById.has(refId)) {
+        row = rowsById.get(refId)
+        kindIds += 1
+      } else if (refName) {
+        const norm = normalizeNameForMatch(refName)
+        if (norm.length >= 2 && rowsByName.has(norm)) {
+          row = rowsByName.get(norm)
+          kindNames += 1
+        }
+      }
+      if (row && !matchedRowIds.includes(row.id)) {
+        matchedRowIds.push(row.id)
+        matchedRowNames.push(row.name)
+        matchedRowIdSet.add(row.id)
+      }
+    }
+    if (matchedRowIds.length < 2) {
+      unmatchedStructures.push({
+        id: ms.id,
+        family: ms.family,
+        label: ms.label,
+        reason:
+          matchedRowIds.length === 0
+            ? 'EXERCISE_REF_NOT_FOUND_IN_SESSION_ROWS'
+            : 'LEGACY_STRUCTURE_WITHOUT_MEMBERS',
+        matchedRowCount: matchedRowIds.length,
+        refCount: refLen,
+      })
+      continue
+    }
+    const matchKind: 'id' | 'name' | 'mixed' =
+      kindIds > 0 && kindNames > 0 ? 'mixed' : kindNames > 0 ? 'name' : 'id'
+    if (matchKind === 'id') boundById += 1
+    if (matchKind === 'name') boundByName += 1
+    renderedGroups.push({
+      structureId: ms.id,
+      family: ms.family as CanonicalMethodRenderableGroup['family'],
+      label: ms.label,
+      matchedRowIds,
+      matchedRowNames,
+      matchKind,
+    })
+  }
+  if (boundById > 0) debugReasons.push(`${boundById}_BOUND_BY_ID`)
+  if (boundByName > 0) debugReasons.push(`${boundByName}_BOUND_BY_NAME`)
+  debugReasons.push(`BOUND_${renderedGroups.length}_GROUPS`)
+  if (unmatchedStructures.length > 0) {
+    debugReasons.push(`UNMATCHED_${unmatchedStructures.length}`)
+  }
+  // Cross-check rendered blocks against canonical groups when supplied.
+  let bodyBlocksMatchCanonical: boolean | null = null
+  if (blocks.length > 0) {
+    if (renderedGroups.length === 0) {
+      bodyBlocksMatchCanonical = false
+    } else {
+      const canonicalIdSets = renderedGroups.map(g => new Set(g.matchedRowIds))
+      let allBlocksCorrelate = true
+      for (const b of blocks) {
+        const memberIds = Array.isArray(b.memberIds) ? b.memberIds : []
+        const overlaps = canonicalIdSets.some(set =>
+          memberIds.some(id => set.has(id)),
+        )
+        if (!overlaps) {
+          allBlocksCorrelate = false
+          break
+        }
+      }
+      bodyBlocksMatchCanonical = allBlocksCorrelate
+      debugReasons.push(
+        allBlocksCorrelate
+          ? 'BODY_BLOCKS_MATCH_CANONICAL'
+          : 'BODY_BLOCKS_DIVERGE_FROM_CANONICAL',
+      )
+    }
+  }
+  // Source + status verdict.
+  const canonicalStructureCount = list.length
+  const matchedExerciseCount = matchedRowIdSet.size
+  if (canonicalStructureCount === 0) {
+    return {
+      source: blocks.length > 0 ? 'styled_groups_fallback' : 'ungrouped_fallback',
+      status: blocks.length > 0 ? 'fallback' : 'empty',
+      renderedGroups: [],
+      unmatchedStructures: [],
+      matchedExerciseCount: 0,
+      canonicalStructureCount: 0,
+      fallbackUsed: true,
+      fallbackReason: 'NO_CANONICAL_METHOD_STRUCTURES',
+      debugReasons: ['NO_CANONICAL_METHOD_STRUCTURES', ...debugReasons],
+      bodyBlocksMatchCanonical,
+    }
+  }
+  if (groupedAppliedCount === 0) {
+    return {
+      source: blocks.length > 0 ? 'styled_groups_fallback' : 'ungrouped_fallback',
+      status: blocks.length > 0 ? 'fallback' : 'empty',
+      renderedGroups: [],
+      unmatchedStructures,
+      matchedExerciseCount: 0,
+      canonicalStructureCount,
+      fallbackUsed: true,
+      fallbackReason: 'NO_GROUPED_FAMILY_APPLIED',
+      debugReasons,
+      bodyBlocksMatchCanonical,
+    }
+  }
+  if (renderedGroups.length === 0) {
+    return {
+      source: blocks.length > 0 ? 'styled_groups_fallback' : 'ungrouped_fallback',
+      status: blocks.length > 0 ? 'fallback' : 'empty',
+      renderedGroups: [],
+      unmatchedStructures,
+      matchedExerciseCount: 0,
+      canonicalStructureCount,
+      fallbackUsed: true,
+      fallbackReason: 'ALL_CANONICAL_GROUPS_FAILED_TO_BIND',
+      debugReasons,
+      bodyBlocksMatchCanonical,
+    }
+  }
+  // At least one canonical group bound. Source is canonical. Status is
+  // `complete` iff every grouped applied entry succeeded AND (when blocks
+  // were passed) the body's blocks correlate to canonical groups.
+  const everyAppliedMatched =
+    unmatchedStructures.filter(
+      u =>
+        u.reason !== 'BLOCKED_OR_NOT_APPLIED' &&
+        u.reason !== 'METHOD_STRUCTURE_NOT_BODY_RENDERABLE',
+    ).length === 0
+  const blockProofOk =
+    bodyBlocksMatchCanonical === null || bodyBlocksMatchCanonical === true
+  const statusVerdict: CanonicalMethodRenderStatus =
+    everyAppliedMatched && blockProofOk ? 'complete' : 'partial'
+  return {
+    source: 'canonical_method_structures',
+    status: statusVerdict,
+    renderedGroups,
+    unmatchedStructures,
+    matchedExerciseCount,
+    canonicalStructureCount,
+    fallbackUsed: false,
+    fallbackReason: null,
+    debugReasons,
+    bodyBlocksMatchCanonical,
+  }
+}
+
 /**
  * Build session card surfaces for all sessions in a program.
  * Handles deduplication by adding differentiating context when cards would look identical.

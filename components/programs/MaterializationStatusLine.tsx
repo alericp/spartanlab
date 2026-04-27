@@ -212,6 +212,41 @@ export function DoctrineCausalLine({ program }: Props) {
   const sessionsWithAudit = challenge.sessionsWithAudit ?? 0
   const verdict = challenge.unchangedVerdict ?? 'not_unchanged'
 
+  // [PHASE 4U] Program-level legacy-banner demotion. The legacy Phase 4E
+  // `doctrineCausalChallenge.unchangedVerdict` can read `doctrine_did_not_run`
+  // / `doctrine_cache_empty` / `doctrine_domain_gap` — all of which paint an
+  // amber "Doctrine did not reach generation" / "No doctrine rules matched"
+  // banner that contradicts the canonical Phase 4Q rollup when canonical says
+  // doctrine actually applied (e.g. structural method materialization stamped
+  // applied/already_applied entries even though the older causal-challenge
+  // selector saw zero exercise winner changes). When the canonical rollup
+  // proves doctrine engaged, the legacy upstream-failure banner is silently
+  // wrong and the user should not see it.
+  //
+  // Demotion rule: if `program.doctrineBlockResolutionRollup` reports
+  // `totalApplied + totalAlreadyApplied > 0`, suppress the legacy
+  // upstream-failure verdicts. The Phase4QDoctrineBlockResolutionLine
+  // (rendered alongside this component on the Program page) already carries
+  // the classified narrative — it owns the doctrine status when present.
+  // The emerald `materialProgramChanged` verdict is NOT demoted: it carries
+  // unique top-pick causal evidence the classified rollup does not.
+  // The zinc `doctrine_scoring_too_weak` / `already_optimal_protected`
+  // verdicts are NOT demoted: they describe selector behaviour, not failure.
+  const blockRollup = (program as unknown as {
+    doctrineBlockResolutionRollup?: { totalApplied?: number; totalAlreadyApplied?: number } | null
+  }).doctrineBlockResolutionRollup ?? null
+  const canonicalAppliedCount =
+    (blockRollup?.totalApplied ?? 0) + (blockRollup?.totalAlreadyApplied ?? 0)
+  const isLegacyUpstreamFailureVerdict =
+    verdict === 'doctrine_did_not_run' ||
+    verdict === 'doctrine_cache_empty' ||
+    verdict === 'doctrine_domain_gap'
+  if (isLegacyUpstreamFailureVerdict && canonicalAppliedCount > 0) {
+    // Canonical truth proves doctrine reached and applied; the legacy banner
+    // would contradict it. The Phase 4Q rollup line owns the narrative.
+    return null
+  }
+
   // Material change — doctrine actually picked a different exercise.
   if ((challenge.materialProgramChanged ?? false) === true && sessionsChanged > 0) {
     return (

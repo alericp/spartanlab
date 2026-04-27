@@ -21232,6 +21232,89 @@ return explanations.length > 0 ? explanations : undefined
     finalVerdict: finalCausalVerdict,
     verdict: finalCausalVerdict,
   })
+
+  // ===========================================================================
+  // [PHASE 4H] DOCTRINE MATERIALIZATION MATRIX + ONBOARDING TRUTH MAP
+  //
+  // Pure diagnostic stamps. NOT a generator. NOT a materializer. NOT a second
+  // doctrine engine. Built from data already computed above (runtimeContract,
+  // doctrineCausalChallenge, inputs) and stamped onto the program so the
+  // Program page / API consumers can render an honest per-category status:
+  //
+  //   • CONNECTED_AND_MATERIAL — rule changed a real program field
+  //   • READ_BUT_SCORING_ONLY — rule influenced ranking, not a field
+  //   • READ_BUT_AUDIT_ONLY  — rule loaded but no consumer
+  //   • NOT_READ / NOT_IN_SCHEMA / NOT_RELEVANT_TO_CURRENT_PROFILE
+  //
+  // No new fields are mutated as a side effect. If a category is currently
+  // scoring-only (prescription, progression), the matrix says exactly that
+  // — it does NOT pretend it is "applied". This is the Phase 4H non-negotiable:
+  // never let explanation text claim materialization that did not happen.
+  // ===========================================================================
+  try {
+    const { buildDoctrineMaterializationMatrix, buildFullOnboardingTruthMaterializationMap } =
+      await import('./doctrine/doctrine-materialization-matrix')
+    const phase4hCausalChallengeForMatrix = (finalProgram as unknown as {
+      doctrineCausalChallenge?: {
+        materialProgramChanged?: boolean
+        sessionsTopCandidateChanged?: number
+        diffSummary?: {
+          changedExerciseCount?: number
+          selectionRulesMatchedTotal?: number
+          carryoverRulesMatchedTotal?: number
+          contraindicationRulesMatchedTotal?: number
+        }
+        unchangedVerdict?: string
+      }
+    }).doctrineCausalChallenge ?? null
+
+    const phase4hMatrix = buildDoctrineMaterializationMatrix({
+      runtimeContract: doctrineRuntimeContract,
+      causalChallenge: phase4hCausalChallengeForMatrix,
+      athleteInputs: inputs as unknown as Record<string, unknown>,
+    })
+    const phase4hOnboardingMap = buildFullOnboardingTruthMaterializationMap({
+      runtimeContract: doctrineRuntimeContract,
+      causalChallenge: phase4hCausalChallengeForMatrix,
+      athleteInputs: inputs as unknown as Record<string, unknown>,
+    })
+
+    ;(finalProgram as unknown as { doctrineMaterializationMatrix?: unknown }).doctrineMaterializationMatrix =
+      phase4hMatrix
+    ;(finalProgram as unknown as { fullOnboardingTruthMaterializationMap?: unknown }).fullOnboardingTruthMaterializationMap =
+      phase4hOnboardingMap
+
+    console.log('[PHASE4H-DOCTRINE-MATERIALIZATION-MATRIX]', {
+      verdict: phase4hMatrix.verdict,
+      doctrineRuntimeAvailable: phase4hMatrix.doctrineRuntimeAvailable,
+      materialProgramChanged: phase4hMatrix.materialProgramChanged,
+      categoriesConnectedAndMaterial: phase4hMatrix.totals.categoriesConnectedAndMaterial,
+      categoriesReadButScoringOnly: phase4hMatrix.totals.categoriesReadButScoringOnly,
+      categoriesReadButAuditOnly: phase4hMatrix.totals.categoriesReadButAuditOnly,
+      categoriesNotRead: phase4hMatrix.totals.categoriesNotRead,
+      categoriesNotInSchema: phase4hMatrix.totals.categoriesNotInSchema,
+      totalRulesRead: phase4hMatrix.totals.totalRulesRead,
+      totalRulesMaterialized: phase4hMatrix.totals.totalRulesMaterialized,
+      categoriesByStatus: phase4hMatrix.categories.map(c => ({ category: c.category, status: c.status })),
+    })
+    console.log('[PHASE4H-FULL-ONBOARDING-TRUTH-MAP]', {
+      verdict: phase4hOnboardingMap.verdict,
+      inputsConsumed: phase4hOnboardingMap.totals.inputsConsumed,
+      inputsMaterialized: phase4hOnboardingMap.totals.inputsMaterialized,
+      inputsConsumedNoChange: phase4hOnboardingMap.totals.inputsConsumedNoChange,
+      inputsMissingConnection: phase4hOnboardingMap.totals.inputsMissingConnection,
+      inputsNotObserved: phase4hOnboardingMap.totals.inputsNotObserved,
+      rowsByStatus: phase4hOnboardingMap.rows.map(r => ({ inputKey: r.inputKey, status: r.status })),
+    })
+  } catch (err) {
+    // Diagnostic must never break generation. If the matrix fails to build for
+    // any reason, log and continue — generation already completed before this
+    // diagnostic stamp.
+    console.log('[PHASE4H-DOCTRINE-MATERIALIZATION-MATRIX-FAILED]', {
+      error: String(err),
+      verdict: 'DIAGNOSTIC_BUILD_FAILED_GENERATION_PRESERVED',
+    })
+  }
   
   // [DOCTRINE INFLUENCE] Store doctrine influence contract for audit visibility
   if (doctrineInfluenceContract) {

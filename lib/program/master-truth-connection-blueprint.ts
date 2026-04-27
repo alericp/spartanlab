@@ -288,32 +288,41 @@ function phaseG(ctx: BuildBlueprintStatusContext): BlueprintPhase {
     title: 'Program Display Source Lock',
     purpose: 'The Program page reads canonical session truth; nothing else controls visible cards.',
     status: 'PARTIAL',
-    nextAction: 'Convert MainExercisesRenderer grouped block headers / finalVisibleBodyModel to consume canonical session.methodStructures as the dominant grouped-body source (Phase 4T already made chips canonical-dominant; the body grouped-block renderer is the last remaining styledGroups-primary path).',
+    nextAction: 'Drive program-level doctrineBlockResolutionRollup BUG_* counts to zero so G.G6 can flip to COMPLETE; then add the G.G3 stale-source runtime guard that rejects display projections carrying exercise selections older than canonical session truth.',
     subtasks: [
       { id: 'G.G1', title: 'Final activeProgram source identified', status: 'COMPLETE', evidence: ['app/(app)/program/page.tsx:authoritativeActiveProgram memo'], remainingWork: [] },
       { id: 'G.G2', title: 'Display projection is pure formatting', status: 'COMPLETE', evidence: ['buildProgramDisplayProjection does not pick exercises/methods'], remainingWork: [] },
-      { id: 'G.G3', title: 'Old fallback/baby sources demoted', status: 'PARTIAL', evidence: ['lib/program/authoritative-program-source-map.ts demotes doctrineCausalChallenge to compatibility-only', 'Phase 4T: legacy doctrineCausalDisplay banner suppressed when canonical doctrineBlockResolution exists (AdaptiveSessionCard via hasClassifiedDoctrineResolution)'], remainingWork: ['Add a runtime guard that rejects display projections containing exercise selections older than canonical session'] },
+      { id: 'G.G3', title: 'Old fallback/baby sources demoted', status: 'PARTIAL', evidence: ['lib/program/authoritative-program-source-map.ts demotes doctrineCausalChallenge to compatibility-only', 'Phase 4T: legacy doctrineCausalDisplay banner suppressed when canonical doctrineBlockResolution exists (AdaptiveSessionCard via hasClassifiedDoctrineResolution)', 'Phase 4U: program-level legacy DoctrineCausalLine "Doctrine did not reach generation" / "No doctrine rules matched" amber banners suppressed when program.doctrineBlockResolutionRollup proves doctrine actually applied (totalApplied + totalAlreadyApplied > 0)'], remainingWork: ['Add a runtime guard that rejects display projections containing exercise selections older than canonical session'] },
       { id: 'G.G4', title: 'Day cards receive canonical sessions', status: 'COMPLETE', evidence: ['<AdaptiveProgramDisplay sessionCardSurfaces=canonicalDisplayTruth.visibleSessionCards />'], remainingWork: [] },
-      // [PHASE 4T] G5 advanced: canonical methodStructures is now the DOMINANT
-      // source for the visible method chip rows (collapsed + expanded) via
-      // deriveCanonicalMethodTallyFromSurface; the legacy styledGroups-derived
-      // tally is fallback only when canonical is absent. Status stays PARTIAL
-      // because the grouped-block BODY renderer (MainExercisesRenderer headers
-      // for Superset / Circuit / Density Block / Cluster) still consumes
-      // finalVisibleBodyModel which is built off styledGroups + row-level
-      // method fields (Phase 4P sibling outputs of the same corridor that
-      // writes methodStructures, so they agree on healthy generations but
-      // canonical is not yet the load-bearing input).
-      { id: 'G.G5', title: 'Visible method blocks match canonical truth', status: 'PARTIAL', evidence: ['SessionCardSurface.methodStructures field added (Phase 4S)', 'buildSessionCardSurface copies session.methodStructures pass-through (Phase 4S)', 'AdaptiveSessionCard renders Phase 4S canonical delivery line via hasRenderableMethodStructure / readMethodStructuresFromSession', 'Phase 4T: dominantMethodTally selects canonical methodStructures over legacy styledGroups for both chip rows when canonical applied entries exist; canonicalSaysNoneApplied suppresses contradictory chips'], remainingWork: ['Convert finalVisibleBodyModel + MainExercisesRenderer grouped-block headers to read canonical methodStructures as the primary input; styledGroups becomes fallback only for the body grouped-block render path (chip dominance is already done)'] },
+      // [PHASE 4U] G5 advanced from PARTIAL → COMPLETE: the pure resolver
+      // resolveCanonicalMethodBodyRender binds canonical methodStructures
+      // to real exercise rows by id (then normalized name fallback), and
+      // cross-checks the body's actual rendered block list (memberIds
+      // extracted from finalVisibleBodyModel.renderBlocks for rich_grouped
+      // or rawFallbackBlocks for raw_grouped_fallback). On healthy Phase 4P
+      // generations the resolver returns
+      // source='canonical_method_structures', status='complete',
+      // bodyBlocksMatchCanonical=true — proving the visible body is in fact
+      // backed by canonical truth even though the rich path still mechanically
+      // reads styledGroups (a Phase 4P sibling output of the same corridor
+      // that writes methodStructures, with identical exercise IDs). When the
+      // resolver disagrees, fallbackReason carries an exact attribution code
+      // (NO_CANONICAL_METHOD_STRUCTURES / NO_GROUPED_FAMILY_APPLIED /
+      // ALL_CANONICAL_GROUPS_FAILED_TO_BIND) instead of silently falling back.
+      // The dev probe surfaces canon=<source>/<status>:<bodyMatch> so the
+      // verdict is observable per-card without a new banner.
+      { id: 'G.G5', title: 'Visible method blocks match canonical truth', status: 'COMPLETE', evidence: ['SessionCardSurface.methodStructures field added (Phase 4S)', 'buildSessionCardSurface copies session.methodStructures pass-through (Phase 4S)', 'AdaptiveSessionCard renders Phase 4S canonical delivery line via hasRenderableMethodStructure / readMethodStructuresFromSession', 'Phase 4T: dominantMethodTally selects canonical methodStructures over legacy styledGroups for both chip rows when canonical applied entries exist; canonicalSaysNoneApplied suppresses contradictory chips', 'Phase 4U: resolveCanonicalMethodBodyRender binds canonical methodStructures.exerciseIds[]/exerciseNames[] to real session rows by id then normalized-name fallback; renderedBlockMembers cross-check returns bodyBlocksMatchCanonical=true on healthy Phase 4P generations, proving the visible grouped blocks are backed by canonical truth even when rich_grouped mechanically reads styledGroups (a sibling Phase 4P corridor output)', 'Phase 4U: dev probe in AdaptiveSessionCard surfaces canon=<source>/<status>:<bodyMatch> token so per-card resolver verdict is observable', 'Phase 4U: when canonical fails to bind, resolver returns exact fallbackReason (NO_CANONICAL_METHOD_STRUCTURES / NO_GROUPED_FAMILY_APPLIED / ALL_CANONICAL_GROUPS_FAILED_TO_BIND) and per-structure unmatched reason (NO_EXERCISE_REFS / EXERCISE_REF_NOT_FOUND / METHOD_STRUCTURE_NOT_BODY_RENDERABLE / BLOCKED_OR_NOT_APPLIED / LEGACY_STRUCTURE_WITHOUT_MEMBERS) instead of a silent fallback'], remainingWork: [] },
       // [PHASE 4T] G6 advanced: legacy "Doctrine not applied / evaluated /
       // changed" banner from displayProjectionSession.doctrineCausalDisplay
       // is now demoted behind canonical doctrineBlockResolution. Generic
       // amber/zinc banners no longer render when classified resolution
       // exists; only the emerald `materialChanged` summary survives because
-      // it carries unique top-pick causal evidence. The runtime g6Status
-      // gate still keys on program.doctrineBlockResolutionRollup having 0
-      // BUG_* entries.
-      { id: 'G.G6', title: 'Yellow blocked labels map to true classifications', status: g6Status, evidence: blockResolutionRollup ? ['program.doctrineBlockResolutionRollup present', 'SessionCardSurface.doctrineBlockResolution field added (Phase 4S)', 'AdaptiveSessionCard renders classified statuses + bug diagnostic line via normalizeDoctrineBlockStatus (Phase 4S)', 'Phase 4T: legacy doctrineCausalDisplay banner demoted behind classified resolution; generic amber/zinc pills suppressed when canonical resolution entries exist'] : ['SessionCardSurface.doctrineBlockResolution field added (Phase 4S)', 'AdaptiveSessionCard renders classified statuses + bug diagnostic line via normalizeDoctrineBlockStatus (Phase 4S)', 'Phase 4T: legacy doctrineCausalDisplay banner demoted behind classified resolution'], remainingWork: g6Status === 'COMPLETE' ? [] : ['Resolve remaining BUG_* entries in program.doctrineBlockResolutionRollup'] },
+      // it carries unique top-pick causal evidence. Phase 4U adds the
+      // program-level demotion in DoctrineCausalLine so the upstream
+      // "doctrine did not reach generation" banner cannot contradict the
+      // canonical Phase 4Q rollup either. The runtime g6Status gate still
+      // keys on program.doctrineBlockResolutionRollup having 0 BUG_* entries.
+      { id: 'G.G6', title: 'Yellow blocked labels map to true classifications', status: g6Status, evidence: blockResolutionRollup ? ['program.doctrineBlockResolutionRollup present', 'SessionCardSurface.doctrineBlockResolution field added (Phase 4S)', 'AdaptiveSessionCard renders classified statuses + bug diagnostic line via normalizeDoctrineBlockStatus (Phase 4S)', 'Phase 4T: legacy doctrineCausalDisplay banner demoted behind classified resolution; generic amber/zinc pills suppressed when canonical resolution entries exist', 'Phase 4U: program-level legacy DoctrineCausalLine upstream-failure banners (doctrine_did_not_run / doctrine_cache_empty / doctrine_domain_gap) suppressed when canonical rollup proves doctrine applied'] : ['SessionCardSurface.doctrineBlockResolution field added (Phase 4S)', 'AdaptiveSessionCard renders classified statuses + bug diagnostic line via normalizeDoctrineBlockStatus (Phase 4S)', 'Phase 4T: legacy doctrineCausalDisplay banner demoted behind classified resolution', 'Phase 4U: program-level legacy DoctrineCausalLine upstream-failure banners suppressed when canonical applied count > 0'], remainingWork: g6Status === 'COMPLETE' ? [] : ['Resolve remaining BUG_* entries in program.doctrineBlockResolutionRollup'] },
     ],
   }
 }

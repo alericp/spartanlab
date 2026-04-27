@@ -48,6 +48,13 @@ import {
   // legacy `doctrineCausalDisplay` banner behind classified resolution.
   deriveCanonicalMethodTallyFromSurface,
   hasClassifiedDoctrineResolution,
+  // [PHASE 4U] Pure resolver that proves whether the visible body's grouped
+  // blocks are actually backed by canonical methodStructures (matched by
+  // exercise id / normalized name) or fell through to a styled/ungrouped
+  // fallback. Run inline on the card after `finalVisibleBodyModel`; the
+  // verdict drives the dev probe and the blueprint Phase G evidence.
+  resolveCanonicalMethodBodyRender,
+  type CanonicalMethodBodyRenderResolution,
   type ExerciseRowSurface,
   type SessionCardSurface,
   type ProgramDisplayProjectionSession,
@@ -1986,6 +1993,89 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   })()
 
   // ==========================================================================
+  // [PHASE 4U — CANONICAL-METHOD-BODY-RENDER-PROOF]
+  //
+  // This is the Phase G proof that the visible body's grouped blocks are
+  // backed by canonical `methodStructures`, not silently rendered off a
+  // parallel/stale source. The pure resolver lives in program-display-contract
+  // and never touches state, hooks, or I/O — it just returns a verdict object
+  // we can read in dev probes and surface in the blueprint evidence.
+  //
+  // Inputs we hand it:
+  //   1. `cardSurface.methodStructures` — canonical Phase 4P truth carried on
+  //      the surface (Phase 4S wired this end-to-end).
+  //   2. `safeExercises` (id+name only) — the row list the body actually
+  //      iterates. This is the same array the synthesized fallback path and
+  //      the rich grouped contract consume, so a successful canonical match
+  //      against it implies the body's blocks DID hit canonical-backed rows.
+  //   3. The body's already-built render block list (member ids extracted
+  //      from `finalVisibleBodyModel.renderBlocks` for rich_grouped, or
+  //      `rawFallbackBlocks` for raw_grouped_fallback). The resolver uses
+  //      this to compute `bodyBlocksMatchCanonical` — the strongest "the
+  //      visible body IS canonical" cross-check.
+  //
+  // Why this is an inline pass rather than a buildSessionCardSurface field:
+  // the rendered block list is only known here, after the dispatcher picked
+  // a mode. The resolver is pure so calling it during render is safe.
+  //
+  // What downstream consumers do with the verdict:
+  //   - the dev probe surfaces `canon=...` so the body's actual source is
+  //     observable without a new banner;
+  //   - the blueprint G.G5 evidence cites status === 'complete' as proof
+  //     that canonical truth reaches real rows;
+  //   - the body itself is unchanged this phase — on healthy generations
+  //     methodStructures, styledGroups, and exercise[].method are sibling
+  //     outputs of the same Phase 4P corridor that wrote them, so the
+  //     resolver's `bodyBlocksMatchCanonical` should be true and the verdict
+  //     should be 'canonical_method_structures'/'complete'. When it is not,
+  //     we have an exact attribution code (NO_CANONICAL_METHOD_STRUCTURES /
+  //     NO_GROUPED_FAMILY_APPLIED / ALL_CANONICAL_GROUPS_FAILED_TO_BIND) the
+  //     blueprint can call out instead of a silent fallback.
+  // ==========================================================================
+  const canonicalBodyRenderResolution: CanonicalMethodBodyRenderResolution = (() => {
+    // Extract member ids from whichever block list the body will actually
+    // render. `simple_order_grouped` and `flat_category` paint no grouped
+    // blocks, so we pass an empty list and let the resolver compute its
+    // canonical-only verdict (no body cross-check possible).
+    const renderedBlockMembers: { memberIds: string[]; groupType: string }[] = []
+    if (finalVisibleBodyModel.mode === 'rich_grouped') {
+      for (const rb of finalVisibleBodyModel.renderBlocks) {
+        if (rb.type === 'group') {
+          renderedBlockMembers.push({
+            memberIds: (rb.group.exercises || [])
+              .map(e => e.id)
+              .filter((id): id is string => typeof id === 'string' && id.length > 0),
+            groupType: rb.group.groupType,
+          })
+        }
+        // type==='exercise' rows are not grouped blocks; skip.
+      }
+    } else if (finalVisibleBodyModel.mode === 'raw_grouped_fallback') {
+      for (const rfb of finalVisibleBodyModel.rawFallbackBlocks) {
+        renderedBlockMembers.push({
+          memberIds: (rfb.members || [])
+            .map(m => m.id)
+            .filter((id): id is string => typeof id === 'string' && id.length > 0),
+          groupType: rfb.groupType,
+        })
+      }
+    }
+    // `safeExercises` is the row list the body iterates — id+name slice is
+    // all the resolver needs. Cast to the resolver's minimal row shape.
+    const rowsForResolver = (safeExercises as Array<{ id?: unknown; name?: unknown }>).map(
+      r => ({
+        id: typeof r.id === 'string' ? r.id : '',
+        name: typeof r.name === 'string' ? r.name : '',
+      }),
+    )
+    return resolveCanonicalMethodBodyRender(
+      cardSurface?.methodStructures ?? null,
+      rowsForResolver,
+      renderedBlockMembers,
+    )
+  })()
+
+  // ==========================================================================
   // [FUNNEL-AUDIT-S5] CHECKPOINT E (card input) + CHECKPOINT F (final body mode)
   //
   // Completes the end-to-end grouped-truth funnel audit that already covers:
@@ -3160,6 +3250,22 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                         <span>vis={visCount}</span>
                         <span>trim={trim}</span>
                         <span>body={finalVisibleBodyModel.mode}</span>
+                        {/* [PHASE 4U] Canonical body-render proof token. Reads
+                            the pure resolver verdict computed above. Format:
+                              canon=<source>/<status>[:bodyMatch]
+                            Examples:
+                              canon=canonical_method_structures/complete:1
+                              canon=styled_groups_fallback/fallback
+                              canon=ungrouped_fallback/empty
+                            When the verdict is canonical/complete with
+                            bodyMatch=1 the visible blocks are proven backed
+                            by canonical methodStructures. */}
+                        <span>
+                          canon={canonicalBodyRenderResolution.source}/{canonicalBodyRenderResolution.status}
+                          {canonicalBodyRenderResolution.bodyBlocksMatchCanonical !== null
+                            ? `:${canonicalBodyRenderResolution.bodyBlocksMatchCanonical ? '1' : '0'}`
+                            : ''}
+                        </span>
                       </div>
                     </div>
                   )

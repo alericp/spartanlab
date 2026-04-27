@@ -78,6 +78,8 @@ export async function POST(request: Request) {
       newEquipment,
       currentProgramId,
       clientCanonicalSnapshot,
+      // [PHASE-M] Optional recent workout logs from the client.
+      recentWorkoutLogs,
     } = body
     
     if (!requestType) {
@@ -230,6 +232,9 @@ export async function POST(request: Request) {
       preserveHistory: true,
       archiveCurrentProgram: false,
       regenerationReason: `rebuild_from_current_settings_${requestType}`,
+      // [PHASE-M] Forward recent workout logs so the rebuilt program reflects
+      // recent performance at generation time.
+      recentWorkoutLogs: Array.isArray(recentWorkoutLogs) ? recentWorkoutLogs : undefined,
     }
     
     // [ROOT-CAUSE-FIX] Log the corrected semantic classification

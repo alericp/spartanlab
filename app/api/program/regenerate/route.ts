@@ -95,6 +95,10 @@ export async function POST(request: Request) {
       programInputs,
       regenerationReason,
       currentProgramId,
+      // [PHASE-M] Optional recent workout logs from the client (canonical
+      // localStorage source for completedSetEvidence). Sanitized/capped/hashed
+      // by the authoritative service, never trusted blindly.
+      recentWorkoutLogs,
     } = body
     
     // ==========================================================================
@@ -172,6 +176,9 @@ export async function POST(request: Request) {
       preserveHistory: true,
       archiveCurrentProgram: false,
       regenerationReason: regenerationReason || 'rebuild_from_current_settings',
+      // [PHASE-M] Forward recent workout logs so regenerate reflects recent
+      // performance history at generation time, not only via the client overlay.
+      recentWorkoutLogs: Array.isArray(recentWorkoutLogs) ? recentWorkoutLogs : undefined,
     }
     
     console.log('[regenerate-route-dispatching-to-authoritative-service]', {

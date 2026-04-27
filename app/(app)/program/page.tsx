@@ -70,7 +70,16 @@ import type { TrainingDays } from '@/lib/program-service'
 // that reads canonical workout logs and applies bounded future-only mutations
 // to the program object held in state. Imported statically because the
 // underlying contract is JSON-safe and side-effect free.
-import { applyPerformanceFeedbackOverlay } from '@/lib/program/performance-feedback-integration'
+//
+// [PHASE-M] Same module also exposes:
+//   - getRecentWorkoutLogsForGenerationRequest: the JSON-safe recent-log
+//     slice we forward to the authoritative server generator so fresh build /
+//     regenerate / modify / rebuild reflect recent performance at generation
+//     time, not only the client display overlay.
+import {
+  applyPerformanceFeedbackOverlay,
+  getRecentWorkoutLogsForGenerationRequest,
+} from '@/lib/program/performance-feedback-integration'
 // [PHASE 28KL] Direct imports for athlete/onboarding profile readback during modify-open forensics
 import { getAthleteProfile as getAthleteProfileDirect } from '@/lib/data-service'
 import { getOnboardingProfile as getOnboardingProfileDirect } from '@/lib/athlete-profile'
@@ -2054,6 +2063,11 @@ export default function ProgramPage() {
         noteWarningsCount: result.adaptation.proof.noteWarningsCount,
         changed: result.changed,
         signature: result.signature,
+        // [PHASE-M] When the server already applied the same evidence
+        // corridor, the overlay returns skipReason='server_already_applied_*'
+        // and `changed=false`. We surface the reason in logs so we can audit
+        // server/client provenance without re-running the resolver.
+        skipReason: result.skipReason,
       })
       if (result.changed) {
         setProgram(result.program as AdaptiveProgram)
@@ -5997,6 +6011,10 @@ export default function ProgramPage() {
       canonicalProfile,
       builderInputs: generationInputs,
       existingProgramId: program?.id,
+      // [PHASE-M] Forward recent trusted workout logs so the freshly built
+      // program reflects recent performance at generation time. Server
+      // re-sanitizes / caps / hashes regardless of payload trust.
+      recentWorkoutLogs: getRecentWorkoutLogsForGenerationRequest(),
     }),
   })
   
@@ -7753,6 +7771,9 @@ export default function ProgramPage() {
           programInputs: modifyProgramInputs,
           regenerationReason: 'modify_builder_submit',
           currentProgramId: program?.id ?? null,
+          // [PHASE-M] Forward recent trusted workout logs to the
+          // authoritative regenerate corridor.
+          recentWorkoutLogs: getRecentWorkoutLogsForGenerationRequest(),
         }),
       })
       
@@ -9213,6 +9234,9 @@ export default function ProgramPage() {
             programInputs: rebuildBuilderInput,
             regenerationReason: 'rebuild_from_current_settings',
             currentProgramId: program?.id ?? null,
+            // [PHASE-M] Forward recent trusted workout logs to the
+            // authoritative regenerate corridor.
+            recentWorkoutLogs: getRecentWorkoutLogsForGenerationRequest(),
           }),
         })
         
@@ -11974,6 +11998,9 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           currentProgramId: program?.id ?? null,
           // Pass client canonical as LOW-trust fallback, server will resolve its own
           clientCanonicalSnapshot: adjustmentCanonicalOverride,
+          // [PHASE-M] Forward recent trusted workout logs to the
+          // authoritative rebuild corridor.
+          recentWorkoutLogs: getRecentWorkoutLogsForGenerationRequest(),
         }),
       })
       

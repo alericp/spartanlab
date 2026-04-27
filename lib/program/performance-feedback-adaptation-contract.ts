@@ -241,6 +241,19 @@ export interface ExercisePerformanceAdaptationStamp {
    *  succeeded. `blocked_by_safety_bound` means the contract chose not to
    *  apply because the change would violate a Phase L safety bound. */
   status: 'applied' | 'blocked_by_safety_bound'
+  /** [PHASE-M] Which corridor applied this adaptation. `server` means the
+   *  authoritative generator stamped it during executeAuthoritativeGeneration
+   *  using client-supplied recent workout history. `client` means the Program
+   *  page boot-time overlay applied it after load. Used by the Program page
+   *  boot effect to detect server-applied adaptation and avoid double-applying.
+   *  Optional for backwards compatibility with pre-Phase-M stamps. */
+  appliedBy?: 'server' | 'client'
+  /** [PHASE-M] Stable hash of the evidence set that produced this stamp
+   *  (typically derived from sorted trusted log ids + log count). Server and
+   *  client compute this identically so the Program page can detect that an
+   *  exercise already carries an adaptation for the exact same evidence and
+   *  skip re-mutation. Optional for backwards compatibility. */
+  evidenceHash?: string
 }
 
 export interface PerformanceFeedbackInput {
@@ -1033,6 +1046,15 @@ export function applyFuturePrescriptionMutations<T extends PhaseLProgramShape>(
   program: T,
   mutations: FuturePrescriptionMutation[],
   nowIso?: string,
+  /**
+   * [PHASE-M] Optional stamp provenance. When omitted, defaults to a
+   * client-side stamp with no evidence hash (backwards compatible with
+   * existing Phase L call sites that don't yet pass provenance).
+   */
+  stampProvenance?: {
+    appliedBy?: 'server' | 'client'
+    evidenceHash?: string
+  },
 ): T {
   if (!program || !Array.isArray(program.sessions) || mutations.length === 0) return program
   const ts = nowIso ?? new Date().toISOString()
@@ -1109,6 +1131,10 @@ export function applyFuturePrescriptionMutations<T extends PhaseLProgramShape>(
         ) as PerformanceSignalType[],
         shortLabel,
         status: 'applied',
+        // [PHASE-M] Provenance for idempotency. Optional fields default to
+        // 'client' / undefined so legacy callers keep working unchanged.
+        appliedBy: stampProvenance?.appliedBy,
+        evidenceHash: stampProvenance?.evidenceHash,
       }
 
       // Spread original first so we never drop unknown fields, then assign

@@ -250,6 +250,24 @@ export interface NumericMutationRowDecision {
 export interface NumericPrescriptionDeltaProof {
   version: 'phase-4z.numeric-prescription-delta.v1'
   role: NumericMutationRowRole
+  /**
+   * High-level status the Program-card chip reads to decide which visual
+   * variant to render. Three honest states:
+   *   - 'mutated'   — at least one field actually changed (chip = emerald,
+   *                   or amber when `clamped` is true).
+   *   - 'protected' — eligible signal was suppressed by a safety gate; chip
+   *                   renders the protectedBy reason in grey.
+   *   - 'no_change' — no doctrine signal called for a change AND no
+   *                   protection fired; chip is suppressed by the consumer
+   *                   to keep common rows compact.
+   */
+  status: 'mutated' | 'protected' | 'no_change'
+  /**
+   * True iff at least one field change in `fieldChanges[]` carries
+   * `clampedToSafeBound: true`. Surfaced separately so the Program-card chip
+   * can paint the amber "clamped" variant without walking `fieldChanges`.
+   */
+  clamped: boolean
   changed: boolean
   fieldChanges: NumericMutationFieldChange[]
   protectedBy: NumericMutationReason | null
@@ -1147,15 +1165,28 @@ export function runNumericPrescriptionMutationForSession(
     // 3. Stamp the per-row compact proof object — single object per row,
     // never an array. Always written, even on no-change rows, so the
     // Program card can render an honest "protected" chip.
+    const changed = decision.fieldChanges.length > 0
+    const clamped = decision.fieldChanges.some((c) => c.clampedToSafeBound === true)
+    const protectedBy =
+      !changed && decision.noChangeReason ? decision.noChangeReason : null
+    // Status drives the Program-card chip variant. Keep this derivation
+    // here (not in the consumer) so the contract owns honesty:
+    //   - any field actually moved -> 'mutated'
+    //   - no fields moved AND a protection reason fired -> 'protected'
+    //   - everything else -> 'no_change' (chip suppressed by consumer)
+    const status: 'mutated' | 'protected' | 'no_change' = changed
+      ? 'mutated'
+      : protectedBy
+        ? 'protected'
+        : 'no_change'
     const proof: NumericPrescriptionDeltaProof = {
       version: 'phase-4z.numeric-prescription-delta.v1',
       role,
-      changed: decision.fieldChanges.length > 0,
+      status,
+      clamped,
+      changed,
       fieldChanges: decision.fieldChanges,
-      protectedBy:
-        decision.fieldChanges.length === 0 && decision.noChangeReason
-          ? decision.noChangeReason
-          : null,
+      protectedBy,
       visibleLabel: buildVisibleLabel(decision),
     }
     ex.numericPrescriptionDelta = proof

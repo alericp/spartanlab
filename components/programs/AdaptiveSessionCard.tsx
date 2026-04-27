@@ -5537,7 +5537,7 @@ function ExerciseRow({
       {/* DOSAGE OWNER: prescriptionLine, intensityBadge, restGuidance */}
       {/* EXPLANATION OWNER: prescriptionContext (derived from same prescriptionIntent) */}
       {/* BANNED STALE SOURCES: exercise.note (doctrineFinalNote), alignedRowSurface chips, getBestRowSublabel */}
-      <div className="flex items-center gap-2 mt-1">
+      <div className="flex items-center gap-2 mt-1 flex-wrap">
         <span className="text-[13px] font-medium text-[#CACACA]">{card.prescriptionLine}</span>
         {card.intensityBadge && hasRPE && (
           <span className="text-[11px] text-[#7A7A7A]">{card.intensityBadge}</span>
@@ -5545,6 +5545,62 @@ function ExerciseRow({
         {card.restGuidance && (
           <span className="text-[10px] text-[#5A5A5A]">{card.restGuidance}</span>
         )}
+        {/* [PHASE 4Z / PHASE I] NUMERIC PRESCRIPTION MUTATION CHIP.
+            Single compact chip that surfaces the per-row numeric mutation
+            outcome stamped by lib/program/numeric-prescription-mutation-contract.ts.
+            Three honest states:
+              - mutated   = "Sets 3 → 4", "Reps 8-12 → 8-10", "Hold 30s → 25s"
+                            (visibleLabel from contract; one chip per row)
+              - protected = "Protected: skill_priority"   (no fake delta)
+              - clamped   = same label as mutated, with a thin amber dot to
+                            mark MUTATION_CLAMPED_TO_SAFE_BOUND.
+            Contract guarantees this is the SAME truth the live workout
+            consumes (preserved via load-authoritative-session.ts and
+            normalize-workout-session.ts) -- no Program-only mutation.
+            Hidden for warmup/cooldown rows. */}
+        {!isWarmupCooldown && (() => {
+          const numericDelta = (exercise as unknown as {
+            numericPrescriptionDelta?: {
+              status?: string
+              visibleLabel?: string
+              clamped?: boolean
+              protectedBy?: string | null
+              fieldChanges?: Array<unknown>
+            }
+          }).numericPrescriptionDelta
+          if (!numericDelta) return null
+          const status = numericDelta.status
+          const label = numericDelta.visibleLabel
+          if (!label) return null
+          // Only show a chip when there is actual content to render: an
+          // applied mutation, a clamped mutation, or a protection that
+          // explains why an eligible doctrine signal did NOT mutate the row.
+          // Silently skip "no change" / "no doctrine signal" cases to keep
+          // the row compact for the common path.
+          const isMutated = status === 'mutated'
+          const isProtectedWithReason =
+            status === 'protected' && !!numericDelta.protectedBy
+          if (!isMutated && !isProtectedWithReason) return null
+          const chipClass = isMutated
+            ? numericDelta.clamped
+              ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30'
+              : 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
+            : 'bg-[#3A3A3A]/40 text-[#9A9A9A] border border-[#4A4A4A]/40'
+          const titleText = isMutated
+            ? numericDelta.clamped
+              ? `Doctrine-driven dosage change (clamped to safe bound): ${label}`
+              : `Doctrine-driven dosage change: ${label}`
+            : `Numeric mutation skipped: ${label}`
+          return (
+            <span
+              className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded shrink-0 ${chipClass}`}
+              title={titleText}
+              aria-label={titleText}
+            >
+              {label}
+            </span>
+          )
+        })()}
       </div>
 
       {/* ROW 2b: [METHOD-OWNERSHIP-PANEL]

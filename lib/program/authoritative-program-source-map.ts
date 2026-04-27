@@ -66,6 +66,15 @@
  *     labels). These are tracked as `COMPATIBILITY_ONLY` and counted in
  *     `demotedSources`.
  */
+// [PHASE 4Y] H.H5 — pull in the live grouped runtime evaluator so the
+// per-program source map can publish a runtime verdict alongside the
+// data-preservation verdict.
+import {
+  evaluateLiveGroupedExecution,
+  type LiveGroupedRuntimeVerdict,
+  type LiveGroupedRuntimeReason,
+} from '@/lib/workout/live-grouped-execution-contract'
+
 export type SourceFieldVerdictKind =
   | 'AUTHORITATIVE'
   | 'COMPATIBILITY_ONLY'
@@ -720,6 +729,24 @@ export interface LiveWorkoutSourceMap {
     | 'LIVE_PARITY_BROKEN_SELECTED_VARIANT'
     | 'LIVE_PARITY_BROKEN_STALE_SOURCE'
     | 'LIVE_NOT_LAUNCHED_YET'
+  /**
+   * [PHASE 4Y] H.H5 runtime verdict. Independent of the data-preservation
+   * `verdict` above. Proves whether the live runtime will actually consume
+   * grouped truth as interactive sequences (FULL_GROUPED_RUNTIME) or has
+   * fallen back to guidance-only / blocked / partial. Populated by
+   * `evaluateLiveGroupedExecution(liveSess)`.
+   */
+  liveGroupedRuntimeVerdict: LiveGroupedRuntimeVerdict
+  /** Stable reason codes attached to `liveGroupedRuntimeVerdict`. */
+  liveGroupedRuntimeReasons: LiveGroupedRuntimeReason[]
+  /** Source the live runtime ultimately consumed for grouped blocks. */
+  liveGroupedRuntimeSource:
+    | 'methodStructures'
+    | 'styledGroups'
+    | 'rowLevelMethods'
+    | 'flatRows'
+  /** True when at least one grouped block is executable in the live runtime. */
+  liveGroupedRuntimeHasExecutableBlocks: boolean
   warnings: string[]
 }
 
@@ -762,6 +789,10 @@ export function runLiveWorkoutSourceMap(
       doctrineParticipationPreserved: false,
       doctrineBlockResolutionPreserved: false,
       verdict: 'LIVE_NOT_LAUNCHED_YET',
+      liveGroupedRuntimeVerdict: 'STRAIGHT_SETS_ONLY_NO_GROUPS',
+      liveGroupedRuntimeReasons: ['NO_GROUPED_METHODS_PRESENT'],
+      liveGroupedRuntimeSource: 'flatRows',
+      liveGroupedRuntimeHasExecutableBlocks: false,
       warnings: ['program or live session missing'],
     }
   }
@@ -850,6 +881,23 @@ export function runLiveWorkoutSourceMap(
       warnings.push('rowLevelMutatorSummary stripped by live normalizer')
   }
 
+  // [PHASE 4Y] H.H5 — runtime parity verdict. The data-preservation `verdict`
+  // above only proves methodStructures/styledGroups survived; this verdict
+  // proves the live runtime will actually consume them as interactive grouped
+  // sequences (FULL_GROUPED_RUNTIME) or honestly states why it cannot
+  // (LIVE_GUIDANCE_PRESERVED_ONLY / GROUPED_RUNTIME_BLOCKED /
+  // GROUPED_RUNTIME_PARTIAL / STRAIGHT_SETS_ONLY_NO_GROUPS).
+  //
+  // We pass `styledGroupsAcceptedAsExecutionSource: undefined` because the
+  // source-map runs from outside the live component and cannot know whether
+  // StreamlinedWorkoutSession's shadow-owner guard accepted styledGroups in
+  // this particular boot. The evaluator falls back to methodStructures-first
+  // analysis, which is exactly what we want: the verdict reflects the safest
+  // possible runtime grouping that the canonical session truth can guarantee.
+  const liveGroupedExec = evaluateLiveGroupedExecution({
+    session: liveSess as Parameters<typeof evaluateLiveGroupedExecution>[0]['session'],
+  })
+
   return {
     version: 'phase-4q-live-workout-source-map-v1',
     programDisplaySessionId:
@@ -863,6 +911,10 @@ export function runLiveWorkoutSourceMap(
     doctrineParticipationPreserved,
     doctrineBlockResolutionPreserved,
     verdict,
+    liveGroupedRuntimeVerdict: liveGroupedExec.parityVerdict,
+    liveGroupedRuntimeReasons: liveGroupedExec.reasons,
+    liveGroupedRuntimeSource: liveGroupedExec.source,
+    liveGroupedRuntimeHasExecutableBlocks: liveGroupedExec.hasExecutableGroupedBlocks,
     warnings,
   }
 }

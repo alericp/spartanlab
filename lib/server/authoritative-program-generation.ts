@@ -55,6 +55,12 @@ import {
   type WeekAdaptationDecision,
   type WeekAdaptationInput,
 } from '@/lib/program-generation/week-adaptation-decision-contract'
+import {
+  applyServerPerformanceFeedbackOverlay,
+  buildPerformanceHistoryContext,
+  programAlreadyHasServerAdaptationFor,
+  type ServerWorkoutLogInput,
+} from './performance-history-context'
 
 // ==========================================================================
 // [CORRIDOR_KILL_V4] Version fingerprint for cache/deploy proof
@@ -109,6 +115,20 @@ export interface AuthoritativeGenerationRequest {
   // Optional: Additional metadata
   regenerationReason?: string
   modifyContext?: Record<string, unknown>
+  
+  /**
+   * [PHASE-M] Optional recent workout logs supplied by the route (typically
+   * forwarded from the Program page client which has localStorage access).
+   * When present, the authoritative generator runs the SAME Phase L resolver
+   * the Program page boot effect uses and stamps server-side
+   * performanceAdaptation onto affected exercises BEFORE returning. This
+   * closes the L8 fresh-build/regenerate parity gap so the freshly returned
+   * program already reflects recent performance history.
+   *
+   * Optional + safe defaults: missing logs → no overlay, no fake adaptation.
+   * Untrusted/demo logs are filtered server-side regardless of caller intent.
+   */
+  recentWorkoutLogs?: ServerWorkoutLogInput[]
 }
 
 export interface AuthoritativeGenerationResult {
@@ -2386,6 +2406,114 @@ export async function executeAuthoritativeGeneration(
     }
 
     markStage('method_decision_stamp_done')
+
+    // ==========================================================================
+    // [PHASE-M] STAGE: Server Performance History Overlay
+    // ==========================================================================
+    // Closes the Phase L L8 fresh-build / regenerate parity gap. When the
+    // route forwards recent trusted workout logs, run the SAME Phase L
+    // resolver + applier the Program page boot effect uses, stamping
+    // `appliedBy: 'server'` + `evidenceHash` on each affected exercise so:
+    //   1) the freshly returned program already carries performance-aware
+    //      future-only mutations (no display-time-only patching),
+    //   2) the Program page boot effect can detect the server stamp and
+    //      refuse to double-apply on the same evidence hash.
+    //
+    // Safe defaults: missing logs → no overlay, no fake adaptation. Failures
+    // are caught locally so a Phase L resolver hiccup never breaks an
+    // otherwise-successful generation.
+    // ==========================================================================
+    markStage('phase_m_performance_overlay_start')
+    let phaseMOverlayDiagnostic: {
+      attempted: boolean
+      hasEvidence: boolean
+      rawLogCount: number
+      trustedLogCount: number
+      cappedLogCount: number
+      mutationsApplied: number
+      mutationsBlocked: number
+      signalCount: number
+      status: string
+      changed: boolean
+      evidenceHash: string
+      verdict: string
+      error?: string
+    } = {
+      attempted: false,
+      hasEvidence: false,
+      rawLogCount: 0,
+      trustedLogCount: 0,
+      cappedLogCount: 0,
+      mutationsApplied: 0,
+      mutationsBlocked: 0,
+      signalCount: 0,
+      status: 'not_attempted',
+      changed: false,
+      evidenceHash: '',
+      verdict: 'PHASE_M_SKIPPED_NO_LOGS_SUPPLIED',
+    }
+
+    try {
+      const incomingLogs: ServerWorkoutLogInput[] = Array.isArray(request.recentWorkoutLogs)
+        ? request.recentWorkoutLogs
+        : []
+
+      if (incomingLogs.length > 0) {
+        phaseMOverlayDiagnostic.attempted = true
+        const historyContext = buildPerformanceHistoryContext({
+          recentWorkoutLogs: incomingLogs,
+        })
+        phaseMOverlayDiagnostic.hasEvidence = historyContext.hasEvidence
+        phaseMOverlayDiagnostic.rawLogCount = historyContext.diagnostics.rawLogCount
+        phaseMOverlayDiagnostic.trustedLogCount = historyContext.diagnostics.trustedLogCount
+        phaseMOverlayDiagnostic.cappedLogCount = historyContext.diagnostics.cappedLogCount
+        phaseMOverlayDiagnostic.evidenceHash = historyContext.evidenceHash
+
+        if (!historyContext.hasEvidence) {
+          phaseMOverlayDiagnostic.status = 'insufficient_data'
+          phaseMOverlayDiagnostic.verdict = 'PHASE_M_SKIPPED_INSUFFICIENT_EVIDENCE'
+        } else if (
+          // Idempotency: a freshly built program will not yet carry stamps,
+          // but defensive check protects against any caller that reuses the
+          // same request twice in flight.
+          programAlreadyHasServerAdaptationFor(program, historyContext.evidenceHash)
+        ) {
+          phaseMOverlayDiagnostic.status = 'idempotent_skip'
+          phaseMOverlayDiagnostic.verdict = 'PHASE_M_SKIPPED_ALREADY_APPLIED_SAME_EVIDENCE'
+        } else {
+          const overlay = applyServerPerformanceFeedbackOverlay(program, historyContext)
+          phaseMOverlayDiagnostic.mutationsApplied = overlay.summary.mutationsApplied
+          phaseMOverlayDiagnostic.mutationsBlocked = overlay.summary.mutationsBlocked
+          phaseMOverlayDiagnostic.signalCount = overlay.summary.signalCount
+          phaseMOverlayDiagnostic.status = overlay.summary.status
+          phaseMOverlayDiagnostic.changed = overlay.changed
+
+          if (overlay.changed) {
+            program = overlay.program as AdaptiveProgram
+            phaseMOverlayDiagnostic.verdict =
+              'PHASE_M_APPLIED_SERVER_PERFORMANCE_HISTORY_OVERLAY'
+          } else {
+            phaseMOverlayDiagnostic.verdict = 'PHASE_M_RESOLVER_RAN_NO_MUTATIONS'
+          }
+        }
+      }
+    } catch (overlayErr) {
+      phaseMOverlayDiagnostic.error = String(overlayErr)
+      phaseMOverlayDiagnostic.verdict = 'PHASE_M_OVERLAY_FAILED_NON_BLOCKING'
+      console.log('[phase-m-server-overlay-failed]', {
+        generationIntent: request.generationIntent,
+        triggerSource: request.triggerSource,
+        error: String(overlayErr),
+      })
+    }
+
+    console.log('[phase-m-server-performance-history-overlay]', {
+      generationIntent: request.generationIntent,
+      triggerSource: request.triggerSource,
+      ...phaseMOverlayDiagnostic,
+    })
+
+    markStage('phase_m_performance_overlay_done')
 
     // ==========================================================================
     // STAGE: Success

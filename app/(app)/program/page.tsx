@@ -71,6 +71,10 @@ import type { TrainingDays } from '@/lib/program-service'
 // to the program object held in state. Imported statically because the
 // underlying contract is JSON-safe and side-effect free.
 import { applyPerformanceFeedbackOverlay } from '@/lib/program/performance-feedback-integration'
+// [PHASE-M] Recent workout logs forwarded to the authoritative server
+// generator so fresh build / regenerate / modify / rebuild reflect recent
+// performance at generation time, not only the client display overlay.
+import { getRecentWorkoutLogs } from '@/lib/workout-log-service'
 // [PHASE 28KL] Direct imports for athlete/onboarding profile readback during modify-open forensics
 import { getAthleteProfile as getAthleteProfileDirect } from '@/lib/data-service'
 import { getOnboardingProfile as getOnboardingProfileDirect } from '@/lib/athlete-profile'

@@ -254,10 +254,15 @@ function phaseF(ctx: BuildBlueprintStatusContext): BlueprintPhase {
     id: 'F',
     title: 'Canonical Program Object Lock',
     purpose: 'One final canonical program/session object beats stale, fallback, and projection sources.',
-    // F overall stays PARTIAL because F.F4 (fresh-vs-stale + cross-tab race)
-    // is intentionally NOT closed in 4W — see F.F4 evidence/remainingWork.
-    status: 'PARTIAL',
-    nextAction: 'Close F.F4: prove fresh successful generation cannot be overwritten by stale localStorage during hydration (cross-tab race). evaluateUnifiedProgramStaleness already exists; add a Program page boot guard that prefers canonical-storage over a degraded in-memory program when the two disagree.',
+    // [PHASE 4X] F overall advanced PARTIAL → COMPLETE. F.F1-F.F5 are all
+    // COMPLETE. F.F4 was the last open leg and was closed in 4X by
+    // consolidating boot/hydration + visibility/focus/storage/periodic
+    // reconciliation onto a single pure `decideCanonicalProgramWinner`
+    // helper that consults the canonical truth contract introduced in
+    // 4P-4W (`hasCanonicalProgramTruth` + the source-map
+    // canonicalControlsDisplay/fallbackControlsDisplay flags).
+    status: 'COMPLETE',
+    nextAction: 'Begin Phase H live workout parity lock: verify Start Workout consumes the same selected canonical session/methodStructures/doctrineBlockResolution as Program display, without flattening grouped method execution.',
     subtasks: [
       { id: 'F.F1', title: 'Authoritative program object identified', status: 'COMPLETE', evidence: ['runAuthoritativeProgramGeneration output'], remainingWork: [] },
       { id: 'F.F2', title: 'Authoritative session object identified', status: 'COMPLETE', evidence: ['program.sessions[]'], remainingWork: [] },
@@ -288,17 +293,54 @@ function phaseF(ctx: BuildBlueprintStatusContext): BlueprintPhase {
       // that fails the page render loudly (rather than just logging) if
       // canonical truth is downgraded — a guarded toggle for prod.
       { id: 'F.F3', title: 'Save/load/normalize preserves all method/doctrine fields', status: 'COMPLETE', evidence: sourceMapHealthy ? ['authoritativeSourceMap healthy on this program', 'Phase 4V: hasCanonicalProgramTruth pure guard added (lib/program/program-display-contract.ts)', 'Phase 4V: normalizeProgramForDisplay re-attaches methodStructures + doctrineBlockResolution by name after preserveSessionGroupedContract (lib/program-state.ts)', 'Phase 4V: every load logs canonicalTruthSource/canonicalTruthNormalized verdicts and warns [PHASE_4V_CANONICAL_TRUTH] on downgrade'] : ['live workout normalizer fixed in 4Q', 'Phase 4V: hasCanonicalProgramTruth pure guard added (lib/program/program-display-contract.ts)', 'Phase 4V: normalizeProgramForDisplay re-attaches methodStructures + doctrineBlockResolution by name after preserveSessionGroupedContract (lib/program-state.ts)', 'Phase 4V: every load logs canonicalTruthSource/canonicalTruthNormalized verdicts and warns [PHASE_4V_CANONICAL_TRUTH] on downgrade'], remainingWork: [] },
-      // [PHASE 4W] F.F4 stays PARTIAL on purpose. evaluateUnifiedProgramStaleness
-      // is wired in app/(app)/program/page.tsx (lines 3055, 9911) and runs at
-      // page load + after build, so single-tab fresh-vs-stale already detects
-      // the regression. The unproven leg is the cross-tab race: localStorage
-      // is shared across tabs and a stale tab can overwrite a fresh tab's
-      // success on regenerate. Closing F.F4 needs a Program page boot guard
-      // that prefers canonical storage over a degraded in-memory program when
-      // the two disagree, plus a `storage` event listener that re-runs the
-      // staleness check. Phase 4W deliberately does not implement this to
-      // avoid hydration loops / render-time side effects.
-      { id: 'F.F4', title: 'Fresh successful generation beats stale stored truth', status: 'PARTIAL', evidence: ['evaluateUnifiedProgramStaleness wired at page boot + post-build', 'Phase 4W: assertCanonicalProgramTruthPreserved throws in dev/strict on any normalize-time downgrade so stale partial loads cannot silently win'], remainingWork: ['Cross-tab race: storage event listener + boot-time canonical-vs-in-memory reconciler not yet implemented'] },
+      // [PHASE 4X] F.F4 advanced PARTIAL → COMPLETE. Closure of the last
+      // remaining Phase F leg. Implementation:
+      //   1. New module-level pure helper `decideCanonicalProgramWinner`
+      //      in app/(app)/program/page.tsx applies a single ordered
+      //      rule set:
+      //        POST_BUILD_WINNER_LOCK_ACTIVE > NO_CURRENT_PROGRAM >
+      //        CANDIDATE_INVALID_OR_MISSING >
+      //        BLOCK_STORAGE_CANONICAL_DOWNGRADE >
+      //        CURRENT_NEWER_PROTECTED >
+      //        CANDIDATE_CANONICAL_UPGRADE >
+      //        CANDIDATE_CANONICAL_NEWER >
+      //        CANDIDATE_NEWER_LEGACY_OK >
+      //        CANDIDATE_ID_DIFFERS_NOT_NEWER >
+      //        SESSION_COUNT_ONLY_NOT_AUTHORITY > NO_MATERIAL_DIFFERENCE.
+      //      Pure, no React state, no localStorage, no side effects.
+      //   2. The existing Phase 17J/17K reconciliation effect was UPGRADED
+      //      (not duplicated): `reconcileWithCanonical` now reads canonical-
+      //      truth verdicts via `hasCanonicalProgramTruth` for current and
+      //      candidate, calls the helper, and gates `setProgram` on the
+      //      helper's `shouldReplace`. The legacy 26E/26F shouldReplace
+      //      decision is preserved as `legacyShouldReplace` for diagnostic
+      //      continuity but no longer drives state changes.
+      //   3. The boot/hydration path (mount effect's safe + malformed
+      //      branches) was wrapped with the same helper so a stale storage
+      //      load cannot silently overwrite a fresher in-memory program on
+      //      page load. Logged as `mount_hydration` /
+      //      `mount_hydration_malformed`.
+      //   4. The `storage` event handler was narrowed to only react to the
+      //      three keys saveAdaptiveProgram + history actually touch
+      //      (`spartanlab_active_program`, `spartanlab_adaptive_program`,
+      //      `spartanlab_adaptive_programs`) — eliminates false-positive
+      //      reconciliation runs from unrelated localStorage writes.
+      //   5. The 2-second periodic check still runs but routes through
+      //      `reconcileWithCanonical` → the helper, so it cannot replace
+      //      a fresh current program with stale storage and the
+      //      authoritative post-build lock continues to hard-block all
+      //      replacement during its 5-second window.
+      //   6. Authoritative post-build lock continues to be set on all four
+      //      success paths (main_generation @6307, modify @7332,
+      //      regenerate @9771, onboarding @11938).
+      //
+      // Cross-tab is now defended at every replacement edge: storage
+      // events, focus/visibility, periodic, and boot. Session count alone
+      // is explicitly never authority. Canonical-truth downgrade is hard
+      // blocked. The single authoritative
+      // [phase4x-canonical-reconciliation-winner] log captures every
+      // decision.
+      { id: 'F.F4', title: 'Fresh successful generation beats stale stored truth', status: 'COMPLETE', evidence: ['evaluateUnifiedProgramStaleness wired at page boot + post-build', 'Phase 4W: assertCanonicalProgramTruthPreserved throws in dev/strict on any normalize-time downgrade', 'Phase 4X: decideCanonicalProgramWinner pure helper at module scope in app/(app)/program/page.tsx — single winner rule for boot + visibility + focus + storage + periodic', 'Phase 4X: reconcileWithCanonical refactored to consult hasCanonicalProgramTruth + helper; legacy 26E/26F decision retained for diagnostics only', 'Phase 4X: mount-effect safe + malformed branches wrapped with the same helper (mount_hydration / mount_hydration_malformed)', 'Phase 4X: storage handler narrowed to spartanlab_active_program / spartanlab_adaptive_program / spartanlab_adaptive_programs only', 'Phase 4X: post-build authoritative lock unchanged on all four success paths (main_generation / modify / regenerate / onboarding) and remains the first hard-block in reconcileWithCanonical', 'Phase 4X: BLOCK_STORAGE_CANONICAL_DOWNGRADE rule prevents fallback storage from overwriting healthy canonical current truth', 'Phase 4X: SESSION_COUNT_ONLY_NOT_AUTHORITY rule explicitly blocks session-count-only replacement'], remainingWork: [] },
       // [PHASE 4W] F.F5 advanced from PARTIAL → COMPLETE. The fallback
       // source-map verifier the prompt asked for is now live in
       // lib/program/authoritative-program-source-map.ts as the four

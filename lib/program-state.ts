@@ -35,6 +35,7 @@ import {
   markCanonicalPathUsed,
 } from './production-safety'
 import { EMPTY_SKILL_TRACE, getSafeSkillTrace } from './safe-access'
+import { hasCanonicalProgramTruth } from './program/program-display-contract'
 
 // =============================================================================
 // [BUILDER-TRUTH-PRESERVATION] Canonical Load-Time Grouped Truth Preservation
@@ -1269,6 +1270,38 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
         ? program.sessions
             .filter(s => s && typeof s === 'object' && Array.isArray(s.exercises))
             .map(s => {
+              // ====================================================================
+              // [PHASE 4V] CANONICAL SESSION TRUTH PRESERVATION CONTRACT
+              //
+              // The `...s` spread above carries every runtime field through, but
+              // the explicit lines further down (`blockId` / `method` /
+              // `methodLabel` / `setExecutionMethod`) make that preservation a
+              // contract instead of an accidental side-effect of ordering. Phase
+              // 4V extends the same contract to the session-level canonical
+              // Phase 4P/4Q/4S signals so any future refactor that swaps the
+              // spread for a picked subset still survives the load corridor:
+              //
+              //   * methodStructures            (Phase 4P canonical method truth)
+              //   * doctrineBlockResolution     (Phase 4Q classified doctrine)
+              //
+              // These two fields are typed as optional via `as unknown as` casts
+              // on `AdaptiveSession` (their authoritative declarations live in
+              // `lib/program/method-structure-contract.ts` and
+              // `lib/program/doctrine-block-resolution-contract.ts`). We read
+              // them off `s` via a narrow structural typing and re-assign them
+              // BY NAME below using `Object.assign` to keep TypeScript happy
+              // without polluting the `AdaptiveSession` interface. They are
+              // copied verbatim — never re-decided, never flattened, never
+              // converted into styledGroups.
+              //
+              // `methodMaterializationSummary` already lives inside
+              // `styleMetadata` and is preserved by `preserveSessionGroupedContract`
+              // below (the existing `existingMeta` spread carries it through).
+              // ====================================================================
+              const sCanonical = s as unknown as {
+                methodStructures?: unknown
+                doctrineBlockResolution?: unknown
+              }
               // First normalize basic session fields
               const normalizedSession = {
                 ...s,
@@ -1333,7 +1366,25 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
               
         // [BUILDER-TRUTH-PRESERVATION] Preserve builder's grouped truth, don't rebuild
         // Load-time normalization preserves authoritative builder output
-        return preserveSessionGroupedContract(normalizedSession)
+        const preserved = preserveSessionGroupedContract(normalizedSession)
+        // [PHASE 4V] Re-attach canonical session-level Phase 4P/4Q signals BY
+        // NAME after `preserveSessionGroupedContract` so the contract is
+        // explicit and survives future refactors. `Object.assign` is used
+        // (rather than spread) because `methodStructures` and
+        // `doctrineBlockResolution` are not declared on the
+        // `AdaptiveSession` interface — they are typed via `as unknown as`
+        // at their authoring sites. We only assign when the source
+        // actually carried the field, so legacy programs without canonical
+        // truth stay untouched (no `undefined` keys introduced).
+        if (sCanonical.methodStructures !== undefined) {
+          Object.assign(preserved, { methodStructures: sCanonical.methodStructures })
+        }
+        if (sCanonical.doctrineBlockResolution !== undefined) {
+          Object.assign(preserved, {
+            doctrineBlockResolution: sCanonical.doctrineBlockResolution,
+          })
+        }
+        return preserved
             })
         : [],
       
@@ -1451,6 +1502,35 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
       console.warn('[BUILDER-TRUTH-PRESERVATION] Grouped truth DOWNGRADED during normalization:', preservationSummary)
     }
 
+    // ==========================================================================
+    // [PHASE 4V] CANONICAL PROGRAM TRUTH PRESERVATION AUDIT
+    // ==========================================================================
+    // Mirrors the BUILDER-TRUTH-PRESERVATION audit above but for the canonical
+    // Phase 4P/4Q/4S signal set (`methodStructures`,
+    // `doctrineBlockResolution`, `methodMaterializationSummary`,
+    // `doctrineBlockResolutionRollup`). We compare presence on the source
+    // program against the normalized program using the centralized
+    // `hasCanonicalProgramTruth` guard. If the source had canonical truth
+    // and normalization stripped it, that is a load-corridor regression and
+    // we warn loudly so the next contributor sees it before legacy fallback
+    // overpaints the page.
+    // ==========================================================================
+    const sourceCanonical = hasCanonicalProgramTruth(
+      program as unknown as Parameters<typeof hasCanonicalProgramTruth>[0],
+    )
+    const normalizedCanonical = hasCanonicalProgramTruth(
+      normalized as unknown as Parameters<typeof hasCanonicalProgramTruth>[0],
+    )
+    const canonicalTruthDowngraded =
+      sourceCanonical.programHasAnyCanonicalTruth &&
+      !normalizedCanonical.programHasAnyCanonicalTruth
+    if (canonicalTruthDowngraded) {
+      console.warn(
+        '[PHASE_4V_CANONICAL_TRUTH] Canonical program truth DOWNGRADED during normalization:',
+        { source: sourceCanonical, normalized: normalizedCanonical },
+      )
+    }
+
     console.log('[ProgramState] Normalized program for display:', {
       originalSessions: program.sessions?.length || 0,
       normalizedSessions: normalized.sessions.length,
@@ -1460,6 +1540,9 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
       contractFieldsNormalized: missingFields.length,
       groupedTruthPreservation: preservationSummary,
       anyDowngraded,
+      canonicalTruthSource: sourceCanonical.verdict,
+      canonicalTruthNormalized: normalizedCanonical.verdict,
+      canonicalTruthDowngraded,
     })
     
     return normalized

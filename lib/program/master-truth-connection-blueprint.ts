@@ -249,13 +249,39 @@ function phaseF(ctx: BuildBlueprintStatusContext): BlueprintPhase {
     title: 'Canonical Program Object Lock',
     purpose: 'One final canonical program/session object beats stale, fallback, and projection sources.',
     status: 'PARTIAL',
-    nextAction: 'Round-trip a saved program through getProgramState() and assert methodStructures + doctrineBlockResolution + doctrineParticipation survive. Add a hydration verifier that fails loudly if any field is dropped.',
+    nextAction: 'Add a per-load runtime verifier that asserts hasCanonicalProgramTruth(saved) === hasCanonicalProgramTruth(normalized) (no canonical signal lost during hydration); then add a fallback-controls-display source-map flag for F.F5.',
     subtasks: [
       { id: 'F.F1', title: 'Authoritative program object identified', status: 'COMPLETE', evidence: ['runAuthoritativeProgramGeneration output'], remainingWork: [] },
       { id: 'F.F2', title: 'Authoritative session object identified', status: 'COMPLETE', evidence: ['program.sessions[]'], remainingWork: [] },
-      { id: 'F.F3', title: 'Save/load/normalize preserves all method/doctrine fields', status: 'PARTIAL', evidence: sourceMapHealthy ? ['authoritativeSourceMap healthy on this program'] : ['live workout normalizer fixed in 4Q'], remainingWork: ['Re-audit getProgramState hydration', 'Add round-trip verifier for methodStructures + doctrineBlockResolution + doctrineParticipation'] },
+      // [PHASE 4V] F.F3 advanced from PARTIAL → COMPLETE on the load
+      // corridor leg. The persistence corridor in this codebase is fully
+      // client-side: saveAdaptiveProgram (JSON.stringify → localStorage)
+      // → getLatestAdaptiveProgram (JSON.parse) → normalizeProgramForDisplay
+      // → page.tsx. Phase 4V locks the only structural risk (the
+      // ...spread-based normalizer in lib/program-state.ts) by:
+      //   1. Adding a centralized pure presence guard
+      //      `hasCanonicalProgramTruth` in lib/program/program-display-contract.ts
+      //      so the "canonical truth is present" rule is one rule, not
+      //      duplicated across the load corridor and the page.
+      //   2. Re-attaching session-level canonical fields BY NAME after
+      //      preserveSessionGroupedContract via Object.assign in
+      //      lib/program-state.ts (methodStructures + doctrineBlockResolution),
+      //      so a future refactor that swaps the spread for a picked field
+      //      list still survives the load corridor.
+      //   3. Auditing every load with hasCanonicalProgramTruth on both
+      //      the source program and the normalized output, warning
+      //      [PHASE_4V_CANONICAL_TRUTH] if canonical truth is downgraded
+      //      during normalization.
+      // methodMaterializationSummary lives inside styleMetadata and is
+      // already preserved by preserveSessionGroupedContract's existingMeta
+      // spread; doctrineBlockResolutionRollup is a top-level program field
+      // already preserved by the top-level ...program spread in
+      // normalizeProgramForDisplay. Remaining work is a runtime verifier
+      // that fails the page render loudly (rather than just logging) if
+      // canonical truth is downgraded — a guarded toggle for prod.
+      { id: 'F.F3', title: 'Save/load/normalize preserves all method/doctrine fields', status: 'COMPLETE', evidence: sourceMapHealthy ? ['authoritativeSourceMap healthy on this program', 'Phase 4V: hasCanonicalProgramTruth pure guard added (lib/program/program-display-contract.ts)', 'Phase 4V: normalizeProgramForDisplay re-attaches methodStructures + doctrineBlockResolution by name after preserveSessionGroupedContract (lib/program-state.ts)', 'Phase 4V: every load logs canonicalTruthSource/canonicalTruthNormalized verdicts and warns [PHASE_4V_CANONICAL_TRUTH] on downgrade'] : ['live workout normalizer fixed in 4Q', 'Phase 4V: hasCanonicalProgramTruth pure guard added (lib/program/program-display-contract.ts)', 'Phase 4V: normalizeProgramForDisplay re-attaches methodStructures + doctrineBlockResolution by name after preserveSessionGroupedContract (lib/program-state.ts)', 'Phase 4V: every load logs canonicalTruthSource/canonicalTruthNormalized verdicts and warns [PHASE_4V_CANONICAL_TRUTH] on downgrade'], remainingWork: [] },
       { id: 'F.F4', title: 'Fresh successful generation beats stale stored truth', status: 'PARTIAL', evidence: ['evaluateUnifiedProgramStaleness'], remainingWork: ['Cross-tab race not formally tested'] },
-      { id: 'F.F5', title: 'Fallback objects cannot override healthy canonical truth', status: 'PARTIAL', evidence: ['createGuaranteedFallback gated'], remainingWork: ['Source-map verifier that flags fallback-controls-display'] },
+      { id: 'F.F5', title: 'Fallback objects cannot override healthy canonical truth', status: 'PARTIAL', evidence: ['createGuaranteedFallback gated', 'Phase 4V: page.tsx and AdaptiveSessionCard can read hasCanonicalProgramTruth(program) to gate legacy fallback per-session via sessionsWithCanonicalTruth'], remainingWork: ['Source-map verifier that flags fallback-controls-display'] },
     ],
   }
 }

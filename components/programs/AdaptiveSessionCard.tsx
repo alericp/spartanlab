@@ -6126,14 +6126,25 @@ function ExerciseRow({
         if (!trendLabel && !coachLabel) return null
         const setCount = trend?.setCount ?? 0
         const sessionCount = trend?.sessionCount ?? 0
+        // [PHASE-S] Evidence tail moved out of visible text. The "5 sets ·
+        // 3 sessions" counter was debug-flavored audit copy on the always-
+        // visible exercise row. Per Phase S "user-friendly wording" rule the
+        // visible line now reads as plain coaching ("Trend: progressing well
+        // · Coach: hold progression"), and the evidence count is preserved
+        // in the hover `title`, the `aria-label`, and the
+        // `data-phase-o-evidence` attribute so screenshot verification, dev
+        // probes, and acceptance assertions still see the raw counts.
         const evidenceTail =
           setCount > 0 && sessionCount > 0
-            ? ` · ${setCount} set${setCount === 1 ? '' : 's'} · ${sessionCount} session${sessionCount === 1 ? '' : 's'}`
+            ? `${setCount} set${setCount === 1 ? '' : 's'} · ${sessionCount} session${sessionCount === 1 ? '' : 's'}`
             : ''
         const fullTitle =
           (trend?.conciseExplanation ? `Trend: ${trend.conciseExplanation}` : '') +
           (coach?.explanation
             ? `${trend?.conciseExplanation ? ' · ' : ''}Coach: ${coach.explanation}`
+            : '') +
+          (evidenceTail
+            ? `${trend?.conciseExplanation || coach?.explanation ? ' · ' : ''}Evidence: ${evidenceTail}`
             : '')
         return (
           <p
@@ -6141,11 +6152,11 @@ function ExerciseRow({
             title={fullTitle || undefined}
             aria-label={fullTitle || 'Performance trend'}
             data-phase-o-proof="true"
+            data-phase-o-evidence={evidenceTail || undefined}
           >
             {trendLabel && <span>Trend: {trendLabel}</span>}
             {trendLabel && coachLabel && <span className="text-[#5A5A5A]"> · </span>}
             {coachLabel && <span>Coach: {coachLabel}</span>}
-            {evidenceTail && <span className="text-[#5A5A5A]">{evidenceTail}</span>}
           </p>
         )
       })()}

@@ -79,6 +79,18 @@ import { getRecentWorkoutSetEvidenceForGeneration } from './workout-set-evidence
 // `prescribedLoad` / `estimatedMinutes`. Only `targetRPE` (bounded ≤1 step)
 // and an optional `note` decoration may change.
 import { runProgramQualityDoctrineAudit } from '@/lib/program/program-quality-doctrine-audit-contract'
+// [PHASE-Q] Doctrine rule utilization / causal application contract. Pure
+// deterministic READER that runs AFTER Phase P on the final adapted program
+// object. Reads the artifacts already stamped by the builder + Phase 4L–4Q
+// + Phase L/M/N/O/P, classifies each of the 5 doctrine categories
+// (skill / method / recovery / prescription / sessionLength) into the
+// honest 6-state ladder (ELIGIBLE_AND_APPLIED, ELIGIBLE_BUT_SUPPRESSED,
+// NOT_ELIGIBLE, BLOCKED_BY_UNSUPPORTED_RUNTIME, ACKNOWLEDGED_ONLY,
+// POST_HOC_ONLY), and stamps a structured `doctrineUtilizationTrace` on the
+// program AND each session. Does NOT mutate prescriptions, exercises,
+// methods, or any prior phase output. The trace is the answer to the user's
+// "is doctrine actually causal?" question — it does not become a builder.
+import { runDoctrineUtilizationContract } from '@/lib/program/doctrine-utilization-contract'
 
 // ==========================================================================
 // [CORRIDOR_KILL_V4] Version fingerprint for cache/deploy proof
@@ -2705,6 +2717,60 @@ export async function executeAuthoritativeGeneration(
       ...phasePAuditDiagnostic,
     })
     markStage('phase_p_quality_audit_done')
+
+    // ==========================================================================
+    // [PHASE-Q] DOCTRINE RULE UTILIZATION / CAUSAL APPLICATION TRACE
+    // Runs AFTER Phase P on the final adapted program. Pure reader: never
+    // mutates prescriptions, exercises, methods, or any earlier phase
+    // output. Stamps a structured `doctrineUtilizationTrace` on the program
+    // and each session so the Program card and the master-truth blueprint
+    // can answer the honest question — "is doctrine actually causal?" —
+    // per category (skill / method / recovery / prescription / sessionLength)
+    // using the 6-state ladder (ELIGIBLE_AND_APPLIED, ELIGIBLE_BUT_SUPPRESSED,
+    // NOT_ELIGIBLE, BLOCKED_BY_UNSUPPORTED_RUNTIME, ACKNOWLEDGED_ONLY,
+    // POST_HOC_ONLY). Failure here is non-blocking: the contract returns
+    // safely or this try/catch absorbs the error.
+    // ==========================================================================
+    const phaseQTraceDiagnostic: {
+      attempted: boolean
+      stamped: boolean
+      overallVerdict: string
+      summary: string
+      byCategory?: Record<string, string>
+      error?: string
+    } = {
+      attempted: false,
+      stamped: false,
+      overallVerdict: 'PHASE_Q_NOT_ATTEMPTED',
+      summary: '',
+    }
+    try {
+      phaseQTraceDiagnostic.attempted = true
+      const phaseQResult = runDoctrineUtilizationContract(program)
+      program = phaseQResult.program as AdaptiveProgram
+      phaseQTraceDiagnostic.stamped = true
+      phaseQTraceDiagnostic.overallVerdict = phaseQResult.trace.overallVerdict
+      phaseQTraceDiagnostic.summary = phaseQResult.trace.summary
+      const cats: Record<string, string> = {}
+      for (const k of Object.keys(phaseQResult.trace.byCategory)) {
+        cats[k] = phaseQResult.trace.byCategory[k as keyof typeof phaseQResult.trace.byCategory].state
+      }
+      phaseQTraceDiagnostic.byCategory = cats
+    } catch (traceErr) {
+      phaseQTraceDiagnostic.error = String(traceErr)
+      phaseQTraceDiagnostic.overallVerdict = 'PHASE_Q_TRACE_FAILED_NON_BLOCKING'
+      console.log('[phase-q-doctrine-utilization-failed]', {
+        generationIntent: request.generationIntent,
+        triggerSource: request.triggerSource,
+        error: String(traceErr),
+      })
+    }
+    console.log('[phase-q-doctrine-utilization-trace]', {
+      generationIntent: request.generationIntent,
+      triggerSource: request.triggerSource,
+      ...phaseQTraceDiagnostic,
+    })
+    markStage('phase_q_doctrine_utilization_done')
 
     // ==========================================================================
     // STAGE: Success

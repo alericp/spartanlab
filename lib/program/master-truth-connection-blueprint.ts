@@ -1471,6 +1471,18 @@ export function buildMasterTruthConnectionBlueprintStatus(
     // safety bounds remain authoritative and completed sessions are never
     // mutated.
     phaseP(),
+    // [PHASE-Q] Doctrine Rule Utilization / Causal Application Audit. Pure
+    // deterministic READER that runs AFTER Phase P. Reads existing artifacts
+    // stamped by the builder + Phase 4L–4Q + Phase L/M/N/O/P, classifies
+    // each of the 5 doctrine categories (skill / method / recovery /
+    // prescription / sessionLength) into the 6-state honesty ladder
+    // (ELIGIBLE_AND_APPLIED, ELIGIBLE_BUT_SUPPRESSED, NOT_ELIGIBLE,
+    // BLOCKED_BY_UNSUPPORTED_RUNTIME, ACKNOWLEDGED_ONLY, POST_HOC_ONLY),
+    // and stamps `program.doctrineUtilizationTrace` plus
+    // `session.doctrineUtilizationTrace`. Does NOT build, mutate, or
+    // overwrite anything earlier. The trace answers the user's question:
+    // "is doctrine actually causal, or just acknowledged?"
+    phaseQ(),
   ]
 
   // Active phase = the first phase whose status is not COMPLETE / DO_NOT_REDO.

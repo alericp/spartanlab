@@ -403,14 +403,28 @@ export function buildDoctrineMaterializationMatrix(
   })
 
   // ---------------------------------------------------------------------------
-  // 3b. method_selection_row_level  (Phase 4J — honest gap row)
-  // No materializer in the codebase writes top_set_backoff / drop_set /
-  // rest_pause / endurance_density. The auditor reasons about them and
-  // surfaces zero counts in actualMaterialization.rowExecutionCounts.
+  // 3b. method_selection_row_level  (Phase 4K — honest reconciliation)
+  //
+  // The Phase 4J version of this row claimed MATERIALIZER_NOT_CONNECTED for
+  // top_set_backoff / drop_set / rest_pause. That claim is no longer true.
+  // lib/adaptive-program-builder.ts lines ~13549-13960 ship a doctrine-locked
+  // row-level mutator with explicit safety gates (see registry entry for the
+  // complete gate list). Whether it FIRES on a given program depends on user
+  // method preferences (sessionMethodIntentContract.userWants{Top,Drop,RestPause})
+  // and the per-session safety gates — see program.weeklyMethodRepresentation
+  // for the per-program APPLIED / BLOCKED / NOT_NEEDED breakdown.
+  //
+  // The matrix is built from runtimeContract only and does not see per-program
+  // exercise field writes, so the row reports CONNECTED_AND_MATERIAL with
+  // zero counts (the rollup-driven counts live in weeklyMethodRepresentation
+  // where the Program page reads them).
+  //
+  // endurance_density is the only row-level method with no dedicated writer —
+  // it is rolled into the grouped density_block form when the profile asks.
   // ---------------------------------------------------------------------------
   rows.push({
     category: 'method_selection_row_level',
-    status: 'MATERIALIZER_NOT_CONNECTED',
+    status: 'CONNECTED_AND_MATERIAL',
     rulesRead: 0,
     rulesRelevant: 0,
     rulesEligible: 0,
@@ -418,22 +432,21 @@ export function buildDoctrineMaterializationMatrix(
     rulesMaterialized: 0,
     rulesBlocked: 0,
     allowedProgramFields: [
-      'exercise.setExecutionMethod (top_set / drop_set / rest_pause)',
-      'exercise.topSetPrescription',
-      'exercise.backoffPrescription',
-      'exercise.dropSetPrescription',
+      'exercise.setExecutionMethod (top_set / drop_set / rest_pause / cluster)',
+      'exercise.method',
+      'exercise.methodLabel',
     ],
     changedProgramFields: [],
-    visibleSurfaces: [],
-    noChangeReason:
-      'no row-level materializer exists for top_set_backoff / drop_set / rest_pause / endurance_density. ' +
-      'method-decision-engine reasons about these and surfaces zero counts in ' +
-      'session.methodDecision.actualMaterialization.rowExecutionCounts. Drop-set logic exists in ' +
-      'training-methods.ts (CALISTHENICS_DROP_SETS, evaluateDropSet) but is not called by any session builder.',
+    visibleSurfaces: ['session card row method chip', 'live workout method cue'],
+    noChangeReason: null,
     notes:
-      'Phase 4J honest split. lib/program/weekly-method-representation.ts surfaces this per-method to the ' +
-      'Program page. Building safe row-level dosage mutators is deferred for the same safety reason that ' +
-      'blocked the prescription / progression mutators in Phase 4I.',
+      'Phase 4K honest reconciliation. Owner: lib/adaptive-program-builder.ts row-level mutator block ' +
+      '(lines ~13549-13960). Safety gates: skill-pillar protection (planche / front lever / back lever / ' +
+      'handstand / iron cross / v-sit / manna / muscle-up); skill-adjacent token blocklist for drop_set; ' +
+      'late-position requirement (lateBoundary = max(2, ceil(N/2))); weekly-role density gating; ' +
+      'strength-category exclusion for drop_set; "already has method or blockId" skip. Per-program ' +
+      'firing counts live in program.weeklyMethodRepresentation. endurance_density still has no ' +
+      'dedicated row-level writer — density_block (grouped) is the closest materialized form.',
   })
 
   // ---------------------------------------------------------------------------

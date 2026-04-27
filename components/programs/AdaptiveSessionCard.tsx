@@ -2416,6 +2416,40 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 </p>
               )
             })()}
+            {/* ============================================================
+                [PHASE-K] WEEKLY STRESS DISTRIBUTION PROOF
+                ----------------------------------------------------------------
+                Compact coach-facing chip + one-line explanation derived from
+                the canonical weekly stress plan (computed once in the builder
+                by `buildWeeklyStressDistributionPlan` and stamped onto
+                `session.stressDistributionProof`). This is the visible proof
+                that the week was reasoned about as a whole - not just six
+                isolated session labels.
+                Render rules:
+                  - Only renders when `session.stressDistributionProof` is
+                    present (legacy programs without Phase K classification
+                    show nothing - we never invent labels).
+                  - Label is the coach chip ("High strength day", "Moderate
+                    volume day", "Tendon-protective skill day", etc.).
+                  - Explanation is the post-governor one-liner
+                    ("Hard pull stress; next day softened", etc.) - omitted
+                    when the contract had nothing notable to say.
+                  - Sized one notch above the intensity meta line so the
+                    coach chip reads as the authoritative summary while
+                    intensity/progression/breadth above remain context.
+                ============================================================ */}
+            {session.stressDistributionProof?.label && (
+              <div className="mt-1.5 flex flex-col gap-0.5">
+                <span className="inline-flex items-center self-start gap-1 rounded-full border border-[#2B313A] bg-[#161A21] px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-wide text-[#E6E9EF]">
+                  {session.stressDistributionProof.label}
+                </span>
+                {session.stressDistributionProof.explanation && (
+                  <p className="text-[11px] text-[#9CA3AF] leading-snug">
+                    {session.stressDistributionProof.explanation}
+                  </p>
+                )}
+              </div>
+            )}
             {/* Compact meta line - time + exercise count only */}
             <div className="flex items-center gap-3 mt-1 text-xs text-[#6A6A6A]">
               <span className="flex items-center gap-1">

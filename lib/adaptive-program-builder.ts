@@ -18911,6 +18911,12 @@ console.log('[program-generate] Generation complete:', {
     } : undefined,
     structure,
     sessions,
+    // [PHASE-K] Whole-week stress / recovery / exposure plan + governor audit.
+    // Single owner for "what is the rhythm of this week" - read by the
+    // Program page summary and by display surfaces that need richer detail
+    // than the per-session hoisted fields can express.
+    weeklyStressDistributionPlan: phaseKStressPlan,
+    weeklyStressGovernorAdjustments: phaseKGovernorResult.appliedAdjustments,
     equipmentProfile,
     // [PHASE 15D] Store dominant spine resolution for display truthfulness
     dominantSpineResolution: {

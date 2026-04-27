@@ -124,9 +124,15 @@ beats stale, fallback, and projection sources.
 |----|---------|--------|----------|
 | F1 | Authoritative program object identified | `COMPLETE` | output of `runAuthoritativeProgramGeneration` |
 | F2 | Authoritative session object identified | `COMPLETE` | `program.sessions[]` |
-| F3 | Save/load/normalize preserves all method/doctrine fields | `PARTIAL` | live workout normalizer fixed in 4Q (`lib/workout/load-authoritative-session.ts`); `getProgramState` hydration not re-audited |
-| F4 | Fresh successful generation beats stale stored truth | `PARTIAL` | `evaluateUnifiedProgramStaleness` exists; cross-tab race not formally tested |
-| F5 | Fallback objects cannot override healthy canonical truth | `PARTIAL` | `createGuaranteedFallback` is gated; needs source-map verifier |
+| F3 | Save/load/normalize preserves all method/doctrine fields | `COMPLETE` | live workout normalizer fixed in 4Q (`lib/workout/load-authoritative-session.ts`). **Phase 4V**: `hasCanonicalProgramTruth` pure guard added (`lib/program/program-display-contract.ts`); `normalizeProgramForDisplay` re-attaches `methodStructures` + `doctrineBlockResolution` by name after `preserveSessionGroupedContract` (`lib/program-state.ts`); every load logs canonical-truth source/normalized verdicts. **Phase 4W**: `detectCanonicalProgramTruthDowngrade` reports granular per-signal loss (methodStructures / doctrineBlockResolution / methodMaterializationSummary / doctrineBlockResolutionRollup / per-session coverage); `assertCanonicalProgramTruthPreserved` throws `PHASE_4W_CANONICAL_TRUTH_DOWNGRADE` in dev / test / `SPARTANLAB_STRICT_CANONICAL_TRUTH=true`, structured `console.error` in production — silent downgrades can no longer ship. |
+| F4 | Fresh successful generation beats stale stored truth | `PARTIAL` | `evaluateUnifiedProgramStaleness` exists and runs at page boot + post-build; **Phase 4W** strict-mode throw also catches partial canonical downgrades during normalize. **Cross-tab race remains the open leg**: no `storage` event listener / boot-time canonical-vs-in-memory reconciler yet — a stale tab can still overwrite a fresh tab's success. Not faked `COMPLETE`. |
+| F5 | Fallback objects cannot override healthy canonical truth | `COMPLETE` | `createGuaranteedFallback` gated upstream. **Phase 4W**: `AuthoritativeProgramSourceMap` exposes `canonicalControlsDisplay` / `canonicalDisplayReason` and `fallbackControlsDisplay` / `fallbackDisplayReason` with stable codes (`CANONICAL_METHOD_STRUCTURES_DRIVE_DISPLAY` / `STYLED_GROUPS_AGREE_WITH_CANONICAL_CORRIDOR` / `ROW_LEVEL_METHODS_DRIVE_DISPLAY` / `LEGACY_PROGRAM_NO_CANONICAL_TRUTH` / `CANONICAL_TRUTH_PRESENT_BUT_FALLBACK_DISPLAY_CONTROLS` / `STYLED_GROUPS_USED_WITHOUT_METHOD_STRUCTURES` / `DOCTRINE_CAUSAL_DISPLAY_USED_WITHOUT_DOCTRINE_BLOCK_RESOLUTION`). Computed from the same per-field inspections as `sourceVerdict`, so the two cannot drift. Combined with the 4W normalize-time throw, fallback can no longer masquerade as canonical truth. |
+
+> **Later engine-quality audit (deferred until canonical funnel + live workout
+> parity are locked):** verify recovery / intensity / adaptiveness doctrine
+> and high / moderate / low stress distribution across the rendered week (the
+> current 6-session output may still lack proper stress dispersion across
+> Full / 45 / 30 variants). Tracking note only — not in scope for Phase F.
 
 ---
 

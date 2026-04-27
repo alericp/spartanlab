@@ -35,7 +35,11 @@ import {
   markCanonicalPathUsed,
 } from './production-safety'
 import { EMPTY_SKILL_TRACE, getSafeSkillTrace } from './safe-access'
-import { hasCanonicalProgramTruth } from './program/program-display-contract'
+import {
+  hasCanonicalProgramTruth,
+  detectCanonicalProgramTruthDowngrade,
+  assertCanonicalProgramTruthPreserved,
+} from './program/program-display-contract'
 
 // =============================================================================
 // [BUILDER-TRUTH-PRESERVATION] Canonical Load-Time Grouped Truth Preservation
@@ -1503,17 +1507,31 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
     }
 
     // ==========================================================================
-    // [PHASE 4V] CANONICAL PROGRAM TRUTH PRESERVATION AUDIT
+    // [PHASE 4W] CANONICAL PROGRAM TRUTH ENFORCEMENT
     // ==========================================================================
-    // Mirrors the BUILDER-TRUTH-PRESERVATION audit above but for the canonical
-    // Phase 4P/4Q/4S signal set (`methodStructures`,
-    // `doctrineBlockResolution`, `methodMaterializationSummary`,
-    // `doctrineBlockResolutionRollup`). We compare presence on the source
-    // program against the normalized program using the centralized
-    // `hasCanonicalProgramTruth` guard. If the source had canonical truth
-    // and normalization stripped it, that is a load-corridor regression and
-    // we warn loudly so the next contributor sees it before legacy fallback
-    // overpaints the page.
+    // Phase 4V audited canonical-truth preservation with a coarse
+    // "any-canonical-truth-lost?" warning. Phase 4W upgrades that to:
+    //
+    //   1. GRANULAR detection — `detectCanonicalProgramTruthDowngrade`
+    //      reports per-signal loss (methodStructures /
+    //      doctrineBlockResolution / methodMaterializationSummary /
+    //      doctrineBlockResolutionRollup) AND per-session-coverage drop,
+    //      so partial downgrades are caught (e.g. methodStructures
+    //      survives but doctrineBlockResolution gets stripped).
+    //
+    //   2. GUARDED FAIL-LOUD enforcement —
+    //      `assertCanonicalProgramTruthPreserved` THROWS in dev/test or
+    //      when `SPARTANLAB_STRICT_CANONICAL_TRUTH=true`, and emits a
+    //      structured `console.error` (not just `warn`) in production so
+    //      regressions cannot silently render. Legacy programs (source
+    //      had no canonical truth) are exempt — they still render through
+    //      compatibility fallback without throwing.
+    //
+    // The throw happens inside the same `try` block that already wraps
+    // the entire normalize body, so a strict-mode throw propagates up
+    // to `normalizeProgramForDisplay`'s outer `catch` and the function
+    // returns `null` (the existing failure semantic) — callers already
+    // handle that. Customers in production never see a crash.
     // ==========================================================================
     const sourceCanonical = hasCanonicalProgramTruth(
       program as unknown as Parameters<typeof hasCanonicalProgramTruth>[0],
@@ -1521,15 +1539,10 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
     const normalizedCanonical = hasCanonicalProgramTruth(
       normalized as unknown as Parameters<typeof hasCanonicalProgramTruth>[0],
     )
-    const canonicalTruthDowngraded =
-      sourceCanonical.programHasAnyCanonicalTruth &&
-      !normalizedCanonical.programHasAnyCanonicalTruth
-    if (canonicalTruthDowngraded) {
-      console.warn(
-        '[PHASE_4V_CANONICAL_TRUTH] Canonical program truth DOWNGRADED during normalization:',
-        { source: sourceCanonical, normalized: normalizedCanonical },
-      )
-    }
+    const canonicalDowngrade = detectCanonicalProgramTruthDowngrade(
+      sourceCanonical,
+      normalizedCanonical,
+    )
 
     console.log('[ProgramState] Normalized program for display:', {
       originalSessions: program.sessions?.length || 0,
@@ -1542,9 +1555,27 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
       anyDowngraded,
       canonicalTruthSource: sourceCanonical.verdict,
       canonicalTruthNormalized: normalizedCanonical.verdict,
-      canonicalTruthDowngraded,
+      canonicalTruthDowngradeVerdict: canonicalDowngrade.verdict,
+      canonicalTruthDowngrade: canonicalDowngrade.isDowngrade
+        ? {
+            lostMethodStructures: canonicalDowngrade.lostMethodStructures,
+            lostDoctrineBlockResolution: canonicalDowngrade.lostDoctrineBlockResolution,
+            lostMethodMaterializationSummary: canonicalDowngrade.lostMethodMaterializationSummary,
+            lostDoctrineBlockResolutionRollup: canonicalDowngrade.lostDoctrineBlockResolutionRollup,
+            lostCanonicalSessionCoverage: canonicalDowngrade.lostCanonicalSessionCoverage,
+          }
+        : null,
     })
-    
+
+    // Throws in dev/strict mode, structured error log in production.
+    // Legacy programs (source had no canonical truth) are exempt.
+    assertCanonicalProgramTruthPreserved({
+      source: sourceCanonical,
+      normalized: normalizedCanonical,
+      downgrade: canonicalDowngrade,
+      context: 'normalizeProgramForDisplay',
+    })
+
     return normalized
   } catch (err) {
     console.error('[ProgramState] Error normalizing program:', err)

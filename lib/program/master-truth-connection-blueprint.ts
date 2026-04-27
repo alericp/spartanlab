@@ -244,12 +244,20 @@ function phaseF(ctx: BuildBlueprintStatusContext): BlueprintPhase {
   const sourceMap = readObject(ctx.sourceMap) ?? readObject((readObject(ctx.program) ?? {}).authoritativeSourceMap)
   const sourceMapHealthy = sourceMap?.sourceVerdict === 'LOCKED_SINGLE_AUTHORITATIVE_SOURCE'
 
+  // [PHASE 4W] Surface the new fallback-controls-display flags so consumers
+  // (this blueprint, dev tooling, future runtime guards) can read them off
+  // a runtime source-map result without reaching into legacy fields.
+  const fallbackControllingDisplayFlag = sourceMap?.fallbackControlsDisplay === true
+  const canonicalControllingDisplayFlag = sourceMap?.canonicalControlsDisplay === true
+
   return {
     id: 'F',
     title: 'Canonical Program Object Lock',
     purpose: 'One final canonical program/session object beats stale, fallback, and projection sources.',
+    // F overall stays PARTIAL because F.F4 (fresh-vs-stale + cross-tab race)
+    // is intentionally NOT closed in 4W — see F.F4 evidence/remainingWork.
     status: 'PARTIAL',
-    nextAction: 'Add a per-load runtime verifier that asserts hasCanonicalProgramTruth(saved) === hasCanonicalProgramTruth(normalized) (no canonical signal lost during hydration); then add a fallback-controls-display source-map flag for F.F5.',
+    nextAction: 'Close F.F4: prove fresh successful generation cannot be overwritten by stale localStorage during hydration (cross-tab race). evaluateUnifiedProgramStaleness already exists; add a Program page boot guard that prefers canonical-storage over a degraded in-memory program when the two disagree.',
     subtasks: [
       { id: 'F.F1', title: 'Authoritative program object identified', status: 'COMPLETE', evidence: ['runAuthoritativeProgramGeneration output'], remainingWork: [] },
       { id: 'F.F2', title: 'Authoritative session object identified', status: 'COMPLETE', evidence: ['program.sessions[]'], remainingWork: [] },
@@ -280,8 +288,39 @@ function phaseF(ctx: BuildBlueprintStatusContext): BlueprintPhase {
       // that fails the page render loudly (rather than just logging) if
       // canonical truth is downgraded — a guarded toggle for prod.
       { id: 'F.F3', title: 'Save/load/normalize preserves all method/doctrine fields', status: 'COMPLETE', evidence: sourceMapHealthy ? ['authoritativeSourceMap healthy on this program', 'Phase 4V: hasCanonicalProgramTruth pure guard added (lib/program/program-display-contract.ts)', 'Phase 4V: normalizeProgramForDisplay re-attaches methodStructures + doctrineBlockResolution by name after preserveSessionGroupedContract (lib/program-state.ts)', 'Phase 4V: every load logs canonicalTruthSource/canonicalTruthNormalized verdicts and warns [PHASE_4V_CANONICAL_TRUTH] on downgrade'] : ['live workout normalizer fixed in 4Q', 'Phase 4V: hasCanonicalProgramTruth pure guard added (lib/program/program-display-contract.ts)', 'Phase 4V: normalizeProgramForDisplay re-attaches methodStructures + doctrineBlockResolution by name after preserveSessionGroupedContract (lib/program-state.ts)', 'Phase 4V: every load logs canonicalTruthSource/canonicalTruthNormalized verdicts and warns [PHASE_4V_CANONICAL_TRUTH] on downgrade'], remainingWork: [] },
-      { id: 'F.F4', title: 'Fresh successful generation beats stale stored truth', status: 'PARTIAL', evidence: ['evaluateUnifiedProgramStaleness'], remainingWork: ['Cross-tab race not formally tested'] },
-      { id: 'F.F5', title: 'Fallback objects cannot override healthy canonical truth', status: 'PARTIAL', evidence: ['createGuaranteedFallback gated', 'Phase 4V: page.tsx and AdaptiveSessionCard can read hasCanonicalProgramTruth(program) to gate legacy fallback per-session via sessionsWithCanonicalTruth'], remainingWork: ['Source-map verifier that flags fallback-controls-display'] },
+      // [PHASE 4W] F.F4 stays PARTIAL on purpose. evaluateUnifiedProgramStaleness
+      // is wired in app/(app)/program/page.tsx (lines 3055, 9911) and runs at
+      // page load + after build, so single-tab fresh-vs-stale already detects
+      // the regression. The unproven leg is the cross-tab race: localStorage
+      // is shared across tabs and a stale tab can overwrite a fresh tab's
+      // success on regenerate. Closing F.F4 needs a Program page boot guard
+      // that prefers canonical storage over a degraded in-memory program when
+      // the two disagree, plus a `storage` event listener that re-runs the
+      // staleness check. Phase 4W deliberately does not implement this to
+      // avoid hydration loops / render-time side effects.
+      { id: 'F.F4', title: 'Fresh successful generation beats stale stored truth', status: 'PARTIAL', evidence: ['evaluateUnifiedProgramStaleness wired at page boot + post-build', 'Phase 4W: assertCanonicalProgramTruthPreserved throws in dev/strict on any normalize-time downgrade so stale partial loads cannot silently win'], remainingWork: ['Cross-tab race: storage event listener + boot-time canonical-vs-in-memory reconciler not yet implemented'] },
+      // [PHASE 4W] F.F5 advanced from PARTIAL → COMPLETE. The fallback
+      // source-map verifier the prompt asked for is now live in
+      // lib/program/authoritative-program-source-map.ts as the four
+      // co-equal fields canonicalControlsDisplay / canonicalDisplayReason
+      // / fallbackControlsDisplay / fallbackDisplayReason. Reasons are
+      // stable codes:
+      //   - CANONICAL_METHOD_STRUCTURES_DRIVE_DISPLAY
+      //   - STYLED_GROUPS_AGREE_WITH_CANONICAL_CORRIDOR
+      //   - ROW_LEVEL_METHODS_DRIVE_DISPLAY
+      //   - LEGACY_PROGRAM_NO_CANONICAL_TRUTH (legitimate legacy fallback)
+      //   - CANONICAL_TRUTH_PRESENT_BUT_FALLBACK_DISPLAY_CONTROLS (regression)
+      //   - STYLED_GROUPS_USED_WITHOUT_METHOD_STRUCTURES (regression)
+      //   - DOCTRINE_CAUSAL_DISPLAY_USED_WITHOUT_DOCTRINE_BLOCK_RESOLUTION
+      // The classification is computed from the existing per-field
+      // inspections (methodStructures count, styledGroups non-straight
+      // count, row-level method count) so it cannot drift from the
+      // sourceVerdict. createGuaranteedFallback is still gated upstream;
+      // Phase 4W also caps the load corridor with
+      // assertCanonicalProgramTruthPreserved so a fallback object cannot
+      // silently take over from a partially-downgraded canonical
+      // program.
+      { id: 'F.F5', title: 'Fallback objects cannot override healthy canonical truth', status: 'COMPLETE', evidence: ['createGuaranteedFallback gated', 'Phase 4V: page.tsx and AdaptiveSessionCard can read hasCanonicalProgramTruth(program) to gate legacy fallback per-session via sessionsWithCanonicalTruth', 'Phase 4W: AuthoritativeProgramSourceMap exposes canonicalControlsDisplay / fallbackControlsDisplay + stable reason codes (lib/program/authoritative-program-source-map.ts)', 'Phase 4W: detectCanonicalProgramTruthDowngrade catches partial downgrades (lostMethodStructures / lostDoctrineBlockResolution / lostMethodMaterializationSummary / lostDoctrineBlockResolutionRollup / lostCanonicalSessionCoverage)', 'Phase 4W: assertCanonicalProgramTruthPreserved throws in dev/strict (NODE_ENV !== production OR SPARTANLAB_STRICT_CANONICAL_TRUTH=true) and console.errors in production', fallbackControllingDisplayFlag ? 'Live source-map currently reports fallbackControlsDisplay=true' : canonicalControllingDisplayFlag ? 'Live source-map currently reports canonicalControlsDisplay=true' : 'Live source-map flags not yet observed on this build'], remainingWork: [] },
     ],
   }
 }

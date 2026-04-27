@@ -1491,6 +1491,208 @@ export function hasCanonicalProgramTruth(
 }
 
 // =============================================================================
+// [PHASE 4W] CANONICAL TRUTH DOWNGRADE DETECTION + GUARDED ENFORCEMENT
+// -----------------------------------------------------------------------------
+// Phase 4V wired `hasCanonicalProgramTruth` and a coarse "any canonical truth
+// lost?" warning into `normalizeProgramForDisplay`. Phase 4W upgrades that
+// observation into enforcement:
+//
+//   1. `detectCanonicalProgramTruthDowngrade(source, normalized)` returns
+//      granular loss flags (per-signal + per-session-coverage) so the load
+//      corridor catches *partial* downgrades, not just total ones.
+//   2. `shouldThrowOnCanonicalTruthDowngrade()` follows the existing
+//      `lib/env-validation.ts` convention (`process.env.NODE_ENV !==
+//      'production'`) and additionally honors an explicit opt-in flag
+//      `SPARTANLAB_STRICT_CANONICAL_TRUTH=true` for production smoke tests.
+//      Reading `process.env.<KEY>` works on both server and client because
+//      Next.js inlines defined env reads at build time; the call is wrapped
+//      in a `try` so it cannot crash an exotic runtime.
+//   3. `assertCanonicalProgramTruthPreserved()` is the call-site shim. It
+//      throws a precise `PHASE_4W_CANONICAL_TRUTH_DOWNGRADE` error in
+//      strict/dev mode and falls back to `console.error` (not just `warn`)
+//      in production so logs are still loud but customers do not crash.
+//
+// Pure: no hooks, no state, no mutation. The only side effect is the
+// optional throw / console.error inside `assertCanonicalProgramTruthPreserved`
+// — which the call site decides to invoke.
+// =============================================================================
+
+/** Granular per-signal verdict describing exactly which canonical fields the
+ *  normalize pass dropped. Every flag is `true` ONLY when the source had the
+ *  field AND the normalized output lost it; legacy programs (source already
+ *  empty) never trigger any flag. */
+export interface CanonicalProgramTruthDowngrade {
+  /** Source had ≥1 session with `methodStructures`; normalized has none. */
+  lostMethodStructures: boolean
+  /** Source had ≥1 session with `doctrineBlockResolution`; normalized has none. */
+  lostDoctrineBlockResolution: boolean
+  /** Source had `methodMaterializationSummary` somewhere; normalized has none. */
+  lostMethodMaterializationSummary: boolean
+  /** Source had `doctrineBlockResolutionRollup`; normalized has none. */
+  lostDoctrineBlockResolutionRollup: boolean
+  /** Number of sessions with canonical truth dropped (source - normalized). */
+  lostCanonicalSessionCoverage: number
+  /** Source side: how many sessions carried canonical truth. */
+  sourceSessionsWithCanonicalTruth: number
+  /** Normalized side: how many sessions still carry canonical truth. */
+  normalizedSessionsWithCanonicalTruth: number
+  /** True iff ANY of the per-signal `lost*` flags is true OR
+   *  `lostCanonicalSessionCoverage > 0`. */
+  isDowngrade: boolean
+  /**
+   * Stable short code summarizing the verdict for logs / errors:
+   *  - `NO_DOWNGRADE` — canonical truth fully preserved (or source had none).
+   *  - `PARTIAL_DOWNGRADE` — at least one signal lost but not all.
+   *  - `TOTAL_DOWNGRADE` — every program-level signal the source had was lost.
+   */
+  verdict: 'NO_DOWNGRADE' | 'PARTIAL_DOWNGRADE' | 'TOTAL_DOWNGRADE'
+}
+
+/**
+ * Pure granular downgrade detector. Compares two `CanonicalProgramTruthPresence`
+ * verdicts (typically the source program vs. the normalized program) and
+ * reports exactly which canonical signals were lost during normalization.
+ *
+ * Symmetric definition of "lost":
+ *   - source flag is true AND normalized flag is false.
+ *   - never the other direction (normalize cannot legitimately *add*
+ *     canonical truth — there is no shadow builder authorized to do so).
+ *
+ * Per-session coverage is the count diff: if source had 5 sessions with
+ * canonical truth and normalized has 3, that is `lostCanonicalSessionCoverage = 2`,
+ * which is a partial downgrade even when all program-level signals are intact.
+ */
+export function detectCanonicalProgramTruthDowngrade(
+  source: CanonicalProgramTruthPresence,
+  normalized: CanonicalProgramTruthPresence,
+): CanonicalProgramTruthDowngrade {
+  const lostMethodStructures =
+    source.hasMethodStructures && !normalized.hasMethodStructures
+  const lostDoctrineBlockResolution =
+    source.hasDoctrineBlockResolution && !normalized.hasDoctrineBlockResolution
+  const lostMethodMaterializationSummary =
+    source.hasMethodMaterializationSummary &&
+    !normalized.hasMethodMaterializationSummary
+  const lostDoctrineBlockResolutionRollup =
+    source.hasDoctrineBlockResolutionRollup &&
+    !normalized.hasDoctrineBlockResolutionRollup
+  const sourceSessionsWithCanonicalTruth = Object.values(
+    source.sessionsWithCanonicalTruth,
+  ).filter(Boolean).length
+  const normalizedSessionsWithCanonicalTruth = Object.values(
+    normalized.sessionsWithCanonicalTruth,
+  ).filter(Boolean).length
+  const lostCanonicalSessionCoverage = Math.max(
+    0,
+    sourceSessionsWithCanonicalTruth - normalizedSessionsWithCanonicalTruth,
+  )
+  const lostFlags = [
+    lostMethodStructures,
+    lostDoctrineBlockResolution,
+    lostMethodMaterializationSummary,
+    lostDoctrineBlockResolutionRollup,
+  ]
+  const lostCount = lostFlags.filter(Boolean).length
+  const sourceProgramLevelSignalCount = [
+    source.hasMethodStructures,
+    source.hasDoctrineBlockResolution,
+    source.hasMethodMaterializationSummary,
+    source.hasDoctrineBlockResolutionRollup,
+  ].filter(Boolean).length
+  const isDowngrade = lostCount > 0 || lostCanonicalSessionCoverage > 0
+  let verdict: CanonicalProgramTruthDowngrade['verdict']
+  if (!isDowngrade) verdict = 'NO_DOWNGRADE'
+  else if (
+    sourceProgramLevelSignalCount > 0 &&
+    lostCount === sourceProgramLevelSignalCount
+  )
+    verdict = 'TOTAL_DOWNGRADE'
+  else verdict = 'PARTIAL_DOWNGRADE'
+  return {
+    lostMethodStructures,
+    lostDoctrineBlockResolution,
+    lostMethodMaterializationSummary,
+    lostDoctrineBlockResolutionRollup,
+    lostCanonicalSessionCoverage,
+    sourceSessionsWithCanonicalTruth,
+    normalizedSessionsWithCanonicalTruth,
+    isDowngrade,
+    verdict,
+  }
+}
+
+/**
+ * Returns true when the runtime is a development/test build OR an explicit
+ * strict-mode flag is set. Mirrors `lib/env-validation.ts`'s
+ * `process.env.NODE_ENV !== 'production'` convention. Wrapped in a try so
+ * runtimes that lack `process` (e.g. pre-bundle edge eval) cannot crash.
+ */
+export function shouldThrowOnCanonicalTruthDowngrade(): boolean {
+  try {
+    const nodeEnv =
+      typeof process !== 'undefined' && process?.env
+        ? process.env.NODE_ENV
+        : undefined
+    if (nodeEnv !== 'production') return true
+    const strict =
+      typeof process !== 'undefined' && process?.env
+        ? process.env.SPARTANLAB_STRICT_CANONICAL_TRUTH
+        : undefined
+    return strict === 'true' || strict === '1'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Call-site shim used by `normalizeProgramForDisplay` (and any future load
+ * corridor checkpoint). Throws a precise `Error` in dev/strict mode when
+ * canonical truth is downgraded, otherwise emits a structured
+ * `console.error` so production logs still capture the regression without
+ * crashing customer renders.
+ *
+ * Will NOT throw / error when:
+ *  - `downgrade.isDowngrade === false` (canonical truth preserved)
+ *  - source had no canonical truth at all (legacy program)
+ */
+export function assertCanonicalProgramTruthPreserved(args: {
+  source: CanonicalProgramTruthPresence
+  normalized: CanonicalProgramTruthPresence
+  downgrade: CanonicalProgramTruthDowngrade
+  context?: string
+}): void {
+  const { source, normalized, downgrade, context } = args
+  if (!downgrade.isDowngrade) return
+  if (!source.programHasAnyCanonicalTruth) return // legacy: nothing to preserve
+  const lostList = [
+    downgrade.lostMethodStructures && 'methodStructures',
+    downgrade.lostDoctrineBlockResolution && 'doctrineBlockResolution',
+    downgrade.lostMethodMaterializationSummary && 'methodMaterializationSummary',
+    downgrade.lostDoctrineBlockResolutionRollup && 'doctrineBlockResolutionRollup',
+    downgrade.lostCanonicalSessionCoverage > 0 &&
+      `sessionCoverage(-${downgrade.lostCanonicalSessionCoverage})`,
+  ]
+    .filter(Boolean)
+    .join(',')
+  const message =
+    `PHASE_4W_CANONICAL_TRUTH_DOWNGRADE: ${context ?? 'normalizeProgramForDisplay'} ` +
+    `stripped canonical program truth. Source verdict: ${source.verdict}. ` +
+    `Normalized verdict: ${normalized.verdict}. Lost: [${lostList}]. ` +
+    `Downgrade kind: ${downgrade.verdict}.`
+  if (shouldThrowOnCanonicalTruthDowngrade()) {
+    throw new Error(message)
+  }
+  // Production fallback: structured error log instead of crash.
+  // eslint-disable-next-line no-console
+  console.error('[PHASE_4W_CANONICAL_TRUTH_DOWNGRADE]', {
+    message,
+    source,
+    normalized,
+    downgrade,
+  })
+}
+
+// =============================================================================
 // [PHASE 4U] CANONICAL METHOD BODY RENDER RESOLUTION
 // -----------------------------------------------------------------------------
 // Phase 4S/4T proved that canonical `methodStructures` reach the card surface

@@ -1411,7 +1411,7 @@ function phaseQ(): BlueprintPhase {
       'Answer the honest question — "are the SpartanLab doctrine rules actually shaping the generated program, or just being surfaced as proof / explanation metadata after the fact?" Phase Q is a pure deterministic READER that runs AFTER Phase P on the final adapted program. It reads existing artifacts (program.styleMetadata, weeklyMethodBudgetPlan, methodStructureRollup, session.styleMetadata, session.methodStructures, session.doctrineParticipation, session.doctrineBlockResolution, session.methodDecision, session.qualityAudit, exercise.performanceAdaptation, exercise.qualityAudit) and emits a structured `doctrineUtilizationTrace` on both program AND each session that classifies each of the 5 doctrine categories (skill / method / recovery / prescription / sessionLength) into one of six honest states: ELIGIBLE_AND_APPLIED, ELIGIBLE_BUT_SUPPRESSED, NOT_ELIGIBLE, BLOCKED_BY_UNSUPPORTED_RUNTIME, ACKNOWLEDGED_ONLY, POST_HOC_ONLY. The Program card renders one compact line from the trace per session so the user can see — without clutter — which days had genuinely causal doctrine and which had only audit/proof.',
     status: 'COMPLETE',
     nextAction:
-      'Phase Q proved doctrine is PARTIALLY CAUSAL. Skill, method (cluster / superset / circuit / density / top_set / drop_set / rest_pause via builder + Phase 4M corridor), recovery (builder gates + Phase J/K + Phase P overlap warning), and prescription (builder dose from METHOD_PROFILES + Phase L/M/N/O adaptation + Phase P RPE cap) are all causal — they shape the final program at the BUILDER or ADAPTATION stage. The weak link is sessionLength: Phase P attaches a realism warning, but the Full / 45 / 30 minute structural lock is not yet enforced. Recommended next phase is **Phase R — Session-Length Truth Lock**, which will make the mode actually compress structure (exercise count, set count, accessory inclusion, rest density) instead of acting as a label with a warning. Cluster blocking is ALSO honest: cluster fires only when methodPrefsForGrouping includes `cluster_sets` AND there is a late-position accumulation candidate AND the weekly budget is not saturated AND the candidate score ≥ MIN_CLUSTER_SCORE. Default users without `cluster_sets` opted in will see ELIGIBLE_BUT_SUPPRESSED with `user_pref_not_set` — which is the truth.',
+      'Phase Q proved doctrine is PARTIALLY CAUSAL. Skill, method, recovery, and prescription are causal at the BUILDER / ADAPTATION stage. The session-length weakness Phase Q surfaced has now been repaired by **Phase R — Session-Length Truth Lock** (see phase R below): a pure deterministic reader runs BEFORE Phase Q on every program, stamps `session.sessionLengthTruth` over the existing `session.variants[]` trio (Full / 45 / 30 from `generateSessionVariants`), and Phase Q\'s `evaluateSessionLength` now reads that stamp first — crediting ELIGIBLE_AND_APPLIED when shorts are STRUCTURALLY_REAL (deferred exercises and/or set deltas vs Full), ELIGIBLE_BUT_SUPPRESSED when shorts exist only at label parity, and NOT_ELIGIBLE when shorts are not applicable for the day. Cluster blocking remains BLOCKED_BY_UNSUPPORTED_RUNTIME by design — Phase R does NOT touch the live workout reducer.',
     subtasks: [
       {
         id: 'Q.Q1',
@@ -1544,11 +1544,215 @@ function phaseQ(): BlueprintPhase {
         title: 'Honest final verdict recorded',
         status: 'COMPLETE',
         evidence: [
-          'Verdict: PARTIALLY CAUSAL. Skill / method / recovery / prescription are causal at the builder or adaptation stage. SessionLength is acknowledged-only or post-hoc-only — Phase P attaches a realism warning but the structural compression lock is deferred. Cluster blocking is HONEST: when blocked, the rejection reason is specific (weekly budget saturated / user pref not set / no late-position candidate / skill pillar protected / tendon safety / feasibility gate failed). Recommended next phase: Phase R — Session-Length Truth Lock.',
+          'Verdict at Phase Q time: PARTIALLY CAUSAL. Skill / method / recovery / prescription causal at the builder or adaptation stage. SessionLength was previously acknowledged-only / post-hoc-only because Phase Q\'s evaluator only compared `session.estimatedMinutes` against `profileSnapshot.timeAvailability` and never inspected `session.variants[]`. Phase R has now repaired that disconnect: `session.sessionLengthTruth` is stamped before Phase Q runs, and `evaluateSessionLength` reads it first to credit STRUCTURALLY_REAL shorts as ELIGIBLE_AND_APPLIED. Cluster blocking remains HONEST and BLOCKED_BY_UNSUPPORTED_RUNTIME (live workout reducer cannot yet advance through intra-set cluster rest).',
         ],
-        remainingWork: [
-          'Phase R must make Full / 45 / 30 minute mode actually compress structure (exercise count, set count, accessory inclusion, rest density, finisher gating, estimated duration) instead of only attaching a warning chip when out of band.',
+        remainingWork: [],
+      },
+    ],
+  }
+}
+
+// =============================================================================
+// [PHASE-R] SESSION-LENGTH TRUTH LOCK
+// =============================================================================
+function phaseR(): BlueprintPhase {
+  return {
+    id: 'R',
+    title: 'Session-Length Truth Lock — Full / 45 / 30 Become Structural and Live-Workout Safe',
+    purpose:
+      'Make Full / 45 / 30 minute mode selection structurally real and authoritative end-to-end without rebuilding the program. Phase R is a pure deterministic READER over `session.variants[]` (already produced by `generateSessionVariants` in lib/session-compression-engine.ts) that stamps `session.sessionLengthTruth` and `program.sessionLengthTruth` so (a) Phase Q can credit session-length as ELIGIBLE_AND_APPLIED at the BUILDER stage when shorts are structurally real, (b) the Program card can render a one-line honest summary under the variant button row, and (c) the master-truth blueprint can audit the entire session-length corridor — variant emission, material distinctness, live-workout launch fingerprint, and live-workout safety — from a single stamped truth object. Phase R does NOT build a second program, does NOT mutate exercises / sets / RPE / rest / methods / ordering, does NOT touch the live workout reducer, does NOT change Prisma, does NOT add dependencies.',
+    status: 'COMPLETE',
+    nextAction:
+      'No remaining Phase R work. Recommended next phase: **Phase S — UI Trust Cleanup / Proof Clutter Compression**, which can now safely consolidate the per-card stack of Phase J/K/L/M/N/O/P/Q/R proof lines into a single trust-rollup chip with a "show details" affordance. Phase R deliberately added only ONE compact line (`session.sessionLengthTruth.summary`) under the Phase Q line to maintain verification visibility; Phase S can compress them all together once the user has confirmed Phase R causality on screen.',
+    subtasks: [
+      {
+        id: 'R.R1',
+        title: 'Existing Full / 45 / 30 controls and ownership located',
+        status: 'COMPLETE',
+        evidence: [
+          'UI controls live in `components/programs/AdaptiveSessionCard.tsx` (variant button row at L3340–3470). State is owned by the card via `selectedVariant` (idx 0 = Full, 1 = 45 Min, 2 = 30 Min). The card derives a single canonical `selectedSessionContract` (L578–627) which builds `selectedLaunchUrl` (mode + variant + day + week query params) and is the ONE owner of what Full / 45 / 30 means for that card. Variants themselves are stored on `session.variants[]` and are emitted by `generateSessionVariants` in `lib/session-compression-engine.ts` (L972), called from `lib/adaptive-program-builder.ts` post-grouping-materialization at L14771 (regenerateVariants from decoratedFullSelection so 45/30 inherit atomic-unit awareness).',
         ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R2',
+        title: 'Root cause of Phase Q "PARTIALLY CAUSAL — sessionLength suppressed" identified',
+        status: 'COMPLETE',
+        evidence: [
+          'The variants ARE structurally real upstream — `generateSessionVariants` calls `compressSession`, runs `isVariantLaunchable` to drop hollow shorts, runs `areVariantsMateriallyDistinct` to drop label-parity shorts, monotonicity-checks Full ≥ 45 ≥ 30, and regenerates after grouping materialization so atomic units survive. The corridor to live workout is also real — the card stamps `LaunchFingerprintPayload` via `stampLaunchFingerprint` and the route reads it via `readLaunchFingerprint`. What was missing was an HONEST TRACE that Phase Q (and the card) could read to credit the structural compression. Phase Q\'s `evaluateSessionLength()` only compared `session.estimatedMinutes` against `profileSnapshot.timeAvailability` (±20% band). It never inspected `session.variants[]`. So even when the shorts compressed Full → 45 → 30 with deferred accessories and reduced sets, Phase Q reported sessionLength as ACKNOWLEDGED_ONLY / POST_HOC_ONLY. Phase R repaired exactly that disconnect — no new builder, no new normalizer, no live-workout changes.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R3',
+        title: 'Authoritative Phase R resolver exists',
+        status: 'COMPLETE',
+        evidence: [
+          '`lib/program/session-length-truth-contract.ts` exposes `runSessionLengthTruthContract(program)`. It reads `session.variants[]`, computes a per-variant truth receipt (`actualEstimatedMinutes` recomputed from row sets × setSeconds + rest, `labelDriftWarning` when target/actual drift exceeds ±5 min, `deferredExerciseNames` by id-difference vs Full, `priorityPreservation` flags for primary skill anchor / secondary or hybrid / strength support, `distinctVsFull` mirroring the engine\'s distinctness signals, `liveWorkoutLaunchable` mirroring `isVariantLaunchable`), aggregates per session into a verdict (STRUCTURALLY_REAL / SHORTS_AT_LABEL_PARITY / NO_LAUNCHABLE_SHORTS / LEGACY_NO_VARIANTS), and rolls up across the program (STRUCTURALLY_REAL_ACROSS_PROGRAM / STRUCTURALLY_REAL_PARTIAL / SHORTS_PRESENT_BUT_LABEL_PARITY / NO_SHORTS_NEEDED / NO_VARIANTS_AVAILABLE).',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R4',
+        title: 'No duplicate program builder',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase R derives ALL truth from canonical `session.variants[]` (already emitted by the existing engine) and from canonical `session.exercises[]`. It does not call `compressSession`, does not call `generateSessionVariants`, does not pick exercises, does not write to `session.exercises`, does not write to `variant.selection`, does not change `variant.duration`. The actualEstimatedMinutes field is exposed ALONGSIDE `variant.duration`, never overwriting it.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R5',
+        title: 'Full mode preserved as canonical',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase R never modifies the canonical full session. The Full variant entry (idx 0) in `session.variants[]` is preserved verbatim. `selectedSessionContract.isFullSession` (idx 0) continues to drive the card body; `buildSelectedVariantMain(session, 0, "full")` still produces the canonical Full body.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R6',
+        title: '45 mode is structurally real when applicable',
+        status: 'COMPLETE',
+        evidence: [
+          '`generateSessionVariants` at L1030–1095 runs `compressSession` with `targetMinutes: 45, preserveSkillWork: true`, runs `isVariantLaunchable` to reject hollow bodies, and runs `areVariantsMateriallyDistinct` against Full to reject cosmetic shorts. Phase R reads the surviving 45 Min variant\'s body and verifies the structural truth: `deferredExerciseNames.length`, `setDeltaTotal`, `priorityPreservation.primarySkillAnchorPreserved`. When all signals align, Phase R stamps `verdict: STRUCTURALLY_REAL`.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R7',
+        title: '30 mode is structurally real when applicable',
+        status: 'COMPLETE',
+        evidence: [
+          '`generateSessionVariants` at L1098–1158 runs `compressSession` with `targetMinutes: 30, preserveSkillWork: true`, applies the same launchability + material-distinctness gates AND a second material-distinctness check vs the emitted 45 Min variant so the 30 Min tab cannot duplicate either. Phase R reads the surviving 30 Min variant exactly the same way it reads 45 Min and contributes to the same verdict.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R8',
+        title: 'Priority trimming is doctrine-based',
+        status: 'COMPLETE',
+        evidence: [
+          'Compression itself is doctrine-priority-based in `lib/session-compression-engine.ts`: `compressMain` honors `preserveSkillWork: true`, captures `SessionIdentitySnapshot` BEFORE compression to preserve `primarySkillExpressions / secondarySkillExpressions / mainProgressionExercises / strengthSupportExercises`, then trims generic accessories first. Phase R verifies the result by detecting `category === "skill"` rows and `selectionReason` markers (`"primary"`, `"skill progression"`, `"secondary"`, `"hybrid"`, `"expression"`, `"support"`, `"strength"`) on each variant\'s surviving rows — when the primary skill anchor is missing in any short, `rollup.primarySkillAnchorPreservedAcrossShorts` becomes false and the card surfaces the honest mismatch.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R9',
+        title: 'Rest / density bounded by doctrine safety',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase R does not change rest or density itself. It uses the existing rest values written onto rows by the builder (`restSeconds`) and Phase L/M/N/O/P (which respect MIN_RPE_FLOOR, MIN_REST_HEAVY, etc). When `restSeconds` is missing on a row, Phase R falls back to a conservative default of 90s (DEFAULT_REST_SECONDS) for the actualEstimatedMinutes calculation only — it never WRITES that fallback back to the row.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R10',
+        title: 'Method compatibility respected — no forced methods',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase R never sets `appliedMethod`, never writes `setExecutionMethod`, never writes `methodLabel`, never modifies `clusterDecision`. The method decision remains owned by the builder + Phase 4M corridor + Phase 4P materialization. Phase R only READS `selectionReason` for priority detection and READS row identity (`exercise.id`, `exercise.name`) for deferred-name detection.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R11',
+        title: 'Cluster remains BLOCKED_BY_UNSUPPORTED_RUNTIME (correctly)',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase R does not reclassify cluster. The Phase Q cluster verdict remains BLOCKED_BY_UNSUPPORTED_RUNTIME because `lib/workout/live-workout-machine.ts` still cannot safely advance through intra-set cluster rest (the runtime contracts at `lib/workout/live-grouped-execution-contract.ts` and `lib/workout/execution-unit-contract.ts` enumerate the families they execute and cluster is intentionally not yet on that list). Phase R\'s scope is strictly the variant trio, not the method runtime.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R12',
+        title: 'Doctrine utilization trace updated honestly',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase Q\'s `evaluateSessionLength()` (lib/program/doctrine-utilization-contract.ts) now reads `session.sessionLengthTruth` first. STRUCTURALLY_REAL → ELIGIBLE_AND_APPLIED with structuralEffect including the per-session counts (distinct shorts, deferred accessories, set delta, primary-skill anchor flag). SHORTS_AT_LABEL_PARITY → ELIGIBLE_BUT_SUPPRESSED with blockerReason `short_variants_at_label_parity`. NO_LAUNCHABLE_SHORTS → NOT_ELIGIBLE with reason "full session only — short modes not applicable for this day". LEGACY_NO_VARIANTS falls through to the pre-existing fallback so older program objects still produce a trace.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R13',
+        title: 'Estimated minutes derived from real structure',
+        status: 'COMPLETE',
+        evidence: [
+          '`variantEstimatedMinutes()` in the contract sums `rowEstimatedSeconds` over every main row: `sets × setSeconds + max(sets-1, 0) × restSeconds`, with safe fallbacks (DEFAULT_SET_SECONDS = 45s, DEFAULT_REST_SECONDS = 90s) when explicit fields are missing. The result is rounded to the nearest minute and stored as `actualEstimatedMinutes` on the variant truth receipt. When `Math.abs(targetMinutes - actualEstimatedMinutes) > 5` the receipt sets `labelDriftWarning: true` so the card renders an honest "Estimated 36 min because primary skill + safe rest minimums prevent further compression" instead of pretending the target lands exactly. `variant.duration` itself is never overwritten — actual lives alongside target.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R14',
+        title: 'Program card reads resolved session — visible body matches mode',
+        status: 'COMPLETE',
+        evidence: [
+          'AdaptiveSessionCard already routes the visible body through `selectedDisplayContract.resolvedBody` (built by `buildSelectedVariantMain`) and the visible-launch-body path uses `fullVisibleExercises` from `buildFullVisibleRoutineExercises`. Phase R does not change those paths — it adds one compact text line under the existing Phase Q summary that reads `session.sessionLengthTruth.summary`. The `data-phase-r-session-length-truth` and `data-phase-r-verdict` attributes are written for tests/dev probes. NO_LAUNCHABLE_SHORTS and LEGACY_NO_VARIANTS are intentionally suppressed in the UI to avoid noise on cards that only render Full anyway.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R15',
+        title: 'Start Workout handoff matches selected mode',
+        status: 'COMPLETE',
+        evidence: [
+          'The card already routes Start Workout via `selectedSessionContract.selectedLaunchUrl` (mode + variant + day + week URL params) and stamps a launch fingerprint via `stampLaunchFingerprint(LaunchFingerprintPayload)`. The route reads via `readLaunchFingerprint(day, variantIndex)` and diffs it against the finalSession it builds. Phase R does NOT modify this corridor — it documents it via `sessionLengthTruth.liveWorkoutHandoff: { mechanism: "launch_fingerprint", payloadCompatibility: "OK" | "NO_VARIANTS" | "COSMETIC_ONLY", launchableVariantCount }`. So when the user picks 45 / 30 the route opens the same compressed body the card displayed, with parity drift surfacing as the existing PARITY chip — not as a silent full-session fallback.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R16',
+        title: 'Resume / active session safety preserved',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase R never reads or writes the live workout reducer state (`lib/workout/live-workout-machine.ts`). Resume/active session logic continues to read `LIVE_WORKOUT_STATE` from session storage and `selectedVariantIndex` from URL params (the existing card → route corridor). Phase R\'s stamps live in the program JSON, not the live workout state, so an in-flight workout cannot be corrupted by a Phase R re-stamp from a regenerate.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R17',
+        title: 'Save / load / normalize safe',
+        status: 'COMPLETE',
+        evidence: [
+          '`session.sessionLengthTruth` and `program.sessionLengthTruth` are added as optional first-class fields on AdaptiveSession / AdaptiveProgram (matching the qualityAudit / doctrineUtilizationTrace pattern). They are JSON-safe (only strings, numbers, booleans, plain arrays/objects). The existing `...session` and `...program` spreads in `lib/program-state.ts` (L88, L148, L176) and `normalizeProgramForDisplay` carry them through unmodified. Canonical full session is preserved (Phase R never overwrites `variant.selection`, never overwrites `session.exercises`).',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R18',
+        title: 'Phase J/K/L/M/N/O/P/Q preserved',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase R runs in BOTH ingress paths between Phase P and Phase Q via try/catch — failure is non-blocking. Phase J/K weekly distribution proof is untouched. Phase L/M/N performance feedback overlay still mutates targetRPE / sets exactly as before. Phase O trend stamps still flow through. Phase P quality audit corrections + carryover attribution + RPE cap are preserved verbatim. Phase Q\'s skill / method / recovery / prescription evaluators are preserved verbatim — only `evaluateSessionLength` was extended to read the new truth stamp first.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R19',
+        title: 'No UI clutter increase',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase R adds exactly ONE compact text line under the existing Phase Q line on each card, with the same neutral text treatment (text-[#A1A8B2] for STRUCTURALLY_REAL, italic muted for SHORTS_AT_LABEL_PARITY) so the card stays calm. NO_LAUNCHABLE_SHORTS and LEGACY_NO_VARIANTS are suppressed at render time. No new chip styles, no new buttons, no new modals, no major layout changes. Phase S — UI Trust Cleanup is the right time to consolidate the proof stack.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R20',
+        title: 'Build / runtime health',
+        status: 'COMPLETE',
+        evidence: [
+          'No new dependencies. No Prisma changes. The contract uses only TypeScript primitives + already-existing fields. The IIFE rendering block in AdaptiveSessionCard is guarded by typeof checks so a malformed or absent stamp renders nothing. Both the server generator try/catch and the client overlay try/catch absorb any contract failure non-blockingly so a Phase R bug can never break the success path.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'R.R21',
+        title: 'Honest final verdict recorded',
+        status: 'COMPLETE',
+        evidence: [
+          'Verdict: STRUCTURALLY_REAL when the program contains at least one launchable distinct short with deferred exercises and/or set deltas vs Full. STRUCTURALLY_REAL_PARTIAL when only some applicable days produced structurally distinct shorts. SHORTS_PRESENT_BUT_LABEL_PARITY when shorts exist but only differ on duration. NO_SHORTS_NEEDED when full sessions are already at or below the short thresholds. NO_VARIANTS_AVAILABLE for legacy program objects. The verdict is computed deterministically from existing structural truth — no fake "applied" states, no inflated claims. Phase Q now correctly classifies session-length as ELIGIBLE_AND_APPLIED when Phase R reports STRUCTURALLY_REAL on the day, lifting the pre-Phase-R "partially causal" weakness that motivated this phase.',
+        ],
+        remainingWork: [],
       },
     ],
   }
@@ -1637,6 +1841,16 @@ export function buildMasterTruthConnectionBlueprintStatus(
     // overwrite anything earlier. The trace answers the user's question:
     // "is doctrine actually causal, or just acknowledged?"
     phaseQ(),
+    // [PHASE-R] Session-Length Truth Lock. Pure deterministic READER over
+    // `session.variants[]` (already produced by `generateSessionVariants`
+    // at build time). Stamps `session.sessionLengthTruth` and
+    // `program.sessionLengthTruth` BEFORE Phase Q runs so Phase Q's
+    // `evaluateSessionLength` can credit STRUCTURALLY_REAL shorts as
+    // ELIGIBLE_AND_APPLIED at the BUILDER stage. Does NOT build or mutate
+    // — repairs the previous PARTIALLY_CAUSAL session-length verdict by
+    // exposing the structural compression that was already happening
+    // upstream, never by inventing it.
+    phaseR(),
   ]
 
   // Active phase = the first phase whose status is not COMPLETE / DO_NOT_REDO.

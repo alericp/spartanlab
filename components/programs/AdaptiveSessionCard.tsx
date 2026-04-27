@@ -2537,6 +2537,55 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 </p>
               )
             })()}
+            {/* ============================================================
+                [PHASE-R] SESSION-LENGTH TRUTH — one compact line under the
+                Phase Q summary. Reads `session.sessionLengthTruth.summary`
+                written by lib/program/session-length-truth-contract.ts. The
+                stamp is the honest answer to "are Full / 45 / 30 actually
+                structurally different, or label-only?" For structurally
+                real shorts the line reads "Session length: 3 modes
+                structurally distinct · shorts drop 2 accessories · primary
+                skill anchor preserved." For label-parity shorts it surfaces
+                that honestly. Renders nothing for legacy programs that
+                never went through Phase R, so old saved programs do not
+                regress visually. Same neutral text treatment as the Phase Q
+                line so the card stays calm.
+                ============================================================ */}
+            {(() => {
+              const slt = (session as unknown as {
+                sessionLengthTruth?: {
+                  verdict?:
+                    | 'STRUCTURALLY_REAL'
+                    | 'SHORTS_AT_LABEL_PARITY'
+                    | 'NO_LAUNCHABLE_SHORTS'
+                    | 'LEGACY_NO_VARIANTS'
+                  summary?: string
+                }
+              }).sessionLengthTruth
+              if (!slt || !slt.summary) return null
+              // Suppress the "full only" / "legacy" lines on cards that
+              // already render only one variant — those would be noise.
+              if (
+                slt.verdict === 'NO_LAUNCHABLE_SHORTS' ||
+                slt.verdict === 'LEGACY_NO_VARIANTS'
+              ) {
+                return null
+              }
+              const tone =
+                slt.verdict === 'STRUCTURALLY_REAL'
+                  ? 'text-[#A1A8B2]'
+                  : 'text-[#9CA3AF] italic'
+              return (
+                <p
+                  className={`mt-1 text-[11px] leading-snug ${tone}`}
+                  data-phase-r-session-length-truth="true"
+                  data-phase-r-verdict={slt.verdict}
+                  title={slt.summary}
+                >
+                  {slt.summary}
+                </p>
+              )
+            })()}
             {/* Compact meta line - time + exercise count only */}
             <div className="flex items-center gap-3 mt-1 text-xs text-[#6A6A6A]">
               <span className="flex items-center gap-1">

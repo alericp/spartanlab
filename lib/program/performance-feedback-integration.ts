@@ -39,6 +39,11 @@ import {
 // Phase P in BOTH ingress paths so the Program card always renders honest,
 // stamped causality data instead of recomputing it.
 import { runDoctrineUtilizationContract } from './doctrine-utilization-contract'
+// [PHASE-R] Session-length truth lock. Pure reader over `session.variants[]`.
+// Runs AFTER Phase P, BEFORE Phase Q in BOTH ingress paths so Phase Q can
+// credit session-length as ELIGIBLE_AND_APPLIED when shorts are structurally
+// real. See lib/program/session-length-truth-contract.ts.
+import { runSessionLengthTruthContract } from './session-length-truth-contract'
 import type { AdaptiveProgram } from '../adaptive-program-builder'
 
 // =============================================================================
@@ -356,14 +361,29 @@ export function applyPerformanceFeedbackOverlay<T extends PhaseLProgramShape>(
     console.log('[phase-p-client-overlay-failed]', { error: String(err) })
   }
 
+  // [PHASE-R] Stamp `sessionLengthTruth` over `session.variants[]` BEFORE
+  // Phase Q so the doctrine utilization trace can credit session-length as
+  // ELIGIBLE_AND_APPLIED when shorts are structurally real. Pure reader,
+  // non-blocking. If the contract throws we keep the Phase P output exactly
+  // as it is — the truth stamp is proof, not a builder.
+  let postPhaseR: T = postPhaseP
+  try {
+    const phaseRResult = runSessionLengthTruthContract(
+      postPhaseP as unknown as AdaptiveProgram,
+    )
+    postPhaseR = phaseRResult.program as unknown as T
+  } catch (err) {
+    console.log('[phase-r-client-overlay-failed]', { error: String(err) })
+  }
+
   // [PHASE-Q] Stamp the doctrine utilization trace on top of the
-  // post-Phase-P program. Pure reader; non-blocking. If the contract throws
-  // we keep the Phase P output exactly as it is — the trace is proof, not a
+  // post-Phase-R program. Pure reader; non-blocking. If the contract throws
+  // we keep the Phase R output exactly as it is — the trace is proof, not a
   // builder.
-  let postPhaseQ: T = postPhaseP
+  let postPhaseQ: T = postPhaseR
   try {
     const phaseQResult = runDoctrineUtilizationContract(
-      postPhaseP as unknown as AdaptiveProgram,
+      postPhaseR as unknown as AdaptiveProgram,
       { nowIso: options?.nowIso },
     )
     postPhaseQ = phaseQResult.program as unknown as T

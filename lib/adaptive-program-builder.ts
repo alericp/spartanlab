@@ -1387,6 +1387,22 @@ export interface AdaptiveSession {
   // See lib/program/doctrine-utilization-contract.ts.
   // ==========================================================================
   doctrineUtilizationTrace?: import('./program/doctrine-utilization-contract').SessionDoctrineUtilizationTrace
+  // ==========================================================================
+  // [PHASE-R] SESSION-LENGTH TRUTH STAMP
+  // Authoritative truth receipt over `session.variants[]`: did Full / 45 / 30
+  // actually structurally compress, or are the shorts only label-parity? For
+  // each launchable variant the stamp records actual estimated minutes
+  // (re-computed from the variant body, not the label), the exercise names
+  // deferred vs Full, set deltas, priority preservation flags, distinctness
+  // vs Full, and a payload-compatibility classification of the live workout
+  // launch corridor. Phase Q reads this stamp to credit session-length as
+  // ELIGIBLE_AND_APPLIED when shorts are structurally real. Pure metadata —
+  // Phase R never mutates exercises, sets, RPE, rest, methods, or ordering.
+  // Round-trips through the existing `...session` spread. Optional +
+  // JSON-safe.
+  // See lib/program/session-length-truth-contract.ts.
+  // ==========================================================================
+  sessionLengthTruth?: import('./program/session-length-truth-contract').SessionLengthTruthStamp
 }
 
 export interface AdaptiveExercise {
@@ -2475,6 +2491,17 @@ exerciseExplanations?: {
   // See lib/program/doctrine-utilization-contract.ts.
   // ===========================================================================
   doctrineUtilizationTrace?: import('./program/doctrine-utilization-contract').ProgramDoctrineUtilizationTrace
+  // ===========================================================================
+  // [PHASE-R] PROGRAM-LEVEL SESSION-LENGTH TRUTH ROLLUP
+  // Aggregates per-session Phase R stamps into program counts and one
+  // `programVerdict` of STRUCTURALLY_REAL_ACROSS_PROGRAM /
+  // STRUCTURALLY_REAL_PARTIAL / SHORTS_PRESENT_BUT_LABEL_PARITY /
+  // NO_SHORTS_NEEDED / NO_VARIANTS_AVAILABLE. Pure metadata — Phase R never
+  // edits programs, sessions, or live workout state. Round-trips through
+  // the existing `...program` spread.
+  // See lib/program/session-length-truth-contract.ts.
+  // ===========================================================================
+  sessionLengthTruth?: import('./program/session-length-truth-contract').ProgramSessionLengthTruthStamp
 }
 
 // =============================================================================

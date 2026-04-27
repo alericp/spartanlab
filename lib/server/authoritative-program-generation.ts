@@ -61,6 +61,12 @@ import {
   programAlreadyHasServerAdaptationFor,
   type ServerWorkoutLogInput,
 } from './performance-history-context'
+// [PHASE-N] Durable evidence reader. Closes the Phase M-recommended gap:
+// generation now reads recent per-set evidence directly from Neon
+// (`workout_log_set_evidence`) when the route caller didn't supply
+// `recentWorkoutLogs`, AND merges Neon evidence with route-payload evidence
+// when both are present (deduped by workout log id).
+import { getRecentWorkoutSetEvidenceForGeneration } from './workout-set-evidence-reader'
 
 // ==========================================================================
 // [CORRIDOR_KILL_V4] Version fingerprint for cache/deploy proof
@@ -2437,6 +2443,11 @@ export async function executeAuthoritativeGeneration(
       changed: boolean
       evidenceHash: string
       verdict: string
+      // [PHASE-N] How the evidence corridor was sourced.
+      payloadLogCount: number
+      neonLogCount: number
+      mergedLogCount: number
+      neonReadStatus: string
       error?: string
     } = {
       attempted: false,
@@ -2451,17 +2462,73 @@ export async function executeAuthoritativeGeneration(
       changed: false,
       evidenceHash: '',
       verdict: 'PHASE_M_SKIPPED_NO_LOGS_SUPPLIED',
+      payloadLogCount: 0,
+      neonLogCount: 0,
+      mergedLogCount: 0,
+      neonReadStatus: 'not_attempted',
     }
 
     try {
       const incomingLogs: ServerWorkoutLogInput[] = Array.isArray(request.recentWorkoutLogs)
         ? request.recentWorkoutLogs
         : []
+      phaseMOverlayDiagnostic.payloadLogCount = incomingLogs.length
 
-      if (incomingLogs.length > 0) {
+      // [PHASE-N] Always attempt the durable Neon evidence read when we
+      // have a canonical user id, regardless of whether the route also
+      // forwarded recentWorkoutLogs. This makes server-initiated
+      // regenerations (and any future backend-only rebuild) performance-
+      // aware, and lets the merge step below pick the freshest evidence
+      // when both sources have data.
+      let neonLogs: ServerWorkoutLogInput[] = []
+      if (request.dbUserId) {
+        try {
+          const neonResult = await getRecentWorkoutSetEvidenceForGeneration({
+            userId: request.dbUserId,
+            programId: request.existingProgramId ?? null,
+            limit: 14,
+            sinceDays: 30,
+          })
+          phaseMOverlayDiagnostic.neonReadStatus = neonResult.status
+          phaseMOverlayDiagnostic.neonLogCount = neonResult.logs.length
+          neonLogs = neonResult.logs as ServerWorkoutLogInput[]
+        } catch (neonErr) {
+          phaseMOverlayDiagnostic.neonReadStatus = 'reader_threw'
+          console.log('[phase-n-evidence-reader-threw]', {
+            dbUserId: request.dbUserId,
+            error: String(neonErr),
+          })
+        }
+      } else {
+        phaseMOverlayDiagnostic.neonReadStatus = 'no_db_user_id'
+      }
+
+      // [PHASE-N] Merge route payload + Neon evidence, deduped by workout
+      // log id. The synthetic logs returned by the reader use the SAME id
+      // the localStorage WorkoutLog used (we wrote it in
+      // workout_log_set_evidence.workout_log_id), so dedupe by id is
+      // sufficient. Payload wins on collision because it can carry richer
+      // ambient fields the persistence corridor doesn't store (e.g.
+      // perceivedDifficulty), and the resolver uses those when present.
+      const mergedById = new Map<string, ServerWorkoutLogInput>()
+      for (const log of incomingLogs) {
+        if (log && typeof (log as { id?: unknown }).id === 'string') {
+          mergedById.set((log as { id: string }).id, log)
+        }
+      }
+      for (const log of neonLogs) {
+        const id = (log as { id?: unknown }).id
+        if (typeof id === 'string' && !mergedById.has(id)) {
+          mergedById.set(id, log)
+        }
+      }
+      const mergedLogs = Array.from(mergedById.values())
+      phaseMOverlayDiagnostic.mergedLogCount = mergedLogs.length
+
+      if (mergedLogs.length > 0) {
         phaseMOverlayDiagnostic.attempted = true
         const historyContext = buildPerformanceHistoryContext({
-          recentWorkoutLogs: incomingLogs,
+          recentWorkoutLogs: mergedLogs,
         })
         phaseMOverlayDiagnostic.hasEvidence = historyContext.hasEvidence
         phaseMOverlayDiagnostic.rawLogCount = historyContext.diagnostics.rawLogCount

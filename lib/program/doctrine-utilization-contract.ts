@@ -332,6 +332,26 @@ interface UtilizationSessionLike {
     corrections?: string[] | null
     conciseExplanation?: string | null
   } | null
+  // [PHASE-R] Session-length truth stamp produced before Phase Q runs.
+  // Phase Q reads this to credit session-length as ELIGIBLE_AND_APPLIED
+  // when shorts are structurally real (variants[] has launchable distinct
+  // shorts that drop exercises and/or sets vs Full).
+  sessionLengthTruth?: {
+    verdict?:
+      | 'STRUCTURALLY_REAL'
+      | 'SHORTS_AT_LABEL_PARITY'
+      | 'NO_LAUNCHABLE_SHORTS'
+      | 'LEGACY_NO_VARIANTS'
+      | null
+    summary?: string | null
+    rollup?: {
+      launchableVariantCount?: number | null
+      distinctShortCount?: number | null
+      deferredExerciseTotal?: number | null
+      setDeltaTotal?: number | null
+      primarySkillAnchorPreservedAcrossShorts?: boolean | null
+    } | null
+  } | null
   exercises?: Array<{
     name?: string | null
     category?: string | null
@@ -868,6 +888,80 @@ function evaluateSessionLength(
     ? session.qualityAudit!.corrections!
     : []
   const lengthWarning = corrections.includes('session_length_warning_attached')
+
+  // ===========================================================================
+  // [PHASE-R] CAUSAL CREDIT — read the Session-Length Truth Stamp first.
+  // Phase R runs BEFORE Phase Q in both ingress paths (server generator and
+  // client overlay). When Phase R reports STRUCTURALLY_REAL we have hard
+  // evidence that the variant trio actually compresses the session
+  // structurally (deferred exercises and/or set deltas), so session-length
+  // doctrine reaches ELIGIBLE_AND_APPLIED at the BUILDER stage. When Phase R
+  // reports SHORTS_AT_LABEL_PARITY we credit ELIGIBLE_BUT_SUPPRESSED with the
+  // honest reason — shorts exist but only differ on the duration label.
+  // When Phase R reports NO_LAUNCHABLE_SHORTS the session is single-mode by
+  // design (Full only); we surface NOT_ELIGIBLE because shorts are not
+  // applicable for this day. The pre-existing `estimatedMinutes` vs
+  // `timeAvailability` band check below is preserved as a fallback for
+  // legacy sessions that never went through Phase R.
+  // ===========================================================================
+  const slt = session.sessionLengthTruth
+  if (slt && typeof slt.verdict === 'string') {
+    if (slt.verdict === 'STRUCTURALLY_REAL') {
+      const distinctShorts = slt.rollup?.distinctShortCount ?? 0
+      const deferred = slt.rollup?.deferredExerciseTotal ?? 0
+      const setDelta = slt.rollup?.setDeltaTotal ?? 0
+      const skillPreserved = !!slt.rollup?.primarySkillAnchorPreservedAcrossShorts
+      const reasonParts: string[] = []
+      reasonParts.push(`${distinctShorts} structurally distinct short${distinctShorts === 1 ? '' : 's'}`)
+      if (deferred > 0) reasonParts.push(`${deferred} accessor${deferred === 1 ? 'y' : 'ies'} deferred`)
+      if (setDelta > 0) reasonParts.push(`${setDelta} set${setDelta === 1 ? '' : 's'} trimmed`)
+      if (skillPreserved) reasonParts.push('primary skill anchor preserved')
+      return {
+        ruleId: 'phaseQ:sessionLength:phase_r_structurally_real',
+        category: 'sessionLength',
+        eligible: true,
+        state: 'ELIGIBLE_AND_APPLIED',
+        appliedTo: 'sessionLength',
+        decisionStage: 'builder',
+        reason: `Phase R: ${reasonParts.join(', ')}.`,
+        structuralEffect: slt.summary || 'Variant trio structurally compresses Full → 45 / 30.',
+        sourceOfTruthObjectPath: 'session.sessionLengthTruth',
+        visibleProofText: 'Session-length doctrine applied (structural)',
+        dayNumbers: [dayNumber],
+      }
+    }
+    if (slt.verdict === 'SHORTS_AT_LABEL_PARITY') {
+      return {
+        ruleId: 'phaseQ:sessionLength:phase_r_label_parity',
+        category: 'sessionLength',
+        eligible: true,
+        state: 'ELIGIBLE_BUT_SUPPRESSED',
+        appliedTo: 'sessionLength',
+        decisionStage: 'builder',
+        reason: 'Phase R: short variants present but only differ by duration label — no exercise drop, no set delta.',
+        blockerReason: 'short_variants_at_label_parity',
+        sourceOfTruthObjectPath: 'session.sessionLengthTruth',
+        visibleProofText: 'Session length: shorts at label parity',
+        dayNumbers: [dayNumber],
+      }
+    }
+    if (slt.verdict === 'NO_LAUNCHABLE_SHORTS') {
+      return {
+        ruleId: 'phaseQ:sessionLength:phase_r_no_shorts_needed',
+        category: 'sessionLength',
+        eligible: false,
+        state: 'NOT_ELIGIBLE',
+        appliedTo: 'sessionLength',
+        decisionStage: 'builder',
+        reason: 'Phase R: full session only — short modes not applicable for this day.',
+        sourceOfTruthObjectPath: 'session.sessionLengthTruth',
+        visibleProofText: 'Session length: full only',
+        dayNumbers: [dayNumber],
+      }
+    }
+    // LEGACY_NO_VARIANTS falls through to the existing fallback so older
+    // program objects still produce a trace.
+  }
 
   if (lengthWarning) {
     return {

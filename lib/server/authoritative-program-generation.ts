@@ -91,6 +91,7 @@ import { runProgramQualityDoctrineAudit } from '@/lib/program/program-quality-do
 // methods, or any prior phase output. The trace is the answer to the user's
 // "is doctrine actually causal?" question — it does not become a builder.
 import { runDoctrineUtilizationContract } from '@/lib/program/doctrine-utilization-contract'
+import { runSessionLengthTruthContract } from '@/lib/program/session-length-truth-contract'
 
 // ==========================================================================
 // [CORRIDOR_KILL_V4] Version fingerprint for cache/deploy proof
@@ -2717,6 +2718,69 @@ export async function executeAuthoritativeGeneration(
       ...phasePAuditDiagnostic,
     })
     markStage('phase_p_quality_audit_done')
+
+    // ==========================================================================
+    // [PHASE-R] SESSION-LENGTH TRUTH LOCK
+    // Runs AFTER Phase P, BEFORE Phase Q. Pure reader over
+    // `session.variants[]` (already produced by `generateSessionVariants` at
+    // build time). Stamps `session.sessionLengthTruth` and
+    // `program.sessionLengthTruth` so Phase Q can credit session-length as
+    // ELIGIBLE_AND_APPLIED when shorts are structurally real, and the card
+    // can render an honest one-line summary under the variant button row.
+    // Never mutates exercises, sets, RPE, rest, methods, or ordering. Failure
+    // is non-blocking — the contract returns safely or the try/catch absorbs
+    // the error and Phase Q proceeds with its existing
+    // `evaluateSessionLength` fallback.
+    // ==========================================================================
+    const phaseRSessionLengthDiagnostic: {
+      attempted: boolean
+      stamped: boolean
+      stampedSessions: number
+      structurallyReal: number
+      labelParity: number
+      noLaunchableShorts: number
+      legacyNoVariants: number
+      programVerdict: string
+      summary: string
+      error?: string
+    } = {
+      attempted: false,
+      stamped: false,
+      stampedSessions: 0,
+      structurallyReal: 0,
+      labelParity: 0,
+      noLaunchableShorts: 0,
+      legacyNoVariants: 0,
+      programVerdict: 'PHASE_R_NOT_ATTEMPTED',
+      summary: '',
+    }
+    try {
+      phaseRSessionLengthDiagnostic.attempted = true
+      const phaseRResult = runSessionLengthTruthContract(program)
+      program = phaseRResult.program as AdaptiveProgram
+      phaseRSessionLengthDiagnostic.stamped = true
+      phaseRSessionLengthDiagnostic.stampedSessions = phaseRResult.audit.stampedSessions
+      phaseRSessionLengthDiagnostic.structurallyReal = phaseRResult.audit.structurallyReal
+      phaseRSessionLengthDiagnostic.labelParity = phaseRResult.audit.labelParity
+      phaseRSessionLengthDiagnostic.noLaunchableShorts = phaseRResult.audit.noLaunchableShorts
+      phaseRSessionLengthDiagnostic.legacyNoVariants = phaseRResult.audit.legacyNoVariants
+      phaseRSessionLengthDiagnostic.programVerdict = phaseRResult.audit.programVerdict
+      phaseRSessionLengthDiagnostic.summary = phaseRResult.audit.summary
+    } catch (lengthErr) {
+      phaseRSessionLengthDiagnostic.error = String(lengthErr)
+      phaseRSessionLengthDiagnostic.programVerdict = 'PHASE_R_TRUTH_FAILED_NON_BLOCKING'
+      console.log('[phase-r-session-length-truth-failed]', {
+        generationIntent: request.generationIntent,
+        triggerSource: request.triggerSource,
+        error: String(lengthErr),
+      })
+    }
+    console.log('[phase-r-session-length-truth-lock]', {
+      generationIntent: request.generationIntent,
+      triggerSource: request.triggerSource,
+      ...phaseRSessionLengthDiagnostic,
+    })
+    markStage('phase_r_session_length_truth_done')
 
     // ==========================================================================
     // [PHASE-Q] DOCTRINE RULE UTILIZATION / CAUSAL APPLICATION TRACE

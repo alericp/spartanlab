@@ -21385,10 +21385,10 @@ return explanations.length > 0 ? explanations : undefined
       causalChallenge: phase4hCausalChallengeForMatrix,
       athleteInputs: inputs as unknown as Record<string, unknown>,
       // [PHASE 4I] forward materializer output so the matrix's
-      // cooldown_flexibility row reflects real materialization.
-      cooldownFlexibilityMaterialization: phase4iFlexibilityMaterialization as
-        | Parameters<typeof buildDoctrineMaterializationMatrix>[0]['cooldownFlexibilityMaterialization']
-        | undefined,
+      // cooldown_flexibility row reflects real materialization. The local
+      // Phase4iFlexMatShape is structurally identical to the matrix's
+      // optional arg, so a plain `?? undefined` is sufficient.
+      cooldownFlexibilityMaterialization: phase4iFlexibilityMaterialization ?? undefined,
     })
     const phase4hOnboardingMap = buildFullOnboardingTruthMaterializationMap({
       runtimeContract: doctrineRuntimeContract,

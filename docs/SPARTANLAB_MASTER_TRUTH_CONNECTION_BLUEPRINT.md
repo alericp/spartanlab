@@ -141,13 +141,19 @@ controls visible cards.
 | G2 | Display projection is pure formatting, not rebuilding | `COMPLETE` | `buildProgramDisplayProjection` does not pick exercises/methods |
 | G3 | Old fallback/baby sources demoted | `PARTIAL` | older `doctrineCausalChallenge` proof remains compatibility-only — verified by `authoritative-program-source-map.ts` |
 | G4 | Day cards receive canonical sessions | `COMPLETE` | `<AdaptiveProgramDisplay sessionCardSurfaces=...>` from `buildCanonicalProgramDisplayTruth` |
-| G5 | Visible method blocks match canonical methodStructures/styledGroups | `PARTIAL` | reads `session.styleMetadata.styledGroups` directly; `methodStructures[]` not yet displayed as a card surface |
-| G6 | Yellow blocked labels map to true block classifications | `PARTIAL` | `doctrineBlockResolutionRollup` exposed at proof line, per-session per-row visible labels not yet rerouted |
+| G5 | Visible method blocks match canonical methodStructures/styledGroups | `PARTIAL` | Phase 4S: `SessionCardSurface.methodStructures` field added; `buildSessionCardSurface` copies `session.methodStructures` pass-through; `AdaptiveSessionCard` renders a Phase 4S canonical delivery line via `hasRenderableMethodStructure` / `readMethodStructuresFromSession`. Remaining: `styledGroups` still drives `visibleMethodTally` and the body's grouped headers — `methodStructures` is now a parallel authoritative source, not yet the dominant body-render source. |
+| G6 | Yellow blocked labels map to true block classifications | `PARTIAL` | Phase 4S: `SessionCardSurface.doctrineBlockResolution` field added; `buildSessionCardSurface` copies `session.doctrineBlockResolution` pass-through; `AdaptiveSessionCard` renders classified statuses (Applied / Already reflected / Blocked for safety / No matching target / Not for this day / Needs audit) plus a red diagnostic line for `BUG_*` classifications via `normalizeDoctrineBlockStatus`. Remaining: program-level `doctrineBlockResolutionRollup` may still report residual `BUG_*` entries on some programs — `COMPLETE` only when that count is `0`. |
 
-**Remaining work:** the SessionCardSurface contract should explicitly carry
-`methodStructures` and `doctrineBlockResolution[]` so cards render typed
-classifications instead of legacy generic blocked text. This is Phase 4R+
-follow-up work; Phase 4R itself locks ownership and exposes the helper.
+**Remaining work:** Phase 4S has wired `SessionCardSurface.methodStructures`
+and `SessionCardSurface.doctrineBlockResolution` end-to-end through
+`buildSessionCardSurface` → `AdaptiveProgramDisplay` → `AdaptiveSessionCard`.
+The card now renders a classified Phase 4S delivery line and demotes generic
+unclassified blocked text via `normalizeDoctrineBlockStatus`. The next G-phase
+work is to make `methodStructures` the *dominant* body-render source for
+grouped headers (currently `styledGroups` still drives `visibleMethodTally` and
+`MainExercisesRenderer`'s grouped block layout), and to drive the program-level
+`doctrineBlockResolutionRollup` `BUG_*` counts to zero so G6 can flip to
+`COMPLETE`.
 
 ---
 
@@ -200,12 +206,14 @@ debug report.
 
 **Phase G — Program Display Source Lock.** The structural primitive
 (`canonicalDisplayTruth.visibleSessionCards`) is in place and proven to read
-from `program.sessions`. The remaining display work is to thread typed
-`methodStructures[]` and `doctrineBlockResolution[]` into `SessionCardSurface`
-so cards render classified verdicts instead of generic blocked text. After
-Phase G is COMPLETE, the next active phase is **Phase F.F3** (re-audit
-`getProgramState` / hydration preservation), then Phase H.H5 (live grouped
-runtime), then Phase I.
+from `program.sessions`. Phase 4S threaded typed `methodStructures[]` and
+`doctrineBlockResolution[]` into `SessionCardSurface`, and
+`AdaptiveSessionCard` now renders a classified Phase 4S delivery line. G5/G6
+remain `PARTIAL` only because `styledGroups` still drives the in-body grouped
+headers and the program-level `doctrineBlockResolutionRollup` may still
+report residual `BUG_*` entries. After G is fully `COMPLETE`, the next active
+phase is **Phase F.F3** (re-audit `getProgramState` / hydration
+preservation), then Phase H.H5 (live grouped runtime), then Phase I.
 
 ## How to use this file in a future prompt
 

@@ -220,7 +220,7 @@ function phaseE(): BlueprintPhase {
     title: 'Actual Program Mutation Lock',
     purpose: 'Doctrine changes the actual workout program, not just labels.',
     status: 'PARTIAL',
-    nextAction: 'Carry methodStructures + doctrineBlockResolution into SessionCardSurface so visible cards render typed verdicts (Phase G follow-up before I).',
+    nextAction: 'Selection-pass for method-aware exercise picking and multi-structure composition rules (deferred to Phase I; Phase 4S already wired methodStructures + doctrineBlockResolution through SessionCardSurface into AdaptiveSessionCard).',
     subtasks: [
       { id: 'E.E1', title: 'Structural methods create real grouped sessions where safe', status: 'COMPLETE', evidence: ['lib/program/structural-method-materialization-corridor.ts'], remainingWork: [] },
       { id: 'E.E2', title: 'Row-level methods mutate real exercise rows where safe', status: 'COMPLETE', evidence: ['lib/program/row-level-method-prescription-mutator.ts'], remainingWork: [] },
@@ -288,14 +288,26 @@ function phaseG(ctx: BuildBlueprintStatusContext): BlueprintPhase {
     title: 'Program Display Source Lock',
     purpose: 'The Program page reads canonical session truth; nothing else controls visible cards.',
     status: 'PARTIAL',
-    nextAction: 'Extend SessionCardSurface to carry session.methodStructures + session.doctrineBlockResolution[] so AdaptiveSessionCard renders typed classifications instead of legacy generic blocked text.',
+    nextAction: 'Make canonical session.methodStructures the dominant body-render source for grouped blocks (currently styledGroups drives visibleMethodTally / body rendering, while methodStructures drives the new classified summary line).',
     subtasks: [
       { id: 'G.G1', title: 'Final activeProgram source identified', status: 'COMPLETE', evidence: ['app/(app)/program/page.tsx:authoritativeActiveProgram memo'], remainingWork: [] },
       { id: 'G.G2', title: 'Display projection is pure formatting', status: 'COMPLETE', evidence: ['buildProgramDisplayProjection does not pick exercises/methods'], remainingWork: [] },
       { id: 'G.G3', title: 'Old fallback/baby sources demoted', status: 'PARTIAL', evidence: ['lib/program/authoritative-program-source-map.ts demotes doctrineCausalChallenge to compatibility-only'], remainingWork: ['Add a runtime guard that rejects display projections containing exercise selections older than canonical session'] },
       { id: 'G.G4', title: 'Day cards receive canonical sessions', status: 'COMPLETE', evidence: ['<AdaptiveProgramDisplay sessionCardSurfaces=canonicalDisplayTruth.visibleSessionCards />'], remainingWork: [] },
-      { id: 'G.G5', title: 'Visible method blocks match canonical truth', status: 'PARTIAL', evidence: ['cards read session.styleMetadata.styledGroups directly'], remainingWork: ['Add session.methodStructures field to SessionCardSurface', 'Render typed structures in AdaptiveSessionCard before falling back to styledGroups'] },
-      { id: 'G.G6', title: 'Yellow blocked labels map to true classifications', status: g6Status, evidence: blockResolutionRollup ? ['program.doctrineBlockResolutionRollup present'] : [], remainingWork: g6Status === 'COMPLETE' ? [] : ['Reroute per-row blocked chip text through session.doctrineBlockResolution[]'] },
+      // [PHASE 4S] G5 evidence updated: SessionCardSurface now carries
+      // canonical methodStructures and AdaptiveSessionCard renders them via a
+      // classified summary line. Status stays PARTIAL because styledGroups is
+      // still the primary source for grouped body rendering / visibleMethodTally
+      // chips — methodStructures is now a parallel authoritative source, not
+      // yet the dominant body-render source.
+      { id: 'G.G5', title: 'Visible method blocks match canonical truth', status: 'PARTIAL', evidence: ['SessionCardSurface.methodStructures field added (Phase 4S)', 'buildSessionCardSurface copies session.methodStructures pass-through (Phase 4S)', 'AdaptiveSessionCard renders Phase 4S canonical delivery line via hasRenderableMethodStructure / readMethodStructuresFromSession'], remainingWork: ['Make session.methodStructures the dominant source for visibleMethodTally/MainExercisesRenderer grouped headers (styledGroups currently still drives body rendering)'] },
+      // [PHASE 4S] G6 evidence updated: SessionCardSurface now carries
+      // canonical doctrineBlockResolution[] and AdaptiveSessionCard renders
+      // classified statuses (Applied / Already reflected / Blocked for safety
+      // / No matching target / Not for this day / Needs audit) plus a
+      // diagnostic line for BUG_* classifications. The runtime g6Status
+      // gate still requires the program-level rollup to confirm 0 bugs.
+      { id: 'G.G6', title: 'Yellow blocked labels map to true classifications', status: g6Status, evidence: blockResolutionRollup ? ['program.doctrineBlockResolutionRollup present', 'SessionCardSurface.doctrineBlockResolution field added (Phase 4S)', 'AdaptiveSessionCard renders classified statuses + bug diagnostic line via normalizeDoctrineBlockStatus (Phase 4S)'] : ['SessionCardSurface.doctrineBlockResolution field added (Phase 4S)', 'AdaptiveSessionCard renders classified statuses + bug diagnostic line via normalizeDoctrineBlockStatus (Phase 4S)'], remainingWork: g6Status === 'COMPLETE' ? [] : ['Resolve remaining BUG_* entries in program.doctrineBlockResolutionRollup'] },
     ],
   }
 }

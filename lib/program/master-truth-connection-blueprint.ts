@@ -543,7 +543,7 @@ function phaseI(): BlueprintPhase {
     //     'final_skill_obligation') cannot receive upward sets/reps/holds.
     //   - RPE max is 8 in Phase I (7 for protected/skill rows). Phase I
     //     never prescribes RPE 9-10.
-    //   - Density / unsupported method types remain guidanceOnly — no fake
+    //   - Density / unsupported method types remain guidanceOnly �� no fake
     //     numeric mutation, deferred to a future engine-quality task.
     //   - Total session sets cap: at most +1 set per session in Phase I.
     //
@@ -581,6 +581,121 @@ function phaseJ(): BlueprintPhase {
   }
 }
 
+/** Phase K: Recovery / Intensity / Weekly Distribution Materialization Lock. */
+function phaseK(): BlueprintPhase {
+  return {
+    id: 'K',
+    title: 'Recovery / Intensity / Weekly Distribution Materialization Lock',
+    purpose:
+      "Make whole-week stress / recovery / exposure logic computable, attached to canonical program/session truth, preserved through save/load/normalize/live, and visibly reflected on the Program page. The week stops feeling like six near-copy days because at least one repeated high-stress exposure can be conservatively softened with attached audit proof.",
+    status: 'PARTIAL',
+    nextAction:
+      'Expand mutation surface beyond sets/RPE on adjacent (i, i+1) pairs once acceptance signal is confirmed (method eligibility downgrades, accessory volume trims, density block on tendon-followups). Until then the contract is conservative-by-design.',
+    subtasks: [
+      {
+        id: 'K.K1',
+        title: 'Existing recovery/intensity sources inventoried',
+        status: 'COMPLETE',
+        evidence: [
+          'lib/recovery-engine.ts and lib/recovery-fatigue-engine.ts produce readiness/fatigue scores; consumed at generation time for protective acclimation gating.',
+          'lib/session-load-intelligence.ts produces per-session load / recovery_cost estimates used by adaptive selection.',
+          'lib/program/weekly-session-role-contract.ts assigns a per-day role (intensity_class / progression_character / breadth) but only as a per-session label.',
+          'lib/adaptive-deload-recovery-engine.ts and lib/adaptive-training-cycle-engine.ts handle deload and cycle adaptations.',
+          'Phase I numeric prescription mutation already shapes per-row dosage but does not reason across days.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'K.K2',
+        title: 'Weekly stress distribution contract exists',
+        status: 'COMPLETE',
+        evidence: [
+          'lib/program/weekly-stress-distribution-contract.ts ships a pure additive module with classifySessionStressFromComposed(), buildWeeklyStressDistributionPlan(), applyWeeklyStressGovernor(), and getStressDistributionVisibleProof().',
+          'Stress sources covered: LOAD / VOLUME / DENSITY / SKILL_TENDON / ECCENTRIC_ISOMETRIC / MIXED / RECOVERY.',
+          'Per-session classification produces stressLevel, recoveryCost, primaryStressSource, secondaryStressSources, exposureTags, nextDayRisk, reasonCodes, visibleLabel, and visibleExplanationShort.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'K.K3',
+        title: 'Session stress roles computed from full-week context',
+        status: 'COMPLETE',
+        evidence: [
+          'buildWeeklyStressDistributionPlan() runs after the per-session loop in adaptive-program-builder so all composed exercises are visible.',
+          'Pairwise nextDayRisk evaluates session i against session i+1 with overlap-aware exposure-tag matching, not isolated per-day labels.',
+          'Per-session classification is stamped on session.stressRole / stressLevel / recoveryCost / primaryStressSource / secondaryStressSources / nextDayRisk / stressDistributionReasonCodes / stressDistributionProof.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'K.K4',
+        title: 'Repeated high-stress exposure guard exists',
+        status: 'COMPLETE',
+        evidence: [
+          'computeNextDayRisk() returns HIGH when adjacent sessions share heavy LOAD on the same exposure tag, repeated SKILL_TENDON exposures, or DENSITY-then-heavy stacking.',
+          'Reason codes are propagated onto session.stressDistributionReasonCodes and consumed by the governor.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'K.K5',
+        title: 'Contract can conservatively mutate/soften actual sessions',
+        status: 'COMPLETE',
+        evidence: [
+          'applyWeeklyStressGovernor() softens the SECOND session of a HIGH-risk pair: drops sets by 1 (min 1), caps targetRPE down by 1 (min 6), and writes a per-row stressAdjustmentDelta audit.',
+          'Skill rows, grouped (blockId) rows, and rows with setExecutionMethod are skipped to avoid colliding with the doctrine corridor.',
+          'Hard-gated to one adjusted session per week (maxAdjustedSessions=1) and at most two rows per session (maxRowsPerSession=2). Suppressed entirely on protected/acclimation/recovery_constrained weeks (governorSuppressedReason).',
+        ],
+        remainingWork: [
+          'Method eligibility downgrades (density -> guidance on tendon-followup days) and accessory volume trims still pending; first-pass mutation is sets/RPE only.',
+        ],
+      },
+      {
+        id: 'K.K6',
+        title: 'Canonical fields preserved through save/load/normalize/display',
+        status: 'COMPLETE',
+        evidence: [
+          'AdaptiveProgram exposes weeklyStressDistributionPlan and weeklyStressGovernorAdjustments; AdaptiveSession exposes stressRole / stressLevel / recoveryCost / primaryStressSource / secondaryStressSources / nextDayRisk / stressDistributionReasonCodes / stressDistributionProof; AdaptiveExercise exposes stressAdjustmentDelta.',
+          'normalizeProgramForDisplay carries them via the existing `...program` and `...s` and `...ex` spreads (same preservation contract as Phase 4V/4Z).',
+          'No normalizer re-decides stress roles; only the builder owns the contract.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'K.K7',
+        title: 'Program UI shows compact stress-distribution proof',
+        status: 'COMPLETE',
+        evidence: [
+          'AdaptiveSessionCard renders session.stressDistributionProof.label as a compact uppercase chip below the supporting role line, with the optional one-line explanation underneath.',
+          'Renders only when canonical truth is present — legacy programs without Phase K classification show nothing (no invented labels).',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'K.K8',
+        title: 'Live workout does not lose stress/adaptive context',
+        status: 'PARTIAL',
+        evidence: [
+          'Hoisted session.stressRole / stressLevel / recoveryCost / nextDayRisk fields are part of the canonical session object the live workout loader receives via the existing snapshot path; nothing in the live reducer flattens them.',
+        ],
+        remainingWork: [
+          'Live reducer does not yet consume stressLevel / recoveryCost for adaptive rest beyond the existing RPE-driven path. Hookup is intentionally deferred until Phase K mutation surface stabilises.',
+        ],
+      },
+      {
+        id: 'K.K9',
+        title: 'No cosmetic-only intensity labels',
+        status: 'COMPLETE',
+        evidence: [
+          'visibleLabel and visibleExplanationShort are derived from the SAME computed classification that the governor reads — when the governor softens session i+1, the classification reasonCodes and visible explanation reflect the softened state.',
+          'No stress label fires without a backing classification entry; classifications cannot be produced without the per-session composed exercises.',
+        ],
+        remainingWork: [],
+      },
+    ],
+  }
+}
+
 // =============================================================================
 // PUBLIC ENTRY POINT
 // =============================================================================
@@ -612,6 +727,10 @@ export function buildMasterTruthConnectionBlueprintStatus(
     phaseH(),
     phaseI(),
     phaseJ(),
+    // [PHASE-K] Recovery / Intensity / Weekly Distribution Materialization Lock.
+    // Whole-week stress reasoning + conservative governor + canonical
+    // session/program fields + visible coach-line proof on the Program card.
+    phaseK(),
   ]
 
   // Active phase = the first phase whose status is not COMPLETE / DO_NOT_REDO.

@@ -121,16 +121,38 @@ export interface WeeklyMethodRepresentationContract {
 /**
  * Honest mapping from method id to the file that writes it (if any).
  *
+ * [PHASE 4K — HONEST RECONCILIATION]
+ * The Phase 4J version of this map claimed top_set_backoff / drop_set /
+ * rest_pause had no materializer. That claim was true at Phase 4J authoring
+ * time, but is FALSE on the current branch: `lib/adaptive-program-builder.ts`
+ * now ships a hardened row-level mutator block (lines ~13549-13960) that
+ * writes `setExecutionMethod` for `top_set`, `drop_set`, `rest_pause`, and
+ * `cluster` with explicit safety gates:
+ *
+ *   - Skill-pillar protection (planche / front lever / back lever / handstand
+ *     / iron cross / v-sit / manna / muscle-up name + category checks).
+ *   - Skill-adjacent token blocklist (chest-to-bar / archer / typewriter /
+ *     muscle-up / etc.) blocks drop_set on those rows.
+ *   - Late-position requirement (`lateBoundary = max(2, ceil(N/2))`) for
+ *     drop_set / rest_pause — early skill-quality rows are never touched.
+ *   - Weekly-role density gating — `roleBlocksDropSet` blocks drop_set when
+ *     the weekly role is low-intensity or has density='blocked'.
+ *   - drop_set excludes `category === 'strength'` (primary/secondary strength
+ *     are protected from a generic drop-set stamp).
+ *   - top_set requires the pillar to be `category === 'strength'` or have
+ *     `selectionReason` containing 'primary'.
+ *   - top_set / drop_set / rest_pause skip rows that already carry a method
+ *     or blockId.
+ *
  * Audit basis for each entry:
- *   - GROUPED methods (superset / circuit / density_block / cluster) are
- *     written by `applySessionStylePreferences` in `lib/training-methods.ts`.
- *     Confirmed at lines 2308 (cluster), 2393/2457/2530/2629 (superset),
- *     2576 (circuit), 2603 (density_block).
- *   - ROW-LEVEL methods (top_set_backoff / drop_set / rest_pause /
- *     endurance_density) have NO materializer in the codebase as of Phase 4J.
- *     The method-decision-engine reasons about them and surfaces counts via
- *     `actualMaterialization.rowExecutionCounts`, but no code path writes
- *     `exercise.setExecutionMethod = 'top_set'` or `'drop_set'`.
+ *   - GROUPED methods (superset / circuit / density_block) are written by
+ *     `applySessionStylePreferences` in `lib/training-methods.ts`.
+ *   - cluster is written by the builder (line 13562) AND by the grouped-style
+ *     materializer's cluster path (when applicable).
+ *   - top_set_backoff / drop_set / rest_pause are written by the builder
+ *     (lines 13762, 13880, 13942) under the safety gates documented above.
+ *   - endurance_density genuinely has no dedicated row-level writer — it is
+ *     rolled into the grouped `density_block` form when the profile asks.
  */
 const METHOD_MATERIALIZER_MAP: Record<
   WeeklyMethodId,
@@ -139,11 +161,13 @@ const METHOD_MATERIALIZER_MAP: Record<
   superset: { hasMaterializer: true, module: '@/lib/training-methods' },
   circuit: { hasMaterializer: true, module: '@/lib/training-methods' },
   density_block: { hasMaterializer: true, module: '@/lib/training-methods' },
-  cluster: { hasMaterializer: true, module: '@/lib/training-methods' },
-  // honestly: no row-level materializer exists for these
-  top_set_backoff: { hasMaterializer: false, module: null },
-  drop_set: { hasMaterializer: false, module: null },
-  rest_pause: { hasMaterializer: false, module: null },
+  cluster: { hasMaterializer: true, module: '@/lib/adaptive-program-builder' },
+  // [PHASE 4K] honest flip — these now have a row-level writer in the builder.
+  top_set_backoff: { hasMaterializer: true, module: '@/lib/adaptive-program-builder' },
+  drop_set: { hasMaterializer: true, module: '@/lib/adaptive-program-builder' },
+  rest_pause: { hasMaterializer: true, module: '@/lib/adaptive-program-builder' },
+  // endurance_density still has no dedicated writer — density_block (grouped)
+  // is the closest materialized form. Honest gap that remains.
   endurance_density: { hasMaterializer: false, module: null },
 }
 
@@ -261,51 +285,19 @@ function classifyMethod(
     return { status: 'APPLIED', reason: '' }
   }
 
-  // 2. MATERIALIZER_NOT_CONNECTED — no writer in the codebase. This is the
-  //    honest answer for top_set_backoff / drop_set / rest_pause /
-  //    endurance_density today. The auditor reasoned about them but nothing
-  //    materialized them, by design.
+  // 2. MATERIALIZER_NOT_CONNECTED — only `endurance_density` remains in this
+  //    bucket after Phase 4K. All other row-level methods now have a writer.
   if (!writer.hasMaterializer) {
-    if (methodId === 'top_set_backoff') {
-      return {
-        status: 'MATERIALIZER_NOT_CONNECTED',
-        reason:
-          strength
-            ? 'Top set + back-off is appropriate for your strength goal, but no row-level materializer ' +
-              'currently writes top_set / backoff prescriptions. The method-decision-engine reasons about ' +
-              'it; building the writer is Phase 4J+ scope.'
-            : 'Top set + back-off has no row-level materializer in the codebase yet. Even if your profile ' +
-              'suggested it, no code path would set exercise.setExecutionMethod = "top_set" today.',
-      }
-    }
-    if (methodId === 'drop_set') {
-      return {
-        status: 'MATERIALIZER_NOT_CONNECTED',
-        reason:
-          'Drop set has no row-level materializer in the codebase yet. Drop set logic exists in training-methods.ts ' +
-          '(CALISTHENICS_DROP_SETS, evaluateDropSet) but is never called by applySessionStylePreferences or any ' +
-          'session builder, so no exercise.setExecutionMethod = "drop_set" is ever written.',
-      }
-    }
     if (methodId === 'endurance_density') {
       return {
         status: 'MATERIALIZER_NOT_CONNECTED',
         reason:
           endurance
-            ? 'Your profile suggests endurance/density work, but endurance_density has no dedicated ' +
-              'materializer that writes a session-level density block. Density blocks (the closest grouped ' +
-              'method) ARE materialized — see the density_block row.'
-            : 'endurance_density has no dedicated materializer; density_block is the closest grouped form and ' +
-              'is materialized when accessory pools support it.',
-      }
-    }
-    if (methodId === 'rest_pause') {
-      return {
-        status: 'MATERIALIZER_NOT_CONNECTED',
-        reason:
-          'rest_pause has no row-level materializer in the codebase yet. The method-decision-engine reasons ' +
-          'about it and surfaces it in actualMaterialization.rowExecutionCounts.rest_pause, but no code path ' +
-          'writes exercise.setExecutionMethod = "rest_pause".',
+            ? 'Your profile suggests endurance / density work, but endurance_density has no dedicated ' +
+              'row-level writer. The grouped density_block form (see that row) is the closest materialized ' +
+              'representation and IS written by applySessionStylePreferences when accessory pools support it.'
+            : 'endurance_density has no dedicated row-level writer; density_block is the closest grouped ' +
+              'form and is materialized when the profile asks for it.',
       }
     }
     return {
@@ -314,34 +306,69 @@ function classifyMethod(
     }
   }
 
-  // 3. BLOCKED_BY_SAFETY — writer exists, count is zero, profile is
-  //    skill-priority. Honest reading: skill priority intentionally suppresses
-  //    fatigue methods on primary work, and the materializer's accessory pool
-  //    must have been too small or the safety gates rejected pairings.
-  if (skillPriority && (methodId === 'drop_set' || methodId === 'circuit' || methodId === 'density_block')) {
+  // 3. BLOCKED_BY_SAFETY — writer exists, count is zero, skill-priority profile.
+  //    Skill priority intentionally suppresses fatigue / density methods on or
+  //    near primary work. The builder's drop_set / rest_pause / cluster gates
+  //    encode this directly (skill-pillar blocklist + skill-adjacent token
+  //    blocklist + weekly-role density gating + late-position requirement).
+  if (
+    skillPriority &&
+    (methodId === 'drop_set' ||
+      methodId === 'rest_pause' ||
+      methodId === 'circuit' ||
+      methodId === 'density_block' ||
+      methodId === 'cluster')
+  ) {
     return {
       status: 'BLOCKED_BY_SAFETY',
       reason:
         'Skill-priority profile (planche / front lever / back lever / similar). Fatigue and density methods ' +
         'are intentionally suppressed on or near primary skill work to protect technical quality and tendon ' +
-        'safety. If the accessory pool had supported it without quality conflict, applySessionStylePreferences ' +
-        'would have grouped it.',
+        'safety. The builder evaluated this method and rejected every candidate via the doctrine-locked safety ' +
+        'gates (skill-pillar blocklist, skill-adjacent token blocklist, weekly-role density gating, ' +
+        'late-position requirement, strength-category exclusion for drop_set).',
     }
   }
 
-  // 4. BLOCKED_BY_SAFETY for cluster — writer exists but cluster is highly
-  //    context-gated (athlete level + neural demand). Zero count is honest.
-  if (methodId === 'cluster' && skillPriority) {
+  // 4. NOT_NEEDED_FOR_PROFILE — top_set_backoff with zero count. Either the
+  //    user did not select top_sets in their session-method preferences, or
+  //    the session pillar was not a primary-strength loaded movement.
+  if (methodId === 'top_set_backoff') {
     return {
-      status: 'BLOCKED_BY_SAFETY',
-      reason:
-        'Clusters are reserved for high-neural strength/skill movements with athlete-level support. ' +
-        'On this profile applySessionStylePreferences did not find a session that met the gate.',
+      status: 'NOT_NEEDED_FOR_PROFILE',
+      reason: strength
+        ? 'Top set + back-off is appropriate for a strength goal, but no session in this program had a pillar ' +
+          'that was both (a) selected for top_sets via session-method preferences and (b) a primary-strength ' +
+          'loaded movement. The builder evaluated each session pillar and rejected.'
+        : 'Top set + back-off was not requested via session-method preferences for this profile, and the ' +
+          'pillar exercises did not match the loaded-primary-strength gate that top_set requires.',
     }
   }
 
-  // 5. NOT_NEEDED_FOR_PROFILE — writer exists, count is zero, no profile
-  //    signal demanding it.
+  // 5. NOT_NEEDED_FOR_PROFILE — rest_pause with zero count, non-skill-priority.
+  if (methodId === 'rest_pause') {
+    return {
+      status: 'NOT_NEEDED_FOR_PROFILE',
+      reason:
+        'Rest-pause was either not selected via session-method preferences, or the late-accessory pool was ' +
+        'fully claimed by drop_set / cluster / grouped methods. The builder walks late positions and stamps ' +
+        'rest_pause only on a remaining safe accessory or non-strength row.',
+    }
+  }
+
+  // 6. NOT_NEEDED_FOR_PROFILE — drop_set with zero count, non-skill-priority.
+  if (methodId === 'drop_set') {
+    return {
+      status: 'NOT_NEEDED_FOR_PROFILE',
+      reason:
+        'Drop set was either not selected via session-method preferences, or no late accessory / core row ' +
+        'survived the doctrine-locked gates (skill-adjacent tokens, weekly-role density gating, strength-' +
+        'category exclusion). The builder did not find a row that was simultaneously safe and useful.',
+    }
+  }
+
+  // 7. NOT_NEEDED_FOR_PROFILE — endurance-style grouped methods with zero count
+  //    on a non-endurance profile.
   if (methodId === 'circuit' || methodId === 'density_block') {
     if (!endurance) {
       return {
@@ -353,13 +380,13 @@ function classifyMethod(
     }
   }
 
-  // 6. NOT_NEEDED_FOR_PROFILE — fall-through default for grouped methods with
-  //    materializers.
+  // 8. NOT_NEEDED_FOR_PROFILE — fall-through default for grouped / cluster
+  //    methods with materializers but zero count and no specific reason above.
   return {
     status: 'NOT_NEEDED_FOR_PROFILE',
     reason:
-      'A materializer exists for this method but applySessionStylePreferences did not find a compatible ' +
-      'session/accessory pairing for your profile. This is a coaching decision, not a missing feature.',
+      'A materializer exists for this method but the builder did not find a compatible session / accessory ' +
+      'pairing for your profile. This is a coaching decision, not a missing feature.',
   }
 }
 
@@ -411,7 +438,8 @@ function buildVerdict(
     return {
       verdict: 'method_materialization_gap',
       oneLine:
-        'Honest gap: row-level methods (top set, drop set, rest pause, endurance density) have no materializer in the codebase yet, and grouped methods did not fire for this profile.',
+        'Honest gap: only endurance_density has no row-level writer today, and the grouped methods + ' +
+        'row-level methods that DO have writers did not fire for this profile.',
     }
   }
 

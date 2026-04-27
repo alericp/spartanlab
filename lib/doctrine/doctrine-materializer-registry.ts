@@ -203,12 +203,17 @@ export const DOCTRINE_MATERIALIZER_REGISTRY: ReadonlyArray<DoctrineMaterializerR
   //      reconciled `actualMaterialization` counts. It does NOT mutate
   //      exercises.
   //
-  //   3. Row-level methods `top_set_backoff` / `drop_set` / `rest_pause` /
-  //      `endurance_density` have NO materializer anywhere. The auditor
-  //      reasons about them and surfaces zero counts in
-  //      `actualMaterialization.rowExecutionCounts`. No code path writes
-  //      `exercise.setExecutionMethod = 'top_set' | 'drop_set' | 'rest_pause'`
-  //      today.
+  //   3. [PHASE 4K UPDATE] Row-level methods `top_set_backoff` / `drop_set` /
+  //      `rest_pause` / `cluster` ARE NOW MATERIALIZED. The Phase 4J version
+  //      of this comment claimed no materializer existed; that was true at
+  //      Phase 4J authoring time but is FALSE on the current branch.
+  //      `lib/adaptive-program-builder.ts` lines ~13549-13960 ship a hardened
+  //      row-level mutator block with explicit doctrine-locked safety gates
+  //      (skill-pillar protection, skill-adjacent token blocklist, weekly-role
+  //      density gating, late-position requirement, strength-category
+  //      exclusion for drop_set). `endurance_density` remains the only
+  //      row-level method with no dedicated writer — `density_block` (grouped)
+  //      is the closest materialized form for that profile.
   //
   // We split the entry into two honest rows so the matrix and Program page
   // can render the truth.
@@ -239,27 +244,33 @@ export const DOCTRINE_MATERIALIZER_REGISTRY: ReadonlyArray<DoctrineMaterializerR
   },
   {
     category: 'method_selection_row_level',
-    owner: null,
-    ownerModule: null,
+    owner: 'adaptive-program-builder row-level method mutator block',
+    ownerModule: '@/lib/adaptive-program-builder',
+    // No single exported function — the mutator is an inline block inside the
+    // session-build path, gated by `sessionMethodIntentContract.userWants{Top,Drop,RestPause}`.
     ownerEntryFunction: null,
-    status: 'MATERIALIZER_NOT_CONNECTED',
+    status: 'CONNECTED_AND_MATERIAL',
     allowedFields: [
-      'exercise.setExecutionMethod (top_set / drop_set / rest_pause)',
-      'exercise.topSetPrescription',
-      'exercise.backoffPrescription',
-      'exercise.dropSetPrescription',
+      'exercise.setExecutionMethod (top_set / drop_set / rest_pause / cluster)',
+      'exercise.method',
+      'exercise.methodLabel',
     ],
     sourceBatches: ['batch_01', 'batch_02', 'batch_10'],
     notes:
-      'Phase 4J honest split — row-level row. top_set_backoff / drop_set / rest_pause / ' +
-      'endurance_density have NO materializer. Drop-set logic exists ' +
-      '(CALISTHENICS_DROP_SETS, evaluateDropSet in training-methods.ts) but is never ' +
-      'called by applySessionStylePreferences or any session builder. ' +
-      'method-decision-engine reasons about these methods and reports zero counts in ' +
-      'actualMaterialization.rowExecutionCounts. Building safe row-level dosage ' +
-      'mutators is deferred — same safety gate that blocked the prescription/' +
-      'progression mutators in Phase 4I. The new ' +
-      'lib/program/weekly-method-representation.ts auditor surfaces this honestly.',
+      'Phase 4K honest reconciliation. The Phase 4J entry claimed no materializer ' +
+      'existed for top_set_backoff / drop_set / rest_pause; that claim is no longer ' +
+      'true. lib/adaptive-program-builder.ts lines ~13549-13960 ship a doctrine-locked ' +
+      'row-level writer with explicit safety gates: skill-pillar protection ' +
+      '(planche / front lever / back lever / handstand / iron cross / v-sit / manna / ' +
+      'muscle-up name + category checks), skill-adjacent token blocklist (chest-to-bar / ' +
+      'archer / typewriter / muscle-up) for drop_set, late-position requirement ' +
+      '(lateBoundary = max(2, ceil(N/2))), weekly-role density gating ' +
+      '(roleBlocksDropSet on low-intensity / density-blocked roles), ' +
+      'strength-category exclusion for drop_set, and "already has method or blockId" ' +
+      'skip. endurance_density remains the only row-level method with no dedicated ' +
+      'writer (density_block grouped form is the closest representation). ' +
+      'lib/program/weekly-method-representation.ts surfaces per-method APPLIED / ' +
+      'BLOCKED_BY_SAFETY / NOT_NEEDED_FOR_PROFILE / MATERIALIZER_NOT_CONNECTED.',
   },
 
   // ---------------------------------------------------------------------------

@@ -2490,6 +2490,53 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 </div>
               )
             })()}
+            {/* ============================================================
+                [PHASE-Q] DOCTRINE UTILIZATION (CAUSAL) — one compact line
+                ----------------------------------------------------------------
+                Reads `session.doctrineUtilizationTrace.summary` written by
+                lib/program/doctrine-utilization-contract.ts. The summary is
+                already concise ("Doctrine: 2 applied · 1 suppressed · 1
+                audit-only") and is the only honest answer to "is doctrine
+                actually shaping THIS day". Does NOT introduce a new chip
+                style — uses the same neutral text treatment as the existing
+                stress proof line so the card stays readable. Renders nothing
+                when the trace is missing (legacy program objects).
+                ============================================================ */}
+            {(() => {
+              const trace = (session as unknown as {
+                doctrineUtilizationTrace?: {
+                  summary?: string
+                  dominantState?:
+                    | 'ELIGIBLE_AND_APPLIED'
+                    | 'ELIGIBLE_BUT_SUPPRESSED'
+                    | 'NOT_ELIGIBLE'
+                    | 'BLOCKED_BY_UNSUPPORTED_RUNTIME'
+                    | 'ACKNOWLEDGED_ONLY'
+                    | 'POST_HOC_ONLY'
+                }
+              }).doctrineUtilizationTrace
+              if (!trace || !trace.summary) return null
+              // Tone the row by dominant state — applied is calm neutral,
+              // post-hoc / acknowledged is muted so the user can see at a
+              // glance which days had genuine causal doctrine.
+              const tone =
+                trace.dominantState === 'ELIGIBLE_AND_APPLIED'
+                  ? 'text-[#A1A8B2]'
+                  : trace.dominantState === 'POST_HOC_ONLY' ||
+                      trace.dominantState === 'ACKNOWLEDGED_ONLY'
+                    ? 'text-[#6F757D] italic'
+                    : 'text-[#9CA3AF]'
+              return (
+                <p
+                  className={`mt-1 text-[11px] leading-snug ${tone}`}
+                  data-phase-q-utilization-summary="true"
+                  data-phase-q-dominant-state={trace.dominantState}
+                  title={trace.summary}
+                >
+                  {trace.summary}
+                </p>
+              )
+            })()}
             {/* Compact meta line - time + exercise count only */}
             <div className="flex items-center gap-3 mt-1 text-xs text-[#6A6A6A]">
               <span className="flex items-center gap-1">

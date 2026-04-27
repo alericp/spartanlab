@@ -35,6 +35,10 @@ import {
   runProgramQualityDoctrineAudit,
   type ProgramQualityAuditResult,
 } from './program-quality-doctrine-audit-contract'
+// [PHASE-Q] Doctrine utilization causal trace. Pure reader — runs after
+// Phase P in BOTH ingress paths so the Program card always renders honest,
+// stamped causality data instead of recomputing it.
+import { runDoctrineUtilizationContract } from './doctrine-utilization-contract'
 import type { AdaptiveProgram } from '../adaptive-program-builder'
 
 // =============================================================================
@@ -352,8 +356,23 @@ export function applyPerformanceFeedbackOverlay<T extends PhaseLProgramShape>(
     console.log('[phase-p-client-overlay-failed]', { error: String(err) })
   }
 
+  // [PHASE-Q] Stamp the doctrine utilization trace on top of the
+  // post-Phase-P program. Pure reader; non-blocking. If the contract throws
+  // we keep the Phase P output exactly as it is — the trace is proof, not a
+  // builder.
+  let postPhaseQ: T = postPhaseP
+  try {
+    const phaseQResult = runDoctrineUtilizationContract(
+      postPhaseP as unknown as AdaptiveProgram,
+      { nowIso: options?.nowIso },
+    )
+    postPhaseQ = phaseQResult.program as unknown as T
+  } catch (err) {
+    console.log('[phase-q-client-overlay-failed]', { error: String(err) })
+  }
+
   return {
-    program: postPhaseP,
+    program: postPhaseQ,
     adaptation,
     signature,
     changed: true,

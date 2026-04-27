@@ -1652,6 +1652,67 @@ export async function executeAuthoritativeGeneration(
         // actually produced grouped/method-cued sessions for this profile.
         materialization: summary.materialization,
       })
+
+      // ====================================================================
+      // [PHASE 4J] WEEKLY METHOD REPRESENTATION AUDITOR
+      //
+      // Pure additive diagnostic. Reads the rollup that
+      // stampMethodDecisionsOnSessions just produced + the program's profile
+      // snapshot, and emits per-method APPLIED / BLOCKED_BY_SAFETY /
+      // NOT_NEEDED_FOR_PROFILE / MATERIALIZER_NOT_CONNECTED for the 8 spec
+      // methods. Stamps onto program.weeklyMethodRepresentation. Fails soft —
+      // never blocks generation.
+      //
+      // This is the surface that answers the user's Phase 4J question:
+      // "Where are top sets / drop sets / circuits / density?" — honestly,
+      // per method, with a real materializer-or-not flag.
+      // ====================================================================
+      try {
+        const { buildWeeklyMethodRepresentation } = await import(
+          '@/lib/program/weekly-method-representation'
+        )
+        const profileSnapshot = (program as unknown as {
+          profileSnapshot?: {
+            primaryGoal?: string | null
+            secondaryGoal?: string | null
+            selectedSkills?: string[] | null
+            sessionStylePreference?: string | null
+            selectedTrainingStyles?: string[] | null
+          } | null
+        }).profileSnapshot ?? null
+
+        const weeklyMethodRep = buildWeeklyMethodRepresentation({
+          materializationRollup: summary.materialization,
+          sessionCount: program.sessions.length,
+          profile: profileSnapshot,
+        })
+
+        ;(program as unknown as { weeklyMethodRepresentation?: unknown }).weeklyMethodRepresentation =
+          weeklyMethodRep
+
+        console.log('[PHASE4J-WEEKLY-METHOD-REPRESENTATION]', {
+          generationIntent: request.generationIntent,
+          triggerSource: request.triggerSource,
+          verdict: weeklyMethodRep.verdict,
+          methodsApplied: weeklyMethodRep.totals.methodsApplied,
+          methodsMaterializerNotConnected: weeklyMethodRep.totals.methodsMaterializerNotConnected,
+          methodsBlockedBySafety: weeklyMethodRep.totals.methodsBlockedBySafety,
+          methodsNotNeeded: weeklyMethodRep.totals.methodsNotNeeded,
+          oneLine: weeklyMethodRep.oneLineExplanation,
+          byMethodStatus: weeklyMethodRep.byMethod.map(e => ({
+            methodId: e.methodId,
+            status: e.status,
+            count: e.materializedCount,
+            hasMaterializer: e.hasMaterializer,
+          })),
+        })
+      } catch (weeklyErr) {
+        console.log('[PHASE4J-WEEKLY-METHOD-REPRESENTATION-FAILED]', {
+          generationIntent: request.generationIntent,
+          triggerSource: request.triggerSource,
+          error: String(weeklyErr),
+        })
+      }
     } catch (methodErr) {
       console.log('[doctrine-method-decision-stamp-failed]', {
         generationIntent: request.generationIntent,

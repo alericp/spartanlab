@@ -83,6 +83,8 @@ export interface DoctrineCategoryRow {
     | 'exercise_selection'
     | 'carryover_support'
     | 'method_selection'
+    /** [PHASE 4J] honest split — see registry comment. */
+    | 'method_selection_row_level'
     | 'prescription'
     | 'progression'
     | 'contraindication_safety'
@@ -351,9 +353,12 @@ export function buildDoctrineMaterializationMatrix(
   })
 
   // ---------------------------------------------------------------------------
-  // 3. method_selection
-  // PATH: runtimeContract.methodDoctrine → method-decision-engine
-  //       → exercise.method / setExecutionMethod
+  // 3. method_selection  (GROUPED — Phase 4J honest narrative)
+  // PATH: runtimeContract.methodDoctrine + applySessionStylePreferences
+  //       → session.styleMetadata.styledGroups (superset / circuit /
+  //         density_block) + exercise.setExecutionMethod (cluster only)
+  // OWNER: lib/training-methods.ts::applySessionStylePreferences
+  // AUDITOR (post-build, not materializer): lib/program/method-decision-engine.ts
   // ---------------------------------------------------------------------------
   const methodCount = safeCount(cov?.methodRuleCount)
   const methodPreferredCount = safeCount(runtimeContract?.methodDoctrine?.preferredMethods?.length)
@@ -374,23 +379,61 @@ export function buildDoctrineMaterializationMatrix(
     rulesMaterialized: methodPreferredCount,
     rulesBlocked: methodBlockedCount,
     allowedProgramFields: [
+      'session.styleMetadata.styledGroups[]',
       'exercise.method',
-      'exercise.setExecutionMethod',
-      'styleMetadata.styledGroups',
+      'exercise.methodLabel',
+      'exercise.setExecutionMethod (cluster only)',
+      'exercise.blockId',
       'methodMaterializationSummary',
     ],
     changedProgramFields:
       methodPreferredCount > 0
-        ? ['exercise.method', 'exercise.setExecutionMethod', 'methodMaterializationSummary']
+        ? ['session.styleMetadata.styledGroups', 'exercise.method', 'methodMaterializationSummary']
         : [],
-    visibleSurfaces: ['session card method label', 'method materialization summary chip'],
+    visibleSurfaces: ['session card method label', 'styled groups display', 'method materialization summary chip'],
     noChangeReason:
       methodPreferredCount === 0 && methodCount > 0
         ? 'method rules loaded but the runtime context (profile / experience / goal) did not surface any preferred or blocked methods'
         : null,
     notes:
-      'method-decision-engine reads runtimeContract.methodDoctrine and runtimeContract.prescriptionDoctrine ' +
-      'and is the single authoritative method-decision per session.',
+      'Phase 4J corrected scope: applySessionStylePreferences in lib/training-methods.ts is the GROUPED ' +
+      'materializer (superset / circuit / density_block / cluster). method-decision-engine is a POST-BUILD ' +
+      'AUDITOR that stamps session.methodDecision; it does NOT mutate exercises. Row-level methods ' +
+      '(top_set / drop_set / rest_pause / endurance_density) have no materializer — see the next row.',
+  })
+
+  // ---------------------------------------------------------------------------
+  // 3b. method_selection_row_level  (Phase 4J — honest gap row)
+  // No materializer in the codebase writes top_set_backoff / drop_set /
+  // rest_pause / endurance_density. The auditor reasons about them and
+  // surfaces zero counts in actualMaterialization.rowExecutionCounts.
+  // ---------------------------------------------------------------------------
+  rows.push({
+    category: 'method_selection_row_level',
+    status: 'MATERIALIZER_NOT_CONNECTED',
+    rulesRead: 0,
+    rulesRelevant: 0,
+    rulesEligible: 0,
+    rulesSelected: 0,
+    rulesMaterialized: 0,
+    rulesBlocked: 0,
+    allowedProgramFields: [
+      'exercise.setExecutionMethod (top_set / drop_set / rest_pause)',
+      'exercise.topSetPrescription',
+      'exercise.backoffPrescription',
+      'exercise.dropSetPrescription',
+    ],
+    changedProgramFields: [],
+    visibleSurfaces: [],
+    noChangeReason:
+      'no row-level materializer exists for top_set_backoff / drop_set / rest_pause / endurance_density. ' +
+      'method-decision-engine reasons about these and surfaces zero counts in ' +
+      'session.methodDecision.actualMaterialization.rowExecutionCounts. Drop-set logic exists in ' +
+      'training-methods.ts (CALISTHENICS_DROP_SETS, evaluateDropSet) but is not called by any session builder.',
+    notes:
+      'Phase 4J honest split. lib/program/weekly-method-representation.ts surfaces this per-method to the ' +
+      'Program page. Building safe row-level dosage mutators is deferred for the same safety reason that ' +
+      'blocked the prescription / progression mutators in Phase 4I.',
   })
 
   // ---------------------------------------------------------------------------

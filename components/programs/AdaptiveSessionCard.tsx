@@ -89,6 +89,14 @@ import {
 } from '@/lib/exercise-override-service'
 import { recordReplaceSignal } from '@/lib/override-signal-service'
 import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
+// [PHASE-S] Trust display helpers: pure presentation mapping from raw
+// Phase Q/R/P trace states to short coach-facing labels and severity tones.
+// No logic, no recompute — only mapping. See lib/program/trust-display-contract.ts.
+import {
+  doctrineStateLabel,
+  trustToneClasses,
+  type DoctrineUtilizationState,
+} from '@/lib/program/trust-display-contract'
 
 // ============================================================================
 // [GROUPED-BODY-PRIORITY]
@@ -498,7 +506,12 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const [skippedExercises, setSkippedExercises] = useState<Set<string>>(new Set())
   const [adjustedExercises, setAdjustedExercises] = useState<Map<string, string>>(new Map())
   const [showMethodDecisions, setShowMethodDecisions] = useState(false)
-  
+  // [PHASE-S] Trust-detail collapsible. Default closed so the always-visible
+  // header stays compact (the Phase S spec target). When opened, the user can
+  // see every preserved Phase J/K/P/Q/R proof line — same `data-phase-*`
+  // attributes, same wording — for screenshot verification.
+  const [showWhyThisPlan, setShowWhyThisPlan] = useState(false)
+
   // [TASK 4] Track session identity to reset variant state when session changes
   // Using ref to avoid setting state during render
   const lastSessionIdentityRef = useRef<string>('')
@@ -2451,16 +2464,18 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               </div>
             )}
             {/* ============================================================
-                [PHASE-P] SESSION-LEVEL QUALITY / DOCTRINE AUDIT PROOF
+                [PHASE-P] SESSION-LEVEL QUALITY / DOCTRINE AUDIT — chip only
                 ----------------------------------------------------------------
-                Compact amber chip + one-line explanation derived from the
-                Phase P resolver's session-level findings:
-                  - cross-session straight-arm overlap warning, OR
-                  - session-length realism warning (Phase Q owns the lock).
-                Renders nothing when no Phase P session-level finding is
-                present (most sessions). Skill-carryover roll-ups stay on the
-                exercise-level proof line so the session header doesn't
-                clutter when only attribution exists.
+                Compact amber chip stays always-visible because it is a real
+                safety / realism warning the user MUST see at a glance
+                (Phase S spec: "Do not hide important warnings completely").
+                The longer one-line explanation that USED to render right
+                under the chip has been moved to the "Why this plan?"
+                trust dropdown below to keep the always-visible header
+                surface compact (Phase S compression target). Tap "Why this
+                plan?" to see the explanation; the original
+                `data-phase-p-session-proof` attribute remains on the chip
+                so screenshot verification and dev probes still work.
                 ============================================================ */}
             {(() => {
               const sqa = (session as unknown as {
@@ -2478,114 +2493,31 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               const hasTimeWarn = corr.includes('session_length_warning_attached')
               if (!hasOverlap && !hasTimeWarn) return null
               const label = hasOverlap ? 'OVERLAP WATCH' : 'TIME REALISM'
-              const explanation = sqa.conciseExplanation || sqa.straightArmOverlap?.explanation || ''
               return (
                 <div className="mt-1 flex flex-col gap-0.5" data-phase-p-session-proof="true">
                   <span className="inline-flex items-center self-start gap-1 rounded-full border border-amber-500/30 bg-amber-500/5 px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-wide text-amber-300">
                     {label}
                   </span>
-                  {explanation && (
-                    <p className="text-[11px] text-amber-300/70 italic leading-snug">{explanation}</p>
-                  )}
                 </div>
               )
             })()}
-            {/* ============================================================
-                [PHASE-Q] DOCTRINE UTILIZATION (CAUSAL) — one compact line
+            {/* ====================================================================
+                [PHASE-S] PROOF CLUTTER COMPRESSION
                 ----------------------------------------------------------------
-                Reads `session.doctrineUtilizationTrace.summary` written by
-                lib/program/doctrine-utilization-contract.ts. The summary is
-                already concise ("Doctrine: 2 applied · 1 suppressed · 1
-                audit-only") and is the only honest answer to "is doctrine
-                actually shaping THIS day". Does NOT introduce a new chip
-                style — uses the same neutral text treatment as the existing
-                stress proof line so the card stays readable. Renders nothing
-                when the trace is missing (legacy program objects).
-                ============================================================ */}
-            {(() => {
-              const trace = (session as unknown as {
-                doctrineUtilizationTrace?: {
-                  summary?: string
-                  dominantState?:
-                    | 'ELIGIBLE_AND_APPLIED'
-                    | 'ELIGIBLE_BUT_SUPPRESSED'
-                    | 'NOT_ELIGIBLE'
-                    | 'BLOCKED_BY_UNSUPPORTED_RUNTIME'
-                    | 'ACKNOWLEDGED_ONLY'
-                    | 'POST_HOC_ONLY'
-                }
-              }).doctrineUtilizationTrace
-              if (!trace || !trace.summary) return null
-              // Tone the row by dominant state — applied is calm neutral,
-              // post-hoc / acknowledged is muted so the user can see at a
-              // glance which days had genuine causal doctrine.
-              const tone =
-                trace.dominantState === 'ELIGIBLE_AND_APPLIED'
-                  ? 'text-[#A1A8B2]'
-                  : trace.dominantState === 'POST_HOC_ONLY' ||
-                      trace.dominantState === 'ACKNOWLEDGED_ONLY'
-                    ? 'text-[#6F757D] italic'
-                    : 'text-[#9CA3AF]'
-              return (
-                <p
-                  className={`mt-1 text-[11px] leading-snug ${tone}`}
-                  data-phase-q-utilization-summary="true"
-                  data-phase-q-dominant-state={trace.dominantState}
-                  title={trace.summary}
-                >
-                  {trace.summary}
-                </p>
-              )
-            })()}
-            {/* ============================================================
-                [PHASE-R] SESSION-LENGTH TRUTH — one compact line under the
-                Phase Q summary. Reads `session.sessionLengthTruth.summary`
-                written by lib/program/session-length-truth-contract.ts. The
-                stamp is the honest answer to "are Full / 45 / 30 actually
-                structurally different, or label-only?" For structurally
-                real shorts the line reads "Session length: 3 modes
-                structurally distinct · shorts drop 2 accessories · primary
-                skill anchor preserved." For label-parity shorts it surfaces
-                that honestly. Renders nothing for legacy programs that
-                never went through Phase R, so old saved programs do not
-                regress visually. Same neutral text treatment as the Phase Q
-                line so the card stays calm.
-                ============================================================ */}
-            {(() => {
-              const slt = (session as unknown as {
-                sessionLengthTruth?: {
-                  verdict?:
-                    | 'STRUCTURALLY_REAL'
-                    | 'SHORTS_AT_LABEL_PARITY'
-                    | 'NO_LAUNCHABLE_SHORTS'
-                    | 'LEGACY_NO_VARIANTS'
-                  summary?: string
-                }
-              }).sessionLengthTruth
-              if (!slt || !slt.summary) return null
-              // Suppress the "full only" / "legacy" lines on cards that
-              // already render only one variant — those would be noise.
-              if (
-                slt.verdict === 'NO_LAUNCHABLE_SHORTS' ||
-                slt.verdict === 'LEGACY_NO_VARIANTS'
-              ) {
-                return null
-              }
-              const tone =
-                slt.verdict === 'STRUCTURALLY_REAL'
-                  ? 'text-[#A1A8B2]'
-                  : 'text-[#9CA3AF] italic'
-              return (
-                <p
-                  className={`mt-1 text-[11px] leading-snug ${tone}`}
-                  data-phase-r-session-length-truth="true"
-                  data-phase-r-verdict={slt.verdict}
-                  title={slt.summary}
-                >
-                  {slt.summary}
-                </p>
-              )
-            })()}
+                The Phase Q `doctrineUtilizationTrace.summary` line and the
+                Phase R `sessionLengthTruth.summary` line USED to render
+                always-visible right here, stacked under the Phase J/K stress
+                chip and the Phase P warning chip. That produced 4 stacked
+                proof rows on every session header — the exact "too cluttered"
+                state Phase S is correcting. Both lines have been MOVED into
+                the "Why this plan?" collapsible below the meta line. They
+                still render verbatim with their original `data-phase-q-*` /
+                `data-phase-r-*` data attributes intact so screenshot
+                verification, dev probes, and acceptance tests continue to
+                pass. Phase J/K stress + Phase P warning remain visible on
+                the header because they carry per-day identity / real safety
+                signals that should not be hidden behind a click.
+                ==================================================================== */}
             {/* Compact meta line - time + exercise count only */}
             <div className="flex items-center gap-3 mt-1 text-xs text-[#6A6A6A]">
               <span className="flex items-center gap-1">
@@ -2597,6 +2529,215 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 <span className="text-[#E63946]/70">({activeSessionView.variantLabel})</span>
               )}
             </div>
+
+            {/* ====================================================================
+                [PHASE-S] "WHY THIS PLAN?" TRUST DROPDOWN
+                ----------------------------------------------------------------
+                Default-collapsed trust details. Renders ONLY when there is
+                meaningful trust data to show — Phase Q `doctrineUtilizationTrace`,
+                Phase R `sessionLengthTruth`, Phase P `qualityAudit` extended
+                explanation, or a doctrine breakdown by category. Otherwise the
+                trigger does not render and the header stays calm.
+
+                Click handlers `e.stopPropagation()` so opening the trust
+                dropdown does NOT also toggle the parent header expand/collapse
+                (the parent `<div>` at L2335 has its own `onClick` for the body
+                expansion). Local state `showWhyThisPlan` keeps the dropdown
+                open/close stable per-card and does not reset on parent
+                re-render.
+                ==================================================================== */}
+            {(() => {
+              const sessionAny = session as unknown as {
+                doctrineUtilizationTrace?: {
+                  summary?: string
+                  dominantState?: DoctrineUtilizationState
+                  byCategory?: Record<
+                    string,
+                    {
+                      stateCounts?: Partial<Record<DoctrineUtilizationState, number>>
+                      dominantState?: DoctrineUtilizationState
+                    }
+                  >
+                }
+                sessionLengthTruth?: {
+                  verdict?:
+                    | 'STRUCTURALLY_REAL'
+                    | 'SHORTS_AT_LABEL_PARITY'
+                    | 'NO_LAUNCHABLE_SHORTS'
+                    | 'LEGACY_NO_VARIANTS'
+                  summary?: string
+                }
+                qualityAudit?: {
+                  conciseExplanation?: string
+                  corrections?: string[]
+                  straightArmOverlap?: { explanation?: string }
+                }
+              }
+              const trace = sessionAny.doctrineUtilizationTrace
+              const slt = sessionAny.sessionLengthTruth
+              const sqa = sessionAny.qualityAudit
+              const hasTrace = !!(trace && trace.summary)
+              const hasSlt =
+                !!slt &&
+                !!slt.summary &&
+                slt.verdict !== 'NO_LAUNCHABLE_SHORTS' &&
+                slt.verdict !== 'LEGACY_NO_VARIANTS'
+              const hasSqaExtended =
+                !!sqa &&
+                Array.isArray(sqa.corrections) &&
+                (sqa.corrections.includes('straight_arm_overlap_warning_attached') ||
+                  sqa.corrections.includes('session_length_warning_attached')) &&
+                !!(sqa.conciseExplanation || sqa.straightArmOverlap?.explanation)
+              const byCategoryEntries = trace?.byCategory
+                ? Object.entries(trace.byCategory).filter(
+                    ([, v]) => v && (v.dominantState || v.stateCounts),
+                  )
+                : []
+              const hasBreakdown = byCategoryEntries.length > 0
+              const insightCount =
+                (hasTrace ? 1 : 0) +
+                (hasSlt ? 1 : 0) +
+                (hasSqaExtended ? 1 : 0) +
+                (hasBreakdown ? 1 : 0)
+              if (insightCount === 0) return null
+              return (
+                <div className="mt-2" data-phase-s-trust-dropdown="true">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowWhyThisPlan((v) => !v)
+                    }}
+                    aria-expanded={showWhyThisPlan}
+                    aria-controls={`why-this-plan-${session.dayNumber}`}
+                    className="flex items-center gap-1.5 text-[11px] text-[#8A8A8A] hover:text-[#C5C5C5] transition-colors"
+                  >
+                    {showWhyThisPlan ? (
+                      <ChevronUp className="w-3 h-3" />
+                    ) : (
+                      <ChevronDown className="w-3 h-3" />
+                    )}
+                    <span className="font-medium">Why this plan?</span>
+                    <span className="text-[10px] text-[#6A6A6A]">
+                      {insightCount} insight{insightCount === 1 ? '' : 's'}
+                    </span>
+                  </button>
+                  {showWhyThisPlan && (
+                    <div
+                      id={`why-this-plan-${session.dayNumber}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-2 space-y-2 rounded-md border border-[#2A2A2A] bg-[#1A1A1A]/60 p-3"
+                      data-phase-s-trust-details="true"
+                    >
+                      {/* [PHASE-Q] DOCTRINE UTILIZATION (CAUSAL) — moved into
+                          details. Original `data-phase-q-*` attributes
+                          preserved so screenshot verification still works. */}
+                      {(() => {
+                        if (!trace || !trace.summary) return null
+                        const tone =
+                          trace.dominantState === 'ELIGIBLE_AND_APPLIED'
+                            ? 'text-[#A1A8B2]'
+                            : trace.dominantState === 'POST_HOC_ONLY' ||
+                                trace.dominantState === 'ACKNOWLEDGED_ONLY'
+                              ? 'text-[#6F757D] italic'
+                              : 'text-[#9CA3AF]'
+                        return (
+                          <div>
+                            <div className="text-[10px] uppercase tracking-wide text-[#6A6A6A] mb-1">
+                              Doctrine application
+                            </div>
+                            <p
+                              className={`text-[11px] leading-snug ${tone}`}
+                              data-phase-q-utilization-summary="true"
+                              data-phase-q-dominant-state={trace.dominantState}
+                              title={trace.summary}
+                            >
+                              {trace.summary}
+                            </p>
+                            {hasBreakdown && (
+                              <ul
+                                className="mt-1.5 space-y-1"
+                                data-phase-s-doctrine-breakdown="true"
+                              >
+                                {byCategoryEntries.map(([catId, cat]) => {
+                                  const dom = cat.dominantState
+                                  if (!dom) return null
+                                  const labelInfo = doctrineStateLabel(dom)
+                                  const tones = trustToneClasses(labelInfo.tone)
+                                  const niceCat = catId
+                                    .replace(/([A-Z])/g, ' $1')
+                                    .replace(/^./, (c) => c.toUpperCase())
+                                    .trim()
+                                  return (
+                                    <li
+                                      key={catId}
+                                      className="flex items-center gap-2 text-[11px]"
+                                      data-phase-s-category={catId}
+                                      data-phase-q-dominant-state={dom}
+                                    >
+                                      <span className="text-[#A5A5A5] min-w-[80px]">
+                                        {niceCat}
+                                      </span>
+                                      <span
+                                        className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${tones.pill}`}
+                                        title={labelInfo.meaning}
+                                      >
+                                        {labelInfo.label}
+                                      </span>
+                                    </li>
+                                  )
+                                })}
+                              </ul>
+                            )}
+                          </div>
+                        )
+                      })()}
+
+                      {/* [PHASE-R] SESSION-LENGTH TRUTH — moved into details.
+                          Original `data-phase-r-*` attributes preserved. */}
+                      {hasSlt && slt && (
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wide text-[#6A6A6A] mb-1">
+                            Session length
+                          </div>
+                          <p
+                            className={`text-[11px] leading-snug ${
+                              slt.verdict === 'STRUCTURALLY_REAL'
+                                ? 'text-[#A1A8B2]'
+                                : 'text-[#9CA3AF] italic'
+                            }`}
+                            data-phase-r-session-length-truth="true"
+                            data-phase-r-verdict={slt.verdict}
+                            title={slt.summary}
+                          >
+                            {slt.summary}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* [PHASE-P] Extended quality-audit explanation. The
+                          severity chip itself stays on the always-visible
+                          header (real warnings should never hide); only the
+                          longer explanation moves here. */}
+                      {hasSqaExtended && sqa && (
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wide text-[#6A6A6A] mb-1">
+                            Quality &amp; safety
+                          </div>
+                          <p
+                            className="text-[11px] leading-snug text-amber-300/70 italic"
+                            data-phase-p-extended-explanation="true"
+                          >
+                            {sqa.conciseExplanation ||
+                              sqa.straightArmOverlap?.explanation}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* ==================================================================
                 [DOCTRINE-METHOD-DECISION-PHASE3]

@@ -7,6 +7,19 @@ import {
   runStructuralMethodMaterializationCorridor,
   type StructuralMaterializationResult,
 } from './structural-method-materialization-corridor'
+// [PHASE 4Q] Block resolution classifier + per-session doctrine participation.
+// Both are pure builders: classifier reads `session.methodStructures[]`,
+// participation reads counts. They produce JSON-safe objects the mutator
+// stamps onto the session and the program-level loop rolls up.
+import {
+  classifyDoctrineBlocksForSession,
+  type ClassifyDoctrineBlocksResult,
+  type DoctrineBlockResolutionEntry,
+} from './doctrine-block-resolution-contract'
+import {
+  buildSessionDoctrineParticipation,
+  type SessionDoctrineParticipation,
+} from './session-doctrine-participation-contract'
 
 /**
  * =============================================================================
@@ -331,6 +344,31 @@ export interface RowLevelMutatorSummary {
     noSafeTargetCount: number
     newStructuralGroupWritten: boolean
   } | null
+  /**
+   * [PHASE 4Q] Per-session classified resolution of every method structure
+   * entry. Replaces generic "blocked" labels with TRUE_SAFETY / NO_TARGET /
+   * NOT_RELEVANT / BUG_*. Null only on classifier crash (fail-soft).
+   */
+  blockResolution: {
+    entries: DoctrineBlockResolutionEntry[]
+    appliedCount: number
+    alreadyAppliedCount: number
+    trueSafetyBlockCount: number
+    noRelevantTargetCount: number
+    notRelevantToSessionCount: number
+    bugMissingConnectionCount: number
+    bugRuntimeContractMissingCount: number
+    bugDisplayConsumerMissingCount: number
+    bugNormalizerDroppedTruthCount: number
+    bugStaleSourceWonCount: number
+    unknownNeedsAuditCount: number
+  } | null
+  /**
+   * [PHASE 4Q] Per-session doctrine participation verdict. Answers "did
+   * doctrine actually run for this day, and if it ran with no change, why?"
+   * Mirrors `session.doctrineParticipation`.
+   */
+  doctrineParticipation: SessionDoctrineParticipation | null
 }
 
 export interface RowLevelMethodPrescriptionMutatorInput {
@@ -959,6 +997,115 @@ export function applyRowLevelMethodPrescriptionMutations(
   }
 
   // -----------------------------------------------------------------------
+  // 2d. [PHASE 4Q] DOCTRINE BLOCK RESOLUTION CLASSIFIER
+  //     Reads `session.methodStructures[]` (just written by the structural
+  //     corridor) and classifies every entry into one of:
+  //       APPLIED / ALREADY_APPLIED / TRUE_SAFETY_BLOCK /
+  //       NO_RELEVANT_TARGET / NOT_RELEVANT_TO_SESSION /
+  //       BUG_MISSING_CONNECTION / BUG_RUNTIME_CONTRACT_MISSING /
+  //       BUG_DISPLAY_CONSUMER_MISSING / BUG_NORMALIZER_DROPPED_TRUTH /
+  //       BUG_STALE_SOURCE_WON / UNKNOWN_NEEDS_AUDIT
+  //
+  //     Stamps the result onto `session.doctrineBlockResolution[]` so the
+  //     Program page never has to render a generic yellow "blocked" chip.
+  // -----------------------------------------------------------------------
+  let blockResolution: ClassifyDoctrineBlocksResult | null = null
+  try {
+    const stampedMethodStructures =
+      (session?.methodStructures as Parameters<typeof classifyDoctrineBlocksForSession>[0]['methodStructures']) ?? []
+    if (Array.isArray(stampedMethodStructures) && stampedMethodStructures.length > 0) {
+      const sessionRoleRaw =
+        (session as { weeklyRole?: { roleId?: unknown } } | null)?.weeklyRole?.roleId ?? null
+      const sessionRole = typeof sessionRoleRaw === 'string' ? sessionRoleRaw : null
+      const dayNumberRaw = (session as { dayNumber?: unknown } | null)?.dayNumber
+      const dayNumber = typeof dayNumberRaw === 'number' ? dayNumberRaw : undefined
+      const sessionIdRaw = (session as { id?: unknown } | null)?.id
+      const sessionId = typeof sessionIdRaw === 'string' ? sessionIdRaw : undefined
+      blockResolution = classifyDoctrineBlocksForSession({
+        methodStructures: stampedMethodStructures,
+        dayNumber,
+        sessionId,
+        sessionRole,
+        weeklyMethodBudgetPlan:
+          (input.weeklyMethodBudgetPlan as Parameters<typeof classifyDoctrineBlocksForSession>[0]['weeklyMethodBudgetPlan']) ?? null,
+      })
+      // Stamp the resolution entries onto the session for display consumers.
+      ;(session as unknown as { doctrineBlockResolution?: DoctrineBlockResolutionEntry[] }).doctrineBlockResolution =
+        blockResolution.entries
+    }
+  } catch (resolutionErr) {
+    // Fail-soft: classifier must never block the mutator from returning the
+    // existing Phase 4L/4M/4P summary.
+    console.log('[PHASE4Q-BLOCK-RESOLUTION-FAILED]', { error: String(resolutionErr) })
+  }
+
+  // -----------------------------------------------------------------------
+  // 2e. [PHASE 4Q] PER-SESSION DOCTRINE PARTICIPATION
+  //     Final per-session verdict: did doctrine run for this day, and if it
+  //     ran with no change, why? Answers DOCTRINE_USED_DECISIVELY /
+  //     EVALUATED_NO_CHANGE / NOT_RELEVANT_TO_SESSION / INPUT_MISSING /
+  //     OUTPUT_DROPPED. Stamped onto `session.doctrineParticipation`.
+  // -----------------------------------------------------------------------
+  let doctrineParticipation: SessionDoctrineParticipation | null = null
+  try {
+    const sessionRoleRaw =
+      (session as { weeklyRole?: { roleId?: unknown } } | null)?.weeklyRole?.roleId ?? null
+    const sessionRole = typeof sessionRoleRaw === 'string' ? sessionRoleRaw : null
+    const dayNumberRaw = (session as { dayNumber?: unknown } | null)?.dayNumber
+    const dayNumber = typeof dayNumberRaw === 'number' ? dayNumberRaw : 0
+
+    // Grouped families: superset / circuit / density_block. Used by the
+    // participation builder to distinguish "method applied row-level" from
+    // "grouped block visible".
+    const groupedFamilies = new Set(['superset', 'circuit', 'density_block'])
+    let groupedAppliedCount = 0
+    if (structuralMaterialization) {
+      for (const entry of structuralMaterialization.methodStructures) {
+        if (
+          groupedFamilies.has(entry.family) &&
+          (entry.status === 'applied' || entry.status === 'already_applied')
+        ) {
+          groupedAppliedCount += 1
+        }
+      }
+    }
+
+    const totalBugs = blockResolution
+      ? blockResolution.bugMissingConnectionCount +
+        blockResolution.bugRuntimeContractMissingCount +
+        blockResolution.bugDisplayConsumerMissingCount +
+        blockResolution.bugNormalizerDroppedTruthCount +
+        blockResolution.bugStaleSourceWonCount
+      : 0
+
+    doctrineParticipation = buildSessionDoctrineParticipation({
+      dayNumber,
+      sessionRole,
+      // Doctrine query/runtime availability is inferred from the input
+      // contract presence. The corridor only ran if the contract was usable.
+      doctrineQueried: input.doctrineRuntimeContract != null,
+      doctrineRuntimeAvailable: input.doctrineRuntimeContract != null,
+      trainingIntentAvailable: input.trainingIntentVector != null,
+      weeklyBudgetAvailable: input.weeklyMethodBudgetPlan != null,
+      methodDecisionAvailable: input.methodDecision != null,
+      structuralMaterializationRan: structuralMaterialization != null,
+      rowLevelMutationRan: corridorSummary != null,
+      appliedCount: structuralMaterialization?.appliedCount ?? 0,
+      alreadyAppliedCount: structuralMaterialization?.alreadyAppliedCount ?? 0,
+      blockedCount: structuralMaterialization?.blockedCount ?? 0,
+      noSafeTargetCount: structuralMaterialization?.noSafeTargetCount ?? 0,
+      notNeededCount: structuralMaterialization?.notNeededCount ?? 0,
+      groupedAppliedCount,
+      bugCount: totalBugs,
+    })
+    ;(session as unknown as { doctrineParticipation?: SessionDoctrineParticipation }).doctrineParticipation =
+      doctrineParticipation
+  } catch (participationErr) {
+    // Fail-soft: participation builder must never block the mutator.
+    console.log('[PHASE4Q-PARTICIPATION-FAILED]', { error: String(participationErr) })
+  }
+
+  // -----------------------------------------------------------------------
   // 3. BUILD APPLIED / BLOCKED LISTS
   // -----------------------------------------------------------------------
   const appliedMutations: RowLevelAppliedMutation[] = []
@@ -1246,6 +1393,28 @@ export function applyRowLevelMethodPrescriptionMutations(
           newStructuralGroupWritten: structuralMaterialization.newStructuralGroupWritten,
         }
       : null,
+    // [PHASE 4Q] Per-session classified resolution of every method structure
+    // entry. Replaces generic "blocked" labels with TRUE_SAFETY / NO_TARGET /
+    // NOT_RELEVANT / BUG_*. Null only on classifier crash (fail-soft).
+    blockResolution: blockResolution
+      ? {
+          entries: blockResolution.entries,
+          appliedCount: blockResolution.appliedCount,
+          alreadyAppliedCount: blockResolution.alreadyAppliedCount,
+          trueSafetyBlockCount: blockResolution.trueSafetyBlockCount,
+          noRelevantTargetCount: blockResolution.noRelevantTargetCount,
+          notRelevantToSessionCount: blockResolution.notRelevantToSessionCount,
+          bugMissingConnectionCount: blockResolution.bugMissingConnectionCount,
+          bugRuntimeContractMissingCount: blockResolution.bugRuntimeContractMissingCount,
+          bugDisplayConsumerMissingCount: blockResolution.bugDisplayConsumerMissingCount,
+          bugNormalizerDroppedTruthCount: blockResolution.bugNormalizerDroppedTruthCount,
+          bugStaleSourceWonCount: blockResolution.bugStaleSourceWonCount,
+          unknownNeedsAuditCount: blockResolution.unknownNeedsAuditCount,
+        }
+      : null,
+    // [PHASE 4Q] Per-session doctrine participation verdict. Mirrors
+    // `session.doctrineParticipation`.
+    doctrineParticipation,
   }
 
   // Stamp onto session

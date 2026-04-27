@@ -126,6 +126,24 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
         progressionDecision: e.progressionDecision,
         coachingMeta: e.coachingMeta,
         executionTruth: e.executionTruth,
+        // [PHASE 4Q] Preserve doctrine-corridor-stamped row-level method
+        // truth across the live-workout normalize boundary. Without these
+        // pass-throughs, methods that the program page card showed (top
+        // set / drop set / rest-pause / endurance density / cluster) get
+        // silently flattened into generic straight sets when Start Workout
+        // is tapped. See lib/program/doctrine-application-corridor.ts for
+        // where these are stamped and lib/workout/normalize-workout-session.ts
+        // for the parallel preservation block in the secondary normalizer.
+        setExecutionMethod: e.setExecutionMethod,
+        densityPrescription: e.densityPrescription,
+        doctrineApplicationDeltas: e.doctrineApplicationDeltas,
+        // [PHASE 4P] Structural method materialization corridor flags. Used
+        // by the live workout to attribute superset/circuit/density block
+        // membership to the corridor vs the builder.
+        structuralMethodApplied: e.structuralMethodApplied,
+        structuralMethodDeltas: e.structuralMethodDeltas,
+        // [WEEK-PROGRESSION-TRUTH] Preserve weighted RPE if present.
+        targetWeightedRPE: e.targetWeightedRPE,
       }
     })
     .filter((ex): ex is NonNullable<typeof ex> => ex !== null)

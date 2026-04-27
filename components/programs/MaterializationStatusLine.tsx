@@ -592,6 +592,269 @@ export function WeeklyMethodChallengeLine({ program }: Props) {
       <Phase4NMethodBudgetLine program={program as unknown as { weeklyMethodBudgetPlan?: BudgetPlanView | null; trainingIntentVector?: IntentVectorView | null }} />
 
       <Phase4PMethodStructureLine program={program as unknown as { methodStructureRollup?: MethodStructureRollupView | null }} />
+
+      <Phase4QDoctrineBlockResolutionLine
+        program={program as unknown as { doctrineBlockResolutionRollup?: DoctrineBlockResolutionRollupView | null }}
+      />
+
+      <Phase4QDoctrineParticipationLine
+        program={program as unknown as { doctrineParticipationRollup?: DoctrineParticipationRollupView | null }}
+      />
+
+      <Phase4QAuthoritativeSourceMapLine
+        program={program as unknown as { authoritativeSourceMap?: AuthoritativeProgramSourceMapView | null }}
+      />
+    </div>
+  )
+}
+
+// =============================================================================
+// [PHASE 4Q] DOCTRINE BLOCK RESOLUTION LINE
+// Reads `program.doctrineBlockResolutionRollup` (built by
+// `lib/program/doctrine-block-resolution-contract.ts` in the authoritative
+// generation wrapper). Replaces the generic yellow "blocked" status that
+// previously appeared on the Program page with classified counts:
+//   - true safety blocks (legitimate, doctrine-correct)
+//   - no relevant target / not relevant to session (legitimate non-applies)
+//   - BUG_* (missing connection / runtime / display / normalizer / stale source)
+// The verdict pill is colour-coded:
+//   ALL_BLOCKS_EXPLAINED_OR_APPLIED       → emerald
+//   BUG_BLOCKS_REMAIN                     → amber
+//   DISPLAY_SOURCE_SPLIT_REMAINS          → amber
+//   RUNTIME_PARITY_BLOCKED                → amber
+// First bug sample is exposed in the verdict pill's tooltip.
+// =============================================================================
+interface DoctrineBlockResolutionRollupView {
+  finalVerdict?: string
+  totalApplied?: number
+  totalAlreadyApplied?: number
+  totalTrueSafetyBlocks?: number
+  totalNoRelevantTarget?: number
+  totalNotRelevantToSession?: number
+  totalBugMissingConnection?: number
+  totalBugRuntimeContractMissing?: number
+  totalBugDisplayConsumerMissing?: number
+  totalBugNormalizerDroppedTruth?: number
+  totalBugStaleSourceWon?: number
+  firstBugSample?: {
+    family?: string
+    dayNumber?: number
+    resolvedStatus?: string
+    reason?: string
+    requiredAction?: string
+  } | null
+}
+
+function Phase4QDoctrineBlockResolutionLine({
+  program,
+}: {
+  program: { doctrineBlockResolutionRollup?: DoctrineBlockResolutionRollupView | null }
+}) {
+  const rollup = program.doctrineBlockResolutionRollup
+  if (!rollup || !rollup.finalVerdict) return null
+
+  const applied = rollup.totalApplied ?? 0
+  const alreadyApplied = rollup.totalAlreadyApplied ?? 0
+  const trueSafety = rollup.totalTrueSafetyBlocks ?? 0
+  const noTarget = rollup.totalNoRelevantTarget ?? 0
+  const notRelevant = rollup.totalNotRelevantToSession ?? 0
+  const totalBugs =
+    (rollup.totalBugMissingConnection ?? 0) +
+    (rollup.totalBugRuntimeContractMissing ?? 0) +
+    (rollup.totalBugDisplayConsumerMissing ?? 0) +
+    (rollup.totalBugNormalizerDroppedTruth ?? 0) +
+    (rollup.totalBugStaleSourceWon ?? 0)
+
+  const sample = rollup.firstBugSample ?? null
+  const sampleTooltip = sample
+    ? `Day ${sample.dayNumber ?? '?'} · ${sample.family ?? '—'} · ${sample.resolvedStatus ?? '—'}${sample.reason ? ` — ${sample.reason}` : ''}${sample.requiredAction ? ` (next: ${sample.requiredAction})` : ''}`
+    : ''
+
+  function verdictMicrocopy(): { label: string; tone: string } {
+    switch (rollup?.finalVerdict) {
+      case 'ALL_BLOCKS_EXPLAINED_OR_APPLIED':
+        return { label: 'all blocks explained or applied', tone: 'text-emerald-300' }
+      case 'BUG_BLOCKS_REMAIN':
+        return { label: `${totalBugs} bug-block${totalBugs === 1 ? '' : 's'} remain`, tone: 'text-amber-300' }
+      case 'DISPLAY_SOURCE_SPLIT_REMAINS':
+        return { label: 'display source split — display consumer missing', tone: 'text-amber-300' }
+      case 'RUNTIME_PARITY_BLOCKED':
+        return { label: 'live workout parity blocked', tone: 'text-amber-300' }
+      default:
+        return { label: rollup?.finalVerdict ?? '—', tone: 'text-zinc-400' }
+    }
+  }
+  const { label, tone } = verdictMicrocopy()
+
+  return (
+    <div className="mt-2 border-t border-zinc-800/60 pt-2">
+      <div
+        className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] min-w-0"
+        style={{ overflowWrap: 'anywhere' }}
+      >
+        <span className="font-medium text-zinc-300">Doctrine blocks</span>
+        <span className={tone} title={sampleTooltip}>
+          {label}
+        </span>
+        <span className="text-zinc-500">·</span>
+        <span className="text-zinc-400">
+          {applied} applied
+          {alreadyApplied > 0 ? ` · ${alreadyApplied} already applied` : ''}
+          {trueSafety > 0 ? ` · ${trueSafety} true safety` : ''}
+          {noTarget > 0 ? ` · ${noTarget} no relevant target` : ''}
+          {notRelevant > 0 ? ` · ${notRelevant} not relevant` : ''}
+          {totalBugs > 0 ? ` · ${totalBugs} bug-block` : ''}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// [PHASE 4Q] DOCTRINE PARTICIPATION LINE
+// Reads `program.doctrineParticipationRollup` (built by
+// `lib/program/session-doctrine-participation-contract.ts`). Answers "did
+// every day participate in doctrine, and if not, why?". Without this line
+// the user could never tell whether a day silently skipped doctrine
+// (input missing / output dropped / display not consuming) vs honestly
+// evaluated and earned no change.
+// =============================================================================
+interface DoctrineParticipationRollupView {
+  sessionsProcessed?: number
+  countsByVerdict?: Record<string, number>
+  everyDayAccounted?: boolean
+  worstVerdict?: string
+  worstVerdictDays?: number[]
+}
+
+function Phase4QDoctrineParticipationLine({
+  program,
+}: {
+  program: { doctrineParticipationRollup?: DoctrineParticipationRollupView | null }
+}) {
+  const rollup = program.doctrineParticipationRollup
+  if (!rollup || !rollup.sessionsProcessed) return null
+
+  const counts = rollup.countsByVerdict ?? {}
+  const usedDecisively = counts['DOCTRINE_USED_DECISIVELY'] ?? 0
+  const evaluatedNoChange = counts['DOCTRINE_EVALUATED_NO_CHANGE'] ?? 0
+  const notRelevant = counts['DOCTRINE_NOT_RELEVANT_TO_SESSION'] ?? 0
+  const inputMissing = counts['DOCTRINE_INPUT_MISSING'] ?? 0
+  const outputDropped = counts['DOCTRINE_OUTPUT_DROPPED'] ?? 0
+  const displayNotConsuming = counts['DISPLAY_NOT_CONSUMING_DOCTRINE'] ?? 0
+  const liveNotConsuming = counts['LIVE_WORKOUT_NOT_CONSUMING_DOCTRINE'] ?? 0
+  const totalBugs = inputMissing + outputDropped + displayNotConsuming + liveNotConsuming
+
+  const tone = !rollup.everyDayAccounted || totalBugs > 0
+    ? 'text-amber-300'
+    : usedDecisively > 0
+      ? 'text-emerald-300'
+      : 'text-zinc-400'
+  const label = !rollup.everyDayAccounted
+    ? 'days with no participation verdict'
+    : totalBugs > 0
+      ? `${totalBugs} day${totalBugs === 1 ? '' : 's'} with bug verdict (${rollup.worstVerdict ?? '—'})`
+      : usedDecisively > 0
+        ? `${usedDecisively} of ${rollup.sessionsProcessed} day${rollup.sessionsProcessed === 1 ? '' : 's'} use doctrine decisively`
+        : 'every day evaluated doctrine, no decisive change'
+  const tooltip =
+    rollup.worstVerdictDays && rollup.worstVerdictDays.length > 0
+      ? `Worst-verdict days: ${rollup.worstVerdictDays.join(', ')}`
+      : ''
+
+  return (
+    <div className="mt-2 border-t border-zinc-800/60 pt-2">
+      <div
+        className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] min-w-0"
+        style={{ overflowWrap: 'anywhere' }}
+      >
+        <span className="font-medium text-zinc-300">Doctrine participation</span>
+        <span className={tone} title={tooltip}>
+          {label}
+        </span>
+        <span className="text-zinc-500">·</span>
+        <span className="text-zinc-400">
+          {usedDecisively} decisive
+          {evaluatedNoChange > 0 ? ` · ${evaluatedNoChange} no change` : ''}
+          {notRelevant > 0 ? ` · ${notRelevant} not relevant` : ''}
+          {totalBugs > 0 ? ` · ${totalBugs} bug` : ''}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// [PHASE 4Q] AUTHORITATIVE SOURCE MAP LINE
+// Reads `program.authoritativeSourceMap` (built once at generation time by
+// `lib/program/authoritative-program-source-map.ts`). Confirms in one line
+// that Program display + live workout consume a single authoritative source
+// instead of split/legacy/fallback sources. Suppressed in the LOCKED case
+// to keep the proof strip uncluttered when everything is healthy; only
+// rendered when the map detected a split, stale source, legacy fallback,
+// or live workout divergence. Honest no-clutter semantics.
+// =============================================================================
+interface AuthoritativeProgramSourceMapView {
+  sourceVerdict?: string
+  finalProgramSource?: string
+  finalSessionSource?: string
+  finalDisplaySource?: string
+  finalWorkoutLaunchSource?: string
+  sessionsCount?: number
+  demotedSources?: string[]
+  blockedLegacySources?: string[]
+  warnings?: string[]
+}
+
+function Phase4QAuthoritativeSourceMapLine({
+  program,
+}: {
+  program: { authoritativeSourceMap?: AuthoritativeProgramSourceMapView | null }
+}) {
+  const map = program.authoritativeSourceMap
+  if (!map || !map.sourceVerdict) return null
+  // Honest no-clutter: when the source is locked, suppress the line. The user
+  // only needs to see this surface when something is actually split/stale.
+  if (map.sourceVerdict === 'LOCKED_SINGLE_AUTHORITATIVE_SOURCE') return null
+
+  const tone =
+    map.sourceVerdict === 'LIVE_WORKOUT_DIVERGES_FROM_PROGRAM_DISPLAY'
+      ? 'text-amber-300'
+      : map.sourceVerdict === 'LEGACY_FALLBACK_CONTROLLING_DISPLAY'
+        ? 'text-amber-300'
+        : 'text-zinc-400'
+
+  const label = (() => {
+    switch (map.sourceVerdict) {
+      case 'SPLIT_SOURCE_DETECTED':
+        return 'split source detected'
+      case 'STALE_SOURCE_DETECTED':
+        return 'stale source detected'
+      case 'LEGACY_FALLBACK_CONTROLLING_DISPLAY':
+        return 'legacy fallback controlling display'
+      case 'LIVE_WORKOUT_DIVERGES_FROM_PROGRAM_DISPLAY':
+        return 'live workout diverges from program display'
+      default:
+        return map.sourceVerdict ?? '—'
+    }
+  })()
+
+  const tooltip = (map.warnings ?? []).join(' · ')
+
+  return (
+    <div className="mt-2 border-t border-zinc-800/60 pt-2">
+      <div
+        className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] min-w-0"
+        style={{ overflowWrap: 'anywhere' }}
+      >
+        <span className="font-medium text-zinc-300">Source map</span>
+        <span className={tone} title={tooltip}>
+          {label}
+        </span>
+        {(map.demotedSources?.length ?? 0) > 0 ? (
+          <span className="text-zinc-500">· demoted: {(map.demotedSources ?? []).join(', ')}</span>
+        ) : null}
+      </div>
     </div>
   )
 }

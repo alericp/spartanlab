@@ -1948,6 +1948,19 @@ export async function executeAuthoritativeGeneration(
           firstAppliedSample: null as null | { dayNumber: number; family: string; exerciseNames: string[]; reason: string; visibleProofPath: string },
         }
 
+        // [PHASE 4Q] Per-session classifier results + per-session participation
+        // are fed into program-level rollups after the loop. The rollups are
+        // built by `buildDoctrineBlockResolutionRollup` and
+        // `buildProgramDoctrineParticipationRollup` so the Program page can
+        // render one compact line for each. Built lazily inside the try block
+        // to keep them out of the hot path on fail-soft error.
+        const perSessionBlockResolutionResults: Array<
+          import('@/lib/program/doctrine-block-resolution-contract').ClassifyDoctrineBlocksResult
+        > = []
+        const perSessionDoctrineParticipationEntries: Array<
+          import('@/lib/program/session-doctrine-participation-contract').SessionDoctrineParticipation
+        > = []
+
         for (let s = 0; s < program.sessions.length; s++) {
           const sess = program.sessions[s] as unknown
           try {
@@ -2046,6 +2059,30 @@ export async function executeAuthoritativeGeneration(
                 }
               }
             }
+
+            // [PHASE 4Q] Accumulate per-session block resolution + doctrine
+            // participation. Classifier output already lives on
+            // `summary.blockResolution`; participation is on
+            // `summary.doctrineParticipation`. Both are JSON-safe.
+            if (summary.blockResolution) {
+              perSessionBlockResolutionResults.push({
+                entries: summary.blockResolution.entries,
+                appliedCount: summary.blockResolution.appliedCount,
+                alreadyAppliedCount: summary.blockResolution.alreadyAppliedCount,
+                trueSafetyBlockCount: summary.blockResolution.trueSafetyBlockCount,
+                noRelevantTargetCount: summary.blockResolution.noRelevantTargetCount,
+                notRelevantToSessionCount: summary.blockResolution.notRelevantToSessionCount,
+                bugMissingConnectionCount: summary.blockResolution.bugMissingConnectionCount,
+                bugRuntimeContractMissingCount: summary.blockResolution.bugRuntimeContractMissingCount,
+                bugDisplayConsumerMissingCount: summary.blockResolution.bugDisplayConsumerMissingCount,
+                bugNormalizerDroppedTruthCount: summary.blockResolution.bugNormalizerDroppedTruthCount,
+                bugStaleSourceWonCount: summary.blockResolution.bugStaleSourceWonCount,
+                unknownNeedsAuditCount: summary.blockResolution.unknownNeedsAuditCount,
+              })
+            }
+            if (summary.doctrineParticipation) {
+              perSessionDoctrineParticipationEntries.push(summary.doctrineParticipation)
+            }
           } catch (perSessionErr) {
             console.log('[PHASE4L-ROW-LEVEL-MUTATOR-PER-SESSION-FAILED]', {
               dayNumber: (sess as { dayNumber?: number } | null)?.dayNumber ?? null,
@@ -2138,6 +2175,96 @@ export async function executeAuthoritativeGeneration(
           byFamily: methodStructureRollupAccum.byFamily,
           sampleProof: methodStructureRollupAccum.firstAppliedSample,
         })
+
+        // [PHASE 4Q] Build program-level doctrine block resolution rollup
+        // from the per-session classifier results. This replaces the generic
+        // "blocked" labels with classified counts and a one-line verdict
+        // (ALL_BLOCKS_EXPLAINED_OR_APPLIED / BUG_BLOCKS_REMAIN /
+        //  DISPLAY_SOURCE_SPLIT_REMAINS / RUNTIME_PARITY_BLOCKED).
+        try {
+          const { buildDoctrineBlockResolutionRollup } = await import(
+            '@/lib/program/doctrine-block-resolution-contract'
+          )
+          const blockResolutionRollup = buildDoctrineBlockResolutionRollup(
+            perSessionBlockResolutionResults,
+          )
+          ;(program as unknown as { doctrineBlockResolutionRollup?: unknown }).doctrineBlockResolutionRollup =
+            blockResolutionRollup
+          console.log('[PHASE4Q-DOCTRINE-BLOCK-RESOLUTION-ROLLUP]', {
+            generationIntent: request.generationIntent,
+            triggerSource: request.triggerSource,
+            finalVerdict: blockResolutionRollup.finalVerdict,
+            totalApplied: blockResolutionRollup.totalApplied,
+            totalTrueSafetyBlocks: blockResolutionRollup.totalTrueSafetyBlocks,
+            totalNoRelevantTarget: blockResolutionRollup.totalNoRelevantTarget,
+            totalNotRelevantToSession: blockResolutionRollup.totalNotRelevantToSession,
+            totalBugMissingConnection: blockResolutionRollup.totalBugMissingConnection,
+            totalBugRuntimeContractMissing: blockResolutionRollup.totalBugRuntimeContractMissing,
+            totalBugDisplayConsumerMissing: blockResolutionRollup.totalBugDisplayConsumerMissing,
+            totalBugNormalizerDroppedTruth: blockResolutionRollup.totalBugNormalizerDroppedTruth,
+            totalBugStaleSourceWon: blockResolutionRollup.totalBugStaleSourceWon,
+            firstBugSample: blockResolutionRollup.firstBugSample,
+          })
+        } catch (rollupErr) {
+          console.log('[PHASE4Q-BLOCK-RESOLUTION-ROLLUP-FAILED]', { error: String(rollupErr) })
+        }
+
+        // [PHASE 4Q] Build program-level doctrine participation rollup. Every
+        // day must have a verdict; the rollup answers "are any days silently
+        // skipping doctrine?" via `everyDayAccounted`.
+        try {
+          const { buildProgramDoctrineParticipationRollup } = await import(
+            '@/lib/program/session-doctrine-participation-contract'
+          )
+          const participationRollup = buildProgramDoctrineParticipationRollup(
+            perSessionDoctrineParticipationEntries,
+          )
+          ;(program as unknown as { doctrineParticipationRollup?: unknown }).doctrineParticipationRollup =
+            participationRollup
+          console.log('[PHASE4Q-DOCTRINE-PARTICIPATION-ROLLUP]', {
+            generationIntent: request.generationIntent,
+            triggerSource: request.triggerSource,
+            sessionsProcessed: participationRollup.sessionsProcessed,
+            countsByVerdict: participationRollup.countsByVerdict,
+            everyDayAccounted: participationRollup.everyDayAccounted,
+            worstVerdict: participationRollup.worstVerdict,
+            worstVerdictDays: participationRollup.worstVerdictDays,
+          })
+        } catch (rollupErr) {
+          console.log('[PHASE4Q-PARTICIPATION-ROLLUP-FAILED]', { error: String(rollupErr) })
+        }
+
+        // [PHASE 4Q] Run the authoritative program source map ONE TIME after
+        // every per-session corridor has finished and every program-level
+        // rollup has been stamped. This is what proves, at generation time,
+        // the freshly built program has every canonical method/structure
+        // field populated. The Program page can call the same helper at
+        // display time to detect divergence.
+        try {
+          const { runAuthoritativeProgramSourceMap } = await import(
+            '@/lib/program/authoritative-program-source-map'
+          )
+          const sourceMap = runAuthoritativeProgramSourceMap({
+            program,
+            observedAt: 'generation',
+            staleSourceSuspected: false,
+            freshGenerationJustCompleted: true,
+          })
+          ;(program as unknown as { authoritativeSourceMap?: unknown }).authoritativeSourceMap = sourceMap
+          console.log('[PHASE4Q-AUTHORITATIVE-SOURCE-MAP]', {
+            generationIntent: request.generationIntent,
+            triggerSource: request.triggerSource,
+            sourceVerdict: sourceMap.sourceVerdict,
+            finalDisplaySource: sourceMap.finalDisplaySource,
+            finalSessionSource: sourceMap.finalSessionSource,
+            sessionsCount: sourceMap.sessionsCount,
+            demotedSources: sourceMap.demotedSources,
+            blockedLegacySources: sourceMap.blockedLegacySources,
+            warnings: sourceMap.warnings,
+          })
+        } catch (sourceMapErr) {
+          console.log('[PHASE4Q-AUTHORITATIVE-SOURCE-MAP-FAILED]', { error: String(sourceMapErr) })
+        }
 
         console.log('[PHASE4M-DOCTRINE-APPLICATION-COMPLETE]', {
           generationIntent: request.generationIntent,

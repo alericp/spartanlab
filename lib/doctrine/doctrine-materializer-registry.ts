@@ -59,6 +59,15 @@ export type DoctrineMaterializerCategoryKey =
   | 'exercise_selection'
   | 'carryover_support'
   | 'method_selection'
+  /**
+   * [PHASE 4J] Honest split: row-level methods (top_set_backoff / drop_set /
+   * rest_pause / endurance_density) have NO materializer in the codebase.
+   * `method_selection` covers grouped methods (super/circuit/density/cluster)
+   * that ARE materialized by `applySessionStylePreferences`. This second key
+   * surfaces the row-level gap honestly instead of hiding it inside a single
+   * "method_selection: CONNECTED_AND_MATERIAL" claim.
+   */
+  | 'method_selection_row_level'
   | 'prescription'
   | 'progression'
   | 'contraindication_safety'
@@ -178,28 +187,79 @@ export const DOCTRINE_MATERIALIZER_REGISTRY: ReadonlyArray<DoctrineMaterializerR
   },
 
   // ---------------------------------------------------------------------------
-  // 3. METHOD SELECTION  (method-decision-engine reads runtimeContract.methodDoctrine)
+  // 3. METHOD SELECTION  (Phase 4J — honest correction)
+  //
+  // The Phase 4G/4H entry blanket-claimed "CONNECTED_AND_MATERIAL" naming
+  // method-decision-engine as the owner. That was inaccurate. Phase 4J audit
+  // (see lib/program/weekly-method-representation.ts header) found:
+  //
+  //   1. The actual MATERIALIZER for grouped methods is
+  //      `applySessionStylePreferences` in `lib/training-methods.ts`. It
+  //      writes session.styleMetadata.styledGroups[].groupType for
+  //      'superset' | 'circuit' | 'density_block' | 'cluster' | 'straight'.
+  //
+  //   2. `method-decision-engine` is a POST-BUILD AUDITOR — it stamps
+  //      `session.methodDecision` with the engine's recommendation and the
+  //      reconciled `actualMaterialization` counts. It does NOT mutate
+  //      exercises.
+  //
+  //   3. Row-level methods `top_set_backoff` / `drop_set` / `rest_pause` /
+  //      `endurance_density` have NO materializer anywhere. The auditor
+  //      reasons about them and surfaces zero counts in
+  //      `actualMaterialization.rowExecutionCounts`. No code path writes
+  //      `exercise.setExecutionMethod = 'top_set' | 'drop_set' | 'rest_pause'`
+  //      today.
+  //
+  // We split the entry into two honest rows so the matrix and Program page
+  // can render the truth.
   // ---------------------------------------------------------------------------
   {
     category: 'method_selection',
-    owner: 'method decision engine',
-    ownerModule: '@/lib/program/method-decision-engine',
-    ownerEntryFunction: 'decideMethodForExercise',
+    owner: 'training-methods grouped-style materializer',
+    ownerModule: '@/lib/training-methods',
+    ownerEntryFunction: 'applySessionStylePreferences',
     status: 'CONNECTED_AND_MATERIAL',
     allowedFields: [
+      'session.styleMetadata.styledGroups[]',
+      'session.styleMetadata.styledGroups[].groupType',
       'exercise.method',
-      'exercise.setExecutionMethod',
-      'exercise.methodReason',
-      'exercise.methodBlockedReason',
-      'styleMetadata.styledGroups',
-      'methodMaterializationSummary',
+      'exercise.methodLabel',
+      'exercise.setExecutionMethod (cluster only)',
+      'exercise.blockId',
+      'session.styleMetadata.methodMaterializationSummary',
     ],
     sourceBatches: ['batch_01', 'batch_02', 'batch_06', 'batch_10'],
     notes:
-      'method-decision-engine consumes runtimeContract.methodDoctrine.preferredMethods ' +
-      'and blockedMethods plus prescriptionDoctrine fatigue/time notes. Batch 10 ' +
-      'METHOD_COMPATIBILITY_MATRIX is the per-method × per-exercise-category gate ' +
-      'used by the engine. Materialization is observable via methodMaterializationSummary.',
+      'Phase 4J honest split — grouped row. applySessionStylePreferences writes ' +
+      'styledGroups for superset / circuit / density_block, plus row-level cluster via ' +
+      'setExecutionMethod. method-decision-engine.stampMethodDecisionsOnSessions runs ' +
+      'AFTER the builder and reconciles a per-session methodDecision auditor stamp; it ' +
+      'is not the materializer. Phase 4A.actualMaterialization is the authoritative ' +
+      'reconciliation surface.',
+  },
+  {
+    category: 'method_selection_row_level',
+    owner: null,
+    ownerModule: null,
+    ownerEntryFunction: null,
+    status: 'MATERIALIZER_NOT_CONNECTED',
+    allowedFields: [
+      'exercise.setExecutionMethod (top_set / drop_set / rest_pause)',
+      'exercise.topSetPrescription',
+      'exercise.backoffPrescription',
+      'exercise.dropSetPrescription',
+    ],
+    sourceBatches: ['batch_01', 'batch_02', 'batch_10'],
+    notes:
+      'Phase 4J honest split — row-level row. top_set_backoff / drop_set / rest_pause / ' +
+      'endurance_density have NO materializer. Drop-set logic exists ' +
+      '(CALISTHENICS_DROP_SETS, evaluateDropSet in training-methods.ts) but is never ' +
+      'called by applySessionStylePreferences or any session builder. ' +
+      'method-decision-engine reasons about these methods and reports zero counts in ' +
+      'actualMaterialization.rowExecutionCounts. Building safe row-level dosage ' +
+      'mutators is deferred — same safety gate that blocked the prescription/' +
+      'progression mutators in Phase 4I. The new ' +
+      'lib/program/weekly-method-representation.ts auditor surfaces this honestly.',
   },
 
   // ---------------------------------------------------------------------------

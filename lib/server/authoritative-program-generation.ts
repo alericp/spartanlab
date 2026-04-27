@@ -1961,6 +1961,20 @@ export async function executeAuthoritativeGeneration(
           import('@/lib/program/session-doctrine-participation-contract').SessionDoctrineParticipation
         > = []
 
+        // [PHASE 4Z / PHASE I] Per-session numeric prescription mutation
+        // summaries. The mutation runs INSIDE this same per-session loop
+        // (after row-level method/prescription mutations have stamped
+        // `setExecutionMethod` / `methodStructures` / `prescriptionBoundsProof`
+        // / `weeklyRole` so the contract can read them), but the program-level
+        // rollup is built ONCE after the loop using
+        // `summarizeNumericMutationResult()`. Same fail-soft pattern as
+        // every other corridor in this file — a per-session error never
+        // blocks generation.
+        const perSessionNumericMutationSummaries: Array<
+          import('@/lib/program/numeric-prescription-mutation-contract').NumericMutationSessionSummary
+        > = []
+        const perSessionNumericMutationDayNumbers: Array<number | null> = []
+
         for (let s = 0; s < program.sessions.length; s++) {
           const sess = program.sessions[s] as unknown
           try {
@@ -2082,6 +2096,49 @@ export async function executeAuthoritativeGeneration(
             }
             if (summary.doctrineParticipation) {
               perSessionDoctrineParticipationEntries.push(summary.doctrineParticipation)
+            }
+
+            // ================================================================
+            // [PHASE 4Z / PHASE I] NUMERIC PRESCRIPTION MUTATION
+            //
+            // Runs LAST in the per-session loop, after every other corridor
+            // has stamped its truth onto the session. By this point the
+            // exercise rows carry: applied `setExecutionMethod` (top_set /
+            // drop_set / rest_pause / cluster), applied `method` /
+            // `methodLabel` / `densityPrescription` for endurance_density,
+            // `prescriptionBoundsProof` per row, `doctrineApplicationDeltas[]`
+            // (with the Phase 4M restSeconds / targetRPE deltas already
+            // pushed), `methodStructures[]`, and `weeklyRole`.
+            //
+            // The mutation contract reads ONLY those signals and produces
+            // bounded changes to `sets` / `reps` / `holdSeconds`. It pushes
+            // additional `DoctrineApplicationDelta` entries with families
+            // `prescription_sets` / `prescription_reps` / `prescription_holds`
+            // onto the SAME `exercise.doctrineApplicationDeltas[]` array, so
+            // the existing Phase 4M normalizer (lib/workout/normalize-workout-session.ts)
+            // and Phase 4Q live loader (lib/workout/load-authoritative-session.ts)
+            // already preserve them through save/load/normalize/Program/live
+            // workout for free.
+            // ================================================================
+            try {
+              const { runNumericPrescriptionMutationForSession } = await import(
+                '@/lib/program/numeric-prescription-mutation-contract'
+              )
+              const numericResult = runNumericPrescriptionMutationForSession({
+                session: sess as Parameters<
+                  typeof runNumericPrescriptionMutationForSession
+                >[0]['session'],
+                jointCautions: jointCautionsForMutator,
+              })
+              perSessionNumericMutationSummaries.push(numericResult.summary)
+              perSessionNumericMutationDayNumbers.push(
+                (sess as { dayNumber?: number } | null)?.dayNumber ?? null,
+              )
+            } catch (numericErr) {
+              console.log('[PHASE4Z-NUMERIC-MUTATION-PER-SESSION-FAILED]', {
+                dayNumber: (sess as { dayNumber?: number } | null)?.dayNumber ?? null,
+                error: String(numericErr),
+              })
             }
           } catch (perSessionErr) {
             console.log('[PHASE4L-ROW-LEVEL-MUTATOR-PER-SESSION-FAILED]', {
@@ -2232,6 +2289,46 @@ export async function executeAuthoritativeGeneration(
           })
         } catch (rollupErr) {
           console.log('[PHASE4Q-PARTICIPATION-ROLLUP-FAILED]', { error: String(rollupErr) })
+        }
+
+        // ====================================================================
+        // [PHASE 4Z / PHASE I] PROGRAM-LEVEL NUMERIC MUTATION ROLLUP
+        //
+        // Built from the per-session summaries collected inside the per-session
+        // loop above. Stamps onto `program.numericMutationRollup` so the
+        // Program page and `runAuthoritativeProgramSourceMap` can read a
+        // single program-level verdict
+        // (NUMERIC_MUTATION_APPLIED / _PARTIAL / _BLOCKED_BY_PROTECTED_WEEK /
+        //  _BLOCKED_BY_SKILL_PRIORITY / _NO_ELIGIBLE_ROWS) and a one-line
+        // sample proof for the user-visible chip.
+        // ====================================================================
+        try {
+          const { summarizeNumericMutationResult } = await import(
+            '@/lib/program/numeric-prescription-mutation-contract'
+          )
+          const numericMutationRollup = summarizeNumericMutationResult(
+            perSessionNumericMutationSummaries,
+            perSessionNumericMutationDayNumbers,
+          )
+          ;(program as unknown as { numericMutationRollup?: unknown }).numericMutationRollup =
+            numericMutationRollup
+          console.log('[PHASE4Z-NUMERIC-MUTATION-ROLLUP]', {
+            generationIntent: request.generationIntent,
+            triggerSource: request.triggerSource,
+            sessionsProcessed: numericMutationRollup.sessionsProcessed,
+            totalRowsMutated: numericMutationRollup.totalRowsMutated,
+            totalFieldChanges: numericMutationRollup.totalFieldChanges,
+            fieldChangesByKind: numericMutationRollup.fieldChangesByKind,
+            totalSetsAdded: numericMutationRollup.totalSetsAdded,
+            totalSetsRemoved: numericMutationRollup.totalSetsRemoved,
+            programFinalVerdict: numericMutationRollup.programFinalVerdict,
+            firstAppliedSample: numericMutationRollup.firstAppliedSample,
+            protectionsApplied: numericMutationRollup.protectionsApplied,
+          })
+        } catch (numericRollupErr) {
+          console.log('[PHASE4Z-NUMERIC-MUTATION-ROLLUP-FAILED]', {
+            error: String(numericRollupErr),
+          })
         }
 
         // [PHASE 4Q] Run the authoritative program source map ONE TIME after

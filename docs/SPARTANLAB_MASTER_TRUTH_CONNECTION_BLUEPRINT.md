@@ -189,24 +189,47 @@ older than canonical session truth, and driving the program-level
 > the honest state, not a silent flatten. A safe density timer runtime is a
 > future engine-quality task and is not in scope for Phase H.
 
-> **Next chronological step:** Phase I — Numeric Prescription Mutation Lock.
-> Define safe mutation bounds for doctrine-driven sets / reps / holds / rest /
-> RPE changes in a new `lib/program/numeric-prescription-mutation-contract.ts`.
+> **Phase I — Numeric Prescription Mutation Lock — completed in Phase 4Z.**
+> See the Phase I section below for the contract location, insertion point,
+> conservative gates, and visible-proof contract.
 
 ---
 
-## Phase I — Numeric Prescription Mutation Lock — `NOT_STARTED`
+## Phase I — Numeric Prescription Mutation Lock — `COMPLETE`
 
 **Purpose:** allow doctrine to safely change dosage (sets/reps/holds/rest/RPE)
 once truth, source, and display are locked.
 
-| ID | Subtask | Status |
-|----|---------|--------|
-| I1 | Define safe mutation bounds | `NOT_STARTED` |
-| I2 | Protect skill-priority work from unsafe fatigue methods | `NOT_STARTED` |
-| I3 | Mutate only eligible rows | `NOT_STARTED` |
-| I4 | Preserve conservative safety gates | `NOT_STARTED` |
-| I5 | Surface before/after dosage changes clearly | `NOT_STARTED` |
+| ID | Subtask | Status | Evidence |
+|----|---------|--------|----------|
+| I1 | Define safe mutation bounds | `COMPLETE` (4Z) | New pure module `lib/program/numeric-prescription-mutation-contract.ts` exports `getDefaultNumericMutationBounds()` with centralized sets / reps / holdSeconds bounds. Rest + RPE remain owned by Phase 4M's doctrine-application corridor and are not re-mutated by Phase I. |
+| I2 | Protect skill-priority work from unsafe fatigue methods | `COMPLETE` (4Z) | `skill_priority` and `final_skill_obligation` rows from `prescriptionBoundsProof.role` are blocked from any upward sets / reps / holds mutation; `jointCautions` hard-blocks holdSeconds increases on isometric skill rows. |
+| I3 | Mutate only eligible rows | `COMPLETE` (4Z) | `isExerciseEligibleForNumericMutation()` reads `weeklyRole`, `prescriptionBoundsProof.role`, `jointCautions`, and structural method status. Ineligible rows produce a `numericPrescriptionDelta` with `status: protected` and a `protectedBy` reason — never a fake numeric change. |
+| I4 | Preserve conservative safety gates | `COMPLETE` (4Z) | Acclimation / deload / protected weeks block upward mutations entirely. Per-session +1 set cap prevents fatigue-debt accumulation. RPE max is 8 (7 for protected rows); Phase I never prescribes RPE 9-10. `density_block` and unsupported method types remain `guidanceOnly` (deferred to a future engine-quality task) — no fake numeric mutation. |
+| I5 | Surface before/after dosage changes clearly | `COMPLETE` (4Z) | `numericPrescriptionDelta` per-row proof + `DoctrineApplicationDelta` entries (`prescription_sets` / `prescription_reps` / `prescription_holds`) survive save / load / normalize via the existing Phase 4M corridor. `AdaptiveSessionCard` Row 2 paints a single compact emerald (mutated) / amber (clamped) / grey (protected) chip with the contract `visibleLabel`. The same truth is the same one the live workout consumes via `lib/workout/load-authoritative-session.ts` and `lib/workout/normalize-workout-session.ts`. |
+
+> **Insertion point:** the mutation runs INSIDE the per-session loop in
+> `lib/server/authoritative-program-generation.ts`, AFTER
+> `applyRowLevelMethodPrescriptionMutations` (so it can read
+> `setExecutionMethod` / `methodStructures` / `prescriptionBoundsProof` /
+> `weeklyRole`) and BEFORE program save. The program-level rollup
+> `program.numericMutationRollup` is built ONCE after the loop. No
+> normalizer was promoted to a shadow builder — `program-state.ts`
+> `normalizeProgramForDisplay` and
+> `lib/workout/normalize-workout-session.ts` only PRESERVE the new fields
+> (the latter via the Phase 4M `doctrineApplicationDeltas[]` pass-through
+> plus a tiny new pass-through for `numericPrescriptionDelta`).
+
+> **Future engine-quality work (deferred, not in Phase I scope):** a real
+> intensity / recovery / adaptiveness layer that distributes high / moderate
+> / low day load across the week, scales sessions from recovery feedback,
+> and runs a real density runtime. Phase I deliberately creates the safe
+> mutation rail that this future layer must use — it does not implement that
+> layer itself.
+
+> **Next chronological step:** Phase J — Product Cleanup / Trust Polish.
+> Remove debug clutter, retire stale prompts, and tighten user-facing copy
+> so the final UI feels like an AI coach, not a debug report.
 
 ---
 

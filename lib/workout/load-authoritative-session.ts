@@ -142,6 +142,14 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
         // membership to the corridor vs the builder.
         structuralMethodApplied: e.structuralMethodApplied,
         structuralMethodDeltas: e.structuralMethodDeltas,
+        // [PHASE 4Z / PHASE I] Numeric prescription mutation per-row proof.
+        // Stamped by lib/program/numeric-prescription-mutation-contract.ts
+        // and carries the row's mutated sets/reps/holdSeconds before/after,
+        // protectedBy reason for non-mutated rows, and the visible chip
+        // label. Without this pass-through the Program-card chip and live
+        // workout coaching surface would lose proof that doctrine actually
+        // changed the prescription.
+        numericPrescriptionDelta: e.numericPrescriptionDelta,
         // [WEEK-PROGRESSION-TRUTH] Preserve weighted RPE if present.
         targetWeightedRPE: e.targetWeightedRPE,
       }

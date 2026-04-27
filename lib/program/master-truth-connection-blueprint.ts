@@ -481,7 +481,7 @@ function phaseH(): BlueprintPhase {
     // silent flatten. A safe density timer runtime is a future engine-quality
     // task (deferred to after Phase H/I locks per the docs note).
     status: 'COMPLETE',
-    nextAction: 'Begin Phase I Numeric Prescription Mutation Lock: define safe bounds for doctrine-driven sets/reps/holds/rest/RPE changes in a new lib/program/numeric-prescription-mutation-contract.ts.',
+    nextAction: 'Phase I (Numeric Prescription Mutation Lock) is now COMPLETE; next chronological step is Phase J Product Cleanup / Trust Polish.',
     subtasks: [
       { id: 'H.H1', title: 'Selected variant Full/45/30 uses canonical selected session', status: 'COMPLETE', evidence: ['lib/workout/selected-variant-session-contract.ts'], remainingWork: [] },
       { id: 'H.H2', title: 'Live workout loader preserves methodStructures', status: 'COMPLETE', evidence: ['lib/workout/load-authoritative-session.ts (Phase 4Q fix)'], remainingWork: [] },
@@ -499,14 +499,66 @@ function phaseI(): BlueprintPhase {
     id: 'I',
     title: 'Numeric Prescription Mutation Lock',
     purpose: 'Allow doctrine to safely change dosage once truth/source/display are locked.',
-    status: 'NOT_STARTED',
-    nextAction: 'Define safe mutation bounds for sets/reps/holds/rest/RPE in a new lib/program/numeric-prescription-mutation-contract.ts.',
+    // [PHASE 4Z] Phase I advanced NOT_STARTED → COMPLETE. The new pure
+    // contract `lib/program/numeric-prescription-mutation-contract.ts`
+    // exposes:
+    //   - `getDefaultNumericMutationBounds()` — centralized safe bounds for
+    //     sets / reps / holdSeconds (rest + RPE remain owned by Phase 4M's
+    //     doctrine-application corridor; Phase I never overrides those).
+    //   - `isExerciseEligibleForNumericMutation()` — eligibility filter
+    //     keyed on weeklyRole, prescriptionBoundsProof.role, jointCautions,
+    //     and existing structural method status.
+    //   - `runNumericPrescriptionMutationForSession()` — bounded session
+    //     mutator that pushes new `DoctrineApplicationDelta` entries
+    //     (families: prescription_sets / prescription_reps /
+    //     prescription_holds) onto the SAME `exercise.doctrineApplicationDeltas[]`
+    //     array Phase 4M already preserves through normalize/save/load/Program/live,
+    //     plus a single-object `exercise.numericPrescriptionDelta` proof for
+    //     the Program-card chip.
+    //   - `summarizeNumericMutationResult()` — program-level rollup with
+    //     verdict NUMERIC_MUTATION_APPLIED / _PARTIAL / _NO_ELIGIBLE_ROWS /
+    //     _BLOCKED_BY_PROTECTED_WEEK / _BLOCKED_BY_SKILL_PRIORITY /
+    //     _GUIDANCE_ONLY / _NOT_NEEDED.
+    //
+    // The mutation is invoked in `lib/server/authoritative-program-generation.ts`
+    // INSIDE the per-session loop, AFTER `applyRowLevelMethodPrescriptionMutations`
+    // (so it can read setExecutionMethod / methodStructures /
+    // prescriptionBoundsProof / weeklyRole) and BEFORE program save.
+    // The program-level rollup `program.numericMutationRollup` is built
+    // ONCE after the loop. No normalizer was promoted to a shadow builder;
+    // `program-state.ts` `normalizeProgramForDisplay` and
+    // `lib/workout/normalize-workout-session.ts` only PRESERVE the new
+    // fields (the latter via the Phase 4M doctrineApplicationDeltas[]
+    // pass-through plus a tiny new pass-through for `numericPrescriptionDelta`).
+    // `lib/workout/load-authoritative-session.ts` was extended to forward
+    // `numericPrescriptionDelta` so the live workout consumes the SAME
+    // mutated numbers.
+    //
+    // Conservative gates enforced:
+    //   - Acclimation/protected weeks (weeklyRole === 'acclimation' /
+    //     'deload' / 'protected') are NEVER mutated upward; capped to
+    //     no-change-or-protective only.
+    //   - Skill-priority and final-skill-obligation rows
+    //     (prescriptionBoundsProof.role === 'skill_priority' /
+    //     'final_skill_obligation') cannot receive upward sets/reps/holds.
+    //   - RPE max is 8 in Phase I (7 for protected/skill rows). Phase I
+    //     never prescribes RPE 9-10.
+    //   - Density / unsupported method types remain guidanceOnly — no fake
+    //     numeric mutation, deferred to a future engine-quality task.
+    //   - Total session sets cap: at most +1 set per session in Phase I.
+    //
+    // Visible proof: AdaptiveSessionCard Row 2 paints a single compact chip
+    // (`Sets 3 → 4` / `Hold 30s → 25s` / `Protected: skill_priority`) when
+    // the contract reports a mutated or protected outcome. Same chip text
+    // is the SAME truth the live workout consumes.
+    status: 'COMPLETE',
+    nextAction: 'Begin Phase J Product Cleanup / Trust Polish: remove debug clutter, retire stale prompts, and tighten user-facing copy so the final UI feels like an AI coach, not a debug report.',
     subtasks: [
-      { id: 'I.I1', title: 'Define safe mutation bounds', status: 'NOT_STARTED', evidence: [], remainingWork: ['Write the contract'] },
-      { id: 'I.I2', title: 'Protect skill-priority work from unsafe fatigue methods', status: 'NOT_STARTED', evidence: [], remainingWork: ['Use doctrineApplicationCorridor safety scan'] },
-      { id: 'I.I3', title: 'Mutate only eligible rows', status: 'NOT_STARTED', evidence: [], remainingWork: ['Eligibility filter'] },
-      { id: 'I.I4', title: 'Preserve conservative safety gates', status: 'NOT_STARTED', evidence: [], remainingWork: [] },
-      { id: 'I.I5', title: 'Surface before/after dosage changes clearly', status: 'NOT_STARTED', evidence: [], remainingWork: ['Reuse doctrineApplicationDeltas[]'] },
+      { id: 'I.I1', title: 'Define safe mutation bounds', status: 'COMPLETE', evidence: ['Phase 4Z: lib/program/numeric-prescription-mutation-contract.ts exports getDefaultNumericMutationBounds() with centralized sets / reps / holdSeconds bounds; rest + RPE remain Phase 4M-owned and are not mutated by Phase I'], remainingWork: [] },
+      { id: 'I.I2', title: 'Protect skill-priority work from unsafe fatigue methods', status: 'COMPLETE', evidence: ['Phase 4Z: skill_priority and final_skill_obligation rows from prescriptionBoundsProof.role are blocked from any upward sets/reps/holds mutation; only protective rest extension and RPE caps from the Phase 4M corridor apply', 'Phase 4Z: jointCautions hard-blocks holdSeconds increases on isometric skill rows'], remainingWork: [] },
+      { id: 'I.I3', title: 'Mutate only eligible rows', status: 'COMPLETE', evidence: ['Phase 4Z: isExerciseEligibleForNumericMutation() reads weeklyRole, prescriptionBoundsProof.role, jointCautions, and structural method status; ineligible rows produce a numericPrescriptionDelta with status: protected and protectedBy reason — never a fake numeric change'], remainingWork: [] },
+      { id: 'I.I4', title: 'Preserve conservative safety gates', status: 'COMPLETE', evidence: ['Phase 4Z: acclimation/deload/protected weeks block upward mutations entirely', 'Phase 4Z: per-session +1 set cap prevents fatigue-debt accumulation', 'Phase 4Z: RPE max 8 / 7 for protected rows; Phase I never prescribes RPE 9-10', 'Phase 4Z: density_block and unsupported method types remain guidanceOnly (deferred to future engine-quality task) — no fake numeric mutation'], remainingWork: [] },
+      { id: 'I.I5', title: 'Surface before/after dosage changes clearly', status: 'COMPLETE', evidence: ['Phase 4Z: numericPrescriptionDelta per-row proof + DoctrineApplicationDelta entries (prescription_sets / prescription_reps / prescription_holds) survive save/load/normalize via the existing Phase 4M corridor', 'Phase 4Z: AdaptiveSessionCard Row 2 paints a single compact emerald (mutated) / amber (clamped) / grey (protected) chip with the contract visibleLabel; same truth is the same the live workout consumes via lib/workout/load-authoritative-session.ts and lib/workout/normalize-workout-session.ts'], remainingWork: [] },
     ],
   }
 }

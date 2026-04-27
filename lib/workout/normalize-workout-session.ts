@@ -192,6 +192,22 @@ function normalizeExercise(raw: unknown, index: number): WorkoutExerciseContract
     ;(normalized as unknown as { doctrineApplicationDeltas: unknown }).doctrineApplicationDeltas = rawAppDeltas
   }
 
+  // [PHASE 4Z / PHASE I] Preserve the numeric prescription mutation per-row
+  // proof. Stamped by
+  // `lib/program/numeric-prescription-mutation-contract.ts` after Phase 4M's
+  // doctrine application corridor, this single object carries the row's
+  // mutated sets/reps/holdSeconds before/after history, the protectedBy
+  // reason for non-mutated rows, and the visible chip label the Program
+  // card / live workout coaching surface render. The `doctrineApplicationDeltas[]`
+  // preservation block above already carries the corresponding family
+  // entries (`prescription_sets` / `prescription_reps` / `prescription_holds`)
+  // — this preserves the compact one-object-per-row summary so consumers
+  // do not need to walk the deltas array.
+  const rawNumericDelta = (ex as { numericPrescriptionDelta?: unknown }).numericPrescriptionDelta
+  if (rawNumericDelta && typeof rawNumericDelta === 'object') {
+    ;(normalized as unknown as { numericPrescriptionDelta: unknown }).numericPrescriptionDelta = rawNumericDelta
+  }
+
   // [PHASE 4P] Preserve `structuralMethodApplied` flag and any
   // `structuralMethodDeltas` written by the structural method
   // materialization corridor. These are NOT in `WorkoutExerciseContract`

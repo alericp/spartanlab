@@ -171,7 +171,7 @@ older than canonical session truth, and driving the program-level
 
 ---
 
-## Phase H — Live Workout Parity Lock — `PARTIAL`
+## Phase H — Live Workout Parity Lock — `COMPLETE`
 
 **Purpose:** Start Workout launches the same truth Program page shows.
 
@@ -181,8 +181,17 @@ older than canonical session truth, and driving the program-level
 | H2 | Live workout loader preserves methodStructures | `COMPLETE` (4Q) | `lib/workout/load-authoritative-session.ts` (Phase 4Q fix) |
 | H3 | Normalizer preserves styledGroups | `COMPLETE` (4Q) | `lib/workout/normalize-workout-session.ts` |
 | H4 | Live workout preserves row-level method fields | `COMPLETE` (4Q) | `setExecutionMethod`, `densityPrescription`, `doctrineApplicationDeltas`, `structuralMethodDeltas`, `targetWeightedRPE` |
-| H5 | Live workout does not silently flatten grouped methods | `PARTIAL` | data preserved as guidance; interactive grouped runtime deferred |
-| H6 | Honest partial parity reported when execution is incomplete | `COMPLETE` | `LIVE_GUIDANCE_PRESERVED_ONLY` verdict in source map |
+| H5 | Live workout does not silently flatten grouped methods | `COMPLETE` (4Y) | New pure module `lib/workout/live-grouped-execution-contract.ts` (`evaluateLiveGroupedExecution()` + `buildExecutionBlocksFromMethodStructures()`). `StreamlinedWorkoutSession` executionPlan derivation now has a methodStructures fallback branch between styledGroups and the flat fallback — grouped methods are no longer silently flattened when styledGroups is absent or rejected by the shadow-owner guard. The existing `live-workout-machine` reducer (`COMPLETE_BLOCK_SET` / `ADVANCE_TO_NEXT_BLOCK_MEMBER` / `ADVANCE_TO_NEXT_BLOCK` / `COMPLETE_BLOCK_ROUND` / `COMPLETE_BLOCK_ROUND_REST`) drives the grouped runtime — no second state machine. `consumedExerciseIndexes` tracking + post-group flat-block appending preserves the no-duplicate-members invariant. Honest guidance-only banner with exact reason code (`DENSITY_RUNTIME_NOT_SUPPORTED_YET` / `GROUP_MEMBER_REF_NOT_FOUND` / `UNSUPPORTED_METHOD_TYPE` / `METHOD_STRUCTURE_STATUS_NOT_APPLIED`) renders for `LIVE_GUIDANCE_PRESERVED_ONLY` / `GROUPED_RUNTIME_BLOCKED` / `GROUPED_RUNTIME_PARTIAL`. |
+| H6 | Honest partial parity reported when execution is incomplete | `COMPLETE` | `LIVE_GUIDANCE_PRESERVED_ONLY` verdict in source map; Phase 4Y: `liveGroupedRuntimeVerdict` / `liveGroupedRuntimeReasons` / `liveGroupedRuntimeSource` / `liveGroupedRuntimeHasExecutableBlocks` published by `runLiveWorkoutSourceMap` |
+
+> **Density runtime note:** `density_block` method type is intentionally
+> `guidanceOnly` with reason `DENSITY_RUNTIME_NOT_SUPPORTED_YET` — that is
+> the honest state, not a silent flatten. A safe density timer runtime is a
+> future engine-quality task and is not in scope for Phase H.
+
+> **Next chronological step:** Phase I — Numeric Prescription Mutation Lock.
+> Define safe mutation bounds for doctrine-driven sets / reps / holds / rest /
+> RPE changes in a new `lib/program/numeric-prescription-mutation-contract.ts`.
 
 ---
 

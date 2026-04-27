@@ -138,6 +138,32 @@ export interface DoctrineApplicationInput {
   weeklyRole?: { roleId?: string; intensityClass?: string } | null
   currentWeekNumber?: number | null
   jointCautions?: string[]
+  /**
+   * [PHASE 4N] Optional. When passed, the corridor consults the weekly
+   * method budget for soft per-family caps (e.g. drop_set max 1/session,
+   * cluster MAY_APPLY only). When absent the corridor falls back to its
+   * Phase 4M behavior so existing callers keep working.
+   */
+  weeklyMethodBudgetPlan?: {
+    byFamily?: Record<string, { verdict: string; recommendedWeeklyCount: number }>
+    appliesPerSessionLimit?: number
+  } | null
+  /**
+   * [PHASE 4N] Optional. When passed, replaces the legacy
+   * `deriveProfileIntent(profileSnapshot)` reading with the multi-intent
+   * vector. The vector reads many more profile fields and uses
+   * row-protective skill priority instead of global blocking.
+   */
+  trainingIntentVector?: {
+    strengthIntent: number
+    hypertrophyIntent: number
+    skillIntent: number
+    enduranceIntent: number
+    densityIntent: number
+    advancedAthleteSignal: number
+    recoveryProtectionIntent: number
+    tendonProtectionIntent: number
+  } | null
 }
 
 // =============================================================================
@@ -245,9 +271,17 @@ function deriveProfileIntent(profile: ProfileSnapshotLike | null | undefined): P
   const strengthPriority = strengthTokens.some(t => goalBlob.includes(t))
   const hypertrophyPriority = hypertrophyTokens.some(t => goalBlob.includes(t))
   const strengthEndurancePriority = enduranceTokens.some(t => goalBlob.includes(t))
-  const skillPriority =
-    skillTokens.some(t => goalBlob.includes(t) || skills.includes(t)) ||
-    (profile?.selectedSkills?.length ?? 0) >= 2
+  // [PHASE 4N] OVER-BLOCK REMOVED.
+  //
+  // Pre-Phase-4N this also flipped to true when `selectedSkills.length >= 2`,
+  // which globally blocked top set + back-off and several other methods even
+  // on a safe weighted barbell row. Skill priority must protect skill ROWS,
+  // not erase non-skill methods from the entire week.
+  //
+  // The only remaining trigger is an explicit skill token in the user's
+  // goals/styles. Per-row skill protection is handled separately via
+  // `isHighSkillProtected(name, category, selectionReason)`.
+  const skillPriority = skillTokens.some(t => goalBlob.includes(t) || skills.includes(t))
 
   return {
     strengthPriority,
@@ -307,7 +341,20 @@ function inferExerciseRole(ex: ExerciseLike): keyof typeof ROLE_BOUNDS {
 
 export function buildDoctrineApplicationPlan(input: DoctrineApplicationInput): DoctrineApplicationPlanEntry[] {
   const { session } = input
-  const intent = deriveProfileIntent(input.profileSnapshot)
+  // [PHASE 4N] Prefer the multi-intent vector when the caller passes it.
+  // Fall back to the legacy `deriveProfileIntent` for any unrelated caller
+  // that has not yet been upgraded.
+  const intent: ProfileIntent = input.trainingIntentVector
+    ? {
+        strengthPriority: input.trainingIntentVector.strengthIntent >= 0.5,
+        hypertrophyPriority: input.trainingIntentVector.hypertrophyIntent >= 0.5,
+        strengthEndurancePriority:
+          input.trainingIntentVector.enduranceIntent >= 0.5 || input.trainingIntentVector.strengthIntent >= 0.75,
+        // Row-protective only: never used as a global blocker post-Phase-4N.
+        skillPriority: input.trainingIntentVector.skillIntent >= 0.75,
+        rawGoals: 'training_intent_vector_v4n',
+      }
+    : deriveProfileIntent(input.profileSnapshot)
   const exercises = session.exercises ?? []
   const plan: DoctrineApplicationPlanEntry[] = []
 
@@ -353,11 +400,10 @@ export function buildDoctrineApplicationPlan(input: DoctrineApplicationInput): D
     } else {
       gatesPassed.push('loadable_strength_pillar')
     }
-    if (intent.skillPriority) {
-      gatesFailed.push('skill_priority_profile')
-    } else {
-      gatesPassed.push('not_skill_priority')
-    }
+    // [PHASE 4N] Removed the global `skill_priority_profile` blocker.
+    // Skill priority now protects only skill ROWS (via `isHighSkillProtected`
+    // above). A user with multiple skills selected can still earn top set on
+    // a safe loadable barbell row.
     if (!intent.strengthPriority) {
       gatesFailed.push('profile_not_strength_priority')
     } else {

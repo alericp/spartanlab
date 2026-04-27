@@ -1747,19 +1747,142 @@ export async function executeAuthoritativeGeneration(
         const { applyRowLevelMethodPrescriptionMutations } = await import(
           '@/lib/program/row-level-method-prescription-mutator'
         )
+        // [PHASE 4N] Read the FULL profile truth, not the narrow 5-field set.
+        // The canonical profile carries trainingPathType, primaryTrainingOutcome,
+        // experienceLevel, weighted benchmarks, etc. — all needed by the new
+        // training intent vector to honestly score a hybrid advanced profile.
         const profileSnapshotForMutator =
           (program as unknown as {
             profileSnapshot?: {
               primaryGoal?: string | null
               secondaryGoal?: string | null
               selectedSkills?: string[] | null
+              selectedFlexibility?: string[] | null
+              selectedStrength?: string[] | null
               sessionStylePreference?: string | null
               selectedTrainingStyles?: string[] | null
               selectedTrainingMethods?: string[] | null
+              trainingMethodPreferences?: Array<string | { id?: string; key?: string }> | null
+              trainingPathType?: string | null
+              primaryTrainingOutcome?: string | null
+              goalCategory?: string | null
+              goalCategories?: string[] | null
+              trainingStyle?: string | null
+              experienceLevel?: string | null
+              trainingExperience?: string | null
+              trainingDaysPerWeek?: number | null
+              scheduleMode?: string | null
+              adaptiveWorkloadEnabled?: boolean | null
+              sessionDurationMode?: string | null
               jointCautions?: string[] | null
+              equipmentAvailable?: string[] | null
+              weakestArea?: string | null
+              primaryLimitation?: string | null
               sessionLengthMinutes?: number | null
+              pullUpMax?: string | null
+              dipMax?: string | null
+              pushUpMax?: string | null
+              wallHSPUReps?: string | null
+              weightedPullUp?: { addedWeight?: number | null; reps?: number | null } | null
+              weightedDip?: { addedWeight?: number | null; reps?: number | null } | null
+              frontLeverProgression?: string | null
+              plancheProgression?: string | null
+              muscleUpReadiness?: string | null
+              hspuProgression?: string | null
+              recoveryQuality?: string | null
             } | null
           }).profileSnapshot ?? null
+
+        // [PHASE 4N] Build the multi-intent vector + weekly method budget ONCE
+        // per program. Both are attached to the canonical program object and
+        // passed into every per-session mutator call so all sessions share the
+        // same doctrine truth.
+        let trainingIntentVector: unknown = null
+        let weeklyMethodBudgetPlan: unknown = null
+        try {
+          const { buildTrainingIntentVector } = await import('@/lib/program/training-intent-vector')
+          const { buildWeeklyMethodBudgetPlan } = await import('@/lib/program/weekly-method-budget-plan')
+          trainingIntentVector = buildTrainingIntentVector(profileSnapshotForMutator)
+
+          // Coarse weekly shape summary — scan all sessions ONCE to detect
+          // whether any safe target rows exist anywhere this week. Rows that
+          // pass these tokens are safe candidates; the corridor still
+          // re-checks per row when it actually applies a mutation.
+          let hasLoadableStrengthPillar = false
+          let hasLateAccessoryHypertrophyRow = false
+          let hasSecondaryStrengthRow = false
+          let hasConditioningOrCoreRow = false
+          let hasSafePairableAccessories = false
+          let alreadyHasGroupedDensityBlock = false
+          let alreadyHasGroupedSuperset = false
+          let alreadyHasGroupedCircuit = false
+          const loadableTokens = ['weighted pull', 'weighted chin', 'weighted dip', 'weighted row', 'weighted push', 'barbell row', 'barbell press', 'overhead press', 'bench press']
+          for (const sess of program.sessions ?? []) {
+            const exs = (sess as { exercises?: Array<{ name?: string; category?: string; selectionReason?: string }> }).exercises ?? []
+            const groups = (sess as { styledGroups?: Array<{ groupType?: string }> }).styledGroups ?? []
+            for (const g of groups) {
+              if (g.groupType === 'density_block') alreadyHasGroupedDensityBlock = true
+              if (g.groupType === 'superset') alreadyHasGroupedSuperset = true
+              if (g.groupType === 'circuit') alreadyHasGroupedCircuit = true
+            }
+            let accessoryCount = 0
+            for (let i = 0; i < exs.length; i++) {
+              const ex = exs[i]
+              const name = String(ex?.name ?? '').toLowerCase()
+              const category = String(ex?.category ?? '').toLowerCase()
+              if (category === 'strength' && loadableTokens.some(t => name.includes(t))) {
+                hasLoadableStrengthPillar = true
+              }
+              const isLate = i >= Math.ceil(exs.length / 2)
+              if (isLate && (category === 'strength' || /accessory|hypertrophy/.test(String(ex?.selectionReason ?? '').toLowerCase()))) {
+                if (category === 'strength' && !loadableTokens.some(t => name.includes(t))) {
+                  hasSecondaryStrengthRow = true
+                } else {
+                  hasLateAccessoryHypertrophyRow = true
+                  accessoryCount += 1
+                }
+              }
+              if (category === 'conditioning' || category === 'core') {
+                hasConditioningOrCoreRow = true
+              }
+            }
+            if (accessoryCount >= 2) hasSafePairableAccessories = true
+          }
+          weeklyMethodBudgetPlan = buildWeeklyMethodBudgetPlan(
+            trainingIntentVector as Parameters<typeof buildWeeklyMethodBudgetPlan>[0],
+            {
+              sessionCount: program.sessions?.length ?? 0,
+              hasLoadableStrengthPillar,
+              hasLateAccessoryHypertrophyRow,
+              hasSecondaryStrengthRow,
+              hasConditioningOrCoreRow,
+              hasSafePairableAccessories,
+              alreadyHasGroupedDensityBlock,
+              alreadyHasGroupedSuperset,
+              alreadyHasGroupedCircuit,
+            },
+          )
+          ;(program as unknown as { trainingIntentVector?: unknown }).trainingIntentVector = trainingIntentVector
+          ;(program as unknown as { weeklyMethodBudgetPlan?: unknown }).weeklyMethodBudgetPlan = weeklyMethodBudgetPlan
+          console.log('[PHASE4N-INTENT-VECTOR-BUILT]', {
+            generationIntent: request.generationIntent,
+            triggerSource: request.triggerSource,
+            confidence: (trainingIntentVector as { confidence?: string } | null)?.confidence ?? null,
+            sourceFieldsUsed: (trainingIntentVector as { sourceFieldsUsed?: string[] } | null)?.sourceFieldsUsed ?? [],
+            sourceFieldsMissing: (trainingIntentVector as { sourceFieldsMissing?: string[] } | null)?.sourceFieldsMissing ?? [],
+          })
+          console.log('[PHASE4N-WEEKLY-METHOD-BUDGET-BUILT]', {
+            generationIntent: request.generationIntent,
+            byFamily: Object.fromEntries(
+              Object.entries(((weeklyMethodBudgetPlan as { byFamily?: Record<string, { verdict: string }> }).byFamily) ?? {}).map(
+                ([k, v]) => [k, v?.verdict ?? 'UNKNOWN'],
+              ),
+            ),
+          })
+        } catch (vectorErr) {
+          // Fail-soft: vector / budget errors must never block generation.
+          console.log('[PHASE4N-VECTOR-OR-BUDGET-FAILED]', { error: String(vectorErr) })
+        }
 
         // [PHASE 4M] Pull selected training methods, joint cautions, and
         // session length from the profile snapshot so the doctrine
@@ -1826,6 +1949,10 @@ export async function executeAuthoritativeGeneration(
               sessionLengthMinutes: sessionLengthMinutesForMutator,
               weeklyRole: sessionWeeklyRole,
               currentWeekNumber: currentWeekNumberForMutator,
+              // [PHASE 4N] Pass the program-level vector + budget so the
+              // corridor uses the FULL profile truth and respects weekly caps.
+              trainingIntentVector,
+              weeklyMethodBudgetPlan,
             })
             mutatorRollup.sessionsProcessed += 1
             mutatorRollup.totalApplied += summary.appliedCount

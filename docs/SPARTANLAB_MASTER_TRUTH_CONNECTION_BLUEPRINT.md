@@ -139,21 +139,20 @@ controls visible cards.
 |----|---------|--------|----------|
 | G1 | Final activeProgram source identified | `COMPLETE` | `app/(app)/program/page.tsx` `authoritativeActiveProgram` memo |
 | G2 | Display projection is pure formatting, not rebuilding | `COMPLETE` | `buildProgramDisplayProjection` does not pick exercises/methods |
-| G3 | Old fallback/baby sources demoted | `PARTIAL` | older `doctrineCausalChallenge` proof remains compatibility-only — verified by `authoritative-program-source-map.ts` |
+| G3 | Old fallback/baby sources demoted | `PARTIAL` | older `doctrineCausalChallenge` proof remains compatibility-only — verified by `authoritative-program-source-map.ts`. Phase 4T: legacy `doctrineCausalDisplay` "Doctrine not applied / evaluated / changed" amber/zinc banner is now demoted behind canonical `doctrineBlockResolution` (`hasClassifiedDoctrineResolution` guard in `AdaptiveSessionCard`); only the emerald `materialChanged` summary survives because it carries unique top-pick causal evidence. |
 | G4 | Day cards receive canonical sessions | `COMPLETE` | `<AdaptiveProgramDisplay sessionCardSurfaces=...>` from `buildCanonicalProgramDisplayTruth` |
-| G5 | Visible method blocks match canonical methodStructures/styledGroups | `PARTIAL` | Phase 4S: `SessionCardSurface.methodStructures` field added; `buildSessionCardSurface` copies `session.methodStructures` pass-through; `AdaptiveSessionCard` renders a Phase 4S canonical delivery line via `hasRenderableMethodStructure` / `readMethodStructuresFromSession`. Remaining: `styledGroups` still drives `visibleMethodTally` and the body's grouped headers — `methodStructures` is now a parallel authoritative source, not yet the dominant body-render source. |
-| G6 | Yellow blocked labels map to true block classifications | `PARTIAL` | Phase 4S: `SessionCardSurface.doctrineBlockResolution` field added; `buildSessionCardSurface` copies `session.doctrineBlockResolution` pass-through; `AdaptiveSessionCard` renders classified statuses (Applied / Already reflected / Blocked for safety / No matching target / Not for this day / Needs audit) plus a red diagnostic line for `BUG_*` classifications via `normalizeDoctrineBlockStatus`. Remaining: program-level `doctrineBlockResolutionRollup` may still report residual `BUG_*` entries on some programs — `COMPLETE` only when that count is `0`. |
+| G5 | Visible method blocks match canonical methodStructures/styledGroups | `PARTIAL` | Phase 4S: `SessionCardSurface.methodStructures` field added; `buildSessionCardSurface` copies `session.methodStructures` pass-through; `AdaptiveSessionCard` renders a Phase 4S canonical delivery line. **Phase 4T: canonical `methodStructures` is now the *dominant* source for the visible method chip rows** (collapsed and expanded) via `deriveCanonicalMethodTallyFromSurface` / `dominantMethodTally`; legacy styledGroups-derived tally is fallback only when canonical is absent, and `canonicalSaysNoneApplied` suppresses contradictory chips. Remaining: the in-body grouped-block headers inside `MainExercisesRenderer` (`finalVisibleBodyModel`) still consume `styledGroups` + row-level method fields — those are Phase 4P sibling outputs of the same corridor that writes `methodStructures` (so they agree on healthy generations), but canonical is not yet the load-bearing input for the body grouped-block render path. |
+| G6 | Yellow blocked labels map to true block classifications | `PARTIAL` | Phase 4S: `SessionCardSurface.doctrineBlockResolution` field added; `AdaptiveSessionCard` renders classified statuses (Applied / Already reflected / Blocked for safety / No matching target / Not for this day / Needs audit) plus a red diagnostic line for `BUG_*` classifications via `normalizeDoctrineBlockStatus`. **Phase 4T: legacy `doctrineCausalDisplay` "Doctrine not applied to this session" / "Doctrine evaluated this session" generic banners are suppressed when classified `doctrineBlockResolution` exists** — the classified delivery line directly above owns the doctrine narrative; the emerald `materialChanged` chip survives because it conveys top-pick evidence the classifier does not. Remaining: program-level `doctrineBlockResolutionRollup` may still report residual `BUG_*` entries — `COMPLETE` only when that count is `0`. |
 
-**Remaining work:** Phase 4S has wired `SessionCardSurface.methodStructures`
-and `SessionCardSurface.doctrineBlockResolution` end-to-end through
-`buildSessionCardSurface` → `AdaptiveProgramDisplay` → `AdaptiveSessionCard`.
-The card now renders a classified Phase 4S delivery line and demotes generic
-unclassified blocked text via `normalizeDoctrineBlockStatus`. The next G-phase
-work is to make `methodStructures` the *dominant* body-render source for
-grouped headers (currently `styledGroups` still drives `visibleMethodTally` and
-`MainExercisesRenderer`'s grouped block layout), and to drive the program-level
-`doctrineBlockResolutionRollup` `BUG_*` counts to zero so G6 can flip to
-`COMPLETE`.
+**Remaining work:** Phase 4T made canonical `methodStructures` the *dominant*
+chip-row source and demoted the legacy `doctrineCausalDisplay` banner behind
+canonical `doctrineBlockResolution`. The remaining G work is to convert
+`finalVisibleBodyModel` + `MainExercisesRenderer`'s grouped-block headers
+(Superset / Circuit / Density Block / Cluster) to read canonical
+`methodStructures` as their primary input, with `styledGroups` becoming
+fallback only for the body grouped-block render path; and to drive the
+program-level `doctrineBlockResolutionRollup` `BUG_*` counts to zero so G6
+can flip to `COMPLETE`.
 
 ---
 

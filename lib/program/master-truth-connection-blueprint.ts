@@ -816,22 +816,20 @@ function phaseM(): BlueprintPhase {
     title: 'Server Generator Performance History Parity Lock',
     purpose:
       'Make recent completed workout performance available to the authoritative server generator so fresh build / regenerate / modify / rebuild produce performance-aware programs from the beginning, while keeping the existing Program page boot-time Phase L overlay as a safe fallback. One shared resolver, one mutation shape, no double-apply.',
-    status: 'PARTIAL',
+    status: 'COMPLETE',
     nextAction:
-      'Persist a server-readable per-set evidence ledger (server-side workout_log_set_evidence) so the authoritative generator can read recent performance history without depending on the client forwarding logs from localStorage.',
+      'Phase N closed the durable persistence gap (workout_log_set_evidence + writer + reader + generator merge). No remaining Phase M work.',
     subtasks: [
       {
         id: 'M.M1',
         title: 'Recent completedSetEvidence is server-readable or honestly marked unavailable',
-        status: 'PARTIAL',
+        status: 'COMPLETE',
         evidence: [
           'Per-set completedSetEvidence is the authoritative input shape and is written client-side by lib/workout-log-service.ts.saveWorkoutLog into localStorage.',
-          'The Neon `workout_logs` table only persists aggregate stats (id / sessionDate / focusArea / duration). Per-set evidence is NOT yet stored server-side.',
-          'Bridge: the Program page forwards a JSON-safe top-14 trusted slice via getRecentWorkoutLogsForGenerationRequest() into the generation route body; the server-safe adapter (lib/server/performance-history-context.ts) sanitizes / caps (≤14 logs, ≤300 sets) / hashes and feeds the existing Phase L resolver.',
+          'Phase N adds durable Neon persistence: the `workout_log_set_evidence` table (scripts/100-phase-n-workout-set-evidence.sql, additive, IF NOT EXISTS) plus the saveWorkoutLog → POST /api/workout-log/save-evidence → persistWorkoutLogSetEvidence corridor.',
+          'The authoritative generator now ALSO reads recent persisted evidence via getRecentWorkoutSetEvidenceForGeneration() and merges it (deduped by workout log id) with any route-payload recentWorkoutLogs before calling buildPerformanceHistoryContext().',
         ],
-        remainingWork: [
-          'Add a server-side workout_log_set_evidence table + writer so the authoritative generator can read per-set evidence directly without depending on the client transport.',
-        ],
+        remainingWork: [],
       },
       {
         id: 'M.M2',
@@ -932,6 +930,143 @@ function phaseM(): BlueprintPhase {
   }
 }
 
+/** Phase N: Neon-Persisted Workout Set Evidence Canonical History Lock. */
+function phaseN(): BlueprintPhase {
+  return {
+    id: 'N',
+    title: 'Neon-Persisted Workout Set Evidence Canonical History Lock',
+    purpose:
+      'Move completedSetEvidence from "client-carried evidence" to "server-readable canonical training history". After a completed workout, saveWorkoutLog persists the canonical log AND fires per-set evidence into a Neon `workout_log_set_evidence` table; the authoritative generator now reads recent per-set evidence directly from Neon (merged with any route-payload logs, deduped by workout log id) before running the existing Phase L/M resolver.',
+    status: 'COMPLETE',
+    nextAction:
+      'No remaining Phase N work. Optional follow-ups: thread the active programId from the workout-session page into the persistence call so program-scoped reads can tighten the filter from "user OR null program_id" to strict equality.',
+    subtasks: [
+      {
+        id: 'N.N1',
+        title: 'Current workout log persistence audited',
+        status: 'COMPLETE',
+        evidence: [
+          'lib/workout-log-service.ts.saveWorkoutLog is the canonical client-side WorkoutLog writer; before Phase N it only wrote to localStorage and saveSessionFeedback.',
+          'lib/server/neon-truth-reader.ts queries the Neon `workout_logs` table (aggregate stats only) and never touched per-set evidence — confirming the persistence gap Phase M called out.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'N.N2',
+        title: 'completedSetEvidence durable-storage gap confirmed',
+        status: 'COMPLETE',
+        evidence: [
+          'Pre-Phase-N: completedSetEvidence was reachable server-side ONLY when the client forwarded a recentWorkoutLogs payload. Server-initiated regenerations / fresh builds without that payload received zero performance evidence.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'N.N3',
+        title: 'Additive Neon persistence model created safely',
+        status: 'COMPLETE',
+        evidence: [
+          'scripts/100-phase-n-workout-set-evidence.sql creates `workout_log_set_evidence` with IF NOT EXISTS, plus partial indexes on (user_id, created_at DESC), (user_id, program_id, created_at DESC) and (workout_log_id), and a UNIQUE (evidence_hash) for row-level dedupe.',
+          'No existing tables / columns are altered. No destructive operations. Rollback path: drop the new table.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'N.N4',
+        title: 'saveWorkoutLog writes per-set evidence with dedupe',
+        status: 'COMPLETE',
+        evidence: [
+          'lib/workout-log-service.ts.saveWorkoutLog now fires a non-blocking POST to /api/workout-log/save-evidence after the localStorage save succeeds, gated on trusted=true && sourceRoute!="demo" && completedSetEvidence.length > 0.',
+          '/api/workout-log/save-evidence resolves dbUserId from the auth session (NEVER from the body) and calls persistWorkoutLogSetEvidence, which inserts one row per CompletedSetEvidence with ON CONFLICT (evidence_hash) DO NOTHING for idempotency.',
+          'Failure modes — fetch failure, route 5xx, individual row failure — are logged and never throw to the caller, so the live workout UI cannot break because of network/DB.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'N.N5',
+        title: 'Server evidence reader fetches recent set evidence by user/program',
+        status: 'COMPLETE',
+        evidence: [
+          'lib/server/workout-set-evidence-reader.ts.getRecentWorkoutSetEvidenceForGeneration queries `workout_log_set_evidence` user-scoped, bounded by limit (default 14, max 50) and sinceDays (default 30, max 90).',
+          'Reader regroups rows by workout_log_id into synthetic MinimalWorkoutLogShape objects (using the SAME id the localStorage WorkoutLog used) so the existing Phase M buildPerformanceHistoryContext consumes them with zero rule duplication.',
+          'Reader applies no adaptation rules / no UI labels / no program mutation; it is read-only.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'N.N6',
+        title: 'Generation merges route payload evidence + Neon evidence with dedupe',
+        status: 'COMPLETE',
+        evidence: [
+          'lib/server/authoritative-program-generation.ts Phase M overlay block now (a) reads route-payload recentWorkoutLogs, (b) ALWAYS calls getRecentWorkoutSetEvidenceForGeneration when request.dbUserId is present, (c) merges both sources into a Map<id, log> where payload wins on collision (richer ambient fields), and (d) feeds the merged set into buildPerformanceHistoryContext.',
+          'Diagnostic line `[phase-m-server-performance-history-overlay]` now reports payloadLogCount / neonLogCount / mergedLogCount / neonReadStatus alongside the existing fields.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'N.N7',
+        title: 'Phase L/M resolver remains the only adaptation decision owner',
+        status: 'COMPLETE',
+        evidence: [
+          'workout-set-evidence-reader.ts and workout-set-evidence-persistence.ts contain ZERO rule logic — they only marshal rows. All adaptation decisions remain in lib/program/performance-feedback-adaptation-contract.ts via the Phase M adapter (lib/server/performance-history-context.ts).',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'N.N8',
+        title: 'Program page boot overlay remains idempotent and yields to server-applied adaptation',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase M idempotency machinery (programAlreadyHasServerAdaptationFor / appliedBy / evidenceHash) is unchanged. Phase N only widens the evidence INPUT to the resolver; it does not alter the stamp shape, the boot overlay, or the dedupe logic.',
+          'Because the synthetic Neon logs and the route-payload logs share the same workout_log_id, evidenceHash collisions naturally trigger the existing idempotent_skip path on repeat generations.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'N.N9',
+        title: 'Missing evidence degrades to insufficient_data without fake adaptation',
+        status: 'COMPLETE',
+        evidence: [
+          'When neither route payload nor Neon returns logs, mergedLogs is empty and the overlay block falls through with verdict=PHASE_M_SKIPPED_NO_LOGS_SUPPLIED — identical to pre-Phase-N behavior.',
+          'getRecentWorkoutSetEvidenceForGeneration returns status=no_user / no_rows / db_error without throwing, and the reader_threw branch is logged + treated as empty so a Neon hiccup never escalates to fake adaptation.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'N.N10',
+        title: 'Phase J/K/L/M regressions verified',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase J: live workout reducer / resume routing untouched. The new fire-and-forget evidence POST runs AFTER localStorage save and never blocks the UI.',
+          'Phase K: weeklyStressDistributionPlan / stressLevel / recoveryCost flow unchanged — Phase N only adds an additional INPUT source to the existing Phase M overlay.',
+          'Phase L: performance-feedback-adaptation-contract.ts is untouched. CompletedSetEvidence shape and resolver rules are unchanged.',
+          'Phase M: payload-only path still works (incomingLogs is still merged in first); idempotency / appliedBy / evidenceHash provenance unchanged; verdict labels preserved.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'N.N11',
+        title: 'Migration / deployment requirements documented honestly',
+        status: 'COMPLETE',
+        evidence: [
+          'Migration file: scripts/100-phase-n-workout-set-evidence.sql, additive only (CREATE TABLE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS). Executed via SystemAction(executeScript) during this phase against the connected Neon DATABASE_URL.',
+          'No prisma client regeneration required (project uses raw @neondatabase/serverless, not Prisma).',
+          'No environment variable changes required (DATABASE_URL was already present and consumed by lib/db.ts).',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'N.N12',
+        title: 'Server-initiated generation can read recent evidence when userId/programId are available',
+        status: 'COMPLETE',
+        evidence: [
+          'authoritative-program-generation.ts now calls getRecentWorkoutSetEvidenceForGeneration on EVERY generation attempt where request.dbUserId is set, regardless of whether the route forwarded recentWorkoutLogs. This means future scheduled jobs / backend-only rebuilds become performance-aware automatically as long as they construct an AuthoritativeGenerationRequest with dbUserId.',
+        ],
+        remainingWork: [],
+      },
+    ],
+  }
+}
+
 // =============================================================================
 // PUBLIC ENTRY POINT
 // =============================================================================
@@ -979,6 +1114,12 @@ export function buildMasterTruthConnectionBlueprintStatus(
     // running the same Phase L resolver server-side, with appliedBy /
     // evidenceHash provenance for idempotency between corridors.
     phaseM(),
+    // [PHASE-N] Neon-Persisted Workout Set Evidence Canonical History Lock.
+    // Adds a durable server-readable per-set evidence ledger
+    // (workout_log_set_evidence) so the authoritative generator can read
+    // recent performance history directly from Neon — even when the route
+    // caller didn't forward recentWorkoutLogs from localStorage.
+    phaseN(),
   ]
 
   // Active phase = the first phase whose status is not COMPLETE / DO_NOT_REDO.

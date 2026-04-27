@@ -1348,6 +1348,149 @@ export function hasClassifiedDoctrineResolution(
 }
 
 // =============================================================================
+// [PHASE 4V] CANONICAL PROGRAM TRUTH PRESENCE GUARD
+// -----------------------------------------------------------------------------
+// Centralizes the "canonical wins" rule for the persistence/normalize/hydration
+// corridor. Save (`saveAdaptiveProgram`) is `JSON.stringify`, load
+// (`getLatestAdaptiveProgram`) is `JSON.parse`, and `normalizeProgramForDisplay`
+// in `lib/program-state.ts` mechanically preserves every canonical field via
+// `...spread` — so a fresh program reaches the page with `methodStructures`,
+// `doctrineBlockResolution`, `methodMaterializationSummary`, and
+// `doctrineBlockResolutionRollup` intact. But nothing today actively asserts
+// those fields exist after the round-trip, and a future refactor that swaps
+// a spread for a whitelisted field set would silently strip them.
+//
+// `hasCanonicalProgramTruth` is the centralized check the load corridor and
+// Program page can both query without each rebuilding the test. It is the
+// "canonical truth is present, do not let legacy fallback override it" rule
+// distilled into one pure function.
+//
+// Pure: no hooks, no I/O, no state, no mutation. Inputs in, plain object out.
+// =============================================================================
+
+/**
+ * Verdict object describing which canonical Phase 4P/4Q/4S signals are
+ * populated on a given program. Consumers in the persistence corridor read
+ * these to decide whether legacy fallback fields (styledGroups,
+ * doctrineCausalDisplay, doctrineCausalChallenge, materializationStatus
+ * banners) are allowed to paint anything user-visible.
+ */
+export interface CanonicalProgramTruthPresence {
+  /** ≥1 session carries a non-empty `methodStructures` array. */
+  hasMethodStructures: boolean
+  /** ≥1 session carries a non-empty `doctrineBlockResolution` array. */
+  hasDoctrineBlockResolution: boolean
+  /** Program or any session carries a non-null
+   *  `methodMaterializationSummary` (top-level or nested in
+   *  `styleMetadata.methodMaterializationSummary`). */
+  hasMethodMaterializationSummary: boolean
+  /** Program carries a non-null `doctrineBlockResolutionRollup`. */
+  hasDoctrineBlockResolutionRollup: boolean
+  /** True iff ANY of the above signals are present. */
+  programHasAnyCanonicalTruth: boolean
+  /**
+   * Per-session map: session.dayNumber → whether THAT session carries any
+   * canonical truth. Lets the Program page gate per-card legacy fallback
+   * while still letting older saved sessions render through compatibility
+   * fallback.
+   */
+  sessionsWithCanonicalTruth: Record<number, boolean>
+  /**
+   * Stable code explaining the verdict for logs / blueprint evidence:
+   *  - `CANONICAL_TRUTH_PRESENT` — at least one canonical signal found.
+   *  - `LEGACY_PROGRAM_NO_CANONICAL_FIELDS` — older saved program; fallback
+   *    is the only option and that is fine.
+   *  - `EMPTY_PROGRAM` — null/undefined program input.
+   */
+  verdict:
+    | 'CANONICAL_TRUTH_PRESENT'
+    | 'LEGACY_PROGRAM_NO_CANONICAL_FIELDS'
+    | 'EMPTY_PROGRAM'
+}
+
+/**
+ * Pure presence check across the canonical Phase 4P/4Q/4S signal set. Reads
+ * the program/session shape via narrow structural typings so it works on
+ * raw `AdaptiveProgram` (where canonical fields are cast on via
+ * `as unknown as`), `ProgramDisplayProjection` clones, and `SessionCardSurface`
+ * outputs alike. Does not mutate inputs. Returns a fresh object every call.
+ */
+export function hasCanonicalProgramTruth(
+  program:
+    | {
+        sessions?:
+          | ReadonlyArray<{
+              dayNumber?: number
+              methodStructures?: unknown
+              doctrineBlockResolution?: unknown
+              styleMetadata?: { methodMaterializationSummary?: unknown } | null
+            } | null | undefined>
+          | null
+        methodMaterializationSummary?: unknown
+        doctrineBlockResolutionRollup?: unknown
+      }
+    | null
+    | undefined,
+): CanonicalProgramTruthPresence {
+  if (!program) {
+    return {
+      hasMethodStructures: false,
+      hasDoctrineBlockResolution: false,
+      hasMethodMaterializationSummary: false,
+      hasDoctrineBlockResolutionRollup: false,
+      programHasAnyCanonicalTruth: false,
+      sessionsWithCanonicalTruth: {},
+      verdict: 'EMPTY_PROGRAM',
+    }
+  }
+  const sessions = Array.isArray(program.sessions) ? program.sessions : []
+  let hasMethodStructures = false
+  let hasDoctrineBlockResolution = false
+  let hasSessionLevelSummary = false
+  const sessionsWithCanonicalTruth: Record<number, boolean> = {}
+  for (const s of sessions) {
+    if (!s) continue
+    const ms = (s as { methodStructures?: unknown }).methodStructures
+    const msPresent = Array.isArray(ms) && ms.length > 0
+    const dbr = (s as { doctrineBlockResolution?: unknown }).doctrineBlockResolution
+    const dbrPresent = Array.isArray(dbr) && dbr.length > 0
+    const mms = s.styleMetadata?.methodMaterializationSummary
+    const mmsPresent = mms !== null && mms !== undefined
+    if (msPresent) hasMethodStructures = true
+    if (dbrPresent) hasDoctrineBlockResolution = true
+    if (mmsPresent) hasSessionLevelSummary = true
+    const day = typeof s.dayNumber === 'number' ? s.dayNumber : -1
+    if (day >= 0) {
+      sessionsWithCanonicalTruth[day] =
+        msPresent || dbrPresent || mmsPresent || (sessionsWithCanonicalTruth[day] ?? false)
+    }
+  }
+  const programLevelSummary =
+    (program as { methodMaterializationSummary?: unknown }).methodMaterializationSummary
+  const hasMethodMaterializationSummary =
+    hasSessionLevelSummary || (programLevelSummary !== null && programLevelSummary !== undefined)
+  const rollup =
+    (program as { doctrineBlockResolutionRollup?: unknown }).doctrineBlockResolutionRollup
+  const hasDoctrineBlockResolutionRollup = rollup !== null && rollup !== undefined
+  const programHasAnyCanonicalTruth =
+    hasMethodStructures ||
+    hasDoctrineBlockResolution ||
+    hasMethodMaterializationSummary ||
+    hasDoctrineBlockResolutionRollup
+  return {
+    hasMethodStructures,
+    hasDoctrineBlockResolution,
+    hasMethodMaterializationSummary,
+    hasDoctrineBlockResolutionRollup,
+    programHasAnyCanonicalTruth,
+    sessionsWithCanonicalTruth,
+    verdict: programHasAnyCanonicalTruth
+      ? 'CANONICAL_TRUTH_PRESENT'
+      : 'LEGACY_PROGRAM_NO_CANONICAL_FIELDS',
+  }
+}
+
+// =============================================================================
 // [PHASE 4U] CANONICAL METHOD BODY RENDER RESOLUTION
 // -----------------------------------------------------------------------------
 // Phase 4S/4T proved that canonical `methodStructures` reach the card surface

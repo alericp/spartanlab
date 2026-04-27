@@ -543,7 +543,7 @@ function phaseI(): BlueprintPhase {
     //     'final_skill_obligation') cannot receive upward sets/reps/holds.
     //   - RPE max is 8 in Phase I (7 for protected/skill rows). Phase I
     //     never prescribes RPE 9-10.
-    //   - Density / unsupported method types remain guidanceOnly �� no fake
+    //   - Density / unsupported method types remain guidanceOnly ��� no fake
     //     numeric mutation, deferred to a future engine-quality task.
     //   - Total session sets cap: at most +1 set per session in Phase I.
     //
@@ -696,6 +696,120 @@ function phaseK(): BlueprintPhase {
   }
 }
 
+/** Phase L: Post-Workout Performance Feedback Adaptation Lock. */
+function phaseL(): BlueprintPhase {
+  return {
+    id: 'L',
+    title: 'Post-Workout Performance Feedback Adaptation Lock',
+    purpose:
+      'Convert logged workout performance (actual reps/hold/RPE/notes) into safe, bounded, future-only prescription mutations that flow through the same canonical session object the Program card and live workout already consume. The product remembers what happened and adjusts intelligently — never rewriting completed work, never erasing selected skills, never adding cosmetic-only labels.',
+    status: 'PARTIAL',
+    nextAction:
+      'Move per-set evidence ledger from completion-time client-side capture to a canonical store accessible to the server generator so fresh regenerate paths can also read recent performance, not only the in-memory display overlay.',
+    subtasks: [
+      {
+        id: 'L.L1',
+        title: 'Completed set/session evidence is readable from canonical workout history',
+        status: 'COMPLETE',
+        evidence: [
+          'StreamlinedWorkoutSession.handleCompleteWorkout() builds a per-set CompletedSetEvidence[] from normalizedCompletedSets (actualReps / holdSeconds / actualRPE / per-set note + reasonTags + per-exercise note flags) and passes it into quickLogWorkout().',
+          'WorkoutLog now carries `completedSetEvidence?: CompletedSetEvidence[]` and saveWorkoutLog passes it through verbatim.',
+          'extractCompletedSetEvidence() in performance-feedback-adaptation-contract reads either the new per-set ledger or falls back to the per-exercise summary on legacy logs.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'L.L2',
+        title: 'Evidence is classified into performance signals',
+        status: 'COMPLETE',
+        evidence: [
+          'classifyPerformanceSignals() emits under_target_high_rpe / on_target_high_rpe / on_target_normal_rpe / above_target_low_rpe / repeated_skill_fatigue / repeated_strength_fatigue / note_tension_warning / note_capacity_warning / note_pain_warning / recovery_protection_triggered / insufficient_data.',
+          'Severity escalates with repeated signals on the same exercise/skill across multiple sets or sessions.',
+          'Notes are matched against pain (sharp / pinch / tweak / injury) vs fatigue (tension / fried / capacity / build) keywords AND structured reasonTags from the live workout.',
+          'Straight-arm skill exercises (planche / front lever / back lever / iron cross / dragon flag) classify as protective-priority via deriveExerciseClass().',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'L.L3',
+        title: 'Signals produce safe bounded future prescription mutations',
+        status: 'COMPLETE',
+        evidence: [
+          'deriveFuturePrescriptionMutations() converts each signal into a typed FuturePrescriptionMutation: hold_progression / reduce_next_exposure_volume / reduce_rpe_target / extend_rest_guidance / preserve_prescription / increase_progression_slightly / swap_to_regression_candidate / add_recovery_note_only.',
+          'Hard-coded SAFE_BOUNDS: max -1 set per next exposure (never below 1); max -1 RPE target (never below 6); rep/hold change capped at 20% (40% for high-severity pain); rest extension max +30s; progression-up only on repeated above-target low-RPE signals.',
+          'Each mutation carries before/after, reasonCodes, userVisibleExplanation, safetyLevel, and a shouldApply gate. Caution-level mutations on selected skills are demoted to add_recovery_note_only.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'L.L4',
+        title: 'Mutations apply only to future sessions/exposures, never completed sessions',
+        status: 'COMPLETE',
+        evidence: [
+          'PerformanceFeedbackInput.completedDayNumbers is computed from log.generatedWorkoutId in performance-feedback-integration; resolvePerformanceFeedbackAdaptation skips any mutation whose targetDayNumber is <= max(completedDayNumbers).',
+          'applyFuturePrescriptionMutations only mutates sessions whose dayNumber appears in the post-filter mutation set; all other sessions are returned by reference.',
+          'Selected-skill removal is structurally impossible: mutations only touch sets / repsOrTime / targetRPE / restSeconds and stamp performanceAdaptation; exercise.id and exercise.name are never written.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'L.L5',
+        title: 'Mutated prescription remains the authoritative object consumed by Program page/session cards',
+        status: 'COMPLETE',
+        evidence: [
+          'applyFuturePrescriptionMutations writes the post-mutation `sets` / `repsOrTime` / `targetRPE` / `restSeconds` directly onto the exercise object that buildExerciseCardContract and buildExerciseRowSurface read.',
+          'No parallel display-only adaptation object exists; the Phase L proof chip is sourced from the same exercise.performanceAdaptation stamp that records the numeric change.',
+          'Program page applies the overlay via a single boot-time effect with a (programId, log count, latest log id) signature ref so it never re-runs in a render loop.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'L.L6',
+        title: 'Normalization/load/display preserves adaptation metadata',
+        status: 'COMPLETE',
+        evidence: [
+          'AdaptiveExercise.performanceAdaptation is preserved by the existing `...ex` spread inside normalizeProgramForDisplay (same preservation contract that carries Phase 4V/4Z and Phase K stressAdjustmentDelta).',
+          'No normalizer re-decides Phase L state; only the integration helper writes performanceAdaptation, and only the contract writes mutations.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'L.L7',
+        title: 'Visible explanation derives from actual mutation',
+        status: 'COMPLETE',
+        evidence: [
+          'AdaptiveSessionCard renders the Phase L proof chip ONLY when exercise.performanceAdaptation is present; the chip\'s shortLabel is built deterministically from mutationType in the writer so chip + numeric change cannot disagree.',
+          'No "Adapted from performance" text appears unless an adaptation stamp exists with shouldApply=true; blocked-by-safety-bound mutations show a muted "blocked" chip rather than a misleading success label.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'L.L8',
+        title: 'Fresh build/regenerate/saved reload parity is audited',
+        status: 'PARTIAL',
+        evidence: [
+          'Saved-reload path: program-state.normalizeProgramForDisplay preserves performanceAdaptation; the program/page boot effect re-applies the overlay against the freshest log set on every (programId, latest log) change.',
+          'Fresh build / regenerate path: the server builder does not yet read recent workout logs, so a brand-new program does not carry Phase L mutations at generation time. The overlay re-applies on the client immediately after setProgram(), which is functionally equivalent for the saved program corridor but not yet for server-side programs.',
+        ],
+        remainingWork: [
+          'Surface a server-readable per-set evidence ledger so authoritative-program-generation can bias initial dosage; today the overlay is client-only.',
+        ],
+      },
+      {
+        id: 'L.L9',
+        title: 'Phase J live resume and Phase K recovery/intensity outputs are not regressed',
+        status: 'COMPLETE',
+        evidence: [
+          'Live workout reducer untouched. Resume routing (StreamlinedWorkoutSession.getResumableSessionSummary / buildResumeWorkoutUrl) untouched.',
+          'Phase K canonical fields (session.stressRole / stressLevel / recoveryCost / nextDayRisk / stressDistributionProof; program.weeklyStressDistributionPlan; exercise.stressAdjustmentDelta) all flow through the same `...program` / `...s` / `...ex` spreads applyFuturePrescriptionMutations uses, so the overlay never strips Phase K state.',
+          'Phase L mutations only write sets / repsOrTime / targetRPE / restSeconds + performanceAdaptation; methodStructures / styledGroups / blockId / setExecutionMethod / numericPrescriptionDelta untouched.',
+        ],
+        remainingWork: [],
+      },
+    ],
+  }
+}
+
 // =============================================================================
 // PUBLIC ENTRY POINT
 // =============================================================================
@@ -731,6 +845,12 @@ export function buildMasterTruthConnectionBlueprintStatus(
     // Whole-week stress reasoning + conservative governor + canonical
     // session/program fields + visible coach-line proof on the Program card.
     phaseK(),
+    // [PHASE-L] Post-Workout Performance Feedback Adaptation Lock.
+    // Logged set/rep/hold/RPE/note evidence -> classified signals -> safe
+    // bounded future-only prescription mutations stamped onto the same
+    // exercise object the Program card consumes. Selected skills are
+    // structurally protected; completed sessions are never rewritten.
+    phaseL(),
   ]
 
   // Active phase = the first phase whose status is not COMPLETE / DO_NOT_REDO.

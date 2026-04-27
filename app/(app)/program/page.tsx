@@ -66,6 +66,11 @@ import Link from 'next/link'
 // TASK 5: Lightweight type imports only - actual modules loaded dynamically
 import type { AdaptiveProgramInputs, AdaptiveProgram, GenerationErrorCode, TemplateSimilarityResult } from '@/lib/adaptive-program-builder'
 import type { TrainingDays } from '@/lib/program-service'
+// [PHASE-L] Post-workout performance feedback overlay. Pure client-side glue
+// that reads canonical workout logs and applies bounded future-only mutations
+// to the program object held in state. Imported statically because the
+// underlying contract is JSON-safe and side-effect free.
+import { applyPerformanceFeedbackOverlay } from '@/lib/program/performance-feedback-integration'
 // [PHASE 28KL] Direct imports for athlete/onboarding profile readback during modify-open forensics
 import { getAthleteProfile as getAthleteProfileDirect } from '@/lib/data-service'
 import { getOnboardingProfile as getOnboardingProfileDirect } from '@/lib/athlete-profile'
@@ -2002,6 +2007,65 @@ export default function ProgramPage() {
   const [showBuilder, setShowBuilder] = useState(false)
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false)
   const [mounted, setMounted] = useState(false)
+
+  // ==========================================================================
+  // [PHASE-L] POST-WORKOUT PERFORMANCE FEEDBACK OVERLAY APPLICATION
+  // --------------------------------------------------------------------------
+  // After `program` is populated by any mount/reconciliation/regenerate path,
+  // read recent canonical workout logs and apply the bounded performance-
+  // feedback overlay. Stamps `performanceAdaptation` on affected future
+  // exercises and writes the post-mutation `sets` / `repsOrTime` /
+  // `targetRPE` directly so the same Program card render path that already
+  // exists consumes the adapted prescription — no parallel display-only
+  // banner.
+  //
+  // Dedup contract: the overlay computes a stable signature of
+  //   (program.id, log count, latest log id)
+  // and we keep the last-applied signature in a ref. This guarantees the
+  // overlay never re-runs in a render loop and never re-applies itself on
+  // top of an already-overlaid program.
+  //
+  // Future-only safety: the contract internally restricts mutations to
+  // sessions whose dayNumber is strictly greater than the largest completed
+  // dayNumber observed in the logs, so completed Day 6 is never mutated by
+  // a Day 6 log.
+  // ==========================================================================
+  const phaseLAppliedSignatureRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!mounted) return
+    if (!program || !program.id) return
+    if (typeof window === 'undefined') return
+    try {
+      const result = applyPerformanceFeedbackOverlay(program)
+      if (!result) return
+      if (phaseLAppliedSignatureRef.current === result.signature) return
+      phaseLAppliedSignatureRef.current = result.signature
+      console.log('[phase-l-performance-feedback]', {
+        programId: program.id,
+        status: result.adaptation.status,
+        signals: result.adaptation.signals.length,
+        mutations: result.adaptation.mutations.length,
+        mutationsApplied: result.adaptation.proof.mutationsApplied,
+        mutationsBlocked: result.adaptation.proof.mutationsBlocked,
+        completedSetsRead: result.adaptation.proof.completedSetsRead,
+        sessionsRead: result.adaptation.proof.sessionsRead,
+        highRpeCount: result.adaptation.proof.highRpeCount,
+        underTargetCount: result.adaptation.proof.underTargetCount,
+        noteWarningsCount: result.adaptation.proof.noteWarningsCount,
+        changed: result.changed,
+        signature: result.signature,
+      })
+      if (result.changed) {
+        setProgram(result.program as AdaptiveProgram)
+      }
+    } catch (err) {
+      console.error('[phase-l-performance-feedback] overlay failed', err)
+    }
+    // We deliberately depend on program identity + length so log changes
+    // forced by re-mount or regenerate retrigger the overlay. The signature
+    // ref guarantees idempotency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, program?.id, program?.sessions?.length])
   
   // ==========================================================================
   // [DEBUG-PROBE-GATE] Opt-in diagnostic visibility

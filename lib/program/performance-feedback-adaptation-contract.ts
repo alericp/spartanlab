@@ -233,6 +233,14 @@ export interface ExercisePerformanceAdaptationStamp {
   computedAt: string
   /** Backing signal types so dev tooling can audit. */
   signalTypes: PerformanceSignalType[]
+  /** Compact uppercase chip label used by the Program card. Derived
+   *  deterministically from `mutationType` so the chip always agrees with
+   *  the underlying mutation. */
+  shortLabel: string
+  /** Mutation status for display. `applied` means the bounded mutation
+   *  succeeded. `blocked_by_safety_bound` means the contract chose not to
+   *  apply because the change would violate a Phase L safety bound. */
+  status: 'applied' | 'blocked_by_safety_bound'
 }
 
 export interface PerformanceFeedbackInput {
@@ -1050,6 +1058,32 @@ export function applyFuturePrescriptionMutations<T extends PhaseLProgramShape>(
       )
       if (!m) return ex
 
+      // Deterministic short chip label per mutation type. Single owner so
+      // the Program card chip and the underlying numeric mutation can never
+      // disagree.
+      const shortLabel: string = (() => {
+        switch (m.mutationType) {
+          case 'reduce_next_exposure_volume':
+            return 'VOLUME REDUCED'
+          case 'hold_progression':
+            return 'PROGRESSION HELD'
+          case 'reduce_rpe_target':
+            return 'RPE LOWERED'
+          case 'extend_rest_guidance':
+            return 'REST EXTENDED'
+          case 'preserve_prescription':
+            return 'PRESCRIPTION PRESERVED'
+          case 'increase_progression_slightly':
+            return 'PROGRESSION ADVANCED'
+          case 'swap_to_regression_candidate':
+            return 'REGRESSION SUGGESTED'
+          case 'add_recovery_note_only':
+            return 'RECOVERY NOTE'
+          default:
+            return 'ADAPTED'
+        }
+      })()
+
       const stamp: ExercisePerformanceAdaptationStamp = {
         applied: true,
         reasonCodes: m.reasonCodes,
@@ -1073,6 +1107,8 @@ export function applyFuturePrescriptionMutations<T extends PhaseLProgramShape>(
             'above_target_low_rpe',
           ].includes(c),
         ) as PerformanceSignalType[],
+        shortLabel,
+        status: 'applied',
       }
 
       // Spread original first so we never drop unknown fields, then assign

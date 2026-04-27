@@ -5635,6 +5635,53 @@ function ExerciseRow({
             </span>
           )
         })()}
+        {/* [PHASE-L] POST-WORKOUT PERFORMANCE FEEDBACK PROOF CHIP.
+            Single compact chip surfacing the per-row adaptation stamped by
+            lib/program/performance-feedback-adaptation-contract.ts after a
+            recent workout produced an under-target high-RPE / repeated
+            fatigue / tension / pain signal. Three honest variants:
+              - protective (held / reduced volume / lowered RPE): teal chip
+              - blocked (safety bound prevented apply): muted chip with
+                blocked title text so users see honesty rather than a fake
+                "adapted" claim
+              - skipped: nothing renders.
+            The chip's `aria-label` and `title` carry the
+            `userVisibleExplanation` string built from actual mutation
+            evidence — never invented. Hidden for warmup/cooldown rows.
+            Single-line, never wraps the row container. */}
+        {!isWarmupCooldown && (() => {
+          const adaptation = (exercise as unknown as {
+            performanceAdaptation?: {
+              applied?: boolean
+              status?: string
+              mutationType?: string
+              userVisibleExplanation?: string
+              shortLabel?: string
+              reasonCodes?: string[]
+            }
+          }).performanceAdaptation
+          if (!adaptation) return null
+          const explanation = adaptation.userVisibleExplanation
+          const shortLabel = adaptation.shortLabel
+          if (!shortLabel || !explanation) return null
+          const isApplied = adaptation.applied === true
+          const chipClass = isApplied
+            ? 'bg-teal-500/10 text-teal-300 border border-teal-500/30'
+            : 'bg-[#3A3A3A]/40 text-[#9A9A9A] border border-[#4A4A4A]/40'
+          const titleText = isApplied
+            ? `Adjusted from last workout: ${explanation}`
+            : `Performance signal blocked by safety bound: ${explanation}`
+          return (
+            <span
+              className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded shrink-0 ${chipClass}`}
+              title={titleText}
+              aria-label={titleText}
+              data-phase-l-proof="true"
+            >
+              {shortLabel}
+            </span>
+          )
+        })()}
       </div>
 
       {/* ROW 2b: [METHOD-OWNERSHIP-PANEL]

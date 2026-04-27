@@ -5463,6 +5463,43 @@ export function StreamlinedWorkoutSession({
       const completionStatus: 'completed' | 'partial' | 'skipped' = 
         completedExercises >= totalExercises * 0.8 ? 'completed' :
         completedExercises > 0 ? 'partial' : 'skipped'
+
+      // [PHASE-L] Build per-set evidence ledger from normalizedCompletedSets so
+      // future-prescription adaptation has actualReps / actualHold / actualRPE
+      // / per-set notes rather than only the per-exercise summary. We map by
+      // exerciseIndex back to the live `exercises` list to recover canonical
+      // name + category + prescribed reps/hold for the comparison.
+      const completedSetEvidence = normalizedCompletedSets
+        .map(set => {
+          const ex = exercises[set.exerciseIndex]
+          if (!ex) return null
+          // Parse prescribed reps/hold from repsOrTime as a best-effort comparison.
+          const repsOrTime = (ex as { repsOrTime?: string }).repsOrTime ?? ''
+          const lowMatch = repsOrTime.match(/(\d+)/)
+          const lowVal = lowMatch ? parseInt(lowMatch[1], 10) : undefined
+          const isHold = /sec|hold|s\b/i.test(repsOrTime)
+          const flagsForExercise = sessionNotes.exerciseNotes[set.exerciseIndex]
+          return {
+            exerciseName: ex.name,
+            exerciseId: ex.id,
+            sessionId: sessionId,
+            setNumber: set.setNumber,
+            prescribedReps: !isHold ? lowVal : undefined,
+            prescribedHoldSeconds: isHold ? lowVal : undefined,
+            actualReps: typeof set.actualReps === 'number' ? set.actualReps : undefined,
+            actualHoldSeconds: typeof set.holdSeconds === 'number' ? set.holdSeconds : undefined,
+            prescribedRPE: (ex as { targetRPE?: number }).targetRPE,
+            actualRPE: typeof set.actualRPE === 'number' ? set.actualRPE : undefined,
+            note: set.note ?? flagsForExercise?.freeText,
+            noteFlags: [
+              ...(set.reasonTags ?? []),
+              ...(flagsForExercise?.flags ?? []),
+            ],
+            timestamp: typeof set.timestamp === 'number' ? new Date(set.timestamp).toISOString() : undefined,
+            trusted: true,
+          }
+        })
+        .filter((ev): ev is NonNullable<typeof ev> => ev !== null)
       
   // Quick log the workout with full feedback loop data
     // Ensure minimum 1 minute duration to prevent 0-minute sessions
@@ -5486,6 +5523,8 @@ export function StreamlinedWorkoutSession({
         })),
         // FEEDBACK LOOP: Exercise-level outcomes for progression engine
         exercises: exerciseOutcomes,
+        // [PHASE-L] Per-set evidence ledger for future-prescription adaptation
+        completedSetEvidence,
         // FEEDBACK LOOP: Mark demo sessions to exclude from adaptive logic
         isDemo: isDemoSession || isDemo,
         completionStatus,

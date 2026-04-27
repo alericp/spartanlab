@@ -1474,6 +1474,16 @@ export interface AdaptiveExercise {
     reasonCoachLine: string
   }
   // ==========================================================================
+  // [PHASE-L] POST-WORKOUT PERFORMANCE FEEDBACK ADAPTATION STAMP
+  // Stamped IN PLACE on a future-session exercise when logged workout
+  // performance produced a bounded mutation. The numeric mutation lives on
+  // `sets` / `repsOrTime` / `targetRPE` / `restSeconds` directly — this stamp
+  // is the audit + visible-proof surface, NOT a parallel cosmetic banner.
+  // Populated by lib/program/performance-feedback-adaptation-contract.ts.
+  // Absent on every row that did not receive a Phase L mutation.
+  // ==========================================================================
+  performanceAdaptation?: import('./program/performance-feedback-adaptation-contract').ExercisePerformanceAdaptationStamp
+  // ==========================================================================
   // [DB-TRUTH-WINNER-PROVENANCE-LOCK]
   // Canonical, durable winner-rationale stamp. Built ONLY from final post-rerank
   // truth (not eligibility, not preferences, not bundle availability alone).

@@ -155,6 +155,14 @@ export interface LiveWorkoutSnapshot {
   lastSetRPE?: RPEValue | null
   restType?: 'same_exercise' | 'between_exercise' | 'block_round'
   nextExerciseName?: string
+  // [PHASE-J / UP-NEXT-SETUP] Single compact one-liner that summarizes the
+  // upcoming exercise's setup for the rest screen "Up Next" surface. Built
+  // upstream from the canonical effective-contract resolver so the rest
+  // card matches what the active card will show after the transition.
+  // Example: "Set 1 of 3 \u00b7 6-8 reps \u00b7 +25 lbs \u00b7 RPE 8".
+  // Optional - omitted when no useful detail can be honestly assembled
+  // (no load, no reps target, no targetRPE, no set count).
+  nextExerciseSetup?: string
 
   // Block round rest
   blockLabel?: string
@@ -620,6 +628,12 @@ export function LiveWorkoutExecutionSurface({
         lastSetRPE={snapshot.lastSetRPE}
         restType={snapshot.restType}
         nextExerciseName={snapshot.nextExerciseName}
+        // [PHASE-J / UP-NEXT-SETUP] Forward the compact one-liner so the
+        // rest-screen "Up Next" can show prescribed reps / load / RPE
+        // beneath the next exercise name. Surface stays a thin adapter -
+        // it does not build the string here; that ownership stays in
+        // StreamlinedWorkoutSession's snapshot construction.
+        nextExerciseSetup={snapshot.nextExerciseSetup}
         // Block round rest
         blockLabel={snapshot.blockLabel}
         blockGroupType={snapshot.blockGroupType}

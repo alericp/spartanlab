@@ -2792,50 +2792,73 @@ export function StreamlinedWorkoutSession({
         }
         break
       case 'HYDRATE_FROM_STORAGE': {
-        // [REFRESH-DUPLICATE-SET-FIX] PHASE-SAFE POINTER ADVANCEMENT (layer 2 of 4)
+        // [PHASE-T] LIVE WORKOUT RESUME / SAVED SESSION RESTORATION LOCK
+        // ----------------------------------------------------------------
+        // ROOT CAUSE BEFORE PHASE T:
+        //   The previous gate was `if (rawCompletedSets.length > 0) { ...
+        //   machineDispatch({ type: 'RESUME_WORKOUT', ... }) }`. That meant
+        //   ANY snapshot with zero logged sets but a non-zero
+        //   currentExerciseIndex (e.g. user skipped exercise 1, advanced to
+        //   exercise 2, then tapped Save & Exit) was silently dropped on
+        //   the floor when the route re-entered:
+        //     - autosave HAD persisted the snapshot honestly,
+        //     - getResumableSessionSummary() correctly surfaced it (it only
+        //       blocks BOTH completedSets===0 AND currentExerciseIndex===0),
+        //     - the dashboard correctly built the canonical resume URL,
+        //     - the live route correctly loaded the session and called
+        //       loadSessionFromStorage(), which correctly returned the
+        //       validated payload,
+        //     - and then this case ran, the `if` was false, and the entire
+        //       machineDispatch was skipped. The machine stayed in
+        //       createInitialMachineState's `phase: 'ready'`,
+        //       `currentExerciseIndex: 0`, `currentSetNumber: 1` -> the user
+        //       was rendered the start-fresh "Ready" screen at exercise 1,
+        //       set 1 even though the dashboard had just told them
+        //       "Resume Workout".
         //
-        // Root cause the guard below fixes:
-        //   During the green between_exercise_rest screen, the machine phase
-        //   is `between_exercise_rest` with:
-        //     - currentExerciseIndex = the exercise that was just finished
-        //     - currentSetNumber    = the FINAL set number of that exercise
-        //                             (the set that was JUST completed)
-        //     - completedSets       = already contains that final set
-        //   liveSession flattens this to status:'resting' for autosave. On
-        //   refresh, RESUME_WORKOUT forces phase:'active' and preserves
-        //   currentSetNumber. That leaves the runtime pointed at an
-        //   already-completed set. When the user logs it, COMPLETE_SET
-        //   appends a SECOND Set N to completedSets -> the visible
-        //   "two Set 2 rows" duplicate.
+        //   The gate also masked the same bug from anyone who refreshed
+        //   mid-rest with zero sets logged on a brand new exercise.
         //
-        //   Fix: before dispatching RESUME_WORKOUT, detect the exact
-        //   condition "pointer is at an already-completed set" using the
-        //   authoritative session contract for the per-exercise set count.
-        //   If so, advance the pointer to the next logical logging slot
-        //   (next set of same exercise, or set 1 of next exercise, or
-        //   clamp to end). Completed-set history is NEVER changed here;
-        //   only the transient pointer is repaired. Durable truth vs
-        //   transient truth is separated.
+        // FIX:
+        //   Always dispatch RESUME_WORKOUT when this case runs. The upstream
+        //   loadSessionFromStorage() already validates schema version,
+        //   recency (4 hr cutoff), sessionId match, structureSignature
+        //   match, status (rejects 'completed'), and shape of every field.
+        //   By the time we are here, the snapshot is authoritative resume
+        //   intent and MUST win over the fresh initializer.
+        //
+        //   The pre-existing [REFRESH-DUPLICATE-SET-FIX] pointer-advancement
+        //   guard (which prevents appending a duplicate Set N when the
+        //   pointer references an already-logged set after refresh during
+        //   between-exercise rest) is preserved. It is intrinsically a
+        //   completedSets > 0 concern, so it stays gated by that condition.
+        //   What changes is: when completedSets is empty we still hand the
+        //   raw indices to the machine instead of skipping the dispatch.
         const rawSaved = action.savedState
         const rawCompletedSets = (rawSaved.completedSets ?? []) as Array<{
           exerciseIndex: number
           setNumber: number
         }>
+        const exercises = machineSessionContract?.exercises ?? []
+        const exerciseCount = exercises.length
+        let safeIdx = typeof rawSaved.currentExerciseIndex === 'number'
+          ? rawSaved.currentExerciseIndex
+          : 0
+        let safeSetNumber = typeof rawSaved.currentSetNumber === 'number'
+          ? rawSaved.currentSetNumber
+          : 1
+
+        // [REFRESH-DUPLICATE-SET-FIX] PHASE-SAFE POINTER ADVANCEMENT
+        // (preserved from the prior contract). Only meaningful when at
+        // least one set has been logged; with zero completedSets the
+        // pointer cannot, by definition, reference an already-completed
+        // set. So this block stays gated by completedSets > 0.
         if (rawCompletedSets.length > 0) {
-          const exercises = machineSessionContract?.exercises ?? []
-          const exerciseCount = exercises.length
-          let safeIdx = typeof rawSaved.currentExerciseIndex === 'number'
-            ? rawSaved.currentExerciseIndex
-            : 0
-          let safeSetNumber = typeof rawSaved.currentSetNumber === 'number'
-            ? rawSaved.currentSetNumber
-            : 1
-          
           const isSetAlreadyCompleted = (exIdx: number, setNum: number) =>
             rawCompletedSets.some(
               s => s.exerciseIndex === exIdx && s.setNumber === setNum
             )
-          
+
           if (
             exerciseCount > 0 &&
             safeIdx >= 0 &&
@@ -2847,10 +2870,10 @@ export function StreamlinedWorkoutSession({
               typeof exercises[safeIdx]?.sets === 'number' && exercises[safeIdx].sets > 0
                 ? exercises[safeIdx].sets
                 : 1
-            
+
             let advancedIdx = safeIdx
             let advancedSetNumber = safeSetNumber
-            
+
             if (safeSetNumber < prescribedSets) {
               // Still more sets remaining in current exercise -> next set
               advancedSetNumber = safeSetNumber + 1
@@ -2866,7 +2889,7 @@ export function StreamlinedWorkoutSession({
                 advancedSetNumber = prescribedSets
               }
             }
-            
+
             console.log('[REFRESH-DUPLICATE-SET-FIX] advanced stale pointer past already-completed set', {
               fromExerciseIndex: safeIdx,
               fromSetNumber: safeSetNumber,
@@ -2875,24 +2898,49 @@ export function StreamlinedWorkoutSession({
               completedSetsCount: rawCompletedSets.length,
               reason: 'refresh_during_between_exercise_rest_or_equivalent',
             })
-            
+
             safeIdx = advancedIdx
             safeSetNumber = advancedSetNumber
           }
-          
-          machineDispatch({
-            type: 'RESUME_WORKOUT',
-            startTime: rawSaved.startTime || Date.now(),
-            savedState: {
-              currentExerciseIndex: safeIdx,
-              currentSetNumber: safeSetNumber,
-              completedSets: rawSaved.completedSets as unknown as CompletedSet[],
-              elapsedSeconds: rawSaved.elapsedSeconds,
-              workoutNotes: rawSaved.workoutNotes,
-              lastSetRPE: rawSaved.lastSetRPE,
-            },
-          })
         }
+
+        // [PHASE-T] Always dispatch. The case body is now structurally
+        // unconditional - any time the upstream validator handed us a
+        // payload we honor it. With zero completedSets and a non-zero
+        // currentExerciseIndex (the silent-restart bucket), this dispatch
+        // restores phase:'active' at the saved exercise/set instead of
+        // dropping the snapshot and rendering the fresh-start "Ready"
+        // screen.
+        console.log('[PHASE-T] HYDRATE_FROM_STORAGE -> RESUME_WORKOUT dispatched', {
+          completedSetsCount: rawCompletedSets.length,
+          restoredExerciseIndex: safeIdx,
+          restoredSetNumber: safeSetNumber,
+          hasElapsedSeconds: typeof rawSaved.elapsedSeconds === 'number',
+          hasWorkoutNotes: typeof rawSaved.workoutNotes === 'string' && rawSaved.workoutNotes.length > 0,
+          hasLastSetRPE: typeof rawSaved.lastSetRPE === 'number',
+          hasExerciseOverrides:
+            !!rawSaved.exerciseOverrides &&
+            Object.keys(rawSaved.exerciseOverrides).length > 0,
+        })
+        machineDispatch({
+          type: 'RESUME_WORKOUT',
+          startTime: rawSaved.startTime || Date.now(),
+          savedState: {
+            currentExerciseIndex: safeIdx,
+            currentSetNumber: safeSetNumber,
+            completedSets: rawSaved.completedSets as unknown as CompletedSet[],
+            elapsedSeconds: rawSaved.elapsedSeconds,
+            workoutNotes: rawSaved.workoutNotes,
+            lastSetRPE: rawSaved.lastSetRPE,
+            // [PHASE-T] Forward exerciseOverrides too. The machine reducer's
+            // RESUME_WORKOUT case already honors `saved.exerciseOverrides`,
+            // and the autosave path (saveSessionToStorage) already persists
+            // them. Forwarding them here closes the last leak so per-set
+            // notes / reason tags / load / band / actual-load adjustments
+            // entered before Save & Exit are visible after Resume.
+            exerciseOverrides: rawSaved.exerciseOverrides,
+          },
+        })
         break
       }
       case 'SET_TRANSITION_ERROR':

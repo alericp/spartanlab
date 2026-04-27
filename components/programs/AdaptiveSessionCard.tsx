@@ -5658,6 +5658,22 @@ function ExerciseRow({
               userVisibleExplanation?: string
               shortLabel?: string
               reasonCodes?: string[]
+              // [PHASE-O] Optional trend / coach slices, present when the
+              // resolver detected multi-session trend evidence on this row.
+              // Absent on legacy stamps and on rows without repeated evidence.
+              trendIntelligence?: {
+                trendCodes?: string[]
+                movementPattern?: string
+                severity?: 'low' | 'moderate' | 'high'
+                confidence?: 'low' | 'medium' | 'high'
+                conciseExplanation?: string
+                setCount?: number
+                sessionCount?: number
+              }
+              coachDecision?: {
+                action?: string
+                explanation?: string
+              }
             }
           }).performanceAdaptation
           if (!adaptation) return null
@@ -5677,12 +5693,115 @@ function ExerciseRow({
               title={titleText}
               aria-label={titleText}
               data-phase-l-proof="true"
+              data-phase-o-trend-codes={adaptation.trendIntelligence?.trendCodes?.join(',') || undefined}
+              data-phase-o-coach-action={adaptation.coachDecision?.action || undefined}
             >
               {shortLabel}
             </span>
           )
         })()}
       </div>
+
+      {/* [PHASE-O] Trend / coach proof line — concise second line under
+          the existing performanceAdaptation chip when the resolver attached
+          a trend slice. Only renders when:
+            (a) the row is not a warm-up / cooldown,
+            (b) the row carries a performanceAdaptation stamp, AND
+            (c) that stamp carries a Phase O trendIntelligence or coachDecision
+                slice with a non-empty conciseExplanation / action.
+          Renders nothing when the trend layer had insufficient repeated
+          evidence so the UI never invents trend claims. The same DOM block
+          owns BOTH the trend label AND the coach-decision microcopy so users
+          see the reason chain on a single compact line, not two competing
+          surfaces. */}
+      {!isWarmupCooldown && (() => {
+        const adaptation = (exercise as unknown as {
+          performanceAdaptation?: {
+            applied?: boolean
+            trendIntelligence?: {
+              trendCodes?: string[]
+              movementPattern?: string
+              severity?: 'low' | 'moderate' | 'high'
+              confidence?: 'low' | 'medium' | 'high'
+              conciseExplanation?: string
+              setCount?: number
+              sessionCount?: number
+            }
+            coachDecision?: {
+              action?: string
+              explanation?: string
+            }
+          }
+        }).performanceAdaptation
+        if (!adaptation) return null
+        const trend = adaptation.trendIntelligence
+        const coach = adaptation.coachDecision
+        const hasTrend = !!trend && Array.isArray(trend.trendCodes) && trend.trendCodes.length > 0
+        const hasCoach = !!coach && typeof coach.action === 'string' && coach.action.length > 0
+        if (!hasTrend && !hasCoach) return null
+        // Honest "no change" trend on insufficient data is still useful proof,
+        // but only when the resolver ALSO produced a chip — otherwise we'd
+        // be adding noise to every row. We already gated on `adaptation`
+        // existing above, so this is satisfied by construction.
+        const trendCodes = trend?.trendCodes ?? []
+        // Build a short trend label from the dominant trend code.
+        const trendLabel = (() => {
+          if (trendCodes.includes('joint_caution_pressure_detected')) return 'caution flag'
+          if (trendCodes.includes('skill_tension_limiter_detected')) return 'tension limiter'
+          if (trendCodes.includes('overreaching_risk')) return 'overreaching risk'
+          if (trendCodes.includes('repeated_under_target') && trendCodes.includes('repeated_high_rpe'))
+            return 'repeated high effort under target'
+          if (trendCodes.includes('repeated_high_rpe')) return 'repeated high RPE'
+          if (trendCodes.includes('repeated_under_target')) return 'repeated under target'
+          if (trendCodes.includes('capacity_limiter_detected')) return 'capacity limiter'
+          if (trendCodes.includes('progressing_well')) return 'progressing well'
+          if (trendCodes.includes('stable_on_target')) return 'stable on target'
+          if (trendCodes.includes('high_effort_on_target')) return 'on target at high effort'
+          if (trendCodes.includes('insufficient_data')) return null
+          return null
+        })()
+        // Coach action label — short, plain English.
+        const coachLabel = (() => {
+          switch (coach?.action) {
+            case 'hold_progression': return 'hold progression'
+            case 'reduce_volume': return 'reduce volume'
+            case 'lower_rpe_target': return 'lower RPE target'
+            case 'extend_rest': return 'extend rest'
+            case 'preserve_current_dose': return 'preserve dose'
+            case 'small_progression': return 'small progression'
+            case 'maintain_and_monitor': return 'maintain and monitor'
+            case 'technique_focus': return 'technique focus'
+            case 'deload_candidate': return 'deload candidate'
+            case 'insufficient_data_no_change': return 'no change — insufficient data'
+            default: return null
+          }
+        })()
+        if (!trendLabel && !coachLabel) return null
+        const setCount = trend?.setCount ?? 0
+        const sessionCount = trend?.sessionCount ?? 0
+        const evidenceTail =
+          setCount > 0 && sessionCount > 0
+            ? ` · ${setCount} set${setCount === 1 ? '' : 's'} · ${sessionCount} session${sessionCount === 1 ? '' : 's'}`
+            : ''
+        const fullTitle =
+          (trend?.conciseExplanation ? `Trend: ${trend.conciseExplanation}` : '') +
+          (coach?.explanation
+            ? `${trend?.conciseExplanation ? ' · ' : ''}Coach: ${coach.explanation}`
+            : '')
+        return (
+          <p
+            className="mt-1 text-[10px] text-teal-300/70 italic leading-snug"
+            title={fullTitle || undefined}
+            aria-label={fullTitle || 'Performance trend'}
+            data-phase-o-proof="true"
+          >
+            {trendLabel && <span>Trend: {trendLabel}</span>}
+            {trendLabel && coachLabel && <span className="text-[#5A5A5A]"> · </span>}
+            {coachLabel && <span>Coach: {coachLabel}</span>}
+            {evidenceTail && <span className="text-[#5A5A5A]">{evidenceTail}</span>}
+          </p>
+        )
+      })()}
 
       {/* ROW 2b: [METHOD-OWNERSHIP-PANEL]
           ONE authoritative visible method surface for flat method-only rows

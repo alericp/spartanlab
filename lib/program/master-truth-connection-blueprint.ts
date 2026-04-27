@@ -930,6 +930,178 @@ function phaseM(): BlueprintPhase {
   }
 }
 
+/** Phase O: Persistent Performance Trend Intelligence + Coach Decision Layer. */
+function phaseO(): BlueprintPhase {
+  return {
+    id: 'O',
+    title: 'Persistent Performance Trend Intelligence + Coach Decision Layer',
+    purpose:
+      'Convert persisted multi-session CompletedSetEvidence into deterministic trend intelligence (movement-pattern grouped, repeated vs acute distinguished, notes/tags interpreted) and a structured CoachDecision per affected exercise. Trend layer recommends; the existing Phase L/M resolver remains the final mutation owner with unchanged numeric safety bounds. Concise trend / coach proof is rendered under the existing performanceAdaptation chip on the Program card so users see the reason chain that produced the numeric change.',
+    status: 'COMPLETE',
+    nextAction:
+      'No remaining Phase O work. Optional follow-ups: roll up movement-pattern signals into session-level recovery flags surfaced on the session card header (currently only attached to per-exercise stamps), and let the trend layer also detect cross-pattern fatigue spillover.',
+    subtasks: [
+      {
+        id: 'O.O1',
+        title: 'Phase N persisted evidence reader audited and reused',
+        status: 'COMPLETE',
+        evidence: [
+          'lib/server/workout-set-evidence-reader.ts.getRecentWorkoutSetEvidenceForGeneration is the only Neon read path; Phase O reuses its synthetic-log output verbatim through Phase M buildPerformanceHistoryContext.',
+          'No new evidence table, no second reader, no parallel adaptation path.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'O.O2',
+        title: 'Resolver evidence entry point identified and extended in place',
+        status: 'COMPLETE',
+        evidence: [
+          'lib/program/performance-feedback-adaptation-contract.ts.resolvePerformanceFeedbackAdaptation now computes trend intelligence + coach decisions BEFORE deriveFuturePrescriptionMutations, then passes a {trendByExerciseKey, coachByExerciseKey} context into the existing mutator. No new resolver, no duplicated mutation logic.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'O.O3',
+        title: 'Trend intelligence contract added as pure deterministic layer',
+        status: 'COMPLETE',
+        evidence: [
+          'lib/program/performance-trend-intelligence-contract.ts is JSON-safe / side-effect-free, imports no localStorage / window / fetch / React / DB, and owns analyzePerformanceTrends + deriveCoachDecisionsFromPerformanceTrends.',
+          'No mutation rules, no UI labels, no DB writes — recommend-only layer.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'O.O4',
+        title: 'Bounded evidence windowing implemented',
+        status: 'COMPLETE',
+        evidence: [
+          'analyzePerformanceTrends accepts a daysBack window (default 21, capped 1..45). Trusted-only filter, timestamp-based pruning, deterministic ISO clock injection for tests.',
+          'PHASE_O_TREND_CONSTANTS exposes MIN_SETS_FOR_REPEATED_PATTERN / MIN_SETS_FOR_HIGH_CONFIDENCE / MIN_SETS_FOR_PROGRESSION_READINESS so unit tests can reason about thresholds.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'O.O5',
+        title: 'Movement-pattern classifier added safely with unknown fallback',
+        status: 'COMPLETE',
+        evidence: [
+          'classifyMovementPattern uses both Phase L exerciseClass AND name keywords to separate planche / front_lever / back_lever / handstand / weighted_pull / weighted_dip / vertical_pull / horizontal_pull / horizontal_press / vertical_press / explosive_pull / core_compression / lower_body / mobility / accessory / unknown.',
+          'Returns unknown when uncertain; never invents a high-confidence label.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'O.O6',
+        title: 'Notes / tags converted into structured trend signals',
+        status: 'COMPLETE',
+        evidence: [
+          'Pain flags / "too much tension" / capacity tokens are detected separately and produce distinct trend codes (joint_caution_pressure_detected, skill_tension_limiter_detected, capacity_limiter_detected) and reason codes (pain_or_caution_flag, tension_note_repeated, capacity_note).',
+          'A repeated "too much tension" on straight-arm work elevates severity to high; isolated mentions on other classes stay moderate.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'O.O7',
+        title: 'Coach decision helper added (recommend-only)',
+        status: 'COMPLETE',
+        evidence: [
+          'deriveCoachDecisionsFromPerformanceTrends produces hold_progression / reduce_volume / lower_rpe_target / extend_rest / preserve_current_dose / small_progression / maintain_and_monitor / technique_focus / deload_candidate / insufficient_data_no_change actions.',
+          'allowedMutationTypes / blockedMutationTypes are exposed but the Phase L resolver remains the final mutation owner — coach context is advisory.',
+          'Skill progression for straight-arm work is doctrine-owned: even when trend says progressing_well, action is downgraded to preserve_current_dose for that class.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'O.O8',
+        title: 'Existing Phase L/M resolver receives trend / coach context and stamps it',
+        status: 'COMPLETE',
+        evidence: [
+          'deriveFuturePrescriptionMutations gained an optional trendContext param. When supplied, each mutation carries a JSON-safe trendIntelligence + coachDecision slice (pickExerciseTrendStamp / pickCoachDecisionStamp).',
+          'applyFuturePrescriptionMutations copies those slices into ExercisePerformanceAdaptationStamp so the per-exercise stamp the Program card already consumes carries the trend reason chain — no parallel UI surface.',
+          'Phase M overlay (lib/server/performance-history-context.ts) and Phase M boot overlay (lib/program/performance-feedback-integration.ts) get the trend slices for free because they call resolvePerformanceFeedbackAdaptation + applyFuturePrescriptionMutations unchanged.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'O.O9',
+        title: 'Safe bounded mutation remains final owner — no new numeric rules',
+        status: 'COMPLETE',
+        evidence: [
+          'PHASE_L_SAFE_BOUNDS (MAX_VOLUME_DROP_SETS=1, MIN_SETS_FLOOR=2, MAX_RPE_DROP=1, MIN_RPE_FLOOR=6, MAX_PROGRESSION_BUMP_SETS=1) are unchanged.',
+          'Trend layer never decides sets / reps / RPE / rest values directly.',
+          'Single change to the mutator: when trend reasonCodes contains single_acute_event AND the proposed mutation is reduce_next_exposure_volume AND the signal is NOT pain / tension / repeated_skill_fatigue, the mutator demotes the cut to add_recovery_note_only with shouldApply=true. Pain warnings are NEVER suppressed.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'O.O10',
+        title: 'Program page renders concise trend / coach proof only when real',
+        status: 'COMPLETE',
+        evidence: [
+          'components/programs/AdaptiveSessionCard.tsx renders a compact teal italic line directly under the existing performanceAdaptation chip carrying "Trend: <label> · Coach: <action> · N sets · M sessions" only when trendIntelligence.trendCodes is non-empty AND a label maps to a known dominant trend.',
+          'Insufficient_data trend codes do NOT render a Phase O line, so cards without repeated evidence remain visually unchanged from Phase L/M.',
+          'data-phase-o-trend-codes / data-phase-o-coach-action / data-phase-o-proof attributes are exposed for tests and dev probes.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'O.O11',
+        title: 'Saved / load / normalize preserves trend fields',
+        status: 'COMPLETE',
+        evidence: [
+          'normalizeProgramForDisplay continues to use ...ex spread on each exercise; trendIntelligence + coachDecision sit inside performanceAdaptation and travel with the existing object — no normalizer change required.',
+          'JSON-safe stamps (ExerciseTrendStamp / CoachDecisionStamp) contain only string / number / boolean / array fields so localStorage round-trips cleanly.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'O.O12',
+        title: 'No duplicate adaptation, no fake chips, no parallel decision layer',
+        status: 'COMPLETE',
+        evidence: [
+          'Trend layer outputs are purely advisory; the only mutation pathway is still resolvePerformanceFeedbackAdaptation -> deriveFuturePrescriptionMutations -> applyFuturePrescriptionMutations.',
+          'Program card chip rendering remains a single owner: the chip and the trend line both read from exercise.performanceAdaptation; they cannot disagree because they read the same object.',
+          'Insufficient_data / single_acute_event explicitly produce no Phase O line — UI never claims a trend that did not exist.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'O.O13',
+        title: 'Phase J/K/L/M/N regressions verified',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase J: live workout reducer and resume routing untouched. completedSetEvidence shape unchanged; Phase O only reads it.',
+          'Phase K: weeklyStressDistributionPlan / stressLevel / recoveryCost flow unchanged — no Phase K input is consumed and no Phase K output is overwritten.',
+          'Phase L: mutation rules and SAFE_BOUNDS unchanged. The single conservative demotion (single_acute_event suppresses isolated reduce_next_exposure_volume into add_recovery_note_only) is more cautious, never more aggressive.',
+          'Phase M: server overlay still calls applyServerPerformanceFeedbackOverlay unchanged. Idempotency (appliedBy + evidenceHash) is unchanged. Diagnostic line `[phase-m-server-performance-history-overlay]` gained additive trendExerciseGroupCount / trendRepeatedPatternCount / trendIsolatedAcuteSuppressedCount / trendCautionFlagCount / trendProgressionReadyCount / trendOverallConfidence / trendSummary fields.',
+          'Phase N: persistence corridor and reader untouched. Phase O consumes the same synthetic logs via the existing Phase M adapter.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'O.O14',
+        title: 'Insufficient data produces no-change with honest reason',
+        status: 'COMPLETE',
+        evidence: [
+          'analyzePerformanceTrends returns hasEvidence: false + an empty exerciseTrends list when no evidence is in window; the resolver passes empty maps to the mutator and behavior reverts byte-for-byte to the Phase L pre-O path.',
+          'When some evidence exists but a particular exercise has only one set, the trend records single_acute_event in reasonCodes and the coach action falls through to maintain_and_monitor / insufficient_data_no_change — the UI does NOT add a Phase O line.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'O.O15',
+        title: 'Blueprint / proof statuses recorded',
+        status: 'COMPLETE',
+        evidence: [
+          'phaseO() in lib/program/master-truth-connection-blueprint.ts records O1..O15 statuses inline.',
+          'Phase O is appended after Phase N in the phases array consumed by buildMasterTruthConnectionBlueprintStatus.',
+        ],
+        remainingWork: [],
+      },
+    ],
+  }
+}
+
 /** Phase N: Neon-Persisted Workout Set Evidence Canonical History Lock. */
 function phaseN(): BlueprintPhase {
   return {

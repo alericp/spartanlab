@@ -2448,6 +2448,15 @@ export async function executeAuthoritativeGeneration(
       neonLogCount: number
       mergedLogCount: number
       neonReadStatus: string
+      // [PHASE-O] Trend intelligence audit. 0 / 'low' / 'No trend evidence.'
+      // when the trend layer ran with insufficient repeated evidence.
+      trendExerciseGroupCount: number
+      trendRepeatedPatternCount: number
+      trendIsolatedAcuteSuppressedCount: number
+      trendCautionFlagCount: number
+      trendProgressionReadyCount: number
+      trendOverallConfidence: 'low' | 'medium' | 'high'
+      trendSummary: string
       error?: string
     } = {
       attempted: false,
@@ -2466,6 +2475,13 @@ export async function executeAuthoritativeGeneration(
       neonLogCount: 0,
       mergedLogCount: 0,
       neonReadStatus: 'not_attempted',
+      trendExerciseGroupCount: 0,
+      trendRepeatedPatternCount: 0,
+      trendIsolatedAcuteSuppressedCount: 0,
+      trendCautionFlagCount: 0,
+      trendProgressionReadyCount: 0,
+      trendOverallConfidence: 'low',
+      trendSummary: 'not_attempted',
     }
 
     try {
@@ -2554,6 +2570,15 @@ export async function executeAuthoritativeGeneration(
           phaseMOverlayDiagnostic.signalCount = overlay.summary.signalCount
           phaseMOverlayDiagnostic.status = overlay.summary.status
           phaseMOverlayDiagnostic.changed = overlay.changed
+          // [PHASE-O] Trend audit fields propagated from the resolver.
+          phaseMOverlayDiagnostic.trendExerciseGroupCount = overlay.summary.trendExerciseGroupCount
+          phaseMOverlayDiagnostic.trendRepeatedPatternCount = overlay.summary.trendRepeatedPatternCount
+          phaseMOverlayDiagnostic.trendIsolatedAcuteSuppressedCount =
+            overlay.summary.trendIsolatedAcuteSuppressedCount
+          phaseMOverlayDiagnostic.trendCautionFlagCount = overlay.summary.trendCautionFlagCount
+          phaseMOverlayDiagnostic.trendProgressionReadyCount = overlay.summary.trendProgressionReadyCount
+          phaseMOverlayDiagnostic.trendOverallConfidence = overlay.summary.trendOverallConfidence
+          phaseMOverlayDiagnostic.trendSummary = overlay.summary.trendSummary
 
           if (overlay.changed) {
             program = overlay.program as AdaptiveProgram

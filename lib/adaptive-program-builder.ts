@@ -21268,10 +21268,127 @@ return explanations.length > 0 ? explanations : undefined
       }
     }).doctrineCausalChallenge ?? null
 
+    // ==========================================================================
+    // [PHASE 4I] DOCTRINE FLEXIBILITY / COOLDOWN MATERIALIZER
+    //
+    // First true Phase 4I materializer. Reads inputs.flexibilityGoals +
+    // FLEXIBILITY_GOAL_SUPPORT_MATRIX (batch 09) and emits per-session
+    // cooldown blocks. Pure function. Additive output: stamps a NEW field
+    // `program.cooldownFlexibilityMaterialization` rather than mutating
+    // session.cooldown — this keeps live workout handoff and existing
+    // session-shape consumers safe (Phase 4I non-negotiable).
+    //
+    // When inputs.flexibilityGoals is empty, the materializer returns
+    // verdict NOT_RELEVANT_TO_CURRENT_PROFILE and emits no blocks.
+    // ==========================================================================
+    // Structural shape used by both the materializer output AND the matrix
+    // arg. Defining it locally so the cast stays simple.
+    type Phase4iFlexMatShape = {
+      verdict?: string
+      totals?: {
+        eligibleGoalsCount?: number
+        sessionsConsidered?: number
+        sessionsMaterialized?: number
+        blocksEmitted?: number
+      }
+      recognizedGoals?: string[]
+      unmatchedGoals?: { goal: string; reason: string }[]
+    }
+    let phase4iFlexibilityMaterialization: Phase4iFlexMatShape | null = null
+    try {
+      const { buildDoctrineFlexibilityCooldownMaterialization } = await import(
+        './program/doctrine-flexibility-cooldown-materializer'
+      )
+
+      // Count total sessions in the program. The flat session list lives at
+      // finalProgram.weeks[].days[]. We tolerate any shape variation by
+      // defensive iteration.
+      type FpWeek = { days?: Array<{ weekNumber?: number | null; dayNumber?: number | null }> }
+      const fpWeeks = ((finalProgram as unknown as { weeks?: FpWeek[] }).weeks ?? []) as FpWeek[]
+      const sessionMetadataPhase4i: { sessionIndex: number; weekNumber: number | null; dayNumber: number | null }[] = []
+      let phase4iTotalSessions = 0
+      for (let w = 0; w < fpWeeks.length; w += 1) {
+        const week = fpWeeks[w]
+        const days = Array.isArray(week?.days) ? week!.days! : []
+        for (let d = 0; d < days.length; d += 1) {
+          const day = days[d] ?? {}
+          sessionMetadataPhase4i.push({
+            sessionIndex: phase4iTotalSessions,
+            weekNumber:
+              typeof day.weekNumber === 'number' && Number.isFinite(day.weekNumber)
+                ? day.weekNumber
+                : w + 1,
+            dayNumber:
+              typeof day.dayNumber === 'number' && Number.isFinite(day.dayNumber)
+                ? day.dayNumber
+                : d + 1,
+          })
+          phase4iTotalSessions += 1
+        }
+      }
+
+      const inputsRecord = inputs as unknown as { flexibilityGoals?: string[] | null }
+      const phase4iMaterialization = buildDoctrineFlexibilityCooldownMaterialization({
+        flexibilityGoals: Array.isArray(inputsRecord?.flexibilityGoals)
+          ? inputsRecord.flexibilityGoals
+          : [],
+        totalSessionCount: phase4iTotalSessions,
+        sessionMetadata: sessionMetadataPhase4i,
+      })
+
+      ;(finalProgram as unknown as { cooldownFlexibilityMaterialization?: unknown }).cooldownFlexibilityMaterialization =
+        phase4iMaterialization
+      phase4iFlexibilityMaterialization = phase4iMaterialization
+
+      console.log('[PHASE4I-FLEXIBILITY-COOLDOWN-MATERIALIZER]', {
+        verdict: phase4iMaterialization.verdict,
+        athleteFlexibilityGoalsCount: phase4iMaterialization.athleteFlexibilityGoals.length,
+        recognizedGoalsCount: phase4iMaterialization.recognizedGoals.length,
+        unmatchedGoalsCount: phase4iMaterialization.unmatchedGoals.length,
+        skippedGoalsCount: phase4iMaterialization.skippedGoals.length,
+        sessionsConsidered: phase4iMaterialization.totals.sessionsConsidered,
+        sessionsMaterialized: phase4iMaterialization.totals.sessionsMaterialized,
+        blocksEmitted: phase4iMaterialization.totals.blocksEmitted,
+      })
+    } catch (err) {
+      console.log('[PHASE4I-FLEXIBILITY-COOLDOWN-MATERIALIZER-FAILED]', {
+        error: String(err),
+        verdict: 'PHASE4I_MATERIALIZER_FAILED_GENERATION_PRESERVED',
+      })
+    }
+
+    // Stamp the registry snapshot too — single source of truth for what is
+    // and isn't materialized today. Pure-data import, JSON-safe, additive.
+    let phase4iRegistrySnapshot: unknown = null
+    try {
+      const { buildDoctrineMaterializerRegistrySnapshot } = await import(
+        './doctrine/doctrine-materializer-registry'
+      )
+      phase4iRegistrySnapshot = buildDoctrineMaterializerRegistrySnapshot()
+      ;(finalProgram as unknown as { doctrineMaterializerRegistry?: unknown }).doctrineMaterializerRegistry =
+        phase4iRegistrySnapshot
+      const totals = (phase4iRegistrySnapshot as { totals: Record<string, number> }).totals
+      console.log('[PHASE4I-DOCTRINE-MATERIALIZER-REGISTRY]', {
+        categoriesConnectedAndMaterial: totals.categoriesConnectedAndMaterial,
+        categoriesScoringOnlyNoMutator: totals.categoriesScoringOnlyNoMutator,
+        categoriesMaterializerNotConnected: totals.categoriesMaterializerNotConnected,
+        categoriesProfileGated: totals.categoriesProfileGated,
+      })
+    } catch (err) {
+      console.log('[PHASE4I-DOCTRINE-MATERIALIZER-REGISTRY-FAILED]', {
+        error: String(err),
+      })
+    }
+
     const phase4hMatrix = buildDoctrineMaterializationMatrix({
       runtimeContract: doctrineRuntimeContract,
       causalChallenge: phase4hCausalChallengeForMatrix,
       athleteInputs: inputs as unknown as Record<string, unknown>,
+      // [PHASE 4I] forward materializer output so the matrix's
+      // cooldown_flexibility row reflects real materialization. The local
+      // Phase4iFlexMatShape is structurally identical to the matrix's
+      // optional arg, so a plain `?? undefined` is sufficient.
+      cooldownFlexibilityMaterialization: phase4iFlexibilityMaterialization ?? undefined,
     })
     const phase4hOnboardingMap = buildFullOnboardingTruthMaterializationMap({
       runtimeContract: doctrineRuntimeContract,
@@ -21293,6 +21410,8 @@ return explanations.length > 0 ? explanations : undefined
       categoriesReadButAuditOnly: phase4hMatrix.totals.categoriesReadButAuditOnly,
       categoriesNotRead: phase4hMatrix.totals.categoriesNotRead,
       categoriesNotInSchema: phase4hMatrix.totals.categoriesNotInSchema,
+      // [PHASE 4I] new honest status counter
+      categoriesMaterializerNotConnected: phase4hMatrix.totals.categoriesMaterializerNotConnected,
       totalRulesRead: phase4hMatrix.totals.totalRulesRead,
       totalRulesMaterialized: phase4hMatrix.totals.totalRulesMaterialized,
       categoriesByStatus: phase4hMatrix.categories.map(c => ({ category: c.category, status: c.status })),

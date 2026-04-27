@@ -59,6 +59,12 @@ export type DoctrineCategoryStatus =
   | 'BLOCKED_WITH_REASON'        // rules were eligible but a named safety/equipment/progression gate blocked them
   | 'NOT_RELEVANT_TO_CURRENT_PROFILE' // category does not apply to this athlete's profile
   | 'NOT_IN_SCHEMA'              // category does not exist as a doctrine rule type in this codebase
+  // [PHASE 4I] rules ARE read (typically inside another rule_type) but no
+  // category-specific materializer consumes them yet. Distinct from
+  // NOT_IN_SCHEMA (no rules exist) and NOT_READ (rules exist but never reach
+  // the runtime path). This is the honest classification for mobility/warmup/
+  // prehab in Phase 4I, where batch 09 ships rules but no consumer is wired.
+  | 'MATERIALIZER_NOT_CONNECTED'
 
 // -----------------------------------------------------------------------------
 // Onboarding truth status — matches Phase 2 of the Phase 4H prompt.
@@ -130,6 +136,8 @@ export interface DoctrineMaterializationMatrix {
     categoriesBlockedWithReason: number
     categoriesNotRelevant: number
     categoriesNotInSchema: number
+    /** [PHASE 4I] count of categories with status MATERIALIZER_NOT_CONNECTED. */
+    categoriesMaterializerNotConnected: number
     totalRulesRead: number
     totalRulesMaterialized: number
   }
@@ -220,6 +228,23 @@ export interface BuildMatrixArgs {
    * we only read fields we recognize, missing ones default to "not_observed".
    */
   athleteInputs?: Record<string, unknown> | null
+  /**
+   * [PHASE 4I] Optional cooldown/flexibility materialization output from
+   * `buildDoctrineFlexibilityCooldownMaterialization`. When present, the
+   * matrix's `cooldown_flexibility` row reflects real materialized blocks.
+   * When absent, the row is reported honestly as MATERIALIZER_NOT_CONNECTED.
+   */
+  cooldownFlexibilityMaterialization?: {
+    verdict?: string
+    totals?: {
+      eligibleGoalsCount?: number
+      sessionsConsidered?: number
+      sessionsMaterialized?: number
+      blocksEmitted?: number
+    }
+    recognizedGoals?: string[]
+    unmatchedGoals?: { goal: string; reason: string }[]
+  } | null
 }
 
 export function buildDoctrineMaterializationMatrix(
@@ -491,53 +516,135 @@ export function buildDoctrineMaterializationMatrix(
   })
 
   // ---------------------------------------------------------------------------
-  // 7. mobility_warmup_prehab
-  //    Does not exist as a doctrine rule type in the current schema (the schema
-  //    has only: progression, exercise_selection, contraindication, method,
-  //    prescription, carryover). Some warmup/prehab exercises live inside
-  //    exercise_selection rules, but there is no first-class category here.
+  // 7. mobility_warmup_prehab  (Phase 4I — honest reclassification)
+  //
+  // Phase 4H labelled this NOT_IN_SCHEMA. That was wrong. Batch 09 ships
+  // mobility / warmup / prehab / skill-rampup doctrine inside the existing
+  // 6 rule_types (no separate "mobility" rule_type by design). What is
+  // missing is the materializer that selects compact 1-3 item warmup/prehab
+  // blocks. Phase 4I deliberately does NOT build this — the safe scope for
+  // this phase is the cooldown/flexibility materializer below.
   // ---------------------------------------------------------------------------
   rows.push({
     category: 'mobility_warmup_prehab',
-    status: 'NOT_IN_SCHEMA',
+    status: 'MATERIALIZER_NOT_CONNECTED',
     rulesRead: 0,
     rulesRelevant: 0,
     rulesEligible: 0,
     rulesSelected: 0,
     rulesMaterialized: 0,
     rulesBlocked: 0,
-    allowedProgramFields: ['session.warmup', 'session.prehab'],
+    allowedProgramFields: [
+      'session.warmup',
+      'session.prehab',
+      'session.prepBlocks',
+      'exercise.prepNotes',
+      'session.jointPrepFocus',
+      'session.skillPrepFocus',
+    ],
     changedProgramFields: [],
     visibleSurfaces: [],
     noChangeReason:
-      'no mobility / warmup / prehab rule_type exists in the doctrine schema. ' +
-      'Warmup and prehab content is currently emitted by the session-composition layer, not by doctrine rules.',
+      'batch 09 mobility/warmup/prehab/skill-rampup doctrine is loaded via the existing 6 rule_types, ' +
+      'but no consumer turns those rules into session.warmup / session.prehab blocks. The flexibility ' +
+      'cooldown materializer (Phase 4I) handles direct flexibility goals; warmup/prehab is Phase 4J.',
     notes:
-      'To make this category materially doctrine-driven, the schema would need a new rule_type, plus ' +
-      'a fetcher, plus a session-composition consumer. Out of scope for Phase 4H.',
+      'Phase 4I correction: previously labelled NOT_IN_SCHEMA, which was inaccurate. The honest ' +
+      'classification is MATERIALIZER_NOT_CONNECTED — rules exist, consumer does not.',
   })
 
   // ---------------------------------------------------------------------------
-  // 8. cooldown_flexibility
-  //    Same: not a first-class doctrine rule type in this schema.
+  // 8. cooldown_flexibility  (Phase 4I — first real Batch 09 consumer)
+  //
+  // When the builder passes `cooldownFlexibilityMaterialization` from the new
+  // materializer, this row reflects that materialization. When the materializer
+  // returns NOT_RELEVANT_TO_CURRENT_PROFILE (no flexibility goals selected),
+  // this row reflects that honestly. When the args field is absent, the row
+  // reports MATERIALIZER_NOT_CONNECTED rather than pretending success.
   // ---------------------------------------------------------------------------
-  rows.push({
-    category: 'cooldown_flexibility',
-    status: 'NOT_IN_SCHEMA',
-    rulesRead: 0,
-    rulesRelevant: 0,
-    rulesEligible: 0,
-    rulesSelected: 0,
-    rulesMaterialized: 0,
-    rulesBlocked: 0,
-    allowedProgramFields: ['session.cooldown', 'session.flexibility'],
-    changedProgramFields: [],
-    visibleSurfaces: [],
-    noChangeReason:
-      'no cooldown / flexibility rule_type exists in the doctrine schema. ' +
-      'Cooldown content is currently emitted by the session-composition layer.',
-    notes: 'Out of scope for Phase 4H — would require schema + fetcher + consumer.',
-  })
+  const flexMat = args.cooldownFlexibilityMaterialization
+  if (flexMat) {
+    const blocksEmitted = flexMat.totals?.blocksEmitted ?? 0
+    const sessionsMaterialized = flexMat.totals?.sessionsMaterialized ?? 0
+    const eligibleGoalsCount = flexMat.totals?.eligibleGoalsCount ?? 0
+    const recognizedGoals = Array.isArray(flexMat.recognizedGoals) ? flexMat.recognizedGoals : []
+    const unmatchedGoals = Array.isArray(flexMat.unmatchedGoals) ? flexMat.unmatchedGoals : []
+
+    let cfStatus: DoctrineCategoryStatus
+    let cfNoChangeReason: string | null
+    if (flexMat.verdict === 'NOT_RELEVANT_TO_CURRENT_PROFILE') {
+      cfStatus = 'NOT_RELEVANT_TO_CURRENT_PROFILE'
+      cfNoChangeReason = 'athlete did not select any flexibility goals during onboarding'
+    } else if (flexMat.verdict === 'NO_GOALS_RECOGNIZED') {
+      cfStatus = 'BLOCKED_WITH_REASON'
+      cfNoChangeReason =
+        'flexibility goals were selected but none survived the FLEXIBILITY_GOAL_SUPPORT_MATRIX classification'
+    } else if (flexMat.verdict === 'BLOCKED_NO_ELIGIBLE_SESSIONS') {
+      cfStatus = 'BLOCKED_WITH_REASON'
+      cfNoChangeReason = 'eligible goals exist but the program had no sessions to attach blocks to'
+    } else if (blocksEmitted > 0) {
+      cfStatus = 'CONNECTED_AND_MATERIAL'
+      cfNoChangeReason = null
+    } else {
+      cfStatus = 'BLOCKED_WITH_REASON'
+      cfNoChangeReason = 'materializer ran but emitted zero blocks (no eligible session/goal pairing)'
+    }
+
+    rows.push({
+      category: 'cooldown_flexibility',
+      status: cfStatus,
+      rulesRead: eligibleGoalsCount,
+      rulesRelevant: eligibleGoalsCount,
+      rulesEligible: eligibleGoalsCount,
+      rulesSelected: blocksEmitted,
+      rulesMaterialized: blocksEmitted,
+      rulesBlocked: unmatchedGoals.length,
+      allowedProgramFields: [
+        'program.cooldownFlexibilityMaterialization',
+        'program.cooldownFlexibilityMaterialization.materializedSessions[]',
+        'program.cooldownFlexibilityMaterialization.materializedSessions[].blocks[]',
+      ],
+      changedProgramFields:
+        blocksEmitted > 0
+          ? [
+              'program.cooldownFlexibilityMaterialization',
+              'program.cooldownFlexibilityMaterialization.materializedSessions[].blocks[]',
+            ]
+          : [],
+      visibleSurfaces:
+        blocksEmitted > 0
+          ? ['Program page cooldown/flexibility line', 'session diagnostic chip']
+          : [],
+      noChangeReason: cfNoChangeReason,
+      notes:
+        `Phase 4I materializer: ${eligibleGoalsCount} eligible goal(s) ` +
+        `(${recognizedGoals.join(', ') || 'none'}), ${blocksEmitted} block(s) across ${sessionsMaterialized} session(s). ` +
+        `Output is additive on program.cooldownFlexibilityMaterialization — does not mutate session.cooldown directly to keep live workout handoff safe.`,
+    })
+  } else {
+    // Builder did not pass the materializer output. Report honestly.
+    rows.push({
+      category: 'cooldown_flexibility',
+      status: 'MATERIALIZER_NOT_CONNECTED',
+      rulesRead: 0,
+      rulesRelevant: 0,
+      rulesEligible: 0,
+      rulesSelected: 0,
+      rulesMaterialized: 0,
+      rulesBlocked: 0,
+      allowedProgramFields: [
+        'program.cooldownFlexibilityMaterialization',
+      ],
+      changedProgramFields: [],
+      visibleSurfaces: [],
+      noChangeReason:
+        'flexibility cooldown materialization was not provided to the matrix builder ' +
+        '(buildDoctrineMaterializationMatrix called without cooldownFlexibilityMaterialization arg)',
+      notes:
+        'Phase 4I materializer exists at lib/program/doctrine-flexibility-cooldown-materializer.ts but its ' +
+        'output was not passed to the matrix in this run.',
+    })
+  }
 
   // ---------------------------------------------------------------------------
   // 9. weekly_architecture
@@ -577,17 +684,26 @@ export function buildDoctrineMaterializationMatrix(
     categoriesBlockedWithReason: rows.filter(r => r.status === 'BLOCKED_WITH_REASON').length,
     categoriesNotRelevant: rows.filter(r => r.status === 'NOT_RELEVANT_TO_CURRENT_PROFILE').length,
     categoriesNotInSchema: rows.filter(r => r.status === 'NOT_IN_SCHEMA').length,
+    // [PHASE 4I] new honest status counter
+    categoriesMaterializerNotConnected: rows.filter(r => r.status === 'MATERIALIZER_NOT_CONNECTED').length,
     totalRulesRead: rows.reduce((sum, r) => sum + r.rulesRead, 0),
     totalRulesMaterialized: rows.reduce((sum, r) => sum + r.rulesMaterialized, 0),
   }
 
   // Verdict ------------------------------------------------------------------
+  // [PHASE 4I] verdict logic must treat MATERIALIZER_NOT_CONNECTED as a
+  // partial-materialization signal too. Any non-zero count of unconnected
+  // materializers means we cannot honestly call the system fully materialized.
   let verdict: DoctrineMaterializationMatrix['verdict']
   if (!doctrineRuntimeAvailable) {
     verdict = 'DOCTRINE_NOT_AVAILABLE'
-  } else if (totals.categoriesReadButScoringOnly === 0 && totals.categoriesReadButAuditOnly === 0) {
+  } else if (
+    totals.categoriesReadButScoringOnly === 0 &&
+    totals.categoriesReadButAuditOnly === 0 &&
+    totals.categoriesMaterializerNotConnected === 0
+  ) {
     verdict = 'DOCTRINE_FULLY_MATERIALIZED_FOR_RELEVANT_CATEGORIES'
-  } else if (totals.totalRulesMaterialized > 0) {
+  } else if (totals.totalRulesMaterialized > 0 || totals.categoriesConnectedAndMaterial > 0) {
     verdict = 'DOCTRINE_PARTIALLY_MATERIALIZED'
   } else {
     verdict = 'DOCTRINE_READ_BUT_NOT_MATERIALIZED'

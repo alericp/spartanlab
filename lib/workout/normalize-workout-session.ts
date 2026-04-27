@@ -192,6 +192,22 @@ function normalizeExercise(raw: unknown, index: number): WorkoutExerciseContract
     ;(normalized as unknown as { doctrineApplicationDeltas: unknown }).doctrineApplicationDeltas = rawAppDeltas
   }
 
+  // [PHASE 4P] Preserve `structuralMethodApplied` flag and any
+  // `structuralMethodDeltas` written by the structural method
+  // materialization corridor. These are NOT in `WorkoutExerciseContract`
+  // and rely on the same extra-property pass-through pattern. Without this
+  // preservation, the live workout would lose attribution of which
+  // exercises were placed into corridor-applied superset/circuit/density
+  // blocks vs builder-applied blocks.
+  const rawStructuralApplied = (ex as { structuralMethodApplied?: unknown }).structuralMethodApplied
+  if (typeof rawStructuralApplied === 'boolean') {
+    ;(normalized as unknown as { structuralMethodApplied: boolean }).structuralMethodApplied = rawStructuralApplied
+  }
+  const rawStructuralDeltas = (ex as { structuralMethodDeltas?: unknown }).structuralMethodDeltas
+  if (Array.isArray(rawStructuralDeltas) && rawStructuralDeltas.length > 0) {
+    ;(normalized as unknown as { structuralMethodDeltas: unknown }).structuralMethodDeltas = rawStructuralDeltas
+  }
+
   return normalized
 }
 
@@ -319,14 +335,49 @@ export function normalizeWorkoutSession(raw: unknown): WorkoutSessionContract | 
     warmup: normalizedWarmup,
     cooldown: normalizedCooldown,
   }
-  
+
+  // [PHASE 4P] Preserve session-level method-structure truth across the
+  // normalize boundary. Without this preservation the live workout would
+  // lose:
+  //   - `styleMetadata.styledGroups` (grouped Superset/Circuit/Density truth
+  //     used by the rich grouped renderer in components/programs/lib/
+  //     session-group-display.ts), and
+  //   - `methodStructures[]` (the canonical Phase 4P read-model that the
+  //     program-level rollup is computed from).
+  // Per-exercise `blockId` + `method` + `setExecutionMethod` are already
+  // preserved inside `normalizeExercise`, but those fall back to a permissive
+  // grouping reconstruction if the session metadata disappears. Keeping the
+  // session-level styledGroups intact is the cheaper, more honest path.
+  // Same extra-property pass-through pattern used elsewhere in this file —
+  // we never break the `WorkoutSessionContract` type.
+  const rawStyleMetadata = (session as { styleMetadata?: unknown }).styleMetadata
+  if (rawStyleMetadata && typeof rawStyleMetadata === 'object') {
+    ;(normalized as unknown as { styleMetadata: unknown }).styleMetadata = rawStyleMetadata
+  }
+  const rawMethodStructures = (session as { methodStructures?: unknown }).methodStructures
+  if (Array.isArray(rawMethodStructures) && rawMethodStructures.length > 0) {
+    ;(normalized as unknown as { methodStructures: unknown }).methodStructures = rawMethodStructures
+  }
+  // Phase 4M rollup proof — session-level mirror of the row-level mutator
+  // summary. Already JSON-safe by construction.
+  const rawRowLevelSummary = (session as { rowLevelMutatorSummary?: unknown }).rowLevelMutatorSummary
+  if (rawRowLevelSummary && typeof rawRowLevelSummary === 'object') {
+    ;(normalized as unknown as { rowLevelMutatorSummary: unknown }).rowLevelMutatorSummary = rawRowLevelSummary
+  }
+
   console.log('[workout-normalizer] Session normalization complete:', {
     inputExercises: rawExercises.length,
     outputExercises: normalizedExercises.length,
     droppedExercises: rawExercises.length - normalizedExercises.length,
     dayLabel: normalized.dayLabel,
+    // [PHASE 4P] Visibility into structural truth preservation.
+    styledGroupsPreserved:
+      rawStyleMetadata && typeof rawStyleMetadata === 'object' && Array.isArray((rawStyleMetadata as { styledGroups?: unknown }).styledGroups)
+        ? ((rawStyleMetadata as { styledGroups: unknown[] }).styledGroups.length)
+        : 0,
+    methodStructuresPreserved: Array.isArray(rawMethodStructures) ? rawMethodStructures.length : 0,
   })
-  
+
   return normalized
 }
 

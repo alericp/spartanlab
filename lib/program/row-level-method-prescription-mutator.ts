@@ -3,6 +3,10 @@ import {
   type DoctrineApplicationCorridorSummary,
   type DoctrineApplicationInput,
 } from './doctrine-application-corridor'
+import {
+  runStructuralMethodMaterializationCorridor,
+  type StructuralMaterializationResult,
+} from './structural-method-materialization-corridor'
 
 /**
  * =============================================================================
@@ -311,6 +315,22 @@ export interface RowLevelMutatorSummary {
    * crashed (fail-soft).
    */
   doctrineApplicationCorridor: DoctrineApplicationCorridorSummary | null
+  /**
+   * [PHASE 4P] Per-session canonical methodStructures result. Mirrors what
+   * the structural materialization corridor wrote onto
+   * `session.methodStructures`. Carries per-family applied/blocked counts
+   * the program-level rollup uses to compute `methodStructureRollup`.
+   * Null only when the corridor crashed (fail-soft).
+   */
+  structuralMaterialization: {
+    methodStructures: import('./method-structure-contract').CanonicalMethodStructure[]
+    appliedCount: number
+    alreadyAppliedCount: number
+    blockedCount: number
+    notNeededCount: number
+    noSafeTargetCount: number
+    newStructuralGroupWritten: boolean
+  } | null
 }
 
 export interface RowLevelMethodPrescriptionMutatorInput {
@@ -915,6 +935,30 @@ export function applyRowLevelMethodPrescriptionMutations(
   }
 
   // -----------------------------------------------------------------------
+  // 2c. [PHASE 4P] STRUCTURAL METHOD MATERIALIZATION CORRIDOR
+  //     Reads existing builder-emitted styledGroups + row-level methods,
+  //     mirrors them into `session.methodStructures`, and materializes
+  //     ANY missing doctrine-earned structural method (superset / circuit /
+  //     density_block) when budget says SHOULD_APPLY/MAY_APPLY and a safe
+  //     target row exists. Builder-applied groups WIN — never overwritten.
+  // -----------------------------------------------------------------------
+  let structuralMaterialization: StructuralMaterializationResult | null = null
+  try {
+    structuralMaterialization = runStructuralMethodMaterializationCorridor({
+      session: session as Parameters<typeof runStructuralMethodMaterializationCorridor>[0]['session'],
+      weeklyMethodBudgetPlan:
+        (input.weeklyMethodBudgetPlan as Parameters<typeof runStructuralMethodMaterializationCorridor>[0]['weeklyMethodBudgetPlan']) ?? null,
+      selectedTrainingMethods: input.selectedTrainingMethods ?? [],
+      selectedSkills: input.selectedSkills ?? [],
+      jointCautions: input.jointCautions ?? [],
+    })
+  } catch (structErr) {
+    // Fail-soft: structural corridor must never block the mutator from
+    // returning the existing Phase 4L/4M summary.
+    console.log('[PHASE4P-STRUCTURAL-CORRIDOR-FAILED]', { error: String(structErr) })
+  }
+
+  // -----------------------------------------------------------------------
   // 3. BUILD APPLIED / BLOCKED LISTS
   // -----------------------------------------------------------------------
   const appliedMutations: RowLevelAppliedMutation[] = []
@@ -1189,6 +1233,19 @@ export function applyRowLevelMethodPrescriptionMutations(
     prescriptionBoundsProofs,
     challenge,
     doctrineApplicationCorridor: corridorSummary,
+    // [PHASE 4P] Per-session canonical methodStructures result. Carries the
+    // counts the program-level rollup uses to compute methodStructureRollup.
+    structuralMaterialization: structuralMaterialization
+      ? {
+          methodStructures: structuralMaterialization.methodStructures,
+          appliedCount: structuralMaterialization.appliedCount,
+          alreadyAppliedCount: structuralMaterialization.alreadyAppliedCount,
+          blockedCount: structuralMaterialization.blockedCount,
+          notNeededCount: structuralMaterialization.notNeededCount,
+          noSafeTargetCount: structuralMaterialization.noSafeTargetCount,
+          newStructuralGroupWritten: structuralMaterialization.newStructuralGroupWritten,
+        }
+      : null,
   }
 
   // Stamp onto session

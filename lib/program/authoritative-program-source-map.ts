@@ -145,6 +145,55 @@ export interface AuthoritativeProgramSourceMap {
     | 'STALE_SOURCE_DETECTED'
     | 'LEGACY_FALLBACK_CONTROLLING_DISPLAY'
     | 'LIVE_WORKOUT_DIVERGES_FROM_PROGRAM_DISPLAY'
+  // ===========================================================================
+  // [PHASE 4W] FALLBACK-CONTROLS-DISPLAY CLASSIFICATION
+  // ---------------------------------------------------------------------------
+  // The existing `sourceVerdict` flags `LEGACY_FALLBACK_CONTROLLING_DISPLAY`
+  // only when no canonical signal is left at all. Phase 4W adds a finer-grained
+  // pair of booleans + reason codes so Program page / AdaptiveSessionCard /
+  // diagnostics can answer *exactly* one question: "Is the visible card today
+  // backed by canonical session truth, or is fallback driving it?" — without
+  // having to redo the entire source-map analysis.
+  //
+  // Definitions (mutually exclusive when there is any program data):
+  //   - `canonicalControlsDisplay = true`  ↔ the visible card today is
+  //      controlled by a canonical signal: methodStructures (preferred),
+  //      non-straight styledGroups, OR row-level method fields. Either
+  //      methodStructures itself is present, or styledGroups+row-level
+  //      methods agree with it (Phase 4P sibling output of the same
+  //      corridor).
+  //   - `fallbackControlsDisplay = true`   ↔ no canonical signal is
+  //      driving the visible card today; whatever the user sees is coming
+  //      from compatibility/legacy/fallback fields.
+  //
+  // Reason codes are stable strings (not localized prose) so consumers can
+  // log/filter them without parsing English.
+  // ===========================================================================
+  /** True when canonical session truth controls today's visible cards. */
+  canonicalControlsDisplay: boolean
+  /** Stable reason explaining `canonicalControlsDisplay`. Null when not
+   *  applicable (e.g. no program). */
+  canonicalDisplayReason:
+    | 'CANONICAL_TRUTH_PRESENT'
+    | 'CANONICAL_METHOD_STRUCTURES_DRIVE_DISPLAY'
+    | 'STYLED_GROUPS_AGREE_WITH_CANONICAL_CORRIDOR'
+    | 'ROW_LEVEL_METHODS_DRIVE_DISPLAY'
+    | null
+  /** True when fallback / legacy / compatibility fields are what the user
+   *  is seeing today (not necessarily a regression — legacy saved programs
+   *  that never had canonical truth land here legitimately). */
+  fallbackControlsDisplay: boolean
+  /** Stable reason explaining `fallbackControlsDisplay`. Null when not
+   *  applicable (canonical truth present and controlling). Multiple reasons
+   *  may apply; the most-blocking one wins. */
+  fallbackDisplayReason:
+    | 'LEGACY_PROGRAM_NO_CANONICAL_TRUTH'
+    | 'CANONICAL_TRUTH_PRESENT_BUT_FALLBACK_DISPLAY_CONTROLS'
+    | 'FALLBACK_USED_FOR_COMPATIBILITY'
+    | 'STYLED_GROUPS_USED_WITHOUT_METHOD_STRUCTURES'
+    | 'DOCTRINE_CAUSAL_DISPLAY_USED_WITHOUT_DOCTRINE_BLOCK_RESOLUTION'
+    | 'DISPLAY_PROJECTION_OLDER_THAN_CANONICAL_SESSION'
+    | null
   fields: {
     programObject: SourceFieldVerdict
     sessions: SourceFieldVerdict
@@ -333,6 +382,14 @@ export function runAuthoritativeProgramSourceMap(
       generatedAt: null,
       sessionsCount: 0,
       sourceVerdict: 'STALE_SOURCE_DETECTED',
+      // [PHASE 4W] No program → display is trivially fallback-controlled
+      // because there is nothing canonical to drive it. Reason is the
+      // generic legacy-no-canonical code; consumers should already gate on
+      // `programId !== null` before treating this as actionable.
+      canonicalControlsDisplay: false,
+      canonicalDisplayReason: null,
+      fallbackControlsDisplay: true,
+      fallbackDisplayReason: 'LEGACY_PROGRAM_NO_CANONICAL_TRUTH',
       fields: makeAllMissingFields(),
       demotedSources,
       blockedLegacySources,
@@ -516,6 +573,76 @@ export function runAuthoritativeProgramSourceMap(
     sourceVerdict = 'LOCKED_SINGLE_AUTHORITATIVE_SOURCE'
   }
 
+  // ---------------------------------------------------------------------------
+  // [PHASE 4W] CANONICAL VS FALLBACK DISPLAY CLASSIFICATION
+  // ---------------------------------------------------------------------------
+  // Definitions, evaluated in priority order:
+  //   1. methodStructures present on ≥1 session                  → canonical
+  //   2. else: non-straight styledGroups + row-level methods     → canonical
+  //      (Phase 4P sibling output of the same corridor)
+  //   3. else: row-level methods alone                           → canonical
+  //   4. else: ANY canonical signal exists but display is not    → fallback
+  //      controlled by it (e.g. methodStructureRollup says it    (CANONICAL_…
+  //      ran but per-session structures are missing)              BUT_FALLBACK)
+  //   5. else: legacy / no canonical signal at all                → fallback
+  //      (LEGACY_PROGRAM_NO_CANONICAL_TRUTH)
+  //
+  // The blocked-legacy-source branch upgrades reason to the most blocking
+  // case so consumers can show targeted dev diagnostics:
+  //   - `STYLED_GROUPS_USED_WITHOUT_METHOD_STRUCTURES`
+  //   - `DOCTRINE_CAUSAL_DISPLAY_USED_WITHOUT_DOCTRINE_BLOCK_RESOLUTION`
+  // ---------------------------------------------------------------------------
+  let canonicalControlsDisplay = false
+  let canonicalDisplayReason: AuthoritativeProgramSourceMap['canonicalDisplayReason'] = null
+  let fallbackControlsDisplay = false
+  let fallbackDisplayReason: AuthoritativeProgramSourceMap['fallbackDisplayReason'] = null
+
+  if (methodStructureCounts.totalMethodStructures > 0) {
+    canonicalControlsDisplay = true
+    canonicalDisplayReason = 'CANONICAL_METHOD_STRUCTURES_DRIVE_DISPLAY'
+  } else if (
+    styledGroupsCounts.sessionsWithNonStraightGroups > 0 &&
+    rowLevelCounts.totalRowLevelMethodFields > 0
+  ) {
+    // Sibling Phase 4P outputs agree on a doctrine corridor decision; this
+    // is canonical-equivalent display even though the methodStructures
+    // array specifically is empty/legacy.
+    canonicalControlsDisplay = true
+    canonicalDisplayReason = 'STYLED_GROUPS_AGREE_WITH_CANONICAL_CORRIDOR'
+  } else if (rowLevelCounts.totalRowLevelMethodFields > 0) {
+    canonicalControlsDisplay = true
+    canonicalDisplayReason = 'ROW_LEVEL_METHODS_DRIVE_DISPLAY'
+  } else {
+    // No canonical display driver. Decide which fallback flavor applies.
+    fallbackControlsDisplay = true
+    if (styledGroupsCounts.totalStyledGroups > 0) {
+      // styledGroups present but no methodStructures and no row-level
+      // methods → display is being painted off legacy styledGroups only.
+      fallbackDisplayReason = 'STYLED_GROUPS_USED_WITHOUT_METHOD_STRUCTURES'
+    } else if (
+      blockedLegacySources.includes('program.doctrineCausalChallenge')
+    ) {
+      fallbackDisplayReason =
+        'DOCTRINE_CAUSAL_DISPLAY_USED_WITHOUT_DOCTRINE_BLOCK_RESOLUTION'
+    } else if (
+      hasMethodStructureRollup ||
+      hasDoctrineApplicationRollup ||
+      hasWeeklyBudgetPlan
+    ) {
+      // The decision rollups exist but per-session structures are gone —
+      // canonical truth was authored upstream but the display layer is
+      // running on something else.
+      fallbackDisplayReason =
+        'CANONICAL_TRUTH_PRESENT_BUT_FALLBACK_DISPLAY_CONTROLS'
+    } else if (sessions.length > 0) {
+      // Sessions render through compatibility fallback (e.g. straight
+      // exercises only). Honest, not a regression for legacy programs.
+      fallbackDisplayReason = 'LEGACY_PROGRAM_NO_CANONICAL_TRUTH'
+    } else {
+      fallbackDisplayReason = 'LEGACY_PROGRAM_NO_CANONICAL_TRUTH'
+    }
+  }
+
   return {
     version: 'phase-4q-authoritative-source-map-v1',
     finalProgramSource: observedAt,
@@ -532,6 +659,10 @@ export function runAuthoritativeProgramSourceMap(
     generatedAt: typeof program.generatedAt === 'string' ? program.generatedAt : null,
     sessionsCount: sessions.length,
     sourceVerdict,
+    canonicalControlsDisplay,
+    canonicalDisplayReason,
+    fallbackControlsDisplay,
+    fallbackDisplayReason,
     fields,
     demotedSources,
     blockedLegacySources,

@@ -360,6 +360,18 @@ interface RowLevelMutatorRollupView {
   totalApplied?: number
   totalBlocked?: number
   enduranceDensityApplied?: number
+  // [PHASE 4M] Doctrine application corridor counts
+  topSetApplied?: number
+  dropSetApplied?: number
+  restPauseApplied?: number
+  prescriptionRestApplied?: number
+  prescriptionRpeApplied?: number
+  totalDoctrineApplications?: number
+  programFinalVerdict?:
+    | 'DOCTRINE_DECISIVELY_APPLIED'
+    | 'DOCTRINE_PARTIALLY_APPLIED'
+    | 'DOCTRINE_EVALUATED_NO_SAFE_CHANGES'
+    | 'DOCTRINE_NOT_CONNECTED'
   rowsWithinBounds?: number
   rowsOutOfBounds?: number
   rowsMissingBounds?: number
@@ -425,17 +437,44 @@ export function WeeklyMethodChallengeLine({ program }: Props) {
   const mutatorRollup = (program as unknown as { rowLevelMutatorRollup?: RowLevelMutatorRollupView | null })
     .rowLevelMutatorRollup ?? null
 
-  // [PHASE 4L] Reclassify endurance_density via the mutator rollup. The Phase
-  // 4J auditor reads from `materializationRollup.totalRow*` only — it cannot
-  // see the Phase 4L mutator's `exercise.method = 'endurance_density'`
-  // writes (those are not in the rollup totals). So we honestly upgrade the
-  // chip when the mutator rollup proves an application happened.
+  // [PHASE 4L+4M] Reclassify chips via the mutator rollup. The Phase 4J
+  // auditor reads from `materializationRollup.totalRow*` only — it cannot
+  // see post-builder writes from the Phase 4L mutator
+  // (`exercise.method = 'endurance_density'`) or the Phase 4M doctrine
+  // application corridor (doctrine-earned `setExecutionMethod` for
+  // top_set / drop_set / rest_pause on rows the builder did not touch).
+  // We honestly upgrade the chip when the rollup proves an application
+  // happened beyond what the auditor saw.
   const reclassified = new Map<WeeklyMethodId, { status: WeeklyMethodStatus; materializedCount: number; reason: string }>()
   if (mutatorRollup && (mutatorRollup.enduranceDensityApplied ?? 0) > 0) {
     reclassified.set('endurance_density', {
       status: 'APPLIED',
       materializedCount: mutatorRollup.enduranceDensityApplied ?? 0,
       reason: `Applied to ${mutatorRollup.enduranceDensityApplied} session(s) by the row-level mutator on safe late-position accessory / core / conditioning targets.`,
+    })
+  }
+  // [PHASE 4M] Doctrine-earned row-level methods. Only upgrade the chip if
+  // the auditor reported < the corridor's count (i.e. the corridor added
+  // applications the auditor did not see). Never downgrade.
+  if (mutatorRollup && (mutatorRollup.topSetApplied ?? 0) > 0) {
+    reclassified.set('top_set_backoff', {
+      status: 'APPLIED',
+      materializedCount: mutatorRollup.topSetApplied ?? 0,
+      reason: `Doctrine application corridor applied top set + back-off on ${mutatorRollup.topSetApplied} session pillar(s) — loadable strength row + strength-priority profile.`,
+    })
+  }
+  if (mutatorRollup && (mutatorRollup.dropSetApplied ?? 0) > 0) {
+    reclassified.set('drop_set', {
+      status: 'APPLIED',
+      materializedCount: mutatorRollup.dropSetApplied ?? 0,
+      reason: `Doctrine application corridor applied drop set on ${mutatorRollup.dropSetApplied} late accessory_hypertrophy row(s) — hypertrophy-priority profile.`,
+    })
+  }
+  if (mutatorRollup && (mutatorRollup.restPauseApplied ?? 0) > 0) {
+    reclassified.set('rest_pause', {
+      status: 'APPLIED',
+      materializedCount: mutatorRollup.restPauseApplied ?? 0,
+      reason: `Doctrine application corridor applied rest-pause on ${mutatorRollup.restPauseApplied} late accessory row(s) — strength-endurance / strength-priority profile.`,
     })
   }
 
@@ -503,6 +542,49 @@ export function WeeklyMethodChallengeLine({ program }: Props) {
               ` · ${mutatorRollup?.rowsOutOfBounds} out-of-bounds (not mutated)`}
             {(mutatorRollup?.rowsMissingBounds ?? 0) > 0 &&
               ` · ${mutatorRollup?.rowsMissingBounds} missing parseable dosage`}
+          </span>
+        </div>
+      )}
+
+      {/* [PHASE 4M] Doctrine application deltas — visible proof that the
+          doctrine application corridor decisively mutated rest seconds and/or
+          targetRPE on at least one row. Only renders when the corridor
+          applied a real mutation (count > 0). */}
+      {mutatorRollup && ((mutatorRollup.prescriptionRestApplied ?? 0) > 0 || (mutatorRollup.prescriptionRpeApplied ?? 0) > 0) && (
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-zinc-400/80">
+          <span className="font-medium text-zinc-300">Doctrine deltas</span>
+          <span>
+            {(mutatorRollup.prescriptionRestApplied ?? 0) > 0 &&
+              `${mutatorRollup.prescriptionRestApplied} rest adjustment${(mutatorRollup.prescriptionRestApplied ?? 0) === 1 ? '' : 's'}`}
+            {(mutatorRollup.prescriptionRestApplied ?? 0) > 0 && (mutatorRollup.prescriptionRpeApplied ?? 0) > 0 && ' · '}
+            {(mutatorRollup.prescriptionRpeApplied ?? 0) > 0 &&
+              `${mutatorRollup.prescriptionRpeApplied} RPE assignment${(mutatorRollup.prescriptionRpeApplied ?? 0) === 1 ? '' : 's'}`}
+            {' (within conservative role bounds, before/after stamped on each row)'}
+          </span>
+        </div>
+      )}
+
+      {/* [PHASE 4M] Program-level final verdict — concise honest read of the
+          rollup. Hidden when the corridor never ran (no rollup attached). */}
+      {mutatorRollup?.programFinalVerdict && (
+        <div className="mt-1 flex items-center gap-2 text-[11px]">
+          <span className="font-medium text-zinc-300">Doctrine application</span>
+          <span
+            className={
+              mutatorRollup.programFinalVerdict === 'DOCTRINE_DECISIVELY_APPLIED'
+                ? 'text-emerald-300'
+                : mutatorRollup.programFinalVerdict === 'DOCTRINE_PARTIALLY_APPLIED'
+                  ? 'text-emerald-200/80'
+                  : 'text-zinc-400'
+            }
+          >
+            {mutatorRollup.programFinalVerdict === 'DOCTRINE_DECISIVELY_APPLIED' &&
+              `decisively applied (${mutatorRollup.totalDoctrineApplications ?? 0} mutation${(mutatorRollup.totalDoctrineApplications ?? 0) === 1 ? '' : 's'})`}
+            {mutatorRollup.programFinalVerdict === 'DOCTRINE_PARTIALLY_APPLIED' &&
+              `partially applied (${mutatorRollup.totalDoctrineApplications ?? 0} mutation${(mutatorRollup.totalDoctrineApplications ?? 0) === 1 ? '' : 's'}, some blocked by safety)`}
+            {mutatorRollup.programFinalVerdict === 'DOCTRINE_EVALUATED_NO_SAFE_CHANGES' &&
+              'evaluated, no safe changes earned for this profile'}
+            {mutatorRollup.programFinalVerdict === 'DOCTRINE_NOT_CONNECTED' && 'not connected'}
           </span>
         </div>
       )}

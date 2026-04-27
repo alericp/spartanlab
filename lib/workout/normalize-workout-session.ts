@@ -180,6 +180,18 @@ function normalizeExercise(raw: unknown, index: number): WorkoutExerciseContract
     ;(normalized as unknown as { rowLevelMethodApplied: boolean }).rowLevelMethodApplied = rawRowLevelApplied
   }
 
+  // [PHASE 4M] Preserve doctrineApplicationDeltas[] across the normalize
+  // boundary. The doctrine application corridor stamps an array of typed
+  // {family, fieldPath, before, after, reason, visibleLabel, ...} deltas
+  // on every exercise that received a doctrine-earned mutation. This array
+  // is plain-JSON-safe and is consumed by the Program page proof line and
+  // the live workout coaching surface. Same extra-property pass-through
+  // pattern as the Phase 4L preservation block above.
+  const rawAppDeltas = (ex as { doctrineApplicationDeltas?: unknown }).doctrineApplicationDeltas
+  if (Array.isArray(rawAppDeltas) && rawAppDeltas.length > 0) {
+    ;(normalized as unknown as { doctrineApplicationDeltas: unknown }).doctrineApplicationDeltas = rawAppDeltas
+  }
+
   return normalized
 }
 

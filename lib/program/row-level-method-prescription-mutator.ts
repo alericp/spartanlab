@@ -1,3 +1,8 @@
+import {
+  runDoctrineApplicationCorridor,
+  type DoctrineApplicationCorridorSummary,
+} from './doctrine-application-corridor'
+
 /**
  * =============================================================================
  * [PHASE 4L] ROW-LEVEL METHOD + PRESCRIPTION MUTATOR
@@ -298,6 +303,13 @@ export interface RowLevelMutatorSummary {
   blockedMutations: RowLevelBlockedMutation[]
   prescriptionBoundsProofs: PrescriptionBoundsProof[]
   challenge: MethodMaterializationChallenge
+  /**
+   * [PHASE 4M] Doctrine application corridor summary — doctrine-earned
+   * top_set / drop_set / rest_pause + bounded restSeconds/targetRPE
+   * mutations stamped with per-row deltas. Null only when the corridor
+   * crashed (fail-soft).
+   */
+  doctrineApplicationCorridor: DoctrineApplicationCorridorSummary | null
 }
 
 export interface RowLevelMethodPrescriptionMutatorInput {
@@ -829,6 +841,7 @@ export function applyRowLevelMethodPrescriptionMutations(
         blockedMutations: [],
         prescriptionBoundsProofs: [],
         challenge,
+        doctrineApplicationCorridor: null,
       },
     }
   }
@@ -851,9 +864,34 @@ export function applyRowLevelMethodPrescriptionMutations(
   const missingBoundsCount = prescriptionBoundsProofs.filter(p => p.verdict === 'MISSING_DOCTRINE_BOUNDS').length
 
   // -----------------------------------------------------------------------
-  // 2. ENDURANCE DENSITY (the only row-level method this mutator owns)
+  // 2. ENDURANCE DENSITY (the only row-level method this mutator owned in Phase 4L)
   // -----------------------------------------------------------------------
   const enduranceResult = tryApplyEnduranceDensity(session, profileIntent)
+
+  // -----------------------------------------------------------------------
+  // 2b. [PHASE 4M] DOCTRINE APPLICATION CORRIDOR
+  //     Doctrine-earned top_set / drop_set / rest_pause on rows the builder
+  //     did NOT already touch, plus bounded restSeconds + targetRPE
+  //     prescription mutation. Imported as a helper module — this mutator
+  //     remains the single authoritative entry point. The corridor never
+  //     touches a row that already has setExecutionMethod / method / blockId.
+  // -----------------------------------------------------------------------
+  let corridorSummary: DoctrineApplicationCorridorSummary | null = null
+  try {
+    corridorSummary = runDoctrineApplicationCorridor({
+      session,
+      profileSnapshot: input.profileSnapshot ?? null,
+      selectedTrainingMethods: input.selectedTrainingMethods ?? [],
+      selectedSkills: input.selectedSkills ?? [],
+      weeklyRole: input.weeklyRole ?? null,
+      currentWeekNumber: input.currentWeekNumber ?? null,
+      jointCautions: input.jointCautions ?? [],
+    })
+  } catch (corridorErr) {
+    // Fail-soft: corridor errors must never block the mutator from emitting
+    // its existing Phase 4L summary + challenge.
+    console.log('[PHASE4M-CORRIDOR-FAILED]', { error: String(corridorErr) })
+  }
 
   // -----------------------------------------------------------------------
   // 3. BUILD APPLIED / BLOCKED LISTS
@@ -1095,23 +1133,41 @@ export function applyRowLevelMethodPrescriptionMutations(
     oneLineExplanation: oneLine,
   }
 
+  // [PHASE 4M] Promote corridor-applied row-level methods into the summary
+  // counts so the rollup at lib/server/authoritative-program-generation.ts
+  // sees them.
+  const corridorAppliedTopSet = corridorSummary?.countsByFamily.top_set?.applied ?? 0
+  const corridorAppliedDropSet = corridorSummary?.countsByFamily.drop_set?.applied ?? 0
+  const corridorAppliedRestPause = corridorSummary?.countsByFamily.rest_pause?.applied ?? 0
+  const corridorAppliedRest = corridorSummary?.countsByFamily.prescription_rest?.applied ?? 0
+  const corridorAppliedRpe = corridorSummary?.countsByFamily.prescription_rpe?.applied ?? 0
+
+  if (corridorAppliedTopSet > 0 && !appliedMethods.includes('top_set')) appliedMethods.push('top_set')
+  if (corridorAppliedDropSet > 0 && !appliedMethods.includes('drop_set')) appliedMethods.push('drop_set')
+  if (corridorAppliedRestPause > 0 && !appliedMethods.includes('rest_pause')) appliedMethods.push('rest_pause')
+
+  const corridorPrescriptionKinds: PrescriptionMutationKind[] = []
+  if (corridorAppliedRest > 0) corridorPrescriptionKinds.push('rest_seconds')
+  if (corridorAppliedRpe > 0) corridorPrescriptionKinds.push('rpe')
+
   const summary: RowLevelMutatorSummary = {
     version: 'phase-4l',
     ran: true,
     source: 'row_level_method_prescription_mutator',
     inputStatus,
-    appliedCount: appliedMutations.length,
+    appliedCount: appliedMutations.length + (corridorSummary?.appliedDeltas.length ?? 0),
     blockedCount: blockedMutations.length,
     noChangeCount: prescriptionBoundsProofs.length,
-    fieldChangeCount: fieldChanges.length,
+    fieldChangeCount: fieldChanges.length + (corridorSummary?.appliedDeltas.length ?? 0),
     appliedMethods: Array.from(new Set(appliedMethods)),
     blockedMethods: Array.from(new Set(blockedMethods)),
-    prescriptionMutationKinds: [],
+    prescriptionMutationKinds: corridorPrescriptionKinds,
     finalStatus,
     appliedMutations,
     blockedMutations,
     prescriptionBoundsProofs,
     challenge,
+    doctrineApplicationCorridor: corridorSummary,
   }
 
   // Stamp onto session

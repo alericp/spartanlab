@@ -1755,8 +1755,36 @@ export async function executeAuthoritativeGeneration(
               selectedSkills?: string[] | null
               sessionStylePreference?: string | null
               selectedTrainingStyles?: string[] | null
+              selectedTrainingMethods?: string[] | null
+              jointCautions?: string[] | null
+              sessionLengthMinutes?: number | null
             } | null
           }).profileSnapshot ?? null
+
+        // [PHASE 4M] Pull selected training methods, joint cautions, and
+        // session length from the profile snapshot so the doctrine
+        // application corridor can apply doctrine-earned row-level methods
+        // and bounded prescription mutations under the user's full context.
+        const selectedTrainingMethodsForMutator =
+          Array.isArray(profileSnapshotForMutator?.selectedTrainingMethods)
+            ? (profileSnapshotForMutator!.selectedTrainingMethods as string[])
+            : []
+        const selectedSkillsForMutator =
+          Array.isArray(profileSnapshotForMutator?.selectedSkills)
+            ? (profileSnapshotForMutator!.selectedSkills as string[])
+            : []
+        const jointCautionsForMutator =
+          Array.isArray(profileSnapshotForMutator?.jointCautions)
+            ? (profileSnapshotForMutator!.jointCautions as string[])
+            : []
+        const sessionLengthMinutesForMutator =
+          typeof profileSnapshotForMutator?.sessionLengthMinutes === 'number'
+            ? profileSnapshotForMutator!.sessionLengthMinutes
+            : null
+        const currentWeekNumberForMutator =
+          typeof (program as unknown as { weekNumber?: number }).weekNumber === 'number'
+            ? (program as unknown as { weekNumber: number }).weekNumber
+            : null
 
         const mutatorRollup = {
           sessionsProcessed: 0,
@@ -1764,6 +1792,15 @@ export async function executeAuthoritativeGeneration(
           totalBlocked: 0,
           totalFieldChanges: 0,
           enduranceDensityApplied: 0,
+          // [PHASE 4M] Doctrine-earned row-level methods + bounded
+          // prescription mutations (rest_seconds + targetRPE only — sets /
+          // reps / hold_seconds remain deferred for safety).
+          topSetApplied: 0,
+          dropSetApplied: 0,
+          restPauseApplied: 0,
+          prescriptionRestApplied: 0,
+          prescriptionRpeApplied: 0,
+          finalVerdictCounts: {} as Record<string, number>,
           rowsWithinBounds: 0,
           rowsOutOfBounds: 0,
           rowsMissingBounds: 0,
@@ -1773,6 +1810,8 @@ export async function executeAuthoritativeGeneration(
         for (let s = 0; s < program.sessions.length; s++) {
           const sess = program.sessions[s] as unknown
           try {
+            const sessionWeeklyRole =
+              (sess as { weeklyRole?: { roleId?: string; intensityClass?: string } } | null)?.weeklyRole ?? null
             const { summary } = applyRowLevelMethodPrescriptionMutations({
               session: sess as Parameters<typeof applyRowLevelMethodPrescriptionMutations>[0]['session'],
               profileSnapshot: profileSnapshotForMutator,
@@ -1780,6 +1819,13 @@ export async function executeAuthoritativeGeneration(
                 (program as unknown as { doctrineRuntimeContract?: unknown }).doctrineRuntimeContract ?? null,
               methodDecision:
                 (sess as { methodDecision?: unknown } | null)?.methodDecision ?? null,
+              // [PHASE 4M] Enriched inputs for the doctrine application corridor
+              selectedTrainingMethods: selectedTrainingMethodsForMutator,
+              selectedSkills: selectedSkillsForMutator,
+              jointCautions: jointCautionsForMutator,
+              sessionLengthMinutes: sessionLengthMinutesForMutator,
+              weeklyRole: sessionWeeklyRole,
+              currentWeekNumber: currentWeekNumberForMutator,
             })
             mutatorRollup.sessionsProcessed += 1
             mutatorRollup.totalApplied += summary.appliedCount
@@ -1787,6 +1833,17 @@ export async function executeAuthoritativeGeneration(
             mutatorRollup.totalFieldChanges += summary.fieldChangeCount
             if (summary.appliedMethods.includes('endurance_density')) {
               mutatorRollup.enduranceDensityApplied += 1
+            }
+            // [PHASE 4M] Pull corridor counts off the summary
+            const corridor = summary.doctrineApplicationCorridor
+            if (corridor) {
+              mutatorRollup.topSetApplied += corridor.countsByFamily.top_set?.applied ?? 0
+              mutatorRollup.dropSetApplied += corridor.countsByFamily.drop_set?.applied ?? 0
+              mutatorRollup.restPauseApplied += corridor.countsByFamily.rest_pause?.applied ?? 0
+              mutatorRollup.prescriptionRestApplied += corridor.countsByFamily.prescription_rest?.applied ?? 0
+              mutatorRollup.prescriptionRpeApplied += corridor.countsByFamily.prescription_rpe?.applied ?? 0
+              mutatorRollup.finalVerdictCounts[corridor.finalVerdict] =
+                (mutatorRollup.finalVerdictCounts[corridor.finalVerdict] ?? 0) + 1
             }
             for (const proof of summary.prescriptionBoundsProofs) {
               if (proof.verdict === 'ALREADY_WITHIN_BOUNDS') mutatorRollup.rowsWithinBounds += 1
@@ -1803,12 +1860,44 @@ export async function executeAuthoritativeGeneration(
           }
         }
 
+        // [PHASE 4M] Compute program-level final verdict from the rollup.
+        const totalDoctrineApplications =
+          mutatorRollup.topSetApplied +
+          mutatorRollup.dropSetApplied +
+          mutatorRollup.restPauseApplied +
+          mutatorRollup.enduranceDensityApplied +
+          mutatorRollup.prescriptionRestApplied +
+          mutatorRollup.prescriptionRpeApplied
+        let programFinalVerdict:
+          | 'DOCTRINE_DECISIVELY_APPLIED'
+          | 'DOCTRINE_PARTIALLY_APPLIED'
+          | 'DOCTRINE_EVALUATED_NO_SAFE_CHANGES'
+          | 'DOCTRINE_NOT_CONNECTED'
+        if (totalDoctrineApplications > 0 && mutatorRollup.totalBlocked === 0) {
+          programFinalVerdict = 'DOCTRINE_DECISIVELY_APPLIED'
+        } else if (totalDoctrineApplications > 0) {
+          programFinalVerdict = 'DOCTRINE_PARTIALLY_APPLIED'
+        } else if (mutatorRollup.totalBlocked > 0) {
+          programFinalVerdict = 'DOCTRINE_EVALUATED_NO_SAFE_CHANGES'
+        } else {
+          programFinalVerdict = 'DOCTRINE_EVALUATED_NO_SAFE_CHANGES'
+        }
+
         ;(program as unknown as { rowLevelMutatorRollup?: unknown }).rowLevelMutatorRollup =
           mutatorRollup
+        // [PHASE 4M] Also expose under the canonical `doctrineApplicationRollup`
+        // name so consumers reading the new contract find it. Same shape.
+        ;(program as unknown as { doctrineApplicationRollup?: unknown }).doctrineApplicationRollup = {
+          ...mutatorRollup,
+          totalDoctrineApplications,
+          programFinalVerdict,
+        }
 
-        console.log('[PHASE4L-ROW-LEVEL-MUTATOR-COMPLETE]', {
+        console.log('[PHASE4M-DOCTRINE-APPLICATION-COMPLETE]', {
           generationIntent: request.generationIntent,
           triggerSource: request.triggerSource,
+          totalDoctrineApplications,
+          programFinalVerdict,
           ...mutatorRollup,
         })
       } catch (mutatorErr) {

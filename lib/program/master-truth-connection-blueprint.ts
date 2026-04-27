@@ -1401,6 +1401,160 @@ function phaseP(): BlueprintPhase {
 }
 
 // =============================================================================
+// [PHASE-Q] DOCTRINE RULE UTILIZATION / CAUSAL APPLICATION AUDIT
+// =============================================================================
+function phaseQ(): BlueprintPhase {
+  return {
+    id: 'Q',
+    title: 'Doctrine Rule Utilization / Causal Application Audit + Safe Wiring Repair',
+    purpose:
+      'Answer the honest question — "are the SpartanLab doctrine rules actually shaping the generated program, or just being surfaced as proof / explanation metadata after the fact?" Phase Q is a pure deterministic READER that runs AFTER Phase P on the final adapted program. It reads existing artifacts (program.styleMetadata, weeklyMethodBudgetPlan, methodStructureRollup, session.styleMetadata, session.methodStructures, session.doctrineParticipation, session.doctrineBlockResolution, session.methodDecision, session.qualityAudit, exercise.performanceAdaptation, exercise.qualityAudit) and emits a structured `doctrineUtilizationTrace` on both program AND each session that classifies each of the 5 doctrine categories (skill / method / recovery / prescription / sessionLength) into one of six honest states: ELIGIBLE_AND_APPLIED, ELIGIBLE_BUT_SUPPRESSED, NOT_ELIGIBLE, BLOCKED_BY_UNSUPPORTED_RUNTIME, ACKNOWLEDGED_ONLY, POST_HOC_ONLY. The Program card renders one compact line from the trace per session so the user can see — without clutter — which days had genuinely causal doctrine and which had only audit/proof.',
+    status: 'COMPLETE',
+    nextAction:
+      'Phase Q proved doctrine is PARTIALLY CAUSAL. Skill, method (cluster / superset / circuit / density / top_set / drop_set / rest_pause via builder + Phase 4M corridor), recovery (builder gates + Phase J/K + Phase P overlap warning), and prescription (builder dose from METHOD_PROFILES + Phase L/M/N/O adaptation + Phase P RPE cap) are all causal — they shape the final program at the BUILDER or ADAPTATION stage. The weak link is sessionLength: Phase P attaches a realism warning, but the Full / 45 / 30 minute structural lock is not yet enforced. Recommended next phase is **Phase R — Session-Length Truth Lock**, which will make the mode actually compress structure (exercise count, set count, accessory inclusion, rest density) instead of acting as a label with a warning. Cluster blocking is ALSO honest: cluster fires only when methodPrefsForGrouping includes `cluster_sets` AND there is a late-position accumulation candidate AND the weekly budget is not saturated AND the candidate score ≥ MIN_CLUSTER_SCORE. Default users without `cluster_sets` opted in will see ELIGIBLE_BUT_SUPPRESSED with `user_pref_not_set` — which is the truth.',
+    subtasks: [
+      {
+        id: 'Q.Q1',
+        title: 'Doctrine source / registry traced',
+        status: 'COMPLETE',
+        evidence: [
+          'Doctrine entry points: lib/doctrine/source-batches/index.ts (10 source batches including batch-08 elite rings/calisthenics, batch-10 training method decision governor with METHOD_COMPATIBILITY_MATRIX), lib/training-doctrine-registry/doctrineRegistry.ts (DOCTRINE_REGISTRY), Neon doctrine DB via lib/doctrine-db.ts and lib/doctrine-query-service.ts. Builder ingests these via doctrineRuntimeContract / methodPrefsForGrouping / weeklyMethodBudgetPlan / materialityContract.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'Q.Q2',
+        title: 'Causal path from source → final card render traced',
+        status: 'COMPLETE',
+        evidence: [
+          'Builder reads doctrine at L11745 (doctrineRuntimeContract) and writes appliedMethods, clusterDecision, setExecutionMethod, method, methodLabel onto sessions/exercises at L13549–13960. Phase 4L row-level mutator adds endurance_density (only). Phase 4M doctrine-application-corridor adds top_set / drop_set / rest_pause when builder did not. Phase 4P structural-method-materialization-corridor mirrors builder writes into canonical methodStructures[]. Phase 4Q classifier+participation contract stamps doctrineBlockResolution / doctrineParticipation per session. Phase L/M/N performance feedback overlay mutates targetRPE / sets bounded. Phase O trend stamps reason chains. Phase P quality audit applies tendon RPE cap + carryover attribution. Phase Q now stamps the unified doctrineUtilizationTrace on top of all of this. AdaptiveSessionCard reads session.doctrineUtilizationTrace.summary directly.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'Q.Q3',
+        title: 'Five doctrine categories audited',
+        status: 'COMPLETE',
+        evidence: [
+          'evaluateSkill (selectedSkills direct match + Phase P carryover stamp), evaluateMethod (appliedMethods + clusterDecision + rejectedMethods + methodStructures + doctrineParticipation + methodDecision fallback), evaluateRecovery (weekStressDistributionProof + Phase P straight_arm_overlap_warning_attached), evaluatePrescription (Phase P tendon_rpe_capped + Phase L/M/N/O performanceAdaptation + builder base dose), evaluateSessionLength (estimatedMinutes vs profile.timeAvailability ± 20% + Phase P session_length_warning_attached). Each evaluator returns one entry per session with the 6-state ladder.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'Q.Q4',
+        title: 'Applied vs acknowledged distinction enforced honestly',
+        status: 'COMPLETE',
+        evidence: [
+          'STATE_RANK ordering: ELIGIBLE_AND_APPLIED < ELIGIBLE_BUT_SUPPRESSED < NOT_ELIGIBLE < BLOCKED_BY_UNSUPPORTED_RUNTIME < ACKNOWLEDGED_ONLY < POST_HOC_ONLY. Per-category rollup picks ELIGIBLE_AND_APPLIED only if at least one session was applied; otherwise falls to the worst observed state. doctrine-influence-contract.ts (shadow-mode) and method-decision-engine.ts (pure reader) are categorized as ACKNOWLEDGED_ONLY when they are the only signal, with reason `phase_3m_reader_only_by_design` / `shadow_mode_only`.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'Q.Q5',
+        title: 'Cluster blocking explained with specific truthful reasons',
+        status: 'COMPLETE',
+        evidence: [
+          'Cluster fires in adaptive-program-builder.ts L13670–13690 when ALL hold: (a) weeklyBudget.clusterSessionsUsed < maxClusterSessionsPerWeek, (b) sessionMethodIntentContract.shouldApplyCluster (which requires methodPrefsForGrouping.includes("cluster_sets") AND hasLateAccumulationClusterCandidate), (c) candidates[0].score >= MIN_CLUSTER_SCORE, (d) no overlap with already-applied grouped method. When cluster does NOT fire, the builder writes a real reason into rejectedMethods (e.g. "Week-level cluster budget saturated (2/2) -- cluster is an intentional, uncommon tool and this week has already placed it on day(s) X, Y. Straight sets preserved here."). Phase Q maps these to stable blockerReason tokens: weekly_budget_saturated, user_pref_not_set, no_late_position_candidate, skill_pillar_protected, tendon_safety, feasibility_gate_failed. The UI never shows generic "blocked" — every block has a specific token + plain English reason.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'Q.Q6',
+        title: 'First authoritative disconnect identified',
+        status: 'COMPLETE',
+        evidence: [
+          'There is NO single causal disconnect that broke generation. Most categories are causal at the BUILDER stage. The actual disconnect Phase Q repaired: there was no single normalized contract that distinguished "applied" from "acknowledged-only / post-hoc-only" across categories — multiple post-hoc layers (doctrine-influence-contract shadow-mode, method-decision-engine pure reader, doctrine-block-resolution-contract classifier, session-doctrine-participation-contract verdict) existed but did not unify. The Program card therefore risked rendering ACKNOWLEDGED_ONLY / POST_HOC_ONLY material as if it were applied. Phase Q is that unifying layer.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'Q.Q7',
+        title: 'Safe repair implemented (single causal-honesty bridge, no rewrite)',
+        status: 'COMPLETE',
+        evidence: [
+          'lib/program/doctrine-utilization-contract.ts is a pure deterministic READER that runs once per generation in BOTH ingress paths (server authoritative-program-generation.ts after Phase P, client performance-feedback-integration.ts after Phase P). It is wrapped in try/catch in both paths so it can never break a successful generation. It does NOT build, does NOT mutate prescriptions/exercises/methods, does NOT add a parallel scanner.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'Q.Q8',
+        title: 'No fake "applied" states leak to UI',
+        status: 'COMPLETE',
+        evidence: [
+          'AdaptiveSessionCard renders Phase Q output ONLY from session.doctrineUtilizationTrace.summary (one compact line). The state token is also written to data-phase-q-dominant-state for tests/dev probes. ACKNOWLEDGED_ONLY and POST_HOC_ONLY states get italic/muted color so they read as audit, not action. ELIGIBLE_AND_APPLIED states use neutral color so users can see at a glance which days had real causal doctrine.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'Q.Q9',
+        title: 'No forced methods (clusters / supersets / circuits) to "prove" causality',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase Q never sets appliedMethod. It never writes setExecutionMethod. It never modifies clusterDecision. It only reads. The builder remains the single owner of method application — Phase Q reports the truth, including legitimate ELIGIBLE_BUT_SUPPRESSED verdicts when cluster is gated by user prefs / budget / no late-position candidate.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'Q.Q10',
+        title: 'Existing phases preserved (J/K/L/M/N/O/P intact)',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase Q runs AFTER Phase P in both pipelines (server + client). It reads existing stamps but writes only the new doctrineUtilizationTrace field. Builder, Phase 4L–4Q, and Phase L/M/N/O/P call sites are unchanged. The new field is additive on the AdaptiveProgram envelope and does not collide with any prior phase output.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'Q.Q11',
+        title: 'Save/load/normalize preserves the trace as metadata only',
+        status: 'COMPLETE',
+        evidence: [
+          'doctrineUtilizationTrace is JSON-safe (only primitives, arrays, and plain objects). It rides through the existing `...program` / `...session` spreads in lib/program-state.ts and normalizeProgramForDisplay — same path as performanceAdaptation, qualityAudit, methodDecision, doctrineBlockResolution. No normalizer change required.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'Q.Q12',
+        title: 'Program page proof derives from the authoritative final object',
+        status: 'COMPLETE',
+        evidence: [
+          'AdaptiveSessionCard reads session.doctrineUtilizationTrace.summary directly from the program object passed in. No recomputation, no second resolver, no fetch. The card cannot disagree with the resolver because there is exactly one source of truth.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'Q.Q13',
+        title: 'Live workout safety untouched',
+        status: 'COMPLETE',
+        evidence: [
+          'Phase Q is invoked ONLY by the authoritative server generator and the client boot overlay. The live workout machine (lib/workout/live-workout-machine.ts), Start Workout (components/workout/ActiveWorkoutStartCorridor.tsx), and Resume / set logging do not import doctrine-utilization-contract.ts at all. Phase Q never mutates exercise.method, exercise.setExecutionMethod, blockId, or any prescription field.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'Q.Q14',
+        title: 'Build / runtime health',
+        status: 'COMPLETE',
+        evidence: [
+          'No new dependencies, no Prisma schema changes. doctrine-utilization-contract.ts uses only TypeScript primitives + already-stamped fields. The IIFE rendering block in AdaptiveSessionCard is guarded by typeof checks so a malformed or absent trace renders nothing.',
+        ],
+        remainingWork: [],
+      },
+      {
+        id: 'Q.Q15',
+        title: 'Honest final verdict recorded',
+        status: 'COMPLETE',
+        evidence: [
+          'Verdict: PARTIALLY CAUSAL. Skill / method / recovery / prescription are causal at the builder or adaptation stage. SessionLength is acknowledged-only or post-hoc-only — Phase P attaches a realism warning but the structural compression lock is deferred. Cluster blocking is HONEST: when blocked, the rejection reason is specific (weekly budget saturated / user pref not set / no late-position candidate / skill pillar protected / tendon safety / feasibility gate failed). Recommended next phase: Phase R — Session-Length Truth Lock.',
+        ],
+        remainingWork: [
+          'Phase R must make Full / 45 / 30 minute mode actually compress structure (exercise count, set count, accessory inclusion, rest density, finisher gating, estimated duration) instead of only attaching a warning chip when out of band.',
+        ],
+      },
+    ],
+  }
+}
+
+// =============================================================================
 // PUBLIC ENTRY POINT
 // =============================================================================
 

@@ -1373,6 +1373,20 @@ export interface AdaptiveSession {
   // lib/program/program-quality-doctrine-audit-contract.ts.
   // ==========================================================================
   qualityAudit?: import('./program/program-quality-doctrine-audit-contract').SessionQualityAuditStamp
+  // ==========================================================================
+  // [PHASE-Q] DOCTRINE UTILIZATION CAUSAL TRACE
+  // Stamped IN PLACE on each session by the Phase Q resolver. The trace is
+  // the honest answer to "did doctrine actually shape this session, or was
+  // it surfaced after the fact?" — every doctrine signal collected on the
+  // session is classified into one of six states (ELIGIBLE_AND_APPLIED,
+  // ELIGIBLE_BUT_SUPPRESSED, NOT_ELIGIBLE, BLOCKED_BY_UNSUPPORTED_RUNTIME,
+  // ACKNOWLEDGED_ONLY, POST_HOC_ONLY) and rolled up into a one-line
+  // `summary` the card renders. Pure metadata: never builds, mutates,
+  // selects, or reorders. Round-trips through the existing `...session`
+  // spread. Optional + JSON-safe.
+  // See lib/program/doctrine-utilization-contract.ts.
+  // ==========================================================================
+  doctrineUtilizationTrace?: import('./program/doctrine-utilization-contract').SessionDoctrineUtilizationTrace
 }
 
 export interface AdaptiveExercise {
@@ -2448,6 +2462,19 @@ exerciseExplanations?: {
     adaptationSummary: string
     decidedAt: string
   }
+  // ===========================================================================
+  // [PHASE-Q] PROGRAM-LEVEL DOCTRINE UTILIZATION CAUSAL TRACE
+  // Program-wide rollup written by `runDoctrineUtilizationContract` after
+  // Phase P. Aggregates per-session traces into category buckets (skill,
+  // method, recovery, prescription, sessionLength, ...) with state counts
+  // (ELIGIBLE_AND_APPLIED, ELIGIBLE_BUT_SUPPRESSED, NOT_ELIGIBLE,
+  // BLOCKED_BY_UNSUPPORTED_RUNTIME, ACKNOWLEDGED_ONLY, POST_HOC_ONLY) and
+  // an `overallVerdict` of FULLY_CAUSAL / PARTIALLY_CAUSAL / MOSTLY_POST_HOC.
+  // Pure metadata: never edits prescriptions or methods. Round-trips through
+  // the existing `...program` spread. Optional + JSON-safe.
+  // See lib/program/doctrine-utilization-contract.ts.
+  // ===========================================================================
+  doctrineUtilizationTrace?: import('./program/doctrine-utilization-contract').ProgramDoctrineUtilizationTrace
 }
 
 // =============================================================================

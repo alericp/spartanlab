@@ -495,10 +495,16 @@ export function buildDoctrineMaterializationMatrix(
       'and rationale strings consumed by method-decision-engine for fatigue and time-efficiency notes, but ' +
       'the existing per-exercise sets/reps/hold/rest/RPE resolver does not currently consume those biases as ' +
       'numeric mutators. Connecting prescription doctrine to actual dosage numbers requires a dedicated ' +
-      'safety phase and is intentionally not done in Phase 4H.',
+      'safety phase and is intentionally not done in Phase 4H. [PHASE 4L UPDATE] A per-row bounds WITNESS ' +
+      'is now attached to exercise.prescriptionBoundsProof (currentValue + doctrineMin/Max + verdict) and ' +
+      'rolled up onto program.rowLevelMutatorRollup so the Program page can prove ' +
+      'ALREADY_WITHIN_BOUNDS / OUT_OF_BOUNDS_NOT_MUTATED / MISSING_DOCTRINE_BOUNDS per row. The witness is ' +
+      'not a mutator — no numeric field is overwritten — so the status remains honestly READ_BUT_SCORING_ONLY.',
     notes:
       'This is the largest "evaluated but not material" gap in the current architecture. Phase 4H surfaces ' +
-      'it honestly rather than hiding it behind UI labels.',
+      'it honestly rather than hiding it behind UI labels. [PHASE 4L] Per-row bounds witness now provides ' +
+      'visible proof of the gap (within-bounds vs. out-of-bounds counts on the Program page) without ' +
+      'crossing the safety line that decisive numeric dose mutation requires.',
   })
 
   // ---------------------------------------------------------------------------

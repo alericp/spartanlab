@@ -293,3 +293,219 @@ export function DoctrineCausalLine({ program }: Props) {
   // rather than show ambiguous copy.
   return null
 }
+
+/**
+ * [PHASE 4L] WEEKLY METHOD CHALLENGE LINE
+ *
+ * Reads `program.weeklyMethodRepresentation` (Phase 4J auditor output) and
+ * `program.rowLevelMutatorRollup` (Phase 4L mutator rollup) and renders a
+ * compact per-method chip set so the athlete can see, at a glance, which
+ * row-level methods materialized vs. which were blocked by safety vs. which
+ * are not needed for their profile.
+ *
+ * Honest contract:
+ *   - Hidden when `program.weeklyMethodRepresentation` is missing
+ *     (legacy / pre-Phase-4J program — the stale notice owns that state).
+ *   - Each chip's status comes from real audit data:
+ *       APPLIED                       → emerald + count
+ *       BLOCKED_BY_SAFETY             → amber
+ *       NOT_NEEDED_FOR_PROFILE        → zinc
+ *       MATERIALIZER_NOT_CONNECTED    → zinc dashed
+ *   - Never claims "applied" without a non-zero materialized count.
+ *   - Never hides honest gaps (`endurance_density` legitimately reports
+ *     `MATERIALIZER_NOT_CONNECTED` from the auditor, but if the Phase 4L
+ *     mutator applied it on at least one session this rollup will reclassify
+ *     it as APPLIED via `rowLevelMutatorRollup.enduranceDensityApplied`).
+ *   - Includes a compact prescription-bounds summary line when the mutator
+ *     ran (e.g. "8/12 rows within prescription bounds").
+ */
+type WeeklyMethodId =
+  | 'top_set_backoff'
+  | 'drop_set'
+  | 'superset'
+  | 'circuit'
+  | 'density_block'
+  | 'cluster'
+  | 'endurance_density'
+  | 'rest_pause'
+
+type WeeklyMethodStatus =
+  | 'APPLIED'
+  | 'BLOCKED_BY_SAFETY'
+  | 'NOT_NEEDED_FOR_PROFILE'
+  | 'MATERIALIZER_NOT_CONNECTED'
+
+interface WeeklyMethodEntry {
+  methodId: WeeklyMethodId
+  status: WeeklyMethodStatus
+  materializedCount: number
+  reason: string
+  hasMaterializer: boolean
+}
+
+interface WeeklyMethodRepView {
+  version?: string
+  byMethod?: WeeklyMethodEntry[]
+  oneLineExplanation?: string
+  totals?: {
+    methodsApplied?: number
+    methodsBlockedBySafety?: number
+    methodsNotNeeded?: number
+    methodsMaterializerNotConnected?: number
+  }
+}
+
+interface RowLevelMutatorRollupView {
+  sessionsProcessed?: number
+  totalApplied?: number
+  totalBlocked?: number
+  enduranceDensityApplied?: number
+  rowsWithinBounds?: number
+  rowsOutOfBounds?: number
+  rowsMissingBounds?: number
+}
+
+const METHOD_CHIP_LABELS: Record<WeeklyMethodId, string> = {
+  top_set_backoff: 'Top Set + Back-Off',
+  drop_set: 'Drop Set',
+  superset: 'Superset',
+  circuit: 'Circuit',
+  density_block: 'Density Block',
+  cluster: 'Cluster',
+  endurance_density: 'Endurance Density',
+  rest_pause: 'Rest-Pause',
+}
+
+const METHOD_CHIP_ORDER: WeeklyMethodId[] = [
+  'top_set_backoff',
+  'drop_set',
+  'rest_pause',
+  'cluster',
+  'endurance_density',
+  'superset',
+  'circuit',
+  'density_block',
+]
+
+function chipClassForStatus(status: WeeklyMethodStatus): string {
+  switch (status) {
+    case 'APPLIED':
+      return 'border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-200'
+    case 'BLOCKED_BY_SAFETY':
+      return 'border-amber-500/30 bg-amber-500/[0.06] text-amber-200'
+    case 'NOT_NEEDED_FOR_PROFILE':
+      return 'border-zinc-700/40 bg-zinc-900/40 text-zinc-300'
+    case 'MATERIALIZER_NOT_CONNECTED':
+      return 'border-dashed border-zinc-700/50 bg-zinc-900/30 text-zinc-400'
+  }
+}
+
+function statusShortLabel(status: WeeklyMethodStatus): string {
+  switch (status) {
+    case 'APPLIED':
+      return 'applied'
+    case 'BLOCKED_BY_SAFETY':
+      return 'blocked'
+    case 'NOT_NEEDED_FOR_PROFILE':
+      return 'not needed'
+    case 'MATERIALIZER_NOT_CONNECTED':
+      return 'not connected'
+  }
+}
+
+export function WeeklyMethodChallengeLine({ program }: Props) {
+  if (!program) return null
+
+  const weeklyRep = (program as unknown as { weeklyMethodRepresentation?: WeeklyMethodRepView | null })
+    .weeklyMethodRepresentation ?? null
+
+  // Hidden on legacy / pre-Phase-4J programs.
+  if (!weeklyRep || !Array.isArray(weeklyRep.byMethod) || weeklyRep.byMethod.length === 0) return null
+
+  const mutatorRollup = (program as unknown as { rowLevelMutatorRollup?: RowLevelMutatorRollupView | null })
+    .rowLevelMutatorRollup ?? null
+
+  // [PHASE 4L] Reclassify endurance_density via the mutator rollup. The Phase
+  // 4J auditor reads from `materializationRollup.totalRow*` only — it cannot
+  // see the Phase 4L mutator's `exercise.method = 'endurance_density'`
+  // writes (those are not in the rollup totals). So we honestly upgrade the
+  // chip when the mutator rollup proves an application happened.
+  const reclassified = new Map<WeeklyMethodId, { status: WeeklyMethodStatus; materializedCount: number; reason: string }>()
+  if (mutatorRollup && (mutatorRollup.enduranceDensityApplied ?? 0) > 0) {
+    reclassified.set('endurance_density', {
+      status: 'APPLIED',
+      materializedCount: mutatorRollup.enduranceDensityApplied ?? 0,
+      reason: `Applied to ${mutatorRollup.enduranceDensityApplied} session(s) by the row-level mutator on safe late-position accessory / core / conditioning targets.`,
+    })
+  }
+
+  const entries = (weeklyRep.byMethod ?? [])
+    .filter(e => METHOD_CHIP_ORDER.includes(e.methodId))
+    .map(e => {
+      const reclass = reclassified.get(e.methodId)
+      if (reclass) return { ...e, ...reclass }
+      return e
+    })
+    .sort((a, b) => METHOD_CHIP_ORDER.indexOf(a.methodId) - METHOD_CHIP_ORDER.indexOf(b.methodId))
+
+  if (entries.length === 0) return null
+
+  // Build prescription bounds summary line — only when mutator ran.
+  const totalRows =
+    (mutatorRollup?.rowsWithinBounds ?? 0) +
+    (mutatorRollup?.rowsOutOfBounds ?? 0) +
+    (mutatorRollup?.rowsMissingBounds ?? 0)
+  const showPrescriptionLine = !!mutatorRollup && totalRows > 0
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-method-challenge="phase4l"
+      className="mb-3 rounded-md border border-zinc-700/40 bg-zinc-900/40 px-3 py-2 max-w-full min-w-0 overflow-hidden"
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-zinc-400/80" aria-hidden />
+        <span className="text-[12px] font-medium text-zinc-200">Method materialization</span>
+        {weeklyRep.oneLineExplanation && (
+          <span className="text-[12px] text-zinc-400/80 break-words [overflow-wrap:anywhere] min-w-0 flex-1">
+            {weeklyRep.oneLineExplanation}
+          </span>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        {entries.map(entry => {
+          const label = METHOD_CHIP_LABELS[entry.methodId]
+          const chipClass = chipClassForStatus(entry.status)
+          const showCount = entry.status === 'APPLIED' && entry.materializedCount > 0
+          return (
+            <span
+              key={entry.methodId}
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] leading-tight ${chipClass}`}
+              title={entry.reason}
+            >
+              <span className="font-medium">{label}</span>
+              <span className="opacity-70">
+                {showCount ? `· ${entry.materializedCount}` : `· ${statusShortLabel(entry.status)}`}
+              </span>
+            </span>
+          )
+        })}
+      </div>
+
+      {showPrescriptionLine && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-zinc-400/80">
+          <span className="font-medium text-zinc-300">Prescription bounds</span>
+          <span>
+            {mutatorRollup?.rowsWithinBounds ?? 0}/{totalRows} rows within doctrine bounds
+            {(mutatorRollup?.rowsOutOfBounds ?? 0) > 0 &&
+              ` · ${mutatorRollup?.rowsOutOfBounds} out-of-bounds (not mutated)`}
+            {(mutatorRollup?.rowsMissingBounds ?? 0) > 0 &&
+              ` · ${mutatorRollup?.rowsMissingBounds} missing parseable dosage`}
+          </span>
+        </div>
+      )}
+    </div>
+  )
+}

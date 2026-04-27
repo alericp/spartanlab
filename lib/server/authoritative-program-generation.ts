@@ -1713,6 +1713,111 @@ export async function executeAuthoritativeGeneration(
           error: String(weeklyErr),
         })
       }
+
+      // ====================================================================
+      // [PHASE 4L] ROW-LEVEL METHOD + PRESCRIPTION MUTATOR
+      //
+      // The dedicated authoritative gateway for row-level method
+      // materialization and prescription bounds proof. Runs ONCE per session
+      // after:
+      //   - the builder has finished (top_set / drop_set / rest_pause /
+      //     cluster are already written under hardened safety gates),
+      //   - applySessionStylePreferences has packaged grouped methods,
+      //   - methodDecision has been stamped,
+      //   - weeklyMethodRepresentation has been built.
+      //
+      // What this mutator does decisively:
+      //   1. Adds endurance_density on a safe late-position accessory / core /
+      //      conditioning row when profile asks for endurance/conditioning AND
+      //      no grouped density block was applied.
+      //   2. Emits per-row prescriptionBoundsProof witness (currentValue,
+      //      doctrineMin/Max, verdict). Never mutates dosage — decisive
+      //      numeric dose mutation remains deferred to a dedicated safety
+      //      phase.
+      //   3. Builds methodMaterializationChallenge per family
+      //      (top_set / drop_set / rest_pause / cluster / endurance_density /
+      //      prescription_*) so the Program page can render APPLIED /
+      //      BLOCKED / NOT_NEEDED / OUT_OF_BOUNDS chips.
+      //
+      // Stamps onto session.rowLevelMutatorSummary and
+      // session.styleMetadata.methodMaterializationChallenge. Fails soft —
+      // never blocks generation.
+      // ====================================================================
+      try {
+        const { applyRowLevelMethodPrescriptionMutations } = await import(
+          '@/lib/program/row-level-method-prescription-mutator'
+        )
+        const profileSnapshotForMutator =
+          (program as unknown as {
+            profileSnapshot?: {
+              primaryGoal?: string | null
+              secondaryGoal?: string | null
+              selectedSkills?: string[] | null
+              sessionStylePreference?: string | null
+              selectedTrainingStyles?: string[] | null
+            } | null
+          }).profileSnapshot ?? null
+
+        const mutatorRollup = {
+          sessionsProcessed: 0,
+          totalApplied: 0,
+          totalBlocked: 0,
+          totalFieldChanges: 0,
+          enduranceDensityApplied: 0,
+          rowsWithinBounds: 0,
+          rowsOutOfBounds: 0,
+          rowsMissingBounds: 0,
+          finalStatusCounts: {} as Record<string, number>,
+        }
+
+        for (let s = 0; s < program.sessions.length; s++) {
+          const sess = program.sessions[s] as unknown
+          try {
+            const { summary } = applyRowLevelMethodPrescriptionMutations({
+              session: sess as Parameters<typeof applyRowLevelMethodPrescriptionMutations>[0]['session'],
+              profileSnapshot: profileSnapshotForMutator,
+              doctrineRuntimeContract:
+                (program as unknown as { doctrineRuntimeContract?: unknown }).doctrineRuntimeContract ?? null,
+              methodDecision:
+                (sess as { methodDecision?: unknown } | null)?.methodDecision ?? null,
+            })
+            mutatorRollup.sessionsProcessed += 1
+            mutatorRollup.totalApplied += summary.appliedCount
+            mutatorRollup.totalBlocked += summary.blockedCount
+            mutatorRollup.totalFieldChanges += summary.fieldChangeCount
+            if (summary.appliedMethods.includes('endurance_density')) {
+              mutatorRollup.enduranceDensityApplied += 1
+            }
+            for (const proof of summary.prescriptionBoundsProofs) {
+              if (proof.verdict === 'ALREADY_WITHIN_BOUNDS') mutatorRollup.rowsWithinBounds += 1
+              else if (proof.verdict === 'OUT_OF_BOUNDS_NOT_MUTATED') mutatorRollup.rowsOutOfBounds += 1
+              else if (proof.verdict === 'MISSING_DOCTRINE_BOUNDS') mutatorRollup.rowsMissingBounds += 1
+            }
+            mutatorRollup.finalStatusCounts[summary.finalStatus] =
+              (mutatorRollup.finalStatusCounts[summary.finalStatus] ?? 0) + 1
+          } catch (perSessionErr) {
+            console.log('[PHASE4L-ROW-LEVEL-MUTATOR-PER-SESSION-FAILED]', {
+              dayNumber: (sess as { dayNumber?: number } | null)?.dayNumber ?? null,
+              error: String(perSessionErr),
+            })
+          }
+        }
+
+        ;(program as unknown as { rowLevelMutatorRollup?: unknown }).rowLevelMutatorRollup =
+          mutatorRollup
+
+        console.log('[PHASE4L-ROW-LEVEL-MUTATOR-COMPLETE]', {
+          generationIntent: request.generationIntent,
+          triggerSource: request.triggerSource,
+          ...mutatorRollup,
+        })
+      } catch (mutatorErr) {
+        console.log('[PHASE4L-ROW-LEVEL-MUTATOR-FAILED]', {
+          generationIntent: request.generationIntent,
+          triggerSource: request.triggerSource,
+          error: String(mutatorErr),
+        })
+      }
     } catch (methodErr) {
       console.log('[doctrine-method-decision-stamp-failed]', {
         generationIntent: request.generationIntent,

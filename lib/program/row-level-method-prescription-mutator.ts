@@ -1,6 +1,7 @@
 import {
   runDoctrineApplicationCorridor,
   type DoctrineApplicationCorridorSummary,
+  type DoctrineApplicationInput,
 } from './doctrine-application-corridor'
 
 /**
@@ -329,6 +330,19 @@ export interface RowLevelMethodPrescriptionMutatorInput {
   sessionLengthMinutes?: number | null
   weeklyRole?: { roleId?: string; intensityClass?: string } | null
   currentWeekNumber?: number | null
+  /**
+   * [PHASE 4N] Multi-intent vector built once at the program level by
+   * `lib/program/training-intent-vector.ts`. When present the corridor
+   * uses it instead of the legacy 5-field `deriveProfileIntent`. Skill
+   * priority is row-protective only (no global blocking).
+   */
+  trainingIntentVector?: unknown
+  /**
+   * [PHASE 4N] Weekly method budget plan built once at the program level
+   * by `lib/program/weekly-method-budget-plan.ts`. The corridor consults
+   * the per-family verdicts to soft-cap heavy methods.
+   */
+  weeklyMethodBudgetPlan?: unknown
   debugMode?: boolean
 }
 
@@ -886,6 +900,13 @@ export function applyRowLevelMethodPrescriptionMutations(
       weeklyRole: input.weeklyRole ?? null,
       currentWeekNumber: input.currentWeekNumber ?? null,
       jointCautions: input.jointCautions ?? [],
+      // [PHASE 4N] Forward the program-level vector + budget so the corridor
+      // applies doctrine-earned methods using the FULL profile truth (not
+      // just the 5 fields the legacy intent reader saw) and respects the
+      // weekly per-family caps.
+      trainingIntentVector: (input.trainingIntentVector as DoctrineApplicationInput['trainingIntentVector']) ?? null,
+      weeklyMethodBudgetPlan:
+        (input.weeklyMethodBudgetPlan as DoctrineApplicationInput['weeklyMethodBudgetPlan']) ?? null,
     })
   } catch (corridorErr) {
     // Fail-soft: corridor errors must never block the mutator from emitting

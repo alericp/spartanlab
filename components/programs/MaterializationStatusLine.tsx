@@ -588,6 +588,134 @@ export function WeeklyMethodChallengeLine({ program }: Props) {
           </span>
         </div>
       )}
+
+      <Phase4NMethodBudgetLine program={program as unknown as { weeklyMethodBudgetPlan?: BudgetPlanView | null; trainingIntentVector?: IntentVectorView | null }} />
+    </div>
+  )
+}
+
+// =============================================================================
+// [PHASE 4N] METHOD BUDGET LINE
+// Reads `program.weeklyMethodBudgetPlan` (built once by
+// `lib/program/weekly-method-budget-plan.ts`) and renders a compact per-family
+// verdict strip: SHOULD_APPLY / MAY_APPLY / NOT_NEEDED / BLOCKED_BY_SAFETY /
+// NO_SAFE_TARGET / NOT_CONNECTED. Each chip carries the budget reason in its
+// `title` tooltip — the user can hover any "blocked" or "not_needed" chip and
+// see the exact intent / safety reason instead of guessing.
+// =============================================================================
+type BudgetVerdict =
+  | 'SHOULD_APPLY'
+  | 'MAY_APPLY'
+  | 'NOT_NEEDED'
+  | 'BLOCKED_BY_SAFETY'
+  | 'NO_SAFE_TARGET'
+  | 'NOT_CONNECTED'
+interface BudgetEntryView {
+  family: string
+  verdict: BudgetVerdict
+  recommendedWeeklyCount?: number
+  reason?: string
+}
+interface BudgetPlanView {
+  byFamily?: Record<string, BudgetEntryView>
+  totalShouldApply?: number
+}
+interface IntentVectorView {
+  strengthIntent?: number
+  hypertrophyIntent?: number
+  skillIntent?: number
+  enduranceIntent?: number
+  densityIntent?: number
+  advancedAthleteSignal?: number
+  tendonProtectionIntent?: number
+  confidence?: 'low' | 'partial' | 'usable' | 'strong'
+}
+
+function Phase4NMethodBudgetLine({
+  program,
+}: {
+  program: { weeklyMethodBudgetPlan?: BudgetPlanView | null; trainingIntentVector?: IntentVectorView | null }
+}) {
+  const budget = program.weeklyMethodBudgetPlan
+  const vector = program.trainingIntentVector
+
+  if (!budget || !budget.byFamily) return null
+
+  const familyOrder: Array<{ key: string; label: string }> = [
+    { key: 'top_set_backoff', label: 'Top Set' },
+    { key: 'drop_set', label: 'Drop Set' },
+    { key: 'rest_pause', label: 'Rest-Pause' },
+    { key: 'cluster', label: 'Cluster' },
+    { key: 'superset', label: 'Superset' },
+    { key: 'circuit', label: 'Circuit' },
+    { key: 'density_block', label: 'Density Block' },
+    { key: 'endurance_density', label: 'Endurance Density' },
+  ]
+
+  function chipClass(verdict: BudgetVerdict): string {
+    switch (verdict) {
+      case 'SHOULD_APPLY':
+        return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+      case 'MAY_APPLY':
+        return 'bg-emerald-400/10 text-emerald-200/80 border-emerald-400/20'
+      case 'NOT_NEEDED':
+        return 'bg-zinc-700/40 text-zinc-400 border-zinc-700/50'
+      case 'BLOCKED_BY_SAFETY':
+        return 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+      case 'NO_SAFE_TARGET':
+        return 'bg-zinc-700/40 text-zinc-400 border-zinc-700/50 border-dashed'
+      case 'NOT_CONNECTED':
+        return 'bg-zinc-800/40 text-zinc-500 border-zinc-800/60 border-dashed'
+    }
+  }
+  function shortLabel(verdict: BudgetVerdict): string {
+    switch (verdict) {
+      case 'SHOULD_APPLY': return 'should apply'
+      case 'MAY_APPLY': return 'may apply'
+      case 'NOT_NEEDED': return 'not needed'
+      case 'BLOCKED_BY_SAFETY': return 'blocked'
+      case 'NO_SAFE_TARGET': return 'no safe target'
+      case 'NOT_CONNECTED': return 'not connected'
+    }
+  }
+
+  return (
+    <div className="mt-2 border-t border-zinc-800/60 pt-2">
+      <div className="flex items-center gap-2 text-[11px]">
+        <span className="font-medium text-zinc-300">Method budget</span>
+        {vector?.confidence && (
+          <span className="text-zinc-500">
+            (intent vector: {vector.confidence}
+            {typeof vector.strengthIntent === 'number' && ` · str ${vector.strengthIntent.toFixed(2)}`}
+            {typeof vector.hypertrophyIntent === 'number' && ` · hyp ${vector.hypertrophyIntent.toFixed(2)}`}
+            {typeof vector.skillIntent === 'number' && ` · skill ${vector.skillIntent.toFixed(2)}`}
+            {typeof vector.enduranceIntent === 'number' && ` · end ${vector.enduranceIntent.toFixed(2)}`}
+            {typeof vector.densityIntent === 'number' && ` · den ${vector.densityIntent.toFixed(2)}`}
+            )
+          </span>
+        )}
+      </div>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {familyOrder.map(({ key, label }) => {
+          const entry = budget.byFamily?.[key]
+          if (!entry) return null
+          const verdict = entry.verdict
+          return (
+            <span
+              key={key}
+              title={entry.reason ?? ''}
+              className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] ${chipClass(verdict)}`}
+            >
+              <span className="font-medium">{label}</span>
+              <span className="opacity-70">·</span>
+              <span>{shortLabel(verdict)}</span>
+              {verdict === 'SHOULD_APPLY' && typeof entry.recommendedWeeklyCount === 'number' && entry.recommendedWeeklyCount > 0 && (
+                <span className="opacity-70">{` ×${entry.recommendedWeeklyCount}/wk`}</span>
+              )}
+            </span>
+          )
+        })}
+      </div>
     </div>
   )
 }

@@ -374,6 +374,12 @@ export interface ActiveWorkoutCorridorProps {
   lastSetRPE?: RPEValue | null
   restType?: 'same_exercise' | 'between_exercise' | 'block_round' // Type of rest period
   nextExerciseName?: string // For between-exercise rest, name of next exercise
+  // [PHASE-J / UP-NEXT-SETUP] Compact one-liner with next exercise's setup
+  // (set count, reps target, prescribed load, target RPE). Built by the
+  // parent from the canonical effective-contract resolver so the rest card
+  // matches what the active card will show after the transition. Optional -
+  // when absent, the rest card falls back to just the exercise name.
+  nextExerciseSetup?: string
   
   // Block round rest props (for grouped methods - superset/circuit)
   blockLabel?: string
@@ -905,6 +911,8 @@ export function ActiveWorkoutStartCorridor({
   lastSetRPE,
   restType = 'same_exercise',
   nextExerciseName,
+  // [PHASE-J / UP-NEXT-SETUP] Compact one-liner with next exercise setup
+  nextExerciseSetup,
   // Block round rest props
   blockLabel,
   blockGroupType,
@@ -1506,12 +1514,26 @@ export function ActiveWorkoutStartCorridor({
                   </div>
                   
                   {/* Up Next Info */}
+                  {/* [PHASE-J / UP-NEXT-SETUP] Show prescribed setup details
+                      beneath the exercise name during between-exercise rest
+                      so the user can prepare load / band / mental focus
+                      before the next set starts. The setup string is built
+                      upstream from the canonical effective-contract
+                      resolver and includes only honest values (no fake
+                      load, no fake RPE). When the helper has nothing
+                      useful to say, we fall back to the legacy
+                      "Exercise N+1 of M" line so we never show a blank
+                      row. Same-exercise rest path unchanged. */}
                   <div className="pt-2 border-t border-[#2B313A]/50">
                     <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-1">Up Next</p>
                     {restType === 'between_exercise' ? (
                       <>
                         <p className="text-sm font-medium text-[#E6E9EF]">{nextExerciseName || 'Next Exercise'}</p>
-                        <p className="text-xs text-[#A4ACB8]">Exercise {currentExerciseIndex + 2} of {totalExercises}</p>
+                        {nextExerciseSetup ? (
+                          <p className="text-xs text-[#A4ACB8]">{nextExerciseSetup}</p>
+                        ) : (
+                          <p className="text-xs text-[#A4ACB8]">Exercise {currentExerciseIndex + 2} of {totalExercises}</p>
+                        )}
                       </>
                     ) : (
                       <>
@@ -2379,6 +2401,26 @@ export function ActiveWorkoutStartCorridor({
               [UI-DENSITY-R3] Further reduced pt-2 -> pt-1.5 and pb-2 ->
               pb-1.5 so the bottom rail hugs the ledger more tightly. */}
           <div className="sticky bottom-0 bg-[#0F1115] pt-1.5 pb-1.5 pb-safe border-t border-[#2B313A]/50">
+            {/* [PHASE-J / SCROLL-CUE] Subtle iOS-style edge fade above the
+                sticky action rail. Communicates two things at once on
+                mobile: (1) content above the bar continues underneath
+                (encouraging an upward scroll back to recently logged
+                sets / notes), and (2) the rail itself is anchored
+                permanently to the bottom and not part of the scrolling
+                content. We use a 12px transparent->surface gradient
+                positioned just above the bar's top edge so it blends
+                with the existing border-t separator instead of fighting
+                it. pointer-events:none guarantees the fade can never
+                steal taps from Log Set or any of the four utility
+                controls below.
+                Implementation note: kept as a CSS-only effect (no
+                scroll listeners, no state) so it cannot regress the
+                mobile render path or the reducer-driven action rail
+                layout. */}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 -top-3 h-3 bg-gradient-to-t from-[#0F1115] to-transparent"
+            />
             {/* Primary Action: Log Set
                 [LIVE-LOG-COMMIT-SURVIVAL] Disabled only by hard-invalid input
                 (no RPE selected). No local in-flight gate. Brief green flash

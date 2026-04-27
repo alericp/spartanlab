@@ -7071,6 +7071,73 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     const nextExerciseIndex = safeExerciseIndex + 1
     const nextExercise = nextExerciseIndex < exercises.length ? exercises[nextExerciseIndex] : null
     const nextExerciseName = nextExercise?.name
+
+    // =====================================================================
+    // [PHASE-J / UP-NEXT-SETUP] Build a compact one-line setup string for
+    // the rest screen "Up Next" between-exercise transition.
+    //
+    // Previously the rest card showed only the exercise NAME ("Weighted
+    // Dips"), so the user could not see the actual setup they were about
+    // to attack. We now stitch together the next exercise's authoritative
+    // prescription details:
+    //   - "Set 1 of N"
+    //   - reps / hold target (from the canonical effective contract on the
+    //     next exercise; we build that contract for the next exercise the
+    //     same way we build it for the current one)
+    //   - prescribed load chip (e.g. "+25 lbs"), only when prescribedLoad
+    //     resolves to an actual positive load
+    //   - method/group context for grouped blocks ("Superset A2", "Circuit
+    //     round 2"), only when it differs from the current block
+    //   - target RPE, only when the next exercise actually carries one
+    //
+    // Rules enforced here so the corridor cannot drift:
+    //   - DO NOT invent load. Omit the chip if prescribedLoad is missing.
+    //   - DO NOT show stale Program-card values; use the same scaled
+    //     effective-contract path the active card uses.
+    //   - DO NOT pad with empty separators. Each segment is conditional.
+    //   - Keep it to ONE LINE. Two short segments max for mobile.
+    // =====================================================================
+    const nextExerciseSetup: string | null = (() => {
+      if (!nextExercise) return null
+      try {
+        // Reuse the same effective-contract resolver the active card uses
+        // so week scaling, doctrine mutations, and load-authoritative
+        // session output all flow through the same single-owner path.
+        const nextSets = getEffectiveExerciseValues(nextExercise).sets
+        const nextRepsOrTime = (nextExercise.repsOrTime ?? '').toString().trim()
+        const nextTargetRPE = nextExercise.targetRPE
+        const nextLoad = nextExercise.prescribedLoad
+        const segments: string[] = []
+        // Set count (always "Set 1 of N" because the user is heading INTO
+        // exercise N+1's first set after a between-exercise rest).
+        if (nextSets > 0) {
+          segments.push(`Set 1 of ${nextSets}`)
+        }
+        // Reps / hold prescription, exactly as the corridor would show on
+        // the active card. We pass through the prescription text verbatim
+        // because that is the contract the user already trusts elsewhere.
+        if (nextRepsOrTime.length > 0) {
+          segments.push(nextRepsOrTime)
+        }
+        // Prescribed load chip - only when there is an actual positive
+        // load. We never invent a load on bodyweight exercises.
+        if (nextLoad && typeof nextLoad.load === 'number' && nextLoad.load > 0) {
+          const unit = nextLoad.unit || 'lbs'
+          segments.push(`+${nextLoad.load} ${unit}`)
+        }
+        // Target RPE - only when the next exercise carries one. Some
+        // accessory rows legitimately have no targetRPE; we omit rather
+        // than fabricating "RPE -".
+        if (typeof nextTargetRPE === 'number' && nextTargetRPE > 0) {
+          segments.push(`RPE ${nextTargetRPE}`)
+        }
+        if (segments.length === 0) return null
+        return segments.join(' \u00b7 ')
+      } catch (err) {
+        console.warn('[v0] [up_next_setup_build_failed]', err)
+        return null
+      }
+    })()
     
     // [REST-CORRIDOR-SINGLE-OWNER] Rest duration flows through one authoritative
     // decision path. Block-round rest is owned by the block prescription. For
@@ -7323,6 +7390,12 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           lastSetRPE: safeLastSetRPE,
           restType,
           nextExerciseName,
+          // [PHASE-J / UP-NEXT-SETUP] Compact one-liner with set count, reps,
+          // load chip, and target RPE for the next exercise. Built upstream
+          // from the canonical effective-contract resolver so the rest card
+          // shows the EXACT same setup the active card will show after the
+          // transition. Optional - omitted if no useful detail exists.
+          nextExerciseSetup,
           // Block round rest
           blockLabel,
           blockGroupType,

@@ -197,6 +197,14 @@ import {
   type ExecutionBlock,
   type ExecutionPlan,
 } from '@/lib/workout/live-workout-machine'
+// [PHASE 4Y] H.H5 — methodStructures fallback builder for the executionPlan
+// derivation, plus the live-runtime parity verdict surfaced in the
+// guidance-only banner below. See lib/workout/live-grouped-execution-contract.ts.
+import {
+  buildExecutionBlocksFromMethodStructures,
+  evaluateLiveGroupedExecution,
+  type LiveGroupedExecutionResult,
+} from '@/lib/workout/live-grouped-execution-contract'
 // [PHASE-NEXT] Execution unit contract and rest resolver
 import {
   type SetReasonTag,
@@ -2068,10 +2076,78 @@ export function StreamlinedWorkoutSession({
 
       executionPlan = { blocks, hasGroupedBlocks, totalSets }
     } else {
-      // FALLBACK PATH: Derive from flat exercise blockId fields
-      executionPlan = deriveExecutionPlanFromExercises(exercises)
+      // [PHASE 4Y / H.H5] METHOD-STRUCTURES FALLBACK PATH.
+      //
+      // Before the flat fallback, attempt to build executable grouped blocks
+      // directly from the canonical Phase 4P `session.methodStructures[]`.
+      // This closes the case where styledGroups was rejected by the
+      // shadow-owner guard (or never written) but methodStructures still
+      // carries applied superset/circuit/cluster blocks bound to real
+      // session rows. Without this path, those grouped methods would be
+      // silently flattened into independent rows — exactly the
+      // "silent flattening" H.H5 forbids.
+      const candidateMethodStructures = Array.isArray(
+        (safeSession as unknown as { methodStructures?: unknown }).methodStructures,
+      )
+        ? ((safeSession as unknown as { methodStructures?: unknown }).methodStructures as
+            Parameters<typeof buildExecutionBlocksFromMethodStructures>[0]['methodStructures'])
+        : []
+      const msBuild = buildExecutionBlocksFromMethodStructures({
+        methodStructures: candidateMethodStructures,
+        exercises,
+      })
+
+      if (msBuild.hasGroupedBlocks) {
+        // Append flat blocks for any exercise NOT consumed by a grouped
+        // method-structure block. This preserves the "no duplicate members"
+        // invariant — an exercise is either a grouped member OR a standalone
+        // flat block, never both.
+        const flatBlocks: ExecutionBlock[] = []
+        let flatTotalSets = 0
+        for (let i = 0; i < exercises.length; i++) {
+          if (msBuild.consumedExerciseIndexes.has(i)) continue
+          const ex = exercises[i]
+          flatBlocks.push({
+            blockId: `flat-${ex.id || i}`,
+            groupType: null,
+            blockLabel: ex.name,
+            memberExercises: [ex],
+            memberExerciseIndexes: [i],
+            targetRounds: ex.sets || 3,
+            intraBlockRestSeconds: 0,
+            postRoundRestSeconds: ex.restSeconds || 90,
+            postBlockRestSeconds: 90,
+          })
+          flatTotalSets += ex.sets || 3
+        }
+        const mergedBlocks = [...msBuild.blocks, ...flatBlocks]
+        // Preserve the visible-card exercise order: sort merged blocks by
+        // the lowest member-exercise index, so the live runtime walks the
+        // same order the Program card showed.
+        mergedBlocks.sort(
+          (a, b) =>
+            (a.memberExerciseIndexes[0] ?? 0) - (b.memberExerciseIndexes[0] ?? 0),
+        )
+        executionPlan = {
+          blocks: mergedBlocks,
+          hasGroupedBlocks: true,
+          totalSets: msBuild.totalSets + flatTotalSets,
+        }
+        console.log('[phase4y-method-structures-execution-plan]', {
+          source: 'methodStructures',
+          groupedBlocks: msBuild.blocks.length,
+          flatBlocks: flatBlocks.length,
+          consumedExerciseIndexes: Array.from(msBuild.consumedExerciseIndexes),
+          reasons: msBuild.reasons,
+          note:
+            'styledGroups was unavailable or rejected by shadow-owner guard; methodStructures fallback built grouped runtime instead of flattening.',
+        })
+      } else {
+        // FALLBACK PATH: Derive from flat exercise blockId fields
+        executionPlan = deriveExecutionPlanFromExercises(exercises)
+      }
     }
-    
+
     return {
       dayLabel: safeSession.dayLabel || 'Workout',
       dayNumber: safeSession.dayNumber || 1,
@@ -2081,6 +2157,36 @@ export function StreamlinedWorkoutSession({
     }
   }, [sessionIsValid, safeSession])
   
+  // [PHASE 4Y / H.H5] LIVE GROUPED RUNTIME PARITY VERDICT.
+  //
+  // Pure, side-effect-free read of the booted session against the execution
+  // plan the live runtime will actually consume. Surfaces three useful states:
+  //
+  //   - FULL_GROUPED_RUNTIME           — every grouped block is executable.
+  //                                      No banner. The grouped reducer
+  //                                      actions (COMPLETE_BLOCK_SET / etc.)
+  //                                      will drive the runtime.
+  //   - STRAIGHT_SETS_ONLY_NO_GROUPS   — no grouped methods present. No banner.
+  //   - LIVE_GUIDANCE_PRESERVED_ONLY / — grouped data preserved but cannot
+  //     GROUPED_RUNTIME_BLOCKED          execute (density-only, missing refs,
+  //     / GROUPED_RUNTIME_PARTIAL        unsupported method, shadow-owner
+  //                                      guard rejected styledGroups). Banner
+  //                                      below states why.
+  //
+  // The verdict is published into the source-map (Phase 4Q) via runLiveWorkoutSourceMap
+  // and is the proof source for closing H.H5.
+  const liveGroupedExecutionResult: LiveGroupedExecutionResult = useMemo(() => {
+    const styledGroupsAccepted =
+      !!machineSessionContract?.executionPlan?.hasGroupedBlocks &&
+      machineSessionContract.executionPlan.blocks.some(
+        (b) => b.groupType !== null && !b.blockId.startsWith('flat-'),
+      )
+    return evaluateLiveGroupedExecution({
+      session: safeSession as unknown as Parameters<typeof evaluateLiveGroupedExecution>[0]['session'],
+      styledGroupsAcceptedAsExecutionSource: styledGroupsAccepted,
+    })
+  }, [safeSession, machineSessionContract])
+
   // [LIVE-SESSION-LOCK] Generate structure signature for restore validation
   const sessionStructureSignature = useMemo(() => {
     return generateSessionStructureSignature(safeSession)
@@ -7083,7 +7189,59 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
       onBlockRoundRestComplete: handleBlockRoundRestComplete,
     }
     
-    return <LiveWorkoutExecutionSurface snapshot={liveSnapshot} handlers={liveHandlers} />
+    // [PHASE 4Y / H.H5] Honest guidance-only banner.
+    //
+    // Renders ONLY when the live runtime cannot execute one or more grouped
+    // methods that exist in the session truth (density_block today, plus any
+    // case where members fail to bind to real session rows or the styledGroups
+    // shadow-owner guard rejected ordering and methodStructures had nothing
+    // executable to fall back to). H.H5 forbids silent flattening — this
+    // banner is the user-visible "we preserved the method as guidance" notice
+    // with the exact stable reason code in dev-only small text.
+    const showGuidanceBanner =
+      liveGroupedExecutionResult.parityVerdict === 'LIVE_GUIDANCE_PRESERVED_ONLY' ||
+      liveGroupedExecutionResult.parityVerdict === 'GROUPED_RUNTIME_BLOCKED' ||
+      liveGroupedExecutionResult.parityVerdict === 'GROUPED_RUNTIME_PARTIAL'
+    const guidanceBannerReason =
+      liveGroupedExecutionResult.reasons.find(
+        (r) =>
+          r === 'DENSITY_RUNTIME_NOT_SUPPORTED_YET' ||
+          r === 'GROUP_MEMBER_REF_NOT_FOUND' ||
+          r === 'UNSUPPORTED_METHOD_TYPE' ||
+          r === 'STYLED_GROUP_FLATTENED_SEQUENCE_MISMATCH' ||
+          r === 'METHOD_STRUCTURE_STATUS_NOT_APPLIED',
+      ) ?? 'GUIDANCE_ONLY_PRESERVED'
+
+    return (
+      <>
+        {showGuidanceBanner && (
+          <div
+            className="mx-3 mt-3 mb-2 rounded-md border border-[#3F352B] bg-[#1F1A12] px-3 py-2 flex items-start gap-2"
+            role="status"
+            aria-live="polite"
+          >
+            <span className="mt-0.5 text-[#D4A045] text-xs font-semibold tracking-wide">
+              GROUPED METHOD
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-[#E6E9EF] leading-relaxed">
+                Grouped method preserved as guidance only.{' '}
+                {liveGroupedExecutionResult.parityVerdict === 'GROUPED_RUNTIME_PARTIAL'
+                  ? 'Some grouped blocks will run interactively; others are guidance.'
+                  : 'You will execute the rows in order with normal logging.'}
+              </p>
+              {process.env.NODE_ENV === 'development' && (
+                <p className="text-[10px] text-[#6B7280] mt-1 tabular-nums">
+                  reason: {guidanceBannerReason} · verdict:{' '}
+                  {liveGroupedExecutionResult.parityVerdict}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+        <LiveWorkoutExecutionSurface snapshot={liveSnapshot} handlers={liveHandlers} />
+      </>
+    )
   }
 
   // ==========================================================================

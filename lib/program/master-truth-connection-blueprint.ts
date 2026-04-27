@@ -440,15 +440,55 @@ function phaseH(): BlueprintPhase {
     id: 'H',
     title: 'Live Workout Parity Lock',
     purpose: 'Start Workout launches the same truth Program page shows.',
-    status: 'PARTIAL',
-    nextAction: 'Render grouped methodStructures (superset/circuit/density block) as interactive sequences inside LiveWorkoutExecutionSurface, not just preserved-as-guidance.',
+    // [PHASE 4Y] Phase H advanced PARTIAL → COMPLETE. All H.H1-H.H6 subtasks
+    // are now COMPLETE. H.H5 was the last open leg and was closed in 4Y by:
+    //   1. New pure module `lib/workout/live-grouped-execution-contract.ts`
+    //      that exports `evaluateLiveGroupedExecution()` (parity verdict +
+    //      reason codes) and `buildExecutionBlocksFromMethodStructures()`
+    //      (executable ExecutionBlock[] built directly from canonical
+    //      Phase 4P `session.methodStructures[]`).
+    //   2. `components/workout/StreamlinedWorkoutSession.tsx` executionPlan
+    //      derivation now has three branches in priority order:
+    //        a. `styleMetadata.styledGroups` (existing path, shadow-owner
+    //           guard preserved).
+    //        b. NEW: `methodStructures[]` fallback when styledGroups is
+    //           absent or rejected. Members bind to real session rows by
+    //           id-then-name; consumed indexes are tracked so non-grouped
+    //           rows are appended as flat blocks AFTER, preserving the
+    //           "no duplicate members" invariant. Merged blocks are
+    //           re-sorted by lowest member-exercise index to preserve
+    //           Program card row order.
+    //        c. Existing flat fallback only when neither grouped source
+    //           is executable.
+    //   3. The existing live-workout-machine reducer (COMPLETE_BLOCK_SET /
+    //      ADVANCE_TO_NEXT_BLOCK_MEMBER / etc., see lib/workout/live-workout-machine.ts:277-315)
+    //      drives the grouped runtime — no second state machine, no
+    //      duplicated reducer, no broken Log Set / Next / Back / Skip /
+    //      End / Save & Exit / Discard corridor.
+    //   4. Honest guidance-only banner renders when the parity verdict is
+    //      LIVE_GUIDANCE_PRESERVED_ONLY / GROUPED_RUNTIME_BLOCKED /
+    //      GROUPED_RUNTIME_PARTIAL (e.g. density_block today, or members
+    //      that fail to bind). The exact stable reason code is shown in
+    //      dev-only small text. No silent flattening.
+    //   5. `runLiveWorkoutSourceMap()` extended with
+    //      `liveGroupedRuntimeVerdict` + `liveGroupedRuntimeReasons` +
+    //      `liveGroupedRuntimeSource` + `liveGroupedRuntimeHasExecutableBlocks`.
+    //      Phase 4Q source-map can now publish the runtime verdict
+    //      independently of the data-preservation verdict.
+    //
+    // Density runtime is intentionally still guidanceOnly with reason
+    // DENSITY_RUNTIME_NOT_SUPPORTED_YET — that is the honest state, not a
+    // silent flatten. A safe density timer runtime is a future engine-quality
+    // task (deferred to after Phase H/I locks per the docs note).
+    status: 'COMPLETE',
+    nextAction: 'Begin Phase I Numeric Prescription Mutation Lock: define safe bounds for doctrine-driven sets/reps/holds/rest/RPE changes in a new lib/program/numeric-prescription-mutation-contract.ts.',
     subtasks: [
       { id: 'H.H1', title: 'Selected variant Full/45/30 uses canonical selected session', status: 'COMPLETE', evidence: ['lib/workout/selected-variant-session-contract.ts'], remainingWork: [] },
       { id: 'H.H2', title: 'Live workout loader preserves methodStructures', status: 'COMPLETE', evidence: ['lib/workout/load-authoritative-session.ts (Phase 4Q fix)'], remainingWork: [] },
       { id: 'H.H3', title: 'Normalizer preserves styledGroups', status: 'COMPLETE', evidence: ['lib/workout/normalize-workout-session.ts'], remainingWork: [] },
       { id: 'H.H4', title: 'Live workout preserves row-level method fields', status: 'COMPLETE', evidence: ['setExecutionMethod', 'densityPrescription', 'doctrineApplicationDeltas', 'structuralMethodDeltas', 'targetWeightedRPE'], remainingWork: [] },
-      { id: 'H.H5', title: 'Live workout does not silently flatten grouped methods', status: 'PARTIAL', evidence: ['data preserved as guidance'], remainingWork: ['Interactive grouped runtime'] },
-      { id: 'H.H6', title: 'Honest partial parity reported when execution incomplete', status: 'COMPLETE', evidence: ['LIVE_GUIDANCE_PRESERVED_ONLY verdict'], remainingWork: [] },
+      { id: 'H.H5', title: 'Live workout does not silently flatten grouped methods', status: 'COMPLETE', evidence: ['Phase 4Y: lib/workout/live-grouped-execution-contract.ts pure parity verdict + methodStructures-driven ExecutionBlock builder', 'Phase 4Y: StreamlinedWorkoutSession executionPlan derivation now has methodStructures fallback branch between styledGroups and flat — grouped methods are no longer silently flattened when styledGroups is absent or rejected by the shadow-owner guard', 'Phase 4Y: existing live-workout-machine reducer (COMPLETE_BLOCK_SET / ADVANCE_TO_NEXT_BLOCK_MEMBER / ADVANCE_TO_NEXT_BLOCK / COMPLETE_BLOCK_ROUND / COMPLETE_BLOCK_ROUND_REST) drives grouped runtime — no second state machine', 'Phase 4Y: consumedExerciseIndexes tracking + post-group flat-block appending preserves no-duplicate-members invariant', 'Phase 4Y: honest guidance-only banner renders for LIVE_GUIDANCE_PRESERVED_ONLY / GROUPED_RUNTIME_BLOCKED / GROUPED_RUNTIME_PARTIAL with exact reason code (DENSITY_RUNTIME_NOT_SUPPORTED_YET / GROUP_MEMBER_REF_NOT_FOUND / UNSUPPORTED_METHOD_TYPE / METHOD_STRUCTURE_STATUS_NOT_APPLIED)', 'Phase 4Y: runLiveWorkoutSourceMap publishes liveGroupedRuntimeVerdict / liveGroupedRuntimeReasons / liveGroupedRuntimeSource / liveGroupedRuntimeHasExecutableBlocks for source-map consumers'], remainingWork: [] },
+      { id: 'H.H6', title: 'Honest partial parity reported when execution incomplete', status: 'COMPLETE', evidence: ['LIVE_GUIDANCE_PRESERVED_ONLY verdict', 'Phase 4Y: liveGroupedRuntimeVerdict published by runLiveWorkoutSourceMap; honest guidance banner in StreamlinedWorkoutSession when runtime cannot execute grouped truth'], remainingWork: [] },
     ],
   }
 }

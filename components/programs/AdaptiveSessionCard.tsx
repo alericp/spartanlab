@@ -1307,6 +1307,18 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       } | null
     } | null)?.methodMaterializationSummary || null
 
+  // [STEP 3B OF 19 — SHORT-VARIANT-FLAG] Authoritative "is the selected
+  // variant a short (45 / 30) variant?" flag. Lifted to outer scope so it
+  // is available to (a) the grouped render contract gate inside the IIFE
+  // below, AND (b) the chip-row integrity gate (`integrityForcesFlat`) and
+  // any other downstream surface that needs to know whether the canonical
+  // full-session method tally should be allowed to render grouped chips
+  // for the currently selected visible variant.
+  const isShortVariant: boolean = (() => {
+    const dur = (selectedVariantData as { duration?: number } | null | undefined)?.duration
+    return dur === 45 || dur === 30
+  })()
+
   const groupedRenderContract: GroupedDisplayModel = (() => {
     // [RAW-OWNERSHIP-WINS] Grouped-truth detection is owned by RAW source.
     // Display path can only ADD to grouped truth (not subtract) because
@@ -1375,26 +1387,139 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       ? null
       : displayGroupedRendering.flatReason
 
+    // ========================================================================
+    // [STEP 3B OF 19 — SELECTED-VARIANT-GROUPED-RENDER-GATE]
+    //
+    // The merged contract above intentionally lets RAW + materializationSummary
+    // truth own session-level grouped signal so that the full-session card
+    // cannot silently collapse to flat when downstream display weakening
+    // strands a real superset/circuit. That lock is correct for FULL Session
+    // mode but is the leak for SHORT variants (45 Min / 30 Min):
+    //
+    //   - When 45/30 variant pruning defers one half of a superset pair (or
+    //     every grouped member), `rawGroupedOwnership` and `summaryGrouped`
+    //     still report grouped truth from the FULL session. Counts above
+    //     read from `countsSource` which falls back to display only when
+    //     display had rich groups — for short variants stripped of all
+    //     grouped members, display has no rich groups, so chip/banner
+    //     counts come from rawGroupedOwnership (full-session counts).
+    //   - The merged `rawFallbackBlocks` also fall back to
+    //     rawGroupedOwnership when display empty, leaking full-session
+    //     fallback blocks into the dispatcher's raw_grouped_fallback arm.
+    //   - Even when both fallback paths are empty, `hasGroupedTruth=true`
+    //     drives the dispatcher into `simple_order_grouped`, which paints
+    //     a generic grouped banner over the variant body using RAW-derived
+    //     per-type counts — the exact "Grouped structure: 1 Superset" /
+    //     "1 Superset" chip + no visible bracket the user reported.
+    //   - And the synthesis backstop in `synthesizedRawFallbackBlocks`
+    //     (~L1659-1677) explicitly falls back to RAW `safeExercises` when
+    //     display synthesis returns empty — re-injecting full-session
+    //     grouped blocks into the variant body.
+    //
+    // The gate below is THE final selected-variant render authority:
+    //
+    //   - Full Session (duration neither 45 nor 30): pass-through. The
+    //     existing raw-rescue behavior is correct because variant pruning
+    //     was not applied.
+    //
+    //   - 45 / 30 Min: the variant-aware `displayGroupedRendering` model
+    //     (built from `variantPrunedStyleMetadata + fullVisibleExercises`)
+    //     IS the authority. If it has rich renderable groups OR raw
+    //     fallback blocks, the contract carries display-derived counts
+    //     and block lists ONLY (raw cannot leak in via `countsSource`
+    //     fallback). If display has NEITHER, hasGroupedTruth is forced
+    //     false; the contract is zeroed out; the dispatcher routes to
+    //     `flat_category` honestly; the strip + chip + GroupedBodyHeadline
+    //     all suppress; synthesis backstop returns empty (its first guard
+    //     is `if (!hasGroupedTruth) return []`).
+    //
+    // This is the single visible-truth lock for selected-variant grouped
+    // rendering. Every downstream surface (top chip strip, expanded chip
+    // row, GroupedBodyHeadline, finalVisibleBodyModel dispatch, body
+    // branch, Start Workout payload via the same selected variant body)
+    // consumes the gated contract through `hasGroupedTruth` /
+    // `hasRichRenderableGroups` / counts on this object.
+    //
+    // `isShortVariant` is lifted to the outer scope (above this IIFE) so
+    // both the contract gate AND the chip-row integrity gate downstream
+    // (`integrityForcesFlat`) can read the same authoritative flag.
+    // ========================================================================
+    if (!isShortVariant) {
+      return {
+        hasGroups: groups.length > 0 || rawGroupedOwnership.hasGroups,
+        totalGroupCount: Math.max(
+          displayGroupedRendering.totalGroupCount,
+          rawGroupedOwnership.totalGroupCount
+        ),
+        nonStraightGroupCount: countsSource.nonStraightGroupCount,
+        supersetCount: countsSource.supersetCount,
+        circuitCount: countsSource.circuitCount,
+        densityCount: countsSource.densityCount,
+        clusterCount: countsSource.clusterCount,
+        groups,
+        methodSummary:
+          displayGroupedRendering.methodSummary ?? rawGroupedOwnership.methodSummary,
+        sourceUsed,
+        flatReason,
+        renderBlocks,
+        hasGroupedTruth,
+        hasRichRenderableGroups,
+        rawFallbackBlocks,
+      }
+    }
+
+    // SHORT VARIANT: display authority. Check whether display has any
+    // backing for grouped rendering — rich renderable groups OR raw
+    // fallback blocks the renderer can iterate.
+    const displayHasRich = displayGroupedRendering.hasRichRenderableGroups
+    const displayHasRawFallback = displayGroupedRendering.rawFallbackBlocks.length > 0
+    const displayBacksGrouped = displayHasRich || displayHasRawFallback
+
+    if (!displayBacksGrouped) {
+      // Short variant has no display backing for grouped rendering. Suppress
+      // grouped truth entirely so the dispatcher routes to flat_category and
+      // every chip/banner/body surface stays consistent with the visible
+      // body. We keep `flatReason` so debug surfaces can attribute why.
+      return {
+        hasGroups: false,
+        totalGroupCount: 0,
+        nonStraightGroupCount: 0,
+        supersetCount: 0,
+        circuitCount: 0,
+        densityCount: 0,
+        clusterCount: 0,
+        groups: [],
+        methodSummary:
+          displayGroupedRendering.methodSummary ?? rawGroupedOwnership.methodSummary,
+        sourceUsed: displayGroupedRendering.sourceUsed,
+        flatReason: displayGroupedRendering.flatReason,
+        renderBlocks: [],
+        hasGroupedTruth: false,
+        hasRichRenderableGroups: false,
+        rawFallbackBlocks: [],
+      }
+    }
+
+    // Short variant DOES have display backing — return a contract whose
+    // counts and block lists track display ONLY (no raw fallback into
+    // countsSource or rawFallbackBlocks). Truth flags read from display.
     return {
-      hasGroups: groups.length > 0 || rawGroupedOwnership.hasGroups,
-      totalGroupCount: Math.max(
-        displayGroupedRendering.totalGroupCount,
-        rawGroupedOwnership.totalGroupCount
-      ),
-      nonStraightGroupCount: countsSource.nonStraightGroupCount,
-      supersetCount: countsSource.supersetCount,
-      circuitCount: countsSource.circuitCount,
-      densityCount: countsSource.densityCount,
-      clusterCount: countsSource.clusterCount,
-      groups,
+      hasGroups: displayGroupedRendering.hasGroups,
+      totalGroupCount: displayGroupedRendering.totalGroupCount,
+      nonStraightGroupCount: displayGroupedRendering.nonStraightGroupCount,
+      supersetCount: displayGroupedRendering.supersetCount,
+      circuitCount: displayGroupedRendering.circuitCount,
+      densityCount: displayGroupedRendering.densityCount,
+      clusterCount: displayGroupedRendering.clusterCount,
+      groups: displayGroupedRendering.groups,
       methodSummary:
         displayGroupedRendering.methodSummary ?? rawGroupedOwnership.methodSummary,
-      sourceUsed,
-      flatReason,
-      renderBlocks,
-      hasGroupedTruth,
-      hasRichRenderableGroups,
-      rawFallbackBlocks,
+      sourceUsed: displayGroupedRendering.sourceUsed,
+      flatReason: displayGroupedRendering.flatReason,
+      renderBlocks: displayGroupedRendering.renderBlocks,
+      hasGroupedTruth: displayGroupedRendering.hasGroupedTruth,
+      hasRichRenderableGroups: displayGroupedRendering.hasRichRenderableGroups,
+      rawFallbackBlocks: displayGroupedRendering.rawFallbackBlocks,
     }
   })()
   // [DISPLAY-FIRST-FALLBACK] Two separate gates, each with a precise meaning:
@@ -2414,10 +2539,21 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     reconciledSummary?.summaryIntegrityVerdict ?? 'PASS_FINAL_STRUCTURE_CONFIRMED'
   const reconciledGroupedRows = reconciledSummary?.groupedExerciseRowCount ?? null
   const reconciledGrouped = reconciledSummary?.groupedMethodCounts ?? null
+  // [STEP 3B OF 19 — SHORT-VARIANT-CHIP-GATE] When the selected-variant
+  // grouped render gate (inside the groupedRenderContract IIFE above) has
+  // suppressed grouped truth for a 45 / 30 variant, the collapsed-header
+  // chips would still emit grouped tokens if `canonicalMethodTally` carried
+  // session-level methodStructures from the full session (canonical surface
+  // is not variant-narrowed). Force the dominant tally flat in that case so
+  // the chip row, the strip, and the body all agree the selected short
+  // variant has no executable grouped structure.
+  const shortVariantSuppressedGroupedTruth =
+    isShortVariant && groupedRenderContract.hasGroupedTruth === false
   const integrityForcesFlat =
     reconciledIntegrityVerdict === 'FAIL_METHOD_CLAIM_WITH_ZERO_CHANGED_EXERCISES' ||
     (reconciledGroupedRows !== null && reconciledGroupedRows < 2) ||
-    finalVisibleBodyModel.mode === 'simple_order_grouped'
+    finalVisibleBodyModel.mode === 'simple_order_grouped' ||
+    shortVariantSuppressedGroupedTruth
   const dominantMethodTally: { superset: number; circuit: number; density: number; cluster: number } = (() => {
     if (integrityForcesFlat) {
       // Cluster is row-level execution; preserve only that count. Grouped

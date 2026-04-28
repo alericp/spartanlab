@@ -90,6 +90,45 @@ export function DoctrineInfluenceMap({ program }: Props) {
   const map = buildDoctrineInfluenceMap(program)
   const tone = VERDICT_TONE[map.verdict]
 
+  // [PHASE AA1] Read the weekly method materialization plan stamped by the
+  // authoritative generation pipeline. The plan is a JSON-safe summary of
+  // user-preferred vs doctrine-earned methods + per-day assignments. We
+  // render a compact disclosure inside the existing Influence Map panel so
+  // the user can answer "which of my picked methods materialized, and on
+  // which days?" without any new UI surface or chrome on the Program page.
+  // Fail-closed when the plan is absent (legacy programs predating Phase
+  // AA1 stamping).
+  const matPlan = (program as unknown as {
+    weeklyMethodMaterializationPlan?: {
+      userPreferredMethods?: string[]
+      doctrineEarnedMethods?: string[]
+      byMethod?: Array<{
+        method: string
+        userPreferred: boolean
+        doctrineEarned: boolean
+        budgetVerdict: string
+        materializedDays: number[]
+        noSafeTargetDays: number[]
+        reason: string
+      }>
+      dayAssignments?: Array<{
+        dayNumber: number
+        dayLabel: string | null
+        appliedMethods: string[]
+        blockedMethods: Array<{ method: string; reason: string }>
+        primarySpine: string
+      }>
+      totals?: {
+        sessionsConsidered: number
+        sessionsWithAppliedMethod: number
+        methodsUserPickedAndApplied: number
+        methodsUserPickedNotApplied: number
+        methodsDoctrineEarnedAndApplied: number
+      }
+      oneLineExplanation?: string
+    } | null
+  }).weeklyMethodMaterializationPlan ?? null
+
   // Status totals as compact chip strip — only non-zero buckets.
   const totalChips: Array<{ label: string; count: number; tone: 'emerald' | 'zinc' | 'amber' | 'rose' | 'sky' }> = []
   if (map.statusTotals.MATERIALIZED > 0)
@@ -345,6 +384,128 @@ export function DoctrineInfluenceMap({ program }: Props) {
           }
         />
       </div>
+
+      {/*
+        [PHASE AA1] Method preferences vs reality — disclosure-only.
+        Renders only when the program carries a weeklyMethodMaterializationPlan
+        stamp. Lives inside the same Trust Accordion details surface so it
+        never clutters the main Program page.
+      */}
+      {matPlan && (
+        <details className="group border-t border-[#2B313A]/60">
+          <summary className="cursor-pointer select-none px-3 py-2 text-[11px] text-[#A4ACB8] hover:text-[#E6E9EF]">
+            Method preferences vs reality
+            {matPlan.totals && (
+              <span className="ml-1.5 text-[10px] text-[#7A828F]">
+                ({matPlan.totals.methodsUserPickedAndApplied} applied
+                {matPlan.totals.methodsUserPickedNotApplied > 0
+                  ? ` · ${matPlan.totals.methodsUserPickedNotApplied} not applied`
+                  : ''}
+                )
+              </span>
+            )}
+          </summary>
+          <div className="px-3 pb-3 pt-1 space-y-2">
+            {matPlan.oneLineExplanation && (
+              <p className="text-[11px] text-[#E6E9EF] break-words [overflow-wrap:anywhere]">
+                {matPlan.oneLineExplanation}
+              </p>
+            )}
+
+            {/* Per-method table */}
+            {Array.isArray(matPlan.byMethod) && matPlan.byMethod.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-[10px] tabular-nums">
+                  <thead className="text-[#7A828F]">
+                    <tr className="text-left">
+                      <th className="font-medium pr-2">Method</th>
+                      <th className="font-medium pr-2">Source</th>
+                      <th className="font-medium pr-2">Verdict</th>
+                      <th className="font-medium pr-2">Days&nbsp;applied</th>
+                      <th className="font-medium pr-2">No&nbsp;target</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {matPlan.byMethod
+                      // Surface user-preferred + doctrine-earned + actually-
+                      // applied first; hide rows that are nothing-relevant.
+                      .filter(
+                        m =>
+                          m.userPreferred ||
+                          m.doctrineEarned ||
+                          m.materializedDays.length > 0 ||
+                          m.noSafeTargetDays.length > 0,
+                      )
+                      .map(m => {
+                        const sourceLabel = m.userPreferred && m.doctrineEarned
+                          ? 'pick + doctrine'
+                          : m.userPreferred
+                            ? 'your pick'
+                            : m.doctrineEarned
+                              ? 'doctrine'
+                              : ''
+                        const verdictTone =
+                          m.materializedDays.length > 0
+                            ? 'text-emerald-300'
+                            : m.budgetVerdict === 'BLOCKED_BY_SAFETY'
+                              ? 'text-rose-300'
+                              : m.budgetVerdict === 'NO_SAFE_TARGET'
+                                ? 'text-amber-300'
+                                : 'text-[#A4ACB8]'
+                        return (
+                          <tr key={m.method} className="border-t border-[#1A1F26]">
+                            <td className="pr-2 py-1 text-[#E6E9EF]">{m.method.replace(/_/g, ' ')}</td>
+                            <td className="pr-2 text-[#A4ACB8]">{sourceLabel || '—'}</td>
+                            <td className={`pr-2 ${verdictTone}`}>{m.budgetVerdict}</td>
+                            <td className="pr-2 text-emerald-300">
+                              {m.materializedDays.length > 0 ? m.materializedDays.join(', ') : '—'}
+                            </td>
+                            <td className="pr-2 text-amber-300/80">
+                              {m.noSafeTargetDays.length > 0 ? m.noSafeTargetDays.join(', ') : '—'}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Per-day assignments — only days with applied or blocked methods */}
+            {Array.isArray(matPlan.dayAssignments) && matPlan.dayAssignments.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-[10px] font-medium text-[#A4ACB8] uppercase tracking-wide mt-1">
+                  Per-day method spine
+                </div>
+                <ul className="space-y-1">
+                  {matPlan.dayAssignments.map(d => (
+                    <li
+                      key={d.dayNumber}
+                      className="text-[10px] text-[#A4ACB8] break-words [overflow-wrap:anywhere]"
+                    >
+                      <span className="text-[#E6E9EF]">Day {d.dayNumber}</span>
+                      {d.dayLabel && <span className="text-[#7A828F]"> · {d.dayLabel}</span>}
+                      <span className="text-[#7A828F]"> · {d.primarySpine}</span>
+                      {d.blockedMethods.length > 0 && (
+                        <ul className="mt-0.5 ml-3">
+                          {d.blockedMethods.map((b, i) => (
+                            <li
+                              key={`${d.dayNumber}-${b.method}-${i}`}
+                              className="text-[10px] text-amber-300/70"
+                            >
+                              · {b.method.replace(/_/g, ' ')}: {b.reason}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </details>
+      )}
     </div>
   )
 }

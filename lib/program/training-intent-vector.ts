@@ -93,13 +93,16 @@ export interface TrainingIntentSourceLike {
  *  0.0 — absent
  *  0.25 — weak hint
  *  0.5 — moderate (one direct signal)
+ *  0.6 — explicit-method-preference floor (Phase AA1 — user picked this method
+ *        in onboarding/settings; budget plan should treat as MAY_APPLY rather
+ *        than NOT_NEEDED, but doctrine still gates safety + targets)
  *  0.75 — strong (multiple direct signals)
  *  1.0 — explicit primary target
  *
  * Multi-intent profiles can have several dimensions at 0.5+ simultaneously.
  */
 export interface TrainingIntentVector {
-  version: 'phase-4n'
+  version: 'phase-aa1' | 'phase-4n'
 
   strengthIntent: number
   hypertrophyIntent: number
@@ -122,6 +125,34 @@ export interface TrainingIntentVector {
   selectedTrainingStyles: string[]
   selectedTrainingMethods: string[]
   equipmentSignals: string[]
+
+  /**
+   * [PHASE AA1] Canonical, normalized list of method preferences the user
+   * actually opted into via onboarding/settings (`trainingMethodPreferences`)
+   * OR via the legacy `selectedTrainingMethods` blob. Vocabulary matches the
+   * canonical method preference union — `straight_sets`, `supersets`,
+   * `circuits`, `density_blocks`, `cluster_sets`, `top_sets`, `drop_sets`,
+   * `rest_pause`, `ladder_sets`. Empty when the profile carries no explicit
+   * preference and the inferred default never ran.
+   *
+   * This is the ONE field downstream code should read to answer
+   * "did the user explicitly pick this method?" — it tolerates both source
+   * field names and string vs object shapes.
+   */
+  explicitMethodPreferences: string[]
+
+  /**
+   * [PHASE AA1] Per-method intent boost the explicit preferences applied. One
+   * row per canonical method id with the floor we pushed the corresponding
+   * intent to. Used by the weekly method budget plan to distinguish
+   * "doctrine-earned" from "user-preference-earned" verdicts and by the
+   * weekly materialization plan to render the source on the proof surface.
+   */
+  explicitMethodPreferenceBoosts: Array<{
+    method: string
+    intentTouched: 'densityIntent' | 'enduranceIntent' | 'hypertrophyIntent' | 'strengthIntent' | 'none'
+    floor: number
+  }>
 
   sourceFieldsUsed: string[]
   sourceFieldsMissing: string[]
@@ -278,6 +309,84 @@ export function buildTrainingIntentVector(
   const selectedFlexibility = (profile?.selectedFlexibility ?? []).map(s => String(s).toLowerCase())
   const trainingMethods = (profile?.selectedTrainingMethods ?? []).map(s => String(s).toLowerCase())
 
+  // ---------------------------------------------------------------------------
+  // [PHASE AA1 OF 3] EXPLICIT METHOD PREFERENCE READER
+  //
+  // The pre-AA1 vector declared `trainingMethodPreferences` in its input type
+  // but never actually read it. As a result the canonical
+  // `program.profileSnapshot.trainingMethodPreferences` (which IS populated
+  // from `canonicalProfile.trainingMethodPreferences`) was a dead-letter
+  // field for intent scoring. Downstream effect: a hybrid skill+strength
+  // user with `['straight_sets', 'supersets', 'circuits', 'density_blocks']`
+  // got `densityIntent = 0` and `enduranceIntent = 0`, the budget plan
+  // returned `NOT_NEEDED` for circuit / density_block, the structural
+  // materialization corridor wrote `not_needed` entries, and the user
+  // reasonably complained: "I picked density blocks, where are they?"
+  //
+  // This block normalizes BOTH `trainingMethodPreferences` (canonical) AND
+  // `selectedTrainingMethods` (legacy) into one canonical method id list,
+  // then applies a 0.6 floor to the corresponding intent. 0.6 is a deliberate
+  // choice: it clears the budget plan's 0.5 NOT_NEEDED threshold so the
+  // method becomes MAY_APPLY, but stays below 0.75 so doctrine-earned
+  // SHOULD_APPLY (which requires multiple direct signals) is not impersonated
+  // by a single checkbox click. Safety gates (`BLOCKED_BY_SAFETY`,
+  // `NO_SAFE_TARGET`) still take priority — explicit preference cannot
+  // override a tendon-protection or no-safe-target verdict.
+  // ---------------------------------------------------------------------------
+  const EXPLICIT_PREF_FLOOR = 0.6
+  const rawMethodPrefs = profile?.trainingMethodPreferences ?? []
+  const normalizedExplicitPrefs: string[] = []
+  for (const entry of rawMethodPrefs) {
+    if (entry == null) continue
+    let id: string
+    if (typeof entry === 'string') id = entry.toLowerCase()
+    else if (typeof entry === 'object' && 'id' in entry && typeof entry.id === 'string') id = entry.id.toLowerCase()
+    else if (typeof entry === 'object' && 'key' in entry && typeof entry.key === 'string') id = entry.key.toLowerCase()
+    else continue
+    // Normalize singular ↔ plural variants the codebase uses interchangeably.
+    if (id === 'top_set') id = 'top_sets'
+    if (id === 'drop_set') id = 'drop_sets'
+    if (id === 'density_block') id = 'density_blocks'
+    if (id === 'circuit') id = 'circuits'
+    if (id === 'superset') id = 'supersets'
+    if (id === 'cluster_set' || id === 'cluster') id = 'cluster_sets'
+    if (id === 'ladder_set') id = 'ladder_sets'
+    if (!normalizedExplicitPrefs.includes(id)) normalizedExplicitPrefs.push(id)
+  }
+  // Also fold in any tokens from `selectedTrainingMethods` (legacy text blob)
+  // that match a canonical method id directly.
+  const CANONICAL_METHODS = [
+    'straight_sets', 'supersets', 'circuits', 'density_blocks',
+    'cluster_sets', 'top_sets', 'drop_sets', 'rest_pause', 'ladder_sets',
+  ]
+  for (const tok of trainingMethods) {
+    if (CANONICAL_METHODS.includes(tok) && !normalizedExplicitPrefs.includes(tok)) {
+      normalizedExplicitPrefs.push(tok)
+    }
+  }
+
+  if (normalizedExplicitPrefs.length > 0) {
+    recordUsed('trainingMethodPreferences')
+  } else if (rawMethodPrefs.length === 0) {
+    recordMissing('trainingMethodPreferences')
+  }
+
+  // Build the per-method boost trace BEFORE applying floors so we can record
+  // exactly which intent each preference touched.
+  const explicitMethodPreferenceBoosts: TrainingIntentVector['explicitMethodPreferenceBoosts'] = []
+  for (const prefId of normalizedExplicitPrefs) {
+    let intentTouched: TrainingIntentVector['explicitMethodPreferenceBoosts'][number]['intentTouched'] = 'none'
+    if (prefId === 'circuits' || prefId === 'density_blocks') intentTouched = 'densityIntent'
+    else if (prefId === 'rest_pause') intentTouched = 'hypertrophyIntent'
+    else if (prefId === 'drop_sets') intentTouched = 'hypertrophyIntent'
+    else if (prefId === 'top_sets' || prefId === 'cluster_sets') intentTouched = 'strengthIntent'
+    else if (prefId === 'ladder_sets') intentTouched = 'enduranceIntent'
+    // supersets and straight_sets do not boost any intent — supersets are
+    // earned by density/hypertrophy/short-session signals already and
+    // straight_sets is the safe baseline.
+    explicitMethodPreferenceBoosts.push({ method: prefId, intentTouched, floor: EXPLICIT_PREF_FLOOR })
+  }
+
   if (primary) recordUsed('primaryGoal'); else recordMissing('primaryGoal')
   if (secondary) recordUsed('secondaryGoal'); else recordMissing('secondaryGoal')
   if (goalCategory) recordUsed('goalCategory'); else recordMissing('goalCategory')
@@ -367,6 +476,29 @@ export function buildTrainingIntentVector(
   }
   if (stylePref.includes('shorter') || stylePref.includes('time_efficient') || stylePref.includes('compressed')) {
     densityIntent = Math.max(densityIntent, 0.75)
+  }
+
+  // [PHASE AA1] Apply explicit-method-preference floors AFTER the doctrine-
+  // derived score. Math.max means a stronger doctrine signal (e.g. 0.75 from
+  // multi-token match) wins over the 0.6 floor, but a zero-doctrine score
+  // gets lifted to 0.6 so the budget plan does not return NOT_NEEDED for a
+  // method the user explicitly opted into.
+  for (const prefId of normalizedExplicitPrefs) {
+    if (prefId === 'circuits' || prefId === 'density_blocks') {
+      densityIntent = Math.max(densityIntent, EXPLICIT_PREF_FLOOR)
+      // Circuits also signal endurance work-capacity intent; density blocks
+      // do not (density on accessory rows is hypertrophy-density, not
+      // endurance-density).
+      if (prefId === 'circuits') {
+        enduranceIntent = Math.max(enduranceIntent, EXPLICIT_PREF_FLOOR)
+      }
+    } else if (prefId === 'rest_pause' || prefId === 'drop_sets') {
+      hypertrophyIntent = Math.max(hypertrophyIntent, EXPLICIT_PREF_FLOOR)
+    } else if (prefId === 'top_sets' || prefId === 'cluster_sets') {
+      strengthIntent = Math.max(strengthIntent, EXPLICIT_PREF_FLOOR)
+    } else if (prefId === 'ladder_sets') {
+      enduranceIntent = Math.max(enduranceIntent, EXPLICIT_PREF_FLOOR)
+    }
   }
 
   // Mobility / Flexibility
@@ -471,7 +603,7 @@ export function buildTrainingIntentVector(
   }
 
   return {
-    version: 'phase-4n',
+    version: 'phase-aa1',
     strengthIntent: clamp01(strengthIntent),
     hypertrophyIntent: clamp01(hypertrophyIntent),
     skillIntent: clamp01(skillIntent),
@@ -489,6 +621,8 @@ export function buildTrainingIntentVector(
     selectedTrainingStyles: styles,
     selectedTrainingMethods: trainingMethods,
     equipmentSignals,
+    explicitMethodPreferences: normalizedExplicitPrefs,
+    explicitMethodPreferenceBoosts,
     sourceFieldsUsed: used,
     sourceFieldsMissing: missing,
     confidence,

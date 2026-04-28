@@ -2343,6 +2343,57 @@ export async function executeAuthoritativeGeneration(
         }
 
         // ====================================================================
+        // [PHASE AA1 OF 3] WEEKLY METHOD MATERIALIZATION PLAN
+        //
+        // Pure read-only summary that combines:
+        //   - the AA1-aware training intent vector (explicit method
+        //     preferences now actually consumed),
+        //   - the AA1-aware weekly method budget plan (verdictSource
+        //     classification: doctrine_earned / user_preference /
+        //     doctrine_and_user / safety_gate / no_target / not_needed),
+        //   - the per-session styledGroups + setExecutionMethod truth
+        //     emitted by the builder, the row-level mutator, and the
+        //     structural materialization corridor,
+        //
+        // and stamps `program.weeklyMethodMaterializationPlan` so the trust
+        // accordion / influence map can honestly answer the user's question
+        // "which methods materialized on which days, and if a method I
+        // picked didn't show up, exactly why?" — without adding any new UI
+        // surface in this phase. Fail-soft.
+        // ====================================================================
+        try {
+          const { buildWeeklyMethodMaterializationPlan } = await import(
+            '@/lib/program/weekly-method-materialization-plan'
+          )
+          const matPlan = buildWeeklyMethodMaterializationPlan(
+            program as Parameters<typeof buildWeeklyMethodMaterializationPlan>[0],
+          )
+          ;(program as unknown as { weeklyMethodMaterializationPlan?: unknown }).weeklyMethodMaterializationPlan =
+            matPlan
+          console.log('[PHASE-AA1-WEEKLY-MAT-PLAN]', {
+            generationIntent: request.generationIntent,
+            triggerSource: request.triggerSource,
+            userPreferredMethods: matPlan.userPreferredMethods,
+            doctrineEarnedMethods: matPlan.doctrineEarnedMethods,
+            methodsUserPickedAndApplied: matPlan.totals.methodsUserPickedAndApplied,
+            methodsUserPickedNotApplied: matPlan.totals.methodsUserPickedNotApplied,
+            methodsDoctrineEarnedAndApplied: matPlan.totals.methodsDoctrineEarnedAndApplied,
+            sessionsWithAppliedMethod: matPlan.totals.sessionsWithAppliedMethod,
+            oneLine: matPlan.oneLineExplanation,
+            byMethod: matPlan.byMethod.map(m => ({
+              method: m.method,
+              userPreferred: m.userPreferred,
+              doctrineEarned: m.doctrineEarned,
+              budgetVerdict: m.budgetVerdict,
+              materializedDays: m.materializedDays,
+              noSafeTargetDays: m.noSafeTargetDays,
+            })),
+          })
+        } catch (matErr) {
+          console.log('[PHASE-AA1-WEEKLY-MAT-PLAN-FAILED]', { error: String(matErr) })
+        }
+
+        // ====================================================================
         // [PHASE 4Z / PHASE I] PROGRAM-LEVEL NUMERIC MUTATION ROLLUP
         //
         // Built from the per-session summaries collected inside the per-session

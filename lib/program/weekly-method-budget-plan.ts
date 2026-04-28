@@ -58,6 +58,29 @@ export interface WeeklyMethodBudgetEntry {
   reason: string
   sourceIntentSignals: string[]
   sourceDoctrineFamilies: string[]
+  /**
+   * [PHASE AA1] Why the verdict landed where it did, in audit-friendly form.
+   *
+   * - `doctrine_earned`     — derived intent score crossed the threshold on
+   *                            its own (multi-token goal match, session
+   *                            length, advanced benchmarks, etc.)
+   * - `user_preference`     — verdict became eligible only because the user
+   *                            explicitly checked this method in onboarding
+   *                            / settings (`trainingMethodPreferences`)
+   * - `doctrine_and_user`   — both signals were independently sufficient
+   * - `safety_gate`         — verdict is BLOCKED_BY_SAFETY (recovery /
+   *                            tendon / first-week / etc.)
+   * - `no_target`           — verdict is NO_SAFE_TARGET (week shape lacks
+   *                            an eligible row)
+   * - `not_needed`          — neither doctrine nor user preference earns it
+   */
+  verdictSource?:
+    | 'doctrine_earned'
+    | 'user_preference'
+    | 'doctrine_and_user'
+    | 'safety_gate'
+    | 'no_target'
+    | 'not_needed'
 }
 
 export interface WeeklyMethodBudgetPlan {
@@ -108,6 +131,51 @@ export function buildWeeklyMethodBudgetPlan(
     density_block: planDensityBlock(vector, shape),
     endurance_density: planEnduranceDensity(vector, shape),
     straight_sets: planStraightSets(vector),
+  }
+
+  // [PHASE AA1 OF 3] Classify the SOURCE of each verdict — was it doctrine
+  // intent, user explicit preference, both, or a safety/no-target/not-needed
+  // path? This is purely additive trace data; the verdict itself is already
+  // fixed by the per-family planners. The classifier reads
+  // `vector.explicitMethodPreferences` (added in the same phase) so it can
+  // distinguish "the user picked this" from "doctrine alone earned this".
+  // Used by the weekly materialization plan and the trust accordion to render
+  // honest "user preference applied" vs "doctrine-earned" copy without
+  // collapsing them into one undifferentiated badge.
+  const explicitPrefs = (vector as TrainingIntentVector & {
+    explicitMethodPreferences?: string[]
+  }).explicitMethodPreferences ?? []
+  const familyToCanonicalPref: Record<WeeklyBudgetMethodFamily, string | null> = {
+    top_set_backoff: 'top_sets',
+    drop_set: 'drop_sets',
+    rest_pause: 'rest_pause',
+    cluster: 'cluster_sets',
+    superset: 'supersets',
+    circuit: 'circuits',
+    density_block: 'density_blocks',
+    endurance_density: 'circuits', // closest user-facing analogue
+    straight_sets: 'straight_sets',
+  }
+  for (const entry of Object.values(byFamily)) {
+    const canonicalPref = familyToCanonicalPref[entry.family]
+    const userPicked = canonicalPref !== null && explicitPrefs.includes(canonicalPref)
+    if (entry.verdict === 'BLOCKED_BY_SAFETY') {
+      entry.verdictSource = 'safety_gate'
+    } else if (entry.verdict === 'NO_SAFE_TARGET') {
+      entry.verdictSource = 'no_target'
+    } else if (entry.verdict === 'NOT_NEEDED' || entry.verdict === 'NOT_CONNECTED') {
+      // If the user EXPLICITLY picked this method but doctrine still says
+      // not-needed, the verdict stays not_needed (we don't override here —
+      // the intent vector already lifted the score; if it's still below
+      // threshold, the per-family planner has a structural reason). But we
+      // record the source as `user_preference` so downstream surfaces can
+      // render "you picked this; doctrine did not earn it for this profile"
+      // honestly instead of pretending it was never asked for.
+      entry.verdictSource = userPicked ? 'user_preference' : 'not_needed'
+    } else {
+      // SHOULD_APPLY or MAY_APPLY — distinguish doctrine vs user-preference.
+      entry.verdictSource = userPicked ? 'doctrine_and_user' : 'doctrine_earned'
+    }
   }
 
   let totalShouldApply = 0

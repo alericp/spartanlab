@@ -13615,16 +13615,103 @@ async function generateAdaptiveProgramImpl(
       const candidates: ClusterCandidate[] = []
       const rejectLog: Array<{ name: string; reason: string }> = []
 
-      // [SESSION-FRAGMENTATION-PENALTY, prompt 7] If another non-straight
-      // method has already been applied to this session (supersets, circuits,
-      // density_block), adding cluster on top fragments the session's method
-      // signal. Doctrine: "pick one intentional method per session when
-      // possible, avoid stacking methods just because they all happen to
-      // qualify." Subtract 15 points from every candidate so only an
-      // extraordinarily well-placed cluster target can still clear the bar
-      // in a session that already has a method.
-      const sessionAlreadyHasMethod = methodMaterializationResult.appliedMethods.length > 0
-      const sessionFragmentationPenalty = sessionAlreadyHasMethod ? -15 : 0
+      // ============================================================
+      // [PHASE AB2] METHOD COMPATIBILITY SCORING
+      // ------------------------------------------------------------
+      // Replaces the prior blanket "session already has method → -15"
+      // fragmentation penalty. AB2 doctrine explicitly permits valid
+      // multi-method coexistence — for example, "one superset block +
+      // one later cluster block" — when compatibility is scored safe.
+      // The previous -15 penalty was applied irrespective of WHICH
+      // method had already been applied or where it lived in the
+      // session, which made it the canonical "blunt one-method-per-
+      // session" suppression rule AB2 calls out: cluster's accessory
+      // base score (75) plus any reasonable late-position bonus (≤+15)
+      // could not clear the 85 threshold once a -15 penalty was
+      // attached, regardless of whether the existing method actually
+      // conflicted.
+      //
+      // The replacement is compatibility-aware. The penalty depends on
+      // WHAT was already applied:
+      //
+      //   • supersets only (no density / circuit)
+      //       → 0 penalty. Supersets pair earlier rows; cluster lands
+      //         on the late accessory tail. Different territory, no
+      //         fatigue redundancy. AB2 explicitly allows this combo.
+      //
+      //   • circuits only
+      //       → -10. Circuits and cluster are both fatigue-managed
+      //         accumulation patterns, so stacking them adds
+      //         noise without a new training effect. Still beatable
+      //         by an unusually well-placed accessory tail target.
+      //
+      //   • density_blocks only
+      //       → -12. Density already saturates local-tissue fatigue;
+      //         cluster's intra-set rest pattern would compound it.
+      //         Stronger penalty than circuits but not a hard block.
+      //
+      //   • two or more methods already stacked
+      //       → -8 marginal additional penalty. The session is
+      //         already at fatigue/time saturation; we discourage
+      //         a third method but still allow if the candidate is
+      //         exceptional.
+      //
+      // Each path also stamps a `compatibilityVerdict` token used in
+      // the rejection reason text (consumed by the Program UI per-
+      // session rejection surface). AB2 requires that suppression
+      // reasons be specific — "redundant with density block" instead
+      // of generic "fragmentation=-15".
+      // ============================================================
+      const appliedSoFar = methodMaterializationResult.appliedMethods
+      const stackedMethodCount = appliedSoFar.length
+      const hasSupersetsAlready = appliedSoFar.includes('supersets')
+      const hasCircuitsAlready = appliedSoFar.includes('circuits')
+      const hasDensityAlready = appliedSoFar.includes('density_blocks')
+
+      let sessionFragmentationPenalty = 0
+      let compatibilityVerdict:
+        | 'compatible'
+        | 'compatible_with_supersets'
+        | 'fatigue_saturation_multi_method'
+        | 'redundant_with_density_block'
+        | 'redundant_with_circuit'
+        | 'no_other_method' = 'no_other_method'
+
+      if (stackedMethodCount === 0) {
+        sessionFragmentationPenalty = 0
+        compatibilityVerdict = 'no_other_method'
+      } else if (stackedMethodCount >= 2) {
+        // Two or more methods already stacked — fatigue/time saturation.
+        sessionFragmentationPenalty = -8
+        compatibilityVerdict = 'fatigue_saturation_multi_method'
+      } else if (hasDensityAlready) {
+        sessionFragmentationPenalty = -12
+        compatibilityVerdict = 'redundant_with_density_block'
+      } else if (hasCircuitsAlready) {
+        sessionFragmentationPenalty = -10
+        compatibilityVerdict = 'redundant_with_circuit'
+      } else if (hasSupersetsAlready) {
+        // AB2: superset + late accessory cluster is an explicitly
+        // allowed combination. Different exercise territory, different
+        // training effect, no fatigue redundancy.
+        sessionFragmentationPenalty = 0
+        compatibilityVerdict = 'compatible_with_supersets'
+      } else {
+        // Some other single method (e.g. a future method we haven't
+        // taxonomized yet). Keep a small penalty — doctrine still
+        // prefers signal clarity — but nowhere near the prior -15.
+        sessionFragmentationPenalty = -5
+        compatibilityVerdict = 'compatible'
+      }
+
+      const compatibilityReason: string | null =
+        compatibilityVerdict === 'redundant_with_density_block'
+          ? 'redundant with density block — both saturate local fatigue and would over-stack accumulation'
+          : compatibilityVerdict === 'redundant_with_circuit'
+            ? 'redundant with circuit — both work fatigue-managed accumulation, no new training effect from stacking'
+            : compatibilityVerdict === 'fatigue_saturation_multi_method'
+              ? `${stackedMethodCount} methods already applied this session — fatigue/time saturation, additional method discouraged`
+              : null
 
       // [SHORT-SESSION-PENALTY, prompt 7] On short sessions (<5 exercises)
       // the overhead of cluster's intra-set rest structure isn't worth the
@@ -13794,6 +13881,19 @@ async function generateAdaptiveProgramImpl(
           position: clusterTarget.index,
           candidatesConsidered: candidates.length,
           reasonTokens,
+          // [PHASE AB2] Telemetry proving the compatibility-aware path.
+          // When `compatibilityVerdict` is `compatible_with_supersets`
+          // and `stackedMethodCount > 0`, this is direct evidence that
+          // multi-method coexistence (superset + cluster) was permitted
+          // by AB2's compatibility scoring — the prior blanket -15
+          // penalty would have rejected exactly this case.
+          phaseAb2: {
+            compatibilityVerdict,
+            stackedMethodCountBeforeCluster: stackedMethodCount,
+            appliedMethodsBeforeCluster: appliedSoFar.filter(m => m !== 'cluster_sets'),
+            fragmentationPenaltyApplied: sessionFragmentationPenalty,
+            multiMethodCoexistence: stackedMethodCount > 0,
+          },
         })
 
         session.adaptationNotes = session.adaptationNotes || []
@@ -13814,11 +13914,42 @@ async function generateAdaptiveProgramImpl(
           })
         }
       } else {
+        // [PHASE AB2] Specific rejection reason. When the deciding
+        // factor was multi-method compatibility, surface the typed
+        // verdict (e.g. "redundant with density block") instead of a
+        // generic "fragmentation=-15" number. AB2 explicitly forbids
+        // "session already has method" as a reason on its own.
+        const noCandidates = candidates.length === 0
+        const top = noCandidates ? null : candidates[0]
+        const compatibilityWasDeciding =
+          !noCandidates &&
+          top !== null &&
+          compatibilityReason !== null &&
+          // Compatibility decided this rejection if removing the
+          // fragmentation penalty would have cleared the threshold.
+          top.score - sessionFragmentationPenalty >= MIN_CLUSTER_SCORE
+
+        const reasonText = noCandidates
+          ? `No qualifying cluster candidates (doctrine requires late-session non-primary accessory / secondary-strength / skill-accumulation row). Rejected: ${rejectLog.slice(0, 3).map(r => `${r.name}(${r.reason})`).join(', ')}`
+          : compatibilityWasDeciding && compatibilityReason
+            ? `Cluster suppressed: ${compatibilityReason}. Top candidate ${top!.ex.name} (${top!.role} @ ${top!.positionTier}) scored ${top!.score} (compat=${sessionFragmentationPenalty}, shortSession=${shortSessionPenalty}, threshold=${MIN_CLUSTER_SCORE})`
+            : `Best candidate score ${top!.score} below threshold (${MIN_CLUSTER_SCORE}) -- honest straight sets preferred. Top candidate: ${top!.ex.name} (${top!.role} @ ${top!.positionTier} pos ${top!.index}); compat=${sessionFragmentationPenalty} (${compatibilityVerdict}), shortSession=${shortSessionPenalty}`
+
         methodMaterializationResult.rejectedMethods.push({
           method: 'cluster_sets',
-          reason: candidates.length === 0
-            ? `No qualifying cluster candidates (doctrine requires late-session non-primary accessory / secondary-strength / skill-accumulation row). Rejected: ${rejectLog.slice(0, 3).map(r => `${r.name}(${r.reason})`).join(', ')}`
-            : `Best candidate score ${candidates[0].score} below threshold (${MIN_CLUSTER_SCORE}) -- honest straight sets preferred. Top candidate: ${candidates[0].ex.name} (${candidates[0].role} @ ${candidates[0].positionTier} pos ${candidates[0].index}); fragmentation=${sessionFragmentationPenalty}, shortSession=${shortSessionPenalty}`,
+          reason: reasonText,
+        })
+
+        console.log('[PHASE-AB2-CLUSTER-REJECTED]', {
+          dayNumber: session.dayNumber,
+          compatibilityVerdict,
+          compatibilityWasDeciding,
+          stackedMethodCount,
+          appliedSoFar,
+          topScore: top?.score ?? null,
+          threshold: MIN_CLUSTER_SCORE,
+          fragmentationPenalty: sessionFragmentationPenalty,
+          shortSessionPenalty,
         })
       }
     }

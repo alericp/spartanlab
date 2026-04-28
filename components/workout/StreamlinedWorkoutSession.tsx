@@ -7225,6 +7225,79 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
         return null
       }
     })()
+
+    // =====================================================================
+    // [PHASE-U / UP-NEXT-DETAIL] Structured next-exercise prescription.
+    //
+    // Phase J shipped a single concatenated `nextExerciseSetup` string
+    // ("Set 1 of 3 \u00b7 6-8 reps \u00b7 +25 lbs \u00b7 RPE 8"). That dense one-line
+    // form was useful but hard to scan on mobile and crammed unrelated
+    // dimensions together. Phase U breaks the same authoritative truth
+    // into NAMED structured fields so the corridor can render one chip
+    // per dimension (sets, prescription, load, RPE, rest) and a separate
+    // setup-cue line. Truth source is unchanged - same effective-contract
+    // resolver, same `nextExercise.*` fields. We are NOT computing any
+    // new training logic; we are exposing already-existing values in a
+    // shape the UI can layout cleanly.
+    //
+    // Truth-preservation rules (DO NOT WEAKEN):
+    //   - Every field returns null when the underlying authoritative value
+    //     is missing. NEVER fabricate. NEVER infer. NEVER pad with "-".
+    //   - prescribedLoad is forwarded verbatim; we will not show a load
+    //     chip on bodyweight exercises (gate is `load > 0` at the corridor).
+    //   - targetRPE is forwarded only when it is a positive number.
+    //   - restSeconds is forwarded only when positive; rest will not be
+    //     fabricated from defaults.
+    //   - setupCue is forwarded ONLY when nextExercise.note already exists
+    //     and is a non-empty string. We do NOT generate a coaching cue.
+    //   - category is forwarded as-is from authoritative truth; the
+    //     corridor decides whether to render a badge.
+    // =====================================================================
+    const nextExerciseRich: {
+      sets: number | null
+      repsOrTime: string | null
+      prescribedLoad: { load: number; unit: string } | null
+      targetRPE: number | null
+      restSeconds: number | null
+      category: string | null
+      setupCue: string | null
+    } | null = (() => {
+      if (!nextExercise) return null
+      try {
+        const nextSets = getEffectiveExerciseValues(nextExercise).sets
+        const nextRepsOrTime = (nextExercise.repsOrTime ?? '').toString().trim()
+        const nextTargetRPE = nextExercise.targetRPE
+        const nextLoad = nextExercise.prescribedLoad
+        const nextRestSeconds = nextExercise.restSeconds
+        const nextCategory = (nextExercise.category ?? '').toString().trim()
+        const nextNote = (nextExercise.note ?? '').toString().trim()
+        return {
+          sets: typeof nextSets === 'number' && nextSets > 0 ? nextSets : null,
+          repsOrTime: nextRepsOrTime.length > 0 ? nextRepsOrTime : null,
+          prescribedLoad:
+            nextLoad && typeof nextLoad.load === 'number' && nextLoad.load > 0
+              ? { load: nextLoad.load, unit: nextLoad.unit || 'lbs' }
+              : null,
+          targetRPE:
+            typeof nextTargetRPE === 'number' && nextTargetRPE > 0
+              ? nextTargetRPE
+              : null,
+          restSeconds:
+            typeof nextRestSeconds === 'number' && nextRestSeconds > 0
+              ? nextRestSeconds
+              : null,
+          category: nextCategory.length > 0 ? nextCategory : null,
+          // [PHASE-U] Setup cue is exclusively the authoritative
+          // `note` field on the exercise contract. If the contract has
+          // no note we render no cue line - we do not invent
+          // coaching language.
+          setupCue: nextNote.length > 0 ? nextNote : null,
+        }
+      } catch (err) {
+        console.warn('[v0] [up_next_rich_build_failed]', err)
+        return null
+      }
+    })()
     
     // [REST-CORRIDOR-SINGLE-OWNER] Rest duration flows through one authoritative
     // decision path. Block-round rest is owned by the block prescription. For
@@ -7483,6 +7556,18 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           // shows the EXACT same setup the active card will show after the
           // transition. Optional - omitted if no useful detail exists.
           nextExerciseSetup,
+          // [PHASE-U / UP-NEXT-DETAIL] Structured per-field next-exercise
+          // prescription. Each field is null when the underlying
+          // authoritative truth is missing - the corridor decides per-chip
+          // whether to render. The single-line `nextExerciseSetup` above
+          // is preserved as a fallback/legacy path.
+          nextExerciseSets: nextExerciseRich?.sets ?? null,
+          nextExerciseRepsOrTime: nextExerciseRich?.repsOrTime ?? null,
+          nextExercisePrescribedLoad: nextExerciseRich?.prescribedLoad ?? null,
+          nextExerciseTargetRPE: nextExerciseRich?.targetRPE ?? null,
+          nextExerciseRestSeconds: nextExerciseRich?.restSeconds ?? null,
+          nextExerciseCategoryLabel: nextExerciseRich?.category ?? null,
+          nextExerciseSetupCue: nextExerciseRich?.setupCue ?? null,
           // Block round rest
           blockLabel,
           blockGroupType,

@@ -268,8 +268,13 @@ const ROLE_LABELS: Record<WeeklySessionRoleId, { label: string; description: str
     description: 'CNS-fresh skill exposure. Fewer exercises, banded or assisted support where appropriate.',
   },
   broad_mixed_volume: {
-    label: 'Broader mixed day',
-    description: 'More exercises across patterns at moderate intensity. Coverage over peak.',
+    // [PHASE Y2 TRANSLATION] Internal id stays `broad_mixed_volume` for
+    // backward-compatibility, but the athlete-facing label and description
+    // no longer use the debug-y "broad" / "broader" wording. Translates to
+    // a clearer "balanced expression" frame that reads as coaching, not
+    // internal taxonomy.
+    label: 'Balanced expression day',
+    description: 'Balanced across your selected skills — more exercises across patterns at controlled effort to support both primary and secondary skills.',
   },
   secondary_support: {
     label: 'Secondary / support day',
@@ -807,7 +812,10 @@ function buildRationale(
     case 'skill_quality_emphasis':
       return `${focus}: CNS-fresh skill quality day — fewer exercises, supportive variants${protectionTag}.`
     case 'broad_mixed_volume':
-      return `${focus}: broader coverage at moderate intensity — more exercises across patterns${protectionTag}.`
+      // [PHASE Y2 TRANSLATION] Translate "broader coverage at moderate
+      // intensity" into clearer coach-facing language. Same truth, no
+      // internal "broader" debug-y phrasing.
+      return `${focus}: balanced expression day — multiple patterns at controlled effort to support your selected skills${protectionTag}.`
     case 'secondary_support':
       return `${focus}: secondary expression and carryover — moderate stress${protectionTag}.`
     case 'density_capacity':

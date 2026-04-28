@@ -21689,6 +21689,48 @@ return explanations.length > 0 ? explanations : undefined
       inputsNotObserved: phase4hOnboardingMap.totals.inputsNotObserved,
       rowsByStatus: phase4hOnboardingMap.rows.map(r => ({ inputKey: r.inputKey, status: r.status })),
     })
+
+    // -------------------------------------------------------------------
+    // [PHASE Y1 OF 3] DOCTRINE EXECUTION MATRIX + CAUSAL UTILIZATION PROOF
+    // -------------------------------------------------------------------
+    // Pure, JSON-safe, additive. Reads from objects already stamped on the
+    // program (doctrineMaterializationMatrix, runtimeContract,
+    // doctrineCausalChallenge, rowLevelMutatorRollup /
+    // doctrineApplicationRollup, weeklyMethodRepresentation,
+    // weeklyStressGovernorAdjustments, sessions[]) and produces a
+    // per-bundle execution matrix + RPE/density/pairing traces.
+    //
+    // Diagnostic only — never mutates the program. Failures are caught
+    // below and never break generation.
+    try {
+      const { buildDoctrineExecutionMatrix } = await import(
+        './program/doctrine-execution-matrix-contract'
+      )
+      const phaseY1Matrix = buildDoctrineExecutionMatrix({
+        program: finalProgram as unknown as Record<string, unknown>,
+      })
+      ;(finalProgram as unknown as { doctrineExecutionMatrix?: unknown }).doctrineExecutionMatrix =
+        phaseY1Matrix
+      console.log('[PHASE-Y1-DOCTRINE-EXECUTION-MATRIX]', {
+        verdict: phaseY1Matrix.summary.causalUtilizationVerdict,
+        batchesLoaded: phaseY1Matrix.summary.batchesLoaded,
+        bundlesEligible: phaseY1Matrix.summary.bundlesEligible,
+        bundlesFired: phaseY1Matrix.summary.bundlesFired,
+        bundlesMutatedProgram: phaseY1Matrix.summary.bundlesMutatedProgram,
+        bundlesDisplayOnly: phaseY1Matrix.summary.bundlesDisplayOnly,
+        bundlesBlockedByRuntime: phaseY1Matrix.summary.bundlesBlockedByRuntime,
+        bundlesSuppressedBySafety: phaseY1Matrix.summary.bundlesSuppressedBySafety,
+        rpeFlattenedSuspected: phaseY1Matrix.rpeReasonTrace.rpeFlattenedSuspected,
+        densityVerdict: phaseY1Matrix.densityTrace.overallVerdict,
+        skinTheCatPlusC2BFound: phaseY1Matrix.pairingTrace.skinTheCatPlusC2BFound,
+        pairingCounts: phaseY1Matrix.pairingTrace.counts,
+      })
+    } catch (yErr) {
+      console.log('[PHASE-Y1-DOCTRINE-EXECUTION-MATRIX-FAILED]', {
+        error: String(yErr),
+        verdict: 'DIAGNOSTIC_BUILD_FAILED_GENERATION_PRESERVED',
+      })
+    }
   } catch (err) {
     // Diagnostic must never break generation. If the matrix fails to build for
     // any reason, log and continue — generation already completed before this

@@ -207,6 +207,15 @@ import {
   type ProgramDisplayProjection,
   type CanonicalProgramTruthPresence,
 } from '@/lib/program/program-display-contract'
+// [PHASE Y3 OF 3] Coach-facing narrative derived from the Y2
+// `trainingDifferentiationCalibration` already attached to the program.
+// Replaces the flat "Intensity: Conservative" chip with a session-derived
+// strategy label, supporting sentence, RPE wave, density verdict, and
+// safety tag. Pure JSON-safe helper — no React, no fetch, no DB.
+import {
+  buildProgramDecisionsNarrative,
+  type ProgramDecisionsNarrative,
+} from '@/lib/program/program-decisions-narrative'
 
 // [canonical-rebuild] Import type for adjustment rebuild requests
 import type { AdjustmentRebuildRequest, AdjustmentRebuildResult } from '@/components/programs/ProgramAdjustmentModal'
@@ -682,65 +691,170 @@ function formatStressPattern(pattern: string | null): string {
 
 // ==========================================================================
 // [PROGRAM-DECISION-SUMMARY] Compact UI component
+// --------------------------------------------------------------------------
+// [PHASE Y3 OF 3] When the program carries the Y2 calibration, the chip
+// strip is rebuilt to reflect the *lived* weekly truth (per-day role
+// summary, RPE wave, density verdict, safety tag) instead of the flat
+// pre-generation `unifiedDoctrineDecision.dosageRules.intensityBias`
+// label. Falls back to the legacy chips when Y2 is absent so older
+// programs render exactly as they did before.
 // ==========================================================================
 function ProgramDecisionSummary({ program }: { program: AdaptiveProgram }) {
   const summary = extractProgramDecisionSummary(program)
+  // [PHASE Y3] Coach-facing narrative derived from Y2. Returns
+  // `available:false` when Y2 is missing — in that case we keep the
+  // legacy chip strip below.
+  const narrative: ProgramDecisionsNarrative = buildProgramDecisionsNarrative(program)
 
   // [DEBUG-LEAKAGE-REMOVAL] Render-time corridor verification log removed.
   // It produced a console entry on every render with no user-visible value.
 
-  // Only render if doctrine truth is available
+  // Y3-aware path: render the session-derived strategy + supporting sentence.
+  if (narrative.available && narrative.topLevelStrategyLabel) {
+    const chips: Array<{ label: string; value: string; color: string }> = []
+
+    if (summary.available && summary.dominantSpine) {
+      chips.push({
+        label: 'Focus',
+        value: formatSpineLabel(summary.dominantSpine),
+        color: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20',
+      })
+    }
+
+    chips.push({
+      label: 'Strategy',
+      value: narrative.topLevelStrategyLabel,
+      color: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
+    })
+
+    if (narrative.perDayStressBreakdown) {
+      chips.push({
+        label: 'Wave',
+        value: narrative.perDayStressBreakdown,
+        color: 'text-zinc-300 bg-zinc-700/30 border-zinc-600/40',
+      })
+    }
+
+    if (narrative.rpeWaveSummary) {
+      chips.push({
+        label: 'RPE',
+        value: narrative.rpeWaveSummary,
+        color: 'text-zinc-300 bg-zinc-700/30 border-zinc-600/40',
+      })
+    }
+
+    if (narrative.densityVerdict === 'real_density') {
+      chips.push({
+        label: 'Density',
+        value: 'Materialized',
+        color: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
+      })
+    } else if (narrative.densityVerdict === 'capacity_supportive') {
+      chips.push({
+        label: 'Density',
+        value: 'Capacity-supportive',
+        color: 'text-zinc-300 bg-zinc-700/30 border-zinc-600/40',
+      })
+    }
+
+    if (narrative.safetyTag) {
+      chips.push({
+        label: 'Safety',
+        value: narrative.safetyTag,
+        color: 'text-blue-400 bg-blue-400/10 border-blue-400/20',
+      })
+    }
+
+    return (
+      <div className="mb-4 p-3 bg-zinc-900/50 border border-zinc-800/60 rounded-lg">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">
+            Program Decisions
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {chips.map((chip, idx) => (
+            <div
+              key={idx}
+              className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs ${chip.color}`}
+            >
+              <span className="text-zinc-500">{chip.label}:</span>
+              <span className="font-medium">{chip.value}</span>
+            </div>
+          ))}
+        </div>
+        {narrative.supportingSentence && (
+          <p className="mt-2 text-xs text-zinc-400 leading-relaxed">
+            {narrative.supportingSentence}
+          </p>
+        )}
+        {narrative.densityVisibleLine && (
+          <p className="mt-1 text-[11px] text-zinc-500 italic">
+            {narrative.densityVisibleLine}
+          </p>
+        )}
+        {narrative.consistencyNote && (
+          <p className="mt-1 text-[11px] text-zinc-600 italic">
+            {narrative.consistencyNote}
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  // ------- Legacy path (Y2 absent) — render the original chip strip --------
   if (!summary.available) {
     return null
   }
-  
-  // Build compact decision chips
+
   const chips: Array<{ label: string; value: string; color: string }> = []
-  
+
   if (summary.dominantSpine) {
     chips.push({
       label: 'Focus',
       value: formatSpineLabel(summary.dominantSpine),
-      color: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20'
+      color: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20',
     })
   }
-  
+
   if (summary.intensityBias) {
-    const intensityColor = summary.intensityBias === 'aggressive' 
-      ? 'text-red-400 bg-red-400/10 border-red-400/20'
-      : summary.intensityBias === 'conservative'
-      ? 'text-green-400 bg-green-400/10 border-green-400/20'
-      : 'text-amber-400 bg-amber-400/10 border-amber-400/20'
+    const intensityColor =
+      summary.intensityBias === 'aggressive'
+        ? 'text-red-400 bg-red-400/10 border-red-400/20'
+        : summary.intensityBias === 'conservative'
+          ? 'text-green-400 bg-green-400/10 border-green-400/20'
+          : 'text-amber-400 bg-amber-400/10 border-amber-400/20'
     chips.push({
       label: 'Intensity',
       value: formatBiasLabel(summary.intensityBias),
-      color: intensityColor
+      color: intensityColor,
     })
   }
-  
+
   if (summary.volumeBias) {
-    const volumeColor = summary.volumeBias === 'high' 
-      ? 'text-purple-400 bg-purple-400/10 border-purple-400/20'
-      : summary.volumeBias === 'low'
-      ? 'text-blue-400 bg-blue-400/10 border-blue-400/20'
-      : 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20'
+    const volumeColor =
+      summary.volumeBias === 'high'
+        ? 'text-purple-400 bg-purple-400/10 border-purple-400/20'
+        : summary.volumeBias === 'low'
+          ? 'text-blue-400 bg-blue-400/10 border-blue-400/20'
+          : 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20'
     chips.push({
       label: 'Volume',
       value: formatBiasLabel(summary.volumeBias),
-      color: volumeColor
+      color: volumeColor,
     })
   }
-  
+
   if (summary.stressPattern) {
     chips.push({
       label: 'Weekly',
       value: formatStressPattern(summary.stressPattern),
-      color: 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20'
+      color: 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20',
     })
   }
-  
+
   if (chips.length === 0) return null
-  
+
   return (
     <div className="mb-4 p-3 bg-zinc-900/50 border border-zinc-800/60 rounded-lg">
       <div className="flex items-center gap-2 mb-2">
@@ -750,7 +864,7 @@ function ProgramDecisionSummary({ program }: { program: AdaptiveProgram }) {
       </div>
       <div className="flex flex-wrap gap-2">
         {chips.map((chip, idx) => (
-          <div 
+          <div
             key={idx}
             className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs ${chip.color}`}
           >

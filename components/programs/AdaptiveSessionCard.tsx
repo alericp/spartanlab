@@ -4349,6 +4349,109 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                       </div>
                     )}
 
+                    {/* [PHASE-AA3] COACH REASONS BLOCK
+                        Reads `session.aa3CoachPlan` (stamped by the AA3
+                        coach-materialization corridor at generation time).
+                        Surfaces ONE specific coach-like line per method
+                        family that was considered but not used. Skips:
+                          - APPLIED_BY_*  (already shown in "Today's
+                            structure" / cluster-decision card / the body)
+                          - NOT_PREFERRED (implicit from onboarding — too
+                            noisy to repeat for every unselected family)
+                          - DEFAULT_STRAIGHT_SETS_INTENTIONAL (already
+                            captured by the appliedSummary line above)
+                        Renders only when the AA3 plan exists AND has at
+                        least one displayable entry, so legacy programs
+                        without a stamped plan render exactly as before.
+                        Compact by design: each row is "<Method>: <reason>".
+                        AA1R is preserved — these are reasons for NOT
+                        applying, never claims of application. */}
+                    {(() => {
+                      const plan = (session as unknown as {
+                        aa3CoachPlan?: {
+                          perMethod?: Record<string, {
+                            family: string
+                            verdict: string
+                            reason: string
+                            target: string | null
+                          }>
+                          appliedByAA3?: string[]
+                          summary?: string
+                        }
+                      }).aa3CoachPlan
+                      if (!plan?.perMethod) return null
+
+                      const aa3Label = (m: string): string => {
+                        switch (m) {
+                          case 'superset': return 'Superset'
+                          case 'circuit': return 'Circuit'
+                          case 'density_block': return 'Density block'
+                          case 'top_set': return 'Top set'
+                          case 'drop_set': return 'Drop set'
+                          case 'cluster': return 'Cluster sets'
+                          case 'rest_pause': return 'Rest-pause'
+                          case 'straight_sets': return 'Straight sets'
+                          default: return m
+                        }
+                      }
+
+                      const SHOWABLE_VERDICTS = new Set([
+                        'CONSIDERED_NOT_OPTIMAL',
+                        'BLOCKED_BY_RUNTIME',
+                        'NO_TARGET',
+                        'SUPPRESSED_BY_VOLUME_GUARD',
+                        'SUPPRESSED_BY_SKILL_PRIORITY',
+                      ])
+
+                      const FAMILY_ORDER = [
+                        'top_set', 'drop_set', 'superset', 'circuit',
+                        'density_block', 'rest_pause', 'cluster',
+                      ]
+
+                      const rows = FAMILY_ORDER
+                        .map(family => plan.perMethod![family])
+                        .filter((e): e is NonNullable<typeof e> =>
+                          !!e && SHOWABLE_VERDICTS.has(e.verdict))
+
+                      // AA3 applied by AA3 itself: surface a small confirmation line
+                      // so the user knows the row mutation is real and where it
+                      // lives. APPLIED_BY_PRIOR_PIPELINE rows are already covered
+                      // by the body (row's setExecutionMethod renders the badge).
+                      const aa3Applied = (plan.appliedByAA3 ?? [])
+                        .map(family => plan.perMethod![family])
+                        .filter((e): e is NonNullable<typeof e> => !!e)
+
+                      if (rows.length === 0 && aa3Applied.length === 0) return null
+
+                      return (
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wide text-[#6A6A6A] mb-1.5">
+                            Coach reasons
+                          </div>
+                          <ul className="space-y-1.5">
+                            {aa3Applied.map((e, i) => (
+                              <li key={`aa3-applied-${i}`} className="flex gap-2">
+                                <span className="text-emerald-400/70 shrink-0">+</span>
+                                <span className="text-[#A5A5A5] leading-relaxed">
+                                  <span className="text-emerald-300 font-medium">{aa3Label(e.family)} applied{e.target ? ` to ${e.target}` : ''}:</span>{' '}
+                                  {e.reason}
+                                </span>
+                              </li>
+                            ))}
+                            {rows.map((e, i) => (
+                              <li key={`aa3-not-${i}`} className="flex gap-2">
+                                <span className="text-[#6A6A6A] shrink-0">·</span>
+                                <span className="text-[#A5A5A5] leading-relaxed">
+                                  <span className="text-[#C5C5C5] font-medium">{aa3Label(e.family)}:</span>{' '}
+                                  {e.reason}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )
+                    })()}
+
                   </div>
                 )}
               </div>

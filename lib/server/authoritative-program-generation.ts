@@ -2434,6 +2434,77 @@ export async function executeAuthoritativeGeneration(
         }
 
         // ====================================================================
+        // [PHASE AA3] COACH MATERIALIZATION CORRIDOR
+        //
+        // Runs AFTER the row-level prescription mutator and the numeric
+        // mutation rollup, and BEFORE the AA1R final-method-truth reconciler.
+        // Per-session, AA3:
+        //   1) Records a verdict + specific coach-like reason for every
+        //      method family (superset / circuit / density_block / top_set /
+        //      drop_set / cluster / rest_pause / straight_sets) — stamped
+        //      onto `session.aa3CoachPlan`.
+        //   2) Optionally materializes ONE narrow row-level method on the
+        //      session (top_set or drop_set only) when every safety gate
+        //      passes (no prior application, safe target, post-week-1,
+        //      volume-guard ok, doctrine-earned or user-preferred, weekly
+        //      budget allows). Never touches styledGroups, exercise
+        //      selection, sets/reps/rest/RPE, finishers, or cooldowns.
+        //
+        // The reconciler runs AFTER AA3 and validates every claim against
+        // the final executable structure, so AA1R protections remain intact:
+        // an AA3 verdict cannot outrun the body. Fail-soft per session.
+        // ====================================================================
+        try {
+          const { runAA3CoachMaterializationCorridor, buildAA3ProgramRollup } = await import(
+            '@/lib/program/aa3-coach-materialization-corridor'
+          )
+          const aa3Diagnostics: ReturnType<typeof runAA3CoachMaterializationCorridor>['diagnostic'][] = []
+          const aa3WeeklyBudget =
+            (program as unknown as { weeklyMethodBudgetPlan?: unknown }).weeklyMethodBudgetPlan ?? null
+          const aa3CurrentWeek =
+            (program as unknown as { currentWeekNumber?: number }).currentWeekNumber ?? null
+          const aa3Profile =
+            (program as unknown as { profileSnapshot?: unknown }).profileSnapshot ?? null
+          for (let s = 0; s < (program.sessions?.length ?? 0); s++) {
+            const sess = program.sessions[s] as unknown
+            try {
+              const { diagnostic } = runAA3CoachMaterializationCorridor({
+                session: sess as Parameters<typeof runAA3CoachMaterializationCorridor>[0]['session'],
+                profileSnapshot:
+                  aa3Profile as Parameters<typeof runAA3CoachMaterializationCorridor>[0]['profileSnapshot'],
+                weeklyMethodBudgetPlan:
+                  aa3WeeklyBudget as Parameters<typeof runAA3CoachMaterializationCorridor>[0]['weeklyMethodBudgetPlan'],
+                currentWeekNumber: aa3CurrentWeek,
+              })
+              aa3Diagnostics.push(diagnostic)
+            } catch (sessAA3Err) {
+              console.log('[PHASE-AA3-SESSION-FAILED]', {
+                generationIntent: request.generationIntent,
+                triggerSource: request.triggerSource,
+                sessionIndex: s,
+                error: String(sessAA3Err),
+              })
+            }
+          }
+          const aa3Rollup = buildAA3ProgramRollup(aa3Diagnostics)
+          ;(program as unknown as { aa3CoachRollup?: unknown }).aa3CoachRollup = aa3Rollup
+          console.log('[PHASE-AA3-COACH-MATERIALIZATION-ROLLUP]', {
+            generationIntent: request.generationIntent,
+            triggerSource: request.triggerSource,
+            sessionsProcessed: aa3Rollup.sessionsProcessed,
+            sessionsWithAA3Mutation: aa3Rollup.sessionsWithAA3Mutation,
+            volumeGuardTriggeredSessions: aa3Rollup.volumeGuardTriggeredSessions,
+            perMethodApplicationCount: aa3Rollup.perMethodApplicationCount,
+          })
+        } catch (aa3Err) {
+          console.log('[PHASE-AA3-COACH-MATERIALIZATION-FAILED]', {
+            generationIntent: request.generationIntent,
+            triggerSource: request.triggerSource,
+            error: String(aa3Err),
+          })
+        }
+
+        // ====================================================================
         // [PHASE AA1R] FINAL METHOD MATERIALIZATION TRUTH RECONCILIATION
         //
         // Runs AFTER every method/row/structural/numeric corridor has finished

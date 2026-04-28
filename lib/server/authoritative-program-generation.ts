@@ -2946,6 +2946,77 @@ export async function executeAuthoritativeGeneration(
     markStage('phase_q_doctrine_utilization_done')
 
     // ==========================================================================
+    // [PHASE-AA2] DOCTRINE UTILIZATION / READABILITY MAP
+    // Runs AFTER Phase Q on the final program. Pure reader: never mutates
+    // exercises, methods, prescriptions, or any earlier-phase output. Composes
+    // existing artifacts (source-batch counts, materializer registry, Phase Q
+    // trace, AA1 weeklyMethodMaterializationPlan, weeklyMethodBudgetPlan,
+    // profileSnapshot) into ONE AA2-shaped utilization map with the full
+    // ladder (LOADED → QUERIED → MATCHED_CONTEXT → ELIGIBLE → APPLIED →
+    // MATERIALIZED_EXECUTABLE → VISIBLE) plus honest off-ramps (SUPPRESSED,
+    // BLOCKED_BY_UNSUPPORTED_RUNTIME, NOT_ELIGIBLE, NO_TARGET, POST_HOC_ONLY,
+    // PROOF_ONLY, DISCONNECTED). Stamped at `program.aa2DoctrineUtilizationMap`.
+    // Failure here is non-blocking: this try/catch absorbs the error.
+    // ==========================================================================
+    const { runAA2DoctrineUtilizationContract } = await import(
+      '@/lib/program/aa2-doctrine-utilization-map-contract'
+    )
+    const phaseAA2Diagnostic: {
+      attempted: boolean
+      stamped: boolean
+      overallVerdict: string
+      summary: string
+      causalFamilies: number
+      postHocFamilies: number
+      disconnectedFamilies: number
+      runtimeBlockedFamilies: number
+      recommendedAA3Family: string | null
+      recommendedAA3Method: string | null
+      error?: string
+    } = {
+      attempted: false,
+      stamped: false,
+      overallVerdict: 'PHASE_AA2_NOT_ATTEMPTED',
+      summary: '',
+      causalFamilies: 0,
+      postHocFamilies: 0,
+      disconnectedFamilies: 0,
+      runtimeBlockedFamilies: 0,
+      recommendedAA3Family: null,
+      recommendedAA3Method: null,
+    }
+    try {
+      phaseAA2Diagnostic.attempted = true
+      const phaseAA2Result = runAA2DoctrineUtilizationContract(program)
+      program = phaseAA2Result.program as AdaptiveProgram
+      phaseAA2Diagnostic.stamped = true
+      phaseAA2Diagnostic.overallVerdict = phaseAA2Result.map.overallVerdict
+      phaseAA2Diagnostic.summary = phaseAA2Result.map.summary
+      phaseAA2Diagnostic.causalFamilies = phaseAA2Result.map.causality.causalFamilies.length
+      phaseAA2Diagnostic.postHocFamilies = phaseAA2Result.map.causality.postHocFamilies.length
+      phaseAA2Diagnostic.disconnectedFamilies =
+        phaseAA2Result.map.causality.disconnectedFamilies.length
+      phaseAA2Diagnostic.runtimeBlockedFamilies =
+        phaseAA2Result.map.causality.runtimeBlockedFamilies.length
+      phaseAA2Diagnostic.recommendedAA3Family = phaseAA2Result.map.recommendedAA3Target.family
+      phaseAA2Diagnostic.recommendedAA3Method = phaseAA2Result.map.recommendedAA3Target.method
+    } catch (aa2Err) {
+      phaseAA2Diagnostic.error = String(aa2Err)
+      phaseAA2Diagnostic.overallVerdict = 'PHASE_AA2_TRACE_FAILED_NON_BLOCKING'
+      console.log('[phase-aa2-doctrine-utilization-failed]', {
+        generationIntent: request.generationIntent,
+        triggerSource: request.triggerSource,
+        error: String(aa2Err),
+      })
+    }
+    console.log('[phase-aa2-doctrine-utilization-map]', {
+      generationIntent: request.generationIntent,
+      triggerSource: request.triggerSource,
+      ...phaseAA2Diagnostic,
+    })
+    markStage('phase_aa2_doctrine_utilization_done')
+
+    // ==========================================================================
     // STAGE: Success
     // ==========================================================================
     markStage('complete')

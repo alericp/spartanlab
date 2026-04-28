@@ -2433,6 +2433,64 @@ export async function executeAuthoritativeGeneration(
           })
         }
 
+        // ====================================================================
+        // [PHASE AA1R] FINAL METHOD MATERIALIZATION TRUTH RECONCILIATION
+        //
+        // Runs AFTER every method/row/structural/numeric corridor has finished
+        // and BEFORE the authoritative source map. Re-derives each session's
+        // methodMaterializationSummary from the FINAL exercises + styledGroups,
+        // restamps methodDecision.actualMaterialization from that fresh
+        // summary, drops any styledGroups that lost their row binding during
+        // later corridors, and trims styleMetadata.appliedMethods to match.
+        //
+        // This is the single fix for the user-reported bug:
+        //   "Day 3 says Doctrine Materialization: Superset applied — 0
+        //    exercises changed, but the visible body has no real superset."
+        //
+        // Pure / surgical: never re-decides training, never invents methods,
+        // never weakens safety gates. Fail-soft.
+        // ====================================================================
+        try {
+          const { reconcileFinalMethodMaterializationTruth } = await import(
+            '@/lib/program/final-method-truth-reconciler'
+          )
+          const reconciliationRollup = reconcileFinalMethodMaterializationTruth(
+            program as Parameters<typeof reconcileFinalMethodMaterializationTruth>[0],
+          )
+          ;(program as unknown as { finalMethodTruthReconciliation?: unknown }).finalMethodTruthReconciliation =
+            reconciliationRollup
+          console.log('[FINAL-METHOD-TRUTH-RECONCILED]', {
+            generationIntent: request.generationIntent,
+            triggerSource: request.triggerSource,
+            sessionsProcessed: reconciliationRollup.sessionsProcessed,
+            sessionsWithSummaryRestamped: reconciliationRollup.sessionsWithSummaryRestamped,
+            sessionsWithMethodDecisionRefreshed: reconciliationRollup.sessionsWithMethodDecisionRefreshed,
+            sessionsWithAppliedMethodsTrimmed: reconciliationRollup.sessionsWithAppliedMethodsTrimmed,
+            sessionsForcedToFlat: reconciliationRollup.sessionsForcedToFlat,
+            sessionsWithIntegrityFail: reconciliationRollup.sessionsWithIntegrityFail,
+            sessionsWithIntegrityWarn: reconciliationRollup.sessionsWithIntegrityWarn,
+            sessionsWithIntegrityPass: reconciliationRollup.sessionsWithIntegrityPass,
+            totalStaleStyledGroupsDropped: reconciliationRollup.totalStaleStyledGroupsDropped,
+            methodClaimsRemovedBecauseNoFinalStructure:
+              reconciliationRollup.methodClaimsRemovedBecauseNoFinalStructure,
+            perSessionVerdicts: reconciliationRollup.perSession.map(p => ({
+              dayNumber: p.dayNumber,
+              verdict: p.integrityVerdict,
+              mode: p.dominantRenderMode,
+              groupedBlocks: p.groupedBlockCount,
+              groupedRows: p.groupedExerciseRowCount,
+              stale: p.staleStyledGroupCount,
+              orphans: p.orphanedMethods,
+            })),
+          })
+        } catch (reconErr) {
+          console.log('[FINAL-METHOD-TRUTH-RECONCILE-FAILED]', {
+            generationIntent: request.generationIntent,
+            triggerSource: request.triggerSource,
+            error: String(reconErr),
+          })
+        }
+
         // [PHASE 4Q] Run the authoritative program source map ONE TIME after
         // every per-session corridor has finished and every program-level
         // rollup has been stamped. This is what proves, at generation time,

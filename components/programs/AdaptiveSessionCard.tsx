@@ -2892,6 +2892,41 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 return null
               }
 
+              // [PHASE AA1R] Defense-in-depth integrity gate. The doctrine
+              // panel MUST never claim "Superset applied / Circuit applied /
+              // Density Block applied" while the visible body has no rows
+              // bound to a renderable grouped block. The reconciler already
+              // zeroes such claims, but old saved programs (pre-AA1R) can
+              // still reach this code path with a stale summary. Read the
+              // freshly stamped summary's integrity verdict + groupedExerciseRowCount
+              // and refuse to render any grouped label that the row body
+              // cannot prove.
+              const finalSummary = (session as unknown as {
+                styleMetadata?: {
+                  methodMaterializationSummary?: {
+                    summaryIntegrityVerdict?: string
+                    groupedExerciseRowCount?: number
+                  } | null
+                } | null
+              }).styleMetadata?.methodMaterializationSummary ?? null
+              const integrityVerdict = finalSummary?.summaryIntegrityVerdict ?? 'PASS_FINAL_STRUCTURE_CONFIRMED'
+              const groupedRowProof = finalSummary?.groupedExerciseRowCount ?? am.changedExerciseCount
+
+              const claimsGroupedSomething =
+                am.groupedMethodCounts.superset > 0 ||
+                am.groupedMethodCounts.circuit > 0 ||
+                am.groupedMethodCounts.density_block > 0
+
+              // Hard refusal: any grouped claim with insufficient row proof
+              // OR an explicit FAIL verdict from the reconciler.
+              if (
+                integrityVerdict === 'FAIL_METHOD_CLAIM_WITH_ZERO_CHANGED_EXERCISES' ||
+                (claimsGroupedSomething && groupedRowProof < 2) ||
+                (claimsGroupedSomething && am.changedExerciseCount === 0)
+              ) {
+                return null
+              }
+
               const profileSrc = md.profileInfluence?.source ?? 'legacyFallback'
               const profileAware = profileSrc !== 'legacyFallback'
               const isStaleProgram =

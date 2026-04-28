@@ -92,7 +92,7 @@ import {
   type MethodDecisionProfileSnapshotLike,
 } from '@/lib/program/method-decision-engine'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
-import { buildGroupedDisplayModel, getGroupedMethodSemantics, type GroupedDisplayModel, type RenderBlock, type RawFallbackBlock, type GroupedSourceUsed, type GroupedFlatReason, type GroupType } from './lib/session-group-display'
+import { buildGroupedDisplayModel, getGroupedMethodSemantics, minMembersFor, type GroupedDisplayModel, type RenderBlock, type RawFallbackBlock, type GroupedSourceUsed, type GroupedFlatReason, type GroupType } from './lib/session-group-display'
 // [PHASE AB5] Single authoritative grouped execution prescription resolver.
 // Converts a rich DisplayGroup OR a permissive RawFallbackBlock into a
 // complete execution contract that carries rounds, member doses, rest
@@ -5202,6 +5202,52 @@ function MainExercisesRenderer({
           const rawRenderableCount =
             rawPrescription.members.length - rawOrphanIndexSet.size
 
+          // [PHASE AB6 RECOVERY — ZERO-MEMBER GROUP GUARD (raw path)]
+          // Mirrors the rich path. A raw fallback block whose surviving
+          // members are below the method minimum cannot render as a grouped
+          // method (would produce "Superset · 0 exercises" or "Circuit · 1
+          // exercise"). Drop entirely when 0 survivors; degrade to flat row(s)
+          // when 1 survivor of a 2-member group.
+          {
+            const rawMinRequired = minMembersFor(block.groupType)
+            if (rawRenderableCount === 0) {
+              return null
+            }
+            if (rawRenderableCount < rawMinRequired) {
+              return (
+                <div key={block.groupId || `raw-degraded-${bIdx}`} className="space-y-2">
+                  {block.members.map((member, mIdx) => {
+                    if (rawOrphanIndexSet.has(mIdx)) return null
+                    const hydrated =
+                      (member.id ? hydrateMap.get(member.id) : undefined) ||
+                      (member.name ? hydrateMap.get(member.name) : undefined) ||
+                      (member.name ? hydrateMap.get(member.name.toLowerCase()) : undefined) ||
+                      (member.name ? hydrateMap.get(normalizeKey(member.name)) : undefined)
+                    if (!hydrated) return null
+                    rawIdx++
+                    return (
+                      <ExerciseRow
+                        key={hydrated.id}
+                        exercise={hydrated}
+                        index={rawIdx}
+                        prefix={undefined}
+                        sessionId={sessionId}
+                        isSkipped={skippedExercises.has(hydrated.id)}
+                        adjustedName={adjustedExercises.get(hydrated.id)}
+                        sessionContext={sessionContextForRows}
+                        sessionEvidence={sessionEvidence}
+                        coachingExplanation={coachingExplanation}
+                        onReplace={onReplace}
+                        onSkip={onSkip}
+                        onProgressionAdjust={onProgressionAdjust}
+                      />
+                    )
+                  })}
+                </div>
+              )
+            }
+          }
+
           return (
             <div
               key={block.groupId || `raw-${bIdx}`}
@@ -5861,7 +5907,65 @@ function MainExercisesRenderer({
         const renderableMemberCount = groupPrescription
           ? groupPrescription.members.length - orphanIndexSet.size
           : group.exercises.length
-        
+
+        // [PHASE AB6 RECOVERY — ZERO-MEMBER GROUP GUARD]
+        // The previous render path could emit "Superset · paired sets · 0
+        // exercises" when 45/30 compression deferred a superset's members
+        // out of the selected variant body. A grouped block whose surviving
+        // executable member count is below the method's minimum is NOT a
+        // valid grouped method on this card — it must be hidden as a group
+        // and either dropped (zero survivors) or degraded to flat rows
+        // (1 survivor of a 2-member type) so the surviving exercise still
+        // appears in the visible body. This is the final reconciliation
+        // step for the selected variant: group metadata may have survived
+        // upstream pruning, but execution membership did not.
+        if (isSpecialGroup) {
+          const minRequired = minMembersFor(group.groupType)
+          if (renderableMemberCount === 0) {
+            // No surviving executable members. Drop the entire block.
+            return null
+          }
+          if (renderableMemberCount < minRequired) {
+            // 1 survivor of a 2-member group — degrade to flat row(s) so
+            // the exercise is not lost. No group frame, no header, no rounds.
+            return (
+              <div key={group.id || `degraded-${blockIdx}`} className="space-y-2">
+                {group.exercises.map((groupExercise, exIdx) => {
+                  if (orphanIndexSet.has(exIdx)) return null
+                  const renderSurfaceMembers = group.id
+                    ? blockIdToDisplayExercises.get(group.id)
+                    : undefined
+                  const fullExercise =
+                    (renderSurfaceMembers && renderSurfaceMembers[exIdx])
+                    || exerciseDataMap.get(groupExercise.id)
+                    || exerciseDataMap.get(groupExercise.name)
+                    || exerciseDataMap.get(groupExercise.name.toLowerCase())
+                    || exerciseDataMap.get(normalizeExerciseKey(groupExercise.name))
+                  if (!fullExercise) return null
+                  globalExerciseIndex++
+                  return (
+                    <ExerciseRow
+                      key={fullExercise.id}
+                      exercise={fullExercise}
+                      index={globalExerciseIndex}
+                      prefix={undefined}
+                      sessionId={sessionId}
+                      isSkipped={skippedExercises.has(fullExercise.id)}
+                      adjustedName={adjustedExercises.get(fullExercise.id)}
+                      sessionContext={sessionContextForRows}
+                      sessionEvidence={sessionEvidence}
+                      coachingExplanation={coachingExplanation}
+                      onReplace={onReplace}
+                      onSkip={onSkip}
+                      onProgressionAdjust={onProgressionAdjust}
+                    />
+                  )
+                })}
+              </div>
+            )
+          }
+        }
+
         return (
           <div
             key={group.id || `group-${blockIdx}`}

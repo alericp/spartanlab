@@ -2,49 +2,33 @@
  * =============================================================================
  * WeeklyMethodDecisionAccordion.tsx
  * -----------------------------------------------------------------------------
- * AB6 — Top-level "Weekly Method Decisions" accordion.
+ * AB6 RECOVERY — DAY-BY-DAY AI COACH METHOD SUMMARY
  *
- * PURPOSE
- *   Wire the existing `weekly-method-decision-summary.ts` derivation into
- *   the visible Program page. The user previously had to expand every day
- *   card and scroll through scattered method copy to understand which
- *   training methods the AI coach used and which user-preferred methods
- *   were not used; this surface answers that question in ONE compact place,
- *   above the day cards.
+ * The previous version of this accordion only showed week-level counts
+ * ("1 used · 0 preferred not used · 1 engine gap"), which the user could not
+ * trust as a real coaching surface. This rebuild reads the new per-day
+ * derivation (`buildPerWeekMethodCoachSummary`) and renders, inside a single
+ * compact accordion, a Day 1 → Day N coach explanation:
  *
- * DOCTRINE
- *   - Source of truth: `program.weeklyMethodRepresentation` (the Phase 4J
- *     `WeeklyMethodRepresentationContract` set by
- *     `lib/server/authoritative-program-generation.ts`).
- *   - Derivation: `buildWeeklyMethodDecisionSummary` — pure function. We do
- *     NOT re-evaluate methods. We do NOT introduce a second selection engine.
- *   - When the underlying contract is missing (older saved programs), we
- *     render an honest fallback: "regenerate to produce method reasoning"
- *     instead of inventing fake AI explanation.
- *   - Dimensions the engine cannot truly evaluate (recovery, fatigue,
- *     progression-week, joint/tendon caution, dosage recompute, session-
- *     length tradeoff, exercise-compatibility recompute) are surfaced as
- *     "Not yet evaluated by current method decision layer" — never as
- *     "the AI considered it" filler.
- *   - No override mutation here. The AB5 add-on prompt explicitly forbids
- *     building a full override system in this step; we only describe
- *     override eligibility and tradeoff so the future override phase can
- *     read the same shape.
+ *   1. A short "this week's strategy" intro paragraph.
+ *   2. Per-day cards (one card per training day) showing:
+ *        - Day number + label + role
+ *        - Strategy line for the day
+ *        - Methods USED with one-line "why used" reasoning
+ *        - Methods NOT USED with one-line "why not used" reasoning
+ *        - Override readiness + tradeoff per absent method
+ *        - Compact influence chip (applied · blocked · runtime gap)
+ *   3. A small "preferred but not honored this week" footer when relevant.
+ *   4. An honest fallback when the underlying contract is missing.
  *
- * UI BEHAVIOR
- *   - Renders as a single compact `<details>` block, collapsed by default,
- *     to match the visual idiom of `ProgramTrustAccordion` already on this
- *     page. No emojis, no new fonts, no new dependencies, no redesign.
- *   - Header summary always visible: "Methods used: 2  ·  Preferred not
- *     used: 1  ·  Not yet evaluated: 3" so the user gets the gist without
- *     opening it.
- *   - Expanded body renders three honest sections: Used / Preferred but
- *     not used / Engine gaps + not-yet-evaluated dimensions.
- *
- * NOT IMPLEMENTED HERE (deferred — see AB7)
- *   - Override action that mutates the program
- *   - Dosage / frequency / intensity recompute
- *   - Per-day method timeline
+ * STRICT RULES
+ *   - No new methods are decided here. We READ from session truth only.
+ *   - Override action is NOT mutating anything — readiness is informative.
+ *   - When the program is missing the Phase 4J representation, we still try
+ *     to build the per-day summary directly from session method evidence;
+ *     the user gets a real surface even on older saved programs.
+ *   - All copy stays inside the existing dark-theme palette already in use
+ *     elsewhere on the Program page. No emojis, no new fonts, no redesign.
  * =============================================================================
  */
 
@@ -52,26 +36,20 @@
 
 import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import {
-  buildWeeklyMethodDecisionSummary,
-  type WeeklyMethodDecisionSummary,
-  type WeeklyMethodOverrideEligibility,
-  type WeeklyMethodReasonCategory,
-} from '@/lib/program/weekly-method-decision-summary'
-import type {
-  WeeklyMethodId,
-  WeeklyMethodRepresentationContract,
-} from '@/lib/program/weekly-method-representation'
+  buildPerWeekMethodCoachSummary,
+  type DayMethodNotUsedEntry,
+  type DayMethodUsedEntry,
+  type DayOverrideEligibility,
+  type PerDayMethodSummary,
+  type PerWeekMethodCoachSummary,
+} from '@/lib/program/per-day-method-summary'
+import type { WeeklyMethodRepresentationContract } from '@/lib/program/weekly-method-representation'
 
 // =============================================================================
 // PROPS
 // =============================================================================
 
 interface WeeklyMethodDecisionAccordionProps {
-  /**
-   * The full program. We read `program.weeklyMethodRepresentation` off it
-   * defensively — older saved programs may not carry this field, in which
-   * case we render the missing-data fallback rather than crashing.
-   */
   program: AdaptiveProgram | null | undefined
 }
 
@@ -79,13 +57,6 @@ interface WeeklyMethodDecisionAccordionProps {
 // SAFE EXTRACTOR
 // =============================================================================
 
-/**
- * Pull the WeeklyMethodRepresentationContract off the program object without
- * trusting its shape. Returns `null` when the field is missing or fails any
- * of the minimum-shape sanity checks. We do NOT validate every field — the
- * decision-summary derivation is already null-tolerant — we just guard
- * against `null` / `undefined` / wrong-type so the renderer cannot crash.
- */
 function extractRepresentation(
   program: AdaptiveProgram | null | undefined,
 ): WeeklyMethodRepresentationContract | null {
@@ -103,58 +74,22 @@ function extractRepresentation(
 // PRESENTATION HELPERS
 // =============================================================================
 
-/**
- * Human-readable method label. We intentionally do NOT include parenthetical
- * jargon; the user wanted concise coaching language. Falls back to a
- * lowercased + de-snake-cased version when an unknown method id appears.
- */
-const METHOD_LABEL: Record<WeeklyMethodId, string> = {
-  superset: 'Supersets',
-  circuit: 'Circuits',
-  density_block: 'Density blocks',
-  cluster: 'Cluster sets',
-  top_set_backoff: 'Top set + backoff',
-  drop_set: 'Drop sets',
-  rest_pause: 'Rest-pause',
-  endurance_density: 'Endurance / conditioning blocks',
-}
-
-function methodLabel(id: WeeklyMethodId): string {
-  return METHOD_LABEL[id] ?? String(id).replace(/_/g, ' ')
-}
-
-/**
- * Friendly reason-category label. Stays in plain coaching English — no
- * "scaffold", "contract", "rollup", "materializer" jargon for the
- * athlete-facing surface.
- */
-const REASON_CATEGORY_LABEL: Record<WeeklyMethodReasonCategory, string> = {
-  skill_quality_protection: 'Skill quality protection',
-  strength_specificity: 'Strength specificity',
-  goal_priority_mismatch: 'Goal priority mismatch',
-  engine_gap_no_writer: 'Not yet supported by runtime',
-  profile_did_not_request: 'Not selected in your profile',
-  not_yet_evaluated: 'Not yet evaluated by current method decision layer',
-}
-
-const OVERRIDE_LABEL: Record<WeeklyMethodOverrideEligibility, string> = {
-  safe_to_offer_with_tradeoff: 'Override possible (with tradeoff)',
-  unsafe_to_offer: 'Override not recommended right now',
-  engine_gap: 'Override not yet supported',
+const OVERRIDE_LABEL: Record<DayOverrideEligibility, string> = {
+  safe_with_tradeoff: 'Override possible (with tradeoff)',
+  unsafe_skill_protection: 'Override not recommended',
+  unsafe_role_mismatch: 'Override not recommended for this day',
+  engine_gap_no_writer: 'Override not yet supported',
   not_yet_evaluated: 'Override not yet evaluated',
 }
 
-/** Color tag for the override-eligibility chip. We stay inside the existing
- * dark-theme palette already used elsewhere on the Program page (amber for
- * caution, emerald for safe, neutral grey for engine gap / unknown). */
-function overrideChipClasses(elig: WeeklyMethodOverrideEligibility): string {
+function overrideChipClasses(elig: DayOverrideEligibility): string {
   switch (elig) {
-    case 'safe_to_offer_with_tradeoff':
+    case 'safe_with_tradeoff':
       return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-    case 'unsafe_to_offer':
+    case 'unsafe_skill_protection':
+    case 'unsafe_role_mismatch':
       return 'border-amber-500/30 bg-amber-500/10 text-amber-400'
-    case 'engine_gap':
-      return 'border-[#3A3A3A] bg-[#1A1A1A] text-[#8A8A8A]'
+    case 'engine_gap_no_writer':
     case 'not_yet_evaluated':
     default:
       return 'border-[#3A3A3A] bg-[#1A1A1A] text-[#8A8A8A]'
@@ -162,202 +97,178 @@ function overrideChipClasses(elig: WeeklyMethodOverrideEligibility): string {
 }
 
 // =============================================================================
-// SUB-SECTIONS
+// SUB-COMPONENTS
 // =============================================================================
 
-function MethodsUsedSection({
-  summary,
-}: {
-  summary: WeeklyMethodDecisionSummary
-}) {
-  if (summary.methodsUsed.length === 0) {
-    return (
-      <div className="text-[12px] leading-relaxed text-[#8A8A8A]">
-        No method-style structures were materialized this week. The plan
-        used straight sets to protect skill quality and progression
-        clarity.
-      </div>
-    )
-  }
+function DayMethodsUsedRow({ entry }: { entry: DayMethodUsedEntry }) {
   return (
-    <ul className="space-y-1.5">
-      {summary.methodsUsed.map(entry => (
-        <li
-          key={entry.methodId}
-          className="flex items-baseline justify-between gap-3 text-[12px] leading-relaxed text-[#C8C8C8]"
-        >
-          <span className="flex items-baseline gap-2 min-w-0">
-            <span className="font-medium text-[#E6E9EF]">
-              {methodLabel(entry.methodId)}
-            </span>
-            {entry.isUserPreference && (
-              <span className="shrink-0 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-px text-[10px] font-medium text-emerald-400">
-                preferred
-              </span>
-            )}
+    <li className="text-[12px] leading-relaxed text-[#C8C8C8]">
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <span className="font-medium text-[#E6E9EF]">{entry.label}</span>
+        <span className="text-[10px] text-[#8A8A8A]">
+          {entry.count}{' '}
+          {entry.count === 1 ? 'occurrence' : 'occurrences'}
+        </span>
+        {entry.isUserPreference && (
+          <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-px text-[10px] font-medium text-emerald-400">
+            preferred
           </span>
-          <span className="shrink-0 text-[11px] text-[#8A8A8A]">
-            {entry.materializedCount}{' '}
-            {entry.materializedCount === 1 ? 'block' : 'blocks'} this week
-          </span>
-        </li>
-      ))}
-    </ul>
+        )}
+      </div>
+      <div className="text-[11px] leading-relaxed text-[#A4ACB8] mt-0.5">
+        {entry.reason}
+      </div>
+    </li>
   )
 }
 
-function PreferredButNotUsedSection({
-  summary,
-}: {
-  summary: WeeklyMethodDecisionSummary
-}) {
-  if (summary.preferredButNotUsed.length === 0) {
-    return (
-      <div className="text-[12px] leading-relaxed text-[#8A8A8A]">
-        Every method style you preferred was either used, or no method
-        preferences were selected during onboarding.
-      </div>
-    )
-  }
+function DayMethodsNotUsedRow({ entry }: { entry: DayMethodNotUsedEntry }) {
   return (
-    <ul className="space-y-2.5">
-      {summary.preferredButNotUsed.map(entry => (
-        <li
-          key={entry.methodId}
-          className="rounded-md border border-[#2B313A] bg-[#0F1115] p-2.5"
+    <li className="text-[12px] leading-relaxed text-[#A4ACB8]">
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <span className="font-medium text-[#C8C8C8]">{entry.label}</span>
+        {entry.isUserPreference && (
+          <span className="rounded-sm border border-amber-500/30 bg-amber-500/10 px-1.5 py-px text-[10px] font-medium text-amber-400">
+            preferred
+          </span>
+        )}
+        <span
+          className={`rounded-sm border px-1.5 py-px text-[10px] font-medium ${overrideChipClasses(
+            entry.overrideEligibility,
+          )}`}
         >
-          <div className="flex items-baseline justify-between gap-3 mb-1">
-            <span className="text-[12px] font-medium text-[#E6E9EF]">
-              {methodLabel(entry.methodId)}
-            </span>
-            <span
-              className={`shrink-0 rounded-sm border px-1.5 py-px text-[10px] font-medium ${overrideChipClasses(
-                entry.overrideEligibility,
-              )}`}
-            >
-              {OVERRIDE_LABEL[entry.overrideEligibility]}
-            </span>
-          </div>
-          <div className="text-[11px] leading-relaxed text-[#A4ACB8] mb-1">
-            <span className="text-[#8A8A8A]">Why not used:</span>{' '}
-            {REASON_CATEGORY_LABEL[entry.reasonCategory]}
-          </div>
-          {/* Decision-layer reason text passes through verbatim. We never
-              rewrite it — that would risk inventing reasoning. */}
-          {entry.reason && (
-            <div className="text-[11px] leading-relaxed text-[#A4ACB8] mb-1.5">
-              {entry.reason}
-            </div>
+          {OVERRIDE_LABEL[entry.overrideEligibility]}
+        </span>
+      </div>
+      <div className="text-[11px] leading-relaxed text-[#A4ACB8] mt-0.5">
+        {entry.reason}
+      </div>
+      <div className="text-[10px] leading-relaxed text-[#6B7280] mt-0.5">
+        <span className="text-[#8A8A8A]">Tradeoff: </span>
+        {entry.overrideTradeoff}
+      </div>
+    </li>
+  )
+}
+
+function DayCard({ day }: { day: PerDayMethodSummary }) {
+  // Highlight only the most relevant absent methods so the card stays
+  // compact. Priority order: user-preferred not honored, then any methods
+  // explicitly blocked by role/skill protection, then up to 3 others.
+  const sortedNotUsed = [...day.methodsNotUsed].sort((a, b) => {
+    const score = (e: DayMethodNotUsedEntry): number => {
+      if (e.isUserPreference) return 0
+      if (
+        e.reasonCategory === 'role_skill_priority' ||
+        e.reasonCategory === 'role_strength_priority' ||
+        e.reasonCategory === 'role_recovery_or_light' ||
+        e.reasonCategory === 'role_acclimation_week'
+      ) return 1
+      if (e.reasonCategory === 'engine_gap_no_writer') return 2
+      return 3
+    }
+    return score(a) - score(b)
+  })
+  // Cap visible "not used" entries at 5 so a single day never dominates
+  // the accordion. The user can still see all 8 if they need to.
+  const VISIBLE_NOT_USED = 5
+  const visibleNotUsed = sortedNotUsed.slice(0, VISIBLE_NOT_USED)
+  const hiddenNotUsedCount = sortedNotUsed.length - visibleNotUsed.length
+
+  return (
+    <div className="rounded-md border border-[#2B313A] bg-[#0F1115] p-3">
+      {/* Header: day number + role + influence chip */}
+      <div className="flex items-baseline justify-between gap-3 mb-1.5">
+        <div className="flex items-baseline gap-2 flex-wrap min-w-0">
+          <span className="text-[12px] font-semibold text-[#E6E9EF]">
+            Day {day.dayNumber}
+          </span>
+          {day.dayLabel && (
+            <span className="text-[11px] text-[#A4ACB8]">{day.dayLabel}</span>
           )}
-          <div className="text-[11px] leading-relaxed text-[#8A8A8A]">
-            <span className="text-[#6B7280]">Tradeoff if forced:</span>{' '}
-            {entry.overrideTradeoffNote}
+          {day.roleLabel && (
+            <span className="rounded-sm border border-[#3A3A3A] bg-[#1A1A1A] px-1.5 py-px text-[10px] text-[#A4ACB8]">
+              {day.roleLabel}
+            </span>
+          )}
+        </div>
+        <span className="shrink-0 text-[10px] text-[#6B7280]">
+          <span className="text-emerald-400">{day.influence.applied}</span> applied
+          <span className="mx-1 text-[#3A3A3A]">·</span>
+          <span className="text-amber-400">{day.influence.blocked}</span> blocked
+          {day.influence.runtimeGap > 0 && (
+            <>
+              <span className="mx-1 text-[#3A3A3A]">·</span>
+              <span className="text-[#8A8A8A]">{day.influence.runtimeGap}</span> runtime
+              gap
+            </>
+          )}
+        </span>
+      </div>
+
+      {/* Strategy: 1-2 sentence "why this day looks the way it does" */}
+      <p className="text-[11px] leading-relaxed text-[#A4ACB8] mb-2.5">
+        {day.strategy}
+      </p>
+
+      {/* Methods used today */}
+      {day.methodsUsed.length > 0 && (
+        <div className="mb-3">
+          <div className="text-[10px] font-medium uppercase tracking-wide text-[#6B7280] mb-1.5">
+            Used
           </div>
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-function NotYetEvaluatedSection({
-  summary,
-}: {
-  summary: WeeklyMethodDecisionSummary
-}) {
-  // Engine gaps come from real status entries — show those first because
-  // they are concrete (a specific method has no row-level writer yet).
-  const hasEngineGaps = summary.engineGaps.length > 0
-
-  // Honest dimensions the decision layer has no producer for yet. We list
-  // them flat so the user understands these are NOT silently considered.
-  const notYetEvaluatedFlags: Array<{ key: string; label: string }> = []
-  if (summary.notYetEvaluated.recoveryWindowReasoning) {
-    notYetEvaluatedFlags.push({
-      key: 'recovery',
-      label: 'Recovery-window reasoning',
-    })
-  }
-  if (summary.notYetEvaluated.fatigueLoadReasoning) {
-    notYetEvaluatedFlags.push({
-      key: 'fatigue',
-      label: 'Fatigue-load reasoning',
-    })
-  }
-  if (summary.notYetEvaluated.progressionWeekReasoning) {
-    notYetEvaluatedFlags.push({
-      key: 'progression',
-      label: 'Progression-week reasoning',
-    })
-  }
-  if (summary.notYetEvaluated.jointTendonCautionReasoning) {
-    notYetEvaluatedFlags.push({
-      key: 'joint',
-      label: 'Joint / tendon caution reasoning',
-    })
-  }
-  if (summary.notYetEvaluated.sessionLengthTradeoffReasoning) {
-    notYetEvaluatedFlags.push({
-      key: 'session-length',
-      label: 'Session-length tradeoff reasoning',
-    })
-  }
-  if (summary.notYetEvaluated.dosageRecompute) {
-    notYetEvaluatedFlags.push({
-      key: 'dosage',
-      label: 'Override dosage recompute',
-    })
-  }
-  if (summary.notYetEvaluated.exerciseCompatibilityRecompute) {
-    notYetEvaluatedFlags.push({
-      key: 'compat',
-      label: 'Exercise-compatibility recompute',
-    })
-  }
-
-  if (!hasEngineGaps && notYetEvaluatedFlags.length === 0) return null
-
-  return (
-    <div className="space-y-2.5">
-      {hasEngineGaps && (
-        <div>
-          <div className="text-[11px] font-medium text-[#A4ACB8] mb-1.5">
-            Method styles not yet supported in runtime
-          </div>
-          <ul className="space-y-1">
-            {summary.engineGaps.map(gap => (
-              <li
-                key={gap.methodId}
-                className="flex items-baseline gap-2 text-[11px] leading-relaxed text-[#8A8A8A]"
-              >
-                <span className="text-[#A4ACB8]">{methodLabel(gap.methodId)}:</span>
-                <span>{gap.note}</span>
-              </li>
+          <ul className="space-y-1.5">
+            {day.methodsUsed.map(entry => (
+              <DayMethodsUsedRow key={entry.methodId} entry={entry} />
             ))}
           </ul>
         </div>
       )}
-      {notYetEvaluatedFlags.length > 0 && (
+
+      {/* Methods NOT used today (with reasons + override readiness) */}
+      {visibleNotUsed.length > 0 && (
         <div>
-          <div className="text-[11px] font-medium text-[#A4ACB8] mb-1.5">
-            Dimensions not yet evaluated by current method decision layer
+          <div className="text-[10px] font-medium uppercase tracking-wide text-[#6B7280] mb-1.5">
+            Not used
           </div>
-          {/* We render these as a flex-wrapped chip strip rather than a
-              dense paragraph so the user sees at a glance that these are
-              honest gaps, not silent assumptions. */}
-          <div className="flex flex-wrap gap-1.5">
-            {notYetEvaluatedFlags.map(flag => (
-              <span
-                key={flag.key}
-                className="rounded-sm border border-[#3A3A3A] bg-[#1A1A1A] px-1.5 py-0.5 text-[10px] text-[#8A8A8A]"
-              >
-                {flag.label}
-              </span>
+          <ul className="space-y-2">
+            {visibleNotUsed.map(entry => (
+              <DayMethodsNotUsedRow key={entry.methodId} entry={entry} />
             ))}
-          </div>
+          </ul>
+          {hiddenNotUsedCount > 0 && (
+            <div className="text-[10px] text-[#6B7280] mt-1.5">
+              + {hiddenNotUsedCount} more methods absent for similar reasons.
+            </div>
+          )}
         </div>
       )}
     </div>
   )
+}
+
+// =============================================================================
+// HEADER COUNTS
+// =============================================================================
+
+function summaryHeaderCounts(summary: PerWeekMethodCoachSummary): {
+  usedCount: number
+  daysWithMethods: number
+  preferredNotHonoredCount: number
+  runtimeGapCount: number
+} {
+  const runtimeGapMethods = new Set<string>()
+  for (const d of summary.days) {
+    for (const m of d.methodsNotUsed) {
+      if (m.reasonCategory === 'engine_gap_no_writer') runtimeGapMethods.add(m.methodId)
+    }
+  }
+  return {
+    usedCount: summary.totals.methodsUsedAcrossWeek.length,
+    daysWithMethods: summary.totals.daysWithAnyMethod,
+    preferredNotHonoredCount: summary.totals.preferredNeverHonored.length,
+    runtimeGapCount: runtimeGapMethods.size,
+  }
 }
 
 // =============================================================================
@@ -368,13 +279,13 @@ export function WeeklyMethodDecisionAccordion({
   program,
 }: WeeklyMethodDecisionAccordionProps) {
   const representation = extractRepresentation(program)
+  const summary = buildPerWeekMethodCoachSummary({
+    program,
+    representation,
+  })
 
-  // Older saved programs do not carry the Phase 4J representation contract.
-  // We render a graceful, honest fallback rather than fake reasoning.
-  // Crucially: we DO render something so the user knows the surface
-  // exists and just lacks data for this saved program — silently hiding
-  // would leave them looking for it.
-  if (!representation) {
+  // Hard fallback — program is missing or has no sessions.
+  if (!program || !Array.isArray(program.sessions) || program.sessions.length === 0 || !summary) {
     return (
       <details className="group rounded-lg border border-[#2B313A] bg-[#0F1115] mb-3">
         <summary className="flex items-center justify-between gap-3 cursor-pointer select-none px-3 py-2.5 text-[12px] font-medium text-[#E6E9EF]">
@@ -389,24 +300,15 @@ export function WeeklyMethodDecisionAccordion({
         </summary>
         <div className="px-3 pb-3 pt-1 text-[11px] leading-relaxed text-[#A4ACB8]">
           Method reasoning is not available for this saved program yet.
-          Regenerate to produce full method decision reasoning.
+          Regenerate to produce a full day-by-day method explanation.
         </div>
       </details>
     )
   }
 
-  const summary = buildWeeklyMethodDecisionSummary({
-    representation,
-    derivedFromMaterializationRollup: true,
-  })
-
-  if (!summary) return null
-
-  // Header counts. We use these in the always-visible summary line so the
-  // user gets the gist without expanding the accordion.
-  const usedCount = summary.methodsUsed.length
-  const preferredNotUsedCount = summary.preferredButNotUsed.length
-  const engineGapCount = summary.engineGaps.length
+  const { usedCount, daysWithMethods, preferredNotHonoredCount, runtimeGapCount } =
+    summaryHeaderCounts(summary)
+  const totalDays = summary.days.length
 
   return (
     <details className="group rounded-lg border border-[#2B313A] bg-[#0F1115] mb-3">
@@ -415,19 +317,27 @@ export function WeeklyMethodDecisionAccordion({
           <span className="text-[12px] font-medium text-[#E6E9EF]">
             Weekly Method Decisions
           </span>
-          {/* Compact always-visible summary — the user can read the gist
-              without expanding. Each chip stays in the existing palette. */}
           <span className="text-[11px] text-[#A4ACB8]">
-            <span className="text-emerald-400">{usedCount}</span> used
+            <span className="text-emerald-400">{usedCount}</span> method
+            {usedCount === 1 ? '' : 's'} this week
             <span className="mx-1.5 text-[#3A3A3A]">·</span>
-            <span className={preferredNotUsedCount > 0 ? 'text-amber-400' : 'text-[#A4ACB8]'}>
-              {preferredNotUsedCount}
+            <span className="text-[#A4ACB8]">
+              {daysWithMethods}/{totalDays}
             </span>{' '}
-            preferred not used
-            {engineGapCount > 0 && (
+            day{totalDays === 1 ? '' : 's'} with overlays
+            {preferredNotHonoredCount > 0 && (
               <>
                 <span className="mx-1.5 text-[#3A3A3A]">·</span>
-                <span className="text-[#8A8A8A]">{engineGapCount} engine gap{engineGapCount === 1 ? '' : 's'}</span>
+                <span className="text-amber-400">{preferredNotHonoredCount}</span> preferred
+                not used
+              </>
+            )}
+            {runtimeGapCount > 0 && (
+              <>
+                <span className="mx-1.5 text-[#3A3A3A]">·</span>
+                <span className="text-[#8A8A8A]">
+                  {runtimeGapCount} runtime gap{runtimeGapCount === 1 ? '' : 's'}
+                </span>
               </>
             )}
           </span>
@@ -440,36 +350,53 @@ export function WeeklyMethodDecisionAccordion({
         </span>
       </summary>
 
-      <div className="px-3 pb-3 pt-1 space-y-4 border-t border-[#2B313A]/60">
-        {/* Methods used */}
+      <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[#2B313A]/60">
+        {/* This week's strategy intro */}
         <section>
-          <h4 className="text-[11px] font-medium uppercase tracking-wide text-[#6B7280] mb-2">
-            Methods used this week
+          <h4 className="text-[10px] font-medium uppercase tracking-wide text-[#6B7280] mb-1.5">
+            This week&apos;s method strategy
           </h4>
-          <MethodsUsedSection summary={summary} />
+          <p className="text-[12px] leading-relaxed text-[#C8C8C8]">
+            {summary.weekStrategy}
+          </p>
         </section>
 
-        {/* Preferred but not used */}
-        <section>
-          <h4 className="text-[11px] font-medium uppercase tracking-wide text-[#6B7280] mb-2">
-            Methods you prefer that were not used
+        {/* Day-by-day breakdown */}
+        <section className="space-y-2">
+          <h4 className="text-[10px] font-medium uppercase tracking-wide text-[#6B7280]">
+            Day-by-day method reasoning
           </h4>
-          <PreferredButNotUsedSection summary={summary} />
+          <div className="space-y-2">
+            {summary.days.map(day => (
+              <DayCard key={day.dayNumber} day={day} />
+            ))}
+          </div>
         </section>
 
-        {/* Honest gaps */}
-        <section>
-          <NotYetEvaluatedSection summary={summary} />
-        </section>
+        {/* Preferred-but-never-honored footer (week-level) */}
+        {summary.totals.preferredNeverHonored.length > 0 && (
+          <section className="rounded-md border border-amber-500/20 bg-amber-500/5 p-2.5">
+            <div className="text-[11px] font-medium text-amber-400 mb-1">
+              Preferred styles not used this week
+            </div>
+            <p className="text-[11px] leading-relaxed text-[#A4ACB8]">
+              {summary.totals.preferredNeverHonored
+                .map(m => m.replace(/_/g, ' '))
+                .join(', ')}
+              . The per-day breakdown above shows why each day did not earn
+              these styles, and which days have a safe override path with a
+              dosage tradeoff.
+            </p>
+          </section>
+        )}
 
         {/* Coaching footnote — explains the doctrine WITHOUT promising an
             override system that does not yet exist. */}
         <p className="text-[10px] leading-relaxed text-[#6B7280] pt-2 border-t border-[#2B313A]/40">
           The coach recommends the most optimal plan for your current
-          profile, but you still own the program. A safe override path
-          that recomputes dosage and rest is not yet built — when it
-          ships, this surface will offer it where the override is marked
-          possible.
+          profile, but you still own the program. Override-with-dosage-recompute
+          is not yet built — when it ships, the days marked &quot;Override
+          possible&quot; will offer it, with the safer days going first.
         </p>
       </div>
     </details>

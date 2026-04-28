@@ -3878,29 +3878,71 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               selectedDisplayContract.variantData
             )
             if (!truth) return null
+            // [PHASE AB4] Engine-state-driven honesty.
+            //
+            // AB3 used a single `isFallback` boolean, which forced every
+            // non-fallback variant to render "{n} Min recomposed" — even
+            // when the per-variant ledger applied=0. AB4 splits the engine
+            // into four states and the UI must honor each one:
+            //
+            //   doctrine_materialized → "{n} Min materialized" (real causal mutation)
+            //   doctrine_preserved    → "{n} Min preserved"    (no mutation, by doctrine)
+            //   no_safe_mutation      → "{n} Min preserved"    (no mutation, safety)
+            //   fallback_compression  → "Compression-only fallback"
+            //   doctrine_recomposition (legacy) → treat like materialized for old saves
             const isFallback = truth.engine === 'fallback_compression'
+            const isPreserved =
+              truth.engine === 'doctrine_preserved' || truth.engine === 'no_safe_mutation'
+            const isMaterialized =
+              truth.engine === 'doctrine_materialized' ||
+              truth.engine === 'doctrine_recomposition'
+            // Defensive: even if engine claims materialized, if applied=0 we
+            // refuse to use the materialized headline and downgrade to
+            // preserved. This is the AB4 honesty rule: applied=0 cannot ever
+            // display as "recomposed".
+            const appliedCount =
+              truth.ledger.mutated + truth.ledger.visible + truth.ledger.executable
+            const showAsMaterialized = isMaterialized && appliedCount > 0
+            const showAsPreserved = isPreserved || (isMaterialized && appliedCount === 0)
             // Strategy chip label — short, scannable, matches the headline copy
             // produced by the recomposer's `crunchTimeStrategy` field. Stable
             // mapping (no fuzzy text) so QA can grep on it.
             const strategyLabel = (() => {
+              // If the engine forces preserved/no-safe-mutation, the chip
+              // should not lie about a mixed-method strategy when the body
+              // has none materialised.
+              if (showAsPreserved) {
+                return truth.engine === 'no_safe_mutation' ? 'No Safe Mutation' : 'Preserved'
+              }
               switch (truth.crunchTimeStrategy) {
                 case 'preserve_spine': return 'Preserve Spine'
-                case 'density_recompose': return 'Density Recompose'
+                case 'density_recompose': return 'Density'
                 case 'paired_accessory': return 'Paired Accessory'
+                case 'rest_pause_assist': return 'Rest-Pause'
+                case 'cluster_assist': return 'Cluster'
+                case 'superset_assist': return 'Superset'
+                case 'mixed_method': return 'Mixed Method'
                 case 'set_reduction': return 'Set Reduction'
                 case 'rest_reduction': return 'Rest Reduction'
                 case 'rpe_reduction': return 'RPE Reduction'
                 case 'minimal_priority': return 'Minimal Priority'
                 case 'straight_sets_best': return 'Straight Sets'
                 case 'identity_preserve': return 'Identity Preserve'
-                default: return 'Recomposed'
+                case 'doctrine_preserved': return 'Preserved'
+                default: return 'Materialized'
               }
             })()
             const containerBorder = isFallback
               ? 'border-amber-500/40 bg-amber-500/5'
-              : 'border-[#4F6D8A]/40 bg-[#12161C]'
+              : showAsPreserved
+                ? 'border-[#4F6D8A]/30 bg-[#0F1218]'
+                : 'border-[#4F6D8A]/40 bg-[#12161C]'
             const headlineColor = isFallback ? 'text-amber-300' : 'text-[#A5A5A5]'
-            const labelColor = isFallback ? 'text-amber-400/80' : 'text-[#6A8FB0]'
+            const labelColor = isFallback
+              ? 'text-amber-400/80'
+              : showAsPreserved
+                ? 'text-[#6A6A6A]'
+                : 'text-[#6A8FB0]'
             // Cap method-changes / deltas / deferred lists so the card stays
             // compact. Truth object always carries the full data for any
             // downstream surface that wants to render it in detail.
@@ -3922,13 +3964,23 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   <div className="flex items-center gap-2">
                     <Layers className="w-3.5 h-3.5 text-[#6A8FB0]" aria-hidden="true" />
                     <span className={`uppercase tracking-wider text-[10px] font-semibold ${labelColor}`}>
-                      {isFallback ? 'Compression-only fallback' : `${truth.targetMinutes} Min recomposed`}
+                      {isFallback
+                        ? 'Compression-only fallback'
+                        : showAsMaterialized
+                          ? `${truth.targetMinutes} Min materialized`
+                          : truth.engine === 'no_safe_mutation'
+                            ? `${truth.targetMinutes} Min preserved (no safe mutation)`
+                            : `${truth.targetMinutes} Min preserved`}
                     </span>
                   </div>
                   {!isFallback && (
                     <Badge
                       variant="outline"
-                      className="border-[#4F6D8A]/50 text-[#A5A5A5] text-[10px] h-5 px-1.5"
+                      className={`text-[10px] h-5 px-1.5 ${
+                        showAsPreserved
+                          ? 'border-[#3A3A3A] text-[#6A6A6A]'
+                          : 'border-[#4F6D8A]/50 text-[#A5A5A5]'
+                      }`}
                     >
                       {strategyLabel}
                     </Badge>
@@ -3986,8 +4038,38 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                         <span className="text-amber-200/90">{truth.safetyBlocks.join('; ')}</span>
                       </div>
                     )}
+                    {/* [PHASE AB4] Causal mutation records — proof of what
+                        AB4 actually did to the body (set/RPE/rest deltas the
+                        materialiser applied). Distinct from FULL→variant
+                        deltas above, which are seed-vs-Full. We render
+                        compactly and only when the engine produced honest
+                        records. */}
+                    {Array.isArray(truth.mutationRecords) && truth.mutationRecords.length > 0 && (() => {
+                      const causal = truth.mutationRecords.filter(
+                        m => m.type === 'set_delta' || m.type === 'rpe_delta' || m.type === 'rest_delta'
+                      )
+                      if (causal.length === 0) return null
+                      return (
+                        <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                          <span className="text-[#6A8FB0] text-[10px] uppercase tracking-wider">Mutator:</span>
+                          <span className="text-[#A5A5A5]">
+                            {causal.slice(0, 3).map(m => {
+                              const name = m.exerciseNames[0] ?? 'row'
+                              const verb =
+                                m.type === 'set_delta'
+                                  ? 'sets'
+                                  : m.type === 'rpe_delta'
+                                    ? 'RPE'
+                                    : 'rest'
+                              return `${name}: ${verb} ${m.before} → ${m.after}`
+                            }).join('; ')}
+                            {causal.length > 3 ? ` +${causal.length - 3} more` : ''}
+                          </span>
+                        </div>
+                      )
+                    })()}
                     <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] font-mono text-[#7FA8CC]">
-                      <span>applied={truth.ledger.mutated + truth.ledger.visible + truth.ledger.executable}</span>
+                      <span>applied={appliedCount}</span>
                       <span>mut={truth.ledger.mutated}</span>
                       <span>vis={truth.ledger.visible}</span>
                       <span>exec={truth.ledger.executable}</span>
@@ -3995,7 +4077,19 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                       <span>sup={truth.ledger.suppressed}</span>
                       <span>nt={truth.ledger.no_target}</span>
                       <span>aud={truth.ledger.audit_only}</span>
+                      <span>state={truth.materializationState ?? 'unknown'}</span>
                     </div>
+                    {/* [PHASE AB4] Honest preserved/no-safe-mutation note.
+                        When applied=0 we MUST tell the user this body was
+                        intentionally preserved — never let "{n} Min
+                        recomposed" appear with applied=0. */}
+                    {showAsPreserved && (
+                      <p className="mt-1 text-[10px] text-[#6A6A6A]">
+                        {truth.engine === 'no_safe_mutation'
+                          ? 'Doctrine evaluated this body and found no safe causal mutation. Every row is either a protected anchor or already fatigue-managed; the compression seed was kept intact to protect quality.'
+                          : 'Doctrine evaluated this body and intentionally preserved the compression seed. No additional set / RPE / rest mutation crossed the safety threshold for this variant.'}
+                      </p>
+                    )}
                   </div>
                 )}
                 {isFallback && (

@@ -64,11 +64,39 @@ import type { SessionVariant } from '@/lib/session-compression-engine'
 // ----------------------------------------------------------------------------
 
 /**
- * Engine identity. Distinguishes "doctrine actually scored this variant" from
- * "we only had compression output and could not score." AB3 forbids labelling
- * fallback compression as doctrine recomposition in user-visible surfaces.
+ * Engine identity. Distinguishes "doctrine actually scored AND materially
+ * mutated this variant" from "doctrine evaluated and chose to preserve" from
+ * "we only had compression output and could not score."
+ *
+ *   - doctrine_materialized  : AB4 mutator applied at least one causal body
+ *                              mutation (set / RPE / rest delta) AND/OR the
+ *                              analyser found a real body-level delta
+ *                              relative to Full. UI may label as
+ *                              "{n} Min materialized" / "recomposed".
+ *   - doctrine_preserved     : AB4 mutator ran, found eligible candidates,
+ *                              and INTENTIONALLY chose not to mutate (every
+ *                              candidate was already at threshold). The body
+ *                              equals the compression seed by doctrine
+ *                              decision, not by accident. UI MUST NOT label
+ *                              this as "recomposed".
+ *   - no_safe_mutation       : AB4 mutator ran but every row was either a
+ *                              protected anchor or already fatigue-managed.
+ *                              No mutation was safe to apply. UI MUST NOT
+ *                              label this as "recomposed".
+ *   - fallback_compression   : analyser could not run (missing context,
+ *                              malformed inputs). UI MUST NOT label this as
+ *                              "recomposed" / "materialized".
+ *
+ * AB3-era `doctrine_recomposition` is preserved as a deprecated alias so any
+ * persisted programs serialised with the older value continue to render.
+ * New code paths should emit `doctrine_materialized` / `doctrine_preserved`.
  */
-export type RecompositionEngine = 'doctrine_recomposition' | 'fallback_compression'
+export type RecompositionEngine =
+  | 'doctrine_materialized'
+  | 'doctrine_preserved'
+  | 'no_safe_mutation'
+  | 'fallback_compression'
+  | 'doctrine_recomposition' // [DEPRECATED] kept for backwards-compat decode
 
 /**
  * Crunch-time strategy that best describes what doctrine decided about this
@@ -106,6 +134,21 @@ export type CrunchTimeStrategy =
   | 'minimal_priority'
   | 'straight_sets_best'
   | 'identity_preserve'
+  // [PHASE AB4] Mixed-method headlines. When the body contains a
+  // non-straight method (rest-pause / cluster / superset / density /
+  // circuit) AND another axis of mutation exists (set / RPE / rest delta),
+  // the headline must reflect the mixed composition rather than collapsing
+  // to "Straight Sets". Each label is precise and matches the executable
+  // method actually present on at least one row.
+  | 'rest_pause_assist'
+  | 'cluster_assist'
+  | 'superset_assist'
+  | 'mixed_method'
+  // [PHASE AB4] Honest "did not recompose" headline when the mutator chose
+  // to preserve the compression seed by doctrine decision. Distinct from
+  // `identity_preserve` (analyser-side cosmetic) — `doctrine_preserved`
+  // tells the UI to render "preserved" instead of "recomposed".
+  | 'doctrine_preserved'
 
 /**
  * Per-method state inside the recomposition truth. AB1 ledger semantics —
@@ -208,9 +251,43 @@ export interface RecompositionTruth {
   /** AB1-compatible per-variant rule ledger. */
   ledger: RecompositionLedger
   /**
+   * [PHASE AB4] Causal materialization state from the upstream materialiser.
+   * Distinct from `engine` because the analyser can find body deltas (e.g.
+   * rows differ from Full) even when AB4 itself didn't mutate — and AB4
+   * can mutate even when row identity vs Full looks similar. UI consumers
+   * key off this AND `engine` to render the honest headline.
+   */
+  materializationState:
+    | 'materialized'
+    | 'preserved'
+    | 'no_safe_mutation'
+    | 'fallback'
+    | 'unknown'
+  /**
+   * [PHASE AB4] Records of every causal mutation the materialiser applied
+   * (or refused to apply) on this variant body. Distinct from the analyser-
+   * derived `setDeltas` / `rpeDeltas` / `restDeltas`, which are FULL-vs-
+   * variant deltas — these are seed-vs-mutated deltas, i.e. proof of what
+   * AB4 actually did to the body.
+   */
+  mutationRecords: Array<{
+    type:
+      | 'set_delta'
+      | 'rpe_delta'
+      | 'rest_delta'
+      | 'method_preserved'
+      | 'method_blocked'
+      | 'no_safe_mutation_available'
+    exerciseNames: string[]
+    before?: string | number
+    after?: string | number
+    reason: string
+    safetyReason?: string
+  }>
+  /**
    * Short concise sentence the Program UI can render verbatim, e.g.
-   * "30 Min recomposed: preserved Planche Lean spine, deferred 2 accessories,
-   * trimmed 4 sets."
+   * "30 Min materialized: preserved Planche Lean spine, deferred 2 accessories,
+   * trimmed 4 sets." or "30 Min preserved: compression seed already optimal."
    */
   visibleSummary: string
   /**
@@ -264,6 +341,31 @@ export interface RecomposeSessionVariantsInput {
    * skill enum.
    */
   primarySkillExpressions?: string[]
+  /**
+   * [PHASE AB4] Per-short-variant materialization output. Indexed in the
+   * same order as `shortVariants`. Present when AB4 ran upstream of this
+   * recompose pass; absent when only AB3 analysis is available. The
+   * recomposer reads this to honestly stamp `materializationState`,
+   * `mutationRecords`, and the engine label.
+   */
+  materializations?: Array<{
+    materializationState: 'materialized' | 'preserved' | 'no_safe_mutation' | 'fallback'
+    mutationRecords: Array<{
+      type:
+        | 'set_delta'
+        | 'rpe_delta'
+        | 'rest_delta'
+        | 'method_preserved'
+        | 'method_blocked'
+        | 'no_safe_mutation_available'
+      exerciseNames: string[]
+      before?: string | number
+      after?: string | number
+      reason: string
+      safetyReason?: string
+    }>
+    mutatedRowCount: number
+  }>
 }
 
 // ----------------------------------------------------------------------------
@@ -425,10 +527,35 @@ function classifyCrunchTimeStrategy(input: StrategyInput): CrunchTimeStrategy {
     sameCount &&
     fullRows.every((r, i) => r.id === (variantRows[i]?.id ?? '__missing__'))
 
-  // Method-carried strategies first — they describe the dominant doctrine
-  // signal even when there is also a set/rest delta.
+  // [PHASE AB4] Method-truth headline rules.
+  //
+  // The AB3 classifier had three bugs:
+  //   1. Cluster / rest-pause that survived would fall through to
+  //      `straight_sets_best`, producing a "Straight Sets" headline while
+  //      a REST-PAUSE row was visibly present in the body. AB4 forbids
+  //      that.
+  //   2. The "method-carried" branch only checked density / superset and
+  //      ignored cluster / rest-pause entirely.
+  //   3. When MULTIPLE non-straight methods coexisted, the headline only
+  //      reported one of them, hiding the mixed composition.
+  //
+  // Correct headline rule: if any non-straight method actually appears on
+  // a row in the variant body, the headline must acknowledge it. The
+  // strategy is selected by precedence (density > paired accessory > rest-
+  // pause > cluster > set/rest/rpe deltas > preserve-spine > etc.) but
+  // when 2+ non-straight methods coexist, we collapse to `mixed_method`
+  // so the UI doesn't lie by omission.
+  const nonStraightMethodCount =
+    (hasCarriedDensity ? 1 : 0) +
+    (hasCarriedSuperset ? 1 : 0) +
+    (hasCarriedCluster ? 1 : 0) +
+    (hasCarriedRestPause ? 1 : 0)
+
+  if (nonStraightMethodCount >= 2) return 'mixed_method'
   if (hasCarriedDensity) return 'density_recompose'
   if (hasCarriedSuperset) return 'paired_accessory'
+  if (hasCarriedRestPause) return 'rest_pause_assist'
+  if (hasCarriedCluster) return 'cluster_assist'
 
   // Same body, different prescription → prescription-axis strategies
   if (sameOrderedIdentity) {
@@ -454,14 +581,10 @@ function classifyCrunchTimeStrategy(input: StrategyInput): CrunchTimeStrategy {
   // Variant collapsed to one priority row only
   if (variantHasOnlyOnePriorityRow && variantCount <= 3) return 'minimal_priority'
 
-  // Cluster / rest-pause carried but no superset/density — single-method
-  // efficiency. Treat as straight-sets-best since the body is otherwise
-  // straight sets with one row-level method intervention.
-  if (hasCarriedCluster || hasCarriedRestPause) return 'straight_sets_best'
-
   // Default — variant is materially distinct, body shrunk, no method carry,
-  // anchors mostly preserved (else preserveSpine fired). Doctrine evaluated
-  // and concluded straight sets best for the time cap.
+  // anchors mostly preserved (else preserveSpine fired). Honest "straight
+  // sets best for the time cap" verdict — AND we already returned for
+  // every non-straight method above, so this label is now truthful.
   return 'straight_sets_best'
 }
 
@@ -539,7 +662,12 @@ function analyseVariant(
   fullRows: RowReadout[],
   variant: SessionVariant,
   primarySkillExpressions: string[],
-  appliedMethodsThisSession: string[]
+  appliedMethodsThisSession: string[],
+  materialization?: {
+    materializationState: 'materialized' | 'preserved' | 'no_safe_mutation' | 'fallback'
+    mutationRecords: RecompositionTruth['mutationRecords']
+    mutatedRowCount: number
+  }
 ): RecompositionTruth {
   const variantRows = readSelection(variant.selection, primarySkillExpressions)
 
@@ -713,10 +841,73 @@ function analyseVariant(
   }
 
   // ---------------------------------------------------------------------
+  // [PHASE AB4] Honest engine + state resolution.
+  //
+  // The engine label answers ONE question: "did doctrine causally do
+  // anything to this variant body that the UI may surface as
+  // 'recomposed' / 'materialized'?". The answer must agree with the
+  // ledger and the materialization records.
+  //
+  // Rules:
+  //   - applied = mutated + visible + executable (AB1 semantics).
+  //   - If `materializationState === 'fallback'` → engine = fallback_compression.
+  //   - Else if AB4 mutated rows OR analyser found body deltas
+  //     (applied > 0) → engine = doctrine_materialized.
+  //   - Else if AB4 ran and reported `no_safe_mutation` → engine = no_safe_mutation.
+  //   - Else AB4 ran and intentionally preserved → engine = doctrine_preserved.
+  //
+  // The Program UI keys off this field to render "{label} materialized" /
+  // "{label} preserved" / "{label} compression-only fallback" — never
+  // "{label} recomposed" when applied=0.
+  // ---------------------------------------------------------------------
+  const appliedCount = ledger.mutated + ledger.visible + ledger.executable
+  const matState = materialization?.materializationState ?? 'unknown'
+
+  let engine: RecompositionEngine
+  let materializationStateOut: RecompositionTruth['materializationState']
+  let recompositionApplied: boolean
+  if (matState === 'fallback') {
+    engine = 'fallback_compression'
+    materializationStateOut = 'fallback'
+    recompositionApplied = false
+  } else if (appliedCount > 0 || (materialization?.mutatedRowCount ?? 0) > 0) {
+    engine = 'doctrine_materialized'
+    materializationStateOut = matState === 'unknown' ? 'materialized' : matState
+    recompositionApplied = true
+  } else if (matState === 'no_safe_mutation') {
+    engine = 'no_safe_mutation'
+    materializationStateOut = 'no_safe_mutation'
+    recompositionApplied = false
+  } else if (matState === 'preserved') {
+    engine = 'doctrine_preserved'
+    materializationStateOut = 'preserved'
+    recompositionApplied = false
+  } else {
+    // No materialization data, no body deltas — analyser ran but couldn't
+    // honestly claim recomposition. Treat as preserved.
+    engine = 'doctrine_preserved'
+    materializationStateOut = 'preserved'
+    recompositionApplied = false
+  }
+
+  // If engine forces "preserved" but the strategy classifier picked
+  // anything other than identity/preserve, override the strategy to
+  // `doctrine_preserved` so the headline label is consistent.
+  const finalCrunchTimeStrategy: CrunchTimeStrategy =
+    !recompositionApplied && engine !== 'fallback_compression'
+      ? 'doctrine_preserved'
+      : crunchTimeStrategy
+
+  // ---------------------------------------------------------------------
   // Visible summary — short concise sentence the card can render directly.
+  // [PHASE AB4] Headline verb is now state-driven:
+  //   materialized → "{label} materialized: ..."
+  //   preserved    → "{label} preserved: ..."
+  //   no_safe...   → "{label} preserved: no safe mutation available, ..."
+  //   fallback     → handled by makeFallbackTruth
   // ---------------------------------------------------------------------
   const summaryParts: string[] = []
-  switch (crunchTimeStrategy) {
+  switch (finalCrunchTimeStrategy) {
     case 'preserve_spine':
       summaryParts.push(
         preservedPriorityAnchors.length > 0
@@ -729,6 +920,18 @@ function analyseVariant(
       break
     case 'density_recompose':
       summaryParts.push('Density recompose')
+      break
+    case 'rest_pause_assist':
+      summaryParts.push('Rest-pause assist on accessory row')
+      break
+    case 'cluster_assist':
+      summaryParts.push('Cluster assist on accessory row')
+      break
+    case 'superset_assist':
+      summaryParts.push('Superset assist on accessory pair')
+      break
+    case 'mixed_method':
+      summaryParts.push('Mixed method composition')
       break
     case 'set_reduction':
       summaryParts.push(`Reduced ${setDeltas.length} prescription${setDeltas.length === 1 ? '' : 's'}`)
@@ -748,13 +951,20 @@ function analyseVariant(
     case 'identity_preserve':
       summaryParts.push('Compression already optimal')
       break
+    case 'doctrine_preserved':
+      summaryParts.push(
+        engine === 'no_safe_mutation'
+          ? 'No safe mutation available — protected anchors and fatigue-managed rows'
+          : 'Compression seed already optimal — no safe additional mutation'
+      )
+      break
   }
   if (deferredExercises.length > 0) {
     summaryParts.push(
       `deferred ${deferredExercises.length} ${deferredExercises.length === 1 ? 'exercise' : 'exercises'}`
     )
   }
-  if (setDeltas.length > 0 && crunchTimeStrategy !== 'set_reduction') {
+  if (setDeltas.length > 0 && finalCrunchTimeStrategy !== 'set_reduction') {
     const totalSetsTrimmed = setDeltas.reduce((acc, s) => {
       const m = s.match(/(\d+)\s*→\s*(\d+)/)
       if (!m) return acc
@@ -765,14 +975,17 @@ function analyseVariant(
     if (totalSetsTrimmed > 0) summaryParts.push(`trimmed ${totalSetsTrimmed} sets`)
   }
 
-  const visibleSummary = `${variant.label} recomposed: ${summaryParts.join(', ')}.`
+  const headlineVerb = recompositionApplied
+    ? 'materialized'
+    : 'preserved'
+  const visibleSummary = `${variant.label} ${headlineVerb}: ${summaryParts.join(', ')}.`
 
   return {
     targetMinutes: variant.duration,
-    engine: 'doctrine_recomposition',
+    engine,
     estimatedMinutes: variant.duration,
-    crunchTimeStrategy,
-    recompositionApplied: true,
+    crunchTimeStrategy: finalCrunchTimeStrategy,
+    recompositionApplied,
     preservedPriorityAnchors,
     changedExercises,
     deferredExercises,
@@ -782,6 +995,8 @@ function analyseVariant(
     methodChanges,
     safetyBlocks,
     ledger,
+    materializationState: materializationStateOut,
+    mutationRecords: materialization?.mutationRecords ?? [],
     visibleSummary,
     executableParityExpected: true,
   }
@@ -801,6 +1016,11 @@ export function recomposeSessionForDuration(
     primarySkillExpressions?: string[]
     sessionExercisesPostMaterialization?: RecomposeSessionVariantsInput['sessionExercisesPostMaterialization']
     appliedMethodsThisSession?: string[]
+    materialization?: {
+      materializationState: 'materialized' | 'preserved' | 'no_safe_mutation' | 'fallback'
+      mutationRecords: RecompositionTruth['mutationRecords']
+      mutatedRowCount: number
+    }
   } = {}
 ): RecompositionTruth {
   try {
@@ -812,7 +1032,8 @@ export function recomposeSessionForDuration(
       fullRows,
       shortVariant,
       options.primarySkillExpressions ?? [],
-      options.appliedMethodsThisSession ?? []
+      options.appliedMethodsThisSession ?? [],
+      options.materialization
     )
   } catch (err) {
     if (typeof console !== 'undefined' && console.warn) {
@@ -839,13 +1060,15 @@ export function recomposeSessionVariants(
     sessionExercisesPostMaterialization,
     appliedMethodsThisSession,
     primarySkillExpressions,
+    materializations,
   } = input
 
-  return shortVariants.map(sv =>
+  return shortVariants.map((sv, idx) =>
     recomposeSessionForDuration(fullVariant, sv, {
       primarySkillExpressions,
       sessionExercisesPostMaterialization,
       appliedMethodsThisSession,
+      materialization: materializations?.[idx],
     })
   )
 }
@@ -883,6 +1106,8 @@ function makeFallbackTruth(shortVariant: SessionVariant): RecompositionTruth {
       no_target: 0,
       audit_only: 0,
     },
+    materializationState: 'fallback',
+    mutationRecords: [],
     visibleSummary: `${shortVariant?.label ?? 'Short'} session: compression-only fallback (no doctrine recomposition available).`,
     executableParityExpected: true,
   }

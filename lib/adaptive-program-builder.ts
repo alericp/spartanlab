@@ -21604,6 +21604,111 @@ return explanations.length > 0 ? explanations : undefined
         phase4iMaterialization
       phase4iFlexibilityMaterialization = phase4iMaterialization
 
+      // ==============================================================
+      // [PHASE-AA4] TRUTH-TO-UI BRIDGE
+      // ==============================================================
+      // The materializer above produces an authoritative
+      // `program.cooldownFlexibilityMaterialization` audit object. Prior
+      // to AA4 the materializer comment stated "Does NOT mutate
+      // session.cooldown" so flexibility goals could be classified as
+      // CONNECTED_AND_MATERIAL while never appearing in the actual
+      // Program UI cool-down block or Start Workout session — i.e.
+      // audit-only materialization, exactly the user-reported gap.
+      //
+      // AA4 closes that gap by injecting one synthesized AdaptiveExercise
+      // per emitted block into the matching session's `cooldown` array.
+      // - Both AdaptiveSessionCard (line ~4503) and StreamlinedWorkoutSession
+      //   (line ~1981) read `session.cooldown` directly, so this single
+      //   bridge gives Program UI + Start Workout parity automatically.
+      // - The materializer's own caps already protect against bloat
+      //   (≤3 sessions/week × ≤2 blocks/session, only direct flexibility
+      //   goals with cooldownAllowed=true).
+      // - The audit object is preserved unchanged so the matrix and
+      //   any downstream readers can still cross-reference goals,
+      //   reasons, unmatched/skipped lists, and provenance.
+      // - Bridge only fires when verdict is CONNECTED_AND_MATERIAL,
+      //   so audit-only verdicts (NOT_RELEVANT_TO_CURRENT_PROFILE,
+      //   NO_GOALS_RECOGNIZED, BLOCKED_NO_ELIGIBLE_SESSIONS) leave
+      //   `session.cooldown` untouched.
+      let phase4iBlocksInjected = 0
+      let phase4iSessionsInjected = 0
+      try {
+        if (
+          phase4iMaterialization.verdict === 'CONNECTED_AND_MATERIAL' &&
+          phase4iMaterialization.materializedSessions.length > 0
+        ) {
+          // Re-walk weeks/days in the same order used to build
+          // sessionMetadataPhase4i so flat indices match exactly.
+          type FpDayMutable = { cooldown?: unknown[] }
+          type FpWeekMutable = { days?: FpDayMutable[] }
+          const fpWeeksMutable = (
+            (finalProgram as unknown as { weeks?: FpWeekMutable[] }).weeks ?? []
+          ) as FpWeekMutable[]
+          const flatSessions: FpDayMutable[] = []
+          for (const w of fpWeeksMutable) {
+            const days = Array.isArray(w?.days) ? w.days : []
+            for (const d of days) flatSessions.push(d)
+          }
+
+          for (const matSession of phase4iMaterialization.materializedSessions) {
+            if (!matSession || matSession.blocks.length === 0) continue
+            const target = flatSessions[matSession.sessionIndex]
+            if (!target || typeof target !== 'object') continue
+            if (!Array.isArray(target.cooldown)) target.cooldown = []
+            const targetCooldown = target.cooldown as Array<Record<string, unknown>>
+
+            // Dedupe defensively: if a prior pass already injected this
+            // blockId (e.g. regeneration on the same in-memory object),
+            // skip rather than duplicate.
+            const existingIds = new Set(
+              targetCooldown
+                .map(x => (x && typeof x === 'object' ? (x as { id?: unknown }).id : null))
+                .filter((x): x is string => typeof x === 'string')
+            )
+
+            let injectedThisSession = 0
+            for (const block of matSession.blocks) {
+              if (!block || existingIds.has(block.blockId)) continue
+              // Synthesize an AdaptiveExercise that the existing
+              // cooldown row contract can render. Cooldown rows in
+              // ExerciseRow already display name + repsOrTime +
+              // selectionReason, with no main-row affordances.
+              const synthesized = {
+                id: block.blockId,
+                name: block.displayName,
+                category: 'cooldown',
+                sets: 1,
+                repsOrTime: block.prescription,
+                isOverrideable: false,
+                selectionReason: block.userGuidance,
+                source: 'database' as const,
+                // [PHASE-AA4] Provenance markers so future readers can
+                // distinguish flexibility-injected blocks from generic
+                // cooldown exercises. The materialization audit object
+                // remains the canonical source of truth for goals,
+                // unmatched/skipped reasons, and source rule ids.
+                phase4iFlexibilityBlock: true,
+                phase4iGoalKey: block.goalKey,
+                phase4iSourceRuleIds: block.sourceRuleIds,
+                phase4iPreferredMethods: block.preferredMethods,
+              } as unknown as Record<string, unknown>
+              targetCooldown.push(synthesized)
+              existingIds.add(block.blockId)
+              injectedThisSession += 1
+              phase4iBlocksInjected += 1
+            }
+            if (injectedThisSession > 0) phase4iSessionsInjected += 1
+          }
+        }
+      } catch (bridgeErr) {
+        // Bridge is non-blocking: a failure here cannot regress the
+        // program. The materialization audit object is already stamped
+        // above, so the matrix/audit surfaces remain accurate.
+        console.log('[PHASE-AA4-COOLDOWN-FLEX-BRIDGE-FAILED]', {
+          error: String(bridgeErr),
+        })
+      }
+
       console.log('[PHASE4I-FLEXIBILITY-COOLDOWN-MATERIALIZER]', {
         verdict: phase4iMaterialization.verdict,
         athleteFlexibilityGoalsCount: phase4iMaterialization.athleteFlexibilityGoals.length,
@@ -21613,6 +21718,10 @@ return explanations.length > 0 ? explanations : undefined
         sessionsConsidered: phase4iMaterialization.totals.sessionsConsidered,
         sessionsMaterialized: phase4iMaterialization.totals.sessionsMaterialized,
         blocksEmitted: phase4iMaterialization.totals.blocksEmitted,
+        // [PHASE-AA4] Bridge-injection telemetry: proves emitted blocks
+        // actually became visible session content rather than audit-only.
+        bridgeBlocksInjected: phase4iBlocksInjected,
+        bridgeSessionsInjected: phase4iSessionsInjected,
       })
     } catch (err) {
       console.log('[PHASE4I-FLEXIBILITY-COOLDOWN-MATERIALIZER-FAILED]', {

@@ -73,6 +73,7 @@ import {
 } from '@/components/programs/MaterializationStatusLine'
 import { DoctrineCausalityLedgerLine } from '@/components/programs/DoctrineCausalityLedgerLine'
 import { DoctrineExecutionLine } from '@/components/programs/DoctrineExecutionLine'
+import { DoctrineInfluenceMap } from '@/components/programs/DoctrineInfluenceMap'
 
 interface Props {
   program: AdaptiveProgram | null
@@ -325,6 +326,15 @@ export function ProgramTrustAccordion({ program }: Props) {
             program.doctrineExecutionMatrix is missing.
           */}
           <DoctrineExecutionLine program={program} />
+          {/*
+            [PHASE Z2 OF 2] Doctrine Influence Map — compact owner/dev proof
+            surface that consolidates the 10 doctrine batches + per-domain
+            coverage + RPE / density / method / skill diagnostics + similarity
+            diagnosis. Lives behind the same "View full AI evidence"
+            disclosure so the main Program page stays clean. Fail-closed when
+            the program lacks runtime contract / Phase W ledger artifacts.
+          */}
+          <DoctrineInfluenceMap program={program} />
         </div>
       </details>
     </div>

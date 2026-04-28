@@ -21691,6 +21691,68 @@ return explanations.length > 0 ? explanations : undefined
     })
 
     // -------------------------------------------------------------------
+    // [PHASE Y2 OF 3] TRAINING DIFFERENTIATION + DOCTRINE INFLUENCE CALIBRATION
+    // -------------------------------------------------------------------
+    // Calibrates the existing decision layers so the doctrine bundles
+    // already firing in Y1 produce more visible, training-real differences
+    // across the 6-session week WITHOUT introducing a new generator path.
+    //
+    // Runs AFTER all builder mutations (composition, method materialization,
+    // prescription shaping, weekly stress governor) and BEFORE the Y1
+    // matrix is built so the matrix naturally reflects Y2's calibrations.
+    //
+    //  - Lifts RPE on heavier-role rows from default fallback toward the
+    //    role's intended floor, never on tendon-sensitive / skill / method-
+    //    owned / grouped rows, never above the role's `rpeCap`.
+    //  - Materializes density (literal time cap + tightened rest) on
+    //    density_block styledGroups when the week and role allow, or
+    //    honestly demotes the wording to "capacity-supportive pairing".
+    //  - Mitigates HIGH-overlap supersets (rest extension + RPE cap) and
+    //    demotes Skin-the-Cat + C2B Pull-Up to straight sets when sets,
+    //    RPE, or day-load make it unsafe.
+    //  - Stamps `program.trainingDifferentiationCalibration` so proof
+    //    surfaces (Phase Y1 matrix, trust accordion) can read concrete
+    //    Y2 mutation evidence.
+    //
+    // Defensive — failures never break generation.
+    try {
+      const { applyTrainingDifferentiationCalibration } = await import(
+        './program/training-differentiation-calibrator'
+      )
+      const phaseY2Calibration = applyTrainingDifferentiationCalibration({
+        sessions: finalProgram.sessions || [],
+        protectedWeek: !!weeklySessionRoleContract.protectedWeek,
+        protectionReason: weeklySessionRoleContract.protectionReason,
+      })
+      ;(finalProgram as unknown as { trainingDifferentiationCalibration?: unknown }).trainingDifferentiationCalibration =
+        phaseY2Calibration
+      console.log('[PHASE-Y2-TRAINING-DIFFERENTIATION-CALIBRATION]', {
+        verdict: phaseY2Calibration.verdict,
+        protectedWeek: phaseY2Calibration.protectedWeek,
+        protectionReason: phaseY2Calibration.protectionReason,
+        rpeRowsLifted: phaseY2Calibration.totals.rpeRowsLifted,
+        rpeRowsHeld: phaseY2Calibration.totals.rpeRowsHeld,
+        densityBlocksMaterialized: phaseY2Calibration.totals.densityBlocksMaterialized,
+        densityBlocksHonestlyDemoted: phaseY2Calibration.totals.densityBlocksHonestlyDemoted,
+        pairingsMitigated: phaseY2Calibration.totals.pairingsMitigated,
+        pairingsDemotedToStraight: phaseY2Calibration.totals.pairingsDemotedToStraight,
+        skinTheCatPlusC2BHandled: phaseY2Calibration.totals.skinTheCatPlusC2BHandled,
+        weeklyRoles: phaseY2Calibration.weeklyRoleSummary.map((r) => ({
+          day: r.dayNumber,
+          role: r.roleId,
+          stress: r.intendedStressLevel,
+          rpeBand: r.intendedRPEBand,
+        })),
+        methodBudgetSummary: phaseY2Calibration.methodBudget.visibleSummary,
+      })
+    } catch (yErr) {
+      console.log('[PHASE-Y2-TRAINING-DIFFERENTIATION-CALIBRATION-FAILED]', {
+        error: String(yErr),
+        verdict: 'CALIBRATION_FAILED_GENERATION_PRESERVED',
+      })
+    }
+
+    // -------------------------------------------------------------------
     // [PHASE Y1 OF 3] DOCTRINE EXECUTION MATRIX + CAUSAL UTILIZATION PROOF
     // -------------------------------------------------------------------
     // Pure, JSON-safe, additive. Reads from objects already stamped on the
@@ -21699,6 +21761,11 @@ return explanations.length > 0 ? explanations : undefined
     // doctrineApplicationRollup, weeklyMethodRepresentation,
     // weeklyStressGovernorAdjustments, sessions[]) and produces a
     // per-bundle execution matrix + RPE/density/pairing traces.
+    //
+    // [PHASE Y2 SYNC] Y1 runs AFTER Y2's calibration so the matrix's RPE
+    // trace, density materialization verdict, and pairing safety verdict
+    // reflect Y2's actual mutations — this is what keeps Y1 proof in sync
+    // with the post-Y2 program.
     //
     // Diagnostic only — never mutates the program. Failures are caught
     // below and never break generation.

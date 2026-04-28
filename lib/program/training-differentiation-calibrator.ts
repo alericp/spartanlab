@@ -589,6 +589,32 @@ export function applyTrainingDifferentiationCalibration(
   })
 
   // ---------------------------------------------------------------------------
+  // [PHASE Y3 OF 3] PER-SESSION DAY PURPOSE STAMP
+  // ---------------------------------------------------------------------------
+  // Y2 already produces a rich per-day role summary. Y3's day card needs one
+  // extra hop: a tiny `weeklyDayPurpose` object stamped directly on each
+  // session, so `AdaptiveSessionCard` can render a per-day "why this day
+  // exists" line without having to reach back into program-level data.
+  //
+  // Strictly additive — we attach via cast and never remove or rename fields
+  // on the session. Legacy programs without Y2 keep their existing card.
+  // ---------------------------------------------------------------------------
+  for (const s of sessions) {
+    const row = weeklyRoleSummary.find((r) => r.dayNumber === s.dayNumber)
+    if (!row) continue
+    ;(s as unknown as { weeklyDayPurpose?: unknown }).weeklyDayPurpose = {
+      roleId: row.roleId,
+      roleLabel: row.roleLabel,
+      intendedStressLevel: row.intendedStressLevel,
+      intendedRPEBand: row.intendedRPEBand,
+      reason: row.reason,
+      primaryAdaptation: row.primaryAdaptation,
+      densityAllowed: row.densityAllowed,
+      heavyPairingAllowed: row.heavyPairingAllowed,
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Pass 1: RPE differentiation — bounded lift toward role's intended floor.
   // ---------------------------------------------------------------------------
   const rpeDecisions: TrainingDifferentiationCalibration['rpeDecisions'] = []

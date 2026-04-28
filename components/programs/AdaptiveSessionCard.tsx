@@ -2464,6 +2464,63 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               </div>
             )}
             {/* ============================================================
+                [PHASE Y3 OF 3] WHY THIS DAY EXISTS
+                ----------------------------------------------------------------
+                Reads the Y2 calibrator's per-session `weeklyDayPurpose` stamp
+                (added in `applyTrainingDifferentiationCalibration`). Renders a
+                compact role label + intended-RPE band + one-sentence reason so
+                each day card answers "why this day exists" without forcing the
+                user to open the trust accordion. Falls back to nothing on
+                legacy programs without Y2.
+                ============================================================ */}
+            {(() => {
+              const dp = (session as unknown as {
+                weeklyDayPurpose?: {
+                  roleLabel?: string
+                  intendedRPEBand?: string
+                  intendedStressLevel?: 'low' | 'moderate' | 'high'
+                  reason?: string
+                }
+              }).weeklyDayPurpose
+              if (!dp || !dp.reason) return null
+
+              // Skip if the role label perfectly duplicates the stress proof
+              // label above — avoids two near-identical chip rows.
+              const stressLabel = session.stressDistributionProof?.label || ''
+              const roleLabel = dp.roleLabel || ''
+              const duplicate =
+                stressLabel.toLowerCase().trim() === roleLabel.toLowerCase().trim()
+
+              const stressTone =
+                dp.intendedStressLevel === 'high'
+                  ? 'text-amber-300/90'
+                  : dp.intendedStressLevel === 'low'
+                    ? 'text-blue-300/90'
+                    : 'text-zinc-300/90'
+
+              return (
+                <div className="mt-1.5 flex flex-col gap-0.5" data-phase-y3-day-purpose="true">
+                  {!duplicate && (roleLabel || dp.intendedRPEBand) && (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {roleLabel && (
+                        <span className={`inline-flex items-center self-start gap-1 rounded-full border border-[#2B313A] bg-[#0F1318] px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-wide ${stressTone}`}>
+                          {roleLabel}
+                        </span>
+                      )}
+                      {dp.intendedRPEBand && (
+                        <span className="inline-flex items-center self-start gap-1 rounded-full border border-[#22272F] bg-[#0F1318] px-2 py-0.5 text-[10.5px] font-medium tracking-wide text-zinc-400">
+                          {dp.intendedRPEBand}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-[11px] text-[#9CA3AF] leading-snug">
+                    {dp.reason}
+                  </p>
+                </div>
+              )
+            })()}
+            {/* ============================================================
                 [PHASE-P] SESSION-LEVEL QUALITY / DOCTRINE AUDIT — chip only
                 ----------------------------------------------------------------
                 Compact amber chip stays always-visible because it is a real

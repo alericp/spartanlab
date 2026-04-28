@@ -285,6 +285,34 @@ export function reconcileFinalMethodMaterializationTruth(
     }
 
     // -------------------------------------------------------------------------
+    // [PHASE AA1R-S2] 4b) Normalize legacy boolean flags so downstream readers
+    //                  (truthExplanation.methodPreferencesApplied, ai-truth-audit,
+    //                  onboarding-truth-expression-audit, etc.) reflect the
+    //                  reconciled grouped truth and not the pre-corridor stamp.
+    //                  These flags are written by the builder before the
+    //                  structural materialization corridor runs, so they can
+    //                  legitimately disagree with the final executable body.
+    // -------------------------------------------------------------------------
+    const sm = session.styleMetadata as
+      | (Record<string, unknown> & {
+          hasSupersetsApplied?: boolean
+          hasCircuitsApplied?: boolean
+          hasDensityApplied?: boolean
+        })
+      | null
+    if (sm) {
+      const finalSuper = finalSummary.groupedMethodCounts.superset > 0
+      const finalCirc = finalSummary.groupedMethodCounts.circuit > 0
+      const finalDens = finalSummary.groupedMethodCounts.density_block > 0
+      // Only DEMOTE — never promote. If the legacy flag was already false we
+      // leave it false. If the flag was true but the reconciler proved no
+      // grouped block, we flip it to false so legacy readers stop claiming it.
+      if (sm.hasSupersetsApplied === true && !finalSuper) sm.hasSupersetsApplied = false
+      if (sm.hasCircuitsApplied === true && !finalCirc) sm.hasCircuitsApplied = false
+      if (sm.hasDensityApplied === true && !finalDens) sm.hasDensityApplied = false
+    }
+
+    // -------------------------------------------------------------------------
     // 5) Per-session debug record.
     // -------------------------------------------------------------------------
     rollup.perSession.push({
@@ -348,6 +376,48 @@ export function reconcileFinalMethodMaterializationTruth(
     ;(program.doctrineIntegration as Record<string, unknown>).materializationRollup = reconciled
     ;(program.doctrineIntegration as Record<string, unknown>).allSessionsFlat = reconciled.allSessionsFlat
     ;(program.doctrineIntegration as Record<string, unknown>).materializationReconciledAt = new Date().toISOString()
+  }
+
+  // ---------------------------------------------------------------------------
+  // [PHASE AA1R-S2] 7) Re-cap program.truthExplanation.methodPreferencesApplied
+  //                   so the "Why this plan" chip row (ProgramTruthSummary)
+  //                   cannot claim more sessions per method than the reconciled
+  //                   grouped counts prove. Pure demotion: never raises a count.
+  // ---------------------------------------------------------------------------
+  const truthExplanation = (program as { truthExplanation?: Record<string, unknown> | null } | undefined)
+    ?.truthExplanation
+  if (truthExplanation && typeof truthExplanation === 'object') {
+    const mpa = (truthExplanation as { methodPreferencesApplied?: Record<string, unknown> | null })
+      .methodPreferencesApplied
+    if (mpa && typeof mpa === 'object') {
+      // Count sessions whose final reconciled summary has a grouped block of
+      // each kind. This is the single authoritative cap.
+      let cappedSupers = 0
+      let cappedCircs = 0
+      let cappedDens = 0
+      for (const sess of sessions) {
+        const sum = (sess?.styleMetadata as { methodMaterializationSummary?: MethodMaterializationSummary | null } | null)
+          ?.methodMaterializationSummary
+        if (!sum) continue
+        if (sum.groupedMethodCounts.superset > 0) cappedSupers += 1
+        if (sum.groupedMethodCounts.circuit > 0) cappedCircs += 1
+        if (sum.groupedMethodCounts.density_block > 0) cappedDens += 1
+      }
+      const m = mpa as {
+        sessionsWithSupersets?: number
+        sessionsWithCircuits?: number
+        sessionsWithDensity?: number
+      }
+      if (typeof m.sessionsWithSupersets === 'number' && m.sessionsWithSupersets > cappedSupers) {
+        m.sessionsWithSupersets = cappedSupers
+      }
+      if (typeof m.sessionsWithCircuits === 'number' && m.sessionsWithCircuits > cappedCircs) {
+        m.sessionsWithCircuits = cappedCircs
+      }
+      if (typeof m.sessionsWithDensity === 'number' && m.sessionsWithDensity > cappedDens) {
+        m.sessionsWithDensity = cappedDens
+      }
+    }
   }
 
   return rollup

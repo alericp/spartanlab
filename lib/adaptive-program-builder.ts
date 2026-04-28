@@ -238,6 +238,16 @@ import {
   recomposeSessionVariants,
   type SessionVariantWithRecompositionTruth,
 } from './program/short-session-recomposition-contract'
+// [PHASE AB4] SHORT SESSION DOCTRINE MUTATION / MATERIALIZATION OWNER
+// Causal mutator that runs BEFORE AB3 recompose. Mutates each short
+// variant's `selection.main` in a doctrine-aware way (set / RPE / rest
+// reductions on safe accessory rows) and emits typed mutation records
+// the recomposer + UI consume. Start Workout parity is automatic because
+// `buildSelectedVariantMain` reads the mutated `variant.selection.main`.
+import {
+  materializeShortSessionVariant,
+  type MaterializeShortSessionVariantResult,
+} from './program/short-session-materializer'
 import { analyzeEquipmentProfile, adaptSessionForEquipment, getEquipmentRecommendations, type EquipmentProfile } from './equipment-adaptation-engine'
 import { GOAL_LABELS } from './program-service'
 // [planner-truth-audit] TASK 7: Final audit for generic shell detection
@@ -15164,6 +15174,100 @@ async function generateAdaptiveProgramImpl(
             return harvested
           })()
 
+          // ===================================================================
+          // [PHASE AB4] CAUSAL SHORT-SESSION MATERIALIZATION
+          // ===================================================================
+          // Run the doctrine mutator on each short variant BEFORE the AB3
+          // recomposer analyses it. The mutator clones the variant, applies
+          // safe set / RPE / rest reductions on non-anchor / non-fatigue-
+          // managed accessory rows, and returns a NEW variant. We splice
+          // the mutated variant back into `session.variants` (replacing the
+          // reference at the same index) so:
+          //
+          //   - Program UI's selectedDisplayContract reads the mutated body,
+          //   - buildSelectedVariantMain at /workout/session reads the
+          //     mutated body (Start Workout parity is automatic),
+          //   - the AB3 recomposer below analyses the post-mutation body and
+          //     finds real Full→variant deltas (so applied > 0 when AB4
+          //     actually mutated something).
+          //
+          // The materialiser is pure: clone-then-mutate. Full is never
+          // touched. When no safe mutation is available, the mutator
+          // returns the seed unchanged and reports an honest
+          // `materializationState`, which AB3 then maps to engine
+          // `doctrine_preserved` / `no_safe_mutation` so the UI label is
+          // truthful (no "recomposed" headline with applied=0).
+          // ===================================================================
+          const materializationResults: MaterializeShortSessionVariantResult[] = []
+          for (let i = 0; i < shortVariants.length; i++) {
+            const seed = shortVariants[i]
+            try {
+              const result = materializeShortSessionVariant({
+                fullVariant,
+                compressedVariant: seed,
+                targetMinutes: typeof seed.duration === 'number' ? seed.duration : 0,
+                appliedMethodsThisSession,
+                primarySkillExpressions,
+                dayNumber: session.dayNumber,
+                focus: session.focus,
+              })
+              materializationResults.push(result)
+              // Splice the mutated variant back into the parent list so
+              // every downstream consumer sees the same body. Find the
+              // original index in `session.variants` (shortVariants is a
+              // filtered alias, but each entry is a reference into the
+              // parent array — we replace by reference equality).
+              const parentIdx = (session.variants as SessionVariant[]).indexOf(seed)
+              if (parentIdx >= 0) {
+                ;(session.variants as SessionVariant[])[parentIdx] = result.variant
+                shortVariants[i] = result.variant
+              }
+            } catch (matErr) {
+              console.warn('[PHASE-AB4-MATERIALIZE-FAILED]', {
+                dayNumber: session.dayNumber,
+                variantLabel: seed?.label,
+                duration: seed?.duration,
+                error: matErr instanceof Error ? matErr.message : String(matErr),
+              })
+              // Fallback record so downstream analyser stamps fallback engine.
+              materializationResults.push({
+                variant: seed,
+                materializationState: 'fallback',
+                mutationRecords: [
+                  {
+                    type: 'no_safe_mutation_available',
+                    exerciseNames: [],
+                    reason: matErr instanceof Error ? matErr.message : String(matErr),
+                  },
+                ],
+                mutatedRowCount: 0,
+              })
+            }
+          }
+
+          // AB4 telemetry — corridor PASS verifies this token is present and
+          // that materializationState matches the mutationRecords.
+          console.log('[PHASE-AB4-SHORT-SESSION-DOCTRINE-MUTATED]', {
+            dayNumber: session.dayNumber,
+            focus: session.focus,
+            shortVariantsMaterialised: materializationResults.length,
+            perVariant: materializationResults.map((r, i) => ({
+              label: shortVariants[i]?.label,
+              duration: shortVariants[i]?.duration,
+              materializationState: r.materializationState,
+              mutatedRowCount: r.mutatedRowCount,
+              mutationRecordCount: r.mutationRecords.length,
+              mutationTypes: r.mutationRecords.map(m => m.type),
+            })),
+            verdict: materializationResults.every(r => r.materializationState === 'materialized')
+              ? 'ALL_SHORTS_MATERIALIZED'
+              : materializationResults.some(r => r.materializationState === 'materialized')
+                ? 'PARTIAL_MATERIALIZATION'
+                : materializationResults.some(r => r.materializationState === 'fallback')
+                  ? 'FALLBACK_PRESENT'
+                  : 'ALL_PRESERVED_NO_SAFE_MUTATION',
+          })
+
           const truths = recomposeSessionVariants({
             fullVariant,
             shortVariants,
@@ -15172,6 +15276,11 @@ async function generateAdaptiveProgramImpl(
             dayNumber: session.dayNumber,
             focus: session.focus,
             primarySkillExpressions,
+            materializations: materializationResults.map(r => ({
+              materializationState: r.materializationState,
+              mutationRecords: r.mutationRecords,
+              mutatedRowCount: r.mutatedRowCount,
+            })),
           })
 
           // Stamp truth onto each short variant in place. Truth is a plain

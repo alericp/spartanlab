@@ -72,6 +72,7 @@ import {
   WeeklyMethodChallengeLine,
 } from '@/components/programs/MaterializationStatusLine'
 import { DoctrineCausalityLedgerLine } from '@/components/programs/DoctrineCausalityLedgerLine'
+import { DoctrineExecutionLine } from '@/components/programs/DoctrineExecutionLine'
 
 interface Props {
   program: AdaptiveProgram | null
@@ -315,6 +316,15 @@ export function ProgramTrustAccordion({ program }: Props) {
           <DoctrineCausalityLedgerLine program={program} />
           <DoctrineCausalLine program={program} />
           <WeeklyMethodChallengeLine program={program} />
+          {/*
+            [PHASE Y1 OF 3] Doctrine Execution — per-bundle causality proof,
+            RPE-7 reason trace, density materialization trace, and pairing
+            fatigue overlap trace. Collapsed by default; rendered behind the
+            same "View full AI evidence" disclosure so the main Program page
+            stays clean (Phase X cleanup preserved). Fail-closed when
+            program.doctrineExecutionMatrix is missing.
+          */}
+          <DoctrineExecutionLine program={program} />
         </div>
       </details>
     </div>

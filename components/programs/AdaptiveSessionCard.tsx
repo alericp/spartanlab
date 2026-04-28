@@ -2235,7 +2235,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   // ==========================================================================
   const legacyVisibleMethodTally = visibleMethodTally
   const canonicalMethodTally = deriveCanonicalMethodTallyFromSurface(cardSurface)
-  const dominantMethodTally: { superset: number; circuit: number; density: number; cluster: number } =
+  const preGateDominantMethodTally: { superset: number; circuit: number; density: number; cluster: number } =
     canonicalMethodTally.hasCanonicalApplied
       ? {
           superset: canonicalMethodTally.superset,
@@ -2246,6 +2246,76 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       : canonicalMethodTally.canonicalSaysNoneApplied
         ? { superset: 0, circuit: 0, density: 0, cluster: 0 }
         : legacyVisibleMethodTally
+
+  // ==========================================================================
+  // [PHASE AA1R-S2] FINAL EXECUTABLE METHOD TRUTH GATE FOR THE CHIP ROW
+  //
+  // The chip row above the body (collapsed header + expanded header) is the
+  // ONE remaining surface that could overclaim a grouped method even after
+  // the AA1R reconciler ran. It derived from `cardSurface.methodStructures`
+  // (canonical) or the legacy `finalVisibleBodyModel` tally — both of which
+  // can still report `simple_order_grouped` superset/circuit/density counts
+  // when the visible body is rendering a flat ordered list.
+  //
+  // The reconciler already wrote the final, integrity-verified
+  // `methodMaterializationSummary` onto `session.styleMetadata`. This gate is
+  // a PURE consumer of that summary:
+  //
+  //   integrity FAIL  -> zero superset/circuit/density chips (cluster row
+  //                       counts pass through; cluster is row-level and does
+  //                       not require a grouped block).
+  //   groupedExerciseRowCount < 2  -> zero grouped chips (a grouped claim
+  //                       requires at least two exercise rows bound to a
+  //                       renderable block by blockId).
+  //   summary disagrees per-method -> drop the disagreeing claim only. We do
+  //                       NOT add chips the summary proves; the chip's count
+  //                       still comes from the upstream tally so existing
+  //                       valid grouped sessions render exactly as before.
+  //
+  // simple_order_grouped also collapses to 0 grouped chips here because the
+  // body in that mode renders no real grouped blocks — the chip row would
+  // contradict what the body shows.
+  // ==========================================================================
+  const reconciledSummary =
+    ((session as unknown as {
+      styleMetadata?: {
+        methodMaterializationSummary?: {
+          summaryIntegrityVerdict?: string
+          groupedExerciseRowCount?: number
+          groupedMethodCounts?: { superset?: number; circuit?: number; density_block?: number }
+        } | null
+      } | null
+    }).styleMetadata?.methodMaterializationSummary) ?? null
+  const reconciledIntegrityVerdict =
+    reconciledSummary?.summaryIntegrityVerdict ?? 'PASS_FINAL_STRUCTURE_CONFIRMED'
+  const reconciledGroupedRows = reconciledSummary?.groupedExerciseRowCount ?? null
+  const reconciledGrouped = reconciledSummary?.groupedMethodCounts ?? null
+  const integrityForcesFlat =
+    reconciledIntegrityVerdict === 'FAIL_METHOD_CLAIM_WITH_ZERO_CHANGED_EXERCISES' ||
+    (reconciledGroupedRows !== null && reconciledGroupedRows < 2) ||
+    finalVisibleBodyModel.mode === 'simple_order_grouped'
+  const dominantMethodTally: { superset: number; circuit: number; density: number; cluster: number } = (() => {
+    if (integrityForcesFlat) {
+      // Cluster is row-level execution; preserve only that count. Grouped
+      // method claims are dropped because the final executable structure
+      // could not back them.
+      return { superset: 0, circuit: 0, density: 0, cluster: preGateDominantMethodTally.cluster }
+    }
+    // Per-method gate: drop a single grouped claim if the reconciled summary
+    // says that specific method's count is 0. This handles partial-failure
+    // cases (e.g. circuit survived but a stale superset claim did not).
+    if (reconciledGrouped) {
+      return {
+        superset: (reconciledGrouped.superset ?? 0) > 0 ? preGateDominantMethodTally.superset : 0,
+        circuit: (reconciledGrouped.circuit ?? 0) > 0 ? preGateDominantMethodTally.circuit : 0,
+        density: (reconciledGrouped.density_block ?? 0) > 0 ? preGateDominantMethodTally.density : 0,
+        cluster: preGateDominantMethodTally.cluster,
+      }
+    }
+    // Legacy program (no reconciled summary present) — fall back to the
+    // pre-gate tally so existing saved programs keep rendering as before.
+    return preGateDominantMethodTally
+  })()
   const hasAnyVisibleMethod =
     dominantMethodTally.superset > 0 ||
     dominantMethodTally.circuit > 0 ||

@@ -93,6 +93,18 @@ import {
 } from '@/lib/program/method-decision-engine'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { buildGroupedDisplayModel, getGroupedMethodSemantics, type GroupedDisplayModel, type RenderBlock, type RawFallbackBlock, type GroupedSourceUsed, type GroupedFlatReason, type GroupType } from './lib/session-group-display'
+// [PHASE AB5] Single authoritative grouped execution prescription resolver.
+// Converts a rich DisplayGroup OR a permissive RawFallbackBlock into a
+// complete execution contract that carries rounds, member doses, rest
+// microcopy, and an orphan-row verdict. Both grouped render branches read
+// from this resolver so header rounds, member doses, and orphan handling
+// cannot drift between them. Live-runtime parity is preserved because
+// `rounds` follows the SAME priority order the live machine uses:
+// methodStructure.rounds -> first hydrated member sets -> 3.
+import {
+  resolveGroupedExecutionPrescription,
+  buildRoundsHeaderText,
+} from './lib/grouped-execution-prescription'
 import { 
   addOverride, 
   applyOverridesToSession,
@@ -5144,6 +5156,52 @@ function MainExercisesRenderer({
         {fallbackBlocks.map((block, bIdx) => {
           const colors = getGroupTypeColors(block.groupType)
           const icon = getGroupTypeIcon(block.groupType)
+
+          // [PHASE AB5] Resolve grouped execution prescription for this
+          // raw-fallback block. Same single resolver the rich path uses;
+          // this is the parity guarantee — header rounds, member doses,
+          // and orphan handling are identical regardless of whether the
+          // card landed in the rich or raw branch.
+          const rawPrescription = resolveGroupedExecutionPrescription({
+            block: { kind: 'raw', block },
+            // [PHASE AB5] Mirror the raw fallback render path's hydration
+            // chain exactly. positionIndex is unused here (raw fallback has
+            // no blockId-positional map; the renderer resolves by id/name
+            // alone) but the resolver passes it for parity with the rich
+            // path so the function shape is uniform across both branches.
+            hydrate: ({ id, name }) => {
+              const direct =
+                (id ? hydrateMap.get(id) : undefined) ||
+                (name ? hydrateMap.get(name) : undefined) ||
+                (name ? hydrateMap.get(name.toLowerCase()) : undefined) ||
+                (name ? hydrateMap.get(normalizeKey(name)) : undefined)
+              if (!direct) return null
+              const scaled = direct as unknown as {
+                scaledSets?: number
+                scaledReps?: string
+                scaledTargetRPE?: number
+              }
+              return {
+                id: direct.id,
+                name: direct.name,
+                sets: direct.sets ?? null,
+                repsOrTime: direct.repsOrTime ?? null,
+                targetRPE: direct.targetRPE ?? null,
+                restSeconds: direct.restSeconds ?? null,
+                scaledSets: scaled.scaledSets,
+                scaledReps: scaled.scaledReps,
+                scaledTargetRPE: scaled.scaledTargetRPE,
+              }
+            },
+          })
+          const rawRoundsHeader = buildRoundsHeaderText(rawPrescription)
+          const rawOrphanIndexSet = new Set<number>()
+          rawPrescription.members.forEach((m, i) => {
+            if (!m.bound || !m.prescriptionComplete) rawOrphanIndexSet.add(i)
+          })
+          const rawRenderableCount =
+            rawPrescription.members.length - rawOrphanIndexSet.size
+
           return (
             <div
               key={block.groupId || `raw-${bIdx}`}
@@ -5161,8 +5219,26 @@ function MainExercisesRenderer({
               <div className={`mb-2 flex items-center gap-2 flex-wrap px-2.5 py-1.5 rounded-md ${colors.bg}`}>
                 <span className={colors.text}>{icon}</span>
                 <span className={`text-sm font-semibold ${colors.text}`}>{block.label}</span>
+                {/* [PHASE AB5] Method tagline (paired sets / rounds & stations
+                    / etc) followed by the rounds chip. Same idiom and same
+                    palette as the rich-grouped header above, so the two
+                    surfaces speak identically about block workload. */}
+                {(() => {
+                  const tagline = getGroupedMethodSemantics(block.groupType)?.headerTagline
+                  if (!tagline) return null
+                  return (
+                    <span className={`text-[11px] ${colors.text} opacity-80`}>
+                      · {tagline}
+                    </span>
+                  )
+                })()}
+                {rawRoundsHeader && (
+                  <span className={`text-[11px] ${colors.text} opacity-80 font-medium`}>
+                    · {rawRoundsHeader}
+                  </span>
+                )}
                 <span className="text-[11px] text-[#8A8A8A]">
-                  · {block.members.length} {block.members.length === 1 ? 'exercise' : 'exercises'}
+                  · {rawRenderableCount} {rawRenderableCount === 1 ? 'exercise' : 'exercises'}
                 </span>
               </div>
 
@@ -5207,6 +5283,15 @@ function MainExercisesRenderer({
                   regardless of hydration. */}
               <div className="space-y-1.5">
                 {block.members.map((member, mIdx) => {
+                  // [PHASE AB5] ORPHAN ROW GUARD (raw fallback path).
+                  // Same contract as the rich path: members the resolver
+                  // marked as unbound OR prescription-incomplete MUST NOT
+                  // render as a blank name-only row. They stay in the
+                  // upstream variant body but are dropped from this visible
+                  // surface — Start Workout would also refuse to launch
+                  // them via live-grouped-execution-contract.ts:561-565.
+                  if (rawOrphanIndexSet.has(mIdx)) return null
+
                   rawIdx++
                   const hydrated =
                     (member.id ? hydrateMap.get(member.id) : undefined) ||
@@ -5643,17 +5728,39 @@ function MainExercisesRenderer({
             (block.exerciseName && exerciseDataMap.get(normalizeExerciseKey(block.exerciseName)))
 
           if (!fullExercise) {
-            const safeName = (block.exerciseName || '').trim()
-            if (!safeName || safeName.length < 2) return null
-            return (
-              <div
-                key={block.exerciseId || `ex-${blockIdx}`}
-                className="flex items-baseline gap-2 py-2 px-3 rounded-lg border bg-[#171717] border-[#282828] text-sm text-[#C8C8C8]"
-              >
-                <span className="text-[10px] text-[#4A4A4A] font-mono shrink-0">{globalExerciseIndex}.</span>
-                <span className="truncate">{safeName}</span>
-              </div>
-            )
+            // [PHASE AB5] ORPHAN ROW GUARD (flat path).
+            //
+            // Pre-AB5, an exercise that survived the render contract but
+            // failed display-side hydration would render as a name-only div
+            // — the exact "Explosive Pull-Ups appears with no sets/reps"
+            // symptom the user flagged. Start Workout would never launch
+            // such a row (the live runtime hydrates from the same source),
+            // so the Program card was lying about an executable row.
+            //
+            // The guard now drops the row entirely from RENDER. The
+            // underlying selected variant body is unchanged; the renderer
+            // simply refuses to display a row that has no executable
+            // prescription. globalExerciseIndex was already incremented;
+            // we decrement it back so the visible numbering stays
+            // contiguous with what actually rendered.
+            globalExerciseIndex--
+            return null
+          }
+
+          // [PHASE AB5] Hydration succeeded but the row may still lack a
+          // sets/reps prescription (compression seed dropped both fields,
+          // for example). Treat that as orphan too: ExerciseRow's "3 ×
+          // 8-12" defaults would silently invent a dose, and Start Workout
+          // would not be able to honor it. We drop the row and let the
+          // upstream variant ledger account for it elsewhere.
+          const fullExerciseHasSets =
+            typeof fullExercise.sets === 'number' && fullExercise.sets > 0
+          const fullExerciseHasReps =
+            typeof fullExercise.repsOrTime === 'string' &&
+            fullExercise.repsOrTime.trim().length > 0
+          if (!fullExerciseHasSets && !fullExerciseHasReps) {
+            globalExerciseIndex--
+            return null
           }
 
           return (
@@ -5680,6 +5787,80 @@ function MainExercisesRenderer({
         const label = getGroupTypeLabel(group.groupType)
         const icon = getGroupTypeIcon(group.groupType)
         const isSpecialGroup = group.groupType !== 'straight'
+
+        // [PHASE AB5] Resolve grouped execution prescription ONCE per block.
+        // The resolver computes rounds + per-member doses + orphan flags from
+        // the same hydration map the renderer already uses below
+        // (blockIdToDisplayExercises + exerciseDataMap). Reading here means
+        // header rounds, member dose visibility, and orphan handling all
+        // come from a single source. Pure function — no side effects, no
+        // re-renders introduced.
+        const groupPrescription = isSpecialGroup
+          ? resolveGroupedExecutionPrescription({
+              block: { kind: 'rich', group },
+              hydrate: ({ id, name, positionIndex }) => {
+                // Mirror the rich render path's preference order EXACTLY:
+                //   1. blockId + positional index (most reliable; survives rename)
+                //   2. exact id
+                //   3. exact raw name
+                //   4. lowercased name
+                //   5. normalized name (handles "Pull-Ups" vs "Pull Ups")
+                // This is the same chain at line 5826 below, so the
+                // resolver's "bound" verdict cannot disagree with the
+                // renderer's hydrated success path.
+                const renderSurfaceMembers = group.id
+                  ? blockIdToDisplayExercises.get(group.id)
+                  : undefined
+                const direct =
+                  (renderSurfaceMembers && renderSurfaceMembers[positionIndex]) ||
+                  (id ? exerciseDataMap.get(id) : undefined) ||
+                  (name ? exerciseDataMap.get(name) : undefined) ||
+                  (name ? exerciseDataMap.get(name.toLowerCase()) : undefined) ||
+                  (name ? exerciseDataMap.get(normalizeExerciseKey(name)) : undefined)
+                if (!direct) return null
+                // ExerciseRow's effective dose mirrors ScaledExercise; pass
+                // the same shape so the resolver honors week-progression
+                // truth without us re-implementing it here.
+                const scaled = direct as unknown as {
+                  scaledSets?: number
+                  scaledReps?: string
+                  scaledTargetRPE?: number
+                }
+                return {
+                  id: direct.id,
+                  name: direct.name,
+                  sets: direct.sets ?? null,
+                  repsOrTime: direct.repsOrTime ?? null,
+                  targetRPE: direct.targetRPE ?? null,
+                  restSeconds: direct.restSeconds ?? null,
+                  scaledSets: scaled.scaledSets,
+                  scaledReps: scaled.scaledReps,
+                  scaledTargetRPE: scaled.scaledTargetRPE,
+                }
+              },
+            })
+          : null
+        const roundsHeader = groupPrescription
+          ? buildRoundsHeaderText(groupPrescription)
+          : null
+        // [PHASE AB5] Orphan-member ids the renderer must skip. A member is
+        // an orphan when (a) it failed to hydrate to any session exercise,
+        // OR (b) it hydrated but has no resolvable sets/reps. The first
+        // case is a hard miss; the second is "shell row reached the
+        // display contract" — both produce blank rows under AB4 and both
+        // must be dropped. We map by index position because that is what
+        // the rich render path iterates with.
+        const orphanIndexSet = new Set<number>()
+        if (groupPrescription) {
+          groupPrescription.members.forEach((m, i) => {
+            if (!m.bound || !m.prescriptionComplete) orphanIndexSet.add(i)
+          })
+        }
+        // Renderable member count after orphan pruning — used for the
+        // header "· N exercises" label so the count never lies.
+        const renderableMemberCount = groupPrescription
+          ? groupPrescription.members.length - orphanIndexSet.size
+          : group.exercises.length
         
         return (
           <div
@@ -5749,8 +5930,22 @@ function MainExercisesRenderer({
                     </span>
                   )
                 })()}
+                {/* [PHASE AB5] Rounds chip. The grouped execution prescription
+                    resolver tells us how many paired sets / rounds / cluster
+                    sets the block will execute. Rendered immediately after
+                    the method tagline so the user sees the workload at a
+                    glance: "Superset · paired sets · 2 paired sets". The
+                    chip uses the method-color palette (matches the rail) so
+                    it reads as part of the grouped frame, not as a separate
+                    badge. Hidden when the resolver could not bind any
+                    member (e.g. fully orphan block). */}
+                {roundsHeader && (
+                  <span className={`text-[11px] ${colors.text} opacity-80 font-medium`}>
+                    · {roundsHeader}
+                  </span>
+                )}
                 <span className="text-[11px] text-[#8A8A8A]">
-                  · {group.exercises.length} exercises
+                  · {renderableMemberCount} {renderableMemberCount === 1 ? 'exercise' : 'exercises'}
                 </span>
                 {group.restProtocol && (
                   <span className="text-[11px] text-[#8A8A8A]">
@@ -5793,6 +5988,26 @@ function MainExercisesRenderer({
                 keep the plain `space-y-2` they had before. */}
             <div className={isSpecialGroup ? 'space-y-1.5' : 'space-y-2'}>
               {group.exercises.map((groupExercise, exIdx) => {
+                // [PHASE AB5] ORPHAN ROW GUARD (rich grouped path).
+                //
+                // The resolver above already classified this member. If the
+                // member is unbound (no hydration) OR bound but missing
+                // sets/reps, we MUST NOT render a blank name-only row. The
+                // visible blocker symptom in AB4 was Explosive Pull-Ups
+                // appearing under a Superset block as a bare name with no
+                // dose; that path is closed here.
+                //
+                // Note: we drop the row from RENDER, but the underlying
+                // selected variant body is unchanged — the member still
+                // counts in the variant's own ledger. The renderer just
+                // refuses to display a row that has no executable
+                // prescription, which Start Workout would also refuse to
+                // launch (the live runtime drops orphan member refs at
+                // live-grouped-execution-contract.ts:561-565).
+                if (isSpecialGroup && orphanIndexSet.has(exIdx)) {
+                  return null
+                }
+
                 globalExerciseIndex++
                 
                 // [UNIFIED-RENDER-OWNERSHIP] Prefer the RENDER surface as the

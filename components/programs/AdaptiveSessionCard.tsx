@@ -3854,7 +3854,12 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   </p>
                 )}
                 {session.warmup.map((exercise, idx) => (
-                  <ExerciseRow key={idx} exercise={exercise} isWarmupCooldown />
+                  // [PHASE-AA4] Pass authoritative `sectionKind="warmup"` so
+                  // the row renders the green Warm-Up identity tag and
+                  // suppresses main-row affordances. Replaces legacy
+                  // `isWarmupCooldown` boolean which collapsed warm-up and
+                  // cool-down into one flag.
+                  <ExerciseRow key={idx} exercise={exercise} sectionKind="warmup" />
                 ))}
               </div>
             )}
@@ -4501,7 +4506,15 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   </p>
                 )}
                 {session.cooldown.map((exercise, idx) => (
-                  <ExerciseRow key={idx} exercise={exercise} isWarmupCooldown />
+                  // [PHASE-AA4] Pass authoritative `sectionKind="cooldown"`
+                  // so the row renders the restrained slate-blue Cool-Down
+                  // identity tag (NOT the green Warm-Up tag). This is the
+                  // direct fix for the visible bug where every cool-down
+                  // row was labeled "Warm-Up". Phase 4I flexibility blocks
+                  // injected into session.cooldown by the builder render
+                  // through this exact path, so they receive the correct
+                  // label automatically.
+                  <ExerciseRow key={idx} exercise={exercise} sectionKind="cooldown" />
                 ))}
               </div>
             )}
@@ -5880,6 +5893,14 @@ interface ExerciseRowProps {
   exercise: AdaptiveExercise
   index?: number
   prefix?: string // [PHASE 7B] Superset/circuit prefix like A1, A2, B1, etc
+  // [PHASE-AA4] Authoritative section discriminant. Replaces the ambiguous
+  // `isWarmupCooldown` boolean which previously collapsed warm-up and
+  // cool-down into one flag and forced cool-down rows to render the
+  // green "Warm-Up" badge. New callers MUST pass `sectionKind`.
+  // Legacy `isWarmupCooldown` is kept only as a backward-compatibility
+  // alias for any caller we have not migrated yet; when set without
+  // sectionKind it is treated as warm-up (the prior behavior).
+  sectionKind?: 'main' | 'warmup' | 'cooldown'
   isWarmupCooldown?: boolean
   sessionId?: string
   isSkipped?: boolean
@@ -5913,7 +5934,8 @@ function ExerciseRow({
   exercise, 
   index, 
   prefix, // [PHASE 7B] For grouped exercises
-  isWarmupCooldown, 
+  sectionKind, // [PHASE-AA4] Authoritative warmup/cooldown/main discriminant
+  isWarmupCooldown: isWarmupCooldownLegacy,
   sessionId,
   isSkipped,
   adjustedName,
@@ -5925,7 +5947,23 @@ function ExerciseRow({
   onProgressionAdjust,
 }: ExerciseRowProps) {
   const [showDetails, setShowDetails] = useState(false)
-  
+
+  // [PHASE-AA4] Derive the resolved section kind. Precedence:
+  //   1. explicit `sectionKind` prop (new authoritative discriminant),
+  //   2. legacy `isWarmupCooldown` boolean (treated as warm-up to preserve
+  //      the prior behavior of the only legacy caller),
+  //   3. default 'main'.
+  // The single boolean `isWarmupCooldown` flag is preserved below for the
+  // many existing surface gates (`!isWarmupCooldown && ...`) that suppress
+  // main-row affordances on warm-up AND cool-down identically. AA4 only
+  // disambiguates the visible badge + reason styling between warm-up and
+  // cool-down; structural suppressions remain shared.
+  const resolvedSectionKind: 'main' | 'warmup' | 'cooldown' =
+    sectionKind ?? (isWarmupCooldownLegacy ? 'warmup' : 'main')
+  const isWarmupCooldown = resolvedSectionKind === 'warmup' || resolvedSectionKind === 'cooldown'
+  const isWarmupRow = resolvedSectionKind === 'warmup'
+  const isCooldownRow = resolvedSectionKind === 'cooldown'
+
   // TASK 3: Safety guard for malformed exercise data
   if (!exercise || typeof exercise !== 'object') {
     console.warn('[ExerciseRow] Received invalid exercise:', exercise)
@@ -6078,11 +6116,21 @@ function ExerciseRow({
             <span className="text-[10px] text-[#4A4A4A] font-mono shrink-0">{prefix || `${index}.`}</span>
           )}
           <p className="font-medium text-[#E5E5E5] text-[13px] truncate">{displayName}</p>
-          {isWarmupCooldown ? (
+          {isWarmupRow ? (
             // [WARM-UP-STYLE-DEMOTED] Warm-up identity tag remains the sole
             // green accent in the row -- small, restrained, not saturated.
             <span className="text-[8px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400/80 shrink-0">
               Warm-Up
+            </span>
+          ) : isCooldownRow ? (
+            // [PHASE-AA4] Cool-down identity tag uses a restrained slate-blue
+            // treatment so it is visibly distinct from the warm-up green and
+            // from the main-row intent accents. This corrects the prior bug
+            // where every row inside the cool-down block rendered the green
+            // "Warm-Up" badge because warm-up and cool-down were collapsed
+            // into a single boolean.
+            <span className="text-[8px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-[#4F6D8A]/15 text-[#7FA8CC] shrink-0">
+              Cool-Down
             </span>
           ) : (
             <span className={`text-[9px] shrink-0 ${intentAccent[card.prescriptionIntent] || 'text-[#5A5A5A]'}`}>

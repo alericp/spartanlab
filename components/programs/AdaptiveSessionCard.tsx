@@ -5567,6 +5567,51 @@ function resolveRowMethodTruth(
   else if (raw === 'top_set') family = 'top_set'
   else if (raw === 'drop_set') family = 'drop_set'
 
+  // [PHASE Z1 GROUPED-METHOD-CONTIGUITY-LOCK] Orphan grouped-method defense.
+  //
+  // Superset and circuit are GROUPED-STRUCTURE methods: the method only has
+  // meaning when there is a real paired/coordinated block. A row whose
+  // `method='superset'` (or `setExecutionMethod='superset'`) survived without
+  // a `blockId` AND without a grouped `prefix` is an orphaned label -- the
+  // pair was demoted upstream (e.g. high-overlap STC+C2B demotion in
+  // training-differentiation-calibrator.ts) but the row's grouped-method
+  // metadata was not fully scrubbed. Painting a "Superset" chip on that bare
+  // flat row produces the visible "SUPSET label on separated rows" symptom
+  // -- the user reads grouped truth that the program cannot back with a
+  // visible bracket and Start Workout cannot back with grouped execution.
+  //
+  // The contract: a grouped-structure family on a row that is NOT a grouped
+  // member must be suppressed for visible chip purposes. We collapse `family`
+  // to null so the Row-1 fallback chip and any downstream consumer reading
+  // `family` see "no method here", matching what the visible body actually
+  // shows. The raw fields (`raw`, `source`) are preserved for diagnostics so
+  // the trust accordion / dev probe can still report "method orphaned and
+  // suppressed during display projection."
+  //
+  // Cluster and density are intentionally NOT suppressed by this gate:
+  // single-row cluster / density are legitimate row-level method cues per
+  // the cluster doctrine correction, owned by the row-level Method
+  // Ownership Panel and the "Method cues present" status line. Only
+  // superset / circuit -- which require a grouped partner to be honest --
+  // are caught here.
+  if ((family === 'superset' || family === 'circuit') && !isGroupedMember) {
+    if (typeof window !== 'undefined') {
+      // One-shot dev trace per orphan. Loud enough that an upstream demotion
+      // path that forgets to scrub method/methodLabel/setExecutionMethod is
+      // visible in the console; quiet enough that it does not spam the
+      // production preview. The trust accordion's Method decisions surface
+      // is the user-visible owner of this fact.
+      console.log('[v0] [GROUPED-METHOD-CONTIGUITY-LOCK] orphan_grouped_method_suppressed', {
+        exerciseId: (exercise as { id?: string }).id,
+        exerciseName: (exercise as { name?: string }).name,
+        rawMethodField: raw,
+        rawSource: source,
+        reason: 'family is grouped-structure (superset/circuit) but row has no blockId and no grouped prefix; chip suppressed to keep visible truth honest.',
+      })
+    }
+    family = null
+  }
+
   // [PHASE-3E ROW-LEVEL SET-EXECUTION VISIBLE TRUTH LOCK]
   // The row-level set-execution family set is taxonomy-locked to these five.
   // Superset/circuit are grouped-structure -- not row-level -- and never
@@ -5860,13 +5905,29 @@ function ExerciseRow({
           {/*
             [ROW-HEADER-METHOD-CHIP-DELEGATED]
             Cluster / density identity is OWNED by the dedicated Method
-            Ownership Panel below the prescription line (Row 2b). This
-            Row 1 slot only paints a small fallback chip for flat-row
-            superset / circuit leaks, which are grouped-structure by
-            doctrine and should almost never appear on a bare flat row.
-            All method resolution goes through the single authoritative
-            `resolveRowMethodTruth` helper so chip and panel cannot
-            disagree or disagree on label casing.
+            Ownership Panel below the prescription line (Row 2b).
+
+            [PHASE Z1 GROUPED-METHOD-CONTIGUITY-LOCK]
+            Pre-Z1 this slot painted a small fallback chip for flat-row
+            superset / circuit leaks. The chip was honest on paper but
+            visibly dishonest in practice: an orphaned `method='superset'`
+            (e.g. surviving a Y2 STC+C2B demotion that cleared blockId
+            but not method) made the row carry a "Superset" label even
+            though no grouped block, no paired partner, and no Start
+            Workout grouped execution backed it.
+
+            With Z1, `resolveRowMethodTruth` now suppresses the family
+            for any superset / circuit row that is NOT a grouped member
+            (no blockId, no prefix). Family collapses to null and this
+            chip path never fires for orphans. The chip remains as a
+            structural defense -- it would only paint if BOTH the
+            upstream demotion AND the orphan defense were bypassed, in
+            which case the chip's small visible footprint is a tractable
+            failure surface rather than a dominant lie.
+
+            All method resolution still goes through the single
+            authoritative `resolveRowMethodTruth` helper so chip, panel,
+            and grouped block render cannot disagree.
           */}
           {(() => {
             if (isWarmupCooldown) return null

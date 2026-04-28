@@ -921,7 +921,32 @@ export function applyTrainingDifferentiationCalibration(
         } else {
           // Demote to straight: clear blockId and rebuild as separate rows.
           for (const e of memberRows) {
-            e.blockId = undefined
+            // [PHASE Z1 GROUPED-METHOD-CONTIGUITY-LOCK] When demoting a
+            // superset to straight sets, clear EVERY method-ownership field
+            // on the row -- not just `blockId`. Previously this loop only
+            // cleared `blockId`, leaving `e.method='superset'` (and any
+            // `methodLabel='A1'/'A2'` plus `setExecutionMethod`) stale on the
+            // row. Downstream, `resolveRowMethodTruth` in AdaptiveSessionCard
+            // reads `e.method`, sees `'superset'`, and -- because the row no
+            // longer has a `blockId` to flag it as a grouped member -- the
+            // row-level fallback chip paints a "Superset" label on a bare
+            // flat row whose paired member has been moved into its own
+            // straight set. That is the user-visible "SUPSET chip on
+            // separated exercises" symptom Phase Z1 closes. The builder's
+            // pre-materialization scrub at adaptive-program-builder.ts:13062
+            // -13067 already clears all four fields together; the demotion
+            // here now matches that contract so a row cannot survive with
+            // grouped-method metadata after its group has been dissolved.
+            const eAny = e as unknown as {
+              method?: string
+              methodLabel?: string
+              setExecutionMethod?: string
+              blockId?: string
+            }
+            eAny.blockId = undefined
+            eAny.method = undefined
+            eAny.methodLabel = undefined
+            eAny.setExecutionMethod = undefined
             // Cap STC sets to 2 and STC RPE to 7 for safety.
             if (SKIN_THE_CAT_RE.test(e.name)) {
               if (typeof e.sets === 'number' && e.sets > 2) e.sets = 2
@@ -955,7 +980,23 @@ export function applyTrainingDifferentiationCalibration(
         if (maxRpe >= 8 || input.protectedWeek) {
           // Demote to straight.
           for (const e of memberRows) {
-            e.blockId = undefined
+            // [PHASE Z1 GROUPED-METHOD-CONTIGUITY-LOCK] Match the STC+C2B
+            // demotion above: clear every method-ownership field, not just
+            // `blockId`. Leaving `method='superset'` / `methodLabel='A1'` /
+            // `setExecutionMethod` stale produced the "Superset chip on
+            // separated rows" leak in AdaptiveSessionCard's row-level
+            // fallback chip. After demotion the row IS straight; nothing
+            // about its method identity should still claim grouped truth.
+            const eAny = e as unknown as {
+              method?: string
+              methodLabel?: string
+              setExecutionMethod?: string
+              blockId?: string
+            }
+            eAny.blockId = undefined
+            eAny.method = undefined
+            eAny.methodLabel = undefined
+            eAny.setExecutionMethod = undefined
             if (typeof e.targetRPE === 'number' && e.targetRPE > 7.5) e.targetRPE = 7.5
             if (typeof e.restSeconds !== 'number' || e.restSeconds < 120) e.restSeconds = 120
           }

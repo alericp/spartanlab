@@ -7,6 +7,17 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { AdaptiveSession, AdaptiveExercise, TrainingMethodPreference } from '@/lib/adaptive-program-builder'
 import { isVariantLaunchable } from '@/lib/session-compression-engine'
+// [PHASE AB3] SHORT SESSION DOCTRINE RECOMPOSITION TRUTH
+// Read-only access to the per-variant `recompositionTruth` sidecar stamped by
+// the program builder after VARIANT-PARENT-TRUTH-RECONCILE. The card surfaces
+// this when the user has selected a 45 Min / 30 Min variant so the user can
+// see what doctrine actually decided about the short body — preserved
+// anchors, deferred work, set/RPE/rest deltas, method changes, and the
+// crunch-time strategy headline.
+import {
+  getRecompositionTruth,
+  type RecompositionTruth,
+} from '@/lib/program/short-session-recomposition-contract'
 // [SELECTED-VARIANT-SESSION-CONTRACT] Single authoritative owner of the
 // selected-variant body and its launch fingerprint. The card stamps its
 // expected fingerprint immediately before router.push so the live workout
@@ -3844,6 +3855,157 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               })}
             </div>
           )}
+
+          {/* [PHASE AB3] SHORT SESSION DOCTRINE RECOMPOSITION TRUTH SURFACE
+              Renders ONLY when a short variant (45 Min / 30 Min) is selected
+              AND the builder stamped a `recompositionTruth` sidecar onto the
+              chosen variant. The card reads through the `selectedDisplayContract`
+              so this is the SAME variant body that Start Workout will execute
+              (the route consumes `variant.selection.main` via
+              `buildSelectedVariantMain`, which is unchanged). Display rules:
+                - When `engine === 'doctrine_recomposition'`, the headline says
+                  "{label} recomposed" and lists strategy / preserved / deferred /
+                  delta highlights.
+                - When `engine === 'fallback_compression'`, the surface honestly
+                  labels itself "Compression-only fallback" so the user is never
+                  told "doctrine recomposed" for a body that wasn't.
+                - Hidden entirely when Full Session is selected (Full is parent
+                  truth, not a recomposition of itself). */}
+          {(() => {
+            const selectedIdx = selectedDisplayContract.selectedVariantIndex
+            if (selectedIdx <= 0) return null
+            const truth: RecompositionTruth | null = getRecompositionTruth(
+              selectedDisplayContract.variantData
+            )
+            if (!truth) return null
+            const isFallback = truth.engine === 'fallback_compression'
+            // Strategy chip label — short, scannable, matches the headline copy
+            // produced by the recomposer's `crunchTimeStrategy` field. Stable
+            // mapping (no fuzzy text) so QA can grep on it.
+            const strategyLabel = (() => {
+              switch (truth.crunchTimeStrategy) {
+                case 'preserve_spine': return 'Preserve Spine'
+                case 'density_recompose': return 'Density Recompose'
+                case 'paired_accessory': return 'Paired Accessory'
+                case 'set_reduction': return 'Set Reduction'
+                case 'rest_reduction': return 'Rest Reduction'
+                case 'rpe_reduction': return 'RPE Reduction'
+                case 'minimal_priority': return 'Minimal Priority'
+                case 'straight_sets_best': return 'Straight Sets'
+                case 'identity_preserve': return 'Identity Preserve'
+                default: return 'Recomposed'
+              }
+            })()
+            const containerBorder = isFallback
+              ? 'border-amber-500/40 bg-amber-500/5'
+              : 'border-[#4F6D8A]/40 bg-[#12161C]'
+            const headlineColor = isFallback ? 'text-amber-300' : 'text-[#A5A5A5]'
+            const labelColor = isFallback ? 'text-amber-400/80' : 'text-[#6A8FB0]'
+            // Cap method-changes / deltas / deferred lists so the card stays
+            // compact. Truth object always carries the full data for any
+            // downstream surface that wants to render it in detail.
+            const cappedDeferred = truth.deferredExercises.slice(0, 4)
+            const cappedSetDeltas = truth.setDeltas.slice(0, 3)
+            const cappedRpeDeltas = truth.rpeDeltas.slice(0, 2)
+            const cappedRestDeltas = truth.restDeltas.slice(0, 2)
+            const cappedAnchors = truth.preservedPriorityAnchors.slice(0, 3)
+            const executableMethods = truth.methodChanges.filter(
+              m => m.state === 'executable' || m.state === 'visible' || m.state === 'mutated'
+            )
+            return (
+              <div
+                className={`rounded-md border ${containerBorder} px-3 py-2 text-xs leading-relaxed`}
+                role="region"
+                aria-label="Short session recomposition summary"
+              >
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-3.5 h-3.5 text-[#6A8FB0]" aria-hidden="true" />
+                    <span className={`uppercase tracking-wider text-[10px] font-semibold ${labelColor}`}>
+                      {isFallback ? 'Compression-only fallback' : `${truth.targetMinutes} Min recomposed`}
+                    </span>
+                  </div>
+                  {!isFallback && (
+                    <Badge
+                      variant="outline"
+                      className="border-[#4F6D8A]/50 text-[#A5A5A5] text-[10px] h-5 px-1.5"
+                    >
+                      {strategyLabel}
+                    </Badge>
+                  )}
+                </div>
+                <p className={`${headlineColor} text-pretty`}>{truth.visibleSummary}</p>
+                {!isFallback && (
+                  <div className="mt-2 flex flex-col gap-1">
+                    {cappedAnchors.length > 0 && (
+                      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                        <span className="text-[#6A8FB0] text-[10px] uppercase tracking-wider">Preserved:</span>
+                        <span className="text-[#A5A5A5]">{cappedAnchors.join(', ')}</span>
+                      </div>
+                    )}
+                    {cappedDeferred.length > 0 && (
+                      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                        <span className="text-[#6A8FB0] text-[10px] uppercase tracking-wider">Deferred:</span>
+                        <span className="text-[#A5A5A5]">
+                          {cappedDeferred.join(', ')}
+                          {truth.deferredExercises.length > cappedDeferred.length
+                            ? ` +${truth.deferredExercises.length - cappedDeferred.length} more`
+                            : ''}
+                        </span>
+                      </div>
+                    )}
+                    {cappedSetDeltas.length > 0 && (
+                      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                        <span className="text-[#6A8FB0] text-[10px] uppercase tracking-wider">Sets:</span>
+                        <span className="text-[#A5A5A5]">{cappedSetDeltas.join('; ')}</span>
+                      </div>
+                    )}
+                    {cappedRpeDeltas.length > 0 && (
+                      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                        <span className="text-[#6A8FB0] text-[10px] uppercase tracking-wider">RPE:</span>
+                        <span className="text-[#A5A5A5]">{cappedRpeDeltas.join('; ')}</span>
+                      </div>
+                    )}
+                    {cappedRestDeltas.length > 0 && (
+                      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                        <span className="text-[#6A8FB0] text-[10px] uppercase tracking-wider">Rest:</span>
+                        <span className="text-[#A5A5A5]">{cappedRestDeltas.join('; ')}</span>
+                      </div>
+                    )}
+                    {executableMethods.length > 0 && (
+                      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                        <span className="text-[#6A8FB0] text-[10px] uppercase tracking-wider">Methods:</span>
+                        <span className="text-[#A5A5A5]">
+                          {executableMethods.map(m => `${m.method} (${m.state})`).join(', ')}
+                        </span>
+                      </div>
+                    )}
+                    {truth.safetyBlocks.length > 0 && (
+                      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                        <span className="text-amber-400/80 text-[10px] uppercase tracking-wider">Blocked:</span>
+                        <span className="text-amber-200/90">{truth.safetyBlocks.join('; ')}</span>
+                      </div>
+                    )}
+                    <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] font-mono text-[#7FA8CC]">
+                      <span>applied={truth.ledger.mutated + truth.ledger.visible + truth.ledger.executable}</span>
+                      <span>mut={truth.ledger.mutated}</span>
+                      <span>vis={truth.ledger.visible}</span>
+                      <span>exec={truth.ledger.executable}</span>
+                      <span>blk={truth.ledger.blocked}</span>
+                      <span>sup={truth.ledger.suppressed}</span>
+                      <span>nt={truth.ledger.no_target}</span>
+                      <span>aud={truth.ledger.audit_only}</span>
+                    </div>
+                  </div>
+                )}
+                {isFallback && (
+                  <p className="mt-1 text-[10px] text-amber-200/80">
+                    Doctrine recomposition was unavailable for this variant. The body was produced by compression only and is not labelled as doctrine-recomposed.
+                  </p>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Warmup Toggle */}
           <div>

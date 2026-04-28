@@ -379,7 +379,22 @@ export interface ActiveWorkoutCorridorProps {
   // parent from the canonical effective-contract resolver so the rest card
   // matches what the active card will show after the transition. Optional -
   // when absent, the rest card falls back to just the exercise name.
+  // Phase U preserves this string for backward compatibility - it is
+  // rendered ONLY when the structured fields below are all absent.
   nextExerciseSetup?: string
+  // [PHASE-U / UP-NEXT-DETAIL] Structured per-field next-exercise
+  // prescription. Each field independently optional. The corridor renders
+  // one chip / line per present field; missing fields are silently
+  // omitted (NEVER replaced with placeholder dashes or fabricated values).
+  // All fields originate from authoritative `nextExercise.*` truth in
+  // StreamlinedWorkoutSession.
+  nextExerciseSets?: number | null
+  nextExerciseRepsOrTime?: string | null
+  nextExercisePrescribedLoad?: { load: number; unit: string } | null
+  nextExerciseTargetRPE?: number | null
+  nextExerciseRestSeconds?: number | null
+  nextExerciseCategoryLabel?: string | null
+  nextExerciseSetupCue?: string | null
   
   // Block round rest props (for grouped methods - superset/circuit)
   blockLabel?: string
@@ -913,6 +928,14 @@ export function ActiveWorkoutStartCorridor({
   nextExerciseName,
   // [PHASE-J / UP-NEXT-SETUP] Compact one-liner with next exercise setup
   nextExerciseSetup,
+  // [PHASE-U / UP-NEXT-DETAIL] Structured next-exercise prescription fields
+  nextExerciseSets,
+  nextExerciseRepsOrTime,
+  nextExercisePrescribedLoad,
+  nextExerciseTargetRPE,
+  nextExerciseRestSeconds,
+  nextExerciseCategoryLabel,
+  nextExerciseSetupCue,
   // Block round rest props
   blockLabel,
   blockGroupType,
@@ -1514,31 +1537,139 @@ export function ActiveWorkoutStartCorridor({
                   </div>
                   
                   {/* Up Next Info */}
-                  {/* [PHASE-J / UP-NEXT-SETUP] Show prescribed setup details
-                      beneath the exercise name during between-exercise rest
-                      so the user can prepare load / band / mental focus
-                      before the next set starts. The setup string is built
-                      upstream from the canonical effective-contract
-                      resolver and includes only honest values (no fake
-                      load, no fake RPE). When the helper has nothing
-                      useful to say, we fall back to the legacy
-                      "Exercise N+1 of M" line so we never show a blank
-                      row. Same-exercise rest path unchanged. */}
+                  {/* [PHASE-U / UP-NEXT-DETAIL] Rich next-exercise preview.
+                      Phase J shipped a single concatenated one-liner that
+                      crammed every dimension into one truncatable row.
+                      Phase U breaks the same authoritative truth into
+                      named structured fields and renders one chip per
+                      dimension that actually exists. The user can scan
+                      "what's next" in a single glance:
+                        - exercise identity (name + optional category badge)
+                        - prescription chips (sets x reps OR sets x hold)
+                        - intensity chips (load, target RPE)
+                        - rest target chip
+                        - one-line setup cue from authoritative `note` only
+                      Truth-preservation rules (see parent helper
+                      `nextExerciseRich` in StreamlinedWorkoutSession):
+                        - Each chip renders ONLY when its underlying field
+                          is present and positive. We never show a chip
+                          with a placeholder dash.
+                        - Load chip only when prescribedLoad.load > 0.
+                          Bodyweight movements correctly show no load.
+                        - Target RPE only when targetRPE is a positive
+                          number. Some accessories legitimately omit it.
+                        - Setup cue is exclusively authoritative
+                          `nextExercise.note` text, lightly trimmed. We
+                          do NOT generate coaching language.
+                      Backwards-compat:
+                        - When ALL structured fields are absent (legacy
+                          parent or partial snapshot), fall back to the
+                          Phase J one-liner so the rest screen never
+                          regresses to a bare exercise name.
+                      Same-exercise rest path is unchanged - it still
+                      shows current set / current prescription. */}
                   <div className="pt-2 border-t border-[#2B313A]/50">
-                    <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-1">Up Next</p>
-                    {restType === 'between_exercise' ? (
-                      <>
-                        <p className="text-sm font-medium text-[#E6E9EF]">{nextExerciseName || 'Next Exercise'}</p>
-                        {nextExerciseSetup ? (
-                          <p className="text-xs text-[#A4ACB8]">{nextExerciseSetup}</p>
-                        ) : (
-                          <p className="text-xs text-[#A4ACB8]">Exercise {currentExerciseIndex + 2} of {totalExercises}</p>
-                        )}
-                      </>
-                    ) : (
+                    <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-1.5">Up Next</p>
+                    {restType === 'between_exercise' ? (() => {
+                      const hasAnyStructuredField =
+                        (typeof nextExerciseSets === 'number' && nextExerciseSets > 0) ||
+                        (typeof nextExerciseRepsOrTime === 'string' && nextExerciseRepsOrTime.length > 0) ||
+                        !!nextExercisePrescribedLoad ||
+                        (typeof nextExerciseTargetRPE === 'number' && nextExerciseTargetRPE > 0) ||
+                        (typeof nextExerciseRestSeconds === 'number' && nextExerciseRestSeconds > 0) ||
+                        (typeof nextExerciseCategoryLabel === 'string' && nextExerciseCategoryLabel.length > 0) ||
+                        (typeof nextExerciseSetupCue === 'string' && nextExerciseSetupCue.length > 0)
+                      const formatRestSeconds = (s: number): string => {
+                        if (s >= 60 && s % 60 === 0) return `${s / 60} min`
+                        if (s >= 60) return `${Math.round(s / 60 * 10) / 10} min`
+                        return `${s}s`
+                      }
+                      return (
+                        <>
+                          {/* Identity row: name + optional category badge */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-medium text-[#E6E9EF] leading-snug">
+                              {nextExerciseName || 'Next Exercise'}
+                            </p>
+                            {typeof nextExerciseCategoryLabel === 'string' && nextExerciseCategoryLabel.length > 0 && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] border-[#2B313A] text-[#6B7280] bg-transparent uppercase tracking-wide"
+                              >
+                                {nextExerciseCategoryLabel}
+                              </Badge>
+                            )}
+                          </div>
+
+                          {hasAnyStructuredField ? (
+                            <>
+                              {/* Prescription + intensity chip row */}
+                              <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                                {typeof nextExerciseSets === 'number' && nextExerciseSets > 0 && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] border-[#2B313A] text-[#A4ACB8] bg-[#1A1F26] tabular-nums"
+                                  >
+                                    {`Set 1 of ${nextExerciseSets}`}
+                                  </Badge>
+                                )}
+                                {typeof nextExerciseRepsOrTime === 'string' && nextExerciseRepsOrTime.length > 0 && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] border-[#2B313A] text-[#E6E9EF] bg-[#1A1F26]"
+                                    title={nextExerciseRepsOrTime}
+                                  >
+                                    {nextExerciseRepsOrTime}
+                                  </Badge>
+                                )}
+                                {nextExercisePrescribedLoad && nextExercisePrescribedLoad.load > 0 && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] border-amber-500/30 text-amber-400 bg-amber-500/10 tabular-nums"
+                                  >
+                                    {`+${nextExercisePrescribedLoad.load} ${nextExercisePrescribedLoad.unit || 'lbs'}`}
+                                  </Badge>
+                                )}
+                                {typeof nextExerciseTargetRPE === 'number' && nextExerciseTargetRPE > 0 && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] border-blue-500/30 text-blue-400 bg-blue-500/10 tabular-nums"
+                                  >
+                                    {`RPE ${nextExerciseTargetRPE}`}
+                                  </Badge>
+                                )}
+                                {typeof nextExerciseRestSeconds === 'number' && nextExerciseRestSeconds > 0 && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] border-[#2B313A] text-[#6B7280] bg-transparent tabular-nums"
+                                  >
+                                    {`Rest ${formatRestSeconds(nextExerciseRestSeconds)}`}
+                                  </Badge>
+                                )}
+                              </div>
+
+                              {/* Setup cue line - authoritative `note` only */}
+                              {typeof nextExerciseSetupCue === 'string' && nextExerciseSetupCue.length > 0 && (
+                                <p className="mt-1.5 text-[11px] text-[#A4ACB8] italic leading-snug line-clamp-2">
+                                  {nextExerciseSetupCue}
+                                </p>
+                              )}
+                            </>
+                          ) : nextExerciseSetup ? (
+                            // [PHASE-U] Backwards-compat fallback: when no
+                            // structured fields are present, render the
+                            // Phase J one-liner so existing behavior is
+                            // preserved end-to-end.
+                            <p className="mt-1 text-xs text-[#A4ACB8]">{nextExerciseSetup}</p>
+                          ) : (
+                            <p className="mt-1 text-xs text-[#A4ACB8]">{`Exercise ${currentExerciseIndex + 2} of ${totalExercises}`}</p>
+                          )}
+                        </>
+                      )
+                    })() : (
                       <>
                         <p className="text-sm font-medium text-[#E6E9EF]">{exerciseName}</p>
-                        <p className="text-xs text-[#A4ACB8]">Set {currentSetNumber} of {exerciseSets} · {exerciseRepsOrTime}</p>
+                        <p className="text-xs text-[#A4ACB8]">{`Set ${currentSetNumber} of ${exerciseSets} \u00b7 ${exerciseRepsOrTime}`}</p>
                       </>
                     )}
                   </div>

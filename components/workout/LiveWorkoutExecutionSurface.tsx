@@ -163,6 +163,17 @@ export interface LiveWorkoutSnapshot {
   // Optional - omitted when no useful detail can be honestly assembled
   // (no load, no reps target, no targetRPE, no set count).
   nextExerciseSetup?: string
+  // [PHASE-U / UP-NEXT-DETAIL] Structured per-field next-exercise prescription.
+  // Each field maps 1:1 onto authoritative `nextExercise.*` truth. Every
+  // field is independently optional - the corridor renders chips/lines
+  // only for fields that are present and positive. NEVER fabricated.
+  nextExerciseSets?: number | null
+  nextExerciseRepsOrTime?: string | null
+  nextExercisePrescribedLoad?: { load: number; unit: string } | null
+  nextExerciseTargetRPE?: number | null
+  nextExerciseRestSeconds?: number | null
+  nextExerciseCategoryLabel?: string | null
+  nextExerciseSetupCue?: string | null
 
   // Block round rest
   blockLabel?: string
@@ -634,6 +645,18 @@ export function LiveWorkoutExecutionSurface({
         // it does not build the string here; that ownership stays in
         // StreamlinedWorkoutSession's snapshot construction.
         nextExerciseSetup={snapshot.nextExerciseSetup}
+        // [PHASE-U / UP-NEXT-DETAIL] Forward structured next-exercise
+        // prescription fields. The corridor renders one chip / line per
+        // field that is present; missing fields are silently omitted.
+        // Surface remains a thin adapter - all values originate in
+        // StreamlinedWorkoutSession's snapshot construction.
+        nextExerciseSets={snapshot.nextExerciseSets}
+        nextExerciseRepsOrTime={snapshot.nextExerciseRepsOrTime}
+        nextExercisePrescribedLoad={snapshot.nextExercisePrescribedLoad}
+        nextExerciseTargetRPE={snapshot.nextExerciseTargetRPE}
+        nextExerciseRestSeconds={snapshot.nextExerciseRestSeconds}
+        nextExerciseCategoryLabel={snapshot.nextExerciseCategoryLabel}
+        nextExerciseSetupCue={snapshot.nextExerciseSetupCue}
         // Block round rest
         blockLabel={snapshot.blockLabel}
         blockGroupType={snapshot.blockGroupType}

@@ -178,6 +178,12 @@ import { ProgramMaterializationStaleNotice } from '@/components/programs/Program
 // wrapper already writes. Does NOT show selected-rule counts, batch keys,
 // source labels, or Phase-disclaimer copy.
       import { MaterializationStatusLine, DoctrineCausalLine, WeeklyMethodChallengeLine } from '@/components/programs/MaterializationStatusLine'
+// [PHASE W] Honest doctrine causality ledger — splits Phase Q's
+// ELIGIBLE_AND_APPLIED into MATERIALIZED (concrete fields cited) vs
+// APPLIED_NO_STRUCTURAL_CHANGE, plus DISPLAYED_ONLY / UNKNOWN_UNVERIFIED.
+// Reads only canonical program artifacts already stamped by Phase Q/4A/4E/4L.
+// Pure observation — never mutates the program.
+import { DoctrineCausalityLedgerLine } from '@/components/programs/DoctrineCausalityLedgerLine'
 // [VISIBLE-SESSION-TRUTH-LOCK] Single canonical visible-card display contract.
 // The page-level CanonicalProgramDisplayTruth now embeds these surfaces so
 // every visible day card consumes one authoritative contract owned by the
@@ -1544,6 +1550,23 @@ function ProgramDisplayWrapper({
             notice owns that state). Does NOT show selected-rule counts,
             batch keys, source labels, or Phase-disclaimer copy. */}
         <MaterializationStatusLine program={program} />
+
+        {/* [PHASE W] DOCTRINE CAUSALITY LEDGER LINE — athlete-facing.
+            Complementary to MaterializationStatusLine: that line reports
+            ROLLUP-level structural change counts; this line reports
+            PER-RULE classification distribution after splitting Phase Q's
+            ELIGIBLE_AND_APPLIED into:
+              - MATERIALIZED                 (concrete fields cited)
+              - APPLIED_NO_STRUCTURAL_CHANGE (engine accepted, no diff)
+            and surfacing the cosmetic-only buckets honestly:
+              - ACKNOWLEDGED_ONLY
+              - POST_HOC_ONLY
+              - DISPLAYED_ONLY
+              - UNKNOWN_UNVERIFIED
+            Hides on legacy / inconclusive empty programs (Phase 4B owns
+            that state). Reads only artifacts already stamped on the
+            canonical program object — pure observation, no mutation. */}
+        <DoctrineCausalityLedgerLine program={program} />
 
         {/* [PHASE 4E] DOCTRINE CAUSAL CHALLENGE LINE — athlete-facing.
             Reads ONLY `program.doctrineCausalChallenge` (the rollup of

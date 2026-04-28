@@ -104,15 +104,23 @@ export function MaterializationStatusLine({ program }: Props) {
   }
 
   if (hasRealChange) {
+    // [PHASE W] Header switched from "Doctrine applied" to
+    // "Doctrine materialized" because this branch is gated on
+    // `hasRealChange === true`, i.e. the materialization rollup confirms at
+    // least one of {sessionsWithStructuralChange, totalGroupedBlocks,
+    // totalRowMethods, totalChangedExercises} > 0. That is exactly Phase W's
+    // MATERIALIZED definition (engine accepted AND output structurally
+    // changed, with concrete cited counts in the body). The chip body is
+    // unchanged — it still cites the same authoritative rollup fields.
     return (
       <div
         role="status"
         aria-live="polite"
-        data-materialization-status="applied"
+        data-materialization-status="materialized"
         className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-emerald-500/20 bg-emerald-500/[0.04] px-3 py-2 max-w-full min-w-0 overflow-hidden"
       >
         <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400/90" aria-hidden />
-        <span className="text-[12px] font-medium text-emerald-200 shrink-0">Doctrine applied</span>
+        <span className="text-[12px] font-medium text-emerald-200 shrink-0">Doctrine materialized</span>
         <span className="text-[12px] text-emerald-200/70 break-words [overflow-wrap:anywhere] min-w-0">
           {parts.join(' · ')}
         </span>

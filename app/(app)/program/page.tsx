@@ -1665,6 +1665,14 @@ function ProgramDisplayWrapper({
           ========================================================================== */}
       <ProgramTruthSummary
         truthExplanation={resolvedTruthExplanation as unknown as Parameters<typeof ProgramTruthSummary>[0]['truthExplanation']}
+        // [PHASE AB1] Forward the Rule Population Ledger stamped by the
+        // builder so the user-facing summary can render the honest
+        // executable / visible / scoring-only / blocked / no-target /
+        // audit-only rollup. Defensive cast: the ledger is optional and
+        // missing on programs generated before AB1.
+        rulePopulationLedger={
+          (program as unknown as { rulePopulationLedger?: Parameters<typeof ProgramTruthSummary>[0]['rulePopulationLedger'] })?.rulePopulationLedger ?? null
+        }
       />
 
         {/* ==========================================================================

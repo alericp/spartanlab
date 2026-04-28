@@ -13827,7 +13827,7 @@ async function generateAdaptiveProgramImpl(
     // [PHASE 3C PACKAGING-TRUTH-LOCK]
     // SET-EXECUTION METHOD MATERIALIZATION (top_set / drop_set / rest_pause)
     //
-    // These are PER-ROW execution cues, not grouped structure — same shape
+    // These are PER-ROW execution cues, not grouped structure �� same shape
     // as cluster's method-only emission (no blockId, just ex.method +
     // ex.setExecutionMethod). Pre-3C the registry supported them
     // (training-methods.ts L368-L525, setExecutionMethod type at L1220) and
@@ -21773,6 +21773,64 @@ return explanations.length > 0 ? explanations : undefined
       phase4hMatrix
     ;(finalProgram as unknown as { fullOnboardingTruthMaterializationMap?: unknown }).fullOnboardingTruthMaterializationMap =
       phase4hOnboardingMap
+
+    // ===================================================================
+    // [PHASE AB1] RULE POPULATION LEDGER
+    // ===================================================================
+    // Pure derivation from `phase4hMatrix`. Stamps the canonical eleven-
+    // state ledger (loaded / candidate / eligible / selected / mutated /
+    // visible / executable / blocked / suppressed / no_target / audit_only)
+    // onto the program object. The ledger is the only surface that
+    // consumers (Program UI, debug surfaces, future phases) should use
+    // when they need to answer "did this rule actually change the
+    // program?" — the matrix is preserved as a row-level diagnostic.
+    //
+    // Consumes the AA4 cooldown-flexibility bridge telemetry already
+    // computed above (`phase4iBlocksInjected`, `phase4iSessionsInjected`)
+    // so the cooldown_flexibility category can be honestly upgraded to
+    // `executable` even on saved programs whose matrix proof fields drop
+    // through normalisation.
+    //
+    // Fail-soft: a derivation error never breaks generation.
+    // ===================================================================
+    try {
+      const { buildRulePopulationLedger } = await import(
+        '@/lib/program/rule-population-ledger-contract'
+      )
+      const phaseAB1Ledger = buildRulePopulationLedger({
+        matrix: phase4hMatrix,
+        cooldownFlexBridge: {
+          bridgeBlocksInjected: phase4iBlocksInjected,
+          bridgeSessionsInjected: phase4iSessionsInjected,
+        },
+      })
+      ;(finalProgram as unknown as { rulePopulationLedger?: unknown }).rulePopulationLedger =
+        phaseAB1Ledger
+      console.log('[PHASE-AB1-RULE-POPULATION-LEDGER]', {
+        verdict: phaseAB1Ledger.verdict,
+        headline: phaseAB1Ledger.headline,
+        categoriesExecutable: phaseAB1Ledger.totals.categoriesExecutable,
+        categoriesVisible: phaseAB1Ledger.totals.categoriesVisible,
+        categoriesMutated: phaseAB1Ledger.totals.categoriesMutated,
+        categoriesScoringOnly: phaseAB1Ledger.totals.categoriesScoringOnly,
+        categoriesAuditOnly: phaseAB1Ledger.totals.categoriesAuditOnly,
+        categoriesBlocked: phaseAB1Ledger.totals.categoriesBlocked,
+        categoriesNoTarget: phaseAB1Ledger.totals.categoriesNoTarget,
+        categoriesNotRelevant: phaseAB1Ledger.totals.categoriesNotRelevant,
+        categoriesMaterializerNotConnected:
+          phaseAB1Ledger.totals.categoriesMaterializerNotConnected,
+        totalRulesRead: phaseAB1Ledger.totals.totalRulesRead,
+        totalRulesMaterialized: phaseAB1Ledger.totals.totalRulesMaterialized,
+        categoriesByState: phaseAB1Ledger.categories.map(c => ({
+          category: c.category,
+          state: c.state,
+        })),
+      })
+    } catch (ab1Err) {
+      console.log('[PHASE-AB1-RULE-POPULATION-LEDGER-FAILED]', {
+        error: String(ab1Err),
+      })
+    }
 
     console.log('[PHASE4H-DOCTRINE-MATERIALIZATION-MATRIX]', {
       verdict: phase4hMatrix.verdict,

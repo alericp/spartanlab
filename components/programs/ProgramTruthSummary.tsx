@@ -7,6 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { getSafeSkillTrace } from '@/lib/safe-access'
+import type {
+  RulePopulationLedger,
+  RulePopulationLedgerEntryState,
+} from '@/lib/program/rule-population-ledger-contract'
+import { RULE_LEDGER_CATEGORY_LABELS } from '@/lib/program/rule-population-ledger-contract'
 
 /**
  * PROGRAM TRUTH SUMMARY
@@ -334,6 +339,13 @@ interface SelectedSkillTraceContract {
 interface ProgramTruthSummaryProps {
   truthExplanation: TruthExplanation | null | undefined
   selectedSkillTrace?: SelectedSkillTraceContract | null
+  /**
+   * [PHASE AB1] The Rule Population Ledger stamped onto the program by
+   * `buildRulePopulationLedger`. Optional — older saved programs that
+   * predate AB1 will not have it, and the component renders nothing in
+   * that case rather than fabricating counts.
+   */
+  rulePopulationLedger?: RulePopulationLedger | null
   className?: string
 }
 
@@ -365,7 +377,7 @@ function toneClasses(tone: Tone): string {
   }
 }
 
-export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, className }: ProgramTruthSummaryProps) {
+export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, rulePopulationLedger, className }: ProgramTruthSummaryProps) {
   const [isExpanded, setIsExpanded] = useState(false)
 
   if (!truthExplanation) {
@@ -804,6 +816,138 @@ export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, clas
                 </div>
               </section>
             )}
+
+            {/* ===========================================================
+                [PHASE AB1] RULE POPULATION LEDGER — honest one-section
+                rollup of how doctrine rules actually shaped the program.
+                Reads `program.rulePopulationLedger` (stamped by AB1 in
+                the builder). Each category resolves to ONE state from
+                the eleven-state contract — `applied` only ever means
+                mutated/visible/executable. Categories that are
+                scoring-only / audit-only / blocked / no-target / not
+                relevant are surfaced separately and NEVER counted as
+                applied.
+
+                Suppressed entirely when ledger is missing (older saved
+                programs predate AB1) so we never fabricate counts.
+                =========================================================== */}
+            {rulePopulationLedger &&
+              rulePopulationLedger.verdict !== 'RULES_NOT_AVAILABLE' &&
+              rulePopulationLedger.categories.length > 0 && (
+                <section className="space-y-2">
+                  <h4 className="text-xs font-medium text-[#8A8A8A] uppercase tracking-wide">
+                    Rule Population
+                  </h4>
+                  <div className="text-xs bg-[#1E1E1E] rounded p-2.5 space-y-2">
+                    {/* Honest verdict line + chip rollup */}
+                    <p className="text-[#E8E4D9] leading-relaxed">
+                      {rulePopulationLedger.headline}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {rulePopulationLedger.totals.categoriesExecutable > 0 && (
+                        <span className="text-[11px] px-2 py-0.5 rounded border bg-green-500/10 text-green-400 border-green-500/20">
+                          {rulePopulationLedger.totals.categoriesExecutable} executable
+                        </span>
+                      )}
+                      {rulePopulationLedger.totals.categoriesVisible -
+                        rulePopulationLedger.totals.categoriesExecutable >
+                        0 && (
+                        <span className="text-[11px] px-2 py-0.5 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">
+                          {rulePopulationLedger.totals.categoriesVisible -
+                            rulePopulationLedger.totals.categoriesExecutable}{' '}
+                          visible only
+                        </span>
+                      )}
+                      {rulePopulationLedger.totals.categoriesScoringOnly > 0 && (
+                        <span className="text-[11px] px-2 py-0.5 rounded border bg-[#2A2A2A] text-[#A4ACB8] border-[#3A3A3A]">
+                          {rulePopulationLedger.totals.categoriesScoringOnly} influenced scoring
+                        </span>
+                      )}
+                      {rulePopulationLedger.totals.categoriesBlocked > 0 && (
+                        <span className="text-[11px] px-2 py-0.5 rounded border bg-amber-500/10 text-amber-400 border-amber-500/30">
+                          {rulePopulationLedger.totals.categoriesBlocked} blocked
+                        </span>
+                      )}
+                      {rulePopulationLedger.totals.categoriesNoTarget > 0 && (
+                        <span className="text-[11px] px-2 py-0.5 rounded border bg-[#2A2A2A] text-[#9A9A9A] border-[#3A3A3A]">
+                          {rulePopulationLedger.totals.categoriesNoTarget} no target
+                        </span>
+                      )}
+                      {rulePopulationLedger.totals.categoriesAuditOnly > 0 && (
+                        <span className="text-[11px] px-2 py-0.5 rounded border bg-[#2A2A2A] text-[#9A9A9A] border-[#3A3A3A]">
+                          {rulePopulationLedger.totals.categoriesAuditOnly} audit only
+                        </span>
+                      )}
+                      {rulePopulationLedger.totals.categoriesNotRelevant > 0 && (
+                        <span className="text-[11px] px-2 py-0.5 rounded border bg-[#2A2A2A] text-[#6A6A6A] border-[#3A3A3A]">
+                          {rulePopulationLedger.totals.categoriesNotRelevant} not relevant
+                        </span>
+                      )}
+                    </div>
+                    {/* Per-category honest list — one line each. Only
+                        surfaces categories whose state is meaningful for
+                        the user (executable / visible / blocked /
+                        no_target / scoring-only). audit_only and
+                        not-relevant rows are summarised in the chip row
+                        above to keep this list compact. */}
+                    <div className="grid grid-cols-1 gap-1 pt-1">
+                      {rulePopulationLedger.categories
+                        .filter((c) =>
+                          (
+                            [
+                              'executable',
+                              'visible',
+                              'mutated',
+                              'blocked',
+                              'no_target',
+                              'selected',
+                            ] as RulePopulationLedgerEntryState[]
+                          ).includes(c.state),
+                        )
+                        .map((c) => {
+                          const tone =
+                            c.state === 'executable'
+                              ? 'text-green-400'
+                              : c.state === 'visible' || c.state === 'mutated'
+                                ? 'text-blue-400'
+                                : c.state === 'blocked'
+                                  ? 'text-amber-400'
+                                  : c.state === 'no_target'
+                                    ? 'text-[#A4ACB8]'
+                                    : 'text-[#9A9A9A]'
+                          const stateText =
+                            c.state === 'executable'
+                              ? 'shapes live workout'
+                              : c.state === 'visible'
+                                ? 'visible in program'
+                                : c.state === 'mutated'
+                                  ? 'changed program fields'
+                                  : c.state === 'blocked'
+                                    ? 'blocked'
+                                    : c.state === 'no_target'
+                                      ? 'no target this run'
+                                      : 'influenced scoring'
+                          return (
+                            <div
+                              key={c.category}
+                              className="flex items-start justify-between gap-3"
+                            >
+                              <span className="text-[#E8E4D9]">
+                                {RULE_LEDGER_CATEGORY_LABELS[c.category] ?? c.category}
+                              </span>
+                              <span className={cn('text-[11px] flex-shrink-0', tone)}>
+                                {stateText}
+                                {c.state === 'blocked' && c.noChangeReason
+                                  ? ` — ${c.noChangeReason}`
+                                  : ''}
+                              </span>
+                            </div>
+                          )
+                        })}
+                    </div>
+                  </div>
+                </section>
+              )}
 
             {/* Equipment — very soft, one flat row, low visual weight */}
             {equipmentLabels.length > 0 && (

@@ -3272,9 +3272,17 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 return null
               }
 
+              // [PHASE AB1] Per-AB1 Part E: this line counts METHOD-DECISION
+              // resolutions (e.g. "9 method blocks resolved as APPLIED"),
+              // not "9 of N rules". The previous label "9 doctrine applied"
+              // implicitly suggested rule-level counts and conflicted with
+              // AB1's semantic rule that "applied" must mean
+              // mutated/visible/executable at the level being labelled.
+              // The count is honest at method-decision-block level, so we
+              // keep the count and tighten the wording to match.
               const segments: string[] = []
               if (appliedCount > 0) {
-                segments.push(`${appliedCount} doctrine applied`)
+                segments.push(`${appliedCount} method ${appliedCount === 1 ? 'decision' : 'decisions'} applied`)
               }
               if (trueSafetyCount > 0) {
                 segments.push(`${trueSafetyCount} blocked for safety`)
@@ -3303,7 +3311,15 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                       is empty AND there is no bug to surface. */}
                   {segments.length > 0 && (
                     <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                      <span className="text-[#8A8A8A]">Doctrine:</span>
+                      {/* [PHASE AB1] Renamed label from "Doctrine:" to
+                          "Method decisions:" because every count below
+                          (applied / blocked / no target / not for this day /
+                          needs audit) is at METHOD-DECISION-BLOCK level via
+                          `cardSurface.doctrineBlockResolution`. The user-
+                          visible program-level rule rollup now lives in
+                          ProgramTruthSummary and reads
+                          `program.rulePopulationLedger`. */}
+                      <span className="text-[#8A8A8A]">Method decisions:</span>
                       {appliedCount > 0 && (
                         <span className="text-[#7FB287]">
                           {appliedCount} applied

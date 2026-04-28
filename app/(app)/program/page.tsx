@@ -195,6 +195,13 @@ import { DoctrineCausalityLedgerLine } from '@/components/programs/DoctrineCausa
 // <details> disclosure. Reduces vertical clutter while keeping every
 // causality state honestly accessible.
 import { ProgramTrustAccordion } from '@/components/programs/ProgramTrustAccordion'
+// [PHASE AB6] Top-level Weekly Method Decisions accordion. Renders directly
+// below ProgramTrustAccordion so the user sees AI-coach method reasoning
+// without expanding every day card. Pure read-only — derives from
+// `program.weeklyMethodRepresentation` (the Phase 4J contract). Renders an
+// honest "not available" fallback for older saved programs that lack the
+// contract instead of inventing fake reasoning.
+import { WeeklyMethodDecisionAccordion } from '@/components/programs/WeeklyMethodDecisionAccordion'
 // [VISIBLE-SESSION-TRUTH-LOCK] Single canonical visible-card display contract.
 // The page-level CanonicalProgramDisplayTruth now embeds these surfaces so
 // every visible day card consumes one authoritative contract owned by the
@@ -1706,6 +1713,39 @@ function ProgramDisplayWrapper({
             entirely (the Phase 4B stale notice owns that state).
             ========================================================================== */}
         <ProgramTrustAccordion program={program} />
+
+        {/* ==========================================================================
+            [PHASE AB6] WEEKLY METHOD DECISIONS ACCORDION
+            ----------------------------------------------------------------------
+            Compact top-level surface that explains, in one place above the day
+            cards:
+              - which training methods (supersets, circuits, clusters,
+                rest-pause, etc.) the AI coach actually used this week,
+              - which user-preferred methods were NOT used and why
+                (skill-quality protection / strength specificity / engine
+                gap / not selected),
+              - whether a future safe override could honor the preference,
+              - which decision dimensions are not yet evaluated by the
+                current method decision layer (recovery, fatigue,
+                progression-week, joint/tendon caution, dosage recompute,
+                session-length tradeoff, exercise-compatibility recompute).
+
+            Source of truth: `program.weeklyMethodRepresentation` (Phase 4J
+            `WeeklyMethodRepresentationContract`, set by
+            `lib/server/authoritative-program-generation.ts`). Reading
+            happens inside the accordion via the pure
+            `buildWeeklyMethodDecisionSummary` derivation — no second
+            method-selection engine, no UI-side reasoning invention.
+
+            Older saved programs that lack the Phase 4J contract render an
+            honest "not available — regenerate" fallback rather than fake
+            method reasoning.
+
+            The accordion is collapsed by default; the always-visible
+            header shows used / preferred-not-used / engine-gap counts so
+            the user gets the gist without expanding.
+            ========================================================================== */}
+        <WeeklyMethodDecisionAccordion program={program} />
 
         {/* [PHASE 4C — PROOF DEMOTION] DoctrineRuntimeProof and
             DoctrineIntegrationProofBlock are diagnostic surfaces. They

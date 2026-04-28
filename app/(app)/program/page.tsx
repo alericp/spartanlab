@@ -183,7 +183,18 @@ import { ProgramMaterializationStaleNotice } from '@/components/programs/Program
 // APPLIED_NO_STRUCTURAL_CHANGE, plus DISPLAYED_ONLY / UNKNOWN_UNVERIFIED.
 // Reads only canonical program artifacts already stamped by Phase Q/4A/4E/4L.
 // Pure observation — never mutates the program.
+//
+// [PHASE X] Phase W's `DoctrineCausalityLedgerLine` is no longer rendered
+// directly on the main Program surface — it now lives inside
+// `ProgramTrustAccordion` along with the Phase 4C / 4E / 4L proof lines.
+// The import is kept here so the accordion can be replaced or
+// short-circuited from this page in a future phase without re-importing.
 import { DoctrineCausalityLedgerLine } from '@/components/programs/DoctrineCausalityLedgerLine'
+// [PHASE X] PROGRAM TRUST ACCORDION — compact verdict + chips above the
+// fold, full Phase 4C / W / 4E / 4L proof preserved inside a native
+// <details> disclosure. Reduces vertical clutter while keeping every
+// causality state honestly accessible.
+import { ProgramTrustAccordion } from '@/components/programs/ProgramTrustAccordion'
 // [VISIBLE-SESSION-TRUTH-LOCK] Single canonical visible-card display contract.
 // The page-level CanonicalProgramDisplayTruth now embeds these surfaces so
 // every visible day card consumes one authoritative contract owned by the
@@ -1542,57 +1553,37 @@ function ProgramDisplayWrapper({
         truthExplanation={resolvedTruthExplanation as unknown as Parameters<typeof ProgramTruthSummary>[0]['truthExplanation']}
       />
 
-        {/* [PHASE 4C] MATERIALIZATION STATUS LINE — athlete-facing.
-            One compact, mobile-safe, honest line built ONLY from
-            `program.doctrineIntegration.materializationRollup` (the real
-            counts the Phase 4A wrapper writes from actual session fields).
-            Renders nothing on stale/legacy programs (the Phase 4B stale
-            notice owns that state). Does NOT show selected-rule counts,
-            batch keys, source labels, or Phase-disclaimer copy. */}
-        <MaterializationStatusLine program={program} />
+        {/* ==========================================================================
+            [PHASE X] PROGRAM TRUST ACCORDION
+            ----------------------------------------------------------------------
+            Replaces the four previously-stacked proof lines on the main
+            athlete-facing surface:
+              - Phase 4C MaterializationStatusLine
+              - Phase W  DoctrineCausalityLedgerLine
+              - Phase 4E DoctrineCausalLine
+              - Phase 4L WeeklyMethodChallengeLine
 
-        {/* [PHASE W] DOCTRINE CAUSALITY LEDGER LINE — athlete-facing.
-            Complementary to MaterializationStatusLine: that line reports
-            ROLLUP-level structural change counts; this line reports
-            PER-RULE classification distribution after splitting Phase Q's
-            ELIGIBLE_AND_APPLIED into:
-              - MATERIALIZED                 (concrete fields cited)
-              - APPLIED_NO_STRUCTURAL_CHANGE (engine accepted, no diff)
-            and surfacing the cosmetic-only buckets honestly:
-              - ACKNOWLEDGED_ONLY
-              - POST_HOC_ONLY
-              - DISPLAYED_ONLY
-              - UNKNOWN_UNVERIFIED
-            Hides on legacy / inconclusive empty programs (Phase 4B owns
-            that state). Reads only artifacts already stamped on the
-            canonical program object — pure observation, no mutation. */}
-        <DoctrineCausalityLedgerLine program={program} />
+            The accordion renders a compact two-tier surface:
+              LEVEL 1 (always visible): premium verdict header, one-line
+                Phase W summary, chip strip with non-zero buckets only.
+              LEVEL 2 (collapsed by default, behind <details>): the four
+                original proof lines render IDENTICALLY to their previous
+                behavior — same components, same `program` prop, same data
+                paths, same fail-closed null behavior.
 
-        {/* [PHASE 4E] DOCTRINE CAUSAL CHALLENGE LINE — athlete-facing.
-            Reads ONLY `program.doctrineCausalChallenge` (the rollup of
-            per-session pre-doctrine top-3 vs post-doctrine top-3 audits
-            harvested from the exercise selector). Answers the distinct
-            question "did doctrine actually pick a different exercise?"
-            that materialization rollup does not answer. Honest states:
-              - emerald: doctrine changed N exercise selections (causal)
-              - amber:   doctrine did not run / domain gap (real failure)
-              - zinc:    doctrine evaluated alternatives, base ranking won
-              - hidden:  legacy program without challenge object
-            Never claims doctrine "applied" without an actual winner change. */}
-        <DoctrineCausalLine program={program} />
+            Phase W causality states are PRESERVED INDIVIDUALLY:
+              materialized / applied (no change) / suppressed / blocked by
+              runtime / acknowledged / post-hoc / displayed-only /
+              unknown-unverified all remain accessible.
 
-        {/* [PHASE 4L] WEEKLY METHOD CHALLENGE LINE — athlete-facing.
-            Compact per-method chip set (Top Set + Back-Off / Drop Set /
-            Rest-Pause / Cluster / Endurance Density / Superset / Circuit /
-            Density Block) showing APPLIED / BLOCKED_BY_SAFETY /
-            NOT_NEEDED_FOR_PROFILE / MATERIALIZER_NOT_CONNECTED based on
-            real audit data from `program.weeklyMethodRepresentation`
-            (Phase 4J auditor) reclassified through
-            `program.rowLevelMutatorRollup` (Phase 4L mutator) when the
-            mutator owns a method the auditor cannot see (endurance_density).
-            Includes a compact prescription-bounds summary line when the
-            mutator ran. Hidden on legacy / pre-Phase-4J programs. */}
-        <WeeklyMethodChallengeLine program={program} />
+            Cluster / circuit / density "blocked by runtime" remains
+            honestly visible inside the detail disclosure — never hidden,
+            never falsely promoted.
+
+            On legacy / inconclusive empty programs, the accordion hides
+            entirely (the Phase 4B stale notice owns that state).
+            ========================================================================== */}
+        <ProgramTrustAccordion program={program} />
 
         {/* [PHASE 4C — PROOF DEMOTION] DoctrineRuntimeProof and
             DoctrineIntegrationProofBlock are diagnostic surfaces. They

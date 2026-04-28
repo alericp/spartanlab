@@ -999,7 +999,7 @@ function buildProfileInfluence(
 // invention. Pure function; does not mutate the session.
 // =============================================================================
 
-function buildActualMaterialization(
+export function buildActualMaterialization(
   session: MethodDecisionSessionInput,
 ): MethodDecisionActualMaterialization {
   const sm = (session as unknown as {
@@ -1024,6 +1024,15 @@ function buildActualMaterialization(
           drop_set?: number
           rest_pause?: number
         }
+        // [PHASE AA1R] Integrity gate fields. Old summaries lack these, so all
+        // reads are guarded with sane defaults.
+        summaryIntegrityVerdict?:
+          | 'PASS_FINAL_STRUCTURE_CONFIRMED'
+          | 'WARN_STYLED_GROUP_WITHOUT_ROW_BINDING'
+          | 'FAIL_METHOD_CLAIM_WITH_ZERO_CHANGED_EXERCISES'
+        staleStyledGroupCount?: number
+        orphanedStyledGroupMethods?: string[]
+        groupedExerciseRowCount?: number
       } | null
       styledGroups?: Array<{
         groupType?: string | null
@@ -1046,20 +1055,24 @@ function buildActualMaterialization(
   // ---- PATH 1: builder-locked summary present (post-3F builds) -----------
   const summary = sm?.methodMaterializationSummary ?? null
   if (summary && typeof summary === 'object') {
-    const groupedSuperset = summary.groupedMethodCounts?.superset ?? 0
-    const groupedCircuit = summary.groupedMethodCounts?.circuit ?? 0
-    const groupedDensity = summary.groupedMethodCounts?.density_block ?? 0
+    // [PHASE AA1R] Integrity-gate the grouped counts. If the summary's
+    // integrity verdict is FAIL_METHOD_CLAIM_WITH_ZERO_CHANGED_EXERCISES we
+    // refuse to surface any grouped claim — the styledGroup was orphaned and
+    // the doctrine panel must not lie. The reconciler also zeroes counts in
+    // this case, but we double-check here so older saved programs that read
+    // a stale summary still get an honest verdict at display time.
+    const verdict = summary.summaryIntegrityVerdict ?? 'PASS_FINAL_STRUCTURE_CONFIRMED'
+    const integrityFailed = verdict === 'FAIL_METHOD_CLAIM_WITH_ZERO_CHANGED_EXERCISES'
+
+    const groupedSuperset = integrityFailed ? 0 : (summary.groupedMethodCounts?.superset ?? 0)
+    const groupedCircuit = integrityFailed ? 0 : (summary.groupedMethodCounts?.circuit ?? 0)
+    const groupedDensity = integrityFailed ? 0 : (summary.groupedMethodCounts?.density_block ?? 0)
     const rowCluster = summary.rowExecutionCounts?.cluster ?? 0
     const rowTopSet = summary.rowExecutionCounts?.top_set ?? 0
     const rowDropSet = summary.rowExecutionCounts?.drop_set ?? 0
     const rowRestPause = summary.rowExecutionCounts?.rest_pause ?? 0
-    const groupedBlockCount = summary.groupedBlockCount ?? (groupedSuperset + groupedCircuit + groupedDensity)
-    const dominant = summary.dominantRenderMode ?? (
-      groupedBlockCount > 0 ? 'grouped'
-      : (rowCluster + rowTopSet + rowDropSet + rowRestPause) > 0 ? 'flat_with_method_cues'
-      : 'flat'
-    )
-    const hasReal = dominant !== 'flat'
+    const groupedBlockCountRaw = summary.groupedBlockCount ?? (groupedSuperset + groupedCircuit + groupedDensity)
+    const groupedBlockCount = integrityFailed ? 0 : groupedBlockCountRaw
 
     // Count exercises that materially changed (have a blockId in a renderable
     // grouped block OR carry a setExecutionMethod). This is a count of REAL
@@ -1078,20 +1091,38 @@ function buildActualMaterialization(
       }
     }
 
+    // [PHASE AA1R] Final defense-in-depth gate: even if the summary says
+    // grouped count > 0, refuse to claim grouped if no exercise rows survive
+    // with a blockId (groupedExerciseRowCount preferred when present).
+    const groupedRowProof = summary.groupedExerciseRowCount ?? blockIdsSeen.size
+    const groupedClaimSurvives = groupedBlockCount > 0 && groupedRowProof >= 2
+    const finalGroupedSuperset = groupedClaimSurvives ? groupedSuperset : 0
+    const finalGroupedCircuit = groupedClaimSurvives ? groupedCircuit : 0
+    const finalGroupedDensity = groupedClaimSurvives ? groupedDensity : 0
+    const finalGroupedBlockCount = groupedClaimSurvives ? groupedBlockCount : 0
+
+    // Recompute dominant mode AFTER all integrity gates so a failed claim
+    // collapses to flat / flat_with_method_cues honestly.
+    const dominant: 'grouped' | 'flat_with_method_cues' | 'flat' = finalGroupedBlockCount > 0
+      ? 'grouped'
+      : (rowCluster + rowTopSet + rowDropSet + rowRestPause) > 0 ? 'flat_with_method_cues'
+      : 'flat'
+    const hasReal = dominant !== 'flat'
+
     const descriptions: string[] = []
-    if (groupedDensity > 0) {
+    if (finalGroupedDensity > 0) {
       descriptions.push(
-        `Density Block applied — ${groupedDensity === 1 ? 'one block' : `${groupedDensity} blocks`} of accessory exercises grouped under a timed work cap`,
+        `Density Block applied — ${finalGroupedDensity === 1 ? 'one block' : `${finalGroupedDensity} blocks`} of accessory exercises grouped under a timed work cap`,
       )
     }
-    if (groupedSuperset > 0) {
+    if (finalGroupedSuperset > 0) {
       descriptions.push(
-        `Superset applied — ${groupedSuperset === 1 ? 'one paired block' : `${groupedSuperset} paired blocks`} with minimal rest between movements`,
+        `Superset applied — ${finalGroupedSuperset === 1 ? 'one paired block' : `${finalGroupedSuperset} paired blocks`} with minimal rest between movements`,
       )
     }
-    if (groupedCircuit > 0) {
+    if (finalGroupedCircuit > 0) {
       descriptions.push(
-        `Circuit applied — ${groupedCircuit === 1 ? 'one round-based block' : `${groupedCircuit} round-based blocks`} with rest after the full round`,
+        `Circuit applied — ${finalGroupedCircuit === 1 ? 'one round-based block' : `${finalGroupedCircuit} round-based blocks`} with rest after the full round`,
       )
     }
     if (rowCluster > 0) {
@@ -1121,11 +1152,11 @@ function buildActualMaterialization(
     return {
       hasRealStructuralChange: hasReal,
       dominantRenderMode: dominant,
-      groupedBlockCount,
+      groupedBlockCount: finalGroupedBlockCount,
       groupedMethodCounts: {
-        superset: groupedSuperset,
-        circuit: groupedCircuit,
-        density_block: groupedDensity,
+        superset: finalGroupedSuperset,
+        circuit: finalGroupedCircuit,
+        density_block: finalGroupedDensity,
       },
       rowExecutionCounts: {
         cluster: rowCluster,

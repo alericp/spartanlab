@@ -97,6 +97,39 @@ export interface MethodMaterializationSummary {
    * tag for flat-with-method-cues sessions, or null for genuinely flat.
    */
   primaryPackagingOutcome: string | null
+  // ---------------------------------------------------------------------------
+  // [PHASE AA1R] STRUCTURAL INTEGRITY VERDICT
+  //
+  // Rebuilt after every method/structural/numeric corridor has run. Detects
+  // styledGroups that survived as visual fossils after later mutations
+  // flattened the actual exercise rows. Without these fields the doctrine
+  // panel could legitimately read "Superset applied — 0 exercises changed"
+  // because styledGroups + groupedMethodCounts + changedExerciseCount were
+  // computed from different snapshots.
+  //
+  // PASS_FINAL_STRUCTURE_CONFIRMED      — every counted grouped block has
+  //                                       matching exercise rows bound by
+  //                                       blockId, and the row counts agree.
+  // WARN_STYLED_GROUP_WITHOUT_ROW_BINDING — at least one styledGroup was
+  //                                       discarded as orphaned (its members
+  //                                       have no matching exercise blockId);
+  //                                       counted blocks are still real.
+  // FAIL_METHOD_CLAIM_WITH_ZERO_CHANGED_EXERCISES — grouped count > 0 but the
+  //                                       final body has < 2 rows bound to
+  //                                       any of the counted blocks. Consumers
+  //                                       MUST treat the session as flat and
+  //                                       refuse to render an "applied" claim.
+  // ---------------------------------------------------------------------------
+  summaryIntegrityVerdict:
+    | 'PASS_FINAL_STRUCTURE_CONFIRMED'
+    | 'WARN_STYLED_GROUP_WITHOUT_ROW_BINDING'
+    | 'FAIL_METHOD_CLAIM_WITH_ZERO_CHANGED_EXERCISES'
+  /** styledGroups dropped because no >=2 exercises shared a matching blockId. */
+  staleStyledGroupCount: number
+  /** Methods whose styledGroups were all orphaned (none survived row binding). */
+  orphanedStyledGroupMethods: string[]
+  /** Total number of session.exercises that bind to a renderable grouped block by blockId. */
+  groupedExerciseRowCount: number
   sourceOfTruth: 'builder_materialized_session_summary'
   generatedAtBuildTime: true
 }
@@ -201,7 +234,29 @@ export function deriveMethodMaterializationSummary(
     cluster: 0, // intentionally always 0 by taxonomy
   }
 
-  // Priority 1: styledGroups -> non-straight + non-cluster + usable members + >= MIN
+  // [PHASE AA1R] Build per-blockId exercise membership map ONCE. Every grouped
+  // method claim must reconcile with this map — a styledGroup is real iff at
+  // least 2 exercises in the FINAL session.exercises body carry a matching
+  // blockId. Without this reconciliation, a styledGroup left over from an
+  // earlier corridor pass will be counted even though no exercise rows were
+  // ever bound to it (the "Superset applied — 0 exercises changed" bug).
+  const blockMembership = new Map<string, { usableMembers: number; methods: Set<string> }>()
+  for (const ex of exercises) {
+    if (!ex?.blockId) continue
+    const entry = blockMembership.get(ex.blockId) || { usableMembers: 0, methods: new Set<string>() }
+    if (hasUsableName(ex?.name)) entry.usableMembers += 1
+    if (typeof ex?.method === 'string' && ex.method.length > 0) entry.methods.add(ex.method.toLowerCase())
+    blockMembership.set(ex.blockId, entry)
+  }
+
+  // Track row-binding integrity per styledGroup pass.
+  let staleStyledGroupCount = 0
+  const orphanedMethodSet = new Set<string>()
+  const stylePathConfirmedMethods = new Set<MaterializedGroupedMethod>()
+
+  // Priority 1: styledGroups -> non-cluster + usable members + must bind to >=2
+  // exercise rows by blockId in the FINAL exercises list. styledGroups that
+  // fail this binding check are recorded as stale/orphan and DO NOT count.
   let priority1Hit = false
   for (const g of styled) {
     const t = normalizeGrouped(g?.groupType)
@@ -210,11 +265,43 @@ export function deriveMethodMaterializationSummary(
     const members = Array.isArray(g?.exercises) ? g!.exercises! : []
     const usable = members.filter(m => hasUsableName(m?.name))
     if (usable.length < MIN_MEMBERS_FOR_GROUPED_BLOCK) continue
+
+    // [PHASE AA1R] Row-binding gate: confirm the styledGroup has matching
+    // exercise rows in the final body. Match by group id (the structural
+    // corridor writes both styledGroup.id and exercise.blockId to the same
+    // value). When id is missing/legacy, fall back to method+name-derived
+    // membership scan.
+    let bound = 0
+    if (typeof g?.id === 'string' && g.id.length > 0) {
+      const m = blockMembership.get(g.id)
+      bound = m?.usableMembers ?? 0
+    }
+    if (bound < MIN_MEMBERS_FOR_GROUPED_BLOCK) {
+      // Fallback scan: any single block whose method matches this styledGroup
+      // type AND has >= MIN usable members counts as bound (legacy path).
+      for (const [, info] of blockMembership) {
+        if (info.usableMembers < MIN_MEMBERS_FOR_GROUPED_BLOCK) continue
+        const matchesMethod = Array.from(info.methods).some(m => normalizeGrouped(m) === t)
+        if (matchesMethod) {
+          bound = Math.max(bound, info.usableMembers)
+          break
+        }
+      }
+    }
+
+    if (bound < MIN_MEMBERS_FOR_GROUPED_BLOCK) {
+      staleStyledGroupCount += 1
+      orphanedMethodSet.add(t)
+      continue
+    }
+
     groupedMethodCounts[t] += 1
+    stylePathConfirmedMethods.add(t)
     priority1Hit = true
   }
 
-  // Priority 2 (fallback): exercises sharing blockId + non-straight method
+  // Priority 2 (fallback): exercises sharing blockId + non-straight method,
+  // for methods that the styledGroup pass did not already confirm.
   if (!priority1Hit) {
     type BlockEntry = { method: MaterializedGroupedMethod; usableMembers: number }
     const blockMap = new Map<string, BlockEntry>()
@@ -237,6 +324,15 @@ export function deriveMethodMaterializationSummary(
     groupedMethodCounts.circuit +
     groupedMethodCounts.density_block
 
+  // Methods whose styledGroups were ALL orphaned and which got no Priority 2
+  // rescue end up with groupedMethodCounts[X] === 0. Those are the truly
+  // orphaned methods. Drop any method from the orphan list that ended up with
+  // a real count via fallback (so we don't lie either way).
+  const orphanedStyledGroupMethods: string[] = []
+  for (const m of orphanedMethodSet) {
+    if (groupedMethodCounts[m] === 0) orphanedStyledGroupMethods.push(m)
+  }
+
   // -------------------------------------------------------------------------
   // RENDERABLE BLOCK IDS -- so row-level cue counting below skips members
   // that are visibly OWNED by a renderable grouped block. Mirrors the
@@ -254,6 +350,16 @@ export function deriveMethodMaterializationSummary(
   }
   for (const [bId, n] of blockUsable) {
     if (n >= MIN_MEMBERS_FOR_GROUPED_BLOCK) renderableBlockIds.add(bId)
+  }
+
+  // [PHASE AA1R] groupedExerciseRowCount = number of exercises bound to a
+  // renderable grouped block. This is the row-level proof the doctrine panel
+  // must reconcile against — it cannot say "Superset applied" while this is 0.
+  let groupedExerciseRowCount = 0
+  for (const ex of exercises) {
+    if (typeof ex?.blockId === 'string' && renderableBlockIds.has(ex.blockId)) {
+      groupedExerciseRowCount += 1
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -296,9 +402,30 @@ export function deriveMethodMaterializationSummary(
   }
 
   // -------------------------------------------------------------------------
+  // [PHASE AA1R] STRUCTURAL INTEGRITY VERDICT
+  // -------------------------------------------------------------------------
+  let summaryIntegrityVerdict: MethodMaterializationSummary['summaryIntegrityVerdict'] =
+    'PASS_FINAL_STRUCTURE_CONFIRMED'
+  if (groupedBlockCount > 0 && groupedExerciseRowCount < MIN_MEMBERS_FOR_GROUPED_BLOCK) {
+    // Hard failure: a grouped count survived but the final body cannot prove
+    // it. Force grouped counts to 0 so consumers cannot claim "applied".
+    summaryIntegrityVerdict = 'FAIL_METHOD_CLAIM_WITH_ZERO_CHANGED_EXERCISES'
+    groupedMethodCounts.superset = 0
+    groupedMethodCounts.circuit = 0
+    groupedMethodCounts.density_block = 0
+  } else if (staleStyledGroupCount > 0) {
+    summaryIntegrityVerdict = 'WARN_STYLED_GROUP_WITHOUT_ROW_BINDING'
+  }
+  // Re-derive groupedBlockCount AFTER integrity gate may have zeroed counts.
+  const finalGroupedBlockCount =
+    groupedMethodCounts.superset +
+    groupedMethodCounts.circuit +
+    groupedMethodCounts.density_block
+
+  // -------------------------------------------------------------------------
   // DERIVED FLAGS + DOMINANT RENDER MODE
   // -------------------------------------------------------------------------
-  const groupedStructurePresent = groupedBlockCount > 0
+  const groupedStructurePresent = finalGroupedBlockCount > 0
   const rowLevelMethodCuesPresent =
     rowExecutionCounts.superset > 0 ||
     rowExecutionCounts.circuit > 0 ||
@@ -366,11 +493,15 @@ export function deriveMethodMaterializationSummary(
     groupedStructurePresent,
     rowLevelMethodCuesPresent,
     dominantRenderMode,
-    groupedBlockCount,
+    groupedBlockCount: finalGroupedBlockCount,
     groupedMethodCounts,
     rowExecutionCounts,
     materializedMethods: Array.from(materializedMethodsSet),
     primaryPackagingOutcome,
+    summaryIntegrityVerdict,
+    staleStyledGroupCount,
+    orphanedStyledGroupMethods,
+    groupedExerciseRowCount,
     sourceOfTruth: 'builder_materialized_session_summary',
     generatedAtBuildTime: true,
   }

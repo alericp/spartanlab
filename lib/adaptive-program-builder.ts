@@ -229,6 +229,15 @@ import {
   areVariantsMateriallyDistinct,
   type SessionVariant,
 } from './session-compression-engine'
+// [PHASE AB3] SHORT SESSION DOCTRINE RECOMPOSITION CONTRACT
+// Owns the per-variant `recompositionTruth` sidecar that the Program UI
+// reads when 45 Min / 30 Min is selected. This module does NOT mutate
+// `variant.selection.main` (Start Workout parity is preserved) — it analyses
+// the reconciled short variants vs Full and stamps doctrine truth on each.
+import {
+  recomposeSessionVariants,
+  type SessionVariantWithRecompositionTruth,
+} from './program/short-session-recomposition-contract'
 import { analyzeEquipmentProfile, adaptSessionForEquipment, getEquipmentRecommendations, type EquipmentProfile } from './equipment-adaptation-engine'
 import { GOAL_LABELS } from './program-service'
 // [planner-truth-audit] TASK 7: Final audit for generic shell detection
@@ -15060,7 +15069,181 @@ async function generateAdaptiveProgramImpl(
         })
       }
     }
-    
+
+    // =========================================================================
+    // [PHASE AB3] SHORT SESSION DOCTRINE RECOMPOSITION
+    // ROOT GOAL: when the user selects 45 Min / 30 Min on the Program card,
+    // doctrine must have actually scored the resulting body — not just
+    // delivered a smaller compression copy. This pass runs AFTER the
+    // VARIANT-PARENT-TRUTH-RECONCILE block (so 45/30 already inherit Full's
+    // grouped truth and atomic-unit awareness) and BEFORE post-mutation core
+    // integrity check (so any analysis-side telemetry is included in the
+    // session that ships).
+    //
+    // CRITICAL DESIGN GUARANTEES:
+    //   1. This pass does NOT touch `variant.selection.main`. It reads the
+    //      already-reconciled body and writes a JSON-safe sidecar
+    //      `variant.recompositionTruth`. Start Workout consumes
+    //      `variant.selection.main` via `buildSelectedVariantMain` — that
+    //      path is unchanged, so executable parity is preserved.
+    //   2. When context is missing or analysis errors, the recomposer emits
+    //      `engine: 'fallback_compression'` instead of claiming doctrine
+    //      recomposition. The Program UI keys off this field and renders a
+    //      different label so the user is never told "doctrine recomposed"
+    //      for a fallback-compression body.
+    //   3. The per-variant ledger this stamps follows AB1 semantics: only
+    //      `mutated`/`visible`/`executable` count as applied. Considered,
+    //      eligible, blocked, suppressed, no_target, and audit_only are
+    //      separate axes. UI consumers that surface "applied" counts must
+    //      therefore continue to use the AB1-safe categories.
+    //   4. Method combinations are NEVER hard-blocked in this pass. The
+    //      recomposer only READS what materialisation already applied and
+    //      reports which methods carried into each short variant. Multiple
+    //      methods coexisting in one day (superset + cluster, etc.) flow
+    //      through unchanged.
+    // =========================================================================
+    if (Array.isArray(session.variants) && session.variants.length > 0) {
+      try {
+        const variants = session.variants as SessionVariantWithRecompositionTruth[]
+        // Full is always emitted first by generateSessionVariants. We treat
+        // it as parent truth for delta analysis. If for any reason the first
+        // variant is not the Full (compressionLevel !== 'none'), fall back
+        // to scanning for the largest-duration variant.
+        const fullVariant =
+          variants.find(v => v.compressionLevel === 'none') ||
+          [...variants].sort((a, b) => (b.duration ?? 0) - (a.duration ?? 0))[0]
+        const shortVariants = variants.filter(v => v !== fullVariant)
+
+        if (fullVariant && shortVariants.length > 0) {
+          // Pull doctrine context from the already-materialised session so the
+          // recomposer can honestly classify what carried into each short body.
+          // session.styleMetadata.appliedMethods is the post-materialisation
+          // truth (set by the materialiser at line ~14797). session.exercises
+          // is the post-mat row truth. selectedSkills come from the
+          // session-architecture truth when available, else we fall back to
+          // primary skill expressions detected in the main body.
+          const appliedMethodsThisSession: string[] = Array.isArray(
+            session.styleMetadata?.appliedMethods,
+          )
+            ? (session.styleMetadata?.appliedMethods as string[])
+            : []
+          const sessionExercisesPostMaterialization = Array.isArray(session.exercises)
+            ? session.exercises.map(ex => ({
+                id: (ex as { id?: string }).id,
+                exerciseId: (ex as { exerciseId?: string }).exerciseId,
+                name: (ex as { name?: string }).name,
+                blockId: (ex as { blockId?: string }).blockId,
+                method: (ex as { method?: string }).method,
+                methodLabel: (ex as { methodLabel?: string }).methodLabel,
+              }))
+            : []
+          // Prefer architecture-truth primarySkillExpressions when available;
+          // otherwise harvest names from selection rows that flagged
+          // primary-influence in their selectionContext. Recomposer treats
+          // this as a hint, not a hard requirement — analysis still runs if
+          // the list is empty.
+          const primarySkillExpressions: string[] = (() => {
+            const fromArchitecture = (sessionArchitectureTruth as unknown as {
+              primarySkillExpressions?: string[]
+            })?.primarySkillExpressions
+            if (Array.isArray(fromArchitecture) && fromArchitecture.length > 0) {
+              return fromArchitecture
+            }
+            const harvested: string[] = []
+            const fullMain = fullVariant.selection?.main || []
+            for (const row of fullMain) {
+              const ctx = (row as { selectionContext?: { influencingSkills?: Array<{ skillId?: string; influence?: string }> } })
+                .selectionContext
+              const inf = ctx?.influencingSkills || []
+              for (const i of inf) {
+                if (i.influence === 'primary' && typeof i.skillId === 'string') {
+                  if (!harvested.includes(i.skillId)) harvested.push(i.skillId)
+                }
+              }
+            }
+            return harvested
+          })()
+
+          const truths = recomposeSessionVariants({
+            fullVariant,
+            shortVariants,
+            sessionExercisesPostMaterialization,
+            appliedMethodsThisSession,
+            dayNumber: session.dayNumber,
+            focus: session.focus,
+            primarySkillExpressions,
+          })
+
+          // Stamp truth onto each short variant in place. Truth is a plain
+          // JSON-safe object (no class instances / no functions), so it
+          // survives every serialisation layer between here and the Program
+          // UI. We also explicitly DO NOT clear the property on Full — Full
+          // is parent truth, not a recomposition.
+          for (let i = 0; i < shortVariants.length; i++) {
+            const v = shortVariants[i] as SessionVariantWithRecompositionTruth
+            v.recompositionTruth = truths[i]
+          }
+
+          // Honest emission verdict. Per-variant engine identity surfaces in
+          // the log so PASS/FAIL audits can verify that no short variant is
+          // silently labelled as doctrine-recomposed when it was actually
+          // fallback-compression.
+          console.log('[PHASE-AB3-SHORT-SESSION-DOCTRINE-RECOMPOSITION]', {
+            dayNumber: session.dayNumber,
+            focus: session.focus,
+            fullDuration: fullVariant.duration,
+            fullMainCount: fullVariant.selection?.main?.length ?? 0,
+            shortVariantsAnalysed: shortVariants.length,
+            appliedMethodsThisSession,
+            primarySkillExpressionsCount: primarySkillExpressions.length,
+            perVariant: shortVariants.map((v, i) => ({
+              label: v.label,
+              duration: v.duration,
+              mainCount: v.selection?.main?.length ?? 0,
+              engine: truths[i]?.engine,
+              strategy: truths[i]?.crunchTimeStrategy,
+              preservedAnchors: truths[i]?.preservedPriorityAnchors?.length ?? 0,
+              deferred: truths[i]?.deferredExercises?.length ?? 0,
+              setDeltas: truths[i]?.setDeltas?.length ?? 0,
+              rpeDeltas: truths[i]?.rpeDeltas?.length ?? 0,
+              restDeltas: truths[i]?.restDeltas?.length ?? 0,
+              methodChanges: truths[i]?.methodChanges?.length ?? 0,
+              ledger: truths[i]?.ledger,
+            })),
+            verdict: truths.every(t => t.engine === 'doctrine_recomposition')
+              ? 'ALL_SHORTS_DOCTRINE_RECOMPOSED'
+              : truths.some(t => t.engine === 'doctrine_recomposition')
+                ? 'PARTIAL_DOCTRINE_RECOMPOSITION'
+                : 'FALLBACK_COMPRESSION_ONLY',
+          })
+
+          postSessionStep = 'short_session_doctrine_recomposed'
+        } else {
+          console.log('[PHASE-AB3-SHORT-SESSION-DOCTRINE-RECOMPOSITION-SKIPPED]', {
+            dayNumber: session.dayNumber,
+            focus: session.focus,
+            reason:
+              !fullVariant
+                ? 'no_full_variant_resolved'
+                : 'no_short_variants_to_recompose',
+            variantCount: variants.length,
+            verdict: 'NO_SHORT_VARIANTS__NOTHING_TO_DO',
+          })
+        }
+      } catch (recomposeErr) {
+        // Recomposition is additive analysis; an error here must NEVER fail
+        // the session. The variant bodies remain valid (compression already
+        // gated launchability and material distinctness). Worst case: the
+        // Program UI shows the variant without the recomposition truth
+        // sidecar, which is the same as the pre-AB3 baseline.
+        console.warn('[PHASE-AB3-SHORT-SESSION-DOCTRINE-RECOMPOSITION-FAILED]', {
+          dayNumber: session.dayNumber,
+          error: recomposeErr instanceof Error ? recomposeErr.message : String(recomposeErr),
+          verdict: 'KEEPING_VARIANTS_WITHOUT_RECOMPOSITION_TRUTH',
+        })
+      }
+    }
+
     // =========================================================================
     // STEP E: Post-mutation core integrity check
     // =========================================================================

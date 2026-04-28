@@ -93,6 +93,9 @@ import {
 } from '@/lib/program/method-decision-engine'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { buildGroupedDisplayModel, getGroupedMethodSemantics, minMembersFor, type GroupedDisplayModel, type RenderBlock, type RawFallbackBlock, type GroupedSourceUsed, type GroupedFlatReason, type GroupType } from './lib/session-group-display'
+// [STEP 4 OF 19] Display-time prescription clarity overlay (ROM, purpose,
+// HSPU/pike sanity). Pure resolver — no state, no I/O.
+import { resolveExercisePrescriptionClarity } from '@/lib/program/exercise-prescription-clarity'
 // [PHASE AB5] Single authoritative grouped execution prescription resolver.
 // Converts a rich DisplayGroup OR a permissive RawFallbackBlock into a
 // complete execution contract that carries rounds, member doses, rest
@@ -2176,24 +2179,122 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   // alone (under-claiming for raw_grouped_fallback sessions whose body did
   // paint grouped headers).
   // ==========================================================================
+  // ==========================================================================
+  // [SELECTED-VARIANT-EXECUTABLE-METHOD-TALLY] (Step 3 carryover)
+  //
+  // Authoritative chip/strip tally for the SELECTED VARIANT body.
+  //
+  // The original `finalVisibleBodyModel.{supersetCount,...}` counts are stamped
+  // upstream from `groupedRenderContract` / `rawFallbackBlocks`. Those sources
+  // do not know which exercises the selected variant (Full / 45 Min / 30 Min)
+  // actually preserved — so when the 45/30 variant prunes one half of a
+  // superset pair, the count remains "1 Superset" even though the visible body
+  // no longer paints any executable superset frame. That produced the screenshot
+  // bug: a "Grouped structure: 1 Superset" strip + "1 Superset" chip rendering
+  // above a body that has zero executable superset members.
+  //
+  // This derivation is the ONE place we reconcile group claims with the
+  // selected variant's visible row list. A group counts ONLY when the number
+  // of its members that ALSO appear in `fullVisibleExercises` (the variant-
+  // narrowed visible list) meets `minMembersFor(groupType)`.
+  //
+  // Method minimums (from session-group-display.minMembersFor):
+  //   superset >= 2, circuit >= 2, density_block >= 2, cluster >= 2
+  // (Single-row cluster/density route through METHOD_ONLY_FLAT and never
+  // reach this derivation, so we apply the same >=2 rule uniformly here.)
+  // ==========================================================================
+  const selectedVariantExecutableMethodTally: {
+    superset: number
+    circuit: number
+    density: number
+    cluster: number
+    hasAnyExecutableGroup: boolean
+  } = (() => {
+    const empty = { superset: 0, circuit: 0, density: 0, cluster: 0, hasAnyExecutableGroup: false }
+    if (
+      finalVisibleBodyModel.mode !== 'rich_grouped' &&
+      finalVisibleBodyModel.mode !== 'raw_grouped_fallback'
+    ) {
+      return empty
+    }
+    const visibleIds = new Set<string>()
+    const visibleNames = new Set<string>()
+    for (const ex of fullVisibleExercises) {
+      const id = (ex as unknown as { id?: string }).id
+      const nm = (ex as unknown as { name?: string }).name
+      if (typeof id === 'string' && id.length > 0) visibleIds.add(id)
+      if (typeof nm === 'string') {
+        const n = nm.trim().toLowerCase()
+        if (n.length >= 2) visibleNames.add(n)
+      }
+    }
+    const isMemberExecutable = (m: { id?: string; name?: string }): boolean => {
+      if (m.id && visibleIds.has(m.id)) return true
+      const n = (m.name || '').trim().toLowerCase()
+      if (n.length >= 2 && visibleNames.has(n)) return true
+      return false
+    }
+    let superset = 0, circuit = 0, density = 0, cluster = 0
+    if (finalVisibleBodyModel.mode === 'rich_grouped') {
+      for (const rb of finalVisibleBodyModel.renderBlocks) {
+        if (rb.type !== 'group') continue
+        const gt = rb.group.groupType
+        if (gt === 'straight') continue
+        const min = minMembersFor(gt)
+        const executableCount = (rb.group.exercises || []).filter(isMemberExecutable).length
+        if (executableCount < min) continue
+        if (gt === 'superset') superset++
+        else if (gt === 'circuit') circuit++
+        else if (gt === 'density_block') density++
+        else if (gt === 'cluster') cluster++
+      }
+    } else {
+      for (const rfb of finalVisibleBodyModel.rawFallbackBlocks) {
+        const gt = rfb.groupType
+        if (gt === 'straight') continue
+        const min = minMembersFor(gt)
+        const executableCount = (rfb.members || []).filter(isMemberExecutable).length
+        if (executableCount < min) continue
+        if (gt === 'superset') superset++
+        else if (gt === 'circuit') circuit++
+        else if (gt === 'density_block') density++
+        else if (gt === 'cluster') cluster++
+      }
+    }
+    return {
+      superset,
+      circuit,
+      density,
+      cluster,
+      hasAnyExecutableGroup: superset + circuit + density + cluster > 0,
+    }
+  })()
+
   const visibleMethodTally: { superset: number; circuit: number; density: number; cluster: number } = (() => {
+    // [SELECTED-VARIANT-EXECUTABLE-METHOD-TALLY] For grouped modes, route through
+    // the executable tally so chip counts cannot exceed what the selected variant
+    // body actually paints. Prior behavior carried `finalVisibleBodyModel.*Count`
+    // straight through, which over-claimed for variant-pruned cards (e.g. 30 Min
+    // preserved single anchor with no superset partner left).
     if (finalVisibleBodyModel.mode === 'rich_grouped') {
       return {
-        superset: finalVisibleBodyModel.supersetCount,
-        circuit: finalVisibleBodyModel.circuitCount,
-        density: finalVisibleBodyModel.densityCount,
-        cluster: finalVisibleBodyModel.clusterCount,
+        superset: selectedVariantExecutableMethodTally.superset,
+        circuit: selectedVariantExecutableMethodTally.circuit,
+        density: selectedVariantExecutableMethodTally.density,
+        cluster: selectedVariantExecutableMethodTally.cluster,
       }
     }
     if (finalVisibleBodyModel.mode === 'raw_grouped_fallback') {
-      let superset = 0, circuit = 0, density = 0, cluster = 0
-      for (const b of finalVisibleBodyModel.rawFallbackBlocks) {
-        if (b.groupType === 'superset') superset++
-        else if (b.groupType === 'circuit') circuit++
-        else if (b.groupType === 'density_block') density++
-        else if (b.groupType === 'cluster') cluster++
+      // Trust the executable tally — it filters group claims down to those
+      // whose members actually survive into the selected variant body. If it
+      // returns 0, the chip strip and body must agree the selected variant
+      // has no grouped structure even though raw blocks existed upstream.
+      return {
+        superset: selectedVariantExecutableMethodTally.superset,
+        circuit: selectedVariantExecutableMethodTally.circuit,
+        density: selectedVariantExecutableMethodTally.density,
+        cluster: selectedVariantExecutableMethodTally.cluster,
       }
-      return { superset, circuit, density, cluster }
     }
     // [SIMPLE-ORDER-BANNER-TALLY] Previously zero. But `simple_order_grouped`
     // fires precisely when grouped truth exists but no renderable blocks
@@ -4209,17 +4310,42 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const isMethodOnly = !isGroupedBlocks && hasAnyNonStraightMethod
   if (!isGroupedBlocks && !isMethodOnly) return null
   if (isGroupedBlocks) {
-    // Per-type counts come from the same finalVisibleBodyModel the body
-    // paints, so counts match exactly what the user is about to see below.
+    // [SELECTED-VARIANT-EXECUTABLE-METHOD-TALLY] Strip counts now come from
+    // the executable tally so the strip cannot claim grouped methods that
+    // the selected variant body cannot paint (e.g. 30-min preserved variant
+    // dropping one half of a superset pair).
+    //
+    // Strip wording rules:
+    //   - rich_grouped / raw_grouped_fallback: use executable tally; if it
+    //     returns 0 across all four families, suppress the strip entirely.
+    //     The body's own zero-member guard ensures no empty group frame
+    //     paints, so chip + body are honest together.
+    //   - simple_order_grouped: keep the original model counts because that
+    //     mode renders a grouped-method banner over an ordered list with no
+    //     filterable rendered blocks.
+    const useExecutableTally =
+      mode === 'rich_grouped' || mode === 'raw_grouped_fallback'
     const tokens: string[] = []
-    const s = finalVisibleBodyModel.supersetCount
-    const c = finalVisibleBodyModel.circuitCount
-    const d = finalVisibleBodyModel.densityCount
-    const cl = finalVisibleBodyModel.clusterCount
+    const s = useExecutableTally
+      ? selectedVariantExecutableMethodTally.superset
+      : finalVisibleBodyModel.supersetCount
+    const c = useExecutableTally
+      ? selectedVariantExecutableMethodTally.circuit
+      : finalVisibleBodyModel.circuitCount
+    const d = useExecutableTally
+      ? selectedVariantExecutableMethodTally.density
+      : finalVisibleBodyModel.densityCount
+    const cl = useExecutableTally
+      ? selectedVariantExecutableMethodTally.cluster
+      : finalVisibleBodyModel.clusterCount
     if (s > 0) tokens.push(`${s} Superset${s > 1 ? 's' : ''}`)
     if (c > 0) tokens.push(`${c} Circuit${c > 1 ? 's' : ''}`)
     if (d > 0) tokens.push(`${d} Density Block${d > 1 ? 's' : ''}`)
     if (cl > 0) tokens.push(`${cl} Cluster${cl > 1 ? 's' : ''}`)
+    // [VARIANT-PRUNE-HONESTY] If selected variant trimmed all grouped members
+    // below the method minimum, suppress the strip entirely rather than
+    // rendering "Grouped structure: grouped" with no count tokens.
+    if (useExecutableTally && tokens.length === 0) return null
     const summary = tokens.length > 0 ? tokens.join(' · ') : 'grouped'
     return (
       <div className="mb-2 flex items-center gap-2 rounded-md border border-[#4F6D8A]/40 bg-[#4F6D8A]/10 px-3 py-1.5 text-xs text-[#7FA8CC]">
@@ -6821,6 +6947,28 @@ function ExerciseRow({
         {card.restGuidance && (
           <span className="text-[10px] text-[#5A5A5A]">{card.restGuidance}</span>
         )}
+        {/* [STEP 4 OF 19 — PRESCRIPTION CLARITY OVERLAY] HSPU/pike sanity hint
+            rendered inline next to the prescription line so unrealistic generic
+            ranges read as a soft amber correction. ROM standard + purpose live
+            on Row 2b below to keep this line scannable. The hint is shown ONLY
+            when the resolver detected a mismatch between the row's HSPU family
+            and the prescribed reps; otherwise nothing renders. */}
+        {!isWarmupCooldown && (() => {
+          const clarity = resolveExercisePrescriptionClarity({
+            exerciseName: exercise.name || '',
+            reps: effectiveReps,
+          })
+          if (!clarity.repRangeHint) return null
+          return (
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30"
+              title={clarity.repRangeHint}
+              aria-label={`HSPU/pike sanity: ${clarity.repRangeHint}`}
+            >
+              Conservative target
+            </span>
+          )
+        })()}
         {/* [PHASE 4Z / PHASE I] NUMERIC PRESCRIPTION MUTATION CHIP.
             Single compact chip that surfaces the per-row numeric mutation
             outcome stamped by lib/program/numeric-prescription-mutation-contract.ts.
@@ -6943,6 +7091,42 @@ function ExerciseRow({
           )
         })()}
       </div>
+
+      {/* [STEP 4 OF 19 — PRESCRIPTION CLARITY: ROM + PURPOSE ROW]
+          Row 2b: thin compact line under the prescription line carrying the
+          ROM/depth/position standard and the primary purpose / carryover for
+          this row. Resolved purely from the exercise name (and reps for HSPU
+          sanity classification) by `resolveExercisePrescriptionClarity`. Renders
+          nothing for unrecognized rows so the row layout stays compact for the
+          common path. Skipped for warmup/cooldown rows. */}
+      {!isWarmupCooldown && (() => {
+        const clarity = resolveExercisePrescriptionClarity({
+          exerciseName: exercise.name || '',
+          reps: effectiveReps,
+        })
+        if (!clarity.romStandard && !clarity.purposeText) return null
+        return (
+          <div className="mt-1 space-y-0.5">
+            {clarity.romStandard && (
+              <p
+                className="text-[10px] text-[#8A8A8A] leading-snug"
+                title={clarity.romStandard}
+              >
+                <span className="font-semibold text-[#A5A5A5]">ROM/standard:</span>{' '}
+                {clarity.romStandard}
+              </p>
+            )}
+            {clarity.purposeText && (
+              <p
+                className="text-[10px] italic text-[#7A7A7A] leading-snug"
+                title={clarity.purposeText}
+              >
+                {clarity.purposeText}
+              </p>
+            )}
+          </div>
+        )
+      })()}
 
       {/* [PHASE-P] Quality / doctrine audit proof line — concise sibling line
           rendered under the chip row, ABOVE the Phase O line, when the Phase P

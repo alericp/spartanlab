@@ -30,6 +30,12 @@ import { isHoldUnit } from '@/lib/workout/execution-unit-contract'
 // EXISTING rep range that was emitted for a hold exercise (e.g. an upstream
 // layer wrote "8-15 reps" onto Wall Handstand Hold).
 import { resolveExercisePrescriptionUnitTruth } from '@/lib/program/exercise-prescription-unit-truth'
+// [STEP-5C-CANONICAL-GRAMMAR] Final sanity gate at the parallel normalize
+// boundary. Pure no-op for canonical strings; rewrites legacy arithmetic
+// ranges (e.g. "7-12 reps" -> "8-12 reps", "5-11" -> "5-8" / "8-12"
+// based on intent) so the live workout never receives a non-canonical
+// rep band even from programs persisted before Step 5C.
+import { normalizeRepsOrTimeString } from '@/lib/program/canonical-range-grammar'
 
 // =============================================================================
 // SAFE STRING HELPER - PREVENTS toLowerCase CRASHES
@@ -107,7 +113,18 @@ function normalizeExercise(raw: unknown, index: number): WorkoutExerciseContract
     difficultyLevel: typeof ex.difficultyLevel === 'string' ? ex.difficultyLevel : null,
     repsOrTime: candidateRepsOrTime,
   })
-  const repairedRepsOrTime = candidateUnitTruth.repsOrTime || candidateRepsOrTime
+  // [STEP-5C-CANONICAL-GRAMMAR] After unit-truth repair, snap any
+  // arithmetic-interpolated rep ranges (e.g. legacy 7-12 / 5-11 / 6-13)
+  // produced by older program builds to the canonical coaching grammar.
+  // Pure no-op for canonical strings, hold ranges already on the
+  // canonical hold band list, single-value durations, and unparsed
+  // strings.
+  const unitTruthString = candidateUnitTruth.repsOrTime || candidateRepsOrTime
+  const repairedRepsOrTime = normalizeRepsOrTimeString(
+    unitTruthString,
+    'unknown',
+    'moderate',
+  ).repsOrTime
 
   // Build the normalized exercise with guaranteed safe values
   const normalized: WorkoutExerciseContract = {

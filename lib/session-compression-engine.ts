@@ -3,6 +3,11 @@
 // [PHASE 6A] Preserves session identity and exercise metadata through compression
 
 import type { ExerciseSelection, SelectedExercise } from './program-exercise-selector'
+// [STEP-5C-CANONICAL-GRAMMAR] Compression's reduce/expand helpers do
+// fixed-delta arithmetic (e.g. 9-14 -> 7-12) which produces blocked
+// non-canonical bands. Snap their outputs through the canonical grammar
+// so 30/45-minute compressed sessions never display weird ranges.
+import { normalizeRepsOrTimeString } from './program/canonical-range-grammar'
 
 export interface CompressionResult {
   original: ExerciseSelection
@@ -698,23 +703,27 @@ function reduceRepsOrTime(repsOrTime: string): string {
   const timeMatch = repsOrTime.match(/(\d+)s/)
   if (timeMatch) {
     const reduced = Math.max(10, parseInt(timeMatch[1]) - 10)
-    return `${reduced}s`
+    // [STEP-5C-CANONICAL-GRAMMAR] Snap reduced hold to canonical band.
+    return normalizeRepsOrTimeString(`${reduced}s`, 'unknown', 'compressed').repsOrTime
   }
-  
+
   // Reduce rep ranges (e.g., "10-12" -> "8-10")
   const rangeMatch = repsOrTime.match(/(\d+)-(\d+)/)
   if (rangeMatch) {
     const low = Math.max(5, parseInt(rangeMatch[1]) - 2)
     const high = Math.max(8, parseInt(rangeMatch[2]) - 2)
-    return `${low}-${high}`
+    // [STEP-5C-CANONICAL-GRAMMAR] Compression subtracts a fixed delta
+    // which can produce 7-12 / 6-13 / 5-11. Snap to canonical for the
+    // compressed-session intent (technique-bias bands).
+    return normalizeRepsOrTimeString(`${low}-${high}`, 'unknown', 'compressed').repsOrTime
   }
-  
+
   // Single number
   const singleMatch = repsOrTime.match(/^(\d+)$/)
   if (singleMatch) {
     return String(Math.max(5, parseInt(singleMatch[1]) - 2))
   }
-  
+
   return repsOrTime
 }
 

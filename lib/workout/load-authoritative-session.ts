@@ -26,6 +26,11 @@ import { getSessionDiagnostic } from '@/lib/workout/validate-session'
 import type { WorkoutSessionContract } from '@/lib/contracts/workout-session-contract'
 // [WEEK-PROGRESSION-TRUTH] Import week scaling to apply dosage adjustments at session load time
 import { scaleSessionForWeek, type ScaledSession } from '@/lib/week-dosage-scaling'
+// [STEP-4B-PRESCRIPTION-UNIT-TRUTH] Single authority for repairing reps/seconds
+// mismatches when a saved program is hydrated for the live workout. Ensures
+// Program page and Live Workout always agree on prescription unit. See
+// lib/program/exercise-prescription-unit-truth.ts.
+import { resolveExercisePrescriptionUnitTruth } from '@/lib/program/exercise-prescription-unit-truth'
 
 // =============================================================================
 // SESSION METADATA - TRACKS SOURCE AND VALIDATION STATUS
@@ -106,12 +111,26 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
       if (!ex || typeof ex !== 'object') return null
       const e = ex as Record<string, unknown>
       
+      // [STEP-4B-PRESCRIPTION-UNIT-TRUTH] Repair any reps/seconds mismatch on
+      // load so the live workout reads the same hold/seconds the Program page
+      // displays. No-op for rep-based exercises and time-based holds.
+      const rawRepsOrTime = typeof e.repsOrTime === 'string' && e.repsOrTime ? e.repsOrTime : '8-12 reps'
+      const unitTruth = resolveExercisePrescriptionUnitTruth({
+        name: typeof e.name === 'string' ? e.name : null,
+        id: typeof e.id === 'string' ? e.id : null,
+        category: typeof e.category === 'string' ? e.category : null,
+        isIsometric: typeof e.isIsometric === 'boolean' ? e.isIsometric : undefined,
+        defaultRepsOrTime: typeof e.defaultRepsOrTime === 'string' ? e.defaultRepsOrTime : null,
+        difficultyLevel: typeof e.difficultyLevel === 'string' ? e.difficultyLevel : null,
+        repsOrTime: rawRepsOrTime,
+      })
+
       return {
         id: typeof e.id === 'string' && e.id ? e.id : `exercise-${idx}`,
         name: typeof e.name === 'string' && e.name ? e.name : 'Exercise',
         category: typeof e.category === 'string' ? e.category : 'general',
         sets: typeof e.sets === 'number' && e.sets > 0 ? e.sets : 3,
-        repsOrTime: typeof e.repsOrTime === 'string' && e.repsOrTime ? e.repsOrTime : '8-12 reps',
+        repsOrTime: unitTruth.repsOrTime || rawRepsOrTime,
         note: typeof e.note === 'string' ? e.note : '',
         isOverrideable: e.isOverrideable !== false,
         selectionReason: typeof e.selectionReason === 'string' ? e.selectionReason : '',

@@ -24,6 +24,12 @@ import type {
 import { validateWorkoutSessionContract } from '@/lib/contracts/workout-session-contract'
 // [LIVE-UNIT-CONTRACT] Canonical hold classifier for unit-aware default guards.
 import { isHoldUnit } from '@/lib/workout/execution-unit-contract'
+// [STEP-4B-PRESCRIPTION-UNIT-TRUTH] Single authority for repairing reps/seconds
+// mismatches at normalize boundaries. The existing isHoldUnit guard only
+// covers the empty-string fallback; this helper additionally repairs an
+// EXISTING rep range that was emitted for a hold exercise (e.g. an upstream
+// layer wrote "8-15 reps" onto Wall Handstand Hold).
+import { resolveExercisePrescriptionUnitTruth } from '@/lib/program/exercise-prescription-unit-truth'
 
 // =============================================================================
 // SAFE STRING HELPER - PREVENTS toLowerCase CRASHES
@@ -86,6 +92,23 @@ function normalizeExercise(raw: unknown, index: number): WorkoutExerciseContract
   })
   const fallbackRepsOrTime = candidateIsHold ? '30 sec hold' : '8-12 reps'
 
+  // [STEP-4B-PRESCRIPTION-UNIT-TRUTH] Repair reps/seconds mismatch on the
+  // EXISTING repsOrTime as well, not only on the empty-string fallback.
+  // Without this, an upstream "8-15 reps" written onto a hold survives all
+  // the way to the live workout state machine even though the program card
+  // displays the corrected hold seconds.
+  const candidateRepsOrTime = safeString(ex.repsOrTime, fallbackRepsOrTime)
+  const candidateUnitTruth = resolveExercisePrescriptionUnitTruth({
+    name: candidateName,
+    id: typeof ex.id === 'string' ? ex.id : null,
+    category: candidateCategory,
+    isIsometric: typeof ex.isIsometric === 'boolean' ? ex.isIsometric : undefined,
+    defaultRepsOrTime: typeof ex.defaultRepsOrTime === 'string' ? ex.defaultRepsOrTime : null,
+    difficultyLevel: typeof ex.difficultyLevel === 'string' ? ex.difficultyLevel : null,
+    repsOrTime: candidateRepsOrTime,
+  })
+  const repairedRepsOrTime = candidateUnitTruth.repsOrTime || candidateRepsOrTime
+
   // Build the normalized exercise with guaranteed safe values
   const normalized: WorkoutExerciseContract = {
     // Core identity - ALWAYS strings, never undefined
@@ -95,7 +118,7 @@ function normalizeExercise(raw: unknown, index: number): WorkoutExerciseContract
     
     // Execution parameters - guaranteed safe
     sets: safeNumber(ex.sets, 3, 1),
-    repsOrTime: safeString(ex.repsOrTime, fallbackRepsOrTime),
+    repsOrTime: repairedRepsOrTime,
     note: safeString(ex.note, ''),
     
     // Override/selection

@@ -149,6 +149,66 @@ const _STEP_4G_CONTRACT_GUARD: _AdaptiveProgramInputsContractGuard = true
 void _STEP_4G_CONTRACT_GUARD
 
 // ==========================================================================
+// [STEP-5A-XI] Program-page metadata view helper.
+//
+// `AdaptiveProgramInputs` (lib/adaptive-program-builder.ts:1088) is the
+// builder *input* contract. The four keys
+//   - sessionDurationMode
+//   - trainingPathType
+//   - goalCategories
+//   - selectedFlexibility
+// are intentionally NOT part of `AdaptiveProgramInputs` — the Step 4G guard
+// above enforces that. They live on the canonical profile / generation
+// entry / program-output side of the contract, and are added structurally
+// by `entryToAdaptiveInputs()` (lib/canonical-profile-service.ts:3614,
+// inline structural return type) and `getCanonicalProfile()`.
+//
+// At runtime, the page-level `inputs: AdaptiveProgramInputs | null` state
+// often holds a value that *also* carries those four metadata fields — it
+// was assigned from `entryToAdaptiveInputs()` output and the extra keys
+// survive the assignment because TS doesn't strip extra properties at
+// runtime. But the static type narrows them away, so direct reads like
+// `inputs.sessionDurationMode` emit TS2339 (the current build blocker).
+//
+// This helper provides a single typed *view* over any unknown-shaped
+// runtime object that may carry the four metadata fields. It does NOT
+// widen `AdaptiveProgramInputs`, does NOT use `as any`, does NOT use
+// `as AdaptiveProgramInputs & {...}`, and is purely additive — the Step 4G
+// guard remains intact above. Each call site that needs metadata snapshots
+// once near the start of its scope and reads from the snapshot, replacing
+// the unsafe `inputs.<bannedKey>` / `effectiveInputs.<bannedKey>` reads.
+// ==========================================================================
+type _ProgramPageMetadataView = {
+  sessionDurationMode: 'static' | 'adaptive' | null
+  trainingPathType: string | null
+  goalCategories: string[]
+  selectedFlexibility: string[]
+}
+function readProgramPageMetadataFromUnknown(source: unknown): _ProgramPageMetadataView {
+  const record = source && typeof source === 'object' ? (source as Record<string, unknown>) : null
+  const readString = (key: string): string | null => {
+    const value = record?.[key]
+    return typeof value === 'string' ? value : null
+  }
+  const sessionDurationModeRaw = readString('sessionDurationMode')
+  const readStringArray = (key: string): string[] => {
+    const value = record?.[key]
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === 'string')
+      : []
+  }
+  return {
+    sessionDurationMode:
+      sessionDurationModeRaw === 'static' || sessionDurationModeRaw === 'adaptive'
+        ? sessionDurationModeRaw
+        : null,
+    trainingPathType: readString('trainingPathType'),
+    goalCategories: readStringArray('goalCategories'),
+    selectedFlexibility: readStringArray('selectedFlexibility'),
+  }
+}
+
+// ==========================================================================
 // [STEP-4J — 3 OF 3] Staleness-evaluator contract drift tripwire.
 //
 // `lib/program/program-page-contract-adapter.ts` exports
@@ -2560,6 +2620,17 @@ export default function ProgramPage() {
   })
   
   const [inputs, setInputs] = useState<AdaptiveProgramInputs | null>(null)
+  // [STEP-5A-XI] Page-level metadata view of the four canonical-profile
+  //   fields that are intentionally NOT on `AdaptiveProgramInputs`
+  //   (Step 4G guard at top of file). At runtime, `inputs` often carries
+  //   these fields anyway because it was assigned from
+  //   `entryToAdaptiveInputs()` output; the helper recovers them via
+  //   `Record<string, unknown>` narrowing without widening the static
+  //   `AdaptiveProgramInputs` type or using `as any`. Used by the many
+  //   diagnostic logs and rebuild/regenerate paths below that previously
+  //   read `inputs?.sessionDurationMode` / `inputs?.trainingPathType` /
+  //   `inputs?.goalCategories` / `inputs?.selectedFlexibility` directly.
+  const inputsMeta = useMemo(() => readProgramPageMetadataFromUnknown(inputs), [inputs])
   const [program, setProgram] = useState<AdaptiveProgram | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [constraintLabel, setConstraintLabel] = useState<string>('')
@@ -6491,6 +6562,19 @@ export default function ProgramPage() {
         ? { ...inputs, ...inputOverrides } as AdaptiveProgramInputs  // Partial override case
         : inputs  // No overrides, use page inputs
     const isModifyFlow = !!inputOverrides
+
+    // [STEP-5A-XI] Read the four canonical-profile metadata fields
+    //   (sessionDurationMode, trainingPathType, goalCategories,
+    //    selectedFlexibility) through the typed-view helper instead of
+    //   directly off `effectiveInputs`. Those four fields are NOT in the
+    //   `AdaptiveProgramInputs` interface (Step 4G guard at top of file
+    //   enforces this), but the runtime value held by `effectiveInputs`
+    //   often carries them anyway because it was assigned from
+    //   `entryToAdaptiveInputs()` output, which structurally includes
+    //   them. The helper reads via `Record<string, unknown>` narrowing,
+    //   so no `as any` and no `AdaptiveProgramInputs` widening is needed.
+    const effectiveInputsMeta = readProgramPageMetadataFromUnknown(effectiveInputs)
+    const inputOverridesMeta = readProgramPageMetadataFromUnknown(inputOverrides)
     
     console.log('[phase24t-inputs-merge-fix-audit]', {
       hasInputOverrides: !!inputOverrides,
@@ -6512,7 +6596,8 @@ export default function ProgramPage() {
       isFullInputsObject,
       effectiveInputsScheduleMode: effectiveInputs?.scheduleMode,
       effectiveInputsTrainingDaysPerWeek: effectiveInputs?.trainingDaysPerWeek,
-      effectiveInputsSessionDurationMode: effectiveInputs?.sessionDurationMode,
+      // [STEP-5A-XI] sourced via metadata view helper, not from typed-AdaptiveProgramInputs read
+      effectiveInputsSessionDurationMode: effectiveInputsMeta.sessionDurationMode,
       effectiveInputsPrimaryGoal: effectiveInputs?.primaryGoal,
       verdict: effectiveInputs?.scheduleMode === 'static' 
         ? `HANDLEGENERATE_RECEIVED_STATIC_${effectiveInputs?.trainingDaysPerWeek}_DAYS`
@@ -6560,10 +6645,12 @@ export default function ProgramPage() {
         secondaryGoal: effectiveInputs?.secondaryGoal,
         scheduleMode: effectiveInputs?.scheduleMode,
         trainingDaysPerWeek: effectiveInputs?.trainingDaysPerWeek,
-        sessionDurationMode: effectiveInputs?.sessionDurationMode,
+        // [STEP-5A-XI] metadata view, not direct AdaptiveProgramInputs read
+        sessionDurationMode: effectiveInputsMeta.sessionDurationMode,
         sessionLength: effectiveInputs?.sessionLength,
         selectedSkills: effectiveInputs?.selectedSkills,
-        trainingPathType: effectiveInputs?.trainingPathType,
+        // [STEP-5A-XI] metadata view, not direct AdaptiveProgramInputs read
+        trainingPathType: effectiveInputsMeta.trainingPathType,
         experienceLevel: effectiveInputs?.experienceLevel,
         equipmentCount: effectiveInputs?.equipment?.length ?? 0,
       },
@@ -6598,7 +6685,8 @@ export default function ProgramPage() {
       step: 'HANDLEGENERATE_RECEIVED',
       effectiveScheduleMode: effectiveInputs?.scheduleMode,
       effectiveTrainingDaysPerWeek: effectiveInputs?.trainingDaysPerWeek,
-      effectiveSessionDurationMode: effectiveInputs?.sessionDurationMode,
+      // [STEP-5A-XI] metadata view, not direct AdaptiveProgramInputs read
+      effectiveSessionDurationMode: effectiveInputsMeta.sessionDurationMode,
       effectivePrimaryGoal: effectiveInputs?.primaryGoal,
       inputOverridesProvided: !!inputOverrides,
       inputOverridesScheduleMode: (inputOverrides as AdaptiveProgramInputs)?.scheduleMode,
@@ -6666,11 +6754,22 @@ export default function ProgramPage() {
         inputs_secondaryGoal: effectiveInputs?.secondaryGoal ?? null,
         inputs_scheduleMode: effectiveInputs?.scheduleMode ?? null,
         inputs_trainingDaysPerWeek: effectiveInputs?.trainingDaysPerWeek ?? null,
-        inputs_sessionDurationMode: effectiveInputs?.sessionDurationMode ?? null,
+        // [STEP-5A-XI] metadata view (sessionDurationMode/trainingPathType not on AdaptiveProgramInputs)
+        inputs_sessionDurationMode: effectiveInputsMeta.sessionDurationMode,
         inputs_sessionLength: effectiveInputs?.sessionLength ?? null,
         inputs_selectedSkills: effectiveInputs?.selectedSkills ?? [],
-        inputs_selectedStyles: effectiveInputs?.selectedStyles ?? null,
-        inputs_trainingPathType: effectiveInputs?.trainingPathType ?? null,
+        // [STEP-5A-XI] selectedStyles is also not on AdaptiveProgramInputs;
+        //   recover via Record-narrowing helper to avoid TS2339 in this log.
+        inputs_selectedStyles: ((): string[] | null => {
+          const record = effectiveInputs && typeof effectiveInputs === 'object'
+            ? (effectiveInputs as Record<string, unknown>)
+            : null
+          const value = record?.selectedStyles
+          return Array.isArray(value)
+            ? value.filter((item): item is string => typeof item === 'string')
+            : null
+        })(),
+        inputs_trainingPathType: effectiveInputsMeta.trainingPathType,
         inputs_equipment: effectiveInputs?.equipment ?? [],
       },
       entryBuilderUsed: 'buildCanonicalGenerationEntry',
@@ -6678,6 +6777,14 @@ export default function ProgramPage() {
     })
     
     // [PHASE 24N] Build canonical entry with overrides when in modify flow
+    // [STEP-5A-XI] The four metadata fields (sessionDurationMode,
+    //   trainingPathType, goalCategories, selectedFlexibility) are sourced
+    //   via the typed metadata view helper. They are not on
+    //   `AdaptiveProgramInputs` (Step 4G), but `effectiveInputs` at runtime
+    //   carries them when it was assigned from `entryToAdaptiveInputs()`
+    //   output, which the helper recovers via `Record<string, unknown>`
+    //   narrowing. Behavior is preserved — same runtime values, just read
+    //   through a typed view rather than a TS2339-emitting direct access.
     const entryOverrides = isModifyFlow ? {
       primaryGoal: effectiveInputs.primaryGoal,
       secondaryGoal: effectiveInputs.secondaryGoal,
@@ -6685,12 +6792,12 @@ export default function ProgramPage() {
       trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
       sessionLength: effectiveInputs.sessionLength,
       scheduleMode: effectiveInputs.scheduleMode,
-      sessionDurationMode: effectiveInputs.sessionDurationMode,
+      sessionDurationMode: effectiveInputsMeta.sessionDurationMode,
       equipment: effectiveInputs.equipment,
       selectedSkills: effectiveInputs.selectedSkills,
-      trainingPathType: effectiveInputs.trainingPathType,
-      goalCategories: effectiveInputs.goalCategories,
-      selectedFlexibility: effectiveInputs.selectedFlexibility,
+      trainingPathType: effectiveInputsMeta.trainingPathType,
+      goalCategories: effectiveInputsMeta.goalCategories,
+      selectedFlexibility: effectiveInputsMeta.selectedFlexibility,
     } : undefined
     
     const entryResult = buildCanonicalGenerationEntry(
@@ -7279,7 +7386,9 @@ export default function ProgramPage() {
       trainingDaysPerWeek: effectiveTrainingDays ?? undefined,
       sessionLengthMinutes: newProgram.sessionLength ?? inputs.sessionLength ?? undefined,
       scheduleMode: effectiveScheduleMode,
-      sessionDurationMode: inputs.sessionDurationMode ?? undefined,
+      // [STEP-5A-XI] sessionDurationMode is not on AdaptiveProgramInputs —
+      //   sourced via inputsMeta (Record-narrowing helper)
+      sessionDurationMode: inputsMeta.sessionDurationMode ?? undefined,
       // Equipment
       equipmentAvailable: canonicalEquipment,
       // Goal fields
@@ -7289,10 +7398,23 @@ export default function ProgramPage() {
       experienceLevel: inputs.experienceLevel ?? undefined,
       // [PHASE 18F] Deep planner identity fields - CRITICAL for rebuild parity
       selectedSkills: inputs.selectedSkills?.length ? inputs.selectedSkills : undefined,
-      trainingPathType: inputs.trainingPathType ?? undefined,
-      goalCategories: inputs.goalCategories?.length ? inputs.goalCategories : undefined,
-      selectedFlexibility: inputs.selectedFlexibility?.length ? inputs.selectedFlexibility : undefined,
-      selectedStrength: inputs.selectedStrength?.length ? inputs.selectedStrength : undefined,
+      // [STEP-5A-XI] trainingPathType / goalCategories / selectedFlexibility
+      //   not on AdaptiveProgramInputs — sourced via inputsMeta
+      trainingPathType: inputsMeta.trainingPathType ?? undefined,
+      goalCategories: inputsMeta.goalCategories.length > 0 ? inputsMeta.goalCategories : undefined,
+      selectedFlexibility: inputsMeta.selectedFlexibility.length > 0 ? inputsMeta.selectedFlexibility : undefined,
+      // [STEP-5A-XI] selectedStrength is also not on AdaptiveProgramInputs;
+      //   read via inline Record-narrowing (single-use, no full helper needed)
+      selectedStrength: ((): string[] | undefined => {
+        const record = inputs && typeof inputs === 'object'
+          ? (inputs as Record<string, unknown>)
+          : null
+        const value = record?.selectedStrength
+        const arr = Array.isArray(value)
+          ? value.filter((item): item is string => typeof item === 'string')
+          : []
+        return arr.length > 0 ? arr : undefined
+      })(),
     }
     
     // [PHASE 18F] TASK 1 - Pre-writeback depth audit
@@ -7308,10 +7430,19 @@ export default function ProgramPage() {
         primaryGoal: inputs.primaryGoal ?? null,
         secondaryGoal: inputs.secondaryGoal ?? null,
         selectedSkills: inputs.selectedSkills ?? [],
-        trainingPathType: inputs.trainingPathType ?? null,
-        goalCategories: inputs.goalCategories ?? [],
-        selectedFlexibility: inputs.selectedFlexibility ?? [],
-        selectedStrength: inputs.selectedStrength ?? [],
+        // [STEP-5A-XI] inputsMeta-sourced — not on AdaptiveProgramInputs
+        trainingPathType: inputsMeta.trainingPathType,
+        goalCategories: inputsMeta.goalCategories,
+        selectedFlexibility: inputsMeta.selectedFlexibility,
+        selectedStrength: ((): string[] => {
+          const record = inputs && typeof inputs === 'object'
+            ? (inputs as Record<string, unknown>)
+            : null
+          const value = record?.selectedStrength
+          return Array.isArray(value)
+            ? value.filter((item): item is string => typeof item === 'string')
+            : []
+        })(),
         experienceLevel: inputs.experienceLevel ?? null,
       },
       writebackTruthWillPersist: {
@@ -8451,6 +8582,12 @@ export default function ProgramPage() {
     // This ensures submit uses the same truth as render, not ambient inputs
     // ==========================================================================
     const effectiveInputs = builderSessionInputs ?? inputs
+    // [STEP-5A-XI] Local metadata view for the four canonical-profile
+    //   fields not on AdaptiveProgramInputs (Step 4G). Scoped to this
+    //   deprecated handler to avoid widening the static type or using
+    //   `as any`. Same Record-narrowing approach as the page-level
+    //   `inputsMeta` above.
+    const effectiveInputsMeta = readProgramPageMetadataFromUnknown(effectiveInputs)
     
     // [PHASE 24A] Submit parity audit - verify render and submit use same truth
     console.log('[phase24a-modify-render-submit-parity-audit]', {
@@ -8464,7 +8601,8 @@ export default function ProgramPage() {
         scheduleMode: effectiveInputs.scheduleMode,
         trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
         selectedSkillsCount: effectiveInputs.selectedSkills?.length ?? 0,
-        trainingPathType: effectiveInputs.trainingPathType,
+        // [STEP-5A-XI] metadata view, not direct AdaptiveProgramInputs read
+        trainingPathType: effectiveInputsMeta.trainingPathType,
         sessionLength: effectiveInputs.sessionLength,
         experienceLevel: effectiveInputs.experienceLevel,
       } : null,
@@ -8486,10 +8624,12 @@ export default function ProgramPage() {
         secondaryGoal: effectiveInputs.secondaryGoal,
         scheduleMode: effectiveInputs.scheduleMode,
         trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
-        sessionDurationMode: effectiveInputs.sessionDurationMode,
+        // [STEP-5A-XI] metadata view, not direct AdaptiveProgramInputs read
+        sessionDurationMode: effectiveInputsMeta.sessionDurationMode,
         sessionLength: effectiveInputs.sessionLength,
         selectedSkillsCount: effectiveInputs.selectedSkills?.length ?? 0,
-        trainingPathType: effectiveInputs.trainingPathType,
+        // [STEP-5A-XI] metadata view, not direct AdaptiveProgramInputs read
+        trainingPathType: effectiveInputsMeta.trainingPathType,
         experienceLevel: effectiveInputs.experienceLevel,
         equipmentCount: effectiveInputs.equipment?.length ?? 0,
       } : null,
@@ -8534,9 +8674,10 @@ export default function ProgramPage() {
         builderInputsScheduleMode: effectiveInputs.scheduleMode,
         builderInputsTrainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
         builderInputsSelectedSkillsCount: effectiveInputs.selectedSkills?.length ?? 0,
-        builderInputsTrainingPathType: effectiveInputs.trainingPathType,
-        builderInputsGoalCategoriesCount: effectiveInputs.goalCategories?.length ?? 0,
-        builderInputsSelectedFlexibilityCount: effectiveInputs.selectedFlexibility?.length ?? 0,
+        // [STEP-5A-XI] metadata view, not direct AdaptiveProgramInputs read
+        builderInputsTrainingPathType: effectiveInputsMeta.trainingPathType,
+        builderInputsGoalCategoriesCount: effectiveInputsMeta.goalCategories.length,
+        builderInputsSelectedFlexibilityCount: effectiveInputsMeta.selectedFlexibility.length,
         builderInputsExperienceLevel: effectiveInputs.experienceLevel,
         builderInputsEquipmentCount: effectiveInputs.equipment?.length ?? 0,
         clientCanonicalSnapshotPrimaryGoal: clientCanonicalSnapshot.primaryGoal,
@@ -8607,12 +8748,15 @@ export default function ProgramPage() {
         // behavior for genuinely-empty inputs while no longer overriding a
         // valid static numeric intent.
         scheduleMode: modifyScheduleTruth.scheduleMode ?? 'flexible',
-        sessionDurationMode: effectiveInputs.sessionDurationMode || 'adaptive',
+        // [STEP-5A-XI] These four fields are not on AdaptiveProgramInputs
+        //   (Step 4G). Recovered via the typed metadata view; behavior is
+        //   preserved — same runtime values, no `as any`, no widening.
+        sessionDurationMode: effectiveInputsMeta.sessionDurationMode || 'adaptive',
         equipment: effectiveInputs.equipment || ['pull_up_bar', 'parallettes', 'rings'],
         selectedSkills: effectiveInputs.selectedSkills || [],
-        trainingPathType: effectiveInputs.trainingPathType || 'custom',
-        goalCategories: effectiveInputs.goalCategories || [],
-        selectedFlexibility: effectiveInputs.selectedFlexibility || [],
+        trainingPathType: effectiveInputsMeta.trainingPathType || 'custom',
+        goalCategories: effectiveInputsMeta.goalCategories,
+        selectedFlexibility: effectiveInputsMeta.selectedFlexibility,
         onboardingComplete: true,
       }
       
@@ -8627,12 +8771,15 @@ export default function ProgramPage() {
         trainingDaysPerWeek: modifyScheduleTruth.builderTrainingDays ?? effectiveInputs.trainingDaysPerWeek,
         sessionLength: effectiveInputs.sessionLength,
         scheduleMode: modifyScheduleTruth.scheduleMode ?? effectiveInputs.scheduleMode,
-        sessionDurationMode: effectiveInputs.sessionDurationMode,
+        // [STEP-5A-XI] Four canonical-profile metadata fields not on
+        //   AdaptiveProgramInputs (Step 4G); sourced through the typed
+        //   metadata view rather than direct property access.
+        sessionDurationMode: effectiveInputsMeta.sessionDurationMode,
         equipment: effectiveInputs.equipment,
         selectedSkills: effectiveInputs.selectedSkills,
-        trainingPathType: effectiveInputs.trainingPathType,
-        goalCategories: effectiveInputs.goalCategories,
-        selectedFlexibility: effectiveInputs.selectedFlexibility,
+        trainingPathType: effectiveInputsMeta.trainingPathType,
+        goalCategories: effectiveInputsMeta.goalCategories,
+        selectedFlexibility: effectiveInputsMeta.selectedFlexibility,
       }
       
       console.log('[modify-unified-fix-dispatch]', {
@@ -9290,10 +9437,10 @@ export default function ProgramPage() {
             secondaryGoal: inputs?.secondaryGoal ?? null,
             scheduleMode: inputs?.scheduleMode ?? null,
             trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
-            sessionDurationMode: inputs?.sessionDurationMode ?? null,
+            sessionDurationMode: inputsMeta.sessionDurationMode,
             sessionLength: inputs?.sessionLength ?? null,
             selectedSkills: inputs?.selectedSkills ?? [],
-            trainingPathType: inputs?.trainingPathType ?? null,
+            trainingPathType: inputsMeta.trainingPathType,
             equipment: inputs?.equipment ?? [],
           },
           freshRebuildInputTruth: {
@@ -9331,13 +9478,13 @@ export default function ProgramPage() {
             secondaryGoal: inputs?.secondaryGoal ?? null,
             scheduleMode: inputs?.scheduleMode ?? null,
             trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
-            sessionDurationMode: inputs?.sessionDurationMode ?? null,
+            sessionDurationMode: inputsMeta.sessionDurationMode,
             sessionLength: inputs?.sessionLength ?? null,
             selectedSkills: inputs?.selectedSkills ?? [],
-            trainingPathType: inputs?.trainingPathType ?? null,
+            trainingPathType: inputsMeta.trainingPathType,
             equipment: inputs?.equipment ?? [],
-            goalCategories: inputs?.goalCategories ?? [],
-            selectedFlexibility: inputs?.selectedFlexibility ?? [],
+            goalCategories: inputsMeta.goalCategories,
+            selectedFlexibility: inputsMeta.selectedFlexibility,
             experienceLevel: inputs?.experienceLevel ?? null,
             selectedStyles: inputs?.selectedStyles ?? [],
           },
@@ -9392,13 +9539,13 @@ export default function ProgramPage() {
           secondaryGoalMatch: (inputs?.secondaryGoal ?? null) === (canonicalProfileNow?.secondaryGoal ?? null),
           scheduleModeMatch: (inputs?.scheduleMode ?? null) === (canonicalProfileNow?.scheduleMode ?? null),
           trainingDaysMatch: (inputs?.trainingDaysPerWeek ?? null) === (canonicalProfileNow?.trainingDaysPerWeek ?? null),
-          sessionDurationModeMatch: (inputs?.sessionDurationMode ?? null) === (canonicalProfileNow?.sessionDurationMode ?? null),
+          sessionDurationModeMatch: (inputsMeta.sessionDurationMode) === (canonicalProfileNow?.sessionDurationMode ?? null),
           sessionLengthMatch: (inputs?.sessionLength ?? null) === (canonicalProfileNow?.sessionLengthMinutes ?? null),
           selectedSkillsMatch: JSON.stringify(inputs?.selectedSkills ?? []) === JSON.stringify(canonicalProfileNow?.selectedSkills ?? []),
-          trainingPathTypeMatch: (inputs?.trainingPathType ?? null) === (canonicalProfileNow?.trainingPathType ?? null),
+          trainingPathTypeMatch: (inputsMeta.trainingPathType) === (canonicalProfileNow?.trainingPathType ?? null),
           equipmentMatch: JSON.stringify(inputs?.equipment ?? []) === JSON.stringify(canonicalProfileNow?.equipmentAvailable ?? []),
-          goalCategoriesMatch: JSON.stringify(inputs?.goalCategories ?? []) === JSON.stringify(canonicalProfileNow?.goalCategories ?? []),
-          selectedFlexibilityMatch: JSON.stringify(inputs?.selectedFlexibility ?? []) === JSON.stringify(canonicalProfileNow?.selectedFlexibility ?? []),
+          goalCategoriesMatch: JSON.stringify(inputsMeta.goalCategories) === JSON.stringify(canonicalProfileNow?.goalCategories ?? []),
+          selectedFlexibilityMatch: JSON.stringify(inputsMeta.selectedFlexibility) === JSON.stringify(canonicalProfileNow?.selectedFlexibility ?? []),
           experienceLevelMatch: (inputs?.experienceLevel ?? null) === (canonicalProfileNow?.experienceLevel ?? null),
         }
         const __p18c_inputsVsFresh = {
@@ -9406,13 +9553,13 @@ export default function ProgramPage() {
           secondaryGoalMatch: (inputs?.secondaryGoal ?? null) === (freshRebuildInput?.secondaryGoal ?? null),
           scheduleModeMatch: (inputs?.scheduleMode ?? null) === (freshRebuildInput?.scheduleMode ?? null),
           trainingDaysMatch: (inputs?.trainingDaysPerWeek ?? null) === (freshRebuildInput?.trainingDaysPerWeek ?? null),
-          sessionDurationModeMatch: (inputs?.sessionDurationMode ?? null) === (freshRebuildInput?.sessionDurationMode ?? null),
+          sessionDurationModeMatch: (inputsMeta.sessionDurationMode) === (freshRebuildInput?.sessionDurationMode ?? null),
           sessionLengthMatch: (inputs?.sessionLength ?? null) === (freshRebuildInput?.sessionLength ?? null),
           selectedSkillsMatch: JSON.stringify(inputs?.selectedSkills ?? []) === JSON.stringify(freshRebuildInput?.selectedSkills ?? []),
-          trainingPathTypeMatch: (inputs?.trainingPathType ?? null) === (freshRebuildInput?.trainingPathType ?? null),
+          trainingPathTypeMatch: (inputsMeta.trainingPathType) === (freshRebuildInput?.trainingPathType ?? null),
           equipmentMatch: JSON.stringify(inputs?.equipment ?? []) === JSON.stringify(freshRebuildInput?.equipment ?? []),
-          goalCategoriesMatch: JSON.stringify(inputs?.goalCategories ?? []) === JSON.stringify(freshRebuildInput?.goalCategories ?? []),
-          selectedFlexibilityMatch: JSON.stringify(inputs?.selectedFlexibility ?? []) === JSON.stringify(freshRebuildInput?.selectedFlexibility ?? []),
+          goalCategoriesMatch: JSON.stringify(inputsMeta.goalCategories) === JSON.stringify(freshRebuildInput?.goalCategories ?? []),
+          selectedFlexibilityMatch: JSON.stringify(inputsMeta.selectedFlexibility) === JSON.stringify(freshRebuildInput?.selectedFlexibility ?? []),
           experienceLevelMatch: (inputs?.experienceLevel ?? null) === (freshRebuildInput?.experienceLevel ?? null),
         }
         const __p18c_freshVsCanonical = {
@@ -9450,13 +9597,13 @@ export default function ProgramPage() {
             secondaryGoal: inputs?.secondaryGoal ?? null,
             scheduleMode: inputs?.scheduleMode ?? null,
             trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
-            sessionDurationMode: inputs?.sessionDurationMode ?? null,
+            sessionDurationMode: inputsMeta.sessionDurationMode,
             sessionLength: inputs?.sessionLength ?? null,
             selectedSkills: inputs?.selectedSkills ?? [],
-            trainingPathType: inputs?.trainingPathType ?? null,
+            trainingPathType: inputsMeta.trainingPathType,
             equipment: inputs?.equipment ?? [],
-            goalCategories: inputs?.goalCategories ?? [],
-            selectedFlexibility: inputs?.selectedFlexibility ?? [],
+            goalCategories: inputsMeta.goalCategories,
+            selectedFlexibility: inputsMeta.selectedFlexibility,
             experienceLevel: inputs?.experienceLevel ?? null,
           },
           freshRebuildInputTruth: {
@@ -9508,9 +9655,9 @@ export default function ProgramPage() {
             primaryGoal: !!(inputs?.primaryGoal),
             scheduleMode: !!(inputs?.scheduleMode),
             selectedSkills: (inputs?.selectedSkills?.length ?? 0) > 0,
-            trainingPathType: !!(inputs?.trainingPathType),
-            goalCategories: (inputs?.goalCategories?.length ?? 0) > 0,
-            selectedFlexibility: (inputs?.selectedFlexibility?.length ?? 0) > 0,
+            trainingPathType: !!inputsMeta.trainingPathType,
+            goalCategories: inputsMeta.goalCategories.length > 0,
+            selectedFlexibility: inputsMeta.selectedFlexibility.length > 0,
             experienceLevel: !!(inputs?.experienceLevel),
           },
           likelyRebuildCollapseIfInputsWins: 
@@ -9548,7 +9695,7 @@ export default function ProgramPage() {
           sessionDurationMode:
             freshRebuildInput?.sessionDurationMode ||
             canonicalProfileNow?.sessionDurationMode ||
-            inputs?.sessionDurationMode ||
+            inputsMeta.sessionDurationMode ||
             null,
           sessionLength:
             freshRebuildInput?.sessionLength ??
@@ -9566,7 +9713,7 @@ export default function ProgramPage() {
           trainingPathType:
             freshRebuildInput?.trainingPathType ||
             canonicalProfileNow?.trainingPathType ||
-            inputs?.trainingPathType ||
+            inputsMeta.trainingPathType ||
             null,
           equipment:
             (freshRebuildInput?.equipment?.length ?? 0) > 0
@@ -9582,16 +9729,16 @@ export default function ProgramPage() {
               ? freshRebuildInput.goalCategories
               : (canonicalProfileNow?.goalCategories?.length ?? 0) > 0
               ? canonicalProfileNow.goalCategories
-              : (inputs?.goalCategories?.length ?? 0) > 0
-              ? inputs.goalCategories
+              : inputsMeta.goalCategories.length > 0
+              ? inputsMeta.goalCategories
               : [],
           selectedFlexibility:
             (freshRebuildInput?.selectedFlexibility?.length ?? 0) > 0
               ? freshRebuildInput.selectedFlexibility
               : (canonicalProfileNow?.selectedFlexibility?.length ?? 0) > 0
               ? canonicalProfileNow.selectedFlexibility
-              : (inputs?.selectedFlexibility?.length ?? 0) > 0
-              ? inputs.selectedFlexibility
+              : inputsMeta.selectedFlexibility.length > 0
+              ? inputsMeta.selectedFlexibility
               : [],
           experienceLevel:
             freshRebuildInput?.experienceLevel ||
@@ -9661,11 +9808,11 @@ export default function ProgramPage() {
             secondaryGoal: inputs?.secondaryGoal ?? null,
             scheduleMode: inputs?.scheduleMode ?? null,
             trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
-            sessionDurationMode: inputs?.sessionDurationMode ?? null,
+            sessionDurationMode: inputsMeta.sessionDurationMode,
             sessionLength: inputs?.sessionLength ?? null,
             selectedSkills: inputs?.selectedSkills ?? [],
             selectedStyles: inputs?.selectedStyles ?? [],
-            trainingPathType: inputs?.trainingPathType ?? null,
+            trainingPathType: inputsMeta.trainingPathType,
             equipment: inputs?.equipment ?? [],
           },
           preMergeRebuildInput: {
@@ -9707,7 +9854,7 @@ export default function ProgramPage() {
           preservedSelectedSkillsFromInputs:
             JSON.stringify(rebuildBuilderInput?.selectedSkills ?? []) === JSON.stringify(inputs?.selectedSkills ?? rebuildBuilderInput?.selectedSkills ?? []),
           preservedTrainingPathTypeFromInputs:
-            rebuildBuilderInput?.trainingPathType === (inputs?.trainingPathType ?? rebuildBuilderInput?.trainingPathType),
+            rebuildBuilderInput?.trainingPathType === (inputsMeta.trainingPathType ?? rebuildBuilderInput?.trainingPathType),
           verdict: 'final_rebuild_input_now_prefers_current_settings_truth',
         })
         
@@ -9841,10 +9988,10 @@ export default function ProgramPage() {
             selectedSkills: inputs?.selectedSkills ?? [],
             scheduleMode: inputs?.scheduleMode ?? null,
             trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
-            sessionDurationMode: inputs?.sessionDurationMode ?? null,
+            sessionDurationMode: inputsMeta.sessionDurationMode,
             sessionLength: inputs?.sessionLength ?? null,
             equipment: inputs?.equipment ?? [],
-            trainingPathType: inputs?.trainingPathType ?? null,
+            trainingPathType: inputsMeta.trainingPathType,
           },
           freshRebuildInputTruth: {
             primaryGoal: freshRebuildInput?.primaryGoal ?? null,
@@ -10082,9 +10229,9 @@ export default function ProgramPage() {
           currentInputs: {
             primaryGoal: inputs?.primaryGoal ?? null,
             selectedSkills: inputs?.selectedSkills ?? [],
-            trainingPathType: inputs?.trainingPathType ?? null,
-            goalCategories: inputs?.goalCategories ?? [],
-            selectedFlexibility: inputs?.selectedFlexibility ?? [],
+            trainingPathType: inputsMeta.trainingPathType,
+            goalCategories: inputsMeta.goalCategories,
+            selectedFlexibility: inputsMeta.selectedFlexibility,
             experienceLevel: inputs?.experienceLevel ?? null,
             scheduleMode: inputs?.scheduleMode ?? null,
             trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
@@ -10104,7 +10251,7 @@ export default function ProgramPage() {
             canonicalHasTrainingPathType: !!canonicalProfileNow?.trainingPathType,
             canonicalHasGoalCategories: (canonicalProfileNow?.goalCategories?.length ?? 0) > 0,
             canonicalMatchesInputsSkills: JSON.stringify(canonicalProfileNow?.selectedSkills ?? []) === JSON.stringify(inputs?.selectedSkills ?? []),
-            canonicalMatchesInputsPathType: (canonicalProfileNow?.trainingPathType ?? null) === (inputs?.trainingPathType ?? null),
+            canonicalMatchesInputsPathType: (canonicalProfileNow?.trainingPathType ?? null) === (inputsMeta.trainingPathType),
           },
           verdict: (canonicalProfileNow?.selectedSkills?.length ?? 0) > 0 && !!canonicalProfileNow?.trainingPathType
             ? 'CANONICAL_NOW_CARRIES_DEEP_PLANNER_IDENTITY'
@@ -12374,7 +12521,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         currentInputsScheduleMode: inputs?.scheduleMode ?? null,
         currentInputsTrainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
         currentInputsSelectedSkills: inputs?.selectedSkills ?? null,
-        currentInputsTrainingPathType: inputs?.trainingPathType ?? null,
+        currentInputsTrainingPathType: inputsMeta.trainingPathType,
       },
       overridesAboutToApply: overrides,
     })
@@ -12564,7 +12711,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         // For session-related fields, only preserve from inputs if request is NOT session_time
         sessionDurationMode: request.type === 'session_time'
           ? updatedInputs?.sessionDurationMode
-          : (inputs?.sessionDurationMode || updatedInputs?.sessionDurationMode),
+          : (inputsMeta.sessionDurationMode || updatedInputs?.sessionDurationMode),
         sessionLength: request.type === 'session_time'
           ? updatedInputs?.sessionLength
           : (inputs?.sessionLength ?? updatedInputs?.sessionLength),
@@ -12590,11 +12737,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           secondaryGoal: inputs?.secondaryGoal ?? null,
           scheduleMode: inputs?.scheduleMode ?? null,
           trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
-          sessionDurationMode: inputs?.sessionDurationMode ?? null,
+          sessionDurationMode: inputsMeta.sessionDurationMode,
           sessionLength: inputs?.sessionLength ?? null,
           selectedSkills: inputs?.selectedSkills ?? [],
           selectedStyles: inputs?.selectedStyles ?? [],
-          trainingPathType: inputs?.trainingPathType ?? null,
+          trainingPathType: inputsMeta.trainingPathType,
           equipment: inputs?.equipment ?? [],
         },
         preMergeAdjustmentInput: {
@@ -12637,7 +12784,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         preservedSelectedSkillsFromInputs:
           JSON.stringify(adjustmentBuilderInput?.selectedSkills ?? []) === JSON.stringify(inputs?.selectedSkills ?? adjustmentBuilderInput?.selectedSkills ?? []),
         preservedTrainingPathTypeFromInputs:
-          adjustmentBuilderInput?.trainingPathType === (inputs?.trainingPathType ?? adjustmentBuilderInput?.trainingPathType),
+          adjustmentBuilderInput?.trainingPathType === (inputsMeta.trainingPathType ?? adjustmentBuilderInput?.trainingPathType),
         verdict: 'final_adjustment_input_preserves_current_settings_truth_except_requested_field',
       })
       
@@ -12677,7 +12824,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           primaryGoal: inputs?.primaryGoal ?? null,
           secondaryGoal: inputs?.secondaryGoal ?? null,
           selectedSkills: inputs?.selectedSkills ?? [],
-          trainingPathType: inputs?.trainingPathType ?? null,
+          trainingPathType: inputsMeta.trainingPathType,
         },
         updatedInputsTruth: {
           primaryGoal: updatedInputs?.primaryGoal ?? null,
@@ -12720,7 +12867,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         trainingPathType:
           updatedInputs?.trainingPathType ||
           adjCanonicalProfileNow?.trainingPathType ||
-          inputs?.trainingPathType ||
+          inputsMeta.trainingPathType ||
           null,
       }
       
@@ -12761,7 +12908,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         // sessionDurationMode - let request win if session_time
         sessionDurationMode: request.type === 'session_time'
           ? updatedInputs?.sessionDurationMode
-          : (inputs?.sessionDurationMode || updatedInputs?.sessionDurationMode || adjCanonicalProfileNow?.sessionDurationMode),
+          : (inputsMeta.sessionDurationMode || updatedInputs?.sessionDurationMode || adjCanonicalProfileNow?.sessionDurationMode),
         // sessionLengthMinutes - let request win if session_time
         sessionLengthMinutes: request.type === 'session_time'
           ? updatedInputs?.sessionLength
@@ -12797,10 +12944,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           selectedSkills: inputs?.selectedSkills ?? [],
           scheduleMode: inputs?.scheduleMode ?? null,
           trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
-          sessionDurationMode: inputs?.sessionDurationMode ?? null,
+          sessionDurationMode: inputsMeta.sessionDurationMode,
           sessionLength: inputs?.sessionLength ?? null,
           equipment: inputs?.equipment ?? [],
-          trainingPathType: inputs?.trainingPathType ?? null,
+          trainingPathType: inputsMeta.trainingPathType,
         },
         updatedInputsTruth: {
           primaryGoal: updatedInputs?.primaryGoal ?? null,
@@ -14537,12 +14684,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         secondaryGoal: inputs.secondaryGoal,
         scheduleMode: inputs.scheduleMode,
         trainingDaysPerWeek: inputs.trainingDaysPerWeek,
-        sessionDurationMode: inputs.sessionDurationMode,
+        // [STEP-5A-XI] These four fields are not on AdaptiveProgramInputs
+        //   (Step 4G banned-key guard). Sourced via the page-level
+        //   `inputsMeta` Record-narrowing helper.
+        sessionDurationMode: inputsMeta.sessionDurationMode,
         sessionLength: inputs.sessionLength,
         selectedSkillsCount: inputs.selectedSkills?.length ?? 0,
-        trainingPathType: inputs.trainingPathType,
-        goalCategoriesCount: inputs.goalCategories?.length ?? 0,
-        selectedFlexibilityCount: inputs.selectedFlexibility?.length ?? 0,
+        trainingPathType: inputsMeta.trainingPathType,
+        goalCategoriesCount: inputsMeta.goalCategories.length,
+        selectedFlexibilityCount: inputsMeta.selectedFlexibility.length,
         experienceLevel: inputs.experienceLevel,
         equipmentCount: inputs.equipment?.length ?? 0,
       } : null,
@@ -15950,6 +16100,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 // [PHASE 26] Read CURRENT state from ref, not stale closure
                 const currentBuilderSessionInputs = builderSessionInputsRef.current
                 const hasCurrentSessionInputs = !!currentBuilderSessionInputs
+                // [STEP-5A-XI] `builderSessionInputsRef` is typed
+                //   `useRef<AdaptiveProgramInputs | null>`, so the four
+                //   canonical-profile metadata fields (sessionDurationMode,
+                //   trainingPathType, goalCategories, selectedFlexibility)
+                //   are NOT visible on this static type (Step 4G banned
+                //   keys). At runtime the ref carries them anyway because
+                //   it was assigned from `entryToAdaptiveInputs()` output.
+                //   Read them through the typed metadata view helper.
+                const currentBuilderSessionInputsMeta = readProgramPageMetadataFromUnknown(currentBuilderSessionInputs)
                 
                 // ==========================================================================
                 // [MAIN-GEN-TRUTH step-1] Capture pre-click state for main generation trace
@@ -15972,17 +16131,20 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   selectedSkillsCountBeforeClick: currentBuilderSessionInputs?.selectedSkills?.length ?? inputs?.selectedSkills?.length ?? null,
                   goalCategoriesCountBeforeClick: currentBuilderSessionInputs?.selectedGoalCategories?.length ?? inputs?.selectedGoalCategories?.length ?? null,
                   experienceLevelBeforeClick: currentBuilderSessionInputs?.experienceLevel ?? inputs?.experienceLevel ?? null,
-                  sessionDurationModeBeforeClick: currentBuilderSessionInputs?.sessionDurationMode ?? inputs?.sessionDurationMode ?? null,
+                  // [STEP-5A-XI] sourced via metadata view helpers, not direct AdaptiveProgramInputs reads
+                  sessionDurationModeBeforeClick: currentBuilderSessionInputsMeta.sessionDurationMode ?? inputsMeta.sessionDurationMode,
                   // Step 2: Form input - will be filled from what goes to handleGenerate
                   submittedScheduleMode: hasCurrentSessionInputs ? currentBuilderSessionInputs?.scheduleMode ?? null : inputs?.scheduleMode ?? null,
                   submittedTrainingDaysPerWeek: hasCurrentSessionInputs ? currentBuilderSessionInputs?.trainingDaysPerWeek ?? null : inputs?.trainingDaysPerWeek ?? null,
-                  submittedSessionDurationMode: hasCurrentSessionInputs ? currentBuilderSessionInputs?.sessionDurationMode ?? null : inputs?.sessionDurationMode ?? null,
+                  // [STEP-5A-XI] sourced via metadata view helpers, not direct AdaptiveProgramInputs reads
+                  submittedSessionDurationMode: hasCurrentSessionInputs ? currentBuilderSessionInputsMeta.sessionDurationMode : inputsMeta.sessionDurationMode,
                   submittedPrimaryGoal: hasCurrentSessionInputs ? currentBuilderSessionInputs?.primaryGoal ?? null : inputs?.primaryGoal ?? null,
                   submittedSecondaryGoal: hasCurrentSessionInputs ? currentBuilderSessionInputs?.secondaryGoal ?? null : inputs?.secondaryGoal ?? null,
                   submittedSelectedSkillsCount: hasCurrentSessionInputs ? currentBuilderSessionInputs?.selectedSkills?.length ?? null : inputs?.selectedSkills?.length ?? null,
                   submittedGoalCategoriesCount: hasCurrentSessionInputs ? currentBuilderSessionInputs?.selectedGoalCategories?.length ?? null : inputs?.selectedGoalCategories?.length ?? null,
                   submittedExperienceLevel: hasCurrentSessionInputs ? currentBuilderSessionInputs?.experienceLevel ?? null : inputs?.experienceLevel ?? null,
-                  submittedTrainingPathType: hasCurrentSessionInputs ? currentBuilderSessionInputs?.trainingPathType ?? null : inputs?.trainingPathType ?? null,
+                  // [STEP-5A-XI] sourced via metadata view helpers, not direct AdaptiveProgramInputs reads
+                  submittedTrainingPathType: hasCurrentSessionInputs ? currentBuilderSessionInputsMeta.trainingPathType : inputsMeta.trainingPathType,
                   // Remaining steps filled later
                   entryScheduleMode: null,
                   entryTrainingDaysPerWeek: null,
@@ -16136,7 +16298,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   step: 'MODIFY_SUBMIT_SNAPSHOT',
                   refScheduleMode: currentBuilderSessionInputs?.scheduleMode,
                   refTrainingDaysPerWeek: currentBuilderSessionInputs?.trainingDaysPerWeek,
-                  refSessionDurationMode: currentBuilderSessionInputs?.sessionDurationMode,
+                  // [STEP-5A-XI] sourced via metadata view, not direct AdaptiveProgramInputs read
+                  refSessionDurationMode: currentBuilderSessionInputsMeta.sessionDurationMode,
                   refPrimaryGoal: currentBuilderSessionInputs?.primaryGoal,
                   hasBuilderSessionInputs: hasCurrentSessionInputs,
                   verdict: hasCurrentSessionInputs

@@ -70,6 +70,12 @@ import {
   type SessionCardSurface,
   type ProgramDisplayProjectionSession,
 } from '@/lib/program/program-display-contract'
+// [STEP-4B-PRESCRIPTION-UNIT-TRUTH] Single authority for repairing reps/seconds
+// mismatches at render time. Acts as a safety net when an upstream layer (mode
+// detection, doctrine materialization, weekly scaling, variant compression)
+// rewrites a hold's repsOrTime into a generic rep range. See
+// lib/program/exercise-prescription-unit-truth.ts.
+import { resolveExercisePrescriptionUnitTruth } from '@/lib/program/exercise-prescription-unit-truth'
 import type { ProgramExplanationSurface } from '@/lib/coaching-explanation-contract'
 // [SINGLE-TRUTH-FIX] Removed: getCompactExerciseExplanation - was source of contradictory text
 import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, buildSessionMainPreviewSurface, buildFullVisibleRoutineExercises, type SessionAiEvidenceSurface, type FullSessionRoutineSurface, type SessionMainPreviewSurface, type FullRoutineExercise } from '@/lib/program/program-ai-evidence-bridge'
@@ -6832,7 +6838,28 @@ function ExerciseRow({
     weekScalingApplied?: boolean 
   }
   const effectiveSets = scaledExercise.scaledSets ?? exercise.sets ?? 3
-  const effectiveReps = scaledExercise.scaledReps ?? exercise.repsOrTime ?? '8-12'
+  const rawEffectiveReps = scaledExercise.scaledReps ?? exercise.repsOrTime ?? '8-12'
+  // [STEP-4B-PRESCRIPTION-UNIT-TRUTH] Repair reps/seconds mismatches before
+  // any downstream contract reads `repsOrTime`. If an upstream layer fed a
+  // hold exercise (e.g. "Wall Handstand Hold") a rep range like "8-15 reps",
+  // the helper restores the authored hold duration or maps the rep range
+  // proportionally into seconds. Pure pass-through for rep-based exercises
+  // and for already-time-based holds.
+  const exerciseAny = exercise as unknown as {
+    isIsometric?: boolean
+    defaultRepsOrTime?: string
+    difficultyLevel?: string
+  }
+  const unitTruth = resolveExercisePrescriptionUnitTruth({
+    name: exercise.name,
+    id: exercise.id,
+    category: exercise.category,
+    isIsometric: exerciseAny.isIsometric,
+    defaultRepsOrTime: exerciseAny.defaultRepsOrTime,
+    difficultyLevel: exerciseAny.difficultyLevel,
+    repsOrTime: rawEffectiveReps,
+  })
+  const effectiveReps = unitTruth.repsOrTime || rawEffectiveReps
   const effectiveTargetRPE = scaledExercise.scaledTargetRPE ?? exercise.targetRPE
   const weekScalingApplied = scaledExercise.weekScalingApplied ?? false
   

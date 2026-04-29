@@ -174,7 +174,14 @@ export default function DatabasePage() {
                   <div>
                     <p className="text-xs text-[#6A6A6A]">Primary Goal</p>
                     <p className="text-sm font-medium text-[#E63946] capitalize">
-                      {profile.primaryGoal?.replace('_', ' ') || 'Not set'}
+                      {/* [BUILD-FIX] getAthleteProfile() returns a
+                          nullable AthleteProfile, so chain through
+                          `profile?.` before reaching primaryGoal. The
+                          existing `|| 'Not set'` fallback already
+                          handles every empty / undefined branch, so
+                          behavior is preserved when profile exists and
+                          falls back gracefully when it doesn't. */}
+                      {profile?.primaryGoal?.replace('_', ' ') || 'Not set'}
                     </p>
                   </div>
                 </div>

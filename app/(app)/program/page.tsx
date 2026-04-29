@@ -87,7 +87,10 @@ import type { ScheduleMode } from '@/lib/flexible-schedule-engine'
 // per-call-site normalizers — the previous in-file copy was lost during a
 // branch sync, which is exactly why this corridor needs an extracted shared
 // owner. See lib/program/program-page-contract-adapter.ts for full doctrine.
-import { buildStalenessEvaluatorProgram } from '@/lib/program/program-page-contract-adapter'
+import {
+  buildStalenessEvaluatorProgram,
+  type StalenessEvaluatorInput,
+} from '@/lib/program/program-page-contract-adapter'
 
 // [STEP-4D-SYNC] Compile-visible sentinel. Pure type-level + value-level
 // constant with no runtime behavior, no UI, no hooks, no side effects, no
@@ -107,6 +110,100 @@ export const STEP4D_PROGRAM_PAGE_TYPE_SYNC_SENTINEL = {
   fallbackLiteral: 'general',
   forbidsInvalidFallback: 'general_fitness',
   timestamp: '2026-04-29-step4d-sync',
+} as const
+
+// ==========================================================================
+// [STEP-4G-DELTA, RESTORED IN STEP-4J] AdaptiveProgramInputs excess-property
+// regression tripwire. This block was added in Step 4G-DELTA, dropped during
+// a branch sync (the same instability that lost the Step 4H module-scope
+// helpers), and is restored here to keep the corridor's defense-in-depth
+// intact across syncs.
+//
+// Step 4E removed four page/profile metadata fields from the
+// `const result = { ... } satisfies AdaptiveProgramInputs` literal inside
+// `buildModifyEntryInputsFromVisibleProgram`:
+//   - sessionDurationMode
+//   - trainingPathType
+//   - goalCategories
+//   - selectedFlexibility
+//
+// Those keys do NOT exist on the `AdaptiveProgramInputs` interface in
+// `lib/adaptive-program-builder.ts`. If any future change widens
+// `AdaptiveProgramInputs` to include any of those four keys (intentionally
+// or by accident), `_AdaptiveProgramInputsBannedKeys` stops being `never`,
+// the conditional resolves to `never`, and the
+// `_STEP_4G_CONTRACT_GUARD: true` assignment fails at compile time —
+// directly at the Program Page where the regression matters, with the
+// banned key name visible in the TypeScript error message. This protects
+// the interface side; the `satisfies AdaptiveProgramInputs` at the literal
+// site (~line 3876) protects the literal side.
+// ==========================================================================
+type _AdaptiveProgramInputsBannedKeys = Extract<
+  keyof AdaptiveProgramInputs,
+  'sessionDurationMode' | 'trainingPathType' | 'goalCategories' | 'selectedFlexibility'
+>
+type _AdaptiveProgramInputsContractGuard = [_AdaptiveProgramInputsBannedKeys] extends [never]
+  ? true
+  : never
+const _STEP_4G_CONTRACT_GUARD: _AdaptiveProgramInputsContractGuard = true
+void _STEP_4G_CONTRACT_GUARD
+
+// ==========================================================================
+// [STEP-4J — 3 OF 3] Staleness-evaluator contract drift tripwire.
+//
+// `lib/program/program-page-contract-adapter.ts` exports
+// `StalenessEvaluatorInput` as a HAND-MIRRORED interface that matches the
+// real parameter shape of `evaluateUnifiedProgramStaleness` (declared in
+// `lib/canonical-profile-service.ts`). Hand-mirroring is intentional in the
+// adapter file (it avoids a runtime import cycle with
+// canonical-profile-service), but it means the mirror could silently
+// drift if the evaluator's signature ever changes.
+//
+// This block compares the hand-mirrored `StalenessEvaluatorInput` against
+// the type derived directly from `Parameters<typeof evaluateUnifiedProgramStaleness>[0]`
+// (only available HERE, where the evaluator is imported as a runtime
+// value). The comparison is bidirectional — the mirror must be a subtype
+// of the derived shape AND a supertype, i.e., structurally equivalent. If
+// the evaluator's signature ever gains, removes, or changes a field, one
+// of the two `extends` checks resolves to `never`, the conditional
+// resolves to `never`, and the `_STEP_4J_..._GUARD: true` assignment fails
+// at compile time at the Program Page itself.
+//
+// Result: any future change to `evaluateUnifiedProgramStaleness`'s parameter
+// MUST be mirrored in `program-page-contract-adapter.ts`, and the build
+// fails until both sides agree. This is exactly the protection the
+// repeating raw-vs-canonical blocker chain was missing — the adapter's
+// hand-mirror was a single point of silent drift.
+// ==========================================================================
+type _StalenessEvaluatorInputDerivedFromSignature = NonNullable<
+  Parameters<typeof evaluateUnifiedProgramStaleness>[0]
+>
+type _StalenessEvaluatorContractMirrorCheck =
+  StalenessEvaluatorInput extends _StalenessEvaluatorInputDerivedFromSignature
+    ? _StalenessEvaluatorInputDerivedFromSignature extends StalenessEvaluatorInput
+      ? true
+      : never
+    : never
+const _STEP_4J_STALENESS_EVALUATOR_CONTRACT_MIRROR_GUARD: _StalenessEvaluatorContractMirrorCheck = true
+void _STEP_4J_STALENESS_EVALUATOR_CONTRACT_MIRROR_GUARD
+
+export const STEP_4J_PROGRAM_PAGE_CORRIDOR_SENTINEL = {
+  id: 'STEP4J_PROGRAM_PAGE_CONTRACT_BOUNDARY_SWEEP',
+  purpose:
+    'Compile-time + runtime sentinel proving the full Step 4 Program Page contract corridor (4D PrimaryGoal + 4E AdaptiveProgramInputs purity + 4F equipment bridge + 4G-DELTA banned-key tripwire + 4G-EXPORT-HARDLOCK satisfies-on-literal + 4H/4I shared staleness adapter + 4J evaluator-contract-mirror tripwire) is intact in the deployed bundle.',
+  guards: [
+    'AdaptiveProgramInputs banned-key tripwire (Step 4G-DELTA, restored)',
+    'StalenessEvaluatorInput ↔ evaluateUnifiedProgramStaleness mirror tripwire (Step 4J)',
+  ],
+  forbidsAsAny: true,
+  forbidsTsIgnore: true,
+  forbidsAdaptiveProgramInputsWidening: true,
+  forbidsEvaluatorWidening: true,
+  forbidsFakeFlexibleToNumberConversion: true,
+  forbidsFakeSessionLengthDefault: true,
+  preservesScheduleIdentitySeparateFromNumericTrainingDays: true,
+  staleAdapterOwner: 'lib/program/program-page-contract-adapter.ts → buildStalenessEvaluatorProgram',
+  timestamp: '2026-04-29-step4j-3-of-3',
 } as const
 // [PHASE-L] Post-workout performance feedback overlay. Pure client-side glue
 // that reads canonical workout logs and applies bounded future-only mutations

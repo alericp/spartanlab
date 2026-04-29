@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { PageContainer, Section, SectionHeader } from '@/components/layout'
+import type { LucideIcon } from 'lucide-react'
 import { Trophy, Medal, Star, Flame, Target, Dumbbell, Crown, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AchievementBadge } from '@/components/achievements/AchievementBadge'
@@ -19,18 +20,21 @@ import {
 // [BUILD-FIX] Must be exhaustive for every member of the authoritative
 // AchievementCategory union in lib/achievements/achievement-definitions.ts
 // (training | strength | skill | consistency | volume | challenge | h2h |
-// longevity | balance). All icons reuse the existing lucide-react imports
-// above so no new dependency is introduced.
-const CATEGORY_ICONS: Record<AchievementCategory, React.ReactNode> = {
-  training: <Dumbbell className="w-4 h-4" />,
-  strength: <Target className="w-4 h-4" />,
-  skill: <Star className="w-4 h-4" />,
-  consistency: <Flame className="w-4 h-4" />,
-  volume: <Trophy className="w-4 h-4" />,
-  challenge: <Zap className="w-4 h-4" />,
-  h2h: <Crown className="w-4 h-4" />,
-  longevity: <Medal className="w-4 h-4" />,
-  balance: <Trophy className="w-4 h-4" />,
+// longevity | balance). Stores `LucideIcon` *component references* (not
+// rendered JSX) because `SectionHeader.icon` is typed as `LucideIcon`
+// (see components/layout/index.tsx) and renders the component itself
+// internally. The filter chip strip below instantiates the component
+// inline with the desired className.
+const CATEGORY_ICONS: Record<AchievementCategory, LucideIcon> = {
+  training: Dumbbell,
+  strength: Target,
+  skill: Star,
+  consistency: Flame,
+  volume: Trophy,
+  challenge: Zap,
+  h2h: Crown,
+  longevity: Medal,
+  balance: Trophy,
 }
 
 export default function AchievementsPage() {
@@ -121,21 +125,27 @@ export default function AchievementsPage() {
 
       {/* Category filter */}
       <div className="flex gap-2 flex-wrap mb-6">
-        {categories.map(category => (
-          <button
-            key={category}
-            onClick={() => setSelectedCategory(category)}
-            className={cn(
-              "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2",
-              selectedCategory === category
-                ? "bg-[#2A2D31] text-[#F5F5F5]"
-                : "text-[#6B7280] hover:text-[#A5A5A5] hover:bg-[#1A1D21]"
-            )}
-          >
-            {category !== 'all' && CATEGORY_ICONS[category]}
-            {category === 'all' ? 'All' : CATEGORY_LABELS[category]}
-          </button>
-        ))}
+        {categories.map(category => {
+          // [BUILD-FIX] CATEGORY_ICONS now stores LucideIcon component
+          // references, so the filter chip must instantiate the
+          // component inline with the desired sizing className.
+          const ChipIcon = category !== 'all' ? CATEGORY_ICONS[category] : null
+          return (
+            <button
+              key={category}
+              onClick={() => setSelectedCategory(category)}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2",
+                selectedCategory === category
+                  ? "bg-[#2A2D31] text-[#F5F5F5]"
+                  : "text-[#6B7280] hover:text-[#A5A5A5] hover:bg-[#1A1D21]"
+              )}
+            >
+              {ChipIcon && <ChipIcon className="w-4 h-4" />}
+              {category === 'all' ? 'All' : CATEGORY_LABELS[category]}
+            </button>
+          )
+        })}
       </div>
 
       {/* Achievements by category */}

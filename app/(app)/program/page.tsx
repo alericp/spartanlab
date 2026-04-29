@@ -184,27 +184,57 @@ type _ProgramPageMetadataView = {
   goalCategories: string[]
   selectedFlexibility: string[]
 }
+
+// [STEP-5A-OMICRON] Record-cast quarantine helpers.
+//
+// `readProgramPageRecord` is the SINGLE allowed site for
+// `as Record<string, unknown>` in this file. Every other helper and call
+// site flows through it. The cast is safe because the parameter is `unknown`
+// and the function only returns the record after a real `typeof === 'object'`
+// guard — no strongly typed app object (`AdaptiveProgramInputs`,
+// `AdaptiveProgram`, `inputs`, `effectiveInputs`, `newProgram`, etc.) is
+// ever directly converted, which is what TS2352 was rejecting.
+//
+// All other Record-style reads in this file MUST go through one of the
+// four helpers below. No `as any`, no `@ts-ignore`, no non-null assertions,
+// and no direct `as Record<string, unknown>` casts outside this section.
+function readProgramPageRecord(source: unknown): Record<string, unknown> | null {
+  if (!source || typeof source !== 'object') return null
+  return source as Record<string, unknown>
+}
+function readProgramPageString(source: unknown, key: string): string | null {
+  const record = readProgramPageRecord(source)
+  const value = record?.[key]
+  return typeof value === 'string' ? value : null
+}
+function readProgramPageStringArray(source: unknown, key: string): string[] {
+  const record = readProgramPageRecord(source)
+  const value = record?.[key]
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
+}
+// Reserved for numeric metadata reads — pre-declared per the
+// STEP-5A-OMICRON helper contract; safe to remove later if unused.
+function _readProgramPageNumber(source: unknown, key: string): number | null {
+  const record = readProgramPageRecord(source)
+  const value = record?.[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+void _readProgramPageNumber
+
 function readProgramPageMetadataFromUnknown(source: unknown): _ProgramPageMetadataView {
-  const record = source && typeof source === 'object' ? (source as Record<string, unknown>) : null
-  const readString = (key: string): string | null => {
-    const value = record?.[key]
-    return typeof value === 'string' ? value : null
-  }
-  const sessionDurationModeRaw = readString('sessionDurationMode')
-  const readStringArray = (key: string): string[] => {
-    const value = record?.[key]
-    return Array.isArray(value)
-      ? value.filter((item): item is string => typeof item === 'string')
-      : []
-  }
+  // [STEP-5A-OMICRON] Refactored to flow through the quarantined record
+  //   helper above; no direct `as Record<string, unknown>` cast here.
+  const sessionDurationModeRaw = readProgramPageString(source, 'sessionDurationMode')
   return {
     sessionDurationMode:
       sessionDurationModeRaw === 'static' || sessionDurationModeRaw === 'adaptive'
         ? sessionDurationModeRaw
         : null,
-    trainingPathType: readString('trainingPathType'),
-    goalCategories: readStringArray('goalCategories'),
-    selectedFlexibility: readStringArray('selectedFlexibility'),
+    trainingPathType: readProgramPageString(source, 'trainingPathType'),
+    goalCategories: readProgramPageStringArray(source, 'goalCategories'),
+    selectedFlexibility: readProgramPageStringArray(source, 'selectedFlexibility'),
   }
 }
 
@@ -6758,16 +6788,13 @@ export default function ProgramPage() {
         inputs_sessionDurationMode: effectiveInputsMeta.sessionDurationMode,
         inputs_sessionLength: effectiveInputs?.sessionLength ?? null,
         inputs_selectedSkills: effectiveInputs?.selectedSkills ?? [],
-        // [STEP-5A-XI] selectedStyles is also not on AdaptiveProgramInputs;
-        //   recover via Record-narrowing helper to avoid TS2339 in this log.
+        // [STEP-5A-XI] selectedStyles is not on AdaptiveProgramInputs.
+        // [STEP-5A-OMICRON] Sourced via the quarantined record helper —
+        //   replaces the previous inline `(effectiveInputs as Record<string, unknown>)`
+        //   direct cast that TS2352 rejected.
         inputs_selectedStyles: ((): string[] | null => {
-          const record = effectiveInputs && typeof effectiveInputs === 'object'
-            ? (effectiveInputs as Record<string, unknown>)
-            : null
-          const value = record?.selectedStyles
-          return Array.isArray(value)
-            ? value.filter((item): item is string => typeof item === 'string')
-            : null
+          const selectedStyles = readProgramPageStringArray(effectiveInputs, 'selectedStyles')
+          return selectedStyles.length > 0 ? selectedStyles : null
         })(),
         inputs_trainingPathType: effectiveInputsMeta.trainingPathType,
         inputs_equipment: effectiveInputs?.equipment ?? [],
@@ -7403,16 +7430,12 @@ export default function ProgramPage() {
       trainingPathType: inputsMeta.trainingPathType ?? undefined,
       goalCategories: inputsMeta.goalCategories.length > 0 ? inputsMeta.goalCategories : undefined,
       selectedFlexibility: inputsMeta.selectedFlexibility.length > 0 ? inputsMeta.selectedFlexibility : undefined,
-      // [STEP-5A-XI] selectedStrength is also not on AdaptiveProgramInputs;
-      //   read via inline Record-narrowing (single-use, no full helper needed)
+      // [STEP-5A-XI] selectedStrength is not on AdaptiveProgramInputs.
+      // [STEP-5A-OMICRON] Sourced via the quarantined record helper —
+      //   replaces the previous inline `(inputs as Record<string, unknown>)`
+      //   direct cast that TS2352 rejected.
       selectedStrength: ((): string[] | undefined => {
-        const record = inputs && typeof inputs === 'object'
-          ? (inputs as Record<string, unknown>)
-          : null
-        const value = record?.selectedStrength
-        const arr = Array.isArray(value)
-          ? value.filter((item): item is string => typeof item === 'string')
-          : []
+        const arr = readProgramPageStringArray(inputs, 'selectedStrength')
         return arr.length > 0 ? arr : undefined
       })(),
     }
@@ -7434,15 +7457,10 @@ export default function ProgramPage() {
         trainingPathType: inputsMeta.trainingPathType,
         goalCategories: inputsMeta.goalCategories,
         selectedFlexibility: inputsMeta.selectedFlexibility,
-        selectedStrength: ((): string[] => {
-          const record = inputs && typeof inputs === 'object'
-            ? (inputs as Record<string, unknown>)
-            : null
-          const value = record?.selectedStrength
-          return Array.isArray(value)
-            ? value.filter((item): item is string => typeof item === 'string')
-            : []
-        })(),
+        // [STEP-5A-OMICRON] Sourced via the quarantined record helper —
+        //   replaces the previous inline `(inputs as Record<string, unknown>)`
+        //   direct cast that TS2352 rejected.
+        selectedStrength: readProgramPageStringArray(inputs, 'selectedStrength'),
         experienceLevel: inputs.experienceLevel ?? null,
       },
       writebackTruthWillPersist: {
@@ -8264,7 +8282,13 @@ export default function ProgramPage() {
         // ==========================================================================
         if (isPageValidationError && (errorSubCode === 'server_generation_failed' || (err as any).context?.serverResult)) {
           const ctx = (err as { context?: Record<string, unknown> }).context
-          const serverResult = ctx?.serverResult as Record<string, unknown> | undefined
+          // [STEP-5A-OMICRON] Server-result diagnostic chain refactored to
+          //   flow through the quarantined record helper. `ctx?.serverResult`
+          //   is an `unknown` value from a parent `Record` index access; we
+          //   narrow it through `readProgramPageRecord` rather than a direct
+          //   `as Record<string, unknown>` cast so the only allowed cast site
+          //   is inside `readProgramPageRecord` itself.
+          const serverResult = readProgramPageRecord(ctx?.serverResult)
           
           if (serverResult) {
             // Extract exact server diagnostic fields
@@ -8274,7 +8298,7 @@ export default function ProgramPage() {
             const exactBuilderCorridor = serverResult.exactBuilderCorridor as string | undefined
             const exactLocalStep = serverResult.exactLocalStep as string | undefined
             const compactBuilderError = serverResult.compactBuilderError as string | undefined
-            const diagnostics = serverResult.diagnostics as Record<string, unknown> | undefined
+            const diagnostics = readProgramPageRecord(serverResult.diagnostics)
             
             // Map server fields to failure display fields
             // Priority: exactFailingSubstep > exactLocalStep > failedStage
@@ -8284,25 +8308,25 @@ export default function ProgramPage() {
             
             // Extract from diagnostics if available
             if (diagnostics?.phase15eDiagnostic) {
-              const p15e = diagnostics.phase15eDiagnostic as Record<string, unknown>
-              if (!failureStep) failureStep = (p15e.exactFailingSubstep as string) || null
-              if (!failureMiddleStep) failureMiddleStep = (p15e.exactLastSafeSubstep as string) || null
+              const p15e = readProgramPageRecord(diagnostics.phase15eDiagnostic)
+              if (!failureStep) failureStep = (p15e?.exactFailingSubstep as string) || null
+              if (!failureMiddleStep) failureMiddleStep = (p15e?.exactLastSafeSubstep as string) || null
             }
             // [POST_ALLOCATION_HANDOFF_FIX] Check ownerCorridorDiagnostic (current key from route)
             if (diagnostics?.ownerCorridorDiagnostic) {
-              const corr = diagnostics.ownerCorridorDiagnostic as Record<string, unknown>
-              if (!failureStep) failureStep = (corr.exactLocalStep as string) || (corr.exactBuilderCorridor as string) || null
-              if (!failureMiddleStep) failureMiddleStep = (corr.lastSuccessfulPostAllocationCheckpoint as string) || null
+              const corr = readProgramPageRecord(diagnostics.ownerCorridorDiagnostic)
+              if (!failureStep) failureStep = (corr?.exactLocalStep as string) || (corr?.exactBuilderCorridor as string) || null
+              if (!failureMiddleStep) failureMiddleStep = (corr?.lastSuccessfulPostAllocationCheckpoint as string) || null
               // Enrich failure reason with owner name if available
-              const ownerName = corr.failingOwnerName as string | undefined
+              const ownerName = corr?.failingOwnerName as string | undefined
               if (ownerName && !failureReason?.includes(ownerName)) {
                 failureReason = ownerName + (failureReason ? `: ${failureReason}` : '')
               }
             }
             // Legacy fallback for old key
             if (diagnostics?.corridorDiagnostic) {
-              const corr = diagnostics.corridorDiagnostic as Record<string, unknown>
-              if (!failureStep) failureStep = (corr.exactLocalStep as string) || null
+              const corr = readProgramPageRecord(diagnostics.corridorDiagnostic)
+              if (!failureStep) failureStep = (corr?.exactLocalStep as string) || null
             }
             
             console.log('[MAIN_GENERATION_PAGE_FAILURE_INGEST]', {
@@ -10593,7 +10617,10 @@ export default function ProgramPage() {
           finalProgramSessionCount: (newProgram as AdaptiveProgram)?.sessions?.length ?? 0,
           finalProgramPrimaryGoal: (newProgram as AdaptiveProgram)?.primaryGoal ?? null,
           finalProgramScheduleMode: (newProgram as AdaptiveProgram)?.scheduleMode ?? null,
-          finalProgramTrainingPathType: (newProgram as Record<string, unknown>)?.trainingPathType ?? null,
+          // [STEP-5A-OMICRON] Sourced via the quarantined record helper —
+          //   `trainingPathType` is not on `AdaptiveProgram`, but the
+          //   runtime value carries it. Replaces direct `as Record<string, unknown>`.
+          finalProgramTrainingPathType: readProgramPageString(newProgram, 'trainingPathType'),
           finalProgramSelectedSkills: (newProgram as AdaptiveProgram)?.selectedSkills ?? [],
           verdict: 'rebuild_used_explicit_canonical_override_path',
         })
@@ -12011,7 +12038,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         // ==========================================================================
         if (isPageValidationError && (errorSubCode === 'server_regenerate_failed' || (err as any).context?.serverResult)) {
           const ctx = (err as { context?: Record<string, unknown> }).context
-          const serverResult = ctx?.serverResult as Record<string, unknown> | undefined
+          // [STEP-5A-OMICRON] Server-result diagnostic chain refactored to
+          //   flow through the quarantined record helper. See the
+          //   matching comment in the generation handler above.
+          const serverResult = readProgramPageRecord(ctx?.serverResult)
           
           if (serverResult) {
             // Extract exact server diagnostic fields
@@ -12021,7 +12051,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             const exactBuilderCorridor = serverResult.exactBuilderCorridor as string | undefined
             const exactLocalStep = serverResult.exactLocalStep as string | undefined
             const compactBuilderError = serverResult.compactBuilderError as string | undefined
-            const diagnostics = serverResult.diagnostics as Record<string, unknown> | undefined
+            const diagnostics = readProgramPageRecord(serverResult.diagnostics)
             
             // Map server fields to failure display fields
             // Priority: exactFailingSubstep > exactLocalStep > failedStage
@@ -12031,25 +12061,26 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             
             // Extract from diagnostics if available
             if (diagnostics?.phase15eDiagnostic) {
-              const p15e = diagnostics.phase15eDiagnostic as Record<string, unknown>
-              if (!failureStep) failureStep = (p15e.exactFailingSubstep as string) || null
-              if (!failureMiddleStep) failureMiddleStep = (p15e.exactLastSafeSubstep as string) || null
+              const p15e = readProgramPageRecord(diagnostics.phase15eDiagnostic)
+              if (!failureStep) failureStep = (p15e?.exactFailingSubstep as string) || null
+              if (!failureMiddleStep) failureMiddleStep = (p15e?.exactLastSafeSubstep as string) || null
             }
             // [POST_ALLOCATION_HANDOFF_FIX] Check ownerCorridorDiagnostic (current key from route)
+            // [STEP-5A-OMICRON] Refactored to flow through the quarantined record helper.
             if (diagnostics?.ownerCorridorDiagnostic) {
-              const corr = diagnostics.ownerCorridorDiagnostic as Record<string, unknown>
-              if (!failureStep) failureStep = (corr.exactLocalStep as string) || (corr.exactBuilderCorridor as string) || null
-              if (!failureMiddleStep) failureMiddleStep = (corr.lastSuccessfulPostAllocationCheckpoint as string) || null
+              const corr = readProgramPageRecord(diagnostics.ownerCorridorDiagnostic)
+              if (!failureStep) failureStep = (corr?.exactLocalStep as string) || (corr?.exactBuilderCorridor as string) || null
+              if (!failureMiddleStep) failureMiddleStep = (corr?.lastSuccessfulPostAllocationCheckpoint as string) || null
               // Enrich failure reason with owner name if available
-              const ownerName = corr.failingOwnerName as string | undefined
+              const ownerName = corr?.failingOwnerName as string | undefined
               if (ownerName && !failureReason?.includes(ownerName)) {
                 failureReason = ownerName + (failureReason ? `: ${failureReason}` : '')
               }
             }
             // Legacy fallback for old key
             if (diagnostics?.corridorDiagnostic) {
-              const corr = diagnostics.corridorDiagnostic as Record<string, unknown>
-              if (!failureStep) failureStep = (corr.exactLocalStep as string) || null
+              const corr = readProgramPageRecord(diagnostics.corridorDiagnostic)
+              if (!failureStep) failureStep = (corr?.exactLocalStep as string) || null
             }
             
             console.log('[REGENERATE_PAGE_FAILURE_INGEST]', {
@@ -13142,7 +13173,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         finalProgramSessionCount: (newProgram as AdaptiveProgram)?.sessions?.length ?? 0,
         finalProgramPrimaryGoal: (newProgram as AdaptiveProgram)?.primaryGoal ?? null,
         finalProgramScheduleMode: (newProgram as AdaptiveProgram)?.scheduleMode ?? null,
-        finalProgramTrainingPathType: (newProgram as Record<string, unknown>)?.trainingPathType ?? null,
+        // [STEP-5A-OMICRON] Sourced via the quarantined record helper —
+        //   `trainingPathType` is not on `AdaptiveProgram`, but the
+        //   runtime value carries it. Replaces direct `as Record<string, unknown>`.
+        finalProgramTrainingPathType: readProgramPageString(newProgram, 'trainingPathType'),
         finalProgramSelectedSkills: (newProgram as AdaptiveProgram)?.selectedSkills ?? [],
         verdict: 'adjustment_rebuild_used_explicit_canonical_override_path',
       })

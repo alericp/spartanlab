@@ -2970,6 +2970,10 @@ export default function ProgramPage() {
     scheduleStatusRecommendedCountBeforeClick: number | null
     scheduleStatusTypeBeforeClick: string | null
     canonicalScheduleModeBeforeClick: string | null
+    // [STEP-5A-RHO] Numeric-only audit slot. Source: scheduleTruthAudit
+    //   already runs values through `normalizeTrainingDaysForSnapshot`,
+    //   which collapses 'flexible' to null. The numeric-only slot is the
+    //   correct contract here.
     canonicalTrainingDaysPerWeekBeforeClick: number | null
     selectedSkillsCountBeforeClick: number | null
     goalCategoriesCountBeforeClick: number | null
@@ -2977,7 +2981,12 @@ export default function ProgramPage() {
     sessionDurationModeBeforeClick: string | null
     // Step 2: Builder form input
     submittedScheduleMode: string | null
-    submittedTrainingDaysPerWeek: number | null
+    // [STEP-5A-RHO] IDENTITY-PRESERVING audit slot. Source:
+    //   AdaptiveProgramInputs.trainingDaysPerWeek is `TrainingDays | 'flexible'`
+    //   (= 2|3|4|5|'flexible'). The audit's purpose is to record exactly
+    //   what was submitted to the builder, including flexible-schedule
+    //   identity, so coercing 'flexible' to null would lose audit fidelity.
+    submittedTrainingDaysPerWeek: number | 'flexible' | null
     submittedSessionDurationMode: string | null
     submittedPrimaryGoal: string | null
     submittedSecondaryGoal: string | null
@@ -2987,7 +2996,12 @@ export default function ProgramPage() {
     submittedTrainingPathType: string | null
     // Step 3: Canonical entry result
     entryScheduleMode: string | null
-    entryTrainingDaysPerWeek: number | null
+    // [STEP-5A-RHO] IDENTITY-PRESERVING audit slot. Source:
+    //   `buildCanonicalGenerationEntry` returns `entry.trainingDaysPerWeek`
+    //   typed as `number | 'flexible'` (lib/canonical-profile-service.ts).
+    //   The audit's purpose is to capture exactly what the canonical entry
+    //   builder produced, so 'flexible' must survive into the audit record.
+    entryTrainingDaysPerWeek: number | 'flexible' | null
     entrySelectedSkillsCount: number | null
     entryExperienceLevel: string | null
     entryFallbacksUsed: string[] | null

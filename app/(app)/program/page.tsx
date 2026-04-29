@@ -2933,13 +2933,17 @@ export default function ProgramPage() {
           // boundary normalizer so 'flexible' becomes explicit null.
           canonicalTrainingDaysPerWeek: normalizeTrainingDaysForSnapshot(entryInputs.trainingDaysPerWeek),
           prefillScheduleMode: entryInputs.scheduleMode ?? null,
-          // [BUILD-FIX] Replaced unsafe `as number` cast (which silently
-          // forced `number | undefined` to `number` and could leak undefined
-          // into a `number | null` slot at runtime) with `?? null`. Same
-          // semantic — when scheduleMode is static AND trainingDaysPerWeek
-          // is set, we keep the value; otherwise we record explicit absence.
+          // [STEP-4C] AdaptiveProgramInputs.trainingDaysPerWeek is the
+          // overloaded `TrainingDays | 'flexible'` shape. The audit-state
+          // `prefillTrainingDays` slot is typed `number | null | undefined`,
+          // so the literal `'flexible'` must never reach it. Static mode
+          // routes the raw value through the same numeric-only normalizer
+          // used by `canonicalTrainingDaysPerWeek` directly above; flexible
+          // mode (and any other non-static state) records explicit null.
+          // No `as number` cast, no fake default — `'flexible'` collapses
+          // to null, matching the canonical audit slot's semantics.
           prefillTrainingDays: entryInputs.scheduleMode === 'static'
-            ? entryInputs.trainingDaysPerWeek ?? null
+            ? normalizeTrainingDaysForSnapshot(entryInputs.trainingDaysPerWeek)
             : null,
           lastGeneratedScheduleMode: null,
           lastGeneratedTrainingDays: null,
@@ -13398,10 +13402,17 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         })
         
         // Update audit with generation input info
+        // [STEP-4C] `inputTrainingDays` is `freshInputs?.trainingDaysPerWeek`
+        // (overloaded `TrainingDays | 'flexible' | undefined`). `storedAudit`
+        // is `JSON.parse` → `any`, so TypeScript would not flag this — but
+        // when the audit is later read back as the typed audit-state shape,
+        // the canonical numeric slot must hold `number | null`. Normalize at
+        // the write boundary so a flexible-mode regen run doesn't poison the
+        // stored audit with the literal `'flexible'`.
         const updatedAudit = {
           ...storedAudit,
           canonicalScheduleMode: inputScheduleMode,
-          canonicalTrainingDaysPerWeek: inputTrainingDays ?? null,
+          canonicalTrainingDaysPerWeek: normalizeTrainingDaysForSnapshot(inputTrainingDays),
         }
         sessionStorage.setItem('regenTruthAudit', JSON.stringify(updatedAudit))
       }
@@ -14500,12 +14511,14 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       canonicalTrainingDaysPerWeek: normalizeTrainingDaysForSnapshot(canonical.trainingDaysPerWeek),
       // Builder prefill (what form opens with)
       prefillScheduleMode: freshInputs.scheduleMode ?? null,
-      // [BUILD-FIX] Replaced unsafe `as number` cast with `?? null` for the
-      // same reason as the line ~2812 sibling — preserves runtime semantic,
-      // removes an undefined-leak escape hatch, and stays inside the
-      // `number | null` destination contract.
+      // [STEP-4C] Same overloaded-source / numeric-destination issue as
+      // the entry-builder setter above. `freshInputs.trainingDaysPerWeek`
+      // is `TrainingDays | 'flexible'`; this audit slot is `number | null`.
+      // Route static-mode values through the normalizer; non-static
+      // (flexible / unknown) records explicit absence as null. Mirrors
+      // the line ~2941 fix exactly.
       prefillTrainingDays: freshInputs.scheduleMode === 'static'
-        ? freshInputs.trainingDaysPerWeek ?? null
+        ? normalizeTrainingDaysForSnapshot(freshInputs.trainingDaysPerWeek)
         : null,
       // History
       lastGeneratedScheduleMode: program?.scheduleMode || null,

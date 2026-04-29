@@ -8635,36 +8635,53 @@ export function getPrescriptionAwarePrescription(
     recentPerformance,
     fatigueState,
   }
-  
+
+  // [STEP-5B-INTENT-NARROWING] Consult the adaptive resolver FIRST for ANY
+  // prescription mode. Step 5A only intercepted skill_hold / skill_cluster
+  // (handstand-position holds). Step 5B extends the resolver to classify
+  // pulling and pushing strength identities (unilateral_pull, power_pull,
+  // high_rom_pull, weighted_strength_pull/push, standard_pull, ring_dip,
+  // muscle_up_transition_push, hspu_strength, pike_push,
+  // planche_pushup_strength) and emit narrow intent-specific dosage —
+  // replacing the generic 3-8-rep / 6-15-rep template output that the
+  // weighted_strength and bodyweight_strength branches were producing.
+  //
+  // The resolver returns null for unclassified exercises, in which case
+  // we fall through to the existing per-mode logic below — no regression.
+  const adaptive: AdaptiveDosageDecision | null = resolveAdaptiveExerciseDosage({
+    exercise,
+    experienceLevel,
+    fatigueState,
+    // Role hint and ability anchors land here once the session-architecture
+    // and onboarding-hydration layers wire them through. Passing undefined
+    // keeps the resolver on its level-keyed default calibration.
+  })
+  if (adaptive) {
+    // For weighted-strength identities, signal supportsWeightedLoad so the
+    // downstream load-estimator path still runs. The carryover-aware
+    // prescription in getWeightedStrengthPrescriptionForSkill will REPLACE
+    // repsOrTime when benchmarks are present (preserved behavior); when no
+    // benchmarks exist, the resolver's narrow Max-Strength range is used.
+    const supportsWeightedLoad =
+      exercise.id.includes('weighted_pull') ||
+      exercise.id.includes('weighted_dip') ||
+      exercise.id.includes('weighted_push') ||
+      exercise.id.includes('weighted_row')
+    return {
+      sets: adaptive.sets,
+      repsOrTime: adaptive.repsOrTime,
+      note: adaptive.visibleCoachReason,
+      prescriptionMode,
+      supportsWeightedLoad: supportsWeightedLoad || undefined,
+    }
+  }
+
   // For skill work, use advanced skill prescription rules (TASK 2)
   if (prescriptionMode === 'skill_hold' || prescriptionMode === 'skill_cluster') {
-    // [STEP-5-ADAPTIVE-DOSAGE] Try the exercise-identity-keyed resolver
-    // FIRST. Pre-Step-5, this branch always called getSkillPrescriptionRules
-    // which keyed dosage off the user's primary goal — so a Wall Handstand
-    // Hold inherited static_planche rules (holdSecondsRange=[3,6]) when the
-    // user's goal was planche, and the row rendered as "3 × 6s" despite
-    // being a handstand-position drill. The resolver classifies handstand-
-    // position holds from the exercise itself (id / transferTo / name) and
-    // returns a profile-calibrated dosage. It returns null for exercises
-    // it does not yet classify, so other skill holds fall through to the
-    // existing rules unchanged.
-    const adaptive: AdaptiveDosageDecision | null = resolveAdaptiveExerciseDosage({
-      exercise,
-      experienceLevel,
-      fatigueState,
-      // Role hint and ability anchors are wired in later steps once the
-      // session-architecture and onboarding-hydration layers expose them
-      // here; passing undefined keeps the resolver on its level-keyed
-      // default calibration, which already fixes the visible dosage bug.
-    })
-    if (adaptive) {
-      return {
-        sets: adaptive.sets,
-        repsOrTime: adaptive.repsOrTime,
-        note: adaptive.visibleCoachReason,
-        prescriptionMode,
-      }
-    }
+    // Resolver above already handled handstand_position holds. Anything
+    // reaching here is a skill identity the resolver does not yet handle
+    // (lever / planche / compression / etc.) — fall through to the
+    // existing goal-keyed rules.
 
     // Fallback: existing goal-keyed skill rules for skill identities the
     // resolver does not yet handle (lever / planche / compression / etc.).

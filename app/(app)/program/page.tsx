@@ -2313,6 +2313,92 @@ function resolveProgramPageScheduleTruth(input: {
   }
 }
 
+// ==========================================================================
+// [STEP-4F-DELTA] Typed legacy/read bridge for visible-program equipment.
+//
+// `AdaptiveProgram` (lib/adaptive-program-builder.ts) does NOT define a
+// top-level `equipment` field. Older saved programs and snapshot-derived
+// shapes may carry equipment under several different paths. The
+// `buildModifyEntryInputsFromVisibleProgram` helper needs to recover that
+// value without (a) reading an undeclared property, (b) using `as any`,
+// (c) widening the global `AdaptiveProgram` type, or (d) inventing
+// equipment that does not exist on the saved program.
+//
+// `ProgramEquipmentCarrierForModifyEntry` enumerates only the carrier
+// shapes legacy/saved programs might use. The cast in
+// `getVisibleProgramEquipmentForModifyEntry` is `unknown as Carrier`, not
+// `any`, so structural drift in the carrier is still type-checked. The
+// candidates are walked in priority order; the first non-empty array wins.
+// If no candidate is populated, an empty array is returned and the
+// downstream fallback chain (currentInputs.equipment / canonical
+// equipmentAvailable) takes over.
+// ==========================================================================
+type ProgramEquipmentCarrierForModifyEntry = {
+  equipment?: EquipmentType[]
+  equipmentAvailable?: EquipmentType[]
+  inputs?: {
+    equipment?: EquipmentType[]
+  }
+  profile?: {
+    equipment?: EquipmentType[]
+    equipmentAvailable?: EquipmentType[]
+  }
+  sourceInputs?: {
+    equipment?: EquipmentType[]
+  }
+  generationInputs?: {
+    equipment?: EquipmentType[]
+  }
+  metadata?: {
+    equipment?: EquipmentType[]
+    equipmentAvailable?: EquipmentType[]
+  }
+  profileSnapshot?: {
+    equipmentAvailable?: EquipmentType[]
+  }
+  equipmentProfile?: {
+    available?: EquipmentType[]
+  }
+}
+
+function getVisibleProgramEquipmentForModifyEntry(program: AdaptiveProgram): EquipmentType[] {
+  const carrier = program as unknown as ProgramEquipmentCarrierForModifyEntry
+
+  const candidates: Array<EquipmentType[] | undefined> = [
+    carrier.equipment,
+    carrier.equipmentAvailable,
+    carrier.equipmentProfile?.available,
+    carrier.inputs?.equipment,
+    carrier.profile?.equipment,
+    carrier.profile?.equipmentAvailable,
+    carrier.sourceInputs?.equipment,
+    carrier.generationInputs?.equipment,
+    carrier.metadata?.equipment,
+    carrier.metadata?.equipmentAvailable,
+    carrier.profileSnapshot?.equipmentAvailable,
+  ]
+
+  for (const value of candidates) {
+    if (Array.isArray(value) && value.length > 0) {
+      return value
+    }
+  }
+
+  return []
+}
+
+// [STEP-4F-DELTA] Local sanitizer: snapshot.equipmentAvailable is typed
+// `string[]` and canonicalFallback.equipmentAvailable is typed `string[]`,
+// but `AdaptiveProgramInputs.equipment` is typed `EquipmentType[]`. Filter
+// to string-typed items and brand the result. No `as any` is used; the
+// brand happens via the `is EquipmentType` predicate, which keeps the
+// EquipmentType union honest and rejects non-string array entries.
+function normalizeEquipmentForModifyEntry(value: unknown): EquipmentType[] {
+  return Array.isArray(value)
+    ? (value.filter((item): item is EquipmentType => typeof item === 'string') as EquipmentType[])
+    : []
+}
+
 export default function ProgramPage() {
   // ==========================================================================
   // [PHASE 24B] TASK 4 - Dynamic import was converted to static import
@@ -3635,7 +3721,15 @@ export default function ProgramPage() {
       selectedFlexibility?: string[]
       equipmentAvailable?: string[]
     } | undefined
-    
+
+    // [STEP-4F-DELTA] Compute the visible-program equipment value once via
+    // the typed legacy bridge before assembling `result`. Hoisted out of the
+    // ternary chain so the ternary stays readable and so the priority order
+    // (snapshot > visible program > current inputs > canonical fallback) is
+    // visually identical to the priority order for every other field in
+    // this helper.
+    const visibleProgramEquipment = getVisibleProgramEquipmentForModifyEntry(visibleProgram)
+
     // Build inputs with strict priority: snapshot > program > inputs > canonical > default
     const result: AdaptiveProgramInputs = {
       // Primary Goal: snapshot > program > inputs > canonical
@@ -3724,14 +3818,32 @@ export default function ProgramPage() {
         []
       ),
 
-      // Equipment: snapshot.equipmentAvailable > program.equipment > inputs > canonical
+      // Equipment: snapshot.equipmentAvailable > visible program (typed bridge) > inputs > canonical
+      // [STEP-4F-DELTA] The previous read `visibleProgram.equipment` was a
+      // read-contract drift — `equipment` exists on `AdaptiveProgramInputs`
+      // (the builder INPUT shape) but NOT on `AdaptiveProgram` (the saved
+      // VISIBLE program shape), so TypeScript correctly rejected it at
+      // line 3730. Resolution: route the visible-program branch through
+      // `getVisibleProgramEquipmentForModifyEntry`, which performs a
+      // typed `unknown as ProgramEquipmentCarrierForModifyEntry` cast and
+      // walks legacy/nested carrier paths in priority order. The snapshot
+      // and canonical branches are routed through
+      // `normalizeEquipmentForModifyEntry` because their upstream types
+      // are `string[]` (not branded `EquipmentType[]`); the sanitizer
+      // filters to string entries and types the result without `as any`.
+      // The trailing `as EquipmentType[]` is removed because each branch
+      // now produces a typed `EquipmentType[]` directly.
       equipment: (
-        (snapshot?.equipmentAvailable && snapshot.equipmentAvailable.length > 0) ? snapshot.equipmentAvailable :
-        (visibleProgram.equipment && visibleProgram.equipment.length > 0) ? visibleProgram.equipment :
-        (currentInputs?.equipment && currentInputs.equipment.length > 0) ? currentInputs.equipment :
-        (canonicalFallback.equipmentAvailable && canonicalFallback.equipmentAvailable.length > 0) ? canonicalFallback.equipmentAvailable :
-        []
-      ) as EquipmentType[],
+        (snapshot?.equipmentAvailable && snapshot.equipmentAvailable.length > 0)
+          ? normalizeEquipmentForModifyEntry(snapshot.equipmentAvailable)
+        : (visibleProgramEquipment.length > 0)
+          ? visibleProgramEquipment
+        : (currentInputs?.equipment && currentInputs.equipment.length > 0)
+          ? currentInputs.equipment
+        : (canonicalFallback.equipmentAvailable && canonicalFallback.equipmentAvailable.length > 0)
+          ? normalizeEquipmentForModifyEntry(canonicalFallback.equipmentAvailable)
+        : []
+      ),
     }
     // ==========================================================================
     // [STEP-4E] AdaptiveProgramInputs object-contract repair.

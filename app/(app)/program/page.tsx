@@ -2337,7 +2337,12 @@ export default function ProgramPage() {
   // ==========================================================================
   const [builderSessionInputs, setBuilderSessionInputs] = useState<AdaptiveProgramInputs | null>(null)
   const [builderSessionKey, setBuilderSessionKey] = useState<string>('initial')
-  const [builderSessionSource, setBuilderSessionSource] = useState<'default_inputs' | 'modify_visible_program' | null>(null)
+  // [BUILD-FIX] Reuses the canonical BuilderSessionSource union defined
+  // alongside ModifyBuilderEntry above so producer (entry.source) and
+  // consumer (this state) share one source of truth. Includes every
+  // literal actually written at runtime (line ~14132 writes the
+  // canonical-start-new / fallback variants).
+  const [builderSessionSource, setBuilderSessionSource] = useState<BuilderSessionSource | null>(null)
   
   // ==========================================================================
   // [POST-REGEN TRUTH CORRIDOR] Comprehensive trace for the regen flow
@@ -2552,10 +2557,27 @@ export default function ProgramPage() {
   // - modifyFlowState may NEVER become 'builder' unless this entry exists
   // - showBuilder may NEVER be the sole authority for Modify rendering
   // ==========================================================================
+  // [BUILD-FIX] Single source of truth for the builder-session source
+  // signal. The runtime authority writes four literals across the
+  // Modify flow (default seed, visible-program modify, canonical
+  // start-new, and the fallback path at line ~14132). Encoding all
+  // four here lets `setBuilderSessionSource(...)` accept the typed
+  // entry's `source` without `as any` / casts, and forces every
+  // future writer to commit to a real literal.
+  type BuilderSessionSource =
+    | 'default_inputs'
+    | 'modify_visible_program'
+    | 'modify_canonical_start_new'
+    | 'modify_fallback'
+
   interface ModifyBuilderEntry {
     sessionKey: string
-    source: string
+    source: BuilderSessionSource
     inputs: AdaptiveProgramInputs
+    // Optional debug breadcrumb attached at construction time
+    // (line ~13223). Declared optional so existing readers and the
+    // `null` initial state remain valid.
+    __flowIntent?: 'modify_existing'
   }
   const [modifyBuilderEntry, setModifyBuilderEntry] = useState<ModifyBuilderEntry | null>(null)
   

@@ -77,6 +77,18 @@ import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from '
 import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
 import type { ScheduleMode } from '@/lib/flexible-schedule-engine'
 
+// [STEP-4I — 2 OF 3] Shared canonical contract adapter for the Program Page →
+// `evaluateUnifiedProgramStaleness` boundary. Single source of truth for
+// converting raw UI/builder unions (SessionLength with '60+', TrainingDaysPerWeek
+// with 'flexible', etc.) into the evaluator's strict `number | null` /
+// `string | null` / `string[] | null` contract. Both call sites in this file
+// (the active-program staleness useMemo and the post-rebuild staleness branch)
+// route through `buildStalenessEvaluatorProgram` instead of constructing
+// per-call-site normalizers — the previous in-file copy was lost during a
+// branch sync, which is exactly why this corridor needs an extracted shared
+// owner. See lib/program/program-page-contract-adapter.ts for full doctrine.
+import { buildStalenessEvaluatorProgram } from '@/lib/program/program-page-contract-adapter'
+
 // [STEP-4D-SYNC] Compile-visible sentinel. Pure type-level + value-level
 // constant with no runtime behavior, no UI, no hooks, no side effects, no
 // state, and no function calls. Its sole purpose is to force a real
@@ -3960,14 +3972,17 @@ export default function ProgramPage() {
       profileSnapshot: profileSnapshot,
     }
 
-    // [STEP-4H] Raw values from `activeProgram` carry UI/builder unions
-    // (`SessionLength` includes string members like '60+', and
+    // [STEP-4I — 2 OF 3] Raw values from `activeProgram` carry UI/builder
+    // unions (`SessionLength` includes string members like '60+', and
     // `TrainingDaysPerWeek` includes 'flexible'). The evaluator's contract
     // is `number | null` for both. Route every value through
-    // `buildStalenessEvaluatorProgram` (defined at module scope) so the
-    // canonical-evaluator boundary is normalized once instead of patched
-    // line-by-line. `rawProgram` is preserved for the diagnostic console
-    // logs below; the evaluator receives the typed-normalized object.
+    // `buildStalenessEvaluatorProgram` (imported from
+    // `@/lib/program/program-page-contract-adapter`) so the canonical-
+    // evaluator boundary is owned by one shared module instead of being
+    // re-defined inline at module scope (which is what got lost during
+    // the last branch sync and produced the current build blocker).
+    // `rawProgram` is preserved for the diagnostic console logs below;
+    // the evaluator receives the typed-normalized object.
     const evaluatorProgram = buildStalenessEvaluatorProgram(rawProgram)
     const result = evaluateUnifiedProgramStaleness(evaluatorProgram)
     

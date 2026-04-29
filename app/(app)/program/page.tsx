@@ -553,6 +553,16 @@ type PageValidationSubCode =
   | 'route_not_found'
   | 'non_json_server_response'
   | 'server_regenerate_failed'
+  // [STEP-5A-UPSILON] Main-flow server generation failure. Distinct from
+  //   'server_regenerate_failed' (regen path, /api/program/regenerate-fresh)
+  //   and from 'orchestration_failed' (which is a top-level
+  //   PageValidationErrorCode, not a subcode). Used at the
+  //   handleGenerate -> /api/program/generate-fresh response throw site
+  //   when the server returns an error envelope on the main generation
+  //   corridor. Adding the literal to the central union (rather than
+  //   reusing 'server_regenerate_failed') preserves diagnostic fidelity
+  //   so downstream telemetry can distinguish main-gen vs regen failures.
+  | 'server_generation_failed'
 
 /**
  * Structured error for page-side validation failures.

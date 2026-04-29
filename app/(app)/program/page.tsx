@@ -5340,7 +5340,15 @@ export default function ProgramPage() {
                 verdict: 'existing_program_preserved_at_mount',
                 normalizedOnlyNoRestoration: true,
                 createdAt: normalizedProgram.createdAt,
-                sessionCount: normalizedProgram.sessions?.length || 0,
+                // [STEP-5A-KAPPA] Removed duplicate `sessionCount` key here.
+                // The canonical `sessionCount` at the top of this object
+                // (alongside `programId`, `primaryGoal`, `scheduleMode`,
+                // `is6DayProgram`, `is7DayProgram`) is the high-level
+                // snapshot field. The duplicate at this position was
+                // byte-identical (`normalizedProgram.sessions?.length || 0`)
+                // and carried no distinct meaning — TS1117 was correctly
+                // emitted. No semantics changed; the log still surfaces
+                // exactly one `sessionCount` value with the same expression.
                 firstSessionId: normalizedProgram.sessions?.[0]?.id || 'none',
                 firstSessionExerciseCount: normalizedProgram.sessions?.[0]?.exercises?.length || 0,
                 provenanceMode: normalizedProgram.generationProvenance?.generationMode || 'unknown',

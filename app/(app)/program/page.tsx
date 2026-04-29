@@ -2805,11 +2805,23 @@ export default function ProgramPage() {
           athleteTrainingDays: typeof realAthlete?.trainingDaysPerWeek === 'number'
             ? realAthlete.trainingDaysPerWeek : null,
           adaptiveWorkloadEnabled: (entryInputs as { adaptiveWorkloadEnabled?: boolean }).adaptiveWorkloadEnabled ?? true,
-          canonicalScheduleMode: entryInputs.scheduleMode,
-          canonicalTrainingDaysPerWeek: entryInputs.trainingDaysPerWeek,
-          prefillScheduleMode: entryInputs.scheduleMode,
-          prefillTrainingDays: entryInputs.scheduleMode === 'static' 
-            ? (entryInputs.trainingDaysPerWeek as number) : null,
+          // [BUILD-FIX] Normalize optional source values to explicit null at
+          // the boundary. The destination type (line ~2516) declares
+          // canonicalScheduleMode / canonicalTrainingDaysPerWeek as REQUIRED
+          // `... | null` (no undefined), while AdaptiveProgramInputs marks
+          // both fields as optional. `?? null` preserves user truth — an
+          // unset value becomes explicit absence, never a fake default.
+          canonicalScheduleMode: entryInputs.scheduleMode ?? null,
+          canonicalTrainingDaysPerWeek: entryInputs.trainingDaysPerWeek ?? null,
+          prefillScheduleMode: entryInputs.scheduleMode ?? null,
+          // [BUILD-FIX] Replaced unsafe `as number` cast (which silently
+          // forced `number | undefined` to `number` and could leak undefined
+          // into a `number | null` slot at runtime) with `?? null`. Same
+          // semantic — when scheduleMode is static AND trainingDaysPerWeek
+          // is set, we keep the value; otherwise we record explicit absence.
+          prefillTrainingDays: entryInputs.scheduleMode === 'static'
+            ? entryInputs.trainingDaysPerWeek ?? null
+            : null,
           lastGeneratedScheduleMode: null,
           lastGeneratedTrainingDays: null,
           lastReconciliationDecision: null,
@@ -14292,12 +14304,22 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       athleteTrainingDays: typeof athleteProfileForAudit?.trainingDaysPerWeek === 'number'
         ? athleteProfileForAudit.trainingDaysPerWeek : null,
       // Canonical resolved
-      canonicalScheduleMode: canonical.scheduleMode,
-      canonicalTrainingDaysPerWeek: canonical.trainingDaysPerWeek,
+      // [BUILD-FIX] Same boundary normalization as the line ~2800 setter:
+      // canonical.* / freshInputs.* are optional on their source types but
+      // canonicalScheduleMode / canonicalTrainingDaysPerWeek are REQUIRED
+      // `... | null` on the audit-state type. `?? null` keeps absence
+      // explicit instead of leaking undefined.
+      canonicalScheduleMode: canonical.scheduleMode ?? null,
+      canonicalTrainingDaysPerWeek: canonical.trainingDaysPerWeek ?? null,
       // Builder prefill (what form opens with)
-      prefillScheduleMode: freshInputs.scheduleMode,
-      prefillTrainingDays: freshInputs.scheduleMode === 'static' 
-        ? (freshInputs.trainingDaysPerWeek as number) : null,
+      prefillScheduleMode: freshInputs.scheduleMode ?? null,
+      // [BUILD-FIX] Replaced unsafe `as number` cast with `?? null` for the
+      // same reason as the line ~2812 sibling — preserves runtime semantic,
+      // removes an undefined-leak escape hatch, and stays inside the
+      // `number | null` destination contract.
+      prefillTrainingDays: freshInputs.scheduleMode === 'static'
+        ? freshInputs.trainingDaysPerWeek ?? null
+        : null,
       // History
       lastGeneratedScheduleMode: program?.scheduleMode || null,
       lastGeneratedTrainingDays: (program as { trainingDaysPerWeek?: number })?.trainingDaysPerWeek || null,

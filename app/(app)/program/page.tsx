@@ -7373,7 +7373,14 @@ export default function ProgramPage() {
           outputPrimaryGoal: newProgram.primaryGoal,
           outputSecondaryGoal: newProgram.secondaryGoal || null,
           outputSelectedSkills: newProgram.selectedSkills || [],
-          outputEquipment: newProgram.equipment || [],
+          // [STEP-5A-PHI] AdaptiveProgram owns equipment via the typed
+          //   `equipmentProfile: EquipmentProfile` slot, NOT a flat
+          //   `equipment` field. The authoritative output equipment list
+          //   for diagnostics is `equipmentProfile.available` (see the
+          //   already-correct reads at L11671/L11710). The previous flat
+          //   `newProgram.equipment` read was a stale shape from before
+          //   the equipment-adaptation contract migration.
+          outputEquipment: newProgram.equipmentProfile?.available || [],
           outputSessionCount: newProgram.sessions?.length || 0,
           outputScheduleMode: newProgram.scheduleMode,
           goalsMatch: generationInputs?.primaryGoal === newProgram.primaryGoal,
@@ -10955,7 +10962,14 @@ export default function ProgramPage() {
           outputPrimaryGoal: newProgram.primaryGoal,
           outputSecondaryGoal: newProgram.secondaryGoal || null,
           outputSelectedSkills: newProgram.selectedSkills || [],
-          outputEquipment: newProgram.equipment || [],
+          // [STEP-5A-PHI] AdaptiveProgram owns equipment via the typed
+          //   `equipmentProfile: EquipmentProfile` slot, NOT a flat
+          //   `equipment` field. The authoritative output equipment list
+          //   for diagnostics is `equipmentProfile.available` (see the
+          //   already-correct reads at L11671/L11710). The previous flat
+          //   `newProgram.equipment` read was a stale shape from before
+          //   the equipment-adaptation contract migration.
+          outputEquipment: newProgram.equipmentProfile?.available || [],
           outputSessionCount: newProgram.sessions?.length || 0,
           outputScheduleMode: newProgram.scheduleMode,
           goalsMatch: freshRebuildInput.primaryGoal === newProgram.primaryGoal,

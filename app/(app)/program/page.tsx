@@ -2168,6 +2168,121 @@ export function decideCanonicalProgramWinner(
   }
 }
 
+// ==========================================================================
+// [STEP-4B] PROGRAM-PAGE SCHEDULE-TRUTH NORMALIZATION HELPERS
+// ==========================================================================
+// Two cooperating helpers used by the audit/snapshot, modify, regenerate,
+// and adjustment dispatch paths to keep `scheduleMode` and
+// `trainingDaysPerWeek` semantically separate at every Program-page
+// boundary:
+//
+//   1. `normalizeTrainingDaysForSnapshot(value)` — shared boundary
+//      normalizer for any source that overloads the field. Used by audit
+//      snapshots and as the numeric-extraction primitive inside the
+//      schedule-truth resolver.
+//
+//   2. `resolveProgramPageScheduleTruth({ scheduleMode, trainingDaysPerWeek
+//      })` — single authoritative resolver used by Modify, Regenerate, and
+//      Adjustment dispatch corridors. Returns one typed object exposing:
+//        - `scheduleMode` (`'static' | 'flexible' | null`)
+//        - `numericTrainingDays` (`number | null`)
+//        - `builderTrainingDays` (`number | 'flexible' | null`) for
+//          AdaptiveProgramInputs-shaped destinations
+//        - `canonicalTrainingDays` (`number | null`) for canonical-profile
+//          numeric slots
+//        - `isStatic` / `isFlexible` / `diagnosticLabel` for proof logs
+//
+// HARD RULES the resolver enforces:
+//   - `'flexible'` is mode truth, never numeric truth
+//   - missing/invalid → `null`, never an invented `4` or `6`
+//   - numeric values survive end-to-end when mode is static
+//   - the resolver is the only place that decides "is this static or
+//     flexible when mode is missing but a number/literal is present"
+// ==========================================================================
+function normalizeTrainingDaysForSnapshot(
+  value: TrainingDays | 'flexible' | number | string | null | undefined,
+): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+  // `'flexible'`, any other string, null, and undefined all collapse to
+  // explicit absence in the numeric truth slot. We accept the wider
+  // `string` because some upstream helpers (e.g. computeScheduleIntelligence
+  // in flexible-schedule-engine.ts) declare their return as
+  // `number | string | null` rather than the narrower `number | 'flexible' | null`.
+  return null
+}
+
+type ProgramPageScheduleTruth = {
+  scheduleMode: 'static' | 'flexible' | null
+  numericTrainingDays: number | null
+  builderTrainingDays: number | 'flexible' | null
+  canonicalTrainingDays: number | null
+  isStatic: boolean
+  isFlexible: boolean
+  diagnosticLabel: string
+}
+
+function resolveProgramPageScheduleTruth(input: {
+  scheduleMode?: string | null
+  trainingDaysPerWeek?: TrainingDays | 'flexible' | number | string | null
+  fallbackScheduleMode?: string | null
+  fallbackTrainingDaysPerWeek?: TrainingDays | 'flexible' | number | string | null
+}): ProgramPageScheduleTruth {
+  const rawMode = input.scheduleMode ?? input.fallbackScheduleMode ?? null
+  const rawDays = input.trainingDaysPerWeek ?? input.fallbackTrainingDaysPerWeek ?? null
+  const numericDays = normalizeTrainingDaysForSnapshot(
+    rawDays as TrainingDays | 'flexible' | number | string | null | undefined,
+  )
+
+  // Resolve scheduleMode honoring explicit-mode precedence, then falling
+  // back to inference from the days literal/number. Never fakes a default.
+  let scheduleMode: 'static' | 'flexible' | null
+  if (rawMode === 'static' || rawMode === 'flexible') {
+    scheduleMode = rawMode
+  } else if (rawDays === 'flexible') {
+    scheduleMode = 'flexible'
+  } else if (numericDays !== null) {
+    scheduleMode = 'static'
+  } else {
+    scheduleMode = null
+  }
+
+  const isFlexible = scheduleMode === 'flexible'
+  const isStatic = scheduleMode === 'static'
+
+  // Numeric/canonical truth: flexible mode owns no numeric count.
+  const numericTrainingDays = isFlexible ? null : numericDays
+  const canonicalTrainingDays = numericTrainingDays
+
+  // Builder-shape truth: AdaptiveProgramInputs.trainingDaysPerWeek is
+  // typed `TrainingDays | 'flexible'`, so flexible carries the literal.
+  const builderTrainingDays: number | 'flexible' | null = isFlexible
+    ? 'flexible'
+    : numericTrainingDays
+
+  let diagnosticLabel: string
+  if (isStatic && numericTrainingDays !== null) {
+    diagnosticLabel = `STATIC_TARGET_${numericTrainingDays}_SESSIONS`
+  } else if (isStatic) {
+    diagnosticLabel = 'STATIC_TARGET_UNKNOWN'
+  } else if (isFlexible) {
+    diagnosticLabel = 'FLEXIBLE_TARGET_DERIVED_BY_ENGINE'
+  } else {
+    diagnosticLabel = 'SCHEDULE_TRUTH_UNKNOWN'
+  }
+
+  return {
+    scheduleMode,
+    numericTrainingDays,
+    builderTrainingDays,
+    canonicalTrainingDays,
+    isStatic,
+    isFlexible,
+    diagnosticLabel,
+  }
+}
+
 export default function ProgramPage() {
   // ==========================================================================
   // [PHASE 24B] TASK 4 - Dynamic import was converted to static import
@@ -2812,7 +2927,11 @@ export default function ProgramPage() {
           // both fields as optional. `?? null` preserves user truth — an
           // unset value becomes explicit absence, never a fake default.
           canonicalScheduleMode: entryInputs.scheduleMode ?? null,
-          canonicalTrainingDaysPerWeek: entryInputs.trainingDaysPerWeek ?? null,
+          // [STEP-4B] AdaptiveProgramInputs.trainingDaysPerWeek is
+          // `TrainingDays | 'flexible'` — overloaded with the flexible
+          // literal. Audit slot is `number | null`. Route through the
+          // boundary normalizer so 'flexible' becomes explicit null.
+          canonicalTrainingDaysPerWeek: normalizeTrainingDaysForSnapshot(entryInputs.trainingDaysPerWeek),
           prefillScheduleMode: entryInputs.scheduleMode ?? null,
           // [BUILD-FIX] Replaced unsafe `as number` cast (which silently
           // forced `number | undefined` to `number` and could leak undefined
@@ -2940,7 +3059,11 @@ export default function ProgramPage() {
         setScheduleTruthAudit(prev => ({
           ...prev,
           canonicalScheduleMode: intelligence.scheduleIdentity,
-          canonicalTrainingDaysPerWeek: intelligence.canonicalTrainingDaysPerWeek,
+          // [STEP-4B] computeScheduleIntelligence declares its return as
+          // `number | string | null` (wider than 'flexible' literal). The
+          // normalizer's `string` branch collapses any non-finite value to
+          // null, keeping flexible-mode out of the numeric audit slot.
+          canonicalTrainingDaysPerWeek: normalizeTrainingDaysForSnapshot(intelligence.canonicalTrainingDaysPerWeek),
           complexityScore: intelligence.complexityScore,
           complexityElevated: intelligence.complexityTier !== 'low',
           baselineRecommendedSessionCount: intelligence.baselineRecommendedSessionCount,
@@ -7935,14 +8058,33 @@ export default function ProgramPage() {
         verdict: 'ROUTING_TO_AUTHORITATIVE_SERVER_REBUILD',
       })
       
+      // [STEP-4B] One authoritative schedule-truth resolution for the
+      // entire Modify dispatch corridor. Replaces the prior `|| 4` fake
+      // default and prevents any per-call-site re-interpretation.
+      // - canonicalTrainingDays: number | null (for canonical profile)
+      // - builderTrainingDays:   number | 'flexible' | null (for AdaptiveProgramInputs)
+      // - scheduleMode:          'static' | 'flexible' | null
+      const modifyScheduleTruth = resolveProgramPageScheduleTruth({
+        scheduleMode: effectiveInputs.scheduleMode,
+        trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
+      })
+
       // Build canonical profile override with builder inputs
       const modifyCanonicalOverride = {
         primaryGoal: effectiveInputs.primaryGoal || 'skill_acquisition',
         secondaryGoal: effectiveInputs.secondaryGoal || null,
         experienceLevel: effectiveInputs.experienceLevel || 'intermediate',
-        trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek || 4,
+        // [STEP-4B] Removed `|| 4` fake default. Canonical profile expects
+        // numeric truth or null — flexible mode owns flexibility, the
+        // numeric slot stores absence. No invented day count.
+        trainingDaysPerWeek: modifyScheduleTruth.canonicalTrainingDays,
         sessionLengthMinutes: effectiveInputs.sessionLength || 60,
-        scheduleMode: effectiveInputs.scheduleMode || 'flexible',
+        // [STEP-4B] scheduleMode resolved through the same truth object.
+        // Falls back to 'flexible' only if both explicit-mode and any
+        // numeric/literal inference yielded null — preserves prior visible
+        // behavior for genuinely-empty inputs while no longer overriding a
+        // valid static numeric intent.
+        scheduleMode: modifyScheduleTruth.scheduleMode ?? 'flexible',
         sessionDurationMode: effectiveInputs.sessionDurationMode || 'adaptive',
         equipment: effectiveInputs.equipment || ['pull_up_bar', 'parallettes', 'rings'],
         selectedSkills: effectiveInputs.selectedSkills || [],
@@ -7953,13 +8095,16 @@ export default function ProgramPage() {
       }
       
       // Build program inputs for server route
+      // [STEP-4B] AdaptiveProgramInputs.trainingDaysPerWeek is
+      // `TrainingDays | 'flexible'` — builder shape carries the literal,
+      // which the server route's adaptive builder knows how to interpret.
       const modifyProgramInputs = {
         primaryGoal: effectiveInputs.primaryGoal,
         secondaryGoal: effectiveInputs.secondaryGoal,
         experienceLevel: effectiveInputs.experienceLevel,
-        trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
+        trainingDaysPerWeek: modifyScheduleTruth.builderTrainingDays ?? effectiveInputs.trainingDaysPerWeek,
         sessionLength: effectiveInputs.sessionLength,
-        scheduleMode: effectiveInputs.scheduleMode,
+        scheduleMode: modifyScheduleTruth.scheduleMode ?? effectiveInputs.scheduleMode,
         sessionDurationMode: effectiveInputs.sessionDurationMode,
         equipment: effectiveInputs.equipment,
         selectedSkills: effectiveInputs.selectedSkills,
@@ -8055,12 +8200,16 @@ export default function ProgramPage() {
       await programModules.saveAdaptiveProgram(newProgram)
       
       // Update canonical profile to match what was just generated
+      // [STEP-4B] Canonical profile numeric slot must hold number | null —
+      // flexible mode collapses to null here, never the overloaded literal
+      // and never a fake `|| 4`. scheduleMode comes from the resolved
+      // truth so the two fields cannot disagree.
       const { updateCanonicalProfile } = await import('@/lib/canonical-profile-service')
       updateCanonicalProfile({
         primaryGoal: modifyProgramInputs.primaryGoal,
         secondaryGoal: modifyProgramInputs.secondaryGoal,
-        trainingDaysPerWeek: modifyProgramInputs.trainingDaysPerWeek,
-        scheduleMode: modifyProgramInputs.scheduleMode,
+        trainingDaysPerWeek: modifyScheduleTruth.canonicalTrainingDays,
+        scheduleMode: modifyScheduleTruth.scheduleMode ?? modifyProgramInputs.scheduleMode,
         sessionDurationMode: modifyProgramInputs.sessionDurationMode,
         sessionLengthMinutes: modifyProgramInputs.sessionLength,
         selectedSkills: modifyProgramInputs.selectedSkills,
@@ -8136,29 +8285,42 @@ export default function ProgramPage() {
       })
       
       // [MODIFY-UNIFIED-FIX] Authoritative result proof - production-safe verification
+      // [STEP-4B] Honest schedule-truth proof. The prior `flexible ? 6 : days`
+      // hardcode lied about flexible mode having a fixed 6-session target.
+      // Static mode: requestedSessionTarget = numeric day count from resolved truth.
+      // Flexible mode: requestedSessionTarget = null. Adaptive engine derives the
+      // session count; we report it without inventing an expected target.
       const savedSessionCount = newProgram.sessions?.length ?? 0
-      const requestedSessionTarget = modifyProgramInputs.scheduleMode === 'flexible' ? 6 : modifyProgramInputs.trainingDaysPerWeek
+      const requestedSessionTarget = modifyScheduleTruth.numericTrainingDays
       const sameSessionCount = savedSessionCount === visibleSessionCountBeforeSet
-      const isRealAdaptiveReduction = savedSessionCount < (typeof requestedSessionTarget === 'number' ? requestedSessionTarget : 6)
-      
-      // Determine verdict
+
+      // Determine verdict honestly:
+      // - static + match → STATIC_TARGET_MATCH
+      // - static + miss  → STATIC_TARGET_MISMATCH (real bug signal)
+      // - flexible       → FLEXIBLE_RESULT_ACCEPTED_NO_FAKE_TARGET
+      //   (with session-count appended for diagnostic context, never as a
+      //   pass/fail criterion since flexible has no fixed target)
       let modifyVerdict: string
-      if (savedSessionCount >= 6 && modifyProgramInputs.scheduleMode === 'flexible') {
-        modifyVerdict = 'MODIFY_SAVED_AND_DISPLAYED_MATCH'
-      } else if (savedSessionCount === 4 && modifyProgramInputs.scheduleMode === 'flexible') {
-        // This should NOT happen anymore with server route fix
-        modifyVerdict = 'UNEXPECTED_4_SESSION_RESULT_CHECK_SERVER_ROUTE'
-      } else if (isRealAdaptiveReduction) {
-        modifyVerdict = 'REAL_ADAPTIVE_REDUCTION'
+      if (modifyScheduleTruth.isStatic && requestedSessionTarget !== null) {
+        modifyVerdict = savedSessionCount === requestedSessionTarget
+          ? `STATIC_TARGET_MATCH_${requestedSessionTarget}_SESSIONS`
+          : `STATIC_TARGET_MISMATCH_REQUESTED_${requestedSessionTarget}_GOT_${savedSessionCount}`
+      } else if (modifyScheduleTruth.isFlexible) {
+        modifyVerdict = `FLEXIBLE_RESULT_ACCEPTED_NO_FAKE_TARGET_SESSION_COUNT_${savedSessionCount}`
       } else {
-        modifyVerdict = 'MODIFY_FULLY_ROUTED_TO_AUTHORITATIVE_REBUILD'
+        modifyVerdict = `MODIFY_SCHEDULE_TRUTH_UNKNOWN_SESSION_COUNT_${savedSessionCount}`
       }
-      
+
       console.log('[modify-authoritative-result-proof]', {
         modifySubmitHandler: 'handleGenerateFromModifyBuilder',
         authoritativeRebuildWinner: '/api/program/regenerate',
         overridePayloadApplied: true,
-        requestedSessionTarget,
+        // Honest schedule-truth fields
+        scheduleTruthDiagnostic: modifyScheduleTruth.diagnosticLabel,
+        scheduleMode: modifyScheduleTruth.scheduleMode,
+        isStatic: modifyScheduleTruth.isStatic,
+        isFlexible: modifyScheduleTruth.isFlexible,
+        requestedSessionTarget, // null for flexible, numeric for static
         resolvedSessionTarget: savedSessionCount,
         savedProgramId: newProgram.id,
         savedSessionCount,
@@ -9084,17 +9246,27 @@ export default function ProgramPage() {
         mergedSet.add('straight_sets')
         const mergedMethodPreferences = Array.from(mergedSet)
 
+        // [STEP-4B] Run the strongest-truth schedule pair through the
+        // shared resolver so Regenerate uses identical semantics to Modify
+        // and Adjustment. Flexible → canonical numeric is null. Static →
+        // numeric value preserved. No hand-rolled ternary, no fake fallback.
+        const regenerateScheduleTruth = resolveProgramPageScheduleTruth({
+          scheduleMode: strongestRegenerateTruth.scheduleMode,
+          trainingDaysPerWeek: strongestRegenerateTruth.trainingDaysPerWeek,
+        })
+
         const rebuildCanonicalOverride = {
           ...canonicalProfileNow,
           // [PHASE 17Y/18B] Material identity fields - use strongestRegenerateTruth
           primaryGoal: strongestRegenerateTruth.primaryGoal,
           secondaryGoal: strongestRegenerateTruth.secondaryGoal,
           selectedSkills: strongestRegenerateTruth.selectedSkills,
-          scheduleMode: strongestRegenerateTruth.scheduleMode,
-          // [PHASE 17V] Flexible null semantics - if flexible, force null trainingDaysPerWeek
-          trainingDaysPerWeek: strongestRegenerateTruth.scheduleMode === 'flexible' 
-            ? null 
-            : strongestRegenerateTruth.trainingDaysPerWeek,
+          // [STEP-4B] scheduleMode + trainingDaysPerWeek both flow from
+          // the same resolved truth object. If both are absent, fall back
+          // to the strongestRegenerateTruth raw mode (preserving prior
+          // behavior for the genuinely-unknown case) without faking.
+          scheduleMode: regenerateScheduleTruth.scheduleMode ?? strongestRegenerateTruth.scheduleMode,
+          trainingDaysPerWeek: regenerateScheduleTruth.canonicalTrainingDays,
           sessionDurationMode: strongestRegenerateTruth.sessionDurationMode,
           sessionLengthMinutes: strongestRegenerateTruth.sessionLength,
           equipmentAvailable: strongestRegenerateTruth.equipment,
@@ -12012,11 +12184,26 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           null,
       }
       
-      // Determine effective schedule mode based on request type
+      // [STEP-4B] One authoritative schedule-truth resolution for the
+      // adjustment dispatch corridor. Preserves the existing request-type
+      // priority contract (training_days request → updatedInputs wins;
+      // otherwise inputs > updatedInputs > canonical), then routes the
+      // chosen pair through the shared resolver so flexible mode never
+      // leaks into the numeric trainingDaysPerWeek slot and missing values
+      // never become a fake `4` or `6`.
       const adjEffectiveScheduleMode = request.type === 'training_days'
         ? updatedInputs?.scheduleMode
         : (inputs?.scheduleMode || updatedInputs?.scheduleMode || adjCanonicalProfileNow?.scheduleMode)
-      
+
+      const adjEffectiveRawTrainingDays = request.type === 'training_days'
+        ? updatedInputs?.trainingDaysPerWeek
+        : (inputs?.trainingDaysPerWeek ?? updatedInputs?.trainingDaysPerWeek ?? adjCanonicalProfileNow?.trainingDaysPerWeek)
+
+      const adjustmentScheduleTruth = resolveProgramPageScheduleTruth({
+        scheduleMode: adjEffectiveScheduleMode,
+        trainingDaysPerWeek: adjEffectiveRawTrainingDays,
+      })
+
       const adjustmentCanonicalOverride = {
         ...adjCanonicalProfileNow,
         // [PHASE 17X] TASK 3 - Use strongestMaterialIdentityTruth for 4 material identity fields
@@ -12025,14 +12212,12 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         secondaryGoal: strongestMaterialIdentityTruth.secondaryGoal,
         selectedSkills: strongestMaterialIdentityTruth.selectedSkills,
         trainingPathType: strongestMaterialIdentityTruth.trainingPathType,
-        // scheduleMode - let request win if training_days, else preserve
-        scheduleMode: adjEffectiveScheduleMode,
-        // trainingDaysPerWeek - flexible null semantics, let request win if training_days
-        trainingDaysPerWeek: adjEffectiveScheduleMode === 'flexible'
-          ? null
-          : request.type === 'training_days'
-          ? updatedInputs?.trainingDaysPerWeek
-          : (inputs?.trainingDaysPerWeek ?? updatedInputs?.trainingDaysPerWeek ?? adjCanonicalProfileNow?.trainingDaysPerWeek),
+        // [STEP-4B] scheduleMode + trainingDaysPerWeek both come from the
+        // same resolved object. Fallback to the raw effective mode only
+        // when the resolver returned null (genuinely unknown), preserving
+        // existing visible behavior without faking.
+        scheduleMode: adjustmentScheduleTruth.scheduleMode ?? adjEffectiveScheduleMode,
+        trainingDaysPerWeek: adjustmentScheduleTruth.canonicalTrainingDays,
         // sessionDurationMode - let request win if session_time
         sessionDurationMode: request.type === 'session_time'
           ? updatedInputs?.sessionDurationMode
@@ -14310,7 +14495,9 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       // `... | null` on the audit-state type. `?? null` keeps absence
       // explicit instead of leaking undefined.
       canonicalScheduleMode: canonical.scheduleMode ?? null,
-      canonicalTrainingDaysPerWeek: canonical.trainingDaysPerWeek ?? null,
+      // [STEP-4B] getCanonicalProfile() returns the same overloaded
+      // `TrainingDays | 'flexible'` shape; route through the normalizer.
+      canonicalTrainingDaysPerWeek: normalizeTrainingDaysForSnapshot(canonical.trainingDaysPerWeek),
       // Builder prefill (what form opens with)
       prefillScheduleMode: freshInputs.scheduleMode ?? null,
       // [BUILD-FIX] Replaced unsafe `as number` cast with `?? null` for the

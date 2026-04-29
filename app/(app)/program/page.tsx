@@ -6946,7 +6946,14 @@ export default function ProgramPage() {
           entryTrainingDaysPerWeek: entry.trainingDaysPerWeek ?? null,
           entrySelectedSkillsCount: entry.selectedSkills?.length ?? null,
           entryExperienceLevel: entry.experienceLevel ?? null,
-          entryFallbacksUsed: entry.fallbacksUsed ?? null,
+          // [STEP-5A-SIGMA] Use the canonical prefixed metadata field name.
+          //   `ValidatedGenerationEntry` (lib/canonical-profile-service.ts:3137)
+          //   declares `__fallbacksUsed: string[]` — the `__` prefix marks it
+          //   as provenance/debug metadata, distinct from required generation
+          //   inputs. The other three Program-Page reads (L7025, L9427, L9481)
+          //   already use `entry.__fallbacksUsed`; this Step 3 audit slot was
+          //   the lone outlier reading the non-existent `entry.fallbacksUsed`.
+          entryFallbacksUsed: entry.__fallbacksUsed ?? null,
         }
         
         console.log('[MAIN-GEN-TRUTH step-3-canonical-entry]', {

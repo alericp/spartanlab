@@ -226,6 +226,73 @@ function readProgramPageNumber(source: unknown, key: string): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
+// [STEP-5A-OMEGA] Freshness signature projection helper.
+//
+// `createProfileSignature(...)` (lib/program-state.ts:476) expects a
+// narrow normalized profile shape:
+//   { primaryGoal?, secondaryGoal?, scheduleMode?,
+//     trainingDaysPerWeek?: number | null,
+//     sessionLengthMinutes?: number,
+//     selectedSkills?: string[] }
+//
+// The two raw sources used across this file's 8 callsites — `AdaptiveProgramInputs`
+// (state/effective/freshRebuild/updated inputs) and the literal return type of
+// `entryToAdaptiveInputs` (generationInputs) — both carry:
+//   - `trainingDaysPerWeek: number | 'flexible'`  (NOT `number | null`)
+//   - `sessionLength: number`                      (NOT `sessionLengthMinutes`)
+// plus extra generation fields (`equipment`, `experienceLevel`, `regenerationMode`, etc.)
+// that the signature helper must not see.
+//
+// This helper does the one safe, contract-preserving conversion in one place:
+//   - 'flexible' training days → null (preserves "no fixed weekly count" meaning)
+//   - numeric `sessionLength` → `sessionLengthMinutes` (the field is already minutes
+//     per `SessionLength`'s numeric values; we're renaming, not converting units)
+//   - drops all unrelated generation fields
+//   - normalizes optional/null primary/secondary goals to `?? null`
+//
+// Parameter type is intentionally a wide structural subset so both
+// `AdaptiveProgramInputs` AND the `entryToAdaptiveInputs` literal return type
+// fit via TypeScript structural compatibility — required fields with narrower
+// types (e.g. `primaryGoal: PrimaryGoal`) flow into optional wider fields
+// (e.g. `primaryGoal?: string | null`). Excess property checks do NOT fire
+// because callers pass typed bindings, never fresh object literals.
+function toFreshnessSignatureProjection(source: {
+  primaryGoal?: string | null
+  secondaryGoal?: string | null
+  scheduleMode?: string
+  trainingDaysPerWeek?: number | string | null
+  sessionLength?: number
+  sessionLengthMinutes?: number
+  selectedSkills?: string[]
+}): {
+  primaryGoal?: string | null
+  secondaryGoal?: string | null
+  scheduleMode?: string
+  trainingDaysPerWeek?: number | null
+  sessionLengthMinutes?: number
+  selectedSkills?: string[]
+} {
+  const rawTrainingDays = source.trainingDaysPerWeek
+  const rawSessionLengthMinutes =
+    typeof source.sessionLengthMinutes === 'number'
+      ? source.sessionLengthMinutes
+      : typeof source.sessionLength === 'number'
+        ? source.sessionLength
+        : undefined
+  return {
+    primaryGoal: source.primaryGoal ?? null,
+    secondaryGoal: source.secondaryGoal ?? null,
+    scheduleMode:
+      typeof source.scheduleMode === 'string' ? source.scheduleMode : undefined,
+    trainingDaysPerWeek:
+      typeof rawTrainingDays === 'number' ? rawTrainingDays : null,
+    sessionLengthMinutes: rawSessionLengthMinutes,
+    selectedSkills: Array.isArray(source.selectedSkills)
+      ? source.selectedSkills
+      : [],
+  }
+}
+
 function readProgramPageMetadataFromUnknown(source: unknown): _ProgramPageMetadataView {
   // [STEP-5A-OMICRON] Refactored to flow through the quarantined record
   //   helper above; no direct `as Record<string, unknown>` cast here.
@@ -7531,7 +7598,12 @@ export default function ProgramPage() {
         //   parallel truth source or skipping the freshness sync (which
         //   would corrupt cross-surface cache invalidation).
         const freshnessSignatureSource = inputs ?? generationInputs
-        const profileSigForFreshness = createProfileSignature(freshnessSignatureSource)
+        // [STEP-5A-OMEGA] Project to the narrow signature shape — raw
+        //   `trainingDaysPerWeek: number | 'flexible'` and `sessionLength`
+        //   don't match `createProfileSignature`'s contract.
+        const profileSigForFreshness = createProfileSignature(
+          toFreshnessSignatureProjection(freshnessSignatureSource),
+        )
         invalidateStaleCaches()
         updateFreshnessIdentity(
           newProgram.id,
@@ -8065,7 +8137,8 @@ export default function ProgramPage() {
         }
         
         // [program-rebuild-truth] TASK 2: Create success result
-        const profileSig = createProfileSignature(effectiveInputs)
+        // [STEP-5A-OMEGA] Project to narrow signature shape.
+        const profileSig = createProfileSignature(toFreshnessSignatureProjection(effectiveInputs))
         const successResult = createSuccessBuildResult(profileSig, null, newProgram.id)
         
         // [PHASE 16S] Add runtime session metadata to success result
@@ -8606,7 +8679,10 @@ export default function ProgramPage() {
         })
         
         // Create failed build result with structured diagnostics
-        const profileSig = inputs ? createProfileSignature(inputs) : 'unknown'
+        // [STEP-5A-OMEGA] Project to narrow signature shape.
+        const profileSig = inputs
+          ? createProfileSignature(toFreshnessSignatureProjection(inputs))
+          : 'unknown'
         const failedResult = createFailedBuildResult(
           errorCode,
           errorStage,
@@ -10719,7 +10795,8 @@ export default function ProgramPage() {
             'session_building_failure' as GenerationErrorCode,
             'degraded_regenerate',
             'generation_degraded' as BuildAttemptSubCode,
-            createProfileSignature(freshRebuildInput),
+            // [STEP-5A-OMEGA] Project to narrow signature shape.
+            createProfileSignature(toFreshnessSignatureProjection(freshRebuildInput)),
             program?.id || null,
             'Your rebuild returned degraded sessions, so your last good program was preserved.',
             {
@@ -11292,7 +11369,10 @@ export default function ProgramPage() {
         regenerateStage = 'freshness_sync'
         console.log('[freshness-sync] REGEN STAGE 7c: Updating canonical freshness identity...')
         // [TASK 2] Use freshRebuildInput for signature, NOT stale inputs
-        const regenProfileSig = createProfileSignature(freshRebuildInput)
+        // [STEP-5A-OMEGA] Project to narrow signature shape.
+        const regenProfileSig = createProfileSignature(
+          toFreshnessSignatureProjection(freshRebuildInput),
+        )
         invalidateStaleCaches()
         updateFreshnessIdentity(
           newProgram.id,
@@ -11615,7 +11695,8 @@ export default function ProgramPage() {
         setShowBuilder(false)
         
         // [program-rebuild-truth] Create success result using freshRebuildInput signature
-        const profileSig = createProfileSignature(freshRebuildInput)
+        // [STEP-5A-OMEGA] Project to narrow signature shape.
+        const profileSig = createProfileSignature(toFreshnessSignatureProjection(freshRebuildInput))
         const successResult = createSuccessBuildResult(profileSig, program?.id || null, newProgram.id)
         
         // [PHASE 16S] Add runtime session metadata to regeneration success result
@@ -12371,7 +12452,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         })
         
         // Create failed build result with structured diagnostics
-        const profileSig = inputs ? createProfileSignature(inputs) : 'unknown'
+        // [STEP-5A-OMEGA] Project to narrow signature shape.
+        const profileSig = inputs
+          ? createProfileSignature(toFreshnessSignatureProjection(inputs))
+          : 'unknown'
         const failedResult = createFailedBuildResult(
           errorCode,
           errorStage,
@@ -13548,7 +13632,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       
       // [canonical-rebuild] STAGE 5: Update freshness identity
       console.log('[canonical-rebuild] STAGE 5: Updating freshness identity...')
-      const profileSig = createProfileSignature(updatedInputs)
+      // [STEP-5A-OMEGA] Project to narrow signature shape.
+      const profileSig = createProfileSignature(toFreshnessSignatureProjection(updatedInputs))
       invalidateStaleCaches()
       updateFreshnessIdentity(newProgram.id, newProgram.createdAt, profileSig)
       

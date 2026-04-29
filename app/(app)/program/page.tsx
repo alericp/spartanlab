@@ -214,14 +214,17 @@ function readProgramPageStringArray(source: unknown, key: string): string[] {
     ? value.filter((item): item is string => typeof item === 'string')
     : []
 }
-// Reserved for numeric metadata reads — pre-declared per the
-// STEP-5A-OMICRON helper contract; safe to remove later if unused.
-function _readProgramPageNumber(source: unknown, key: string): number | null {
+// [STEP-5A-TAU] Promoted from `_readProgramPageNumber` (pre-declared per
+//   STEP-5A-OMICRON) to public `readProgramPageNumber`. Now actively used
+//   by the canonicalProfile projection in `handleGenerate` to source
+//   `bodyweight` safely from the wider builder/generationInputs object —
+//   `bodyweight` is NOT part of `ValidatedGenerationEntry` and must come
+//   from expanded onboarding/profile truth via the helper family.
+function readProgramPageNumber(source: unknown, key: string): number | null {
   const record = readProgramPageRecord(source)
   const value = record?.[key]
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
-void _readProgramPageNumber
 
 function readProgramPageMetadataFromUnknown(source: unknown): _ProgramPageMetadataView {
   // [STEP-5A-OMICRON] Refactored to flow through the quarantined record
@@ -7073,23 +7076,41 @@ export default function ProgramPage() {
   })
   
   // Build canonical profile from entry result for server route
+  // [STEP-5A-TAU] Projection contract: `entryResult.entry` is typed as
+  //   `ValidatedGenerationEntry` (lib/canonical-profile-service.ts:3114),
+  //   which is a BOUNDED generation-entry shape — it does NOT own
+  //   `selectedStrength`, `bodyweight`, or `sex`. Those expanded
+  //   onboarding/profile fields live on the wider builder input object
+  //   (`generationInputs`) and must be projected from there through the
+  //   safe `readProgramPage*` helper family. The `validatedEntry` alias
+  //   makes the typed-vs-projected source split explicit per field.
+  const validatedEntry = entryResult.entry
   const canonicalProfile = {
-    primaryGoal: entryResult.entry?.primaryGoal,
-    secondaryGoal: entryResult.entry?.secondaryGoal,
-    scheduleMode: entryResult.entry?.scheduleMode,
-    sessionDurationMode: entryResult.entry?.sessionDurationMode,
-    trainingDaysPerWeek: entryResult.entry?.trainingDaysPerWeek,
-    sessionLengthMinutes: entryResult.entry?.sessionLength,
-    selectedSkills: entryResult.entry?.selectedSkills || [],
-    selectedFlexibility: entryResult.entry?.selectedFlexibility || [],
-    selectedStrength: entryResult.entry?.selectedStrength || [],
-    goalCategories: entryResult.entry?.goalCategories || [],
-    trainingPathType: entryResult.entry?.trainingPathType,
-    experienceLevel: entryResult.entry?.experienceLevel,
-    equipment: entryResult.entry?.equipment || [],
-    equipmentAvailable: entryResult.entry?.equipment || [],
-    bodyweight: entryResult.entry?.bodyweight,
-    sex: entryResult.entry?.sex,
+    primaryGoal: validatedEntry?.primaryGoal,
+    secondaryGoal: validatedEntry?.secondaryGoal,
+    scheduleMode: validatedEntry?.scheduleMode,
+    sessionDurationMode: validatedEntry?.sessionDurationMode,
+    trainingDaysPerWeek: validatedEntry?.trainingDaysPerWeek,
+    sessionLengthMinutes: validatedEntry?.sessionLength,
+    selectedSkills: validatedEntry?.selectedSkills || [],
+    selectedFlexibility: validatedEntry?.selectedFlexibility || [],
+    // [STEP-5A-TAU] Sourced from generationInputs (NOT validatedEntry):
+    //   `selectedStrength` is not part of `ValidatedGenerationEntry`. It
+    //   matters for strength-goal truth and must survive into the
+    //   canonical profile, so it's read via the safe string-array helper.
+    selectedStrength: readProgramPageStringArray(generationInputs, 'selectedStrength'),
+    goalCategories: validatedEntry?.goalCategories || [],
+    trainingPathType: validatedEntry?.trainingPathType,
+    experienceLevel: validatedEntry?.experienceLevel,
+    equipment: validatedEntry?.equipment || [],
+    equipmentAvailable: validatedEntry?.equipment || [],
+    // [STEP-5A-TAU] Sourced from generationInputs (NOT validatedEntry):
+    //   `bodyweight` and `sex` are expanded profile fields not owned by
+    //   `ValidatedGenerationEntry`. `?? undefined` preserves the prior
+    //   "missing → undefined" semantics so downstream sentinel checks
+    //   (`if (canonicalProfile.bodyweight)` etc.) keep behaving identically.
+    bodyweight: readProgramPageNumber(generationInputs, 'bodyweight') ?? undefined,
+    sex: readProgramPageString(generationInputs, 'sex') ?? undefined,
     onboardingComplete: true,
   }
   

@@ -92,6 +92,41 @@ const PR_TYPE_CONFIG: Record<PRType, {
     unit: () => 'Unlocked',
     color: 'text-amber-500',
   },
+  // [BUILD-FIX] Hybrid / barbell PR types added to align this display
+  // map with the authoritative PRType union (types/history.ts:187-200).
+  // Using only icons already imported above so no new dependency is
+  // introduced. Unit signatures preserve any persisted `prUnit` (so
+  // metric/imperial PRs render exactly what was saved) and fall back
+  // to 'lb' for weight-based PRs and 'x BW' for relative strength —
+  // matching the conventions used elsewhere in the file.
+  weighted_calisthenics: {
+    label: 'Weighted Calisthenics',
+    shortLabel: 'Weighted',
+    icon: <Dumbbell className="w-3.5 h-3.5" />,
+    unit: (v, u) => (u ? `+${v} ${u}` : `+${v} lb`),
+    color: 'text-rose-400',
+  },
+  barbell_1rm: {
+    label: 'Barbell 1RM',
+    shortLabel: '1RM',
+    icon: <Target className="w-3.5 h-3.5" />,
+    unit: (v, u) => (u ? `${v} ${u}` : `${v} lb`),
+    color: 'text-red-400',
+  },
+  barbell_top_set: {
+    label: 'Barbell Top Set',
+    shortLabel: 'Top Set',
+    icon: <TrendingUp className="w-3.5 h-3.5" />,
+    unit: (v, u) => (u ? `${v} ${u}` : `${v} lb`),
+    color: 'text-yellow-400',
+  },
+  relative_strength: {
+    label: 'Relative Strength',
+    shortLabel: 'Relative',
+    icon: <Star className="w-3.5 h-3.5" />,
+    unit: (v, u) => (u ? `${v} ${u}` : `${v}x BW`),
+    color: 'text-indigo-400',
+  },
 }
 
 const CATEGORY_CONFIG: Record<ExerciseCategory, {

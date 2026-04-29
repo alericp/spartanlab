@@ -3959,8 +3959,17 @@ export default function ProgramPage() {
       selectedSkills: (activeProgram as unknown as { selectedSkills?: string[] }).selectedSkills,
       profileSnapshot: profileSnapshot,
     }
-    
-    const result = evaluateUnifiedProgramStaleness(rawProgram)
+
+    // [STEP-4H] Raw values from `activeProgram` carry UI/builder unions
+    // (`SessionLength` includes string members like '60+', and
+    // `TrainingDaysPerWeek` includes 'flexible'). The evaluator's contract
+    // is `number | null` for both. Route every value through
+    // `buildStalenessEvaluatorProgram` (defined at module scope) so the
+    // canonical-evaluator boundary is normalized once instead of patched
+    // line-by-line. `rawProgram` is preserved for the diagnostic console
+    // logs below; the evaluator receives the typed-normalized object.
+    const evaluatorProgram = buildStalenessEvaluatorProgram(rawProgram)
+    const result = evaluateUnifiedProgramStaleness(evaluatorProgram)
     
     // =========================================================================
     // [PHASE 32B] STALE SNAPSHOT SCHEDULE DETECTION
@@ -11000,21 +11009,31 @@ export default function ProgramPage() {
           || newProgram.equipmentProfile?.available 
           || []
         
-        const postBuildStaleness = evaluateUnifiedProgramStaleness({
-          primaryGoal: newProgram.primaryGoal,
-          secondaryGoal: (newProgram as unknown as { secondaryGoal?: string }).secondaryGoal,
-          trainingDaysPerWeek: newProgram.trainingDaysPerWeek,
-          sessionLength: newProgram.sessionLength,
-          scheduleMode: (newProgram as unknown as { scheduleMode?: string }).scheduleMode,
-          sessionDurationMode: (newProgram as unknown as { sessionDurationMode?: string }).sessionDurationMode,
-          // CRITICAL FIX: Use authoritative equipment from stored build snapshot
-          equipment: postBuildAuthoritativeEquipment,
-          // CRITICAL: Use profileSnapshot jointCautions - AdaptiveProgram doesn't have top-level jointCautions
-          jointCautions: (postBuildProfileSnapshot as { jointCautions?: string[] })?.jointCautions || [],
-          experienceLevel: newProgram.experienceLevel,
-          selectedSkills: (newProgram as unknown as { selectedSkills?: string[] }).selectedSkills,
-          profileSnapshot: postBuildProfileSnapshot,
-        })
+        // [STEP-4H] Same canonical-evaluator boundary as the unifiedStaleness
+        // call site (~line 3963). `newProgram.sessionLength` is `SessionLength`
+        // (string members like '60+' / '10-20'); `newProgram.trainingDaysPerWeek`
+        // is `TrainingDaysPerWeek` ('flexible' member). Both must normalize to
+        // `number | null` before crossing the evaluator contract. Routing
+        // through `buildStalenessEvaluatorProgram` keeps the boundary unified
+        // with the other call site so future evaluator-contract changes flow
+        // through one place.
+        const postBuildStaleness = evaluateUnifiedProgramStaleness(
+          buildStalenessEvaluatorProgram({
+            primaryGoal: newProgram.primaryGoal,
+            secondaryGoal: (newProgram as unknown as { secondaryGoal?: string }).secondaryGoal,
+            trainingDaysPerWeek: newProgram.trainingDaysPerWeek,
+            sessionLength: newProgram.sessionLength,
+            scheduleMode: (newProgram as unknown as { scheduleMode?: string }).scheduleMode,
+            sessionDurationMode: (newProgram as unknown as { sessionDurationMode?: string }).sessionDurationMode,
+            // CRITICAL FIX: Use authoritative equipment from stored build snapshot
+            equipment: postBuildAuthoritativeEquipment,
+            // CRITICAL: Use profileSnapshot jointCautions - AdaptiveProgram doesn't have top-level jointCautions
+            jointCautions: (postBuildProfileSnapshot as { jointCautions?: string[] })?.jointCautions,
+            experienceLevel: newProgram.experienceLevel,
+            selectedSkills: (newProgram as unknown as { selectedSkills?: string[] }).selectedSkills,
+            profileSnapshot: postBuildProfileSnapshot,
+          }),
+        )
         
         // Get canonical profile for comparison
         const canonicalProfileAfterBuild = getCanonicalProfile()

@@ -3731,7 +3731,24 @@ export default function ProgramPage() {
     const visibleProgramEquipment = getVisibleProgramEquipmentForModifyEntry(visibleProgram)
 
     // Build inputs with strict priority: snapshot > program > inputs > canonical > default
-    const result: AdaptiveProgramInputs = {
+    //
+    // [STEP-4G-EXPORT-HARDLOCK] Switched from `const result: AdaptiveProgramInputs = { ... }`
+    // (a type annotation that widens `result` to the interface and loses
+    // literal narrowing on each field) to `const result = { ... } satisfies
+    // AdaptiveProgramInputs` (TS 4.9+ operator that validates the literal
+    // against the interface — same excess-property protection as the
+    // annotation — while preserving the precise inferred type of every
+    // field for downstream consumers). This is a real type-system upgrade,
+    // not a comment: `satisfies` keeps narrow tagged-union literals like
+    // `'static' | 'flexible'` on `scheduleMode` and `'flexible'` on
+    // `trainingDaysPerWeek` visible to the type checker at any future
+    // call site, instead of erasing them to the broader interface field
+    // type. It also pairs with the Step 4G-DELTA tripwire above: if
+    // AdaptiveProgramInputs is ever widened to re-accept the four banned
+    // excess keys, the tripwire fails first; if a NEW invalid excess key
+    // is introduced into this literal, `satisfies` fails here. Defense in
+    // depth, zero runtime cost, no `as any`, no `@ts-ignore`.
+    const result = {
       // Primary Goal: snapshot > program > inputs > canonical
       // [STEP-4D] The `'general_fitness'` literal was invalid — program-service
       // PrimaryGoal does not include it. The valid sentinel for an unknown
@@ -3844,7 +3861,7 @@ export default function ProgramPage() {
           ? normalizeEquipmentForModifyEntry(canonicalFallback.equipmentAvailable)
         : []
       ),
-    }
+    } satisfies AdaptiveProgramInputs
     // ==========================================================================
     // [STEP-4E] AdaptiveProgramInputs object-contract repair.
     //

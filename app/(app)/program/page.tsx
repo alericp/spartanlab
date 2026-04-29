@@ -4560,10 +4560,22 @@ export default function ProgramPage() {
     let bannerTitleSeverity = 'minor'
     
     if (result.isStale) {
+      // [STEP-5A-EPSILON] Top-level `result.severity` is the
+      // `UnifiedStalenessResult.severity` union from
+      // `lib/canonical-profile-service.ts:1806` —
+      //   'none' | 'minor' | 'significant' | 'critical'
+      // It is NOT the field-level `driftDetails[].severity` union
+      // (`'minor' | 'major' | 'critical'`, line 1820). The previous
+      // `result.severity === 'major'` branch could never match (TS
+      // correctly rejected it as a no-overlap comparison) and was
+      // mixing the two contracts. `'major'` field-level escalations
+      // are already rolled up into `'significant'` / `'critical'`
+      // by the evaluator before they reach `result.severity`, so the
+      // narrowed branches below cover the full top-level union.
       if (result.severity === 'critical') {
         bannerTitle = 'Your settings have changed'
         bannerTitleSeverity = 'critical'
-      } else if (result.severity === 'significant' || result.severity === 'major') {
+      } else if (result.severity === 'significant') {
         bannerTitle = 'Training settings have changed'
         bannerTitleSeverity = 'significant'
       } else {
@@ -4577,10 +4589,18 @@ export default function ProgramPage() {
       unifiedSeverity: result.severity,
       recommendation: result.recommendation,
       changedFields: result.changedFields,
+      // [STEP-5A-EPSILON] Audit assertion narrowed to the top-level
+      // `UnifiedStalenessResult.severity` union ('none' | 'minor' |
+      // 'significant' | 'critical'). The prior
+      // `result.severity === 'major'` arm was a no-overlap comparison
+      // mixing top-level severity with field-level `d.severity`. The
+      // `'none'` arm is now explicit so non-stale states are not
+      // silently asserted as title mismatches.
       titleMatchesSeverity: (
         (result.severity === 'critical' && bannerTitle.includes('Your settings')) ||
-        ((result.severity === 'significant' || result.severity === 'major') && bannerTitle.includes('Training settings')) ||
-        (result.severity === 'minor' && bannerTitle.includes('Minor'))
+        (result.severity === 'significant' && bannerTitle.includes('Training settings')) ||
+        (result.severity === 'minor' && bannerTitle.includes('Minor')) ||
+        (result.severity === 'none' && !result.isStale)
       ),
       titleMatchesActualDrift: result.changedFields.length > 0 || !result.isStale,
     })

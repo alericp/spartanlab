@@ -55,6 +55,14 @@
 
 import type { Exercise } from '../adaptive-exercise-pool'
 import type { ExperienceLevel } from '../program-service'
+import {
+  type DayIntensity,
+  type RangeIntent,
+  snapToCanonicalRepBand,
+  snapToCanonicalHoldBand,
+} from './canonical-range-grammar'
+
+export type { DayIntensity } from './canonical-range-grammar'
 
 // -----------------------------------------------------------------------------
 // PUBLIC TYPES
@@ -167,6 +175,13 @@ export interface AdaptiveDosageInput {
     handstandHoldSeconds?: number | null
     hadFreestandingHspu?: boolean | null
   } | null
+  /**
+   * Step 5C — Day-level training intensity. Drives which canonical
+   * rep band the resolver picks for a given intent so high/moderate/
+   * low days visibly differ for the same movement family. Defaults
+   * to 'moderate' when not provided.
+   */
+  dayIntensity?: DayIntensity | null
 }
 
 // -----------------------------------------------------------------------------
@@ -635,10 +650,51 @@ interface BuildDecisionInput {
   assistance?: AdaptiveAssistanceHint
   /** Optional cue appended to visible coach reason. */
   shortCue?: string
+  /** Step 5C — day intensity for canonical-band selection. */
+  dayIntensity: DayIntensity
+}
+
+/**
+ * Map the resolver's internal AdaptivePurpose to the canonical
+ * RangeIntent vocabulary used by the canonical range grammar.
+ */
+function purposeToRangeIntent(purpose: AdaptivePurpose): RangeIntent {
+  switch (purpose) {
+    case 'max_strength':
+      return 'max_strength'
+    case 'strength_volume':
+      return 'strength_volume'
+    case 'hypertrophy_support':
+      return 'hypertrophy_support'
+    case 'power_output':
+      return 'power_output'
+    case 'power_endurance':
+      return 'power_endurance'
+    case 'unilateral_strength':
+      return 'unilateral_strength'
+    case 'skill_strength':
+      return 'skill_strength'
+    case 'muscle_up_support':
+      return 'muscle_up_support'
+    case 'hspu_strength':
+      return 'hspu_strength'
+    case 'hspu_prerequisite':
+      return 'hspu_prerequisite'
+    case 'planche_skill_strength':
+      return 'planche_skill_strength'
+    case 'technique_practice':
+      return 'technique_practice'
+    case 'primer_micro_dose':
+    case 'handstand_line_reacclimation':
+    case 'handstand_position_strength':
+    case 'unknown':
+    default:
+      return 'unknown'
+  }
 }
 
 function buildRepDecision(args: BuildDecisionInput): AdaptiveDosageDecision {
-  const { band, fatigueState, isPrimer } = args
+  const { band, fatigueState, isPrimer, dayIntensity } = args
   // Width-limit at 3 reps for high-skill movements (max_strength,
   // unilateral_strength, power_output, planche, hspu, muscle-up support).
   // For broader hypertrophy intents (pike push at advanced, standard pull),
@@ -651,15 +707,44 @@ function buildRepDecision(args: BuildDecisionInput): AdaptiveDosageDecision {
   }
   if (isPrimer) sets = Math.max(2, band.setsMin)
 
-  const repsMin = isPrimer ? Math.max(2, Math.floor(clamped.min * 0.6)) : clamped.min
-  const repsMax = isPrimer ? Math.max(repsMin + 1, Math.floor(clamped.max * 0.6)) : clamped.max
+  // Step 5C — apply intensity-day rep adjustments BEFORE canonical snap
+  // so high/moderate/low days visibly differ for the same identity.
+  const preIntensityMin = isPrimer ? Math.max(2, Math.floor(clamped.min * 0.6)) : clamped.min
+  const preIntensityMax = isPrimer
+    ? Math.max(preIntensityMin + 1, Math.floor(clamped.max * 0.6))
+    : clamped.max
+
+  // Snap to the canonical band selected by intent + day intensity.
+  // Primers always pass through with their reduced range; the band list
+  // for 'technique_practice' covers their post-snap target appropriately.
+  const intentForSnap: RangeIntent = isPrimer
+    ? 'technique_practice'
+    : purposeToRangeIntent(args.purpose)
+  const snap = snapToCanonicalRepBand(
+    preIntensityMin,
+    preIntensityMax,
+    intentForSnap,
+    dayIntensity,
+  )
+  const repsMin = snap.band.min
+  const repsMax = snap.band.max
   const perSide = !!band.perSide
 
+  // Step 5C — derive an RPE cap for technical / low-intensity days so
+  // the resolver does not push max-strength or skill-strength to RPE 8
+  // on what was supposed to be a quality / motor-pattern day. Other day
+  // intensities preserve the existing band RPE.
+  let rpeMin = band.rpeMin
+  let rpeMax = band.rpeMax
+  let rpeNumeric = band.rpeNumeric
+  if (dayIntensity === 'low' && !isPrimer) {
+    rpeMin = Math.max(5, Math.min(band.rpeMin, 7))
+    rpeMax = Math.max(rpeMin, Math.min(band.rpeMax, 7))
+    rpeNumeric = Math.min(band.rpeNumeric, 7)
+  }
+
   const display = formatRepDisplay(repsMin, repsMax, perSide)
-  const rpeText =
-    band.rpeMin === band.rpeMax
-      ? `RPE ${band.rpeMin}`
-      : `RPE ${band.rpeMin}-${band.rpeMax}`
+  const rpeText = rpeMin === rpeMax ? `RPE ${rpeMin}` : `RPE ${rpeMin}-${rpeMax}`
 
   const rest = {
     min: isPrimer ? Math.max(45, Math.floor(band.restMin * 0.5)) : band.restMin,
@@ -667,9 +752,20 @@ function buildRepDecision(args: BuildDecisionInput): AdaptiveDosageDecision {
     recommended: isPrimer ? Math.max(60, Math.floor(band.restRecommended * 0.5)) : band.restRecommended,
   }
 
-  // Build visible coach reason: "{Intent} · RPE x-y · {cue}"
+  // Build visible coach reason: "{Intent} · RPE x-y · {cue}".
+  // When the canonical snap moved the range, we surface a brief
+  // intensity-day note so the explanation chip reflects the resolver's
+  // real decision rather than inventing one after the fact.
   const cue = args.shortCue ?? defaultCueFor(args.purpose, perSide)
-  const visibleCoachReason = `${args.intentLabel} · ${rpeText}${cue ? ` · ${cue}` : ''}`
+  const intensityNote = intensityNoteFor(args.purpose, dayIntensity)
+  const visibleCoachReason = [
+    args.intentLabel,
+    rpeText,
+    cue,
+    intensityNote,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return {
     skillIdentity: args.identity,
@@ -683,7 +779,7 @@ function buildRepDecision(args: BuildDecisionInput): AdaptiveDosageDecision {
       perSide,
     },
     rpeTarget: rpeText,
-    rpeNumeric: band.rpeNumeric,
+    rpeNumeric,
     restSeconds: rest,
     progressionMode: args.progressionMode,
     purpose: args.purpose,
@@ -694,6 +790,35 @@ function buildRepDecision(args: BuildDecisionInput): AdaptiveDosageDecision {
     safetyReason: args.safetyReason,
     visibleCoachReason,
   }
+}
+
+/**
+ * Step 5C — short, structured note about how day intensity shaped the
+ * dosage. Surfaced via visibleCoachReason without long debug text.
+ */
+function intensityNoteFor(
+  purpose: AdaptivePurpose,
+  dayIntensity: DayIntensity,
+): string {
+  if (dayIntensity === 'high') {
+    if (purpose === 'max_strength') return 'High-intensity day: heavy repeatable output'
+    if (purpose === 'power_output') return 'High-intensity day: speed-priority cap'
+    if (purpose === 'strength_volume') return 'High-intensity day: tight strength volume'
+    return ''
+  }
+  if (dayIntensity === 'low') {
+    if (purpose === 'max_strength' || purpose === 'strength_volume')
+      return 'Technical day: quality bias, RPE capped'
+    if (purpose === 'skill_strength' || purpose === 'planche_skill_strength' || purpose === 'hspu_strength')
+      return 'Technical day: skill quality over volume'
+    return ''
+  }
+  if (dayIntensity === 'density') {
+    if (purpose === 'strength_volume' || purpose === 'hypertrophy_support')
+      return 'Density day: higher canonical range'
+    return ''
+  }
+  return ''
 }
 
 function formatRepDisplay(min: number, max: number, perSide: boolean): string {
@@ -758,6 +883,9 @@ export function resolveAdaptiveExerciseDosage(
   // band table + intent metadata per identity.
   const tier = pickStrengthTier(input.experienceLevel)
   const isPrimer = input.exerciseRoleHint === 'primer'
+  // Step 5C — day intensity drives canonical-band selection inside the
+  // rep-decision builder so high/moderate/low days visibly differ.
+  const dayIntensity: DayIntensity = input.dayIntensity ?? 'moderate'
 
   switch (identity) {
     case 'unilateral_pull': {
@@ -772,6 +900,7 @@ export function resolveAdaptiveExerciseDosage(
         intentLabel: 'Unilateral Strength',
         progressionMode: 'add_reps_then_reduce_assistance',
         safetyReason: 'unilateral_symmetry_cap',
+        dayIntensity,
         assistance: {
           mode: 'optional',
           recommendation: 'Light band only if needed to keep both sides strict',
@@ -793,6 +922,7 @@ export function resolveAdaptiveExerciseDosage(
         progressionMode: 'add_reps_then_harder_variation',
         safetyReason: 'power_quality_cap',
         stopRule: 'Stop when bar height or speed drops',
+        dayIntensity,
         assistance: {
           mode: 'optional',
           recommendation: 'Use only enough assistance to preserve explosive height',
@@ -803,34 +933,59 @@ export function resolveAdaptiveExerciseDosage(
 
     case 'high_rom_pull': {
       const band = HIGH_ROM_PULL_BANDS[tier]
+      // Step 5C — Chest-to-Bar Pull-Ups carry two valid intents depending
+      // on day role: max_strength on a high day (heavy depth pulls) and
+      // muscle_up_support on a moderate / volume day (transition reps).
+      const purpose: AdaptivePurpose =
+        dayIntensity === 'high' ? 'max_strength' : 'muscle_up_support'
+      const intentLabel =
+        dayIntensity === 'high' ? 'Max Strength' : 'Muscle-Up Support'
       return buildRepDecision({
         identity,
         band,
         tier,
         fatigueState: input.fatigueState,
         isPrimer,
-        purpose: 'muscle_up_support',
-        intentLabel: 'Muscle-Up Support',
+        purpose,
+        intentLabel,
         progressionMode: 'add_reps',
         safetyReason: 'skill_strength_cap',
         shortCue: 'Lower-chest contact, no kip',
+        dayIntensity,
       })
     }
 
     case 'weighted_strength_pull':
     case 'weighted_strength_push': {
       const band = WEIGHTED_STRENGTH_BANDS[tier]
+      // Step 5C — weighted strength varies with day intensity:
+      // high  -> max_strength (3-5 / 4-6)
+      // moderate -> strength_volume (5-8 / 6-8)
+      // low/density -> hypertrophy_support window with capped RPE
+      const purpose: AdaptivePurpose =
+        dayIntensity === 'moderate' || dayIntensity === 'mixed'
+          ? 'strength_volume'
+          : dayIntensity === 'density'
+            ? 'hypertrophy_support'
+            : 'max_strength'
+      const intentLabel =
+        purpose === 'strength_volume'
+          ? 'Strength Volume'
+          : purpose === 'hypertrophy_support'
+            ? 'Hypertrophy Support'
+            : 'Max Strength'
       return buildRepDecision({
         identity,
         band,
         tier,
         fatigueState: input.fatigueState,
         isPrimer,
-        purpose: 'max_strength',
-        intentLabel: 'Max Strength',
+        purpose,
+        intentLabel,
         progressionMode: 'add_load',
         safetyReason:
           tier === 'beginner' ? 'beginner_acclimation' : 'advanced_quality_focus',
+        dayIntensity,
       })
     }
 
@@ -847,6 +1002,7 @@ export function resolveAdaptiveExerciseDosage(
         progressionMode: 'add_reps',
         safetyReason:
           tier === 'beginner' ? 'beginner_acclimation' : 'intermediate_progression',
+        dayIntensity,
       })
     }
 
@@ -863,6 +1019,7 @@ export function resolveAdaptiveExerciseDosage(
         progressionMode: 'add_reps',
         safetyReason: 'intermediate_progression',
         shortCue: 'Stable rings, full ROM',
+        dayIntensity,
         assistance: {
           mode: 'optional',
           recommendation: 'Use band only if reps drop below target with form intact',
@@ -884,6 +1041,7 @@ export function resolveAdaptiveExerciseDosage(
         progressionMode: 'add_reps',
         safetyReason: 'skill_strength_cap',
         shortCue: 'Bar-path control, strong lockout',
+        dayIntensity,
       })
     }
 
@@ -903,6 +1061,7 @@ export function resolveAdaptiveExerciseDosage(
         progressionMode: 'add_reps',
         safetyReason: 'skill_strength_cap',
         shortCue: isNegative ? 'Slow eccentric, control to bottom' : 'Strict ROM, full lockout',
+        dayIntensity,
       })
     }
 
@@ -919,6 +1078,7 @@ export function resolveAdaptiveExerciseDosage(
         progressionMode: 'add_reps_then_harder_variation',
         safetyReason: 'intermediate_progression',
         shortCue: 'Vertical line, full ROM',
+        dayIntensity,
       })
     }
 
@@ -935,6 +1095,7 @@ export function resolveAdaptiveExerciseDosage(
         progressionMode: 'add_reps_then_harder_variation',
         safetyReason: 'skill_strength_cap',
         shortCue: 'Maintain lean angle and scap protraction',
+        dayIntensity,
       })
     }
 
@@ -956,9 +1117,15 @@ function resolveHandstandPositionDosage(
   }
   if (isPrimer) sets = 2
 
-  const durationMin = isPrimer ? 8 : band.durationMin
-  const durationMax = isPrimer ? 12 : band.durationMax
-  const display = `${durationMin}-${durationMax}s`
+  const rawMin = isPrimer ? 8 : band.durationMin
+  const rawMax = isPrimer ? 12 : band.durationMax
+  // Step 5C — snap to a canonical hold band so the resolver never
+  // emits arbitrary spreads like 23-47s. Tight intentional ranges
+  // (<= 5s) are preserved unchanged.
+  const holdSnap = snapToCanonicalHoldBand(rawMin, rawMax)
+  const durationMin = holdSnap.band.min
+  const durationMax = holdSnap.band.max
+  const display = holdSnap.display
 
   const purpose: AdaptivePurpose = isPrimer
     ? 'primer_micro_dose'

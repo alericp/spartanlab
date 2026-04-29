@@ -179,7 +179,18 @@ import { type DoctrineRuntimeContract } from './doctrine-runtime-contract'
 import {
   resolveAdaptiveExerciseDosage,
   type AdaptiveDosageDecision,
+  type DayIntensity,
 } from './program/adaptive-dosage-resolver'
+// [STEP-5C-CANONICAL-GRAMMAR] Final sanity gate for any rep range that
+// reaches the prescription pipeline through legacy template / blend /
+// transform paths. The resolver already snaps its own output, so this
+// import is consumed only by `getPrescriptionAwarePrescription`'s
+// fallback branches and by `transformRepsForQuality` /
+// `transformRepsForRecovery` to prevent arithmetic-interpolation leaks.
+import {
+  normalizeRepsOrTimeString,
+  deriveDayIntensity,
+} from './program/canonical-range-grammar'
 
 // [SESSION ARCHITECTURE TRUTH] Import for progression enforcement
 import { 
@@ -262,14 +273,24 @@ function transformRepsForQuality(repsOrTime: string): string {
   if (repRangeMatch) {
     const low = Math.max(3, Math.floor(parseInt(repRangeMatch[1]) * 0.7))
     const high = Math.max(5, Math.floor(parseInt(repRangeMatch[2]) * 0.7))
-    return `${low}-${high}`
+    // [STEP-5C-CANONICAL-GRAMMAR] Multiplying by 0.7 produces arithmetic
+    // ranges (e.g. 7-10 / 7-12) that are not on the canonical coaching
+    // band list. Snap to the nearest technical-day band so this transform
+    // can never leak weird ranges into the visible prescription.
+    const snapped = normalizeRepsOrTimeString(`${low}-${high}`, 'technique_practice', 'low')
+    return snapped.repsOrTime
   }
   // Handle single rep count like "10" -> "6-8"
   const singleRepMatch = repsOrTime.match(/^(\d+)$/)
   if (singleRepMatch) {
     const base = parseInt(singleRepMatch[1])
     const reduced = Math.max(4, Math.floor(base * 0.7))
-    return `${reduced}-${reduced + 2}`
+    const snapped = normalizeRepsOrTimeString(
+      `${reduced}-${reduced + 2}`,
+      'technique_practice',
+      'low',
+    )
+    return snapped.repsOrTime
   }
   // Handle time-based like "30s" -> unchanged (quality already implied)
   return repsOrTime
@@ -284,7 +305,12 @@ function transformRepsForRecovery(repsOrTime: string): string {
   if (repRangeMatch) {
     const low = Math.max(4, parseInt(repRangeMatch[1]) - 2)
     const high = Math.max(6, parseInt(repRangeMatch[2]) - 2)
-    return `${low}-${high}`
+    // [STEP-5C-CANONICAL-GRAMMAR] Subtracting a fixed delta produces
+    // arithmetic ranges (e.g. 7-12 from 9-14). Snap to the nearest
+    // recovery-bias canonical band so transforms never emit blocked
+    // ranges.
+    const snapped = normalizeRepsOrTimeString(`${low}-${high}`, 'hypertrophy_support', 'low')
+    return snapped.repsOrTime
   }
   // Handle time-based like "30s" -> "20-25s"
   const timeMatch = repsOrTime.match(/^(\d+)s?$/)
@@ -3388,13 +3414,25 @@ function selectMainExercises(
     
     // Only apply prescription logic if no override provided
     if (finalSets === undefined || finalRepsOrTime === undefined) {
+      // [STEP-5C-CANONICAL-GRAMMAR] Derive day intensity from the
+      // session architecture contract (sessionIntent + spineSessionType
+      // are already present in scope). The resolver uses this to pick
+      // canonical bands so high/moderate/low days visibly differ for
+      // the same movement family.
+      const callSiteDayIntensity = deriveDayIntensity(
+        sessionArchitectureContract?.sessionIntent ?? null,
+        // spineSessionType lives on compositionMetadata; the contract
+        // surfaces it via dayRoleEnforcement.dayRole when present.
+        sessionArchitectureContract?.dayRoleEnforcement?.dayRole ?? null,
+      )
       const prescriptionResult = getPrescriptionAwarePrescription(
         finalExercise,
         experienceLevel,
         primaryGoal,
         undefined, // currentProgression - could be passed from context
         undefined, // fatigueState - could be passed from context
-        undefined  // recentPerformance - could be passed from context
+        undefined, // recentPerformance - could be passed from context
+        callSiteDayIntensity,
       )
       
       if (finalSets === undefined) {
@@ -8614,7 +8652,13 @@ export function getPrescriptionAwarePrescription(
   primaryGoal: string,
   currentProgression?: string,
   fatigueState?: 'fresh' | 'moderate' | 'fatigued',
-  recentPerformance?: { avgRPE?: number; completionRate?: number; improving?: boolean }
+  recentPerformance?: { avgRPE?: number; completionRate?: number; improving?: boolean },
+  // [STEP-5C-CANONICAL-GRAMMAR] Day-level intensity from the calling
+  // session architecture / composition metadata. When the session is
+  // 'high' (overload / max strength / power) the resolver picks tighter
+  // canonical bands; on 'low' technical days it caps RPE and biases
+  // toward quality. Optional — defaults to 'moderate'.
+  dayIntensity?: DayIntensity,
 ): { sets: number; repsOrTime: string; note?: string; prescriptionMode: PrescriptionMode; supportsWeightedLoad?: boolean } {
   // Detect prescription mode
   // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
@@ -8652,6 +8696,12 @@ export function getPrescriptionAwarePrescription(
     exercise,
     experienceLevel,
     fatigueState,
+    // [STEP-5C-CANONICAL-GRAMMAR] Forward the caller-supplied day
+    // intensity so the resolver picks an intent-appropriate canonical
+    // band (e.g. weighted-pull as max-strength on high days, strength
+    // volume on moderate, hypertrophy-support on density). Defaults to
+    // 'moderate' inside the resolver when omitted.
+    dayIntensity,
     // Role hint and ability anchors land here once the session-architecture
     // and onboarding-hydration layers wire them through. Passing undefined
     // keeps the resolver on its level-keyed default calibration.
@@ -8720,35 +8770,62 @@ export function getPrescriptionAwarePrescription(
   if (prescriptionMode === 'weighted_strength') {
     const prescription = resolvePrescription(prescriptionMode, athleteContext)
     const formatted = formatPrescription(prescription)
-    
+
     // Determine the weighted exercise type
-    const exerciseType: 'weighted_pull_up' | 'weighted_dip' | 'weighted_push_up' | 'weighted_row' | null = 
+    const exerciseType: 'weighted_pull_up' | 'weighted_dip' | 'weighted_push_up' | 'weighted_row' | null =
       exercise.id.includes('weighted_pull') ? 'weighted_pull_up' :
       exercise.id.includes('weighted_dip') ? 'weighted_dip' :
       exercise.id.includes('weighted_push') ? 'weighted_push_up' :
       exercise.id.includes('weighted_row') ? 'weighted_row' : null
-    
+
     // If this is a recognized weighted exercise, calculate load
     // Note: This function doesn't have direct access to benchmarks - that happens at session assembly level
     // The prescribedLoad field will be populated by getWeightedStrengthPrescriptionForSkill when called with benchmarks
-    
+
+    // [STEP-5C-CANONICAL-GRAMMAR] Final sanity gate — the legacy
+    // weighted_strength template already returns 3-8 reps which is on
+    // the canonical list, but the carryover override (TASK 3) and any
+    // future blend can still emit a weird range. Snap once before exit.
+    const snapped = normalizeRepsOrTimeString(
+      formatted.repsOrTime,
+      dayIntensity === 'high' ? 'max_strength' : 'strength_volume',
+      dayIntensity ?? 'moderate',
+    )
+
     return {
       sets: formatted.sets,
-      repsOrTime: formatted.repsOrTime,
+      repsOrTime: snapped.repsOrTime,
       note: formatted.note,
       prescriptionMode,
       // Signal that this exercise supports weighted load prescription
       supportsWeightedLoad: exerciseType !== null,
     }
   }
-  
+
   // For other modes, use base prescription contract
   const prescription = resolvePrescription(prescriptionMode, athleteContext)
   const formatted = formatPrescription(prescription)
-  
+
+  // [STEP-5C-CANONICAL-GRAMMAR] Final sanity gate — `bodyweight_strength`
+  // emits "6-15 reps" and `hypertrophy_support` emits "8-15 reps", which
+  // pass through the existing band list. The blend-with-envelope path in
+  // coaching-framework-engine can still arithmetic-interpolate (e.g.
+  // 7-12) so we snap any legacy fallback string here too.
+  const fallbackIntent =
+    prescriptionMode === 'bodyweight_strength'
+      ? 'strength_volume'
+      : prescriptionMode === 'hypertrophy_support'
+        ? 'hypertrophy_support'
+        : 'unknown'
+  const snappedFallback = normalizeRepsOrTimeString(
+    formatted.repsOrTime,
+    fallbackIntent,
+    dayIntensity ?? 'moderate',
+  )
+
   return {
     sets: formatted.sets,
-    repsOrTime: formatted.repsOrTime,
+    repsOrTime: snappedFallback.repsOrTime,
     note: formatted.note,
     prescriptionMode,
   }

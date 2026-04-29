@@ -139,6 +139,15 @@ const CATEGORY_CONFIG: Record<ExerciseCategory, {
   bodyweight: { label: 'Bodyweight', color: 'text-purple-400' },
   mobility: { label: 'Mobility', color: 'text-cyan-400' },
   conditioning: { label: 'Conditioning', color: 'text-orange-400' },
+  // [BUILD-FIX] Hybrid / barbell categories added to align this display
+  // map with the authoritative ExerciseCategory union
+  // (types/history.ts:202-214). Color tokens follow the existing
+  // Tailwind shade convention used above and stay distinct from the
+  // calisthenics palette so barbell records read as a separate family.
+  weighted_calisthenics: { label: 'Weighted Calisthenics', color: 'text-rose-400' },
+  barbell_hinge: { label: 'Barbell Hinge', color: 'text-red-400' },
+  barbell_squat: { label: 'Barbell Squat', color: 'text-yellow-400' },
+  barbell_press: { label: 'Barbell Press', color: 'text-indigo-400' },
 }
 
 // =============================================================================

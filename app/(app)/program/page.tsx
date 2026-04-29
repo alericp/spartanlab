@@ -1358,8 +1358,14 @@ function ProgramDisplayWrapper({
     // Rebuild truth only when the underlying program identity changes — this
     // is the right granularity because truth is a function of the saved
     // program, not of unrelated parent-component state churn.
+    // [BUILD-FIX] AdaptiveProgram (lib/adaptive-program-builder.ts:1583)
+    // owns `id` + `createdAt`, not `updatedAt`. A new program generation
+    // produces a new id AND a new createdAt, so this triple still
+    // captures every identity transition. `truthExplanation` is the
+    // optional stamp at line 2174 of the same interface — including it
+    // ensures the memo refreshes the moment the canonical stamp lands.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [program?.id, program?.updatedAt, program?.truthExplanation])
+  }, [program?.id, program?.createdAt, program?.truthExplanation])
   
   // [VISIBLE-PROGRAM-TRUTH-CONTRACT] Render-time ownership audit removed.
   // Truth ownership is now structurally enforced by `canonicalDisplayTruth`

@@ -173,6 +173,14 @@ import {
 // [DOCTRINE RUNTIME CONTRACT] Import for upstream doctrine influence
 import { type DoctrineRuntimeContract } from './doctrine-runtime-contract'
 
+// [STEP-5-ADAPTIVE-DOSAGE] Adaptive prescription dosage resolver — keys
+// dosage off the exercise's identity (not the user's primary goal) so a
+// Wall Handstand Hold no longer inherits planche/lever skill rules.
+import {
+  resolveAdaptiveExerciseDosage,
+  type AdaptiveDosageDecision,
+} from './program/adaptive-dosage-resolver'
+
 // [SESSION ARCHITECTURE TRUTH] Import for progression enforcement
 import { 
   filterByCaptedProgression, 
@@ -8630,6 +8638,36 @@ export function getPrescriptionAwarePrescription(
   
   // For skill work, use advanced skill prescription rules (TASK 2)
   if (prescriptionMode === 'skill_hold' || prescriptionMode === 'skill_cluster') {
+    // [STEP-5-ADAPTIVE-DOSAGE] Try the exercise-identity-keyed resolver
+    // FIRST. Pre-Step-5, this branch always called getSkillPrescriptionRules
+    // which keyed dosage off the user's primary goal — so a Wall Handstand
+    // Hold inherited static_planche rules (holdSecondsRange=[3,6]) when the
+    // user's goal was planche, and the row rendered as "3 × 6s" despite
+    // being a handstand-position drill. The resolver classifies handstand-
+    // position holds from the exercise itself (id / transferTo / name) and
+    // returns a profile-calibrated dosage. It returns null for exercises
+    // it does not yet classify, so other skill holds fall through to the
+    // existing rules unchanged.
+    const adaptive: AdaptiveDosageDecision | null = resolveAdaptiveExerciseDosage({
+      exercise,
+      experienceLevel,
+      fatigueState,
+      // Role hint and ability anchors are wired in later steps once the
+      // session-architecture and onboarding-hydration layers expose them
+      // here; passing undefined keeps the resolver on its level-keyed
+      // default calibration, which already fixes the visible dosage bug.
+    })
+    if (adaptive) {
+      return {
+        sets: adaptive.sets,
+        repsOrTime: adaptive.repsOrTime,
+        note: adaptive.visibleCoachReason,
+        prescriptionMode,
+      }
+    }
+
+    // Fallback: existing goal-keyed skill rules for skill identities the
+    // resolver does not yet handle (lever / planche / compression / etc.).
     const skillRules = getSkillPrescriptionRules(
       primaryGoal,
       experienceLevel as 'beginner' | 'intermediate' | 'advanced' | 'elite',

@@ -368,13 +368,27 @@ export function scaleExerciseForWeek(
     const originalSets = typeof exercise.sets === 'number' ? exercise.sets : parseInt(String(exercise.sets)) || 3
     const originalTargetRPE = exercise.targetRPE || 8
     // [PRESCRIPTION-TYPE-FIX] Preserve hold format for week 1 display
-    const holdDuration = parseHoldDuration(rawRepsOrTime)
-    const scaledReps = holdDuration !== null ? formatHoldDuration(holdDuration) : rawRepsOrTime
+    // [STEP-5-ADAPTIVE-DOSAGE] When the upstream prescription is already a
+    // hold RANGE (e.g. "25-45s" from the adaptive dosage resolver), preserve
+    // it verbatim. Pre-Step-5 this branch ran parseHoldDuration -> formatHoldDuration,
+    // which silently collapsed "25-45s" into "45s" (the regex matches the
+    // upper bound first), discarding the lower-bound coaching guidance.
+    const holdRange = parseHoldRange(rawRepsOrTime)
+    let scaledReps: string
+    let scaledHoldDuration: number | undefined
+    if (holdRange) {
+      scaledReps = rawRepsOrTime
+      scaledHoldDuration = holdRange.high
+    } else {
+      const holdDuration = parseHoldDuration(rawRepsOrTime)
+      scaledReps = holdDuration !== null ? formatHoldDuration(holdDuration) : rawRepsOrTime
+      scaledHoldDuration = holdDuration ?? undefined
+    }
     return {
       ...exercise,
       scaledSets: originalSets, // Same as original for week 1
       scaledReps,
-      scaledHoldDuration: holdDuration ?? undefined,
+      scaledHoldDuration,
       scaledTargetRPE: originalTargetRPE,
       weekScalingApplied: false,
     }
@@ -384,7 +398,11 @@ export function scaleExerciseForWeek(
   const originalSets = typeof exercise.sets === 'number' ? exercise.sets : parseInt(String(exercise.sets)) || 3
   const originalTargetRPE = exercise.targetRPE || 8
   const originalRestPeriod = exercise.restPeriod || 90
-  const originalHoldDuration = parseHoldDuration(rawRepsOrTime)
+  // [STEP-5-ADAPTIVE-DOSAGE] Detect a hold RANGE first so we can scale both
+  // endpoints together; falling back to the single-value parser preserves
+  // backward compatibility with rows that emit "30s hold" / "45s".
+  const originalHoldRange = parseHoldRange(rawRepsOrTime)
+  const originalHoldDuration = originalHoldRange ? null : parseHoldDuration(rawRepsOrTime)
   
   // Apply scaling
   const scaledSets = Math.round(originalSets * scaling.volumeMultiplier)
@@ -400,7 +418,16 @@ export function scaleExerciseForWeek(
   let scaledReps = rawRepsOrTime
   let scaledHoldDuration: number | undefined
   
-  if (originalHoldDuration !== null) {
+  if (originalHoldRange) {
+    // [STEP-5-ADAPTIVE-DOSAGE] Hold range: scale both endpoints, keep range
+    // format. This preserves the "25-45s" coaching guidance (lower bound =
+    // floor on a fatigued day, upper bound = stretch target) instead of
+    // collapsing to a single value.
+    const lo = Math.max(1, Math.round(originalHoldRange.low * scaling.holdDurationMultiplier))
+    const hi = Math.max(lo, Math.round(originalHoldRange.high * scaling.holdDurationMultiplier))
+    scaledHoldDuration = hi
+    scaledReps = lo === hi ? `${hi}s` : `${lo}-${hi}s`
+  } else if (originalHoldDuration !== null) {
     // Hold-based exercise: scale hold duration, keep format as "Xs hold"
     scaledHoldDuration = Math.round(originalHoldDuration * scaling.holdDurationMultiplier)
     scaledReps = formatHoldDuration(scaledHoldDuration)
@@ -503,6 +530,33 @@ function parseHoldDuration(reps: string | undefined): number | null {
   }
   
   return null
+}
+
+/**
+ * [STEP-5-ADAPTIVE-DOSAGE] Parse a hold RANGE from a reps string
+ * (e.g., "25-45s", "20-30s hold"). Returns null if the input is not
+ * recognizable as a range; the caller falls back to parseHoldDuration.
+ *
+ * This helper exists so the adaptive dosage resolver can emit ranges
+ * like "25-45s" and have them survive intact through week scaling and
+ * display. Pre-Step-5 the regex collapsed ranges to their upper bound,
+ * which silently dropped the coaching lower bound from the row.
+ */
+function parseHoldRange(
+  reps: string | undefined,
+): { low: number; high: number } | null {
+  if (!reps) return null
+  // Match "<low>-<high>s" with optional whitespace and an optional "hold"
+  // suffix. We require the trailing "s" so we don't accidentally claim a
+  // rep range like "8-12 reps" as a hold range.
+  const m = reps.match(/(\d+)\s*[-–]\s*(\d+)\s*s(?:ec)?(?:ond)?s?\s*(?:hold)?/i)
+  if (!m) return null
+  const low = parseInt(m[1], 10)
+  const high = parseInt(m[2], 10)
+  if (!Number.isFinite(low) || !Number.isFinite(high) || low <= 0 || high < low) {
+    return null
+  }
+  return { low, high }
 }
 
 /**

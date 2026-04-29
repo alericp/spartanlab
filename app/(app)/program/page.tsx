@@ -5127,6 +5127,64 @@ export default function ProgramPage() {
           if (programState.hasUsableWorkoutProgram && programState.adaptiveProgram) {
             const normalizedProgram = stateMod.normalizeProgramForDisplay(programState.adaptiveProgram)
 
+            // ==========================================================================
+            // [STEP-5A-THETA] Honest null branch for normalizeProgramForDisplay.
+            //
+            // `stateMod.normalizeProgramForDisplay` is typed
+            // `(program: AdaptiveProgram | null) => AdaptiveProgram | null`
+            // (lib/program-state.ts:1226). It returns null when the stored
+            // program shape is invalid enough that normalization cannot
+            // safely produce a display-ready candidate. The downstream
+            // identity audit (`normalizedProgram.id !== programState.adaptiveProgram.id`),
+            // the displayCheck.safe true-branch logging block, and the
+            // `logProgramTruthExplanation(normalizedProgram, ...)` /
+            // `logExplanationGapAudit(normalizedProgram, ...)` calls all
+            // require `normalizedProgram` to be non-null — those helpers'
+            // signatures (lib/ai-truth-audit.ts:1406, :1442) take
+            // `program: AdaptiveProgram` (no null). Reading `.id` on a
+            // possibly-null value was the cited TS2531 blocker.
+            //
+            // Honest behavior for null mirrors the existing
+            // `displayCheck.safe === false` malformed-recovery branch:
+            // label the load malformed, mirror the active-Modify-transition
+            // guard so we do not interrupt a Modify flow, and skip identity
+            // audit + healthy-display hydration. We do NOT call
+            // `setProgram(null)` (that would clobber a healthy current
+            // program with an invalid candidate) and we do NOT invent a
+            // fake program id. The audit log surfaces
+            // `normalized_program_null` as an explicit reason.
+            // ==========================================================================
+            if (!normalizedProgram) {
+              console.warn(
+                '[program-rebuild-identity-audit] MOUNT WARNING: normalizeProgramForDisplay returned null; identity audit and display gate skipped for invalid stored program.',
+                {
+                  rawProgramId: programState.adaptiveProgram.id ?? 'missing',
+                  reason: 'normalized_program_null',
+                  context: 'page_load',
+                },
+              )
+              currentInitStage = 'program-malformed:normalized_program_null'
+              setLoadStage('program-malformed:normalized_program_null')
+              // Mirror the malformed-display branch's active-Modify-transition
+              // guard so a transient null normalize result does not yank an
+              // in-flight Modify flow back to the builder.
+              const hasModifyBuilderEntryRef = modifyBuilderEntryRef.current !== null
+              const hasModifyBuilderEntry = modifyBuilderEntry !== null
+              const isModifyLockActive = modifyBuilderLockRef.current
+              const isModifyFlowBuilder = modifyFlowState === 'builder'
+              const hasLiveBuilderEntry = builderSessionInputsRef.current !== null
+              const launcherEntered = modifyClickAudit.canonicalLauncherEntered
+              const isActiveModifyTransition =
+                hasModifyBuilderEntryRef ||
+                hasModifyBuilderEntry ||
+                launcherEntered ||
+                isModifyLockActive ||
+                (isModifyFlowBuilder && hasLiveBuilderEntry)
+              if (!isActiveModifyTransition) {
+                setShowBuilder(true)
+              }
+            } else {
+
             // ================================================================
             // [GROUPED-TRUTH-FUNNEL-AUDIT] STAGE 1 -> STAGE 2 PROBE
             // Compares grouped-truth presence on each session of the canonical
@@ -5372,6 +5430,7 @@ export default function ProgramPage() {
                 setShowBuilder(false)
               }
             }
+            } // [STEP-5A-THETA] close `else` of `if (!normalizedProgram)`
           } else {
             // No usable program - show builder
             currentInitStage = 'no-program'

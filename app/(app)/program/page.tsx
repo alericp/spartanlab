@@ -5099,14 +5099,26 @@ export default function ProgramPage() {
           // [TASK 5 & 7] MOUNT DIAGNOSTIC - Log exactly what is loaded and from where
           // This prevents resurrection of old snapshots during mount/migration
           // ==========================================================================
+          // [STEP-5A-ETA] `ProgramState` (lib/program-state.ts:1057) owns six
+          // fields: hasProgram, hasUsableWorkoutProgram, adaptiveProgram,
+          // legacyProgram, activeProgram, sessionCount. It does NOT own
+          // `migrationRan` or `fallbackRecoveryRan` — those are debug-only
+          // labels invented by an earlier diagnostic block. The
+          // program-state module does not actually track migration or
+          // fallback-recovery flags per load, so reporting them as `false`
+          // would be a fabricated truth. They are surfaced as the literal
+          // `'not_tracked'` instead, making the diagnostic honest without
+          // weakening the `ProgramState` contract or adding fake fields.
           console.log('[program-rebuild-identity-audit] MOUNT: Program state retrieved', {
             hasUsableProgram: programState.hasUsableWorkoutProgram,
             loadedProgramId: programState.adaptiveProgram?.id || 'none',
             loadedCreatedAt: programState.adaptiveProgram?.createdAt || 'none',
             loadedFromSource: 'getProgramState', // canonical active program storage
-            migrationRan: programState.migrationRan || false,
-            fallbackRecoveryRan: programState.fallbackRecoveryRan || false,
-            sessionCount: programState.adaptiveProgram?.sessions?.length || 0,
+            migrationRan: 'not_tracked' as const,
+            fallbackRecoveryRan: 'not_tracked' as const,
+            sessionCount: Array.isArray(programState.adaptiveProgram?.sessions)
+              ? programState.adaptiveProgram.sessions.length
+              : 0,
           })
           
           // TASK 2: Stage 8 - Normalize and validate program for display
@@ -5246,12 +5258,17 @@ export default function ProgramPage() {
               setLoadStage('program-ready')
               
               // [TASK 7] MOUNT DIAGNOSTIC - Comprehensive audit log
+              // [STEP-5A-ETA] See note at the earlier MOUNT diagnostic above:
+              // `migrationRan` / `fallbackRecoveryRan` are not members of
+              // `ProgramState` and are not actually tracked by the
+              // program-state module. Reported as `'not_tracked'` so the
+              // diagnostic remains honest without inventing fields.
               console.log('[program-rebuild-identity-audit] MOUNT: Program loaded successfully', {
                 context: 'page_load',
                 loadedProgramId: normalizedProgram.id,
                 loadedSource: 'canonical_active_program',
-                migrationRan: programState.migrationRan || false,
-                fallbackRecoveryRan: programState.fallbackRecoveryRan || false,
+                migrationRan: 'not_tracked' as const,
+                fallbackRecoveryRan: 'not_tracked' as const,
               })
               
               // [PHASE 17D] Program preservation audit - verify 6-day program intact

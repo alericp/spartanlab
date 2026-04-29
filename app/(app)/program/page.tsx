@@ -7634,9 +7634,12 @@ export default function ProgramPage() {
         // [STEP-5A-OMEGA] Project to the narrow signature shape — raw
         //   `trainingDaysPerWeek: number | 'flexible'` and `sessionLength`
         //   don't match `createProfileSignature`'s contract.
-        const profileSigForFreshness = createProfileSignature(
-          toFreshnessSignatureProjection(freshnessSignatureSource),
-        )
+        // [STEP-5A-OMEGA-3] Bind the projection once so the post-build-truth
+        //   STAGE 6d block below can reuse it for narrow signature reads
+        //   (scheduleMode/trainingDaysPerWeek/sessionLengthMinutes) without
+        //   re-projecting.
+        const freshnessProjection = toFreshnessSignatureProjection(freshnessSignatureSource)
+        const profileSigForFreshness = createProfileSignature(freshnessProjection)
         invalidateStaleCaches()
         updateFreshnessIdentity(
           newProgram.id,
@@ -7657,8 +7660,23 @@ export default function ProgramPage() {
   generationStage = 'persisting_canonical_profile'
   console.log('[post-build-truth] STAGE 6d: Persisting builder inputs to canonical profile...')
   try {
+    // [STEP-5A-OMEGA-3] Bind a non-null narrowed source once for this whole
+    //   STAGE 6d try block. `inputs` (component state) is
+    //   `AdaptiveProgramInputs | null` and TypeScript correctly rejects
+    //   direct field access. `generationInputs` (L7105) is the freshly
+    //   built `AdaptiveProgramInputs` for THIS exact pass — derived from
+    //   `entryToAdaptiveInputs(entryResult.entry!)` after the canonical-entry
+    //   guard succeeded — so it is always non-null AND structurally
+    //   identical to `inputs` per the `AdaptiveProgramInputs` contract.
+    //   The fallback preserves the established
+    //   "use page state when present, else use this-pass canonical truth"
+    //   priority (same pattern as freshness sync at L7633 above).
+    const safeInputs = inputs ?? generationInputs
+
     // Use the program's actual values for consistent drift detection
-    const effectiveScheduleMode = inputs.scheduleMode === 'flexible' || inputs.scheduleMode === 'adaptive'
+    // [STEP-5A-OMEGA-3] scheduleMode read goes through `freshnessProjection`
+    //   (the canonical narrow signature source) per primary projection rule.
+    const effectiveScheduleMode = freshnessProjection.scheduleMode === 'flexible' || freshnessProjection.scheduleMode === 'adaptive'
       ? 'flexible'
       : 'static'
     
@@ -7666,17 +7684,17 @@ export default function ProgramPage() {
     // For static mode: save the actual generated days
     const effectiveTrainingDays = effectiveScheduleMode === 'flexible'
       ? null // Flexible users don't have a fixed day count identity
-      : (newProgram.trainingDaysPerWeek ?? inputs.trainingDaysPerWeek ?? undefined)
+      : (newProgram.trainingDaysPerWeek ?? safeInputs.trainingDaysPerWeek ?? undefined)
     
     // [equipment-truth-fix] TASK C: Convert builder equipment keys to canonical profile keys
     // This strips floor/wall and maps pull_bar->pullup_bar, bands->resistance_bands
-    const canonicalEquipment = builderEquipmentToProfileEquipment(inputs.equipment || [])
+    const canonicalEquipment = builderEquipmentToProfileEquipment(safeInputs.equipment || [])
     
     // [equipment-truth-audit] Log equipment truth on successful build
     console.log('[equipment-truth-audit] Build success - equipment truth:', {
-      builderInputsEquipment: inputs.equipment,
+      builderInputsEquipment: safeInputs.equipment,
       canonicalSavedEquipment: canonicalEquipment,
-      hiddenRuntimeEquipmentStripped: (inputs.equipment || []).filter(e => e === 'floor' || e === 'wall'),
+      hiddenRuntimeEquipmentStripped: (safeInputs.equipment || []).filter(e => e === 'floor' || e === 'wall'),
     })
     
     // ==========================================================================
@@ -7686,20 +7704,23 @@ export default function ProgramPage() {
     const initialBuildWritebackTruth = {
       // Schedule/duration fields
       trainingDaysPerWeek: effectiveTrainingDays ?? undefined,
-      sessionLengthMinutes: newProgram.sessionLength ?? inputs.sessionLength ?? undefined,
+      // [STEP-5A-OMEGA-3] sessionLength via narrowed safeInputs (preserves
+      //   exact existing fallback semantics: program output → inputs → undefined).
+      sessionLengthMinutes: newProgram.sessionLength ?? safeInputs.sessionLength ?? undefined,
       scheduleMode: effectiveScheduleMode,
       // [STEP-5A-XI] sessionDurationMode is not on AdaptiveProgramInputs —
       //   sourced via inputsMeta (Record-narrowing helper)
       sessionDurationMode: inputsMeta.sessionDurationMode ?? undefined,
       // Equipment
       equipmentAvailable: canonicalEquipment,
+      // [STEP-5A-OMEGA-3] Profile fields via narrowed safeInputs.
       // Goal fields
-      primaryGoal: inputs.primaryGoal ?? undefined,
-      secondaryGoal: inputs.secondaryGoal ?? undefined,
+      primaryGoal: safeInputs.primaryGoal ?? undefined,
+      secondaryGoal: safeInputs.secondaryGoal ?? undefined,
       // Experience
-      experienceLevel: inputs.experienceLevel ?? undefined,
+      experienceLevel: safeInputs.experienceLevel ?? undefined,
       // [PHASE 18F] Deep planner identity fields - CRITICAL for rebuild parity
-      selectedSkills: inputs.selectedSkills?.length ? inputs.selectedSkills : undefined,
+      selectedSkills: safeInputs.selectedSkills?.length ? safeInputs.selectedSkills : undefined,
       // [STEP-5A-XI] trainingPathType / goalCategories / selectedFlexibility
       //   not on AdaptiveProgramInputs — sourced via inputsMeta
       trainingPathType: inputsMeta.trainingPathType ?? undefined,
@@ -7725,18 +7746,20 @@ export default function ProgramPage() {
         selectedSkills: (newProgram as unknown as { selectedSkills?: string[] }).selectedSkills ?? [],
       },
       inputsTruthContains: {
-        primaryGoal: inputs.primaryGoal ?? null,
-        secondaryGoal: inputs.secondaryGoal ?? null,
-        selectedSkills: inputs.selectedSkills ?? [],
+        // [STEP-5A-OMEGA-3] Profile audit reads via narrowed safeInputs.
+        primaryGoal: safeInputs.primaryGoal ?? null,
+        secondaryGoal: safeInputs.secondaryGoal ?? null,
+        selectedSkills: safeInputs.selectedSkills ?? [],
         // [STEP-5A-XI] inputsMeta-sourced — not on AdaptiveProgramInputs
         trainingPathType: inputsMeta.trainingPathType,
         goalCategories: inputsMeta.goalCategories,
         selectedFlexibility: inputsMeta.selectedFlexibility,
         // [STEP-5A-OMICRON] Sourced via the quarantined record helper —
         //   replaces the previous inline `(inputs as Record<string, unknown>)`
-        //   direct cast that TS2352 rejected.
+        //   direct cast that TS2352 rejected. Helper accepts `unknown`,
+        //   nullable `inputs` is safe here.
         selectedStrength: readProgramPageStringArray(inputs, 'selectedStrength'),
-        experienceLevel: inputs.experienceLevel ?? null,
+        experienceLevel: safeInputs.experienceLevel ?? null,
       },
       writebackTruthWillPersist: {
         primaryGoal: initialBuildWritebackTruth.primaryGoal ?? null,

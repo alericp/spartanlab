@@ -3715,15 +3715,6 @@ export default function ProgramPage() {
           'static'
       ) as ScheduleMode,
       
-      // Session Duration Mode: snapshot > program > inputs > canonical
-      sessionDurationMode: (
-        snapshot?.sessionDurationMode ||
-        (visibleProgram as { sessionDurationMode?: string }).sessionDurationMode ||
-        currentInputs?.sessionDurationMode ||
-        canonicalFallback.sessionDurationMode ||
-        'standard'
-      ) as 'standard' | 'adaptive',
-      
       // Selected Skills: snapshot > program > inputs > canonical (arrays need special handling)
       selectedSkills: (
         (snapshot?.selectedSkills && snapshot.selectedSkills.length > 0) ? snapshot.selectedSkills :
@@ -3732,34 +3723,7 @@ export default function ProgramPage() {
         (canonicalFallback.selectedSkills && canonicalFallback.selectedSkills.length > 0) ? canonicalFallback.selectedSkills :
         []
       ),
-      
-      // Training Path Type: snapshot > program > inputs > canonical
-      trainingPathType: (
-        snapshot?.trainingPathType ||
-        (visibleProgram as { trainingPathType?: string }).trainingPathType ||
-        currentInputs?.trainingPathType ||
-        canonicalFallback.trainingPathType ||
-        'hybrid'
-      ) as 'skill_first' | 'hybrid' | 'balanced',
-      
-      // Goal Categories: snapshot > program > inputs > canonical
-      goalCategories: (
-        (snapshot?.goalCategories && snapshot.goalCategories.length > 0) ? snapshot.goalCategories :
-        ((visibleProgram as { goalCategories?: string[] }).goalCategories?.length ?? 0) > 0 ? (visibleProgram as { goalCategories?: string[] }).goalCategories :
-        (currentInputs?.goalCategories && currentInputs.goalCategories.length > 0) ? currentInputs.goalCategories :
-        (canonicalFallback.goalCategories && canonicalFallback.goalCategories.length > 0) ? canonicalFallback.goalCategories :
-        []
-      ),
-      
-      // Selected Flexibility: snapshot > program > inputs > canonical
-      selectedFlexibility: (
-        (snapshot?.selectedFlexibility && snapshot.selectedFlexibility.length > 0) ? snapshot.selectedFlexibility :
-        ((visibleProgram as { selectedFlexibility?: string[] }).selectedFlexibility?.length ?? 0) > 0 ? (visibleProgram as { selectedFlexibility?: string[] }).selectedFlexibility :
-        (currentInputs?.selectedFlexibility && currentInputs.selectedFlexibility.length > 0) ? currentInputs.selectedFlexibility :
-        (canonicalFallback.selectedFlexibility && canonicalFallback.selectedFlexibility.length > 0) ? canonicalFallback.selectedFlexibility :
-        []
-      ),
-      
+
       // Equipment: snapshot.equipmentAvailable > program.equipment > inputs > canonical
       equipment: (
         (snapshot?.equipmentAvailable && snapshot.equipmentAvailable.length > 0) ? snapshot.equipmentAvailable :
@@ -3769,7 +3733,42 @@ export default function ProgramPage() {
         []
       ) as EquipmentType[],
     }
-    
+    // ==========================================================================
+    // [STEP-4E] AdaptiveProgramInputs object-contract repair.
+    //
+    // The previous shape of `result` included four excess properties that do
+    // NOT exist on the `AdaptiveProgramInputs` interface in
+    // lib/adaptive-program-builder.ts:
+    //   - sessionDurationMode  (canonical-profile metadata, not builder input)
+    //   - trainingPathType     (canonical-profile metadata, not builder input)
+    //   - goalCategories       (canonical-profile metadata, not builder input)
+    //   - selectedFlexibility  (canonical-profile metadata, not builder input)
+    //
+    // The builder consumes only: primaryGoal, secondaryGoal, experienceLevel,
+    // trainingDaysPerWeek, sessionLength, equipment, todaySessionMinutes,
+    // scheduleMode, adaptiveWorkloadEnabled, selectedSkills, regenerationMode,
+    // regenerationReason. Adding the four excess fields broke the literal-
+    // assignability check (`Object literal may only specify known properties`)
+    // at line 3719 on `sessionDurationMode`, and would have cascaded to the
+    // same error on the other three siblings on subsequent rebuilds.
+    //
+    // Resolution: drop the four excess fields from the builder-input literal.
+    // No metadata-side-channel object is reintroduced because this helper is
+    // currently orphaned — `buildModifyEntryInputsFromVisibleProgram` is only
+    // referenced in a `useCallback` deps array (line ~14676), never invoked.
+    // Splitting metadata into a separate const would create unused code that
+    // the next reviewer would be forced to delete anyway.
+    //
+    // If a future caller is wired up and genuinely needs those four canonical-
+    // profile fields, they should be read directly from `canonicalFallback`
+    // (which is already a parameter of this helper) rather than smuggled
+    // through the builder-input contract.
+    //
+    // Not widening AdaptiveProgramInputs because: (a) the builder generator
+    // does not consume these fields, (b) no other call site passes them as
+    // builder inputs, (c) widening would mask the same legitimate excess-
+    // property guard at every other AdaptiveProgramInputs construction site.
+    // ==========================================================================
     return result
   }, [])
   

@@ -229,12 +229,18 @@ function AchievementCard({ achievement, unlocked, unlockedAt }: AchievementCardP
           </p>
         )}
         {!unlocked && (
-          <div 
-            className="mt-2 px-2 py-0.5 rounded text-[10px] font-medium uppercase"
-            style={{ 
-              backgroundColor: `${tierColors.primary}20`,
-              color: tierColors.primary
-            }}
+          // [BUILD-FIX] TIER_COLORS shape is { bg, text, border, glow }
+          // (all Tailwind class strings) — there is no `primary` raw
+          // color. Render the locked-tier pill with the existing class
+          // tokens via `cn` so the same visual intent is preserved
+          // without re-introducing a phantom raw-color contract.
+          <div
+            className={cn(
+              "mt-2 px-2 py-0.5 rounded text-[10px] font-medium uppercase border",
+              tierColors.bg,
+              tierColors.text,
+              tierColors.border,
+            )}
           >
             {achievement.tier}
           </div>

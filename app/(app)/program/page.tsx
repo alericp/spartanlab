@@ -6731,6 +6731,13 @@ export default function ProgramPage() {
       setGenerationError('Program builder is still loading. Please wait a moment and try again.')
       return
     }
+    // [STEP-5A-CHI] Capture narrowed local. The guard above proves
+    //   `saveAdaptiveProgram` is non-null at this exact point, but
+    //   TypeScript loses property-access narrowing on
+    //   `programModules.saveAdaptiveProgram` across the ~700 lines of
+    //   async/branch-heavy body that follow. Local consts (unlike property
+    //   accesses) preserve narrowing across closures, awaits, and branches.
+    const saveAdaptiveProgram = programModules.saveAdaptiveProgram
     
     console.log('[ProgramPage] handleGenerate: Starting generation', { 
       source: isModifyFlow ? 'modify_builder_unified' : 'builder',
@@ -7421,7 +7428,8 @@ export default function ProgramPage() {
   generationStage = 'saving'
   console.log('[program-build] STAGE 6: Saving snapshot to storage...')
   try {
-    programModules.saveAdaptiveProgram(newProgram)
+    // [STEP-5A-CHI] Use narrowed local from handler-top capture.
+    saveAdaptiveProgram(newProgram)
     console.log('[program-build] STAGE 6: Save completed successfully')
   } catch (saveErr) {
     // [storage-quota-fix] TASK E: Classify storage save errors precisely
@@ -8813,6 +8821,8 @@ export default function ProgramPage() {
       setGenerationError('Program builder is still loading. Please wait a moment.')
       return
     }
+    // [STEP-5A-CHI] Capture narrowed local — see handleGenerate rationale.
+    const saveAdaptiveProgram = programModules.saveAdaptiveProgram
     
     setIsGenerating(true)
     setGenerationError(null)
@@ -9032,7 +9042,8 @@ export default function ProgramPage() {
       })
       
       // Save the program to localStorage (server already validated it)
-      await programModules.saveAdaptiveProgram(newProgram)
+      // [STEP-5A-CHI] Use narrowed local from handler-top capture.
+      await saveAdaptiveProgram(newProgram)
       
       // Update canonical profile to match what was just generated
       // [STEP-4B] Canonical profile numeric slot must hold number | null —
@@ -9279,6 +9290,8 @@ export default function ProgramPage() {
       setGenerationError('Program builder is still loading. Please wait a moment and try again.')
       return
     }
+    // [STEP-5A-CHI] Capture narrowed local — see handleGenerate rationale.
+    const saveAdaptiveProgram = programModules.saveAdaptiveProgram
     
     // ==========================================================================
     // [TASK 1] REGEN ENTRYPOINT AUDIT
@@ -11112,7 +11125,8 @@ export default function ProgramPage() {
   regenerateStage = 'saving'
   console.log('[program-build] REGEN STAGE 7: Saving snapshot...')
   try {
-    programModules.saveAdaptiveProgram(newProgram)
+    // [STEP-5A-CHI] Use narrowed local from handler-top capture.
+    saveAdaptiveProgram(newProgram)
     console.log('[program-build] REGEN STAGE 7: Save completed successfully')
   } catch (saveErr) {
     // [storage-quota-fix] TASK E: Classify storage save errors precisely
@@ -12632,6 +12646,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       console.error('[canonical-rebuild] Modules not loaded')
       return { success: false, error: 'Program builder still loading' }
     }
+    // [STEP-5A-CHI] Capture narrowed local — see handleGenerate rationale.
+    const saveAdaptiveProgram = programModules.saveAdaptiveProgram
     
     // [canonical-rebuild] TASK A: Build updated canonical entry based on adjustment
     // [PHASE 6 TASK 2] Use canonical entry builder instead of just spreading inputs
@@ -13479,16 +13495,24 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       
       // [canonical-rebuild] STAGE 3: Save to canonical storage
       console.log('[canonical-rebuild] STAGE 3: Saving to canonical storage...')
-      programModules.saveAdaptiveProgram(newProgram)
+      // [STEP-5A-CHI] Use narrowed local from handler-top capture.
+      saveAdaptiveProgram(newProgram)
       
       // [canonical-rebuild] STAGE 4: Verify save
-      const savedState = programModules.getProgramState()
-      if (!savedState.adaptiveProgram || savedState.adaptiveProgram.id !== newProgram.id) {
+      // [STEP-5A-CHI] Match the sibling save-verification pattern at
+      //   L7463 / L11155 / L16897 — `getProgramState` is nullable on the
+      //   lazy-loaded modules object, so use optional chaining (this site
+      //   was the lone outlier without `?.`). The subsequent
+      //   `savedState?.adaptiveProgram` chain narrows correctly: after the
+      //   `if (!savedState?.adaptiveProgram)` short-circuit throws, the
+      //   second `||` clause sees a non-null `savedState.adaptiveProgram`.
+      const savedState = programModules.getProgramState?.()
+      if (!savedState?.adaptiveProgram || savedState.adaptiveProgram.id !== newProgram.id) {
         console.log('[phase17a-adjustment-stage-failure]', { 
           stage: 'save_program',
           reason: 'save_verification_failed',
           expectedId: newProgram.id,
-          actualId: savedState.adaptiveProgram?.id || null,
+          actualId: savedState?.adaptiveProgram?.id || null,
         })
         throw new ProgramPageValidationError(
           'snapshot_save_failed', 'save_verification', 'save_verification_failed',

@@ -31,6 +31,12 @@ import { scaleSessionForWeek, type ScaledSession } from '@/lib/week-dosage-scali
 // Program page and Live Workout always agree on prescription unit. See
 // lib/program/exercise-prescription-unit-truth.ts.
 import { resolveExercisePrescriptionUnitTruth } from '@/lib/program/exercise-prescription-unit-truth'
+// [STEP-5C-CANONICAL-GRAMMAR] Final sanity gate at the loader boundary so
+// any legacy-persisted "7-12" / "5-11" / "6-13" rep strings get snapped to
+// a canonical band on hydration. The resolver already snaps for fresh
+// generations; this protects programs saved before Step 5C and any future
+// fallback path that bypasses the resolver.
+import { normalizeRepsOrTimeString } from '@/lib/program/canonical-range-grammar'
 
 // =============================================================================
 // SESSION METADATA - TRACKS SOURCE AND VALIDATION STATUS
@@ -125,12 +131,26 @@ function normalizeToAdaptiveSession(raw: unknown, index: number): AdaptiveSessio
         repsOrTime: rawRepsOrTime,
       })
 
+      // [STEP-5C-CANONICAL-GRAMMAR] After unit-truth repair, snap any
+      // non-canonical rep ranges (e.g. legacy 7-12 / 5-11 / 6-13) to
+      // the approved coaching grammar. `normalizeRepsOrTimeString` is a
+      // pure no-op for canonical strings, hold ranges already on the
+      // canonical hold grammar, single-value durations, and unparsed
+      // strings — so calling it unconditionally is safe at the loader
+      // boundary and protects programs saved before Step 5C.
+      const repairedReps = unitTruth.repsOrTime || rawRepsOrTime
+      const snappedReps = normalizeRepsOrTimeString(
+        repairedReps,
+        'unknown',
+        'moderate',
+      ).repsOrTime
+
       return {
         id: typeof e.id === 'string' && e.id ? e.id : `exercise-${idx}`,
         name: typeof e.name === 'string' && e.name ? e.name : 'Exercise',
         category: typeof e.category === 'string' ? e.category : 'general',
         sets: typeof e.sets === 'number' && e.sets > 0 ? e.sets : 3,
-        repsOrTime: unitTruth.repsOrTime || rawRepsOrTime,
+        repsOrTime: snappedReps,
         note: typeof e.note === 'string' ? e.note : '',
         isOverrideable: e.isOverrideable !== false,
         selectionReason: typeof e.selectionReason === 'string' ? e.selectionReason : '',

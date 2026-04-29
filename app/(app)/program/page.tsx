@@ -5330,6 +5330,17 @@ export default function ProgramPage() {
               })
               
               // [PHASE 17D] Program preservation audit - verify 6-day program intact
+              // [STEP-5A-LAMBDA] `AdaptiveSession` (lib/adaptive-program-builder.ts:1114)
+              //   does NOT define an `id` field. Real available identifiers
+              //   are `dayNumber`, `dayLabel`, `focus`, `focusLabel`. The
+              //   diagnostic now derives a stable human-readable
+              //   `firstSessionKey` from those real fields. No fake `id`
+              //   was added to the type. The local `firstSession` const
+              //   is diagnostic-only, scoped to this branch (where
+              //   `normalizedProgram` is already narrowed non-null by the
+              //   STEP-5A-THETA wrap above), and reads `sessions?.[0]`
+              //   safely with `?? null` to satisfy TS narrowing.
+              const phase17dFirstSession = normalizedProgram.sessions?.[0] ?? null
               console.log('[phase17d-program-preservation-audit]', {
                 programId: normalizedProgram.id,
                 sessionCount: normalizedProgram.sessions?.length || 0,
@@ -5340,17 +5351,14 @@ export default function ProgramPage() {
                 verdict: 'existing_program_preserved_at_mount',
                 normalizedOnlyNoRestoration: true,
                 createdAt: normalizedProgram.createdAt,
-                // [STEP-5A-KAPPA] Removed duplicate `sessionCount` key here.
-                // The canonical `sessionCount` at the top of this object
-                // (alongside `programId`, `primaryGoal`, `scheduleMode`,
-                // `is6DayProgram`, `is7DayProgram`) is the high-level
-                // snapshot field. The duplicate at this position was
-                // byte-identical (`normalizedProgram.sessions?.length || 0`)
-                // and carried no distinct meaning — TS1117 was correctly
-                // emitted. No semantics changed; the log still surfaces
-                // exactly one `sessionCount` value with the same expression.
-                firstSessionId: normalizedProgram.sessions?.[0]?.id || 'none',
-                firstSessionExerciseCount: normalizedProgram.sessions?.[0]?.exercises?.length || 0,
+                // [STEP-5A-KAPPA] Duplicate `sessionCount` removed; canonical
+                // single occurrence is at the top of this object.
+                firstSessionKey: phase17dFirstSession
+                  ? `day${phase17dFirstSession.dayNumber}-${phase17dFirstSession.dayLabel || phase17dFirstSession.focusLabel || phase17dFirstSession.focus || 'session'}`
+                  : 'none',
+                firstSessionExerciseCount: Array.isArray(phase17dFirstSession?.exercises)
+                  ? phase17dFirstSession.exercises.length
+                  : 0,
                 provenanceMode: normalizedProgram.generationProvenance?.generationMode || 'unknown',
                 qualityTier: normalizedProgram.qualityClassification?.qualityTier || 'unknown',
               })
@@ -7349,12 +7357,21 @@ export default function ProgramPage() {
         console.log('[program-build] STAGE 7: Updating UI state...')
         
         // [program-save-truth-audit] TASK H: Verify program being saved matches what will display
+        // [STEP-5A-LAMBDA] `AdaptiveSession` has no `id` field; replaced
+        //   `firstSessionId` with `firstSessionKey` derived from real
+        //   `dayNumber`/`dayLabel`/`focusLabel`/`focus` fields. Same fix
+        //   pattern applied at the regenerate save-audit site below.
+        const programSaveAuditFirstSession = newProgram.sessions?.[0] ?? null
         console.log('[program-save-truth-audit]', {
           programId: newProgram.id,
           createdAt: newProgram.createdAt,
           sessionCount: newProgram.sessions?.length || 0,
-          firstSessionId: newProgram.sessions?.[0]?.id || 'none',
-          firstSessionExerciseCount: newProgram.sessions?.[0]?.exercises?.length || 0,
+          firstSessionKey: programSaveAuditFirstSession
+            ? `day${programSaveAuditFirstSession.dayNumber}-${programSaveAuditFirstSession.dayLabel || programSaveAuditFirstSession.focusLabel || programSaveAuditFirstSession.focus || 'session'}`
+            : 'none',
+          firstSessionExerciseCount: Array.isArray(programSaveAuditFirstSession?.exercises)
+            ? programSaveAuditFirstSession.exercises.length
+            : 0,
           provenanceMode: newProgram.generationProvenance?.generationMode || 'unknown',
           provenanceFreshness: newProgram.generationProvenance?.generationFreshness || 'unknown',
           qualityTier: newProgram.qualityClassification?.qualityTier || 'unknown',
@@ -11049,14 +11066,22 @@ export default function ProgramPage() {
         regenerateStage = 'updating_ui'
         
         // [program-save-truth-audit] TASK H: Verify regenerated program matches what will display
+        // [STEP-5A-LAMBDA] Same pattern as the post-build save audit above:
+        //   `AdaptiveSession` has no `id`; derive `firstSessionKey` from
+        //   real fields.
+        const regenerateSaveAuditFirstSession = newProgram.sessions?.[0] ?? null
         console.log('[program-save-truth-audit]', {
           context: 'regeneration',
           oldProgramId: program?.id || 'none',
           newProgramId: newProgram.id,
           createdAt: newProgram.createdAt,
           sessionCount: newProgram.sessions?.length || 0,
-          firstSessionId: newProgram.sessions?.[0]?.id || 'none',
-          firstSessionExerciseCount: newProgram.sessions?.[0]?.exercises?.length || 0,
+          firstSessionKey: regenerateSaveAuditFirstSession
+            ? `day${regenerateSaveAuditFirstSession.dayNumber}-${regenerateSaveAuditFirstSession.dayLabel || regenerateSaveAuditFirstSession.focusLabel || regenerateSaveAuditFirstSession.focus || 'session'}`
+            : 'none',
+          firstSessionExerciseCount: Array.isArray(regenerateSaveAuditFirstSession?.exercises)
+            ? regenerateSaveAuditFirstSession.exercises.length
+            : 0,
           provenanceMode: newProgram.generationProvenance?.generationMode || 'unknown',
           provenanceFreshness: newProgram.generationProvenance?.generationFreshness || 'unknown',
           qualityTier: newProgram.qualityClassification?.qualityTier || 'unknown',

@@ -7511,7 +7511,27 @@ export default function ProgramPage() {
         // [freshness-sync] STAGE 6c: Update freshness identity and invalidate stale caches
         generationStage = 'freshness_sync'
         console.log('[freshness-sync] STAGE 6c: Updating canonical freshness identity...')
-        const profileSigForFreshness = createProfileSignature(inputs)
+        // [STEP-5A-PSI] Freshness signature source must be non-null.
+        //   `inputs` is React state typed `AdaptiveProgramInputs | null`
+        //   (L2724) — TypeScript can't prove non-null at this post-save
+        //   point, and in practice it CAN be null on the first build of a
+        //   freshly mounted page (state hasn't been hydrated from
+        //   `setInputs(defaultInputs)` yet on certain entry flows).
+        //   `generationInputs` (L7005) is the freshly built canonical
+        //   truth for THIS exact generation pass — derived from
+        //   `entryToAdaptiveInputs(entryResult.entry!)` after the
+        //   canonical-entry guard succeeded, so it is always non-null
+        //   here AND structurally identical to `inputs` per the
+        //   `AdaptiveProgramInputs` contract. Sibling callsites at L8048,
+        //   L11275, L11598, L13531 already pass equivalent inputs-shape
+        //   objects to `createProfileSignature` without issue, proving
+        //   structural compatibility. Falling through preserves the
+        //   "use page state when present, else use this-pass canonical
+        //   truth" priority required by the prompt without inventing a
+        //   parallel truth source or skipping the freshness sync (which
+        //   would corrupt cross-surface cache invalidation).
+        const freshnessSignatureSource = inputs ?? generationInputs
+        const profileSigForFreshness = createProfileSignature(freshnessSignatureSource)
         invalidateStaleCaches()
         updateFreshnessIdentity(
           newProgram.id,

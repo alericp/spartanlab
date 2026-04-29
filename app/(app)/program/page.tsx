@@ -14684,12 +14684,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         secondaryGoal: inputs.secondaryGoal,
         scheduleMode: inputs.scheduleMode,
         trainingDaysPerWeek: inputs.trainingDaysPerWeek,
-        sessionDurationMode: inputs.sessionDurationMode,
+        // [STEP-5A-XI] These four fields are not on AdaptiveProgramInputs
+        //   (Step 4G banned-key guard). Sourced via the page-level
+        //   `inputsMeta` Record-narrowing helper.
+        sessionDurationMode: inputsMeta.sessionDurationMode,
         sessionLength: inputs.sessionLength,
         selectedSkillsCount: inputs.selectedSkills?.length ?? 0,
-        trainingPathType: inputs.trainingPathType,
-        goalCategoriesCount: inputs.goalCategories?.length ?? 0,
-        selectedFlexibilityCount: inputs.selectedFlexibility?.length ?? 0,
+        trainingPathType: inputsMeta.trainingPathType,
+        goalCategoriesCount: inputsMeta.goalCategories.length,
+        selectedFlexibilityCount: inputsMeta.selectedFlexibility.length,
         experienceLevel: inputs.experienceLevel,
         equipmentCount: inputs.equipment?.length ?? 0,
       } : null,
@@ -16097,6 +16100,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 // [PHASE 26] Read CURRENT state from ref, not stale closure
                 const currentBuilderSessionInputs = builderSessionInputsRef.current
                 const hasCurrentSessionInputs = !!currentBuilderSessionInputs
+                // [STEP-5A-XI] `builderSessionInputsRef` is typed
+                //   `useRef<AdaptiveProgramInputs | null>`, so the four
+                //   canonical-profile metadata fields (sessionDurationMode,
+                //   trainingPathType, goalCategories, selectedFlexibility)
+                //   are NOT visible on this static type (Step 4G banned
+                //   keys). At runtime the ref carries them anyway because
+                //   it was assigned from `entryToAdaptiveInputs()` output.
+                //   Read them through the typed metadata view helper.
+                const currentBuilderSessionInputsMeta = readProgramPageMetadataFromUnknown(currentBuilderSessionInputs)
                 
                 // ==========================================================================
                 // [MAIN-GEN-TRUTH step-1] Capture pre-click state for main generation trace
@@ -16119,17 +16131,20 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   selectedSkillsCountBeforeClick: currentBuilderSessionInputs?.selectedSkills?.length ?? inputs?.selectedSkills?.length ?? null,
                   goalCategoriesCountBeforeClick: currentBuilderSessionInputs?.selectedGoalCategories?.length ?? inputs?.selectedGoalCategories?.length ?? null,
                   experienceLevelBeforeClick: currentBuilderSessionInputs?.experienceLevel ?? inputs?.experienceLevel ?? null,
-                  sessionDurationModeBeforeClick: currentBuilderSessionInputs?.sessionDurationMode ?? inputsMeta.sessionDurationMode,
+                  // [STEP-5A-XI] sourced via metadata view helpers, not direct AdaptiveProgramInputs reads
+                  sessionDurationModeBeforeClick: currentBuilderSessionInputsMeta.sessionDurationMode ?? inputsMeta.sessionDurationMode,
                   // Step 2: Form input - will be filled from what goes to handleGenerate
                   submittedScheduleMode: hasCurrentSessionInputs ? currentBuilderSessionInputs?.scheduleMode ?? null : inputs?.scheduleMode ?? null,
                   submittedTrainingDaysPerWeek: hasCurrentSessionInputs ? currentBuilderSessionInputs?.trainingDaysPerWeek ?? null : inputs?.trainingDaysPerWeek ?? null,
-                  submittedSessionDurationMode: hasCurrentSessionInputs ? currentBuilderSessionInputs?.sessionDurationMode ?? null : inputsMeta.sessionDurationMode,
+                  // [STEP-5A-XI] sourced via metadata view helpers, not direct AdaptiveProgramInputs reads
+                  submittedSessionDurationMode: hasCurrentSessionInputs ? currentBuilderSessionInputsMeta.sessionDurationMode : inputsMeta.sessionDurationMode,
                   submittedPrimaryGoal: hasCurrentSessionInputs ? currentBuilderSessionInputs?.primaryGoal ?? null : inputs?.primaryGoal ?? null,
                   submittedSecondaryGoal: hasCurrentSessionInputs ? currentBuilderSessionInputs?.secondaryGoal ?? null : inputs?.secondaryGoal ?? null,
                   submittedSelectedSkillsCount: hasCurrentSessionInputs ? currentBuilderSessionInputs?.selectedSkills?.length ?? null : inputs?.selectedSkills?.length ?? null,
                   submittedGoalCategoriesCount: hasCurrentSessionInputs ? currentBuilderSessionInputs?.selectedGoalCategories?.length ?? null : inputs?.selectedGoalCategories?.length ?? null,
                   submittedExperienceLevel: hasCurrentSessionInputs ? currentBuilderSessionInputs?.experienceLevel ?? null : inputs?.experienceLevel ?? null,
-                  submittedTrainingPathType: hasCurrentSessionInputs ? currentBuilderSessionInputs?.trainingPathType ?? null : inputsMeta.trainingPathType,
+                  // [STEP-5A-XI] sourced via metadata view helpers, not direct AdaptiveProgramInputs reads
+                  submittedTrainingPathType: hasCurrentSessionInputs ? currentBuilderSessionInputsMeta.trainingPathType : inputsMeta.trainingPathType,
                   // Remaining steps filled later
                   entryScheduleMode: null,
                   entryTrainingDaysPerWeek: null,
@@ -16283,7 +16298,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   step: 'MODIFY_SUBMIT_SNAPSHOT',
                   refScheduleMode: currentBuilderSessionInputs?.scheduleMode,
                   refTrainingDaysPerWeek: currentBuilderSessionInputs?.trainingDaysPerWeek,
-                  refSessionDurationMode: currentBuilderSessionInputs?.sessionDurationMode,
+                  // [STEP-5A-XI] sourced via metadata view, not direct AdaptiveProgramInputs read
+                  refSessionDurationMode: currentBuilderSessionInputsMeta.sessionDurationMode,
                   refPrimaryGoal: currentBuilderSessionInputs?.primaryGoal,
                   hasBuilderSessionInputs: hasCurrentSessionInputs,
                   verdict: hasCurrentSessionInputs

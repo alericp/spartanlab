@@ -5364,14 +5364,34 @@ export default function ProgramPage() {
               })
               
               // [PHASE 17D] Current active program input audit - what truth was used
+              // [STEP-5A-MU] `AdaptiveProgram` (lib/adaptive-program-builder.ts:1583+)
+              //   does NOT have an `equipment: string[]` field. That lives on
+              //   `AdaptiveProgramInputs` (line 1094). The output `AdaptiveProgram`
+              //   carries `equipmentProfile: EquipmentProfile` (line 1654) instead.
+              //   Reading `normalizedProgram.equipment` was emitting TS2339 because
+              //   the diagnostic was conflating two different contracts (input vs
+              //   output).
+              //
+              //   This audit reads the *normalized AdaptiveProgram output*, not
+              //   the original inputs object, so the honest equipment surface to
+              //   log here is `equipmentProfile` presence + source label. If
+              //   true raw input equipment[] is needed for an audit, it must be
+              //   sourced from the canonical profile or from a separate inputs
+              //   reference — NOT from `normalizedProgram`. That cross-object
+              //   logic is out of scope for this build-unblock task; we
+              //   intentionally drop input-equipment[] from this log per the
+              //   STEP-5A-MU efficiency rule (production build > diagnostic
+              //   verbosity). No fake `equipment` field was added to
+              //   `AdaptiveProgram`.
               console.log('[phase17d-current-active-program-input-audit]', {
                 programId: normalizedProgram.id,
                 primaryGoal: normalizedProgram.primaryGoal,
                 secondaryGoal: normalizedProgram.secondaryGoal || null,
                 selectedSkills: normalizedProgram.selectedSkills || [],
                 selectedSkillsCount: normalizedProgram.selectedSkills?.length || 0,
-                equipment: normalizedProgram.equipment || [],
-                equipmentCount: normalizedProgram.equipment?.length || 0,
+                equipmentProfilePresent: Boolean(normalizedProgram.equipmentProfile),
+                equipmentSource: 'adaptiveProgram.equipmentProfile' as const,
+                programShapeSource: 'AdaptiveProgram output shape' as const,
                 scheduleMode: normalizedProgram.scheduleMode,
                 sessionCount: normalizedProgram.sessions?.length || 0,
                 generationMode: normalizedProgram.generationProvenance?.generationMode || 'unknown',

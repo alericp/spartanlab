@@ -226,70 +226,103 @@ function readProgramPageNumber(source: unknown, key: string): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-// [STEP-5A-OMEGA] Freshness signature projection helper.
+// [STEP-5A-OMEGA-2] Freshness signature projection helper — INPUT BOUNDARY.
 //
-// `createProfileSignature(...)` (lib/program-state.ts:476) expects a
-// narrow normalized profile shape:
-//   { primaryGoal?, secondaryGoal?, scheduleMode?,
+// `createProfileSignature(...)` (lib/program-state.ts:476) expects a strict
+// normalized profile shape:
+//   { primaryGoal?: string | null,
+//     secondaryGoal?: string | null,
+//     scheduleMode?: string,
 //     trainingDaysPerWeek?: number | null,
 //     sessionLengthMinutes?: number,
 //     selectedSkills?: string[] }
 //
-// The two raw sources used across this file's 8 callsites — `AdaptiveProgramInputs`
-// (state/effective/freshRebuild/updated inputs) and the literal return type of
-// `entryToAdaptiveInputs` (generationInputs) — both carry:
-//   - `trainingDaysPerWeek: number | 'flexible'`  (NOT `number | null`)
-//   - `sessionLength: number`                      (NOT `sessionLengthMinutes`)
-// plus extra generation fields (`equipment`, `experienceLevel`, `regenerationMode`, etc.)
-// that the signature helper must not see.
+// The raw sources passed to this helper across the file's 8 callsites are
+// HETEROGENEOUS — they include `AdaptiveProgramInputs` (state/effective/
+// freshRebuild/updated inputs) AND the literal return type of
+// `entryToAdaptiveInputs` (generationInputs). Both carry shapes the strict
+// signature contract rejects:
+//   - `trainingDaysPerWeek: number | 'flexible'`  (string literal NOT accepted by `number | null`)
+//   - `sessionLength: SessionLength`              (a union that may include string values per
+//                                                  AdaptiveProgramInputs in lib/adaptive-program-builder.ts)
+// plus unrelated generation fields (`equipment`, `experienceLevel`, etc.) the
+// signature must not see.
 //
-// This helper does the one safe, contract-preserving conversion in one place:
-//   - 'flexible' training days → null (preserves "no fixed weekly count" meaning)
-//   - numeric `sessionLength` → `sessionLengthMinutes` (the field is already minutes
-//     per `SessionLength`'s numeric values; we're renaming, not converting units)
+// STEP 5A-OMEGA's previous narrow structural input type rejected
+// `AdaptiveProgramInputs.sessionLength: SessionLength` (the helper declared
+// `sessionLength?: number` but the union widens beyond number). The fix is
+// to make the input boundary `unknown` and do ALL narrowing internally —
+// this is precisely the boundary-helper pattern already established by
+// `readProgramPageRecord` / `readProgramPageString` etc. above.
+//
+// Behavior contract (unchanged from STEP 5A-OMEGA):
+//   - 'flexible' (or any non-numeric) training days  → null
+//   - numeric `sessionLengthMinutes` → preserved
+//   - else numeric `sessionLength`   → renamed (already minutes per
+//                                      `SessionLength`'s numeric variants)
+//   - else                           → undefined
 //   - drops all unrelated generation fields
-//   - normalizes optional/null primary/secondary goals to `?? null`
-//
-// Parameter type is intentionally a wide structural subset so both
-// `AdaptiveProgramInputs` AND the `entryToAdaptiveInputs` literal return type
-// fit via TypeScript structural compatibility — required fields with narrower
-// types (e.g. `primaryGoal: PrimaryGoal`) flow into optional wider fields
-// (e.g. `primaryGoal?: string | null`). Excess property checks do NOT fire
-// because callers pass typed bindings, never fresh object literals.
-function toFreshnessSignatureProjection(source: {
-  primaryGoal?: string | null
-  secondaryGoal?: string | null
-  scheduleMode?: string
-  trainingDaysPerWeek?: number | string | null
-  sessionLength?: number
-  sessionLengthMinutes?: number
-  selectedSkills?: string[]
-}): {
+//   - normalizes missing/invalid primary/secondary goals to null
+type FreshnessSignatureProjection = {
   primaryGoal?: string | null
   secondaryGoal?: string | null
   scheduleMode?: string
   trainingDaysPerWeek?: number | null
   sessionLengthMinutes?: number
   selectedSkills?: string[]
-} {
-  const rawTrainingDays = source.trainingDaysPerWeek
-  const rawSessionLengthMinutes =
-    typeof source.sessionLengthMinutes === 'number'
-      ? source.sessionLengthMinutes
-      : typeof source.sessionLength === 'number'
-        ? source.sessionLength
+}
+function toFreshnessSignatureProjection(input: unknown): FreshnessSignatureProjection {
+  const record = readProgramPageRecord(input)
+  if (!record) {
+    return {
+      primaryGoal: null,
+      secondaryGoal: null,
+      trainingDaysPerWeek: null,
+      selectedSkills: [],
+    }
+  }
+
+  const primaryGoal =
+    typeof record.primaryGoal === 'string' ? record.primaryGoal : null
+  const secondaryGoal =
+    typeof record.secondaryGoal === 'string' ? record.secondaryGoal : null
+  const scheduleMode =
+    typeof record.scheduleMode === 'string' ? record.scheduleMode : undefined
+
+  // [STEP-5A-OMEGA-2] 'flexible' (or any non-numeric trainingDaysPerWeek)
+  //   collapses to null — preserves "no fixed weekly count" meaning without
+  //   inventing a fake number for flexible scheduling.
+  const trainingDaysPerWeek =
+    typeof record.trainingDaysPerWeek === 'number' &&
+    Number.isFinite(record.trainingDaysPerWeek)
+      ? record.trainingDaysPerWeek
+      : null
+
+  // [STEP-5A-OMEGA-2] String session-length labels (e.g. SessionLength's
+  //   string variants) are NOT converted — only numeric values pass through.
+  //   No invented defaults; missing/invalid → undefined.
+  const sessionLengthMinutes =
+    typeof record.sessionLengthMinutes === 'number' &&
+    Number.isFinite(record.sessionLengthMinutes)
+      ? record.sessionLengthMinutes
+      : typeof record.sessionLength === 'number' &&
+          Number.isFinite(record.sessionLength)
+        ? record.sessionLength
         : undefined
+
+  const selectedSkills = Array.isArray(record.selectedSkills)
+    ? record.selectedSkills.filter(
+        (skill): skill is string => typeof skill === 'string',
+      )
+    : []
+
   return {
-    primaryGoal: source.primaryGoal ?? null,
-    secondaryGoal: source.secondaryGoal ?? null,
-    scheduleMode:
-      typeof source.scheduleMode === 'string' ? source.scheduleMode : undefined,
-    trainingDaysPerWeek:
-      typeof rawTrainingDays === 'number' ? rawTrainingDays : null,
-    sessionLengthMinutes: rawSessionLengthMinutes,
-    selectedSkills: Array.isArray(source.selectedSkills)
-      ? source.selectedSkills
-      : [],
+    primaryGoal,
+    secondaryGoal,
+    scheduleMode,
+    trainingDaysPerWeek,
+    sessionLengthMinutes,
+    selectedSkills,
   }
 }
 

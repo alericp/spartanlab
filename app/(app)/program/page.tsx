@@ -6458,8 +6458,20 @@ export default function ProgramPage() {
   // [PHASE 24N] UNIFIED CANONICAL HANDLER - Single entry point for ALL builder submits
   // This handler now accepts optional inputOverrides for Modify flow convergence
   // Both onboarding and modify flows now use this same handler
+  //
+  // [STEP-5A-NU] Local alias for handleGenerate's input-override parameter.
+  //   Earlier code referenced `AdaptiveBuilderInputs`, which was never
+  //   defined, imported, or exported anywhere in the project (TS2304
+  //   "Cannot find name `AdaptiveBuilderInputs`" at 6462:70). The real
+  //   contract is `AdaptiveProgramInputs` (lib/adaptive-program-builder.ts),
+  //   which is already imported at the top of this file and is the type
+  //   used by `useState<AdaptiveProgramInputs | null>` for `inputs`. We
+  //   alias the union locally so the handler signature stays readable
+  //   without inventing or exporting a new type. No type widening; both
+  //   members of the union are real.
   // ==========================================================================
-  const handleGenerate = useCallback(async (inputOverrides?: Partial<AdaptiveBuilderInputs> | AdaptiveProgramInputs) => {
+  type ProgramGenerateInputOverrides = Partial<AdaptiveProgramInputs> | AdaptiveProgramInputs
+  const handleGenerate = useCallback(async (inputOverrides?: ProgramGenerateInputOverrides) => {
     // ==========================================================================
     // [PHASE 24T] CRITICAL FIX: Use inputOverrides directly when it's a full object
     // Previously this merged {...inputs, ...inputOverrides} which caused stale `inputs`
@@ -6467,10 +6479,16 @@ export default function ProgramPage() {
     // Now we detect if inputOverrides is a complete inputs object and use it directly.
     // ==========================================================================
     const isFullInputsObject = inputOverrides && 'primaryGoal' in inputOverrides && 'scheduleMode' in inputOverrides
+    // [STEP-5A-NU] Casts updated from stale `as AdaptiveBuilderInputs` to
+    //   real `as AdaptiveProgramInputs`. Behavior unchanged: full-object
+    //   path uses overrides directly; partial path merges with page-level
+    //   `inputs` (null-safe — spreading `null` yields `{}`, and the
+    //   downstream code already reads `effectiveInputs?.scheduleMode`
+    //   etc. with optional chaining, so no new null guard is required).
     const effectiveInputs = isFullInputsObject
-      ? inputOverrides as AdaptiveBuilderInputs  // [PHASE 24T] Use directly, don't merge with stale inputs
+      ? inputOverrides as AdaptiveProgramInputs  // [PHASE 24T] Use directly, don't merge with stale inputs
       : inputOverrides 
-        ? { ...inputs, ...inputOverrides } as AdaptiveBuilderInputs  // Partial override case
+        ? { ...inputs, ...inputOverrides } as AdaptiveProgramInputs  // Partial override case
         : inputs  // No overrides, use page inputs
     const isModifyFlow = !!inputOverrides
     

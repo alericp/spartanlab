@@ -239,6 +239,65 @@ function readProgramPageMetadataFromUnknown(source: unknown): _ProgramPageMetada
 }
 
 // ==========================================================================
+// [STEP-5A-PI] buildCanonicalGenerationEntry caller-side override contract.
+//
+// `buildCanonicalGenerationEntry(triggerSource, overrides?)` in
+// lib/canonical-profile-service.ts:3154 expects a STRICT Partial whose
+// `sessionLength` slot is `number` (canonical minutes), not the wider
+// `SessionLength` union exported from lib/program-service.ts:44 which also
+// permits string ranges like '10-20' / '60+'. The Program Page's
+// `effectiveInputs.sessionLength` is typed as `SessionLength`, so passing
+// it directly into the override slot breaks the contract.
+//
+// `ProgramPageCanonicalGenerationEntryOverrides` mirrors that strict slot
+// shape locally so call sites get an immediate compile-time error if a
+// non-numeric value sneaks back into `sessionLength`. The
+// `normalizeProgramPageSessionLengthOverride` helper turns any
+// `SessionLength`-shaped value into either canonical numeric minutes or
+// `undefined` (so the helper falls back to `profile.sessionLengthMinutes`
+// canonical truth). Range strings map to the upper bound of each range.
+// ==========================================================================
+type ProgramPageCanonicalGenerationEntryOverrides = Partial<{
+  primaryGoal: string
+  secondaryGoal: string
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced'
+  trainingDaysPerWeek: number | 'flexible'
+  sessionLength: number
+  scheduleMode: 'static' | 'flexible'
+  sessionDurationMode: 'static' | 'adaptive'
+  equipment: string[]
+  regenerationMode: string
+  regenerationReason: string
+  selectedSkills: string[]
+  trainingPathType: string
+  goalCategories: string[]
+  selectedFlexibility: string[]
+}>
+
+function normalizeProgramPageSessionLengthOverride(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  switch (value) {
+    case '10-20':
+      return 20
+    case '20-30':
+      return 30
+    case '30-45':
+      return 45
+    case '45-60':
+      return 60
+    case '60+':
+      return 90
+    default:
+      return undefined
+  }
+}
+
+// ==========================================================================
 // [STEP-4J — 3 OF 3] Staleness-evaluator contract drift tripwire.
 //
 // `lib/program/program-page-contract-adapter.ts` exports
@@ -6812,20 +6871,44 @@ export default function ProgramPage() {
     //   output, which the helper recovers via `Record<string, unknown>`
     //   narrowing. Behavior is preserved — same runtime values, just read
     //   through a typed view rather than a TS2339-emitting direct access.
-    const entryOverrides = isModifyFlow ? {
-      primaryGoal: effectiveInputs.primaryGoal,
-      secondaryGoal: effectiveInputs.secondaryGoal,
-      experienceLevel: effectiveInputs.experienceLevel,
-      trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
-      sessionLength: effectiveInputs.sessionLength,
-      scheduleMode: effectiveInputs.scheduleMode,
-      sessionDurationMode: effectiveInputsMeta.sessionDurationMode,
-      equipment: effectiveInputs.equipment,
-      selectedSkills: effectiveInputs.selectedSkills,
-      trainingPathType: effectiveInputsMeta.trainingPathType,
-      goalCategories: effectiveInputsMeta.goalCategories,
-      selectedFlexibility: effectiveInputsMeta.selectedFlexibility,
-    } : undefined
+    // [STEP-5A-PI] Override object now matches buildCanonicalGenerationEntry's
+    //   strict Partial contract via the local
+    //   `ProgramPageCanonicalGenerationEntryOverrides` type. The previous
+    //   inferred shape was `{ ...; sessionLength: SessionLength; ... }`,
+    //   which TS rejected because `SessionLength` permits range strings
+    //   (e.g. '10-20', '60+') while the helper requires `number`.
+    //   `sessionLength` now flows through `normalizeProgramPageSessionLengthOverride`,
+    //   yielding either canonical numeric minutes or `undefined` (so the
+    //   helper falls back to `profile.sessionLengthMinutes`). Null-valued
+    //   metadata fields (`sessionDurationMode`, `trainingPathType`) are
+    //   coerced to `undefined` so the helper applies its own canonical-truth
+    //   fallback rather than trying to write `null` into a strict slot.
+    const entryOverrides: ProgramPageCanonicalGenerationEntryOverrides | undefined = isModifyFlow
+      ? {
+          primaryGoal: effectiveInputs.primaryGoal,
+          ...(effectiveInputs.secondaryGoal !== undefined
+            ? { secondaryGoal: effectiveInputs.secondaryGoal }
+            : {}),
+          experienceLevel: effectiveInputs.experienceLevel,
+          trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
+          sessionLength: normalizeProgramPageSessionLengthOverride(effectiveInputs.sessionLength),
+          ...(effectiveInputs.scheduleMode !== undefined
+            ? { scheduleMode: effectiveInputs.scheduleMode }
+            : {}),
+          ...(effectiveInputsMeta.sessionDurationMode !== null
+            ? { sessionDurationMode: effectiveInputsMeta.sessionDurationMode }
+            : {}),
+          equipment: effectiveInputs.equipment,
+          ...(effectiveInputs.selectedSkills !== undefined
+            ? { selectedSkills: effectiveInputs.selectedSkills }
+            : {}),
+          ...(effectiveInputsMeta.trainingPathType !== null
+            ? { trainingPathType: effectiveInputsMeta.trainingPathType }
+            : {}),
+          goalCategories: effectiveInputsMeta.goalCategories,
+          selectedFlexibility: effectiveInputsMeta.selectedFlexibility,
+        }
+      : undefined
     
     const entryResult = buildCanonicalGenerationEntry(
       isModifyFlow ? 'handleGenerate_modifyFlow' : 'handleGenerate',
@@ -12502,7 +12585,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     
     // Build canonical entry with overrides for the requested changes
     // [PHASE 24O] CRITICAL FIX: Explicit numeric day-count override must also flip scheduleMode to static
-    const overrides: Record<string, unknown> = {}
+    // [STEP-5A-PI] Override object now uses the local strict-Partial type
+    //   `ProgramPageCanonicalGenerationEntryOverrides` so this caller stays
+    //   contract-aligned with `buildCanonicalGenerationEntry`. `Record<string, unknown>`
+    //   was previously incompatible with the helper's strict slot contract.
+    const overrides: ProgramPageCanonicalGenerationEntryOverrides = {}
     if (request.type === 'training_days' && request.newTrainingDays) {
       overrides.trainingDaysPerWeek = request.newTrainingDays
       // [PHASE 24O] Numeric day selection implies static schedule mode

@@ -5015,24 +5015,62 @@ export default function ProgramPage() {
         setInputs(defaultInputs)
         console.log('[ProgramPage] Stage 6: Default inputs loaded')
         
+        // ==========================================================================
+        // [STEP-5A-ZETA] Builder-hydration diagnostic + display-truth validation.
+        //
+        // Two related fixes in this block, surfaced by the canonical-vs-builder
+        // contract boundary the Step 4 chain established:
+        //
+        // (1) `sessionDurationMode` is NOT a member of `AdaptiveProgramInputs`
+        //     (lib/adaptive-program-builder.ts:1088). Step 4E intentionally
+        //     removed it — `sessionDurationMode` is canonical-profile metadata
+        //     (`'static' | 'adaptive'` at lib/canonical-profile-service.ts:278),
+        //     not an adaptive-builder input. Reading
+        //     `defaultInputs.sessionDurationMode` was the cited blocker
+        //     (TS2339 at line 5022:46) AND was also passed as an excess
+        //     property to `validateBuilderDisplayTruth` (whose parameter shape
+        //     at lib/canonical-profile-service.ts:2686 does NOT accept
+        //     `sessionDurationMode` either). Both are now sourced from the
+        //     canonical profile and labeled truthfully in the log; the
+        //     validator call drops the excess property entirely. The
+        //     dedicated `sessionDurationMode` drift comparison still runs
+        //     elsewhere (line ~4448 inside the staleness diagnostic block),
+        //     so coverage is preserved.
+        //
+        // (2) `validateBuilderDisplayTruth` types `sessionLength?: number`,
+        //     but `AdaptiveProgramInputs.sessionLength` is the broader
+        //     `SessionLength = 30|45|60|75|90|120|'10-20'|'20-30'|'30-45'|'45-60'|'60+'`
+        //     union (lib/program-service.ts:44). Passing a non-numeric
+        //     `'60+'` token would be the same-corridor follow-on blocker. We
+        //     narrow with `typeof === 'number'` and pass `undefined` for
+        //     non-numeric tokens so the validator simply skips that field
+        //     instead of receiving a string-shaped value it cannot compare.
+        // ==========================================================================
+        const builderHydrationCanonicalProfile = getCanonicalProfile()
+        const defaultInputsSessionLengthNumeric: number | undefined =
+          typeof defaultInputs.sessionLength === 'number' ? defaultInputs.sessionLength : undefined
+
         // [planner-input-truth] TASK 6: Log builder hydration truth for debugging
         console.log('[builder-hydration-truth] Builder hydrated with inputs:', {
           primaryGoal: defaultInputs.primaryGoal,
           scheduleMode: defaultInputs.scheduleMode,
-          sessionDurationMode: defaultInputs.sessionDurationMode,
+          // [STEP-5A-ZETA] Canonical-side truth — `AdaptiveProgramInputs` does
+          // not own this field; the canonical profile is the single owner.
+          canonicalSessionDurationMode: builderHydrationCanonicalProfile.sessionDurationMode,
           trainingDaysPerWeek: defaultInputs.trainingDaysPerWeek,
           sessionLength: defaultInputs.sessionLength,
           equipmentCount: defaultInputs.equipment?.length || 0,
           hasWeights: defaultInputs.equipment?.includes('weights') || false,
         })
-        
+
         // [builder-hydration-truth] Validate builder display matches canonical profile
         const displayValidation = validateBuilderDisplayTruth({
           primaryGoal: defaultInputs.primaryGoal,
           scheduleMode: defaultInputs.scheduleMode,
-          sessionDurationMode: defaultInputs.sessionDurationMode,
+          // [STEP-5A-ZETA] sessionDurationMode is intentionally omitted —
+          // `validateBuilderDisplayTruth` does not declare that parameter.
           trainingDaysPerWeek: defaultInputs.trainingDaysPerWeek,
-          sessionLength: defaultInputs.sessionLength,
+          sessionLength: defaultInputsSessionLengthNumeric,
           equipment: defaultInputs.equipment,
         })
         

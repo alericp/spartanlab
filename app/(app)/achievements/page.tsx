@@ -16,12 +16,21 @@ import {
   CATEGORY_LABELS,
 } from '@/lib/achievements/achievement-definitions'
 
+// [BUILD-FIX] Must be exhaustive for every member of the authoritative
+// AchievementCategory union in lib/achievements/achievement-definitions.ts
+// (training | strength | skill | consistency | volume | challenge | h2h |
+// longevity | balance). All icons reuse the existing lucide-react imports
+// above so no new dependency is introduced.
 const CATEGORY_ICONS: Record<AchievementCategory, React.ReactNode> = {
   training: <Dumbbell className="w-4 h-4" />,
   strength: <Target className="w-4 h-4" />,
   skill: <Star className="w-4 h-4" />,
   consistency: <Flame className="w-4 h-4" />,
   volume: <Trophy className="w-4 h-4" />,
+  challenge: <Zap className="w-4 h-4" />,
+  h2h: <Crown className="w-4 h-4" />,
+  longevity: <Medal className="w-4 h-4" />,
+  balance: <Trophy className="w-4 h-4" />,
 }
 
 export default function AchievementsPage() {
@@ -50,7 +59,20 @@ export default function AchievementsPage() {
   }
 
   const unlockedIds = new Set(unlocked.map(ua => ua.achievementId))
-  const categories: (AchievementCategory | 'all')[] = ['all', 'training', 'strength', 'skill', 'consistency', 'volume']
+  // [BUILD-FIX] Aligned with the authoritative AchievementCategory union
+  // so the filter chip strip surfaces every category that has achievements.
+  const categories: (AchievementCategory | 'all')[] = [
+    'all',
+    'training',
+    'strength',
+    'skill',
+    'consistency',
+    'volume',
+    'challenge',
+    'h2h',
+    'longevity',
+    'balance',
+  ]
   
   const filteredAchievements = selectedCategory === 'all' 
     ? ACHIEVEMENTS 
@@ -60,14 +82,17 @@ export default function AchievementsPage() {
   const totalAchievements = ACHIEVEMENTS.length
   const progressPercent = (totalUnlocked / totalAchievements) * 100
 
-  // Group by category for display
+  // [BUILD-FIX] Group by category for display. Partial<Record<...>> is
+  // the honest shape: after filtering not every category is necessarily
+  // present, and the render path below null-coalesces the per-category
+  // array so the UI never crashes on an empty entry.
   const groupedAchievements = filteredAchievements.reduce((acc, achievement) => {
     if (!acc[achievement.category]) {
       acc[achievement.category] = []
     }
-    acc[achievement.category].push(achievement)
+    acc[achievement.category]!.push(achievement)
     return acc
-  }, {} as Record<AchievementCategory, Achievement[]>)
+  }, {} as Partial<Record<AchievementCategory, Achievement[]>>)
 
   return (
     <PageContainer>
@@ -115,24 +140,31 @@ export default function AchievementsPage() {
 
       {/* Achievements by category */}
       {selectedCategory === 'all' ? (
-        Object.entries(groupedAchievements).map(([category, achievements]) => (
-          <Section key={category} className="mb-8">
-            <SectionHeader 
-              title={CATEGORY_LABELS[category as AchievementCategory]}
-              icon={CATEGORY_ICONS[category as AchievementCategory]}
-            />
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {achievements.map(achievement => (
-                <AchievementCard 
-                  key={achievement.id}
-                  achievement={achievement}
-                  unlocked={unlockedIds.has(achievement.id)}
-                  unlockedAt={unlocked.find(ua => ua.achievementId === achievement.id)?.unlockedAt}
-                />
-              ))}
-            </div>
-          </Section>
-        ))
+        Object.entries(groupedAchievements).map(([category, achievements]) => {
+          // [BUILD-FIX] Partial<Record> means `achievements` is
+          // `Achievement[] | undefined`. Null-coalesce so a missing
+          // category entry never crashes the render.
+          const typedCategory = category as AchievementCategory
+          const categoryAchievements = achievements ?? []
+          return (
+            <Section key={category} className="mb-8">
+              <SectionHeader
+                title={CATEGORY_LABELS[typedCategory]}
+                icon={CATEGORY_ICONS[typedCategory]}
+              />
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {categoryAchievements.map(achievement => (
+                  <AchievementCard
+                    key={achievement.id}
+                    achievement={achievement}
+                    unlocked={unlockedIds.has(achievement.id)}
+                    unlockedAt={unlocked.find(ua => ua.achievementId === achievement.id)?.unlockedAt}
+                  />
+                ))}
+              </div>
+            </Section>
+          )
+        })
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {filteredAchievements.map(achievement => (

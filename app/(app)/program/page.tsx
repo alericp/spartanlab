@@ -447,6 +447,34 @@ function isBuilderGenerationError(err: unknown): err is { code: string; stage: s
 }
 
 // ==========================================================================
+// [STEP-5A-DELTA] Drift-detail array-count extractor (build-blocker fix).
+//
+// `evaluateUnifiedProgramStaleness(...)` returns `result.driftDetails` whose
+// `profileValue` field is intentionally typed as a loose / object-shaped
+// value (it carries whatever the canonical profile said for that field —
+// arrays for equipment/selectedSkills, strings for goals, primitives for
+// ints, etc.). The Program Page diagnostic console.log at the
+// `stale-banner-exact-cause-verdict` site previously read
+// `.profileValue?.length` directly, which TypeScript correctly rejects
+// with "Property 'length' does not exist on type '{}'" because `{}` /
+// `unknown` does not own `.length`.
+//
+// The right fix is a tiny narrowing helper at the diagnostic boundary,
+// not loosening the evaluator contract or casting `as any`. For the two
+// call sites in scope (`equipment` and `selectedSkills`) the canonical
+// profile shape is `string[]`, so we count array items only and return
+// `'n/a'` for any non-array value (undefined drift, missing field,
+// non-array profile snapshot legacy shape, etc.). Strings are *not*
+// treated as length-1 here because that would silently mask a contract
+// drift where a string-valued canonical field starts being compared
+// against an array-valued program field — exactly the class of leak the
+// Step 4 corridor was hardened to prevent.
+// ==========================================================================
+function getArrayDriftProfileValueCount(value: unknown): number | 'n/a' {
+  return Array.isArray(value) ? value.length : 'n/a'
+}
+
+// ==========================================================================
 // [DEGRADED-BANNER-CONTRACT] Safe Banner Diagnostic Display Helper
 // Provides stable, consistent formatting for degraded/failure banner display.
 // Guarantees no crashes from missing optional fields, no stale data display.
@@ -4330,8 +4358,16 @@ export default function ProgramPage() {
       activeDisplayedProgramCreatedAt: activeProgram.createdAt,
       lastBuildResultStatus: 'displayed_program_from_storage',
       canonicalProfileVersionIndicators: {
-        equipmentCount: result.driftDetails?.find(d => d.field === 'equipment')?.profileValue?.length || 'n/a',
-        selectedSkillsCount: result.driftDetails?.find(d => d.field === 'selectedSkills')?.profileValue?.length || 'n/a',
+        // [STEP-5A-DELTA] Route loose drift-detail `profileValue` through the
+        // `unknown`-narrowing helper. Direct `.length` access fails because
+        // the evaluator types `profileValue` as `{}` / object-shaped (arrays
+        // for equipment/selectedSkills, strings/primitives for other fields).
+        equipmentCount: getArrayDriftProfileValueCount(
+          result.driftDetails?.find(d => d.field === 'equipment')?.profileValue,
+        ),
+        selectedSkillsCount: getArrayDriftProfileValueCount(
+          result.driftDetails?.find(d => d.field === 'selectedSkills')?.profileValue,
+        ),
       },
       activeProgramSnapshotSource: authoritativeEquipmentQuality,
       changedFields: result.changedFields,

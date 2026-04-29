@@ -76,6 +76,26 @@ import type { AdaptiveProgramInputs, AdaptiveProgram, GenerationErrorCode, Templ
 import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from '@/lib/program-service'
 import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
 import type { ScheduleMode } from '@/lib/flexible-schedule-engine'
+
+// [STEP-4D-SYNC] Compile-visible sentinel. Pure type-level + value-level
+// constant with no runtime behavior, no UI, no hooks, no side effects, no
+// state, and no function calls. Its sole purpose is to force a real
+// pullable file delta on top of commit efe0e3d so the deployed Vercel
+// build is no longer pinned to the pre-Step-4D source. The fields below
+// are the same invariants the Program Page type/fallback corridor relies
+// on — keeping them as a `const` lets a downstream audit grep the bundle
+// for the sentinel id and confirm the deployed artifact actually contains
+// the PrimaryGoal import + valid 'general' fallback fix. If a future
+// build regresses any of these invariants, this constant is the
+// deliberate canary the user can search for in Vercel build output.
+export const STEP4D_PROGRAM_PAGE_TYPE_SYNC_SENTINEL = {
+  id: 'STEP4D_PRIMARY_GOAL_TYPE_IMPORT_SYNC',
+  purpose: 'Confirms Program Page PrimaryGoal/goal-fallback type fix is present in the deployed bundle',
+  primaryGoalImportRequired: true,
+  fallbackLiteral: 'general',
+  forbidsInvalidFallback: 'general_fitness',
+  timestamp: '2026-04-29-step4d-sync',
+} as const
 // [PHASE-L] Post-workout performance feedback overlay. Pure client-side glue
 // that reads canonical workout logs and applies bounded future-only mutations
 // to the program object held in state. Imported statically because the

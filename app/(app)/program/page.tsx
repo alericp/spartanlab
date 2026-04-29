@@ -65,7 +65,17 @@ import Link from 'next/link'
 
 // TASK 5: Lightweight type imports only - actual modules loaded dynamically
 import type { AdaptiveProgramInputs, AdaptiveProgram, GenerationErrorCode, TemplateSimilarityResult } from '@/lib/adaptive-program-builder'
-import type { TrainingDays } from '@/lib/program-service'
+// [STEP-4D] AdaptiveProgramInputs is composed of PrimaryGoal/ExperienceLevel/
+// TrainingDays/SessionLength from program-service plus EquipmentType from
+// adaptive-exercise-pool plus ScheduleMode from flexible-schedule-engine —
+// the same set lib/adaptive-program-builder.ts itself imports. The
+// `buildModifyEntryInputsFromVisibleProgram` helper near line ~3588 builds
+// an `AdaptiveProgramInputs` literal with `as PrimaryGoal`, `as ExperienceLevel`,
+// `as SessionLength`, `as ScheduleMode`, and `as EquipmentType[]` casts.
+// All six type names must therefore be visible in this file.
+import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from '@/lib/program-service'
+import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
+import type { ScheduleMode } from '@/lib/flexible-schedule-engine'
 // [PHASE-L] Post-workout performance feedback overlay. Pure client-side glue
 // that reads canonical workout logs and applies bounded future-only mutations
 // to the program object held in state. Imported statically because the
@@ -3609,12 +3619,18 @@ export default function ProgramPage() {
     // Build inputs with strict priority: snapshot > program > inputs > canonical > default
     const result: AdaptiveProgramInputs = {
       // Primary Goal: snapshot > program > inputs > canonical
+      // [STEP-4D] The `'general_fitness'` literal was invalid — program-service
+      // PrimaryGoal does not include it. The valid sentinel for an unknown
+      // goal in this union is `'general'`. Replacing the literal (rather than
+      // widening the type or adding `as any`) keeps the string union honest
+      // and prevents the fallback from silently producing an out-of-union
+      // value that downstream goal-aware logic would not recognize.
       primaryGoal: (
         snapshot?.primaryGoal ||
         visibleProgram.primaryGoal ||
         currentInputs?.primaryGoal ||
         canonicalFallback.primaryGoal ||
-        'general_fitness'
+        'general'
       ) as PrimaryGoal,
       
       // Secondary Goal: snapshot > program > inputs > canonical

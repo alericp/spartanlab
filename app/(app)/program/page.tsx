@@ -15488,24 +15488,24 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     })
     
     // [PHASE 21B] TASK 1 - Modify root click entry with inputs snapshot
-    // [PRE-AB6 BUILD GREEN GATE] Snapshot `inputs` into a local const so
-    //   TS narrowing flows through the object-literal property reads.
-    //   Inline `inputs ? { inputs.x } : null` does not propagate the
-    //   non-null narrowing into the property expressions because
-    //   `inputs` is a closed-over state value TS treats as possibly
-    //   re-read between the guard and the field accesses. Diagnostic
-    //   only — no behavior change.
+    // [PRE-AB6 BUILD GREEN GATE] Use optional chaining (no ternary
+    //   narrowing) — the previous `snapshot ? { snapshot.x } : null`
+    //   pattern still tripped TS because `inputs` is a closed-over
+    //   state value the compiler does not narrow across the literal's
+    //   property expressions. Each field defaults to null when the
+    //   snapshot is unset; `selectedSkillsCount` defaults to 0 to
+    //   preserve numeric-only diagnostic semantics. Behavior unchanged.
     const currentInputsSnapshot = inputs
     console.log('[phase21b-modify-root-click-entry]', {
       programExists: !!program,
       programId: program?.id ?? null,
-      currentInputs: currentInputsSnapshot ? {
-        primaryGoal: currentInputsSnapshot.primaryGoal,
-        scheduleMode: currentInputsSnapshot.scheduleMode,
-        trainingDaysPerWeek: currentInputsSnapshot.trainingDaysPerWeek,
-        selectedSkillsCount: currentInputsSnapshot.selectedSkills?.length ?? 0,
-        experienceLevel: currentInputsSnapshot.experienceLevel,
-      } : null,
+      currentInputs: {
+        primaryGoal: currentInputsSnapshot?.primaryGoal ?? null,
+        scheduleMode: currentInputsSnapshot?.scheduleMode ?? null,
+        trainingDaysPerWeek: currentInputsSnapshot?.trainingDaysPerWeek ?? null,
+        selectedSkillsCount: currentInputsSnapshot?.selectedSkills?.length ?? 0,
+        experienceLevel: currentInputsSnapshot?.experienceLevel ?? null,
+      },
       currentProgramSessionCount: program?.sessions?.length ?? 0,
     })
     

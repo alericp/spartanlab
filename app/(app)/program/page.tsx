@@ -4421,24 +4421,38 @@ export default function ProgramPage() {
     // The program does NOT have a top-level 'equipment' field - only equipmentProfile.available
     // Using undefined/empty would cause false positives
     // =========================================================================
-    const profileSnapshot = (activeProgram as unknown as { profileSnapshot?: { equipmentAvailable?: string[] } }).profileSnapshot
+    // [BRANCH-RECONCILIATION] Same-class sweep — this is the EXACT same
+    //   architectural smell as the cited Vercel blocker at L12192:
+    //   `profileSnapshot` is narrowed to `{ equipmentAvailable?: string[] }`,
+    //   then the same value is read for `jointCautions` (L4462), `scheduleMode`
+    //   (L4487), and `trainingDaysPerWeek` (L4488) via per-read cast bandages.
+    //   Currently dormant (passes TypeScript) ONLY because every non-equipment
+    //   read uses a cast bandage. One cast removal → reproduces the same
+    //   TS2339 class. Fixed in the same sweep to break the regression chain.
+    //   `buildStalenessEvaluatorProgram` (used at L4479 below) accepts
+    //   `profileSnapshot?: unknown` so passing the raw value is type-safe.
+    const profileSnapshotRaw: unknown = (activeProgram as unknown as { profileSnapshot?: unknown }).profileSnapshot
+    const profileSnapshotEquipment = readProgramPageStringArray(profileSnapshotRaw, 'equipmentAvailable')
+    const profileSnapshotJointCautions = readProgramPageStringArray(profileSnapshotRaw, 'jointCautions')
+    const profileSnapshotScheduleMode = readProgramPageString(profileSnapshotRaw, 'scheduleMode')
+    const profileSnapshotTrainingDays = readProgramPageNumber(profileSnapshotRaw, 'trainingDaysPerWeek')
     
     // Resolve authoritative equipment from stored build snapshot
     // Priority: 1) profileSnapshot.equipmentAvailable, 2) equipmentProfile.available, 3) fallback []
-    const authoritativeEquipment = profileSnapshot?.equipmentAvailable 
-      || activeProgram.equipmentProfile?.available 
-      || []
+    const authoritativeEquipment = profileSnapshotEquipment.length > 0
+      ? profileSnapshotEquipment
+      : (activeProgram.equipmentProfile?.available || [])
     
     console.log('[stale-banner-source-contract-audit]', {
       activeProgramId: activeProgram.id,
       activeProgramCreatedAt: activeProgram.createdAt,
       // Source analysis
-      hasProfileSnapshot: !!profileSnapshot,
-      profileSnapshotEquipment: profileSnapshot?.equipmentAvailable,
+      hasProfileSnapshot: !!profileSnapshotRaw,
+      profileSnapshotEquipment: profileSnapshotEquipment,
       hasEquipmentProfile: !!activeProgram.equipmentProfile,
       equipmentProfileAvailable: activeProgram.equipmentProfile?.available,
       // Final authoritative source
-      authoritativeEquipmentSource: profileSnapshot?.equipmentAvailable 
+      authoritativeEquipmentSource: profileSnapshotEquipment.length > 0
         ? 'profileSnapshot.equipmentAvailable' 
         : activeProgram.equipmentProfile?.available 
           ? 'equipmentProfile.available'
@@ -4459,10 +4473,12 @@ export default function ProgramPage() {
       // CRITICAL: Use authoritative equipment, NOT program.equipment (which doesn't exist)
       equipment: authoritativeEquipment,
       // CRITICAL: Use profileSnapshot jointCautions - AdaptiveProgram doesn't have top-level jointCautions
-      jointCautions: (profileSnapshot as { jointCautions?: string[] })?.jointCautions || [],
+      // [BRANCH-RECONCILIATION] Helper-derived `string[]` (always defined).
+      jointCautions: profileSnapshotJointCautions,
       experienceLevel: activeProgram.experienceLevel,
       selectedSkills: (activeProgram as unknown as { selectedSkills?: string[] }).selectedSkills,
-      profileSnapshot: profileSnapshot,
+      // [BRANCH-RECONCILIATION] Adapter accepts `profileSnapshot?: unknown`.
+      profileSnapshot: profileSnapshotRaw,
     }
 
     // [STEP-4I — 2 OF 3] Raw values from `activeProgram` carry UI/builder
@@ -4484,8 +4500,14 @@ export default function ProgramPage() {
     // Detects when program snapshot scheduleMode differs from canonical truth
     // =========================================================================
     const canonical = getCanonicalProfile()
-    const snapshotScheduleMode = (profileSnapshot as { scheduleMode?: string })?.scheduleMode
-    const snapshotTrainingDays = (profileSnapshot as { trainingDaysPerWeek?: number })?.trainingDaysPerWeek
+    // [BRANCH-RECONCILIATION] Replaced cast bandages with helper-derived
+    //   narrowed reads. `string | null` and `number | null` returns preserve
+    //   downstream comparison semantics: `=== 'static'` / `=== 'flexible'`
+    //   on a null-typed value is type-safe (always false), and the numeric
+    //   inequality (`!==` against `canonical.trainingDaysPerWeek`) treats
+    //   null exactly as the prior `undefined` did.
+    const snapshotScheduleMode = profileSnapshotScheduleMode
+    const snapshotTrainingDays = profileSnapshotTrainingDays
     const canonicalScheduleMode = canonical.scheduleMode
     const canonicalTrainingDays = canonical.trainingDaysPerWeek
     
@@ -4513,7 +4535,8 @@ export default function ProgramPage() {
       stalenessProgramId: activeProgram.id, // Same object - no divergence
       sameProgramId: true,
       sameReferenceIfAvailable: 'same_activeProgram_object',
-      profileSnapshotPresent: !!profileSnapshot,
+      // [BRANCH-RECONCILIATION] Boolean coercion of the raw unknown — same truth value.
+      profileSnapshotPresent: !!profileSnapshotRaw,
       equipmentSourceUsed: authoritativeEquipment.length > 0 ? 'authoritative_snapshot' : 'fallback_empty',
       changedFields: result.changedFields,
       finalVerdict: 'staleness_bound_to_same_authoritative_program',
@@ -4650,7 +4673,7 @@ export default function ProgramPage() {
     // Determine classification based on staleness and equipment source quality
     const authoritativeEquipmentQuality = authoritativeEquipment.length > 0 
       ? 'complete' 
-      : profileSnapshot?.equipmentAvailable 
+      : profileSnapshotEquipment.length > 0 
         ? 'from_snapshot' 
         : 'unknown_quality'
     
@@ -12189,10 +12212,30 @@ export default function ProgramPage() {
         // After successful rebuild, staleness MUST clear if no further changes made
         // CRITICAL: Use authoritative equipment source (profileSnapshot or equipmentProfile)
         // =========================================================================
-        const postBuildProfileSnapshot = (newProgram as unknown as { profileSnapshot?: { equipmentAvailable?: string[] } }).profileSnapshot
-        const postBuildAuthoritativeEquipment = postBuildProfileSnapshot?.equipmentAvailable 
-          || newProgram.equipmentProfile?.available 
-          || []
+        // [BRANCH-RECONCILIATION] Cited Vercel blocker: TS2339 at L12291:50 —
+        //   `Property 'selectedSkills' does not exist on type
+        //   '{ equipmentAvailable?: string[] | undefined; }'`. Root cause: this
+        //   7-callsite corridor narrowed `profileSnapshot` to
+        //   `{ equipmentAvailable?: string[] }` at the cast site, then read
+        //   `selectedSkills` (L12291), `jointCautions` (L12216), `scheduleMode`
+        //   (L12302). L12291 was the one read that lacked a per-field cast
+        //   bandage, producing the TS error. Fix: widen the cast to `unknown`
+        //   and derive every field through the existing boundary helpers
+        //   (`readProgramPageStringArray` L210, `readProgramPageString` L205).
+        //   Downstream `buildStalenessEvaluatorProgram` adapter accepts
+        //   `profileSnapshot?: unknown` so the raw value passes through type-
+        //   safely. Runtime semantics preserved exactly: non-empty stored
+        //   equipment wins → equipmentProfile fallback → empty array;
+        //   selectedSkills/jointCautions become always-defined arrays
+        //   (empty on miss); scheduleMode becomes `string | null`.
+        const postBuildProfileSnapshotRaw: unknown = (newProgram as unknown as { profileSnapshot?: unknown }).profileSnapshot
+        const postBuildSnapshotEquipment = readProgramPageStringArray(postBuildProfileSnapshotRaw, 'equipmentAvailable')
+        const postBuildSnapshotSelectedSkills = readProgramPageStringArray(postBuildProfileSnapshotRaw, 'selectedSkills')
+        const postBuildSnapshotJointCautions = readProgramPageStringArray(postBuildProfileSnapshotRaw, 'jointCautions')
+        const postBuildSnapshotScheduleMode = readProgramPageString(postBuildProfileSnapshotRaw, 'scheduleMode')
+        const postBuildAuthoritativeEquipment = postBuildSnapshotEquipment.length > 0
+          ? postBuildSnapshotEquipment
+          : (newProgram.equipmentProfile?.available || [])
         
         // [STEP-4H] Same canonical-evaluator boundary as the unifiedStaleness
         // call site (~line 3963). `newProgram.sessionLength` is `SessionLength`
@@ -12213,10 +12256,14 @@ export default function ProgramPage() {
             // CRITICAL FIX: Use authoritative equipment from stored build snapshot
             equipment: postBuildAuthoritativeEquipment,
             // CRITICAL: Use profileSnapshot jointCautions - AdaptiveProgram doesn't have top-level jointCautions
-            jointCautions: (postBuildProfileSnapshot as { jointCautions?: string[] })?.jointCautions,
+            // [BRANCH-RECONCILIATION] Helper-derived `string[]` (always defined).
+            //   Adapter `normalizeStringArray` handles `string[]` and
+            //   `string[] | undefined` identically.
+            jointCautions: postBuildSnapshotJointCautions,
             experienceLevel: newProgram.experienceLevel,
             selectedSkills: (newProgram as unknown as { selectedSkills?: string[] }).selectedSkills,
-            profileSnapshot: postBuildProfileSnapshot,
+            // [BRANCH-RECONCILIATION] Adapter accepts `profileSnapshot?: unknown`.
+            profileSnapshot: postBuildProfileSnapshotRaw,
           }),
         )
         
@@ -12228,7 +12275,8 @@ console.log('[post-rebuild-stale-clearance-audit]', {
   rebuiltProgramCreatedAt: newProgram.createdAt,
   // Authoritative snapshot after build
   authoritativeSnapshotAfterBuild: {
-    equipmentSource: postBuildProfileSnapshot?.equipmentAvailable
+    // [BRANCH-RECONCILIATION] Helper-derived equipment-presence check.
+    equipmentSource: postBuildSnapshotEquipment.length > 0
       ? 'profileSnapshot.equipmentAvailable'
       : newProgram.equipmentProfile?.available
         ? 'equipmentProfile.available'
@@ -12283,12 +12331,17 @@ console.log('[phase5-save-chain-order-audit]', {
   step3_recoveryDerived: !!canonicalProfileAfterBuild.recoveryQuality,
   step4_entryBuiltFromCanonical: true, // buildCanonicalGenerationEntry uses getCanonicalProfile
   step5_programGenerated: true, // We reached this point
-  step6_snapshotSaved: !!postBuildProfileSnapshot,
+  // [BRANCH-RECONCILIATION] Boolean coercion of the raw unknown — same truth value.
+  step6_snapshotSaved: !!postBuildProfileSnapshotRaw,
   step7_displayReady: true,
 })
 
 // [PHASE 5 TASK 4] PROGRAM SNAPSHOT TRUTH AUDIT
-const snapshotSkills = postBuildProfileSnapshot?.selectedSkills || []
+// [BRANCH-RECONCILIATION] CITED VERCEL BLOCKER FIX (line 12291:50).
+//   Was: `postBuildProfileSnapshot?.selectedSkills` against a value narrowed
+//   to `{ equipmentAvailable?: string[] }` — TS2339. Now reads the
+//   helper-derived `string[]` directly (always defined, possibly empty).
+const snapshotSkills = postBuildSnapshotSelectedSkills
 const canonicalSkillsForSnapshot = canonicalProfileAfterBuild.selectedSkills || []
 const programSkillsForDisplay = (newProgram as unknown as { selectedSkills?: string[] }).selectedSkills || []
 console.log('[phase5-program-snapshot-truth-audit]', {
@@ -12299,7 +12352,9 @@ console.log('[phase5-program-snapshot-truth-audit]', {
   },
   profileSnapshotStoredOnProgram: {
     selectedSkills: snapshotSkills.slice(0, 3),
-    scheduleMode: (postBuildProfileSnapshot as { scheduleMode?: string })?.scheduleMode,
+    // [BRANCH-RECONCILIATION] Helper-derived `string | null` collapses cleanly
+    //   in the audit log to `null` when the snapshot lacks the field.
+    scheduleMode: postBuildSnapshotScheduleMode,
   },
   displayedActiveProgramSummary: {
     selectedSkills: programSkillsForDisplay.slice(0, 3),

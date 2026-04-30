@@ -73,7 +73,7 @@ import type { AdaptiveProgramInputs, AdaptiveProgram, GenerationErrorCode, Templ
 // an `AdaptiveProgramInputs` literal with `as PrimaryGoal`, `as ExperienceLevel`,
 // `as SessionLength`, `as ScheduleMode`, and `as EquipmentType[]` casts.
 // All six type names must therefore be visible in this file.
-import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from '@/lib/program-service'
+import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength, GeneratedProgram } from '@/lib/program-service'
 import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
 import type { ScheduleMode } from '@/lib/flexible-schedule-engine'
 
@@ -213,6 +213,33 @@ function readProgramPageStringArray(source: unknown, key: string): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
     : []
+}
+
+// [STEP-5A-OMEGA-13] Typed audit-only accessor for union-shaped program objects.
+//
+// `savedState.activeProgram` (from `getProgramState()` in `lib/program-state.ts`)
+// is `AdaptiveProgram | GeneratedProgram | null`. The two halves carry the
+// per-week training day list under DIFFERENT field names:
+//   - `AdaptiveProgram.sessions: AdaptiveSession[]`
+//   - `GeneratedProgram.generatedDays: DayTemplate[]`     (NO `.sessions`)
+//
+// Direct `.sessions?.length` reads against the union therefore fail TS2339.
+// This audit-purpose-only helper performs union-narrowing safely via runtime
+// `'sessions' in program` / `'generatedDays' in program` checks plus
+// `Array.isArray` guards, returning the natural day count for whichever
+// shape was persisted. NO `as any`, NO `@ts-ignore`, NO widening of either
+// program type, and NO invented fields.
+function getProgramSessionCountForAudit(
+  program: AdaptiveProgram | GeneratedProgram | null | undefined,
+): number {
+  if (!program) return 0
+  if ('sessions' in program && Array.isArray(program.sessions)) {
+    return program.sessions.length
+  }
+  if ('generatedDays' in program && Array.isArray(program.generatedDays)) {
+    return program.generatedDays.length
+  }
+  return 0
 }
 // [STEP-5A-TAU] Promoted from `_readProgramPageNumber` (pre-declared per
 //   STEP-5A-OMICRON) to public `readProgramPageNumber`. Now actively used
@@ -11596,7 +11623,12 @@ export default function ProgramPage() {
         }
         
         // Step 4: Verify session count matches
-        const storedSessionCount = savedState?.activeProgram?.sessions?.length || 0
+        // [STEP-5A-OMEGA-13] `savedState.activeProgram` is `AdaptiveProgram |
+        //   GeneratedProgram | null` — the latter has no `.sessions` field.
+        //   Use the typed audit helper to extract the natural day count from
+        //   whichever shape was persisted. `newProgram` is cast to
+        //   `AdaptiveProgram` upstream, so its `.sessions` read remains safe.
+        const storedSessionCount = getProgramSessionCountForAudit(savedState?.activeProgram)
         const newSessionCount = newProgram.sessions?.length || 0
         
         // [PHASE 16R] Session count verification audit

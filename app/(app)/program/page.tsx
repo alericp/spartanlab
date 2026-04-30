@@ -13480,6 +13480,56 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       })
       
       // ==========================================================================
+      // [PRE-AB6 BUILD GREEN GATE] Hoisted from below to fix TDZ blocker.
+      //   `adjCanonicalProfileNow` and `strongestMaterialIdentityTruth` were
+      //   originally declared after the `adjustmentBuilderInput` object that
+      //   reads them, producing
+      //     "Block-scoped variable 'strongestMaterialIdentityTruth' used
+      //      before its declaration."
+      //   All inputs needed by both declarations (`getCanonicalProfile()`,
+      //   `updatedInputs`, `inputs`, `inputsMeta`) are already in scope
+      //   here, so the declarations are safely hoisted with their EXACT
+      //   original derivation logic preserved. This keeps a single
+      //   authoritative source for the 4 material-identity fields fed to
+      //   `adjustmentBuilderInput` (below) AND `adjustmentCanonicalOverride`
+      //   (further below). The originals at the old sites are removed in
+      //   the same change so there is exactly one declaration of each in
+      //   this corridor.
+      // ==========================================================================
+      // [PHASE 17V] TASK 4 - Build explicit canonical override for handleAdjustmentRebuild
+      // This prevents builder from re-reading weaker stale canonical profile
+      const adjCanonicalProfileNow = getCanonicalProfile()
+
+      // [PHASE 17X] TASK 2 - Define stronger material-identity source
+      // Priority: updatedInputs > adjCanonicalProfileNow > inputs (last fallback)
+      // This prevents stale Program-page `inputs` from overriding stronger truth
+      const strongestMaterialIdentityTruth = {
+        primaryGoal:
+          updatedInputs?.primaryGoal ||
+          adjCanonicalProfileNow?.primaryGoal ||
+          inputs?.primaryGoal ||
+          null,
+        secondaryGoal:
+          updatedInputs?.secondaryGoal ??
+          adjCanonicalProfileNow?.secondaryGoal ??
+          inputs?.secondaryGoal ??
+          null,
+        selectedSkills:
+          (updatedInputs?.selectedSkills?.length ?? 0) > 0
+            ? updatedInputs!.selectedSkills
+            : (adjCanonicalProfileNow?.selectedSkills?.length ?? 0) > 0
+            ? adjCanonicalProfileNow.selectedSkills
+            : (inputs?.selectedSkills?.length ?? 0) > 0
+            ? inputs.selectedSkills
+            : [],
+        trainingPathType:
+          updatedInputs?.trainingPathType ||
+          adjCanonicalProfileNow?.trainingPathType ||
+          inputsMeta.trainingPathType ||
+          null,
+      }
+
+      // ==========================================================================
       // [PHASE 17T] TASK 4 - Force explicit regenerationMode for adjustment rebuild path
       // Without this, builder falls back to stateFlags.recommendedMode
       // ==========================================================================
@@ -13601,11 +13651,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       })
       
       // ==========================================================================
-      // [PHASE 17V] TASK 4 - Build explicit canonical override for handleAdjustmentRebuild
-      // This prevents builder from re-reading weaker stale canonical profile
-      // ==========================================================================
-      const adjCanonicalProfileNow = getCanonicalProfile()
-      
+      // [PRE-AB6 BUILD GREEN GATE] The original `const adjCanonicalProfileNow = getCanonicalProfile()`
+      //   declaration that lived here was hoisted above `adjustmentBuilderInput`
+      //   to fix the TDZ read-before-declare blocker. The variable is still
+      //   in scope at this point, so the audit below continues to read the
+      //   same authoritative value. Do NOT redeclare here.
       // ==========================================================================
       // [PHASE 17X] TASK 1 - Material identity source audit
       // ==========================================================================
@@ -13633,36 +13683,16 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       })
       
       // ==========================================================================
-      // [PHASE 17X] TASK 2 - Define stronger material-identity source
-      // Priority: updatedInputs > adjCanonicalProfileNow > inputs (last fallback)
-      // This prevents stale Program-page `inputs` from overriding stronger truth
+      // [PRE-AB6 BUILD GREEN GATE] The original `const strongestMaterialIdentityTruth`
+      //   declaration that lived here (built from `updatedInputs` >
+      //   `adjCanonicalProfileNow` > `inputs` priority) was hoisted above
+      //   `adjustmentBuilderInput` to fix the TDZ read-before-declare
+      //   blocker. The variable is still in scope at this point, so the
+      //   downstream usages — `adjustmentCanonicalOverride` and the
+      //   parity-verdict console.log — continue to read the same single
+      //   authoritative object. Do NOT redeclare here.
       // ==========================================================================
-      const strongestMaterialIdentityTruth = {
-        primaryGoal:
-          updatedInputs?.primaryGoal ||
-          adjCanonicalProfileNow?.primaryGoal ||
-          inputs?.primaryGoal ||
-          null,
-        secondaryGoal:
-          updatedInputs?.secondaryGoal ??
-          adjCanonicalProfileNow?.secondaryGoal ??
-          inputs?.secondaryGoal ??
-          null,
-        selectedSkills:
-          (updatedInputs?.selectedSkills?.length ?? 0) > 0
-            ? updatedInputs!.selectedSkills
-            : (adjCanonicalProfileNow?.selectedSkills?.length ?? 0) > 0
-            ? adjCanonicalProfileNow.selectedSkills
-            : (inputs?.selectedSkills?.length ?? 0) > 0
-            ? inputs.selectedSkills
-            : [],
-        trainingPathType:
-          updatedInputs?.trainingPathType ||
-          adjCanonicalProfileNow?.trainingPathType ||
-          inputsMeta.trainingPathType ||
-          null,
-      }
-      
+
       // [STEP-4B] One authoritative schedule-truth resolution for the
       // adjustment dispatch corridor. Preserves the existing request-type
       // priority contract (training_days request → updatedInputs wins;

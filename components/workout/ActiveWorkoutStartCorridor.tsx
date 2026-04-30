@@ -217,6 +217,17 @@ import {
   recordScannerEvent,
   type ScannerInput,
 } from './LiveWorkoutStateScanner'
+// [PHASE AB6] Canonical grouped runtime hints. Translates AB5 grouped
+// execution truth (member index + group type + rounds + rest seconds)
+// into compact strings the active card renders. Pure helpers — no state,
+// no I/O. Replaces the corridor's hard-coded `String.fromCharCode(...)`
+// member label so circuit/cluster/density don't render with superset's
+// A/B/C idiom on the active screen.
+import {
+  buildGroupedMemberBadgeText,
+  buildGroupedRoundBadgeText,
+  buildGroupedFlowHintText,
+} from '@/lib/workout/live-grouped-runtime-hints'
 
 // =============================================================================
 // TYPES - Plain props only, no complex dependencies
@@ -403,6 +414,13 @@ export interface ActiveWorkoutCorridorProps {
   targetRounds?: number
   blockMemberExercises?: Array<{ id: string; name: string }>
   blockRoundRestSeconds?: number
+  // [PHASE AB6] Intra-block rest seconds (between members within a round).
+  // Forwarded from the live executionPlan so the active card's grouped flow
+  // hint can match the program card's restProtocol idiom (0-15s for
+  // supersets, 10s between circuit stations, 15s mini-rests for clusters,
+  // etc.). Optional; the helper falls back to "minimal rest" copy when
+  // absent or zero.
+  blockIntraRestSeconds?: number
   onBlockRoundRestComplete?: () => void
   // [GROUPED-IDENTITY-FIX] Current exercise position within grouped block
   groupedMemberIndex?: number | null  // 0 = A, 1 = B, etc. null = not in grouped block
@@ -943,6 +961,11 @@ export function ActiveWorkoutStartCorridor({
   targetRounds = 3,
   blockMemberExercises = [],
   blockRoundRestSeconds = 90,
+  // [PHASE AB6] Intra-block rest (between grouped members). Default 0
+  // because superset's authoritative restProtocol is "0-15s between, 90-120s
+  // after pair" — the helper formats 0 as a "minimal rest" hint, not a
+  // misleading "0s" chip on an active screen.
+  blockIntraRestSeconds = 0,
   onBlockRoundRestComplete,
   groupedMemberIndex = null,
   // [LIVE-WORKOUT-ACTION-PLANNER] Adaptive coaching expression
@@ -2060,13 +2083,43 @@ export function ActiveWorkoutStartCorridor({
                     <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
                       {exerciseCategory}
                     </Badge>
-                    {/* [GROUPED-IDENTITY-FIX] Show grouped member identity when in grouped block */}
-                    {groupedMemberIndex !== null && blockGroupType && (
-                      <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px] uppercase px-1.5 py-0">
-                        {blockGroupType === 'superset' ? 'Superset' : blockGroupType === 'circuit' ? 'Circuit' : blockGroupType}{' '}
-                        {String.fromCharCode(65 + groupedMemberIndex)}
-                      </Badge>
-                    )}
+                    {/* [PHASE AB6 / GROUPED-IDENTITY-FIX] Show grouped member identity when in grouped block.
+                        Member label now uses the canonical AB6 helper so circuit/cluster
+                        render "Circuit 1" / "Cluster 1" instead of inheriting superset's
+                        A/B/C idiom. Identity matches the program card. Orphan guard:
+                        when blockMemberExercises is empty (block was filtered upstream
+                        because it failed the method-minimum), the badge is suppressed
+                        so the active screen never displays a fake grouped context. */}
+                    {groupedMemberIndex !== null && blockGroupType && blockMemberExercises.length > 0 && (() => {
+                      const badgeText = buildGroupedMemberBadgeText({
+                        groupType: blockGroupType,
+                        memberIndex: groupedMemberIndex,
+                      })
+                      if (!badgeText) return null
+                      return (
+                        <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px] uppercase px-1.5 py-0">
+                          {badgeText}
+                        </Badge>
+                      )
+                    })()}
+                    {/* [PHASE AB6] Round badge inline next to the member badge. Only
+                        renders when the grouped block expresses round-paced execution
+                        (density_block returns null because it is time-capped). The
+                        helper clamps an over-shot currentRound so the round-rest
+                        transition cannot momentarily render "Round 4 of 3". */}
+                    {groupedMemberIndex !== null && blockGroupType && blockMemberExercises.length > 0 && (() => {
+                      const roundBadge = buildGroupedRoundBadgeText({
+                        groupType: blockGroupType,
+                        currentRound,
+                        targetRounds,
+                      })
+                      if (!roundBadge) return null
+                      return (
+                        <Badge className="bg-[#1A1F26] text-[#A4ACB8] border-[#2B313A] text-[10px] uppercase px-1.5 py-0">
+                          {roundBadge}
+                        </Badge>
+                      )
+                    })()}
                   </div>
                 </div>
 
@@ -2098,6 +2151,50 @@ export function ActiveWorkoutStartCorridor({
                 </>
               )}
             </div>
+
+            {/* [PHASE AB6] Grouped flow hint. Renders ONLY when the current
+                exercise is inside a grouped block AND the block bound at
+                least one real member upstream. The hint reads from the
+                canonical AB6 helper which mirrors the program card's
+                restProtocol microcopy:
+                  - Superset (mid-pair)  : "Then move to B with 0s rest"
+                  - Superset (last)      : "Round 2 of 3 next · 90s rest after round"
+                  - Circuit (mid-round)  : "Then move to 2 with 10s rest"
+                  - Cluster              : "Cluster set · 15s mini-rest between mini-sets"
+                  - Density              : "Rotate within the time cap · keep quality high"
+                Orphan guard: when blockMemberExercises is empty (block was
+                filtered as under-minimum upstream by the executionPlan
+                builder), no hint is rendered — the card falls back to a
+                normal straight-set active layout. The next-member name is
+                forwarded when the next member is unambiguously available
+                so the hint can read "Then move to B (Pull-Ups) with 0s
+                rest" instead of just "Then move to B". */}
+            {(() => {
+              if (groupedMemberIndex === null || !blockGroupType) return null
+              if (!Array.isArray(blockMemberExercises) || blockMemberExercises.length === 0) return null
+              const memberCount = blockMemberExercises.length
+              const nextIdx = (groupedMemberIndex + 1) % memberCount
+              const nextMemberName = blockMemberExercises[nextIdx]?.name ?? null
+              const hint = buildGroupedFlowHintText({
+                groupType: blockGroupType,
+                memberIndex: groupedMemberIndex,
+                memberCount,
+                currentRound,
+                targetRounds,
+                intraBlockRestSeconds: blockIntraRestSeconds,
+                postRoundRestSeconds: blockRoundRestSeconds,
+                nextMemberName,
+              })
+              if (!hint) return null
+              return (
+                <p
+                  className="mt-1 text-[11px] text-amber-400/80 leading-snug"
+                  aria-label="Grouped block flow"
+                >
+                  {hint}
+                </p>
+              )
+            })()}
 
             {/* Set progress dots */}
             <div className="flex items-center gap-3 mt-1">

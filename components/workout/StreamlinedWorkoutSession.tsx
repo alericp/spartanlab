@@ -7145,6 +7145,14 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
   name: ex.name,
   })) || []
   const blockRoundRestSeconds = machineState.blockRoundRestSeconds || 90
+  // [PHASE AB6] Intra-block rest seconds (between members within a round).
+  // Surfaced from the SAME authoritative executionPlan block the rest of
+  // the grouped surface reads from, so the active-card grouped flow hint
+  // matches the program card's restProtocol idiom (0s for superset, 10s
+  // between circuit stations, 15s for cluster mini-rests, etc.). Falls
+  // back to 0 (which the helper renders as "minimal rest") when the
+  // executionPlan did not carry an explicit value.
+  const blockIntraRestSeconds = currentBlock?.block.intraBlockRestSeconds ?? 0
   // [CANONICAL-RUNTIME-CONTRACT] Use the canonical live execution contract for grouped member identity
   // This ensures all surfaces read from the same authoritative source
   const groupedMemberIndex = liveExecutionContract?.groupedContext?.memberIndex ?? null
@@ -7575,6 +7583,9 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           targetRounds,
           blockMemberExercises,
           blockRoundRestSeconds,
+          // [PHASE AB6] Intra-block rest forwarded so the active card can
+          // render an honest grouped flow hint matching the program card.
+          blockIntraRestSeconds,
           groupedMemberIndex,
           // Coaching
           coachingExpression: buildCoachingExpression(machineState.currentActionPlan),

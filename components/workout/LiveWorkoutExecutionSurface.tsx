@@ -182,6 +182,11 @@ export interface LiveWorkoutSnapshot {
   targetRounds?: number
   blockMemberExercises?: Array<{ id: string; name: string }>
   blockRoundRestSeconds?: number
+  // [PHASE AB6] Intra-block rest (between members within a round). Surfaced
+  // so the active card can render an honest grouped flow hint that matches
+  // the program card's restProtocol microcopy. Optional; corridor falls
+  // back to "minimal rest" copy when absent.
+  blockIntraRestSeconds?: number
   groupedMemberIndex?: number | null
 
   // Coaching
@@ -664,6 +669,10 @@ export function LiveWorkoutExecutionSurface({
         targetRounds={snapshot.targetRounds}
         blockMemberExercises={snapshot.blockMemberExercises}
         blockRoundRestSeconds={snapshot.blockRoundRestSeconds}
+        // [PHASE AB6] Intra-block rest forwarded so the corridor's active
+        // card can render grouped flow hint microcopy that matches the
+        // program card's restProtocol idiom.
+        blockIntraRestSeconds={snapshot.blockIntraRestSeconds}
         onBlockRoundRestComplete={handlers.onBlockRoundRestComplete}
         groupedMemberIndex={snapshot.groupedMemberIndex}
         // Coaching

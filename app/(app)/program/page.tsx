@@ -14683,20 +14683,38 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       //   package / generator / live-workout / UI change.
       // ==========================================================================
       const phase28aCanonicalAfter = getCanonicalProfile() ?? null
+      // [PRE-AB6 BUILD GREEN GATE] The previous audit body referenced
+      //   `canonical?.scheduleMode` / `canonical?.trainingDaysPerWeek`,
+      //   but no `canonical` symbol exists in this lexical scope —
+      //   the other `canonical.*` accesses in this file (L4672,
+      //   L15672+, L17820+) live in DIFFERENT functions with their
+      //   own local `canonical` const declarations and are unrelated
+      //   to this `handleAdjustmentRebuild` corridor. The real
+      //   in-scope "canonical before rebuild" snapshot is
+      //   `adjCanonicalProfileNow`, declared at L13662 at the start of
+      //   this function via `getCanonicalProfile()` — exactly what the
+      //   original `// Canonical before (we need to get this from
+      //   snapshot)` comment was asking for. Routing the four
+      //   audit-only reads through `adjCanonicalProfileNow` preserves
+      //   diagnostic intent without inventing a fake `canonical`
+      //   variable, calling a non-existent module method, widening
+      //   `programModules`, recomputing schedule truth, or using
+      //   `as any` / `@ts-ignore`. All four reads use `?.` because
+      //   `getCanonicalProfile()` may return null on cold start.
       console.log('[phase28a-canonical-schedule-truth-audit]', {
         checkpoint: 'POST_GENERATION_CANONICAL_UPDATE',
         // New program schedule
         newProgramScheduleMode: newProgram.scheduleMode,
         newProgramTrainingDays: (newProgram as { trainingDaysPerWeek?: number }).trainingDaysPerWeek,
-        // Canonical before (we need to get this from snapshot)
-        canonicalScheduleModeBefore: canonical?.scheduleMode || 'unknown',
-        canonicalTrainingDaysBefore: canonical?.trainingDaysPerWeek || 'unknown',
+        // Canonical before (real in-scope snapshot taken at L13662)
+        canonicalScheduleModeBefore: adjCanonicalProfileNow?.scheduleMode || 'unknown',
+        canonicalTrainingDaysBefore: adjCanonicalProfileNow?.trainingDaysPerWeek || 'unknown',
         // Canonical after update
         canonicalScheduleModeAfter: phase28aCanonicalAfter?.scheduleMode || 'unknown',
         canonicalTrainingDaysAfter: phase28aCanonicalAfter?.trainingDaysPerWeek || 'unknown',
         // Did new program update canonical?
-        newProgramChangedCanonical: phase28aCanonicalAfter?.scheduleMode !== canonical?.scheduleMode ||
-          phase28aCanonicalAfter?.trainingDaysPerWeek !== canonical?.trainingDaysPerWeek,
+        newProgramChangedCanonical: phase28aCanonicalAfter?.scheduleMode !== adjCanonicalProfileNow?.scheduleMode ||
+          phase28aCanonicalAfter?.trainingDaysPerWeek !== adjCanonicalProfileNow?.trainingDaysPerWeek,
         // Verdict
         verdict: newProgram.scheduleMode === 'static' && (newProgram as { trainingDaysPerWeek?: number }).trainingDaysPerWeek === 6
           ? 'NEW_PROGRAM_UPDATED_CANONICAL_TO_STATIC_6'

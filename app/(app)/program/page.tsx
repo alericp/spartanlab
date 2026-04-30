@@ -15510,6 +15510,16 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     })
     
     if (program) {
+      // [PRE-AB6 BUILD GREEN GATE] Snapshot the proven non-null `program`
+      //   into a local const so every diagnostic read inside this branch
+      //   resolves against a non-nullable type. TS was losing the
+      //   `if (program)` narrowing across these multiple intervening
+      //   `console.log` object literals because `program` is a
+      //   closed-over React state value referenced as a free variable
+      //   inside nested literals; capturing it once into
+      //   `currentProgramSnapshot` keeps the narrowing stable for the
+      //   whole branch. Diagnostic-only — no behavior change.
+      const currentProgramSnapshot = program
       // ==========================================================================
       // [PHASE 24H] TASK A - Modify entry click audit
       // ==========================================================================
@@ -15531,7 +15541,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       
       console.log('[phase24d-modify-click-root-entry]', {
         programExists: true,
-        programId: program.id,
+        programId: currentProgramSnapshot.id,
         currentModifyFlowState: previousModifyFlowState,
         showBuilder,
         showAdjustmentModal,
@@ -15541,7 +15551,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       console.log('[phase24d-modify-state-transition-to-modal]', {
         previousModifyFlowState,
         nextModifyFlowState: 'modal',
-        programId: program.id,
+        programId: currentProgramSnapshot.id,
         showBuilderBefore: showBuilder,
         verdict: 'MODIFY_FLOW_STATE_SET_TO_MODAL',
       })
@@ -15555,7 +15565,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       // [PHASE 21A] Diagnostic 2: Branch verdict
       console.log('[phase21a-modify-branch-verdict]', {
         branch: 'open_adjustment_modal',
-        programId: program.id,
+        programId: currentProgramSnapshot.id,
       })
       
       // [PHASE 21B] TASK 1 - Modify root open branch with flow options
@@ -15566,7 +15576,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           'Make Small Adjustments - handleAdjustmentRebuild path',
           'Start New Program - handleConfirmNewProgram then handleGenerate path',
         ],
-        currentProgramSessionCount: program.sessions?.length ?? 0,
+        currentProgramSessionCount: currentProgramSnapshot.sessions?.length ?? 0,
       })
       
       // [PHASE 24C] TASK 6 - Page-side modify open request audit

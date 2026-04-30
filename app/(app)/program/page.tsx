@@ -9921,7 +9921,19 @@ export default function ProgramPage() {
         const existingProgram = program
         const staleOverrideAudit = {
           existingProgramHadSelectedSkills: existingProgram?.selectedSkills?.length || 0,
-          existingProgramEquipment: existingProgram?.equipment?.length || 0,
+          // [STEP-5A-OMEGA-7] `AdaptiveProgram` does not declare an
+          //   `equipment` field at the program level — equipment lives on
+          //   sessions/exercises and on the (optional) `profileSnapshot`.
+          //   Legacy persisted programs may carry an `equipmentAvailable`
+          //   structural field, so the audit reads it via the same
+          //   structural-cast pattern already used 5x in the
+          //   `[phase23b-modify-entry-source-candidate-audit]` block at
+          //   L15290-L15298 (`(program as { X?: T }).X`). This is NOT
+          //   `as any`, does NOT widen `AdaptiveProgram`, and does NOT add
+          //   a fake field — it is a structural read that returns
+          //   `undefined` (collapsing to 0) when the legacy field is
+          //   absent, preserving the audit's "could contaminate" intent.
+          existingProgramEquipment: (existingProgram as { equipmentAvailable?: string[] } | null)?.equipmentAvailable?.length || 0,
           existingProgramSessionLength: existingProgram?.sessionLength,
           existingProgramScheduleMode: existingProgram?.scheduleMode,
           canonicalSelectedSkills: canonicalProfileNow.selectedSkills?.length || 0,
@@ -15296,7 +15308,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         goalCategoriesCount: visibleProgramSnapshot?.goalCategories?.length ?? 0,
         selectedFlexibilityCount: visibleProgramSnapshot?.selectedFlexibility?.length ?? 0,
         experienceLevel: visibleProgramSnapshot?.experienceLevel || (program as { experienceLevel?: string }).experienceLevel,
-        equipmentCount: (visibleProgramSnapshot?.equipmentAvailable || program.equipment)?.length ?? 0,
+        // [STEP-5A-OMEGA-7] `program.equipment` is invalid — `AdaptiveProgram`
+        //   has no `equipment` field. Mirror the established 5x sibling pattern
+        //   in this same audit block (L15290/L15291/L15292/L15295/L15298) and
+        //   read the legacy structural `equipmentAvailable` field instead.
+        equipmentCount: (visibleProgramSnapshot?.equipmentAvailable || (program as { equipmentAvailable?: string[] }).equipmentAvailable)?.length ?? 0,
       } : null,
       currentInputsTruth: inputs ? {
         primaryGoal: inputs.primaryGoal,
@@ -15340,7 +15356,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       modify_action: 'start_new_program',
       expected_truth_contract: 'canonical_onboarding_truth_first',
       current_visible_program_session_count: program?.sessions?.length ?? 0,
-      current_visible_program_equipment_count: (visibleProgramSnapshot?.equipmentAvailable || program?.equipment)?.length ?? 0,
+      // [STEP-5A-OMEGA-7] Same-class fix as L15303 — `program.equipment` is
+      //   invalid on `AdaptiveProgram`. Read legacy structural `equipmentAvailable`
+      //   instead, mirroring the established sibling cast pattern.
+      current_visible_program_equipment_count: (visibleProgramSnapshot?.equipmentAvailable || (program as { equipmentAvailable?: string[] } | null)?.equipmentAvailable)?.length ?? 0,
       current_inputs_equipment_count: inputs?.equipment?.length ?? 0,
       canonical_profile_equipment_count: canonical.equipmentAvailable?.length ?? 0,
       canonical_profile_selected_skills_count: canonical.selectedSkills?.length ?? 0,

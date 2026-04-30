@@ -15276,10 +15276,46 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       // ==========================================================================
       stage = 'seed_builder_session'
       const newSessionKey = `canonical_modify_${Date.now()}`
+      // [PRE-AB6 BUILD GREEN GATE] `freshInputs` is the wide return type of
+      //   `entryToAdaptiveInputs()` (defined at
+      //   lib/canonical-profile-service.ts:3614 — `primaryGoal: string`,
+      //   `experienceLevel: 'beginner' | 'intermediate' | 'advanced'`,
+      //   `equipment: string[]`, ...). `ModifyBuilderEntry.inputs` is the
+      //   narrow `AdaptiveProgramInputs` contract (defined at
+      //   lib/adaptive-program-builder.ts:1088 — `primaryGoal: PrimaryGoal`,
+      //   `equipment: EquipmentType[]`, etc.). Route through the existing
+      //   quarantined narrowing boundary `toCanonicalAdaptiveProgramInputs`
+      //   (declared in the `readProgramPageRecord` helper family at the top
+      //   of this file) so TS sees a properly-typed AdaptiveProgramInputs.
+      //   Returns null when narrowing fails — the existing pre-commit
+      //   validation block below will fail diagnostically rather than
+      //   commit a malformed modify entry. No `as any`, no `@ts-ignore`,
+      //   no `AdaptiveProgramInputs` / `PrimaryGoal` widening, no
+      //   generator/contract change.
+      const canonicalModifyInputs = toCanonicalAdaptiveProgramInputs(freshInputs)
+      // Fail-fast diagnostic narrowing: if `toCanonicalAdaptiveProgramInputs`
+      //   could not produce a valid `AdaptiveProgramInputs` (e.g. an
+      //   upstream PrimaryGoal value is not in the canonical union), throw
+      //   into the same try/catch corridor that the rest of this modify
+      //   flow already uses — preserving the diagnostic-first behavior of
+      //   the surrounding `validationErrors` block instead of forcing a
+      //   bad program handoff. After this guard, TS narrows
+      //   `canonicalModifyInputs` to `AdaptiveProgramInputs`, so the
+      //   `ModifyBuilderEntry` literal below assigns without any cast.
+      if (!canonicalModifyInputs) {
+        const errorMsg = 'Pre-commit validation failed: inputs failed canonical narrowing (primaryGoal/experienceLevel/sessionLength/trainingDaysPerWeek not in PrimaryGoal/ExperienceLevel/SessionLength/TrainingDays union)'
+        setModifyClickAudit(prev => ({
+          ...prev,
+          step4PreCommitValidated: false,
+          failureStage: 'pre_commit_validation_canonical_narrowing',
+          failureReason: errorMsg,
+        }))
+        throw new Error(errorMsg)
+      }
       const modifyEntry: ModifyBuilderEntry = {
         sessionKey: newSessionKey,
         source: 'modify_visible_program',
-        inputs: freshInputs,
+        inputs: canonicalModifyInputs,
         // [UNIFIED] Track flow intent
         __flowIntent: 'modify_existing' as const,
       }

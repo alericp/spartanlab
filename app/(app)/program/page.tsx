@@ -8657,17 +8657,39 @@ export default function ProgramPage() {
         // When server returns 500, serverResult in context contains exact diagnostic fields
         // This prevents "Step: unavailable / Reason: unavailable" in the banner
         // ==========================================================================
-        if (isPageValidationError && (errorSubCode === 'server_generation_failed' || (err as any).context?.serverResult)) {
-          const ctx = (err as { context?: Record<string, unknown> }).context
-          // [STEP-5A-OMICRON] Server-result diagnostic chain refactored to
-          //   flow through the quarantined record helper. `ctx?.serverResult`
-          //   is an `unknown` value from a parent `Record` index access; we
-          //   narrow it through `readProgramPageRecord` rather than a direct
-          //   `as Record<string, unknown>` cast so the only allowed cast site
-          //   is inside `readProgramPageRecord` itself.
-          const serverResult = readProgramPageRecord(ctx?.serverResult)
-          
-          if (serverResult) {
+        // [STEP-5A-UPSILON-OMEGA-7] Drive ingest purely off `context.serverResult`
+        //   presence via the typed `errorContext` (already declared above at
+        //   L8496-8497 as `Record<string, unknown> | undefined`).
+        //
+        //   The previous condition compared `errorSubCode === 'server_generation_failed'`,
+        //   but `errorSubCode` is locally declared as `BuildAttemptSubCode`
+        //   (L8475) — and that canonical union (lib/program-state.ts:210)
+        //   includes `'server_regenerate_failed'` (L276) but NOT
+        //   `'server_generation_failed'`. The cast at L8481 (`err.subCode as
+        //   BuildAttemptSubCode`) lied to TypeScript: `err.subCode` is the
+        //   local `PageValidationSubCode` (page.tsx L640), which DOES include
+        //   `'server_generation_failed'` (L671) — so at runtime the value
+        //   could be that literal, but TS correctly flagged the comparison
+        //   as impossible against the *declared* type.
+        //
+        //   Removing the literal comparison is safe because the producer at
+        //   L7269 always attaches `{ serverResult }` via context (L7271)
+        //   when throwing with this subcode — so `serverResult` presence is
+        //   a strict superset trigger. Per the prompt's "If no real producer
+        //   emits it [against the declared type], remove that comparison and
+        //   let `context.serverResult` be the trigger."
+        //
+        //   The `(err as any).context?.serverResult` access is replaced with
+        //   the typed `errorContext?.serverResult` flowing through
+        //   `readProgramPageRecord` (L201, the project's quarantined unknown
+        //   narrower) — eliminating the `as any` per project safety doctrine.
+        const mainGenServerResult = isPageValidationError
+          ? readProgramPageRecord(errorContext?.serverResult)
+          : null
+
+        if (mainGenServerResult) {
+          const serverResult = mainGenServerResult
+          {
             // Extract exact server diagnostic fields
             const serverFailedStage = serverResult.failedStage as string | undefined
             const exactFailingSubstep = serverResult.exactFailingSubstep as string | undefined
@@ -12460,12 +12482,20 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         // When server returns 500, serverResult in context contains exact diagnostic fields
         // This prevents "Step: unavailable / Reason: unavailable" in the banner
         // ==========================================================================
-        if (isPageValidationError && (errorSubCode === 'server_regenerate_failed' || (err as any).context?.serverResult)) {
-          const ctx = (err as { context?: Record<string, unknown> }).context
+        // [STEP-5A-UPSILON-OMEGA-7] Replace the `(err as any).context?.serverResult`
+        //   access with the typed `errorContext` (already declared above at
+        //   L12319-12320 as `Record<string, unknown> | undefined`) flowing
+        //   through `readProgramPageRecord`. The literal comparison
+        //   `errorSubCode === 'server_regenerate_failed'` is preserved here
+        //   (unlike the main-gen sibling) because `'server_regenerate_failed'`
+        //   IS a member of the canonical `BuildAttemptSubCode` union
+        //   (lib/program-state.ts:276) — the comparison is valid against
+        //   the declared type. Only the `as any` is unsafe and must go.
+        if (isPageValidationError && (errorSubCode === 'server_regenerate_failed' || readProgramPageRecord(errorContext?.serverResult))) {
           // [STEP-5A-OMICRON] Server-result diagnostic chain refactored to
           //   flow through the quarantined record helper. See the
           //   matching comment in the generation handler above.
-          const serverResult = readProgramPageRecord(ctx?.serverResult)
+          const serverResult = readProgramPageRecord(errorContext?.serverResult)
           
           if (serverResult) {
             // Extract exact server diagnostic fields

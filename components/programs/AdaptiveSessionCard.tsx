@@ -29,6 +29,13 @@ import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWith
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { buildGroupedDisplayModel, minMembersFor, type GroupedDisplayModel, type RenderBlock, type RawFallbackBlock, type GroupedSourceUsed, type GroupedFlatReason } from './lib/session-group-display'
+// [AB5] Grouped Execution Prescription + Orphan Row Guard.
+// The resolver is the single authoritative source for grouped block rounds,
+// per-member prescription completeness, and orphan-bind verdicts. Card render
+// branches (rich + raw fallback + ungrouped) all consume this so Program UI
+// and Start Workout cannot disagree about how many rounds a block executes
+// or which member rows are launchable.
+import { resolveGroupedExecutionPrescription, buildRoundsHeaderText } from './lib/grouped-execution-prescription'
 import { 
   addOverride, 
   applyOverridesToSession,
@@ -1625,6 +1632,42 @@ function MainExercisesRenderer({
         {fallbackBlocks.map((block, bIdx) => {
           const colors = getGroupTypeColors(block.groupType)
           const icon = getGroupTypeIcon(block.groupType)
+
+          // [AB5] Same execution-prescription resolver as the rich branch so
+          // the raw-fallback path also shows truthful rounds, drops fully
+          // unbound blocks, and marks orphan rows as non-executable notes.
+          const blockPrescription = resolveGroupedExecutionPrescription({
+            block: { kind: 'raw', block },
+            hydrate: ({ id, name }) => {
+              const hit =
+                (id ? hydrateMap.get(id) : undefined) ||
+                (name ? hydrateMap.get(name) : undefined) ||
+                (name ? hydrateMap.get(name.toLowerCase()) : undefined) ||
+                (name ? hydrateMap.get(normalizeKey(name)) : undefined)
+              return hit
+                ? {
+                    id: hit.id,
+                    name: hit.name,
+                    sets: hit.sets ?? null,
+                    repsOrTime: hit.repsOrTime ?? null,
+                    targetRPE: hit.targetRPE ?? null,
+                    restSeconds: hit.restSeconds ?? null,
+                    scaledSets: (hit as unknown as { scaledSets?: number | null }).scaledSets ?? null,
+                    scaledReps: (hit as unknown as { scaledReps?: string | null }).scaledReps ?? null,
+                    scaledTargetRPE: (hit as unknown as { scaledTargetRPE?: number | null }).scaledTargetRPE ?? null,
+                  }
+                : null
+            },
+          })
+          const rawRoundsBadgeText = buildRoundsHeaderText(blockPrescription)
+
+          // [AB5 ORPHAN-BLOCK GUARD] If no member binds, the live workout
+          // cannot launch any of these rows -- suppress the entire block
+          // rather than show a method chip with only non-executable notes.
+          if (blockPrescription.boundMembers.length === 0) {
+            return null
+          }
+
           return (
             <div
               key={block.groupId || `raw-${bIdx}`}
@@ -1637,10 +1680,20 @@ function MainExercisesRenderer({
               <div className={`mb-2 flex items-center gap-2 flex-wrap px-2.5 py-1.5 rounded-md ${colors.bg}`}>
                 <span className={colors.text}>{icon}</span>
                 <span className={`text-sm font-semibold ${colors.text}`}>{block.label}</span>
+                {rawRoundsBadgeText && (
+                  <span className={`text-[11px] font-semibold ${colors.text}`}>
+                    · {rawRoundsBadgeText}
+                  </span>
+                )}
                 <span className="text-[11px] text-[#8A8A8A]">
-                  · {block.members.length} {block.members.length === 1 ? 'exercise' : 'exercises'}
+                  · {blockPrescription.boundMembers.length} {blockPrescription.boundMembers.length === 1 ? 'exercise' : 'exercises'}
                 </span>
               </div>
+              {blockPrescription.executionText && (
+                <p className="px-2.5 mb-2 text-[11px] text-[#8A8A8A] leading-snug">
+                  {blockPrescription.executionText}
+                </p>
+              )}
               <div className={`space-y-2 pl-4 border-l-2 ${colors.border}`}>
                 {block.members.map((member, mIdx) => {
                   rawIdx++
@@ -1668,21 +1721,37 @@ function MainExercisesRenderer({
                       />
                     )
                   }
-                  // Minimal text fallback row. Display-first: name must be
-                  // visible even when rich hydration cannot resolve it.
+                  // [AB5 ORPHAN-ROW GUARD] Member name exists upstream but
+                  // failed to hydrate -- demote to non-executable note style
+                  // (italic, dim text, missing-prescription marker) so the
+                  // user knows this row is informational, not launchable.
                   const safeName = (member.name || '').trim()
                   if (safeName.length < 2) return null
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log('[v0] [AB5-ORPHAN-ROW]', {
+                      sessionDay: session.dayNumber,
+                      kind: 'raw_fallback',
+                      groupId: block.groupId,
+                      groupType: block.groupType,
+                      memberName: safeName,
+                      memberId: member.id,
+                      reason: 'raw fallback member did not hydrate',
+                    })
+                  }
                   return (
                     <div
                       key={member.id || `${block.groupId}-${mIdx}`}
-                      className="flex items-baseline gap-2 py-1.5 text-sm text-[#C8C8C8]"
+                      className="flex items-baseline gap-2 py-1.5 text-xs text-[#6A6A6A] italic"
                     >
                       {member.prefix && (
-                        <span className={`text-[11px] font-semibold ${colors.text} shrink-0`}>
+                        <span className="text-[10px] font-semibold text-[#5A5A5A] shrink-0">
                           {member.prefix}
                         </span>
                       )}
                       <span className="truncate">{safeName}</span>
+                      <span className="text-[10px] text-[#5A5A5A] shrink-0 ml-auto not-italic">
+                        — missing prescription
+                      </span>
                     </div>
                   )
                 })}
@@ -1898,15 +1967,32 @@ function MainExercisesRenderer({
             (block.exerciseName && exerciseDataMap.get(normalizeExerciseKey(block.exerciseName)))
 
           if (!fullExercise) {
+            // [AB5 ORPHAN-ROW GUARD] Ungrouped exercise reference exists in
+            // the contract but failed to hydrate to a session exercise. No
+            // prescription means Start Workout cannot launch it. Demote to a
+            // non-executable note so the visible card never claims an
+            // executable row the live workout cannot execute.
             const safeName = (block.exerciseName || '').trim()
             if (!safeName || safeName.length < 2) return null
+            if (process.env.NODE_ENV === 'development') {
+              console.log('[v0] [AB5-ORPHAN-ROW]', {
+                sessionDay: session.dayNumber,
+                kind: 'ungrouped',
+                exerciseId: block.exerciseId,
+                exerciseName: safeName,
+                reason: 'ungrouped reference did not hydrate to a session exercise',
+              })
+            }
             return (
               <div
                 key={block.exerciseId || `ex-${blockIdx}`}
-                className="flex items-baseline gap-2 py-2 px-3 rounded-lg border bg-[#171717] border-[#282828] text-sm text-[#C8C8C8]"
+                className="flex items-baseline gap-2 py-1.5 px-3 rounded-lg border bg-[#141414] border-[#222222] text-xs text-[#6A6A6A] italic"
               >
-                <span className="text-[10px] text-[#4A4A4A] font-mono shrink-0">{globalExerciseIndex}.</span>
+                <span className="text-[10px] text-[#4A4A4A] font-mono shrink-0 not-italic">{globalExerciseIndex}.</span>
                 <span className="truncate">{safeName}</span>
+                <span className="text-[10px] text-[#5A5A5A] shrink-0 ml-auto not-italic">
+                  — missing prescription
+                </span>
               </div>
             )
           }
@@ -1935,7 +2021,50 @@ function MainExercisesRenderer({
         const label = getGroupTypeLabel(group.groupType)
         const icon = getGroupTypeIcon(group.groupType)
         const isSpecialGroup = group.groupType !== 'straight'
-        
+
+        // [AB5 GROUPED EXECUTION PRESCRIPTION] Resolve rounds + per-member dose
+        // verdict so the header can show truthful rounds and the member loop
+        // can demote unbound (orphan) members to a non-executable note. The
+        // hydrate fn mirrors the existing 5-tier render-surface lookup used
+        // below for member rendering, so the resolver's bind verdict cannot
+        // disagree with what the renderer would actually display.
+        const groupPrescription = resolveGroupedExecutionPrescription({
+          block: { kind: 'rich', group },
+          hydrate: ({ id, name, positionIndex }) => {
+            const renderSurfaceMembers = group.id ? blockIdToDisplayExercises.get(group.id) : undefined
+            const hit =
+              (renderSurfaceMembers && renderSurfaceMembers[positionIndex]) ||
+              (id ? exerciseDataMap.get(id) : undefined) ||
+              (name ? exerciseDataMap.get(name) : undefined) ||
+              (name ? exerciseDataMap.get(name.toLowerCase()) : undefined) ||
+              (name ? exerciseDataMap.get(normalizeExerciseKey(name)) : undefined)
+            return hit
+              ? {
+                  id: hit.id,
+                  name: hit.name,
+                  sets: hit.sets ?? null,
+                  repsOrTime: hit.repsOrTime ?? null,
+                  targetRPE: hit.targetRPE ?? null,
+                  restSeconds: hit.restSeconds ?? null,
+                  scaledSets: (hit as unknown as { scaledSets?: number | null }).scaledSets ?? null,
+                  scaledReps: (hit as unknown as { scaledReps?: string | null }).scaledReps ?? null,
+                  scaledTargetRPE: (hit as unknown as { scaledTargetRPE?: number | null }).scaledTargetRPE ?? null,
+                }
+              : null
+          },
+        })
+        const roundsBadgeText = isSpecialGroup ? buildRoundsHeaderText(groupPrescription) : null
+
+        // [AB5 ORPHAN-BLOCK GUARD] If a non-straight grouped block resolved
+        // to ZERO bound members, the card must not render a method chip +
+        // empty container. The contract chose grouped, but no member binds
+        // to a hydrated session exercise -- the live workout cannot execute
+        // it either. Suppress the block entirely so we never advertise a
+        // method the workout cannot launch.
+        if (isSpecialGroup && groupPrescription.boundMembers.length === 0) {
+          return null
+        }
+
         return (
           <div
             key={group.id || `group-${blockIdx}`}
@@ -1979,8 +2108,15 @@ function MainExercisesRenderer({
                     return `${purposePrefix}${label}`
                   })()}
                 </span>
+                {/* [AB5] Rounds badge -- "3 rounds", "2 paired sets", etc.
+                    Derived from the same priority chain the live runtime uses. */}
+                {roundsBadgeText && (
+                  <span className={`text-[11px] font-semibold ${colors.text}`}>
+                    · {roundsBadgeText}
+                  </span>
+                )}
                 <span className="text-[11px] text-[#8A8A8A]">
-                  · {group.exercises.length} exercises
+                  · {groupPrescription.boundMembers.length} {groupPrescription.boundMembers.length === 1 ? 'exercise' : 'exercises'}
                 </span>
                 {group.restProtocol && (
                   <span className="text-[11px] text-[#8A8A8A]">
@@ -1992,6 +2128,13 @@ function MainExercisesRenderer({
                   context={group.exercises[0]?.methodRationale || group.instruction || undefined}
                 />
               </div>
+            )}
+            {/* [AB5] One-line execution sentence under the header so the user
+                can scan exactly what the block runs without expanding rows. */}
+            {isSpecialGroup && groupPrescription.executionText && (
+              <p className="px-2.5 mb-2 text-[11px] text-[#8A8A8A] leading-snug">
+                {groupPrescription.executionText}
+              </p>
             )}
             
             {/* Exercises in this group */}
@@ -2019,27 +2162,43 @@ function MainExercisesRenderer({
                   || exerciseDataMap.get(normalizeExerciseKey(groupExercise.name))
                 
                 if (!fullExercise) {
-                  // Exercise in styled groups but not in displayExercises.
-                  // [GROUPED-TRUTH-RESCUE] Render a minimal row from styledGroups'
-                  // authoritative truth so grouped structure stays visible.
-                  // [JUNK-TEXT-GUARD] If the grouped truth has no usable name,
-                  // drop the row entirely rather than rendering a lone prefix
-                  // (e.g. "A1" with no exercise) or a stray letter fragment.
+                  // [AB5 ORPHAN-ROW GUARD] Member exists in styledGroups but
+                  // failed to bind to a hydrated session exercise, so it has
+                  // no sets/reps/hold prescription and the live workout will
+                  // not launch it. Demote to a clearly non-executable note
+                  // (italic, dim text, explicit "missing prescription"
+                  // marker) instead of rendering a normal-looking exercise
+                  // row. This preserves visibility of upstream grouped truth
+                  // while preventing the card from advertising an executable
+                  // row that Start Workout cannot execute.
                   const safeName = (groupExercise.name || '').trim()
                   if (!safeName || safeName.length < 2) {
                     return null
                   }
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log('[v0] [AB5-ORPHAN-ROW]', {
+                      sessionDay: session.dayNumber,
+                      groupId: group.id,
+                      groupType: group.groupType,
+                      memberName: safeName,
+                      memberId: groupExercise.id,
+                      reason: 'member did not bind to hydrated session exercise',
+                    })
+                  }
                   return (
                     <div
                       key={groupExercise.id || `${safeName}-${exIdx}`}
-                      className="flex items-baseline gap-2 py-1.5 text-sm text-[#C8C8C8]"
+                      className="flex items-baseline gap-2 py-1.5 text-xs text-[#6A6A6A] italic"
                     >
                       {groupExercise.prefix && (
-                        <span className={`text-[11px] font-semibold ${colors.text} shrink-0`}>
+                        <span className="text-[10px] font-semibold text-[#5A5A5A] shrink-0">
                           {groupExercise.prefix}
                         </span>
                       )}
                       <span className="truncate">{safeName}</span>
+                      <span className="text-[10px] text-[#5A5A5A] shrink-0 ml-auto not-italic">
+                        — missing prescription
+                      </span>
                     </div>
                   )
                 }

@@ -14214,8 +14214,26 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   
   // [PHASE 17P] Determine what schedule mode to persist
   let persistedScheduleMode: 'static' | 'flexible' | undefined = undefined
-  let persistedTrainingDays: number | undefined = updatedInputs.trainingDaysPerWeek ?? undefined
-  
+  // [PRE-AB6 BUILD GREEN GATE] `updatedInputs.trainingDaysPerWeek` is typed
+  //   `TrainingDays | 'flexible'` (i.e. `number | 'flexible'`) per the
+  //   AdaptiveProgramInputs contract used everywhere else in this file
+  //   (e.g. L375–378, L7015, L7825–7828). The previous initializer
+  //     `updatedInputs.trainingDaysPerWeek ?? undefined`
+  //   leaked the `'flexible'` string variant into `persistedTrainingDays`,
+  //   which is `number | undefined`. Narrow with a `typeof === 'number'`
+  //   guard — the same canonical pattern already used at L375–378 and
+  //   L7825–7828 — so the numeric persistence field only ever carries a
+  //   real number. If the input is `'flexible'`, that truth is preserved
+  //   in `persistedScheduleMode` below (when request.type === 'training_days')
+  //   or by leaving `persistedScheduleMode = undefined` (= "unchanged"
+  //   per the existing writeback semantics) for other request types,
+  //   which matches the prior runtime intent: a non-training-days request
+  //   must not flip schedule mode based on the input snapshot.
+  let persistedTrainingDays: number | undefined =
+    typeof updatedInputs.trainingDaysPerWeek === 'number'
+      ? updatedInputs.trainingDaysPerWeek
+      : undefined
+
   if (request.type === 'training_days') {
     if (flexiblePreservingRebuild) {
       // Preserve flexible identity - do NOT set static

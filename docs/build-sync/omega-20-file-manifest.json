@@ -1,0 +1,81 @@
+{
+  "marker": "OMEGA-20-DELIVERY-PROOF-MARKER",
+  "branch": "unknown_to_agent_assigned_by_v0_platform_at_push",
+  "sha": "unknown_to_agent_assigned_by_v0_platform_at_push",
+  "workspacePath": "/vercel/share/v0-project",
+  "vercelProjectId": "prj_mvwi5hBTAB1MZElzuZYtYY9BIRkx",
+  "githubRepo": "alericp/spartanlab",
+  "chatBranchLineage": "v0/alericpetsch836-6923-3c70bce5",
+  "agentEnvironmentDisclosure": {
+    "shellAvailable": false,
+    "canRunGit": false,
+    "canRunUnzip": false,
+    "canRunPnpm": false,
+    "canRunShasum": false,
+    "implication": "agent CANNOT verify git push success, zip contents, typecheck, or build from inside the turn. Verification must be done by the user locally."
+  },
+  "changedFilesThisTurn": [
+    "OMEGA_20_DELIVERY_PROOF_ROOT.txt",
+    "docs/build-sync/omega-20-delivery-proof.md",
+    "docs/build-sync/omega-20-file-manifest.json"
+  ],
+  "proofFiles": [
+    "OMEGA_20_DELIVERY_PROOF_ROOT.txt",
+    "docs/build-sync/omega-20-delivery-proof.md",
+    "docs/build-sync/omega-20-file-manifest.json"
+  ],
+  "persistentMarkersFromPriorTurnsVerifiedOnDisk": {
+    "components/workout/StreamlinedWorkoutSession.tsx": [
+      "LIVE_LOG_CORRIDOR_LANDING_V1",
+      "MERGE_LANE_REACTIVATE_V1",
+      "COMPLETED-SET-NOTE-SURFACE"
+    ],
+    "components/workout/ActiveWorkoutStartCorridor.tsx": [
+      "LIVE_LOG_CORRIDOR_LANDING_V1",
+      "Last Set Snapshot",
+      "Hold to adjust faster",
+      "Current progress",
+      "LOAD-PRESS-AND-HOLD",
+      "LOG-SET-SAVING-STATE"
+    ],
+    "lib/workout/live-workout-machine.ts": [
+      "LIVE_LOG_CORRIDOR_LANDING_V1",
+      "LAYER A - BASE REQUIRED COMMIT",
+      "LAYER B - OPTIONAL INTELLIGENCE ENRICHMENT"
+    ],
+    "docs/build-sync/omega-19-delivery-proof.md": [
+      "OMEGA-19-DELIVERY-PROOF-MARKER"
+    ],
+    "docs/build-sync/omega-19-file-manifest.json": [
+      "OMEGA-19-DELIVERY-PROOF-MARKER"
+    ]
+  },
+  "promptDiscrepancies": {
+    "componentsActiveWorkoutAdaptiveWorkoutIterator": "DOES_NOT_EXIST_IN_WORKSPACE - prompt referenced this path but Glob returned zero matches",
+    "appAppProgramPage": "EXISTS_AT_app/(app)/program/page.tsx - confirmed via Glob"
+  },
+  "artifactVerification": {
+    "zipName": "n/a - agent has no shell to generate or inspect zip",
+    "rootMarkerFoundInZip": "USER_MUST_VERIFY",
+    "docsProofFoundInZip": "USER_MUST_VERIFY",
+    "manifestFoundInZip": "USER_MUST_VERIFY",
+    "userVerificationCommands": [
+      "grep -nR \"OMEGA-20-DELIVERY-PROOF-MARKER\" .",
+      "test -f OMEGA_20_DELIVERY_PROOF_ROOT.txt && echo PRESENT || echo MISSING",
+      "ls docs/build-sync/",
+      "grep -cR \"LIVE_LOG_CORRIDOR_LANDING_V1\" components/workout/ lib/workout/"
+    ],
+    "expectedResults": {
+      "omega20MarkerHitCount": ">=3",
+      "rootFile": "PRESENT",
+      "docsBuildSyncContainsOmega20Files": true,
+      "liveLogCorridorLandingV1HitCount": 3
+    }
+  },
+  "likelyCauseOfPriorStaleZip": "The user downloaded the zip from a different version block (the v0 'Download ZIP' button is per-version), or from a different chat targeting the same repo. v0 zips are not auto-refreshed; you must download from the most recent version block of THIS chat.",
+  "deliveryStatusFromAgentPerspective": {
+    "filesWrittenToDisk": true,
+    "filesPushedToGitHubByPlatform": "occurs_after_turn_ends_not_visible_to_agent",
+    "userMustVerify": true
+  }
+}

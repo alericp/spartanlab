@@ -8952,7 +8952,23 @@ export default function ProgramPage() {
         })
         
         // [TASK 9] ERROR PROPAGATION TRUTH FINAL VERDICT
-        const runtimeSubcodesSupported = knownSubCodes.includes('internal_builder_reference_error') && knownSubCodes.includes('internal_builder_type_error')
+        // [STEP-5A-PHI-OMEGA-8] Local typed readonly tuple of the runtime
+        //   builder diagnostic subcodes that this page commits to surfacing.
+        //   The previous `knownSubCodes.includes(...)` calls referenced an
+        //   undeclared identifier (TS2304 — `knownSubCodes` was never
+        //   declared anywhere in this file or in any imported module).
+        //   The diagnostic intent is "this page recognizes the canonical
+        //   runtime builder subcodes" — that intent is now enforced at
+        //   compile time via `satisfies readonly BuildAttemptSubCode[]`,
+        //   which fails the build if either literal ever drops out of
+        //   the canonical union (lib/program-state.ts:246-247). The
+        //   `.includes(...)` calls are preserved verbatim so the log
+        //   shape and final-verdict ternary semantics are unchanged.
+        const runtimeBuilderDiagnosticSubcodes = [
+          'internal_builder_reference_error',
+          'internal_builder_type_error',
+        ] as const satisfies readonly BuildAttemptSubCode[]
+        const runtimeSubcodesSupported = runtimeBuilderDiagnosticSubcodes.includes('internal_builder_reference_error') && runtimeBuilderDiagnosticSubcodes.includes('internal_builder_type_error')
         const runtimeReasonVisible = isRuntimeBuilderError ? !!failureReason : true
         const runtimeStepVisible = isRuntimeBuilderError ? !!failureStep : true
         console.log('[error-propagation-truth-final-verdict]', {

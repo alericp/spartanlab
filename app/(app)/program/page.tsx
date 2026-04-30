@@ -4561,14 +4561,27 @@ export default function ProgramPage() {
     // =========================================================================
     // [stale-equipment-decision-trace-audit] TASK 1: Trace exact equipment decision
     // This audit explains EXACTLY why equipment is flagged as changed
+    //
+    // [PRE-AB6 BUILD GREEN GATE] The local audit value below previously
+    //   shadowed the authoritative `profileSnapshotEquipment` declared at
+    //   the top of this function (L4435 via `readProgramPageStringArray`),
+    //   producing a same-scope duplicate-declaration parser error
+    //   ("the name `profileSnapshotEquipment` is defined multiple times")
+    //   on Vercel build. Renamed to `staleAuditProfileSnapshotEquipment`
+    //   so the audit continues to observe the EXACT raw cast value
+    //   (`string[] | undefined`) it observed before — not the helper-
+    //   normalized `string[]` — and the authoritative declaration
+    //   continues to feed `authoritativeEquipment`, the binding audit,
+    //   and the equipment-quality classifier downstream. References
+    //   updated locally in this audit block only.
     // =========================================================================
-    const profileSnapshotEquipment = (rawProgram.profileSnapshot as { equipmentAvailable?: string[] })?.equipmentAvailable
+    const staleAuditProfileSnapshotEquipment = (rawProgram.profileSnapshot as { equipmentAvailable?: string[] })?.equipmentAvailable
     console.log('[stale-equipment-decision-trace-audit]', {
       activeProgramId: activeProgram.id,
       activeProgramCreatedAt: activeProgram.createdAt,
       // Raw values before normalization
       rawProgramEquipment: rawProgram.equipment,
-      rawProgramProfileSnapshotEquipment: profileSnapshotEquipment,
+      rawProgramProfileSnapshotEquipment: staleAuditProfileSnapshotEquipment,
       // Canonical profile (current truth)
       canonicalProfileEquipmentSource: 'getCanonicalProfile() called inside evaluateUnifiedProgramStaleness',
       // Changed fields from result
@@ -4583,7 +4596,7 @@ export default function ProgramPage() {
         ? 'potentially_true_need_to_check_normalized_values'
         : 'no_equipment_warning',
       falsePositiveReasonIfAny: result.changedFields.includes('equipment') && 
-        JSON.stringify(rawProgram.equipment?.sort()) === JSON.stringify(profileSnapshotEquipment?.sort())
+        JSON.stringify(rawProgram.equipment?.sort()) === JSON.stringify(staleAuditProfileSnapshotEquipment?.sort())
         ? 'possible_false_positive_snapshot_matches_program_but_canonical_differs'
         : null,
     })

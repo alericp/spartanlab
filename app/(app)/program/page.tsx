@@ -1,6 +1,11 @@
-// REDEPLOY_TRIGGER_v2
+// REDEPLOY_TRIGGER_v3
 // No-op change to force Vercel rebuild. Do not remove.
-// Timestamp: 2026-04-06T20:40:00Z - Confirming Info import present at line 50
+// Timestamp: 2026-04-30T15:00:00Z - PRE-AB6 BUILD GREEN GATE / branch-head delivery
+// Purpose: force a real new commit on top of ceab071 so Vercel picks up the
+// hoisted `adjCanonicalProfileNow` + `strongestMaterialIdentityTruth`
+// declarations (now at L13501 / L13506, single declarations, all reads at
+// L13542+ and L13720+ are after declaration) and stops rebuilding the old
+// failing TDZ commit at app/(app)/program/page.tsx:13492:22.
 
 'use client'
 

@@ -15438,9 +15438,13 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       verdict: 'CLICK_FIRED_CONFIRMED',
     })
     
-    if (event) {
-      event.preventDefault()
-    }
+    // [PRE-AB6 BUILD GREEN GATE] Use optional chaining for `event` —
+    //   the handler signature already declares `event?` so optional
+    //   chaining is the contractually correct narrowing pattern. This
+    //   block is dead code (unreachable after the `return` at L15427
+    //   in the neutralized legacy handler) but TS still type-checks
+    //   it. No behavior change.
+    event?.preventDefault()
     
     const showBuilderBefore = showBuilder
     const showAdjustmentModalBefore = showAdjustmentModal

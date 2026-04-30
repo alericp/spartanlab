@@ -406,6 +406,162 @@ function toFreshnessSignatureProjection(input: unknown): FreshnessSignatureProje
   }
 }
 
+// ==========================================================================
+// [PRE-AB6 BUILD GREEN GATE] Canonical AdaptiveProgramInputs narrow boundary.
+//
+// Same family as `readProgramPageRecord` / `readProgramPageString` /
+// `readProgramPageStringArray` / `readProgramPageNumber` /
+// `toFreshnessSignatureProjection` above. Takes the wide return type of
+// `entryToAdaptiveInputs()` (defined at lib/canonical-profile-service.ts:3614,
+// which returns `primaryGoal: string`, `experienceLevel: 'beginner' |
+// 'intermediate' | 'advanced'`, `trainingDaysPerWeek: number | 'flexible'`,
+// `sessionLength: number`, `equipment: string[]`, etc.) — or any unknown
+// runtime-valid shape — and produces a narrow-typed `AdaptiveProgramInputs`
+// (defined at lib/adaptive-program-builder.ts:1088, which requires
+// `primaryGoal: PrimaryGoal`, `experienceLevel: ExperienceLevel`,
+// `trainingDaysPerWeek: TrainingDays | 'flexible'`,
+// `sessionLength: SessionLength`, `equipment: EquipmentType[]`, etc.).
+//
+// Returns `null` when narrowing fails for a required field — callers feed
+// the result into `setInputs()` with `?? prevInputs` so existing typed
+// state is preserved on the unlikely runtime invalid path. No `as any`,
+// no `@ts-ignore`, no `@ts-expect-error`. Internal type-predicate casts
+// against allowlists follow the same quarantined pattern as
+// `readProgramPageRecord` (L206) — runtime-validated narrowing, not
+// silencing.
+//
+// All allowlists below are derived directly from the canonical type
+// declarations:
+//   - PrimaryGoal      → lib/program-service.ts:41
+//   - ExperienceLevel  → lib/program-service.ts:42
+//   - SessionLength    → lib/program-service.ts:44
+//   - TrainingDays     → lib/program-service.ts:46
+//   - EquipmentType    → lib/adaptive-exercise-pool.ts:7
+//   - GenerationMode   → lib/program-state-contract.ts:39
+// ==========================================================================
+const _PRIMARY_GOAL_NARROW_ALLOWLIST: readonly PrimaryGoal[] = [
+  'planche', 'front_lever', 'back_lever', 'muscle_up', 'handstand_pushup',
+  'iron_cross', 'weighted_strength', 'general', 'skill', 'strength',
+  'endurance', 'abs', 'pancake', 'toe_touch', 'front_splits', 'side_splits',
+  'flexibility',
+]
+const _EXPERIENCE_LEVEL_NARROW_ALLOWLIST: readonly ExperienceLevel[] = [
+  'beginner', 'intermediate', 'advanced',
+]
+const _EQUIPMENT_TYPE_NARROW_ALLOWLIST: readonly EquipmentType[] = [
+  'pull_bar', 'dip_bars', 'rings', 'parallettes', 'bands',
+  'weights', 'floor', 'wall', 'bench',
+]
+const _TRAINING_DAYS_NARROW_ALLOWLIST: readonly TrainingDays[] = [2, 3, 4, 5, 6, 7]
+const _SESSION_LENGTH_NUMERIC_ALLOWLIST: readonly number[] = [30, 45, 60, 75, 90, 120]
+const _SESSION_LENGTH_LABEL_ALLOWLIST: readonly string[] = ['10-20', '20-30', '30-45', '45-60', '60+']
+function isGenerationModeNarrow(value: unknown): value is NonNullable<AdaptiveProgramInputs['regenerationMode']> {
+  return value === 'fresh' || value === 'regenerate' || value === 'continue'
+}
+
+function isPrimaryGoalNarrow(value: unknown): value is PrimaryGoal {
+  return typeof value === 'string' && (_PRIMARY_GOAL_NARROW_ALLOWLIST as readonly string[]).includes(value)
+}
+function isExperienceLevelNarrow(value: unknown): value is ExperienceLevel {
+  return typeof value === 'string' && (_EXPERIENCE_LEVEL_NARROW_ALLOWLIST as readonly string[]).includes(value)
+}
+function isEquipmentTypeNarrow(value: unknown): value is EquipmentType {
+  return typeof value === 'string' && (_EQUIPMENT_TYPE_NARROW_ALLOWLIST as readonly string[]).includes(value)
+}
+function isTrainingDaysNarrow(value: unknown): value is TrainingDays {
+  return typeof value === 'number' && (_TRAINING_DAYS_NARROW_ALLOWLIST as readonly number[]).includes(value)
+}
+function isSessionLengthNarrow(value: unknown): value is SessionLength {
+  if (typeof value === 'number') return _SESSION_LENGTH_NUMERIC_ALLOWLIST.includes(value)
+  if (typeof value === 'string') return _SESSION_LENGTH_LABEL_ALLOWLIST.includes(value)
+  return false
+}
+
+function toCanonicalAdaptiveProgramInputs(source: unknown): AdaptiveProgramInputs | null {
+  const record = readProgramPageRecord(source)
+  if (!record) return null
+
+  // Required fields — return null if any fail to narrow so the caller
+  // falls back to existing typed state. Runtime values from
+  // `entryToAdaptiveInputs()` are always valid in the SpartanLab flow
+  // (validated upstream by `buildCanonicalGenerationEntry`), so these
+  // guards function as type-safety belts, not behavior changers.
+  // Capture narrowed locals immediately after each type-predicate guard
+  // so the final return literal does not depend on TS preserving control
+  // flow narrowing across intervening function calls / property accesses.
+  const primaryGoalRaw = record.primaryGoal
+  if (!isPrimaryGoalNarrow(primaryGoalRaw)) return null
+  const primaryGoal: PrimaryGoal = primaryGoalRaw
+
+  const experienceLevelRaw = record.experienceLevel
+  if (!isExperienceLevelNarrow(experienceLevelRaw)) return null
+  const experienceLevel: ExperienceLevel = experienceLevelRaw
+
+  const sessionLengthRaw = record.sessionLength
+  if (!isSessionLengthNarrow(sessionLengthRaw)) return null
+  const sessionLength: SessionLength = sessionLengthRaw
+
+  // trainingDaysPerWeek: TrainingDays | 'flexible' — preserves the
+  // flexible-schedule truth from the previous Phase 17/AB build-gate fix.
+  const trainingDaysRaw = record.trainingDaysPerWeek
+  let trainingDaysPerWeek: TrainingDays | 'flexible'
+  if (trainingDaysRaw === 'flexible') {
+    trainingDaysPerWeek = 'flexible'
+  } else if (isTrainingDaysNarrow(trainingDaysRaw)) {
+    trainingDaysPerWeek = trainingDaysRaw
+  } else {
+    return null
+  }
+
+  // equipment: filter to known EquipmentType values; never crash on stale
+  // raw strings. Empty array is a valid runtime state.
+  const equipment: EquipmentType[] = Array.isArray(record.equipment)
+    ? record.equipment.filter(isEquipmentTypeNarrow)
+    : []
+
+  // Optional fields — undefined when source has no narrow-typed value.
+  const secondaryGoal: PrimaryGoal | undefined = isPrimaryGoalNarrow(record.secondaryGoal)
+    ? record.secondaryGoal
+    : undefined
+
+  const scheduleMode: 'static' | 'flexible' | undefined =
+    record.scheduleMode === 'static' || record.scheduleMode === 'flexible'
+      ? record.scheduleMode
+      : undefined
+
+  const adaptiveWorkloadEnabled: boolean | undefined = typeof record.adaptiveWorkloadEnabled === 'boolean'
+    ? record.adaptiveWorkloadEnabled
+    : undefined
+
+  const todaySessionMinutes: number | undefined = typeof record.todaySessionMinutes === 'number'
+    ? record.todaySessionMinutes
+    : undefined
+
+  const selectedSkills: string[] = readProgramPageStringArray(source, 'selectedSkills')
+
+  const regenerationModeRaw = readProgramPageString(source, 'regenerationMode')
+  const regenerationMode: AdaptiveProgramInputs['regenerationMode'] =
+    isGenerationModeNarrow(regenerationModeRaw) ? regenerationModeRaw : undefined
+
+  const regenerationReasonRaw = readProgramPageString(source, 'regenerationReason')
+  const regenerationReason: string | undefined = regenerationReasonRaw ?? undefined
+
+  return {
+    primaryGoal,
+    secondaryGoal,
+    experienceLevel,
+    trainingDaysPerWeek,
+    sessionLength,
+    equipment,
+    todaySessionMinutes,
+    scheduleMode,
+    adaptiveWorkloadEnabled,
+    selectedSkills,
+    regenerationMode,
+    regenerationReason,
+  }
+}
+
 function readProgramPageMetadataFromUnknown(source: unknown): _ProgramPageMetadataView {
   // [STEP-5A-OMICRON] Refactored to flow through the quarantined record
   //   helper above; no direct `as Record<string, unknown>` cast here.
@@ -14419,7 +14575,22 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         verdict: 'RETURNED_PROGRAM_HYDRATES_INTO_VISIBLE_STATE',
       })
       
-      setInputs(updatedInputs)
+      // [PRE-AB6 BUILD GREEN GATE] `updatedInputs` is the wide return type
+      //   of `entryToAdaptiveInputs()` (`primaryGoal: string`,
+      //   `experienceLevel: 'beginner' | 'intermediate' | 'advanced'`,
+      //   `sessionLength: number`, `equipment: string[]`, ...). The
+      //   `inputs` state is `AdaptiveProgramInputs | null`, which requires
+      //   the narrow contract (`primaryGoal: PrimaryGoal`,
+      //   `sessionLength: SessionLength`, `equipment: EquipmentType[]`,
+      //   etc.). Route through the local quarantined narrowing boundary
+      //   `toCanonicalAdaptiveProgramInputs` (declared in the
+      //   `readProgramPageRecord` family above) so TS sees a properly
+      //   typed AdaptiveProgramInputs. If runtime narrowing fails, fall
+      //   back to existing `inputs` state to preserve the previous typed
+      //   identity rather than wiping it. No `as any`, no `@ts-ignore`,
+      //   no union loosening, no schema/package change.
+      const canonicalUpdatedInputs = toCanonicalAdaptiveProgramInputs(updatedInputs) ?? inputs
+      setInputs(canonicalUpdatedInputs)
       setProgram(newProgram)
       
       // ==========================================================================
@@ -16067,7 +16238,14 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     })
     
     // Also sync to ambient inputs for page consistency (secondary, not builder authority)
-    setInputs(freshInputs)
+    // [PRE-AB6 BUILD GREEN GATE] Same-corridor narrow as the
+    //   handleAdjustmentRebuild setInputs site above — `freshInputs` is
+    //   the wide `entryToAdaptiveInputs()` return shape; route through
+    //   `toCanonicalAdaptiveProgramInputs` so TS sees the narrow
+    //   `AdaptiveProgramInputs`. Falls back to existing `inputs` if
+    //   runtime narrowing fails, preserving the previous typed identity.
+    const canonicalFreshInputs = toCanonicalAdaptiveProgramInputs(freshInputs) ?? inputs
+    setInputs(canonicalFreshInputs)
     
     // ==========================================================================
     // [PHASE 28B] SET SCHEDULE TRUTH AUDIT STATE FOR VISIBLE DEBUG PANEL

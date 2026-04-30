@@ -9025,7 +9025,7 @@ export default function ProgramPage() {
         // After successful rebuild, staleness MUST clear if no further changes made
         // CRITICAL: Use authoritative equipment source (profileSnapshot or equipmentProfile)
         // =========================================================================
-        const postBuildProfileSnapshot = (newProgram as unknown as { profileSnapshot?: { equipmentAvailable?: string[] } }).profileSnapshot
+        const postBuildProfileSnapshot = (newProgram as unknown as { profileSnapshot?: { equipmentAvailable?: string[]; selectedSkills?: string[]; jointCautions?: string[]; scheduleMode?: string } }).profileSnapshot
         const postBuildAuthoritativeEquipment = postBuildProfileSnapshot?.equipmentAvailable 
           || newProgram.equipmentProfile?.available 
           || []

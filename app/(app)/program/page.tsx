@@ -14775,6 +14775,18 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       // ==========================================================================
       // [PHASE 17S] TASK 5 - Rebuild entry postfix verdict
       // ==========================================================================
+      // [PRE-AB6 BUILD GREEN GATE] `overrides` is a Partial-shape object
+      //   (the canonical adjustment override map produced upstream at
+      //   L13593-area), not an array — `.length` does not exist on its
+      //   type. The adjacent `overridesWereApplied` line already uses the
+      //   correct `Object.keys(overrides).length` pattern, matching the
+      //   same pattern at L13554 and L13623 elsewhere in this file.
+      //   Hoist a single `phase17sOverrideCount` local so both
+      //   `overridesWereApplied` and `verdict` read from the same
+      //   authoritative count and the diagnostic intent stays
+      //   internally consistent. No `as any`, no `@ts-ignore`, no
+      //   `overrides`-type widening.
+      const phase17sOverrideCount = Object.keys(overrides ?? {}).length
       console.log('[phase17s-rebuild-entry-postfix-verdict]', {
         rebuildNowUsesSameTruthClassAsOnboarding: 'pending_comparison_at_runtime',
         selectedSkillsPreserved: (updatedInputs.selectedSkills?.length ?? 0) > 0,
@@ -14782,8 +14794,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         trainingPathTypePreserved: !!updatedInputs.trainingPathType,
         sessionDurationModePreserved: !!updatedInputs.sessionDurationMode,
         finalProgramSessionCount: newProgram.sessions?.length ?? 0,
-        overridesWereApplied: Object.keys(overrides).length > 0,
-        verdict: overrides.length === 0
+        overridesWereApplied: phase17sOverrideCount > 0,
+        verdict: phase17sOverrideCount === 0
           ? 'ENTRY_TRUTH_ALIGNED_NO_OVERRIDES'
           : 'ENTRY_TRUTH_NARROWED_BY_OVERRIDES',
       })

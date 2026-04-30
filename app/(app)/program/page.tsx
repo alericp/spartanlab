@@ -15541,7 +15541,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       
       console.log('[phase24d-modify-click-root-entry]', {
         programExists: true,
-        programId: currentProgramSnapshot.id,
+        programId: currentProgramSnapshot?.id ?? null,
         currentModifyFlowState: previousModifyFlowState,
         showBuilder,
         showAdjustmentModal,
@@ -15551,7 +15551,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       console.log('[phase24d-modify-state-transition-to-modal]', {
         previousModifyFlowState,
         nextModifyFlowState: 'modal',
-        programId: currentProgramSnapshot.id,
+        programId: currentProgramSnapshot?.id ?? null,
         showBuilderBefore: showBuilder,
         verdict: 'MODIFY_FLOW_STATE_SET_TO_MODAL',
       })
@@ -15565,7 +15565,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       // [PHASE 21A] Diagnostic 2: Branch verdict
       console.log('[phase21a-modify-branch-verdict]', {
         branch: 'open_adjustment_modal',
-        programId: currentProgramSnapshot.id,
+        programId: currentProgramSnapshot?.id ?? null,
       })
       
       // [PHASE 21B] TASK 1 - Modify root open branch with flow options
@@ -15576,7 +15576,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           'Make Small Adjustments - handleAdjustmentRebuild path',
           'Start New Program - handleConfirmNewProgram then handleGenerate path',
         ],
-        currentProgramSessionCount: currentProgramSnapshot.sessions?.length ?? 0,
+        currentProgramSessionCount: currentProgramSnapshot?.sessions?.length ?? 0,
       })
       
       // [PHASE 24C] TASK 6 - Page-side modify open request audit

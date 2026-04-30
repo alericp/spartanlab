@@ -10029,7 +10029,7 @@ export default function ProgramPage() {
             goalCategories: inputsMeta.goalCategories,
             selectedFlexibility: inputsMeta.selectedFlexibility,
             experienceLevel: inputs?.experienceLevel ?? null,
-            selectedStyles: inputs?.selectedStyles ?? [],
+            selectedStyles: readProgramPageStringArray(inputs, 'selectedStyles'),
           },
           freshRebuildInputTruth: {
             primaryGoal: freshRebuildInput?.primaryGoal ?? null,
@@ -10044,7 +10044,7 @@ export default function ProgramPage() {
             goalCategories: freshRebuildInput?.goalCategories ?? [],
             selectedFlexibility: freshRebuildInput?.selectedFlexibility ?? [],
             experienceLevel: freshRebuildInput?.experienceLevel ?? null,
-            selectedStyles: freshRebuildInput?.selectedStyles ?? [],
+            selectedStyles: readProgramPageStringArray(freshRebuildInput, 'selectedStyles'),
           },
           canonicalBaselineTruth: {
             primaryGoal: canonicalProfileNow?.primaryGoal ?? null,
@@ -10059,7 +10059,7 @@ export default function ProgramPage() {
             goalCategories: canonicalProfileNow?.goalCategories ?? [],
             selectedFlexibility: canonicalProfileNow?.selectedFlexibility ?? [],
             experienceLevel: canonicalProfileNow?.experienceLevel ?? null,
-            selectedStyles: canonicalProfileNow?.selectedStyles ?? [],
+            selectedStyles: readProgramPageStringArray(canonicalProfileNow, 'selectedStyles'),
           },
           fieldsStillAtRiskIfNotExplicitlyMerged: [
             'goalCategories',
@@ -10329,7 +10329,7 @@ export default function ProgramPage() {
           sessionDurationMode: strongestRegenerateTruth.sessionDurationMode,
           sessionLength: strongestRegenerateTruth.sessionLength,
           selectedSkills: strongestRegenerateTruth.selectedSkills,
-          selectedStyles: (inputs?.selectedStyles?.length ?? 0) > 0 ? inputs.selectedStyles : freshRebuildInput?.selectedStyles,
+          selectedStyles: (((): string[] => { const a = readProgramPageStringArray(inputs, 'selectedStyles'); return a.length > 0 ? a : readProgramPageStringArray(freshRebuildInput, 'selectedStyles') })()),
           trainingPathType: strongestRegenerateTruth.trainingPathType,
           equipment: strongestRegenerateTruth.equipment,
           // [PHASE 18B] TASK 4 - Deep planner identity fields
@@ -10354,7 +10354,7 @@ export default function ProgramPage() {
             sessionDurationMode: inputsMeta.sessionDurationMode,
             sessionLength: inputs?.sessionLength ?? null,
             selectedSkills: inputs?.selectedSkills ?? [],
-            selectedStyles: inputs?.selectedStyles ?? [],
+            selectedStyles: readProgramPageStringArray(inputs, 'selectedStyles'),
             trainingPathType: inputsMeta.trainingPathType,
             equipment: inputs?.equipment ?? [],
           },
@@ -10366,7 +10366,7 @@ export default function ProgramPage() {
             sessionDurationMode: freshRebuildInput?.sessionDurationMode ?? null,
             sessionLength: freshRebuildInput?.sessionLength ?? null,
             selectedSkills: freshRebuildInput?.selectedSkills ?? [],
-            selectedStyles: freshRebuildInput?.selectedStyles ?? [],
+            selectedStyles: readProgramPageStringArray(freshRebuildInput, 'selectedStyles'),
             trainingPathType: freshRebuildInput?.trainingPathType ?? null,
             equipment: freshRebuildInput?.equipment ?? [],
           },
@@ -10442,11 +10442,9 @@ export default function ProgramPage() {
           'rest_pause',
           'ladder_sets',
         ])
-        const pageStylesTruth: string[] = Array.isArray(inputs?.selectedStyles) && inputs!.selectedStyles!.length > 0
-          ? (inputs!.selectedStyles as string[])
-          : (Array.isArray((freshRebuildInput as unknown as { selectedStyles?: string[] })?.selectedStyles)
-              ? ((freshRebuildInput as unknown as { selectedStyles?: string[] }).selectedStyles as string[])
-              : [])
+        const pageStylesFromInputs = readProgramPageStringArray(inputs, 'selectedStyles')
+        const pageStylesFromFresh = readProgramPageStringArray(freshRebuildInput, 'selectedStyles')
+        const pageStylesTruth: string[] = pageStylesFromInputs.length > 0 ? pageStylesFromInputs : pageStylesFromFresh
         const pageStylesFiltered = pageStylesTruth.filter(s => typeof s === 'string' && METHOD_PREF_VOCAB.has(s))
         const canonicalMethodPrefs = Array.isArray(canonicalProfileNow?.trainingMethodPreferences)
           ? (canonicalProfileNow!.trainingMethodPreferences as unknown as string[])
@@ -10494,9 +10492,9 @@ export default function ProgramPage() {
         // [METHOD-PREFERENCE-BRIDGE] Pre-fetch audit.
         console.log('[rebuild-method-preference-truth-entry-audit]', {
           source: 'handleRegenerate:program_page_before_fetch',
-          inputs_selectedStyles: inputs?.selectedStyles ?? [],
-          inputs_selectedStyles_count: Array.isArray(inputs?.selectedStyles) ? inputs!.selectedStyles!.length : 0,
-          freshRebuildInput_selectedStyles: (freshRebuildInput as unknown as { selectedStyles?: string[] })?.selectedStyles ?? [],
+          inputs_selectedStyles: pageStylesFromInputs,
+          inputs_selectedStyles_count: pageStylesFromInputs.length,
+          freshRebuildInput_selectedStyles: pageStylesFromFresh,
           canonical_trainingMethodPreferences: canonicalMethodPrefs,
           canonical_trainingMethodPreferences_count: canonicalMethodPrefs.length,
           pageStylesTruth_filtered: pageStylesFiltered,
@@ -13227,7 +13225,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       effectiveScheduleMode: updatedInputs.scheduleMode ?? null,
       effectiveTrainingDays: updatedInputs.trainingDaysPerWeek ?? null,
       effectiveSelectedSkills: updatedInputs.selectedSkills ?? null,
-      effectiveSelectedStyles: updatedInputs.selectedStyles ?? null,
+      effectiveSelectedStyles: (((): string[] | null => { const a = readProgramPageStringArray(updatedInputs, 'selectedStyles'); return a.length > 0 ? a : null })()),
       effectiveTargetSessionDuration: updatedInputs.sessionLength ?? null,
     })
     
@@ -13322,7 +13320,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           ? updatedInputs?.sessionLength
           : (inputs?.sessionLength ?? updatedInputs?.sessionLength),
         // selectedStyles still prefers inputs as fallback (not part of 4 material identity fields)
-        selectedStyles: (inputs?.selectedStyles?.length ?? 0) > 0 ? inputs.selectedStyles : updatedInputs?.selectedStyles,
+        selectedStyles: (((): string[] => { const a = readProgramPageStringArray(inputs, 'selectedStyles'); return a.length > 0 ? a : readProgramPageStringArray(updatedInputs, 'selectedStyles') })()),
         // For equipment, only preserve from inputs if request is NOT equipment
         equipment: request.type === 'equipment'
           ? updatedInputs?.equipment
@@ -13346,7 +13344,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           sessionDurationMode: inputsMeta.sessionDurationMode,
           sessionLength: inputs?.sessionLength ?? null,
           selectedSkills: inputs?.selectedSkills ?? [],
-          selectedStyles: inputs?.selectedStyles ?? [],
+          selectedStyles: readProgramPageStringArray(inputs, 'selectedStyles'),
           trainingPathType: inputsMeta.trainingPathType,
           equipment: inputs?.equipment ?? [],
         },
@@ -13358,7 +13356,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           sessionDurationMode: updatedInputs?.sessionDurationMode ?? null,
           sessionLength: updatedInputs?.sessionLength ?? null,
           selectedSkills: updatedInputs?.selectedSkills ?? [],
-          selectedStyles: updatedInputs?.selectedStyles ?? [],
+          selectedStyles: readProgramPageStringArray(updatedInputs, 'selectedStyles'),
           trainingPathType: updatedInputs?.trainingPathType ?? null,
           equipment: updatedInputs?.equipment ?? [],
         },

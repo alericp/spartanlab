@@ -8255,7 +8255,18 @@ export default function ProgramPage() {
           })
           setBuilderOrigin('default')
           setBuilderSessionInputsAndRef(null)
-          setBuilderSessionKey(null)
+          // [STEP-5A-TAU] Use the established `'initial'` sentinel — matches
+          //   the initial `useState<string>('initial')` declaration at L2986
+          //   AND the three sibling modify-flow reset sites at L9335 (post-success
+          //   modify reset), L9460 (unmount reset), L16901 (cancel modify reset).
+          //   The previous `null` here was an unambiguous copy-paste divergence
+          //   from the surrounding `setBuilderSessionInputsAndRef(null)` /
+          //   `setBuilderSessionSource(null)` calls — `builderSessionKey` is
+          //   typed `string` (NOT `string | null`) because it is consumed as
+          //   a React `key` prop at L16873 and as a string identity in 14+
+          //   other read sites. The `'initial'` sentinel is the canonical
+          //   "no active builder session" string value.
+          setBuilderSessionKey('initial')
           setBuilderSessionSource(null)
         }
         

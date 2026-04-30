@@ -14,13 +14,6 @@
 // =============================================================================
 const WORKOUT_SESSION_ROUTE_VERSION = 'phase_lw2_boot_safe_v1'
 
-// [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Route-level build chip. Always visible
-// fingerprint (NOT dev-only) that the authoritative active workout corridor
-// renders as the first segment of its three-part fingerprint
-// (WS-R3 | SWS-R3 | AWC-R3). If the user's live workout screen does not show
-// this exact chip prefix, the phone is running a stale build.
-export const WORKOUT_ROUTE_BUILD_CHIP = 'WS-R3'
-
 // [PHASE LW2] Route-level boot stage marker
 function markRouteStage(stage: string, data?: Record<string, unknown>): void {
   if (typeof window === 'undefined') return
@@ -92,22 +85,6 @@ import {
   type SessionMeta,
   type AuthoritativeSessionResult,
 } from '@/lib/workout/load-authoritative-session'
-// [SELECTED-VARIANT-SESSION-CONTRACT] Single authoritative owner of the
-// selected-variant body and its launch fingerprint. The route uses the
-// same builder the Program card used, then diffs its resolved fingerprint
-// against the card's stamped fingerprint. Parity drift is surfaced as a
-// visible PARITY chip rather than collapsing silently to full session.
-import {
-  buildSelectedVariantMain,
-  buildSessionFingerprint,
-  compareFingerprints,
-  readLaunchFingerprint,
-  validateSelectedBodySnapshot,
-  type SessionFingerprint,
-  type FingerprintComparison,
-  type LaunchFingerprintPayload,
-  type SnapshotValidation,
-} from '@/lib/workout/selected-variant-session-contract'
 
 // =============================================================================
 // LOCAL ERROR BOUNDARY - Catches workout engine crashes locally
@@ -306,53 +283,6 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
 
   render() {
     if (this.state.hasError) {
-      // [LIVE-TRUE-ISOLATION-R5] Narrowed diagnostic footer. Reads the live
-      // boot stage marker set by StreamlinedWorkoutSession and the
-      // LiveWorkoutExecutionSurface. Buckets each crash into exactly one
-      // of: parent_pre_live (no live stage set), ready_shell_render,
-      // live_branch_entered, live_snapshot_build, live_execution_surface_render,
-      // or active_workout_corridor_render. Also reads any sessionStorage
-      // failure record written before a throw so the bucket survives HMR.
-      let liveStage: string = 'unset'
-      let liveFailureRecord: { stage?: string; errorName?: string; errorMessage?: string } | null = null
-      try {
-        if (typeof window !== 'undefined') {
-          liveStage = (window as unknown as { __spartanlabLiveBootStage?: string }).__spartanlabLiveBootStage || 'unset'
-        }
-        if (typeof sessionStorage !== 'undefined') {
-          const rec = sessionStorage.getItem('spartanlab_live_boot_failure')
-          if (rec) liveFailureRecord = JSON.parse(rec)
-        }
-      } catch {}
-      
-      // Authoritative bucket: failure record from inner boundaries wins
-      // over the last-seen stage marker, then fall back to stage marker.
-      const failureBucket: string = (liveFailureRecord?.stage) || liveStage
-      
-      // Layer attribution for the one-line "where did it fail" answer.
-      let layerLabel = 'pre-live parent hooks'
-      if (failureBucket === 'ready_shell_render') layerLabel = 'ready shell'
-      else if (failureBucket === 'live_branch_entered') layerLabel = 'live branch entry'
-      else if (failureBucket === 'live_snapshot_build' || failureBucket === 'live_snapshot_build_failed') layerLabel = 'live snapshot build'
-      else if (failureBucket === 'live_snapshot_build_succeeded') layerLabel = 'post-snapshot (surface mount)'
-      else if (failureBucket === 'live_execution_surface_render') layerLabel = 'live execution surface'
-      else if (failureBucket === 'active_workout_corridor_render') layerLabel = 'active workout corridor'
-      
-      const errName = this.state.error?.name || 'Error'
-      const errMsg = (this.state.error?.message || '').slice(0, 140)
-      const recordedErrName = liveFailureRecord?.errorName
-      const recordedErrMsg = (liveFailureRecord?.errorMessage || '').slice(0, 140)
-      
-      // Detect crash corridor (same buckets the inner logger uses).
-      const msgForCorridor = (this.state.error?.message || recordedErrMsg || '')
-      const crashCorridor =
-        msgForCorridor.includes('is not defined') ? 'reference_error'
-        : msgForCorridor.includes('toLowerCase') || msgForCorridor.includes('toUpperCase') ? 'unsafe_string_op'
-        : msgForCorridor.includes('undefined') || msgForCorridor.includes('null') ? 'null_reference'
-        : msgForCorridor.includes('map') || msgForCorridor.includes('filter') || msgForCorridor.includes('reduce') ? 'array_op'
-        : this.state.error?.name === 'ReferenceError' ? 'reference_error'
-        : 'unknown'
-      
       return (
         <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
           <div className="text-center max-w-sm">
@@ -381,33 +311,6 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
                   Return to Dashboard
                 </Button>
               </Link>
-            </div>
-            {/* [LIVE-TRUE-ISOLATION-R5] Narrowed diagnostic footer. Production
-                visible, compact, no stack dumps. Tells the next prompt exactly
-                which of the three post-isolation buckets tore down. */}
-            <div className="mt-6 text-left text-[10px] font-mono text-[#6B7280] bg-[#12161C] border border-[#2B313A] rounded px-3 py-2 space-y-0.5">
-              <div className="flex justify-between gap-2">
-                <span className="text-[#4B5563] uppercase tracking-wider">Layer</span>
-                <span className="text-[#A4ACB8] truncate">{layerLabel}</span>
-              </div>
-              <div className="flex justify-between gap-2">
-                <span className="text-[#4B5563] uppercase tracking-wider">Stage</span>
-                <span className="text-[#A4ACB8] truncate">{failureBucket}</span>
-              </div>
-              <div className="flex justify-between gap-2">
-                <span className="text-[#4B5563] uppercase tracking-wider">Corridor</span>
-                <span className="text-[#A4ACB8] truncate">{crashCorridor}</span>
-              </div>
-              <div className="flex justify-between gap-2">
-                <span className="text-[#4B5563] uppercase tracking-wider">Error</span>
-                <span className="text-[#A4ACB8] truncate">{recordedErrName || errName}</span>
-              </div>
-              {(recordedErrMsg || errMsg) && (
-                <div className="pt-1 border-t border-[#2B313A]">
-                  <span className="text-[#4B5563] uppercase tracking-wider">Msg</span>{' '}
-                  <span className="text-[#A4ACB8] break-words">{recordedErrMsg || errMsg}</span>
-                </div>
-              )}
             </div>
             {/* [PHASE LW4] Dev-only diagnostic info */}
             {process.env.NODE_ENV === 'development' && (
@@ -728,42 +631,6 @@ function WorkoutSessionContent() {
   // [DISPLAY-CONTRACT] Use safe display contract instead of raw reasoning
   const [reasoningSummary, setReasoningSummary] = useState<WorkoutReasoningDisplayContract | undefined>(undefined)
   const [loading, setLoading] = useState(true)
-  // [SELECTED-VARIANT-SESSION-CONTRACT] Parity state. `expectedLaunchPayload`
-  // is the fingerprint the Program card stamped before router.push;
-  // `actualFingerprint` is what this route actually built for the live
-  // session; `parityReport` is the diff between them. If parityReport.ok is
-  // false, the visible PARITY chip in the route proof panel flips from
-  // PARITY:OK to PARITY:MISMATCH with the specific field names that drifted,
-  // so the selected-variant corridor never silently collapses to full.
-  const [expectedLaunchPayload, setExpectedLaunchPayload] =
-    useState<LaunchFingerprintPayload | null>(null)
-  const [actualFingerprint, setActualFingerprint] =
-    useState<SessionFingerprint | null>(null)
-  const [parityReport, setParityReport] = useState<FingerprintComparison | null>(null)
-  // Resolved-from tag from the route's own buildSelectedVariantMain call.
-  // Exposed in the proof panel so the user can see whether the live workout
-  // boot came from a real variant or fell through to a divergence marker.
-  const [routeResolvedFrom, setRouteResolvedFrom] = useState<
-    'variant' | 'full' | 'variant_missing' | 'variant_hollow' | null
-  >(null)
-  // [PROGRAM-TO-LIVE MIRROR CONTRACT] Which source actually drove the boot:
-  //   visible_snapshot          -> snapshot passed validation; live body IS
-  //                                the exact array the Program card rendered
-  //   fallback_loaded_session   -> snapshot missing/invalid; live body came
-  //                                from loadAuthoritativeSession +
-  //                                buildSelectedVariantMain re-derivation
-  //   recovery_fallback         -> reserved for future recovery path (not
-  //                                currently emitted; included for contract
-  //                                completeness)
-  // This is the single source of truth for "was the mirror honored?". The
-  // parity chip still reports the diagnostic diff between card-stamped and
-  // route-re-derived fingerprints so any silent drift in the fallback path
-  // remains visible, but the actual live body now prefers the snapshot.
-  const [bootSource, setBootSource] = useState<
-    'visible_snapshot' | 'fallback_loaded_session' | 'recovery_fallback' | null
-  >(null)
-  const [snapshotValidation, setSnapshotValidation] =
-    useState<SnapshotValidation | null>(null)
   // [PHASE-X+1] Error state removed - authoritative loader handles all errors internally
   
   useEffect(() => {
@@ -832,164 +699,137 @@ function WorkoutSessionContent() {
         demoMode,
       })
       
-      // =======================================================================
-      // [SELECTED-SESSION-OWNERSHIP-LOCK] Authoritative variant application.
-      //
-      // The URL params read at the top of this component (`dayParam`,
-      // `executionMode`, `variantIndex`, `weekOverride`) are the EXCLUSIVE
-      // downstream authority for this corridor. They are written by
-      // AdaptiveSessionCard's `selectedSessionContract.selectedLaunchUrl` and
-      // MUST be honored here without any independent re-derivation from
-      // program state, storage, or defaults. The three jobs this block is
-      // allowed to do:
-      //
-      //   1. If `variantIndex > 0` AND a usable `variant.selection.main`
-      //      exists on the loaded session, replace `finalSession.exercises`
-      //      with the variant-narrowed, authoritative-identity-preserved
-      //      list (SESSION-TRUTH-UNITY) and prune styleMetadata exactly
-      //      the way the Program card does (SELECTED-SESSION-OWNERSHIP-LOCK
-      //      prune parity below).
-      //
-      //   2. If `variantIndex > 0` BUT the variant cannot be materialized
-      //      (variants array missing, or variant has no `selection.main`),
-      //      DO NOT silently fall back to the full session. Stamp at least
-      //      `estimatedMinutes` from the variant's declared duration so the
-      //      mode chip does not lie, and LOG CRITICAL so the upstream break
-      //      is auditable. See the two `else` branches below.
-      //
-      //   3. If `variantIndex === 0` (Full Session) do nothing - full
-      //      session is the correct booted shape.
-      //
-      // There is exactly ONE owner of selected-session truth in this
-      // corridor: AdaptiveSessionCard's `selectedSessionContract`. It
-      // writes the URL, this block reads the URL. No other code path in
-      // this route is allowed to derive, default, or replace the selected
-      // variant -- the useEffect dep array at the bottom of this function
-      // (dayParam, demoMode, isFirstSession, variantIndex, executionMode,
-      // weekOverride) ensures any change to the contract re-enters this
-      // resolver and no stale render can survive.
-      // =======================================================================
-      // =======================================================================
-      // [SELECTED-VARIANT-SESSION-CONTRACT] Route-side body resolution now
-      // delegates to the SAME `buildSelectedVariantMain` helper the Program
-      // card called before launch. This removes the historical owner split
-      // where the card mapped variant.selection.main one way and the route
-      // mapped it another way against the same input -- producing subtly
-      // different bodies for the same requested variant. Both sides now
-      // share ONE algorithm. Parity is proven by fingerprint diff below.
-      // =======================================================================
-      const routeResolved = buildSelectedVariantMain(
-        result.session,
-        variantIndex,
-        executionMode,
-      )
-      setRouteResolvedFrom(routeResolved.resolvedFrom)
-
+      // [PHASE-VARIANT-TRUTH] Apply variant selection if specified
+      // This ensures Today page's selected variant (Full/45/30) flows through to live workout
       let finalSession = result.session
       if (variantIndex > 0 && result.session.variants && result.session.variants[variantIndex]) {
         const variant = result.session.variants[variantIndex]
-        if (variant.selection?.main && routeResolved.resolvedFrom === 'variant') {
+        if (variant.selection?.main) {
           console.log('[PHASE-VARIANT-TRUTH] Applying variant selection', {
             variantIndex,
             variantLabel: variant.label,
             variantDuration: variant.duration,
             originalExerciseCount: result.session.exercises.length,
             variantExerciseCount: variant.selection.main.length,
-            resolvedFrom: routeResolved.resolvedFrom,
           })
 
           // ===================================================================
-          // [SELECTED-VARIANT-SESSION-CONTRACT] Shared-owner body.
+          // [SESSION-TRUTH-UNITY] Preserve authoritative exercise identity.
           //
-          // The variant's main exercise body comes from `routeResolved`
-          // above, which is the SAME `buildSelectedVariantMain(session,
-          // variantIndex, executionMode)` call the Program card made before
-          // router.push. Identity preservation (id / blockId / method /
-          // methodLabel / prescribedLoad / category) and variant
-          // prescription overlay (sets / repsOrTime / targetRPE /
-          // restSeconds / note / selectionReason / wasAdapted /
-          // coachingMeta) are both owned by the shared helper. This block
-          // used to have its own near-identical mapping; keeping a parallel
-          // copy invited owner drift (the exact failure mode this corridor
-          // lock is fixing).
+          // Previously this branch synthesized new IDs (`variant-${i}-${idx}`)
+          // and dropped blockId/method/methodLabel/prescribedLoad, so the live
+          // runner received a flattened variant that no longer matched the
+          // Program card (which uses `variant.selection.main[i].exercise.id`,
+          // the original id, and the bridge's lookup against session.exercises
+          // to preserve grouped identity). The two surfaces consumed different
+          // session truths, which broke order parity AND stripped grouped
+          // execution in 45/30 mode.
           //
-          // The `normKey`/`originalById`/`originalByName` rebuild below is
-          // ONLY used by the styledGroups prune downstream; the exercise
-          // body itself now flows from `routeResolved.exercises`.
+          // Now: look up each variant.selection.main[i] against the original
+          // result.session.exercises by id and normalized name, carry forward
+          // the matched original exercise, and overlay variant-specific
+          // prescription fields (sets / repsOrTime / targetRPE / restSeconds
+          // / note / selectionReason / wasAdapted / coachingMeta). Original
+          // id, blockId, method, methodLabel, prescribedLoad, and category
+          // survive intact so grouped execution plan derivation in
+          // StreamlinedWorkoutSession matches what the Program card rendered.
           // ===================================================================
           const normKey = (s: string): string =>
             String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
 
-          const variantExercises = routeResolved.exercises
+          const originalById = new Map<string, typeof result.session.exercises[number]>()
+          const originalByName = new Map<string, typeof result.session.exercises[number]>()
+          for (const ex of result.session.exercises) {
+            if (ex?.id) originalById.set(ex.id, ex)
+            if (ex?.name) originalByName.set(normKey(ex.name), ex)
+          }
+
+          const variantExercises = variant.selection.main.map((sel, idx) => {
+            const selExId = sel.exercise?.id
+            const selExName = sel.exercise?.name || sel.name
+            const matched =
+              (selExId && originalById.get(selExId)) ||
+              (selExName && originalByName.get(normKey(selExName))) ||
+              null
+
+            if (!matched) {
+              console.log('[SESSION-TRUTH-UNITY] No original match for variant selection', {
+                variantIndex,
+                idx,
+                selExId,
+                selExName,
+              })
+            }
+
+            // Start from original exercise truth (preserves id, blockId,
+            // method, methodLabel, prescribedLoad, category, source, etc.),
+            // then overlay variant-specific prescription fields. If no match
+            // (variant introduced a new item), fall back to a minimal shape
+            // using the variant id so at least one identity survives.
+            const base = matched ?? {
+              id: selExId || `variant-${variantIndex}-${idx}`,
+              name: selExName,
+              category: sel.category || 'general',
+              sets: sel.sets,
+              repsOrTime: sel.repsOrTime,
+              note: sel.note || '',
+              isOverrideable: true,
+              selectionReason: sel.selectionReason || '',
+            }
+
+            return {
+              ...base,
+              // Overlay variant-specific prescription. These fields are what
+              // the variant actually compressed/adjusted.
+              sets: sel.sets ?? base.sets,
+              repsOrTime: sel.repsOrTime ?? base.repsOrTime,
+              note: sel.note ?? base.note,
+              selectionReason: sel.selectionReason ?? base.selectionReason,
+              targetRPE: sel.targetRPE ?? (base as { targetRPE?: unknown }).targetRPE,
+              restSeconds: sel.restSeconds ?? (base as { restSeconds?: unknown }).restSeconds,
+              wasAdapted: sel.wasAdapted ?? (base as { wasAdapted?: unknown }).wasAdapted,
+              coachingMeta: sel.coachingMeta ?? (base as { coachingMeta?: unknown }).coachingMeta,
+            }
+          })
 
           // ===================================================================
-          // [SELECTED-SESSION-OWNERSHIP-LOCK] Prune styleMetadata.styledGroups
-          // so runtime grouped-plan derivation only references exercises
-          // present in the selected variant. Without this, a superset whose
-          // second member was dropped by compression would still tell
-          // StreamlinedWorkoutSession to execute both members (it reads
-          // groups.exercises, not the exercise list), producing an execution
-          // that disagrees with the Program card and the variant itself.
-          //
-          // [SELECTED-SESSION-OWNERSHIP-LOCK] This prune MUST exactly mirror
-          // AdaptiveSessionCard's `variantPrunedStyleMetadata` (see
-          // components/programs/AdaptiveSessionCard.tsx:786-852). Previously
-          // this route's prune diverged from the card in two material ways:
-          //   1. The card matches surviving members on id OR normalized name
-          //      OR `blockId` (VARIANT-PRUNE-BLOCKID-MATCH). This route only
-          //      matched id + name, so any group whose member survived only
-          //      via shared blockId on the card was silently DROPPED on the
-          //      live workout boot. Result: cluster/superset chip visible on
-          //      Program card, but flat execution in live workout.
-          //   2. The card's method minimums are `straight` always kept,
-          //      `superset`/`circuit` >= 2, `cluster`/`density_block`/default
-          //      >= 1 (METHOD-ONLY-VISIBILITY). This route required
-          //      `density_block` >= 2, so 1-member method-only density blocks
-          //      survived card prune but were silently dropped here.
-          // Both divergences are now closed -- route prune uses the same
-          // three-signal survivor set (id + normalized name + blockId) and
-          // the same per-method minimums as the card.
+          // [SESSION-TRUTH-UNITY] Prune styleMetadata.styledGroups so runtime
+          // grouped-plan derivation only references exercises present in the
+          // selected variant. Without this, a superset whose second member
+          // was dropped by compression would still tell StreamlinedWorkoutSession
+          // to execute both members (it reads groups.exercises, not the
+          // exercise list), producing an execution that disagrees with the
+          // Program card and the variant itself.
           // ===================================================================
           let prunedStyleMetadata = result.session.styleMetadata
           if (result.session.styleMetadata?.styledGroups) {
             const survivingIds = new Set(variantExercises.map((e) => e.id))
             const survivingNames = new Set(variantExercises.map((e) => normKey(e.name)))
-            // [SELECTED-SESSION-OWNERSHIP-LOCK] blockId survivor signal -
-            // matches AdaptiveSessionCard's VARIANT-PRUNE-BLOCKID-MATCH so a
-            // group whose member retains its originating blockId under the
-            // selected variant is not silently stranded below its method
-            // minimum.
-            const survivingBlockIds = new Set(
-              variantExercises
-                .map((e) => (e as unknown as { blockId?: string }).blockId)
-                .filter((b): b is string => typeof b === 'string' && b.length > 0)
-            )
             const prunedGroups = result.session.styleMetadata.styledGroups
               .map((g) => {
-                const groupBlockSurvives =
-                  typeof g.id === 'string' && g.id.length > 0 && survivingBlockIds.has(g.id)
                 const keptMembers = g.exercises.filter(
-                  (m) =>
-                    survivingIds.has(m.id) ||
-                    survivingNames.has(normKey(m.name)) ||
-                    groupBlockSurvives
+                  (m) => survivingIds.has(m.id) || survivingNames.has(normKey(m.name))
                 )
                 return { ...g, exercises: keptMembers }
               })
-              // [SELECTED-SESSION-OWNERSHIP-LOCK] Method-specific minimums.
-              // MUST stay byte-for-byte in sync with AdaptiveSessionCard's
-              // variantPrunedStyleMetadata (METHOD-ONLY-VISIBILITY).
-              //   straight                            -> always kept
-              //   superset / circuit                  -> >= 2 members
-              //   cluster / density_block / default   -> >= 1 member
+              // [METHOD-MIN-MEMBERS-AUTHORITY] Method-specific minimums so we
+              // don't accidentally drop legitimate single-exercise cluster
+              // groups. Inlined to match the canonical `minMembersFor()` in
+              // components/programs/lib/session-group-display.ts without
+              // adding a top-level import to this boot-sensitive route. Rule
+              // MUST stay in sync with that helper (and with the identical
+              // prune in AdaptiveSessionCard's variantPrunedStyleMetadata).
+              //   superset / circuit / density_block -> 2 members minimum
+              //   cluster                             -> 1 member minimum
+              //   straight / default                  -> 1 member minimum
               .filter((g) => {
-                if (g.groupType === 'straight') return true
-                if (g.groupType === 'superset' || g.groupType === 'circuit') {
-                  return g.exercises.length >= 2
-                }
-                // cluster, density_block, and any other method-only style
-                // the card keeps at >= 1
-                return g.exercises.length >= 1
+                const minMembers =
+                  g.groupType === 'superset' ||
+                  g.groupType === 'circuit' ||
+                  g.groupType === 'density_block'
+                    ? 2
+                    : 1
+                return g.exercises.length >= minMembers
               })
 
             prunedStyleMetadata = {
@@ -997,15 +837,10 @@ function WorkoutSessionContent() {
               styledGroups: prunedGroups,
             }
 
-            console.log('[SELECTED-SESSION-OWNERSHIP-LOCK] Pruned styledGroups for variant (card-parity)', {
+            console.log('[SESSION-TRUTH-UNITY] Pruned styledGroups for variant', {
               variantIndex,
               originalGroupCount: result.session.styleMetadata.styledGroups.length,
               prunedGroupCount: prunedGroups.length,
-              survivorSignals: {
-                idCount: survivingIds.size,
-                nameCount: survivingNames.size,
-                blockIdCount: survivingBlockIds.size,
-              },
             })
           }
 
@@ -1015,319 +850,13 @@ function WorkoutSessionContent() {
             estimatedMinutes: variant.duration,
             styleMetadata: prunedStyleMetadata,
           }
-        } else {
-          // =================================================================
-          // [SELECTED-SESSION-OWNERSHIP-LOCK] Stale-fallback CUT-OFF.
-          //
-          // Prior behavior: when `variantIndex > 0` but the variant object
-          // had no `selection.main` payload (corrupt/old cached program,
-          // partially regenerated variant, etc.), this block was entirely
-          // skipped and `finalSession` silently reverted to the FULL session
-          // from `result.session`. That was the single biggest silent
-          // divergence in the corridor: the user pressed 45/30 on the
-          // Program card, the Card's launch payload correctly emitted
-          // `variant=1&mode=45_min`, the route parsed both, but the live
-          // workout booted the full session anyway -- with no log, no user
-          // signal, and no way to tell from the live workout screen that a
-          // variant was ever requested.
-          //
-          // The cut-off: if variant was requested but cannot be materialized,
-          // we refuse to let full-session truth win silently. We:
-          //   (a) KEEP `result.session` exercises (we have no variant body
-          //       to substitute in - the variant had no selection.main), but
-          //   (b) STAMP `estimatedMinutes` to `variant.duration` when the
-          //       variant object at least declared a duration, so the mode
-          //       label and duration on the live workout stay consistent
-          //       with what the Program card launched, and
-          //   (c) LOG LOUDLY with CRITICAL severity so upstream (program
-          //       generation / variant selection.main population) can be
-          //       traced and fixed. This is intentionally NOT a fallback
-          //       replacement for missing variant data - it is a visible
-          //       divergence marker so the failure is auditable instead of
-          //       silent.
-          // =================================================================
-          const variantDuration =
-            typeof variant?.duration === 'number' && variant.duration > 0
-              ? variant.duration
-              : result.session.estimatedMinutes
-          finalSession = {
-            ...result.session,
-            estimatedMinutes: variantDuration,
-          }
-          console.error('[SELECTED-SESSION-OWNERSHIP-LOCK] CRITICAL variant divergence - selection.main missing', {
-            variantIndex,
-            variantLabel: variant?.label,
-            variantDurationDeclared: variant?.duration,
-            hasSelectionObject: !!variant?.selection,
-            hasMainArray: Array.isArray(variant?.selection?.main),
-            mainArrayLength: Array.isArray(variant?.selection?.main)
-              ? variant!.selection.main.length
-              : 'not_array',
-            fullSessionExerciseCount: result.session.exercises.length,
-            action: 'kept_full_session_exercises_stamped_variant_duration',
-            note: 'Variant was requested by URL but variant.selection.main was unusable. Full-session exercises were kept (no variant body to substitute) but estimatedMinutes was stamped to the variant\'s declared duration so the live workout does not silently claim to be full mode. Upstream program generation must populate variant.selection.main.',
-          })
         }
-      } else if (variantIndex > 0) {
-        // =================================================================
-        // [SELECTED-SESSION-OWNERSHIP-LOCK] Second stale-fallback CUT-OFF.
-        //
-        // Variant index was requested but the variants array is missing or
-        // too short entirely (variants never generated, stale session
-        // cached, or idx out of range). Previously this branch silently
-        // reverted to full session with NO change to `finalSession` at all
-        // - not even an estimatedMinutes stamp - so the live workout booted
-        // full exercises AND full minutes, while the Program card had
-        // rendered 45/30 and the URL contract was `mode=45_min` /
-        // `mode=30_min`. That was the last remaining silent corridor
-        // divergence: mode chip said 45, minutes said 60, exercises were
-        // the full session, and nothing on-screen proved the variant had
-        // ever been requested.
-        //
-        // The cut-off mirrors the sibling `selection.main`-missing branch
-        // above:
-        //   (a) KEEP `result.session` exercises (no variant body to swap
-        //       in - variants array itself is unusable), and
-        //   (b) STAMP `estimatedMinutes` from the URL's authoritative
-        //       `executionMode` (45_min -> 45, 30_min -> 30) so the live
-        //       workout's duration matches what the Program card launched
-        //       instead of the full session's duration, and
-        //   (c) LOG CRITICAL so the upstream break (variants never
-        //       generated / out-of-range index) remains auditable.
-        //
-        // This is NOT a replacement for a real variant - it is a visible
-        // divergence marker. The mode chip and the estimatedMinutes agree;
-        // the exercises disagreeing is the visible signal that variant
-        // data is missing, which is exactly the intent of rule #4
-        // ("surface an explicit divergence") in the selected-session
-        // corridor lock.
-        // =================================================================
-        const intendedVariantDuration =
-          executionMode === '45_min'
-            ? 45
-            : executionMode === '30_min'
-              ? 30
-              : result.session.estimatedMinutes
-        finalSession = {
-          ...result.session,
-          estimatedMinutes: intendedVariantDuration,
-        }
-        console.error('[SELECTED-SESSION-OWNERSHIP-LOCK] CRITICAL variant divergence - variants array unusable', {
-          variantIndex,
-          executionMode,
-          hasVariantsArray: Array.isArray(result.session.variants),
-          variantsLength: Array.isArray(result.session.variants)
-            ? result.session.variants.length
-            : 'not_array',
-          fullSessionExerciseCount: result.session.exercises.length,
-          stampedEstimatedMinutes: intendedVariantDuration,
-          action: 'kept_full_session_exercises_stamped_mode_duration',
-          note: 'Variant was requested by URL but result.session.variants[variantIndex] is missing. Full-session exercises were kept (no variant body to substitute) but estimatedMinutes was stamped from the URL executionMode so the live workout does not silently claim full mode. Upstream must populate session.variants.',
-        })
       }
       
-      // =======================================================================
-      // [PROGRAM-TO-LIVE MIRROR CONTRACT] Mirror-boot decision.
-      //
-      // Before `setSession(finalSession)` runs, read the Program-card launch
-      // snapshot and, if it passes strict structural validation, OVERRIDE
-      // finalSession.exercises + finalSession.estimatedMinutes with the
-      // exact visible array the card rendered. This closes the remaining
-      // owner split where both sides called the same builder but fed it
-      // subtly different input sessions (program-state vs loader) and
-      // therefore produced drifted bodies.
-      //
-      // Storage key must match what the card wrote. Card writes with
-      // `session.dayNumber || 1`, which is exactly what it then serialized
-      // into the URL as `?day=...`. Reading by dayParam here (the URL
-      // truth) is therefore guaranteed to hit the same key on both sides.
-      // =======================================================================
-      const parsedDay = dayParam ? parseInt(dayParam, 10) : NaN
-      const keyDay =
-        Number.isFinite(parsedDay) && parsedDay >= 1
-          ? parsedDay
-          : (finalSession.dayNumber ?? 1)
-      const expectedPayload = readLaunchFingerprint(keyDay, variantIndex)
-      setExpectedLaunchPayload(expectedPayload)
-
-      const validation = validateSelectedBodySnapshot(expectedPayload)
-      setSnapshotValidation(validation)
-
-      // Capture the loader-derived body BEFORE any override so the parity
-      // diagnostic fingerprint reports what re-derivation WOULD have
-      // produced (critical audit surface even when snapshot boot succeeds).
-      const loaderDerivedExercises = finalSession.exercises
-      const loaderDerivedEstimatedMinutes = finalSession.estimatedMinutes
-
-      // ---- Mirror boot branch ----
-      if (validation.valid && expectedPayload?.selectedBody) {
-        const sb = expectedPayload.selectedBody
-        // [MIRROR-CORRIDOR-LOCKDOWN] Resolve the styleMetadata override.
-        //
-        // This is the critical missing piece that allowed grouped metadata
-        // to remain a shadow owner of exercise order even after snapshot
-        // exercise-boot succeeded. The card's variant body is narrow, but
-        // `result.session.styleMetadata` from the loader still carries the
-        // full-session styledGroups. StreamlinedWorkoutSession's executionPlan
-        // builder reads `safeSession.styleMetadata?.styledGroups`, matches
-        // group members against the snapshot exercises by id/name, and
-        // builds blocks whose `memberExerciseIndexes` point at (or miss)
-        // variant exercises -- live-workout-machine.ts:1208 then advances
-        // via those indexes, producing wrong-order or ghost-exercise boots.
-        //
-        // Three cases:
-        //   1. sb.styleMetadata is an object        -> use it as-is (the
-        //      card's variantPrunedStyleMetadata, groups narrowed to
-        //      surviving variant members).
-        //   2. sb.styleMetadata === null            -> clear finalSession
-        //      styleMetadata. Executes the "no grouped owner; derive a
-        //      flat executionPlan from snapshot exercises" contract.
-        //   3. sb.styleMetadata === undefined       -> pre-lockdown stamp.
-        //      Keep finalSession.styleMetadata from the loader; the
-        //      StreamlinedWorkoutSession safety-net filter (added in
-        //      this lockdown) will drop under-minimum blocks defensively.
-        const snapshotHasExplicitMeta = 'styleMetadata' in sb
-        const snapshotMeta = (sb as { styleMetadata?: unknown }).styleMetadata
-        const mergedSession: Record<string, unknown> = {
-          ...(finalSession as unknown as Record<string, unknown>),
-          exercises: sb.exercises,
-          estimatedMinutes: sb.estimatedMinutes,
-        }
-        if (snapshotHasExplicitMeta) {
-          if (snapshotMeta && typeof snapshotMeta === 'object') {
-            mergedSession.styleMetadata = snapshotMeta
-          } else {
-            // null -> clear. Deleting the key is cleaner than `undefined`
-            // because the safe-contract normalizer re-reads via
-            // `sessionAny.styleMetadata` and absence triggers the flat path.
-            delete mergedSession.styleMetadata
-          }
-        }
-        finalSession = mergedSession as typeof finalSession
-        setBootSource('visible_snapshot')
-        console.log('[PROGRAM-TO-LIVE MIRROR CONTRACT] BOOT_FROM_SNAPSHOT', {
-          variantIndex,
-          executionMode,
-          snapshotExerciseCount: sb.exercises.length,
-          snapshotExerciseIds: sb.exercises.map(
-            (e: { id?: string }) => e.id ?? null
-          ),
-          snapshotEstimatedMinutes: sb.estimatedMinutes,
-          snapshotWeekNumber: sb.weekNumber,
-          snapshotVariantLabel: sb.variantLabel,
-          // [MIRROR-CORRIDOR-LOCKDOWN] styleMetadata override audit
-          snapshotHasExplicitStyleMetadata: snapshotHasExplicitMeta,
-          snapshotStyleMetadataShape:
-            snapshotMeta && typeof snapshotMeta === 'object'
-              ? 'object'
-              : snapshotMeta === null
-                ? 'null_cleared'
-                : 'absent_pre_lockdown',
-          snapshotStyleMetadataGroupCount:
-            snapshotMeta &&
-            typeof snapshotMeta === 'object' &&
-            Array.isArray(
-              (snapshotMeta as { styledGroups?: unknown }).styledGroups
-            )
-              ? (snapshotMeta as { styledGroups: unknown[] }).styledGroups.length
-              : 0,
-          // Loader-side derivation was NOT used for boot, but we show what
-          // it would have produced for diagnostic value.
-          loaderDerivedExerciseCount: loaderDerivedExercises.length,
-          loaderDerivedEstimatedMinutes,
-          loaderDerivedFirstId: loaderDerivedExercises[0]?.id ?? null,
-          loaderDerivedLastId:
-            loaderDerivedExercises[loaderDerivedExercises.length - 1]?.id ?? null,
-        })
-      } else {
-        setBootSource('fallback_loaded_session')
-        console.log('[PROGRAM-TO-LIVE MIRROR CONTRACT] BOOT_FROM_LOADER (snapshot unusable)', {
-          variantIndex,
-          executionMode,
-          validationReason: validation.reason,
-          validationDetail: validation.detail,
-          hasStampedPayload: !!expectedPayload,
-          resolvedFrom: expectedPayload?.resolvedFrom ?? null,
-          loaderDerivedExerciseCount: loaderDerivedExercises.length,
-          note:
-            'No snapshot or snapshot failed validation; fell back to loader + buildSelectedVariantMain re-derivation. Parity chip below will surface any drift between the card stamp and the re-derived body.',
-        })
-      }
-
       // Set session and meta - GUARANTEED to have valid session
       setSession(finalSession)
       setSessionMeta(result.meta)
-
-      // =======================================================================
-      // [SELECTED-VARIANT-SESSION-CONTRACT] Parity diagnostic.
-      //
-      // The parity chip continues to report the diff between the card's
-      // stamped fingerprint and the route's re-derived fingerprint (built
-      // from `loaderDerivedExercises`, NOT from the mirrored body). This
-      // keeps the diagnostic honest: PARITY:OK means the loader and the
-      // card agree byte-for-byte on the fingerprint surface. PARITY:MISMATCH
-      // means the loader would have produced a different body than the
-      // card did -- important to surface even when the mirror boot rescued
-      // the live workout, because it signals an upstream owner drift that
-      // will silently re-appear if the snapshot stamp is ever lost
-      // (sessionStorage unavailable, direct URL navigation, etc.).
-      //
-      // The fingerprint built here is intentionally from the loader-derived
-      // body, NOT from the (possibly overridden) finalSession.exercises,
-      // so the diagnostic reflects the re-derivation drift rather than
-      // trivially returning OK whenever snapshot-boot succeeded.
-      // =======================================================================
-      const routeFingerprint = buildSessionFingerprint({
-        variantIndex,
-        mode: executionMode,
-        exercises: loaderDerivedExercises,
-        estimatedMinutes: loaderDerivedEstimatedMinutes,
-      })
-      setActualFingerprint(routeFingerprint)
-
-      const report = compareFingerprints(
-        expectedPayload?.fingerprint,
-        routeFingerprint
-      )
-      setParityReport(report)
-
-      console.log('[SELECTED-VARIANT-SESSION-CONTRACT] parity check', {
-        variantIndex,
-        executionMode,
-        routeResolvedFrom: routeResolved.resolvedFrom,
-        hasExpectedStamp: !!expectedPayload,
-        cardResolvedFrom: expectedPayload?.resolvedFrom ?? null,
-        parityOk: report.ok,
-        mismatches: report.mismatches,
-        routeFingerprint,
-        expectedFingerprint: expectedPayload?.fingerprint ?? null,
-        // Mirror-contract telemetry
-        bootSource:
-          validation.valid && expectedPayload?.selectedBody
-            ? 'visible_snapshot'
-            : 'fallback_loaded_session',
-        snapshotValidation: validation,
-      })
-      if (!report.ok && expectedPayload) {
-        console.error(
-          '[SELECTED-VARIANT-SESSION-CONTRACT] PARITY MISMATCH - Program card body and booted body disagree',
-          {
-            variantIndex,
-            executionMode,
-            mismatches: report.mismatches,
-            expected: expectedPayload.fingerprint,
-            actual: routeFingerprint,
-            // If snapshot boot succeeded, the user-visible live body still
-            // matches the card -- this log records the fallback-path drift
-            // that WOULD have occurred without the mirror contract.
-            bootSource:
-              validation.valid && expectedPayload?.selectedBody
-                ? 'visible_snapshot_rescued_from_loader_drift'
-                : 'fallback_loaded_session_drifted',
-          }
-        )
-      }
-
+      
       // [workout-init] Log normalized session data for debugging
       console.log('[workout-init] session ready:', {
         dayLabel: result.session.dayLabel,
@@ -1524,112 +1053,6 @@ function WorkoutSessionContent() {
   
   return (
     <WorkoutErrorBoundary>
-      {/* [SELECTED-SESSION-CONTRACT-PROOF] DEV-only route-level visible proof.
-          Proves the EXACT values the route received from the Program card's
-          launch payload AND the finalSession it actually built for the live
-          component. If this chip says `mode=45_min variant=1 finalEx=6
-          groups=2` but the Program card's dev Launch strip said idx=2 / 30_min,
-          the route layer is mis-parsing URL params. If this chip says
-          mode=45_min variant=1 but finalEx matches the full session's exercise
-          count, the route built finalSession from raw full-session truth
-          instead of the selected variant. Removed in production. */}
-      {process.env.NODE_ENV === 'development' && session && (
-        <div className="fixed top-2 left-2 z-[9999] rounded-md border border-[#4F6D8A]/40 bg-[#12161C]/95 px-2 py-1.5 text-[10px] font-mono text-[#7FA8CC] leading-tight max-w-[60vw]">
-          <div className="text-[#A4ACB8] uppercase tracking-wider text-[9px] mb-0.5 flex items-center gap-2">
-            <span>Route proof</span>
-            {/* [SELECTED-VARIANT-SESSION-CONTRACT] PARITY chip. Proves the
-                live workout booted the EXACT body the Program card stamped
-                at launch. OK = every fingerprint field (mode, variantIndex,
-                exerciseCount, first/last id + name, totalSets, minutes,
-                ordered ids) matches. MISMATCH = corridor drift; hover /
-                see console for drifted fields. NO_STAMP = user opened this
-                route directly without going through a Program card launch. */}
-            {(() => {
-              const tone = !expectedLaunchPayload
-                ? 'bg-slate-500/20 text-slate-300 border-slate-500/40'
-                : parityReport?.ok
-                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                  : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-              const label = !expectedLaunchPayload
-                ? 'PARITY:NO_STAMP'
-                : parityReport?.ok
-                  ? 'PARITY:OK'
-                  : `PARITY:MISMATCH`
-              return (
-                <span
-                  className={`rounded-sm border px-1 ${tone}`}
-                  title={
-                    parityReport && !parityReport.ok
-                      ? `drifted: ${parityReport.mismatches.join(', ')}`
-                      : undefined
-                  }
-                >
-                  {label}
-                </span>
-              )
-            })()}
-            {routeResolvedFrom && routeResolvedFrom !== 'variant' && routeResolvedFrom !== 'full' && (
-              <span className="rounded-sm border border-amber-500/40 bg-amber-500/20 text-amber-300 px-1">
-                SRC:{routeResolvedFrom}
-              </span>
-            )}
-            {/* [PROGRAM-TO-LIVE MIRROR CONTRACT] bootSource chip. Reports
-                whether the live workout body came from the Program card's
-                visible snapshot (BOOT:SNAPSHOT, green) or from the
-                loader+builder re-derivation fallback (BOOT:FALLBACK,
-                amber). If snapshot validation failed, the reason is in
-                title text. This is the authoritative mirror-contract
-                proof: BOOT:SNAPSHOT means whatever the card rendered is
-                EXACTLY what the live workout is rendering. */}
-            {bootSource && (
-              <span
-                className={`rounded-sm border px-1 ${
-                  bootSource === 'visible_snapshot'
-                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                    : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                }`}
-                title={
-                  bootSource !== 'visible_snapshot' && snapshotValidation?.reason
-                    ? `fallback reason: ${snapshotValidation.reason}`
-                    : undefined
-                }
-              >
-                {bootSource === 'visible_snapshot'
-                  ? 'BOOT:SNAPSHOT'
-                  : 'BOOT:FALLBACK'}
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-            <span>mode={executionMode}</span>
-            <span>variant={variantIndex}</span>
-            <span>finalEx={session.exercises?.length ?? 0}</span>
-            <span>
-              finalSets=
-              {(session.exercises ?? []).reduce(
-                (s: number, e: { sets?: number }) => s + (typeof e.sets === 'number' ? e.sets : 0),
-                0
-              )}
-            </span>
-            <span>
-              groups=
-              {session.styleMetadata?.styledGroups?.filter((g) => g.groupType !== 'straight').length ?? 0}
-            </span>
-            <span>min={session.estimatedMinutes ?? '?'}</span>
-            {actualFingerprint?.firstId && (
-              <span className="text-[#6A6A6A]">first={actualFingerprint.firstId}</span>
-            )}
-            {actualFingerprint?.lastId && (
-              <span className="text-[#6A6A6A]">last={actualFingerprint.lastId}</span>
-            )}
-          </div>
-          {parityReport && !parityReport.ok && expectedLaunchPayload && (
-            <div className="mt-1 text-amber-300 text-[9px] leading-tight">
-              drift: {parityReport.mismatches.slice(0, 3).join(' | ')}
-            </div>
-          )}
-        </div>
-      )}
       <StreamlinedWorkoutSession
         session={session}
         reasoningSummary={reasoningSummary}
@@ -1640,17 +1063,6 @@ function WorkoutSessionContent() {
         // [LIVE-WORKOUT-AUTHORITY] Pass execution mode to component
         executionMode={executionMode}
         variantIndex={variantIndex}
-        // [PHASE-J / RESUME-IDENTITY] Forward the AUTHORITATIVE selected week
-        // from the URL so the live workout component can persist it inside the
-        // resumable snapshot. Required for the dashboard Resume button to
-        // rebuild the same /workout/session?...&week=N launch URL the Program
-        // card stamped. Falsy => null (legacy "no week selection").
-        weekOverride={weekOverride ?? null}
-        // [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Forward the route-level build chip
-        // so the authoritative corridor can render the WS-R3 segment of its
-        // three-part fingerprint. If the chip does not reach the user's screen,
-        // the build pipeline is stale.
-        routeBuildChip={WORKOUT_ROUTE_BUILD_CHIP}
       />
       {/* [PHASE-X+1] Dev badge for session source - only in development */}
       {process.env.NODE_ENV === 'development' && sessionMeta?.recovered && (

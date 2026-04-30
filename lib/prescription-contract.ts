@@ -331,33 +331,15 @@ export function detectPrescriptionMode(
   isWeighted: boolean,
   exerciseId?: string
 ): PrescriptionMode {
-  // [STEP-4B-PRESCRIPTION-UNIT-TRUTH] Any exercise flagged as isometric must
-  // route to a HOLD prescription mode regardless of category or neural demand.
-  // Previously this branch required `category === 'skill' && neuralDemand >= 4`,
-  // which silently dropped low-neural-demand isometrics (e.g. Wall Handstand
-  // Hold, neuralDemand=3, category='accessory') into `hypertrophy_support` and
-  // emitted "8-15 reps" for time-based holds. The renderer then displayed a
-  // hold exercise as a rep prescription, contradicting the exercise identity.
-  //
-  // Routing rules:
-  //   - skill isometric, neuralDemand >= 5 -> skill_cluster (short clusters,
-  //     suited to high-CNS holds like full planche / front lever)
-  //   - skill isometric, neuralDemand <= 4 -> skill_hold (short quality holds,
-  //     5-15s, suited to advanced tuck / one-leg progressions)
-  //   - non-skill isometric (accessory / core / strength / mobility hold) ->
-  //     compression_core (15-45s, recommended 30s). This is the canonical
-  //     time-based template for stability / endurance holds such as Wall
-  //     Handstand Hold, Hollow Body Hold, Plank Hold, Active Hang.
-  if (isIsometric) {
-    if (category === 'skill' && neuralDemand >= 5) {
+  // Skill isometrics (planche, front lever, etc.)
+  if (category === 'skill' && isIsometric && neuralDemand >= 4) {
+    // Use cluster style for very demanding skills or when building exposure
+    if (neuralDemand >= 5) {
       return 'skill_cluster'
     }
-    if (category === 'skill') {
-      return 'skill_hold'
-    }
-    return 'compression_core'
+    return 'skill_hold'
   }
-
+  
   // Weighted strength work
   if (isWeighted || (category === 'strength' && neuralDemand >= 4)) {
     return 'weighted_strength'

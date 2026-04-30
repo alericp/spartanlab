@@ -42,26 +42,6 @@ import {
   type DoctrineCoverageSummary,
 } from './doctrine-db'
 
-// [DOCTRINE-UPLOADED-PDF-FALLBACK] In-code fallback atoms used only when the
-// DB returns zero atoms (DB unavailable, tables empty, or live read failed).
-// When the DB has live atoms, this import is loaded but unused.
-//
-// Reads from the unified uploaded-PDF batch aggregator so that any future
-// uploaded batch (Batch 03+) is picked up automatically without touching this
-// file.
-import {
-  getUploadedDoctrineBatchSources,
-  getUploadedDoctrineBatchPrinciples,
-  getUploadedDoctrineBatchProgressionRules,
-  getUploadedDoctrineBatchMethodRules,
-  getUploadedDoctrineBatchPrescriptionRules,
-  getUploadedDoctrineBatchCarryoverRules,
-  getUploadedDoctrineBatchExerciseSelectionRules,
-  getUploadedDoctrineBatchCounts,
-  getUploadedDoctrineBatchCountsByBatch,
-  getUploadedDoctrineBatchCountsBySource,
-} from './doctrine/source-batches'
-
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -77,76 +57,9 @@ export interface SkillProgressionDoctrine {
 
 export interface DoctrineRuntimeContract {
   available: boolean
-  source:
-    | 'db_live'
-    | 'hybrid_db_plus_uploaded_fallback'
-    | 'fallback_uploaded_pdf_batches'
-    | 'fallback_batch_01'
-    | 'fallback_none'
+  source: 'db_live' | 'fallback_none'
   builtAt: string
   contractVersion: string
-
-  /**
-   * Deterministic [0..1] score reflecting how much of the doctrine surface is
-   * actually active for this build. Builders may gate doctrine-guided generation
-   * on a coherence threshold (e.g. > 0.5).
-   *
-   * 0    — no doctrine available
-   * 0.25 — available but only one weak area active
-   * 0.5  — multiple doctrine areas active, no skill/prescription/method influence
-   * 0.75 — skill or prescription influence exists
-   * 0.9+ — skill + prescription + method/exercise influence all exist
-   */
-  globalCoherence: number
-
-  /**
-   * Distinct doctrine source families represented in the active doctrine set.
-   * e.g. ["progression", "method", "rings_hypertrophy", "weighted_calisthenics"].
-   */
-  sourceFamiliesUsed: string[]
-
-  /**
-   * Source keys (e.g. "front_lever_uploaded_pdf_batch_01") that contributed at
-   * least one atom to the active contract.
-   */
-  activeSourceKeys: string[]
-
-  /**
-   * Multi-batch coverage. ALWAYS populated for every source mode (db_live,
-   * hybrid, fallback). Reflects the final merged atom set the contract is
-   * actually using, so the Program UI can show real batch counts in every
-   * mode (previously hardcoded to 0 in db_live, which silently hid Batch 2/3
-   * coverage when DB had only representative anchor atoms).
-   */
-  batchCoverage: {
-    batchCount: number
-    batchKeys: string[]
-    batchAtomCounts: Record<string, number>
-    bySource: Record<string, number>
-  }
-
-  /**
-   * DB / uploaded-PDF-fallback completeness analysis. Honest report of which
-   * uploaded-doctrine batches were filled from DB vs filled from in-code
-   * fallback. Prevents the "partial DB silently suppresses richer fallback"
-   * failure mode by making the decision visible to the runtime contract and
-   * to the Program UI proof strip.
-   *
-   * state:
-   *   - 'empty'    — DB had zero atoms; entire contract came from fallback
-   *   - 'partial'  — DB had atoms for some batches, fallback filled others
-   *   - 'complete' — every registered batch was satisfied from DB
-   */
-  dbCompleteness: {
-    state: 'empty' | 'partial' | 'complete'
-    totalDbAtoms: number
-    totalFallbackBatchAtoms: number
-    perBatch: Record<
-      string,
-      { dbTotal: number; fallbackTotal: number; filled: 'db' | 'fallback' }
-    >
-    filledFromFallback: string[]
-  }
 
   doctrineCoverage: {
     principlesCount: number
@@ -242,13 +155,13 @@ export async function buildDoctrineRuntimeContract(
     // Query all doctrine data once up front
     const [
       coverage,
-      dbSources,
-      dbPrinciples,
-      dbProgressionRules,
-      dbMethodRules,
-      dbPrescriptionRules,
-      dbCarryoverRules,
-      dbExerciseSelectionRules,
+      sources,
+      principles,
+      progressionRules,
+      methodRules,
+      prescriptionRules,
+      carryoverRules,
+      exerciseSelectionRules,
     ] = await Promise.all([
       getDoctrineCoverageSummary(),
       getDoctrineSources(),
@@ -260,155 +173,7 @@ export async function buildDoctrineRuntimeContract(
       getExerciseSelectionRules({}),
     ])
     
-    // [DOCTRINE-DB-FALLBACK-COMPLETENESS-GATE]
-    // Replaces the previous global `coverage.totalRulesCount > 0` gate, which
-    // silently fell into db_live whenever ANY atoms existed in DB — even if
-    // DB only had representative anchor atoms for Batch 2 / Batch 3 (or later
-    // batches) while the in-code fallback held the richer 80–100+ atom set.
-    // That suppression made later batches look identical in the Program UI
-    // even after they were ingested.
-    //
-    // Per-batch completeness compares DB atom count vs in-code fallback atom
-    // count for every registered uploaded-PDF batch (`batch_01`, `batch_02`,
-    // `batch_03`, plus any future Batch 04+ added to the aggregator). For
-    // each batch the larger set wins:
-    //   • DB atoms ≥ fallback atoms  → keep DB rows for that batch
-    //   • DB atoms <  fallback atoms → replace with fallback rows for batch
-    // Legacy non-batch DB doctrine (no `src_batch_NN_` prefix) is always
-    // preserved.
-    //
-    // Source mode is then derived from the merge result, never from a global
-    // count threshold:
-    //   • totalDb = 0 + fallback empty   → 'fallback_none'
-    //   • totalDb = 0 + fallback present → 'fallback_uploaded_pdf_batches'
-    //   • all batches filled from DB     → 'db_live'
-    //   • some batches filled from FB    → 'hybrid_db_plus_uploaded_fallback'
-
-    // [GATE-TYPE-FIX] `getUploadedDoctrineBatchCountsByBatch()` returns
-    // `Record<UploadedDoctrineBatchKey, number>` (one total per batch), NOT
-    // a per-category breakdown. The previous `as Record<string, {principles,
-    // progression, ...}>` cast was a lie: at runtime `fb.principles` etc.
-    // were undefined, so `fbTotal` summed to `NaN` and `dbTotal >= NaN` was
-    // always false — making `db_live` unreachable even when DB held complete
-    // coverage. Use the returned numbers directly.
-    const fallbackCountsByBatch: Record<string, number> = getUploadedDoctrineBatchCountsByBatch()
-    const REGISTERED_BATCH_KEYS = Object.keys(fallbackCountsByBatch)
-
-    const batchKeyFromSourceId = (sid: string | null | undefined): string | null => {
-      if (!sid) return null
-      const m = sid.match(/^src_batch_(\d{2})_/)
-      return m ? `batch_${m[1]}` : null
-    }
-    const countAtomsByBatch = <T extends { source_id?: string | null }>(rows: T[], batchKey: string): number =>
-      rows.filter(r => batchKeyFromSourceId(r.source_id) === batchKey).length
-
-    type PerBatchStat = { dbTotal: number; fallbackTotal: number; filled: 'db' | 'fallback' }
-    const perBatch: Record<string, PerBatchStat> = {}
-    for (const bk of REGISTERED_BATCH_KEYS) {
-      const fbTotal = fallbackCountsByBatch[bk] ?? 0
-      const dbTotal =
-        countAtomsByBatch(dbPrinciples, bk) +
-        countAtomsByBatch(dbProgressionRules, bk) +
-        countAtomsByBatch(dbMethodRules, bk) +
-        countAtomsByBatch(dbPrescriptionRules, bk) +
-        countAtomsByBatch(dbExerciseSelectionRules, bk) +
-        countAtomsByBatch(dbCarryoverRules, bk)
-      perBatch[bk] = { dbTotal, fallbackTotal: fbTotal, filled: dbTotal >= fbTotal ? 'db' : 'fallback' }
-    }
-    const filledFromFallback = REGISTERED_BATCH_KEYS.filter(bk => perBatch[bk].filled === 'fallback')
-    const totalDbAtoms = coverage.totalRulesCount
-    const totalFallbackBatchAtoms = REGISTERED_BATCH_KEYS.reduce((s, bk) => s + perBatch[bk].fallbackTotal, 0)
-
-    // Per-category merge: keep DB legacy rows + per-batch DB or fallback rows
-    const fbPrinciplesAll = getUploadedDoctrineBatchPrinciples()
-    const fbProgressionAll = getUploadedDoctrineBatchProgressionRules()
-    const fbMethodAll = getUploadedDoctrineBatchMethodRules()
-    const fbPrescriptionAll = getUploadedDoctrineBatchPrescriptionRules()
-    const fbCarryoverAll = getUploadedDoctrineBatchCarryoverRules()
-    const fbSelectionAll = getUploadedDoctrineBatchExerciseSelectionRules()
-
-    const mergeForCategory = <T extends { source_id?: string | null }>(dbRows: T[], fbRows: T[]): T[] => {
-      const out: T[] = []
-      for (const r of dbRows) if (batchKeyFromSourceId(r.source_id) === null) out.push(r) // legacy non-batch
-      for (const bk of REGISTERED_BATCH_KEYS) {
-        if (perBatch[bk].filled === 'db') {
-          for (const r of dbRows) if (batchKeyFromSourceId(r.source_id) === bk) out.push(r)
-        } else {
-          for (const r of fbRows) if (batchKeyFromSourceId(r.source_id) === bk) out.push(r)
-        }
-      }
-      return out
-    }
-
-    let principles = mergeForCategory(dbPrinciples, fbPrinciplesAll)
-    let progressionRules = mergeForCategory(dbProgressionRules, fbProgressionAll)
-    let methodRules = mergeForCategory(dbMethodRules, fbMethodAll)
-    let prescriptionRules = mergeForCategory(dbPrescriptionRules, fbPrescriptionAll)
-    let carryoverRules = mergeForCategory(dbCarryoverRules, fbCarryoverAll)
-    let exerciseSelectionRules = mergeForCategory(dbExerciseSelectionRules, fbSelectionAll)
-
-    // Sources: keep all DB sources, then add fallback sources whose source_key
-    // is not already present (deduped).
-    let sources = (() => {
-      const seen = new Set<string>()
-      const out: typeof dbSources = []
-      for (const s of dbSources) {
-        const k = (s as { source_key?: string | null; id?: string | null }).source_key ?? (s as { id?: string }).id ?? ''
-        if (k && !seen.has(k)) { seen.add(k); out.push(s) }
-      }
-      if (filledFromFallback.length > 0) {
-        for (const s of getUploadedDoctrineBatchSources()) {
-          const k = (s as { source_key?: string | null; id?: string | null }).source_key ?? (s as { id?: string }).id ?? ''
-          if (k && !seen.has(k)) { seen.add(k); out.push(s) }
-        }
-      }
-      return out
-    })()
-
-    // Decide source mode from the merge result, not a global threshold.
-    let dbCompletenessState: 'empty' | 'partial' | 'complete'
-    let contractSource: DoctrineRuntimeContract['source']
-    if (totalDbAtoms === 0 && totalFallbackBatchAtoms === 0) {
-      dbCompletenessState = 'empty'
-      contractSource = 'fallback_none'
-    } else if (totalDbAtoms === 0) {
-      dbCompletenessState = 'empty'
-      contractSource = 'fallback_uploaded_pdf_batches'
-      // Replace anything that fell through with full fallback (safety).
-      sources = getUploadedDoctrineBatchSources()
-      principles = fbPrinciplesAll
-      progressionRules = fbProgressionAll
-      methodRules = fbMethodAll
-      prescriptionRules = fbPrescriptionAll
-      carryoverRules = fbCarryoverAll
-      exerciseSelectionRules = fbSelectionAll
-    } else if (filledFromFallback.length === 0) {
-      dbCompletenessState = 'complete'
-      contractSource = 'db_live'
-    } else {
-      dbCompletenessState = 'partial'
-      contractSource = 'hybrid_db_plus_uploaded_fallback'
-    }
-
-    console.log('[DOCTRINE-RUNTIME-CONTRACT-COMPLETENESS]', {
-      contractSource,
-      dbCompletenessState,
-      totalDbAtoms,
-      totalFallbackBatchAtoms,
-      filledFromFallback,
-      perBatch,
-      verdict:
-        contractSource === 'hybrid_db_plus_uploaded_fallback'
-          ? 'PARTIAL_DB_COMPLETED_BY_UPLOADED_FALLBACK'
-          : contractSource === 'db_live'
-          ? 'DB_COMPLETE_NO_FALLBACK_NEEDED'
-          : contractSource === 'fallback_uploaded_pdf_batches'
-          ? 'DB_EMPTY_USING_UPLOADED_FALLBACK'
-          : 'NO_DOCTRINE_AVAILABLE',
-    })
-
-    const hasLiveRules = principles.length + progressionRules.length + methodRules.length +
-      prescriptionRules.length + carryoverRules.length + exerciseSelectionRules.length > 0
+    const hasLiveRules = coverage.totalRulesCount > 0
     
     // Build progression doctrine per skill
     const progressionDoctrine = buildProgressionDoctrine(
@@ -457,58 +222,12 @@ export async function buildDoctrineRuntimeContract(
       hasLiveRules
     )
     
-    // Compute deterministic doctrine coverage / family / batch metadata.
-    const sourceFamiliesUsed = computeSourceFamiliesUsed(sources)
-    const activeSourceKeys = computeActiveSourceKeys(sources)
-    // Always populate batchCoverage from the FINAL merged atom set so
-    // db_live, hybrid, and fallback all expose honest batch evidence to the
-    // Program UI. Counts are derived from `perBatch` (which reflects the
-    // merge winner per batch), not from the raw aggregator alone.
-    const batchAtomCounts: Record<string, number> = {}
-    for (const bk of REGISTERED_BATCH_KEYS) {
-      batchAtomCounts[bk] = perBatch[bk].filled === 'db' ? perBatch[bk].dbTotal : perBatch[bk].fallbackTotal
-    }
-    const batchCoverage = {
-      batchCount: REGISTERED_BATCH_KEYS.length,
-      batchKeys: [...REGISTERED_BATCH_KEYS],
-      batchAtomCounts,
-      bySource: getUploadedDoctrineBatchCountsBySource(),
-    }
-    const dbCompleteness = {
-      state: dbCompletenessState,
-      totalDbAtoms,
-      totalFallbackBatchAtoms,
-      perBatch,
-      filledFromFallback,
-    }
-
-    const globalCoherence = computeGlobalCoherence({
-      hasLiveRules,
-      principlesCount: principles.length,
-      progressionRuleCount: progressionRules.length,
-      exerciseSelectionRuleCount: exerciseSelectionRules.length,
-      methodRuleCount: methodRules.length,
-      prescriptionRuleCount: prescriptionRules.length,
-      carryoverRuleCount: carryoverRules.length,
-      progressionDoctrine,
-      methodDoctrine,
-      prescriptionDoctrine,
-      skillDoctrine,
-      exerciseDoctrine,
-    })
-
     const contract: DoctrineRuntimeContract = {
       available: true,
-      source: contractSource,
+      source: 'db_live',
       builtAt: new Date().toISOString(),
-      contractVersion: '1.1.0',
-
-      globalCoherence,
-      sourceFamiliesUsed,
-      activeSourceKeys,
-      batchCoverage,
-      dbCompleteness,
-
+      contractVersion: '1.0.0',
+      
       doctrineCoverage: {
         principlesCount: principles.length,
         progressionRuleCount: progressionRules.length,
@@ -530,13 +249,9 @@ export async function buildDoctrineRuntimeContract(
     
     console.log('[DOCTRINE-RUNTIME-CONTRACT-BUILT]', {
       available: true,
-      source: contractSource,
+      source: 'db_live',
       buildTimeMs: Date.now() - startTime,
       coverage: contract.doctrineCoverage,
-      batchCoverage: contract.batchCoverage,
-      sourceFamiliesUsed: contract.sourceFamiliesUsed,
-      activeSourceKeyCount: contract.activeSourceKeys.length,
-      globalCoherence: contract.globalCoherence,
       progressionSkillCount: Object.keys(progressionDoctrine.perSkill).length,
       methodPreferredCount: methodDoctrine.preferredMethods.length,
       methodBlockedCount: methodDoctrine.blockedMethods.length,
@@ -1103,20 +818,8 @@ function buildFallbackContract(): DoctrineRuntimeContract {
     available: false,
     source: 'fallback_none',
     builtAt: new Date().toISOString(),
-    contractVersion: '1.1.0',
-
-    globalCoherence: 0,
-    sourceFamiliesUsed: [],
-    activeSourceKeys: [],
-    batchCoverage: { batchCount: 0, batchKeys: [], batchAtomCounts: {}, bySource: {} },
-    dbCompleteness: {
-      state: 'empty',
-      totalDbAtoms: 0,
-      totalFallbackBatchAtoms: 0,
-      perBatch: {},
-      filledFromFallback: [],
-    },
-
+    contractVersion: '1.0.0',
+    
     doctrineCoverage: {
       principlesCount: 0,
       progressionRuleCount: 0,
@@ -1180,105 +883,4 @@ function buildFallbackContract(): DoctrineRuntimeContract {
       doctrineInfluenceLevel: 'none',
     },
   }
-}
-
-// =============================================================================
-// COVERAGE / FAMILY / COHERENCE HELPERS
-// =============================================================================
-
-/**
- * Distinct doctrine_family values from the active source set, e.g.
- *   ["progression_selection_logic", "rings_hypertrophy", "weighted_calisthenics"]
- *
- * Tolerant to either snake_case `doctrine_family` (DB rows) or camelCase
- * `doctrineFamily` (code fallback rows) — every source object surveyed wins.
- */
-function computeSourceFamiliesUsed(sources: DoctrineSource[]): string[] {
-  const seen = new Set<string>()
-  for (const s of sources) {
-    const anyS = s as unknown as Record<string, unknown>
-    const fam =
-      (typeof anyS.doctrineFamily === 'string' && anyS.doctrineFamily) ||
-      (typeof anyS.doctrine_family === 'string' && (anyS.doctrine_family as string)) ||
-      null
-    if (fam) seen.add(fam)
-  }
-  return Array.from(seen).sort()
-}
-
-function computeActiveSourceKeys(sources: DoctrineSource[]): string[] {
-  const out: string[] = []
-  for (const s of sources) {
-    const anyS = s as unknown as Record<string, unknown>
-    const k =
-      (typeof anyS.sourceKey === 'string' && anyS.sourceKey) ||
-      (typeof anyS.source_key === 'string' && (anyS.source_key as string)) ||
-      null
-    if (k) out.push(k)
-  }
-  return out
-}
-
-/**
- * Deterministic [0..1] coherence score (see DoctrineRuntimeContract.globalCoherence).
- * Builders MAY gate doctrine-guided generation on a threshold (e.g. > 0.5).
- *
- * Active areas:
- *   - skill influence: any per-skill progression doctrine OR any carryover
- *   - prescription influence: any non-null bias OR rationale text
- *   - method influence: any preferred/limited/blocked method OR straightSetsPreferred=false
- *   - exercise influence: enabled with at least one selection rule
- */
-function computeGlobalCoherence(args: {
-  hasLiveRules: boolean
-  principlesCount: number
-  progressionRuleCount: number
-  exerciseSelectionRuleCount: number
-  methodRuleCount: number
-  prescriptionRuleCount: number
-  carryoverRuleCount: number
-  progressionDoctrine: DoctrineRuntimeContract['progressionDoctrine']
-  methodDoctrine: DoctrineRuntimeContract['methodDoctrine']
-  prescriptionDoctrine: DoctrineRuntimeContract['prescriptionDoctrine']
-  skillDoctrine: DoctrineRuntimeContract['skillDoctrine']
-  exerciseDoctrine: DoctrineRuntimeContract['exerciseDoctrine']
-}): number {
-  if (!args.hasLiveRules) return 0
-
-  const skillActive =
-    Object.keys(args.progressionDoctrine.perSkill).length > 0 ||
-    Object.keys(args.skillDoctrine.carryoverMap).length > 0
-
-  const rxActive =
-    args.prescriptionDoctrine.intensityBias != null ||
-    args.prescriptionDoctrine.volumeBias != null ||
-    args.prescriptionDoctrine.densityBias != null ||
-    args.prescriptionDoctrine.holdBias != null ||
-    args.prescriptionDoctrine.rationale.length > 0
-
-  const methodActive =
-    args.methodDoctrine.preferredMethods.length > 0 ||
-    args.methodDoctrine.limitedMethods.length > 0 ||
-    args.methodDoctrine.blockedMethods.length > 0 ||
-    args.methodDoctrine.straightSetsPreferred === false
-
-  const exerciseActive =
-    args.exerciseDoctrine.enabled && args.exerciseDoctrine.selectionRuleCount > 0
-
-  // Count distinct doctrine areas that have any countable rules at all.
-  const countableAreas =
-    (args.progressionRuleCount > 0 ? 1 : 0) +
-    (args.methodRuleCount > 0 ? 1 : 0) +
-    (args.prescriptionRuleCount > 0 ? 1 : 0) +
-    (args.exerciseSelectionRuleCount > 0 ? 1 : 0) +
-    (args.carryoverRuleCount > 0 ? 1 : 0) +
-    (args.principlesCount > 0 ? 1 : 0)
-
-  if (countableAreas === 0) return 0
-  if (countableAreas === 1) return 0.25
-
-  // Multiple areas exist. Promote based on actual influence.
-  if (skillActive && rxActive && (methodActive || exerciseActive)) return 0.95
-  if (skillActive || rxActive) return 0.75
-  return 0.5
 }

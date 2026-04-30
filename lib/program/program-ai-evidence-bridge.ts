@@ -115,14 +115,6 @@ export function buildSessionAiEvidenceSurface(
       hasSupersetsApplied?: boolean
       hasCircuitsApplied?: boolean
       hasDensityApplied?: boolean
-      // [METHOD-TAXONOMY-LOCK] hasClusterApplied is a SET-EXECUTION METHOD
-      // flag (not a grouped structure flag). Included here so the evidence
-      // bridge's `methodLabel` derivation stops silently dropping cluster.
-      hasClusterApplied?: boolean
-      clusterDecision?: {
-        targetExerciseName?: string
-        reasonSummary?: string
-      }
       structureDescription?: string
     }
   },
@@ -234,13 +226,6 @@ export function buildSessionAiEvidenceSurface(
   // ==========================================================================
   let methodLabel: string | null = null
   
-  // [METHOD-TAXONOMY-LOCK] Order matters: grouped-structure methods first
-  // (supersets / circuits / density), then SET-EXECUTION methods (cluster),
-  // then eligibility fallbacks last. Previously cluster was absent from this
-  // chain entirely, so a cluster-only session resolved to `null` or fell
-  // through to the misleading `'Density-eligible'` branch. Cluster must
-  // be declared BEFORE density-eligible so eligibility hints cannot mask
-  // an actually-applied set-execution method.
   if (styleMeta?.hasSupersetsApplied) {
     methodLabel = 'Supersets'
     source = 'authoritative'
@@ -249,9 +234,6 @@ export function buildSessionAiEvidenceSurface(
     source = 'authoritative'
   } else if (styleMeta?.hasDensityApplied) {
     methodLabel = 'Density'
-    source = 'authoritative'
-  } else if (styleMeta?.hasClusterApplied) {
-    methodLabel = 'Cluster'
     source = 'authoritative'
   } else if (composition?.methodEligibility?.density === 'eligible') {
     methodLabel = 'Density-eligible'

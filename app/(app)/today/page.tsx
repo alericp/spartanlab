@@ -851,9 +851,8 @@ function ExerciseRow({ exercise, index, prefix, wasRemoved, sessionContext }: Ex
             {exercise.sets} x {exercise.repsOrTime}
           </p>
           {/* RPE target if available */}
-          {/* [RPE-DISPLAY-CLEANLINESS-LOCK] Round to clean coaching integer (5-10). */}
           {exercise.targetRPE && (
-            <p className="text-[10px] text-[#6A6A6A]">RPE {Math.max(5, Math.min(10, Math.round(exercise.targetRPE)))}</p>
+            <p className="text-[10px] text-[#6A6A6A]">RPE {exercise.targetRPE}</p>
           )}
         </div>
       </div>

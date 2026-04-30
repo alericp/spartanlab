@@ -10,43 +10,6 @@
 // identity marker so the user can verify a pull landed the landing commit
 // without chasing v0 branch hashes.
 
-// [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Session-layer build chip. Always
-// visible (not dev-only). Rendered by the authoritative corridor as the
-// middle segment of its three-part fingerprint (WS-R3 | SWS-R3 | AWC-R3).
-// If the user's live workout does not show this chip, the session-layer
-// code on their device is stale.
-export const SWS_BUILD_CHIP = 'SWS-R3'
-
-// [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Legacy/fallback fingerprint. ONLY
-// rendered by the hard-blocked legacy unit-based and Stage-1 return paths
-// when they somehow paint. If the user ever sees this chip on a live
-// workout screen, the authoritative single-owner contract broke and a
-// legacy active surface leaked through.
-export const LEGACY_ACTIVE_BUILD_CHIP = 'LEGACY-ACTIVE-R3'
-
-// [POST-COMMIT-FREEZE-TRACE-R3] Module-level monotonic tap trace counter.
-// One tap of Log Set on the authoritative corridor advances this counter
-// once via allocateTapTraceId(), then emits that id through stages
-// A (corridor), B-E (parent + reducer), F (parent render after commit),
-// G (corridor re-render with new props). This is the canonical per-tap
-// correlation id - not a per-render random id. Window-mirrored so the
-// reducer/machine file can read it without importing from this module.
-let __nextTapTraceId = 0
-export function allocateTapTraceId(): number {
-  __nextTapTraceId += 1
-  if (typeof window !== 'undefined') {
-    ;(window as unknown as { __spartanlabCurrentTapTraceId?: number }).__spartanlabCurrentTapTraceId = __nextTapTraceId
-  }
-  return __nextTapTraceId
-}
-export function readCurrentTapTraceId(): number | null {
-  if (typeof window !== 'undefined') {
-    const w = window as unknown as { __spartanlabCurrentTapTraceId?: number }
-    return typeof w.__spartanlabCurrentTapTraceId === 'number' ? w.__spartanlabCurrentTapTraceId : null
-  }
-  return null
-}
-
 import { useState, useEffect, useCallback, useRef, useMemo, useReducer } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
@@ -85,12 +48,6 @@ import type { ScaledExercise } from '@/lib/week-dosage-scaling'
 // history surface). Replaces 4+ divergent inline regex variants that missed
 // bare-second shorthand like "6s" and silently logged hold exercises as reps.
 import { isHoldUnit } from '@/lib/workout/execution-unit-contract'
-// [LIVE-CORRIDOR-TRUTH-CONSOLIDATION] Single authoritative helper for
-// resolving the default seed value the user sees on a fresh logging card.
-// Returns the LOW END of the prescribed range (e.g. "4-6" -> 4) and
-// strips leading set-count prefixes like "3 sets x" so they cannot be
-// mistaken for the rep low-end.
-import { getPrescriptionSeedValue, parseLowEndReps } from '@/lib/workout/prescription-defaults'
 // [LIVE-WORKOUT-CORRIDOR-FIX] getLatestAdaptiveProgram loaded dynamically - post-completion only
 // The adaptive-program-builder is a MASSIVE file (18,000+ lines) that can crash module evaluation
 // We only need it for the "next session" preview in PostWorkoutSummary
@@ -110,22 +67,7 @@ import {
 } from '@/lib/adaptive-performance-evaluator'
 import { RPE_QUICK_OPTIONS, type RPEValue } from '@/lib/rpe-adjustment-engine'
 import { InlineRestTimer } from '@/components/workout/InlineRestTimer'
-// [LIVE-TRUE-ISOLATION-R5] Isolated live-execution adapter. Sole owner of
-// live-phase rendering - wraps ActiveWorkoutStartCorridor in its own error
-// boundary and validates every snapshot field at the handoff boundary.
-// Direct value import of ActiveWorkoutStartCorridor is no longer needed
-// here - the surface is the only renderer. Type-only imports remain for
-// SetReasonTag cross-references below.
-import {
-  LiveWorkoutExecutionSurface,
-  markLiveBootStage,
-  type LiveWorkoutSnapshot,
-  type LiveWorkoutHandlers,
-} from '@/components/workout/LiveWorkoutExecutionSurface'
-// [LIVE-STATE-SCANNER-R1] Parent latches Stage B onto the on-screen scanner
-// at the same point Stage B console instrumentation fires. No reducer
-// semantics change - this is pure diagnostic surfacing.
-import { recordScannerEvent as recordScannerStage } from '@/components/workout/LiveWorkoutStateScanner'
+import { ActiveWorkoutStartCorridor } from '@/components/workout/ActiveWorkoutStartCorridor'
 import { ExerciseOptionsMenu } from '@/components/workout/ExerciseOptionsMenu'
 import {
   addOverride,
@@ -197,14 +139,6 @@ import {
   type ExecutionBlock,
   type ExecutionPlan,
 } from '@/lib/workout/live-workout-machine'
-// [PHASE 4Y] H.H5 — methodStructures fallback builder for the executionPlan
-// derivation, plus the live-runtime parity verdict surfaced in the
-// guidance-only banner below. See lib/workout/live-grouped-execution-contract.ts.
-import {
-  buildExecutionBlocksFromMethodStructures,
-  evaluateLiveGroupedExecution,
-  type LiveGroupedExecutionResult,
-} from '@/lib/workout/live-grouped-execution-contract'
 // [PHASE-NEXT] Execution unit contract and rest resolver
 import {
   type SetReasonTag,
@@ -943,12 +877,10 @@ function buildUnifiedTransitionSnapshot(
     }
   }
   
-  // [LIVE-CORRIDOR-TRUTH-CONSOLIDATION] Use canonical low-end-of-range
-  // helper here too. The legacy `match(/(\d+)/)` regex grabbed the first
-  // number anywhere, leaking leading set counts ("3 sets x 4-6" -> 3)
-  // into the next exercise's nextRepsValue/nextHoldValue snapshot fields.
+  // Parse target value from NEXT exercise
   const nextRepsOrTime = nextExercise.repsOrTime || ''
-  const nextTargetValue = parseLowEndReps(nextRepsOrTime) || 5
+  const nextTargetMatch = nextRepsOrTime.match(/(\d+)/)
+  const nextTargetValue = nextTargetMatch ? parseInt(nextTargetMatch[1], 10) : 5
   
   // Determine recommended band for NEXT exercise
   let nextBand: ResistanceBandColor | 'none' = 'none'
@@ -1003,36 +935,7 @@ const STORAGE_KEY = 'spartanlab_workout_session'
 // [LIVE-SESSION-FIX] Storage schema version - increment when state shape changes
 // Old saved state with different version will be discarded to prevent restore poisoning
 // [PHASE-NEXT] v3 = grouped-method runtime with execution blocks, per-set notes, reason tags
-// [PHASE-J / RESUME-IDENTITY] v3 still backward-compatible; resume identity fields
-// (dayLabel, dayNumber, executionMode, variantIndex, weekOverride) are written
-// alongside the existing payload so the dashboard Resume button can reconstruct
-// the EXACT same launch URL the Program card stamped, instead of stripping the
-// selection and forcing the live route to guess defaults.
 const STORAGE_SCHEMA_VERSION = 'workout_session_v3_grouped_runtime'
-
-// =============================================================================
-// [PHASE-J] CANONICAL RESUME IDENTITY
-// =============================================================================
-// The minimum identity needed for the dashboard Resume Workout button to
-// rebuild the same launch URL the Program card produced. Without this, Resume
-// navigates to /workout/session with no params, the route boots whatever it
-// thinks is "today" with default mode/variant, and the saved sessionId +
-// structureSignature both mismatch -> the autosaved snapshot is rejected and
-// the user is silently restarted at exercise 1, set 1.
-//
-// Stored alongside the live runtime state (status, currentExerciseIndex,
-// completedSets, RPE, notes, exerciseOverrides) inside STORAGE_KEY.
-// =============================================================================
-export interface ResumeSessionIdentity {
-  sessionId: string                         // 'session-{dayLabel}-{dayNumber}'
-  dayLabel: string                          // e.g. 'Day 6'
-  dayNumber: number                         // e.g. 6
-  executionMode: '30_min' | '45_min' | 'full'
-  variantIndex: number                      // 0 = Full Session
-  weekOverride: number | null               // selected week from URL
-  schemaVersion: string
-  savedAt: number
-}
 
 // [PHASE-X+1] Version stamp for execution proof
 const STREAMLINED_WORKOUT_VERSION = 'phase_lw2_boot_safe_v1'
@@ -1229,23 +1132,7 @@ function generateSessionStructureSignature(session: {
 // AUTO-SAVE HELPERS
 // =============================================================================
 
-// [PHASE-J] Resume identity bundle written alongside the runtime payload.
-// Optional so legacy callers continue to work; when omitted, the saved state
-// is still readable but the dashboard cannot rebuild a canonical Resume URL.
-interface SaveSessionIdentity {
-  dayLabel: string
-  dayNumber: number
-  executionMode: '30_min' | '45_min' | 'full'
-  variantIndex: number
-  weekOverride: number | null
-}
-
-function saveSessionToStorage(
-  state: WorkoutSessionState,
-  sessionId: string,
-  structureSignature?: string,
-  identity?: SaveSessionIdentity,
-) {
+function saveSessionToStorage(state: WorkoutSessionState, sessionId: string, structureSignature?: string) {
   if (typeof window === 'undefined') return
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ 
@@ -1253,20 +1140,7 @@ function saveSessionToStorage(
       sessionId,
       structureSignature, // [LIVE-SESSION-LOCK] Include structure signature
       schemaVersion: STORAGE_SCHEMA_VERSION, // [LIVE-SESSION-FIX] Include schema version for restore validation
-      savedAt: Date.now(),
-      // [PHASE-J / RESUME-IDENTITY] Persist enough URL identity for the
-      // dashboard Resume button to reconstruct the EXACT launch URL the
-      // Program card stamped. Required for sessionId + structureSignature
-      // matching on rehydration. When `identity` is undefined we fall back to
-      // legacy behaviour (no identity persisted) so behaviour is unchanged
-      // for callers that have not yet been updated.
-      ...(identity ? {
-        dayLabel: identity.dayLabel,
-        dayNumber: identity.dayNumber,
-        executionMode: identity.executionMode,
-        variantIndex: identity.variantIndex,
-        weekOverride: identity.weekOverride,
-      } : {}),
+      savedAt: Date.now() 
     }))
   } catch {}
 }
@@ -1500,135 +1374,6 @@ export function getExistingSessionInfo(): SavedSessionInfo | null {
   }
 }
 
-// =============================================================================
-// [PHASE-J] RESUME IDENTITY READER - DASHBOARD CONSUMER
-// =============================================================================
-// Reads the persisted live workout snapshot and surfaces ONLY the identity
-// bundle the dashboard needs to:
-//   1. Decide whether a resumable session exists (not just any localStorage
-//      blob - it must be schema-current AND status-in-progress AND recent).
-//   2. Reconstruct the canonical /workout/session?day=&mode=&variant=&week=
-//      launch URL the Program card originally stamped, plus a ?resume=1 flag
-//      so the route knows this is an explicit resume vs a fresh start.
-//
-// IMPORTANT: This does NOT return the full runtime state. The runtime state
-// is still hydrated by loadSessionFromStorage() inside the live workout
-// component itself - that gate is the single owner of completedSets / RPE /
-// notes / exerciseOverrides / phase. This getter is identity-only so the
-// dashboard cannot accidentally become a second hydration owner.
-// =============================================================================
-export interface ResumableSessionSummary {
-  sessionId: string
-  dayLabel: string
-  dayNumber: number
-  executionMode: '30_min' | '45_min' | 'full'
-  variantIndex: number
-  weekOverride: number | null
-  status: 'active' | 'resting' | 'completed' | string
-  savedAt: number
-  completedSetsCount: number
-  currentExerciseIndex: number
-  currentSetNumber: number
-  elapsedSeconds: number
-}
-
-export function getResumableSessionSummary(): ResumableSessionSummary | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (!saved) return null
-    const data = JSON.parse(saved)
-    if (!data || typeof data !== 'object') return null
-
-    // [PHASE-J] Schema version gate - never surface stale schema as resumable
-    if (data.schemaVersion !== STORAGE_SCHEMA_VERSION) return null
-
-    // Must be recent (4 hour cutoff matches loadSessionFromStorage)
-    if (typeof data.savedAt !== 'number') return null
-    if (Date.now() - data.savedAt > 4 * 60 * 60 * 1000) return null
-
-    // Must be a real in-progress session - 'completed' is NOT resumable, and
-    // 'ready' means the user never logged anything so there is nothing to
-    // restore. Both 'active' and 'resting' count as in-progress.
-    const status = typeof data.status === 'string' ? data.status : ''
-    if (status !== 'active' && status !== 'resting') return null
-
-    // Must have at least one completed set OR have advanced past exercise 0,
-    // otherwise the user has no progress worth resuming.
-    const completedSetsCount = Array.isArray(data.completedSets)
-      ? data.completedSets.length
-      : 0
-    const currentExerciseIndex = typeof data.currentExerciseIndex === 'number'
-      ? data.currentExerciseIndex
-      : 0
-    if (completedSetsCount === 0 && currentExerciseIndex === 0) return null
-
-    // Must carry the resume identity bundle. Legacy snapshots without this
-    // are NOT exposed as resumable - the dashboard Resume button cannot
-    // rebuild the launch URL without these fields, and surfacing them would
-    // re-create the silent-restart bug we are fixing.
-    const dayLabel = typeof data.dayLabel === 'string' ? data.dayLabel : ''
-    const dayNumber = typeof data.dayNumber === 'number' ? data.dayNumber : NaN
-    const executionMode = data.executionMode === '30_min'
-      || data.executionMode === '45_min'
-      || data.executionMode === 'full'
-        ? data.executionMode as '30_min' | '45_min' | 'full'
-        : null
-    const variantIndex = typeof data.variantIndex === 'number'
-      ? data.variantIndex
-      : null
-    const weekOverride = typeof data.weekOverride === 'number'
-      ? data.weekOverride
-      : data.weekOverride === null
-        ? null
-        : null
-    if (!dayLabel || !Number.isFinite(dayNumber) || executionMode === null || variantIndex === null) {
-      return null
-    }
-
-    return {
-      sessionId: typeof data.sessionId === 'string' ? data.sessionId : `session-${dayLabel}-${dayNumber}`,
-      dayLabel,
-      dayNumber,
-      executionMode,
-      variantIndex,
-      weekOverride,
-      status,
-      savedAt: data.savedAt,
-      completedSetsCount,
-      currentExerciseIndex,
-      currentSetNumber: typeof data.currentSetNumber === 'number' ? data.currentSetNumber : 1,
-      elapsedSeconds: typeof data.elapsedSeconds === 'number' ? data.elapsedSeconds : 0,
-    }
-  } catch {
-    return null
-  }
-}
-
-// =============================================================================
-// [PHASE-J] RESUME URL BUILDER - DASHBOARD CONSUMER
-// =============================================================================
-// Builds the canonical /workout/session?day=&mode=&variant=&week=&resume=1 URL
-// from a ResumableSessionSummary. Single source of truth so all "Resume
-// Workout" entry points produce bit-identical URLs and the live route boots
-// the SAME session shape that was saved.
-// =============================================================================
-export function buildResumeWorkoutUrl(summary: ResumableSessionSummary): string {
-  const params = new URLSearchParams()
-  params.set('day', String(summary.dayNumber))
-  params.set('mode', summary.executionMode)
-  params.set('variant', String(summary.variantIndex))
-  if (summary.weekOverride !== null && Number.isFinite(summary.weekOverride)) {
-    params.set('week', String(summary.weekOverride))
-  }
-  // [PHASE-J] Explicit resume flag so the route can distinguish a Resume
-  // intent from a Start intent. The route already hydrates from storage
-  // when sessionId + structureSignature match, but the flag is forwarded
-  // for diagnostics and as a hook for future restart-confirmation UX.
-  params.set('resume', '1')
-  return `/workout/session?${params.toString()}`
-}
-
 export function clearSessionStorage() {
   if (typeof window === 'undefined') return
   try {
@@ -1773,17 +1518,6 @@ interface StreamlinedWorkoutSessionProps {
   // [LIVE-WORKOUT-AUTHORITY] Execution mode locked at workout start
   executionMode?: '30_min' | '45_min' | 'full'
   variantIndex?: number
-  // [PHASE-J / RESUME-IDENTITY] Selected week override forwarded from the URL
-  // (?week=N). Persisted alongside the live runtime snapshot so the dashboard
-  // Resume button can rebuild the EXACT same /workout/session URL the Program
-  // card stamped, including the week selection. Optional - undefined means
-  // "use whatever week the program currently advertises".
-  weekOverride?: number | null
-  // [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Route-level build chip forwarded
-  // from app/(app)/workout/session/page.tsx so the corridor can render
-  // the full three-part fingerprint. Optional - corridor falls back to
-  // '?' if absent.
-  routeBuildChip?: string
 }
 
 // MERGE_LANE_REACTIVATE_V1
@@ -1797,12 +1531,6 @@ export function StreamlinedWorkoutSession({
   // [LIVE-WORKOUT-AUTHORITY] Default to full if not specified
   executionMode = 'full',
   variantIndex = 0,
-  // [PHASE-J / RESUME-IDENTITY] Default null preserves legacy "no week
-  // selection" behaviour while still allowing the route to forward the
-  // ?week= URL param.
-  weekOverride = null,
-  // [PRODUCTION-VISIBLE-BUILD-PROOF-R3] Route-level build chip (WS-R3)
-  routeBuildChip = '?',
 }: StreamlinedWorkoutSessionProps) {
   // [PHASE LW2-FIX] DO NOT CALL markBootStage() BEFORE HOOKS
   // React rules of hooks require all hooks to be called unconditionally and in the same order
@@ -2063,73 +1791,10 @@ export function StreamlinedWorkoutSession({
     // Priority 1: styleMetadata.styledGroups (same source as Program screen / Today's Plan)
     // Priority 2: Fallback to flat blockId-based derivation
     const styledGroups = safeSession.styleMetadata?.styledGroups
-
-    // [FINAL-MIRROR-LOCK Part 3] styleMetadata SHADOW-OWNER GUARD.
-    //
-    // The card stamps `visibleLaunchBody` (= fullVisibleExercises) as the
-    // single launch-body owner. That array is the exact ordered list the
-    // Program card rendered. styleMetadata.styledGroups, however, is a
-    // PARALLEL structure: its internal flattening (group[0].exercises,
-    // group[1].exercises, ...) can differ from fullVisibleExercises order
-    // even when membership matches. Prior code let styledGroups win
-    // unconditionally, which made live executionPlan traverse the
-    // styledGroups flattening -- NOT the visible card body -- so the
-    // live workout advanced in the wrong order for shortened flat
-    // sessions. That is exactly the verified Day 1 / Day 6 45/30 failure:
-    //
-    //   Card visible body (fullVisibleExercises):
-    //     Planche Leans -> Explosive Pull-Ups -> Tuck FL Hold -> Weighted Dips
-    //   Flattened styledGroups:
-    //     Planche Leans -> Tuck FL Hold -> Weighted Dips -> Explosive Pull-Ups
-    //   Live order followed styledGroups. FAIL.
-    //
-    // Rule enforced here:
-    //   styledGroups may OWN execution order ONLY when
-    //     (a) it contains at least one truly-grouped group (superset /
-    //         circuit / cluster / density_block), AND
-    //     (b) its flattened id-sequence matches the booted `exercises`
-    //         id-sequence byte-for-byte.
-    // Otherwise -> fall through to deriveExecutionPlanFromExercises, which
-    // builds a flat plan in the exact order of the booted exercises array
-    // (which is the mirror body). For all-straight styleMetadata, this
-    // yields the same grouped/straight visuals for real groups when they
-    // align, and preserves visible card order when they don't.
-    const styledGroupsCanOwnOrder = ((): boolean => {
-      if (!styledGroups || styledGroups.length === 0) return false
-      const hasTrulyGrouped = styledGroups.some(
-        g => g.groupType && g.groupType !== 'straight'
-      )
-      if (!hasTrulyGrouped) return false
-      const flatIds: string[] = []
-      for (const g of styledGroups) {
-        for (const ex of g.exercises) flatIds.push(ex.id)
-      }
-      if (flatIds.length !== exercises.length) return false
-      for (let i = 0; i < flatIds.length; i++) {
-        if (flatIds[i] !== exercises[i].id) return false
-      }
-      return true
-    })()
-
-    if (!styledGroupsCanOwnOrder && styledGroups && styledGroups.length > 0) {
-      console.log(
-        '[FINAL-MIRROR-LOCK] executionPlan: rejecting styledGroups as order owner',
-        {
-          reason:
-            styledGroups.every(g => !g.groupType || g.groupType === 'straight')
-              ? 'no_truly_grouped_groups'
-              : 'flattened_id_sequence_mismatch_exercises_order',
-          styledGroupFlatIds: styledGroups.flatMap(g => g.exercises.map(e => e.id)),
-          exerciseIds: exercises.map(e => e.id),
-          note:
-            'Falling through to flat-from-exercises plan so visible card order becomes live order.',
-        }
-      )
-    }
-
+    
     let executionPlan: ExecutionPlan
-
-    if (styledGroupsCanOwnOrder && styledGroups && styledGroups.length > 0) {
+    
+if (styledGroups && styledGroups.length > 0) {
       // AUTHORITATIVE PATH: Convert styledGroups to ExecutionPlan
       console.log('[v0] [execution_plan_from_styled_groups]', {
         styledGroupCount: styledGroups.length,
@@ -2203,54 +1868,6 @@ export function StreamlinedWorkoutSession({
           : groupType === 'density_block' ? 0  // Density blocks are timed, not rest-based
           : 15
         
-        // [MIRROR-CORRIDOR-LOCKDOWN] Defensive drop of under-minimum blocks.
-        //
-        // When a snapshot-boot carries a pruned styleMetadata (the happy
-        // mirror-lockdown path), every kept group already has >= 1 surviving
-        // member by construction -- this filter is a no-op. It exists for
-        // two fallback cases:
-        //
-        //   1. Pre-lockdown stamped snapshot (styleMetadata left as the
-        //      loader's full-session metadata): grouped members that don't
-        //      exist in the narrow variant body produce empty
-        //      memberExercises / memberExerciseIndexes arrays. Pushing such
-        //      blocks into the plan causes live-workout-machine.ts:1208
-        //      (currentExerciseIndex: block.memberExerciseIndexes[i+1]) to
-        //      dereference `undefined` and advance to NaN -> the machine
-        //      strands on a ghost exercise.
-        //
-        //   2. Fallback-boot (no valid snapshot, loader body used): grouped
-        //      groups all materialize, so this is also a no-op.
-        //
-        // Method-minimum rules match the card's variantPrunedStyleMetadata
-        // filter for consistency:
-        //   - superset / circuit : >= 2 members (pairing IS the method)
-        //   - cluster / density_block : >= 1 member (method-only execution
-        //     styles applied to single exercises are legitimate)
-        //   - straight (null groupType) : >= 1 member
-        const isUnderMinimum =
-          memberExercises.length === 0 ||
-          ((groupType === 'superset' || groupType === 'circuit') &&
-            memberExercises.length < 2)
-
-        if (isUnderMinimum) {
-          console.warn(
-            '[MIRROR-CORRIDOR-LOCKDOWN] Dropping under-minimum block from executionPlan',
-            {
-              blockId: group.id,
-              groupType,
-              memberCount: memberExercises.length,
-              reason:
-                memberExercises.length === 0
-                  ? 'no members matched snapshot exercises (shadow-owner guard)'
-                  : 'under method minimum (superset/circuit < 2)',
-              note:
-                'Pre-lockdown snapshot or loader fallback. Safely dropped to avoid live-workout-machine member-advance referencing ghost exercises.',
-            }
-          )
-          continue
-        }
-
         blocks.push({
           blockId: group.id,
           groupType,
@@ -2263,88 +1880,13 @@ export function StreamlinedWorkoutSession({
           postBlockRestSeconds: 120,
         })
       }
-
-      // [MIRROR-CORRIDOR-LOCKDOWN] If every group was under-minimum and
-      // got dropped, `hasGroupedBlocks` was already flipped to true above
-      // by the first grouped group seen. Recompute it against the actually-
-      // kept blocks so downstream `executionPlan.hasGroupedBlocks` reflects
-      // real structure, not the pre-filter intent.
-      hasGroupedBlocks = blocks.some(b => b.groupType !== null)
-
+      
       executionPlan = { blocks, hasGroupedBlocks, totalSets }
     } else {
-      // [PHASE 4Y / H.H5] METHOD-STRUCTURES FALLBACK PATH.
-      //
-      // Before the flat fallback, attempt to build executable grouped blocks
-      // directly from the canonical Phase 4P `session.methodStructures[]`.
-      // This closes the case where styledGroups was rejected by the
-      // shadow-owner guard (or never written) but methodStructures still
-      // carries applied superset/circuit/cluster blocks bound to real
-      // session rows. Without this path, those grouped methods would be
-      // silently flattened into independent rows — exactly the
-      // "silent flattening" H.H5 forbids.
-      const candidateMethodStructures = Array.isArray(
-        (safeSession as unknown as { methodStructures?: unknown }).methodStructures,
-      )
-        ? ((safeSession as unknown as { methodStructures?: unknown }).methodStructures as
-            Parameters<typeof buildExecutionBlocksFromMethodStructures>[0]['methodStructures'])
-        : []
-      const msBuild = buildExecutionBlocksFromMethodStructures({
-        methodStructures: candidateMethodStructures,
-        exercises,
-      })
-
-      if (msBuild.hasGroupedBlocks) {
-        // Append flat blocks for any exercise NOT consumed by a grouped
-        // method-structure block. This preserves the "no duplicate members"
-        // invariant — an exercise is either a grouped member OR a standalone
-        // flat block, never both.
-        const flatBlocks: ExecutionBlock[] = []
-        let flatTotalSets = 0
-        for (let i = 0; i < exercises.length; i++) {
-          if (msBuild.consumedExerciseIndexes.has(i)) continue
-          const ex = exercises[i]
-          flatBlocks.push({
-            blockId: `flat-${ex.id || i}`,
-            groupType: null,
-            blockLabel: ex.name,
-            memberExercises: [ex],
-            memberExerciseIndexes: [i],
-            targetRounds: ex.sets || 3,
-            intraBlockRestSeconds: 0,
-            postRoundRestSeconds: ex.restSeconds || 90,
-            postBlockRestSeconds: 90,
-          })
-          flatTotalSets += ex.sets || 3
-        }
-        const mergedBlocks = [...msBuild.blocks, ...flatBlocks]
-        // Preserve the visible-card exercise order: sort merged blocks by
-        // the lowest member-exercise index, so the live runtime walks the
-        // same order the Program card showed.
-        mergedBlocks.sort(
-          (a, b) =>
-            (a.memberExerciseIndexes[0] ?? 0) - (b.memberExerciseIndexes[0] ?? 0),
-        )
-        executionPlan = {
-          blocks: mergedBlocks,
-          hasGroupedBlocks: true,
-          totalSets: msBuild.totalSets + flatTotalSets,
-        }
-        console.log('[phase4y-method-structures-execution-plan]', {
-          source: 'methodStructures',
-          groupedBlocks: msBuild.blocks.length,
-          flatBlocks: flatBlocks.length,
-          consumedExerciseIndexes: Array.from(msBuild.consumedExerciseIndexes),
-          reasons: msBuild.reasons,
-          note:
-            'styledGroups was unavailable or rejected by shadow-owner guard; methodStructures fallback built grouped runtime instead of flattening.',
-        })
-      } else {
-        // FALLBACK PATH: Derive from flat exercise blockId fields
-        executionPlan = deriveExecutionPlanFromExercises(exercises)
-      }
+      // FALLBACK PATH: Derive from flat exercise blockId fields
+      executionPlan = deriveExecutionPlanFromExercises(exercises)
     }
-
+    
     return {
       dayLabel: safeSession.dayLabel || 'Workout',
       dayNumber: safeSession.dayNumber || 1,
@@ -2354,36 +1896,6 @@ export function StreamlinedWorkoutSession({
     }
   }, [sessionIsValid, safeSession])
   
-  // [PHASE 4Y / H.H5] LIVE GROUPED RUNTIME PARITY VERDICT.
-  //
-  // Pure, side-effect-free read of the booted session against the execution
-  // plan the live runtime will actually consume. Surfaces three useful states:
-  //
-  //   - FULL_GROUPED_RUNTIME           — every grouped block is executable.
-  //                                      No banner. The grouped reducer
-  //                                      actions (COMPLETE_BLOCK_SET / etc.)
-  //                                      will drive the runtime.
-  //   - STRAIGHT_SETS_ONLY_NO_GROUPS   — no grouped methods present. No banner.
-  //   - LIVE_GUIDANCE_PRESERVED_ONLY / — grouped data preserved but cannot
-  //     GROUPED_RUNTIME_BLOCKED          execute (density-only, missing refs,
-  //     / GROUPED_RUNTIME_PARTIAL        unsupported method, shadow-owner
-  //                                      guard rejected styledGroups). Banner
-  //                                      below states why.
-  //
-  // The verdict is published into the source-map (Phase 4Q) via runLiveWorkoutSourceMap
-  // and is the proof source for closing H.H5.
-  const liveGroupedExecutionResult: LiveGroupedExecutionResult = useMemo(() => {
-    const styledGroupsAccepted =
-      !!machineSessionContract?.executionPlan?.hasGroupedBlocks &&
-      machineSessionContract.executionPlan.blocks.some(
-        (b) => b.groupType !== null && !b.blockId.startsWith('flat-'),
-      )
-    return evaluateLiveGroupedExecution({
-      session: safeSession as unknown as Parameters<typeof evaluateLiveGroupedExecution>[0]['session'],
-      styledGroupsAcceptedAsExecutionSource: styledGroupsAccepted,
-    })
-  }, [safeSession, machineSessionContract])
-
   // [LIVE-SESSION-LOCK] Generate structure signature for restore validation
   const sessionStructureSignature = useMemo(() => {
     return generateSessionStructureSignature(safeSession)
@@ -2469,88 +1981,6 @@ export function StreamlinedWorkoutSession({
           }
         : null,
     })
-  }, [
-    machineState.phase,
-    machineState.currentExerciseIndex,
-    machineState.currentSetNumber,
-    machineState.completedSets,
-  ])
-  
-  // =========================================================================
-  // [LIVE-LOG-REVERSION-DETECTOR] PHASE-TRANSITION WATCHDOG
-  //
-  // Purpose: prove or disprove the user-reported "flash rest then snap back
-  // to active" symptom by recording every phase transition in a ref and
-  // logging any transition back to `active` that did NOT come from a
-  // legitimate transition action (COMPLETE_REST, ADVANCE_TO_NEXT_EXERCISE,
-  // SKIP_SET, etc.). If this fires, the exact surrounding dispatch has
-  // re-asserted `phase: 'active'` on stale pointers.
-  //
-  // The ref-pair lets us compare (priorPhase, nextPhase, priorCompletedLen,
-  // nextCompletedLen) across exactly one render boundary without owning
-  // any state itself.
-  // =========================================================================
-  const phaseHistoryRef = useRef<{
-    phase: typeof machineState.phase
-    completedLen: number
-    currentSetNumber: number
-    currentExerciseIndex: number
-    timestamp: number
-  } | null>(null)
-  
-  useEffect(() => {
-    const prior = phaseHistoryRef.current
-    const nextSnapshot = {
-      phase: machineState.phase,
-      completedLen: machineState.completedSets?.length ?? 0,
-      currentSetNumber: machineState.currentSetNumber,
-      currentExerciseIndex: machineState.currentExerciseIndex,
-      timestamp: Date.now(),
-    }
-    
-    if (prior) {
-      // Suspicious reversion pattern: resting -> active on same exercise
-      // with NO change to currentSetNumber means COMPLETE_REST-like
-      // transition happened without the user's input AND without advancing
-      // the set pointer (legitimate COMPLETE_REST keeps set number, but the
-      // ONLY legitimate caller of COMPLETE_REST is handleRestComplete via
-      // user Skip Rest click or rest-timer completion). If this fires
-      // within ~500ms of a phase=resting transition, the "brief flash
-      // then snap back" is real and this log pinpoints the timing.
-      if (
-        prior.phase === 'resting' &&
-        machineState.phase === 'active' &&
-        prior.currentExerciseIndex === machineState.currentExerciseIndex &&
-        prior.completedLen === nextSnapshot.completedLen
-      ) {
-        const dwellMs = nextSnapshot.timestamp - prior.timestamp
-        console.warn('[v0] [log-corridor] REVERSION_DETECTED resting->active without COMPLETE_REST advance', {
-          priorPhase: prior.phase,
-          nextPhase: machineState.phase,
-          dwellMs,
-          currentExerciseIndex: machineState.currentExerciseIndex,
-          currentSetNumber: machineState.currentSetNumber,
-          priorCompletedLen: prior.completedLen,
-          nextCompletedLen: nextSnapshot.completedLen,
-          hint: 'If dwellMs < 800 this is the user-reported flash-and-snapback; inspect the next dispatch after COMPLETE_SET in the same tap.',
-        })
-      }
-      
-      // Log every phase change for post-commit forensics
-      if (prior.phase !== machineState.phase) {
-        console.log('[v0] [log-corridor] phase_transition', {
-          from: prior.phase,
-          to: machineState.phase,
-          dwellMs: nextSnapshot.timestamp - prior.timestamp,
-          priorSet: prior.currentSetNumber,
-          nextSet: machineState.currentSetNumber,
-          priorCompletedLen: prior.completedLen,
-          nextCompletedLen: nextSnapshot.completedLen,
-        })
-      }
-    }
-    
-    phaseHistoryRef.current = nextSnapshot
   }, [
     machineState.phase,
     machineState.currentExerciseIndex,
@@ -2792,73 +2222,50 @@ export function StreamlinedWorkoutSession({
         }
         break
       case 'HYDRATE_FROM_STORAGE': {
-        // [PHASE-T] LIVE WORKOUT RESUME / SAVED SESSION RESTORATION LOCK
-        // ----------------------------------------------------------------
-        // ROOT CAUSE BEFORE PHASE T:
-        //   The previous gate was `if (rawCompletedSets.length > 0) { ...
-        //   machineDispatch({ type: 'RESUME_WORKOUT', ... }) }`. That meant
-        //   ANY snapshot with zero logged sets but a non-zero
-        //   currentExerciseIndex (e.g. user skipped exercise 1, advanced to
-        //   exercise 2, then tapped Save & Exit) was silently dropped on
-        //   the floor when the route re-entered:
-        //     - autosave HAD persisted the snapshot honestly,
-        //     - getResumableSessionSummary() correctly surfaced it (it only
-        //       blocks BOTH completedSets===0 AND currentExerciseIndex===0),
-        //     - the dashboard correctly built the canonical resume URL,
-        //     - the live route correctly loaded the session and called
-        //       loadSessionFromStorage(), which correctly returned the
-        //       validated payload,
-        //     - and then this case ran, the `if` was false, and the entire
-        //       machineDispatch was skipped. The machine stayed in
-        //       createInitialMachineState's `phase: 'ready'`,
-        //       `currentExerciseIndex: 0`, `currentSetNumber: 1` -> the user
-        //       was rendered the start-fresh "Ready" screen at exercise 1,
-        //       set 1 even though the dashboard had just told them
-        //       "Resume Workout".
+        // [REFRESH-DUPLICATE-SET-FIX] PHASE-SAFE POINTER ADVANCEMENT (layer 2 of 4)
         //
-        //   The gate also masked the same bug from anyone who refreshed
-        //   mid-rest with zero sets logged on a brand new exercise.
+        // Root cause the guard below fixes:
+        //   During the green between_exercise_rest screen, the machine phase
+        //   is `between_exercise_rest` with:
+        //     - currentExerciseIndex = the exercise that was just finished
+        //     - currentSetNumber    = the FINAL set number of that exercise
+        //                             (the set that was JUST completed)
+        //     - completedSets       = already contains that final set
+        //   liveSession flattens this to status:'resting' for autosave. On
+        //   refresh, RESUME_WORKOUT forces phase:'active' and preserves
+        //   currentSetNumber. That leaves the runtime pointed at an
+        //   already-completed set. When the user logs it, COMPLETE_SET
+        //   appends a SECOND Set N to completedSets -> the visible
+        //   "two Set 2 rows" duplicate.
         //
-        // FIX:
-        //   Always dispatch RESUME_WORKOUT when this case runs. The upstream
-        //   loadSessionFromStorage() already validates schema version,
-        //   recency (4 hr cutoff), sessionId match, structureSignature
-        //   match, status (rejects 'completed'), and shape of every field.
-        //   By the time we are here, the snapshot is authoritative resume
-        //   intent and MUST win over the fresh initializer.
-        //
-        //   The pre-existing [REFRESH-DUPLICATE-SET-FIX] pointer-advancement
-        //   guard (which prevents appending a duplicate Set N when the
-        //   pointer references an already-logged set after refresh during
-        //   between-exercise rest) is preserved. It is intrinsically a
-        //   completedSets > 0 concern, so it stays gated by that condition.
-        //   What changes is: when completedSets is empty we still hand the
-        //   raw indices to the machine instead of skipping the dispatch.
+        //   Fix: before dispatching RESUME_WORKOUT, detect the exact
+        //   condition "pointer is at an already-completed set" using the
+        //   authoritative session contract for the per-exercise set count.
+        //   If so, advance the pointer to the next logical logging slot
+        //   (next set of same exercise, or set 1 of next exercise, or
+        //   clamp to end). Completed-set history is NEVER changed here;
+        //   only the transient pointer is repaired. Durable truth vs
+        //   transient truth is separated.
         const rawSaved = action.savedState
         const rawCompletedSets = (rawSaved.completedSets ?? []) as Array<{
           exerciseIndex: number
           setNumber: number
         }>
-        const exercises = machineSessionContract?.exercises ?? []
-        const exerciseCount = exercises.length
-        let safeIdx = typeof rawSaved.currentExerciseIndex === 'number'
-          ? rawSaved.currentExerciseIndex
-          : 0
-        let safeSetNumber = typeof rawSaved.currentSetNumber === 'number'
-          ? rawSaved.currentSetNumber
-          : 1
-
-        // [REFRESH-DUPLICATE-SET-FIX] PHASE-SAFE POINTER ADVANCEMENT
-        // (preserved from the prior contract). Only meaningful when at
-        // least one set has been logged; with zero completedSets the
-        // pointer cannot, by definition, reference an already-completed
-        // set. So this block stays gated by completedSets > 0.
         if (rawCompletedSets.length > 0) {
+          const exercises = machineSessionContract?.exercises ?? []
+          const exerciseCount = exercises.length
+          let safeIdx = typeof rawSaved.currentExerciseIndex === 'number'
+            ? rawSaved.currentExerciseIndex
+            : 0
+          let safeSetNumber = typeof rawSaved.currentSetNumber === 'number'
+            ? rawSaved.currentSetNumber
+            : 1
+          
           const isSetAlreadyCompleted = (exIdx: number, setNum: number) =>
             rawCompletedSets.some(
               s => s.exerciseIndex === exIdx && s.setNumber === setNum
             )
-
+          
           if (
             exerciseCount > 0 &&
             safeIdx >= 0 &&
@@ -2870,10 +2277,10 @@ export function StreamlinedWorkoutSession({
               typeof exercises[safeIdx]?.sets === 'number' && exercises[safeIdx].sets > 0
                 ? exercises[safeIdx].sets
                 : 1
-
+            
             let advancedIdx = safeIdx
             let advancedSetNumber = safeSetNumber
-
+            
             if (safeSetNumber < prescribedSets) {
               // Still more sets remaining in current exercise -> next set
               advancedSetNumber = safeSetNumber + 1
@@ -2889,7 +2296,7 @@ export function StreamlinedWorkoutSession({
                 advancedSetNumber = prescribedSets
               }
             }
-
+            
             console.log('[REFRESH-DUPLICATE-SET-FIX] advanced stale pointer past already-completed set', {
               fromExerciseIndex: safeIdx,
               fromSetNumber: safeSetNumber,
@@ -2898,49 +2305,24 @@ export function StreamlinedWorkoutSession({
               completedSetsCount: rawCompletedSets.length,
               reason: 'refresh_during_between_exercise_rest_or_equivalent',
             })
-
+            
             safeIdx = advancedIdx
             safeSetNumber = advancedSetNumber
           }
+          
+          machineDispatch({
+            type: 'RESUME_WORKOUT',
+            startTime: rawSaved.startTime || Date.now(),
+            savedState: {
+              currentExerciseIndex: safeIdx,
+              currentSetNumber: safeSetNumber,
+              completedSets: rawSaved.completedSets as unknown as CompletedSet[],
+              elapsedSeconds: rawSaved.elapsedSeconds,
+              workoutNotes: rawSaved.workoutNotes,
+              lastSetRPE: rawSaved.lastSetRPE,
+            },
+          })
         }
-
-        // [PHASE-T] Always dispatch. The case body is now structurally
-        // unconditional - any time the upstream validator handed us a
-        // payload we honor it. With zero completedSets and a non-zero
-        // currentExerciseIndex (the silent-restart bucket), this dispatch
-        // restores phase:'active' at the saved exercise/set instead of
-        // dropping the snapshot and rendering the fresh-start "Ready"
-        // screen.
-        console.log('[PHASE-T] HYDRATE_FROM_STORAGE -> RESUME_WORKOUT dispatched', {
-          completedSetsCount: rawCompletedSets.length,
-          restoredExerciseIndex: safeIdx,
-          restoredSetNumber: safeSetNumber,
-          hasElapsedSeconds: typeof rawSaved.elapsedSeconds === 'number',
-          hasWorkoutNotes: typeof rawSaved.workoutNotes === 'string' && rawSaved.workoutNotes.length > 0,
-          hasLastSetRPE: typeof rawSaved.lastSetRPE === 'number',
-          hasExerciseOverrides:
-            !!rawSaved.exerciseOverrides &&
-            Object.keys(rawSaved.exerciseOverrides).length > 0,
-        })
-        machineDispatch({
-          type: 'RESUME_WORKOUT',
-          startTime: rawSaved.startTime || Date.now(),
-          savedState: {
-            currentExerciseIndex: safeIdx,
-            currentSetNumber: safeSetNumber,
-            completedSets: rawSaved.completedSets as unknown as CompletedSet[],
-            elapsedSeconds: rawSaved.elapsedSeconds,
-            workoutNotes: rawSaved.workoutNotes,
-            lastSetRPE: rawSaved.lastSetRPE,
-            // [PHASE-T] Forward exerciseOverrides too. The machine reducer's
-            // RESUME_WORKOUT case already honors `saved.exerciseOverrides`,
-            // and the autosave path (saveSessionToStorage) already persists
-            // them. Forwarding them here closes the last leak so per-set
-            // notes / reason tags / load / band / actual-load adjustments
-            // entered before Save & Exit are visible after Resume.
-            exerciseOverrides: rawSaved.exerciseOverrides,
-          },
-        })
         break
       }
       case 'SET_TRANSITION_ERROR':
@@ -4358,12 +3740,6 @@ export function StreamlinedWorkoutSession({
 
     if (liveSession.status !== 'ready') {
       // Save the core workout state from the unified liveSession
-      // [PHASE-J / RESUME-IDENTITY] Persist resume identity alongside runtime
-      // state so the dashboard Resume button can rebuild the EXACT launch URL
-      // (day + mode + variant + week) the Program card stamped. Without this
-      // bundle, Resume navigates to /workout/session with no params, the
-      // route guesses defaults, sessionId/structureSignature mismatch, and
-      // the saved snapshot is rejected -> user gets silently restarted.
       saveSessionToStorage({
         status: liveSession.status,
         currentExerciseIndex: liveSession.currentExerciseIndex,
@@ -4374,25 +3750,9 @@ export function StreamlinedWorkoutSession({
         lastSetRPE: liveSession.lastSetRPE,
         workoutNotes: liveSession.workoutNotes,
         exerciseOverrides: liveSession.exerciseOverrides,
-      }, sessionId, sessionStructureSignature, {
-        dayLabel: safeWorkoutSessionContract.dayLabel,
-        dayNumber: safeWorkoutSessionContract.dayNumber,
-        executionMode,
-        variantIndex,
-        weekOverride: weekOverride ?? null,
-      })
+      }, sessionId, sessionStructureSignature)
     }
-  }, [
-    liveSession,
-    sessionId,
-    isDemoSession,
-    sessionStructureSignature,
-    safeWorkoutSessionContract.dayLabel,
-    safeWorkoutSessionContract.dayNumber,
-    executionMode,
-    variantIndex,
-    weekOverride,
-  ])
+  }, [liveSession, sessionId, isDemoSession, sessionStructureSignature])
   
   // [UNIFIED-HANDOFF] REMOVED: Exercise-change reset effect
   // This was a secondary transition system that caused race conditions.
@@ -4492,26 +3852,15 @@ export function StreamlinedWorkoutSession({
   // The user sees a seeded value (e.g., 6s from prescription) but machine holdValue might still be 30 (default)
   // So we must compute the same displayed value here to log what the user actually saw
   const handleCompleteSet = useCallback(() => {
-    // [POST-COMMIT-FREEZE-TRACE-R3] STAGE B.
-    // Prove the click reached the parent handler. Read (not allocate) the
-    // tap trace id allocated by Stage A inside the corridor's handleLogSet
-    // so the entire A -> G chain correlates on the same id. If tapTraceId
-    // is null here, Stage A never fired -- meaning the click did not reach
-    // the authoritative corridor button.
-    const tapTraceId = readCurrentTapTraceId()
-    console.log('[v0] [log-corridor] stageB handleCompleteSet entered (parent)', {
-      tapTraceId,
+    // [LIVE-LOG-CORRIDOR-PROOF] Stage 1: prove the click reached the parent.
+    // onCompleteSet is wired from ActiveWorkoutStartCorridor's Log Set button.
+    // If this log is missing, the click never reached the parent handler and
+    // the bug is upstream of handleCompleteSet (corridor button wiring).
+    console.log('[v0] [log-corridor] stage1 handleCompleteSet entered', {
       exerciseName: safeCurrentExercise?.name,
       exerciseIndex: safeExerciseIndex,
       setNumber: validatedSetNumber,
-      priorPhase: machineState.phase,
-      priorCompletedSetsLength: normalizedCompletedSets.length,
     })
-    // [LIVE-STATE-SCANNER-R1] Latch parent-received onto the on-screen
-    // scanner so screenshots prove the tap reached handleCompleteSet.
-    // If the scanner stays on `stageA_only` after a tap, the click
-    // never reached the parent handler.
-    recordScannerStage('parent_received')
     
     const currentIndex = safeExerciseIndex
     
@@ -4531,14 +3880,8 @@ export function StreamlinedWorkoutSession({
       name: safeCurrentExercise?.name,
       category: safeCurrentExercise?.category,
     })
-    // [LIVE-CORRIDOR-TRUTH-CONSOLIDATION] Use the canonical low-end resolver
-    // so the log path agrees bit-identically with the corridor seed path.
-    // Both must read from the same source of truth, otherwise the user's
-    // SAW value (corridor seed) and LOGGED value (log seed) can drift.
-    const prescriptionSeedValue = getPrescriptionSeedValue({
-      repsOrTime: exerciseRepsOrTime,
-      isHold: isHoldExerciseForLog,
-    })
+    const targetMatch = exerciseRepsOrTime.match(/(\d+)/)
+    const prescriptionSeedValue = targetMatch ? parseInt(targetMatch[1], 10) : (isHoldExerciseForLog ? 30 : 8)
     
     // [LIVE-INPUT-SEED-FIX] Only the explicit 0 sentinel (set by the machine on
     // init, set completion, or exercise advance) triggers re-seeding from the
@@ -4561,27 +3904,9 @@ export function StreamlinedWorkoutSession({
       ? (machineHoldIsDefault ? prescriptionSeedValue : safeHoldValue)
       : undefined
     
-    // [LIVE-LOG-CORRIDOR-SINGLE-OWNER] Compute blockInfo ONCE up front. The
-    // payload builder reads it (for blockId/memberIndex) and the dispatch
-    // decision reads it (for grouped vs straight). Two sites, one read -- no
-    // split-brain on block identity between payload and routing.
-    const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, currentIndex)
-
-    // [LIVE-LOG-CORRIDOR-SINGLE-OWNER] Pure payload builder local to
-    // handleCompleteSet. Replaces the prior inline setData literal (~50
-    // lines mixed with the grouped-decision logic) so the commit corridor
-    // shape is now explicit:
-    //   handleCompleteSet = validate (button-disabled upstream)
-    //                     + build payload  (this function, called ONCE)
-    //                     + choose dispatch (grouped vs straight, below)
-    //                     + dispatch       (exactly one machineDispatch)
-    // Pure: reads only authoritative values captured in the enclosing
-    // closure (machineState, safeCurrentExercise, corridor-seeded logged
-    // values, blockInfo). Does NOT mutate state. Must not be called more
-    // than once per tap -- multiple calls would only produce identical
-    // payloads, but the pattern prevents any future caller from using this
-    // as a second commit path.
-    const buildSetDataPayload = (): CompletedSetData => {
+    // Build completed set data with notes and grouped context
+      const blockInfo = getBlockForExercise(machineSessionContract?.executionPlan, currentIndex)
+      
       // [LIVE-WORKOUT-AUTHORITY] Resolve input mode for execution fact capture
       const inputMode = resolveExerciseInputMode({
         name: safeCurrentExercise?.name || '',
@@ -4590,81 +3915,20 @@ export function StreamlinedWorkoutSession({
         executionTruth: safeCurrentExercise?.executionTruth,
         prescribedLoad: safeCurrentExercise?.prescribedLoad,
       })
-
+      
       // [LIVE-WORKOUT-AUTHORITY] Capture structured coaching signals from reason tags
       const structuredCoachingInputs = (machineState.currentSetReasonTags || [])
-        .filter((tag): tag is import('@/lib/workout/live-workout-authority-contract').CoachingSignalTag =>
+        .filter((tag): tag is import('@/lib/workout/live-workout-authority-contract').CoachingSignalTag => 
           ['too_easy', 'too_hard', 'pain_discomfort', 'form_issue', 'fatigue', 'grip_limited', 'balance_issue', 'lost_focus', 'load_adjustment_used', 'mixed_band_assistance_used'].includes(tag)
         )
-
-      // [LIVE-CORRIDOR-TRUTH-CONSOLIDATION] STRICT INPUT-MODE GATING
-      //
-      // Band metadata and load metadata are exercise-scoped and set-scoped.
-      // The authoritative input-mode contract decides which fields are
-      // permitted to be captured. Any leftover machineState band / load
-      // fields from a previous exercise MUST be filtered here even if the
-      // ADVANCE_TO_NEXT_EXERCISE reducer reset failed to clear them, so
-      // the persisted CompletedSet ledger for the CURRENT exercise can
-      // never carry band tags or load values that the input-mode contract
-      // does not authorize.
-      //
-      // Why this is a belt-and-suspenders fix on top of the reducer reset:
-      //   - Reducer reset prevents leftover state from being captured.
-      //   - This gate prevents capture even if someone re-introduces a
-      //     pre-fill or carry-forward path in the future.
-      //   - Combined, the two guarantee `recentSets` and the Last Set
-      //     Snapshot can never display a band tag on a weighted exercise
-      //     or a load value on a bodyweight exercise.
-      const bandsAllowed = inputMode.showBandSelector || inputMode.showMultiBandSelector
-      const loadAllowed = inputMode.showLoadInput
-
-      // Gated band capture (strict).
-      const gatedBandUsed = bandsAllowed ? safeBandUsed : 'none'
-      const rawSelectedBands =
-        machineState.selectedBands && machineState.selectedBands.length > 0
-          ? machineState.selectedBands
-          : machineState.multiBandSelection?.bands
-      const gatedSelectedBands = bandsAllowed ? rawSelectedBands : undefined
-      const gatedMultiBandSelection = bandsAllowed ? machineState.multiBandSelection : null
-
-      // Gated load capture (strict). Prescribed load and prescribed unit
-      // are exercise-scoped truth and are always captured for traceability,
-      // but actualLoadUsed/Unit only flow through when the input mode is
-      // load-bearing. Otherwise we record undefined so the persistence
-      // layer never carries a stale load value to a non-weighted set.
-      const gatedActualLoadUsed = loadAllowed
-        ? (machineState.actualLoadUsed ?? safeCurrentExercise?.prescribedLoad?.load)
-        : undefined
-      const gatedActualLoadUnit = loadAllowed
-        ? (machineState.actualLoadUnit || safeCurrentExercise?.prescribedLoad?.unit)
-        : undefined
-
-      if (process.env.NODE_ENV === 'development' && (!bandsAllowed || !loadAllowed)) {
-        const wouldHaveLeakedBand = !bandsAllowed && (
-          (rawSelectedBands?.length ?? 0) > 0 || (safeBandUsed && safeBandUsed !== 'none')
-        )
-        const wouldHaveLeakedLoad = !loadAllowed && machineState.actualLoadUsed != null
-        if (wouldHaveLeakedBand || wouldHaveLeakedLoad) {
-          console.log('[v0] [log-corridor] strict_input_mode_gate_filtered_stale_state', {
-            exerciseName: safeCurrentExercise?.name,
-            inputMode: inputMode.mode,
-            bandsAllowed,
-            loadAllowed,
-            wouldHaveLeakedBand,
-            wouldHaveLeakedLoad,
-            droppedBands: wouldHaveLeakedBand ? rawSelectedBands : undefined,
-            droppedLoad: wouldHaveLeakedLoad ? machineState.actualLoadUsed : undefined,
-          })
-        }
-      }
-
-      return {
+      
+      const setData: CompletedSetData = {
         exerciseIndex: currentIndex,
         setNumber: validatedSetNumber,
         actualReps: loggedRepsValue,
         holdSeconds: loggedHoldValue,
         actualRPE: safeSelectedRPE || 8,
-        bandUsed: gatedBandUsed,
+        bandUsed: safeBandUsed,
         timestamp: Date.now(),
         // Per-set notes from machine state
         // [CRASH-FIX] Added null safety for currentSetReasonTags
@@ -4676,23 +3940,21 @@ export function StreamlinedWorkoutSession({
         round: machineState.currentRound || undefined,
         // [LIVE-WORKOUT-AUTHORITY] Extended execution facts
         inputMode: inputMode.mode,
-        // [LIVE-CORRIDOR-TRUTH-CONSOLIDATION] Strict input-mode gating
-        selectedBands: gatedSelectedBands,
-        multiBandSelection: gatedMultiBandSelection,
-        // Weighted exercise facts (prescribed values are exercise-scoped truth)
-        prescribedLoad: loadAllowed ? safeCurrentExercise?.prescribedLoad?.load : undefined,
-        prescribedLoadUnit: loadAllowed ? safeCurrentExercise?.prescribedLoad?.unit : undefined,
-        actualLoadUsed: gatedActualLoadUsed,
-        actualLoadUnit: gatedActualLoadUnit,
+        // Multi-band support - use selectedBands array directly, fall back to multiBandSelection for compatibility
+        selectedBands: (machineState.selectedBands && machineState.selectedBands.length > 0) 
+          ? machineState.selectedBands 
+          : machineState.multiBandSelection?.bands,
+        multiBandSelection: machineState.multiBandSelection,
+        // Weighted exercise facts
+        prescribedLoad: safeCurrentExercise?.prescribedLoad?.load,
+        prescribedLoadUnit: safeCurrentExercise?.prescribedLoad?.unit,
+        actualLoadUsed: machineState.actualLoadUsed ?? safeCurrentExercise?.prescribedLoad?.load,
+        actualLoadUnit: machineState.actualLoadUnit || safeCurrentExercise?.prescribedLoad?.unit,
         // Unilateral exercise facts
         isPerSide: inputMode.showPerSideToggle || machineState.isPerSide,
         // Structured coaching inputs
         structuredCoachingInputs: structuredCoachingInputs.length > 0 ? structuredCoachingInputs : undefined,
       }
-    }
-
-    // Build exactly once per tap. Downstream dispatch branches reuse this.
-    const setData: CompletedSetData = buildSetDataPayload()
       
       // [LIVE-LOG-CORRIDOR-FIX] Single authoritative grouped boolean.
       //
@@ -4723,15 +3985,11 @@ export function StreamlinedWorkoutSession({
           rawGroupType === 'cluster' ||
           rawGroupType === 'density_block')
       
-      // [POST-COMMIT-FREEZE-TRACE-R3] STAGE C.
-      // Pre-dispatch decision. Carries the same tapTraceId captured at
-      // Stage B so downstream reducer logs can correlate. Proves which
-      // branch handleCompleteSet chose and why. If this prints
-      // chosenDispatch: 'COMPLETE_SET' for a straight exercise, the branch
-      // decision is correct and any remaining failure is downstream
-      // (reducer entry/return or post-commit render).
-      console.log('[v0] [log-corridor] stageC pre-dispatch decision', {
-        tapTraceId,
+      // [LIVE-LOG-CORRIDOR-PROOF] Stage 2: pre-dispatch assertion log. Proves
+      // which branch handleCompleteSet chose and why. If this prints
+      // `dispatch: 'COMPLETE_SET'` for Planche Leans, the branch decision is
+      // correct and any remaining failure is downstream (reducer or rerender).
+      console.log('[v0] [log-corridor] stage2 pre-dispatch decision', {
         exerciseName: safeCurrentExercise?.name,
         exerciseIndex: currentIndex,
         effectiveRepsOrTime: activeEffectiveContract.effectiveRepsOrTime,
@@ -4853,120 +4111,8 @@ export function StreamlinedWorkoutSession({
   // and isLastSet comparison above.
   }, [validatedSetNumber, safeRepsValue, safeHoldValue, safeSelectedRPE, safeBandUsed, safeCurrentExercise, safeExerciseIndex, isHoldExercise, exercises, machineSessionContract, machineState, machineDispatch, activeEffectiveContract])
   
-  // =========================================================================
-  // [LIVE-LOG-FINAL-PHASE-OWNER-SURGERY] MACHINE-DIRECT ADVANCE HELPER
-  //
-  // PROBLEM THIS REMOVES:
-  //   Prior post-log rest-completion paths routed through executeUnifiedAdvance,
-  //   which (a) read liveSession (the legacy flattener), (b) built an
-  //   UnifiedTransitionSnapshot, and (c) re-dispatched through the legacy
-  //   `dispatch` wrapper. That meant the live post-log transition corridor
-  //   had TWO transition owners:
-  //     1. the machine reducer (authoritative)
-  //     2. the legacy wrapper (via executeUnifiedAdvance)
-  //   Any drift in liveSession or snapshot computation could make the visible
-  //   post-rest state disagree with reducer truth for one or more renders.
-  //
-  // WHAT THIS HELPER DOES:
-  //   A single authoritative advance path that reads ONLY from:
-  //     - machineState.currentExerciseIndex (authoritative exercise pointer)
-  //     - exercises[] (contract exercise list)
-  //     - normalizedCompletedSets (machine-derived completed-set ledger)
-  //     - safeLastSetRPE (machine-derived RPE of last completed set)
-  //   and dispatches ONLY through machineDispatch (never through the legacy
-  //   dispatch wrapper).
-  //
-  //   Cleanups (clearRestTimerState, clearSessionStorage on workout-complete)
-  //   and diagnostic transition traces are preserved bit-identical to the
-  //   executeUnifiedAdvance behavior so no external observer sees a change
-  //   in side effects.
-  // =========================================================================
-  const advanceToNextExerciseMachineDirect = useCallback((
-    reason: 'inter_exercise_complete' | 'skip_inter_exercise'
-  ) => {
-    const currentIdx = machineState.currentExerciseIndex
-    const nextIdx = currentIdx + 1
-    const isWorkoutComplete = nextIdx >= exercises.length
-    
-    // Diagnostic breadcrumb (same stage names the prior executeUnifiedAdvance used)
-    writeTransitionTrace({
-      reason,
-      transitionStage: 'requested',
-      timestamp: Date.now(),
-      safeIndexUsed: true,
-    })
-    writeTransitionTrace({
-      transitionStage: 'computed',
-      fromExerciseIndex: currentIdx,
-      toExerciseIndex: isWorkoutComplete ? currentIdx : nextIdx,
-      fromExerciseName: exercises[currentIdx]?.name ?? null,
-      toExerciseName: isWorkoutComplete ? null : exercises[nextIdx]?.name ?? null,
-      transitionType: isWorkoutComplete ? 'workout_complete' : 'next_exercise',
-      beforeStateStatus: machineState.phase === 'between_exercise_rest' ? 'resting' : 'active',
-      afterStateStatus: isWorkoutComplete ? 'completed' : 'active',
-      safeExerciseCount: exercises.length,
-      safeNextExerciseExists: !isWorkoutComplete && nextIdx < exercises.length,
-    })
-    
-    console.log('[v0] [machine-direct-advance] start', {
-      reason,
-      fromIndex: currentIdx,
-      toIndex: isWorkoutComplete ? currentIdx : nextIdx,
-      isWorkoutComplete,
-      phase: machineState.phase,
-    })
-    
-    if (isWorkoutComplete) {
-      // Dispatch authoritative COMPLETE_WORKOUT via machineDispatch only.
-      // The reducer owns the state transition to phase:'completed' and the
-      // final completedSets ledger.
-      machineDispatch({
-        type: 'COMPLETE_WORKOUT',
-        finalCompletedSets: normalizedCompletedSets,
-      })
-      writeTransitionTrace({ transitionStage: 'committed' })
-      clearRestTimerState()
-      clearSessionStorage()
-      return
-    }
-    
-    // [LIVE-CORRIDOR-TRUTH-CONSOLIDATION] Resolve the NEXT exercise's seed
-    // value via the canonical helper. Note: the reducer's
-    // ADVANCE_TO_NEXT_EXERCISE case now stores 0 as the re-seed sentinel
-    // (so the corridor's prescriptionSeedValue derivation owns the actual
-    // displayed default), but we still pass nextTargetValue here for
-    // legacy diagnostic visibility and so any older consumer that reads
-    // `action.targetValue` directly still sees the low-end-of-range value.
-    const nextExercise = exercises[nextIdx]
-    const nextRepsOrTime = nextExercise?.repsOrTime || ''
-    const nextTargetValue = parseLowEndReps(nextRepsOrTime) || 5
-    
-    // Single authoritative dispatch. The reducer's ADVANCE_TO_NEXT_EXERCISE
-    // case handles phase transition, set-number reset, band reset, etc.
-    machineDispatch({
-      type: 'ADVANCE_TO_NEXT_EXERCISE',
-      nextIndex: nextIdx,
-      targetValue: nextTargetValue,
-    })
-    
-    writeTransitionTrace({ transitionStage: 'committed' })
-    clearRestTimerState()
-    
-    console.log('[v0] [machine-direct-advance] complete', {
-      toIndex: nextIdx,
-      toExerciseName: nextExercise?.name,
-      nextTargetValue,
-    })
-  }, [machineState.currentExerciseIndex, machineState.phase, exercises, normalizedCompletedSets, machineDispatch])
-  
   // [UNIFIED-REST-HANDLER] Single handler for all rest completion
-  // Checks machine phase to determine correct transition.
-  //
-  // [LIVE-LOG-FINAL-PHASE-OWNER-SURGERY] Both branches now dispatch ONLY
-  // through machineDispatch. The between-exercise branch previously used
-  // executeUnifiedAdvance (legacy dispatch + liveSession); it now uses
-  // advanceToNextExerciseMachineDirect (machineDispatch + machineState).
-  // Same-exercise rest was already machine-direct and is unchanged.
+  // Checks machine phase to determine correct transition
   const handleRestComplete = useCallback(() => {
     const currentPhase = machineState.phase
     
@@ -4976,25 +4122,22 @@ export function StreamlinedWorkoutSession({
       playTimerCompletionAlert()
       machineDispatch({ type: 'COMPLETE_REST' })
     } else if (currentPhase === 'between_exercise_rest') {
-      // Between-exercise rest -> advance to next exercise (machine-direct)
+      // Between-exercise rest -> advance to next exercise
       playTimerCompletionAlert()
-      advanceToNextExerciseMachineDirect('inter_exercise_complete')
+      executeUnifiedAdvance('inter_exercise_complete')
     }
-  }, [machineState.phase, machineDispatch, advanceToNextExerciseMachineDirect])
+  }, [machineState.phase, machineDispatch, executeUnifiedAdvance])
   
-  // [LIVE-LOG-FINAL-PHASE-OWNER-SURGERY] Legacy aliases kept for call-site
-  // compatibility, but both now route through the machine-direct advance
-  // helper. The legacy `dispatch` wrapper no longer participates in any
-  // live post-log rest-completion path.
+  // Legacy handlers for backward compatibility
   const handleInterExerciseRestComplete = useCallback(() => {
     playTimerCompletionAlert()
-    advanceToNextExerciseMachineDirect('inter_exercise_complete')
-  }, [advanceToNextExerciseMachineDirect])
+    executeUnifiedAdvance('inter_exercise_complete')
+  }, [executeUnifiedAdvance])
   
   const handleSkipInterExerciseRest = useCallback(() => {
-    console.log('[LIVE-LOG-FINAL-PHASE-OWNER-SURGERY] handleSkipInterExerciseRest triggered (machine-direct)')
-    advanceToNextExerciseMachineDirect('skip_inter_exercise')
-  }, [advanceToNextExerciseMachineDirect])
+    console.log('[UNIFIED-HANDOFF] handleSkipInterExerciseRest triggered')
+    executeUnifiedAdvance('skip_inter_exercise')
+  }, [executeUnifiedAdvance])
   
   // [EXECUTION-TRUTH-FIX] Back navigation - review previous exercise
   // [LIVE-WORKOUT-MACHINE] Use safeExerciseIndex from machine
@@ -5318,39 +4461,22 @@ export function StreamlinedWorkoutSession({
   // That is a corridor ownership failure: during a live session, system
   // back MUST map to the same in-app Back control the user sees on screen.
   //
-  // [POST-COMMIT-REWIND-FIX] The previous revision of this effect caused
-  // the proven post-commit rewind (resting set 2 / completed 1 -> active
-  // set 1 / completed 0) immediately after a successful Log Set:
+  // Strategy:
+  //   1. On mount (while session is live and has any progress), push a
+  //      sentinel history entry so the first system-back press hits us,
+  //      not the underlying /program entry.
+  //   2. In popstate, route to handleGoBack when the user has progress to
+  //      undo. When at the first set of the first exercise (nothing to
+  //      unwind), show the exit confirm modal instead of silently leaving.
+  //   3. After handling, re-push the sentinel so the NEXT system-back
+  //      press is intercepted too. True exit only happens through the
+  //      intentional Save & Exit / Discard paths (which call onCancel ->
+  //      router navigation and do NOT pop through this interceptor).
+  //   4. Cleanup removes the listener and (if we're the top entry) pops
+  //      our own sentinel so we don't leak history noise.
   //
-  //   1. Effect had dependency `[safeStatus]`, so every active <-> resting
-  //      transition (the normal post-COMPLETE_SET flow) caused React to
-  //      tear down the old effect and re-run a new one.
-  //   2. The teardown's cleanup called `window.history.back()` whenever
-  //      its sentinel was still on the stack.
-  //   3. The next effect immediately re-armed the sentinel and registered
-  //      a fresh popstate listener BEFORE the async popstate from the
-  //      cleanup history.back() arrived.
-  //   4. That synthesized popstate was indistinguishable from a real
-  //      system back press to the new listener, which then called
-  //      handleGoBackRef.current() -> dispatch({ type: 'GO_BACK', ... })
-  //      -> set 2 -> set 1, completed 1 -> 0. Exact observed shape.
-  //
-  // FIX:
-  //   A. Depend on a stable `isInteractivePhase` boolean instead of the
-  //      raw status, so the effect does NOT re-run on active <-> resting
-  //      transitions (or any other transition between live phases). It
-  //      arms once when the session first becomes interactive and tears
-  //      down once when the session leaves the interactive domain
-  //      (completed / ready / unmount).
-  //   B. Remove the cleanup-time `window.history.back()` entirely. Even
-  //      if a phantom sentinel entry is left on the history stack after
-  //      unmount, it is harmless: by then the popstate listener is gone
-  //      and a later back press simply resolves against normal app
-  //      history. There is NO safe cleanup-time history mutation during
-  //      React teardown.
-  //   C. Popstate handler still reads the latest canGoBack / handler /
-  //      status via refs, so responsiveness to in-progress user state is
-  //      preserved without binding the effect to those values.
+  // We use refs so the effect doesn't re-bind on every render and every
+  // popstate always reads the latest canGoBack / handler.
   // ==========================================================================
   const canGoBackRef = useRef(canGoBack)
   canGoBackRef.current = canGoBack
@@ -5358,38 +4484,31 @@ export function StreamlinedWorkoutSession({
   handleGoBackRef.current = handleGoBack
   const safeStatusRef = useRef(safeStatus)
   safeStatusRef.current = safeStatus
-
-  // [POST-COMMIT-REWIND-FIX] Stable boolean across normal live phase
-  // transitions. Any phase that keeps the user inside the live workout
-  // corridor counts as "interactive" so this flag does NOT flip on a
-  // Log-Set-driven active -> resting transition, and the effect below
-  // therefore does NOT tear down + re-arm during a commit.
-  const isInteractivePhase =
-    safeStatus === 'active' ||
-    safeStatus === 'resting' ||
-    safeStatus === 'between_exercise_rest' ||
-    safeStatus === 'block_round_rest' ||
-    safeStatus === 'transitioning'
-
+  
   useEffect(() => {
     if (typeof window === 'undefined') return
-    if (!isInteractivePhase) return
-
+    // Only arm the interceptor while the session is interactive. If we
+    // haven't reached active/resting/etc yet (ready) or we're already at
+    // completed, let normal navigation happen.
+    const interactiveStatuses = ['active', 'resting']
+    if (!interactiveStatuses.includes(safeStatus)) return
+    
     const SENTINEL = 'spartan_workout_session_sentinel'
-
+    let sentinelArmed = false
+    
     const armSentinel = () => {
       try {
         window.history.pushState({ [SENTINEL]: true }, '')
-        console.log('[LIVE-WORKOUT-CORRIDOR] sentinel_armed')
+        sentinelArmed = true
       } catch {
         // no-op: some embedded browsers restrict pushState
       }
     }
-
+    
     armSentinel()
-
+    
     const onPopState = () => {
-      console.log('[LIVE-WORKOUT-CORRIDOR] popstate_intercepted', {
+      console.log('[LIVE-WORKOUT-CORRIDOR] system back intercepted', {
         canGoBack: canGoBackRef.current,
         status: safeStatusRef.current,
       })
@@ -5398,24 +4517,22 @@ export function StreamlinedWorkoutSession({
       } else {
         setShowExitConfirm(true)
       }
-      // Re-arm so the next system-back press is also intercepted. This
-      // only runs in response to a real popstate event, never during
-      // React effect cleanup.
+      // Re-arm so the next system-back press is also intercepted.
       armSentinel()
     }
-
+    
     window.addEventListener('popstate', onPopState)
-
+    
     return () => {
       window.removeEventListener('popstate', onPopState)
-      // [POST-COMMIT-REWIND-FIX] INTENTIONAL: no window.history.back()
-      // here. See the multi-paragraph comment above for the full failure
-      // mode. Any phantom sentinel entry left behind is benign because
-      // the listener is detached by the line above. This is the single
-      // most important behavioral change in this fix.
-      console.log('[LIVE-WORKOUT-CORRIDOR] cleanup_no_navigation')
+      // If we armed a sentinel and we're leaving while it's still on
+      // the stack, pop it so we don't leave a phantom entry behind.
+      if (sentinelArmed && typeof window.history.state === 'object' &&
+          window.history.state?.[SENTINEL]) {
+        try { window.history.back() } catch { /* no-op */ }
+      }
     }
-  }, [isInteractivePhase])
+  }, [safeStatus])
   
   // Save completed workout with full logging
   const handleSaveWorkout = useCallback(async (difficulty?: PerceivedDifficulty) => {
@@ -5511,43 +4628,6 @@ export function StreamlinedWorkoutSession({
       const completionStatus: 'completed' | 'partial' | 'skipped' = 
         completedExercises >= totalExercises * 0.8 ? 'completed' :
         completedExercises > 0 ? 'partial' : 'skipped'
-
-      // [PHASE-L] Build per-set evidence ledger from normalizedCompletedSets so
-      // future-prescription adaptation has actualReps / actualHold / actualRPE
-      // / per-set notes rather than only the per-exercise summary. We map by
-      // exerciseIndex back to the live `exercises` list to recover canonical
-      // name + category + prescribed reps/hold for the comparison.
-      const completedSetEvidence = normalizedCompletedSets
-        .map(set => {
-          const ex = exercises[set.exerciseIndex]
-          if (!ex) return null
-          // Parse prescribed reps/hold from repsOrTime as a best-effort comparison.
-          const repsOrTime = (ex as { repsOrTime?: string }).repsOrTime ?? ''
-          const lowMatch = repsOrTime.match(/(\d+)/)
-          const lowVal = lowMatch ? parseInt(lowMatch[1], 10) : undefined
-          const isHold = /sec|hold|s\b/i.test(repsOrTime)
-          const flagsForExercise = sessionNotes.exerciseNotes[set.exerciseIndex]
-          return {
-            exerciseName: ex.name,
-            exerciseId: ex.id,
-            sessionId: sessionId,
-            setNumber: set.setNumber,
-            prescribedReps: !isHold ? lowVal : undefined,
-            prescribedHoldSeconds: isHold ? lowVal : undefined,
-            actualReps: typeof set.actualReps === 'number' ? set.actualReps : undefined,
-            actualHoldSeconds: typeof set.holdSeconds === 'number' ? set.holdSeconds : undefined,
-            prescribedRPE: (ex as { targetRPE?: number }).targetRPE,
-            actualRPE: typeof set.actualRPE === 'number' ? set.actualRPE : undefined,
-            note: set.note ?? flagsForExercise?.freeText,
-            noteFlags: [
-              ...(set.reasonTags ?? []),
-              ...(flagsForExercise?.flags ?? []),
-            ],
-            timestamp: typeof set.timestamp === 'number' ? new Date(set.timestamp).toISOString() : undefined,
-            trusted: true,
-          }
-        })
-        .filter((ev): ev is NonNullable<typeof ev> => ev !== null)
       
   // Quick log the workout with full feedback loop data
     // Ensure minimum 1 minute duration to prevent 0-minute sessions
@@ -5571,8 +4651,6 @@ export function StreamlinedWorkoutSession({
         })),
         // FEEDBACK LOOP: Exercise-level outcomes for progression engine
         exercises: exerciseOutcomes,
-        // [PHASE-L] Per-set evidence ledger for future-prescription adaptation
-        completedSetEvidence,
         // FEEDBACK LOOP: Mark demo sessions to exclude from adaptive logic
         isDemo: isDemoSession || isDemo,
         completionStatus,
@@ -5992,43 +5070,8 @@ if (shouldShowLocalFallback) {
   // [JSX-STABILIZED] Precomputed render function for Today's Plan rows
   // Extracted from inline JSX to prevent ownership drift in complex ternary branches
   const renderTodayPlanRows = (): React.ReactNode => {
-    // [FINAL-MIRROR-LOCK Part 2] Shell SHADOW-OWNER GUARD.
-    //
-    // Same contract enforced in the executionPlan builder: styleMetadata
-    // may only OWN row order when (a) it contains at least one truly-
-    // grouped group AND (b) its flattened id-sequence matches the booted
-    // `exercises` order. Otherwise we skip the styleMetadata render path
-    // and fall through to Priority 3 (flat render from `exercises`), which
-    // is the mirror body stamped by the Program card as visibleLaunchBody.
-    //
-    // This is what eliminates the verified failure where the card showed
-    // e.g. Planche -> Explosive Pull-Ups -> Tuck FL Hold -> Weighted Dips
-    // and the shell showed Planche -> Tuck FL Hold -> Weighted Dips ->
-    // Explosive Pull-Ups despite both pulling from the same underlying
-    // `styleMetadata`: the flattening order of the groups disagrees with
-    // fullVisibleExercises order for shortened sessions, and the prior
-    // code always honored the flattening.
-    const shellStyledGroups = safeSession.styleMetadata?.styledGroups
-    const shellStyledGroupsCanOwnOrder = ((): boolean => {
-      if (!shellStyledGroups || shellStyledGroups.length === 0) return false
-      const hasTrulyGrouped = shellStyledGroups.some(
-        g => g.groupType && g.groupType !== 'straight'
-      )
-      if (!hasTrulyGrouped) return false
-      const flatIds: string[] = []
-      for (const g of shellStyledGroups) {
-        for (const ex of g.exercises) flatIds.push(ex.id)
-      }
-      if (flatIds.length !== exercises.length) return false
-      for (let i = 0; i < flatIds.length; i++) {
-        if (flatIds[i] !== exercises[i].id) return false
-      }
-      return true
-    })()
-
     // Priority 1: Authoritative styleMetadata grouped render
-    // (only when styledGroups legitimately owns order per the shadow-owner guard)
-    if (shellStyledGroupsCanOwnOrder && safeSession.styleMetadata?.styledGroups && safeSession.styleMetadata.styledGroups.length > 0) {
+    if (safeSession.styleMetadata?.styledGroups && safeSession.styleMetadata.styledGroups.length > 0) {
       const previewGroupCounters: Record<string, number> = { superset: 0, circuit: 0, cluster: 0, density_block: 0 }
       
       return safeSession.styleMetadata.styledGroups.map((group, groupIdx) => {
@@ -6218,12 +5261,6 @@ if (shouldShowLocalFallback) {
   
   // [LIVE-WORKOUT-MACHINE] Use safeStatus from machine
   if (safeStatus === 'ready') {
-    // [LIVE-TRUE-ISOLATION-R5] Mark that we entered the ready shell branch.
-    // If the route-level boundary fires while this is the last known stage,
-    // the failure happened during pre-start shell rendering, not live.
-    markLiveBootStage('ready_shell_render', {
-      phase: machineState.phase,
-    })
     // [LIVE-PHASE-ASSERTION] Guard against ready render during live execution
     if (machineState.completedSets.length > 0 || machineState.startTime !== null) {
       console.error('[v0] [LIVE-PHASE-ASSERTION] BUG: Ready shell entered with active progress!', {
@@ -6319,76 +5356,6 @@ if (shouldShowLocalFallback) {
                 </Badge>
               )}
             </div>
-            {/* [SELECTED-SESSION-CONTRACT-PROOF] Pre-start shell proof strip.
-                PRODUCTION-VISIBLE (was dev-only). Sits directly above the
-                Today's Plan rows so the user can see, at a glance, whether
-                the shell is reading the SAME session prop the route already
-                variant-narrowed. If `mode` / `variant` here agree with the
-                Card's Launch proof but the CORRIDOR token below flips to
-                `MISMATCH`, the URL requested 45/30 but the live session still
-                carries full-session dimensions -- exactly the silent full-
-                session fallback [SELECTED-SESSION-OWNERSHIP-LOCK] blocks at
-                the route layer.
-
-                CORRIDOR token semantics here:
-                  OK        -> URL mode is 45/30, variant > 0, AND the live
-                               session's estimatedMinutes is consistent with
-                               the declared mode (<= 50 for 45_min, <= 35
-                               for 30_min).
-                  OK_FULL   -> URL mode is full (idx 0); no narrowing
-                               expected.
-                  MISMATCH  -> URL mode is 45/30 but the live session's
-                               estimatedMinutes still looks like the full
-                               session, OR variant was requested (idx > 0)
-                               but the route did not narrow (see route-level
-                               CRITICAL console.error for upstream cause). */}
-            {(() => {
-              const exCount = safeSession.exercises?.length ?? 0
-              const min = typeof safeSession.estimatedMinutes === 'number'
-                ? safeSession.estimatedMinutes
-                : null
-              const groupCount = safeSession.styleMetadata?.styledGroups?.filter(
-                (g) => g.groupType !== 'straight'
-              ).length ?? 0
-              const totalSets = (safeSession.exercises ?? []).reduce(
-                (s, e) => s + (typeof e.sets === 'number' ? e.sets : 0),
-                0
-              )
-              let corridor: 'OK' | 'OK_FULL' | 'MISMATCH' = 'OK_FULL'
-              if (executionMode === '45_min') {
-                corridor = (min !== null && min <= 50) ? 'OK' : 'MISMATCH'
-              } else if (executionMode === '30_min') {
-                corridor = (min !== null && min <= 35) ? 'OK' : 'MISMATCH'
-              } else if (executionMode === 'full') {
-                // Full mode: variant index should be 0. If variant > 0 leaked
-                // through on full mode, that is a launch-builder corridor bug.
-                corridor = variantIndex === 0 ? 'OK_FULL' : 'MISMATCH'
-              }
-              return (
-                <div className="mb-3 rounded-md border border-[#4F6D8A]/40 bg-[#12161C] px-2 py-1.5 text-[10px] font-mono text-[#7FA8CC] leading-tight">
-                  <div className="text-[#A4ACB8] uppercase tracking-wider text-[9px] mb-0.5 flex items-center gap-2">
-                    <span>Shell proof</span>
-                    <span
-                      className={
-                        corridor === 'MISMATCH'
-                          ? 'rounded-sm bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1'
-                          : 'rounded-sm bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-1'
-                      }
-                    >
-                      CORRIDOR:{corridor}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                    <span>mode={executionMode}</span>
-                    <span>variant={variantIndex}</span>
-                    <span>sessionEx={exCount}</span>
-                    <span>totalSets={totalSets}</span>
-                    <span>groups={groupCount}</span>
-                    <span>min={min ?? '?'}</span>
-                  </div>
-                </div>
-              )
-            })()}
             {/* [GROUPED-PLAN-FIX] Render grouped structure in Today's Plan */}
             {/* [JSX-STABILIZED] Precomputed rows for stable JSX ownership */}
             {renderTodayPlanRows()}
@@ -6861,79 +5828,15 @@ function InterExerciseRestCountdown({
   // This returns the isolated ActiveWorkoutStartCorridor component BEFORE
   // any of the complex derivation chains (unit status, render functions, etc.)
   // execute. This is the key fix - we must return EARLY to avoid the hooks.
-  //
-  // [LIVE-LOG-COMMIT-SURVIVAL] GATE READS machineState.phase DIRECTLY.
-  // Previously this gate read `safeStatus`, which is a backward-compat
-  // mapping that collapses 4+ live execution phases into 2 values. That
-  // mapping is harmless as a read, but using it as the corridor-render
-  // gate meant a backward-compat layer was deciding which live screen
-  // mounted. Any render-tick where `safeStatus` lagged behind
-  // machineState.phase (e.g. memo recomputation order) could briefly
-  // remount a different branch. Reading machineState.phase directly
-  // guarantees the gate decision is bit-identical to the authoritative
-  // reducer output with zero intermediate ownership.
+  // 
+  // EXPANDED: Now handles BOTH 'active' AND 'resting' states for same-exercise
+  // continuation. This prevents post-log render drift to the start shell.
   // ==========================================================================
-  const livePhase = machineState.phase
-  const isLiveExecutionPhase =
-    livePhase === 'active' ||
-    livePhase === 'resting' ||
-    livePhase === 'between_exercise_rest' ||
-    livePhase === 'block_round_rest' ||
-    livePhase === 'transitioning'
-  
-  // =========================================================================
-  // [HOOK-CONTRACT-FIX] Post-commit observability (Stage F) used to live
-  // here as a `useRef` + `useEffect` pair. Those hooks were declared BELOW
-  // the component-level `if (safeStatus === 'ready') { return ... }` and
-  // `if (safeStatus === 'completed') { return ... }` early returns, which
-  // meant the parent's hook count changed between renders whenever the
-  // status transitioned across those branches - the exact shape of React
-  // error #310 that the production diagnostic footer reported as
-  // `ready_shell_render`. Since those hooks are strictly live-only
-  // concerns, they now live inside LiveWorkoutExecutionSurface, which is
-  // only mounted during live execution phases. The parent component now
-  // declares NO hooks after any conditional component-level return.
-  // =========================================================================
-
-  if (isLiveExecutionPhase) {
-    // [LIVE-TRUE-ISOLATION-R5] Stage marker fired the instant we enter the
-    // live render branch. If this stage is set on crash, the parent hook
-    // chain ran successfully and the failure is downstream (snapshot
-    // build, live surface, or corridor). If this stage is NOT set on
-    // crash, the failure happened up in the parent hook/effect/useMemo
-    // chain BEFORE we ever reached the live branch.
-    markLiveBootStage('live_branch_entered', {
-      phase: machineState.phase,
-      exerciseIndex: safeExerciseIndex,
-    })
-    
-    // [LIVE-LOG-COMMIT-SURVIVAL] corridorMode is derived DIRECTLY from
-    // machineState.phase. No safeStatus compatibility layer.
-    const corridorMode =
-      livePhase === 'block_round_rest'
-        ? ('block_round_rest' as const)
-        : livePhase === 'resting' || livePhase === 'between_exercise_rest'
-          ? ('resting' as const)
-          : ('active' as const)
-    const isBlockRoundRest = livePhase === 'block_round_rest'
-
-    // [LIVE-LOG-CORRIDOR-PROOF] stage_screen_rendered_authoritative
-    // Proves which render branch is actually mounting. If this log prints
-    // during a user's live workout, the authoritative ActiveWorkoutStartCorridor
-    // path is live. If instead a `stage_screen_rendered_LEGACY_UNIT_contract_violation`
-    // or `stage_screen_rendered_LEGACY_STAGE1_contract_violation` log prints
-    // for the same render tick, the single-owner contract is broken and the
-    // corridor early-return above is no longer short-circuiting the legacy
-    // paths. This is the first log that must appear in any Log Set chain.
-    console.log('[v0] [log-corridor] stage_screen_rendered_authoritative', {
-      safeStatus,
-      corridorMode,
-      exerciseName: safeCurrentExercise?.name,
-      exerciseIndex: safeExerciseIndex,
-      currentSetNumber: validatedSetNumber,
-      completedSetsCount: normalizedCompletedSets?.length ?? 0,
-      phase: machineState.phase,
-    })
+  if (safeStatus === 'active' || safeStatus === 'resting') {
+    // Determine corridor mode - check machineState.phase directly for block_round_rest
+    const isBlockRoundRest = machineState.phase === 'block_round_rest'
+    const corridorMode = isBlockRoundRest ? 'block_round_rest' as const : 
+                         safeStatus === 'resting' ? 'resting' as const : 'active' as const
     
     // [ISOLATED-ACTIVE-CORRIDOR] Derive simple safe values for the corridor
     // These are plain reads from machine state - no complex derivations
@@ -6954,17 +5857,10 @@ function InterExerciseRestCountdown({
       name: safeCurrentExercise?.name,
       category: safeCurrentExercise?.category,
     })
-    // [LIVE-CORRIDOR-TRUTH-CONSOLIDATION] Use the canonical low-end-of-range
-    // resolver instead of `match(/(\d+)/)`. The previous regex grabbed the
-    // FIRST number anywhere in the prescription text, so prescriptions like
-    // "3 sets x 4-6 reps" yielded 3 (the set count) and the active card
-    // opened at 3 even though the prescribed RANGE was 4-6. The helper
-    // strips leading set-count prefixes and prefers the range LOW end,
-    // which is the contractually correct default seed.
-    const prescriptionSeedValue = getPrescriptionSeedValue({
-      repsOrTime: exerciseRepsOrTime,
-      isHold: isHoldExerciseForDefault,
-    })
+    const targetMatch = exerciseRepsOrTime.match(/(\d+)/)
+    const prescriptionSeedValue = targetMatch
+      ? parseInt(targetMatch[1], 10)
+      : (isHoldExerciseForDefault ? 30 : 8)
     
     // [DEFAULT_SEED_DECISION] Deterministic seeding rule:
     // The machine sets repsValue/holdValue to 0 on init, on COMPLETE_SET, and
@@ -7075,60 +5971,8 @@ function InterExerciseRestCountdown({
       machineDispatch({ type: 'TOGGLE_REASON_TAG', tag })
     }
     
-    // =====================================================================
-    // [LIVE-LOG-PHASE-OWNER-SURGERY] SINGLE-OWNER REST SUBTYPE DERIVATION
-    //
-    // PROBLEM OBSERVED (from screen recording):
-    //   After Log Set on Planche Leans Set 1/5, the UI momentarily flashes
-    //   through the green "Exercise Complete! Up Next Tuck Front Lever Hold"
-    //   between-exercise rest card before stabilizing. The reducer can only
-    //   produce phase:'between_exercise_rest' for the FINAL set of an
-    //   exercise, so this flash implies a stale / re-entrant dispatch path
-    //   was briefly forcing that phase even with only 1 of 5 sets completed.
-    //
-    // SINGLE-OWNER CONTRACT APPLIED HERE:
-    //   The between-exercise rest card is allowed to render IFF both:
-    //     (a) machineState.phase === 'between_exercise_rest', AND
-    //     (b) the ACTUAL completed-set history proves this exercise is done
-    //         (i.e. completedSets.filter(exerciseIndex === current).length
-    //          is >= the effective prescribed sets for the current exercise)
-    //
-    //   This invariant is a render-time truth filter, NOT a parallel owner.
-    //   It reads ONLY from machineState (completedSets) and the effective
-    //   contract (prescribed sets). It cannot produce a false positive and
-    //   cannot mutate state. If a second owner somehow flips phase to
-    //   between_exercise_rest prematurely, the invariant denies the render
-    //   and the user continues to see the correct same-exercise rest card.
-    //
-    //   Conversely, on the LEGITIMATE last-set path, completedSets already
-    //   contains the just-logged final set (reducer appends before returning
-    //   between_exercise_rest), so the invariant passes bit-identically to
-    //   the prior behavior - zero regression for real between-exercise rest.
-    // =====================================================================
-    const currentExerciseCompletedCount = normalizedCompletedSets.filter(
-      s => s.exerciseIndex === safeExerciseIndex
-    ).length
-    const currentExerciseFullyCompleted =
-      currentExerciseCompletedCount >= activeEffectiveContract.effectiveSets
-    const rawPhaseIsBetweenExercise = machineState.phase === 'between_exercise_rest'
-    const isBetweenExerciseRest = rawPhaseIsBetweenExercise && currentExerciseFullyCompleted
-    
-    // Diagnostic: if the reducer produced between_exercise_rest but the
-    // completed-set history disagrees, log the exact mismatch so the
-    // upstream dispatch responsible for the premature phase flip becomes
-    // visible in logs. The invariant above still protects the render.
-    if (rawPhaseIsBetweenExercise && !currentExerciseFullyCompleted) {
-      console.warn('[v0] [log-corridor] BETWEEN_EXERCISE_REST_PREMATURE_PHASE_FILTERED', {
-        currentExerciseIndex: safeExerciseIndex,
-        exerciseName: safeCurrentExercise?.name,
-        currentExerciseCompletedCount,
-        prescribedSets: activeEffectiveContract.effectiveSets,
-        machinePhase: machineState.phase,
-        completedSetsTotal: normalizedCompletedSets.length,
-        hint: 'render filter denied Exercise-Complete rest card because current exercise has not reached its final set. Root cause upstream.',
-      })
-    }
-    
+    // Determine rest type and next exercise for between-exercise transitions
+    const isBetweenExerciseRest = machineState.phase === 'between_exercise_rest'
     const restType = isBlockRoundRest ? 'block_round' as const :
                      isBetweenExerciseRest ? 'between_exercise' as const : 'same_exercise' as const
     
@@ -7158,146 +6002,6 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     const nextExerciseIndex = safeExerciseIndex + 1
     const nextExercise = nextExerciseIndex < exercises.length ? exercises[nextExerciseIndex] : null
     const nextExerciseName = nextExercise?.name
-
-    // =====================================================================
-    // [PHASE-J / UP-NEXT-SETUP] Build a compact one-line setup string for
-    // the rest screen "Up Next" between-exercise transition.
-    //
-    // Previously the rest card showed only the exercise NAME ("Weighted
-    // Dips"), so the user could not see the actual setup they were about
-    // to attack. We now stitch together the next exercise's authoritative
-    // prescription details:
-    //   - "Set 1 of N"
-    //   - reps / hold target (from the canonical effective contract on the
-    //     next exercise; we build that contract for the next exercise the
-    //     same way we build it for the current one)
-    //   - prescribed load chip (e.g. "+25 lbs"), only when prescribedLoad
-    //     resolves to an actual positive load
-    //   - method/group context for grouped blocks ("Superset A2", "Circuit
-    //     round 2"), only when it differs from the current block
-    //   - target RPE, only when the next exercise actually carries one
-    //
-    // Rules enforced here so the corridor cannot drift:
-    //   - DO NOT invent load. Omit the chip if prescribedLoad is missing.
-    //   - DO NOT show stale Program-card values; use the same scaled
-    //     effective-contract path the active card uses.
-    //   - DO NOT pad with empty separators. Each segment is conditional.
-    //   - Keep it to ONE LINE. Two short segments max for mobile.
-    // =====================================================================
-    const nextExerciseSetup: string | null = (() => {
-      if (!nextExercise) return null
-      try {
-        // Reuse the same effective-contract resolver the active card uses
-        // so week scaling, doctrine mutations, and load-authoritative
-        // session output all flow through the same single-owner path.
-        const nextSets = getEffectiveExerciseValues(nextExercise).sets
-        const nextRepsOrTime = (nextExercise.repsOrTime ?? '').toString().trim()
-        const nextTargetRPE = nextExercise.targetRPE
-        const nextLoad = nextExercise.prescribedLoad
-        const segments: string[] = []
-        // Set count (always "Set 1 of N" because the user is heading INTO
-        // exercise N+1's first set after a between-exercise rest).
-        if (nextSets > 0) {
-          segments.push(`Set 1 of ${nextSets}`)
-        }
-        // Reps / hold prescription, exactly as the corridor would show on
-        // the active card. We pass through the prescription text verbatim
-        // because that is the contract the user already trusts elsewhere.
-        if (nextRepsOrTime.length > 0) {
-          segments.push(nextRepsOrTime)
-        }
-        // Prescribed load chip - only when there is an actual positive
-        // load. We never invent a load on bodyweight exercises.
-        if (nextLoad && typeof nextLoad.load === 'number' && nextLoad.load > 0) {
-          const unit = nextLoad.unit || 'lbs'
-          segments.push(`+${nextLoad.load} ${unit}`)
-        }
-        // Target RPE - only when the next exercise carries one. Some
-        // accessory rows legitimately have no targetRPE; we omit rather
-        // than fabricating "RPE -".
-        if (typeof nextTargetRPE === 'number' && nextTargetRPE > 0) {
-          segments.push(`RPE ${nextTargetRPE}`)
-        }
-        if (segments.length === 0) return null
-        return segments.join(' \u00b7 ')
-      } catch (err) {
-        console.warn('[v0] [up_next_setup_build_failed]', err)
-        return null
-      }
-    })()
-
-    // =====================================================================
-    // [PHASE-U / UP-NEXT-DETAIL] Structured next-exercise prescription.
-    //
-    // Phase J shipped a single concatenated `nextExerciseSetup` string
-    // ("Set 1 of 3 \u00b7 6-8 reps \u00b7 +25 lbs \u00b7 RPE 8"). That dense one-line
-    // form was useful but hard to scan on mobile and crammed unrelated
-    // dimensions together. Phase U breaks the same authoritative truth
-    // into NAMED structured fields so the corridor can render one chip
-    // per dimension (sets, prescription, load, RPE, rest) and a separate
-    // setup-cue line. Truth source is unchanged - same effective-contract
-    // resolver, same `nextExercise.*` fields. We are NOT computing any
-    // new training logic; we are exposing already-existing values in a
-    // shape the UI can layout cleanly.
-    //
-    // Truth-preservation rules (DO NOT WEAKEN):
-    //   - Every field returns null when the underlying authoritative value
-    //     is missing. NEVER fabricate. NEVER infer. NEVER pad with "-".
-    //   - prescribedLoad is forwarded verbatim; we will not show a load
-    //     chip on bodyweight exercises (gate is `load > 0` at the corridor).
-    //   - targetRPE is forwarded only when it is a positive number.
-    //   - restSeconds is forwarded only when positive; rest will not be
-    //     fabricated from defaults.
-    //   - setupCue is forwarded ONLY when nextExercise.note already exists
-    //     and is a non-empty string. We do NOT generate a coaching cue.
-    //   - category is forwarded as-is from authoritative truth; the
-    //     corridor decides whether to render a badge.
-    // =====================================================================
-    const nextExerciseRich: {
-      sets: number | null
-      repsOrTime: string | null
-      prescribedLoad: { load: number; unit: string } | null
-      targetRPE: number | null
-      restSeconds: number | null
-      category: string | null
-      setupCue: string | null
-    } | null = (() => {
-      if (!nextExercise) return null
-      try {
-        const nextSets = getEffectiveExerciseValues(nextExercise).sets
-        const nextRepsOrTime = (nextExercise.repsOrTime ?? '').toString().trim()
-        const nextTargetRPE = nextExercise.targetRPE
-        const nextLoad = nextExercise.prescribedLoad
-        const nextRestSeconds = nextExercise.restSeconds
-        const nextCategory = (nextExercise.category ?? '').toString().trim()
-        const nextNote = (nextExercise.note ?? '').toString().trim()
-        return {
-          sets: typeof nextSets === 'number' && nextSets > 0 ? nextSets : null,
-          repsOrTime: nextRepsOrTime.length > 0 ? nextRepsOrTime : null,
-          prescribedLoad:
-            nextLoad && typeof nextLoad.load === 'number' && nextLoad.load > 0
-              ? { load: nextLoad.load, unit: nextLoad.unit || 'lbs' }
-              : null,
-          targetRPE:
-            typeof nextTargetRPE === 'number' && nextTargetRPE > 0
-              ? nextTargetRPE
-              : null,
-          restSeconds:
-            typeof nextRestSeconds === 'number' && nextRestSeconds > 0
-              ? nextRestSeconds
-              : null,
-          category: nextCategory.length > 0 ? nextCategory : null,
-          // [PHASE-U] Setup cue is exclusively the authoritative
-          // `note` field on the exercise contract. If the contract has
-          // no note we render no cue line - we do not invent
-          // coaching language.
-          setupCue: nextNote.length > 0 ? nextNote : null,
-        }
-      } catch (err) {
-        console.warn('[v0] [up_next_rich_build_failed]', err)
-        return null
-      }
-    })()
     
     // [REST-CORRIDOR-SINGLE-OWNER] Rest duration flows through one authoritative
     // decision path. Block-round rest is owned by the block prescription. For
@@ -7448,263 +6152,201 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
     }
     
     // =====================================================================
-    // [LIVE-TRUE-ISOLATION-R5] BUILD THE FLAT LIVE SNAPSHOT + HAND OFF TO
-    // LiveWorkoutExecutionSurface.
+    // [LIVE-LOG-HANDOFF-FIX] activeCorridorSnapshot - SINGLE AUTHORITATIVE
+    // RENDER SOURCE FOR ACTIVEWORKOUTSTARTCORRIDOR
     //
-    // This is the ONLY live-render handoff surface. The surface is a
-    // narrow adapter that renders ActiveWorkoutStartCorridor behind its
-    // own error boundary and validates every field at the boundary.
+    // Prior to this fix, the corridor's visible identifying props
+    // (mode, set number, completed count, recent sets, inputs) were
+    // scattered inline across 40+ JSX lines. Every individual field was
+    // already machine-derived - there was no literal mixing with
+    // liveSession / existingSession / viewModel - but the scattered reads
+    // made the handoff surface opaque: there was no single observable
+    // point at which we could prove "the parent is handing the corridor
+    // exactly these post-commit machine values."
     //
-    // Snapshot construction is wrapped in try/catch so that a degenerate
-    // value (a throw inside any of the machine-pure derivations above)
-    // can be attributed to `live_snapshot_build` rather than to the
-    // surface render or to the corridor render itself. The route-level
-    // error footer reads this stage attribution to narrow diagnosis.
-    //
-    // Fields consolidated here were previously scattered inline across
-    // 40+ corridor JSX props. Every source is machine-pure:
-    //   - machineState
-    //   - safeCurrentExercise (indexed by machineState.currentExerciseIndex)
-    //   - activeEffectiveContract (week-scaled effective prescription)
-    //   - corridor-scoped derivations from earlier in this block
+    // This snapshot consolidates every field named in LIVE-LOG-HANDOFF
+    // C2 into ONE object, sourced only from:
+    //   - machineState        (phase, completedSets, currentSetNumber,
+    //                          currentExerciseIndex, selectedRPE,
+    //                          repsValue, holdValue, selectedBands,
+    //                          actualLoadUsed, actualLoadUnit,
+    //                          isPerSide, currentSetNote,
+    //                          currentSetReasonTags)
+    //   - safeCurrentExercise (the indexed exercise from the contract
+    //                          using machineState.currentExerciseIndex)
+    //   - activeEffectiveContract (effective sets / repsOrTime / RPE
+    //                          driven off machineState-owned current
+    //                          exercise)
+    //   - corridor-scoped derivations already in this block
     //     (corridorRepsValue, corridorHoldValue, corridorRecentSets,
-    //      isHoldExerciseForDefault, corridorMode, corridorInputMode,
-    //      corridorBandSelectable, corridorRecommendedBand, etc.)
+    //      isHoldExerciseForDefault, corridorMode, etc.) which are
+    //     themselves machine-pure.
     //
-    // Explicitly NOT sourced from: liveSession, existingSession,
-    // viewModel, or any safeStatus compatibility mapping.
+    // It explicitly DOES NOT read from:
+    //   - liveSession (legacy flattener used by autosave only)
+    //   - existingSession (pre-start saved-session hint)
+    //   - viewModel (used for pre-start shell only)
+    //   - any "safeStatus" route that masks machineState.phase
+    //
+    // The corridor receives these fields as individual props below so
+    // its public API is unchanged; the snapshot is purely a consolidation
+    // boundary for proof logging and future audits.
     // =====================================================================
-    markLiveBootStage('live_snapshot_build', {
+    const activeCorridorSnapshot = {
+      // Mode & labels
+      mode: corridorMode,
+      exerciseName: safeCurrentExercise?.name || 'Exercise',
+      exerciseCategory: safeCurrentExercise?.category || 'general',
+      // Week-scaled prescription (effective contract)
+      exerciseSets: activeEffectiveContract.effectiveSets,
+      exerciseRepsOrTime: activeEffectiveContract.effectiveRepsOrTime,
+      targetRPE: activeEffectiveContract.effectiveTargetRPE,
+      // Flat progression (machine-direct)
+      currentSetNumber: validatedSetNumber || 1,
+      currentExerciseIndex: safeExerciseIndex || 0,
+      totalExercises: exercises?.length || 1,
+      completedSetsCount: normalizedCompletedSets?.length || 0,
+      totalSetsCount: totalSets || 3,
+      // Inputs (machine-direct via seeding helpers)
+      repsValue: corridorRepsValue,
+      holdValue: corridorHoldValue,
+      selectedRPE: safeSelectedRPE,
+      // Notes (machine-direct)
+      currentSetNote: corridorCurrentSetNote,
+      currentSetReasonTags: corridorCurrentSetReasonTags,
+      // Ledger (machine-direct)
+      recentSets: corridorRecentSets,
+      // Input-kind contract (canonical isHoldUnit same detector as persistence)
+      isHoldExercise: isHoldExerciseForDefault,
+      // Load + bands (machine-direct)
+      selectedBands: corridorBandSelectable ? (machineState.selectedBands || []) : [],
+      actualLoadUsed: machineState.actualLoadUsed,
+      actualLoadUnit: machineState.actualLoadUnit,
+      isPerSide: machineState.isPerSide,
+    } as const
+    
+    // [log-corridor] Stage 6: snapshot passed to corridor. Proves the
+    // parent handoff values AFTER reducer commit. If this log shows
+    // currentSetNumber=2 and completedSetsCount=1 but the screen still
+    // shows Set 1/5, the bug is downstream (stage 7 inside the corridor
+    // or later). If this log ALSO shows Set 1/5 + 0, the bug is upstream
+    // of the handoff (reducer return not landing, or an overwrite effect
+    // rewriting machineState before this snapshot).
+    console.log('[v0] [log-corridor] stage6 active snapshot passed to corridor', {
+      mode: activeCorridorSnapshot.mode,
       phase: machineState.phase,
-      currentSetNumber: validatedSetNumber,
-      completedSetsCount: normalizedCompletedSets?.length ?? 0,
+      currentExerciseIndex: activeCorridorSnapshot.currentExerciseIndex,
+      currentSetNumber: activeCorridorSnapshot.currentSetNumber,
+      completedSetsCount: activeCorridorSnapshot.completedSetsCount,
+      recentSetsLength: activeCorridorSnapshot.recentSets.length,
+      selectedRPE: activeCorridorSnapshot.selectedRPE,
+      repsValue: activeCorridorSnapshot.repsValue,
+      holdValue: activeCorridorSnapshot.holdValue,
+      isHoldExercise: activeCorridorSnapshot.isHoldExercise,
     })
     
-    const liveSnapshot: LiveWorkoutSnapshot = (() => {
-      try {
-        const snapshot: LiveWorkoutSnapshot = {
-          // Mode & labels
-          mode: corridorMode,
-          sessionLabel: safeDisplayLabel || 'Workout',
-          // [HOOK-CONTRACT-FIX] Raw machine phase handed to the live surface
-          // so its post-commit observability effect (previously a parent-body
-          // hook below the ready-shell conditional return - root cause of
-          // React error #310) can do reversion detection without relying on
-          // the lossy `mode` projection.
-          machinePhase: machineState.phase,
-          // Exercise identity
-          exerciseName: safeCurrentExercise?.name || 'Exercise',
-          exerciseCategory: safeCurrentExercise?.category || 'general',
-          // Week-scaled prescription (effective contract)
-          exerciseSets: activeEffectiveContract.effectiveSets,
-          exerciseRepsOrTime: activeEffectiveContract.effectiveRepsOrTime,
-          targetRPE: activeEffectiveContract.effectiveTargetRPE,
-          // Optional prescribed weighted load
-          prescribedLoad:
-            safeCurrentExercise?.prescribedLoad?.load &&
-            safeCurrentExercise.prescribedLoad.load > 0
-              ? {
-                  load: safeCurrentExercise.prescribedLoad.load,
-                  unit: safeCurrentExercise.prescribedLoad.unit || 'lbs',
-                  confidenceLevel: safeCurrentExercise.prescribedLoad.confidenceLevel,
-                }
-              : undefined,
-          // Flat progression (machine-direct)
-          currentSetNumber: validatedSetNumber || 1,
-          currentExerciseIndex: safeExerciseIndex || 0,
-          totalExercises: exercises?.length || 1,
-          completedSetsCount: normalizedCompletedSets?.length || 0,
-          totalSetsCount: totalSets || 3,
-          elapsedSeconds: safeElapsedSeconds || 0,
-          // Inputs (machine-direct via seeding helpers)
-          repsValue: corridorRepsValue,
-          holdValue: corridorHoldValue,
-          selectedRPE: safeSelectedRPE,
-          bandUsed: safeBandUsed || 'none',
-          // Notes (machine-direct)
-          currentSetNote: corridorCurrentSetNote,
-          currentSetReasonTags: corridorCurrentSetReasonTags,
-          // Ledger (machine-direct)
-          recentSets: corridorRecentSets,
-          // Hold primary-input contract (same isHoldUnit() as persistence)
-          isHoldExercise: isHoldExerciseForDefault,
-          // Commit survival (machine-direct)
-          lastCommitRevision: normalizedCompletedSets.length,
-          // Input mode contract
-          inputMode: corridorInputMode.mode,
-          showLoadInput: corridorInputMode.showLoadInput,
-          showMultiBandSelector:
-            corridorBandSelectable && corridorInputMode.showMultiBandSelector,
-          showPerSideToggle: corridorInputMode.showPerSideToggle,
-          primaryInputLabel: corridorInputMode.primaryInputLabel,
-          // Band config
-          bandSelectable: corridorBandSelectable,
-          recommendedBand: corridorBandSelectable ? corridorRecommendedBand : undefined,
-          selectedBands: corridorBandSelectable ? (machineState.selectedBands || []) : [],
-          // Weighted inputs (machine-direct)
-          actualLoadUsed: machineState.actualLoadUsed,
-          actualLoadUnit: machineState.actualLoadUnit,
-          isPerSide: machineState.isPerSide,
-          // Rest
-          restDurationSeconds: getRestDuration(),
-          lastSetRPE: safeLastSetRPE,
-          restType,
-          nextExerciseName,
-          // [PHASE-J / UP-NEXT-SETUP] Compact one-liner with set count, reps,
-          // load chip, and target RPE for the next exercise. Built upstream
-          // from the canonical effective-contract resolver so the rest card
-          // shows the EXACT same setup the active card will show after the
-          // transition. Optional - omitted if no useful detail exists.
-          nextExerciseSetup,
-          // [PHASE-U / UP-NEXT-DETAIL] Structured per-field next-exercise
-          // prescription. Each field is null when the underlying
-          // authoritative truth is missing - the corridor decides per-chip
-          // whether to render. The single-line `nextExerciseSetup` above
-          // is preserved as a fallback/legacy path.
-          nextExerciseSets: nextExerciseRich?.sets ?? null,
-          nextExerciseRepsOrTime: nextExerciseRich?.repsOrTime ?? null,
-          nextExercisePrescribedLoad: nextExerciseRich?.prescribedLoad ?? null,
-          nextExerciseTargetRPE: nextExerciseRich?.targetRPE ?? null,
-          nextExerciseRestSeconds: nextExerciseRich?.restSeconds ?? null,
-          nextExerciseCategoryLabel: nextExerciseRich?.category ?? null,
-          nextExerciseSetupCue: nextExerciseRich?.setupCue ?? null,
-          // Block round rest
-          blockLabel,
-          blockGroupType,
-          currentRound,
-          targetRounds,
-          blockMemberExercises,
-          blockRoundRestSeconds,
-          groupedMemberIndex,
-          // Coaching
-          coachingExpression: buildCoachingExpression(machineState.currentActionPlan),
-          // Build chips (unchanged contract)
-          routeBuildChip,
-          parentBuildChip: SWS_BUILD_CHIP,
-          // Back nav
-          canGoBack,
-        }
-        
-        // [log-corridor] Stage 6: snapshot passed to corridor. Proves the
-        // parent handoff values AFTER reducer commit.
-        console.log('[v0] [log-corridor] stage6 active snapshot passed to corridor', {
-          mode: snapshot.mode,
-          phase: machineState.phase,
-          currentExerciseIndex: snapshot.currentExerciseIndex,
-          currentSetNumber: snapshot.currentSetNumber,
-          completedSetsCount: snapshot.completedSetsCount,
-          recentSetsLength: snapshot.recentSets?.length ?? 0,
-          selectedRPE: snapshot.selectedRPE,
-          repsValue: snapshot.repsValue,
-          holdValue: snapshot.holdValue,
-          isHoldExercise: snapshot.isHoldExercise,
-        })
-        
-        markLiveBootStage('live_snapshot_build_succeeded', {
-          mode: snapshot.mode,
-          currentSetNumber: snapshot.currentSetNumber,
-        })
-        return snapshot
-      } catch (snapshotError) {
-        const err = snapshotError as Error
-        markLiveBootStage('live_snapshot_build_failed', {
-          errorName: err?.name,
-          errorMessage: err?.message?.slice(0, 200),
-        })
-        try {
-          if (typeof sessionStorage !== 'undefined') {
-            sessionStorage.setItem(
-              'spartanlab_live_boot_failure',
-              JSON.stringify({
-                stage: 'live_snapshot_build',
-                errorName: err?.name ?? 'Error',
-                errorMessage: err?.message?.slice(0, 200) ?? '',
-                timestamp: Date.now(),
-              })
-            )
-          }
-        } catch {}
-        throw snapshotError
-      }
-    })()
-    
-    // [LIVE-TRUE-ISOLATION-R5] All handlers flattened into one plain object.
-    // The surface forwards these to the corridor verbatim. No handler
-    // creation or memoization happens inside the surface itself.
-    const liveHandlers: LiveWorkoutHandlers = {
-      onCompleteSet: handleCompleteSet,
-      onSetReps: setRepsValue,
-      onSetHold: setHoldValue,
-      onSetRPE: setSelectedRPE,
-      onSetBand: setBandUsed,
-      onSetNote: handleSetNote,
-      onToggleReasonTag: handleToggleReasonTag,
-      onSetSelectedBands: (bands) => machineDispatch({ type: 'SET_SELECTED_BANDS', bands }),
-      onSetActualLoad: (load, unit) => machineDispatch({ type: 'SET_ACTUAL_LOAD', load, unit }),
-      onSetIsPerSide: (isPerSide) => machineDispatch({ type: 'SET_IS_PER_SIDE', isPerSide }),
-      onExit: () => setShowExitConfirm(true),
-      onSaveAndExit: handleSaveAndExit,
-      onDiscardWorkout: handleDiscardAndExit,
-      onSkipSet: handleSkipSet,
-      onEndExercise: handleEndExercise,
-      onSkip: handleSkipExercise,
-      onRestComplete: handleRestComplete,
-      onGoBack: handleGoBack,
-      onBlockRoundRestComplete: handleBlockRoundRestComplete,
-    }
-    
-    // [PHASE 4Y / H.H5] Honest guidance-only banner.
-    //
-    // Renders ONLY when the live runtime cannot execute one or more grouped
-    // methods that exist in the session truth (density_block today, plus any
-    // case where members fail to bind to real session rows or the styledGroups
-    // shadow-owner guard rejected ordering and methodStructures had nothing
-    // executable to fall back to). H.H5 forbids silent flattening — this
-    // banner is the user-visible "we preserved the method as guidance" notice
-    // with the exact stable reason code in dev-only small text.
-    const showGuidanceBanner =
-      liveGroupedExecutionResult.parityVerdict === 'LIVE_GUIDANCE_PRESERVED_ONLY' ||
-      liveGroupedExecutionResult.parityVerdict === 'GROUPED_RUNTIME_BLOCKED' ||
-      liveGroupedExecutionResult.parityVerdict === 'GROUPED_RUNTIME_PARTIAL'
-    const guidanceBannerReason =
-      liveGroupedExecutionResult.reasons.find(
-        (r) =>
-          r === 'DENSITY_RUNTIME_NOT_SUPPORTED_YET' ||
-          r === 'GROUP_MEMBER_REF_NOT_FOUND' ||
-          r === 'UNSUPPORTED_METHOD_TYPE' ||
-          r === 'STYLED_GROUP_FLATTENED_SEQUENCE_MISMATCH' ||
-          r === 'METHOD_STRUCTURE_STATUS_NOT_APPLIED',
-      ) ?? 'GUIDANCE_ONLY_PRESERVED'
-
     return (
-      <>
-        {showGuidanceBanner && (
-          <div
-            className="mx-3 mt-3 mb-2 rounded-md border border-[#3F352B] bg-[#1F1A12] px-3 py-2 flex items-start gap-2"
-            role="status"
-            aria-live="polite"
-          >
-            <span className="mt-0.5 text-[#D4A045] text-xs font-semibold tracking-wide">
-              GROUPED METHOD
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-[#E6E9EF] leading-relaxed">
-                Grouped method preserved as guidance only.{' '}
-                {liveGroupedExecutionResult.parityVerdict === 'GROUPED_RUNTIME_PARTIAL'
-                  ? 'Some grouped blocks will run interactively; others are guidance.'
-                  : 'You will execute the rows in order with normal logging.'}
-              </p>
-              {process.env.NODE_ENV === 'development' && (
-                <p className="text-[10px] text-[#6B7280] mt-1 tabular-nums">
-                  reason: {guidanceBannerReason} · verdict:{' '}
-                  {liveGroupedExecutionResult.parityVerdict}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-        <LiveWorkoutExecutionSurface snapshot={liveSnapshot} handlers={liveHandlers} />
-      </>
+      <ActiveWorkoutStartCorridor
+        mode={activeCorridorSnapshot.mode}
+        sessionLabel={safeDisplayLabel || 'Workout'}
+        exerciseName={activeCorridorSnapshot.exerciseName}
+        exerciseCategory={activeCorridorSnapshot.exerciseCategory}
+        // [ACTIVE-WEEK-PARITY] exerciseSets / exerciseRepsOrTime / targetRPE
+        // flow from activeCorridorSnapshot which pulls from
+        // activeEffectiveContract (the same week-scaled contract used by
+        // the pre-start shell). Never route these through raw base dosage.
+        exerciseSets={activeCorridorSnapshot.exerciseSets}
+        exerciseRepsOrTime={activeCorridorSnapshot.exerciseRepsOrTime}
+        targetRPE={activeCorridorSnapshot.targetRPE}
+        prescribedLoad={safeCurrentExercise?.prescribedLoad?.load && safeCurrentExercise.prescribedLoad.load > 0 ? {
+          load: safeCurrentExercise.prescribedLoad.load,
+          unit: safeCurrentExercise.prescribedLoad.unit || 'lbs',
+          confidenceLevel: safeCurrentExercise.prescribedLoad.confidenceLevel,
+        } : undefined}
+        currentSetNumber={activeCorridorSnapshot.currentSetNumber}
+        currentExerciseIndex={activeCorridorSnapshot.currentExerciseIndex}
+        totalExercises={activeCorridorSnapshot.totalExercises}
+        completedSetsCount={activeCorridorSnapshot.completedSetsCount}
+        totalSetsCount={activeCorridorSnapshot.totalSetsCount}
+        elapsedSeconds={safeElapsedSeconds || 0}
+        repsValue={activeCorridorSnapshot.repsValue}
+        holdValue={activeCorridorSnapshot.holdValue}
+        // [ACTIVE-SET-SAVE-PARITY] Single authoritative primary-input kind.
+        // Sourced from activeCorridorSnapshot.isHoldExercise which equals
+        // isHoldExerciseForDefault - the IDENTICAL canonical isHoldUnit()
+        // output handleCompleteSet uses for persistence. Render branch and
+        // persist branch cannot disagree.
+        isHoldExercise={activeCorridorSnapshot.isHoldExercise}
+        selectedRPE={activeCorridorSnapshot.selectedRPE}
+        bandUsed={safeBandUsed || 'none'}
+        currentSetNote={activeCorridorSnapshot.currentSetNote}
+        currentSetReasonTags={activeCorridorSnapshot.currentSetReasonTags}
+        recentSets={activeCorridorSnapshot.recentSets}
+        // [LIVE-WORKOUT-AUTHORITY] Input mode contract
+        inputMode={corridorInputMode.mode}
+        showLoadInput={corridorInputMode.showLoadInput}
+        // [AUTHORITATIVE-BAND-GATE] Both band gates collapse to the same
+        // contract-owned flag. If the contract says no band UI, the corridor
+        // cannot render band controls regardless of any other prop.
+        showMultiBandSelector={corridorBandSelectable && corridorInputMode.showMultiBandSelector}
+        showPerSideToggle={corridorInputMode.showPerSideToggle}
+        primaryInputLabel={corridorInputMode.primaryInputLabel}
+        bandSelectable={corridorBandSelectable}
+        recommendedBand={corridorBandSelectable ? corridorRecommendedBand : undefined}
+        // [LIVE-WORKOUT-AUTHORITY] Multi-band selection
+        // [STALE-BAND-HANDOFF-GUARD] If the contract forbids band UI (weighted
+        // exercise), never hand stale selectedBands down to the corridor.
+        // This is a belt-and-suspenders guard on top of the machine-level
+        // clearing in ADVANCE_TO_NEXT_* reducers: even if a render fires
+        // before the next advance dispatch, the contract-forbidden surface
+        // cannot display stale colored band chips from the prior exercise.
+        // [LIVE-LOG-HANDOFF-FIX] Route through activeCorridorSnapshot. Value
+        // already applies the `corridorBandSelectable` suppression rule
+        // (weighted/unilateral-weighted modes -> empty array) so the
+        // belt-and-suspenders guard against stale colored band chips
+        // travels with the snapshot, not as a second inline rule.
+        selectedBands={activeCorridorSnapshot.selectedBands}
+        onSetSelectedBands={(bands) => machineDispatch({ type: 'SET_SELECTED_BANDS', bands })}
+        // [LIVE-WORKOUT-AUTHORITY] Weighted exercise inputs (machine-direct via snapshot)
+        actualLoadUsed={activeCorridorSnapshot.actualLoadUsed}
+        actualLoadUnit={activeCorridorSnapshot.actualLoadUnit}
+        onSetActualLoad={(load, unit) => machineDispatch({ type: 'SET_ACTUAL_LOAD', load, unit })}
+        // [LIVE-WORKOUT-AUTHORITY] Per-side tracking (machine-direct via snapshot)
+        isPerSide={activeCorridorSnapshot.isPerSide}
+        onSetIsPerSide={(isPerSide) => machineDispatch({ type: 'SET_IS_PER_SIDE', isPerSide })}
+        restDurationSeconds={getRestDuration()}
+        lastSetRPE={safeLastSetRPE}
+        restType={restType}
+        nextExerciseName={nextExerciseName}
+        // Block round rest props
+        blockLabel={blockLabel}
+        blockGroupType={blockGroupType}
+        currentRound={currentRound}
+        targetRounds={targetRounds}
+        blockMemberExercises={blockMemberExercises}
+        blockRoundRestSeconds={blockRoundRestSeconds}
+        onBlockRoundRestComplete={handleBlockRoundRestComplete}
+        groupedMemberIndex={groupedMemberIndex}
+        // [LIVE-WORKOUT-ACTION-PLANNER] Pass coaching expression from planner
+        coachingExpression={buildCoachingExpression(machineState.currentActionPlan)}
+        onCompleteSet={handleCompleteSet}
+        onSetReps={setRepsValue}
+        onSetHold={setHoldValue}
+        onSetRPE={setSelectedRPE}
+        onSetBand={setBandUsed}
+        onSetNote={handleSetNote}
+        onToggleReasonTag={handleToggleReasonTag}
+        onExit={() => setShowExitConfirm(true)}
+        onSaveAndExit={handleSaveAndExit}
+        onDiscardWorkout={handleDiscardAndExit}
+        // [LIVE-WORKOUT-AUTHORITY] Distinct skip actions
+        onSkipSet={handleSkipSet}
+        onEndExercise={handleEndExercise}
+        onSkip={handleSkipExercise} // Legacy fallback
+        onRestComplete={handleRestComplete}
+        onGoBack={handleGoBack}
+        canGoBack={canGoBack}
+      />
     )
   }
 
@@ -7748,16 +6390,6 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
   // UNIT 1: Header - renders progress bar, timer, workout label
   // [ACTIVE-ENTRY-CONTRACT] Now reads from activeEntryContract for progress values
   const renderHeaderUnit = (): React.ReactNode => {
-    // [LIVE-RENDER-SOURCE-LOCK] Belt-and-suspenders single-owner guard.
-    // The isLiveExecutionPhase early-return at line ~6066 already returns
-    // <ActiveWorkoutStartCorridor/> before this function can run during a
-    // live workout. This hard-block prevents any future regression where
-    // a legacy unit header could silently render above the authoritative
-    // corridor during active/resting/transitioning phases.
-    if (isLiveExecutionPhase) {
-      console.warn('[v0] [log-corridor] LEGACY_UNIT_HEADER_BLOCKED_DURING_LIVE_PHASE', { livePhase })
-      return null
-    }
     if (!unitStatus.header.enabled) return null
     try {
       unitStatus.header.rendered = true
@@ -7810,11 +6442,6 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
   // UNIT 2: Exercise - renders current exercise card with grouped block indicator
   // [ACTIVE-ENTRY-CONTRACT] Now reads from activeEntryContract for all values
   const renderExerciseUnit = (): React.ReactNode => {
-    // [LIVE-RENDER-SOURCE-LOCK] Belt-and-suspenders single-owner guard.
-    if (isLiveExecutionPhase) {
-      console.warn('[v0] [log-corridor] LEGACY_UNIT_EXERCISE_BLOCKED_DURING_LIVE_PHASE', { livePhase })
-      return null
-    }
     if (!unitStatus.exercise.enabled) return null
     try {
       unitStatus.exercise.rendered = true
@@ -8018,11 +6645,6 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
   }
   
   const renderInputsUnit = (): React.ReactNode => {
-    // [LIVE-RENDER-SOURCE-LOCK] Belt-and-suspenders single-owner guard.
-    if (isLiveExecutionPhase) {
-      console.warn('[v0] [log-corridor] LEGACY_UNIT_INPUTS_BLOCKED_DURING_LIVE_PHASE', { livePhase })
-      return null
-    }
     if (!unitStatus.inputs.enabled) return null
     try {
       unitStatus.inputs.rendered = true
@@ -8174,49 +6796,12 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
   
   // UNIT 4: Actions - renders complete button and secondary actions
   const renderActionsUnit = (): React.ReactNode => {
-    // [LIVE-RENDER-SOURCE-LOCK] Belt-and-suspenders single-owner guard.
-    // Authoritative Log Set button lives in ActiveWorkoutStartCorridor. This
-    // legacy Log Set surface must never render during any live execution phase.
-    if (isLiveExecutionPhase) {
-      console.warn('[v0] [log-corridor] LEGACY_UNIT_ACTIONS_BLOCKED_DURING_LIVE_PHASE (non-authoritative Log Set suppressed)', { livePhase })
-      return null
-    }
     if (!unitStatus.actions.enabled) return null
     try {
       unitStatus.actions.rendered = true
-      // [LIVE-LOG-CORRIDOR-PROOF] stage_screen_rendered_LEGACY_UNIT
-      // Fires ONLY if the legacy unit-based active-Actions renderer ever
-      // executes during a live workout. The authoritative corridor early-
-      // return at line ~5857 MUST fire first for any active/resting status,
-      // which makes this renderer structurally unreachable in the commit
-      // corridor. If this warn prints while safeStatus is 'active' or
-      // 'resting', the single-owner contract is broken -- the user is
-      // tapping a NON-AUTHORITATIVE button that will still route through
-      // handleCompleteSet (so commits still work) but the UI they see is
-      // the wrong render branch. Filterable with [log-corridor] prefix.
-      if (safeStatus === 'active' || safeStatus === 'resting') {
-        console.warn('[v0] [log-corridor] stage_screen_rendered_LEGACY_UNIT_contract_violation', {
-          safeStatus,
-          exerciseName: safeCurrentExercise?.name,
-          explanation: 'authoritative corridor early-return at line ~5857 should have prevented this render',
-        })
-      }
       return (
         <>
-          {/* [LIVE-LOG-CORRIDOR-SINGLE-OWNER] NON-AUTHORITATIVE. Legacy unit-
-              based render Log Set button. The authoritative Log Set button
-              lives in ActiveWorkoutStartCorridor.tsx and reaches this file via
-              the corridor's onCompleteSet prop (wired to handleCompleteSet).
-              This button is unreachable in the active-logging path because the
-              'active'/'resting' status branch at line ~5835 returns the
-              corridor component before this render runs. If this onClick ever
-              fires in production, the dev warning below makes it visible so we
-              can re-assert the single-owner contract. It still routes through
-              the SAME handleCompleteSet so no silent duplicate path can form. */}
-          <Button onClick={() => {
-            console.warn('[v0] [log-corridor] NON-AUTHORITATIVE legacy unit-Actions Log Set click - commit corridor single-owner contract says this should be unreachable')
-            handleCompleteSet()
-          }} disabled={safeSelectedRPE === null} className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-base font-bold">
+          <Button onClick={handleCompleteSet} disabled={safeSelectedRPE === null} className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-base font-bold">
             <Check className="w-5 h-5 mr-2" />Log Set
           </Button>
           <div className="flex items-center justify-between pt-2">
@@ -8277,60 +6862,166 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
   }
   
   // ==========================================================================
-  // [LIVE-SESSION-CRASH-FIX-R4] LEGACY STAGE-1 BRANCH REMOVED.
-  //
-  // Root cause that tripped the Workout Session Issue boundary:
-  //   This component mounts in phase 'ready' (see live-workout-machine.ts
-  //   initialState). 'ready' is NOT a live execution phase, so the
-  //   authoritative corridor early-return at line ~6256 does NOT fire.
-  //   Control then fell into the legacy Stage-1 active render branch,
-  //   whose JSX referenced `CardContent` and `Input` - neither of which
-  //   is imported in this file. On first render we threw a client-side
-  //   ReferenceError and the error boundary caught it before Start
-  //   Workout could finish wiring.
-  //
-  // Surgical fix:
-  //   Removed the entire Stage-1 legacy branch. The single-owner contract
-  //   is now strictly:
-  //     - live phases (active / resting / between_exercise_rest /
-  //       block_round_rest / transitioning)
-  //         -> authoritative <ActiveWorkoutStartCorridor /> at the early-
-  //            return around line ~6256.
-  //     - all non-live phases (ready / paused / complete / transitional
-  //       boot states)
-  //         -> fall through to the Stage-2+ unit-based return below,
-  //            whose renderers use ONLY imports that actually exist in
-  //            this file (Card, Button, Badge, RepsHoldInput, etc.).
-  //
-  //   No legacy active render surface remains reachable during live
-  //   execution. The removed branch was the ONLY place in this file
-  //   that referenced `CardContent` or `Input`, so the ReferenceError
-  //   surface is eliminated entirely rather than patched around.
+  // STAGE 1: MINIMAL WORKING ACTIVE UI
+  // [SURGICAL-FIX] This is the narrow, known-good first active render path.
+  // Uses ONLY machine-derived safe values. No complex derivation chains.
+  // No grouped context resolution. No activeWorkoutViewModel dependency.
   // ==========================================================================
-
+  if (ACTIVE_DERIVATION_STAGE === 1) {
+    console.log('[v0] [Stage1] Rendering minimal active UI - ENTRY')
+    console.log('[v0] [Stage1_deps]', {
+      safeCurrentExercise: !!safeCurrentExercise,
+      safeCurrentExerciseName: safeCurrentExercise?.name,
+      validatedSetNumber,
+      safeExerciseIndex,
+      exercisesLength: exercises?.length,
+      normalizedCompletedSetsLength: normalizedCompletedSets?.length,
+      safeElapsedSeconds,
+      safeDisplayLabel,
+      safeHoldValue,
+      safeRepsValue,
+      safeSelectedRPE,
+    })
+    unitStatus.shell.rendered = true
+    
+    // Read ONLY from machine-derived safe values - no complex derivations
+    // [ACTIVE-WEEK-PARITY] Stage-1 is a visible active render; it must use
+    // the same effective dosage as the full-stage render. Otherwise the live
+    // shell would flash raw Week-1 values (e.g. "Set 1/3 - 6s hold") between
+    // mount and stage-6 promotion even on Week 2/3/4 sessions.
+    const s1ExerciseName = safeCurrentExercise?.name || 'Exercise'
+    const s1ExerciseCategory = safeCurrentExercise?.category || 'general'
+    const s1ExerciseSets = activeEffectiveContract.effectiveSets
+    const s1ExerciseRepsOrTime = activeEffectiveContract.effectiveRepsOrTime
+    const s1SetNumber = validatedSetNumber || 1
+    const s1ExerciseIndex = safeExerciseIndex || 0
+    const s1TotalExercises = exercises?.length || 1
+    const s1CompletedSets = normalizedCompletedSets?.length || 0
+    const s1TotalSets = (exercises || []).reduce((sum, ex) => sum + getEffectiveExerciseValues(ex).sets, 0) || 3
+    const s1Elapsed = safeElapsedSeconds || 0
+    // [LIVE-UNIT-CONTRACT] Canonical hold detector for Stage1 summary.
+    const s1IsHold = isHoldUnit({
+      repsOrTime: s1ExerciseRepsOrTime,
+      name: s1ExerciseName,
+      category: s1ExerciseCategory,
+    })
+    
+    // Parse target value simply
+    let s1TargetValue = s1IsHold ? 30 : 8
+    const s1RepsMatch = s1ExerciseRepsOrTime.match(/(\d+)/)
+    if (s1RepsMatch) s1TargetValue = parseInt(s1RepsMatch[1], 10)
+    
+    console.log('[v0] [Stage1_vars_computed]', { s1ExerciseName, s1SetNumber, s1TotalExercises, s1IsHold })
+    console.log('[v0] [Stage1] About to return JSX')
+    
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex flex-col overflow-x-hidden">
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
+          <div className="px-4 py-2.5">
+            <div className="max-w-lg mx-auto">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                  <span className="text-sm font-medium text-[#E6E9EF] truncate max-w-[160px]">{safeDisplayLabel}</span>
+                  <span className="text-xs text-[#6B7280]">{s1ExerciseIndex + 1}/{s1TotalExercises}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-[#6B7280]">{s1CompletedSets}/{s1TotalSets}</span>
+                  <span className="font-mono text-sm font-bold text-[#E6E9EF] tabular-nums">{formatDuration(s1Elapsed)}</span>
+                </div>
+              </div>
+              <div className="h-1 bg-[#2B313A] rounded-full overflow-hidden">
+                <div className="h-full bg-[#C1121F] transition-all duration-300" style={{ width: `${(s1CompletedSets / Math.max(s1TotalSets, 1)) * 100}%` }} />
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Main content */}
+        <div className="flex-1 px-4 py-3">
+          <div className="max-w-lg mx-auto space-y-3">
+            {/* Exercise Card */}
+            <Card className="bg-[#1A1F26] border-[#2B313A]">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-[#C1121F]/10 text-[#C1121F] border-0 text-[10px] uppercase px-2 py-0.5">
+                      {s1ExerciseCategory}
+                    </Badge>
+                    <span className="text-xs text-[#6B7280]">Set {s1SetNumber}/{s1ExerciseSets}</span>
+                  </div>
+                </div>
+                <h2 className="text-xl font-bold text-[#E6E9EF] mb-1">{s1ExerciseName}</h2>
+                <p className="text-sm text-[#A4ACB8]">{s1ExerciseRepsOrTime}</p>
+              </CardContent>
+            </Card>
+            
+            {/* Input Controls */}
+            <Card className="bg-[#1A1F26] border-[#2B313A]">
+              <CardContent className="p-4 space-y-4">
+                {s1IsHold ? (
+                  <div>
+                    <label className="block text-xs text-[#6B7280] mb-1.5">Hold Time (seconds)</label>
+                    <Input
+                      type="number"
+                      value={safeHoldValue}
+                      onChange={(e) => setHoldValue(parseInt(e.target.value) || 0)}
+                      className="bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] text-lg font-bold"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs text-[#6B7280] mb-1.5">Reps Completed</label>
+                    <Input
+                      type="number"
+                      value={safeRepsValue}
+                      onChange={(e) => setRepsValue(parseInt(e.target.value) || 0)}
+                      className="bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] text-lg font-bold"
+                    />
+                  </div>
+                )}
+                
+                <div>
+                  <label className="block text-xs text-[#6B7280] mb-1.5">RPE (Effort)</label>
+                  <div className="flex gap-1">
+                    {[6, 7, 8, 9, 10].map(rpe => (
+                      <Button
+                        key={rpe}
+                        variant={safeSelectedRPE === rpe ? 'default' : 'outline'}
+                        size="sm"
+                        className={safeSelectedRPE === rpe ? 'bg-[#C1121F] border-[#C1121F]' : 'border-[#2B313A] text-[#A4ACB8]'}
+                        onClick={() => setSelectedRPE(rpe)}
+                      >
+                        {rpe}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            {/* Action Button */}
+            <Button
+              className="w-full h-14 text-lg font-bold bg-[#C1121F] hover:bg-[#A10F1A] text-white"
+              onClick={handleCompleteSet}
+            >
+              Complete Set
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
   // ==========================================================================
   // STAGE 2+: Unit-based render with containment
   // Shell stays alive, each unit renders inside with local error handling
-  // This is now the SOLE non-live render path.
   // ==========================================================================
   unitStatus.shell.rendered = true
   
   return (
     <div className="min-h-screen bg-[#0F1115] flex flex-col overflow-x-hidden">
-      {/* [PRODUCTION-VISIBLE-BUILD-PROOF-R3] LEGACY fingerprint for the
-          unit-based Stage-2+ render path. If this chip appears during a
-          live workout, the isLiveExecutionPhase gate at line ~6110 did not
-          short-circuit and the unit-based legacy surface leaked through.
-          Placed at the root so it is visible regardless of which unit
-          renderers chose to return null. */}
-      <div className="fixed top-1 right-1 z-50 pointer-events-none">
-        <span
-          className="text-[9px] font-mono uppercase tracking-wider px-1 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40"
-          aria-hidden
-        >
-          {LEGACY_ACTIVE_BUILD_CHIP}
-        </span>
-      </div>
       {/* UNIT 1: Header */}
       {renderHeaderUnit()}
       

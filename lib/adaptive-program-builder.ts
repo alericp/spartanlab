@@ -136,7 +136,6 @@ import { prefetchDoctrineRules, getDoctrineInfluenceSummary, getCachedDoctrineRu
 
 // [DOCTRINE RUNTIME CONTRACT] Authoritative doctrine contract for upstream generation influence
 import { buildDoctrineRuntimeContract, type DoctrineRuntimeContract } from './doctrine-runtime-contract'
-import type { DoctrineIntegrationProof } from './doctrine/doctrine-builder-integration-contract'
 // [SHADOW INTEGRATION] Doctrine Influence Contract - bridges doctrine DB → generator
 import {
 buildDoctrineInfluenceContract,
@@ -179,32 +178,6 @@ import {
   type SessionBlockRole,
   type WeekAdaptationInput,
 } from './program-generation/session-composition-intelligence'
-// [WEEKLY-SESSION-ROLE-CONTRACT] Authoritative per-day weekly role distribution.
-// Built ONCE per program build, BEFORE the day loop. Each session receives its
-// dayRole from this contract to differentiate breadth / intensity / progression
-// character / method allowance across days within the same week.
-import {
-  buildWeeklySessionRoleContract,
-  type WeeklySessionRoleContract,
-  type WeeklyDayRole,
-  type WeekPhaseTag,
-} from './program/weekly-session-role-contract'
-// =============================================================================
-// [PHASE-K] Weekly stress distribution contract.
-// Pure additive whole-week governor that classifies each composed session
-// by its actual stress source (load / volume / density / skill_tendon /
-// eccentric_isometric / mixed / recovery), detects repeated high-stress
-// adjacencies, and conservatively softens the second of any pair where
-// next-day risk evaluates to HIGH. Runs AFTER the per-session loop and
-// AFTER the role-contract prescription-shaping pass so it sees the final
-// composed exercises. Does not run during protected weeks.
-// =============================================================================
-import {
-  buildWeeklyStressDistributionPlan,
-  applyWeeklyStressGovernor,
-  type WeeklyStressDistributionPlan,
-  type WeeklyStressGovernorResult,
-} from './program/weekly-stress-distribution-contract'
 // [exercise-trace] TASK 8: Import comparison utilities for build-to-build traceability
 import {
   type ProgramSelectionTrace,
@@ -223,31 +196,7 @@ import {
   type ResolvedSessionIdentity,
 } from './engine-quality-contract'
 import { evaluateExerciseProgression, type ProgressionDecision as SimpleProgressionDecision } from './progression-decision-engine'
-import {
-  generateSessionVariants,
-  isVariantLaunchable,
-  areVariantsMateriallyDistinct,
-  type SessionVariant,
-} from './session-compression-engine'
-// [PHASE AB3] SHORT SESSION DOCTRINE RECOMPOSITION CONTRACT
-// Owns the per-variant `recompositionTruth` sidecar that the Program UI
-// reads when 45 Min / 30 Min is selected. This module does NOT mutate
-// `variant.selection.main` (Start Workout parity is preserved) — it analyses
-// the reconciled short variants vs Full and stamps doctrine truth on each.
-import {
-  recomposeSessionVariants,
-  type SessionVariantWithRecompositionTruth,
-} from './program/short-session-recomposition-contract'
-// [PHASE AB4] SHORT SESSION DOCTRINE MUTATION / MATERIALIZATION OWNER
-// Causal mutator that runs BEFORE AB3 recompose. Mutates each short
-// variant's `selection.main` in a doctrine-aware way (set / RPE / rest
-// reductions on safe accessory rows) and emits typed mutation records
-// the recomposer + UI consume. Start Workout parity is automatic because
-// `buildSelectedVariantMain` reads the mutated `variant.selection.main`.
-import {
-  materializeShortSessionVariant,
-  type MaterializeShortSessionVariantResult,
-} from './program/short-session-materializer'
+import { generateSessionVariants, type SessionVariant } from './session-compression-engine'
 import { analyzeEquipmentProfile, adaptSessionForEquipment, getEquipmentRecommendations, type EquipmentProfile } from './equipment-adaptation-engine'
 import { GOAL_LABELS } from './program-service'
 // [planner-truth-audit] TASK 7: Final audit for generic shell detection
@@ -582,10 +531,6 @@ import {
   type WeekLoadBalance,
 } from './engine-quality-contract'
 import { yieldToMainThread, createGenerationContext, assertNotAborted, type GenerationContext } from './utils/yield-control'
-// [METHOD-MATERIALIZATION-SUMMARY-LOCK] Pure helper that owns derivation of
-// the canonical session-level method verdict. Imported as ESM to avoid the
-// CommonJS require() pattern in this otherwise-ESM module.
-import { deriveMethodMaterializationSummary } from './program/method-materialization-summary'
 // [WEEK-ADAPTATION-CONTRACT] Canonical week-level adaptation decision authority
 import {
   buildWeekAdaptationDecision,
@@ -948,14 +893,6 @@ type AdaptiveSessionContext = {
   multiSkillAllocation?: MultiSkillSessionAllocationContract | null
   // [DOCTRINE RUNTIME CONTRACT] Authoritative doctrine contract for upstream generation influence
   doctrineRuntimeContract?: DoctrineRuntimeContract | null
-  // [DOCTRINE-TO-BUILDER PHASE 2] Compact program-level proof that the doctrine
-  // decision context reached the builder for THIS generation. Attached by
-  // `executeAuthoritativeGeneration` from `doctrineRuntimeContract` immediately
-  // after builder completion. Survives save/load via whole-object JSON
-  // serialization. Phase 2 wires context only — exercise selection,
-  // sets/reps/rest, and method choice are NOT yet doctrine-driven.
-  // The `disclaimer` field on the proof preserves that contract for the UI.
-  doctrineIntegration?: DoctrineIntegrationProof | null
   // [DOCTRINE INFLUENCE] Doctrine influence contract - bridges doctrine DB → generator
   // This contract explicitly separates athleteTruth, doctrineDbTruth, codeDoctrineFallbackTruth,
   // mergedInfluence, sourceAttribution, and readinessState for audit visibility.
@@ -977,69 +914,6 @@ type AdaptiveSessionContext = {
   // [PHASE 15E CONTRACT FIX] Now properly typed as SessionWeekAdaptation (not WeekAdaptationInput)
   // ==========================================================================
   weekAdaptation?: SessionWeekAdaptation | null
-  // ==========================================================================
-  // [STYLE-CORRIDOR-CLUSTER-FIX] PRIMARY ROOT-CAUSE OWNER
-  // Pre-fix: `generateAdaptiveSession` (top-level fn at L23075) referenced
-  // bare `programmingTruthBundle` on 21+ lines (smart substitution L24689,
-  // pattern-specific prescription L25141, the entire style corridor
-  // L26434-L26688). The variable is a `let` declared inside
-  // `generateAdaptiveProgramImpl` (L5448) — a sibling function, not an
-  // enclosing one — so every reference was an out-of-scope read producing
-  // a runtime ReferenceError. Earlier reads (L24689, L25141) were silenced
-  // by surrounding try/catch blocks. The style corridor's references were
-  // partially guarded by the outer try added in the previous prompt, but
-  // the *catch handler* of that guard at L26683-L26695 itself referenced
-  // `programmingTruthBundle`, so the catch handler crashed and escaped
-  // the guard, surfacing as `step=applying_training_style middleStep=none
-  // reason=programmingTruthBundle is not defined` on the red rebuild card.
-  //
-  // Fix: thread the bundle through the context as an optional field, pass
-  // it from the single construction site at L11194, destructure it inside
-  // `generateAdaptiveSession`. This resolves ALL 21+ references at once
-  // — not just the style corridor — turning silent-but-already-broken
-  // bundle-driven code paths into legitimately bundle-aware paths and
-  // permanently eliminating the ReferenceError as a class of bug.
-  // ==========================================================================
-  programmingTruthBundle?: ProgrammingTruthBundle | null
-  // ==========================================================================
-  // [PHASE-NEXT-FINAL-DECISION-OWNER-LOCK] VARIANT DEPTH WINNER LOCK
-  // ------------------------------------------------------------------
-  // Pre-fix: `progressionDepthAdjustments` is computed at L7508 inside
-  // `generateAdaptiveProgramImpl` from `currentWorkingProgression`,
-  // historical ceiling, exposure readiness, and skillFamilyTruth — and
-  // is the ONLY place where readiness gating decides
-  // conservative/moderate/progressive depth per skill. All 6 references
-  // to its key field `adjustedBias` are write/log only (lines 7510,
-  // 7587, 7633, 7646, 7650, 7651). The actual final exercise scorer
-  // lives at L24385 inside `generateAdaptiveSession` — a sibling
-  // function — so the bias is structurally invisible to the winner
-  // selection. Same scope-leak class as the previous
-  // `programmingTruthBundle` cluster.
-  //
-  // Fix: thread the per-skill bias map through this context as an
-  // optional field. The rerank site (L24385) reads exercise.skill /
-  // .skillFamily, looks up the bias, and applies a bounded depth
-  // adjustment that decisively softens advanced variants for
-  // conservative-bias skills and decisively favours them for
-  // progressive-bias skills. Bounded by the same -30/+30 clamp inside
-  // `applySkillSpecificRankingModifier` so total influence stays
-  // within authoritative material limits.
-  //
-  // Field shape mirrors the source declaration at L7508 verbatim so
-  // there is no impedance mismatch at construction or read time.
-  // ==========================================================================
-  progressionDepthAdjustments?: Record<string, {
-    originalDepth: string | null
-    adjustedBias: number
-    reason: string
-    precedenceUsed: string
-    currentScore: number | null
-    historicalLevel: number | null
-    currentBeatsHistorical: boolean
-    readinessGated: boolean
-    readinessPermission: string
-    preGateBias: number
-  }> | null
   // ==========================================================================
   // [PROGRAMMING-TRUTH-BUNDLE] Bundle-derived decision signals
   // These inform dosage/load, progression, and constraint-aware selection
@@ -1066,23 +940,6 @@ type AdaptiveSessionContext = {
   // This is passed explicitly to avoid out-of-scope reference errors
   // ==========================================================================
   sessionIntent?: SessionIntent | null
-  // ==========================================================================
-  // [WEEKLY-METHOD-DISTRIBUTION, prompt 7] Week-level anti-overconcentration
-  // tracker. A SINGLE mutable object is created once per program build and
-  // shared across every session in the loop (see the week loop at ~L10956).
-  // Each session reads `clusterSessionsUsed` / `maxClusterSessionsPerWeek`
-  // BEFORE scoring cluster and writes `clusterSessionsUsed++` AFTER a cluster
-  // is applied. This is how the builder enforces "cluster is an uncommon,
-  // intentional tool -- not a per-session decoration." Wired exactly the
-  // way `outerDoctrineRecoveryTracker` is wired (see L11154 / L11174), so
-  // we stay inside an established mutation pattern for session-level writes
-  // that need to accumulate across the week.
-  // ==========================================================================
-  weeklyMethodBudget?: {
-    clusterSessionsUsed: number
-    maxClusterSessionsPerWeek: number
-    clusterAppliedDays: number[] // dayNumbers that received cluster -- for audit logs
-  } | null
   }
 
 export interface AdaptiveProgramInputs {
@@ -1118,43 +975,6 @@ export interface AdaptiveSession {
   focusLabel: string
   isPrimary: boolean
   rationale: string
-  // ==========================================================================
-  // [PHASE-K] CANONICAL STRESS / RECOVERY FIELDS
-  // Hoisted top-level so every consumer (Program card, live workout loader,
-  // dashboard, normalizer) reads the same authoritative fields without
-  // having to descend into a nested classification object. The full
-  // classification + reasonCodes + plan-level summary live on
-  // `program.weeklyStressDistributionPlan` for richer surfaces; these
-  // hoisted fields are the per-session display contract.
-  // Optional - sessions saved before Phase K will not carry these.
-  // ==========================================================================
-  /** "primary_strength_emphasis" / "skill_quality_emphasis" / etc. — mirrors
-   *  the role contract's roleId for one-stop reading. */
-  stressRole?: string
-  stressLevel?: 'LOW' | 'MODERATE' | 'HIGH'
-  recoveryCost?: 'LOW' | 'MODERATE' | 'HIGH' | 'VERY_HIGH'
-  primaryStressSource?:
-    | 'LOAD'
-    | 'VOLUME'
-    | 'DENSITY'
-    | 'SKILL_TENDON'
-    | 'ECCENTRIC_ISOMETRIC'
-    | 'MIXED'
-    | 'RECOVERY'
-  secondaryStressSources?: Array<
-    'LOAD' | 'VOLUME' | 'DENSITY' | 'SKILL_TENDON' | 'ECCENTRIC_ISOMETRIC' | 'MIXED' | 'RECOVERY'
-  >
-  /** Risk against the NEXT day in the week. Used by the governor decision
-   *  trail and the visible-proof helper. */
-  nextDayRisk?: 'LOW' | 'MODERATE' | 'HIGH'
-  /** Stable machine reason codes — never user-facing. */
-  stressDistributionReasonCodes?: string[]
-  /** Compact coach-facing chip + one-line explanation produced by the
-   *  contract. Visible on the Program card when present. */
-  stressDistributionProof?: {
-    label: string
-    explanation: string
-  }
   exercises: AdaptiveExercise[]
   warmup: AdaptiveExercise[]
   cooldown: AdaptiveExercise[]
@@ -1203,30 +1023,6 @@ export interface AdaptiveSession {
   hasCircuitsApplied: boolean
   hasDensityApplied: boolean
   hasClusterApplied?: boolean  // [METHOD-MATERIALIZATION] Cluster sets for quality on skill holds
-  // [CLUSTER-DECISION-EVIDENCE] Concrete, card-consumable proof of the
-  // cluster decision for this session. Populated only when cluster was
-  // actually applied (hasClusterApplied === true). Single source of truth
-  // the Program card reads to prove cluster choice/target/reason/type --
-  // no more generic "Cluster sets applied to preserve output" fallback
-  // copy. Absent when cluster was rejected or not evaluated.
-  clusterDecision?: {
-    targetExerciseId: string
-    targetExerciseName: string
-    score: number            // final scored value from the candidate loop
-    position: number         // 0-indexed slot in the session (primary-effort zone: 0 or 1)
-    // [CLUSTER-DOCTRINE-INVERSION] New doctrine emits late/accumulation kinds.
-    // Legacy 'skill_hold' / 'heavy_compound' retained so saved sessions
-    // materialized under the prior (inverted) doctrine still type-check.
-    kind:
-      | 'late_accessory_accumulation'   // canonical case: late accessory completion
-      | 'secondary_strength_completion' // non-primary strength, late in session
-      | 'late_skill_accumulation'       // skill drill that is NOT the primary skill slot
-      | 'skill_hold'                    // legacy (pre-inversion saved sessions)
-      | 'heavy_compound'                // legacy (pre-inversion saved sessions)
-    reasonTokens: string[]   // stable machine tokens for audit/tests
-    reasonSummary: string    // clean human copy for the card
-    type: 'method_cue' | 'grouped_block'  // today always 'method_cue' -- future multi-member blocks flip this
-  }
   structureDescription: string
   appliedMethods: TrainingMethodPreference[]
   rejectedMethods: Array<{ method: string; reason: string }>
@@ -1268,13 +1064,6 @@ export interface AdaptiveSession {
   }
   complexityLevel: string
   }
-  // [METHOD-MATERIALIZATION-SUMMARY-LOCK] Single canonical session-level
-  // method verdict, stamped by the builder AFTER finalStyledGroups +
-  // appliedMethods + clusterDecision are locked. Visible-program consumers
-  // (page parity header, scanner strip, AdaptiveSessionCard) read this
-  // FIRST and only fall back to scattered-field derivation when absent.
-  // See lib/program/method-materialization-summary.ts for the contract.
-  methodMaterializationSummary?: import('./program/method-materialization-summary').MethodMaterializationSummary
   }
   // [AI_SESSION_MATERIALITY_PHASE] Session-level skill expression metadata
   // This makes the ACTUAL skill materiality visible in each session
@@ -1333,37 +1122,7 @@ export interface AdaptiveSession {
       methodsEarned: boolean
       templateEscaped: boolean
     }
-    // [WEEKLY-SESSION-ROLE-CONTRACT] Authoritative per-day weekly role
-    // summary. The single owner of "what role does this day play in the
-    // week" — drives display differentiation (label, intensity class,
-    // breadth target, progression character, method allowance) without
-    // re-deriving truth on the consumer side.
-    weeklyRole?: {
-      roleId: string
-      roleLabel: string
-      intensityClass: string
-      progressionCharacter: string
-      breadthTarget: { min: number; target: number; max: number }
-      weeklyRationale: string
-      methodAllowance: {
-        density: string
-        supersets: string
-        circuits: string
-        finisher: string
-        cluster: string
-      }
-    } | null
   }
-  // [DOCTRINE-TO-BUILDER PHASE 3] Single doctrine-attributable method decision
-  // for THIS session. Stamped by `executeAuthoritativeGeneration` AFTER the
-  // builder finishes materialization (which already wrote styledGroups,
-  // appliedMethods, methodMaterializationSummary, etc.). This field does NOT
-  // re-decide the method — it is a READ-ONLY attribution of the materialized
-  // method to its Batch 10 compatibility entry + runtime methodDoctrine
-  // preferred/blocked rules, with rejected-method rationale derived from the
-  // same doctrine sources. Survives save/load via whole-object JSON.
-  // See lib/program/method-decision-engine.ts for the contract.
-  methodDecision?: import('./program/method-decision-engine').MethodDecision | null
   // [PRESCRIPTION-PROPAGATION] Track what week adaptation actually changed in this session
   prescriptionPropagationAudit?: {
     adaptationPhase: string
@@ -1383,45 +1142,6 @@ export interface AdaptiveSession {
     }
     verdict: 'PRESCRIPTION_MATERIALLY_CHANGED_BY_WEEK_ADAPTATION' | 'PRESCRIPTION_UNCHANGED_BY_WEEK_ADAPTATION'
   }
-  // ==========================================================================
-  // [PHASE-P] SESSION-LEVEL QUALITY / DOCTRINE AUDIT STAMP
-  // Roll-up of Phase P findings for this session: session-length realism,
-  // cross-session straight-arm overlap warning, and any indirect skill
-  // carryover expressed across the session. Always optional; populated only
-  // when at least one finding applies. See
-  // lib/program/program-quality-doctrine-audit-contract.ts.
-  // ==========================================================================
-  qualityAudit?: import('./program/program-quality-doctrine-audit-contract').SessionQualityAuditStamp
-  // ==========================================================================
-  // [PHASE-Q] DOCTRINE UTILIZATION CAUSAL TRACE
-  // Stamped IN PLACE on each session by the Phase Q resolver. The trace is
-  // the honest answer to "did doctrine actually shape this session, or was
-  // it surfaced after the fact?" — every doctrine signal collected on the
-  // session is classified into one of six states (ELIGIBLE_AND_APPLIED,
-  // ELIGIBLE_BUT_SUPPRESSED, NOT_ELIGIBLE, BLOCKED_BY_UNSUPPORTED_RUNTIME,
-  // ACKNOWLEDGED_ONLY, POST_HOC_ONLY) and rolled up into a one-line
-  // `summary` the card renders. Pure metadata: never builds, mutates,
-  // selects, or reorders. Round-trips through the existing `...session`
-  // spread. Optional + JSON-safe.
-  // See lib/program/doctrine-utilization-contract.ts.
-  // ==========================================================================
-  doctrineUtilizationTrace?: import('./program/doctrine-utilization-contract').SessionDoctrineUtilizationTrace
-  // ==========================================================================
-  // [PHASE-R] SESSION-LENGTH TRUTH STAMP
-  // Authoritative truth receipt over `session.variants[]`: did Full / 45 / 30
-  // actually structurally compress, or are the shorts only label-parity? For
-  // each launchable variant the stamp records actual estimated minutes
-  // (re-computed from the variant body, not the label), the exercise names
-  // deferred vs Full, set deltas, priority preservation flags, distinctness
-  // vs Full, and a payload-compatibility classification of the live workout
-  // launch corridor. Phase Q reads this stamp to credit session-length as
-  // ELIGIBLE_AND_APPLIED when shorts are structurally real. Pure metadata —
-  // Phase R never mutates exercises, sets, RPE, rest, methods, or ordering.
-  // Round-trips through the existing `...session` spread. Optional +
-  // JSON-safe.
-  // See lib/program/session-length-truth-contract.ts.
-  // ==========================================================================
-  sessionLengthTruth?: import('./program/session-length-truth-contract').SessionLengthTruthStamp
 }
 
 export interface AdaptiveExercise {
@@ -1437,21 +1157,9 @@ export interface AdaptiveExercise {
   // Database enforcement: marks exercise as DB-backed
   source?: 'database'
   // Training method information
-  // [METHOD-TAXONOMY-LOCK] `method` + `blockId` carry GROUPED STRUCTURE membership
-  // (superset / circuit / density_block). `setExecutionMethod` below carries
-  // SET-EXECUTION METHOD identity (cluster / rest-pause / top set / drop set)
-  // which applies to this single exercise and is orthogonal to grouping. See
-  // taxonomy comment in lib/workout/execution-unit-contract.ts.
   method?: TrainingMethod
   methodLabel?: string
   blockId?: string // Groups exercises in the same block (e.g., superset)
-  // [METHOD-TAXONOMY-LOCK] Per-exercise set-execution method. Populated when a
-  // set-execution method applies (e.g. cluster) — does NOT imply grouped
-  // structure. Card/UI code should read this field in preference to inferring
-  // set-execution identity from the overloaded `method` field. Legacy paths
-  // that still read `method === 'cluster'` continue to work; new consumers
-  // should prefer `setExecutionMethod === 'cluster'`.
-  setExecutionMethod?: 'cluster' | 'rest_pause' | 'top_set' | 'drop_set'
   // Session override tracking (runtime only, not persisted to program)
   originalName?: string // Set when exercise is replaced
   isSkipped?: boolean // Set when exercise is skipped
@@ -1514,70 +1222,6 @@ export interface AdaptiveExercise {
     // Explanation for coaching display
     explanationNote: string | null
   }
-  // ==========================================================================
-  // [PHASE-K] STRESS ADJUSTMENT DELTA
-  // Authoritative per-row audit of the weekly stress governor's mutation.
-  // Populated ONLY when this row was actually softened by the governor pass
-  // (the second session in an adjacent (i, i+1) pair where next-day-risk
-  // evaluated to HIGH). Carries the BEFORE / AFTER values of `sets` and
-  // `targetRPE` so display surfaces and audit consumers can prove the
-  // adjustment is real, not a label. Absent on every other row.
-  // ==========================================================================
-  stressAdjustmentDelta?: {
-    setsBefore: number
-    setsAfter: number
-    rpeBefore: number | null
-    rpeAfter: number | null
-    reasonCode: string
-    reasonCoachLine: string
-  }
-  // ==========================================================================
-  // [PHASE-L] POST-WORKOUT PERFORMANCE FEEDBACK ADAPTATION STAMP
-  // Stamped IN PLACE on a future-session exercise when logged workout
-  // performance produced a bounded mutation. The numeric mutation lives on
-  // `sets` / `repsOrTime` / `targetRPE` / `restSeconds` directly — this stamp
-  // is the audit + visible-proof surface, NOT a parallel cosmetic banner.
-  // Populated by lib/program/performance-feedback-adaptation-contract.ts.
-  // Absent on every row that did not receive a Phase L mutation.
-  // ==========================================================================
-  performanceAdaptation?: import('./program/performance-feedback-adaptation-contract').ExercisePerformanceAdaptationStamp
-  // ==========================================================================
-  // [PHASE-P] PROGRAM QUALITY / DOCTRINE SHARPNESS AUDIT STAMP
-  // Stamped IN PLACE on a row when the Phase P resolver either applied a
-  // bounded correction (tendon RPE cap, unilateral per-side note) or
-  // attached an audit-only proof slice (skill carryover attribution,
-  // explicit no-change reason). Numeric corrections live on
-  // `targetRPE` / `note` directly — this stamp is the audit + visible-proof
-  // surface, NOT a parallel cosmetic banner. See
-  // lib/program/program-quality-doctrine-audit-contract.ts. Absent on every
-  // row that received no Phase P attention. Optional + JSON-safe.
-  // ==========================================================================
-  qualityAudit?: import('./program/program-quality-doctrine-audit-contract').ExerciseQualityAuditStamp
-  // ==========================================================================
-  // [DB-TRUTH-WINNER-PROVENANCE-LOCK]
-  // Canonical, durable winner-rationale stamp. Built ONLY from final post-rerank
-  // truth (not eligibility, not preferences, not bundle availability alone).
-  // Combines the per-exercise rerank result (`dbTruth*` transients) with the
-  // per-skill progressionDepthAdjustments row (currentVsHistorical, readiness
-  // gating, precedence) into one owned object that survives mapToAdaptiveExercises
-  // and the save/load corridor instead of being dropped at the field-whitelist
-  // boundary in mapToAdaptiveExercises.
-  // ==========================================================================
-  dbTruthWinnerProvenance?: {
-    rankingApplied: boolean
-    rankingChanged: boolean
-    precedenceUsed: 'current' | 'response' | 'historical' | 'default' | 'readiness_gate' | 'none' | null
-    skillFamilyUsed: string | null
-    depthBias: number | null
-    depthDelta: number | null
-    adjustedScoreFinal: number | null
-    currentBeatsHistorical: boolean | null
-    readinessGated: boolean | null
-    readinessPermission: string | null
-    conservativeByCurrentTruth: boolean | null
-    sourceOfTruth: 'db_truth_final_winner'
-    generatedAtBuildTime: true
-  }
 }
 
 export interface AdaptiveProgram {
@@ -1615,20 +1259,6 @@ export interface AdaptiveProgram {
   }
   structure: WeeklyStructure
   sessions: AdaptiveSession[]
-  // ===========================================================================
-  // [PHASE-K] WEEKLY STRESS DISTRIBUTION PLAN
-  // Authoritative whole-week classification + governor audit. Computed once
-  // post-session-loop by `buildWeeklyStressDistributionPlan` and stamped
-  // here. Display surfaces (Program card, dashboard) can read either this
-  // plan or the per-session hoisted fields (`session.stressRole` etc.) -
-  // both are written in the same single owner pass.
-  // Optional - programs saved before Phase K will not carry it.
-  // ===========================================================================
-  weeklyStressDistributionPlan?: WeeklyStressDistributionPlan
-  /** Audit trail of governor mutations actually applied this week. Empty
-   *  array when nothing fired (week was either protected or had no
-   *  high-risk adjacencies). */
-  weeklyStressGovernorAdjustments?: WeeklyStressGovernorResult['appliedAdjustments']
   // [PHASE 15D] Dominant spine resolution for multi-style programs
   dominantSpineResolution?: {
     primarySpine: WeeklySpineType
@@ -2274,30 +1904,6 @@ exerciseExplanations?: {
         visiblyExpressedCount: number
       }
     } | null
-    // ========================================================================
-    // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Lightweight session/program rollup of
-    // the canonical per-exercise dbTruthWinnerProvenance stamps. Derived
-    // ENTIRELY from final stamped exercises post-save — never from transient
-    // scorer arrays or live recomputation. Surfaces honest counts of how many
-    // chosen exercises were materially shaped by working-state truth so
-    // ProgramTruthSummary can render one small "Working state truth" decision
-    // without rebuilding the rationale from scratch.
-    // ========================================================================
-    dbTruthWinnerSummary?: {
-      totalExercisesWithDbTruthInfluence: number
-      exercisesReorderedByDbTruth: number
-      exercisesConservativeByCurrentTruth: number
-      exercisesReadinessGated: number
-      exercisesWhereCurrentBeatHistorical: number
-      precedenceBreakdown: {
-        current: number
-        response: number
-        historical: number
-        readinessGate: number
-        default: number
-      }
-      sourceOfTruth: 'db_truth_final_winner_rollup'
-    } | null
   }
   // ==========================================================================
   // [AI-TRUTH-PERSISTENCE] Generation Truth Snapshot
@@ -2497,30 +2103,6 @@ exerciseExplanations?: {
     adaptationSummary: string
     decidedAt: string
   }
-  // ===========================================================================
-  // [PHASE-Q] PROGRAM-LEVEL DOCTRINE UTILIZATION CAUSAL TRACE
-  // Program-wide rollup written by `runDoctrineUtilizationContract` after
-  // Phase P. Aggregates per-session traces into category buckets (skill,
-  // method, recovery, prescription, sessionLength, ...) with state counts
-  // (ELIGIBLE_AND_APPLIED, ELIGIBLE_BUT_SUPPRESSED, NOT_ELIGIBLE,
-  // BLOCKED_BY_UNSUPPORTED_RUNTIME, ACKNOWLEDGED_ONLY, POST_HOC_ONLY) and
-  // an `overallVerdict` of FULLY_CAUSAL / PARTIALLY_CAUSAL / MOSTLY_POST_HOC.
-  // Pure metadata: never edits prescriptions or methods. Round-trips through
-  // the existing `...program` spread. Optional + JSON-safe.
-  // See lib/program/doctrine-utilization-contract.ts.
-  // ===========================================================================
-  doctrineUtilizationTrace?: import('./program/doctrine-utilization-contract').ProgramDoctrineUtilizationTrace
-  // ===========================================================================
-  // [PHASE-R] PROGRAM-LEVEL SESSION-LENGTH TRUTH ROLLUP
-  // Aggregates per-session Phase R stamps into program counts and one
-  // `programVerdict` of STRUCTURALLY_REAL_ACROSS_PROGRAM /
-  // STRUCTURALLY_REAL_PARTIAL / SHORTS_PRESENT_BUT_LABEL_PARITY /
-  // NO_SHORTS_NEEDED / NO_VARIANTS_AVAILABLE. Pure metadata — Phase R never
-  // edits programs, sessions, or live workout state. Round-trips through
-  // the existing `...program` spread.
-  // See lib/program/session-length-truth-contract.ts.
-  // ===========================================================================
-  sessionLengthTruth?: import('./program/session-length-truth-contract').ProgramSessionLengthTruthStamp
 }
 
 // =============================================================================
@@ -4986,18 +4568,6 @@ export interface ServerGenerationOptions {
    * contract instead of treating fresh builds as adaptive recalculations.
    */
   isFreshBaselineBuild?: boolean
-  
-  /**
-   * [AUTHORITATIVE-INGRESS-UNIFICATION] Pre-built Programming Truth Bundle
-   * from the authoritative generation service. When provided, the builder
-   * MUST reuse this bundle instead of rebuilding it. This eliminates the
-   * parallel-ingress-truth-owner problem where the service ingestion and the
-   * builder each independently read Neon.
-   *
-   * If null/undefined: legacy path — builder builds its own bundle (client flow).
-   * If provided:       unified path — builder reuses the authoritative bundle.
-   */
-  preBuiltProgrammingTruthBundle?: ProgrammingTruthBundle | null
 }
 
 // ==========================================================================
@@ -5494,42 +5064,19 @@ async function generateAdaptiveProgramImpl(
   }
   
   // ==========================================================================
-  // [PHASE 4G] DOCTRINE DB PRE-FETCH: Cache rules for the FULL skill context.
-  //
-  // Before Phase 4G this prefetched only by `inputs.primaryGoal`. For a
-  // multi-skill athlete (e.g. selectedSkills = [planche, front_lever,
-  // back_lever, handstand, hspu, v_sit]) that meant 5 of 6 skills' worth of
-  // rules were silently discarded by the SQL filters in
-  // `getExerciseSelectionRules` / `getCarryoverRules`. Those rules could not
-  // enter the cache → could not score candidates → could not become eligible
-  // → could not be selected → could not be materialized → could not be
-  // visible. That was the literal root cause of "doctrine evaluated this
-  // session but didn't change it" in earlier phases.
-  //
-  // Phase 4G fix: pass the deduplicated union of primaryGoal + secondaryGoal
-  // + selectedSkills so doctrine sees rules for every skill the athlete
-  // actually selected. Backward compatible (string still accepted by
-  // prefetchDoctrineRules). Does NOT alter scoring magnitudes, safety
-  // gates, or candidate generation — it only stops discarding the
-  // athlete's own skill-targeted rules before scoring runs.
+  // [PHASE 4] DOCTRINE DB PRE-FETCH: Cache rules before exercise selection
   // ==========================================================================
+  // Prefetch doctrine rules for the primary goal so they're available
+  // synchronously during exercise selection scoring.
   try {
-    const phase4gQueryContext = {
+    await prefetchDoctrineRules(inputs.primaryGoal)
+    console.log('[PHASE4-DOCTRINE-PREFETCH]', {
       primaryGoal: inputs.primaryGoal,
-      secondaryGoal: inputs.secondaryGoal ?? null,
-      selectedSkills: Array.isArray(inputs.selectedSkills) ? inputs.selectedSkills : [],
-    }
-    await prefetchDoctrineRules(phase4gQueryContext)
-    console.log('[PHASE4G-DOCTRINE-PREFETCH]', {
-      primaryGoal: phase4gQueryContext.primaryGoal,
-      secondaryGoal: phase4gQueryContext.secondaryGoal,
-      selectedSkillsCount: phase4gQueryContext.selectedSkills.length,
-      selectedSkills: phase4gQueryContext.selectedSkills,
       status: 'rules_cached',
-      verdict: 'DOCTRINE_RULES_PREFETCHED_FOR_FULL_SKILL_SET',
+      verdict: 'DOCTRINE_RULES_PREFETCHED',
     })
   } catch (err) {
-    console.log('[PHASE4G-DOCTRINE-PREFETCH]', {
+    console.log('[PHASE4-DOCTRINE-PREFETCH]', {
       primaryGoal: inputs.primaryGoal,
       status: 'prefetch_failed',
       error: String(err),
@@ -5829,66 +5376,43 @@ async function generateAdaptiveProgramImpl(
   // Built ONCE here, consumed by all downstream dosage/load/progression decisions.
   // ==========================================================================
   let programmingTruthBundle: ProgrammingTruthBundle | null = null
-  // [AUTHORITATIVE-INGRESS-UNIFICATION] If authoritative service already built a bundle,
-  // REUSE it rather than rebuilding a parallel one. This is the single-ingress guarantee.
-  const preBuiltBundle = serverOptions?.preBuiltProgrammingTruthBundle ?? null
-  if (preBuiltBundle) {
-    programmingTruthBundle = preBuiltBundle
-    console.log('[programming-truth-bundle-reused-from-authoritative-service]', {
-      bundleVersion: preBuiltBundle.version,
-      sectionsAvailable: preBuiltBundle.diagnostics.sectionsAvailable,
-      sectionsUnavailable: preBuiltBundle.diagnostics.sectionsUnavailable,
-      totalDataPoints: preBuiltBundle.diagnostics.totalDataPointsAcrossSections,
+  try {
+    // Resolve athlete ID for bundle building - use canonical profile userId
+    const bundleUserId = canonicalProfile.userId || 'unknown'
+    
+    // Build the truth bundle - this fetches from Neon in parallel
+    programmingTruthBundle = await buildProgrammingTruthBundle(
+      bundleUserId,
+      canonicalProfile as unknown as import('./canonical-profile-service').CanonicalProgrammingProfile
+    )
+    
+    // Log bundle diagnostics for dev verification
+    console.log('[programming-truth-bundle-built]', {
+      bundleVersion: programmingTruthBundle.version,
+      sectionsAvailable: programmingTruthBundle.diagnostics.sectionsAvailable,
+      sectionsUnavailable: programmingTruthBundle.diagnostics.sectionsUnavailable,
+      totalDataPoints: programmingTruthBundle.diagnostics.totalDataPointsAcrossSections,
+      buildDurationMs: programmingTruthBundle.diagnostics.buildDurationMs,
       derivedSignals: {
-        dosageConfidence: preBuiltBundle.derivedSignals.dosageConfidence,
-        progressionConfidence: preBuiltBundle.derivedSignals.progressionConfidence,
-        loadingConfidence: preBuiltBundle.derivedSignals.loadingConfidence,
+        dosageConfidence: programmingTruthBundle.derivedSignals.dosageConfidence,
+        progressionConfidence: programmingTruthBundle.derivedSignals.progressionConfidence,
+        loadingConfidence: programmingTruthBundle.derivedSignals.loadingConfidence,
+        hasActiveConstraints: programmingTruthBundle.derivedSignals.hasActiveConstraints,
+        constraintInformedSelection: programmingTruthBundle.derivedSignals.constraintInformedSelection,
       },
-      hasMeaningfulBenchmarks: hasMeaningfulBenchmarks(preBuiltBundle),
-      hasPerformanceEnvelopes: hasPerformanceEnvelopeData(preBuiltBundle),
-      hasEarnedHistory: hasEarnedTrainingHistory(preBuiltBundle),
-      bundleConfidenceLevel: getBundleConfidenceLevel(preBuiltBundle),
-      verdict: 'AUTHORITATIVE_BUNDLE_REUSED__NO_PARALLEL_INGRESS',
+      hasMeaningfulBenchmarks: hasMeaningfulBenchmarks(programmingTruthBundle),
+      hasPerformanceEnvelopes: hasPerformanceEnvelopeData(programmingTruthBundle),
+      hasEarnedHistory: hasEarnedTrainingHistory(programmingTruthBundle),
+      bundleConfidenceLevel: getBundleConfidenceLevel(programmingTruthBundle),
+      verdict: 'PROGRAMMING_TRUTH_BUNDLE_BUILT_SUCCESSFULLY',
     })
-  } else {
-    try {
-      // Resolve athlete ID for bundle building - use canonical profile userId
-      const bundleUserId = canonicalProfile.userId || 'unknown'
-      
-      // Build the truth bundle - this fetches from Neon in parallel
-      programmingTruthBundle = await buildProgrammingTruthBundle(
-        bundleUserId,
-        canonicalProfile as unknown as import('./canonical-profile-service').CanonicalProgrammingProfile
-      )
-      
-      // Log bundle diagnostics for dev verification
-      console.log('[programming-truth-bundle-built]', {
-        bundleVersion: programmingTruthBundle.version,
-        sectionsAvailable: programmingTruthBundle.diagnostics.sectionsAvailable,
-        sectionsUnavailable: programmingTruthBundle.diagnostics.sectionsUnavailable,
-        totalDataPoints: programmingTruthBundle.diagnostics.totalDataPointsAcrossSections,
-        buildDurationMs: programmingTruthBundle.diagnostics.buildDurationMs,
-        derivedSignals: {
-          dosageConfidence: programmingTruthBundle.derivedSignals.dosageConfidence,
-          progressionConfidence: programmingTruthBundle.derivedSignals.progressionConfidence,
-          loadingConfidence: programmingTruthBundle.derivedSignals.loadingConfidence,
-          hasActiveConstraints: programmingTruthBundle.derivedSignals.hasActiveConstraints,
-          constraintInformedSelection: programmingTruthBundle.derivedSignals.constraintInformedSelection,
-        },
-        hasMeaningfulBenchmarks: hasMeaningfulBenchmarks(programmingTruthBundle),
-        hasPerformanceEnvelopes: hasPerformanceEnvelopeData(programmingTruthBundle),
-        hasEarnedHistory: hasEarnedTrainingHistory(programmingTruthBundle),
-        bundleConfidenceLevel: getBundleConfidenceLevel(programmingTruthBundle),
-        verdict: 'PROGRAMMING_TRUTH_BUNDLE_BUILT_SUCCESSFULLY',
-      })
-    } catch (bundleErr) {
-      // Non-fatal: If bundle fails, generation continues with canonical profile only
-      console.warn('[programming-truth-bundle-build-failed]', {
-        error: bundleErr instanceof Error ? bundleErr.message : 'Unknown error',
-        fallbackBehavior: 'GENERATION_CONTINUES_WITH_CANONICAL_PROFILE_ONLY',
-      })
-      programmingTruthBundle = null
-    }
+  } catch (bundleErr) {
+    // Non-fatal: If bundle fails, generation continues with canonical profile only
+    console.warn('[programming-truth-bundle-build-failed]', {
+      error: bundleErr instanceof Error ? bundleErr.message : 'Unknown error',
+      fallbackBehavior: 'GENERATION_CONTINUES_WITH_CANONICAL_PROFILE_ONLY',
+    })
+    programmingTruthBundle = null
   }
   
   // TASK 6: Log schedule/duration truth consumption
@@ -7653,85 +7177,10 @@ async function generateAdaptiveProgramImpl(
   }
   
   // ==========================================================================
-  // [PHASE 4D — CAUSAL ORDER FIX] Build cwpRecord + doctrineRuntimeContract
-  // BEFORE the Phase-2 doctrine influence contract that depends on them.
-  //
-  // PRE-FIX BUG (silent for entire Phase 2/3 lifetime of this file):
-  //   `cwpRecord` was declared at L8715 and `doctrineRuntimeContract` at L8725,
-  //   but the [PHASE 2] influence build below referenced both. Because const/let
-  //   are in the temporal dead zone before their declaration, the references
-  //   threw ReferenceError ("Cannot access 'cwpRecord' before initialization").
-  //   The surrounding try/catch silently swallowed the error and continued with
-  //   `doctrineInfluenceContract = null`. That null propagated into:
-  //     - `buildUnifiedDoctrineDecision(null, ...)` → degraded decision
-  //     - `buildMaterialityContract(..., null)` → legacy scoring path
-  //     - exercise selector / weekly-role contract → no doctrine influence
-  //   Logs still showed "DOCTRINE_UPSTREAM_INFLUENCE_APPLIED" because the late
-  //   `doctrineRuntimeContract` build at L8725 actually succeeded — but that
-  //   late build never reached the influence contract. Result: doctrine was
-  //   detected and counted but never causally consumed.
-  //
-  // FIX: Build cwpRecord and doctrineRuntimeContract HERE from canonicalProfile
-  // (which is already in scope at L5563-5580). The late site at L8714+ is
-  // converted into a guarded fallback that only rebuilds if this early build
-  // failed entirely.
-  // ==========================================================================
-  let cwpRecord: Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null }> = {}
-  if (canonicalProfile.currentWorkingProgressions) {
-    for (const [skill, value] of Object.entries(canonicalProfile.currentWorkingProgressions)) {
-      cwpRecord[skill] = {
-        currentWorkingProgression:
-          typeof value === 'string'
-            ? value
-            : (typeof value === 'object' && value
-                ? (value as { currentWorkingProgression?: string | null }).currentWorkingProgression ?? null
-                : null),
-        historicalCeiling:
-          typeof value === 'object' && value
-            ? (value as { historicalCeiling?: string | null }).historicalCeiling ?? null
-            : null,
-      }
-    }
-  }
-
-  let doctrineRuntimeContract: DoctrineRuntimeContract | null = null
-  try {
-    doctrineRuntimeContract = await buildDoctrineRuntimeContract({
-      primaryGoal: canonicalProfile.primaryGoal || null,
-      secondaryGoal: canonicalProfile.secondaryGoal || null,
-      selectedSkills: canonicalProfile.selectedSkills || [],
-      experienceLevel: canonicalProfile.experienceLevel || null,
-      jointCautions: canonicalProfile.jointCautions || [],
-      equipmentAvailable: canonicalProfile.equipment || canonicalProfile.equipmentAvailable || [],
-      currentWorkingProgressions: cwpRecord,
-      trainingMethodPreferences: inputs.trainingMethodPreferences?.map(p => p.name) || [],
-      sessionStyle: inputs.sessionStyle || null,
-    })
-    console.log('[PHASE4D-DOCTRINE-RUNTIME-CONTRACT-EARLY-BUILD]', {
-      available: doctrineRuntimeContract.available,
-      source: doctrineRuntimeContract.source,
-      coverageHasLiveRules: doctrineRuntimeContract.doctrineCoverage.hasLiveRules,
-      progressionSkillCount: Object.keys(doctrineRuntimeContract.progressionDoctrine.perSkill).length,
-      methodPreferredCount: doctrineRuntimeContract.methodDoctrine.preferredMethods.length,
-      methodBlockedCount: doctrineRuntimeContract.methodDoctrine.blockedMethods.length,
-      cwpRecordSkillCount: Object.keys(cwpRecord).length,
-      verdict: 'DOCTRINE_RUNTIME_READY_FOR_INFLUENCE_CONTRACT',
-    })
-  } catch (err) {
-    console.log('[PHASE4D-DOCTRINE-RUNTIME-CONTRACT-EARLY-FALLBACK]', {
-      error: String(err),
-      verdict: 'INFLUENCE_CONTRACT_WILL_BUILD_WITHOUT_RUNTIME',
-    })
-  }
-
-  // ==========================================================================
   // [PHASE 2] BUILD DOCTRINE INFLUENCE CONTRACT EARLY
   // ==========================================================================
   // PURPOSE: Build doctrine influence contract BEFORE materiality contract so
   // it can be consumed by canonical materiality scoring.
-  //
-  // [PHASE 4D] cwpRecord and doctrineRuntimeContract are now declared above
-  // this block (was: declared 1250+ lines later, causing silent TDZ failure).
   // ==========================================================================
   let doctrineInfluenceContract: DoctrineInfluenceContract | null = null
   try {
@@ -8997,67 +8446,32 @@ async function generateAdaptiveProgramImpl(
   // prescription, skill coverage, and exercise selection.
   // ==========================================================================
   
-  // ==========================================================================
-  // [PHASE 4D — CAUSAL ORDER FIX] Guarded fallback for the late doctrine
-  // runtime contract build.
-  //
-  // Pre-fix: this block declared `cwpRecord` (const) and `doctrineRuntimeContract`
-  // (let) here for the first time — but the [PHASE 2] influence contract above
-  // referenced both, throwing TDZ ReferenceError that the early try/catch
-  // silently swallowed. The late build then succeeded and emitted
-  // 'DOCTRINE_UPSTREAM_INFLUENCE_APPLIED' logs, creating the false impression
-  // that doctrine was causally consumed when in fact only the late
-  // doctrineRuntimeContract reached downstream consumers — the influence
-  // contract, unified decision, and materiality contract had already run with
-  // null influence.
-  //
-  // Post-fix: cwpRecord and doctrineRuntimeContract are built EARLY (before
-  // the influence contract). This block is now a fallback that only runs if
-  // the early build failed entirely. If the early build succeeded, this is
-  // an audit checkpoint only — we do NOT rebuild from materiality-derived
-  // values because doing so would create an inconsistency: the influence
-  // contract was built from the early runtime contract, and overwriting it
-  // here would diverge influence vs runtime.
-  // ==========================================================================
-  if (!doctrineRuntimeContract) {
-    // Last-resort late build: only reached if the early build threw a
-    // non-TDZ error (e.g., DB import failure). Uses materiality-enriched
-    // values since by this point bundle-progression enrichment has run.
-    const fallbackCwpRecord: Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null }> = {}
-    if (multiSkillMaterialityContract.currentWorkingProgressions) {
-      for (const [skill, data] of Object.entries(multiSkillMaterialityContract.currentWorkingProgressions)) {
-        fallbackCwpRecord[skill] = {
-          currentWorkingProgression: typeof data === 'object' && data ? (data as { currentWorkingProgression?: string | null }).currentWorkingProgression ?? null : null,
-          historicalCeiling: typeof data === 'object' && data ? (data as { historicalCeiling?: string | null }).historicalCeiling ?? null : null,
-        }
+  // Build cwpRecord outside try block so it's accessible for doctrine influence contract
+  const cwpRecord: Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null }> = {}
+  if (multiSkillMaterialityContract.currentWorkingProgressions) {
+    for (const [skill, data] of Object.entries(multiSkillMaterialityContract.currentWorkingProgressions)) {
+      cwpRecord[skill] = {
+        currentWorkingProgression: typeof data === 'object' && data ? (data as { currentWorkingProgression?: string | null }).currentWorkingProgression ?? null : null,
+        historicalCeiling: typeof data === 'object' && data ? (data as { historicalCeiling?: string | null }).historicalCeiling ?? null : null,
       }
     }
-    try {
-      doctrineRuntimeContract = await buildDoctrineRuntimeContract({
-        primaryGoal: multiSkillMaterialityContract.primaryGoal,
-        secondaryGoal: multiSkillMaterialityContract.secondaryGoal,
-        selectedSkills: multiSkillMaterialityContract.selectedSkills,
-        experienceLevel: multiSkillMaterialityContract.experienceLevel,
-        jointCautions: multiSkillMaterialityContract.jointCautions,
-        equipmentAvailable: multiSkillMaterialityContract.equipmentAvailable,
-        currentWorkingProgressions: fallbackCwpRecord,
-        trainingMethodPreferences: inputs.trainingMethodPreferences?.map(p => p.name) || [],
-        sessionStyle: inputs.sessionStyle || null,
-      })
-      console.log('[PHASE4D-DOCTRINE-RUNTIME-CONTRACT-LATE-FALLBACK-SUCCESS]', {
-        available: doctrineRuntimeContract.available,
-        source: doctrineRuntimeContract.source,
-        verdict: 'DOCTRINE_RUNTIME_BUILT_VIA_LATE_FALLBACK',
-        note: 'Influence contract above ran without doctrine runtime — degraded mode.',
-      })
-    } catch (err) {
-      console.log('[PHASE4D-DOCTRINE-RUNTIME-CONTRACT-LATE-FALLBACK-FAILED]', {
-        error: String(err),
-        verdict: 'DOCTRINE_RUNTIME_UNAVAILABLE',
-      })
-    }
-  } else {
-    console.log('[PHASE4D-DOCTRINE-RUNTIME-CONTRACT-LATE-AUDIT]', {
+  }
+  
+  let doctrineRuntimeContract: DoctrineRuntimeContract | null = null
+  try {
+    doctrineRuntimeContract = await buildDoctrineRuntimeContract({
+      primaryGoal: multiSkillMaterialityContract.primaryGoal,
+      secondaryGoal: multiSkillMaterialityContract.secondaryGoal,
+      selectedSkills: multiSkillMaterialityContract.selectedSkills,
+      experienceLevel: multiSkillMaterialityContract.experienceLevel,
+      jointCautions: multiSkillMaterialityContract.jointCautions,
+      equipmentAvailable: multiSkillMaterialityContract.equipmentAvailable,
+      currentWorkingProgressions: cwpRecord,
+      trainingMethodPreferences: inputs.trainingMethodPreferences?.map(p => p.name) || [],
+      sessionStyle: inputs.sessionStyle || null,
+    })
+    
+    console.log('[DOCTRINE-RUNTIME-CONTRACT-UPSTREAM-INTEGRATION]', {
       available: doctrineRuntimeContract.available,
       source: doctrineRuntimeContract.source,
       coverageHasLiveRules: doctrineRuntimeContract.doctrineCoverage.hasLiveRules,
@@ -9068,8 +8482,14 @@ async function generateAdaptiveProgramImpl(
       skillSupportCount: doctrineRuntimeContract.skillDoctrine.supportSkills.length,
       skillDeferredCount: doctrineRuntimeContract.skillDoctrine.deferredSkills.length,
       explanationLevel: doctrineRuntimeContract.explanationDoctrine.doctrineInfluenceLevel,
-      verdict: 'DOCTRINE_RUNTIME_ALREADY_BUILT_FROM_EARLY_PASS_INFLUENCE_CONTRACT_RECEIVED_IT',
+      verdict: 'DOCTRINE_UPSTREAM_INFLUENCE_APPLIED',
     })
+  } catch (err) {
+    console.log('[DOCTRINE-RUNTIME-CONTRACT-FALLBACK-GRACEFUL]', {
+      error: String(err),
+      verdict: 'DOCTRINE_RUNTIME_CONTRACT_FALLBACK',
+    })
+    // Generation continues without doctrine influence - fallback is safe
   }
   
   // ==========================================================================
@@ -11253,78 +10673,6 @@ async function generateAdaptiveProgramImpl(
   
   // Generate repetition justifications
   const repetitionJustifications = generateRepetitionJustifications(sessionIntents)
-
-  // ==========================================================================
-  // [WEEKLY-SESSION-ROLE-CONTRACT] Build the authoritative per-day role
-  // distribution for THIS week. ONE call, ONE owner. Each day's role flows
-  // into:
-  //   - session-composition-intelligence  (complexity bias, method gating,
-  //                                        breadth target nudge)
-  //   - session.compositionMetadata        (so the Program page card surface
-  //                                        can read role label + signals)
-  //
-  // This is the layer that makes a 6-day flexible week visibly differentiate
-  // by role (heavier strength / skill quality / broad mixed / secondary /
-  // density / supportive) instead of producing six structurally identical
-  // sessions.
-  //
-  // Honest about week phase: builder always materializes week-1 dosage, so
-  // we tag weekPhase as 'acclimation' here. Week-dosage-scaling later
-  // re-derives display dosage for week 2/3/4 — the ROLE distribution stays
-  // stable across the cycle (each role's intensity caps stay protected for
-  // week-1 build, but the role labels persist regardless).
-  // ==========================================================================
-  const weeklyRoleWeekPhase: WeekPhaseTag = (() => {
-    // Builder is currently always producing week-1 dosage for the saved
-    // program object. We do NOT lie about this — even when the user is
-    // viewing later weeks, the saved generation is week-1.
-    return 'acclimation'
-  })()
-
-  const weeklyRoleComplexityScore = (() => {
-    // Lightweight proxy of the same complexity inputs that
-    // calculate-content-complexity uses, so we don't have to thread the
-    // full complexity audit through this code path. This is a HINT that
-    // only widens breadth bands for broad-mixed / secondary / density days.
-    const skillsCount = (canonicalProfile.selectedSkills || []).length
-    const stylesCount = (canonicalProfile.trainingMethodPreferences || []).length
-    let s = 0
-    if (skillsCount >= 5) s += 3
-    else if (skillsCount >= 3) s += 2
-    else if (skillsCount >= 2) s += 1
-    if (experienceLevel === 'advanced') s += 2
-    else if (experienceLevel === 'intermediate') s += 1
-    if (stylesCount >= 2) s += 1
-    if (effectiveTrainingDays >= 6) s += 1
-    return Math.min(10, s)
-  })()
-
-  const weeklyRoleHasWeightedEquipment = (canonicalProfile.equipmentAvailable || []).some((eq: string) =>
-    ['barbell', 'dumbbells', 'kettlebell', 'weight_plates', 'cable_machine'].includes(eq)
-  )
-
-  const weeklySessionRoleContract: WeeklySessionRoleContract = buildWeeklySessionRoleContract({
-    days: structure.days,
-    sessionIntents,
-    weekPhase: weeklyRoleWeekPhase,
-    weekAdaptationPhase: weekAdaptationDecision?.phase || null,
-    firstWeekActive: isFirstWeek,
-    experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
-    trainingStyleMode: String(trainingStyleMode || 'mixed'),
-    complexityScore: weeklyRoleComplexityScore,
-    hasJointCautions: (canonicalProfile.jointCautions || []).length > 0,
-    hasWeightedEquipment: weeklyRoleHasWeightedEquipment,
-  })
-
-  console.log('[weekly-session-role-contract-built]', {
-    totalDays: weeklySessionRoleContract.audit.totalDays,
-    differentiationScore: weeklySessionRoleContract.audit.differentiationScore,
-    rolesAssigned: weeklySessionRoleContract.audit.rolesAssigned,
-    protectedWeek: weeklySessionRoleContract.protectedWeek,
-    protectionReason: weeklySessionRoleContract.protectionReason,
-    distribution: weeklySessionRoleContract.distribution,
-    verdict: 'WEEKLY_ROLE_CONTRACT_AUTHORITATIVE',
-  })
   
   // Generate each session with variety info
   // Build context object for session generation (explicit dependency passing)
@@ -11566,69 +10914,7 @@ async function generateAdaptiveProgramImpl(
     sessionsWithRelaxation: [] as number[],
     lastKnownRecoveryCandidate: null as number | null,
   }
-
-  // ==========================================================================
-  // [PHASE 4E — DOCTRINE CAUSAL AUDIT ACCUMULATOR]
-  //
-  // Pre-Phase-4E behavior:
-  //   The exercise selector built a per-call DoctrineScoringAudit (tracking
-  //   whether doctrine changed the top winner / top 3 / which rule types
-  //   matched) and merged audits across all candidate pools within a session
-  //   into `sessionDoctrineAudit`. That merged audit was discarded on return
-  //   from selectMainExercises. The builder had no way to ask "across all my
-  //   sessions, did doctrine actually change any winner?". As a result, the
-  //   doctrineIntegration UI rollups counted rules and sources but never
-  //   reflected actual causal authority.
-  //
-  // Phase 4E:
-  //   selectExercisesForSession now surfaces `doctrineCausalAudit` on its
-  //   ExerciseSelection return. We harvest it per session at the existing
-  //   call site below and push the per-session record onto this accumulator,
-  //   which lives at the same scope as loopLevelDoctrineTracker. After the
-  //   sessions loop completes, we aggregate the accumulator into
-  //   `program.doctrineCausalChallenge` — a durable, JSON-serializable
-  //   verdict object the UI can read to honestly say either:
-  //     - "Doctrine changed N exercise winners across M sessions" (real causal change)
-  //     - "Doctrine ran but did not change any winner" (already optimal / weak scoring / domain gap)
-  //     - "Doctrine had no rules matching your profile" (domain gap)
-  //     - "Doctrine cache empty" (upstream profile/runtime contract failure)
-  //   Without proof labels, without rule-counts-as-success, without PASS reports.
-  // ==========================================================================
-  const doctrineCausalAuditAccumulator: Array<{
-    sessionIndex: number
-    dayNumber: number
-    dayFocus: string
-    audit: import('./doctrine-exercise-scorer').DoctrineScoringAudit | null
-  }> = []
-
-  // ==========================================================================
-  // [WEEKLY-METHOD-DISTRIBUTION, prompt 7] Initialize the shared cluster budget.
-  //
-  // Doctrine goal: cluster is an intentional, uncommon tool. It must NOT appear
-  // on every session. Cap per week ≈ one third of sessions, minimum 1, maximum 2.
-  //
-  //   week = 2-3 sessions  -> max 1 cluster session
-  //   week = 4-6 sessions  -> max 2 cluster sessions
-  //   week = 7+ sessions   -> max 2 cluster sessions (still capped; two is
-  //                          plenty to demonstrate accumulation exposure
-  //                          without turning the week into method-spam)
-  //
-  // The tracker is a single mutable object. Every `sessionContext` for this
-  // program receives a reference to the SAME object, so session N's cluster
-  // application is visible to session N+1's materialization block.
-  // ==========================================================================
-  const totalWeekSessions = structure.days.length
-  const weeklyMethodBudget = {
-    clusterSessionsUsed: 0,
-    maxClusterSessionsPerWeek: Math.min(2, Math.max(1, Math.floor(totalWeekSessions / 3))),
-    clusterAppliedDays: [] as number[],
-  }
-  console.log('[weekly-method-budget-init]', {
-    totalWeekSessions,
-    maxClusterSessionsPerWeek: weeklyMethodBudget.maxClusterSessionsPerWeek,
-    doctrine: 'cluster_is_uncommon_intentional_tool',
-  })
-
+  
   try {
     // [PHASE 16C TASK 4] Convert to async for loop with yields inside
     for (let index = 0; index < structure.days.length; index++) {
@@ -11748,13 +11034,6 @@ async function generateAdaptiveProgramImpl(
     
     // Build composition context with all canonical truth
     // [WEEKLY-COMPOSITION-UPGRADE] Now includes week-level adaptation decisions
-    // [WEEKLY-SESSION-ROLE-CONTRACT] Resolve THIS day's authoritative role
-    // from the contract built once before the session loop. Falls back to
-    // null safely if for any reason the index is out of bounds (shouldn't
-    // happen — contract is built from the same `structure.days` we iterate).
-    const weeklyRoleForThisSession: WeeklyDayRole | null =
-      weeklySessionRoleContract.dayRoles[index] || null
-
     const compositionContext = buildSessionCompositionContext(
       day,
       index,
@@ -11772,8 +11051,7 @@ async function generateAdaptiveProgramImpl(
       doctrineRuntimeContract || null,
       fatigueStateForComposition,
       undefined, // recentSessionShapes
-      weekAdaptationInputForSession, // [WEEKLY-COMPOSITION-UPGRADE] Pass week-level decisions
-      weeklyRoleForThisSession // [WEEKLY-SESSION-ROLE-CONTRACT] Per-day authoritative role
+      weekAdaptationInputForSession // [WEEKLY-COMPOSITION-UPGRADE] Pass week-level decisions
     )
     
     // Build the authoritative composition blueprint
@@ -11824,18 +11102,6 @@ async function generateAdaptiveProgramImpl(
   canonicalSessionSpine,
   // [WEEKLY-COMPOSITION-UPGRADE] Pass week-level adaptation decisions for session-level enforcement
   weekAdaptation: weekAdaptationInputForSession,
-  // [STYLE-CORRIDOR-CLUSTER-FIX] Pass the actual bundle (not just the
-  // decision summary) so generateAdaptiveSession's pre-existing 21+ bare
-  // references resolve to the real local at L5448 instead of throwing
-  // ReferenceError. This is the single ingress that closes the cluster.
-  programmingTruthBundle,
-  // [PHASE-NEXT-FINAL-DECISION-OWNER-LOCK] Pass per-skill progression
-  // depth bias map (declared at L7508 inside this function) so the
-  // sibling `generateAdaptiveSession` rerank corridor at L24385 can
-  // finally apply the readiness/exposure/current-vs-history truth that
-  // was already computed but stranded. This is the single ingress that
-  // closes the variant-depth winner-lock gap.
-  progressionDepthAdjustments,
   // [PROGRAMMING-TRUTH-BUNDLE] Pass bundle-derived decisions for dosage/progression/constraint
   bundleDecisions: bundleDecisionSummary || null,
   // [UNIFIED DOCTRINE DECISION] Pass doctrine decision for exercise selection enforcement
@@ -11852,18 +11118,6 @@ async function generateAdaptiveProgramImpl(
   outerDoctrineRecoveryTracker: null as any, // Will be set below
   // [SESSION-SURVIVAL-CONTRACT-LOOP] Loop-level tracker ref for outer catch access
   loopLevelDoctrineTracker: loopLevelDoctrineTracker as any,
-  // [PHASE 4E — DOCTRINE CAUSAL AUDIT ACCUMULATOR] Reference to the loop-level
-  // accumulator, mutated inside generateAdaptiveSession's post-selection block.
-  // Each session pushes its own ExerciseSelection.doctrineCausalAudit (or null
-  // if the selector did not run / the cache was empty / no rule matched).
-  // This is the durable evidence the program needs to claim or honestly deny
-  // doctrine causality.
-  doctrineCausalAuditAccumulator: doctrineCausalAuditAccumulator as any,
-  // [WEEKLY-METHOD-DISTRIBUTION, prompt 7] Shared cluster budget -- the SAME
-  // object reference is handed to every session this build, so session N's
-  // cluster application is visible to session N+1's cluster materializer.
-  // See the initialization block directly above the week loop (~L10958).
-  weeklyMethodBudget,
   }
   
   // ==========================================================================
@@ -12061,17 +11315,22 @@ async function generateAdaptiveProgramImpl(
         }],
         cooldown: [],
         finisher: undefined,
-        // [VARIANT-LAUNCHABILITY-CONTRACT] Prior code attached a hollow
-        // `Recovery Session` variant with `selection.main: []` here. That
-        // metadata-only variant was the exact anti-pattern the contract
-        // forbids -- it looked like a real variant to any consumer that
-        // didn't explicitly check `selection.main.length > 0`. Recovery
-        // fallbacks honestly have no variant story, so we emit no variants
-        // at all. The card's `session.variants && session.variants.length > 1`
-        // gate already suppresses the toggle row, and selectedSessionContract
-        // gracefully falls back to `session.estimatedMinutes` when
-        // session.variants is undefined.
-        variants: undefined,
+        variants: [{
+          duration: 15,
+          label: 'Recovery Session',
+          selection: {
+            main: [],
+            warmup: [],
+            cooldown: [],
+            totalEstimatedTime: 15,
+            skillExpressionResult: {
+              directlyExpressedSkills: [],
+              technicalSlotSkills: [],
+              supportSkillsInjected: [],
+            },
+          },
+          compressionLevel: 'none' as const,
+        }],
         adaptationNotes: [`[FALLBACK] Generation failed: ${errorMessage.slice(0, 80)}`],
         rationale: 'This session could not be generated. Please try regenerating your program.',
         recoveryContext: {
@@ -12350,238 +11609,14 @@ async function generateAdaptiveProgramImpl(
     } else {
       postSessionStep = 'session_load_skipped_no_exercises'
     }
-
-    // =========================================================================
-    // [WEEKLY-ROLE-PRESCRIPTION-SHAPING-LOCK]
-    // Apply this day's authoritative WeeklyPrescriptionShape to the actual
-    // exercise rows. This is THE place where weekly role becomes MATERIAL
-    // programming (not just labels / chips / rationale). It mutates:
-    //   - ex.sets       (clamped to [1,6])
-    //   - ex.repsOrTime (numeric ranges only; "Xs" holds and "each side" left alone)
-    //   - ex.targetRPE  (capped at the role's rpeCap)
-    //
-    // Doctrine guards:
-    //   * Skill / skill-adjacent rows (category === 'skill', or row already
-    //     carrying a setExecutionMethod / blockId) are LEFT ALONE — their
-    //     dosage is already owned by their method (cluster / top set / drop set
-    //     / superset / circuit / density).
-    //   * Time-based holds and "each side" prescriptions are left alone
-    //     (mutating those is too risky given the variety of authored formats).
-    //   * Runs BEFORE grouping & method materialization so that:
-    //       - the grouped-block harmonization later (after drop/top/RP) sees
-    //         shape-consistent member sets,
-    //       - the method materializer reads a row whose sets/RPE already
-    //         reflect role-doctrine.
-    //   * Protection: when the contract is `protectedWeek`, rpeCap is softened
-    //     by -1 (min 6) so week-1 / recovery-constrained heavy days don't push
-    //     RPE 9 even though the role intent is still "heavier-relative".
-    //
-    // SINGLE OWNER: nothing downstream re-derives shape from role. Display
-    // surfaces (program-display-contract) READ what this pass wrote.
-    // =========================================================================
-    if (
-      weeklyRoleForThisSession &&
-      Array.isArray(session.exercises) &&
-      session.exercises.length > 0
-    ) {
-      const shape = weeklyRoleForThisSession.prescriptionShape
-      const isProtected = weeklySessionRoleContract.protectedWeek
-      const effectiveRpeCap =
-        shape.rpeCap == null
-          ? null
-          : isProtected
-            ? Math.max(6, shape.rpeCap - 1)
-            : shape.rpeCap
-
-      // Numeric-range nudge: matches "5-8" / "8-12" / "5 - 8". Leaves alone
-      // anything ending in 's', 'sec', 'min', or containing 'each' / 'side'.
-      const NUMERIC_RANGE_RE = /^\s*(\d+)\s*[-–]\s*(\d+)\s*$/
-      const shiftRange = (input: string): string => {
-        if (!input) return input
-        const lower = input.toLowerCase()
-        if (
-          lower.includes('s') ||
-          lower.includes('min') ||
-          lower.includes('each') ||
-          lower.includes('side') ||
-          lower.includes('hold')
-        ) {
-          return input
-        }
-        const m = NUMERIC_RANGE_RE.exec(input)
-        if (!m) return input
-        const lo = parseInt(m[1], 10)
-        const hi = parseInt(m[2], 10)
-        if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo <= 0 || hi <= 0 || hi < lo) return input
-        let dLo = 0
-        let dHi = 0
-        switch (shape.repIntent) {
-          case 'lower_heavy':
-            dLo = -1
-            dHi = -2
-            break
-          case 'higher_volume':
-            dLo = +2
-            dHi = +4
-            break
-          case 'recovery_short':
-            dLo = -1
-            dHi = -1
-            break
-          case 'midrange':
-          case 'technical_quality':
-          default:
-            return input
-        }
-        const newLo = Math.max(1, lo + dLo)
-        const newHi = Math.max(newLo, hi + dHi)
-        if (newLo === lo && newHi === hi) return input
-        return `${newLo}-${newHi}`
-      }
-
-      let mutationsApplied = 0
-      const auditRows: Array<{ name: string; before: { sets: number; reps: string; rpe?: number }; after: { sets: number; reps: string; rpe?: number }; skipped?: string }> = []
-
-      for (const ex of session.exercises) {
-        if (!ex) continue
-        const before = {
-          sets: typeof ex.sets === 'number' ? ex.sets : parseInt(String(ex.sets || 3)) || 3,
-          reps: ex.repsOrTime || '',
-          rpe: ex.targetRPE,
-        }
-
-        // Doctrine guard 1: skill rows left alone (their dosage is intentional).
-        if (ex.category === 'skill') {
-          auditRows.push({ name: ex.name, before, after: before, skipped: 'skill_category_protected' })
-          continue
-        }
-        // Doctrine guard 2: rows already carrying a set-execution method
-        // (cluster / top_set / drop_set / rest_pause) are owned by that method.
-        if (ex.setExecutionMethod) {
-          auditRows.push({ name: ex.name, before, after: before, skipped: `setExecutionMethod=${ex.setExecutionMethod}` })
-          continue
-        }
-        // Doctrine guard 3: rows already grouped (blockId) are owned by the
-        // group's method; harmonization later will equalize their set counts.
-        if (ex.blockId) {
-          auditRows.push({ name: ex.name, before, after: before, skipped: `grouped_block=${ex.blockId}` })
-          continue
-        }
-
-        // Apply setsBias (clamp [1, 6]).
-        if (typeof ex.sets === 'number' && shape.setsBias !== 0) {
-          const next = Math.max(1, Math.min(6, ex.sets + shape.setsBias))
-          if (next !== ex.sets) {
-            ex.sets = next
-            mutationsApplied++
-          }
-        }
-
-        // Apply rep range shift (numeric ranges only).
-        if (typeof ex.repsOrTime === 'string') {
-          const shifted = shiftRange(ex.repsOrTime)
-          if (shifted !== ex.repsOrTime) {
-            ex.repsOrTime = shifted
-            mutationsApplied++
-          }
-        }
-
-        // Apply RPE cap.
-        if (effectiveRpeCap != null) {
-          const currentRpe = typeof ex.targetRPE === 'number' ? ex.targetRPE : null
-          if (currentRpe == null) {
-            ex.targetRPE = effectiveRpeCap
-            mutationsApplied++
-          } else if (currentRpe > effectiveRpeCap) {
-            ex.targetRPE = effectiveRpeCap
-            mutationsApplied++
-          }
-        }
-
-        const after = {
-          sets: typeof ex.sets === 'number' ? ex.sets : before.sets,
-          reps: ex.repsOrTime || before.reps,
-          rpe: ex.targetRPE,
-        }
-        if (after.sets !== before.sets || after.reps !== before.reps || after.rpe !== before.rpe) {
-          auditRows.push({ name: ex.name, before, after })
-        }
-      }
-
-      if (mutationsApplied > 0) {
-        console.log('[WEEKLY-ROLE-PRESCRIPTION-SHAPING]', {
-          dayNumber: session.dayNumber,
-          roleId: weeklyRoleForThisSession.roleId,
-          shape,
-          isProtected,
-          effectiveRpeCap,
-          mutationsApplied,
-          changedRows: auditRows.filter((r) => !r.skipped).slice(0, 8),
-          skippedRows: auditRows.filter((r) => r.skipped).map((r) => `${r.name}:${r.skipped}`).slice(0, 8),
-        })
-      }
-      postSessionStep = 'weekly_role_prescription_shape_applied'
-    }
-
+    
     // =========================================================================
     // [AUTHORITATIVE SESSION METHOD INTENT CONTRACT]
     // This is the SINGLE OWNER of per-session method decisions.
     // It computes eligibility from real user truth, not focus string matching.
     // All downstream materialization must use this contract, not ad-hoc gates.
     // =========================================================================
-    // [METHOD-PREFERENCE-BRIDGE] Narrow defensive fallback. The authoritative
-    // source is `canonicalProfile.trainingMethodPreferences`. Rebuild already
-    // bridges that field explicitly; this fallback only activates for alternate
-    // entry paths (adjustments, tests, stale canonical) where prefs are empty
-    // but `selectedStyles` is present. Vocabularies match (TrainingMethodPreference).
-    const METHOD_PREF_BRIDGE_VOCAB = new Set([
-      'straight_sets',
-      'supersets',
-      'circuits',
-      'density_blocks',
-      'cluster_sets',
-      'drop_sets',
-      'rest_pause',
-      'ladder_sets',
-      // [PHASE 3C PACKAGING-TRUTH-LOCK] top_sets was missing from the bridge
-      // vocab, so users who selected it via selectedStyles had their preference
-      // silently dropped before reaching the intent contract. setExecutionMethod
-      // type already supports 'top_set' (L1220) but there was no entry path.
-      'top_sets',
-    ])
-    const rawMethodPrefs: string[] = Array.isArray(canonicalProfile.trainingMethodPreferences)
-      ? (canonicalProfile.trainingMethodPreferences as unknown as string[])
-      : []
-    const canonicalSelectedStyles: string[] = Array.isArray(
-      (canonicalProfile as unknown as { selectedStyles?: unknown }).selectedStyles
-    )
-      ? ((canonicalProfile as unknown as { selectedStyles?: string[] }).selectedStyles as string[])
-      : []
-    const didBridgeFromSelectedStyles = rawMethodPrefs.length === 0 && canonicalSelectedStyles.length > 0
-    const methodPrefsForGrouping = (
-      rawMethodPrefs.length > 0
-        ? rawMethodPrefs
-        : canonicalSelectedStyles.filter(s => typeof s === 'string' && METHOD_PREF_BRIDGE_VOCAB.has(s))
-    ) as unknown as typeof canonicalProfile.trainingMethodPreferences
-
-    // [METHOD-PREFERENCE-BRIDGE] Entry audit.
-    {
-      const effective: string[] = Array.isArray(methodPrefsForGrouping)
-        ? (methodPrefsForGrouping as unknown as string[])
-        : []
-      const nonBaseline = effective.filter(m => m !== 'straight_sets')
-      console.log('[builder-method-preference-truth-entry-audit]', {
-        source: 'adaptive-program-builder:session_method_intent_contract_entry',
-        canonical_trainingMethodPreferences: rawMethodPrefs,
-        canonical_trainingMethodPreferences_count: rawMethodPrefs.length,
-        canonical_selectedStyles: canonicalSelectedStyles,
-        canonical_selectedStyles_count: canonicalSelectedStyles.length,
-        didBridgeFromSelectedStyles,
-        methodPrefsForGrouping: effective,
-        methodPrefsForGrouping_count: effective.length,
-        builderWillTreatMethodTruthAs: nonBaseline.length > 0 ? 'PRESENT' : 'EMPTY',
-      })
-    }
+    const methodPrefsForGrouping = canonicalProfile.trainingMethodPreferences || []
     
     // Count exercise categories to understand session composition
     const skillExerciseCount = session.exercises?.filter(e => e.category === 'skill').length || 0
@@ -12597,14 +11632,8 @@ async function generateAdaptiveProgramImpl(
     const isSkillPrimarySession = skillExerciseCount >= 3 && skillExerciseCount >= totalExercises * 0.5
     
     // [STRENGTHENED] Compute whether skill work needs protection (separate from blocking all grouping)
-    // This protects skill exercises themselves but allows accessory grouping.
-    // [CLUSTER-DOCTRINE-INVERSION] No longer the cluster gate. Cluster now
-    // requires `hasLateAccumulationClusterCandidate` (below, via the role/
-    // position/intent ladder). This signal is kept only for other auditors
-    // (session composition, materiality) and is not consumed by the cluster
-    // decision path.
-    const _hasSkillWorkToProtect = skillExerciseCount >= 1
-    void _hasSkillWorkToProtect
+    // This protects skill exercises themselves but allows accessory grouping
+    const hasSkillWorkToProtect = skillExerciseCount >= 1
     
     // [STRENGTHENED] Compute groupable tail size - includes more exercise types
     // Support strength work (non-primary, non-weighted-compound) can be grouped
@@ -12660,164 +11689,6 @@ async function generateAdaptiveProgramImpl(
     const blueprintCircuitEligibility = sessionCompositionBlueprint?.methodEligibility?.circuits
     const blueprintDensityEligibility = sessionCompositionBlueprint?.methodEligibility?.density
     
-    // =========================================================================
-    // [PHASE 3A PACKAGING-OWNER-LOCK] Derive doctrine-earned methods from the
-    // blueprint as a FIRST-CLASS packaging driver.
-    //
-    // Pre-3A failure: sessionMethodIntentContract.shouldApplySupersets/Circuits/
-    // Density all required `methodPrefsForGrouping.includes('supersets')` etc.
-    // The blueprint ALREADY computed a doctrine-rich 'earned' / 'allowed' /
-    // 'discouraged' / 'blocked' status (session-composition-intelligence.ts
-    // determineMethodEligibility, L522+) accounting for:
-    //   - recoveryCapacity, sessionMinutes, experienceLevel, trainingStyle
-    //   - firstWeekProtection, weeklyLoadStrategy finisher/density bias
-    //   - day focus (support_recovery / flexibility_focus veto)
-    //   - fatigueState needs_deload veto
-    //   - doctrineRuntimeContract.methodDoctrine explicit allow flags
-    // But NONE of this reached the materializer — packaging was effectively
-    // "preferences only." Users without explicit method prefs always got
-    // straight sets regardless of how strongly doctrine earned grouping.
-    //
-    // Fix: blueprint status participates in the gate.
-    //   - 'blocked'    → HARD VETO even if user selected
-    //   - 'earned'     → FIRE even if user did not explicitly select
-    //   - 'allowed'    → fire only when user selected (preserve old behavior)
-    //   - 'discouraged'→ same as allowed baseline (user preference required)
-    //   - undefined    → fall back to user-preference-only behavior
-    // =========================================================================
-    const supersetsBlueprintBlocked = blueprintSupersetEligibility === 'blocked'
-    const supersetsBlueprintEarned = blueprintSupersetEligibility === 'earned'
-    const circuitsBlueprintBlocked = blueprintCircuitEligibility === 'blocked'
-    const circuitsBlueprintEarned = blueprintCircuitEligibility === 'earned'
-    const densityBlueprintBlocked = blueprintDensityEligibility === 'blocked'
-    const densityBlueprintEarned = blueprintDensityEligibility === 'earned'
-    
-    // [PHASE 3A COMPRESSION-EARNS-SUPERSETS] Short sessions create real
-    // doctrine pressure: fitting a quality tail into 30 min with full
-    // straight-set rest is mathematically impossible. When session duration is
-    // ≤30 min and a groupable tail exists AND the blueprint has not blocked
-    // supersets AND the session is not skill-dominated (which would demand
-    // quality protection), compression itself earns supersets. This mirrors
-    // the doctrine exposed at L25277 (shortSessionStyle) but makes it FIRST-
-    // CLASS at intent-contract time instead of a downstream cosmetic log.
-    const blueprintSessionMinutes = sessionCompositionBlueprint?.estimatedDurationMinutes ?? 0
-    const compressionEarnsSupersets =
-      blueprintSessionMinutes > 0 &&
-      blueprintSessionMinutes <= 30 &&
-      !isSkillPrimarySession &&
-      !supersetsBlueprintBlocked &&
-      accessoryTailSize >= 2
-    
-    // =========================================================================
-    // [CLUSTER-DOCTRINE-INVERSION]  Prompt 5 of the method checklist.
-    //
-    // Previous doctrine (CLUSTER-DOCTRINE-TIGHTENED) gated cluster onto the
-    // session's EARLY position-0/1 primary skill holds and heavy compounds.
-    // That is precisely the "weak / usually wrong" cluster usage the user's
-    // saved doctrine names: early freshness-dependent primary work must stay
-    // STRAIGHT for quality. Cluster is a completion / accumulation tool that
-    // belongs LATE in a session on accessory / secondary-strength / late
-    // skill-accumulation work where clean rep targets matter more than
-    // uninterrupted straight-set purity.
-    //
-    // NEW DECISION LADDER (kept in a single place so eligibility here and
-    // scoring below agree by construction -- they share `classifyForCluster`):
-    //
-    //   LAYER 1 - ROLE
-    //     skill_primary         : category='skill' + selectionReason~'primary'
-    //     skill_accumulation    : category='skill' + NOT primary
-    //     primary_strength      : category='strength' + selectionReason~'primary'
-    //     secondary_strength    : category='strength' + NOT primary
-    //     accessory             : category='accessory'
-    //     core_or_support       : category='core' | 'support'
-    //
-    //   LAYER 2 - POSITION TIER  (earliestLateIndex = max(2, ceil(total/2)))
-    //     early : position <= 1                  (freshness zone)
-    //     mid   : 2 <= position < earliestLate   (transitional)
-    //     late  : position >= earliestLate       (fatigue-tolerant zone)
-    //
-    //   LAYER 3 - OUTPUT INTENT  (baked into role base score)
-    //     quality   : skill_primary / primary_strength   (cluster REJECTED)
-    //     strength  : secondary_strength                  (cluster bonus low)
-    //     accumulation / completion : accessory + late    (cluster bonus high)
-    //     hypertrophy : core_or_support + late            (cluster bonus low)
-    //
-    //   LAYER 4 - ELIGIBILITY (hard gates, before scoring):
-    //     reject if isGrouped                  (don't steal block members)
-    //     reject if role ∈ {skill_primary, primary_strength}  (doctrine: quality)
-    //     reject if selectionReason~'primary'  (explicit primary-effort guard)
-    //     reject if positionTier === 'early'   (doctrine: freshness-critical)
-    //
-    //   LAYER 5 - SCORING (eligible candidates only):
-    //     base by role:
-    //       accessory           = 80   (canonical cluster target per doctrine)
-    //       secondary_strength  = 70
-    //       core_or_support     = 55
-    //       skill_accumulation  = 45   (only narrow late skill-accum case)
-    //     positionAdj:
-    //       mid  : -20                 (still close to primary-effort energy)
-    //       late : +(position - earliestLate + 1) * 5   (later = better)
-    //
-    //   MIN_CLUSTER_SCORE raised 60 -> 75 so only strong picks stick.
-    //
-    // Session-level sanity: exactly one cluster per session (top candidate
-    // only), preserving the prior "cluster doesn't swallow the program" goal
-    // by construction rather than by post-hoc demotion.
-    // =========================================================================
-    const _totalSessionExercises = session.exercises?.length || 0
-    const _earliestLateIndex = Math.max(2, Math.ceil(_totalSessionExercises / 2))
-
-    type ClusterRole =
-      | 'skill_primary' | 'skill_accumulation'
-      | 'primary_strength' | 'secondary_strength'
-      | 'accessory' | 'core_or_support'
-    type ClusterPositionTier = 'early' | 'mid' | 'late'
-
-    const classifyForCluster = (
-      ex: NonNullable<typeof session.exercises>[number],
-      position: number
-    ): {
-      role: ClusterRole
-      positionTier: ClusterPositionTier
-      isPrimary: boolean
-      isGrouped: boolean
-    } => {
-      const isPrimary = !!ex.selectionReason?.includes('primary')
-      const isGrouped = !!ex.blockId
-      let role: ClusterRole
-      if (ex.category === 'skill') {
-        role = isPrimary ? 'skill_primary' : 'skill_accumulation'
-      } else if (ex.category === 'strength') {
-        role = isPrimary ? 'primary_strength' : 'secondary_strength'
-      } else if (ex.category === 'core' || ex.category === 'support') {
-        role = 'core_or_support'
-      } else {
-        role = 'accessory'
-      }
-      let positionTier: ClusterPositionTier
-      if (position <= 1) positionTier = 'early'
-      else if (position < _earliestLateIndex) positionTier = 'mid'
-      else positionTier = 'late'
-      return { role, positionTier, isPrimary, isGrouped }
-    }
-
-    const isClusterEligible = (
-      ex: NonNullable<typeof session.exercises>[number],
-      position: number
-    ): boolean => {
-      const { role, positionTier, isPrimary, isGrouped } = classifyForCluster(ex, position)
-      if (isGrouped) return false                                       // don't steal block members
-      if (isPrimary) return false                                       // explicit primary-effort guard
-      if (role === 'skill_primary' || role === 'primary_strength') return false  // freshness-critical
-      if (positionTier === 'early') return false                        // freshness zone
-      return true
-    }
-
-    // Eligibility flag: does ANY exercise pass the new doctrine gate?
-    // Replaces the old inverted `hasPrimaryEffortClusterCandidate`.
-    const hasLateAccumulationClusterCandidate =
-      (session.exercises || []).some((ex, position) => isClusterEligible(ex, position))
-    
     // Build the authoritative session method intent contract
     const sessionMethodIntentContract = {
       sessionId: `day_${session.dayNumber}`,
@@ -12830,18 +11701,6 @@ async function generateAdaptiveProgramImpl(
       userWantsCircuits: methodPrefsForGrouping.includes('circuits'),
       userWantsDensity: methodPrefsForGrouping.includes('density_blocks'),
       userWantsCluster: methodPrefsForGrouping.includes('cluster_sets'),
-      // [PHASE 3C PACKAGING-TRUTH-LOCK] Set-execution method preferences (per-row
-      // cues, not grouped structure — parity with cluster's method-only pattern).
-      // These were entirely absent from the intent contract, so the materializer
-      // had no authoritative signal to stamp them onto exercises even when the
-      // user had explicitly selected them.
-      userWantsDropSets:
-        methodPrefsForGrouping.includes('drop_sets') ||
-        methodPrefsForGrouping.includes('drop_set'),
-      userWantsRestPause: methodPrefsForGrouping.includes('rest_pause'),
-      userWantsTopSets:
-        methodPrefsForGrouping.includes('top_sets') ||
-        methodPrefsForGrouping.includes('top_set'),
       
       // Session composition analysis
       skillExerciseCount,
@@ -12851,92 +11710,33 @@ async function generateAdaptiveProgramImpl(
       isSkillDominated: isSkillPrimarySession,
       
       // [STRENGTHENED] Method eligibility decisions - more permissive for accessory tails
-      // [PHASE 3A] Blueprint 'blocked' is a HARD VETO at the *allowed* layer so
-      // downstream materializers cannot accidentally revive a method doctrine
-      // forbade (needs_deload, recovery day focus, first-week protection, etc.).
       // Supersets: allowed on any session with 2+ groupable exercises
-      supersetsAllowed: accessoryTailSize >= 2 && !supersetsBlueprintBlocked,
-      supersetsEarned: accessoryTailSize >= 2 && !supersetsBlueprintBlocked,
+      supersetsAllowed: accessoryTailSize >= 2,
+      supersetsEarned: accessoryTailSize >= 2, // Always earned if tail exists
       // Circuits: allowed if 3+ groupable exercises, even on skill days (we protect skill work separately)
-      circuitsAllowed: accessoryTailSize >= 3 && !circuitsBlueprintBlocked,
-      circuitsEarned: accessoryTailSize >= 3 && !circuitsBlueprintBlocked,
+      circuitsAllowed: accessoryTailSize >= 3, // Removed !isSkillPrimarySession gate
+      circuitsEarned: accessoryTailSize >= 3,
       // Density: same as circuits
-      densityAllowed: accessoryTailSize >= 3 && !densityBlueprintBlocked,
-      densityEarned: accessoryTailSize >= 3 && !densityBlueprintBlocked,
-      // [CLUSTER-DOCTRINE-INVERSION] Cluster eligibility now requires a
-      // concrete LATE-SESSION accessory / secondary-strength / skill-
-      // accumulation candidate to exist (not an early primary-effort slot).
-      // See `hasLateAccumulationClusterCandidate` and the decision-ladder
-      // comment directly above it.
-      clusterAllowed: hasLateAccumulationClusterCandidate,
+      densityAllowed: accessoryTailSize >= 3,
+      densityEarned: accessoryTailSize >= 3,
+      // Cluster: for skill work quality preservation
+      clusterAllowed: hasSkillWorkToProtect,
       
-      // =======================================================================
-      // [PHASE 3A PACKAGING-OWNER-LOCK] shouldApply* now fires when EITHER:
-      //   1. User explicitly selected the method (existing behavior), OR
-      //   2. The blueprint doctrine-earned the method for this session, OR
-      //   3. (supersets only) compression pressure earned supersets on a ≤30min
-      //      session with an adequate tail and no skill-dominated veto.
-      // AND the blueprint did not 'blocked' the method.
-      //
-      // Why this is doctrine-safe:
-      //   - blueprint 'earned' already respects recovery / duration / experience
-      //     / training style / first-week protection / weekly bias / day focus
-      //   - candidate filters below still exclude primary / skill / heavy
-      //     weighted compounds / power-explosive work from any grouping
-      //   - isSkillPrimarySession sessions never get compression-earned
-      //     supersets (explicit guard in compressionEarnsSupersets)
-      //
-      // Why pre-3A preferences-only was wrong:
-      //   A user who never opened the "training method preferences" step
-      //   received straight sets even when the session was a 60-min advanced
-      //   hybrid day with full recovery �� i.e. a doctrine-perfect superset
-      //   opportunity. That is *underexpression*, not doctrine-correct purity.
-      // =======================================================================
-      shouldApplySupersets:
-        (methodPrefsForGrouping.includes('supersets') || supersetsBlueprintEarned || compressionEarnsSupersets) &&
-        accessoryTailSize >= 2 &&
-        !supersetsBlueprintBlocked,
+      // [STRENGTHENED] Final method selection - lower thresholds, trust user preferences
+      shouldApplySupersets: methodPrefsForGrouping.includes('supersets') && accessoryTailSize >= 2,
       // Circuits allowed even on skill days - we protect skill exercises separately
-      shouldApplyCircuits:
-        (methodPrefsForGrouping.includes('circuits') || circuitsBlueprintEarned) &&
-        accessoryTailSize >= 3 &&
-        !circuitsBlueprintBlocked,
-      shouldApplyDensity:
-        (methodPrefsForGrouping.includes('density_blocks') || densityBlueprintEarned) &&
-        accessoryTailSize >= 3 &&
-        !densityBlueprintBlocked,
-      // [CLUSTER-DOCTRINE-INVERSION] Now uses the inverted-doctrine gate
-      // (late-accumulation candidate must truly exist) rather than the
-      // prior primary-effort gate.
-      shouldApplyCluster: methodPrefsForGrouping.includes('cluster_sets') && hasLateAccumulationClusterCandidate,
+      shouldApplyCircuits: methodPrefsForGrouping.includes('circuits') && accessoryTailSize >= 3,
+      shouldApplyDensity: methodPrefsForGrouping.includes('density_blocks') && accessoryTailSize >= 3,
+      shouldApplyCluster: methodPrefsForGrouping.includes('cluster_sets') && hasSkillWorkToProtect,
       
-      // [PHASE 3A] Packaging priority now includes doctrine-earned methods that
-      // the user did not explicitly opt into, so downstream consumers reading
-      // preferredPackagingOrder see the real post-doctrine packaging ladder.
+      // Packaging priority (what to try first)
       preferredPackagingOrder: [
-        ...((methodPrefsForGrouping.includes('supersets') || supersetsBlueprintEarned || compressionEarnsSupersets) && !supersetsBlueprintBlocked ? ['supersets'] : []),
-        ...((methodPrefsForGrouping.includes('circuits') || circuitsBlueprintEarned) && !circuitsBlueprintBlocked ? ['circuits'] : []),
-        ...((methodPrefsForGrouping.includes('density_blocks') || densityBlueprintEarned) && !densityBlueprintBlocked ? ['density'] : []),
+        ...(methodPrefsForGrouping.includes('supersets') ? ['supersets'] : []),
+        ...(methodPrefsForGrouping.includes('circuits') ? ['circuits'] : []),
+        ...(methodPrefsForGrouping.includes('density_blocks') ? ['density'] : []),
         ...(methodPrefsForGrouping.includes('cluster_sets') ? ['cluster'] : []),
         'straight_sets', // Always fallback
       ],
-      
-      // [PHASE 3A] Packaging-source audit: explain WHY each method will/won't fire
-      packagingDecisionSources: {
-        supersets: supersetsBlueprintBlocked ? 'blocked_by_blueprint_doctrine'
-          : methodPrefsForGrouping.includes('supersets') ? 'user_preference'
-          : supersetsBlueprintEarned ? 'earned_by_blueprint_doctrine'
-          : compressionEarnsSupersets ? 'earned_by_compression_pressure'
-          : 'no_trigger',
-        circuits: circuitsBlueprintBlocked ? 'blocked_by_blueprint_doctrine'
-          : methodPrefsForGrouping.includes('circuits') ? 'user_preference'
-          : circuitsBlueprintEarned ? 'earned_by_blueprint_doctrine'
-          : 'no_trigger',
-        density: densityBlueprintBlocked ? 'blocked_by_blueprint_doctrine'
-          : methodPrefsForGrouping.includes('density_blocks') ? 'user_preference'
-          : densityBlueprintEarned ? 'earned_by_blueprint_doctrine'
-          : 'no_trigger',
-      },
       
       // Complexity/safety level
       complexityLevel: isSkillPrimarySession ? 'conservative' : 
@@ -12964,16 +11764,6 @@ async function generateAdaptiveProgramImpl(
         cluster: sessionMethodIntentContract.shouldApplyCluster,
       },
       isSkillDominated: sessionMethodIntentContract.isSkillDominated,
-      // [PHASE 3A] Expose the doctrine-earned layer so the authoritative log
-      // shows WHY each method fires (user pref / blueprint earned / compression).
-      blueprintEligibility: {
-        supersets: blueprintSupersetEligibility,
-        circuits: blueprintCircuitEligibility,
-        density: blueprintDensityEligibility,
-      },
-      packagingDecisionSources: sessionMethodIntentContract.packagingDecisionSources,
-      compressionEarnsSupersets,
-      blueprintSessionMinutes,
     })
     
     // =========================================================================
@@ -13046,70 +11836,6 @@ async function generateAdaptiveProgramImpl(
       })
     }
     
-    // [PRE-MATERIALIZATION-METHOD-SCRUB] The method materialization corridor
-    // (supersets → circuits → density → cluster) is the single authoritative
-    // owner of per-row method identity. Wipe any carry-forward .method /
-    // .methodLabel / .blockId / .setExecutionMethod on session.exercises
-    // before the first writer runs. Idempotent: no-op on a clean build.
-    // Does NOT touch prescription, selection truth, or unrelated fields.
-    if (Array.isArray(session.exercises) && session.exercises.length > 0) {
-      let scrubbedCount = 0
-      const scrubbedSample: Array<{ name?: string; prevMethod?: string | null; prevBlockId?: string | null; prevSetExec?: string | null }> = []
-      for (const ex of session.exercises) {
-        const exAny = ex as unknown as {
-          name?: string
-          method?: string | null
-          methodLabel?: string | null
-          blockId?: string | null
-          setExecutionMethod?: string | null
-        }
-        const hadMethod = !!(exAny.method && exAny.method !== 'straight' && exAny.method !== 'straight_sets')
-        const hadBlockId = !!exAny.blockId
-        const hadSetExec = !!(exAny.setExecutionMethod && exAny.setExecutionMethod !== 'straight' && exAny.setExecutionMethod !== 'straight_sets')
-        const hadAny = hadMethod || hadBlockId || hadSetExec || !!exAny.methodLabel
-        if (hadAny) {
-          if (scrubbedSample.length < 3) {
-            scrubbedSample.push({
-              name: exAny.name,
-              prevMethod: exAny.method ?? null,
-              prevBlockId: exAny.blockId ?? null,
-              prevSetExec: exAny.setExecutionMethod ?? null,
-            })
-          }
-          scrubbedCount++
-        }
-        // Reset the four method-ownership fields. The materialization passes
-        // below are the ONLY legitimate writers from this point forward.
-        exAny.method = undefined
-        exAny.methodLabel = undefined
-        exAny.blockId = undefined
-        exAny.setExecutionMethod = undefined
-      }
-      // Also clear any stale cluster evidence sidecar on the incoming
-      // styleMetadata. This is recomputed later from `stashedClusterDecision`
-      // (see L12940) only when THIS build applies cluster, so wiping it here
-      // guarantees it never survives from a prior build into a session where
-      // the current doctrine would reject cluster.
-      if (session.styleMetadata) {
-        const styleAny = session.styleMetadata as unknown as {
-          clusterDecision?: unknown
-        }
-        if (styleAny.clusterDecision !== undefined) {
-          styleAny.clusterDecision = undefined
-        }
-      }
-      if (scrubbedCount > 0) {
-        console.log('[PRE-MATERIALIZATION-METHOD-SCRUB]', {
-          dayNumber: session.dayNumber,
-          focus: session.focus,
-          exerciseCount: session.exercises.length,
-          scrubbedCount,
-          scrubbedSample,
-          verdict: 'STALE_METHOD_CARRY_CLEARED_BEFORE_FRESH_MATERIALIZATION',
-        })
-      }
-    }
-
     // =========================================================================
     // [PHASE 8] STEP D2: Apply superset grouping using method intent contract
     // This materially changes exercise packaging based on user's style preferences
@@ -13179,22 +11905,8 @@ async function generateAdaptiveProgramImpl(
       // explicitly selected supersets actually look grouped in the body instead of leaving
       // only two pairs buried at the very end. Primary/skill work stays protected because
       // upstream candidate filtering already excludes it.
-      // [PHASE 3C PACKAGING-TRUTH-LOCK] Ladder extended upward for genuinely large
-      // tails so an advanced hybrid session with 8-10 exercises and 7-9 eligible
-      // accessory candidates doesn't truncate to only 3 pairs. The ladder still
-      // caps at floor(candidates/2) so we never exhaust the tail entirely, and
-      // the candidate filter above still protects primary/skill/heavy/power work.
-      //   candidates >= 10 -> 5 pairs max (e.g. 10 eligible -> 5 pairs use all 10)
-      //   candidates >= 8  -> 4 pairs max
-      //   candidates >= 6  -> 3 pairs max (previous top)
-      //   candidates >= 4  -> 2 pairs max
-      //   candidates >= 2  -> 1 pair  max
       if (supersetCandidates.length >= 2) {
-        const pairCap =
-          supersetCandidates.length >= 10 ? 5 :
-          supersetCandidates.length >= 8  ? 4 :
-          supersetCandidates.length >= 6  ? 3 :
-          2
+        const pairCap = supersetCandidates.length >= 6 ? 3 : 2
         const pairsToCreate = Math.min(pairCap, Math.floor(supersetCandidates.length / 2))
         let pairsCreated = 0
         
@@ -13387,168 +12099,42 @@ async function generateAdaptiveProgramImpl(
                (ex.category === 'strength' && !ex.selectionReason?.includes('primary'))
       })
       
-      // =====================================================================
-      // [PHASE 3C PACKAGING-TRUTH-LOCK] Multi-block density + circuit emission
-      //
-      // Pre-3C failure: this pass emitted a SINGLE circuit block of up to 4
-      // exercises, then stopped — even when 7–9 eligible candidates remained.
-      // Downstream code then aliased `hasDensityApplied = hasCircuitsApplied`
-      // (L12902), so a user who explicitly selected density_blocks saw only a
-      // circuit block and never a density_block styledGroup. That was the
-      // "conceptually present but not materially attached" failure the phase
-      // brief called out.
-      //
-      // Fix: two-block materializer with doctrine-correct block-type selection.
-      //   - PRIMARY BLOCK: first 3-4 deepest-tail candidates.
-      //       * circuit  when user wants circuits (or circuits blueprint-earned)
-      //       * density  when user wants density but NOT circuits, OR both are
-      //         earned but session is conditioning-compatible and this block
-      //         is conceptually a timed density work block rather than a
-      //         round-based circuit (see kind selection below).
-      //   - SECONDARY BLOCK: triggered ONLY on large tails (>= 6 eligible
-      //     AFTER primary block is placed, i.e. >= 9-10 original candidates).
-      //     Emits the OTHER block type so a session with both preferences
-      //     actually shows both styles, not two of the same.
-      //
-      // Doctrine safety preserved:
-      //   - tail-end slicing unchanged (deepest accessory/core work only)
-      //   - candidate filter unchanged (no skill, no primary, no heavy,
-      //     no power, no weighted compounds)
-      //   - blueprint 'blocked' veto at sessionMethodIntentContract level
-      //     still suppresses the entire pass upstream
-      //   - cluster pass later skips already-blockId'd exercises (unchanged)
-      // =====================================================================
+      // Apply circuit grouping if we have 3+ candidates (not already supersetted)
       if (circuitCandidates.length >= 3 && (circuitsEarned || densityEarned)) {
-        const userWantsCircuits = sessionMethodIntentContract.userWantsCircuits
-        const userWantsDensity = sessionMethodIntentContract.userWantsDensity
-
-        // [3C] Block kind selection for primary block:
-        //   - user selected circuits -> circuit (preserves explicit user truth)
-        //   - user selected density only -> density_block (fixes the alias bug)
-        //   - neither selected, both earned by blueprint -> circuit (preserves
-        //     prior default behavior when user did not opt in explicitly)
-        //   - only density earned (no circuit earn) -> density_block
-        const primaryKind: 'circuit' | 'density_block' =
-          userWantsCircuits ? 'circuit'
-          : userWantsDensity ? 'density_block'
-          : circuitsEarned ? 'circuit'
-          : 'density_block'
-
-        const primarySize = Math.min(4, circuitCandidates.length)
-        const primaryExercises = circuitCandidates.slice(-primarySize) // Deepest tail
-        const primaryBlockId = primaryKind === 'circuit'
-          ? `circuit_${session.dayNumber}_1`
-          : `density_${session.dayNumber}_1`
-        const primaryMethodLabel = primaryKind === 'circuit' ? 'Circuit' : 'Density'
-
-        for (let i = 0; i < primaryExercises.length; i++) {
-          const ex = primaryExercises[i]
+        const circuitSize = Math.min(4, circuitCandidates.length)
+        const circuitExercises = circuitCandidates.slice(-circuitSize) // Take from the end (true tail)
+        const circuitBlockId = `circuit_${session.dayNumber}_1`
+        
+        for (let i = 0; i < circuitExercises.length; i++) {
+          const ex = circuitExercises[i]
           const idx = session.exercises.findIndex(e => e.id === ex.id)
           if (idx !== -1) {
-            session.exercises[idx].blockId = primaryBlockId
-            session.exercises[idx].method = primaryKind
-            session.exercises[idx].methodLabel = `${primaryMethodLabel} ${String.fromCharCode(65 + i)}`
-            // Adjust rest for grouped format. Density holds slightly longer
-            // intra-round rest than circuits, which run near-continuous.
+            session.exercises[idx].blockId = circuitBlockId
+            session.exercises[idx].method = 'circuit'
+            session.exercises[idx].methodLabel = `Circuit ${String.fromCharCode(65 + i)}`
+            // Adjust rest for circuit format
             if (session.exercises[idx].restSeconds && session.exercises[idx].restSeconds > 30) {
-              session.exercises[idx].restSeconds = primaryKind === 'circuit' ? 15 : 20
+              session.exercises[idx].restSeconds = 15 // Minimal rest between circuit exercises
             }
           }
         }
-
-        const primaryAppliedMethod = primaryKind === 'circuit' ? 'circuits' : 'density_blocks'
-        methodMaterializationResult.appliedMethods.push(primaryAppliedMethod)
+        
+        methodMaterializationResult.appliedMethods.push('circuits')
         methodMaterializationResult.structureDecisions.push({
           block: 'accessory_tail',
-          method: primaryKind,
-          rationale: `${primarySize} exercises grouped as ${primaryKind} — ${
-            userWantsCircuits ? 'user selected circuits'
-            : userWantsDensity ? 'user selected density_blocks'
-            : circuitsEarned ? 'circuits blueprint-earned'
-            : 'density blueprint-earned'
-          }`,
+          method: 'circuit',
+          rationale: `${circuitSize} exercises grouped for density - user selected circuits/density_blocks and session is conditioning-compatible`,
         })
-
-        console.log('[TRAINING-METHOD-MATERIALIZED] Primary block applied:', {
+        
+        console.log('[TRAINING-METHOD-MATERIALIZED] Circuit applied:', {
           dayNumber: session.dayNumber,
-          blockKind: primaryKind,
-          size: primarySize,
-          exercises: primaryExercises.map(e => e.name),
-          eligibility: { circuitsEarned, densityEarned, userWantsCircuits, userWantsDensity },
+          circuitSize,
+          exercises: circuitExercises.map(e => e.name),
+          eligibility: { circuitsEarned, densityEarned },
         })
-
+        
         session.adaptationNotes = session.adaptationNotes || []
-        session.adaptationNotes.push(
-          `${primarySize}-exercise ${primaryKind} applied to accessory tail for ${
-            primaryKind === 'circuit' ? 'round-based conditioning density' : 'timed density work'
-          }`,
-        )
-
-        // [3C] SECONDARY BLOCK on large tails.
-        // Only fires when (a) at least 6 candidates remain AFTER the primary
-        // block was placed (i.e. original tail was 9–10+), and (b) both styles
-        // are earned or selected. This prevents force-stacking on any tail
-        // that isn't genuinely large enough to support two grouped blocks
-        // while leaving at least 2 ungrouped exercises for session finishers
-        // or support rows that read better as straight sets.
-        const remainingCandidates = circuitCandidates.slice(0, circuitCandidates.length - primarySize)
-        const bothStylesActive =
-          (userWantsCircuits || circuitsEarned) &&
-          (userWantsDensity || densityEarned)
-        const canPlaceSecondaryBlock =
-          remainingCandidates.length >= 6 && bothStylesActive
-
-        if (canPlaceSecondaryBlock) {
-          // Secondary block is the OTHER kind so the session shows real variety,
-          // not two circuits or two density blocks in a row.
-          const secondaryKind: 'circuit' | 'density_block' =
-            primaryKind === 'circuit' ? 'density_block' : 'circuit'
-          const secondarySize = Math.min(3, remainingCandidates.length - 2)
-          const secondaryExercises = remainingCandidates.slice(-secondarySize)
-          const secondaryBlockId = secondaryKind === 'circuit'
-            ? `circuit_${session.dayNumber}_2`
-            : `density_${session.dayNumber}_2`
-          const secondaryMethodLabel = secondaryKind === 'circuit' ? 'Circuit' : 'Density'
-
-          let secondaryAppliedCount = 0
-          for (let i = 0; i < secondaryExercises.length; i++) {
-            const ex = secondaryExercises[i]
-            const idx = session.exercises.findIndex(e => e.id === ex.id)
-            if (idx !== -1 && !session.exercises[idx].blockId) {
-              session.exercises[idx].blockId = secondaryBlockId
-              session.exercises[idx].method = secondaryKind
-              session.exercises[idx].methodLabel = `${secondaryMethodLabel} ${String.fromCharCode(65 + i)}`
-              if (session.exercises[idx].restSeconds && session.exercises[idx].restSeconds > 30) {
-                session.exercises[idx].restSeconds = secondaryKind === 'circuit' ? 15 : 20
-              }
-              secondaryAppliedCount++
-            }
-          }
-
-          if (secondaryAppliedCount >= 2) {
-            const secondaryAppliedMethod = secondaryKind === 'circuit' ? 'circuits' : 'density_blocks'
-            if (!methodMaterializationResult.appliedMethods.includes(secondaryAppliedMethod)) {
-              methodMaterializationResult.appliedMethods.push(secondaryAppliedMethod)
-            }
-            methodMaterializationResult.structureDecisions.push({
-              block: 'secondary_accessory_block',
-              method: secondaryKind,
-              rationale: `Secondary ${secondaryKind} block of ${secondaryAppliedCount} exercises — large tail (${circuitCandidates.length} candidates) and both circuit/density earned so session shows real method variety`,
-            })
-
-            console.log('[TRAINING-METHOD-MATERIALIZED] Secondary block applied:', {
-              dayNumber: session.dayNumber,
-              primaryKind,
-              secondaryKind,
-              secondarySize: secondaryAppliedCount,
-              exercises: secondaryExercises.slice(0, secondaryAppliedCount).map(e => e.name),
-            })
-
-            session.adaptationNotes.push(
-              `${secondaryAppliedCount}-exercise ${secondaryKind} added as secondary block for method variety`,
-            )
-          }
-        }
+        session.adaptationNotes.push(`${circuitSize}-exercise circuit applied to accessory tail for density`)
       } else if (circuitCandidates.length < 3) {
         methodMaterializationResult.rejectedMethods.push({
           method: 'circuits',
@@ -13576,794 +12162,69 @@ async function generateAdaptiveProgramImpl(
     }
     
     // -------------------------------------------------------------------------
-    // CLUSTER SET MATERIALIZATION  [CLUSTER-DOCTRINE-INVERSION]
-    //
-    // See the full decision-ladder comment above `classifyForCluster`
-    // (~L11725). This block consumes that ladder:
-    //   - `isClusterEligible` applies the hard gates (role, position, primary,
-    //     grouped) BEFORE scoring.
-    //   - Scoring then weights role base + position-tier adjustment so late
-    //     accessories win and secondary strength / core / skill-accumulation
-    //     are admitted selectively.
-    //   - MIN_CLUSTER_SCORE = 75 (up from 60) so marginal picks don't stick.
-    //   - Exactly one cluster per session (top candidate only) -- session-
-    //     level monoculture prevention is enforced by construction.
-    //
-    // All method-carry stamping (ex.method / ex.methodLabel /
-    // ex.setExecutionMethod / styleMetadata.clusterDecision) is preserved
-    // verbatim so the row-level method visibility corridor (AdaptiveSession-
-    // Card panel, row method truth log, session chip row) keeps rendering
-    // whenever cluster fires -- the visual corridor proven in prompts 1-4 is
-    // untouched; only WHICH exercise becomes the cluster target changes.
+    // CLUSTER SET MATERIALIZATION
+    // Applies to high-skill or heavy strength work to maintain quality
+    // Uses the authoritative session method intent contract for eligibility
     // -------------------------------------------------------------------------
-    const shouldEvaluateCluster = sessionMethodIntentContract.shouldApplyCluster
-
-    // [WEEKLY-METHOD-DISTRIBUTION, prompt 7] Week-level saturation check.
-    // If this week has already used its cluster budget, short-circuit BEFORE
-    // scoring. Doctrine: cluster is an intentional, uncommon tool across the
-    // week -- not a per-session accessory decoration.
-    //
-    // [HOTFIX, prompt 8] This block lives inside `generateAdaptiveProgramImpl`
-    // (not `generateAdaptiveSession` -- see L5050 vs L22290). There is NO
-    // `context` parameter at this scope; referencing `context?.weeklyMethodBudget`
-    // here threw `ReferenceError: context is not defined` and degraded regenerate
-    // into the previous-plan fallback corridor at post_session/superset_grouping_applied.
-    // The `weeklyMethodBudget` const is created once inside this same function
-    // (just before the week loop, ~L10970) and is directly in lexical scope,
-    // so we reference it by its local name. Every other consumer below
-    // (`weeklyBudget.clusterSessionsUsed` / `.clusterAppliedDays` / the
-    // increment block) was already using the destructured `weeklyBudget`
-    // alias correctly -- only this one line was the leak.
-    const weeklyBudget = weeklyMethodBudget ?? null
-    const weekClusterSaturated = !!weeklyBudget
-      && weeklyBudget.clusterSessionsUsed >= weeklyBudget.maxClusterSessionsPerWeek
-
-    if (weekClusterSaturated) {
-      methodMaterializationResult.rejectedMethods.push({
-        method: 'cluster_sets',
-        reason: `Week-level cluster budget saturated (${weeklyBudget!.clusterSessionsUsed}/${weeklyBudget!.maxClusterSessionsPerWeek}) -- cluster is an intentional, uncommon tool and this week has already placed it on day(s) ${weeklyBudget!.clusterAppliedDays.join(', ')}. Straight sets preserved here.`,
+    // [FIX] Use method intent contract for cluster eligibility
+    const shouldEvaluateCluster = sessionMethodIntentContract.shouldApplyCluster ||
+      methodPrefsForGrouping.includes('rest_pause')
+    
+    if (shouldEvaluateCluster && session.exercises && session.exercises.length > 0) {
+      // Find cluster-eligible exercises (skill isometrics, heavy strength holds)
+      const clusterCandidates = session.exercises.filter(ex => {
+        if (ex.blockId) return false // Already grouped
+        const nameLower = ex.name?.toLowerCase() || ''
+        // INCLUDE: High-skill isometric work that benefits from intra-set rest
+        const isSkillHold = ex.category === 'skill' && 
+          (nameLower.includes('hold') || nameLower.includes('lever') || nameLower.includes('planche'))
+        // INCLUDE: Heavy weighted work
+        const isHeavyWork = nameLower.includes('weighted') && ex.category === 'strength'
+        return isSkillHold || isHeavyWork
       })
-    } else if (shouldEvaluateCluster && session.exercises && session.exercises.length > 0) {
-      type ClusterCandidate = {
-        ex: NonNullable<typeof session.exercises>[number]
-        score: number
-        index: number
-        role: ClusterRole
-        positionTier: ClusterPositionTier
-      }
-      const candidates: ClusterCandidate[] = []
-      const rejectLog: Array<{ name: string; reason: string }> = []
-
-      // ============================================================
-      // [PHASE AB2] METHOD COMPATIBILITY SCORING
-      // ------------------------------------------------------------
-      // Replaces the prior blanket "session already has method → -15"
-      // fragmentation penalty. AB2 doctrine explicitly permits valid
-      // multi-method coexistence — for example, "one superset block +
-      // one later cluster block" — when compatibility is scored safe.
-      // The previous -15 penalty was applied irrespective of WHICH
-      // method had already been applied or where it lived in the
-      // session, which made it the canonical "blunt one-method-per-
-      // session" suppression rule AB2 calls out: cluster's accessory
-      // base score (75) plus any reasonable late-position bonus (≤+15)
-      // could not clear the 85 threshold once a -15 penalty was
-      // attached, regardless of whether the existing method actually
-      // conflicted.
-      //
-      // The replacement is compatibility-aware. The penalty depends on
-      // WHAT was already applied:
-      //
-      //   • supersets only (no density / circuit)
-      //       → 0 penalty. Supersets pair earlier rows; cluster lands
-      //         on the late accessory tail. Different territory, no
-      //         fatigue redundancy. AB2 explicitly allows this combo.
-      //
-      //   • circuits only
-      //       → -10. Circuits and cluster are both fatigue-managed
-      //         accumulation patterns, so stacking them adds
-      //         noise without a new training effect. Still beatable
-      //         by an unusually well-placed accessory tail target.
-      //
-      //   • density_blocks only
-      //       → -12. Density already saturates local-tissue fatigue;
-      //         cluster's intra-set rest pattern would compound it.
-      //         Stronger penalty than circuits but not a hard block.
-      //
-      //   • two or more methods already stacked
-      //       → -8 marginal additional penalty. The session is
-      //         already at fatigue/time saturation; we discourage
-      //         a third method but still allow if the candidate is
-      //         exceptional.
-      //
-      // Each path also stamps a `compatibilityVerdict` token used in
-      // the rejection reason text (consumed by the Program UI per-
-      // session rejection surface). AB2 requires that suppression
-      // reasons be specific — "redundant with density block" instead
-      // of generic "fragmentation=-15".
-      // ============================================================
-      const appliedSoFar = methodMaterializationResult.appliedMethods
-      const stackedMethodCount = appliedSoFar.length
-      const hasSupersetsAlready = appliedSoFar.includes('supersets')
-      const hasCircuitsAlready = appliedSoFar.includes('circuits')
-      const hasDensityAlready = appliedSoFar.includes('density_blocks')
-
-      let sessionFragmentationPenalty = 0
-      let compatibilityVerdict:
-        | 'compatible'
-        | 'compatible_with_supersets'
-        | 'fatigue_saturation_multi_method'
-        | 'redundant_with_density_block'
-        | 'redundant_with_circuit'
-        | 'no_other_method' = 'no_other_method'
-
-      if (stackedMethodCount === 0) {
-        sessionFragmentationPenalty = 0
-        compatibilityVerdict = 'no_other_method'
-      } else if (stackedMethodCount >= 2) {
-        // Two or more methods already stacked — fatigue/time saturation.
-        sessionFragmentationPenalty = -8
-        compatibilityVerdict = 'fatigue_saturation_multi_method'
-      } else if (hasDensityAlready) {
-        sessionFragmentationPenalty = -12
-        compatibilityVerdict = 'redundant_with_density_block'
-      } else if (hasCircuitsAlready) {
-        sessionFragmentationPenalty = -10
-        compatibilityVerdict = 'redundant_with_circuit'
-      } else if (hasSupersetsAlready) {
-        // AB2: superset + late accessory cluster is an explicitly
-        // allowed combination. Different exercise territory, different
-        // training effect, no fatigue redundancy.
-        sessionFragmentationPenalty = 0
-        compatibilityVerdict = 'compatible_with_supersets'
-      } else {
-        // Some other single method (e.g. a future method we haven't
-        // taxonomized yet). Keep a small penalty — doctrine still
-        // prefers signal clarity — but nowhere near the prior -15.
-        sessionFragmentationPenalty = -5
-        compatibilityVerdict = 'compatible'
-      }
-
-      const compatibilityReason: string | null =
-        compatibilityVerdict === 'redundant_with_density_block'
-          ? 'redundant with density block — both saturate local fatigue and would over-stack accumulation'
-          : compatibilityVerdict === 'redundant_with_circuit'
-            ? 'redundant with circuit — both work fatigue-managed accumulation, no new training effect from stacking'
-            : compatibilityVerdict === 'fatigue_saturation_multi_method'
-              ? `${stackedMethodCount} methods already applied this session — fatigue/time saturation, additional method discouraged`
-              : null
-
-      // [SHORT-SESSION-PENALTY, prompt 7] On short sessions (<5 exercises)
-      // the overhead of cluster's intra-set rest structure isn't worth the
-      // accumulation benefit -- the session is too small to need fatigue-
-      // managed completion. Reduce every candidate by 10.
-      const totalExs = session.exercises.length
-      const shortSessionPenalty = totalExs < 5 ? -10 : 0
-
-      session.exercises.forEach((ex, position) => {
-        const { role, positionTier, isPrimary, isGrouped } = classifyForCluster(ex, position)
-
-        // Hard eligibility gates (mirror `isClusterEligible` so keep in sync).
-        if (isGrouped) {
-          rejectLog.push({ name: ex.name || '?', reason: 'already_grouped' })
-          return
-        }
-        if (isPrimary) {
-          rejectLog.push({ name: ex.name || '?', reason: 'primary_effort_protected' })
-          return
-        }
-        if (role === 'skill_primary' || role === 'primary_strength') {
-          rejectLog.push({ name: ex.name || '?', reason: `freshness_critical_role:${role}` })
-          return
-        }
-        if (positionTier === 'early') {
-          rejectLog.push({ name: ex.name || '?', reason: 'early_position_freshness_zone' })
-          return
-        }
-
-        // [ROLE BASE RECALIBRATION, prompt 7] Lowered across the board so
-        // only *accessory* rows at *genuinely deep late* positions comfortably
-        // clear the new higher bar. The user's doctrine: "Cluster is most
-        // appropriate when quality exposure is needed but continuous
-        // prescription would degrade too much, OR where accumulated high-
-        // quality reps/seconds are desired with short intra-set relief."
-        // That is most plausibly the accessory-tail case, not the
-        // secondary-strength completion case (which was getting swept in
-        // too readily).
-        //   accessory           : 80 -> 75  (canonical target; still highest)
-        //   secondary_strength  : 70 -> 60  (still eligible but rarely clears)
-        //   core_or_support     : 55 -> 40  (effectively unreachable w/o very late)
-        //   skill_accumulation  : 45 -> 30  (effectively unreachable)
-        const baseByRole: Record<ClusterRole, number> = {
-          accessory: 75,
-          secondary_strength: 60,
-          core_or_support: 40,
-          skill_accumulation: 30,
-          // Unreachable (rejected above), kept for exhaustiveness:
-          skill_primary: 0,
-          primary_strength: 0,
-        }
-        const base = baseByRole[role] ?? 0
-
-        // Position adjustment: mid penalizes, late bonuses scaled by how-late.
-        let positionAdj = 0
-        if (positionTier === 'mid') {
-          positionAdj = -20
-        } else {
-          // 'late'
-          positionAdj = (position - _earliestLateIndex + 1) * 5
-        }
-
-        const score = base + positionAdj + sessionFragmentationPenalty + shortSessionPenalty
-        candidates.push({ ex, score, index: position, role, positionTier })
-      })
-
-      candidates.sort((a, b) => b.score - a.score)
-
-      // [THRESHOLD RAISED 75 -> 85, prompt 7] Combined with the lower role
-      // bases, the penalty terms, and the week-level cap, this produces the
-      // intended doctrine distribution. With new scoring (no penalties):
-      //   accessory@earliestLate      = 75 + 5  = 80  (REJECTED -- need deeper)
-      //   accessory@earliestLate+1    = 75 + 10 = 85  (OK -- second-from-end)
-      //   accessory@earliestLate+2    = 75 + 15 = 90  (OK -- tail)
-      //   secondary_strength@deep_late (+4)   = 60 + 25 = 85  (borderline OK)
-      //   secondary_strength@earliestLate     = 60 + 5  = 65  (REJECTED)
-      //   core_or_support: never reaches 85 under normal session lengths
-      //   skill_accumulation: never reaches 85
-      //
-      // With session-fragmentation penalty active (-15):
-      //   accessory@earliestLate+1    = 85 - 15 = 70  (REJECTED)
-      //   accessory@earliestLate+3    = 75 + 20 - 15 = 80 (REJECTED)
-      //   -> in sessions that already have supersets/circuits/density,
-      //      cluster is effectively suppressed except at very deep positions.
-      //
-      // With short-session penalty active (-10, sessions with <5 exercises):
-      //   accessory cannot practically clear 85 in a 4-exercise session
-      //   because `earliestLate = max(2, ceil(4/2)) = 2`, so the deepest
-      //   accessory at position 3 scores only 75 + 10 - 10 = 75 < 85.
-      //   -> short sessions stay straight, matching doctrine.
-      const MIN_CLUSTER_SCORE = 85
-      const clusterTarget = candidates.length > 0 && candidates[0].score >= MIN_CLUSTER_SCORE
-        ? candidates[0]
-        : null
-
-      if (clusterTarget) {
-        const idx = clusterTarget.index
-
-        // [METHOD-TAXONOMY-LOCK] Same dual-write as before: legacy `.method`
-        // for row-chip back-compat + authoritative `.setExecutionMethod` for
-        // new consumers. Preserved so the visibility corridor renders.
-        session.exercises[idx].method = 'cluster'
-        session.exercises[idx].methodLabel = 'Cluster Sets'
-        session.exercises[idx].setExecutionMethod = 'cluster'
-
-        methodMaterializationResult.appliedMethods.push('cluster_sets')
-
-        // Structure decision block name reflects the new doctrinal kind.
-        const structureBlockName =
-          clusterTarget.role === 'accessory' ? 'late_accessory' :
-          clusterTarget.role === 'secondary_strength' ? 'secondary_strength' :
-          clusterTarget.role === 'skill_accumulation' ? 'late_skill_accumulation' :
-          'accessory_tail'
-        methodMaterializationResult.structureDecisions.push({
-          block: structureBlockName,
-          method: 'cluster',
-          rationale: `Cluster format applied to ${clusterTarget.ex.name} (${clusterTarget.role}, ${clusterTarget.positionTier}, score ${clusterTarget.score}) for fatigue-managed completion`,
-        })
-
-        // [CLUSTER-DECISION-EVIDENCE] Proof of choice consumed by the card.
-        // `kind` now reflects the inverted doctrine; `reasonTokens` /
-        // `reasonSummary` describe WHY this late-accumulation row is the
-        // right cluster target (not the old "primary slot / quality
-        // preservation" copy which was doctrinally wrong).
-        const clusterKind:
-          | 'late_accessory_accumulation'
-          | 'secondary_strength_completion'
-          | 'late_skill_accumulation' =
-          clusterTarget.role === 'accessory' || clusterTarget.role === 'core_or_support'
-            ? 'late_accessory_accumulation'
-            : clusterTarget.role === 'secondary_strength'
-              ? 'secondary_strength_completion'
-              : 'late_skill_accumulation'
-
-        const reasonTokens: string[] = []
-        reasonTokens.push(clusterKind)
-        reasonTokens.push(`position_tier:${clusterTarget.positionTier}`)
-        reasonTokens.push('fatigue_managed_completion')
-        if (candidates.length > 1) reasonTokens.push(`best_of_${candidates.length}`)
-
-        const kindPhrase =
-          clusterKind === 'late_accessory_accumulation' ? 'late accessory accumulation' :
-          clusterKind === 'secondary_strength_completion' ? 'secondary strength completion' :
-          'late skill accumulation'
-        const reasonSummary = `${kindPhrase} · ${clusterTarget.positionTier} position · fatigue-managed completion`
-
-        ;(methodMaterializationResult as unknown as {
-          clusterDecision?: NonNullable<NonNullable<typeof session.styleMetadata>['clusterDecision']>
-        }).clusterDecision = {
-          targetExerciseId: String(clusterTarget.ex.id),
-          targetExerciseName: String(clusterTarget.ex.name),
-          score: clusterTarget.score,
-          position: clusterTarget.index,
-          kind: clusterKind,
-          reasonTokens,
-          reasonSummary,
-          type: 'method_cue',
-        }
-
-        console.log('[TRAINING-METHOD-MATERIALIZED] Cluster sets applied:', {
-          dayNumber: session.dayNumber,
-          exercise: clusterTarget.ex.name,
-          category: clusterTarget.ex.category,
-          role: clusterTarget.role,
-          positionTier: clusterTarget.positionTier,
-          score: clusterTarget.score,
-          position: clusterTarget.index,
-          candidatesConsidered: candidates.length,
-          reasonTokens,
-          // [PHASE AB2] Telemetry proving the compatibility-aware path.
-          // When `compatibilityVerdict` is `compatible_with_supersets`
-          // and `stackedMethodCount > 0`, this is direct evidence that
-          // multi-method coexistence (superset + cluster) was permitted
-          // by AB2's compatibility scoring — the prior blanket -15
-          // penalty would have rejected exactly this case.
-          phaseAb2: {
-            compatibilityVerdict,
-            stackedMethodCountBeforeCluster: stackedMethodCount,
-            appliedMethodsBeforeCluster: appliedSoFar.filter(m => m !== 'cluster_sets'),
-            fragmentationPenaltyApplied: sessionFragmentationPenalty,
-            multiMethodCoexistence: stackedMethodCount > 0,
-          },
-        })
-
-        session.adaptationNotes = session.adaptationNotes || []
-        session.adaptationNotes.push(`Cluster sets applied to ${clusterTarget.ex.name} for fatigue-managed completion`)
-
-        // [WEEKLY-METHOD-DISTRIBUTION, prompt 7] Record this cluster against
-        // the week's shared budget so subsequent sessions see the running
-        // total. The `weeklyBudget` reference points at the SAME object held
-        // by every other sessionContext in this build (see week-loop init).
-        if (weeklyBudget) {
-          weeklyBudget.clusterSessionsUsed += 1
-          weeklyBudget.clusterAppliedDays.push(session.dayNumber)
-          console.log('[weekly-method-budget-increment]', {
-            dayNumber: session.dayNumber,
-            clusterSessionsUsed: weeklyBudget.clusterSessionsUsed,
-            maxClusterSessionsPerWeek: weeklyBudget.maxClusterSessionsPerWeek,
-            appliedOnDays: [...weeklyBudget.clusterAppliedDays],
+      
+      // Apply cluster to first qualifying exercise only (to preserve quality)
+      if (clusterCandidates.length > 0) {
+        const clusterTarget = clusterCandidates[0]
+        const idx = session.exercises.findIndex(e => e.id === clusterTarget.id)
+        
+        if (idx !== -1) {
+          session.exercises[idx].method = 'cluster'
+          session.exercises[idx].methodLabel = 'Cluster Sets'
+          // Cluster sets use brief intra-set rest (10-20s)
+          // Keep longer inter-set rest
+          
+          methodMaterializationResult.appliedMethods.push('cluster_sets')
+          methodMaterializationResult.structureDecisions.push({
+            block: 'primary_skill',
+            method: 'cluster',
+            rationale: `Cluster format applied to ${clusterTarget.name} for quality maintenance on high-demand work`,
           })
+          
+          console.log('[TRAINING-METHOD-MATERIALIZED] Cluster sets applied:', {
+            dayNumber: session.dayNumber,
+            exercise: clusterTarget.name,
+            category: clusterTarget.category,
+          })
+          
+          session.adaptationNotes = session.adaptationNotes || []
+          session.adaptationNotes.push(`Cluster set format applied to ${clusterTarget.name} for quality`)
         }
       } else {
-        // [PHASE AB2] Specific rejection reason. When the deciding
-        // factor was multi-method compatibility, surface the typed
-        // verdict (e.g. "redundant with density block") instead of a
-        // generic "fragmentation=-15" number. AB2 explicitly forbids
-        // "session already has method" as a reason on its own.
-        const noCandidates = candidates.length === 0
-        const top = noCandidates ? null : candidates[0]
-        const compatibilityWasDeciding =
-          !noCandidates &&
-          top !== null &&
-          compatibilityReason !== null &&
-          // Compatibility decided this rejection if removing the
-          // fragmentation penalty would have cleared the threshold.
-          top.score - sessionFragmentationPenalty >= MIN_CLUSTER_SCORE
-
-        const reasonText = noCandidates
-          ? `No qualifying cluster candidates (doctrine requires late-session non-primary accessory / secondary-strength / skill-accumulation row). Rejected: ${rejectLog.slice(0, 3).map(r => `${r.name}(${r.reason})`).join(', ')}`
-          : compatibilityWasDeciding && compatibilityReason
-            ? `Cluster suppressed: ${compatibilityReason}. Top candidate ${top!.ex.name} (${top!.role} @ ${top!.positionTier}) scored ${top!.score} (compat=${sessionFragmentationPenalty}, shortSession=${shortSessionPenalty}, threshold=${MIN_CLUSTER_SCORE})`
-            : `Best candidate score ${top!.score} below threshold (${MIN_CLUSTER_SCORE}) -- honest straight sets preferred. Top candidate: ${top!.ex.name} (${top!.role} @ ${top!.positionTier} pos ${top!.index}); compat=${sessionFragmentationPenalty} (${compatibilityVerdict}), shortSession=${shortSessionPenalty}`
-
         methodMaterializationResult.rejectedMethods.push({
           method: 'cluster_sets',
-          reason: reasonText,
-        })
-
-        console.log('[PHASE-AB2-CLUSTER-REJECTED]', {
-          dayNumber: session.dayNumber,
-          compatibilityVerdict,
-          compatibilityWasDeciding,
-          stackedMethodCount,
-          appliedSoFar,
-          topScore: top?.score ?? null,
-          threshold: MIN_CLUSTER_SCORE,
-          fragmentationPenalty: sessionFragmentationPenalty,
-          shortSessionPenalty,
+          reason: 'No qualifying exercises for cluster format (requires skill holds or weighted strength)',
         })
       }
     }
-
-    // -------------------------------------------------------------------------
-    // [PHASE 3C PACKAGING-TRUTH-LOCK]
-    // SET-EXECUTION METHOD MATERIALIZATION (top_set / drop_set / rest_pause)
-    //
-    // These are PER-ROW execution cues, not grouped structure �� same shape
-    // as cluster's method-only emission (no blockId, just ex.method +
-    // ex.setExecutionMethod). Pre-3C the registry supported them
-    // (training-methods.ts L368-L525, setExecutionMethod type at L1220) and
-    // the bridge vocab accepted them, but the materialization layer never
-    // stamped them onto any exercise. Result: "conceptually present but not
-    // materially attached," exactly the failure the phase brief diagnoses.
-    //
-    // Doctrine guards (each method gets ONE assignment per session at most,
-    // and only on a safe target):
-    //
-    //   TOP_SET — applied to the SESSION PILLAR (index 0) when it is a
-    //     non-skill primary strength row that benefits from a heavy single
-    //     followed by back-off sets. Skipped when pillar is skill-primary
-    //     (planche / lever / handstand), already grouped (shouldn't happen
-    //     since pillar is always protected by the superset filter), or
-    //     already carrying cluster.
-    //
-    //   DROP_SET — applied to a LATE accessory exercise (deeper than the
-    //     mid-tier boundary) that is NOT skill, NOT primary, NOT already
-    //     grouped (blockId), NOT already carrying cluster, and NOT a heavy
-    //     weighted compound. Drop sets are an accumulation finisher; they
-    //     belong on the deepest reasonable accessory row.
-    //
-    //   REST_PAUSE — applied to a LATE secondary-strength or accessory row
-    //     that is NOT skill, NOT primary, NOT grouped, NOT cluster, NOT
-    //     drop_set (avoid double-stamping the same row). Rest-pause works
-    //     well on sub-maximal strength accumulation.
-    //
-    // Both drop_set and rest_pause cannot land on the SAME exercise (they
-    // are mutually exclusive set-execution methods). top_set CAN coexist
-    // with a downstream drop_set / rest_pause on a different row — they are
-    // independent decisions for different positions in the session.
-    //
-    // The output is a single ex.method = '<name>' + ex.setExecutionMethod
-    // stamp, exactly mirroring the cluster method-only pattern at L12799.
-    // The finalStyledGroups rebuild's ungrouped path treats these as
-    // groupType='straight' (single-row method cue), and the row-level
-    // method chip corridor renders them through the existing methodLabel
-    // path. No grouped truth is fabricated.
-    // -------------------------------------------------------------------------
-    {
-      const userWantsTop = sessionMethodIntentContract.userWantsTopSets
-      const userWantsDrop = sessionMethodIntentContract.userWantsDropSets
-      const userWantsRP = sessionMethodIntentContract.userWantsRestPause
-
-      if ((userWantsTop || userWantsDrop || userWantsRP) && Array.isArray(session.exercises) && session.exercises.length > 0) {
-        const exs = session.exercises
-
-        // Helper: row already carries a non-straight method or is grouped?
-        const rowHasMethodOrGroup = (ex: typeof exs[number]): boolean => {
-          if (ex.blockId) return true
-          const m = ex.method
-          if (!m) return false
-          if (m === 'straight' || m === 'straight_sets') return false
-          return true // already cluster, superset, circuit, density, etc.
-        }
-
-        const isSkillPillar = (ex: typeof exs[number]): boolean => {
-          if (ex.category === 'skill') return true
-          const n = (ex.name || '').toLowerCase()
-          return (
-            n.includes('planche') ||
-            n.includes('front lever') ||
-            n.includes('back lever') ||
-            n.includes('handstand') ||
-            n.includes('iron cross') ||
-            n.includes('v-sit') ||
-            n.includes('manna') ||
-            n.includes('muscle-up')
-          )
-        }
-
-        const isHeavyOrPower = (ex: typeof exs[number]): boolean => {
-          const n = (ex.name || '').toLowerCase()
-          return (
-            n.includes('weighted pull') ||
-            n.includes('weighted dip') ||
-            n.includes('explosive') ||
-            n.includes('plyometric') ||
-            n.includes('ballistic') ||
-            n.includes('clapping')
-          )
-        }
-
-        const lateBoundary = Math.max(2, Math.ceil(exs.length / 2))
-
-        // -------- TOP_SET on session pillar --------
-        if (userWantsTop) {
-          const pillar = exs[0]
-          if (
-            pillar &&
-            !isSkillPillar(pillar) &&
-            !rowHasMethodOrGroup(pillar) &&
-            // Pillar must be a true primary strength role to benefit from
-            // a heavy single + back-off — skill-primary rows must use straight
-            // sets for neural quality.
-            (pillar.category === 'strength' || (pillar.selectionReason || '').includes('primary'))
-          ) {
-            pillar.method = 'top_set'
-            pillar.methodLabel = 'Top Set + Back-Off'
-            pillar.setExecutionMethod = 'top_set'
-            methodMaterializationResult.appliedMethods.push('top_sets')
-            methodMaterializationResult.structureDecisions.push({
-              block: 'session_pillar',
-              method: 'top_set',
-              rationale: `Top set + back-off applied to ${pillar.name} — user selected top_sets and pillar is primary strength (heavy single → back-off accumulation honors the loading intent without grouping)`,
-            })
-            console.log('[TRAINING-METHOD-MATERIALIZED] Top set applied:', {
-              dayNumber: session.dayNumber,
-              exercise: pillar.name,
-              category: pillar.category,
-            })
-          } else {
-            methodMaterializationResult.rejectedMethods.push({
-              method: 'top_sets',
-              reason: pillar
-                ? isSkillPillar(pillar)
-                  ? `Pillar is skill-primary (${pillar.name}); top sets compromise neural quality on skill work`
-                  : rowHasMethodOrGroup(pillar)
-                    ? `Pillar already carries a method (${pillar.method ?? 'grouped'}); top set cannot stack`
-                    : `Pillar is not primary strength role (category=${pillar.category}); top set format requires loaded primary effort`
-                : 'Session has no exercises',
-            })
-          }
-        }
-
-        // -------- DROP_SET on deepest safe accessory --------
-        // Walk from the END backward to find the deepest row that passes
-        // all guards. Skip rows already touched by top_set above (different
-        // position so this rarely conflicts).
-        //
-        // [DROP-SET-DOCTRINE-LOCK]
-        // Hardened doctrine. Pre-lock the gate was too permissive:
-        //   * `isHeavyOrPower` only filtered by 4 explosive keywords
-        //     (explosive/plyometric/ballistic/clapping), so skill-adjacent
-        //     strength like Chest-to-Bar Pull-Ups, Archer Pull-Ups, Typewriter
-        //     Pull-Ups, Muscle-Ups slipped through and got an unjustified
-        //     "Drop Set Finisher" stamp without a truthful regression pathway.
-        //   * `category === 'strength'` was allowed, which let primary-strength
-        //     compounds qualify as drop-set targets.
-        //   * No check against the weekly role's intensity or method allowance.
-        //
-        // New doctrine gates (all must pass for a row to qualify):
-        //   1. Not skill-pillar (existing).
-        //   2. Not heavy/power AS DEFINED BY EXPANDED NAME LIST + transition
-        //      movement keywords + skill-target keywords.
-        //   3. Not selectionReason 'primary' (existing).
-        //   4. Not already grouped/methoded (existing).
-        //   5. CATEGORY: `accessory` or `core` ONLY. `strength` is removed —
-        //      strength rows are doctrine-protected from generic drop-stamping.
-        //   6. WEEKLY-ROLE: weeklyRole.intensityClass !== 'low' AND weeklyRole
-        //      .methodAllowance.density !== 'blocked' (skill-quality and
-        //      recovery days don't earn drop sets even if user prefs include).
-        // ----------------------------------------------------------------------
-        const SKILL_ADJACENT_NAME_TOKENS = [
-          'chest-to-bar', 'chest to bar', 'c2b',
-          'archer', 'typewriter', 'one-arm', 'one arm', 'single arm', 'single-arm',
-          'muscle-up', 'muscle up',
-          'pistol', 'shrimp',
-          'planche', 'iron cross', 'maltese',
-          'front lever', 'back lever',
-          'handstand push', 'hspu',
-          'weighted',
-          // explosive/power tokens (already partially in isHeavyOrPower; restate
-          // here for symmetry so this gate is the single source of truth).
-          'explosive', 'plyometric', 'ballistic', 'clapping', 'kipping',
-        ]
-        const isSkillAdjacentOrSkillTarget = (ex: typeof exs[number]): boolean => {
-          if (!ex) return true
-          const n = (ex.name || '').toLowerCase()
-          if (SKILL_ADJACENT_NAME_TOKENS.some((tok) => n.includes(tok))) return true
-          // Defensive: any row whose selectionReason / note hints at primary
-          // skill expression or transition movement.
-          const reason = (ex.selectionReason || '').toLowerCase()
-          if (
-            reason.includes('skill') ||
-            reason.includes('transition') ||
-            reason.includes('muscle_up') ||
-            reason.includes('front_lever') ||
-            reason.includes('planche')
-          ) {
-            return true
-          }
-          return false
-        }
-
-        const roleBlocksDropSet =
-          !!weeklyRoleForThisSession &&
-          (weeklyRoleForThisSession.intensityClass === 'low' ||
-            weeklyRoleForThisSession.methodAllowance.density === 'blocked')
-
-        let dropSetTarget: typeof exs[number] | null = null
-        let dropSetIdx = -1
-        let dropSetRejectionReason: string | null = null
-        if (userWantsDrop && roleBlocksDropSet) {
-          dropSetRejectionReason = `weekly_role_blocks_drop_sets (role=${weeklyRoleForThisSession?.roleId} intensity=${weeklyRoleForThisSession?.intensityClass} densityGate=${weeklyRoleForThisSession?.methodAllowance.density})`
-        }
-        if (userWantsDrop && !roleBlocksDropSet) {
-          for (let i = exs.length - 1; i >= lateBoundary; i--) {
-            const ex = exs[i]
-            if (!ex) continue
-            if (isSkillPillar(ex)) continue
-            if (isHeavyOrPower(ex)) continue
-            if (isSkillAdjacentOrSkillTarget(ex)) continue
-            if ((ex.selectionReason || '').includes('primary')) continue
-            if (rowHasMethodOrGroup(ex)) continue
-            // [DROP-SET-DOCTRINE-LOCK] Tightened category allow-list.
-            // `strength` removed — primary/secondary strength rows are
-            // doctrine-protected from a generic drop-set stamp.
-            if (ex.category === 'accessory' || ex.category === 'core') {
-              dropSetTarget = ex
-              dropSetIdx = i
-              break
-            }
-          }
-          if (dropSetTarget && dropSetIdx !== -1) {
-            dropSetTarget.method = 'drop_set'
-            dropSetTarget.methodLabel = 'Drop Set Finisher'
-            dropSetTarget.setExecutionMethod = 'drop_set'
-            methodMaterializationResult.appliedMethods.push('drop_sets')
-            methodMaterializationResult.structureDecisions.push({
-              block: 'late_accessory',
-              method: 'drop_set',
-              rationale: `Drop set applied to ${dropSetTarget.name} (position ${dropSetIdx}/${exs.length - 1}) — user selected drop_sets, doctrine gates passed (category=${dropSetTarget.category}, role=${weeklyRoleForThisSession?.roleId ?? 'none'}, no skill-adjacent / no primary / no transition tokens) and this is a late safe accumulation row`,
-            })
-            console.log('[TRAINING-METHOD-MATERIALIZED] Drop set applied:', {
-              dayNumber: session.dayNumber,
-              exercise: dropSetTarget.name,
-              position: dropSetIdx,
-              category: dropSetTarget.category,
-              roleId: weeklyRoleForThisSession?.roleId,
-            })
-          } else {
-            const reason = dropSetRejectionReason || 'No safe late-accessory candidate available (all qualifying rows are skill-primary, heavy/power, skill-adjacent (chest-to-bar / archer / typewriter / muscle-up / etc.), primary-tagged, strength-category, or already grouped/methoded)'
-            methodMaterializationResult.rejectedMethods.push({
-              method: 'drop_sets',
-              reason,
-            })
-            console.log('[TRAINING-METHOD-REJECTED] Drop set rejected:', {
-              dayNumber: session.dayNumber,
-              roleId: weeklyRoleForThisSession?.roleId,
-              reason,
-            })
-          }
-        } else if (userWantsDrop && roleBlocksDropSet) {
-          methodMaterializationResult.rejectedMethods.push({
-            method: 'drop_sets',
-            reason: dropSetRejectionReason!,
-          })
-          console.log('[TRAINING-METHOD-REJECTED] Drop set blocked by weekly role:', {
-            dayNumber: session.dayNumber,
-            roleId: weeklyRoleForThisSession?.roleId,
-            reason: dropSetRejectionReason,
-          })
-        }
-
-        // -------- REST_PAUSE on deepest remaining safe row --------
-        if (userWantsRP) {
-          let rpTarget: typeof exs[number] | null = null
-          let rpIdx = -1
-          for (let i = exs.length - 1; i >= lateBoundary; i--) {
-            const ex = exs[i]
-            if (!ex) continue
-            if (ex === dropSetTarget) continue // Don't double-stamp
-            if (isSkillPillar(ex)) continue
-            if (isHeavyOrPower(ex)) continue
-            if ((ex.selectionReason || '').includes('primary')) continue
-            if (rowHasMethodOrGroup(ex)) continue
-            if (
-              ex.category === 'strength' ||
-              ex.category === 'accessory'
-            ) {
-              rpTarget = ex
-              rpIdx = i
-              break
-            }
-          }
-          if (rpTarget && rpIdx !== -1) {
-            rpTarget.method = 'rest_pause'
-            rpTarget.methodLabel = 'Rest-Pause Sets'
-            rpTarget.setExecutionMethod = 'rest_pause'
-            methodMaterializationResult.appliedMethods.push('rest_pause')
-            methodMaterializationResult.structureDecisions.push({
-              block: 'late_accessory',
-              method: 'rest_pause',
-              rationale: `Rest-pause applied to ${rpTarget.name} (position ${rpIdx}/${exs.length - 1}) — user selected rest_pause and this is a late safe accumulation row`,
-            })
-            console.log('[TRAINING-METHOD-MATERIALIZED] Rest-pause applied:', {
-              dayNumber: session.dayNumber,
-              exercise: rpTarget.name,
-              position: rpIdx,
-              category: rpTarget.category,
-            })
-          } else {
-            methodMaterializationResult.rejectedMethods.push({
-              method: 'rest_pause',
-              reason: 'No safe late-accessory candidate available (all qualifying rows are skill-primary, heavy compounds, primary-tagged, already grouped/methoded, or claimed by drop_set)',
-            })
-          }
-        }
-      }
-    }
-
-    // -------------------------------------------------------------------------
-    // [GROUPED-BLOCK-COHERENCE-LOCK]
-    // Harmonize set counts across all members of every grouped block (any
-    // exercises sharing a `blockId`). The live workout consumer at
-    // components/workout/StreamlinedWorkoutSession.tsx:347 reads
-    // `firstEx.sets` as `targetRounds` for the entire grouped block, so
-    // members with mismatched `sets` would silently force the user to perform
-    // the FIRST member's count regardless of their own (e.g. block of A1:6
-    // sets pull-ups + A2:3 sets dips → 6 rounds total, where A2 was authored
-    // for 3). The fix: at materialization time, equalize all members' `sets`
-    // to the FIRST member's count. The first member is the writer-intended
-    // owner of the block's rounds (it's the leader prefixed A1/B1/etc.).
-    //
-    // Doctrine notes:
-    //   * This runs AFTER drop_set/top_set/rest_pause materialization, so
-    //     set-execution methods (which carry their own dosage) are unaffected
-    //     because they do NOT share blockId with grouped members.
-    //   * If a block has only one member (degenerate), nothing happens.
-    //   * Cluster groupings written upstream ALSO benefit from this — cluster
-    //     members share blockId and should share rounds.
-    //   * No new blockId taxonomy. We trust the existing writer.
-    // -------------------------------------------------------------------------
-    if (Array.isArray(session.exercises) && session.exercises.length > 0) {
-      const blockMembers = new Map<string, typeof session.exercises>()
-      for (const ex of session.exercises) {
-        if (!ex || !ex.blockId) continue
-        const list = blockMembers.get(ex.blockId) || []
-        list.push(ex)
-        blockMembers.set(ex.blockId, list)
-      }
-      const harmonizationAudit: Array<{ blockId: string; leader: string; targetRounds: number; harmonizedMembers: Array<{ name: string; before: number; after: number }> }> = []
-      for (const [blockId, members] of blockMembers) {
-        if (members.length < 2) continue
-        const leader = members[0]
-        const targetRounds =
-          typeof leader.sets === 'number' && leader.sets >= 1
-            ? leader.sets
-            : parseInt(String(leader.sets || 3), 10) || 3
-        const changed: Array<{ name: string; before: number; after: number }> = []
-        for (let i = 1; i < members.length; i++) {
-          const m = members[i]
-          const before =
-            typeof m.sets === 'number' && m.sets >= 1
-              ? m.sets
-              : parseInt(String(m.sets || 3), 10) || 3
-          if (before !== targetRounds) {
-            m.sets = targetRounds
-            changed.push({ name: m.name, before, after: targetRounds })
-          }
-        }
-        if (changed.length > 0) {
-          harmonizationAudit.push({
-            blockId,
-            leader: leader.name,
-            targetRounds,
-            harmonizedMembers: changed,
-          })
-        }
-      }
-      if (harmonizationAudit.length > 0) {
-        console.log('[GROUPED-BLOCK-COHERENCE-LOCK] grouped-rounds harmonized', {
-          dayNumber: session.dayNumber,
-          roleId: weeklyRoleForThisSession?.roleId ?? 'none',
-          blocksHarmonized: harmonizationAudit.length,
-          details: harmonizationAudit,
-        })
-      }
-    }
-
+    
     // -------------------------------------------------------------------------
     // UPDATE STYLE METADATA WITH FULL METHOD MATERIALIZATION RESULTS
     // This ensures durable truth survives save/load/render cycles
     // -------------------------------------------------------------------------
     const existingStyleMeta = session.styleMetadata || {}
     const hasCircuitsApplied = methodMaterializationResult.appliedMethods.includes('circuits')
-    // [PHASE 3C PACKAGING-TRUTH-LOCK] Honest density signal.
-    // Pre-3C: `hasDensityApplied = hasCircuitsApplied` aliased these two
-    // distinct grouped-method styles together, so a session with circuits
-    // (round-based) silently reported density (timed work block) as applied
-    // even though no density_block styledGroup ever emitted. The new
-    // multi-block materializer above can emit real density_block blockIds
-    // independently, so this signal must reflect what actually materialized.
-    const hasDensityApplied = methodMaterializationResult.appliedMethods.includes('density_blocks')
+    const hasDensityApplied = hasCircuitsApplied // Circuits are a form of density
     const hasClusterApplied = methodMaterializationResult.appliedMethods.includes('cluster_sets')
     
     // Rebuild styledGroups from final exercise state
@@ -14414,18 +12275,6 @@ async function generateAdaptiveProgramImpl(
         case 'density':
         case 'density_blocks':
           return 'density_block'
-        // [PHASE 3C PACKAGING-TRUTH-LOCK] Set-execution methods are PER-ROW
-        // execution cues, not grouped structure. They map to 'straight' so
-        // the styledGroup contract honestly reports zero grouped blocks for
-        // a single-row method cue, exactly mirroring the cluster method-only
-        // behavior at L13034 below. The row-level method chip corridor still
-        // renders the cue via ex.method + ex.methodLabel + ex.setExecutionMethod.
-        case 'top_set':
-        case 'top_sets':
-        case 'drop_set':
-        case 'drop_sets':
-        case 'rest_pause':
-          return 'straight'
         default:
           return 'straight'
       }
@@ -14476,40 +12325,11 @@ async function generateAdaptiveProgramImpl(
     // Add remaining ungrouped exercises as straight sets
     const ungroupedExercises = (session.exercises || []).filter(e => !e.blockId)
     for (const ex of ungroupedExercises) {
-      // [CLUSTER-SEMANTIC-PARITY] For ungrouped (single-exercise) rows, we
-      // apply the method-vs-structure split directly at styledGroup emission.
-      //
-      //   Cluster         -> METHOD-ONLY execution cue for a SINGLE exercise.
-      //                      Emit groupType='straight' so the scanner and the
-      //                      card adapter both read the session's grouped
-      //                      STRUCTURE honestly (zero grouped blocks). The
-      //                      execution-cue truth survives via ex.method =
-      //                      'cluster', which drives the row-level method
-      //                      chip and the card's "Method cues present:
-      //                      Cluster" status line.
-      //
-      //   Density_block   -> Stays in the grouped-structure taxonomy per the
-      //                      governor's method list. A 1-member density_block
-      //                      is a legitimate style the card can render with a
-      //                      single-member block frame (adapter's
-      //                      minMembersFor('density_block') = 2 still gates
-      //                      the final render, but we emit the structural
-      //                      intent here so the dispatcher can decide).
-      //
-      //   Superset / Circuit -> Never emit without a blockId. These are
-      //                      pairing-only methods -- a 1-member superset /
-      //                      circuit has no meaning. Fall through to
-      //                      'straight'.
-      //
-      // Without this split, a single-row cluster exercise produced a
-      // non-straight styledGroup that set `hasAnyStyledNonStraightRaw = true`
-      // in the card adapter, forcing the card through a defensive
-      // METHOD_ONLY_FLAT reroute. Now the card reaches honest flat_category
-      // directly and the scanner reports BLOCKS: 0 / METHODS: 1x cluster
-      // without any ambiguity.
-      const normalized = normalizeFinalGroupType(ex.method)
-      const groupType: 'straight' | 'density_block' =
-        normalized === 'density_block' ? 'density_block' : 'straight'
+      // [FINAL-GROUPED-TRUTH-NORMALIZER] Use the same normalizer here so an
+      // ungrouped exercise carrying a non-straight per-exercise method (most
+      // commonly 'cluster' from cluster_sets materialization, but defensively
+      // also 'density_block' / 'density') cannot silently collapse to straight.
+      const groupType = normalizeFinalGroupType(ex.method)
       finalStyledGroups.push({
         id: `straight_${ex.id}`,
         groupType,
@@ -14520,10 +12340,14 @@ async function generateAdaptiveProgramImpl(
           trainingMethod: ex.method || 'straight_sets',
           methodRationale: ex.methodLabel || ex.selectionReason || 'Standard execution',
         }],
-        instruction: groupType === 'density_block'
+        instruction: groupType === 'cluster' 
+          ? 'Use brief 10-20s intra-set rest to maintain quality'
+          : groupType === 'density_block'
           ? 'Complete prescribed work within the timed block'
           : 'Complete all sets before moving on',
-        restProtocol: groupType === 'density_block'
+        restProtocol: groupType === 'cluster'
+          ? '10-20s intra-set, 120-180s inter-set'
+          : groupType === 'density_block'
           ? '30-60s between rounds'
           : ex.category === 'skill' ? '120-180s' : '60-90s',
       })
@@ -14540,36 +12364,14 @@ async function generateAdaptiveProgramImpl(
     // promotes fake grouping to the UI.
     const finalNonStraightStyledGroupsCount = finalStyledGroups.filter(g => g.groupType !== 'straight').length
     const finalExerciseBlockIdCount = (session.exercises || []).filter(e => !!e.blockId).length
-    // [CLUSTER-SEMANTIC-PARITY] Method-only cluster (ex.method='cluster'
-    // without blockId) is intentionally emitted as groupType='straight' in
-    // the ungrouped rebuild above -- it is a row-level execution cue, not
-    // grouped structure. Excluding it from this count so the invariant does
-    // not falsely report FLATTENED for the honest method-only case.
     const finalExerciseNonStraightMethodCount = (session.exercises || []).filter(e => {
       const m = e.method
-      if (!m || m === 'straight' || m === 'straight_sets') return false
-      // Method-only cluster on an ungrouped exercise is not structural.
-      if (m === 'cluster' && !e.blockId) return false
-      // [PHASE 3C PACKAGING-TRUTH-LOCK] Set-execution methods (top_set,
-      // drop_set, rest_pause) are per-row execution cues, never structural.
-      // Excluding them here so the invariant does not falsely report
-      // FLATTENED for an honest method-only single-row stamp.
-      if ((m === 'top_set' || m === 'drop_set' || m === 'rest_pause') && !e.blockId) return false
-      return true
+      return !!m && m !== 'straight' && m !== 'straight_sets'
     }).length
-    // Cluster application is method-only when it did not land on a grouped
-    // block -- treat it the same way for the "grouped methods applied"
-    // signal so the invariant does not warn purely because cluster_sets was
-    // applied as an execution cue.
-    const clusterAppliedAsStructuralBlock = (session.exercises || []).some(
-      e => e.method === 'cluster' && !!e.blockId,
-    )
     const groupedMethodsAppliedForSession =
       methodMaterializationResult.appliedMethods.some(m =>
-        m === 'supersets' || m === 'circuits' || m === 'density_blocks',
-      ) ||
-      (methodMaterializationResult.appliedMethods.includes('cluster_sets') && clusterAppliedAsStructuralBlock) ||
-      (session.styleMetadata?.hasSupersetsApplied === true)
+        m === 'supersets' || m === 'circuits' || m === 'density_blocks' || m === 'cluster_sets',
+      ) || (session.styleMetadata?.hasSupersetsApplied === true)
     const hasGroupedExerciseEvidence =
       finalExerciseBlockIdCount > 0 || finalExerciseNonStraightMethodCount > 0
     let finalGroupedTruthVerdict: 'FINAL_GROUPED_TRUTH_PRESENT' | 'FINAL_GROUPED_TRUTH_FLATTENED' | 'FINAL_GROUPED_TRUTH_HONESTLY_STRAIGHT'
@@ -14595,14 +12397,8 @@ async function generateAdaptiveProgramImpl(
     
     // Determine primary style based on applied methods
     // [ROOT-CAUSE-FIX] Check CURRENT session.styleMetadata for supersets, not stale existingStyleMeta
-    // [PHASE 3C PACKAGING-TRUTH-LOCK] Include density_blocks in the priority
-    // ladder so a session whose only grouped method is a real density block
-    // (now possible thanks to the multi-block materializer) reports
-    // primaryStyle='density_blocks' instead of silently demoting to
-    // straight_sets. Order: circuits > supersets > density > cluster > straight.
     const primaryStyle = hasCircuitsApplied ? 'circuits' :
       session.styleMetadata?.hasSupersetsApplied ? 'supersets' :
-      hasDensityApplied ? 'density_blocks' :
       hasClusterApplied ? 'cluster_sets' : 'straight_sets'
     
     // [DOCTRINE-REJECTION-COMPLETION] Fill in truthful rejection reasons for user-selected
@@ -14665,14 +12461,6 @@ async function generateAdaptiveProgramImpl(
     // not applied even when they were successfully created.
     const currentSupersetsApplied = session.styleMetadata?.hasSupersetsApplied || false
     
-    // [CLUSTER-DECISION-EVIDENCE] Pull the stashed decision from the
-    // materialization result (captured inside the `if (clusterTarget)`
-    // block above). Undefined when cluster was not applied -- the card
-    // uses its presence as the single gate for rendering the evidence row.
-    const stashedClusterDecision = (methodMaterializationResult as unknown as {
-      clusterDecision?: NonNullable<NonNullable<typeof session.styleMetadata>['clusterDecision']>
-    }).clusterDecision
-    
     session.styleMetadata = {
       ...existingStyleMeta,
       primaryStyle,
@@ -14680,63 +12468,14 @@ async function generateAdaptiveProgramImpl(
       hasCircuitsApplied,
       hasDensityApplied,
       hasClusterApplied,
-      clusterDecision: stashedClusterDecision,
       structureDescription: methodMaterializationResult.structureDecisions.length > 0
         ? methodMaterializationResult.structureDecisions.map(d => d.rationale).join('; ')
         : existingStyleMeta.structureDescription || 'Standard straight sets',
-      // [PACKAGING-TRUTH-OWNERSHIP-LOCK] appliedMethods is now derived strictly
-      // from MATERIALIZATION-TRUTH — i.e. the single authoritative owner the
-      // pre-materialization scrub (L12332) and the finalStyledGroups rebuild
-      // (L13386) install. Pre-lock, this field UNION'd
-      // `existingStyleMeta.appliedMethods` / `session.styleMetadata.appliedMethods`
-      // — both of which carry the LATE-CORRIDOR `applySessionStylePreferences`
-      // claim from `generateAdaptiveSession` (L26798) — with the upstream
-      // materializer's output. That union let preference-only claims survive
-      // as "applied" even when the upstream materializer rejected the method
-      // (rotation handed the day to a different style, feasibility gate failed,
-      // session was skill-dominated, etc.). Result: `styleMeta.appliedMethods`
-      // claimed e.g. "circuits applied" while `finalStyledGroups` contained
-      // zero circuit blocks — the exact "method eligibility mistaken for
-      // method materialization" symptom (Section 5.3 of the audit prompt).
-      // The card already detected this drift downstream (see
-      // AdaptiveSessionCard L2884-L2912 `falsePositiveApplied`) but had to
-      // re-classify the leaked methods as rejected with a generic stub reason
-      // instead of trusting the upstream materializer's truth in the first
-      // place. By locking ownership here, every consumer of
-      // `styleMetadata.appliedMethods` (Method decisions surface, scanner
-      // strip, audit logs, save/route/page) reads the same materialization-
-      // truth the visible body renders.
-      //
-      // The late-corridor's per-decision evidence (drivers, blockers, bundle
-      // signals consumed) is NOT discarded — it remains preserved on
-      // `styleMetadata.methodDecisionEvidence` via `...existingStyleMeta`
-      // above, so the audit trail proving "why each preferred method was
-      // applied/rejected/deferred" survives intact. Only the *binary*
-      // applied/rejected verdict now defers to the upstream owner.
-      appliedMethods: (() => {
-        const result: string[] = []
-        const hasSupersetGroup = finalStyledGroups.some(g => g.groupType === 'superset')
-        const hasCircuitGroup = finalStyledGroups.some(g => g.groupType === 'circuit')
-        const hasDensityGroup = finalStyledGroups.some(g => g.groupType === 'density_block')
-        // Supersets: trust the upstream superset writer's flag OR the rebuilt
-        // grouped truth. Both sources are written by the materialization owner.
-        if (currentSupersetsApplied || hasSupersetGroup) result.push('supersets')
-        // Circuits / density: trust the materialization pass's appliedMethods
-        // signal cross-checked against rebuilt grouped truth, so a method
-        // that materialized as a structural block is reported applied even
-        // if a downstream rename of the materialization signal drifts.
-        if (hasCircuitsApplied || hasCircuitGroup) result.push('circuits')
-        if (hasDensityApplied || hasDensityGroup) result.push('density_blocks')
-        // Cluster is a SET-EXECUTION METHOD, not a grouped structure. The
-        // method-vs-structure split (taxonomy-lock at L13483-L13514) means
-        // single-row cluster does NOT emit a grouped block; trust the
-        // materialization pass's hasClusterApplied signal which fires when
-        // ex.method='cluster' was actually written onto a session exercise.
-        if (hasClusterApplied) result.push('cluster_sets')
-        // Baseline always present.
-        result.push('straight_sets')
-        return [...new Set(result)]
-      })(),
+      appliedMethods: [...new Set([
+        ...(session.styleMetadata?.appliedMethods || existingStyleMeta.appliedMethods || []), // [FIX] Also use current
+        ...methodMaterializationResult.appliedMethods,
+        'straight_sets', // Always include as baseline
+      ])],
       rejectedMethods: completedRejectedMethods,
       styledGroups: finalStyledGroups,
       // Audit trail for materialization
@@ -14768,48 +12507,7 @@ async function generateAdaptiveProgramImpl(
       },
       complexityLevel: sessionMethodIntentContract.complexityLevel,
     }
-
-    // =========================================================================
-    // [METHOD-MATERIALIZATION-SUMMARY-LOCK]
-    // Stamp the SINGLE CANONICAL session-level method verdict the visible
-    // program corridor consumes. Built strictly from FINAL post-materialization
-    // truth:
-    //   - finalStyledGroups (already locked above as the materialized owner)
-    //   - session.exercises[].method / .setExecutionMethod / .blockId
-    //     (already written by superset / circuit / cluster / density passes)
-    //   - styleMetadata.clusterDecision (already written when cluster applied)
-    //
-    // NOT populated from preferences, eligibility, intent contract, or
-    // blueprint-allowed flags. Those signals stay where they already live
-    // (methodIntentContract above) for evidence/audit purposes; this object
-    // is strictly the visible-outcome verdict every UI consumer reads first.
-    // =========================================================================
-    {
-      const summary = deriveMethodMaterializationSummary({
-        exercises: session.exercises as Array<{
-          blockId?: string | null
-          method?: string | null
-          setExecutionMethod?: string | null
-          name?: string | null
-        }>,
-        styleMetadata: {
-          styledGroups: finalStyledGroups,
-          clusterDecision: session.styleMetadata.clusterDecision,
-        },
-      })
-      session.styleMetadata.methodMaterializationSummary = summary
-      console.log('[METHOD-MATERIALIZATION-SUMMARY-STAMPED]', {
-        dayNumber: session.dayNumber,
-        focus: session.focus,
-        dominantRenderMode: summary.dominantRenderMode,
-        groupedBlockCount: summary.groupedBlockCount,
-        groupedMethodCounts: summary.groupedMethodCounts,
-        rowExecutionCounts: summary.rowExecutionCounts,
-        materializedMethods: summary.materializedMethods,
-        primaryPackagingOutcome: summary.primaryPackagingOutcome,
-      })
-    }
-
+    
     console.log('[TRAINING-METHOD-MATERIALIZATION-COMPLETE]', {
       dayNumber: session.dayNumber,
       focus: session.focus,
@@ -14818,36 +12516,6 @@ async function generateAdaptiveProgramImpl(
       styledGroupsCount: finalStyledGroups.length,
       primaryStyle,
     })
-
-    // [PACKAGING-TRUTH-OWNERSHIP-LOCK] Verdict log proving the late-corridor
-    // leak is suppressed. `lateCorridorClaim` is whatever
-    // applySessionStylePreferences (run inside generateAdaptiveSession) wrote
-    // onto session.styleMetadata.appliedMethods before the upstream
-    // materialization scrub+rebuild ran. `materializedTruth` is the new
-    // upstream-owned, finalStyledGroups-cross-checked appliedMethods.
-    // `leakSuppressed` lists any method the late corridor claimed as applied
-    // that the materializer did NOT confirm — these are now correctly absent
-    // from `materializedTruth` rather than surviving as false positives.
-    {
-      const lateCorridorClaim: string[] = Array.isArray(existingStyleMeta.appliedMethods)
-        ? existingStyleMeta.appliedMethods
-        : []
-      const materializedTruth: string[] = session.styleMetadata.appliedMethods || []
-      const leakSuppressed = lateCorridorClaim.filter(
-        m => m !== 'straight_sets' && !materializedTruth.includes(m),
-      )
-      console.log('[PACKAGING-TRUTH-OWNERSHIP-LOCK-VERDICT]', {
-        dayNumber: session.dayNumber,
-        focus: session.focus,
-        lateCorridorClaim,
-        materializedTruth,
-        leakSuppressed,
-        finalNonStraightStyledGroupsCount: finalStyledGroups.filter(g => g.groupType !== 'straight').length,
-        verdict: leakSuppressed.length > 0
-          ? 'LEAK_SUPPRESSED_LATE_CLAIM_NOT_BACKED_BY_MATERIALIZATION'
-          : 'NO_LEAK_LATE_CLAIM_AND_MATERIALIZATION_AGREE',
-      })
-    }
     
     postSessionStep = 'training_method_materialization_complete'
 
@@ -14947,96 +12615,11 @@ async function generateAdaptiveProgramImpl(
             // can see grouped blocks and treat them as atomic units.
             const regeneratedVariants = generateSessionVariants(decoratedFullSelection, fullDuration)
 
-            // [VARIANT-LAUNCHABILITY-CONTRACT] Belt-and-suspenders filter: the
-            // engine already gates pushes through isVariantLaunchable, so this
-            // should be a no-op in practice. It exists to guarantee that any
-            // future compressMain edge case that emits a hollow SelectedExercise
-            // row cannot survive the reconcile pass either. Rejected variants
-            // are logged so the upstream break (compressor emitted unusable
-            // rows for this day) stays auditable instead of silently
-            // propagating as a metadata-only tab.
-            //
-            // [VARIANT-MATERIAL-DISTINCTNESS-CONTRACT] Second gate: after
-            // grouped-truth decoration, compressMain's atomic-unit awareness
-            // can legitimately preserve MORE exercises than the pre-reconcile
-            // compression (groups survive as intact units instead of being
-            // half-broken). If that preservation is strong enough that the
-            // regenerated 45/30 ends up identical in body to Full, we must
-            // reject the short variant here rather than propagate a cosmetic
-            // tab downstream. The filter walks the regenerated list in order
-            // (Full is always first, then 45, then 30) and keeps each
-            // candidate only if it is materially distinct from every
-            // already-accepted larger variant.
-            const launchableRegenerated: SessionVariant[] = []
-            for (const v of regeneratedVariants) {
-              if (!isVariantLaunchable(v)) {
-                console.warn('[VARIANT-LAUNCHABILITY-CONTRACT] Dropping non-launchable regenerated variant', {
-                  dayNumber: session.dayNumber,
-                  focus: session.focus,
-                  variantLabel: v?.label,
-                  variantDuration: v?.duration,
-                  mainCount: Array.isArray(v?.selection?.main) ? v.selection.main.length : 'not_array',
-                })
-                continue
-              }
-              // The first accepted variant is always Full (compressionLevel
-              // 'none' or largest duration); subsequent shorts must be
-              // materially distinct from every accepted-larger variant to
-              // earn their place in the emitted list.
-              let rejectedAsCosmetic: { matchedFields: string[]; against: string } | null = null
-              for (const accepted of launchableRegenerated) {
-                const distinctness = areVariantsMateriallyDistinct(v, accepted)
-                if (!distinctness.materiallyDistinct) {
-                  rejectedAsCosmetic = {
-                    matchedFields: distinctness.matchedFields,
-                    against: accepted.label,
-                  }
-                  break
-                }
-              }
-              if (rejectedAsCosmetic) {
-                console.warn('[VARIANT-MATERIAL-DISTINCTNESS-CONTRACT] Dropping cosmetic regenerated variant', {
-                  dayNumber: session.dayNumber,
-                  focus: session.focus,
-                  variantLabel: v.label,
-                  variantDuration: v.duration,
-                  against: rejectedAsCosmetic.against,
-                  matchedFields: rejectedAsCosmetic.matchedFields,
-                  verdict: 'REJECTED_POST_RECONCILE_COSMETIC_SHORT',
-                })
-                continue
-              }
-              launchableRegenerated.push(v)
-            }
+            // Overwrite -- the regenerated list is strictly richer than the prior
+            // one (same Full, grouped-aware 45/30). Preserve the array reference
+            // shape by reassigning session.variants.
+            session.variants = regeneratedVariants
 
-            // Overwrite -- the filtered regenerated list is strictly richer
-            // than the prior one (same Full, grouped-aware 45/30, hollow
-            // variants rejected). If every regenerated variant failed (e.g.
-            // decorated selection somehow produced unusable rows), fall back
-            // to the pre-reconcile variants rather than wiping truth away.
-            if (launchableRegenerated.length > 0) {
-              session.variants = launchableRegenerated
-            } else {
-              console.warn('[VARIANT-LAUNCHABILITY-CONTRACT] All regenerated variants rejected - keeping pre-reconcile list', {
-                dayNumber: session.dayNumber,
-                focus: session.focus,
-                priorVariantCount: Array.isArray(session.variants) ? session.variants.length : 0,
-              })
-            }
-
-            // Compute total prescribed sets for each accepted variant so the
-            // log surfaces every axis of material distinctness (count, sets,
-            // duration). This makes "why did 45 survive but 30 didn't" or
-            // "why did both shorts get dropped as cosmetic" auditable from
-            // one log entry, without needing to re-derive the comparison.
-            const totalSetsOf = (v: SessionVariant): number => {
-              let total = 0
-              for (const row of v.selection.main || []) {
-                const sets = (row as unknown as { sets?: unknown }).sets
-                if (typeof sets === 'number' && Number.isFinite(sets)) total += sets
-              }
-              return total
-            }
             console.log('[VARIANT-PARENT-TRUTH-RECONCILE]', {
               dayNumber: session.dayNumber,
               focus: session.focus,
@@ -15044,18 +12627,15 @@ async function generateAdaptiveProgramImpl(
               sessionExercisesWithGroupedTruth: sessionExerciseById.size,
               rowsDecoratedWithBlockId: decoratedCount,
               regeneratedVariantCount: regeneratedVariants.length,
-              launchableVariantCount: launchableRegenerated.length,
-              rejectedVariantCount: regeneratedVariants.length - launchableRegenerated.length,
-              launchableVariantMainCounts: launchableRegenerated.map(v => ({
+              regeneratedVariantMainCounts: regeneratedVariants.map(v => ({
                 label: v.label,
                 duration: v.duration,
                 mainCount: v.selection.main.length,
-                totalSets: totalSetsOf(v),
                 groupedRowCount: v.selection.main.filter(m =>
                   !!(m.exercise as unknown as { blockId?: string }).blockId
                 ).length,
               })),
-              verdict: 'FULL_IS_PARENT_TRUTH__SHORTS_DERIVED_WITH_ATOMIC_GROUPS__COSMETIC_REJECTED',
+              verdict: 'FULL_IS_PARENT_TRUTH__SHORTS_DERIVED_WITH_ATOMIC_GROUPS',
             })
 
             postSessionStep = 'variant_parent_truth_reconciled'
@@ -15079,280 +12659,7 @@ async function generateAdaptiveProgramImpl(
         })
       }
     }
-
-    // =========================================================================
-    // [PHASE AB3] SHORT SESSION DOCTRINE RECOMPOSITION
-    // ROOT GOAL: when the user selects 45 Min / 30 Min on the Program card,
-    // doctrine must have actually scored the resulting body — not just
-    // delivered a smaller compression copy. This pass runs AFTER the
-    // VARIANT-PARENT-TRUTH-RECONCILE block (so 45/30 already inherit Full's
-    // grouped truth and atomic-unit awareness) and BEFORE post-mutation core
-    // integrity check (so any analysis-side telemetry is included in the
-    // session that ships).
-    //
-    // CRITICAL DESIGN GUARANTEES:
-    //   1. This pass does NOT touch `variant.selection.main`. It reads the
-    //      already-reconciled body and writes a JSON-safe sidecar
-    //      `variant.recompositionTruth`. Start Workout consumes
-    //      `variant.selection.main` via `buildSelectedVariantMain` — that
-    //      path is unchanged, so executable parity is preserved.
-    //   2. When context is missing or analysis errors, the recomposer emits
-    //      `engine: 'fallback_compression'` instead of claiming doctrine
-    //      recomposition. The Program UI keys off this field and renders a
-    //      different label so the user is never told "doctrine recomposed"
-    //      for a fallback-compression body.
-    //   3. The per-variant ledger this stamps follows AB1 semantics: only
-    //      `mutated`/`visible`/`executable` count as applied. Considered,
-    //      eligible, blocked, suppressed, no_target, and audit_only are
-    //      separate axes. UI consumers that surface "applied" counts must
-    //      therefore continue to use the AB1-safe categories.
-    //   4. Method combinations are NEVER hard-blocked in this pass. The
-    //      recomposer only READS what materialisation already applied and
-    //      reports which methods carried into each short variant. Multiple
-    //      methods coexisting in one day (superset + cluster, etc.) flow
-    //      through unchanged.
-    // =========================================================================
-    if (Array.isArray(session.variants) && session.variants.length > 0) {
-      try {
-        const variants = session.variants as SessionVariantWithRecompositionTruth[]
-        // Full is always emitted first by generateSessionVariants. We treat
-        // it as parent truth for delta analysis. If for any reason the first
-        // variant is not the Full (compressionLevel !== 'none'), fall back
-        // to scanning for the largest-duration variant.
-        const fullVariant =
-          variants.find(v => v.compressionLevel === 'none') ||
-          [...variants].sort((a, b) => (b.duration ?? 0) - (a.duration ?? 0))[0]
-        const shortVariants = variants.filter(v => v !== fullVariant)
-
-        if (fullVariant && shortVariants.length > 0) {
-          // Pull doctrine context from the already-materialised session so the
-          // recomposer can honestly classify what carried into each short body.
-          // session.styleMetadata.appliedMethods is the post-materialisation
-          // truth (set by the materialiser at line ~14797). session.exercises
-          // is the post-mat row truth. selectedSkills come from the
-          // session-architecture truth when available, else we fall back to
-          // primary skill expressions detected in the main body.
-          const appliedMethodsThisSession: string[] = Array.isArray(
-            session.styleMetadata?.appliedMethods,
-          )
-            ? (session.styleMetadata?.appliedMethods as string[])
-            : []
-          const sessionExercisesPostMaterialization = Array.isArray(session.exercises)
-            ? session.exercises.map(ex => ({
-                id: (ex as { id?: string }).id,
-                exerciseId: (ex as { exerciseId?: string }).exerciseId,
-                name: (ex as { name?: string }).name,
-                blockId: (ex as { blockId?: string }).blockId,
-                method: (ex as { method?: string }).method,
-                methodLabel: (ex as { methodLabel?: string }).methodLabel,
-              }))
-            : []
-          // Prefer architecture-truth primarySkillExpressions when available;
-          // otherwise harvest names from selection rows that flagged
-          // primary-influence in their selectionContext. Recomposer treats
-          // this as a hint, not a hard requirement — analysis still runs if
-          // the list is empty.
-          const primarySkillExpressions: string[] = (() => {
-            const fromArchitecture = (sessionArchitectureTruth as unknown as {
-              primarySkillExpressions?: string[]
-            })?.primarySkillExpressions
-            if (Array.isArray(fromArchitecture) && fromArchitecture.length > 0) {
-              return fromArchitecture
-            }
-            const harvested: string[] = []
-            const fullMain = fullVariant.selection?.main || []
-            for (const row of fullMain) {
-              const ctx = (row as { selectionContext?: { influencingSkills?: Array<{ skillId?: string; influence?: string }> } })
-                .selectionContext
-              const inf = ctx?.influencingSkills || []
-              for (const i of inf) {
-                if (i.influence === 'primary' && typeof i.skillId === 'string') {
-                  if (!harvested.includes(i.skillId)) harvested.push(i.skillId)
-                }
-              }
-            }
-            return harvested
-          })()
-
-          // ===================================================================
-          // [PHASE AB4] CAUSAL SHORT-SESSION MATERIALIZATION
-          // ===================================================================
-          // Run the doctrine mutator on each short variant BEFORE the AB3
-          // recomposer analyses it. The mutator clones the variant, applies
-          // safe set / RPE / rest reductions on non-anchor / non-fatigue-
-          // managed accessory rows, and returns a NEW variant. We splice
-          // the mutated variant back into `session.variants` (replacing the
-          // reference at the same index) so:
-          //
-          //   - Program UI's selectedDisplayContract reads the mutated body,
-          //   - buildSelectedVariantMain at /workout/session reads the
-          //     mutated body (Start Workout parity is automatic),
-          //   - the AB3 recomposer below analyses the post-mutation body and
-          //     finds real Full→variant deltas (so applied > 0 when AB4
-          //     actually mutated something).
-          //
-          // The materialiser is pure: clone-then-mutate. Full is never
-          // touched. When no safe mutation is available, the mutator
-          // returns the seed unchanged and reports an honest
-          // `materializationState`, which AB3 then maps to engine
-          // `doctrine_preserved` / `no_safe_mutation` so the UI label is
-          // truthful (no "recomposed" headline with applied=0).
-          // ===================================================================
-          const materializationResults: MaterializeShortSessionVariantResult[] = []
-          for (let i = 0; i < shortVariants.length; i++) {
-            const seed = shortVariants[i]
-            try {
-              const result = materializeShortSessionVariant({
-                fullVariant,
-                compressedVariant: seed,
-                targetMinutes: typeof seed.duration === 'number' ? seed.duration : 0,
-                appliedMethodsThisSession,
-                primarySkillExpressions,
-                dayNumber: session.dayNumber,
-                focus: session.focus,
-              })
-              materializationResults.push(result)
-              // Splice the mutated variant back into the parent list so
-              // every downstream consumer sees the same body. Find the
-              // original index in `session.variants` (shortVariants is a
-              // filtered alias, but each entry is a reference into the
-              // parent array — we replace by reference equality).
-              const parentIdx = (session.variants as SessionVariant[]).indexOf(seed)
-              if (parentIdx >= 0) {
-                ;(session.variants as SessionVariant[])[parentIdx] = result.variant
-                shortVariants[i] = result.variant
-              }
-            } catch (matErr) {
-              console.warn('[PHASE-AB4-MATERIALIZE-FAILED]', {
-                dayNumber: session.dayNumber,
-                variantLabel: seed?.label,
-                duration: seed?.duration,
-                error: matErr instanceof Error ? matErr.message : String(matErr),
-              })
-              // Fallback record so downstream analyser stamps fallback engine.
-              materializationResults.push({
-                variant: seed,
-                materializationState: 'fallback',
-                mutationRecords: [
-                  {
-                    type: 'no_safe_mutation_available',
-                    exerciseNames: [],
-                    reason: matErr instanceof Error ? matErr.message : String(matErr),
-                  },
-                ],
-                mutatedRowCount: 0,
-              })
-            }
-          }
-
-          // AB4 telemetry — corridor PASS verifies this token is present and
-          // that materializationState matches the mutationRecords.
-          console.log('[PHASE-AB4-SHORT-SESSION-DOCTRINE-MUTATED]', {
-            dayNumber: session.dayNumber,
-            focus: session.focus,
-            shortVariantsMaterialised: materializationResults.length,
-            perVariant: materializationResults.map((r, i) => ({
-              label: shortVariants[i]?.label,
-              duration: shortVariants[i]?.duration,
-              materializationState: r.materializationState,
-              mutatedRowCount: r.mutatedRowCount,
-              mutationRecordCount: r.mutationRecords.length,
-              mutationTypes: r.mutationRecords.map(m => m.type),
-            })),
-            verdict: materializationResults.every(r => r.materializationState === 'materialized')
-              ? 'ALL_SHORTS_MATERIALIZED'
-              : materializationResults.some(r => r.materializationState === 'materialized')
-                ? 'PARTIAL_MATERIALIZATION'
-                : materializationResults.some(r => r.materializationState === 'fallback')
-                  ? 'FALLBACK_PRESENT'
-                  : 'ALL_PRESERVED_NO_SAFE_MUTATION',
-          })
-
-          const truths = recomposeSessionVariants({
-            fullVariant,
-            shortVariants,
-            sessionExercisesPostMaterialization,
-            appliedMethodsThisSession,
-            dayNumber: session.dayNumber,
-            focus: session.focus,
-            primarySkillExpressions,
-            materializations: materializationResults.map(r => ({
-              materializationState: r.materializationState,
-              mutationRecords: r.mutationRecords,
-              mutatedRowCount: r.mutatedRowCount,
-            })),
-          })
-
-          // Stamp truth onto each short variant in place. Truth is a plain
-          // JSON-safe object (no class instances / no functions), so it
-          // survives every serialisation layer between here and the Program
-          // UI. We also explicitly DO NOT clear the property on Full — Full
-          // is parent truth, not a recomposition.
-          for (let i = 0; i < shortVariants.length; i++) {
-            const v = shortVariants[i] as SessionVariantWithRecompositionTruth
-            v.recompositionTruth = truths[i]
-          }
-
-          // Honest emission verdict. Per-variant engine identity surfaces in
-          // the log so PASS/FAIL audits can verify that no short variant is
-          // silently labelled as doctrine-recomposed when it was actually
-          // fallback-compression.
-          console.log('[PHASE-AB3-SHORT-SESSION-DOCTRINE-RECOMPOSITION]', {
-            dayNumber: session.dayNumber,
-            focus: session.focus,
-            fullDuration: fullVariant.duration,
-            fullMainCount: fullVariant.selection?.main?.length ?? 0,
-            shortVariantsAnalysed: shortVariants.length,
-            appliedMethodsThisSession,
-            primarySkillExpressionsCount: primarySkillExpressions.length,
-            perVariant: shortVariants.map((v, i) => ({
-              label: v.label,
-              duration: v.duration,
-              mainCount: v.selection?.main?.length ?? 0,
-              engine: truths[i]?.engine,
-              strategy: truths[i]?.crunchTimeStrategy,
-              preservedAnchors: truths[i]?.preservedPriorityAnchors?.length ?? 0,
-              deferred: truths[i]?.deferredExercises?.length ?? 0,
-              setDeltas: truths[i]?.setDeltas?.length ?? 0,
-              rpeDeltas: truths[i]?.rpeDeltas?.length ?? 0,
-              restDeltas: truths[i]?.restDeltas?.length ?? 0,
-              methodChanges: truths[i]?.methodChanges?.length ?? 0,
-              ledger: truths[i]?.ledger,
-            })),
-            verdict: truths.every(t => t.engine === 'doctrine_recomposition')
-              ? 'ALL_SHORTS_DOCTRINE_RECOMPOSED'
-              : truths.some(t => t.engine === 'doctrine_recomposition')
-                ? 'PARTIAL_DOCTRINE_RECOMPOSITION'
-                : 'FALLBACK_COMPRESSION_ONLY',
-          })
-
-          postSessionStep = 'short_session_doctrine_recomposed'
-        } else {
-          console.log('[PHASE-AB3-SHORT-SESSION-DOCTRINE-RECOMPOSITION-SKIPPED]', {
-            dayNumber: session.dayNumber,
-            focus: session.focus,
-            reason:
-              !fullVariant
-                ? 'no_full_variant_resolved'
-                : 'no_short_variants_to_recompose',
-            variantCount: variants.length,
-            verdict: 'NO_SHORT_VARIANTS__NOTHING_TO_DO',
-          })
-        }
-      } catch (recomposeErr) {
-        // Recomposition is additive analysis; an error here must NEVER fail
-        // the session. The variant bodies remain valid (compression already
-        // gated launchability and material distinctness). Worst case: the
-        // Program UI shows the variant without the recomposition truth
-        // sidecar, which is the same as the pre-AB3 baseline.
-        console.warn('[PHASE-AB3-SHORT-SESSION-DOCTRINE-RECOMPOSITION-FAILED]', {
-          dayNumber: session.dayNumber,
-          error: recomposeErr instanceof Error ? recomposeErr.message : String(recomposeErr),
-          verdict: 'KEEPING_VARIANTS_WITHOUT_RECOMPOSITION_TRUTH',
-        })
-      }
-    }
-
+    
     // =========================================================================
     // STEP E: Post-mutation core integrity check
     // =========================================================================
@@ -15604,9 +12911,22 @@ async function generateAdaptiveProgramImpl(
         }],
         cooldown: [],
         finisher: undefined,
-        // [VARIANT-LAUNCHABILITY-CONTRACT] Post-mutation fallback; see the
-        // earlier fallback site for the full rationale. No hollow variant.
-        variants: undefined,
+        variants: [{
+          duration: 15,
+          label: 'Recovery Session',
+          selection: {
+            main: [],
+            warmup: [],
+            cooldown: [],
+            totalEstimatedTime: 15,
+            skillExpressionResult: {
+              directlyExpressedSkills: [],
+              technicalSlotSkills: [],
+              supportSkillsInjected: [],
+            },
+          },
+          compressionLevel: 'none' as const,
+        }],
         adaptationNotes: [`[FALLBACK] Post-mutation failed: ${errorMessage.slice(0, 100)}`],
         rationale: `This session's post-processing encountered an error. Please try regenerating.`,
         recoveryContext: {
@@ -15801,9 +13121,22 @@ async function generateAdaptiveProgramImpl(
       ],
       cooldown: [],
       finisher: undefined,
-      // [VARIANT-LAUNCHABILITY-CONTRACT] Outer-loop build-error fallback; see
-      // the earlier fallback site for the full rationale. No hollow variant.
-      variants: undefined,
+      variants: [{
+        duration: 15,
+        label: 'Recovery Session',
+        selection: {
+          main: [],
+          warmup: [],
+          cooldown: [],
+          totalEstimatedTime: 15,
+          skillExpressionResult: {
+            directlyExpressedSkills: [],
+            technicalSlotSkills: [],
+            supportSkillsInjected: [],
+          },
+        },
+        compressionLevel: 'none' as const,
+      }],
       adaptationNotes: [`[FALLBACK] Session failed to build: ${parsedFailureReason || matchedPattern}`],
       rationale: `This session encountered a build error (${matchedPattern}). Please try regenerating your program.`,
       recoveryContext: {
@@ -16250,36 +13583,17 @@ async function generateAdaptiveProgramImpl(
       : durationConfig.minExercises
     
     const isUnderbuilt = exerciseCount < intendedMin
-
-    // [UNDERBUILT-SESSION-TOPUP-REPAIR] Detect whether the authoritative
-    // top-up repair ran on this session by checking for the TOP-UP-REPAIR tag
-    // on any exercise's selectionReason. This flips the reserved (previously
-    // dead) `'repaired'` classification into a real signal: sessions whose
-    // upstream emission was below `minExercises` but whose top-up repair
-    // successfully refilled them to meet or exceed the floor.
-    const repairTagCount = Array.isArray(session.exercises)
-      ? session.exercises.filter(e =>
-          typeof e?.selectionReason === 'string' &&
-          e.selectionReason.includes('[TOP-UP-REPAIR]')
-        ).length
-      : 0
-    const wasTopUpRepaired = repairTagCount > 0
-
+    
     let densityClassification: 'normal' | 'intentionally_light' | 'underbuilt' | 'repaired' = 'normal'
     let reason = 'Session meets density requirements'
-
+    
     if (isIntentionallyLight) {
       densityClassification = 'intentionally_light'
       reason = `Light/recovery session (${dayStress || sessionFocus}) - reduced minimum acceptable`
     } else if (isUnderbuilt) {
-      // Still below floor even after any repair attempt -- this is the
-      // genuinely-underbuilt case worth escalating (e.g. equipment too
-      // constrained to reach the floor, or repair unavailable for this focus).
       densityClassification = 'underbuilt'
-      reason = wasTopUpRepaired
-        ? `Session has ${exerciseCount} exercises after top-up repair (added ${repairTagCount}), still below minimum ${intendedMin}`
-        : `Session has ${exerciseCount} exercises, expected minimum ${intendedMin}`
-
+      reason = `Session has ${exerciseCount} exercises, expected minimum ${intendedMin}`
+      
       // [TASK 4] Log the underbuilt session for debugging
       console.warn('[session-density-audit] UNDERBUILT session detected:', {
         dayNumber: session.dayNumber,
@@ -16289,21 +13603,6 @@ async function generateAdaptiveProgramImpl(
         intendedMax: durationConfig.maxExercises,
         dayStress,
         isIntentionallyLight,
-        wasTopUpRepaired,
-        repairTagCount,
-      })
-    } else if (wasTopUpRepaired) {
-      // Session meets the floor BECAUSE of the top-up repair. This is the
-      // case the reserved `'repaired'` enum was designed for -- now honestly
-      // assigned.
-      densityClassification = 'repaired'
-      reason = `Session reached minimum ${intendedMin} after authoritative top-up repair added ${repairTagCount} exercise(s)`
-      console.log('[session-density-audit] REPAIRED session (top-up succeeded):', {
-        dayNumber: session.dayNumber,
-        focus: sessionFocus,
-        exerciseCount,
-        intendedMin,
-        repairTagCount,
       })
     }
     
@@ -16322,7 +13621,6 @@ async function generateAdaptiveProgramImpl(
   
   // [TASK 3] Output comprehensive session density audit
   const underbuiltSessions = sessionDensityAuditResults.filter(s => s.isUnderbuilt && !s.isIntentionallyLight)
-  const repairedSessions = sessionDensityAuditResults.filter(s => s.densityClassification === 'repaired')
   console.log('[session-density-audit]', {
     totalSessions: sessions.length,
     durationPreference: workoutDuration,
@@ -16335,12 +13633,6 @@ async function generateAdaptiveProgramImpl(
     })),
     underbuiltCount: underbuiltSessions.length,
     underbuiltDays: underbuiltSessions.map(s => s.dayNumber),
-    // [UNDERBUILT-SESSION-TOPUP-REPAIR] Report sessions where the top-up
-    // repair ran and successfully reached the floor. Non-zero values here
-    // are the auditable proof that detection → repair is now wired end to
-    // end, replacing the previous "detect but don't repair" gap.
-    repairedCount: repairedSessions.length,
-    repairedDays: repairedSessions.map(s => s.dayNumber),
     intentionallyLightCount: sessionDensityAuditResults.filter(s => s.isIntentionallyLight).length,
   })
   
@@ -19266,96 +16558,7 @@ console.log('[program-generate] Generation complete:', {
     }
     ;(globalThis as unknown as { sessionStorage: Storage }).sessionStorage.setItem('regenTruthAudit', JSON.stringify(updatedAudit))
   }
-
-  // ============================================================================
-  // [PHASE-K] WEEKLY STRESS DISTRIBUTION CONTRACT
-  // ----------------------------------------------------------------------------
-  // Single ingress for the whole-week stress / recovery / exposure governor.
-  // Runs ONCE here, after every session has been composed, prescribed, and
-  // numerically mutated. Job:
-  //
-  //   1. Classify each session by actual stress source (LOAD / VOLUME /
-  //      DENSITY / SKILL_TENDON / ECCENTRIC_ISOMETRIC / MIXED / RECOVERY)
-  //      from the composed exercises - not from the role label alone.
-  //   2. Compute pairwise nextDayRisk so a back-to-back heavy planche or
-  //      back-to-back density+heavy-pull is detected as HIGH risk.
-  //   3. Conservatively soften the SECOND session of a HIGH-risk pair
-  //      (cap RPE -1, drop sets -1 on overlapping accessory rows, attach
-  //      stressAdjustmentDelta audit). Gated to one session per week and
-  //      blocked entirely on protected/acclimation/recovery_constrained
-  //      weeks - those are already softened upstream.
-  //   4. Stamp canonical fields on each session (stressRole, stressLevel,
-  //      recoveryCost, primaryStressSource, secondaryStressSources,
-  //      nextDayRisk, stressDistributionReasonCodes, stressDistributionProof)
-  //      and on the program (weeklyStressDistributionPlan +
-  //      weeklyStressGovernorAdjustments) so display surfaces and the
-  //      live workout loader can read authoritative truth without
-  //      re-deriving anything.
-  //
-  // SINGLE OWNER: nothing downstream re-classifies stress or re-evaluates
-  // next-day risk. Display surfaces (program-display-contract -> Program
-  // card; live workout loader) consume what this pass writes.
-  // ============================================================================
-  const phaseKStressPlan: WeeklyStressDistributionPlan = buildWeeklyStressDistributionPlan({
-    sessions,
-    weeklyRoleContract: weeklySessionRoleContract,
-  })
-  const phaseKGovernorResult: WeeklyStressGovernorResult = applyWeeklyStressGovernor(
-    sessions,
-    phaseKStressPlan,
-    {
-      maxRowsPerSession: 2,
-      maxAdjustedSessions: 1,
-    },
-  )
-  // Replace the in-place sessions array with the governor's output. The
-  // governor only mutates rows on the second session of a HIGH-risk pair;
-  // every other session reference is preserved by identity.
-  for (let i = 0; i < sessions.length; i++) {
-    sessions[i] = phaseKGovernorResult.sessions[i]
-  }
-  // Stamp per-session canonical fields. Done AFTER governor mutation so the
-  // visibleExplanationShort reflects the post-soften coach-line where
-  // applicable. The governor itself only mutates `next.reasonCodes` and
-  // `next.visibleExplanationShort` on the local plan classification, so
-  // reading classification[i] here gets the right post-soften copy.
-  const phaseKRoleByIndex = weeklySessionRoleContract.dayRoles
-  for (let i = 0; i < sessions.length; i++) {
-    const c = phaseKStressPlan.sessionClassifications[i]
-    if (!c) continue
-    const role = phaseKRoleByIndex[i] || null
-    const proof =
-      c.visibleLabel
-        ? { label: c.visibleLabel, explanation: c.visibleExplanationShort || '' }
-        : undefined
-    sessions[i] = {
-      ...sessions[i],
-      stressRole: role?.roleId,
-      stressLevel: c.stressLevel,
-      recoveryCost: c.recoveryCost,
-      primaryStressSource: c.primaryStressSource,
-      secondaryStressSources: c.secondaryStressSources,
-      nextDayRisk: c.nextDayRisk,
-      stressDistributionReasonCodes: c.reasonCodes,
-      stressDistributionProof: proof,
-    }
-  }
-  console.log('[phase-k-stress-distribution-stamped]', {
-    totalSessions: sessions.length,
-    governorActive: phaseKStressPlan.governorActive,
-    governorSuppressedReason: phaseKStressPlan.governorSuppressedReason,
-    adjustmentsFired: phaseKGovernorResult.appliedAdjustments.length,
-    weeklyHeadline: phaseKStressPlan.summary.weeklyHeadline,
-    classifications: sessions.map(s => ({
-      day: s.dayNumber,
-      stress: s.stressLevel,
-      cost: s.recoveryCost,
-      src: s.primaryStressSource,
-      risk: s.nextDayRisk,
-    })),
-    verdict: 'PHASE_K_STRESS_DISTRIBUTION_AUTHORITATIVE',
-  })
-
+  
   const finalProgram: AdaptiveProgram = {
     id: `adaptive-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     createdAt: new Date().toISOString(),
@@ -19419,12 +16622,6 @@ console.log('[program-generate] Generation complete:', {
     } : undefined,
     structure,
     sessions,
-    // [PHASE-K] Whole-week stress / recovery / exposure plan + governor audit.
-    // Single owner for "what is the rhythm of this week" - read by the
-    // Program page summary and by display surfaces that need richer detail
-    // than the per-session hoisted fields can express.
-    weeklyStressDistributionPlan: phaseKStressPlan,
-    weeklyStressGovernorAdjustments: phaseKGovernorResult.appliedAdjustments,
     equipmentProfile,
     // [PHASE 15D] Store dominant spine resolution for display truthfulness
     dominantSpineResolution: {
@@ -21671,731 +18868,6 @@ return explanations.length > 0 ? explanations : undefined
   hasLiveRules: doctrineRuntimeContract.doctrineCoverage.hasLiveRules,
   verdict: 'DOCTRINE_UI_TRUTH_ALIGNED',
   })
-  }
-
-  // ==========================================================================
-  // [PHASE 4D — CAUSAL VERSION STAMP]
-  // ==========================================================================
-  // This version identifies programs generated AFTER the Phase 4D causal-order
-  // fix that restored the doctrine influence contract → unified decision →
-  // materiality contract → exercise selector / weekly role contract chain.
-  //
-  // Programs without this field (or with an older value) were generated under
-  // the broken Phase-2/3 path where doctrineInfluenceContract was always null
-  // due to a TDZ ReferenceError. The Program page can detect a missing/older
-  // value and surface "Regenerate with doctrine engine" instead of pretending
-  // doctrine was applied.
-  // ==========================================================================
-  ;(finalProgram as unknown as { doctrineCausalVersion?: string }).doctrineCausalVersion = 'phase4d-causal-order-v1'
-  console.log('[PHASE4D-CAUSAL-VERSION-STAMPED]', {
-    doctrineCausalVersion: 'phase4d-causal-order-v1',
-    doctrineRuntimeAvailable: !!doctrineRuntimeContract?.available,
-    doctrineInfluenceAvailable: !!doctrineInfluenceContract,
-    doctrineInfluenceFallback: doctrineInfluenceContract?.safetyFlags?.fallbackActive ?? null,
-    causalChainHealthy: !!doctrineRuntimeContract?.available && !!doctrineInfluenceContract,
-    verdict: !!doctrineRuntimeContract?.available && !!doctrineInfluenceContract
-      ? 'DOCTRINE_CAUSAL_CHAIN_INTACT_END_TO_END'
-      : 'DOCTRINE_CAUSAL_CHAIN_DEGRADED_SEE_INFLUENCE_FLAGS',
-  })
-
-  // ==========================================================================
-  // [PHASE 4E — DOCTRINE CAUSAL CHALLENGE AGGREGATION]
-  //
-  // Roll up the per-session DoctrineScoringAudit records harvested in
-  // generateAdaptiveSession into a single program-level verdict object.
-  //
-  // What this proves vs. what previous "PASS reports" claimed:
-  //   - Selected rule counts → NOT proof. Counted before this phase too.
-  //   - Source counts → NOT proof. Counted before this phase too.
-  //   - Materialization rollup → NOT proof. Reports session structures
-  //     without asking whether doctrine PICKED those structures.
-  //   - data-driven identifiers → NOT proof. Just metadata stamps.
-  //
-  // What IS proof: per-session pre-doctrine top-3 vs post-doctrine top-3.
-  // If doctrine never changed a top winner across any session, then
-  // doctrine did NOT causally pick a single exercise — regardless of
-  // what counts the rollups show.
-  //
-  // unchangedVerdict classification (used by UI to show honest reason):
-  //   - "doctrine_did_not_run"        : audit accumulator empty (selector
-  //                                     never ran or threw).
-  //   - "doctrine_cache_empty"        : audits exist but all have null
-  //                                     fallbackReason ∈ {db_fetch_failed,
-  //                                     no_candidates}.
-  //   - "doctrine_domain_gap"         : rules queried > 0 but nothing
-  //                                     matched any candidate
-  //                                     (fallbackReason = no_matching_rules
-  //                                     OR doctrineApplied=false).
-  //   - "doctrine_scoring_too_weak"   : doctrineApplied=true and candidates
-  //                                     affected, but topCandidateChanged
-  //                                     is false in EVERY session — doctrine
-  //                                     touched scores but never won a slot.
-  //   - "already_optimal_protected"   : topCandidateChanged is false in
-  //                                     every session BUT base rankings
-  //                                     already match doctrine top-3
-  //                                     (preDoctrineTop3 ⊆ postDoctrineTop3
-  //                                     and the program intentionally
-  //                                     converged on the optimal output).
-  //   - "doctrine_changed_program"    : topCandidateChanged is true in at
-  //                                     least one session — real causal
-  //                                     authority demonstrated.
-  //
-  // The classification is driven by ACTUAL pre/post comparisons. No PASS
-  // labels. No rule-count masquerade.
-  // ==========================================================================
-  type SessionAuditRecord = {
-    sessionIndex: number
-    dayNumber: number
-    dayFocus: string
-    audit: import('./doctrine-exercise-scorer').DoctrineScoringAudit | null
-  }
-  const accumulator = doctrineCausalAuditAccumulator as SessionAuditRecord[]
-
-  let totalSessionsWithAudit = 0
-  let sessionsDoctrineRanWithRules = 0
-  let sessionsTopCandidateChanged = 0
-  let sessionsTop3Changed = 0
-  let sessionsCandidatesAffectedButNoWinnerChange = 0
-  let sessionsDoctrineCacheEmpty = 0
-  let sessionsNoMatchingRules = 0
-  let totalCandidatesAffected = 0
-  let totalSelectionRulesMatched = 0
-  let totalCarryoverRulesMatched = 0
-  let totalContraindicationRulesMatched = 0
-  const sessionDiffs: Array<{
-    sessionIndex: number
-    dayNumber: number
-    dayFocus: string
-    topCandidateChanged: boolean
-    top3Changed: boolean
-    doctrineApplied: boolean
-    candidatesAffected: number
-    rulesMatchedTotal: number
-    preDoctrineTop3: string[]
-    postDoctrineTop3: string[]
-    fallbackReason: string | null
-    perSessionVerdict:
-      | 'doctrine_changed_top_winner'
-      | 'doctrine_changed_top3_only'
-      | 'doctrine_affected_scores_only'
-      | 'doctrine_ran_no_match'
-      | 'doctrine_cache_empty'
-      | 'doctrine_did_not_run'
-  }> = []
-
-  for (const record of accumulator) {
-    if (record.audit) totalSessionsWithAudit++
-    const a = record.audit
-    let perSessionVerdict: typeof sessionDiffs[number]['perSessionVerdict']
-    if (!a) {
-      perSessionVerdict = 'doctrine_did_not_run'
-    } else if (a.fallbackReason === 'db_fetch_failed' || a.fallbackReason === 'no_candidates') {
-      sessionsDoctrineCacheEmpty++
-      perSessionVerdict = 'doctrine_cache_empty'
-    } else if (a.fallbackReason === 'no_matching_rules' || (!a.doctrineApplied && (a.rulesQueried.selectionRules + a.rulesQueried.contraindicationRules + a.rulesQueried.carryoverRules) === 0)) {
-      sessionsNoMatchingRules++
-      perSessionVerdict = 'doctrine_ran_no_match'
-    } else if (a.topCandidateChanged) {
-      sessionsDoctrineRanWithRules++
-      sessionsTopCandidateChanged++
-      if (a.top3Changed) sessionsTop3Changed++
-      perSessionVerdict = 'doctrine_changed_top_winner'
-    } else if (a.top3Changed) {
-      sessionsDoctrineRanWithRules++
-      sessionsTop3Changed++
-      perSessionVerdict = 'doctrine_changed_top3_only'
-    } else if (a.doctrineApplied) {
-      sessionsDoctrineRanWithRules++
-      sessionsCandidatesAffectedButNoWinnerChange++
-      perSessionVerdict = 'doctrine_affected_scores_only'
-    } else {
-      sessionsNoMatchingRules++
-      perSessionVerdict = 'doctrine_ran_no_match'
-    }
-    if (a) {
-      totalCandidatesAffected += a.candidatesAffected
-      totalSelectionRulesMatched += a.rulesMatched.selectionRules
-      totalCarryoverRulesMatched += a.rulesMatched.carryoverRules
-      totalContraindicationRulesMatched += a.rulesMatched.contraindicationRules
-    }
-    sessionDiffs.push({
-      sessionIndex: record.sessionIndex,
-      dayNumber: record.dayNumber,
-      dayFocus: record.dayFocus,
-      topCandidateChanged: !!a?.topCandidateChanged,
-      top3Changed: !!a?.top3Changed,
-      doctrineApplied: !!a?.doctrineApplied,
-      candidatesAffected: a?.candidatesAffected ?? 0,
-      rulesMatchedTotal: (a?.rulesMatched.selectionRules ?? 0) + (a?.rulesMatched.carryoverRules ?? 0) + (a?.rulesMatched.contraindicationRules ?? 0),
-      preDoctrineTop3: a?.preDoctrineTop3 ?? [],
-      postDoctrineTop3: a?.postDoctrineTop3 ?? [],
-      fallbackReason: a?.fallbackReason ?? null,
-      perSessionVerdict,
-    })
-  }
-
-  // Program-level unchangedVerdict (only meaningful when no top winner changed).
-  let programUnchangedVerdict:
-    | 'not_unchanged'
-    | 'doctrine_did_not_run'
-    | 'doctrine_cache_empty'
-    | 'doctrine_domain_gap'
-    | 'doctrine_scoring_too_weak'
-    | 'already_optimal_protected' = 'not_unchanged'
-
-  const totalSessions = accumulator.length
-  if (sessionsTopCandidateChanged > 0) {
-    programUnchangedVerdict = 'not_unchanged'
-  } else if (totalSessionsWithAudit === 0) {
-    programUnchangedVerdict = 'doctrine_did_not_run'
-  } else if (sessionsDoctrineCacheEmpty === totalSessionsWithAudit) {
-    programUnchangedVerdict = 'doctrine_cache_empty'
-  } else if (sessionsNoMatchingRules > 0 && sessionsDoctrineRanWithRules === 0) {
-    programUnchangedVerdict = 'doctrine_domain_gap'
-  } else if (sessionsCandidatesAffectedButNoWinnerChange > 0) {
-    // Doctrine touched scores in at least one session but didn't change any
-    // top winner anywhere. Could be either weak scoring OR genuinely optimal
-    // base ranking. We classify as scoring_too_weak by default — the
-    // alternative (already_optimal_protected) requires the base ranker to
-    // have produced a top-3 that ALSO contains all doctrine-supported
-    // candidates, which we can't prove from the audit shape alone.
-    programUnchangedVerdict = 'doctrine_scoring_too_weak'
-  } else {
-    programUnchangedVerdict = 'doctrine_domain_gap'
-  }
-
-  const finalCausalVerdict:
-    | 'DOCTRINE_MATERIALLY_CHANGED_PROGRAM'
-    | 'DOCTRINE_AVAILABLE_BUT_NOT_CAUSAL'
-    | 'DOCTRINE_DID_NOT_REACH_GENERATION'
-    | 'DOCTRINE_NO_MATCHING_RULES_FOR_PROFILE' =
-    sessionsTopCandidateChanged > 0
-      ? 'DOCTRINE_MATERIALLY_CHANGED_PROGRAM'
-      : programUnchangedVerdict === 'doctrine_did_not_run' || programUnchangedVerdict === 'doctrine_cache_empty'
-        ? 'DOCTRINE_DID_NOT_REACH_GENERATION'
-        : programUnchangedVerdict === 'doctrine_domain_gap'
-          ? 'DOCTRINE_NO_MATCHING_RULES_FOR_PROFILE'
-          : 'DOCTRINE_AVAILABLE_BUT_NOT_CAUSAL'
-
-  ;(finalProgram as unknown as { doctrineCausalChallenge?: unknown }).doctrineCausalChallenge = {
-    version: 'phase4e-doctrine-ab-causal-challenge-v1',
-    ranAt: new Date().toISOString(),
-    doctrineEnabled: !!doctrineRuntimeContract?.available && !!doctrineInfluenceContract,
-    sessionsEvaluated: totalSessions,
-    sessionsWithAudit: totalSessionsWithAudit,
-    sessionsTopCandidateChanged,
-    sessionsTop3Changed,
-    sessionsCandidatesAffectedButNoWinnerChange,
-    sessionsDoctrineCacheEmpty,
-    sessionsNoMatchingRules,
-    materialProgramChanged: sessionsTopCandidateChanged > 0,
-    diffSummary: {
-      changedExerciseCount: sessionsTopCandidateChanged,
-      top3ChangedCount: sessionsTop3Changed,
-      candidatesAffectedTotal: totalCandidatesAffected,
-      selectionRulesMatchedTotal: totalSelectionRulesMatched,
-      carryoverRulesMatchedTotal: totalCarryoverRulesMatched,
-      contraindicationRulesMatchedTotal: totalContraindicationRulesMatched,
-    },
-    sessionDiffs,
-    unchangedVerdict: programUnchangedVerdict,
-    finalVerdict: finalCausalVerdict,
-  }
-
-  console.log('[PHASE4E-DOCTRINE-CAUSAL-CHALLENGE-AGGREGATED]', {
-    totalSessions,
-    totalSessionsWithAudit,
-    sessionsTopCandidateChanged,
-    sessionsTop3Changed,
-    sessionsCandidatesAffectedButNoWinnerChange,
-    sessionsDoctrineCacheEmpty,
-    sessionsNoMatchingRules,
-    totalCandidatesAffected,
-    totalSelectionRulesMatched,
-    totalCarryoverRulesMatched,
-    totalContraindicationRulesMatched,
-    materialProgramChanged: sessionsTopCandidateChanged > 0,
-    unchangedVerdict: programUnchangedVerdict,
-    finalVerdict: finalCausalVerdict,
-    verdict: finalCausalVerdict,
-  })
-
-  // ===========================================================================
-  // [PHASE 4H] DOCTRINE MATERIALIZATION MATRIX + ONBOARDING TRUTH MAP
-  //
-  // Pure diagnostic stamps. NOT a generator. NOT a materializer. NOT a second
-  // doctrine engine. Built from data already computed above (runtimeContract,
-  // doctrineCausalChallenge, inputs) and stamped onto the program so the
-  // Program page / API consumers can render an honest per-category status:
-  //
-  //   • CONNECTED_AND_MATERIAL — rule changed a real program field
-  //   • READ_BUT_SCORING_ONLY — rule influenced ranking, not a field
-  //   • READ_BUT_AUDIT_ONLY  — rule loaded but no consumer
-  //   • NOT_READ / NOT_IN_SCHEMA / NOT_RELEVANT_TO_CURRENT_PROFILE
-  //
-  // No new fields are mutated as a side effect. If a category is currently
-  // scoring-only (prescription, progression), the matrix says exactly that
-  // — it does NOT pretend it is "applied". This is the Phase 4H non-negotiable:
-  // never let explanation text claim materialization that did not happen.
-  // ===========================================================================
-  try {
-    const { buildDoctrineMaterializationMatrix, buildFullOnboardingTruthMaterializationMap } =
-      await import('./doctrine/doctrine-materialization-matrix')
-    const phase4hCausalChallengeForMatrix = (finalProgram as unknown as {
-      doctrineCausalChallenge?: {
-        materialProgramChanged?: boolean
-        sessionsTopCandidateChanged?: number
-        diffSummary?: {
-          changedExerciseCount?: number
-          selectionRulesMatchedTotal?: number
-          carryoverRulesMatchedTotal?: number
-          contraindicationRulesMatchedTotal?: number
-        }
-        unchangedVerdict?: string
-      }
-    }).doctrineCausalChallenge ?? null
-
-    // ==========================================================================
-    // [PHASE 4I] DOCTRINE FLEXIBILITY / COOLDOWN MATERIALIZER
-    //
-    // First true Phase 4I materializer. Reads inputs.flexibilityGoals +
-    // FLEXIBILITY_GOAL_SUPPORT_MATRIX (batch 09) and emits per-session
-    // cooldown blocks. Pure function. Additive output: stamps a NEW field
-    // `program.cooldownFlexibilityMaterialization` rather than mutating
-    // session.cooldown — this keeps live workout handoff and existing
-    // session-shape consumers safe (Phase 4I non-negotiable).
-    //
-    // When inputs.flexibilityGoals is empty, the materializer returns
-    // verdict NOT_RELEVANT_TO_CURRENT_PROFILE and emits no blocks.
-    // ==========================================================================
-    // Structural shape used by both the materializer output AND the matrix
-    // arg. Defining it locally so the cast stays simple.
-    type Phase4iFlexMatShape = {
-      verdict?: string
-      totals?: {
-        eligibleGoalsCount?: number
-        sessionsConsidered?: number
-        sessionsMaterialized?: number
-        blocksEmitted?: number
-      }
-      recognizedGoals?: string[]
-      unmatchedGoals?: { goal: string; reason: string }[]
-    }
-    let phase4iFlexibilityMaterialization: Phase4iFlexMatShape | null = null
-    try {
-      const { buildDoctrineFlexibilityCooldownMaterialization } = await import(
-        './program/doctrine-flexibility-cooldown-materializer'
-      )
-
-      // Count total sessions in the program. The flat session list lives at
-      // finalProgram.weeks[].days[]. We tolerate any shape variation by
-      // defensive iteration.
-      type FpWeek = { days?: Array<{ weekNumber?: number | null; dayNumber?: number | null }> }
-      const fpWeeks = ((finalProgram as unknown as { weeks?: FpWeek[] }).weeks ?? []) as FpWeek[]
-      const sessionMetadataPhase4i: { sessionIndex: number; weekNumber: number | null; dayNumber: number | null }[] = []
-      let phase4iTotalSessions = 0
-      for (let w = 0; w < fpWeeks.length; w += 1) {
-        const week = fpWeeks[w]
-        const days = Array.isArray(week?.days) ? week!.days! : []
-        for (let d = 0; d < days.length; d += 1) {
-          const day = days[d] ?? {}
-          sessionMetadataPhase4i.push({
-            sessionIndex: phase4iTotalSessions,
-            weekNumber:
-              typeof day.weekNumber === 'number' && Number.isFinite(day.weekNumber)
-                ? day.weekNumber
-                : w + 1,
-            dayNumber:
-              typeof day.dayNumber === 'number' && Number.isFinite(day.dayNumber)
-                ? day.dayNumber
-                : d + 1,
-          })
-          phase4iTotalSessions += 1
-        }
-      }
-
-      const inputsRecord = inputs as unknown as { flexibilityGoals?: string[] | null }
-      const phase4iMaterialization = buildDoctrineFlexibilityCooldownMaterialization({
-        flexibilityGoals: Array.isArray(inputsRecord?.flexibilityGoals)
-          ? inputsRecord.flexibilityGoals
-          : [],
-        totalSessionCount: phase4iTotalSessions,
-        sessionMetadata: sessionMetadataPhase4i,
-      })
-
-      ;(finalProgram as unknown as { cooldownFlexibilityMaterialization?: unknown }).cooldownFlexibilityMaterialization =
-        phase4iMaterialization
-      phase4iFlexibilityMaterialization = phase4iMaterialization
-
-      // ==============================================================
-      // [PHASE-AA4] TRUTH-TO-UI BRIDGE
-      // ==============================================================
-      // The materializer above produces an authoritative
-      // `program.cooldownFlexibilityMaterialization` audit object. Prior
-      // to AA4 the materializer comment stated "Does NOT mutate
-      // session.cooldown" so flexibility goals could be classified as
-      // CONNECTED_AND_MATERIAL while never appearing in the actual
-      // Program UI cool-down block or Start Workout session — i.e.
-      // audit-only materialization, exactly the user-reported gap.
-      //
-      // AA4 closes that gap by injecting one synthesized AdaptiveExercise
-      // per emitted block into the matching session's `cooldown` array.
-      // - Both AdaptiveSessionCard (line ~4503) and StreamlinedWorkoutSession
-      //   (line ~1981) read `session.cooldown` directly, so this single
-      //   bridge gives Program UI + Start Workout parity automatically.
-      // - The materializer's own caps already protect against bloat
-      //   (≤3 sessions/week × ≤2 blocks/session, only direct flexibility
-      //   goals with cooldownAllowed=true).
-      // - The audit object is preserved unchanged so the matrix and
-      //   any downstream readers can still cross-reference goals,
-      //   reasons, unmatched/skipped lists, and provenance.
-      // - Bridge only fires when verdict is CONNECTED_AND_MATERIAL,
-      //   so audit-only verdicts (NOT_RELEVANT_TO_CURRENT_PROFILE,
-      //   NO_GOALS_RECOGNIZED, BLOCKED_NO_ELIGIBLE_SESSIONS) leave
-      //   `session.cooldown` untouched.
-      let phase4iBlocksInjected = 0
-      let phase4iSessionsInjected = 0
-      try {
-        if (
-          phase4iMaterialization.verdict === 'CONNECTED_AND_MATERIAL' &&
-          phase4iMaterialization.materializedSessions.length > 0
-        ) {
-          // Re-walk weeks/days in the same order used to build
-          // sessionMetadataPhase4i so flat indices match exactly.
-          type FpDayMutable = { cooldown?: unknown[] }
-          type FpWeekMutable = { days?: FpDayMutable[] }
-          const fpWeeksMutable = (
-            (finalProgram as unknown as { weeks?: FpWeekMutable[] }).weeks ?? []
-          ) as FpWeekMutable[]
-          const flatSessions: FpDayMutable[] = []
-          for (const w of fpWeeksMutable) {
-            const days = Array.isArray(w?.days) ? w.days : []
-            for (const d of days) flatSessions.push(d)
-          }
-
-          for (const matSession of phase4iMaterialization.materializedSessions) {
-            if (!matSession || matSession.blocks.length === 0) continue
-            const target = flatSessions[matSession.sessionIndex]
-            if (!target || typeof target !== 'object') continue
-            if (!Array.isArray(target.cooldown)) target.cooldown = []
-            const targetCooldown = target.cooldown as Array<Record<string, unknown>>
-
-            // Dedupe defensively: if a prior pass already injected this
-            // blockId (e.g. regeneration on the same in-memory object),
-            // skip rather than duplicate.
-            const existingIds = new Set(
-              targetCooldown
-                .map(x => (x && typeof x === 'object' ? (x as { id?: unknown }).id : null))
-                .filter((x): x is string => typeof x === 'string')
-            )
-
-            let injectedThisSession = 0
-            for (const block of matSession.blocks) {
-              if (!block || existingIds.has(block.blockId)) continue
-              // Synthesize an AdaptiveExercise that the existing
-              // cooldown row contract can render. Cooldown rows in
-              // ExerciseRow already display name + repsOrTime +
-              // selectionReason, with no main-row affordances.
-              const synthesized = {
-                id: block.blockId,
-                name: block.displayName,
-                category: 'cooldown',
-                sets: 1,
-                repsOrTime: block.prescription,
-                isOverrideable: false,
-                selectionReason: block.userGuidance,
-                source: 'database' as const,
-                // [PHASE-AA4] Provenance markers so future readers can
-                // distinguish flexibility-injected blocks from generic
-                // cooldown exercises. The materialization audit object
-                // remains the canonical source of truth for goals,
-                // unmatched/skipped reasons, and source rule ids.
-                phase4iFlexibilityBlock: true,
-                phase4iGoalKey: block.goalKey,
-                phase4iSourceRuleIds: block.sourceRuleIds,
-                phase4iPreferredMethods: block.preferredMethods,
-              } as unknown as Record<string, unknown>
-              targetCooldown.push(synthesized)
-              existingIds.add(block.blockId)
-              injectedThisSession += 1
-              phase4iBlocksInjected += 1
-            }
-            if (injectedThisSession > 0) phase4iSessionsInjected += 1
-          }
-        }
-      } catch (bridgeErr) {
-        // Bridge is non-blocking: a failure here cannot regress the
-        // program. The materialization audit object is already stamped
-        // above, so the matrix/audit surfaces remain accurate.
-        console.log('[PHASE-AA4-COOLDOWN-FLEX-BRIDGE-FAILED]', {
-          error: String(bridgeErr),
-        })
-      }
-
-      console.log('[PHASE4I-FLEXIBILITY-COOLDOWN-MATERIALIZER]', {
-        verdict: phase4iMaterialization.verdict,
-        athleteFlexibilityGoalsCount: phase4iMaterialization.athleteFlexibilityGoals.length,
-        recognizedGoalsCount: phase4iMaterialization.recognizedGoals.length,
-        unmatchedGoalsCount: phase4iMaterialization.unmatchedGoals.length,
-        skippedGoalsCount: phase4iMaterialization.skippedGoals.length,
-        sessionsConsidered: phase4iMaterialization.totals.sessionsConsidered,
-        sessionsMaterialized: phase4iMaterialization.totals.sessionsMaterialized,
-        blocksEmitted: phase4iMaterialization.totals.blocksEmitted,
-        // [PHASE-AA4] Bridge-injection telemetry: proves emitted blocks
-        // actually became visible session content rather than audit-only.
-        bridgeBlocksInjected: phase4iBlocksInjected,
-        bridgeSessionsInjected: phase4iSessionsInjected,
-      })
-    } catch (err) {
-      console.log('[PHASE4I-FLEXIBILITY-COOLDOWN-MATERIALIZER-FAILED]', {
-        error: String(err),
-        verdict: 'PHASE4I_MATERIALIZER_FAILED_GENERATION_PRESERVED',
-      })
-    }
-
-    // Stamp the registry snapshot too — single source of truth for what is
-    // and isn't materialized today. Pure-data import, JSON-safe, additive.
-    let phase4iRegistrySnapshot: unknown = null
-    try {
-      const { buildDoctrineMaterializerRegistrySnapshot } = await import(
-        './doctrine/doctrine-materializer-registry'
-      )
-      phase4iRegistrySnapshot = buildDoctrineMaterializerRegistrySnapshot()
-      ;(finalProgram as unknown as { doctrineMaterializerRegistry?: unknown }).doctrineMaterializerRegistry =
-        phase4iRegistrySnapshot
-      const totals = (phase4iRegistrySnapshot as { totals: Record<string, number> }).totals
-      console.log('[PHASE4I-DOCTRINE-MATERIALIZER-REGISTRY]', {
-        categoriesConnectedAndMaterial: totals.categoriesConnectedAndMaterial,
-        categoriesScoringOnlyNoMutator: totals.categoriesScoringOnlyNoMutator,
-        categoriesMaterializerNotConnected: totals.categoriesMaterializerNotConnected,
-        categoriesProfileGated: totals.categoriesProfileGated,
-      })
-    } catch (err) {
-      console.log('[PHASE4I-DOCTRINE-MATERIALIZER-REGISTRY-FAILED]', {
-        error: String(err),
-      })
-    }
-
-    const phase4hMatrix = buildDoctrineMaterializationMatrix({
-      runtimeContract: doctrineRuntimeContract,
-      causalChallenge: phase4hCausalChallengeForMatrix,
-      athleteInputs: inputs as unknown as Record<string, unknown>,
-      // [PHASE 4I] forward materializer output so the matrix's
-      // cooldown_flexibility row reflects real materialization. The local
-      // Phase4iFlexMatShape is structurally identical to the matrix's
-      // optional arg, so a plain `?? undefined` is sufficient.
-      cooldownFlexibilityMaterialization: phase4iFlexibilityMaterialization ?? undefined,
-    })
-    const phase4hOnboardingMap = buildFullOnboardingTruthMaterializationMap({
-      runtimeContract: doctrineRuntimeContract,
-      causalChallenge: phase4hCausalChallengeForMatrix,
-      athleteInputs: inputs as unknown as Record<string, unknown>,
-    })
-
-    ;(finalProgram as unknown as { doctrineMaterializationMatrix?: unknown }).doctrineMaterializationMatrix =
-      phase4hMatrix
-    ;(finalProgram as unknown as { fullOnboardingTruthMaterializationMap?: unknown }).fullOnboardingTruthMaterializationMap =
-      phase4hOnboardingMap
-
-    // ===================================================================
-    // [PHASE AB1] RULE POPULATION LEDGER
-    // ===================================================================
-    // Pure derivation from `phase4hMatrix`. Stamps the canonical eleven-
-    // state ledger (loaded / candidate / eligible / selected / mutated /
-    // visible / executable / blocked / suppressed / no_target / audit_only)
-    // onto the program object. The ledger is the only surface that
-    // consumers (Program UI, debug surfaces, future phases) should use
-    // when they need to answer "did this rule actually change the
-    // program?" — the matrix is preserved as a row-level diagnostic.
-    //
-    // Consumes the AA4 cooldown-flexibility bridge telemetry already
-    // computed above (`phase4iBlocksInjected`, `phase4iSessionsInjected`)
-    // so the cooldown_flexibility category can be honestly upgraded to
-    // `executable` even on saved programs whose matrix proof fields drop
-    // through normalisation.
-    //
-    // Fail-soft: a derivation error never breaks generation.
-    // ===================================================================
-    try {
-      const { buildRulePopulationLedger } = await import(
-        '@/lib/program/rule-population-ledger-contract'
-      )
-      const phaseAB1Ledger = buildRulePopulationLedger({
-        matrix: phase4hMatrix,
-        cooldownFlexBridge: {
-          bridgeBlocksInjected: phase4iBlocksInjected,
-          bridgeSessionsInjected: phase4iSessionsInjected,
-        },
-      })
-      ;(finalProgram as unknown as { rulePopulationLedger?: unknown }).rulePopulationLedger =
-        phaseAB1Ledger
-      console.log('[PHASE-AB1-RULE-POPULATION-LEDGER]', {
-        verdict: phaseAB1Ledger.verdict,
-        headline: phaseAB1Ledger.headline,
-        categoriesExecutable: phaseAB1Ledger.totals.categoriesExecutable,
-        categoriesVisible: phaseAB1Ledger.totals.categoriesVisible,
-        categoriesMutated: phaseAB1Ledger.totals.categoriesMutated,
-        categoriesScoringOnly: phaseAB1Ledger.totals.categoriesScoringOnly,
-        categoriesAuditOnly: phaseAB1Ledger.totals.categoriesAuditOnly,
-        categoriesBlocked: phaseAB1Ledger.totals.categoriesBlocked,
-        categoriesNoTarget: phaseAB1Ledger.totals.categoriesNoTarget,
-        categoriesNotRelevant: phaseAB1Ledger.totals.categoriesNotRelevant,
-        categoriesMaterializerNotConnected:
-          phaseAB1Ledger.totals.categoriesMaterializerNotConnected,
-        totalRulesRead: phaseAB1Ledger.totals.totalRulesRead,
-        totalRulesMaterialized: phaseAB1Ledger.totals.totalRulesMaterialized,
-        categoriesByState: phaseAB1Ledger.categories.map(c => ({
-          category: c.category,
-          state: c.state,
-        })),
-      })
-    } catch (ab1Err) {
-      console.log('[PHASE-AB1-RULE-POPULATION-LEDGER-FAILED]', {
-        error: String(ab1Err),
-      })
-    }
-
-    console.log('[PHASE4H-DOCTRINE-MATERIALIZATION-MATRIX]', {
-      verdict: phase4hMatrix.verdict,
-      doctrineRuntimeAvailable: phase4hMatrix.doctrineRuntimeAvailable,
-      materialProgramChanged: phase4hMatrix.materialProgramChanged,
-      categoriesConnectedAndMaterial: phase4hMatrix.totals.categoriesConnectedAndMaterial,
-      categoriesReadButScoringOnly: phase4hMatrix.totals.categoriesReadButScoringOnly,
-      categoriesReadButAuditOnly: phase4hMatrix.totals.categoriesReadButAuditOnly,
-      categoriesNotRead: phase4hMatrix.totals.categoriesNotRead,
-      categoriesNotInSchema: phase4hMatrix.totals.categoriesNotInSchema,
-      // [PHASE 4I] new honest status counter
-      categoriesMaterializerNotConnected: phase4hMatrix.totals.categoriesMaterializerNotConnected,
-      totalRulesRead: phase4hMatrix.totals.totalRulesRead,
-      totalRulesMaterialized: phase4hMatrix.totals.totalRulesMaterialized,
-      categoriesByStatus: phase4hMatrix.categories.map(c => ({ category: c.category, status: c.status })),
-    })
-    console.log('[PHASE4H-FULL-ONBOARDING-TRUTH-MAP]', {
-      verdict: phase4hOnboardingMap.verdict,
-      inputsConsumed: phase4hOnboardingMap.totals.inputsConsumed,
-      inputsMaterialized: phase4hOnboardingMap.totals.inputsMaterialized,
-      inputsConsumedNoChange: phase4hOnboardingMap.totals.inputsConsumedNoChange,
-      inputsMissingConnection: phase4hOnboardingMap.totals.inputsMissingConnection,
-      inputsNotObserved: phase4hOnboardingMap.totals.inputsNotObserved,
-      rowsByStatus: phase4hOnboardingMap.rows.map(r => ({ inputKey: r.inputKey, status: r.status })),
-    })
-
-    // -------------------------------------------------------------------
-    // [PHASE Y2 OF 3] TRAINING DIFFERENTIATION + DOCTRINE INFLUENCE CALIBRATION
-    // -------------------------------------------------------------------
-    // Calibrates the existing decision layers so the doctrine bundles
-    // already firing in Y1 produce more visible, training-real differences
-    // across the 6-session week WITHOUT introducing a new generator path.
-    //
-    // Runs AFTER all builder mutations (composition, method materialization,
-    // prescription shaping, weekly stress governor) and BEFORE the Y1
-    // matrix is built so the matrix naturally reflects Y2's calibrations.
-    //
-    //  - Lifts RPE on heavier-role rows from default fallback toward the
-    //    role's intended floor, never on tendon-sensitive / skill / method-
-    //    owned / grouped rows, never above the role's `rpeCap`.
-    //  - Materializes density (literal time cap + tightened rest) on
-    //    density_block styledGroups when the week and role allow, or
-    //    honestly demotes the wording to "capacity-supportive pairing".
-    //  - Mitigates HIGH-overlap supersets (rest extension + RPE cap) and
-    //    demotes Skin-the-Cat + C2B Pull-Up to straight sets when sets,
-    //    RPE, or day-load make it unsafe.
-    //  - Stamps `program.trainingDifferentiationCalibration` so proof
-    //    surfaces (Phase Y1 matrix, trust accordion) can read concrete
-    //    Y2 mutation evidence.
-    //
-    // Defensive — failures never break generation.
-    try {
-      const { applyTrainingDifferentiationCalibration } = await import(
-        './program/training-differentiation-calibrator'
-      )
-      const phaseY2Calibration = applyTrainingDifferentiationCalibration({
-        sessions: finalProgram.sessions || [],
-        protectedWeek: !!weeklySessionRoleContract.protectedWeek,
-        protectionReason: weeklySessionRoleContract.protectionReason,
-      })
-      ;(finalProgram as unknown as { trainingDifferentiationCalibration?: unknown }).trainingDifferentiationCalibration =
-        phaseY2Calibration
-      console.log('[PHASE-Y2-TRAINING-DIFFERENTIATION-CALIBRATION]', {
-        verdict: phaseY2Calibration.verdict,
-        protectedWeek: phaseY2Calibration.protectedWeek,
-        protectionReason: phaseY2Calibration.protectionReason,
-        rpeRowsLifted: phaseY2Calibration.totals.rpeRowsLifted,
-        rpeRowsHeld: phaseY2Calibration.totals.rpeRowsHeld,
-        densityBlocksMaterialized: phaseY2Calibration.totals.densityBlocksMaterialized,
-        densityBlocksHonestlyDemoted: phaseY2Calibration.totals.densityBlocksHonestlyDemoted,
-        pairingsMitigated: phaseY2Calibration.totals.pairingsMitigated,
-        pairingsDemotedToStraight: phaseY2Calibration.totals.pairingsDemotedToStraight,
-        skinTheCatPlusC2BHandled: phaseY2Calibration.totals.skinTheCatPlusC2BHandled,
-        weeklyRoles: phaseY2Calibration.weeklyRoleSummary.map((r) => ({
-          day: r.dayNumber,
-          role: r.roleId,
-          stress: r.intendedStressLevel,
-          rpeBand: r.intendedRPEBand,
-        })),
-        methodBudgetSummary: phaseY2Calibration.methodBudget.visibleSummary,
-      })
-    } catch (yErr) {
-      console.log('[PHASE-Y2-TRAINING-DIFFERENTIATION-CALIBRATION-FAILED]', {
-        error: String(yErr),
-        verdict: 'CALIBRATION_FAILED_GENERATION_PRESERVED',
-      })
-    }
-
-    // -------------------------------------------------------------------
-    // [PHASE Y1 OF 3] DOCTRINE EXECUTION MATRIX + CAUSAL UTILIZATION PROOF
-    // -------------------------------------------------------------------
-    // Pure, JSON-safe, additive. Reads from objects already stamped on the
-    // program (doctrineMaterializationMatrix, runtimeContract,
-    // doctrineCausalChallenge, rowLevelMutatorRollup /
-    // doctrineApplicationRollup, weeklyMethodRepresentation,
-    // weeklyStressGovernorAdjustments, sessions[]) and produces a
-    // per-bundle execution matrix + RPE/density/pairing traces.
-    //
-    // [PHASE Y2 SYNC] Y1 runs AFTER Y2's calibration so the matrix's RPE
-    // trace, density materialization verdict, and pairing safety verdict
-    // reflect Y2's actual mutations — this is what keeps Y1 proof in sync
-    // with the post-Y2 program.
-    //
-    // Diagnostic only — never mutates the program. Failures are caught
-    // below and never break generation.
-    try {
-      const { buildDoctrineExecutionMatrix } = await import(
-        './program/doctrine-execution-matrix-contract'
-      )
-      const phaseY1Matrix = buildDoctrineExecutionMatrix({
-        program: finalProgram as unknown as Record<string, unknown>,
-      })
-      ;(finalProgram as unknown as { doctrineExecutionMatrix?: unknown }).doctrineExecutionMatrix =
-        phaseY1Matrix
-      console.log('[PHASE-Y1-DOCTRINE-EXECUTION-MATRIX]', {
-        verdict: phaseY1Matrix.summary.causalUtilizationVerdict,
-        batchesLoaded: phaseY1Matrix.summary.batchesLoaded,
-        bundlesEligible: phaseY1Matrix.summary.bundlesEligible,
-        bundlesFired: phaseY1Matrix.summary.bundlesFired,
-        bundlesMutatedProgram: phaseY1Matrix.summary.bundlesMutatedProgram,
-        bundlesDisplayOnly: phaseY1Matrix.summary.bundlesDisplayOnly,
-        bundlesBlockedByRuntime: phaseY1Matrix.summary.bundlesBlockedByRuntime,
-        bundlesSuppressedBySafety: phaseY1Matrix.summary.bundlesSuppressedBySafety,
-        rpeFlattenedSuspected: phaseY1Matrix.rpeReasonTrace.rpeFlattenedSuspected,
-        densityVerdict: phaseY1Matrix.densityTrace.overallVerdict,
-        skinTheCatPlusC2BFound: phaseY1Matrix.pairingTrace.skinTheCatPlusC2BFound,
-        pairingCounts: phaseY1Matrix.pairingTrace.counts,
-      })
-    } catch (yErr) {
-      console.log('[PHASE-Y1-DOCTRINE-EXECUTION-MATRIX-FAILED]', {
-        error: String(yErr),
-        verdict: 'DIAGNOSTIC_BUILD_FAILED_GENERATION_PRESERVED',
-      })
-    }
-  } catch (err) {
-    // Diagnostic must never break generation. If the matrix fails to build for
-    // any reason, log and continue — generation already completed before this
-    // diagnostic stamp.
-    console.log('[PHASE4H-DOCTRINE-MATERIALIZATION-MATRIX-FAILED]', {
-      error: String(err),
-      verdict: 'DIAGNOSTIC_BUILD_FAILED_GENERATION_PRESERVED',
-    })
   }
   
   // [DOCTRINE INFLUENCE] Store doctrine influence contract for audit visibility
@@ -25408,30 +21880,6 @@ function generateAdaptiveSession(
   // This was previously accessed from outer scope closure, causing reference errors
   // ==========================================================================
   sessionIntent,
-  // ==========================================================================
-  // [STYLE-CORRIDOR-CLUSTER-FIX] Destructure the bundle so the 21+ bare
-  // `programmingTruthBundle` references throughout this function (smart
-  // substitution L24689, pattern-specific prescription L25141, the entire
-  // style corridor L26434-L26688 including the outer-guard catch handler
-  // log at L26688) finally resolve to a real binding. Pre-fix every one
-  // of those reads was an out-of-scope ReferenceError; most were silenced
-  // by surrounding try/catches but the style corridor's catch handler
-  // re-referenced the variable and crashed the rebuild end-to-end.
-  // Default to null when the caller did not pass a bundle so all
-  // downstream `programmingTruthBundle?.…` and `if (programmingTruthBundle)`
-  // checks behave correctly.
-  // ==========================================================================
-  programmingTruthBundle = null,
-  // ==========================================================================
-  // [PHASE-NEXT-FINAL-DECISION-OWNER-LOCK] Destructure the per-skill
-  // progression depth bias map computed at L7508. Default `{}` so the
-  // rerank site at L24385 can do `progressionDepthAdjustments[skill]`
-  // safely on every call regardless of whether the caller provided
-  // bias data. Empty map means no bias is applied — identical to
-  // the prior behaviour. Populated map means readiness/exposure/
-  // current-vs-history truth becomes decisive at the final winner stage.
-  // ==========================================================================
-  progressionDepthAdjustments = {},
   } = context
   
   // ==========================================================================
@@ -25762,58 +22210,6 @@ function generateAdaptiveSession(
   // ==========================================================================
   const doctrineRelaxationApplied = !!(selection as any).doctrineRelaxationApplied
   const doctrineRelaxationReason = (selection as any).doctrineRelaxationReason || ''
-
-  // ==========================================================================
-  // [PHASE 4E — DOCTRINE CAUSAL AUDIT HARVEST]
-  //
-  // Harvest the per-session doctrine audit surfaced by selectExercisesForSession
-  // and push it onto the program-level accumulator passed via context. We
-  // capture even when the audit is null — that itself is a meaningful verdict
-  // ("doctrine cache empty" or "no rule matched any candidate"), and we want
-  // the program-level rollup to distinguish "doctrine ran but no winner
-  // changed" from "doctrine never ran at all".
-  //
-  // Pre-Phase-4E: this data was created inside selectMainExercises and
-  // discarded on its return. The builder had no way to ever see it.
-  // ==========================================================================
-  const harvestedDoctrineCausalAudit = (selection as { doctrineCausalAudit?: import('./doctrine-exercise-scorer').DoctrineScoringAudit | null }).doctrineCausalAudit ?? null
-  if ((context as any).doctrineCausalAuditAccumulator && Array.isArray((context as any).doctrineCausalAuditAccumulator)) {
-    ;((context as any).doctrineCausalAuditAccumulator as Array<{
-      sessionIndex: number
-      dayNumber: number
-      dayFocus: string
-      audit: import('./doctrine-exercise-scorer').DoctrineScoringAudit | null
-    }>).push({
-      sessionIndex: sessionIndex,
-      dayNumber: day.dayNumber,
-      dayFocus: day.focus,
-      audit: harvestedDoctrineCausalAudit,
-    })
-    console.log('[PHASE4E-DOCTRINE-CAUSAL-AUDIT-HARVEST]', {
-      sessionIndex,
-      dayNumber: day.dayNumber,
-      dayFocus: day.focus,
-      auditPresent: !!harvestedDoctrineCausalAudit,
-      doctrineApplied: harvestedDoctrineCausalAudit?.doctrineApplied ?? false,
-      topCandidateChanged: harvestedDoctrineCausalAudit?.topCandidateChanged ?? false,
-      top3Changed: harvestedDoctrineCausalAudit?.top3Changed ?? false,
-      candidatesAffected: harvestedDoctrineCausalAudit?.candidatesAffected ?? 0,
-      rulesMatchedTotal:
-        (harvestedDoctrineCausalAudit?.rulesMatched.selectionRules ?? 0) +
-        (harvestedDoctrineCausalAudit?.rulesMatched.contraindicationRules ?? 0) +
-        (harvestedDoctrineCausalAudit?.rulesMatched.carryoverRules ?? 0),
-      fallbackReason: harvestedDoctrineCausalAudit?.fallbackReason ?? null,
-      verdict: harvestedDoctrineCausalAudit?.topCandidateChanged
-        ? 'DOCTRINE_CHANGED_TOP_WINNER_THIS_SESSION'
-        : harvestedDoctrineCausalAudit?.top3Changed
-          ? 'DOCTRINE_CHANGED_TOP3_BUT_NOT_TOP_WINNER'
-          : harvestedDoctrineCausalAudit?.doctrineApplied
-            ? 'DOCTRINE_AFFECTED_CANDIDATES_BUT_NOT_RANKING'
-            : harvestedDoctrineCausalAudit
-              ? 'DOCTRINE_RAN_BUT_NO_RULE_MATCHED'
-              : 'DOCTRINE_DID_NOT_RUN_OR_CACHE_EMPTY',
-    })
-  }
   
   // SESSION SURVIVAL CONTRACT: Track this session's rescue state
   // If doctrine relaxation was applied AND session has exercises, it's a recovery candidate
@@ -25918,20 +22314,12 @@ function generateAdaptiveSession(
     sessionTrace.rescueAttempted = true
     
     // STEP B2: Attempt fallback rescue
-    // [SELECTED-SKILL-FALLBACK-TRUTH] Pass selectedSkills so the empty-session
-    // rescue also draws from the user's actual skill truth first (same reason
-    // as the top-up repair -- prevents emergency-rescued sessions from being
-    // generic-only).
-    const selectedSkillsForEmptyRescue = Array.isArray(selectedSkills)
-      ? selectedSkills.filter((s): s is string => typeof s === 'string' && s.length > 0)
-      : []
     const rescueResult = buildFallbackSelectionForSession(
       day.focus,
       primaryGoal,
       equipment,
       sessionMinutesResolved,
-      experienceLevel,
-      selectedSkillsForEmptyRescue
+      experienceLevel
     )
     
     if (rescueResult.wasRescued && rescueResult.main.length > 0) {
@@ -25962,171 +22350,7 @@ function generateAdaptiveSession(
   
   console.log('[session-trace-post-rescue]', { ...sessionTrace, currentMainCount: rescuedMain.length })
   sessionStep = 'rescue_completed'
-
-  // ==========================================================================
-  // [UNDERBUILT-SESSION-TOPUP-REPAIR] Fill underbuilt Full sessions before emit
-  //
-  // AUDITED FIRST DILUTION OWNER: The post-build session-density audit block
-  // at `[session-density-audit]` further down in this file already classifies
-  // sessions as "underbuilt" when their main exercise count is below
-  // `durationConfig.minExercises`. But that block ONLY logs the warning --
-  // it never repairs. The `'repaired'` classification it reserved was never
-  // assigned by any code path. This allowed thin Full sessions to survive
-  // unchanged, which also starved the 45/30 variant corridor of meaningful
-  // parent material (shorts are derived from Full, so when Full is thin, the
-  // compressed variants are either hollow or indistinguishable).
-  //
-  // This top-up pass is the authoritative repair owner. It runs BEFORE
-  // equipment adaptation / method assignment / mapToAdaptiveExercises so the
-  // entire downstream pipeline (including variant generation, styling, load
-  // optimization) operates on the repaired body.
-  //
-  // CONTRACT:
-  //   1. Never force-fill intentionally light sessions (recovery/mobility/
-  //      deload focus). These are supposed to be thinner by design.
-  //   2. Never exceed the session's minimum target -- only top up to the floor,
-  //      never inflate toward max. Max remains the selector's responsibility;
-  //      repair exists strictly to prevent sessions from leaving the builder
-  //      BELOW their own declared minimum.
-  //   3. Reuse the authoritative fallback owner that the empty-session rescue
-  //      already uses (`buildFallbackSelectionForSession`). No new parallel
-  //      selector, no new candidate pool, no duplicate truth -- same pools
-  //      (`STRENGTH_EXERCISES` / `ACCESSORY_EXERCISES` / `CORE_EXERCISES_POOL`
-  //      / `SKILL_EXERCISES`), same equipment filter (`hasRequiredEquipment`),
-  //      same goal→focus mapping.
-  //   4. Append only exercises whose ids are not already in the selection,
-  //      preserving every existing selection and its metadata.
-  //   5. Tag appended exercises with a clear `TOP-UP-REPAIR` selection reason
-  //      so downstream audits can see which rows were the repair and the
-  //      post-build density audit can classify the session as `'repaired'`
-  //      instead of leaving the reserved enum value as dead code.
-  //   6. If the repair attempt crashes, keep the original underbuilt selection
-  //      and continue -- never fail session generation because a repair
-  //      attempt could not proceed.
-  // ==========================================================================
-  if (rescuedMain.length > 0) {
-    // Resolve the authoritative duration budget for this session's target.
-    const sessionBudgetForTopUp = resolveSessionBudget(sessionMinutesResolved)
-    const topUpTargetMin = sessionBudgetForTopUp.mainWork.minExercises
-
-    // Intentionally light sessions (recovery/mobility/deload focus) are
-    // allowed to stay below the standard minimum. This mirrors the post-build
-    // density audit's `isIntentionallyLight` logic so the two owners agree.
-    const focusLower = (day.focus || '').toLowerCase()
-    const isIntentionallyLight =
-      focusLower.includes('recovery') ||
-      focusLower.includes('mobility') ||
-      focusLower.includes('deload')
-
-    const isUnderbuilt = rescuedMain.length < topUpTargetMin && !isIntentionallyLight
-
-    if (isUnderbuilt) {
-      const deficit = topUpTargetMin - rescuedMain.length
-      console.warn('[UNDERBUILT-SESSION-TOPUP-REPAIR] Underbuilt Full session detected - running authoritative top-up', {
-        dayNumber: day.dayNumber,
-        dayFocus: day.focus,
-        primaryGoal,
-        currentMainCount: rescuedMain.length,
-        targetMinExercises: topUpTargetMin,
-        deficit,
-        isIntentionallyLight,
-        sessionMinutes: sessionMinutesResolved,
-        verdict: 'REPAIR_ENTERING',
-      })
-
-      try {
-        // Reuse the authoritative fallback owner. Same helper the empty-session
-        // rescue uses at L22995 -- no new parallel builder, no new candidate
-        // pool, same equipment filter.
-        //
-        // [SELECTED-SKILL-FALLBACK-TRUTH] Pass the user's full selected-skills
-        // list so the fallback builder can prioritize direct-progression /
-        // support material for each selected skill (back_lever, dragon_flag,
-        // planche_pushup, one_arm_pull_up, one_arm_chin_up, one_arm_push_up,
-        // hspu) via PATH 0 in buildFallbackSelectionForSession, instead of
-        // returning only generic primaryGoal support rows. This was the
-        // upstream dilution that caused the top-up repair to run successfully
-        // at the count level but produce candidates that either duplicated
-        // existing rows or were generic-flavored for the wrong goal.
-        const selectedSkillsForTopUp = Array.isArray(selectedSkills)
-          ? selectedSkills.filter((s): s is string => typeof s === 'string' && s.length > 0)
-          : []
-        const topUpResult = buildFallbackSelectionForSession(
-          day.focus,
-          primaryGoal,
-          equipment,
-          sessionMinutesResolved,
-          experienceLevel,
-          selectedSkillsForTopUp
-        )
-
-        if (topUpResult.wasRescued && topUpResult.main.length > 0) {
-          const existingIds = new Set(
-            rescuedMain
-              .map(e => e?.exercise?.id)
-              .filter((id): id is string => typeof id === 'string' && id.length > 0)
-          )
-          const appended: SelectedExercise[] = []
-          for (const candidate of topUpResult.main) {
-            if (appended.length >= deficit) break
-            const cid = candidate?.exercise?.id
-            if (!cid || existingIds.has(cid)) continue
-            // Tag so downstream audits can distinguish repair rows from
-            // primary selection rows via AdaptiveExercise.selectionReason.
-            appended.push({
-              ...candidate,
-              selectionReason: `[TOP-UP-REPAIR] ${candidate.selectionReason || 'Underbuilt session filled with authoritative support'}`,
-            })
-            existingIds.add(cid)
-          }
-          if (appended.length > 0) {
-            const mainCountBefore = rescuedMain.length
-            rescuedMain = [...rescuedMain, ...appended]
-            sessionTrace.rescuedMainCount = rescuedMain.length
-            console.log('[UNDERBUILT-SESSION-TOPUP-REPAIR] Repair applied', {
-              dayNumber: day.dayNumber,
-              dayFocus: day.focus,
-              mainCountBefore,
-              mainCountAfter: rescuedMain.length,
-              targetMinExercises: topUpTargetMin,
-              appendedIds: appended.map(e => e.exercise.id),
-              appendedNames: appended.map(e => e.exercise.name),
-              rescuePath: topUpResult.rescuePath,
-              verdict: rescuedMain.length >= topUpTargetMin
-                ? 'REPAIR_SUCCESS_REACHED_MINIMUM'
-                : 'REPAIR_PARTIAL_STILL_BELOW_MINIMUM',
-            })
-          } else {
-            console.warn('[UNDERBUILT-SESSION-TOPUP-REPAIR] No eligible top-up candidates (all were duplicates of existing selection)', {
-              dayNumber: day.dayNumber,
-              dayFocus: day.focus,
-              fallbackCandidateCount: topUpResult.main.length,
-              verdict: 'REPAIR_NOOP_DUPLICATES_ONLY',
-            })
-          }
-        } else {
-          console.warn('[UNDERBUILT-SESSION-TOPUP-REPAIR] Fallback builder returned no candidates', {
-            dayNumber: day.dayNumber,
-            dayFocus: day.focus,
-            wasRescued: topUpResult.wasRescued,
-            mainCount: topUpResult.main.length,
-            verdict: 'REPAIR_UNAVAILABLE',
-          })
-        }
-      } catch (topUpErr) {
-        // Never fail session generation because of a repair attempt -- the
-        // session still has its original (underbuilt) exercises and the
-        // downstream pipeline remains valid.
-        console.error('[UNDERBUILT-SESSION-TOPUP-REPAIR] Repair attempt crashed, keeping original underbuilt selection', {
-          dayNumber: day.dayNumber,
-          dayFocus: day.focus,
-          error: topUpErr instanceof Error ? topUpErr.message : String(topUpErr),
-          verdict: 'REPAIR_CRASH_SAFE_FALLBACK',
-        })
-      }
-    }
-  }
-
+  
   // ==========================================================================
   // Equipment adaptation with collapse detection
   // ==========================================================================
@@ -26224,18 +22448,12 @@ function generateAdaptiveSession(
     })
     
     // Attempt recovery via fallback selection with relaxed constraints
-    // [SELECTED-SKILL-FALLBACK-TRUTH] Pass selectedSkills so recovery rescue
-    // also surfaces the user's selected-skill material first.
-    const selectedSkillsForRecovery = Array.isArray(selectedSkills)
-      ? selectedSkills.filter((s): s is string => typeof s === 'string' && s.length > 0)
-      : []
     const recoveryRescue = buildFallbackSelectionForSession(
       day.focus,
       primaryGoal,
       equipment, // Use SAME equipment to ensure truth
       sessionMinutesResolved,
-      experienceLevel,
-      selectedSkillsForRecovery
+      experienceLevel
     )
     
     if (recoveryRescue.wasRescued && recoveryRescue.main.length > 0) {
@@ -26752,155 +22970,14 @@ function generateAdaptiveSession(
           })
         }
         
-        // ==========================================================================
-        // [PHASE-NEXT-FINAL-DECISION-OWNER-LOCK] APPLY VARIANT-DEPTH BIAS
-        // ----------------------------------------------------------------
-        // `progressionDepthAdjustments[skill].adjustedBias` is the readiness-
-        // gated current-vs-history truth value (-1 conservative,
-        // 0 moderate, +1 progressive). Pre-fix this was logged and
-        // discarded. Post-fix the bias is mapped to a bounded score
-        // delta and applied here, *after* the skill-family/envelope/
-        // constraint/fatigue/adherence corridor but *before* the resort,
-        // so it directly affects which exercise wins the final order.
-        //
-        // Bias-to-delta mapping (chosen to be material but bounded —
-        // small enough to be subordinate to a strong base/canonical
-        // signal, large enough to flip a tied or near-tied advanced/
-        // basic pair, and within the existing -30/+30 modifier envelope):
-        //
-        //   conservative skill (-1):
-        //     advanced variant: -10 (decisively softens advanced picks)
-        //     basic variant:    +4  (gently favours basic alternatives)
-        //   progressive skill (+1):
-        //     advanced variant: +6  (favours challenging picks when
-        //                            current ability + readiness justify it)
-        //     basic variant:    -2  (gently de-emphasises basics)
-        //   moderate skill (0): no change
-        //
-        // These deltas are added to `result.adjustedScore` directly;
-        // they don't go through the bridge clamp because the bridge
-        // already returned a clamped modifier. This is intentional: the
-        // depth bias is a SECOND axis of authoritative truth (variant
-        // depth) layered on top of the FIRST axis (ranking modifier),
-        // and combining them in the score space is what makes Neon
-        // truth decisive at the final winner stage.
-        //
-        // Honest behaviour: if `adjustedBias = 0` (no readiness gating,
-        // moderate depth, or no skill match) nothing changes. If the
-        // map is empty (no bundle / no skill data), nothing changes.
-        // No fake variant depth is invented.
-        // ==========================================================================
-        let depthDelta = 0
-        let depthBiasUsed: number | null = null
-        let depthSkillKeyUsed: string | null = null
-        try {
-          // Match by skill key with both raw and underscore-stripped form
-          // (the bias map uses `intent.skill` which can be either form
-          // depending on canonicalProfile shape — see L3268-3269).
-          const skillKey = normalized.skillHint || ''
-          const skillKeyAlt = skillKey.replace(/_/g, '')
-          const adj =
-            progressionDepthAdjustments[skillKey] ||
-            progressionDepthAdjustments[skillKeyAlt] ||
-            null
-          if (adj && typeof adj.adjustedBias === 'number' && adj.adjustedBias !== 0) {
-            depthBiasUsed = adj.adjustedBias
-            depthSkillKeyUsed = adj === progressionDepthAdjustments[skillKey] ? skillKey : skillKeyAlt
-            if (adj.adjustedBias < 0) {
-              // Conservative skill
-              depthDelta = isAdvanced ? -10 : 4
-            } else if (adj.adjustedBias > 0) {
-              // Progressive skill
-              depthDelta = isAdvanced ? 6 : -2
-            }
-          }
-        } catch (depthErr) {
-          // Observer-only failure: never collapse a healthy session
-          // because depth-bias lookup threw. Reset to zero and continue.
-          depthDelta = 0
-          depthBiasUsed = null
-          if (exIndex < 3) {
-            console.error('[db-truth-variant-depth-lookup-failed]', {
-              exerciseName: normalized.name,
-              errorMessage: depthErr instanceof Error ? depthErr.message.slice(0, 200) : 'unknown',
-            })
-          }
-        }
-        const depthAdjustedScore = result.adjustedScore + depthDelta
-        if (depthDelta !== 0 && exIndex < 5) {
-          console.log('[db-truth-variant-depth-applied]', {
-            exerciseName: normalized.name,
-            skillKey: depthSkillKeyUsed,
-            isAdvanced,
-            biasUsed: depthBiasUsed,
-            depthDelta,
-            preDepthScore: result.adjustedScore,
-            postDepthScore: depthAdjustedScore,
-            verdict: 'VARIANT_DEPTH_BIAS_APPLIED_AT_WINNER_STAGE',
-          })
-        }
-        
-        // ==========================================================================
-        // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Build the canonical winner-provenance
-        // object for THIS exercise. We join the per-exercise rerank result with
-        // the per-skill `progressionDepthAdjustments[skillKey]` row (built at
-        // L7558+) so the durable stamp carries the rich "why" — current-vs-
-        // historical precedence, readiness gating verdict, conservative-by-
-        // current-truth flag — that previously only existed keyed by skill in
-        // an in-memory map and never reached the chosen exercise. Every field
-        // here is *materialized* truth: it represents what actually happened to
-        // THIS exercise during the final winner stage. We do NOT stamp
-        // eligibility-only ideas, raw preferences, or theoretical modifiers
-        // that did not survive into the rerank result.
-        //
-        // The rerank stage is where we have BOTH inputs simultaneously:
-        //   - the per-exercise rerank result (`result.*` + `depthDelta`)
-        //   - the per-skill adjustments map (`progressionDepthAdjustments`)
-        // After this stage, only the candidate flows downstream and the map
-        // is no longer consulted, so this is the canonical join site.
-        // ==========================================================================
-        const matchedAdjForProvenance =
-          (depthSkillKeyUsed && progressionDepthAdjustments[depthSkillKeyUsed]) ||
-          progressionDepthAdjustments[normalized.skillHint] ||
-          progressionDepthAdjustments[normalized.skillHint.replace(/_/g, '')] ||
-          null
-        const winnerProvenance: AdaptiveExercise['dbTruthWinnerProvenance'] = {
-          rankingApplied: true,
-          rankingChanged: result.changed || depthDelta !== 0,
-          precedenceUsed: (matchedAdjForProvenance?.precedenceUsed as
-            'current' | 'response' | 'historical' | 'default' | 'readiness_gate' | 'none' | null
-          ) ?? (result.precedenceUsed as 'current' | 'response' | 'historical' | 'default' | 'readiness_gate' | 'none' | null) ?? null,
-          skillFamilyUsed: result.skillFamilyUsed ?? null,
-          depthBias: depthBiasUsed,
-          depthDelta,
-          adjustedScoreFinal: depthAdjustedScore,
-          currentBeatsHistorical: matchedAdjForProvenance?.currentBeatsHistorical ?? null,
-          readinessGated: matchedAdjForProvenance?.readinessGated ?? null,
-          readinessPermission: matchedAdjForProvenance?.readinessPermission ?? null,
-          // [conservativeByCurrentTruth] True when current working state earned
-          // a conservative bias either directly (skillTruth resolved to
-          // conservative) OR indirectly via readiness gating capping the
-          // pre-gate bias. Both routes mean "current truth softened the pick."
-          conservativeByCurrentTruth: matchedAdjForProvenance
-            ? (matchedAdjForProvenance.adjustedBias < 0)
-            : null,
-          sourceOfTruth: 'db_truth_final_winner',
-          generatedAtBuildTime: true,
-        }
-
         return {
           ...ex,
-          dbTruthAdjustedScore: depthAdjustedScore,
-          dbTruthModifier: result.totalModifier + depthDelta,
+          dbTruthAdjustedScore: result.adjustedScore,
+          dbTruthModifier: result.totalModifier,
           dbTruthModifierBreakdown: result.modifierBreakdown,
-          dbTruthRankingChanged: result.changed || depthDelta !== 0,
+          dbTruthRankingChanged: result.changed,
           dbTruthSkillFamily: result.skillFamilyUsed,
           dbTruthPrecedenceUsed: result.precedenceUsed,
-          dbTruthDepthBias: depthBiasUsed,
-          dbTruthDepthDelta: depthDelta,
-          // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Durable canonical owner stamp.
-          // Survives mapToAdaptiveExercises explicit pass-through (L27486+).
-          dbTruthWinnerProvenance: winnerProvenance,
         }
       })
       
@@ -26928,15 +23005,6 @@ function generateAdaptiveSession(
       const skillFamilyModCount = scoredExercises.filter(e => e.dbTruthSkillFamily).length
       const globalFallbackCount = scoredExercises.filter(e => !e.dbTruthSkillFamily && e.dbTruthRankingChanged).length
       
-      // [PHASE-NEXT-FINAL-DECISION-OWNER-LOCK] Variant-depth winner-lock
-      // session-level rollup. Counts how many exercises had a non-zero
-      // depth delta and whether any of those flipped order.
-      const depthShiftedCount = scoredExercises.filter(e => (e.dbTruthDepthDelta || 0) !== 0).length
-      const depthBiasMapSize = Object.keys(progressionDepthAdjustments).length
-      const depthBiasNonZeroCount = Object.values(progressionDepthAdjustments).filter(
-        (a) => a && typeof a.adjustedBias === 'number' && a.adjustedBias !== 0
-      ).length
-      
       console.log('[db-truth-main-ranking]', {
         sessionIndex,
         dayFocus: day.focus,
@@ -26947,24 +23015,15 @@ function generateAdaptiveSession(
         skillFamilySpecificMods: skillFamilyModCount,
         globalFallbackMods: globalFallbackCount,
         totalModifiersApplied: scoredExercises.reduce((sum, e) => sum + (e.dbTruthModifier || 0), 0),
-        // [PHASE-NEXT-FINAL-DECISION-OWNER-LOCK] depth-bias instrumentation
-        depthBiasMapSize,
-        depthBiasNonZeroCount,
-        depthShiftedCount,
-        depthDeltaSum: scoredExercises.reduce((sum, e) => sum + (e.dbTruthDepthDelta || 0), 0),
         modifierBreakdowns: scoredExercises.slice(0, 3).map(e => ({
           name: e?.exercise?.name,
           skillFamily: e.dbTruthSkillFamily,
           precedence: e.dbTruthPrecedenceUsed,
           modifier: e.dbTruthModifier,
           breakdown: e.dbTruthModifierBreakdown,
-          depthBias: e.dbTruthDepthBias,
-          depthDelta: e.dbTruthDepthDelta,
         })),
         verdict: rankingChanged 
-          ? (depthShiftedCount > 0 
-              ? 'DB_TRUTH_VARIANT_DEPTH_DECISIVE'
-              : (skillFamilyModCount > 0 ? 'DB_TRUTH_SKILL_SPECIFIC_RANKING_CHANGED' : 'DB_TRUTH_GLOBAL_RANKING_CHANGED'))
+          ? (skillFamilyModCount > 0 ? 'DB_TRUTH_SKILL_SPECIFIC_RANKING_CHANGED' : 'DB_TRUTH_GLOBAL_RANKING_CHANGED')
           : 'DB_TRUTH_RANKING_NO_ORDER_CHANGE',
       })
       
@@ -28511,27 +24570,6 @@ function generateAdaptiveSession(
   }
   
   sessionStep = 'middle_helpers_completed'
-    // [STYLE-PHASE DEGRADE CARD ROOT FIX] BREADCRUMB ACCURACY GUARD
-    // ------------------------------------------------------------------
-    // Prior failure mode: middleStep is the last value written during the
-    // middle-helper phase (e.g. 'finisher_suppressed_by_week_adaptation',
-    // 'finisher_generated', 'fatigue_adjustment_resolved'). After the
-    // middle phase completes successfully, sessionStep advances normally
-    // but middleStep was never neutralized. If a *later* phase throws —
-    // most notably 'applying_training_style' below — the lifecycle catch
-    // formats `middleStep=${middleStep}` into the classified error
-    // message, which then surfaces verbatim on the degraded-rebuild card.
-    // Users saw "step=applying_training_style middleStep=finisher_-
-    // suppressed_by_week_adaptation" even though finisher suppression
-    // had nothing to do with the actual failure.
-    //
-    // Reset to 'none' here so any later-stage throw reports the true
-    // corridor without the stale finisher/middle breadcrumb. Downstream
-    // log parsers already treat 'none' as "no middleStep" via the
-    // `middleStepMatch[1] !== 'none'` guard at lines 4932 / 14220, so
-    // this neutralization is correctly absorbed by the existing
-    // classifier.
-    middleStep = 'none'
 
     // Map exercises first, then validate/dedupe
     sessionStep = 'mapping_exercises'
@@ -28712,18 +24750,12 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       // This ensures we only fail if truly no equipment-valid path exists
       // ==========================================================================
       sessionStep = 'emergency_fallback_attempt'
-      // [SELECTED-SKILL-FALLBACK-TRUTH] Pass selectedSkills so the emergency
-      // rescue also draws from the user's selected-skill material first.
-      const selectedSkillsForEmergency = Array.isArray(selectedSkills)
-        ? selectedSkills.filter((s): s is string => typeof s === 'string' && s.length > 0)
-        : []
       const emergencyRescue = buildFallbackSelectionForSession(
         day.focus,
         primaryGoal,
         equipment,
         sessionMinutesResolved,
-        experienceLevel,
-        selectedSkillsForEmergency
+        experienceLevel
       )
       
       if (emergencyRescue.wasRescued && emergencyRescue.main.length > 0) {
@@ -28871,133 +24903,9 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
 
     // ==========================================================================
     // [PHASE 7A] Apply training method preferences to session structure
-    // [PHASE 3G NEON-BACKED METHOD MATERIALITY] Bundle truth is now
-    // composed into BundleMethodSignals and passed alongside canonical
-    // preferences. Pre-3G this corridor was bundle-blind — method
-    // packaging was driven entirely by preference presence + experience
-    // gates while DB-backed truth (constraintHistory, performance
-    // envelopes, trainingResponse, derivedSignals) shaped only dosage,
-    // skill, and exercise-selection decisions. Threading the signals here
-    // is the smallest safe wiring change that lets earned truth materially
-    // change method outcomes (apply / reject / threshold) and drop a
-    // structured evidence payload onto the session.
     // ==========================================================================
     sessionStep = 'applying_training_style'
-
-    // [PHASE 3-STYLE-TRUE-ROOT-FIX] OUTER LATE-STYLE CORRIDOR GUARD
-    // ------------------------------------------------------------------
-    // Prior fix only protected `applySessionStylePreferences(styleInput)`
-    // itself with a tight inner try/catch. The actual throw sits *before*
-    // that call: the bundleSignals IIFE invokes four bundle helpers
-    // (`hasMeaningfulBenchmarks`, `hasPerformanceEnvelopeData`,
-    // `hasEarnedTrainingHistory`, `getBundleConfidenceLevel`) that each
-    // dereference a specific top-level bundle section without optional
-    // chaining (e.g. `bundle.benchmarks.meta.available`,
-    // `bundle.diagnostics.sectionsAvailable.length`). A partially-built
-    // bundle missing any one of those sections — which is a real
-    // observed shape on the rebuild path — throws TypeError before the
-    // inner guard can engage. The post-style audit logs at the bottom
-    // of this block also dereference deep into
-    // `styleResult.methodDecisionEvidence.decisions[].bundleSignals-
-    // Consumed`, which can fail similarly if any consumer ever returns
-    // a malformed payload.
-    //
-    // Contract: this entire late-style corridor (bundle signal synthesis,
-    // styleInput construction, applySessionStylePreferences invocation,
-    // sessionStyleMetadata assembly, observability audit logs) is an
-    // *optional enhancement layer*. By the time we enter it,
-    // validatedSession is already trusted. Any throw inside it must
-    // degrade to an honest straight-sets sessionStyleMetadata and let
-    // the validated session ship — never collapse the rebuild into a
-    // degraded card. Logs are observers, not owners.
-    //
-    // Honest outer-fallback shape (kept identical to the inner fallback
-    // for diagnostic uniformity):
-    //   primaryStyle: 'straight_sets', has*Applied: false, styledGroups:
-    //   [], appliedMethods: [], rejectedMethods: [],
-    //   methodDecisionEvidence with `style_corridor_fallback` blocker.
-    let sessionStyleMetadata: any = {
-      primaryStyle: 'straight_sets' as const,
-      hasSupersetsApplied: false,
-      hasCircuitsApplied: false,
-      hasDensityApplied: false,
-      structureDescription:
-        'Straight sets (late-style corridor fallback — core session preserved)',
-      appliedMethods: [],
-      rejectedMethods: [],
-      styledGroups: [],
-      methodDecisionEvidence: {
-        bundleConfidence: 'none' as const,
-        bundleSignalsAvailable: [],
-        decisions: (trainingMethodPreferences || []).map(method => ({
-          method,
-          outcome: 'deferred' as const,
-          drivers: [],
-          blockers: ['style_corridor_fallback'],
-          evidenceConfidence: 'none' as const,
-          bundleSignalsConsumed: [],
-        })),
-        bundleMateriallyChangedOutcome: false,
-      },
-      stylePhaseFellBack: false,
-      stylePhaseFallbackReason: null as string | null,
-    }
-    try {
-
-    // [PHASE 3G] Synthesise the BundleMethodSignals from the bundle.
-    // Every field is optional and reflects only what the bundle actually
-    // proves — never guessed or back-filled. When the bundle is null
-    // (e.g. preview path or build failure), bundleSignals is undefined
-    // and applySessionStylePreferences falls back to legacy preference-
-    // only behaviour, which the evidence payload reports honestly.
-    const bundleSignals = (() => {
-      if (!programmingTruthBundle) return undefined
-      // Synthesise densityTolerance from envelope.preferredDensityLevel +
-      // derivedSignals.densityConfidence. We average across families
-      // because method decisions are session-level, not movement-level.
-      let densityTolerance: 'low' | 'medium' | 'high' | undefined
-      const envelopes = programmingTruthBundle.performanceEnvelopes
-      if (envelopes?.meta?.available && envelopes.totalEnvelopesTracked > 0) {
-        const levels = Object.values(envelopes.byMovementFamily)
-          .map(e => (e.preferredDensityLevel || '').toLowerCase())
-          .filter(Boolean)
-        if (levels.length > 0) {
-          const highCount = levels.filter(l => l === 'high').length
-          const lowCount = levels.filter(l => l === 'low').length
-          if (highCount > lowCount && highCount / levels.length >= 0.5) densityTolerance = 'high'
-          else if (lowCount > highCount && lowCount / levels.length >= 0.5) densityTolerance = 'low'
-          else densityTolerance = 'medium'
-        }
-      }
-      // Average envelope.fatigueThreshold across families (when present).
-      let fatigueThreshold: number | null = null
-      if (envelopes?.meta?.available && envelopes.totalEnvelopesTracked > 0) {
-        const thresholds = Object.values(envelopes.byMovementFamily)
-          .map(e => e.fatigueThreshold)
-          .filter((v): v is number => typeof v === 'number')
-        if (thresholds.length > 0) {
-          fatigueThreshold = thresholds.reduce((a, b) => a + b, 0) / thresholds.length
-        }
-      }
-      const tr = programmingTruthBundle.trainingResponse
-      const ch = programmingTruthBundle.constraintHistory
-      const ds = programmingTruthBundle.derivedSignals
-      return {
-        hasActiveConstraints: ds?.hasActiveConstraints,
-        activeJointRiskFlags: ch?.activeJointRiskFlags,
-        densityConfidence: ds?.densityConfidence,
-        densityTolerance,
-        consistencySignal: tr?.meta?.available ? (tr.consistencySignal ?? undefined) : undefined,
-        averageCompletionRatio: tr?.meta?.available ? (tr.averageCompletionRatio ?? null) : null,
-        averageDifficultyRating: tr?.meta?.available ? (tr.averageDifficultyRating ?? null) : null,
-        fatigueThreshold,
-        bundleConfidenceLevel: getBundleConfidenceLevel(programmingTruthBundle),
-        hasMeaningfulBenchmarks: hasMeaningfulBenchmarks(programmingTruthBundle),
-        hasPerformanceEnvelopes: hasPerformanceEnvelopeData(programmingTruthBundle),
-        hasEarnedHistory: hasEarnedTrainingHistory(programmingTruthBundle),
-      }
-    })()
-
+    
     // Build style input from validated exercises
     const styleInput = {
       exercises: validatedSession.exercises.map(e => ({
@@ -29014,95 +24922,12 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       sessionFocus: day.focus || 'mixed',
       availableMinutes: sessionMinutesResolved,
       dayNumber: day.dayNumber,
-      bundleSignals,
     }
     
-    // [STYLE-PHASE DEGRADE CARD ROOT FIX] SAFE POST-CORE STYLE FALLBACK
-    // ------------------------------------------------------------------
-    // Prior failure mode: applySessionStylePreferences ran unguarded after
-    // the validated session was already healthy. Any throw inside style
-    // packaging — empty pool edge cases, undefined movement patterns,
-    // method-decision evidence assembly, etc. — propagated up to the
-    // lifecycle catch and surfaced as a hard `session_generation_failed:
-    // step=applying_training_style ...` classified error. The rebuild
-    // policy then rendered the red "Last rebuild did not complete" card
-    // even though the actual session content (exercises, warmup, cooldown,
-    // dosage, prescription) was completely valid.
-    //
-    // Contract: style packaging is a *late, optional* enhancement layer.
-    // If it fails after `validatedSession.exercises` is healthy, we
-    // attach an honest straight_sets fallback styleMetadata that does
-    // NOT fake any grouped-method truth, log a precise audit, and let
-    // the validated session ship. Hard failures upstream (where the
-    // exercise list itself is invalid) are *not* changed by this guard
-    // — they continue to throw as before because validatedSession is
-    // already trusted by the time we reach this corridor.
-    //
-    // Honest fallback shape:
-    //   - primaryStyle: 'straight_sets'
-    //   - hasSupersetsApplied / hasCircuitsApplied / hasDensityApplied: false
-    //   - appliedMethods: []   (no methods actually applied)
-    //   - rejectedMethods: [] (we don't know what was rejected — be honest)
-    //   - styledGroups: []     (no grouped truth invented)
-    //   - methodDecisionEvidence: a sentinel payload marking this as a
-    //     style-corridor fallback so audit consumers can distinguish
-    //     "preference-only because bundle was absent" from "fallback
-    //     because style packaging itself failed".
-    let styleResult: ReturnType<typeof applySessionStylePreferences>
-    let stylePhaseFellBack = false
-    let stylePhaseErrorMessage: string | null = null
-    try {
-      styleResult = applySessionStylePreferences(styleInput)
-    } catch (styleErr) {
-      stylePhaseFellBack = true
-      stylePhaseErrorMessage = styleErr instanceof Error ? styleErr.message : String(styleErr)
-      console.error('[style-phase-fallback-engaged]', {
-        dayNumber: day.dayNumber,
-        dayFocus: day.focus,
-        validatedExerciseCount: validatedSession.exercises.length,
-        coreSessionWasHealthy: validatedSession.exercises.length > 0,
-        errorName: styleErr instanceof Error ? styleErr.name : 'unknown',
-        errorMessage: stylePhaseErrorMessage.slice(0, 200),
-        stack: styleErr instanceof Error ? styleErr.stack?.split('\n').slice(0, 5).join('\n') : undefined,
-        verdict: 'STYLE_FALLBACK_TO_STRAIGHT_SETS_CORE_SESSION_PRESERVED',
-      })
-      styleResult = {
-        styledGroups: [],
-        appliedMethods: [],
-        rejectedMethods: [],
-        styleMetadata: {
-          primarySessionStyle: 'straight_sets',
-          hasSupersetsApplied: false,
-          hasCircuitsApplied: false,
-          hasDensityApplied: false,
-          structureDescription:
-            'Straight sets (style packaging fallback — core session preserved)',
-        },
-        methodDecisionEvidence: {
-          bundleConfidence: bundleSignals?.bundleConfidenceLevel ?? 'none',
-          bundleSignalsAvailable: [],
-          decisions: (trainingMethodPreferences || []).map(method => ({
-            method,
-            outcome: 'deferred' as const,
-            drivers: [],
-            blockers: ['style_corridor_fallback'],
-            evidenceConfidence: bundleSignals?.bundleConfidenceLevel ?? 'none',
-            bundleSignalsConsumed: [],
-          })),
-          bundleMateriallyChangedOutcome: false,
-        },
-      }
-    }
-
+    const styleResult = applySessionStylePreferences(styleInput)
+    
     // [PHASE 7A TASK 7] Add style metadata to session
-    // [PHASE 3G NEON-BACKED METHOD MATERIALITY] methodDecisionEvidence is
-    // pinned onto the session here so it survives every persistence and
-    // reload boundary (fresh generate, regenerate, rebuild-adjustment,
-    // modify-builder, saved-program reload). Downstream UI / audit code
-    // can read session.styleMetadata.methodDecisionEvidence to prove
-    // exactly which Neon signals fired for this session's method choices.
-    // [PHASE 3-STYLE-TRUE-ROOT-FIX] Reassigning the outer-guard `let`.
-    sessionStyleMetadata = {
+    const sessionStyleMetadata = {
       primaryStyle: styleResult.styleMetadata.primarySessionStyle,
       hasSupersetsApplied: styleResult.styleMetadata.hasSupersetsApplied,
       hasCircuitsApplied: styleResult.styleMetadata.hasCircuitsApplied,
@@ -29111,39 +24936,7 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       appliedMethods: styleResult.appliedMethods,
       rejectedMethods: styleResult.rejectedMethods,
       styledGroups: styleResult.styledGroups,
-      methodDecisionEvidence: styleResult.methodDecisionEvidence,
-      // [STYLE-PHASE DEGRADE CARD ROOT FIX] Surface the fallback flag
-      // onto session metadata so downstream audit/observability can
-      // count style-fallback rates without reparsing logs.
-      stylePhaseFellBack,
-      stylePhaseFallbackReason: stylePhaseFellBack
-        ? (stylePhaseErrorMessage?.slice(0, 200) ?? 'unknown_style_fallback')
-        : null,
     }
-
-    // [PHASE 3G NEON-BACKED METHOD MATERIALITY] Builder-side audit log
-    // proving the bundle was consulted for method decisions and reporting
-    // whether earned truth materially changed any outcome on this session.
-    console.log('[phase3g-neon-method-materiality-audit]', {
-      dayNumber: day.dayNumber,
-      bundlePresent: !!programmingTruthBundle,
-      bundleConfidence: styleResult.methodDecisionEvidence.bundleConfidence,
-      bundleSignalsAvailable: styleResult.methodDecisionEvidence.bundleSignalsAvailable,
-      bundleMateriallyChangedOutcome: styleResult.methodDecisionEvidence.bundleMateriallyChangedOutcome,
-      methodsAppliedCount: styleResult.appliedMethods.length,
-      methodsRejectedCount: styleResult.rejectedMethods.length,
-      bundleDrivenRejections: styleResult.methodDecisionEvidence.decisions
-        .filter(d => d.outcome === 'rejected' && d.bundleSignalsConsumed.length > 0)
-        .map(d => ({ method: d.method, signals: d.bundleSignalsConsumed, blockers: d.blockers })),
-      bundleDrivenAdjustments: styleResult.methodDecisionEvidence.decisions
-        .filter(d => d.outcome === 'applied' && d.drivers.some(c => c.startsWith('bundle_')))
-        .map(d => ({ method: d.method, drivers: d.drivers.filter(c => c.startsWith('bundle_')) })),
-      verdict: styleResult.methodDecisionEvidence.bundleMateriallyChangedOutcome
-        ? 'NEON_TRUTH_MATERIALLY_CHANGED_METHOD_OUTCOMES'
-        : (programmingTruthBundle
-            ? 'BUNDLE_AVAILABLE_NO_OUTCOME_CHANGE_THIS_SESSION'
-            : 'BUNDLE_UNAVAILABLE_PREFERENCE_ONLY_DECISION'),
-    })
     
     // [PHASE 7A TASK 7] Session style display truth audit
     console.log('[session-style-display-truth-audit]', {
@@ -29188,76 +24981,14 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       materialityVerdict: styleMateriality,
     })
     
-    } catch (lateStyleErr) {
-      // [PHASE 3-STYLE-TRUE-ROOT-FIX] Outer late-style corridor catch.
-      // Engaged when anything outside the inner applySessionStylePreferences
-      // guard throws — most commonly the bundleSignals IIFE (helpers
-      // dereferencing missing top-level bundle sections), the styleInput
-      // mapping, the post-style audit logs, or the materiality audit
-      // calculation. The validated session is already healthy at this
-      // point, so we attach the honest fallback sessionStyleMetadata
-      // (already initialized above), tag it with the precise reason,
-      // and continue. The lifecycle catch downstream will not see a
-      // throw and the rebuild will not be classified as degraded.
-      //
-      // [STYLE-CORRIDOR-CLUSTER-FIX] OBSERVER OWNERSHIP HARDENING.
-      // Pre-fix this handler itself read `programmingTruthBundle` (out of
-      // scope at the time), so when the inner code threw a ReferenceError
-      // for that same variable, the handler re-threw the SAME
-      // ReferenceError on its own log line and escaped the guard,
-      // collapsing the rebuild into a degraded card. The reference is
-      // now properly destructured (Edit 3 above), but as a defense-in-
-      // depth principle for an observer-only block, the entire handler
-      // body is wrapped in a nested try/catch that swallows any future
-      // failure in audit/log/metadata code. Logs are observers, not
-      // owners — under no circumstance may a logging line collapse a
-      // healthy validated session.
-      try {
-        const reason = lateStyleErr instanceof Error ? lateStyleErr.message : String(lateStyleErr)
-        console.error('[late-style-corridor-fallback-engaged]', {
-          dayNumber: day.dayNumber,
-          dayFocus: day.focus,
-          validatedExerciseCount: validatedSession.exercises.length,
-          coreSessionWasHealthy: validatedSession.exercises.length > 0,
-          bundlePresent: !!programmingTruthBundle,
-          errorName: lateStyleErr instanceof Error ? lateStyleErr.name : 'unknown',
-          errorMessage: reason.slice(0, 200),
-          stack: lateStyleErr instanceof Error
-            ? lateStyleErr.stack?.split('\n').slice(0, 6).join('\n')
-            : undefined,
-          verdict: 'OUTER_STYLE_CORRIDOR_FALLBACK_CORE_SESSION_PRESERVED',
-        })
-        sessionStyleMetadata.stylePhaseFellBack = true
-        sessionStyleMetadata.stylePhaseFallbackReason = reason.slice(0, 200)
-      } catch (handlerErr) {
-        // Observer-of-last-resort: even the fallback log itself failed.
-        // Silently mark the fallback flag so downstream consumers know
-        // the corridor degraded, and never re-throw — the validated
-        // session must still ship.
-        try {
-          sessionStyleMetadata.stylePhaseFellBack = true
-          sessionStyleMetadata.stylePhaseFallbackReason =
-            handlerErr instanceof Error ? handlerErr.message.slice(0, 200) : 'handler_failure'
-        } catch {
-          // No-op. Even mutating the metadata failed; nothing more we
-          // can safely do without risking the rebuild.
-        }
-      }
-    }
-
     sessionStep = 'returning_validated_session'
     console.log('[session-lifecycle-success]', {
       dayNumber: day.dayNumber,
       dayFocus: day.focus,
       sessionStep,
       finalExerciseCount: validatedSession.exercises.length,
-      // [PHASE 3-STYLE-TRUE-ROOT-FIX] Read style truth off the hoisted
-      // metadata so the lifecycle-success log works in both the normal
-      // path and the outer-fallback path (where local `styleResult` is
-      // not in scope).
-      styleApplied: sessionStyleMetadata.primaryStyle,
-      methodsApplied: sessionStyleMetadata.appliedMethods,
-      stylePhaseFellBack: sessionStyleMetadata.stylePhaseFellBack === true,
+      styleApplied: styleResult.styleMetadata.primarySessionStyle,
+      methodsApplied: styleResult.appliedMethods,
     })
     
     // [AI_SESSION_MATERIALITY_PHASE] Log skill expression materiality for debugging
@@ -29392,11 +25123,6 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
           description: r.description,
         })),
         audit: sessionCompositionBlueprint.audit,
-        // [WEEKLY-SESSION-ROLE-CONTRACT] Authoritative per-day role summary.
-        // This is what makes the Program page card visibly differentiate
-        // days by role label, intensity class, breadth target, progression
-        // character, and the "why this day looks like this" rationale.
-        weeklyRole: sessionCompositionBlueprint.weeklyRoleSummary || null,
       } : undefined,
       // [PRESCRIPTION-PROPAGATION] Track what week adaptation actually changed in this session
       prescriptionPropagationAudit: weekAdaptation ? {
@@ -29649,18 +25375,6 @@ function mapToAdaptiveExercises(
       }
     }
     
-    // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Read the durable winner-provenance
-    // stamp off the candidate. Pre-lock, this field-whitelist mapping was
-    // the exact site where transient `dbTruth*` rerank fields were dropped:
-    // mapToAdaptiveExercises rebuilds each AdaptiveExercise from a closed
-    // set of fields, so anything not explicitly pulled through here ceased
-    // to exist on the final saved program. The stamp is now an explicit
-    // pass-through entry below, which is the canonical save/load handoff
-    // for winner rationale.
-    const candidateWithProvenance = s as SelectedExercise & {
-      dbTruthWinnerProvenance?: AdaptiveExercise['dbTruthWinnerProvenance']
-    }
-
     return {
       id: s.exercise.id,
       name: s.exercise.name,
@@ -29683,12 +25397,6 @@ function mapToAdaptiveExercises(
     coachingMeta: buildExerciseCoachingMetaFromSelection(s, primaryGoal),
     // [LIVE-EXECUTION-TRUTH] Pass through execution truth contract from selection
     executionTruth: s.executionTruth,
-    // [DB-TRUTH-WINNER-PROVENANCE-LOCK] Durable canonical winner-rationale.
-    // Stamped during the rerank stage (~L24711) and explicitly preserved
-    // here at the only field-whitelist boundary in the build path. Without
-    // this line the stamp would be silently dropped exactly the way the
-    // transient `dbTruth*` rerank fields were before this lock.
-    dbTruthWinnerProvenance: candidateWithProvenance.dbTruthWinnerProvenance,
     }
   }).filter((e): e is AdaptiveExercise => e !== null)
 }

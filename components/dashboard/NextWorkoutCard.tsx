@@ -27,21 +27,8 @@ import { type GeneratedProgram } from '@/lib/program-service'
 import { type AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import { getProgramState } from '@/lib/program-state'
 import { analyzeDifficultyTrends } from '@/lib/adaptive-progression-engine'
-// [PHASE-J / RESUME-IDENTITY] Single canonical reader for the resumable
-// live-workout snapshot. The dashboard MUST NOT re-implement this check or
-// re-construct the launch URL on its own - that drift is exactly what caused
-// Resume Workout to silently restart instead of hydrate.
-import {
-  getResumableSessionSummary,
-  buildResumeWorkoutUrl,
-  type ResumableSessionSummary,
-} from '@/components/workout/StreamlinedWorkoutSession'
 
-// [PHASE-J / RESUME-IDENTITY] WORKOUT_STORAGE_KEY removed.
-// All resumable-session reads now go through getResumableSessionSummary()
-// from StreamlinedWorkoutSession, which is the single owner of the storage
-// key, schema version, status gate, recency gate, and identity validation.
-// Dashboard surfaces never touch the raw localStorage payload directly.
+const WORKOUT_STORAGE_KEY = 'spartanlab_workout_session'
 
 interface NextWorkoutCardProps {
   className?: string
@@ -67,11 +54,6 @@ interface WorkoutContext {
   streakDays?: number
   programUpdatedRecently?: boolean
   versionNote?: string
-  // [PHASE-J / RESUME-IDENTITY] Canonical Resume URL built from the persisted
-  // resumable session summary. Populated only when state === 'resume_session'.
-  // The Resume button MUST navigate to this URL (never to bare /workout/session)
-  // so the live route hydrates the saved snapshot instead of restarting.
-  resumeUrl?: string
 }
 
 export function NextWorkoutCard({ className }: NextWorkoutCardProps) {
@@ -81,28 +63,19 @@ export function NextWorkoutCard({ className }: NextWorkoutCardProps) {
 
   useEffect(() => {
     const analyzeWorkoutState = () => {
-      // [PHASE-J / RESUME-IDENTITY] Check for resumable workout session via the
-      // canonical reader. The previous inline check looked for status
-      // 'active' || 'paused', but the live workout machine actually saves
-      // 'active' || 'resting' || 'completed' - so any session in a rest
-      // phase was being missed. The reader also gates on schema version,
-      // recency, and presence of identity fields, so a stale or partial
-      // snapshot can never be surfaced as resumable.
-      let resumableSummary: ResumableSessionSummary | null = null
+      // Check for active workout session
+      let hasActiveSession = false
       try {
-        resumableSummary = getResumableSessionSummary()
+        const savedSession = localStorage.getItem(WORKOUT_STORAGE_KEY)
+        if (savedSession) {
+          const session = JSON.parse(savedSession)
+          const isRecent = session.startTime && (Date.now() - session.startTime) < 24 * 60 * 60 * 1000
+          const isInProgress = session.status === 'active' || session.status === 'paused'
+          hasActiveSession = isRecent && isInProgress
+        }
       } catch {
-        resumableSummary = null
+        hasActiveSession = false
       }
-      const hasActiveSession = resumableSummary !== null
-      // [PHASE-J] Build the canonical Resume URL ONCE here. All Resume
-      // entry points must use this same URL so the live route boots the
-      // exact session shape that was saved (day + mode + variant + week)
-      // and the saved sessionId / structureSignature both match -> the
-      // saved snapshot is hydrated instead of silently rejected.
-      const resumeUrl = resumableSummary
-        ? buildResumeWorkoutUrl(resumableSummary)
-        : null
 
       // Check workout history - TASK 6: Use trusted logs only
       let workoutLogs: ReturnType<typeof getWorkoutLogs> = []
@@ -293,12 +266,6 @@ export function NextWorkoutCard({ className }: NextWorkoutCardProps) {
         streakDays,
         programUpdatedRecently,
         versionNote,
-        // [PHASE-J / RESUME-IDENTITY] Only forward the canonical Resume URL
-        // when there is a resumable session AND the resolved state is the
-        // resume branch. Other branches (recovery_day, week_complete,
-        // first_workout) deliberately ignore it so a stale snapshot can
-        // never hijack a non-resume CTA.
-        resumeUrl: state === 'resume_session' && resumeUrl ? resumeUrl : undefined,
       })
       
       setIsLoading(false)
@@ -330,7 +297,7 @@ export function NextWorkoutCard({ className }: NextWorkoutCardProps) {
 
   if (!workoutContext) return null
 
-  const { state, sessionName, focusAreas, estimatedMinutes, intensityLevel, adaptiveNote, dayNumber, totalDays, streakDays, resumeUrl } = workoutContext
+  const { state, sessionName, focusAreas, estimatedMinutes, intensityLevel, adaptiveNote, dayNumber, totalDays, streakDays } = workoutContext
 
   // Render based on state
   return (
@@ -404,7 +371,7 @@ export function NextWorkoutCard({ className }: NextWorkoutCardProps) {
 
         {/* Action Button */}
         <div className="flex items-center gap-3">
-          {renderActionButton(state, resumeUrl)}
+          {renderActionButton(state)}
           {renderSecondaryAction(state)}
         </div>
 
@@ -499,18 +466,11 @@ function getIntensityColor(intensity: 'low' | 'moderate' | 'high'): string {
   }
 }
 
-function renderActionButton(state: WorkoutState, resumeUrl?: string) {
+function renderActionButton(state: WorkoutState) {
   switch (state) {
     case 'resume_session':
-      // [PHASE-J / RESUME-IDENTITY] Use the canonical Resume URL produced by
-      // buildResumeWorkoutUrl(). It carries the same day + mode + variant +
-      // week the Program card stamped at launch, plus an explicit ?resume=1
-      // flag. If the URL is somehow missing (e.g. snapshot was just discarded
-      // mid-render), fall back to bare /workout/session - that path will
-      // simply boot today's session as Start, which is the correct
-      // degraded behaviour when no resumable identity is available.
       return (
-        <Link href={resumeUrl ?? '/workout/session'}>
+        <Link href="/workout/session">
           <Button 
             size="lg" 
             className="bg-amber-600 hover:bg-amber-700 text-white gap-2 font-semibold"
@@ -665,27 +625,18 @@ function normalizeSessionLength(length: number | string): number {
 export function NextWorkoutCompact({ className }: NextWorkoutCardProps) {
   const [hasActiveSession, setHasActiveSession] = useState(false)
   const [isFirstWorkout, setIsFirstWorkout] = useState(false)
-  // [PHASE-J / RESUME-IDENTITY] Track the canonical Resume URL alongside
-  // the boolean flag so the click target carries day/mode/variant/week.
-  const [resumeUrl, setResumeUrl] = useState<string | null>(null)
 
   useEffect(() => {
-    // [PHASE-J / RESUME-IDENTITY] Use the same canonical reader the main
-    // dashboard card uses. This unifies the two compact / large surfaces
-    // onto a single source of truth - they can no longer drift on
-    // "what counts as resumable?" or "where does Resume go?".
     try {
-      const summary = getResumableSessionSummary()
-      if (summary) {
-        setHasActiveSession(true)
-        setResumeUrl(buildResumeWorkoutUrl(summary))
-      } else {
-        setHasActiveSession(false)
-        setResumeUrl(null)
+      const savedSession = localStorage.getItem(WORKOUT_STORAGE_KEY)
+      if (savedSession) {
+        const session = JSON.parse(savedSession)
+        const isRecent = session.startTime && (Date.now() - session.startTime) < 24 * 60 * 60 * 1000
+        const isInProgress = session.status === 'active' || session.status === 'paused'
+        setHasActiveSession(isRecent && isInProgress)
       }
     } catch {
       setHasActiveSession(false)
-      setResumeUrl(null)
     }
 
     try {
@@ -696,13 +647,11 @@ export function NextWorkoutCompact({ className }: NextWorkoutCardProps) {
     }
   }, [])
 
-  // Use canonical routing: first workout goes to /first-session, resume goes to
-  // the canonical Resume URL (with day/mode/variant/week), continuing goes to
-  // /workout/session as a fresh start.
-  const targetHref = hasActiveSession
-    ? (resumeUrl ?? '/workout/session')
-    : isFirstWorkout
-    ? '/first-session'
+  // Use canonical routing: first workout goes to /first-session, resume/continuing goes to /workout/session
+  const targetHref = hasActiveSession 
+    ? '/workout/session' 
+    : isFirstWorkout 
+    ? '/first-session' 
     : '/workout/session'
 
   return (

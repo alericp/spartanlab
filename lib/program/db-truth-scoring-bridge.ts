@@ -783,62 +783,9 @@ export function applySkillSpecificRankingModifier(
   }
   
   // 4. Apply fatigue modifier for high-fatigue exercises
-  // ==========================================================================
-  // [PHASE-NEXT-MATERIALITY-FIX] FATIGUE GATING BROADENED FROM HIGH-ONLY TO
-  // SCALED-BY-LEVEL.
-  // Pre-fix: this branch fired only when `exercise.fatigueLevel === 'high'`,
-  // so user-specific consistency truth (which drives `fatigueRiskModifier`
-  // from `bundle.trainingResponse.consistencySignal` — `low` → -10, `high`
-  // → +5) almost never reached scores. Most candidate exercises are
-  // labelled `medium` fatigue, so the modifier was silently discarded.
-  // Post-fix: full modifier on high-fatigue exercises, half on medium,
-  // none on low. Honest (low-fatigue exercises shouldn't be re-ranked by
-  // recovery truth), scaled (medium gets a real but proportional shift),
-  // and finally lets `consistencySignal` move the order.
-  // ==========================================================================
-  if (globalModifiers.fatigueRiskModifier !== 0) {
-    const fatigueScale =
-      exercise.fatigueLevel === 'high' ? 1 :
-      exercise.fatigueLevel === 'medium' ? 0.5 :
-      0
-    if (fatigueScale > 0) {
-      const scaled = Math.round(globalModifiers.fatigueRiskModifier * fatigueScale)
-      if (scaled !== 0) {
-        totalModifier += scaled
-        breakdown.push(`fatigue_risk_${exercise.fatigueLevel}:${scaled > 0 ? '+' : ''}${scaled}`)
-      }
-    }
-  }
-  
-  // ==========================================================================
-  // [PHASE-NEXT-MATERIALITY-FIX] ADHERENCE TRUTH WIRED INTO MAIN RANKING.
-  // Pre-fix: `globalModifiers.adherenceModifier` is computed by
-  // `buildRankingModifiersFromBundle` from
-  // `bundle.trainingResponse.recentAdherencePattern` (consistent +5,
-  // improving +3, declining -5, sporadic -8) and packaged into the
-  // `dbTruthRankingModifiers` payload. The legacy global
-  // `applyRankingModifiers` (L497) DID apply it (L537-540) but that
-  // function has zero call sites — the live scoring path
-  // `applySkillSpecificRankingModifier` (used by the builder at L24385
-  // and re-sorted into the final session at L24457) never read this
-  // field. So adherence Neon truth was computed, logged, and silently
-  // discarded for every regenerated session. Adherence is now applied
-  // here — globally to every candidate, since adherence is a
-  // user-level signal, not a per-pattern signal. Combined with the
-  // existing -30/+30 clamp below this remains within authoritative
-  // material bounds.
-  //
-  // Effect: a user with `declining` adherence sees -5 across all
-  // candidates (no order shift) — but a complex/advanced candidate
-  // also receives the progression penalty AND constraint penalty AND
-  // half-fatigue penalty, so adherence pushes the *combined* shift
-  // farther past the simple/basic alternatives, materially favouring
-  // safer selections. A `consistent` adherence user sees +5 globally
-  // and the combined modifier favours challenging selections.
-  // ==========================================================================
-  if (globalModifiers.adherenceModifier !== 0) {
-    totalModifier += globalModifiers.adherenceModifier
-    breakdown.push(`adherence:${globalModifiers.adherenceModifier > 0 ? '+' : ''}${globalModifiers.adherenceModifier}`)
+  if (globalModifiers.fatigueRiskModifier !== 0 && exercise.fatigueLevel === 'high') {
+    totalModifier += globalModifiers.fatigueRiskModifier
+    breakdown.push(`fatigue_risk:${globalModifiers.fatigueRiskModifier > 0 ? '+' : ''}${globalModifiers.fatigueRiskModifier}`)
   }
   
   // Clamp to bounds

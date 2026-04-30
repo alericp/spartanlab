@@ -60,16 +60,6 @@ const PR_TYPE_CONFIG: Record<PRType, {
   best_level: { label: 'Best Level', icon: Target, color: 'text-cyan-400' },
   best_sets: { label: 'Best Sets', icon: Hash, color: 'text-emerald-400' },
   first_unlock: { label: 'First Unlock', icon: Trophy, color: 'text-amber-400' },
-  // [BUILD-FIX] Hybrid / barbell PR types added to align this display
-  // map with the authoritative PRType union (types/history.ts:173-186).
-  // Reuses already-imported lucide icons — no new dependency. Colors
-  // stay coordinated with the matching entries in the PR Archive page
-  // (app/(app)/history/prs/page.tsx) so the same PR class renders with
-  // the same accent across the session detail and the archive views.
-  weighted_calisthenics: { label: 'Weighted Calisthenics', icon: Dumbbell, color: 'text-rose-400' },
-  barbell_1rm: { label: 'Barbell 1RM', icon: Target, color: 'text-red-400' },
-  barbell_top_set: { label: 'Barbell Top Set', icon: TrendingUp, color: 'text-yellow-400' },
-  relative_strength: { label: 'Relative Strength', icon: Target, color: 'text-indigo-400' },
 }
 
 // =============================================================================

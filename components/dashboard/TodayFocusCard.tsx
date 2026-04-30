@@ -18,14 +18,8 @@ import {
 import { getCoachDecision, getQuickCoachInsights, type CoachDecision } from '@/lib/training-coach'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { getWorkoutLogs } from '@/lib/workout-log-service'
-// [PHASE-J / RESUME-IDENTITY] Single canonical reader for the resumable
-// live-workout snapshot. Both TodayFocusCard surfaces (large + compact) use
-// this same reader so the dashboard cannot drift on what counts as
-// "resumable" or where the Resume button navigates.
-import {
-  getResumableSessionSummary,
-  buildResumeWorkoutUrl,
-} from '@/components/workout/StreamlinedWorkoutSession'
+
+const WORKOUT_STORAGE_KEY = 'spartanlab_workout_session'
 
 interface TodayFocusCardProps {
   className?: string
@@ -34,34 +28,23 @@ interface TodayFocusCardProps {
 export function TodayFocusCard({ className }: TodayFocusCardProps) {
   const router = useRouter()
   const [hasActiveSession, setHasActiveSession] = useState(false)
-  // [PHASE-J / RESUME-IDENTITY] Canonical Resume URL is computed once from the
-  // canonical reader and stored in component state so the click target carries
-  // day/mode/variant/week back into the live route.
-  const [resumeUrl, setResumeUrl] = useState<string | null>(null)
   const [coachDecision, setCoachDecision] = useState<CoachDecision | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isFirstWorkout, setIsFirstWorkout] = useState(false)
 
   useEffect(() => {
-    // [PHASE-J / RESUME-IDENTITY] Use the canonical reader for resumable
-    // sessions. The previous inline check looked for status 'active' ||
-    // 'paused', but the live workout machine actually saves 'active' ||
-    // 'resting' || 'completed' - so any session in a rest phase was being
-    // missed. The reader also gates on schema version, recency, identity
-    // bundle presence, and progress-not-zero, so a stale or partial
-    // snapshot can never be surfaced as resumable.
+    // Check for active workout session
     try {
-      const summary = getResumableSessionSummary()
-      if (summary) {
-        setHasActiveSession(true)
-        setResumeUrl(buildResumeWorkoutUrl(summary))
-      } else {
-        setHasActiveSession(false)
-        setResumeUrl(null)
+      const savedSession = localStorage.getItem(WORKOUT_STORAGE_KEY)
+      if (savedSession) {
+        const session = JSON.parse(savedSession)
+        // Check if session is valid and not too old (24 hours)
+        const isRecent = session.startTime && (Date.now() - session.startTime) < 24 * 60 * 60 * 1000
+        const isInProgress = session.status === 'active' || session.status === 'paused'
+        setHasActiveSession(isRecent && isInProgress)
       }
     } catch {
       setHasActiveSession(false)
-      setResumeUrl(null)
     }
 
     // Check if this is the user's first workout
@@ -193,11 +176,7 @@ export function TodayFocusCard({ className }: TodayFocusCardProps) {
             <Button 
               size="lg" 
               className="bg-amber-600 hover:bg-amber-700 text-white gap-2 font-semibold"
-              // [PHASE-J / RESUME-IDENTITY] Use the canonical Resume URL
-              // produced by buildResumeWorkoutUrl(). Carries day + mode +
-              // variant + week + ?resume=1 so the live route hydrates the
-              // saved snapshot instead of restarting at exercise 1, set 1.
-              onClick={() => router.push(resumeUrl ?? '/workout/session')}
+              onClick={() => router.push('/workout/session')}
             >
               <RotateCcw className="w-5 h-5" />
               Resume Workout
@@ -262,25 +241,19 @@ export function TodayFocusCard({ className }: TodayFocusCardProps) {
 // Compact version for sidebar or secondary placement
 export function TodayFocusCompact({ className }: TodayFocusCardProps) {
   const [hasActiveSession, setHasActiveSession] = useState(false)
-  // [PHASE-J / RESUME-IDENTITY] Track canonical Resume URL for the compact
-  // surface as well so both surfaces produce bit-identical Resume targets.
-  const [resumeUrl, setResumeUrl] = useState<string | null>(null)
   const [isFirstWorkout, setIsFirstWorkout] = useState(false)
 
   useEffect(() => {
-    // [PHASE-J / RESUME-IDENTITY] Single canonical reader.
     try {
-      const summary = getResumableSessionSummary()
-      if (summary) {
-        setHasActiveSession(true)
-        setResumeUrl(buildResumeWorkoutUrl(summary))
-      } else {
-        setHasActiveSession(false)
-        setResumeUrl(null)
+      const savedSession = localStorage.getItem(WORKOUT_STORAGE_KEY)
+      if (savedSession) {
+        const session = JSON.parse(savedSession)
+        const isRecent = session.startTime && (Date.now() - session.startTime) < 24 * 60 * 60 * 1000
+        const isInProgress = session.status === 'active' || session.status === 'paused'
+        setHasActiveSession(isRecent && isInProgress)
       }
     } catch {
       setHasActiveSession(false)
-      setResumeUrl(null)
     }
     
     // Check for first workout
@@ -292,12 +265,11 @@ export function TodayFocusCompact({ className }: TodayFocusCardProps) {
     }
   }, [])
 
-  // Use canonical routing: first workout → /first-session, resume → canonical
-  // Resume URL (with day/mode/variant/week), continuing → /workout/session.
-  const targetHref = hasActiveSession
-    ? (resumeUrl ?? '/workout/session')
-    : isFirstWorkout
-    ? '/first-session'
+  // Use canonical routing: first workout → /first-session, resume → /workout/session
+  const targetHref = hasActiveSession 
+    ? '/workout/session' 
+    : isFirstWorkout 
+    ? '/first-session' 
     : '/workout/session'
 
   return (

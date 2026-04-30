@@ -173,25 +173,6 @@ import {
 // [DOCTRINE RUNTIME CONTRACT] Import for upstream doctrine influence
 import { type DoctrineRuntimeContract } from './doctrine-runtime-contract'
 
-// [STEP-5-ADAPTIVE-DOSAGE] Adaptive prescription dosage resolver — keys
-// dosage off the exercise's identity (not the user's primary goal) so a
-// Wall Handstand Hold no longer inherits planche/lever skill rules.
-import {
-  resolveAdaptiveExerciseDosage,
-  type AdaptiveDosageDecision,
-  type DayIntensity,
-} from './program/adaptive-dosage-resolver'
-// [STEP-5C-CANONICAL-GRAMMAR] Final sanity gate for any rep range that
-// reaches the prescription pipeline through legacy template / blend /
-// transform paths. The resolver already snaps its own output, so this
-// import is consumed only by `getPrescriptionAwarePrescription`'s
-// fallback branches and by `transformRepsForQuality` /
-// `transformRepsForRecovery` to prevent arithmetic-interpolation leaks.
-import {
-  normalizeRepsOrTimeString,
-  deriveDayIntensity,
-} from './program/canonical-range-grammar'
-
 // [SESSION ARCHITECTURE TRUTH] Import for progression enforcement
 import { 
   filterByCaptedProgression, 
@@ -273,24 +254,14 @@ function transformRepsForQuality(repsOrTime: string): string {
   if (repRangeMatch) {
     const low = Math.max(3, Math.floor(parseInt(repRangeMatch[1]) * 0.7))
     const high = Math.max(5, Math.floor(parseInt(repRangeMatch[2]) * 0.7))
-    // [STEP-5C-CANONICAL-GRAMMAR] Multiplying by 0.7 produces arithmetic
-    // ranges (e.g. 7-10 / 7-12) that are not on the canonical coaching
-    // band list. Snap to the nearest technical-day band so this transform
-    // can never leak weird ranges into the visible prescription.
-    const snapped = normalizeRepsOrTimeString(`${low}-${high}`, 'technique_practice', 'low')
-    return snapped.repsOrTime
+    return `${low}-${high}`
   }
   // Handle single rep count like "10" -> "6-8"
   const singleRepMatch = repsOrTime.match(/^(\d+)$/)
   if (singleRepMatch) {
     const base = parseInt(singleRepMatch[1])
     const reduced = Math.max(4, Math.floor(base * 0.7))
-    const snapped = normalizeRepsOrTimeString(
-      `${reduced}-${reduced + 2}`,
-      'technique_practice',
-      'low',
-    )
-    return snapped.repsOrTime
+    return `${reduced}-${reduced + 2}`
   }
   // Handle time-based like "30s" -> unchanged (quality already implied)
   return repsOrTime
@@ -305,12 +276,7 @@ function transformRepsForRecovery(repsOrTime: string): string {
   if (repRangeMatch) {
     const low = Math.max(4, parseInt(repRangeMatch[1]) - 2)
     const high = Math.max(6, parseInt(repRangeMatch[2]) - 2)
-    // [STEP-5C-CANONICAL-GRAMMAR] Subtracting a fixed delta produces
-    // arithmetic ranges (e.g. 7-12 from 9-14). Snap to the nearest
-    // recovery-bias canonical band so transforms never emit blocked
-    // ranges.
-    const snapped = normalizeRepsOrTimeString(`${low}-${high}`, 'hypertrophy_support', 'low')
-    return snapped.repsOrTime
+    return `${low}-${high}`
   }
   // Handle time-based like "30s" -> "20-25s"
   const timeMatch = repsOrTime.match(/^(\d+)s?$/)
@@ -752,47 +718,6 @@ function getSessionSkillExpressionCapture(): SessionSkillExpressionCapture | nul
   return _lastSessionSkillExpressionCapture
 }
 
-// =============================================================================
-// [PHASE 4E — DOCTRINE CAUSAL AUDIT CAPTURE]
-//
-// Mirrors the skill-expression capture pattern above. Module-level mutable
-// state is safe here because session generation is sequential within a single
-// program build (the builder loops day-by-day; selectExercisesForSession is
-// not called concurrently).
-//
-// The pre-Phase-4E bug:
-//   `sessionDoctrineAudit` was a let-bound local inside selectMainExercises
-//   (L4199). It tracked topCandidateChanged / top3Changed across every
-//   applyDoctrineToPool() call within the session, then was discarded on
-//   return because selectMainExercises returns just `finalExercises: SelectedExercise[]`.
-//   Result: the builder had real doctrine causal data per scoring call, but
-//   never received any of it. Every "doctrine applied" claim downstream was
-//   derived from rule/source counts, not from "did doctrine actually pick
-//   a different winner?"
-//
-// Post-fix:
-//   selectMainExercises calls captureSessionDoctrineAudit at the same merge
-//   point that updates sessionDoctrineAudit. selectExercisesForSession resets
-//   the capture at start (mirroring resetSessionSkillExpressionCapture) and
-//   reads it into the ExerciseSelection return.
-// =============================================================================
-
-let _lastSessionDoctrineAudit: DoctrineScoringAudit | null = null
-
-function resetSessionDoctrineAudit(): void {
-  _lastSessionDoctrineAudit = null
-}
-
-function captureSessionDoctrineAudit(audit: DoctrineScoringAudit | null): void {
-  // Idempotent: callers may pass null to skip; we only capture real data.
-  if (!audit) return
-  _lastSessionDoctrineAudit = audit
-}
-
-function getSessionDoctrineAudit(): DoctrineScoringAudit | null {
-  return _lastSessionDoctrineAudit
-}
-
 export interface SelectedExercise {
   exercise: Exercise
   sets: number
@@ -829,31 +754,6 @@ export interface SelectedExercise {
                  'fallback_after_validation' | null
   // [exercise-trace] TASK 2: Full selection traceability
   selectionTrace?: ExerciseSelectionTrace
-  // [PHASE-1B-CONTEXT-WIRE] Session-assembly classifier context.
-  // Pre-Phase-1B, ~13 read sites (lines 5209, 5326, 6096, 6310, 6458, 6690 et al.)
-  // consumed `selectionContext?.sessionRole`, `selectionContext?.influencingSkills`,
-  // and `selectionContext?.primarySelectionReason` to classify each row into
-  // primary / secondary / support / other buckets for the session-architecture
-  // enforcement pass. However, this field was NEVER populated anywhere — a
-  // dead wire. That is why selected secondary/tertiary skills appeared in
-  // upstream selector logic but invisibly collapsed into the `currentOther`
-  // bucket during architecture slot-count enforcement, which then trimmed
-  // them under `maxExercises` pressure.
-  //
-  // This field is now populated by `addExercise` directly from the same
-  // traceContext used for `selectionTrace`. Downstream classifiers require
-  // NO code changes — the existing reads simply start returning real data.
-  selectionContext?: {
-    primarySelectionReason: string
-    sessionRole: string
-    expressionMode: string
-    influencingSkills: Array<{
-      skillId: string
-      influence: 'primary' | 'secondary' | 'selected' | 'limiter_related'
-      expressionMode: string
-    }>
-    doctrineSource: DoctrineSourceTrace | null
-  }
   // [LIVE-EXECUTION-TRUTH] Authoritative runtime execution contract
   // This replaces heuristic-based band/progression detection in the live workout runner
   executionTruth?: {
@@ -1133,18 +1033,6 @@ export interface ExerciseSelection {
   // [DOCTRINE-RELAXATION-RESCUE] Track if doctrine constraints were relaxed
   doctrineRelaxationApplied?: boolean
   doctrineRelaxationReason?: string
-  // [PHASE 4E — DOCTRINE CAUSAL AUDIT SURFACE]
-  // Pre-fix bug: selectMainExercises built a `sessionDoctrineAudit` locally
-  // (L4199) tracking topCandidateChanged / top3Changed across all
-  // applyDoctrineToPool calls, then discarded it on return. The builder had
-  // no way to know whether doctrine actually changed any winner — so
-  // `doctrineIntegration` rollups were built from rule counts and source
-  // counts, never from "did doctrine actually win a slot?".
-  // Post-fix: selectExercisesForSession captures the audit via the existing
-  // module-level capture pattern (mirroring captureSkillExpressionResult)
-  // and surfaces it here so the builder can stamp it on each session and
-  // aggregate it into program.doctrineCausalChallenge.
-  doctrineCausalAudit?: DoctrineScoringAudit | null
 }
 
 interface ExerciseSelectionInputs {
@@ -1383,9 +1271,6 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   
   // [AI_SESSION_MATERIALITY_PHASE] Reset skill expression capture at start of each session
   resetSessionSkillExpressionCapture()
-  // [PHASE 4E — DOCTRINE CAUSAL AUDIT] Reset doctrine audit capture at start of each session
-  // so per-session causal data does not leak from a previous session into this one.
-  resetSessionDoctrineAudit()
   
   console.log('[exercise-resolver] selectExercisesForSession called:', {
     dayFocus: inputs.day?.focus,
@@ -2197,14 +2082,6 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
       dayRole: sessionArchitectureContract.dayRoleEnforcement.dayRole,
       workloadRatio: `${sessionArchitectureContract.workloadDistribution.primaryPercent}/${sessionArchitectureContract.workloadDistribution.secondaryPercent}/${sessionArchitectureContract.workloadDistribution.supportPercent}`,
     },
-    // [PHASE 4E — DOCTRINE CAUSAL AUDIT SURFACE]
-    // Read the per-session capture written by selectMainExercises and surface
-    // it on the return so the builder can stamp it onto the session and
-    // aggregate across all sessions into program.doctrineCausalChallenge.
-    // null means selectMainExercises ran but doctrine never even matched a
-    // candidate — this is itself a meaningful diagnostic ("no_matching_rules"
-    // or "doctrine_cache_empty"), so we do NOT default to {} here.
-    doctrineCausalAudit: getSessionDoctrineAudit(),
   }
 }
 
@@ -2287,33 +2164,9 @@ function getAdvancedSkillExercises(
     }
     
     // [advanced-skill-expression] ISSUE C: Other advanced skills
-    // [PHASE 3D REGISTRY-BREADTH-LOCK] Pre-3D this branch was a hardcoded
-    // allow-list:
-    //   if (skill === 'back_lever' || skill === 'dragon_flag' ||
-    //       skill === 'planche_pushup' || skill === 'one_arm_pull_up' ||
-    //       skill === 'one_arm_chin_up' || skill === 'one_arm_push_up')
-    // That list silently EXCLUDED `planche`, `front_lever`, `handstand`,
-    // `v_sit`, `l_sit`, `muscle_up` — the exact families the saved athlete
-    // truth selects (planche primary, FL secondary, plus handstand and
-    // v-sit). Even when the registry contained their entries, this gate
-    // never let them through, so the recommendation pass returned nothing
-    // and generic scoring took over. That was the dominant reason the
-    // visible output kept feeling underexpressed despite truth gains.
-    //
-    // Fix: the recommendation pass now runs for ANY advanced family that
-    // isn't HSPU (HSPU stays in its own branch above because it carries a
-    // doctrine-specific day-focus gate). The single source of truth is
-    // `ADVANCED_SKILL_FAMILIES`. Future additions to the registry will
-    // automatically reach this pass without requiring a parallel edit
-    // here — closing the class of bug entirely, not just the instance.
-    //
-    // Doctrine safety preserved:
-    //   - `isAdvancedSkill(skill)` already gates entry at L2163
-    //   - Pool availability still filters via the .find() below
-    //   - One recommendation per skill (the `break` statement)
-    //   - expressionMode priority weighting unchanged
-    //   - HSPU's day-focus gate above unchanged
-    else if (skill !== 'hspu') {
+    // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
+    if (skill === 'back_lever' || skill === 'dragon_flag' || skill === 'planche_pushup' ||
+        skill === 'one_arm_pull_up' || skill === 'one_arm_chin_up' || skill === 'one_arm_push_up') {
       const progressions = advancedFamily.directProgressions
       for (const exId of progressions) {
         if (!exId) continue // Skip undefined exercise IDs
@@ -2674,57 +2527,24 @@ function selectMainExercises(
   // unless they are explicitly safe bridge/prep variants.
   // ==========================================================================
   
-  // ==========================================================================
-  // [PHASE 2C CANONICAL REGISTRY ALIGNMENT]
-  // Keys are registered in BOTH underscored and normalized (no-underscore)
-  // forms because the lookup below normalizes skillKey via `.replace(/_/g, '')`.
-  // Pre-Phase-2C, only `planche` / `hspu` / `manna` matched because they have
-  // no underscore — every multi-word skill (`front_lever`, `back_lever`,
-  // `l_sit`, `v_sit`, `muscle_up`) silently returned `no_ladder_defined`,
-  // which meant the realism-cap was effectively a no-op for those skills and
-  // the Phase 2B proximity ranker collapsed into carryover/fatigue tiebreak.
-  // ==========================================================================
+  // Define progression level ordering for common progressions
   const PROGRESSION_LEVEL_ORDER: Record<string, string[]> = {
     // Planche progression
     planche: ['tuck', 'adv_tuck', 'straddle', 'half_lay', 'full'],
-    // Front lever progression (normalized key only — skill has underscore)
-    frontlever: ['tuck', 'adv_tuck', 'one_leg', 'straddle', 'half_lay', 'full'],
-    front_lever: ['tuck', 'adv_tuck', 'one_leg', 'straddle', 'half_lay', 'full'],
-    // Back lever progression (normalized key only — skill has underscore)
-    // Note: ladder tokens substring-match BOTH `advanced_tuck_back_lever` and
-    // any future `adv_tuck_back_lever` alias, because `advanced_tuck` contains
-    // `adv_tuck`.
-    backlever: ['tuck', 'adv_tuck', 'one_leg', 'straddle', 'half_lay', 'full'],
-    back_lever: ['tuck', 'adv_tuck', 'one_leg', 'straddle', 'half_lay', 'full'],
-    // HSPU progression. Ladder tokens match pool IDs:
-    //   `pike_pushup` → `pike`
-    //   `pike_pushup_elevated` → `elevated_pike` (substring of `_elevated`)
-    //   `wall_hspu_partial` / `wall_hspu_negative` / `wall_hspu` / `wall_hspu_full` → `wall`
-    //   `deficit_hspu` → `deficit`
-    //   `freestanding_hs_hold` → `freestanding`
-    hspu: ['pike', 'elevated_pike', 'wall', 'deficit', 'freestanding'],
+    // Front lever progression
+    front_lever: ['tuck', 'adv_tuck', 'straddle', 'half_lay', 'full'],
+    // Back lever progression
+    back_lever: ['tuck', 'adv_tuck', 'straddle', 'half_lay', 'full'],
+    // HSPU progression
+    hspu: ['pike', 'elevated_pike', 'wall', 'freestanding'],
     // Muscle up progression
-    muscleup: ['transition_negative', 'transition_band', 'kipping', 'strict'],
     muscle_up: ['transition_negative', 'transition_band', 'kipping', 'strict'],
     // L-sit progression
-    lsit: ['tuck', 'one_leg', 'full'],
     l_sit: ['tuck', 'one_leg', 'full'],
     // V-sit progression
-    vsit: ['tuck', 'straddle', 'full'],
     v_sit: ['tuck', 'straddle', 'full'],
     // Manna progression
     manna: ['l_sit', 'elevated_l', 'low_manna', 'full'],
-    // Dragon flag progression (Phase 2C — previously missing entirely).
-    // Pool IDs: `dragon_flag_tuck`, `dragon_flag_neg`, `dragon_flag_assisted`, `dragon_flag`.
-    // Final rung uses the literal `dragon_flag` token to match the pure id;
-    // earlier iteration order ensures `_tuck` / `_neg` / `_assisted` match
-    // their respective rungs first (they all also contain `dragon_flag`).
-    dragonflag: ['tuck', 'neg', 'assisted', 'dragon_flag'],
-    dragon_flag: ['tuck', 'neg', 'assisted', 'dragon_flag'],
-    // Planche push-up progression (Phase 2C — previously missing entirely).
-    // Pool IDs: `planche_lean`, `planche_lean_pushup`, `pppu`, `tuck_planche_pushup`.
-    planchepushup: ['lean', 'pppu', 'tuck'],
-    planche_pushup: ['lean', 'pppu', 'tuck'],
   }
   
   // Track blocked exercises for audit
@@ -2759,21 +2579,11 @@ function selectMainExercises(
       return { allowed: true, reason: 'no_ladder_defined' }
     }
     
-    // Find current level index - safely normalize currentProgression.
-    // [PHASE 2C] Longest-match: `advanced_tuck_back_lever` contains BOTH
-    // `tuck` and `adv_tuck`. First-match resolved to the `tuck` rung and
-    // anchored the realism cap one rung too low, which corrupted every
-    // downstream delta calculation for intermediate-tier skills.
+    // Find current level index - safely normalize currentProgression
     const currentProgressionLower = safeLower(currentProgression)
-    let currentLevelIndex = -1
-    let currentBestLen = 0
-    for (let i = 0; i < progressionLadder.length; i++) {
-      const level = progressionLadder[i]
-      if (currentProgressionLower.includes(level) && level.length > currentBestLen) {
-        currentBestLen = level.length
-        currentLevelIndex = i
-      }
-    }
+    const currentLevelIndex = progressionLadder.findIndex(level => 
+      currentProgressionLower.includes(level)
+    )
     
     if (currentLevelIndex === -1) {
       // Can't determine current level - allow by default
@@ -2784,24 +2594,15 @@ function selectMainExercises(
     const exerciseIdLower = safeExerciseId(exercise)
     const exerciseNameLower = safeExerciseName(exercise)
     
-    // [PHASE 2C CANONICAL REGISTRY ALIGNMENT] Longest-match resolution.
-    // See `pickBestCanonicalCandidate` for rationale — both matchers must
-    // use the same longest-match rule so the realism cap and the proximity
-    // ranker agree on each exercise's rung. First-match-wins mis-classified
-    // `adv_tuck_planche` as the `tuck` rung, which meant the cap permitted
-    // it at current=`tuck_planche` (delta 0 → allowed) while the ranker
-    // scored it +100 exact — silently bypassing realism enforcement.
     let exerciseLevelIndex = -1
     let exerciseLevel = 'unknown'
-    let bestMatchLen = 0
+    
     for (let i = 0; i < progressionLadder.length; i++) {
       const level = progressionLadder[i]
       if (exerciseIdLower.includes(level) || exerciseNameLower.includes(level.replace(/_/g, ' '))) {
-        if (level.length > bestMatchLen) {
-          bestMatchLen = level.length
-          exerciseLevelIndex = i
-          exerciseLevel = level
-        }
+        exerciseLevelIndex = i
+        exerciseLevel = level
+        break
       }
     }
     
@@ -2874,274 +2675,7 @@ function selectMainExercises(
     
     return { filtered, blocked, audit }
   }
-
-  // ==========================================================================
-  // [PHASE 1 SELECTED-SKILL DIRECT-EXPRESSION LOCK]
-  // ==========================================================================
-  // Canonical-registry-backed candidate builder for non-primary selected skills
-  // (secondary_anchor / tertiary / support from materialSkillIntent).
-  //
-  // Priority order (deterministic):
-  //   1. ADVANCED_SKILL_FAMILIES[skill].directProgressions     <- canonical direct
-  //   2. getAdvancedSkillSupport(skill).primary/secondary/trunk <- canonical support
-  //   3. Substring/transfer matching                            <- legacy fallback
-  //
-  // This function REPLACES the substring-first candidate search that previously
-  // ran inside the tertiary and support injection sites. Substring matching
-  // used `name.includes(skillLower)` which under-matches specific canonical
-  // progressions (e.g. "skin_the_cat" for back_lever doesn't include
-  // "backlever" substring) and over-matches broadly-named exercises. Sourcing
-  // from ADVANCED_SKILL_FAMILIES.directProgressions and
-  // getAdvancedSkillSupport() gives the selector the exact registered
-  // progression ladder for each selected skill.
-  //
-  // Progression-cap (Phase 2) is NOT applied here -- callers pipe the returned
-  // candidates through `filterByCurrentProgression(scored, skill)` before
-  // addExercise(). Separating the two keeps the candidate-builder pure and
-  // reusable, and ensures the single authoritative cap owner stays
-  // `filterByCurrentProgression` at line 2646.
-  const buildCanonicalSkillCandidates = (
-    skillKey: string,
-    pools: readonly Exercise[][],
-    currentUsedIds: Set<string>
-  ): {
-    candidates: Exercise[]
-    source: 'canonical_direct' | 'canonical_support' | 'transfer_fallback'
-  } => {
-    const allPool: Exercise[] = []
-    const byId = new Map<string, Exercise>()
-    for (const pool of pools) {
-      for (const ex of pool) {
-        if (!byId.has(ex.id)) {
-          byId.set(ex.id, ex)
-          allPool.push(ex)
-        }
-      }
-    }
-
-    // 1. Canonical direct progressions from ADVANCED_SKILL_FAMILIES
-    if (isAdvancedSkill(skillKey)) {
-      const family = getAdvancedSkillFamily(skillKey)
-      if (family && Array.isArray(family.directProgressions) && family.directProgressions.length > 0) {
-        const direct: Exercise[] = []
-        for (const exId of family.directProgressions) {
-          const found = byId.get(exId)
-          if (found && !currentUsedIds.has(exId)) direct.push(found)
-        }
-        if (direct.length > 0) {
-          return { candidates: direct, source: 'canonical_direct' }
-        }
-      }
-    }
-
-    // 2. Canonical support mappings from getAdvancedSkillSupport()
-    // Wrapped in try/catch because the registry throws on unknown skill ids
-    // for some callers; we must never fail the selector for a registry miss.
-    try {
-      const advSupport = getAdvancedSkillSupport(skillKey)
-      if (advSupport) {
-        const supportIds = new Set<string>()
-        for (const s of advSupport.primary) for (const id of s.exerciseIds) supportIds.add(id)
-        for (const s of advSupport.secondary) for (const id of s.exerciseIds) supportIds.add(id)
-        for (const id of advSupport.trunk.exerciseIds) supportIds.add(id)
-        const support: Exercise[] = []
-        for (const id of supportIds) {
-          const found = byId.get(id)
-          if (found && !currentUsedIds.has(id)) support.push(found)
-        }
-        if (support.length > 0) {
-          return { candidates: support, source: 'canonical_support' }
-        }
-      }
-    } catch {
-      // Silently fall through to transfer-matching fallback
-    }
-
-    // 3. Substring / transfer-matching fallback (preserves prior behavior so
-    //    a registry miss never reduces candidate pool below the old baseline).
-    const skillLower = safeLower(skillKey).replace(/_/g, '')
-    if (!skillLower) return { candidates: [], source: 'transfer_fallback' }
-    const fallback = allPool.filter(e =>
-      !currentUsedIds.has(e.id) && (
-        exerciseTransfersToSkill(e, skillLower) ||
-        safeExerciseId(e).includes(skillLower) ||
-        safeExerciseName(e).includes(skillLower) ||
-        (e.primarySkills || []).some(p => safeLower(p).includes(skillLower))
-      )
-    )
-    return { candidates: fallback, source: 'transfer_fallback' }
-  }
-
-  // ==========================================================================
-  // [PHASE 2B CANONICAL SPECIFICITY LOCK]
-  // ==========================================================================
-  // Picks the SINGLE best canonical candidate for a selected skill, using
-  // proximity to `currentWorkingProgression` as the dominant criterion.
-  //
-  // WHY THIS EXISTS
-  // ---------------
-  // Phase 1B guaranteed selected-skill SURVIVAL into the committed session.
-  // But every call site (tertiary injection, support injection, realism
-  // reroutes, and the PHASE1B-FINAL-SELECTED-SKILL-COMMIT pass) then picked
-  // `filtered[0]` / `sorted[0]` / first `.find(...)` match. Because
-  // `ADVANCED_SKILL_FAMILIES.directProgressions` is registered in
-  // low→high order AND `filterByCurrentProgression` lets every rung up
-  // through `currentLevelIndex + 1` survive, index 0 was always the
-  // EASIEST rung — a `straddle_planche`-capable athlete kept receiving
-  // `tuck_planche` committed rows.
-  //
-  // WHAT IT DOES
-  // ------------
-  // For each candidate, it derives the exercise's ladder position using the
-  // same substring match already used by `isExerciseWithinCurrentProgression`
-  // (so nothing drifts from the authoritative realism gate). It then scores:
-  //
-  //   +100 exact match with currentWorkingProgression     (most canonical)
-  //   +90  one rung below current (prime working-set)
-  //   +80  one rung above current (realistic bridge)
-  //   +70  two rungs below (canonical but less specific)
-  //   +60  any other ladder-matched rung
-  //   +40  exercise has no detected ladder position (accessory-class)
-  //
-  // Within the same proximity tier, carryover (desc) then fatigueCost (asc)
-  // break ties so heavier rings variants lose to the cleaner textbook rung.
-  //
-  // WHAT IT DOES NOT TOUCH
-  // ----------------------
-  //   - progression cap owner (still `filterByCurrentProgression`)
-  //   - canonical registry (still ADVANCED_SKILL_FAMILIES + getAdvancedSkillSupport)
-  //   - survival contract (Phase 1B final-commit pass still runs unchanged;
-  //     this only improves WHICH exercise represents the skill, never whether
-  //     it appears)
-  //   - mirror / UI / live runtime
-  const pickBestCanonicalCandidate = (
-    candidates: Exercise[],
-    skillKey: string
-  ): {
-    exercise: Exercise | null
-    matchQuality: 'exact' | 'one_below' | 'one_above_bridge' | 'regression' | 'other_ladder' | 'no_ladder'
-    exerciseLevel: string
-    specificityScore: number
-  } => {
-    if (candidates.length === 0) {
-      return { exercise: null, matchQuality: 'no_ladder', exerciseLevel: 'none', specificityScore: 0 }
-    }
-
-    const currentProgression = getAuthoritativeProgression(skillKey)
-    const normalizedSkill = safeLower(skillKey).replace(/_/g, '')
-    const ladder = PROGRESSION_LEVEL_ORDER[normalizedSkill]
-
-    // No ladder or no working progression data -> keep registry order but
-    // still prefer higher carryover / lower fatigue for tie-break.
-    if (!currentProgression || !ladder) {
-      const ranked = [...candidates].sort((a, b) => {
-        const coDiff = (b.carryover || 0) - (a.carryover || 0)
-        if (coDiff !== 0) return coDiff
-        return (a.fatigueCost || 3) - (b.fatigueCost || 3)
-      })
-      return {
-        exercise: ranked[0],
-        matchQuality: 'no_ladder',
-        exerciseLevel: 'unknown',
-        specificityScore: 40,
-      }
-    }
-
-    const currentLower = safeLower(currentProgression)
-    // [PHASE 2C] Longest-match for currentWorkingProgression → ladder index too.
-    // Athlete at `advanced_tuck_back_lever` must resolve to `adv_tuck` (index 1)
-    // not `tuck` (index 0). Without this, realism cap anchors to the wrong rung
-    // and proximity ranker's delta calculation is off-by-N.
-    let currentLevelIndex = -1
-    let currentBestLen = 0
-    for (let i = 0; i < ladder.length; i++) {
-      const level = ladder[i]
-      if (currentLower.includes(level) && level.length > currentBestLen) {
-        currentBestLen = level.length
-        currentLevelIndex = i
-      }
-    }
-    if (currentLevelIndex === -1) {
-      // Current level unrecognized -> degrade to registry-order + tiebreak.
-      const ranked = [...candidates].sort((a, b) => {
-        const coDiff = (b.carryover || 0) - (a.carryover || 0)
-        if (coDiff !== 0) return coDiff
-        return (a.fatigueCost || 3) - (b.fatigueCost || 3)
-      })
-      return {
-        exercise: ranked[0],
-        matchQuality: 'no_ladder',
-        exerciseLevel: 'unknown',
-        specificityScore: 40,
-      }
-    }
-
-    type Scored = {
-      exercise: Exercise
-      exerciseLevelIndex: number
-      exerciseLevel: string
-      score: number
-      quality: 'exact' | 'one_below' | 'one_above_bridge' | 'regression' | 'other_ladder' | 'no_ladder'
-    }
-
-    const scored: Scored[] = candidates.map(ex => {
-      const idLower = safeExerciseId(ex)
-      const nameLower = safeExerciseName(ex)
-      // [PHASE 2C CANONICAL REGISTRY ALIGNMENT] Longest-match resolution.
-      // Pre-Phase-2C this loop used first-match-wins, which mis-resolved
-      // every substring-prefix case: `adv_tuck_planche` contains both
-      // `tuck` and `adv_tuck`, so `['tuck', 'adv_tuck', ...]` iteration
-      // always resolved the adv-tuck rung to the plain tuck rung, collapsing
-      // delta = +1 into delta = 0 and silently flattening the realism cap +
-      // proximity ranker. Longest-match guarantees the most-specific ladder
-      // token wins regardless of ladder order.
-      let exerciseLevelIndex = -1
-      let exerciseLevel = 'unknown'
-      let bestMatchLen = 0
-      for (let i = 0; i < ladder.length; i++) {
-        const level = ladder[i]
-        const nameToken = level.replace(/_/g, ' ')
-        if (idLower.includes(level) || nameLower.includes(nameToken)) {
-          if (level.length > bestMatchLen) {
-            bestMatchLen = level.length
-            exerciseLevelIndex = i
-            exerciseLevel = level
-          }
-        }
-      }
-
-      if (exerciseLevelIndex === -1) {
-        return { exercise: ex, exerciseLevelIndex, exerciseLevel, score: 40, quality: 'no_ladder' as const }
-      }
-
-      const delta = exerciseLevelIndex - currentLevelIndex
-      if (delta === 0) return { exercise: ex, exerciseLevelIndex, exerciseLevel, score: 100, quality: 'exact' as const }
-      if (delta === -1) return { exercise: ex, exerciseLevelIndex, exerciseLevel, score: 90, quality: 'one_below' as const }
-      if (delta === 1) return { exercise: ex, exerciseLevelIndex, exerciseLevel, score: 80, quality: 'one_above_bridge' as const }
-      if (delta === -2) return { exercise: ex, exerciseLevelIndex, exerciseLevel, score: 70, quality: 'regression' as const }
-      // delta <= -3 or delta >= 2 (delta >= 2 would have been blocked by
-      // filterByCurrentProgression upstream, but we keep the branch for
-      // direct-candidate callers that bypass the gate — they still get
-      // canonical priority over non-ladder candidates).
-      return { exercise: ex, exerciseLevelIndex, exerciseLevel, score: 60, quality: 'other_ladder' as const }
-    })
-
-    scored.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score
-      const coDiff = (b.exercise.carryover || 0) - (a.exercise.carryover || 0)
-      if (coDiff !== 0) return coDiff
-      return (a.exercise.fatigueCost || 3) - (b.exercise.fatigueCost || 3)
-    })
-
-    const best = scored[0]
-    return {
-      exercise: best.exercise,
-      matchQuality: best.quality,
-      exerciseLevel: best.exerciseLevel,
-      specificityScore: best.score,
-    }
-  }
-
+  
   const selected: SelectedExercise[] = []
   const usedIds = new Set<string>()
   
@@ -3414,25 +2948,13 @@ function selectMainExercises(
     
     // Only apply prescription logic if no override provided
     if (finalSets === undefined || finalRepsOrTime === undefined) {
-      // [STEP-5C-CANONICAL-GRAMMAR] Derive day intensity from the
-      // session architecture contract (sessionIntent + spineSessionType
-      // are already present in scope). The resolver uses this to pick
-      // canonical bands so high/moderate/low days visibly differ for
-      // the same movement family.
-      const callSiteDayIntensity = deriveDayIntensity(
-        sessionArchitectureContract?.sessionIntent ?? null,
-        // spineSessionType lives on compositionMetadata; the contract
-        // surfaces it via dayRoleEnforcement.dayRole when present.
-        sessionArchitectureContract?.dayRoleEnforcement?.dayRole ?? null,
-      )
       const prescriptionResult = getPrescriptionAwarePrescription(
         finalExercise,
         experienceLevel,
         primaryGoal,
         undefined, // currentProgression - could be passed from context
         undefined, // fatigueState - could be passed from context
-        undefined, // recentPerformance - could be passed from context
-        callSiteDayIntensity,
+        undefined  // recentPerformance - could be passed from context
       )
       
       if (finalSets === undefined) {
@@ -3903,26 +3425,6 @@ function selectMainExercises(
     noLoadReason,
     // [exercise-trace] TASK 2: Attach the trace
     selectionTrace,
-    // [PHASE-1B-CONTEXT-WIRE] Populate the session-assembly classifier context.
-    // This is the wire the 13 downstream `selectionContext?.sessionRole` /
-    // `selectionContext?.influencingSkills` / `selectionContext?.primarySelectionReason`
-    // reads have been starving on. By projecting traceContext here (same source
-    // of truth as selectionTrace) every upstream addExercise call site
-    // automatically gets correct classification data — no per-site edits needed.
-    // When traceContext is undefined we still derive a usable fallback from
-    // the selectionTrace we just built, so legacy addExercise invocations that
-    // don't pass traceContext also benefit.
-    selectionContext: {
-      primarySelectionReason: traceContext?.primarySelectionReason ?? selectionTrace.primarySelectionReason,
-      sessionRole: traceContext?.sessionRole ?? selectionTrace.sessionRole,
-      expressionMode: traceContext?.expressionMode ?? selectionTrace.expressionMode,
-      influencingSkills: (traceContext?.influencingSkills ?? selectionTrace.influencingSkills).map(s => ({
-        skillId: s.skillId,
-        influence: s.influence,
-        expressionMode: s.expressionMode,
-      })),
-      doctrineSource: traceContext?.doctrineSource ?? selectionTrace.doctrineSource ?? null,
-    },
     // [LIVE-EXECUTION-TRUTH] Attach execution truth for live workout runner
     executionTruth,
     })
@@ -4375,14 +3877,6 @@ function applyMaterialityScoreAdjustments(
         if (audit.topCandidateChanged) sessionDoctrineAudit.topCandidateChanged = true
         if (audit.top3Changed) sessionDoctrineAudit.top3Changed = true
       }
-      // [PHASE 4E — DOCTRINE CAUSAL AUDIT CAPTURE]
-      // Mirror the local merged audit into the module-level capture so
-      // selectExercisesForSession can read it after this helper returns.
-      // Capture even when doctrineApplied is false so we surface honest
-      // "ran but no rule matched" verdicts (vs. "ran and changed winner").
-      // The capture function is idempotent and overwrites with the latest
-      // merged state, so calling it on every pool is safe and correct.
-      captureSessionDoctrineAudit(sessionDoctrineAudit ?? audit)
       
       // Log if doctrine made a material change
       if (audit.doctrineApplied && (audit.topCandidateChanged || audit.top3Changed)) {
@@ -4885,31 +4379,9 @@ function applyMaterialityScoreAdjustments(
         exercise: e,
         score: scoreExerciseForSession(e, sessionSkillsToExpress, day.focus, hasWeightedEquipment)
       }))
-
-      // [PHASE 2 PROGRESSION-CAP UNIFICATION]
-      // Apply the single authoritative progression cap to the secondary/
-      // technical candidate pool. Prior to this change, the cap ran ONLY at
-      // the primary skill site (line 4303), so a user with currentWorking=
-      // "tuck_back_lever" could surface "straddle_back_lever" via the
-      // technical/secondary path because nothing blocked it. Routing through
-      // filterByCurrentProgression keeps a single owner (no parallel gate)
-      // and the same PROGRESSION_LEVEL_ORDER ladder used for primary.
-      const { filtered: techProgressionFiltered, audit: techProgressionAudit } =
-        filterByCurrentProgression(baseScoredTech, technicalSkillAlloc.skill)
-
-      if (techProgressionAudit.blockedCount > 0) {
-        console.log('[PHASE2-PROGRESSION-CAP-UNIFY-SECONDARY]', {
-          skill: technicalSkillAlloc.skill,
-          currentWorkingProgression: getAuthoritativeProgression(technicalSkillAlloc.skill),
-          candidatesBeforeFilter: techProgressionAudit.before,
-          candidatesAfterFilter: techProgressionAudit.after,
-          blockedCount: techProgressionAudit.blockedCount,
-          verdict: 'CURRENT_WORKING_PROGRESSION_ENFORCED_ON_SECONDARY',
-        })
-      }
-
+      
       // [EXERCISE-SELECTION-MATERIALITY] Apply materiality-aware ranking for secondary skill
-      const materialityRankedTech = rankCandidatesWithMateriality(selectorCtx, techProgressionFiltered, 'secondary_skill', sessionSkillsToExpress)
+      const materialityRankedTech = rankCandidatesWithMateriality(selectorCtx, baseScoredTech, 'secondary_skill', sessionSkillsToExpress)
       const scoredTech = applyDoctrineToPool(
         materialityRankedTech.map(c => ({ exercise: c.exercise, score: c.score })),
         day.focus
@@ -5889,255 +5361,134 @@ const added = addExercise(
   if (materialSkillIntent && materialSkillIntent.length > 0 && selected.length < maxExercises) {
     // Find tertiary skills that need expression (these have higher priority than support)
     const tertiarySkillsFromIntent = materialSkillIntent.filter(s => s.role === 'tertiary')
-
+    
     if (tertiarySkillsFromIntent.length > 0) {
-      // [PHASE 1 SELECTED-SKILL DIRECT-EXPRESSION LOCK]
-      // Intent-driven slot count (was: Math.min(2, remaining) hard cap).
-      // The prior 2-slot cap silently deferred 3rd+ selected tertiary skills
-      // with reason='session_slot_limit_reached'. For a user selecting e.g.
-      // planche-primary + back_lever + dragon_flag + one_arm_pull_up, the
-      // last two would never materialize as direct work. Lifting the cap to
-      // tertiarySkillsFromIntent.length (still bounded by session slots)
-      // gives every selected tertiary skill a fair attempt. The session-
-      // level load gates (canAddMore) remain the true upper bound on total
-      // work, so this cannot produce oversized sessions.
-      const maxTertiarySlots = Math.min(tertiarySkillsFromIntent.length, maxExercises - selected.length)
-      let tertiarySlotsUsed = 0
-
-      console.log('[PHASE1-SELECTED-SKILL-LOCK] Tertiary skill injection starting:', {
+      console.log('[VISIBLE-WEEK-EXPRESSION-FIX] Tertiary skill injection starting:', {
         dayFocus: day.focus,
         tertiarySkillCount: tertiarySkillsFromIntent.length,
         tertiarySkills: tertiarySkillsFromIntent.map(s => s.skill),
         slotsRemaining: maxExercises - selected.length,
-        slotBudgetForTertiary: maxTertiarySlots,
       })
-
+      
+      // Calculate how many tertiary slots we can allocate (max 2 per session for visibility)
+      const maxTertiarySlots = Math.min(2, maxExercises - selected.length)
+      let tertiarySlotsUsed = 0
+      
       for (const tertiaryEntry of tertiarySkillsFromIntent) {
         if (tertiarySlotsUsed >= maxTertiarySlots) {
           tertiarySkillsDeferred.push({
             skill: tertiaryEntry.skill,
-            reason: 'session_slot_budget_exhausted',
+            reason: 'session_slot_limit_reached',
           })
           continue
         }
-
-        // [PHASE 1] Canonical-registry-sourced candidates (was: substring/
-        // transfer matching inline). The helper checks ADVANCED_SKILL_FAMILIES
-        // .directProgressions first, then getAdvancedSkillSupport(), then
-        // falls back to the legacy substring/transfer match so we never
-        // regress candidate pool size for skills not in the canonical
-        // registry.
-        const { candidates: canonicalCandidates, source: canonicalSource } =
-          buildCanonicalSkillCandidates(
-            tertiaryEntry.skill,
-            [availableSkills, availableStrength, availableAccessory],
-            usedIds
-          )
-
-        if (canonicalCandidates.length === 0) {
-          tertiarySkillsDeferred.push({
-            skill: tertiaryEntry.skill,
-            reason: 'no_canonical_candidates',
+        
+        // Find exercises that transfer to this tertiary skill
+        // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
+        const tertiarySkillLower = safeLower(tertiaryEntry.skill).replace(/_/g, '')
+        if (!tertiarySkillLower) continue // Skip malformed tertiary skill entries
+        
+        // Search in all pools for exercises matching tertiary skill
+        const tertiaryCandidates = [
+          ...availableSkills.filter(e => 
+            exerciseTransfersToSkill(e, tertiarySkillLower) ||
+            safeExerciseId(e).includes(tertiarySkillLower) ||
+            safeExerciseName(e).includes(tertiarySkillLower) ||
+            (e.primarySkills || []).some(p => safeLower(p).includes(tertiarySkillLower))
+          ),
+          ...availableStrength.filter(e =>
+            exerciseTransfersToSkill(e, tertiarySkillLower) ||
+            safeExerciseId(e).includes(tertiarySkillLower) ||
+            (e.primarySkills || []).some(p => safeLower(p).includes(tertiarySkillLower))
+          ),
+          ...availableAccessory.filter(e =>
+            exerciseTransfersToSkill(e, tertiarySkillLower)
+          ),
+        ].filter(e => !usedIds.has(e.id))
+        
+        // Also try doctrine-backed tertiary exercises
+        const doctrineBacked = getDoctrineBackedExercisesForSkill(tertiaryEntry.skill, [
+          ...availableSkills, ...availableStrength, ...availableAccessory
+        ]).filter(d => !usedIds.has(d.exercise.id))
+        
+        // Prefer doctrine-backed, then transfer-based
+        let selectedTertiaryExercise: Exercise | null = null
+        let selectionSource = 'none'
+        
+        if (doctrineBacked.length > 0) {
+          selectedTertiaryExercise = doctrineBacked[0].exercise
+          selectionSource = doctrineBacked[0].doctrineSource
+        } else if (tertiaryCandidates.length > 0) {
+          // Sort by carryover and primary skill match
+          // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
+          const sorted = tertiaryCandidates.sort((a, b) => {
+            // Prioritize exercises with primary skill match
+            const aHasPrimary = (a.primarySkills || []).some(p => safeLower(p).includes(tertiarySkillLower)) ? 1 : 0
+            const bHasPrimary = (b.primarySkills || []).some(p => safeLower(p).includes(tertiarySkillLower)) ? 1 : 0
+            if (aHasPrimary !== bHasPrimary) return bHasPrimary - aHasPrimary
+            
+            const carryoverDiff = (b.carryover || 0) - (a.carryover || 0)
+            if (carryoverDiff !== 0) return carryoverDiff
+            return (a.fatigueCost || 3) - (b.fatigueCost || 3)
           })
-          console.log('[PHASE1-SELECTED-SKILL-LOCK] Tertiary skill NO CANDIDATES:', {
-            skill: tertiaryEntry.skill,
-            canonicalSource,
-          })
-          continue
+          selectedTertiaryExercise = sorted[0]
+          selectionSource = `transfer-to:${tertiaryEntry.skill}`
         }
-
-        // [PHASE 2 PROGRESSION-CAP UNIFICATION]
-        // Pipe canonical candidates through the single authoritative
-        // progression cap owner. A tuck-level back-lever athlete must not
-        // surface straddle_back_lever via tertiary injection, which was
-        // previously possible because this site skipped the cap entirely.
-        const scoredForProgression = canonicalCandidates.map(e => ({ exercise: e }))
-        const { filtered: progressionSafe, audit: progressionAudit } =
-          filterByCurrentProgression(scoredForProgression, tertiaryEntry.skill)
-
-        if (progressionSafe.length === 0) {
-          // [PHASE-1B-REALISM-REROUTE] Direct progressions all blocked by realism
-          // cap. Per Phase 1B doctrine "REALISM REROUTE, NOT JUST CAP", we MUST
-          // try canonical_support (sub-skill regressions / structural support)
-          // for this same skill BEFORE deferring. Previously the skill silently
-          // disappeared whenever the user's currentWorkingProgression was below
-          // every direct rung available in the equipment-filtered pool — for a
-          // tuck-back-lever athlete on a session pool with only straddle/half-lay
-          // back-lever entries, back-lever vanished entirely instead of getting
-          // its support row (e.g. ring rows, scapular pulls).
-          let rerouteCandidate: Exercise | null = null
-          let rerouteSource: 'canonical_support_reroute' | null = null
-          if (canonicalSource === 'canonical_direct') {
-            try {
-              const advSupport = getAdvancedSkillSupport(tertiaryEntry.skill)
-              if (advSupport) {
-                const supportIds = new Set<string>()
-                for (const s of advSupport.primary) for (const id of s.exerciseIds) supportIds.add(id)
-                for (const s of advSupport.secondary) for (const id of s.exerciseIds) supportIds.add(id)
-                for (const id of advSupport.trunk.exerciseIds) supportIds.add(id)
-                const reroutePool = [...availableSkills, ...availableStrength, ...availableAccessory]
-                // [PHASE 2B] Collect ALL valid support candidates then proximity-rank,
-                // instead of `find(...)` which returned first-in-pool order (typically
-                // the highest-ranked-fatigue ring variant). The same pickBest helper
-                // used by direct sites keeps the reroute selection canonical and
-                // progression-closest for consistency.
-                const rerouteCandidatesAll = reroutePool.filter(
-                  e => supportIds.has(e.id) && !usedIds.has(e.id)
-                )
-                if (rerouteCandidatesAll.length > 0) {
-                  const rerouted = pickBestCanonicalCandidate(rerouteCandidatesAll, tertiaryEntry.skill)
-                  rerouteCandidate = rerouted.exercise
-                  if (rerouteCandidate) rerouteSource = 'canonical_support_reroute'
-                }
-              }
-            } catch {
-              // canonical support lookup failed; fall through to deferral
-            }
-          }
-
-          if (!rerouteCandidate) {
-            tertiarySkillsDeferred.push({
-              skill: tertiaryEntry.skill,
-              reason: `progression_cap_blocked_all_candidates_no_support_reroute(blocked=${progressionAudit.blockedCount})`,
-            })
-            console.log('[PHASE1-SELECTED-SKILL-LOCK] Tertiary skill ALL BLOCKED BY PROGRESSION CAP (reroute also empty):', {
-              skill: tertiaryEntry.skill,
-              currentWorkingProgression: tertiaryEntry.currentWorkingProgression,
-              canonicalCandidateCount: canonicalCandidates.length,
-              blockedCount: progressionAudit.blockedCount,
-              canonicalSource,
-            })
-            continue
-          }
-
-          // Reroute success: inject the support candidate as the tertiary row
-          const rerouteAdded = addExercise(
-            selectorCtx,
-            rerouteCandidate,
-            `[Tertiary Skill Reroute] ${tertiaryEntry.skill.replace(/_/g, ' ')} support (direct blocked by realism cap)`,
+        
+        if (selectedTertiaryExercise) {
+const added = addExercise(
+          selectorCtx,
+          selectedTertiaryExercise,
+          `[Tertiary Skill] ${tertiaryEntry.skill.replace(/_/g, ' ')} development`,
             undefined, undefined, undefined, 'standalone',
             {
               primarySelectionReason: 'selected_skill_tertiary',
-              sessionRole: 'skill_secondary',
-              expressionMode: 'technical_focus',
+              sessionRole: 'skill',  // Tertiary gets skill role, not accessory
+              expressionMode: 'skill_technical',  // Technical expression for visibility
               influencingSkills: [{
                 skillId: tertiaryEntry.skill,
                 influence: 'selected',
-                expressionMode: 'support',
+                expressionMode: 'technical',
               }],
-              doctrineSource: { type: 'skill_doctrine', ruleId: `getAdvancedSkillSupport.${tertiaryEntry.skill}` } as DoctrineSourceTrace,
-              candidatePoolSize: canonicalCandidates.length,
+              doctrineSource: selectionSource.includes('skill-support-mapping') 
+                ? { type: 'skill_doctrine', ruleId: selectionSource } as DoctrineSourceTrace
+                : null,
             }
           )
-          if (rerouteAdded) {
+          
+          if (added) {
             tertiarySlotsUsed++
             tertiarySkillsExpressed.push(tertiaryEntry.skill)
-            console.log('[PHASE1B-REALISM-REROUTE-TERTIARY] Direct blocked, support reroute injected:', {
+            console.log('[VISIBLE-WEEK-EXPRESSION-FIX] Tertiary skill exercise ADDED:', {
               skill: tertiaryEntry.skill,
-              exerciseId: rerouteCandidate.id,
+              exerciseId: selectedTertiaryExercise.id,
+              exerciseName: selectedTertiaryExercise.name,
+              selectionSource,
               currentWorkingProgression: tertiaryEntry.currentWorkingProgression,
-              blockedDirectCount: progressionAudit.blockedCount,
-              rerouteSource,
-              verdict: 'REREROUTED_TO_SUPPORT_INSTEAD_OF_DEFERRING',
             })
           } else {
             tertiarySkillsDeferred.push({
               skill: tertiaryEntry.skill,
-              reason: 'reroute_candidate_rejected_load_or_doctrine',
+              reason: 'exercise_add_failed_load_limits',
             })
           }
-          continue
-        }
-
-        // [PHASE 2B CANONICAL SPECIFICITY LOCK] Rank by proximity to the user's
-        // `currentWorkingProgression`. Previously this site took `sorted[0]`
-        // where `sorted` preserved registry order for canonical_direct — which
-        // is low→high — so the LOWEST rung the realism cap permitted was
-        // always committed. pickBestCanonicalCandidate prefers: exact match
-        // (+100) > one_below (+90) > one_above_bridge (+80) > regression (+70)
-        // > other_ladder (+60) > no_ladder (+40), carryover/fatigue as tie-
-        // break. This is the direct cause of "tertiary present but weak".
-        const tertiaryPick = pickBestCanonicalCandidate(
-          progressionSafe.map(p => p.exercise),
-          tertiaryEntry.skill
-        )
-        const selectedTertiaryExercise = tertiaryPick.exercise!
-
-        // Canonical doctrine source for traceability (used by auditors +
-        // OnboardingTruthExpressionAudit). canonical_direct is the strongest
-        // signal: "this exercise is registered as a direct progression rung
-        // for this selected advanced skill".
-        const doctrineSource: DoctrineSourceTrace | null =
-          canonicalSource === 'canonical_direct'
-            ? { type: 'skill_doctrine', ruleId: `ADVANCED_SKILL_FAMILIES.${tertiaryEntry.skill}.directProgressions` } as DoctrineSourceTrace
-            : canonicalSource === 'canonical_support'
-              ? { type: 'skill_doctrine', ruleId: `getAdvancedSkillSupport.${tertiaryEntry.skill}` } as DoctrineSourceTrace
-              : null
-
-        const added = addExercise(
-          selectorCtx,
-          selectedTertiaryExercise,
-          `[Tertiary Skill] ${tertiaryEntry.skill.replace(/_/g, ' ')} development`,
-          undefined, undefined, undefined, 'standalone',
-          {
-            primarySelectionReason: 'selected_skill_tertiary',
-            // [PHASE-1B-SESSION-ASSEMBLY-LOCK] Use 'skill_secondary' (NOT 'skill').
-            // The architecture-slot enforcement at the bottom of selectMainExercises
-            // classifies rows by sessionRole into primary/secondary/support/other
-            // buckets. The legacy value 'skill' fell into `currentOther` and was
-            // silently erased whenever primary+secondary+support targets summed
-            // to maxExercises (typical 30/45-min compression). Routing tertiary
-            // injections through the secondary bucket is the canonical match
-            // (they ARE selected-skill secondary work) and is what allows the
-            // tertiary obligation to actually survive into the final committed
-            // session. The trace influence 'selected' below is what the
-            // FINAL-SELECTED-SKILL-COMMIT pass uses to identify these rows
-            // for protection / restoration.
-            sessionRole: 'skill_secondary',
-            expressionMode: 'technical_focus',
-            influencingSkills: [{
-              skillId: tertiaryEntry.skill,
-              influence: 'selected',
-              expressionMode: 'technical',
-            }],
-            doctrineSource,
-            candidatePoolSize: canonicalCandidates.length,
-          }
-        )
-
-        if (added) {
-          tertiarySlotsUsed++
-          tertiarySkillsExpressed.push(tertiaryEntry.skill)
-          console.log('[PHASE1-SELECTED-SKILL-LOCK] Tertiary skill ADDED:', {
-            skill: tertiaryEntry.skill,
-            exerciseId: selectedTertiaryExercise.id,
-            exerciseName: selectedTertiaryExercise.name,
-            canonicalSource,
-            progressionCapBlockedCount: progressionAudit.blockedCount,
-            currentWorkingProgression: tertiaryEntry.currentWorkingProgression,
-            // [PHASE 2B] Proximity-based pick trace for visible-quality auditing.
-            matchQuality: tertiaryPick.matchQuality,
-            pickedExerciseLevel: tertiaryPick.exerciseLevel,
-            specificityScore: tertiaryPick.specificityScore,
-          })
         } else {
           tertiarySkillsDeferred.push({
             skill: tertiaryEntry.skill,
-            reason: 'exercise_add_failed_load_limits',
+            reason: 'no_viable_exercises_found',
+          })
+          console.log('[VISIBLE-WEEK-EXPRESSION-FIX] Tertiary skill exercise NOT FOUND:', {
+            skill: tertiaryEntry.skill,
+            candidatesSearched: tertiaryCandidates.length + doctrineBacked.length,
           })
         }
       }
-
-      console.log('[PHASE1-SELECTED-SKILL-LOCK] Tertiary skill injection complete:', {
+      
+      console.log('[VISIBLE-WEEK-EXPRESSION-FIX] Tertiary skill injection complete:', {
         tertiarySkillsExpressed,
         tertiarySkillsDeferred,
         slotsUsed: tertiarySlotsUsed,
         remainingSlots: maxExercises - selected.length,
-        verdict: tertiarySkillsExpressed.length === tertiarySkillsFromIntent.length
-          ? 'ALL_TERTIARY_SKILLS_DIRECTLY_EXPRESSED'
-          : tertiarySkillsExpressed.length > 0
-            ? 'PARTIAL_TERTIARY_EXPRESSION'
-            : 'NO_TERTIARY_EXPRESSED',
       })
     }
   }
@@ -6148,109 +5499,78 @@ const added = addExercise(
   if (materialSkillIntent && materialSkillIntent.length > 0 && selected.length < maxExercises) {
     // Find support skills that need expression
     const supportSkillsFromIntent = materialSkillIntent.filter(s => s.role === 'support')
-
+    
     if (supportSkillsFromIntent.length > 0) {
-      // [PHASE 1] Intent-driven slot budget for support too (was hard 2-cap).
-      // Support is lower-priority than tertiary by construction (tertiary
-      // ran first and consumed available slots), so this rarely inflates
-      // sessions in practice -- it just prevents arbitrary truncation when
-      // the session has room and the user selected 3+ support skills.
-      const maxSupportSlots = Math.min(supportSkillsFromIntent.length, maxExercises - selected.length)
-      let supportSlotsUsed = 0
-
-      console.log('[PHASE1-SELECTED-SKILL-LOCK] Support skill injection starting:', {
+      console.log('[AI_TRUTH_MATERIALITY] Support skill injection starting:', {
         dayFocus: day.focus,
         supportSkillCount: supportSkillsFromIntent.length,
         supportSkills: supportSkillsFromIntent.map(s => s.skill),
         slotsRemaining: maxExercises - selected.length,
-        slotBudgetForSupport: maxSupportSlots,
       })
-
+      
+      // Calculate how many support slots we can allocate (max 2 per session)
+      const maxSupportSlots = Math.min(2, maxExercises - selected.length)
+      let supportSlotsUsed = 0
+      
       for (const supportEntry of supportSkillsFromIntent) {
         if (supportSlotsUsed >= maxSupportSlots) {
           supportSkillsDeferred.push({
             skill: supportEntry.skill,
-            reason: 'session_slot_budget_exhausted',
+            reason: 'session_slot_limit_reached',
           })
           continue
         }
-
-        // [PHASE 1] Canonical-registry-sourced candidates for support role.
-        // For support intent, canonical_support (getAdvancedSkillSupport) is
-        // the intended match; canonical_direct also qualifies when a skill
-        // is advanced and its direct ladder entries remain available.
-        const { candidates: canonicalCandidates, source: canonicalSource } =
-          buildCanonicalSkillCandidates(
-            supportEntry.skill,
-            [availableSkills, availableStrength, availableAccessory],
-            usedIds
-          )
-
-        if (canonicalCandidates.length === 0) {
-          supportSkillsDeferred.push({
-            skill: supportEntry.skill,
-            reason: 'no_canonical_candidates',
+        
+        // Find exercises that transfer to this support skill
+        // [EXERCISE-SELECTION-RUNTIME-STABILIZATION] Use safe string normalization
+        const supportSkillLower = safeLower(supportEntry.skill).replace(/_/g, '')
+        if (!supportSkillLower) continue // Skip malformed support skill entries
+        
+        // Search in all pools for exercises transferring to support skill
+        const supportCandidates = [
+          ...availableSkills.filter(e => 
+            exerciseTransfersToSkill(e, supportSkillLower) ||
+            safeExerciseId(e).includes(supportSkillLower) ||
+            safeExerciseName(e).includes(supportSkillLower)
+          ),
+          ...availableStrength.filter(e =>
+            exerciseTransfersToSkill(e, supportSkillLower) ||
+            safeExerciseId(e).includes(supportSkillLower)
+          ),
+          // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
+          ...availableAccessory.filter(e =>
+            (e.transferTo || []).some(t => safeLower(t).includes(supportSkillLower))
+          ),
+        ].filter(e => !usedIds.has(e.id))
+        
+        // Also try doctrine-backed support exercises
+        const doctrineBacked = getDoctrineBackedExercisesForSkill(supportEntry.skill, [
+          ...availableSkills, ...availableStrength, ...availableAccessory
+        ]).filter(d => !usedIds.has(d.exercise.id))
+        
+        // Prefer doctrine-backed, then transfer-based
+        let selectedSupportExercise: Exercise | null = null
+        let selectionSource = 'none'
+        
+        if (doctrineBacked.length > 0) {
+          selectedSupportExercise = doctrineBacked[0].exercise
+          selectionSource = doctrineBacked[0].doctrineSource
+        } else if (supportCandidates.length > 0) {
+          // Sort by carryover and fatigue cost
+          const sorted = supportCandidates.sort((a, b) => {
+            const carryoverDiff = (b.carryover || 0) - (a.carryover || 0)
+            if (carryoverDiff !== 0) return carryoverDiff
+            return (a.fatigueCost || 3) - (b.fatigueCost || 3) // Prefer lower fatigue
           })
-          console.log('[PHASE1-SELECTED-SKILL-LOCK] Support skill NO CANDIDATES:', {
-            skill: supportEntry.skill,
-            canonicalSource,
-          })
-          continue
+          selectedSupportExercise = sorted[0]
+          selectionSource = `transfer-to:${supportEntry.skill}`
         }
-
-        // [PHASE 2 PROGRESSION-CAP UNIFICATION]
-        // Apply the single authoritative progression cap to support pool as
-        // well. Support is the one place where progression-cap rarely blocks
-        // anything (support patterns are deliberately sub-skill level), but
-        // routing through the unified gate guarantees a single owner across
-        // every injection site.
-        const scoredForProgression = canonicalCandidates.map(e => ({ exercise: e }))
-        const { filtered: progressionSafe, audit: progressionAudit } =
-          filterByCurrentProgression(scoredForProgression, supportEntry.skill)
-
-        if (progressionSafe.length === 0) {
-          // [PHASE-1B-REALISM-REROUTE] Support-role reroute. When the canonical
-          // builder returned canonical_direct (which happens for advanced skills
-          // whose support layer also overlaps direct rungs) and the realism cap
-          // blocked all of them, fall back to canonical_support PROPER (lower
-          // sub-skill regressions). This mirrors the tertiary-block reroute and
-          // is what prevents the support obligation from silently disappearing.
-          let rerouteCandidate: Exercise | null = null
-          if (canonicalSource === 'canonical_direct') {
-            try {
-              const advSupport = getAdvancedSkillSupport(supportEntry.skill)
-              if (advSupport) {
-                const supportIds = new Set<string>()
-                for (const s of advSupport.primary) for (const id of s.exerciseIds) supportIds.add(id)
-                for (const s of advSupport.secondary) for (const id of s.exerciseIds) supportIds.add(id)
-                for (const id of advSupport.trunk.exerciseIds) supportIds.add(id)
-                const reroutePool = [...availableSkills, ...availableStrength, ...availableAccessory]
-                // [PHASE 2B] Collect all valid support candidates, proximity-rank.
-                const rerouteCandidatesAll = reroutePool.filter(
-                  e => supportIds.has(e.id) && !usedIds.has(e.id)
-                )
-                if (rerouteCandidatesAll.length > 0) {
-                  const rerouted = pickBestCanonicalCandidate(rerouteCandidatesAll, supportEntry.skill)
-                  rerouteCandidate = rerouted.exercise
-                }
-              }
-            } catch {
-              // canonical support lookup failed; fall through to deferral
-            }
-          }
-
-          if (!rerouteCandidate) {
-            supportSkillsDeferred.push({
-              skill: supportEntry.skill,
-              reason: `progression_cap_blocked_all_candidates_no_support_reroute(blocked=${progressionAudit.blockedCount})`,
-            })
-            continue
-          }
-
-          const rerouteAdded = addExercise(
-            selectorCtx,
-            rerouteCandidate,
-            `[Support Skill Reroute] ${supportEntry.skill.replace(/_/g, ' ')} support (direct blocked by realism cap)`,
+        
+        if (selectedSupportExercise) {
+const added = addExercise(
+          selectorCtx,
+          selectedSupportExercise,
+          `[Support Skill] ${supportEntry.skill.replace(/_/g, ' ')} development`,
             undefined, undefined, undefined, 'standalone',
             {
               primarySelectionReason: 'selected_skill_support',
@@ -6261,98 +5581,47 @@ const added = addExercise(
                 influence: 'selected',
                 expressionMode: 'support',
               }],
-              doctrineSource: { type: 'skill_doctrine', ruleId: `getAdvancedSkillSupport.${supportEntry.skill}` } as DoctrineSourceTrace,
-              candidatePoolSize: canonicalCandidates.length,
+              doctrineSource: selectionSource.includes('skill-support-mapping') 
+                ? { type: 'skill_doctrine', ruleId: selectionSource } as DoctrineSourceTrace
+                : null,
             }
           )
-          if (rerouteAdded) {
+          
+          if (added) {
             supportSlotsUsed++
             supportSkillsExpressed.push(supportEntry.skill)
-            console.log('[PHASE1B-REALISM-REROUTE-SUPPORT] Direct blocked, support reroute injected:', {
+            console.log('[AI_TRUTH_MATERIALITY] Support skill exercise ADDED:', {
               skill: supportEntry.skill,
-              exerciseId: rerouteCandidate.id,
-              blockedDirectCount: progressionAudit.blockedCount,
-              verdict: 'REREROUTED_TO_SUPPORT_INSTEAD_OF_DEFERRING',
+              exerciseId: selectedSupportExercise.id,
+              exerciseName: selectedSupportExercise.name,
+              selectionSource,
+              currentWorkingProgression: supportEntry.currentWorkingProgression,
             })
           } else {
             supportSkillsDeferred.push({
               skill: supportEntry.skill,
-              reason: 'reroute_candidate_rejected_load_or_doctrine',
+              reason: 'exercise_add_failed_load_limits',
             })
           }
-          continue
-        }
-
-        // [PHASE 2B CANONICAL SPECIFICITY LOCK] Proximity-ranked support pick.
-        // Support intent canonically maps to `canonical_support` (sub-skill /
-        // structural support patterns), but for advanced skills canonical_direct
-        // can also be returned when direct rungs overlap the support layer.
-        // Either way, we want the rung CLOSEST to currentWorkingProgression,
-        // not the easiest. Previously `sorted[0]` = first-in-registry-order
-        // silently demoted the support slot to ring rows / scapular pulls
-        // even when a straddle-level rung was fully valid.
-        const supportPick = pickBestCanonicalCandidate(
-          progressionSafe.map(p => p.exercise),
-          supportEntry.skill
-        )
-        const selectedSupportExercise = supportPick.exercise!
-
-        const doctrineSource: DoctrineSourceTrace | null =
-          canonicalSource === 'canonical_direct'
-            ? { type: 'skill_doctrine', ruleId: `ADVANCED_SKILL_FAMILIES.${supportEntry.skill}.directProgressions` } as DoctrineSourceTrace
-            : canonicalSource === 'canonical_support'
-              ? { type: 'skill_doctrine', ruleId: `getAdvancedSkillSupport.${supportEntry.skill}` } as DoctrineSourceTrace
-              : null
-
-        const added = addExercise(
-          selectorCtx,
-          selectedSupportExercise,
-          `[Support Skill] ${supportEntry.skill.replace(/_/g, ' ')} development`,
-          undefined, undefined, undefined, 'standalone',
-          {
-            primarySelectionReason: 'selected_skill_support',
-            sessionRole: 'accessory',
-            expressionMode: 'skill_accessory',
-            influencingSkills: [{
-              skillId: supportEntry.skill,
-              influence: 'selected',
-              expressionMode: 'support',
-            }],
-            doctrineSource,
-            candidatePoolSize: canonicalCandidates.length,
-          }
-        )
-
-        if (added) {
-          supportSlotsUsed++
-          supportSkillsExpressed.push(supportEntry.skill)
-          console.log('[PHASE1-SELECTED-SKILL-LOCK] Support skill ADDED:', {
-            skill: supportEntry.skill,
-            exerciseId: selectedSupportExercise.id,
-            exerciseName: selectedSupportExercise.name,
-            canonicalSource,
-            progressionCapBlockedCount: progressionAudit.blockedCount,
-            currentWorkingProgression: supportEntry.currentWorkingProgression,
-            // [PHASE 2B] Proximity-based pick trace for visible-quality auditing.
-            matchQuality: supportPick.matchQuality,
-            pickedExerciseLevel: supportPick.exerciseLevel,
-            specificityScore: supportPick.specificityScore,
-          })
         } else {
           supportSkillsDeferred.push({
             skill: supportEntry.skill,
-            reason: 'exercise_add_failed_load_limits',
+            reason: 'no_viable_exercises_found',
+          })
+          console.log('[AI_TRUTH_MATERIALITY] Support skill exercise NOT FOUND:', {
+            skill: supportEntry.skill,
+            candidatesSearched: supportCandidates.length + doctrineBacked.length,
           })
         }
       }
-
-      console.log('[PHASE1-SELECTED-SKILL-LOCK] Support skill injection complete:', {
+      
+      console.log('[AI_TRUTH_MATERIALITY] Support skill injection complete:', {
         dayFocus: day.focus,
         expressed: supportSkillsExpressed,
         deferred: supportSkillsDeferred,
         slotsUsed: supportSlotsUsed,
-        verdict: supportSkillsExpressed.length > 0
-          ? 'SUPPORT_SKILLS_MATERIALLY_EXPRESSED'
+        verdict: supportSkillsExpressed.length > 0 
+          ? 'SUPPORT_SKILLS_MATERIALLY_EXPRESSED' 
           : 'SUPPORT_SKILLS_DEFERRED_WITH_REASONS',
       })
     }
@@ -6515,13 +5784,7 @@ const added = addExercise(
   }
   
   // TASK 6: Final deduplication pass to remove any duplicate exercises
-  // [SELECTED-SKILL-EXPRESSION-ENFORCEMENT] Converted to `let` so that both the
-  // skill-floor pass and the advanced-skill enforcement pass below can inject
-  // missing exercises into `selected` and then refresh this view. Previously
-  // this was `const`, and every `addExercise(...)` call after this point was
-  // silently lost because the architecture-slot enforcement reads from
-  // `deduplicatedSelected`, not `selected`.
-  let deduplicatedSelected = dedupeSelectedExercises(selected)
+  const deduplicatedSelected = dedupeSelectedExercises(selected)
   if (deduplicatedSelected.length !== selected.length) {
     console.log('[exercise-selector] TASK 6: Removed', selected.length - deduplicatedSelected.length, 'duplicate exercises')
   }
@@ -6578,144 +5841,7 @@ const added = addExercise(
       console.log('[skill-exposure-check] Added skill floor exercise:', candidate.id)
     }
   }
-
-  // ==========================================================================
-  // [SELECTED-SKILL-EXPRESSION-ENFORCEMENT]
-  // AUDITED FIRST DILUTION OWNER: The helper `getAdvancedSkillExercises` was
-  // authored specifically to guarantee that selected advanced skills
-  // (back_lever, dragon_flag, planche_pushup, one_arm_pull_up,
-  // one_arm_chin_up, one_arm_push_up) get a direct expression slot whenever
-  // the per-session allocator has scheduled them as `primary` or `technical`
-  // for this day. Before this fix, the helper was dead code -- declared and
-  // fully implemented, but never invoked by `selectMainExercises`. Advanced
-  // skill truth from the onboarding selection therefore relied entirely on
-  // generic scoring, where rare advanced families lost to broader support
-  // candidates on almost every day, making the user's selection feel
-  // "diluted" or "generic."
-  //
-  // This pass is strictly additive and respects overlap-aware doctrine:
-  //   - It ONLY injects exercises for skills the session-level allocator
-  //     (`getSkillsForSession`) already classified as primary/technical for
-  //     this specific session. Skills the allocator deferred to other days
-  //     are not forced in.
-  //   - It only injects candidates that exist in the already-filtered
-  //     `availableSkills`/`availableStrength` pools (equipment, joint
-  //     cautions, prerequisite gates have already pruned the pool).
-  //   - `addExercise` still performs the doctrine/prerequisite/load-budget
-  //     checks internally, so nothing that would normally be blocked
-  //     survives.
-  //   - `selected.length >= maxExercises` is enforced by `addExercise`
-  //     itself, so this pass never inflates the session past the session
-  //     duration budget. If the session is already full, missing advanced
-  //     skills are logged (visible under-expression) but not forced,
-  //     preserving compressibility for 45/30 variants.
-  // ==========================================================================
-  if (skillsForSession && skillsForSession.length > 0) {
-    const selectedAdvancedAllocations = skillsForSession.filter(
-      a => isAdvancedSkill(a.skill) &&
-      (a.expressionMode === 'primary' || a.expressionMode === 'technical')
-    )
-
-    if (selectedAdvancedAllocations.length > 0) {
-      const advancedRecommendations = getAdvancedSkillExercises(
-        selectedAdvancedAllocations,
-        availableSkills,
-        availableStrength,
-        day.focus || 'mixed_upper'
-      )
-
-      // Sort so higher-priority recommendations (primary > technical > support)
-      // get their slot first when session budget is tight.
-      const sortedRecommendations = [...advancedRecommendations].sort(
-        (a, b) => b.priority - a.priority
-      )
-
-      const advancedPool = [...availableSkills, ...availableStrength]
-      const injectedAdvancedIds: string[] = []
-      const skippedAdvanced: Array<{ id: string; reason: string }> = []
-
-      for (const rec of sortedRecommendations) {
-        if (selected.length >= maxExercises) {
-          skippedAdvanced.push({ id: rec.exerciseId, reason: 'session_budget_full' })
-          continue
-        }
-        if (usedIds.has(rec.exerciseId)) {
-          skippedAdvanced.push({ id: rec.exerciseId, reason: 'already_selected' })
-          continue
-        }
-        const candidate = advancedPool.find(e => safeExerciseId(e) === safeLower(rec.exerciseId))
-        if (!candidate) {
-          skippedAdvanced.push({ id: rec.exerciseId, reason: 'not_in_available_pool' })
-          continue
-        }
-
-        const ownerSkill = selectedAdvancedAllocations.find(a => {
-          const family = getAdvancedSkillFamily(a.skill)
-          return family?.directProgressions?.some(p => safeLower(p) === safeLower(rec.exerciseId))
-        })
-
-        const added = addExercise(
-          selectorCtx,
-          candidate,
-          `[Advanced Skill Enforcement] ${rec.reason}`,
-          undefined,
-          undefined,
-          undefined,
-          'standalone',
-          {
-            primarySelectionReason: 'selected_skill_direct_expression',
-            sessionRole: rec.priority >= 3 ? 'skill_primary' : 'skill_secondary',
-            expressionMode: rec.priority >= 3 ? 'direct_intensity' : 'technical_focus',
-            influencingSkills: ownerSkill ? [{
-              skillId: ownerSkill.skill,
-              influence: 'selected',
-              expressionMode: ownerSkill.expressionMode === 'primary' ? 'direct' : 'technical',
-            }] : undefined,
-          }
-        )
-        if (added) {
-          injectedAdvancedIds.push(candidate.id)
-        } else {
-          skippedAdvanced.push({ id: rec.exerciseId, reason: 'addExercise_rejected_doctrine_or_load' })
-        }
-      }
-
-      console.log('[SELECTED-SKILL-EXPRESSION-ENFORCEMENT]', {
-        dayFocus: day.focus,
-        selectedAdvancedSkillsForSession: selectedAdvancedAllocations.map(a => ({
-          skill: a.skill,
-          mode: a.expressionMode,
-        })),
-        recommendationsComputed: sortedRecommendations.length,
-        injectedCount: injectedAdvancedIds.length,
-        injectedIds: injectedAdvancedIds,
-        skipped: skippedAdvanced,
-        verdict: injectedAdvancedIds.length > 0
-          ? 'ADVANCED_SKILL_DIRECT_EXPRESSION_ENFORCED'
-          : sortedRecommendations.length > 0
-            ? 'ADVANCED_SKILL_UNDER_EXPRESSED_THIS_SESSION'
-            : 'NO_ADVANCED_RECOMMENDATIONS_FOR_THIS_DAY',
-      })
-    }
-  }
-
-  // [SELECTED-SKILL-EXPRESSION-ENFORCEMENT] Refresh deduplicatedSelected so
-  // that both the skill-floor pass and the advanced-skill enforcement pass
-  // above (which mutate `selected` via addExercise) actually propagate to
-  // the architecture-slot enforcement below. Without this refresh, any
-  // injection after the original dedupe at line ~5787 is invisible to
-  // downstream logic because `deduplicatedSelected` was a new array
-  // returned by `.filter()`.
-  if (selected.length !== deduplicatedSelected.length) {
-    const beforeCount = deduplicatedSelected.length
-    deduplicatedSelected = dedupeSelectedExercises(selected)
-    console.log('[SELECTED-SKILL-EXPRESSION-ENFORCEMENT] Refreshed deduplicatedSelected', {
-      beforeCount,
-      afterCount: deduplicatedSelected.length,
-      injectedDelta: deduplicatedSelected.length - beforeCount,
-    })
-  }
-
+  
   // [session-assembly] ISSUE C: Log warning if exercise pool is too thin
   if (deduplicatedSelected.length === 0) {
     console.warn('[session-assembly] WARNING: selectMainExercises returned 0 exercises after all fallbacks', {
@@ -6840,342 +5966,7 @@ const added = addExercise(
     
     enforcedExercises = assembledExercises
   }
-
-  // ==========================================================================
-  // [PHASE-1B-FINAL-SELECTED-SKILL-COMMIT] AUTHORITATIVE FINAL-COMMIT GUARANTEE
-  // ==========================================================================
-  // This is the LAST authoritative session-assembly step before audit / return.
-  // It exists because the architecture-slot enforcement above categorizes rows
-  // into primary/secondary/support/other buckets and silently drops rows that
-  // land in `currentOther` whenever primary+secondary+support targets saturate
-  // maxExercises. Even with the tertiary `sessionRole` fix above, edge cases
-  // remain (skills injected by upstream passes that didn't yet land in
-  // selected; skill rows demoted by .slice() when secondaryLimit < count).
-  //
-  // CONTRACT (Phase 1B Parts A-E):
-  //   A. For each materially-eligible selected skill (role !== 'deferred' in
-  //      materialSkillIntent OR present in selectedSkills), confirm the final
-  //      session committed at least one row representing that skill.
-  //   B. Reserved-budget protection: if a selected-skill row was injected into
-  //      `selected` but NOT in `enforcedExercises` (silent eviction), restore
-  //      it. If the budget is full, evict the lowest-priority NON-selected row
-  //      (accessory/core/support_volume; never a primary/spine; never another
-  //      selected-skill row).
-  //   C. Direct-before-support-before-erasure: when a skill never made it
-  //      into `selected` at all, run canonical_direct (cap by progression)
-  //      → canonical_support reroute → defer with reason. NEVER silently
-  //      erase.
-  //   D. Realism reroute: the canonical_support fallback IS the reroute. If
-  //      the realism cap blocks every direct rung for this skill, the support
-  //      pattern (sub-skill regressions) is what gets injected so the skill
-  //      stays visible.
-  //   E. Final commit visibility guarantee: the audit log below this block
-  //      records exactly which obligations were satisfied / restored / newly
-  //      injected / explicitly deferred for downstream materiality auditors.
-  //
-  // SCOPE GUARDS:
-  //   - This pass NEVER touches mirror corridor / live-session shell / UI.
-  //   - This pass NEVER inflates the session past maxExercises (eviction
-  //     swap is 1:1).
-  //   - This pass NEVER removes a primary-spine row, a row already tied to
-  //     a selected skill, or a row whose primaryGoal-related transferTo
-  //     marks it as the spine carrier.
-  //   - This pass uses ONLY the existing canonical sources
-  //     (ADVANCED_SKILL_FAMILIES + getAdvancedSkillSupport). No parallel
-  //     truth, no hardcoded exercise lists.
-  // ==========================================================================
-  {
-    const finalCommitRestoredRows: string[] = []
-    // [PHASE 2B] Enriched trace: record matchQuality + specificityScore so the
-    // verdict log reveals not just WHICH skill was injected, but HOW CANONICAL
-    // the chosen exercise was relative to currentWorkingProgression.
-    const finalCommitNewInjections: Array<{
-      skill: string
-      via: 'direct' | 'support'
-      matchQuality?: string
-      specificityScore?: number
-      exerciseLevel?: string
-    }> = []
-    const finalCommitEvicted: Array<{ exerciseId: string; reason: string }> = []
-    const finalCommitDeferred: Array<{ skill: string; reason: string }> = []
-
-    // Helper: does enforcedExercises already represent this skill?
-    const isSkillRepresented = (skill: string): boolean => {
-      const skillLower = safeLower(skill)
-      const skillNoUnderscore = skillLower.replace(/_/g, '')
-      return enforcedExercises.some(ex => {
-        const inf = ex.selectionContext?.influencingSkills?.[0]
-        if (inf?.skillId === skill || safeLower(inf?.skillId || '') === skillLower) return true
-        // Also accept transfer-tag-based representation (covers primary site
-        // injections that may not always set influencingSkills.skillId exactly)
-        if (exerciseTransfersToSkill(ex.exercise, skill)) return true
-        if (safeExerciseId(ex.exercise).includes(skillNoUnderscore)) return true
-        return false
-      })
-    }
-
-    // Helper: pick the lowest-priority eviction victim. NEVER evicts:
-    //   - selected-skill rows (would defeat the purpose)
-    //   - primary-spine / strength-primary rows
-    //   - rows whose transferTo already serves the primary goal (spine carrier)
-    const findEvictionVictimIndex = (): number => {
-      // Pass 1: prefer generic accessory / support_volume / no-role rows
-      let idx = enforcedExercises.findIndex((e) => {
-        const inf = e.selectionContext?.influencingSkills?.[0]
-        if (inf?.influence === 'selected') return false
-        const role = e.selectionContext?.sessionRole
-        const isPrimary = role === 'skill_primary' || role === 'strength_primary' || role === 'direct_skill'
-        if (isPrimary) return false
-        if (exerciseTransfersToSkill(e.exercise, primaryGoal)) return false
-        return role === 'accessory' || role === 'support_volume' || role === 'core' || !role
-      })
-      if (idx >= 0) return idx
-      // Pass 2: any non-primary, non-selected, non-spine-carrier row
-      idx = enforcedExercises.findIndex((e) => {
-        const inf = e.selectionContext?.influencingSkills?.[0]
-        if (inf?.influence === 'selected') return false
-        const role = e.selectionContext?.sessionRole
-        const isPrimary = role === 'skill_primary' || role === 'strength_primary' || role === 'direct_skill'
-        if (isPrimary) return false
-        if (exerciseTransfersToSkill(e.exercise, primaryGoal)) return false
-        return true
-      })
-      return idx
-    }
-
-    // PART B: restore selected-skill rows that were silently evicted by the
-    // architecture-slot enforcement above.
-    const enforcedIdsBefore = new Set(enforcedExercises.map(e => e.exercise.id))
-    const evictedSelectedSkillRows = selected.filter(row => {
-      if (enforcedIdsBefore.has(row.exercise.id)) return false
-      const inf = row.selectionContext?.influencingSkills?.[0]
-      return inf?.influence === 'selected'
-    })
-
-    for (const row of evictedSelectedSkillRows) {
-      const inf = row.selectionContext?.influencingSkills?.[0]!
-      const skillId = inf.skillId
-      // Skip if skill is already otherwise represented
-      if (isSkillRepresented(skillId)) continue
-
-      if (enforcedExercises.length < maxExercises) {
-        enforcedExercises.push(row)
-        finalCommitRestoredRows.push(skillId)
-        continue
-      }
-
-      const victimIdx = findEvictionVictimIndex()
-      if (victimIdx >= 0) {
-        const victim = enforcedExercises[victimIdx]
-        enforcedExercises.splice(victimIdx, 1, row)
-        finalCommitRestoredRows.push(skillId)
-        finalCommitEvicted.push({
-          exerciseId: victim.exercise.id,
-          reason: `evicted_to_restore_selected_skill_row(${skillId})`,
-        })
-      } else {
-        finalCommitDeferred.push({
-          skill: skillId,
-          reason: 'restoration_blocked_no_safe_eviction_target',
-        })
-      }
-    }
-
-    // PARTS A + C + D: catch skills that never made it into `selected` at all.
-    // Use materialSkillIntent (per-week role assignment) when available, else
-    // fall back to selectedSkills (full onboarding list).
-    const eligibleIntentEntries: Array<{ skill: string; role: string }> = []
-    if (materialSkillIntent && materialSkillIntent.length > 0) {
-      for (const e of materialSkillIntent) {
-        if (e.role === 'deferred' || e.role === 'primary_spine') continue
-        eligibleIntentEntries.push({ skill: e.skill, role: e.role })
-      }
-    } else if (selectedSkills && selectedSkills.length > 0) {
-      for (const s of selectedSkills) {
-        if (s === primaryGoal) continue
-        eligibleIntentEntries.push({ skill: s, role: 'tertiary' })
-      }
-    }
-
-    for (const entry of eligibleIntentEntries) {
-      if (isSkillRepresented(entry.skill)) continue
-
-      // PART C: canonical direct → reroute support → defer
-      const { candidates: directCandidates } = buildCanonicalSkillCandidates(
-        entry.skill,
-        [availableSkills, availableStrength, availableAccessory],
-        usedIds,
-      )
-
-      let chosen: Exercise | null = null
-      let via: 'direct' | 'support' = 'direct'
-
-      // [PHASE 2B CANONICAL SPECIFICITY LOCK] Final-commit direct pick now
-      // uses proximity ranking so the rescued/restored exercise matches the
-      // user's currentWorkingProgression instead of being the lowest rung
-      // permitted by the realism cap. Capturing matchQuality + specificityScore
-      // for the final-commit verdict log.
-      let finalMatchQuality: string = 'n/a'
-      let finalSpecificityScore = 0
-      let finalExerciseLevel = 'none'
-      if (directCandidates.length > 0) {
-        const wrapped = directCandidates.map(e => ({ exercise: e }))
-        const { filtered } = filterByCurrentProgression(wrapped, entry.skill)
-        if (filtered.length > 0) {
-          const pick = pickBestCanonicalCandidate(filtered.map(f => f.exercise), entry.skill)
-          if (pick.exercise) {
-            chosen = pick.exercise
-            via = 'direct'
-            finalMatchQuality = pick.matchQuality
-            finalSpecificityScore = pick.specificityScore
-            finalExerciseLevel = pick.exerciseLevel
-          }
-        }
-      }
-
-      // PART D: realism reroute to canonical_support, proximity-ranked.
-      if (!chosen) {
-        try {
-          const advSupport = getAdvancedSkillSupport(entry.skill)
-          if (advSupport) {
-            const supportIds = new Set<string>()
-            for (const s of advSupport.primary) for (const id of s.exerciseIds) supportIds.add(id)
-            for (const s of advSupport.secondary) for (const id of s.exerciseIds) supportIds.add(id)
-            for (const id of advSupport.trunk.exerciseIds) supportIds.add(id)
-            const reroutePool = [...availableSkills, ...availableStrength, ...availableAccessory]
-            const rerouteCandidatesAll = reroutePool.filter(
-              e => supportIds.has(e.id) && !usedIds.has(e.id)
-            )
-            if (rerouteCandidatesAll.length > 0) {
-              const pick = pickBestCanonicalCandidate(rerouteCandidatesAll, entry.skill)
-              if (pick.exercise) {
-                chosen = pick.exercise
-                via = 'support'
-                finalMatchQuality = pick.matchQuality
-                finalSpecificityScore = pick.specificityScore
-                finalExerciseLevel = pick.exerciseLevel
-              }
-            }
-          }
-        } catch {
-          // canonical support lookup failed; fall through to defer
-        }
-      }
-
-      if (!chosen) {
-        finalCommitDeferred.push({
-          skill: entry.skill,
-          reason: 'no_canonical_candidate_after_realism_reroute',
-        })
-        continue
-      }
-
-      // Build a SelectedExercise row directly (we are past the addExercise/
-      // canAddMore phase by design — this is the final commit reservation).
-      // Build a well-typed ExerciseSelectionTrace using the canonical minimal-
-      // trace helper, then override the Phase 1B-relevant fields. Using
-      // `createMinimalTrace` (exported from engine-quality-contract.ts) keeps
-      // us schema-valid across every required field (candidatePoolSummary,
-      // rejectedAlternatives, equipmentDecision, loadabilityInfluence, etc.)
-      // without duplicating the contract here.
-      const synthesizedTrace: ExerciseSelectionTrace = {
-        ...createMinimalTrace(chosen.id, chosen.name, 'main', 'final_commit_obligation'),
-        sessionRole: via === 'direct' ? 'skill_secondary' : 'accessory',
-        expressionMode: via === 'direct' ? 'technical_focus' : 'strength_support',
-        primarySelectionReason: 'selected_skill_final_obligation' as ExerciseSelectionReason,
-        influencingSkills: [{
-          skillId: entry.skill,
-          influence: 'selected',
-          expressionMode: via === 'direct' ? 'technical' : 'support',
-        }],
-        doctrineSource: {
-          doctrineSource: via === 'direct'
-            ? `ADVANCED_SKILL_FAMILIES.${entry.skill}.directProgressions(final_commit)`
-            : `getAdvancedSkillSupport.${entry.skill}(final_commit_reroute)`,
-          triggeringSkill: entry.skill,
-          doctrineType: via === 'direct' ? 'direct' : 'support',
-        },
-        confidence: 0.85,
-        traceQuality: 'partial',
-      }
-      const newRow: SelectedExercise = {
-        exercise: chosen,
-        sets: chosen.defaultSets || 3,
-        repsOrTime: chosen.defaultRepsOrTime || chosen.reps || chosen.time
-          || (chosen.category === 'skill' ? '10-20s' : chosen.category === 'core' ? '30s' : '8-12'),
-        isOverrideable: true,
-        selectionReason: `[Final Skill Obligation] ${entry.skill.replace(/_/g, ' ')} (${via})`,
-        selectionTrace: synthesizedTrace,
-        selectionContext: {
-          primarySelectionReason: 'selected_skill_final_obligation',
-          sessionRole: via === 'direct' ? 'skill_secondary' : 'accessory',
-          expressionMode: via === 'direct' ? 'technical_focus' : 'skill_accessory',
-          influencingSkills: [{
-            skillId: entry.skill,
-            influence: 'selected',
-            expressionMode: via === 'direct' ? 'technical' : 'support',
-          }],
-          doctrineSource: synthesizedTrace.doctrineSource,
-        },
-      }
-
-      if (enforcedExercises.length < maxExercises) {
-        enforcedExercises.push(newRow)
-        usedIds.add(chosen.id)
-        finalCommitNewInjections.push({
-          skill: entry.skill,
-          via,
-          matchQuality: finalMatchQuality,
-          specificityScore: finalSpecificityScore,
-          exerciseLevel: finalExerciseLevel,
-        })
-      } else {
-        const victimIdx = findEvictionVictimIndex()
-        if (victimIdx >= 0) {
-          const victim = enforcedExercises[victimIdx]
-          enforcedExercises.splice(victimIdx, 1, newRow)
-          usedIds.add(chosen.id)
-          finalCommitNewInjections.push({
-            skill: entry.skill,
-            via,
-            matchQuality: finalMatchQuality,
-            specificityScore: finalSpecificityScore,
-            exerciseLevel: finalExerciseLevel,
-          })
-          finalCommitEvicted.push({
-            exerciseId: victim.exercise.id,
-            reason: `evicted_to_inject_obligation(${entry.skill}/${via})`,
-          })
-        } else {
-          finalCommitDeferred.push({
-            skill: entry.skill,
-            reason: 'session_budget_full_no_safe_eviction_target',
-          })
-        }
-      }
-    }
-
-    console.log('[PHASE1B-FINAL-SELECTED-SKILL-COMMIT] Final-commit enforcement summary:', {
-      dayFocus: day.focus,
-      primaryGoal,
-      maxExercises,
-      enforcedExerciseCountBefore: enforcedIdsBefore.size,
-      enforcedExerciseCountAfter: enforcedExercises.length,
-      restoredEvictedRows: finalCommitRestoredRows,
-      newObligationInjections: finalCommitNewInjections,
-      evictedToMakeRoom: finalCommitEvicted,
-      deferredWithReason: finalCommitDeferred,
-      verdict:
-        finalCommitRestoredRows.length === 0 &&
-        finalCommitNewInjections.length === 0 &&
-        finalCommitDeferred.length === 0
-          ? 'ALL_SELECTED_SKILL_OBLIGATIONS_ALREADY_SATISFIED'
-          : (finalCommitDeferred.length === 0
-              ? 'SELECTED_SKILL_OBLIGATIONS_ENFORCED_AT_FINAL_COMMIT'
-              : 'PARTIAL_OBLIGATION_ENFORCEMENT_WITH_EXPLICIT_DEFERRALS'),
-    })
-  }
-
+  
   // ==========================================================================
   // [SESSION-ARCHITECTURE-MATERIALIZATION] AUTHORITATIVE TRACE AUDIT
   // This audit tracks whether broader skill truth actually materialized into exercises
@@ -7544,18 +6335,7 @@ export function buildFallbackSelectionForSession(
   primaryGoal: PrimaryGoal,
   equipment: EquipmentType[],
   sessionMinutes: number,
-  experienceLevel: ExperienceLevel,
-  // [SELECTED-SKILL-FALLBACK-TRUTH] Optional list of the user's full selected
-  // skills (from onboarding / canonical profile). When provided, this helper
-  // prioritizes direct progressions and support work for the user's actual
-  // skill truth BEFORE falling through to the generic primaryGoal→focus map.
-  // This closes the dilution gap where the fallback returned only generic
-  // goal support rows even when the user had broader selected-skill truth
-  // (e.g. back_lever, dragon_flag) that should have been the first material
-  // an underbuilt-session top-up draws from. When omitted, the helper
-  // behaves exactly as before (backward compatible for rescue paths that
-  // don't have access to the selected-skills array).
-  selectedSkills: string[] = []
+  experienceLevel: ExperienceLevel
 ): { main: SelectedExercise[]; rescuePath: string; wasRescued: boolean } {
   console.log('[session-rescue] Starting fallback resolution:', {
     dayFocus,
@@ -7563,8 +6343,6 @@ export function buildFallbackSelectionForSession(
     equipmentCount: equipment.length,
     sessionMinutes,
     experienceLevel,
-    selectedSkillsCount: selectedSkills.length,
-    selectedSkills,
   })
   
   const rescueResult: SelectedExercise[] = []
@@ -7679,277 +6457,6 @@ export function buildFallbackSelectionForSession(
     }
   }
   
-  // ==========================================================================
-  // [SELECTED-SKILL-FALLBACK-TRUTH] RESCUE PATH 0 (NEW, HIGHEST PRIORITY):
-  // Prioritize direct progressions + support material for the user's actual
-  // selected skills, pulled from the canonical ADVANCED_SKILL_FAMILIES
-  // registry (single source of truth, no parallel data).
-  //
-  // WHY THIS PATH EXISTS: Before this path, the fallback builder's only
-  // skill-awareness was the `primaryGoal` argument -- a single skill/goal
-  // key. But the user's selected-skill set is a list (e.g. front_lever AS
-  // primary plus back_lever + dragon_flag + planche_pushup as additional
-  // selected skills). The old code returned generic pull/scapular/lat
-  // support for front_lever and never surfaced a single back_lever or
-  // dragon_flag direct progression, even when the underbuilt-session
-  // top-up was starving for truthful selected-skill material to append.
-  // That was the first dilution owner.
-  //
-  // This path ONLY activates when the caller passes a non-empty
-  // `selectedSkills` list (the top-up repair in adaptive-program-builder
-  // does). Backward compat: when the list is empty, the function still
-  // falls through to the original PATH 1 immediately.
-  //
-  // DOCTRINE SAFETY: This path does NOT bypass eligibility -- it only
-  // surfaces candidates that are already in the equipment-filtered
-  // `availableSkills` / `availableStrength` / `availableAccessory` pools.
-  // It respects overlap-aware doctrine by caller (the top-up repair
-  // enforces the `deficit` cap and dedupes against existing session rows).
-  // No hardcoded exercises -- every candidate is looked up from canonical
-  // ADVANCED_SKILL_FAMILIES.directProgressions + .supportPatterns.
-  // ==========================================================================
-  if (selectedSkills.length > 0) {
-    // ========================================================================
-    // [SELECTED-SKILL-FAIRNESS-FIX] 2-PASS FAIR CANDIDATE ASSEMBLY
-    //
-    // CONFIRMED UPSTREAM STARVATION (the first real dilution owner):
-    // The previous implementation used a SINGLE shared `alreadyCollected` set
-    // across all selected skills AND a sequential outer loop over skills. This
-    // meant the FIRST selected skill (typically the primary, e.g. front_lever)
-    // claimed every matching exercise in one pass -- including rows that
-    // would have been priority-3 direct progressions for LATER selected skills
-    // (e.g. back_lever, dragon_flag). Combined with a priority-only global
-    // sort and a fixed cap of 6, later selected skills frequently survived
-    // with ZERO rows in the taken set even when they had valid material in
-    // the equipment-filtered pool. That is why broader onboarding truth
-    // never made it to the Program page.
-    //
-    // THE FIX (first real owner only, no parallel truth, no new builder):
-    //   PASS A — collect each advanced selected skill's candidates into its
-    //   OWN per-skill bucket, WITHOUT a shared dedupe set. Same canonical
-    //   registry (ADVANCED_SKILL_FAMILIES), same equipment-filtered pools,
-    //   same 3-tier priority scoring.
-    //
-    //   PASS B — fair representation round(s): iterate selectedSkills in
-    //   order, take each skill's best-still-available candidate, dedupe by
-    //   exercise id in the taken set only (not during collection), repeat
-    //   up to a small per-skill guaranteed-representation floor.
-    //
-    //   PASS C — fill remaining cap from the globally pooled remainder
-    //   ranked by (priority desc, original order) so that once each skill
-    //   has had its fair shot, strong residual candidates still fill any
-    //   unused capacity.
-    //
-    // INVARIANTS PRESERVED:
-    //   - Equipment eligibility: unchanged (same `combinedAvailable`).
-    //   - Canonical truth: same `getAdvancedSkillFamily` / same
-    //     `exerciseTransfersToSkill`.
-    //   - Dedupe by exercise id: still enforced in the final `taken` set.
-    //   - Overall cap: still capped at 6 rows total (session budget).
-    //   - Downstream deficit cap: the caller (top-up repair) still caps
-    //     appended rows by `deficit`, so this cannot inflate past budget.
-    //   - Not equal-hard-exposure: the per-skill floor is a candidate
-    //     *opportunity*, not a dosage guarantee; final session assembly
-    //     decides actual usage.
-    // ========================================================================
-    type SkillCandidate = {
-      exercise: Exercise
-      ownerSkill: string
-      matchReason: string
-      priority: number // 3=direct progression, 2=support pattern, 1=transferTo
-    }
-
-    const combinedAvailable = [...availableSkills, ...availableStrength, ...availableAccessory]
-
-    // PASS A: independent per-skill buckets (no cross-skill dedupe during collection)
-    const perSkillBuckets: Map<string, SkillCandidate[]> = new Map()
-    const advancedSkillsInSelection: string[] = []
-
-    for (const skill of selectedSkills) {
-      const family = getAdvancedSkillFamily(skill)
-      if (!family) continue
-      advancedSkillsInSelection.push(skill)
-
-      const directProgressionIds = new Set(
-        (family.directProgressions || []).map(id => safeLower(id))
-      )
-      const supportPatterns = (family.supportPatterns || []).map(p => safeLower(p))
-
-      const bucket: SkillCandidate[] = []
-      const bucketSeen = new Set<string>() // per-skill dedupe only (intra-bucket)
-
-      for (const ex of combinedAvailable) {
-        const exIdLower = safeLower(ex.id)
-        if (!exIdLower || bucketSeen.has(exIdLower)) continue
-
-        // Priority 3: exact direct-progression id match
-        if (directProgressionIds.has(exIdLower)) {
-          bucket.push({
-            exercise: ex,
-            ownerSkill: skill,
-            matchReason: `direct_progression_for_${skill}`,
-            priority: 3,
-          })
-          bucketSeen.add(exIdLower)
-          continue
-        }
-
-        // Priority 2: support pattern match
-        const norm = getRescueNormalized(ex)
-        if (norm && supportPatterns.length > 0) {
-          const exTags = [
-            safeLower(norm.movementFamily),
-            safeLower(norm.movementPattern),
-            ...norm.tags.map(t => safeLower(t)),
-          ].filter(Boolean)
-          if (supportPatterns.some(p => exTags.some(t => t.includes(p)))) {
-            bucket.push({
-              exercise: ex,
-              ownerSkill: skill,
-              matchReason: `support_pattern_for_${skill}`,
-              priority: 2,
-            })
-            bucketSeen.add(exIdLower)
-            continue
-          }
-        }
-
-        // Priority 1: transferTo match
-        if (exerciseTransfersToSkill(ex, skill)) {
-          bucket.push({
-            exercise: ex,
-            ownerSkill: skill,
-            matchReason: `transfers_to_${skill}`,
-            priority: 1,
-          })
-          bucketSeen.add(exIdLower)
-        }
-      }
-
-      // Priority-sort inside each bucket so PASS B can pop the best first.
-      bucket.sort((a, b) => b.priority - a.priority)
-      perSkillBuckets.set(skill, bucket)
-    }
-
-    const totalCandidatesCollected = Array.from(perSkillBuckets.values()).reduce(
-      (n, b) => n + b.length,
-      0
-    )
-
-    if (totalCandidatesCollected > 0) {
-      const skillTruthCap = 6
-
-      // Session-level dedupe — only applied while assembling `taken`.
-      const takenIds = new Set<string>()
-      const taken: SkillCandidate[] = []
-
-      // PASS B: fair per-skill representation rounds.
-      // Round 1: guarantee each skill with a non-empty bucket gets at least
-      //   its best candidate (up to cap).
-      // Round 2+: continue round-robin up to MIN_PER_SKILL_FLOOR before
-      //   falling through to global priority fill.
-      // Rationale: MIN_PER_SKILL_FLOOR=1 keeps the fix minimal. At 2 skills
-      // with cap 6 this is 2 guaranteed + 4 priority fill. At 4 skills this
-      // is 4 guaranteed + 2 priority fill. At 5+ skills, the first 5 each
-      // get 1 guaranteed slot via round-robin with no over-representation.
-      const MIN_PER_SKILL_FLOOR = 1
-
-      // Work against a mutable shallow copy of each bucket so we can pop
-      // best-first without mutating the original buckets (for auditability).
-      const workingBuckets: Map<string, SkillCandidate[]> = new Map()
-      for (const [skill, bucket] of perSkillBuckets) {
-        workingBuckets.set(skill, [...bucket])
-      }
-
-      for (let round = 0; round < MIN_PER_SKILL_FLOOR && taken.length < skillTruthCap; round++) {
-        for (const skill of advancedSkillsInSelection) {
-          if (taken.length >= skillTruthCap) break
-          const bucket = workingBuckets.get(skill)
-          if (!bucket || bucket.length === 0) continue
-          // Pop the best-not-yet-taken candidate from this skill's bucket.
-          let picked: SkillCandidate | null = null
-          while (bucket.length > 0) {
-            const cand = bucket.shift()!
-            const id = safeLower(cand.exercise.id)
-            if (id && !takenIds.has(id)) {
-              picked = cand
-              break
-            }
-          }
-          if (picked) {
-            const id = safeLower(picked.exercise.id)
-            if (id) takenIds.add(id)
-            taken.push(picked)
-          }
-        }
-      }
-
-      // PASS C: global priority fill from whatever remains in all buckets.
-      if (taken.length < skillTruthCap) {
-        const remaining: SkillCandidate[] = []
-        for (const bucket of workingBuckets.values()) {
-          for (const cand of bucket) {
-            const id = safeLower(cand.exercise.id)
-            if (id && !takenIds.has(id)) remaining.push(cand)
-          }
-        }
-        remaining.sort((a, b) => b.priority - a.priority)
-        for (const cand of remaining) {
-          if (taken.length >= skillTruthCap) break
-          const id = safeLower(cand.exercise.id)
-          if (!id || takenIds.has(id)) continue
-          takenIds.add(id)
-          taken.push(cand)
-        }
-      }
-
-      rescuePath = 'selected_skill_truth'
-      for (const cand of taken) {
-        rescueResult.push(
-          toSelectedExercise(
-            cand.exercise,
-            `Selected-skill material (${cand.matchReason}, priority ${cand.priority})`
-          )
-        )
-      }
-
-      // Auditable breakdown so callers can prove broader-skill representation.
-      const skillsWithCandidates = advancedSkillsInSelection.filter(
-        s => (perSkillBuckets.get(s) || []).length > 0
-      )
-      const skillsRepresentedInTaken = new Set(taken.map(c => c.ownerSkill))
-
-      console.log('[SELECTED-SKILL-FAIRNESS-FIX] Skill-truth candidates surfaced (2-pass fair)', {
-        selectedSkillsCount: selectedSkills.length,
-        advancedSkillsInSelection,
-        perSkillBucketSizes: Object.fromEntries(
-          Array.from(perSkillBuckets.entries()).map(([s, b]) => [s, b.length])
-        ),
-        totalCandidatesCollected,
-        appliedCount: taken.length,
-        skillsWithCandidates,
-        skillsRepresentedInTaken: Array.from(skillsRepresentedInTaken),
-        skillsStarvedDespiteHavingCandidates: skillsWithCandidates.filter(
-          s => !skillsRepresentedInTaken.has(s)
-        ),
-        appliedExercises: taken.map(c => ({
-          id: c.exercise.id,
-          name: c.exercise.name,
-          ownerSkill: c.ownerSkill,
-          priority: c.priority,
-          matchReason: c.matchReason,
-        })),
-        verdict: 'SELECTED_SKILL_TRUTH_APPLIED_WITH_FAIRNESS',
-      })
-    } else {
-      console.log('[SELECTED-SKILL-FAIRNESS-FIX] No skill-truth candidates matched selected skills', {
-        selectedSkills,
-        advancedSkillsInSelection,
-        verdict: 'SELECTED_SKILL_TRUTH_NO_MATCH_FALLING_THROUGH',
-      })
-    }
-  }
-
   // RESCUE PATH 1: Goal-specific support work for the day focus
   const goalFocusMap: Record<PrimaryGoal, string[]> = {
     planche: ['straight_arm', 'push', 'shoulder'],
@@ -7991,23 +6498,10 @@ export function buildFallbackSelectionForSession(
     return targetTags.some(tag => exTags.some(et => et.includes(tag)))
   })
   
-  // [SELECTED-SKILL-FALLBACK-TRUTH] The candidate cap below is raised from 4
-  // to 6 so that sessions at 60/75/90 minutes (which declare minExercises of
-  // 5/5/6) can be satisfied by the fallback pool when the top-up repair
-  // needs more than 4 unique candidates. The top-up repair itself caps its
-  // appended rows by `deficit`, so this widening never inflates a session
-  // past its true budget -- it only ensures the top-up has enough unique
-  // material to append when the session is genuinely underbuilt. For the
-  // empty-session rescue path (separate caller), more fallback candidates
-  // means the rescue is less likely to emit a thin 2-exercise session.
-  const FALLBACK_TARGET_CAP = 6
-
-  if (goalMatchingExercises.length >= 2 && rescueResult.length < FALLBACK_TARGET_CAP) {
-    if (rescuePath === 'none') rescuePath = 'goal_support'
-    const goalSupportAdditions = goalMatchingExercises
-      .filter(ex => !rescueResult.some(r => r.exercise.id === ex.id))
-      .slice(0, Math.max(0, FALLBACK_TARGET_CAP - rescueResult.length))
-    rescueResult.push(...goalSupportAdditions.map(ex => toSelectedExercise(ex, `Goal-aligned ${primaryGoal} support`)))
+  if (goalMatchingExercises.length >= 2) {
+    rescuePath = 'goal_support'
+    const selected = goalMatchingExercises.slice(0, Math.min(4, goalMatchingExercises.length))
+    rescueResult.push(...selected.map(ex => toSelectedExercise(ex, `Goal-aligned ${primaryGoal} support`)))
     console.log('[session-rescue-success] Found goal-matching exercises:', {
       count: rescueResult.length,
       exercises: rescueResult.map(e => e.exercise.name),
@@ -8017,7 +6511,7 @@ export function buildFallbackSelectionForSession(
   // RESCUE PATH 2: Day focus compatible work
   // [PHASE15E-RESCUE-CORRIDOR-INPUT-TRUTH] Use normalized candidates for focus compatibility
   const safeDayFocus = dayFocus || 'mixed_upper'
-  if (rescueResult.length < FALLBACK_TARGET_CAP) {
+  if (rescueResult.length < 2) {
     const focusCompatible = availableStrength.filter(ex => {
       const norm = getRescueNormalized(ex)
       if (!norm) return false // Skip malformed candidates
@@ -8030,19 +6524,19 @@ export function buildFallbackSelectionForSession(
       return true
     })
     
-    if (focusCompatible.length >= 1) {
-      if (rescuePath === 'none') rescuePath = 'focus_compatible'
+    if (focusCompatible.length >= 2) {
+      rescuePath = 'focus_compatible'
       const additional = focusCompatible
         .filter(ex => !rescueResult.some(r => r.exercise.id === ex.id))
-        .slice(0, Math.max(0, FALLBACK_TARGET_CAP - rescueResult.length))
+        .slice(0, Math.max(0, 4 - rescueResult.length))
       rescueResult.push(...additional.map(ex => toSelectedExercise(ex, `Focus-compatible ${safeDayFocus}`)))
     }
   }
   
   // RESCUE PATH 3: General strength/accessory fallback
   // [PHASE15E-RESCUE-CORRIDOR-INPUT-TRUTH] Use normalized candidates for carryover sorting
-  if (rescueResult.length < FALLBACK_TARGET_CAP) {
-    if (rescuePath === 'none') rescuePath = 'general_strength'
+  if (rescueResult.length < 2) {
+    rescuePath = 'general_strength'
     const generalExercises = [...availableStrength, ...availableAccessory]
       .filter(ex => {
         const norm = getRescueNormalized(ex)
@@ -8057,22 +6551,22 @@ export function buildFallbackSelectionForSession(
         const carryoverB = normB?.carryover ?? 0
         return carryoverB - carryoverA
       })
-      .slice(0, Math.max(0, FALLBACK_TARGET_CAP - rescueResult.length))
+      .slice(0, Math.max(0, 4 - rescueResult.length))
     
     rescueResult.push(...generalExercises.map(ex => toSelectedExercise(ex, 'General strength fallback')))
   }
   
   // RESCUE PATH 4: Core work as minimum viable session
   // [PHASE15E-RESCUE-CORRIDOR-INPUT-TRUTH] Use normalized candidates for core identification
-  if (rescueResult.length < FALLBACK_TARGET_CAP && availableCore.length > 0) {
-    if (rescuePath === 'none') rescuePath = 'core_minimum'
+  if (rescueResult.length < 2 && availableCore.length > 0) {
+    rescuePath = 'core_minimum'
     const coreExercises = availableCore
       .filter(ex => {
         const norm = getRescueNormalized(ex)
         if (!norm) return false // Skip malformed candidates
         return !rescueResult.some(r => r.exercise.id === ex.id)
       })
-      .slice(0, Math.max(0, FALLBACK_TARGET_CAP - rescueResult.length))
+      .slice(0, Math.max(0, 3 - rescueResult.length))
     
     rescueResult.push(...coreExercises.map(ex => toSelectedExercise(ex, 'Core fallback')))
   }
@@ -8652,13 +7146,7 @@ export function getPrescriptionAwarePrescription(
   primaryGoal: string,
   currentProgression?: string,
   fatigueState?: 'fresh' | 'moderate' | 'fatigued',
-  recentPerformance?: { avgRPE?: number; completionRate?: number; improving?: boolean },
-  // [STEP-5C-CANONICAL-GRAMMAR] Day-level intensity from the calling
-  // session architecture / composition metadata. When the session is
-  // 'high' (overload / max strength / power) the resolver picks tighter
-  // canonical bands; on 'low' technical days it caps RPE and biases
-  // toward quality. Optional — defaults to 'moderate'.
-  dayIntensity?: DayIntensity,
+  recentPerformance?: { avgRPE?: number; completionRate?: number; improving?: boolean }
 ): { sets: number; repsOrTime: string; note?: string; prescriptionMode: PrescriptionMode; supportsWeightedLoad?: boolean } {
   // Detect prescription mode
   // [EXERCISE-SELECTION-HARDENING] Use safe string normalization
@@ -8679,62 +7167,9 @@ export function getPrescriptionAwarePrescription(
     recentPerformance,
     fatigueState,
   }
-
-  // [STEP-5B-INTENT-NARROWING] Consult the adaptive resolver FIRST for ANY
-  // prescription mode. Step 5A only intercepted skill_hold / skill_cluster
-  // (handstand-position holds). Step 5B extends the resolver to classify
-  // pulling and pushing strength identities (unilateral_pull, power_pull,
-  // high_rom_pull, weighted_strength_pull/push, standard_pull, ring_dip,
-  // muscle_up_transition_push, hspu_strength, pike_push,
-  // planche_pushup_strength) and emit narrow intent-specific dosage —
-  // replacing the generic 3-8-rep / 6-15-rep template output that the
-  // weighted_strength and bodyweight_strength branches were producing.
-  //
-  // The resolver returns null for unclassified exercises, in which case
-  // we fall through to the existing per-mode logic below — no regression.
-  const adaptive: AdaptiveDosageDecision | null = resolveAdaptiveExerciseDosage({
-    exercise,
-    experienceLevel,
-    fatigueState,
-    // [STEP-5C-CANONICAL-GRAMMAR] Forward the caller-supplied day
-    // intensity so the resolver picks an intent-appropriate canonical
-    // band (e.g. weighted-pull as max-strength on high days, strength
-    // volume on moderate, hypertrophy-support on density). Defaults to
-    // 'moderate' inside the resolver when omitted.
-    dayIntensity,
-    // Role hint and ability anchors land here once the session-architecture
-    // and onboarding-hydration layers wire them through. Passing undefined
-    // keeps the resolver on its level-keyed default calibration.
-  })
-  if (adaptive) {
-    // For weighted-strength identities, signal supportsWeightedLoad so the
-    // downstream load-estimator path still runs. The carryover-aware
-    // prescription in getWeightedStrengthPrescriptionForSkill will REPLACE
-    // repsOrTime when benchmarks are present (preserved behavior); when no
-    // benchmarks exist, the resolver's narrow Max-Strength range is used.
-    const supportsWeightedLoad =
-      exercise.id.includes('weighted_pull') ||
-      exercise.id.includes('weighted_dip') ||
-      exercise.id.includes('weighted_push') ||
-      exercise.id.includes('weighted_row')
-    return {
-      sets: adaptive.sets,
-      repsOrTime: adaptive.repsOrTime,
-      note: adaptive.visibleCoachReason,
-      prescriptionMode,
-      supportsWeightedLoad: supportsWeightedLoad || undefined,
-    }
-  }
-
+  
   // For skill work, use advanced skill prescription rules (TASK 2)
   if (prescriptionMode === 'skill_hold' || prescriptionMode === 'skill_cluster') {
-    // Resolver above already handled handstand_position holds. Anything
-    // reaching here is a skill identity the resolver does not yet handle
-    // (lever / planche / compression / etc.) — fall through to the
-    // existing goal-keyed rules.
-
-    // Fallback: existing goal-keyed skill rules for skill identities the
-    // resolver does not yet handle (lever / planche / compression / etc.).
     const skillRules = getSkillPrescriptionRules(
       primaryGoal,
       experienceLevel as 'beginner' | 'intermediate' | 'advanced' | 'elite',
@@ -8770,62 +7205,35 @@ export function getPrescriptionAwarePrescription(
   if (prescriptionMode === 'weighted_strength') {
     const prescription = resolvePrescription(prescriptionMode, athleteContext)
     const formatted = formatPrescription(prescription)
-
+    
     // Determine the weighted exercise type
-    const exerciseType: 'weighted_pull_up' | 'weighted_dip' | 'weighted_push_up' | 'weighted_row' | null =
+    const exerciseType: 'weighted_pull_up' | 'weighted_dip' | 'weighted_push_up' | 'weighted_row' | null = 
       exercise.id.includes('weighted_pull') ? 'weighted_pull_up' :
       exercise.id.includes('weighted_dip') ? 'weighted_dip' :
       exercise.id.includes('weighted_push') ? 'weighted_push_up' :
       exercise.id.includes('weighted_row') ? 'weighted_row' : null
-
+    
     // If this is a recognized weighted exercise, calculate load
     // Note: This function doesn't have direct access to benchmarks - that happens at session assembly level
     // The prescribedLoad field will be populated by getWeightedStrengthPrescriptionForSkill when called with benchmarks
-
-    // [STEP-5C-CANONICAL-GRAMMAR] Final sanity gate — the legacy
-    // weighted_strength template already returns 3-8 reps which is on
-    // the canonical list, but the carryover override (TASK 3) and any
-    // future blend can still emit a weird range. Snap once before exit.
-    const snapped = normalizeRepsOrTimeString(
-      formatted.repsOrTime,
-      dayIntensity === 'high' ? 'max_strength' : 'strength_volume',
-      dayIntensity ?? 'moderate',
-    )
-
+    
     return {
       sets: formatted.sets,
-      repsOrTime: snapped.repsOrTime,
+      repsOrTime: formatted.repsOrTime,
       note: formatted.note,
       prescriptionMode,
       // Signal that this exercise supports weighted load prescription
       supportsWeightedLoad: exerciseType !== null,
     }
   }
-
+  
   // For other modes, use base prescription contract
   const prescription = resolvePrescription(prescriptionMode, athleteContext)
   const formatted = formatPrescription(prescription)
-
-  // [STEP-5C-CANONICAL-GRAMMAR] Final sanity gate — `bodyweight_strength`
-  // emits "6-15 reps" and `hypertrophy_support` emits "8-15 reps", which
-  // pass through the existing band list. The blend-with-envelope path in
-  // coaching-framework-engine can still arithmetic-interpolate (e.g.
-  // 7-12) so we snap any legacy fallback string here too.
-  const fallbackIntent =
-    prescriptionMode === 'bodyweight_strength'
-      ? 'strength_volume'
-      : prescriptionMode === 'hypertrophy_support'
-        ? 'hypertrophy_support'
-        : 'unknown'
-  const snappedFallback = normalizeRepsOrTimeString(
-    formatted.repsOrTime,
-    fallbackIntent,
-    dayIntensity ?? 'moderate',
-  )
-
+  
   return {
     sets: formatted.sets,
-    repsOrTime: snappedFallback.repsOrTime,
+    repsOrTime: formatted.repsOrTime,
     note: formatted.note,
     prescriptionMode,
   }

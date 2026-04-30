@@ -616,17 +616,9 @@ export function workoutMachineReducer(
       // base set append, phase transition, or currentSetNumber advance.
       // =====================================================================
       
-      // [POST-COMMIT-FREEZE-TRACE-R3] STAGE D.
-      // Reducer COMPLETE_SET case entered. Reads the current tap trace id
-      // from the window mirror set by Stage A in the corridor. If
-      // tapTraceId is null here, Stage A never fired and the dispatch
-      // arrived via a non-authoritative path.
-      const __tapTraceId_D =
-        typeof window !== 'undefined'
-          ? ((window as unknown as { __spartanlabCurrentTapTraceId?: number }).__spartanlabCurrentTapTraceId ?? null)
-          : null
-      console.log('[v0] [log-corridor] stageD reducer COMPLETE_SET entered', {
-        tapTraceId: __tapTraceId_D,
+      // [LIVE-LOG-CORRIDOR-PROOF] Stage 4: reducer COMPLETE_SET case entered.
+      // Paired with stage-3 dispatch log in StreamlinedWorkoutSession.tsx.
+      console.log('[v0] [log-corridor] stage4 reducer COMPLETE_SET entered', {
         exerciseIndex: action.completedSet.exerciseIndex,
         setNumber: action.completedSet.setNumber,
         isLastSetOfExercise: action.isLastSetOfExercise,
@@ -834,9 +826,7 @@ export function workoutMachineReducer(
       if (action.isLastSetOfExercise) {
         const isLastExercise = state.currentExerciseIndex >= action.exerciseCount - 1
         if (isLastExercise) {
-          // [POST-COMMIT-FREEZE-TRACE-R3] STAGE E (workout-complete branch).
-          console.log('[v0] [log-corridor] stageE reducer COMPLETE_SET returned -> last set / last exercise / workout complete', {
-            tapTraceId: __tapTraceId_D,
+          console.log('[v0] [log-corridor] COMPLETE_SET base commit -> last set / last exercise', {
             phase: 'completed',
             currentExerciseIndex: state.currentExerciseIndex,
             currentSetNumber: state.currentSetNumber,
@@ -869,9 +859,7 @@ export function workoutMachineReducer(
           action.interExerciseRestSeconds > 0
             ? Math.round(action.interExerciseRestSeconds)
             : 120
-        // [POST-COMMIT-FREEZE-TRACE-R3] STAGE E (last-set branch).
-        console.log('[v0] [log-corridor] stageE reducer COMPLETE_SET returned -> last set / between-exercise rest', {
-          tapTraceId: __tapTraceId_D,
+        console.log('[v0] [log-corridor] COMPLETE_SET base commit -> last set / next exercise', {
           phase: 'between_exercise_rest',
           currentExerciseIndex: state.currentExerciseIndex,
           currentSetNumber: state.currentSetNumber,
@@ -899,16 +887,8 @@ export function workoutMachineReducer(
         }
       }
       
-      // [POST-COMMIT-FREEZE-TRACE-R3] STAGE E (non-final-set branch).
-      // Reducer is returning the non-final-set commit. currentExerciseIndex
-      // stays, currentSetNumber advances by +1, phase becomes 'resting'.
-      // This is the AUTHORITATIVE contract for "user tapped Log Set on a
-      // non-last set of a straight exercise". If Stage F in the parent
-      // does NOT see this exact shape (same exercise index, set +1,
-      // phase=resting) on the next render, a second owner is overwriting
-      // reducer output between reducer return and parent render.
-      console.log('[v0] [log-corridor] stageE reducer COMPLETE_SET returned -> not-last-set / same-exercise rest', {
-        tapTraceId: __tapTraceId_D,
+      // Not last set - transition to resting for same-exercise continuation
+      console.log('[v0] [log-corridor] COMPLETE_SET base commit -> not-last-set / same-exercise rest', {
         phase: 'resting',
         currentExerciseIndex: state.currentExerciseIndex,
         newCurrentSetNumber: state.currentSetNumber + 1,
@@ -970,51 +950,14 @@ export function workoutMachineReducer(
         currentExerciseIndex: action.nextIndex,
         currentSetNumber: 1,
         selectedRPE: null,
-        // [LIVE-INPUT-SEED-FIX] Use the 0 sentinel so the corridor's
-        // re-seed logic in StreamlinedWorkoutSession picks the canonical
-        // low-end-of-range value from the NEW exercise's prescription,
-        // not whatever number the dispatcher happened to parse for the
-        // legacy `targetValue` field. The dispatcher's parse path was the
-        // exact site where "3 sets x 4-6" leaked a leading 3 into reps.
-        // Holding 0 here forces the next render to consult
-        // getPrescriptionSeedValue, which is the single authoritative
-        // owner of "default reps for a fresh set on a fresh exercise".
-        repsValue: 0,
-        holdValue: 0,
-        // [STALE-EXERCISE-STATE-CLEAR] Every per-exercise execution fact
-        // captured during the PREVIOUS exercise MUST NOT leak into the
-        // next exercise. Whether the next exercise is weighted, band-
-        // assisted, bodyweight, hold, or unilateral, it needs a clean
-        // slate so the contract-authorized input UI (and only that UI)
-        // drives what the user sees AND what `buildSetDataPayload`
-        // captures on the first Log Set of the new exercise.
-        //
-        // ROOT CAUSE THIS FIXES (band leak, load leak, per-side leak):
-        //   - selectedBands: previously reset, but if the prior exercise
-        //     used MultiBandSelector and only `multiBandSelection` carried
-        //     the bands, payload builder fell back to it -> red+yellow
-        //     band tags showed on a brand new weighted pull-up's first
-        //     logged set.
-        //   - actualLoadUsed/actualLoadUnit: previously NOT reset, so the
-        //     load input on the next weighted exercise opened at the
-        //     prior exercise's used load (e.g. +25 lbs) instead of the
-        //     new prescribed load (e.g. +42.5 lbs).
-        //   - isPerSide: previously NOT reset, so a unilateral exercise's
-        //     per-side flag could carry into a bilateral exercise.
-        //
-        // After this clear, the snapshot's per-exercise display values
-        // are sourced from the NEW exercise's prescription via the
-        // canonical authority resolvers, not from leftover machine state.
+        repsValue: action.targetValue,
+        holdValue: action.targetValue,
         bandUsed: 'none',
+        // [STALE-BAND-CLEAR] Band state from the previous exercise MUST NOT
+        // leak into the next exercise. Whether the next exercise is weighted
+        // or band-assisted, it needs a clean slate so the contract-authorized
+        // input UI (and only that UI) drives what the user sees.
         selectedBands: [],
-        multiBandSelection: null,
-        actualLoadUsed: null,
-        actualLoadUnit: 'lbs',
-        isPerSide: false,
-        // Per-set notes/tags live with the previous set; clear them so
-        // the new exercise's first set starts unannotated.
-        currentSetNote: '',
-        currentSetReasonTags: [],
         interExerciseRestSeconds: 0,
       }
     

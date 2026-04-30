@@ -60,31 +60,9 @@ export default function DatabasePage() {
   
   const user = getCurrentUser()
   const profile = getAthleteProfile()
-  // [BUILD-FIX] HistoryOverview's authoritative shape (lib/history-
-  // snapshot-engine.ts:54) is { skillSnapshots[], strengthSnapshots[],
-  // trainingSnapshot }. Each skill snapshot has its own totalSessions,
-  // each strength snapshot has its own totalRecords, and the training
-  // snapshot exposes a single totalWorkouts. There is no `skills` /
-  // `strength` / `training` aggregate object — those reads were stale.
-  // Aggregate from the real arrays / object so empty-state detection
-  // remains behaviorally equivalent (any non-zero count = has data).
-  const hasHistoryData = (h: HistoryOverview | null): boolean => {
-    if (!h) return false
-    const skillSessions = h.skillSnapshots.reduce(
-      (sum, s) => sum + (s.totalSessions ?? 0),
-      0,
-    )
-    const strengthRecords = h.strengthSnapshots.reduce(
-      (sum, s) => sum + (s.totalRecords ?? 0),
-      0,
-    )
-    const trainingWorkouts = h.trainingSnapshot?.totalWorkouts ?? 0
-    return skillSessions > 0 || strengthRecords > 0 || trainingWorkouts > 0
-  }
-  const hasAnyData =
-    Boolean(prVault && prVault.totalPRs > 0) ||
-    Boolean(milestones && milestones.totalMilestones > 0) ||
-    hasHistoryData(history)
+  const hasAnyData = (prVault && prVault.totalPRs > 0) || 
+                     (milestones && milestones.totalMilestones > 0) ||
+                     (history && (history.skills.totalSessions > 0 || history.strength.totalRecords > 0 || history.training.totalWorkouts > 0))
   
   return (
     <div className="min-h-screen bg-[#121212] text-[#F5F5F5]">
@@ -174,14 +152,7 @@ export default function DatabasePage() {
                   <div>
                     <p className="text-xs text-[#6A6A6A]">Primary Goal</p>
                     <p className="text-sm font-medium text-[#E63946] capitalize">
-                      {/* [BUILD-FIX] getAthleteProfile() returns a
-                          nullable AthleteProfile, so chain through
-                          `profile?.` before reaching primaryGoal. The
-                          existing `|| 'Not set'` fallback already
-                          handles every empty / undefined branch, so
-                          behavior is preserved when profile exists and
-                          falls back gracefully when it doesn't. */}
-                      {profile?.primaryGoal?.replace('_', ' ') || 'Not set'}
+                      {profile.primaryGoal?.replace('_', ' ') || 'Not set'}
                     </p>
                   </div>
                 </div>

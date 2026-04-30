@@ -42,7 +42,6 @@ import {
   buildAllSessionCardSurfaces,
   type ProgramIntelligenceContract,
   type SessionCardSurface,
-  type ProgramDisplayProjection,
 } from '@/lib/program/program-display-contract'
 import { getCompactSessionExplanation } from '@/lib/coaching-explanation-contract'
 import { 
@@ -75,25 +74,6 @@ interface AdaptiveProgramDisplayProps {
   showProbe?: boolean
   // [ALWAYS-VISIBLE-PROBE] Force probe to render unconditionally
   forceProbe?: boolean
-  // [VISIBLE-SESSION-TRUTH-LOCK] Authoritative per-card surfaces built by the
-  // page-level CanonicalProgramDisplayTruth contract. When provided, the
-  // visible day cards render from these directly instead of recomputing
-  // the same surfaces locally -- enforcing single ownership of visible
-  // session truth at the page level. Optional for backward compatibility:
-  // when undefined, the component falls back to building surfaces locally
-  // via the same canonical helper (no semantic divergence is possible).
-  sessionCardSurfaces?: SessionCardSurface[]
-  // [PHASE 4F — DISPLAY PROJECTION OWNERSHIP LOCK] Read-only program-level
-  // display projection built ONCE on the page from the same `program` object
-  // every other display surface reads. AdaptiveProgramDisplay does NOT re-build
-  // this projection; it only forwards the matching per-session slice (matched
-  // by `dayNumber`) to the corresponding AdaptiveSessionCard. The card body
-  // then surfaces the per-session honest doctrine-causal verdict (changed /
-  // evaluated / no-match / did-not-run) — a question the existing wrapper
-  // chips and the top-of-page DoctrineCausalLine cannot answer per-session.
-  // Optional + null-safe: when null/undefined the day cards render exactly
-  // as before, with no Phase 4F line.
-  programDisplayProjection?: ProgramDisplayProjection | null
   }
 
 export function AdaptiveProgramDisplay({
@@ -105,10 +85,6 @@ export function AdaptiveProgramDisplay({
   unifiedStaleness, // [TASK 1] Consume parent's staleness evaluation
   showProbe = false, // [PREVIEW-VISIBLE-PROBE] Truth probe visibility
   forceProbe = false, // [ALWAYS-VISIBLE-PROBE] Force probe unconditionally
-  // [VISIBLE-SESSION-TRUTH-LOCK] Page-built per-card visible surfaces
-  sessionCardSurfaces: injectedSessionCardSurfaces,
-  // [PHASE 4F] Page-built read-only program display projection
-  programDisplayProjection,
   }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
@@ -225,28 +201,19 @@ export function AdaptiveProgramDisplay({
     ? rawWeeklyRepresentation
     : null
   
-  // [VISIBLE-SESSION-TRUTH-LOCK] Build authoritative per-card display surfaces.
-  // Prefer surfaces injected by the page-level CanonicalProgramDisplayTruth
-  // contract -- when provided, the page is the single owner of visible
-  // session truth. Fall back to the same canonical builder when the parent
-  // does not inject (older callers / standalone usage), so semantics never
-  // diverge regardless of which path produced the array.
-  const sessionCardSurfaces: SessionCardSurface[] = (
-    injectedSessionCardSurfaces && injectedSessionCardSurfaces.length === validSessions.length
-      ? injectedSessionCardSurfaces
-      : validSessions.length > 0
-        ? buildAllSessionCardSurfaces(
-            validSessions as Parameters<typeof buildAllSessionCardSurfaces>[0],
-            {
-              isFirstWeek: program.weekAdaptationDecision?.firstWeekGovernor?.active ?? false,
-              adaptationPhase: program.weekAdaptationDecision?.phase,
-              totalSessions: validSessions.length,
-              primaryGoal: program.primaryGoal,
-              secondaryGoal: program.secondaryGoal,
-            }
-          )
-        : []
-  )
+  // Build authoritative per-card display surfaces
+  const sessionCardSurfaces: SessionCardSurface[] = validSessions.length > 0
+    ? buildAllSessionCardSurfaces(
+        validSessions as Parameters<typeof buildAllSessionCardSurfaces>[0],
+        {
+          isFirstWeek: program.weekAdaptationDecision?.firstWeekGovernor?.active ?? false,
+          adaptationPhase: program.weekAdaptationDecision?.phase,
+          totalSessions: validSessions.length,
+          primaryGoal: program.primaryGoal,
+          secondaryGoal: program.secondaryGoal,
+        }
+      )
+    : []
   
   // Build render context for skills
   const renderPrimaryGoal = program.primaryGoal
@@ -1054,151 +1021,145 @@ export function AdaptiveProgramDisplay({
         {scaledSessions.length > 0 ? (
           scaledSessions.map((session, sessionIndex) => {
             // ================================================================
-            // [FINAL-DAY-CARD-OWNERSHIP-LOCK]
-            //
-            // The day-card visible header now consumes ONE owner: an
-            // enriched `cardSurface` derived from `SessionCardSurface`. The
-            // previously-parallel `intelligenceContract.coachingExplanation`,
-            // `intelligenceContract.dayRationales` and raw
-            // `getSessionSurfaceSignals(session)` reads are folded into
-            // surface fields here, once per session, and the JSX below
-            // never references those parallel paths again.
-            //
-            // The previous in-render `[FUNNEL-AUDIT-S3S4]` console probe
-            // that read raw `session.exercises` / `session.styleMetadata`
-            // on every render is removed (debug leakage in the visible
-            // card body render path). The probes still exist elsewhere
-            // for QA and the underlying truth was never depending on
-            // those logs.
+            // [GROUPED-TRUTH-FUNNEL-AUDIT] STAGE 3 -> STAGE 4 PROBE
+            // Logs grouped-truth presence on (a) the validSessions[i] entry
+            // (Stage 3, post-normalize, pre-week-scaling) and (b) the
+            // scaledSessions[i] entry being passed into AdaptiveSessionCard
+            // (Stage 4). If Stage 3 has truth and Stage 4 does not, the loss
+            // is in scaleSessionForWeek. If both are false, grouped truth was
+            // already absent before this component received the program.
             // ================================================================
-            const baseSurface = sessionCardSurfaces[sessionIndex]
+            if (typeof window !== 'undefined') {
+              const s3Source = validSessions[sessionIndex] as unknown as {
+                styleMetadata?: { styledGroups?: Array<{ groupType: string }> }
+                exercises?: Array<{ blockId?: string; method?: string }>
+              } | undefined
+              const s3Styled = s3Source?.styleMetadata?.styledGroups ?? []
+              const s3NonStraight = s3Styled.filter(g => g.groupType !== 'straight').length
+              const s3Ex = Array.isArray(s3Source?.exercises) ? s3Source.exercises : []
+              const s3ExWithBlockId = s3Ex.filter(e => !!e.blockId).length
+              const s3ExWithNonStraightMethod = s3Ex.filter(e => !!e.method && e.method !== 'straight').length
+              const s3HasGroupedTruth = s3NonStraight > 0 || s3ExWithNonStraightMethod > 0
 
-            // Enrich the surface ONCE per session. All visible-claim
-            // overlap collapses here so the JSX cannot accidentally
-            // double-source a header line.
+              const s4Source = session as unknown as {
+                styleMetadata?: { styledGroups?: Array<{ groupType: string }> }
+                exercises?: Array<{ blockId?: string; method?: string }>
+              }
+              const s4Styled = s4Source.styleMetadata?.styledGroups ?? []
+              const s4NonStraight = s4Styled.filter(g => g.groupType !== 'straight').length
+              const s4Ex = Array.isArray(s4Source.exercises) ? s4Source.exercises : []
+              const s4ExWithBlockId = s4Ex.filter(e => !!e.blockId).length
+              const s4ExWithNonStraightMethod = s4Ex.filter(e => !!e.method && e.method !== 'straight').length
+              const s4HasGroupedTruth = s4NonStraight > 0 || s4ExWithNonStraightMethod > 0
+
+              let stage34Verdict: string
+              if (!s3HasGroupedTruth && !s4HasGroupedTruth) {
+                stage34Verdict = 'STAGE3_ALREADY_FLAT_BEFORE_DISPLAY'
+              } else if (s3HasGroupedTruth && !s4HasGroupedTruth) {
+                stage34Verdict = 'STAGE3_TO_STAGE4_LOSS_IN_SCALE_SESSION_FOR_WEEK'
+              } else {
+                stage34Verdict = 'STAGE3_AND_STAGE4_BOTH_HAVE_GROUPED_TRUTH'
+              }
+
+              console.log('[v0] [FUNNEL-AUDIT-S3S4] Day', session.dayNumber, {
+                s3_styledGroups: s3Styled.length,
+                s3_nonStraight: s3NonStraight,
+                s3_exCount: s3Ex.length,
+                s3_exWithBlockId: s3ExWithBlockId,
+                s3_exWithNonStraightMethod: s3ExWithNonStraightMethod,
+                s3_hasGroupedTruth: s3HasGroupedTruth,
+                s4_styledGroups: s4Styled.length,
+                s4_nonStraight: s4NonStraight,
+                s4_exCount: s4Ex.length,
+                s4_exWithBlockId: s4ExWithBlockId,
+                s4_exWithNonStraightMethod: s4ExWithNonStraightMethod,
+                s4_hasGroupedTruth: s4HasGroupedTruth,
+                verdict: stage34Verdict,
+              })
+            }
+
+            // [SESSION-CARD-SURFACE] Get authoritative card surface for this session
+            const cardSurface = sessionCardSurfaces[sessionIndex]
+            
+            // Get day rationale for this session (fallback/supplementary)
             const dayRationale = intelligenceContract?.dayRationales?.find(
               r => r.dayNumber === session.dayNumber
             )
-            const compactCoaching = intelligenceContract?.coachingExplanation
-              ? getCompactSessionExplanation(intelligenceContract.coachingExplanation, session.dayNumber)
+            
+            // [SURFACE-SIGNALS] Get session-level surface signals for prescription changes
+            const sessionSurfaceSignals = getSessionSurfaceSignals(session as Parameters<typeof getSessionSurfaceSignals>[0])
+            
+            // [COACHING-EXPLANATION-CONTRACT] Get authoritative session explanation
+            const coachingSessionExpl = intelligenceContract?.coachingExplanation 
+              ? getCompactSessionExplanation(intelligenceContract.coachingExplanation, session.dayNumber) 
               : null
-            const surfaceSignals = getSessionSurfaceSignals(session as Parameters<typeof getSessionSurfaceSignals>[0])
-
-            const cardSurface: SessionCardSurface | undefined = baseSurface
-              ? {
-                  ...baseSurface,
-                  // [WEEKLY-SESSION-ROLE-CONTRACT — WHY-LINE PRIMACY]
-                  // When the per-day weekly role provides a rationale, it is
-                  // the strongest authoritative why source for THIS specific
-                  // day. Compact coaching purpose tends to be program-level
-                  // and reads identically across all six days — letting it
-                  // win the why-line slot was the dominant dilution path.
-                  // Order: weeklyRoleRationale > compactCoaching.purpose >
-                  // baseSurface.coachingPurpose > null.
-                  coachingPurpose:
-                    baseSurface.weeklyRoleRationale ??
-                    compactCoaching?.purpose ??
-                    baseSurface.coachingPurpose ??
-                    null,
-                  fallbackWeeklyRole: dayRationale?.weeklyRole ?? baseSurface.fallbackWeeklyRole ?? null,
-                  fallbackRationale: dayRationale?.rationale ?? baseSurface.fallbackRationale ?? null,
-                  microSignals: surfaceSignals.microSignals.length > 0
-                    ? surfaceSignals.microSignals
-                    : baseSurface.microSignals ?? [],
-                }
-              : undefined
-
+            
+            // Determine if we have authoritative card surface to show
             const hasAuthoritativeSurface = cardSurface && cardSurface.source === 'authoritative'
-            const hasAnyChips = !!cardSurface && (
-              cardSurface.primaryIntentChips.length > 0 ||
+            const hasAnyChips = cardSurface && (
+              cardSurface.primaryIntentChips.length > 0 || 
               cardSurface.protectionSignals.length > 0 ||
               cardSurface.methodSignals.length > 0
             )
-            const headerHasContent = !!cardSurface && (
-              !!cardSurface.sessionHeadline ||
-              hasAnyChips ||
-              !!cardSurface.coachingPurpose ||
-              !!cardSurface.evidenceLabel ||
-              !!cardSurface.fallbackWeeklyRole ||
-              !!cardSurface.fallbackRationale ||
-              (cardSurface.microSignals?.length ?? 0) > 0
-            )
-
+            const hasCoachingExplanation = !!coachingSessionExpl?.purpose
+            
             return (
               <div key={`${program.id}-${session.dayNumber}-${session.name || session.focusLabel}-week${currentWeekNumber}`}>
-                {/* [FINAL-DAY-CARD-OWNERSHIP-LOCK] Visible header reads ONLY
-                    `cardSurface.*`. Border / badge styling derive from the
-                    same surface; nothing here re-reads `session` or
-                    `intelligenceContract` for visible truth. */}
-                {headerHasContent && cardSurface ? (
+                {/* [SESSION-CARD-SURFACE] Authoritative per-card identity display */}
+                {/* [COACHING-EXPLANATION-CONTRACT] Show header when we have coaching explanation */}
+                {(hasAuthoritativeSurface || hasAnyChips || hasCoachingExplanation || sessionSurfaceSignals.hasPrescriptionChanges || (dayRationale && dayRationale.source !== 'unavailable')) ? (
                   <div className={`mb-2 px-2 py-1.5 bg-[#1A1A1A]/40 rounded-md border-l-2 ${
-                    cardSurface.protectionSignals.length
-                      ? 'border-[#E63946]/40'
+                    cardSurface?.protectionSignals.length 
+                      ? 'border-[#E63946]/40' 
                       : hasAuthoritativeSurface
                         ? 'border-[#E63946]/30'
                         : 'border-[#E63946]/20'
                   }`}>
                     <div className="flex items-start gap-2">
                       <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 mt-0.5 ${
-                        cardSurface.protectionSignals.length
-                          ? 'bg-[#E63946]/15'
+                        cardSurface?.protectionSignals.length 
+                          ? 'bg-[#E63946]/15' 
                           : 'bg-[#E63946]/10'
                       }`}>
                         <span className={`text-[8px] font-bold ${
-                          cardSurface.protectionSignals.length
-                            ? 'text-[#E63946]/90'
+                          cardSurface?.protectionSignals.length 
+                            ? 'text-[#E63946]/90' 
                             : 'text-[#E63946]/70'
                         }`}>{session.dayNumber}</span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        {/* [DOMINANT-CARD-OWNERSHIP-LOCK]
-                            The role headline + intensity·progression·breadth
-                            supporting line + per-day rationale are now OWNED
-                            by the dominant <AdaptiveSessionCard /> below
-                            (which receives the same `cardSurface` prop).
-                            Rendering them here as well would violate the
-                            "NO COSMETIC DOUBLING" rule — same statement in
-                            two places with slightly different styling. So we
-                            ONLY render the headline here as a tiny upstream
-                            tag for legacy sessions where `weeklyRoleLabel`
-                            is absent, to preserve the prior wrapper strip
-                            behavior for those. When weeklyRoleLabel IS
-                            present, the dominant card owns the identity
-                            and this slot stays silent. */}
-                        {!cardSurface.weeklyRoleLabel && cardSurface.sessionHeadline ? (
+                        {/* A. Session headline - authoritative identity line */}
+                        {cardSurface?.sessionHeadline && (
                           <p className="text-[11px] text-[#9A9A9A] font-medium leading-snug">
                             {cardSurface.sessionHeadline}
                           </p>
-                        ) : !cardSurface.weeklyRoleLabel && cardSurface.fallbackWeeklyRole ? (
-                          <p className="text-[11px] text-[#9A9A9A] font-medium leading-snug">
-                            {cardSurface.fallbackWeeklyRole}
-                          </p>
-                        ) : null}
-
-                        {/* B. Truth chips: primary intent + protection + method
-                            (surface-owned only; method labels were already
-                            materiality-gated upstream). */}
+                        )}
+                        
+                        {/* B. Truth chips row - primary intent + protection + method signals */}
                         {hasAnyChips && (
                           <div className="flex flex-wrap gap-x-1.5 gap-y-1 mt-1">
+                            {/* Primary intent chips */}
                             {cardSurface.primaryIntentChips.map((chip, i) => (
-                              <span
-                                key={`intent-${i}`}
+                              <span 
+                                key={`intent-${i}`} 
                                 className="text-[9px] px-1.5 py-0.5 rounded bg-[#E63946]/8 text-[#C8C8C8] font-medium"
                               >
                                 {chip}
                               </span>
                             ))}
+                            {/* Protection signals */}
                             {cardSurface.protectionSignals.map((chip, i) => (
-                              <span
-                                key={`protect-${i}`}
+                              <span 
+                                key={`protect-${i}`} 
                                 className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400/80 font-medium"
                               >
                                 {chip}
                               </span>
                             ))}
+                            {/* Method signals */}
                             {cardSurface.methodSignals.map((chip, i) => (
-                              <span
-                                key={`method-${i}`}
+                              <span 
+                                key={`method-${i}`} 
                                 className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400/70 font-medium"
                               >
                                 {chip}
@@ -1206,49 +1167,42 @@ export function AdaptiveProgramDisplay({
                             ))}
                           </div>
                         )}
-
-                        {/* C. Coaching purpose (surface-owned). Falls back to
-                            evidence label, then to last-resort rationale.
-                            At most ONE of these renders.
-                            [DOMINANT-CARD-OWNERSHIP-LOCK] Suppressed entirely
-                            when `weeklyRoleRationale` is present, because the
-                            dominant <AdaptiveSessionCard /> below now renders
-                            the per-day rationale itself — duplicating it here
-                            would violate the "NO COSMETIC DOUBLING" rule. */}
-                        {cardSurface.weeklyRoleRationale ? null : cardSurface.coachingPurpose ? (
+                        
+                        {/* [COACHING-EXPLANATION-CONTRACT] Session purpose - prefer coaching explanation */}
+                        {coachingSessionExpl?.purpose && (
                           <p className="text-[10px] text-[#8A8A8A] mt-1 leading-relaxed">
-                            {cardSurface.coachingPurpose}
+                            {coachingSessionExpl.purpose}
                           </p>
-                        ) : cardSurface.evidenceLabel ? (
+                        )}
+                        
+                        {/* C. Evidence label - only show if no coaching purpose */}
+                        {!coachingSessionExpl?.purpose && cardSurface?.evidenceLabel && (
                           <p className="text-[10px] text-[#6A6A6A] mt-1 leading-relaxed">
                             {cardSurface.evidenceLabel}
                           </p>
-                        ) : cardSurface.fallbackRationale ? (
-                          <p className="text-[10px] text-[#6A6A6A] mt-1 leading-relaxed">
-                            {cardSurface.fallbackRationale}
+                        )}
+                        
+                        {/* D. Fallback to day rationale if no authoritative surface */}
+                        {!cardSurface?.sessionHeadline && !coachingSessionExpl?.purpose && dayRationale?.weeklyRole && (
+                          <p className="text-[11px] text-[#9A9A9A] font-medium leading-snug">
+                            {dayRationale.weeklyRole}
                           </p>
-                        ) : null}
-
-                        {/* D. Micro-signals (surface-owned). Suppressed when
-                            chips already render to avoid visual repetition.
-                            [MATERIAL-COMPOSITION-TRUTH-LOCK] Also suppressed
-                            when the dominant card is rendering material
-                            adaptations — those chips are concrete programming
-                            decisions ("Sets reduced", "RPE capped"), while
-                            microSignals are generic prose ("Volume adjusted")
-                            describing the same source flags. NO COSMETIC
-                            DOUBLING — the dominant card owns this slot. */}
-                        {!hasAnyChips &&
-                          (cardSurface.materialAdaptations?.length ?? 0) === 0 &&
-                          (cardSurface.microSignals?.length ?? 0) > 0 && (
-                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
-                              {cardSurface.microSignals!.map((signal, i) => (
-                                <span key={i} className="text-[9px] text-[#E63946]/70 font-medium">
-                                  {signal}
-                                </span>
-                              ))}
-                            </div>
-                          )}
+                        )}
+                        {!hasAnyChips && sessionSurfaceSignals.microSignals.length > 0 && (
+                          <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
+                            {sessionSurfaceSignals.microSignals.map((signal, i) => (
+                              <span key={i} className="text-[9px] text-[#E63946]/70 font-medium">
+                                {signal}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {/* [COACHING-EXPLANATION-CONTRACT] Only show day rationale as last fallback */}
+                        {!coachingSessionExpl?.purpose && !cardSurface?.evidenceLabel && !sessionSurfaceSignals.hasPrescriptionChanges && dayRationale?.rationale && (
+                          <p className="text-[10px] text-[#6A6A6A] mt-0.5 leading-relaxed">
+                            {dayRationale.rationale}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1268,13 +1222,6 @@ export function AdaptiveProgramDisplay({
   coachingExplanation={intelligenceContract?.coachingExplanation || null}
   // [DOCTRINE-STRENGTHENING] Pass week character for visible differentiation badges
   weekCharacter={session.weekCharacter}
-  // [DOMINANT-CARD-OWNERSHIP-LOCK] Pass the SAME authoritative SessionCardSurface
-  // that the wrapper strip currently consumes. Without this prop, the dominant
-  // visible card silently re-derives identity from raw `session.focusLabel` /
-  // `session.dayLabel` while the strengthened weekly-role truth lives only in
-  // the small wrapper strip above it. Single source of truth for visible day
-  // identity is now this `cardSurface`.
-  cardSurface={cardSurface}
   // [PREVIEW-VISIBLE-PROBE] Pass probe flag
   showProbe={showProbe}
   // [ALWAYS-VISIBLE-PROBE] Pass force probe flag
@@ -1282,31 +1229,6 @@ export function AdaptiveProgramDisplay({
   // [WEEK-AUTHORITY-HANDOFF] Pass the AUTHORITATIVE selected week so Start
   // Workout carries the same week as the dosage rendered on this card.
   currentWeekNumber={currentWeekNumber}
-  // [PHASE 3C] Pass the program-level profile snapshot + stamp version so the
-  // card's Doctrine Decision panel can (a) bridge profile-aware attribution
-  // for legacy programs that pre-date the wrapper stamp and (b) honestly tag
-  // saved programs whose stamp version is older than the current engine.
-  programProfileSnapshot={
-    (program as unknown as { profileSnapshot?: unknown }).profileSnapshot as
-      | Parameters<typeof AdaptiveSessionCard>[0]['programProfileSnapshot']
-      | undefined ?? null
-  }
-  methodDecisionVersion={
-    ((program as unknown as { doctrineIntegration?: { methodDecisionVersion?: string | null } })
-      .doctrineIntegration?.methodDecisionVersion) ?? null
-  }
-  // [PHASE 4F — DISPLAY PROJECTION OWNERSHIP LOCK] Per-session projection slice.
-  // Looked up by `dayNumber` (not array index) so a filtered/sliced session
-  // array on the page level cannot mismatch this card. When the projection is
-  // null (older callers / standalone usage) or has no matching slice, the
-  // card simply renders no Phase 4F line — existing behavior unchanged.
-  displayProjectionSession={
-    programDisplayProjection
-      ? programDisplayProjection.sessions.find(
-          ps => ps.dayNumber === ((session as unknown as { dayNumber?: number }).dayNumber ?? -1)
-        ) ?? null
-      : null
-  }
   />
               </div>
             )

@@ -78,8 +78,6 @@ export async function POST(request: Request) {
       newEquipment,
       currentProgramId,
       clientCanonicalSnapshot,
-      // [PHASE-M] Optional recent workout logs from the client.
-      recentWorkoutLogs,
     } = body
     
     if (!requestType) {
@@ -232,9 +230,6 @@ export async function POST(request: Request) {
       preserveHistory: true,
       archiveCurrentProgram: false,
       regenerationReason: `rebuild_from_current_settings_${requestType}`,
-      // [PHASE-M] Forward recent workout logs so the rebuilt program reflects
-      // recent performance at generation time.
-      recentWorkoutLogs: Array.isArray(recentWorkoutLogs) ? recentWorkoutLogs : undefined,
     }
     
     // [ROOT-CAUSE-FIX] Log the corrected semantic classification
@@ -312,9 +307,6 @@ export async function POST(request: Request) {
       timings: result.timings,
       summary: result.summary,
       parityVerdict: result.parityVerdict,
-      // [AUTHORITATIVE-INGRESS-UNIFICATION] Surface ingress proof so consumers can verify
-      // the program was built from canonical + bundle truth, not vague fallback logic.
-      generationIngressProof: result.generationIngressProof,
     })
     
   } catch (error) {

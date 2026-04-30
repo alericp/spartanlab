@@ -77,8 +77,6 @@ export async function POST(request: Request) {
       clientCanonicalSnapshot,
       modifyContext,
       canonicalProfileOverride: legacyCanonicalOverride,
-      // [PHASE-M] Optional recent workout logs from the client.
-      recentWorkoutLogs,
     } = body
     
     if (!builderInputs) {
@@ -183,9 +181,6 @@ export async function POST(request: Request) {
       preserveHistory: true,
       archiveCurrentProgram: false,
       modifyContext,
-      // [PHASE-M] Forward recent workout logs so modify also reflects
-      // recent performance at generation time.
-      recentWorkoutLogs: Array.isArray(recentWorkoutLogs) ? recentWorkoutLogs : undefined,
     }
     
     console.log('[modify-builder-route-dispatching-to-authoritative-service]', {
@@ -241,9 +236,6 @@ export async function POST(request: Request) {
         canonicalSourceWinner,
       },
       parityVerdict: result.parityVerdict,
-      // [AUTHORITATIVE-INGRESS-UNIFICATION] Surface ingress proof so consumers can verify
-      // the program was built from canonical + bundle truth, not vague fallback logic.
-      generationIngressProof: result.generationIngressProof,
     })
     
   } catch (error) {

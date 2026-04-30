@@ -165,199 +165,14 @@ export function getWeekDosageScaling(weekNumber: number): WeekDosageScalingResul
   return WEEK_SCALING_PROFILES[clampedWeek] || WEEK_SCALING_PROFILES[1]
 }
 
-// =============================================================================
-// [BASE-WEEK-AUTHORITY-LOCK] ROLE-AWARE PHASE SCALING GUARDRAILS
-// =============================================================================
-//
-// PURPOSE
-// -------
-// The weekly-session-role-contract (lib/program/weekly-session-role-contract.ts)
-// is the AUTHORITATIVE base-week composition layer. It assigns each day a role
-// (primary_strength_emphasis / skill_quality_emphasis / broad_mixed_volume /
-// secondary_support / density_capacity / recovery_supportive) and an
-// authoritative `prescriptionShape` with `setsBias`, `rpeCap`, `repIntent`,
-// `progressionAggressiveness`. The builder consumes that contract once during
-// prescription-shaping (adaptive-program-builder.ts ~line 12012) so the BASE
-// WEEK already reads with role-correct sets, reps, and RPE.
-//
-// THE BUG THIS LOCK CLOSES
-// -------------------------
-// `scaleExerciseForWeek` previously applied the same volume / intensity
-// multipliers to EVERY row regardless of role:
-//   - Week 3 peak: 2.0× sets, 1.15× RPE
-//   - Week 4 consolidation: 1.8× sets, 1.12× RPE
-// A recovery_supportive day with `setsBias: -1` and `rpeCap: 6` (giving 2
-// sets at RPE 6 in week 1) was inflated to 4 sets at RPE 7+ in week 3.
-// A skill_quality_emphasis day with `rpeCap: 7` was inflated to RPE 8+.
-// A density_capacity day already carried high method fatigue from supersets
-// /circuits, then was multiplied by 2.0× on top.
-//
-// In short: PHASE SCALING WAS OVERRIDING THE ROLE CONTRACT. The user's
-// observation — "weekly scaling appears to be scaling a too-generic base"
-// — was exactly this: scaling was scaling a base that LOOKED generic
-// because the role contract had been overwritten by the multiplier.
-//
-// THE LOCK
-// --------
-// Phase scaling is now SUBORDINATE to the role contract. For each role:
-//   1. `volumeMultiplier` is capped at a role-specific ceiling. Recovery and
-//      skill-quality days never grow past 1.0× (they hold their base).
-//      Heavy days cap at 1.5× (a heavy day getting doubled grinds to mush).
-//      Only broad_mixed / secondary_support / density days take the full
-//      phase multiplier, and density caps slightly lower because the method
-//      itself is the work-density.
-//   2. `intensityMultiplier` is capped per role too. Recovery never grows
-//      past 1.0×. Skill-quality caps at 1.05×. Heavy day takes the full
-//      bump because that is the day the user wants more from in week 3.
-//   3. `sessionIntensityCap` is taken as the STRICTER of the phase cap and
-//      the role's `rpeCap`. So a recovery role that capped at RPE 6 in
-//      week 1 still caps at RPE 6 in week 3 — phase cannot push it to 9.
-//   4. The post-scaling sets clamp tightens by role: heavy days max 4 sets
-//      per row (no 6-set accessory grinders); recovery max 2; skill 3;
-//      others max 5.
-//
-// SAFE ABSENCE
-// ------------
-// If a session has no `compositionMetadata.weeklyRole` (e.g. legacy programs
-// generated before the role contract shipped), behavior falls back to the
-// previous global multipliers. New programs always have a role; legacy
-// programs degrade gracefully without breaking.
-
-type WeeklyRoleId =
-  | 'primary_strength_emphasis'
-  | 'skill_quality_emphasis'
-  | 'broad_mixed_volume'
-  | 'secondary_support'
-  | 'density_capacity'
-  | 'recovery_supportive'
-
-interface RoleScalingCaps {
-  /** Maximum allowed volumeMultiplier. Phase value is min'd against this. */
-  volumeMultiplierCap: number
-  /** Maximum allowed intensityMultiplier. Phase value is min'd against this. */
-  intensityMultiplierCap: number
-  /** Hard ceiling on RPE for this role. Stricter of this and phase cap wins. */
-  rpeCap: number
-  /** Hard ceiling on sets-per-row after scaling. Replaces global Math.min(6, ...). */
-  setsPerRowCap: number
-  /** Floor on sets-per-row after scaling. Prevents over-trim of recovery to 1. */
-  setsPerRowFloor: number
-}
-
-const ROLE_SCALING_CAPS: Record<WeeklyRoleId, RoleScalingCaps> = {
-  // Heavy day: full RPE allowed, but volume must NOT double — a heavy day
-  // doubled grinds. Sets cap at 4 so accessory rows don't balloon to 6.
-  primary_strength_emphasis: {
-    volumeMultiplierCap: 1.5,
-    intensityMultiplierCap: 1.15,
-    rpeCap: 9,
-    setsPerRowCap: 4,
-    setsPerRowFloor: 2,
-  },
-  // Skill-quality day: CNS freshness is the whole point. Volume holds at
-  // base (1.0×); intensity barely creeps up (1.05×). RPE hard cap 7 so
-  // skill quality > grind, even at peak week.
-  skill_quality_emphasis: {
-    volumeMultiplierCap: 1.0,
-    intensityMultiplierCap: 1.05,
-    rpeCap: 7,
-    setsPerRowCap: 3,
-    setsPerRowFloor: 2,
-  },
-  // Broad mixed: this is the day phase scaling is for — full multiplier.
-  broad_mixed_volume: {
-    volumeMultiplierCap: 2.0,
-    intensityMultiplierCap: 1.15,
-    rpeCap: 8,
-    setsPerRowCap: 5,
-    setsPerRowFloor: 2,
-  },
-  // Secondary support: full multiplier; like broad but slightly lower RPE
-  // because primary expression is upstream on a different day.
-  secondary_support: {
-    volumeMultiplierCap: 2.0,
-    intensityMultiplierCap: 1.15,
-    rpeCap: 8,
-    setsPerRowCap: 5,
-    setsPerRowFloor: 2,
-  },
-  // Density: methods (supersets/circuits) ALREADY add work-density per round.
-  // Multiplying sets ON TOP would explode total fatigue. Cap volume at 1.5×;
-  // RPE caps at 7 so density doesn't grind into failure-budget territory.
-  density_capacity: {
-    volumeMultiplierCap: 1.5,
-    intensityMultiplierCap: 1.10,
-    rpeCap: 7,
-    setsPerRowCap: 4,
-    setsPerRowFloor: 2,
-  },
-  // Recovery: holds base. No volume growth; no intensity growth; hard RPE 6.
-  // This is the day the user must clearly see is easier, every week.
-  recovery_supportive: {
-    volumeMultiplierCap: 1.0,
-    intensityMultiplierCap: 1.0,
-    rpeCap: 6,
-    setsPerRowCap: 2,
-    setsPerRowFloor: 1,
-  },
-}
-
-/**
- * Default caps for sessions without an attached weekly role (legacy programs).
- * Equivalent to broad_mixed_volume — preserves prior behavior for backward
- * compatibility while still enforcing the global RPE-10 sanity floor.
- */
-const FALLBACK_SCALING_CAPS: RoleScalingCaps = {
-  volumeMultiplierCap: 2.0,
-  intensityMultiplierCap: 1.15,
-  rpeCap: 9,
-  setsPerRowCap: 6, // legacy hard ceiling
-  setsPerRowFloor: 2,
-}
-
-/**
- * Read the role's scaling caps from a session if a weeklyRole is attached.
- * Sessions emitted by the current builder include
- * `compositionMetadata.weeklyRole.roleId`. Missing role → fallback caps.
- */
-function getScalingCapsForSession(session: AdaptiveSession | undefined): RoleScalingCaps {
-  if (!session) return FALLBACK_SCALING_CAPS
-  // [BASE-WEEK-AUTHORITY-LOCK] Read role from compositionMetadata where the
-  // builder writes it (adaptive-program-builder.ts line 27748). Avoid throwing
-  // if session shape is not exactly typed — legacy/test inputs are tolerated.
-  const meta = (session as unknown as { compositionMetadata?: { weeklyRole?: { roleId?: string } | null } }).compositionMetadata
-  const roleId = meta?.weeklyRole?.roleId
-  if (!roleId) return FALLBACK_SCALING_CAPS
-  if (roleId in ROLE_SCALING_CAPS) {
-    return ROLE_SCALING_CAPS[roleId as WeeklyRoleId]
-  }
-  return FALLBACK_SCALING_CAPS
-}
-
 /**
  * Apply week-specific dosage scaling to a single exercise
  */
 export function scaleExerciseForWeek(
   exercise: AdaptiveExercise,
-  weekNumber: number,
-  // [BASE-WEEK-AUTHORITY-LOCK] Optional role caps. When called via
-  // scaleSessionForWeek the caller resolves caps from the session's
-  // weeklyRole and passes them in. Direct callers (legacy / tests) get the
-  // fallback caps automatically.
-  roleCaps: RoleScalingCaps = FALLBACK_SCALING_CAPS,
+  weekNumber: number
 ): ScaledExercise {
-  const phaseScaling = getWeekDosageScaling(weekNumber)
-  // [BASE-WEEK-AUTHORITY-LOCK] Subordinate phase scaling to the role contract.
-  // Each phase multiplier is min'd against the role's ceiling so a recovery
-  // day cannot be doubled by week 3 and a heavy day cannot be inflated past
-  // 1.5× by peak. This is what makes the BASE WEEK the real intelligence
-  // layer and weeks 1-4 honest scaling of that base, not invention.
-  const scaling: WeekDosageScalingResult = {
-    ...phaseScaling,
-    volumeMultiplier: Math.min(phaseScaling.volumeMultiplier, roleCaps.volumeMultiplierCap),
-    intensityMultiplier: Math.min(phaseScaling.intensityMultiplier, roleCaps.intensityMultiplierCap),
-    sessionIntensityCap: Math.min(phaseScaling.sessionIntensityCap, roleCaps.rpeCap),
-  }
+  const scaling = getWeekDosageScaling(weekNumber)
   
   // Week 1: acclimation - still apply dosage fields for consistent display
   // [WEEK-SCALING-FIX] Always attach scaled fields even for week 1 so display contract works
@@ -368,27 +183,13 @@ export function scaleExerciseForWeek(
     const originalSets = typeof exercise.sets === 'number' ? exercise.sets : parseInt(String(exercise.sets)) || 3
     const originalTargetRPE = exercise.targetRPE || 8
     // [PRESCRIPTION-TYPE-FIX] Preserve hold format for week 1 display
-    // [STEP-5-ADAPTIVE-DOSAGE] When the upstream prescription is already a
-    // hold RANGE (e.g. "25-45s" from the adaptive dosage resolver), preserve
-    // it verbatim. Pre-Step-5 this branch ran parseHoldDuration -> formatHoldDuration,
-    // which silently collapsed "25-45s" into "45s" (the regex matches the
-    // upper bound first), discarding the lower-bound coaching guidance.
-    const holdRange = parseHoldRange(rawRepsOrTime)
-    let scaledReps: string
-    let scaledHoldDuration: number | undefined
-    if (holdRange) {
-      scaledReps = rawRepsOrTime
-      scaledHoldDuration = holdRange.high
-    } else {
-      const holdDuration = parseHoldDuration(rawRepsOrTime)
-      scaledReps = holdDuration !== null ? formatHoldDuration(holdDuration) : rawRepsOrTime
-      scaledHoldDuration = holdDuration ?? undefined
-    }
+    const holdDuration = parseHoldDuration(rawRepsOrTime)
+    const scaledReps = holdDuration !== null ? formatHoldDuration(holdDuration) : rawRepsOrTime
     return {
       ...exercise,
       scaledSets: originalSets, // Same as original for week 1
       scaledReps,
-      scaledHoldDuration,
+      scaledHoldDuration: holdDuration ?? undefined,
       scaledTargetRPE: originalTargetRPE,
       weekScalingApplied: false,
     }
@@ -398,11 +199,7 @@ export function scaleExerciseForWeek(
   const originalSets = typeof exercise.sets === 'number' ? exercise.sets : parseInt(String(exercise.sets)) || 3
   const originalTargetRPE = exercise.targetRPE || 8
   const originalRestPeriod = exercise.restPeriod || 90
-  // [STEP-5-ADAPTIVE-DOSAGE] Detect a hold RANGE first so we can scale both
-  // endpoints together; falling back to the single-value parser preserves
-  // backward compatibility with rows that emit "30s hold" / "45s".
-  const originalHoldRange = parseHoldRange(rawRepsOrTime)
-  const originalHoldDuration = originalHoldRange ? null : parseHoldDuration(rawRepsOrTime)
+  const originalHoldDuration = parseHoldDuration(rawRepsOrTime)
   
   // Apply scaling
   const scaledSets = Math.round(originalSets * scaling.volumeMultiplier)
@@ -418,16 +215,7 @@ export function scaleExerciseForWeek(
   let scaledReps = rawRepsOrTime
   let scaledHoldDuration: number | undefined
   
-  if (originalHoldRange) {
-    // [STEP-5-ADAPTIVE-DOSAGE] Hold range: scale both endpoints, keep range
-    // format. This preserves the "25-45s" coaching guidance (lower bound =
-    // floor on a fatigued day, upper bound = stretch target) instead of
-    // collapsing to a single value.
-    const lo = Math.max(1, Math.round(originalHoldRange.low * scaling.holdDurationMultiplier))
-    const hi = Math.max(lo, Math.round(originalHoldRange.high * scaling.holdDurationMultiplier))
-    scaledHoldDuration = hi
-    scaledReps = lo === hi ? `${hi}s` : `${lo}-${hi}s`
-  } else if (originalHoldDuration !== null) {
+  if (originalHoldDuration !== null) {
     // Hold-based exercise: scale hold duration, keep format as "Xs hold"
     scaledHoldDuration = Math.round(originalHoldDuration * scaling.holdDurationMultiplier)
     scaledReps = formatHoldDuration(scaledHoldDuration)
@@ -439,17 +227,10 @@ export function scaleExerciseForWeek(
   return {
     ...exercise,
     // Scaled values for display
-    // [BASE-WEEK-AUTHORITY-LOCK] Sets-per-row clamp is now ROLE-AWARE. The
-    // ceiling comes from the role's `setsPerRowCap` (heavy=4, skill=3,
-    // recovery=2, broad/support=5, density=4). Replaces the old hard
-    // Math.min(6, ...) which let recovery rows balloon to 6 sets.
-    scaledSets: Math.max(roleCaps.setsPerRowFloor, Math.min(roleCaps.setsPerRowCap, scaledSets)),
+    scaledSets: Math.max(2, Math.min(6, scaledSets)), // Bound to reasonable range
     scaledReps,
     scaledHoldDuration,
-    // [BASE-WEEK-AUTHORITY-LOCK] RPE floor stays at 6 globally, but the
-    // ceiling above (scaling.sessionIntensityCap) is already the stricter of
-    // phase cap and role cap, so a recovery role's RPE 6 ceiling is honored.
-    scaledTargetRPE: Math.max(6, scaledTargetRPE),
+    scaledTargetRPE: Math.max(6, scaledTargetRPE), // Minimum RPE 6
     scaledRestPeriod: Math.max(60, scaledRestPeriod), // Minimum 60s rest
     // Metadata
     weekScalingApplied: true,
@@ -461,30 +242,15 @@ export function scaleExerciseForWeek(
 
 /**
  * Apply week-specific dosage scaling to an entire session
- *
- * [BASE-WEEK-AUTHORITY-LOCK] Resolves the session's weeklyRole ONCE here and
- * threads role-specific scaling caps to every exercise. Sessions without a
- * role (legacy programs) get fallback caps and behave as before.
  */
 export function scaleSessionForWeek(
   session: AdaptiveSession,
   weekNumber: number
 ): ScaledSession {
-  const phaseScaling = getWeekDosageScaling(weekNumber)
-  const roleCaps = getScalingCapsForSession(session)
-  // [BASE-WEEK-AUTHORITY-LOCK] Build a session-level scaling result that
-  // reflects the role-clamped multipliers, so audits / display layers that
-  // read `scaling.volumeMultiplier` see the EFFECTIVE truth (post role clamp),
-  // not the raw phase multiplier.
-  const scaling: WeekDosageScalingResult = {
-    ...phaseScaling,
-    volumeMultiplier: Math.min(phaseScaling.volumeMultiplier, roleCaps.volumeMultiplierCap),
-    intensityMultiplier: Math.min(phaseScaling.intensityMultiplier, roleCaps.intensityMultiplierCap),
-    sessionIntensityCap: Math.min(phaseScaling.sessionIntensityCap, roleCaps.rpeCap),
-  }
-
-  const scaledExercises = (session.exercises || []).map(ex =>
-    scaleExerciseForWeek(ex, weekNumber, roleCaps)
+  const scaling = getWeekDosageScaling(weekNumber)
+  
+  const scaledExercises = (session.exercises || []).map(ex => 
+    scaleExerciseForWeek(ex, weekNumber)
   )
   
   return {
@@ -530,33 +296,6 @@ function parseHoldDuration(reps: string | undefined): number | null {
   }
   
   return null
-}
-
-/**
- * [STEP-5-ADAPTIVE-DOSAGE] Parse a hold RANGE from a reps string
- * (e.g., "25-45s", "20-30s hold"). Returns null if the input is not
- * recognizable as a range; the caller falls back to parseHoldDuration.
- *
- * This helper exists so the adaptive dosage resolver can emit ranges
- * like "25-45s" and have them survive intact through week scaling and
- * display. Pre-Step-5 the regex collapsed ranges to their upper bound,
- * which silently dropped the coaching lower bound from the row.
- */
-function parseHoldRange(
-  reps: string | undefined,
-): { low: number; high: number } | null {
-  if (!reps) return null
-  // Match "<low>-<high>s" with optional whitespace and an optional "hold"
-  // suffix. We require the trailing "s" so we don't accidentally claim a
-  // rep range like "8-12 reps" as a hold range.
-  const m = reps.match(/(\d+)\s*[-–]\s*(\d+)\s*s(?:ec)?(?:ond)?s?\s*(?:hold)?/i)
-  if (!m) return null
-  const low = parseInt(m[1], 10)
-  const high = parseInt(m[2], 10)
-  if (!Number.isFinite(low) || !Number.isFinite(high) || low <= 0 || high < low) {
-    return null
-  }
-  return { low, high }
 }
 
 /**

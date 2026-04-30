@@ -95,10 +95,6 @@ export async function POST(request: Request) {
       programInputs,
       regenerationReason,
       currentProgramId,
-      // [PHASE-M] Optional recent workout logs from the client (canonical
-      // localStorage source for completedSetEvidence). Sanitized/capped/hashed
-      // by the authoritative service, never trusted blindly.
-      recentWorkoutLogs,
     } = body
     
     // ==========================================================================
@@ -130,26 +126,6 @@ export async function POST(request: Request) {
       regenerationReason,
     })
     
-    // [METHOD-PREFERENCE-BRIDGE] Receipt audit: prove trainingMethodPreferences
-    // truth crossed the HTTP boundary. Empty here → grouped methods blocked downstream.
-    {
-      const rcvTrainingMethodPreferences: string[] = Array.isArray(canonicalProfile?.trainingMethodPreferences)
-        ? canonicalProfile.trainingMethodPreferences
-        : []
-      const rcvSelectedStyles: string[] = Array.isArray(programInputs?.selectedStyles)
-        ? programInputs.selectedStyles
-        : []
-      const nonBaseline = rcvTrainingMethodPreferences.filter((m: string) => m !== 'straight_sets')
-      console.log('[regenerate-route-method-preference-truth-receipt-audit]', {
-        source: 'POST_/api/program/regenerate:after_body_parse',
-        canonical_trainingMethodPreferences: rcvTrainingMethodPreferences,
-        canonical_trainingMethodPreferences_count: rcvTrainingMethodPreferences.length,
-        programInputs_selectedStyles: rcvSelectedStyles,
-        programInputs_selectedStyles_count: rcvSelectedStyles.length,
-        builderWillSeeMethodTruthAs: nonBaseline.length > 0 ? 'PRESENT' : 'EMPTY',
-      })
-    }
-    
     if (!canonicalProfile || !programInputs) {
       return NextResponse.json({
         success: false,
@@ -176,9 +152,6 @@ export async function POST(request: Request) {
       preserveHistory: true,
       archiveCurrentProgram: false,
       regenerationReason: regenerationReason || 'rebuild_from_current_settings',
-      // [PHASE-M] Forward recent workout logs so regenerate reflects recent
-      // performance history at generation time, not only via the client overlay.
-      recentWorkoutLogs: Array.isArray(recentWorkoutLogs) ? recentWorkoutLogs : undefined,
     }
     
     console.log('[regenerate-route-dispatching-to-authoritative-service]', {

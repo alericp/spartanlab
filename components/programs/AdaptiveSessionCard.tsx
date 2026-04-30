@@ -6,29 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { AdaptiveSession, AdaptiveExercise, TrainingMethodPreference } from '@/lib/adaptive-program-builder'
-import { isVariantLaunchable } from '@/lib/session-compression-engine'
-// [PHASE AB3] SHORT SESSION DOCTRINE RECOMPOSITION TRUTH
-// Read-only access to the per-variant `recompositionTruth` sidecar stamped by
-// the program builder after VARIANT-PARENT-TRUTH-RECONCILE. The card surfaces
-// this when the user has selected a 45 Min / 30 Min variant so the user can
-// see what doctrine actually decided about the short body — preserved
-// anchors, deferred work, set/RPE/rest deltas, method changes, and the
-// crunch-time strategy headline.
-import {
-  getRecompositionTruth,
-  type RecompositionTruth,
-} from '@/lib/program/short-session-recomposition-contract'
-// [SELECTED-VARIANT-SESSION-CONTRACT] Single authoritative owner of the
-// selected-variant body and its launch fingerprint. The card stamps its
-// expected fingerprint immediately before router.push so the live workout
-// route can read it back and prove parity against the body it actually
-// booted. No parallel card-body vs route-body derivation.
-import {
-  buildSelectedVariantMain,
-  buildSessionFingerprint,
-  stampLaunchFingerprint,
-} from '@/lib/workout/selected-variant-session-contract'
-import { ChevronDown, ChevronUp, Clock, AlertCircle, AlertTriangle, MinusCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell } from 'lucide-react'
+import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell } from 'lucide-react'
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
 import { exerciseSupportsRPE } from '@/lib/rpe-adjustment-engine'
 import { useWorkoutSession } from '@/hooks/useWorkoutSession'
@@ -42,78 +20,15 @@ import { trackWorkoutStarted, trackWorkoutCompleted } from '@/lib/analytics'
 import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble, MethodInfoBubble } from '@/components/coaching'
-// [DOMINANT-CARD-OWNERSHIP-LOCK] Import SessionCardSurface so this dominant
-// visible card can read from the SAME strengthened authoritative truth that
-// the Program-page wrapper strip already consumes. No parallel re-derivation.
-import {
-  buildExerciseCardContract,
-  buildExerciseRowSurface,
-  // [PHASE 4S] Pure helpers for canonical method/doctrine truth pass-through.
-  // These let the card consume Phase 4P / 4Q truth without re-deriving anything.
-  hasRenderableMethodStructure,
-  normalizeDoctrineBlockStatus,
-  readMethodStructuresFromSession,
-  readDoctrineBlockResolutionFromSession,
-  // [PHASE 4T] Canonical method tally + classified-doctrine guard. Used to
-  // make `methodStructures` the dominant chip-row source and to demote the
-  // legacy `doctrineCausalDisplay` banner behind classified resolution.
-  deriveCanonicalMethodTallyFromSurface,
-  hasClassifiedDoctrineResolution,
-  // [PHASE 4U] Pure resolver that proves whether the visible body's grouped
-  // blocks are actually backed by canonical methodStructures (matched by
-  // exercise id / normalized name) or fell through to a styled/ungrouped
-  // fallback. Run inline on the card after `finalVisibleBodyModel`; the
-  // verdict drives the dev probe and the blueprint Phase G evidence.
-  resolveCanonicalMethodBodyRender,
-  type CanonicalMethodBodyRenderResolution,
-  type ExerciseRowSurface,
-  type SessionCardSurface,
-  type ProgramDisplayProjectionSession,
-} from '@/lib/program/program-display-contract'
-// [STEP-4B-PRESCRIPTION-UNIT-TRUTH] Single authority for repairing reps/seconds
-// mismatches at render time. Acts as a safety net when an upstream layer (mode
-// detection, doctrine materialization, weekly scaling, variant compression)
-// rewrites a hold's repsOrTime into a generic rep range. See
-// lib/program/exercise-prescription-unit-truth.ts.
-import { resolveExercisePrescriptionUnitTruth } from '@/lib/program/exercise-prescription-unit-truth'
+import { buildExerciseCardContract, buildExerciseRowSurface, type ExerciseRowSurface } from '@/lib/program/program-display-contract'
 import type { ProgramExplanationSurface } from '@/lib/coaching-explanation-contract'
 // [SINGLE-TRUTH-FIX] Removed: getCompactExerciseExplanation - was source of contradictory text
 import { buildSessionAiEvidenceSurface, deduplicateSessionEvidence, alignRowWithSessionEvidence, getCategoryDisplayContract, buildFullSessionRoutineSurface, buildSessionMainPreviewSurface, buildFullVisibleRoutineExercises, type SessionAiEvidenceSurface, type FullSessionRoutineSurface, type SessionMainPreviewSurface, type FullRoutineExercise } from '@/lib/program/program-ai-evidence-bridge'
 // [SINGLE-TRUTH-FIX] Removed: getExerciseRowVisibility, shouldShowRowIntelligence, deduplicateRowDisplay, DEFAULT_DENSITY_MODE
 // These were used by the ROW 2.5 chip block which was a stale secondary text path
 import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
-// [DOCTRINE-METHOD-DECISION-PHASE3B-BRIDGE]
-// On-read bridge for legacy programs generated BEFORE the authoritative
-// wrapper started stamping `session.methodDecision`. The wrapper remains the
-// primary source for newly-generated programs; this engine call is only
-// invoked when the field is missing on the input session, so we surface the
-// same MethodDecision contract for stored programs without forcing the user
-// to regenerate. Read-only, pure function, no side effects.
-import {
-  deriveMethodDecisionForSession,
-  extractProfileContextFromSnapshot,
-  METHOD_DECISION_VERSION,
-  type MethodDecision as MethodDecisionShape,
-  type MethodDecisionSessionInput,
-  type MethodDecisionProfileSnapshotLike,
-} from '@/lib/program/method-decision-engine'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
-import { buildGroupedDisplayModel, getGroupedMethodSemantics, minMembersFor, type GroupedDisplayModel, type RenderBlock, type RawFallbackBlock, type GroupedSourceUsed, type GroupedFlatReason, type GroupType } from './lib/session-group-display'
-// [STEP 4 OF 19] Display-time prescription clarity overlay (ROM, purpose,
-// HSPU/pike sanity). Pure resolver — no state, no I/O.
-import { resolveExercisePrescriptionClarity } from '@/lib/program/exercise-prescription-clarity'
-// [PHASE AB5] Single authoritative grouped execution prescription resolver.
-// Converts a rich DisplayGroup OR a permissive RawFallbackBlock into a
-// complete execution contract that carries rounds, member doses, rest
-// microcopy, and an orphan-row verdict. Both grouped render branches read
-// from this resolver so header rounds, member doses, and orphan handling
-// cannot drift between them. Live-runtime parity is preserved because
-// `rounds` follows the SAME priority order the live machine uses:
-// methodStructure.rounds -> first hydrated member sets -> 3.
-import {
-  resolveGroupedExecutionPrescription,
-  buildRoundsHeaderText,
-} from './lib/grouped-execution-prescription'
+import { buildGroupedDisplayModel, minMembersFor, type GroupedDisplayModel, type RenderBlock, type RawFallbackBlock, type GroupedSourceUsed, type GroupedFlatReason } from './lib/session-group-display'
 import { 
   addOverride, 
   applyOverridesToSession,
@@ -121,14 +36,6 @@ import {
 } from '@/lib/exercise-override-service'
 import { recordReplaceSignal } from '@/lib/override-signal-service'
 import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
-// [PHASE-S] Trust display helpers: pure presentation mapping from raw
-// Phase Q/R/P trace states to short coach-facing labels and severity tones.
-// No logic, no recompute — only mapping. See lib/program/trust-display-contract.ts.
-import {
-  doctrineStateLabel,
-  trustToneClasses,
-  type DoctrineUtilizationState,
-} from '@/lib/program/trust-display-contract'
 
 // ============================================================================
 // [GROUPED-BODY-PRIORITY]
@@ -169,14 +76,6 @@ interface AdaptiveSessionCardProps {
   coachingExplanation?: ProgramExplanationSurface | null
   // [DOCTRINE-STRENGTHENING] Week-specific training character for visible differentiation
   weekCharacter?: WeekCharacter
-  // [DOMINANT-CARD-OWNERSHIP-LOCK] Authoritative SessionCardSurface — the SAME
-  // strengthened-truth surface the Program-page wrapper consumes. When present,
-  // its `weeklyRoleLabel` / `weeklyIntensityClass` / `weeklyProgressionCharacter`
-  // / `weeklyBreadthLabel` / `weeklyRoleRationale` OWN the dominant visible
-  // identity slot in this card (not a peer to `session.focusLabel`).
-  // Optional + null-safe: older callers / saved sessions without role truth
-  // continue to render with the legacy focusLabel-driven identity unchanged.
-  cardSurface?: SessionCardSurface | null
   // [PREVIEW-VISIBLE-PROBE] Enable visible truth probe via ?programProbe=1 query param
   // This bypasses NODE_ENV checks to show diagnostics in Preview/production
   showProbe?: boolean
@@ -189,28 +88,6 @@ interface AdaptiveSessionCardProps {
   // silently reverts to adaptiveProgram.weekNumber (acclimation) even when
   // the user is viewing Week 2/3/4 on the Program page.
   currentWeekNumber?: number
-  // [PHASE 3C] Program-level profile snapshot — the SAME truth that was frozen
-  // at generation time and used by the authoritative wrapper to stamp
-  // session.methodDecision.profileInfluence. Passed through here so the
-  // on-read bridge (used for legacy programs that pre-date Phase 3 stamping)
-  // can also produce a profile-aware decision instead of a degraded one.
-  // Optional + null-safe: legacy callers without this prop fall back to the
-  // pre-3C attribution path with profileSource='legacyFallback'.
-  programProfileSnapshot?: MethodDecisionProfileSnapshotLike | null
-  // [PHASE 3C] Method-decision version stamped on the parent program. When
-  // present this is `phase_3c.profile_aware.v1`; when missing, the saved
-  // program predates profile-aware stamping — the card shows a clean
-  // "bridged" attribution instead of claiming fresh doctrine application.
-  methodDecisionVersion?: string | null
-  // [PHASE 4F — DISPLAY PROJECTION OWNERSHIP LOCK] Per-session display projection
-  // slice. Built once on the page from `program.doctrineCausalChallenge.sessionDiffs[]`
-  // (Phase 4E) and matched to this card by `dayNumber`. When present, the card
-  // body renders an honest per-session line that says exactly what doctrine
-  // did to THIS session — material change with the post-doctrine top winner,
-  // base ranking won, no rules matched, or doctrine did not run. Never claims
-  // change without Phase 4E proof. Optional + null-safe: when null/undefined
-  // the card renders exactly as before with no Phase 4F line.
-  displayProjectionSession?: ProgramDisplayProjectionSession | null
 }
 
 // =============================================================================
@@ -255,13 +132,16 @@ interface SessionStyleMetadata {
   styledGroups: StyledGroup[]
 }
 
-// [PHASE 3F METHOD SEMANTIC TRUTH LOCK] Pill noun reads from the single
-// authoritative GROUPED_METHOD_SEMANTICS table in session-group-display.ts.
-// Pre-3F this switch held the literal nouns inline and was free to drift
-// from the row-line semantics, body cue, and rest microcopy. Straight has
-// no semantic in the table and returns empty string by contract.
+// Helper to get a display label for group type
 function getGroupTypeLabel(groupType: StyledGroup['groupType']): string {
-  return getGroupedMethodSemantics(groupType)?.label ?? ''
+  switch (groupType) {
+    case 'superset': return 'Superset'
+    case 'circuit': return 'Circuit'
+    case 'density_block': return 'Density Block'
+    case 'cluster': return 'Cluster Set'
+    case 'straight': return ''
+    default: return ''
+  }
 }
 
 // Helper to get an icon for group type
@@ -289,147 +169,6 @@ function getGroupTypeIcon(groupType: StyledGroup['groupType']) {
 // Border goes to `/60` so the left-border accent on members is unmistakable.
 // Text colors stay on-brand (superset uses blue-gray palette tone instead of
 // a flat muted hex so contrast lifts without adding a new color family).
-// =============================================================================
-// [GROUPED-MEMBER-FRAME] Local grouped member row presenter.
-//
-// Scope: renders ONLY inside the grouped branches of MainExercisesRenderer
-// (rich_grouped + raw_grouped_fallback). Flat / non-grouped rows never reach
-// this component and their visual contract is untouched.
-//
-// Why this exists: prior to this, grouped members rendered as raw
-// <ExerciseRow /> panels inside a thin `pl-4 border-l-2` left line, and the
-// only grouped cue per row was `ExerciseRow`'s internal `text-[10px]
-// text-[#4A4A4A] font-mono` prefix span -- practically invisible at a
-// glance. So a Superset A1/A2 pair visually read as "two normal rows under
-// a colored pill" and a 1-member cluster read as "a normal row with
-// decoration above it." The grouped truth survived the model but died at
-// the row-identity surface.
-//
-// What this does: paints a method-colored, row-height rail to the left of
-// every grouped member row. The rail owns:
-//   - the paired prefix (A1/A2, B1/B2, C1/C2/C3) as a first-class badge
-//   - OR the 1-based position for grouped blocks without paired prefixes
-//     (density rotation members: "1", "2", "3")
-//   - OR the method glyph for single-member grouped blocks (most commonly
-//     cluster-1: the Repeat icon in method purple makes the block visibly
-//     read as a cluster method, not a decorated plain row)
-//
-// The rail sits as a flex sibling of the row via `items-stretch`, so it
-// auto-matches the row height. No double-box: the existing `ExerciseRow`
-// panel is preserved byte-for-byte, we just stop asking it to render the
-// now-redundant tiny prefix (`prefix={undefined}` at the call sites).
-//
-// Hydrated rows and minimal fallback text rows both route through this
-// frame so the two surfaces speak the same grouped language even when
-// hydration is incomplete.
-// =============================================================================
-// =============================================================================
-// [GROUPED-MEMBER-SEMANTIC-LINE] Pure helper that produces a compact,
-// method-specific one-liner for each grouped member.
-//
-// Why it exists: even with the method-colored rail + outer pill header, the
-// inner ExerciseRow content (sets / reps / RPE / rest) still reads exactly
-// like a flat row. For grouped days specifically, the athlete needs the row
-// itself to visibly carry method intent. This helper returns the single
-// compact line rendered directly below the row inside GroupedMemberFrame.
-//
-// Authoritative input only: groupType, prefix, 1-based positionIndex,
-// totalMembers, and (for superset) partnerName resolved from the SAME
-// grouped truth already consumed by the grouped branch (block.members or
-// group.exercises). No new truth source, no parallel eligibility logic, no
-// decoration from display text. Returns null when no meaningful line can
-// be derived (e.g. groupType === 'straight'), which is the contract the
-// caller and the frame both rely on to keep flat rows unchanged.
-//
-// Copy is terse and method-differentiated:
-//   superset       -> paired-with-partner framing
-//   circuit        -> "Station N of M — cycle, rest after round"
-//   density_block  -> "Rotation N of M — rotate within time cap, quality"
-//   cluster        -> "Cluster set — intra-set mini-rests, full rest after"
-//                     (1-member cluster explicitly still reads as cluster)
-// =============================================================================
-function buildGroupedMemberSemanticLine(args: {
-  groupType: StyledGroup['groupType']
-  prefix?: string
-  positionIndex: number
-  totalMembers: number
-  partnerName?: string
-}): string | null {
-  // [PHASE 3F METHOD SEMANTIC TRUTH LOCK] Member semantic line reads from
-  // the single authoritative GROUPED_METHOD_SEMANTICS table. Pre-3F this
-  // switch encoded its own copy of the per-method copy and was free to
-  // drift from the pill noun + body cue + rest microcopy. The semantics
-  // table's `memberLine` factory takes the same arg shape so the call
-  // site is a one-liner with no behavior change.
-  const semantics = getGroupedMethodSemantics(args.groupType)
-  if (!semantics) return null
-  return semantics.memberLine({
-    positionIndex: args.positionIndex,
-    totalMembers: args.totalMembers,
-    partnerName: args.partnerName,
-  })
-}
-
-function GroupedMemberFrame({
-  colors,
-  groupType,
-  prefix,
-  positionIndex,
-  totalMembers,
-  semanticLine,
-  children,
-}: {
-  colors: { border: string; bg: string; blockBg: string; text: string }
-  groupType: StyledGroup['groupType']
-  prefix?: string
-  positionIndex: number
-  totalMembers: number
-  // [GROUPED-MEMBER-SEMANTIC-LINE] Optional compact one-liner rendered
-  // directly below the row content in the frame's content column. When
-  // null/undefined, nothing renders (flat rows + edge cases stay byte-
-  // identical). Tinted with the method color family so it visibly belongs
-  // to the same method block as the rail badge and the outer pill header.
-  semanticLine?: string | null
-  children: React.ReactNode
-}) {
-  // Method glyph used when a single-member grouped block has no prefix, so
-  // the rail still carries method semantics instead of a bare "1".
-  const GlyphIcon =
-    groupType === 'superset'
-      ? Layers
-      : groupType === 'circuit'
-        ? RefreshCw
-        : groupType === 'cluster'
-          ? Repeat
-          : groupType === 'density_block'
-            ? Timer
-            : Layers
-
-  const railContent = prefix
-    ? <span className={`text-xs font-bold font-mono ${colors.text}`}>{prefix}</span>
-    : totalMembers === 1
-      ? <GlyphIcon className={`w-3.5 h-3.5 ${colors.text}`} />
-      : <span className={`text-xs font-bold font-mono ${colors.text}`}>{positionIndex}</span>
-
-  return (
-    <div className="flex items-stretch gap-2">
-      <div
-        className={`shrink-0 w-9 flex items-center justify-center rounded-md border ${colors.border} ${colors.bg}`}
-      >
-        {railContent}
-      </div>
-      <div className="flex-1 min-w-0">
-        {children}
-        {semanticLine && (
-          <div className={`mt-1 pl-1 text-[11px] leading-snug ${colors.text}`}>
-            {semanticLine}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 function getGroupTypeColors(groupType: StyledGroup['groupType']): { border: string; bg: string; blockBg: string; text: string } {
   switch (groupType) {
     case 'superset':
@@ -475,7 +214,7 @@ function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
   }
 }
 
-export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter, cardSurface, showProbe: _showProbe = false, forceProbe: _forceProbe = false, currentWeekNumber, programProfileSnapshot, methodDecisionVersion, displayProjectionSession }: AdaptiveSessionCardProps) {
+export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId, primaryGoal, secondaryGoal, sessionEvidence: providedEvidence, defaultExpanded = false, coachingExplanation, weekCharacter, showProbe: _showProbe = false, forceProbe: _forceProbe = false, currentWeekNumber }: AdaptiveSessionCardProps) {
   // [PROBES-HARD-DISABLED] Session truth probes are retired. They caused
   // debug-looking text ("PROBE ACTIVE", instance-id letter fragments, etc.)
   // to leak into production UI when accidentally enabled via query param.
@@ -538,12 +277,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const [skippedExercises, setSkippedExercises] = useState<Set<string>>(new Set())
   const [adjustedExercises, setAdjustedExercises] = useState<Map<string, string>>(new Map())
   const [showMethodDecisions, setShowMethodDecisions] = useState(false)
-  // [PHASE-S] Trust-detail collapsible. Default closed so the always-visible
-  // header stays compact (the Phase S spec target). When opened, the user can
-  // see every preserved Phase J/K/P/Q/R proof line — same `data-phase-*`
-  // attributes, same wording — for screenshot verification.
-  const [showWhyThisPlan, setShowWhyThisPlan] = useState(false)
-
+  
   // [TASK 4] Track session identity to reset variant state when session changes
   // Using ref to avoid setting state during render
   const lastSessionIdentityRef = useRef<string>('')
@@ -589,334 +323,38 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   // Count RPE-enabled exercises - [PHASE 10] Safe access with fallback
   const safeExercises = Array.isArray(session.exercises) ? session.exercises : []
   const rpeExerciseCount = safeExercises.filter((e) => exerciseSupportsRPE(e.name)).length
-
-  // ==========================================================================
-  // [SELECTED-SESSION-CONTRACT] SINGLE AUTHORITATIVE SELECTED-VISIBLE-SESSION
-  // TRUTH. This is the ONE and ONLY owner of what Full / 45 Min / 30 Min means
-  // for this card. Every downstream consumer in this corridor (Program card
-  // body, grouped/method status line, Start Workout launch payload, live route,
-  // StreamlinedWorkoutSession pre-start shell) derives from this contract --
-  // either directly, or by reading the URL params this contract constructs.
-  //
-  // Canonical variant-index semantics:
-  //   - `selectedVariant` state may legally be `null | 0 | 1 | 2`.
-  //   - `null` and `0` both mean "Full Session" and MUST resolve to the same
-  //     canonical index 0 for every consumer. Previously different consumers
-  //     interpreted them independently (body used `selectedVariant !== null`,
-  //     launch used `selectedVariant ?? 0`, status used `safeExercises`).
-  //     That split is what allowed "visible card looks 45" but "Start Workout
-  //     boots full" to coexist without either side being wrong in isolation.
-  //
-  // Fields (all canonical, all derived here, ALL read downstream):
-  //   - selectedVariantIndex   : 0-based canonical index (null resolved to 0)
-  //   - selectedVariantLabel   : human label from variants[idx].label
-  //   - selectedExecutionMode  : 'full' | '45_min' | '30_min', derived from
-  //                              variants[idx].duration (not from raw session)
-  //   - selectedEstimatedMinutes: variants[idx].duration ?? session default
-  //   - selectedLaunchUrl      : the EXACT URL Start Workout will push, with
-  //                              mode + variant + week all locked to the above
-  //   - isFullSession          : canonical idx === 0
-  //   - isVariantSelected      : canonical idx > 0
-  //   - hasMultipleVariants    : variants array has Full + at least one mini
-  //
-  // ==========================================================================
-  const selectedSessionContract = (() => {
-    const variantsArr = Array.isArray(session.variants) ? session.variants : []
-    // [VARIANT-LAUNCHABILITY-CONTRACT] Requested index is coerced to a SAFE
-    // canonical index that points only at a launchable variant. If the user
-    // picked 30 Min but that variant failed the validity gate (empty
-    // selection.main, missing exercise identity, etc.), we collapse to idx 0
-    // (Full) so the launch URL never carries a variant index that cannot
-    // materialize a body. The button for a non-launchable variant is also
-    // not rendered (see the button map below), so in practice the user
-    // never reaches this coercion -- it exists to keep stale persisted
-    // selectedVariant state (e.g. from an older program version) honest.
-    const requestedIdx = selectedVariant ?? 0
-    const requestedLaunchable = isVariantLaunchable(variantsArr[requestedIdx])
-    const canonicalIdx = requestedLaunchable ? requestedIdx : 0
-    const variantObj = variantsArr[canonicalIdx]
-    // Even idx 0 may not be launchable (e.g. fallback/recovery sessions that
-    // now emit `variants: undefined`). In that case variantObj is undefined
-    // and we render as an honest single-session card with no variant story.
-    const variantLabel = variantObj?.label ?? 'Full Session'
-    const estimatedMinutes =
-      typeof variantObj?.duration === 'number' ? variantObj.duration : session.estimatedMinutes
-    let executionMode: '30_min' | '45_min' | 'full' = 'full'
-    if (typeof estimatedMinutes === 'number') {
-      if (estimatedMinutes <= 35) executionMode = '30_min'
-      else if (estimatedMinutes <= 50) executionMode = '45_min'
-    }
-    const weekParam =
-      typeof currentWeekNumber === 'number' && currentWeekNumber >= 1
-        ? `&week=${currentWeekNumber}`
-        : ''
-    const selectedLaunchUrl = `/workout/session?day=${session.dayNumber || 1}&mode=${executionMode}&variant=${canonicalIdx}${weekParam}`
-    // hasMultipleVariants now counts ONLY launchable variants, so a session
-    // whose only 45/30 entries were rejected by the gate reports "no
-    // multiple variants" and the toggle row stays hidden.
-    const launchableCount = variantsArr.filter(v => isVariantLaunchable(v)).length
-    return {
-      selectedVariantIndex: canonicalIdx,
-      selectedVariantLabel: variantLabel,
-      selectedExecutionMode: executionMode,
-      selectedEstimatedMinutes: estimatedMinutes,
-      selectedLaunchUrl,
-      isFullSession: canonicalIdx === 0,
-      isVariantSelected: canonicalIdx > 0,
-      hasMultipleVariants: launchableCount > 1,
-      // Coercion signal for auditability when stale state points at a
-      // variant that has since been invalidated upstream.
-      requestedIndexCoerced: requestedIdx !== canonicalIdx,
-      requestedIndexOriginal: requestedIdx,
-    }
-  })()
-
-  // ==========================================================================
-  // [SELECTED-DISPLAY-CONTRACT] SINGLE AUTHORITATIVE PROGRAM-CARD DISPLAY OWNER
-  //
-  // This is the ONE and ONLY final-display adapter the Program card body reads
-  // from. It bundles:
-  //   - every field of `selectedSessionContract` (canonical idx / label / mode
-  //     / estimatedMinutes / launchUrl / isFullSession / isVariantSelected)
-  //   - `variantData`: the canonical variant object (or null for full / for
-  //     an unusable variant that was coerced to full by the launchability
-  //     gate upstream). Prior code re-derived a separate `selectedVariantData`
-  //     keyed off raw `selectedVariant` state, which bypassed the launchability
-  //     coercion and allowed a non-launchable variant to still feed the visible
-  //     body while Start Workout launched Full -- exactly the split this lock
-  //     removes.
-  //   - `resolvedBody`: the authoritative selected-variant main body, produced
-  //     by the SAME `buildSelectedVariantMain` the Start Workout launch
-  //     fingerprint stamps. This is the ONE source for per-row method /
-  //     methodLabel / blockId / setExecutionMethod carry and for
-  //     variant-authoritative sets/reps/RPE/rest. The old inline
-  //     `displayExercises` mapper at L775 (which did its own variant-keyed
-  //     identity rehydration) is now a pure alias of this body.
-  //
-  // Downstream rule: NO consumer in this component is allowed to re-derive
-  // the selected variant body from raw `selectedVariant` state. Every
-  // consumer reads one of:
-  //   - selectedDisplayContract.resolvedBody.exercises
-  //       (for per-row method carry surfaces + activeSessionView)
-  //   - selectedDisplayContract.variantData
-  //       (for the canonical variant object used by downstream hydration /
-  //        style-metadata variant-pruning)
-  //   - fullVisibleExercises
-  //       (the card-body render list, computed FROM this contract's
-  //        variantData so Full / 45 / 30 visibly and materially differ on
-  //        screen whenever they differ in the stored variant body)
-  //
-  // Start Workout launch corridor is preserved: `handleStartWorkout` now
-  // reuses `selectedDisplayContract.resolvedBody` directly instead of
-  // re-calling the contract builder, so the card body and the stamped
-  // launch fingerprint are guaranteed to come from the SAME body object.
-  // ==========================================================================
-  const selectedDisplayContract = (() => {
-    const canonicalIdx = selectedSessionContract.selectedVariantIndex
-    const variantsArr = Array.isArray(session.variants) ? session.variants : []
-    const variantData =
-      canonicalIdx > 0 ? (variantsArr[canonicalIdx] ?? null) : null
-    const resolvedBody = buildSelectedVariantMain(
-      session,
-      canonicalIdx,
-      selectedSessionContract.selectedExecutionMode,
-    )
-    return {
-      ...selectedSessionContract,
-      /** Canonical variant object for the launchable selected index, or null. */
-      variantData,
-      /**
-       * Authoritative selected-variant main body.
-       * Same builder (`buildSelectedVariantMain`) the Start Workout launch
-       * fingerprint uses. Carries full per-row identity (id / blockId /
-       * method / methodLabel / setExecutionMethod) plus variant-authoritative
-       * dosage (sets / repsOrTime / targetRPE / restSeconds / note).
-       */
-      resolvedBody,
-    }
-  })()
-
+  
   const handleStartWorkout = () => {
     // [workout-route] UNIFIED ENTRY: Route to canonical workout session page
     // This ensures all "Start Workout" paths use the same StreamlinedWorkoutSession experience
     // The embedded WorkoutExecutionCard is no longer used for full workout execution
-    //
-    // [SELECTED-SESSION-CONTRACT] Launch payload is now read AS-IS from the
-    // authoritative selectedSessionContract. No independent re-derivation of
-    // executionMode / variant index / week param here. If the contract says
-    // 45_min + variant=1, the URL is 45_min + variant=1. Full stop.
+    
+    // ==========================================================================
+    // [LIVE-WORKOUT-AUTHORITY] Determine execution mode from selected variant
+    // ==========================================================================
+    const variant = selectedVariant !== null ? session.variants?.[selectedVariant] : session.variants?.[0]
+    const variantDuration = variant?.duration || session.estimatedMinutes
+    
+    // Map variant duration to execution mode
+    let executionMode: '30_min' | '45_min' | 'full' = 'full'
+    if (variantDuration && variantDuration <= 35) {
+      executionMode = '30_min'
+    } else if (variantDuration && variantDuration <= 50) {
+      executionMode = '45_min'
+    }
+    
     trackWorkoutStarted(session.name)
-
-    // [SELECTED-VARIANT-SESSION-CONTRACT] Stamp the expected selected-variant
-    // fingerprint immediately before router.push. This is the card's promise
-    // to the route: "given this session + this variantIndex, here is the
-    // exact body I expect you to boot." The route reads this payload via
-    // readLaunchFingerprint(day, variantIndex) and diffs it against the
-    // finalSession it actually built. Any drift (count, identity, order,
-    // duration, mode) surfaces as a visible PARITY chip instead of a silent
-    // full-session fallback. This closes the last owner split in the
-    // Program-card -> Start Workout corridor: the card and route now share
-    // ONE variant-body builder (buildSelectedVariantMain) and ONE
-    // parity-proof contract.
-    // =====================================================================
-    // [FINAL-MIRROR-LOCK] Program card visible body is the SINGLE launch
-    // owner.
-    //
-    // Prior code stamped from `selectedDisplayContract.resolvedBody.exercises`
-    // under the assumption that it was the "exact same body feeding
-    // MainExercisesRenderer". It is NOT. The actual renderer consumes
-    // `fullVisibleExercises` (line 2782: `displayExercises={fullVisibleExercises}`),
-    // a different authoritative body built by
-    // `buildFullVisibleRoutineExercises(fullRoutineSurface, safeExercises,
-    // selectedVariantData.selection)`. For variant sessions (45 Min /
-    // 30 Min), these two bodies can differ in ORDER even when membership
-    // matches -- which is exactly the verified Day 1 / Day 6 failure
-    // pattern:
-    //   Card visible:  Planche Leans -> Explosive Pull-Ups -> Tuck FL Hold -> Weighted Dips
-    //   Shell booted:  Planche Leans -> Tuck FL Hold -> Weighted Dips -> Explosive Pull-Ups
-    //
-    // The mirror corridor's source of truth for THIS launch is the exact
-    // ordered array the user is currently looking at. We therefore derive
-    // one explicit `visibleLaunchBody` from `fullVisibleExercises` and
-    // route BOTH the fingerprint and the snapshot payload through it.
-    // No path stamps from `cardResolvedBody.exercises` anymore.
-    //
-    // Shape: `FullRoutineExercise` is a structural superset of the fields
-    // the fingerprint + route + live machine read (id, name, category,
-    // sets, repsOrTime, targetRPE, restSeconds, prescribedLoad, blockId,
-    // method, methodLabel, selectionReason, isOverrideable, note). The
-    // `AdaptiveSession['exercises']` annotation on the contract is
-    // structural, so we cast via `unknown` at the boundary rather than
-    // reshaping the rows (any reshape would re-introduce the exact
-    // "card shows one thing, launch stamps another" risk this fix is
-    // eliminating). Every downstream consumer reads by field name.
-    // =====================================================================
-    const selectedCanonicalIdx = selectedDisplayContract.selectedVariantIndex
-    const cardResolvedBody = selectedDisplayContract.resolvedBody
-    // The ONE visible launch body. Shallow-copy each row so the stamped
-    // object is serializable and does not hold React-owned references.
-    const visibleLaunchBody = fullVisibleExercises.map(ex => ({ ...ex })) as unknown as AdaptiveSession['exercises']
-    const cardFingerprint = buildSessionFingerprint({
-      variantIndex: selectedCanonicalIdx,
-      mode: selectedSessionContract.selectedExecutionMode,
-      // [FINAL-MIRROR-LOCK] Fingerprint the VISIBLE body -- not the
-      // resolvedBody. This is what guarantees the PARITY chip tracks the
-      // actual rendered ordering, not a parallel resolved-body ordering
-      // that may or may not equal it.
-      exercises: visibleLaunchBody,
-      estimatedMinutes: cardResolvedBody.estimatedMinutes,
-    })
-    // =====================================================================
-    // [PROGRAM-TO-LIVE MIRROR CONTRACT] Stamp the FULL visible main-body
-    // snapshot -- not just the fingerprint.
-    //
-    // Prior behavior stamped only a thin fingerprint (ordered ids + counts)
-    // and let the live workout route re-call `buildSelectedVariantMain`
-    // against `loadAuthoritativeSession` result. Two problems with that:
-    //
-    //   (a) program-state (card input) vs loadAuthoritativeSession (route
-    //       input) read session data through different paths. Any subtle
-    //       hydration / week-scaling / normalizer drift between them
-    //       produced two different session skeletons into the same shared
-    //       builder -- same algorithm, different inputs -> different
-    //       bodies -> the fingerprint parity chip flipped to MISMATCH,
-    //       but the live workout still booted the re-derived body.
-    //   (b) Full-session launches additionally pick up loader-applied
-    //       `scaled*` dosage fields on each row, while the card renders
-    //       raw (unscaled) dosage for the same session. For non-week-1
-    //       Full launches this alone causes a visible row-level drift.
-    //
-    // The fix is: the card stamps the exact exercise array it resolved
-    // (same as what fed `MainExercisesRenderer`), and the route boots
-    // from that snapshot directly when valid. If snapshot is absent or
-    // structurally invalid, route falls back to the loader+builder
-    // re-derivation so nothing regresses.
-    // =====================================================================
-    stampLaunchFingerprint({
-      dayNumber: session.dayNumber || 1,
-      variantIndex: selectedCanonicalIdx,
-      stampedAt: new Date().toISOString(),
-      fingerprint: cardFingerprint,
-      resolvedFrom: cardResolvedBody.resolvedFrom,
-      launchUrl: selectedSessionContract.selectedLaunchUrl,
-      selectedBody: {
-        executionMode: selectedSessionContract.selectedExecutionMode,
-        // currentWeekNumber is the exact week the Program page selected for
-        // dosage display (prop threaded in from app/(app)/program/page.tsx).
-        // Null-tolerant: live route will ignore it for snapshot-boot
-        // validation and only use it as an audit field.
-        weekNumber:
-          typeof currentWeekNumber === 'number' ? currentWeekNumber : null,
-        variantIndex: selectedCanonicalIdx,
-        variantLabel: selectedSessionContract.selectedVariantLabel,
-        estimatedMinutes:
-          typeof cardResolvedBody.estimatedMinutes === 'number'
-            ? cardResolvedBody.estimatedMinutes
-            : typeof selectedSessionContract.selectedEstimatedMinutes === 'number'
-              ? selectedSessionContract.selectedEstimatedMinutes
-              : 60,
-        // [FINAL-MIRROR-LOCK] Stamp the VISIBLE body (fullVisibleExercises)
-        // -- the exact ordered array `MainExercisesRenderer` is currently
-        // rendering on the card. This is the single launch owner; no other
-        // body source (resolvedBody, variant.selection.main, loader session)
-        // can end up in `selectedBody.exercises` anymore.
-        exercises: visibleLaunchBody,
-        // [MIRROR-CORRIDOR-LOCKDOWN] Stamp the card's already-pruned
-        // styleMetadata. This is what eliminates the "grouped metadata
-        // shadow owner" failure where variant snapshot-boot used the
-        // full-session styledGroups -- causing the live machine's
-        // member-advance path to jump to wrong exercise indexes because
-        // the groups referenced members that weren't in the variant body.
-        //
-        // Semantics (mirrored in SelectedBodySnapshot contract comment):
-        //   - object (with styledGroups.length > 0) : pass to route as-is
-        //   - object (with styledGroups.length === 0) : pass as null to
-        //     explicitly tell the route "no groups in this selected body,
-        //     clear finalSession.styleMetadata so executionPlan derives
-        //     flat from the snapshot exercises"
-        //   - undefined upstream (no metadata at all) : pass null for
-        //     the same reason
-        styleMetadata:
-          variantPrunedStyleMetadata &&
-          Array.isArray(variantPrunedStyleMetadata.styledGroups) &&
-          variantPrunedStyleMetadata.styledGroups.length > 0
-            ? variantPrunedStyleMetadata
-            : null,
-      },
-    })
-
-    console.log('[PROGRAM-TO-LIVE MIRROR CONTRACT] Start Workout launch stamp', {
-      dayNumber: session.dayNumber,
-      selectedVariantIndex: selectedCanonicalIdx,
-      selectedVariantLabel: selectedSessionContract.selectedVariantLabel,
-      selectedExecutionMode: selectedSessionContract.selectedExecutionMode,
-      selectedEstimatedMinutes: selectedSessionContract.selectedEstimatedMinutes,
-      selectedLaunchUrl: selectedSessionContract.selectedLaunchUrl,
-      // Parity stamp
-      cardResolvedFrom: cardResolvedBody.resolvedFrom,
-      cardFingerprint,
-      // [FINAL-MIRROR-LOCK] Mirror stamp proof now reports the VISIBLE
-      // body (same array MainExercisesRenderer rendered). Also log the
-      // prior `resolvedBody` ordering for diagnostic comparison so any
-      // future order divergence between the two owners is visible in
-      // the console, even though only `visibleLaunchBody` drives boot.
-      snapshotStamped: true,
-      snapshotSource: 'fullVisibleExercises',
-      snapshotExerciseCount: visibleLaunchBody.length,
-      snapshotExerciseIds: visibleLaunchBody.map(e => e.id),
-      snapshotExerciseNames: visibleLaunchBody.map(e => e.name),
-      // Diagnostic only -- NOT used for boot.
-      resolvedBodyExerciseIds: cardResolvedBody.exercises.map(e => e.id),
-      resolvedBodyExerciseNames: cardResolvedBody.exercises.map(e => e.name),
-      orderMatchesResolvedBody:
-        visibleLaunchBody.length === cardResolvedBody.exercises.length &&
-        visibleLaunchBody.every(
-          (ex, i) => ex.id === cardResolvedBody.exercises[i]?.id
-        ),
-      snapshotWeekNumber:
-        typeof currentWeekNumber === 'number' ? currentWeekNumber : null,
-    })
-    router.push(selectedSessionContract.selectedLaunchUrl)
+    // [WEEK-AUTHORITY-HANDOFF] Carry the Program page's AUTHORITATIVE selected
+    // week into the live workout route. The live runner uses this week as the
+    // exclusive source of truth for dosage scaling. If absent we fall back to
+    // the program baseline, but when the user is viewing Week 2/3/4 this param
+    // is the only way to guarantee parity between Program card dosage and
+    // the workout that actually boots.
+    const weekParam = typeof currentWeekNumber === 'number' && currentWeekNumber >= 1
+      ? `&week=${currentWeekNumber}`
+      : ''
+    // [LIVE-WORKOUT-AUTHORITY] Pass execution mode and variant index to workout route
+    router.push(`/workout/session?day=${session.dayNumber || 1}&mode=${executionMode}&variant=${selectedVariant ?? 0}${weekParam}`)
   }
 
   const handleWorkoutComplete = () => {
@@ -1043,40 +481,38 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   // This prevents contradictory displays like "2 exercises in header / 3 in body"
   // ==========================================================================
   
-  // [SELECTED-DISPLAY-CONTRACT] `displayExercises` is now a PURE ALIAS of the
-  // authoritative selected-variant main body owned by `selectedDisplayContract`.
-  //
-  // Previously this was a second, independent variant-body mapper that:
-  //   (a) keyed off RAW `selectedVariant` state (not the launchability-coerced
-  //       canonical idx), so a non-launchable variant could feed the visible
-  //       body while Start Workout silently launched Full;
-  //   (b) rehydrated per-row identity with a weaker lookup (`find(e => e.id
-  //       === s.exercise.id)` only), missing rows that drifted on normalized
-  //       name.
-  // Both weaknesses are eliminated by routing through the contract's
-  // `resolvedBody`, which (1) is keyed off `selectedSessionContract`'s
-  // canonical idx and (2) uses id + normalized-name + positional lookup.
-  //
-  // Per-row grouped/cluster truth carry (`method` / `methodLabel` / `blockId`
-  // / `setExecutionMethod`) is preserved by `buildSelectedVariantMain` itself
-  // -- that contract builder decorates each variant row by looking up the
-  // original session exercise and overlaying variant-specific fields on top.
-  const displayExercises = selectedDisplayContract.resolvedBody.exercises
+  // Get exercises to display based on variant selection
+  // [weighted-prescription-truth] Preserve prescribedLoad through variant mapping
+  const displayExercises = selectedVariant !== null && session.variants?.[selectedVariant]
+    ? session.variants[selectedVariant].selection.main.map(s => ({
+        id: s.exercise.id,
+        name: s.exercise.name,
+        category: s.exercise.category,
+        sets: s.sets,
+        repsOrTime: s.repsOrTime,
+        note: s.note,
+        isOverrideable: s.isOverrideable,
+        selectionReason: s.selectionReason,
+        // Preserve prescription fields from variant selection
+        prescribedLoad: s.prescribedLoad,
+        targetRPE: s.targetRPE,
+        restSeconds: s.restSeconds,
+      }))
+        : safeExercises
   
-  // [SELECTED-DISPLAY-CONTRACT] Labels / flags / minutes MUST come from the
-  // single display owner, not from raw `selectedVariant` state. This removes
-  // the last path where the header could advertise "45 Min" (raw state) while
-  // the launch corridor had coerced to Full (contract), or vice-versa.
+  // [TASK 3] Build unified active session view
   const activeSessionView: ActiveSessionView = {
     exercises: displayExercises,
     exerciseCount: displayExercises.length,
-    estimatedMinutes:
-      typeof selectedDisplayContract.selectedEstimatedMinutes === 'number'
-        ? selectedDisplayContract.selectedEstimatedMinutes
-        : (session.estimatedMinutes ?? 60),
-    variantLabel: selectedDisplayContract.selectedVariantLabel,
-    isFullSession: selectedDisplayContract.isFullSession,
-    isVariantSelected: selectedDisplayContract.isVariantSelected,
+    // Calculate estimated minutes from variant if selected, otherwise use session default
+    estimatedMinutes: selectedVariant !== null && session.variants?.[selectedVariant]
+      ? session.variants[selectedVariant].duration
+      : session.estimatedMinutes,
+    variantLabel: selectedVariant !== null && session.variants?.[selectedVariant]
+      ? session.variants[selectedVariant].label
+      : 'Full Session',
+    isFullSession: selectedVariant === null || selectedVariant === 0,
+    isVariantSelected: selectedVariant !== null && selectedVariant > 0,
   }
   
   // ==========================================================================
@@ -1084,19 +520,9 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   // This is the PRIMARY authoritative output for prescription-first display
   // Replaces narrowed displayExercises with full session truth
   // ==========================================================================
-  // [SELECTED-DISPLAY-CONTRACT] `selectedVariantData` is a PURE ALIAS of the
-  // display owner's canonical variant object. This is the variant that matches
-  // the launchable canonical idx (launchability-coerced), NOT raw
-  // `selectedVariant` state. Downstream:
-  //   - `fullRoutineSurface` receives this for variant-aware routine building
-  //   - `fullVisibleExercises` trims + dosage-overwrites off `.selection.main`
-  //   - `variantPrunedStyleMetadata` prunes styleMetadata.styledGroups against
-  //     this variant's surviving body
-  //   - `displayGroupedRendering` reads from the pruned body above
-  // Routing all of these through the single owner is what lets Full / 45 / 30
-  // visibly and materially differ on screen when the stored variant body
-  // differs, while keeping Start Workout on the same selected-session story.
-  const selectedVariantData = selectedDisplayContract.variantData
+  const selectedVariantData = selectedVariant !== null && session.variants?.[selectedVariant]
+    ? session.variants[selectedVariant]
+    : null
     
   const fullRoutineSurface: FullSessionRoutineSurface = buildFullSessionRoutineSurface(
     {
@@ -1202,22 +628,15 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         return { ...g, exercises: keptMembers }
       })
       .filter(g => {
-        // [METHOD-ONLY-VISIBILITY] Method-specific minimums. Superset/circuit
-        // are TRUE grouped-block methods (pairing IS the method) and still
-        // require >= 2 members after variant prune -- a 1-member "superset"
-        // is not a superset and must not survive as a fake group. Cluster
-        // and density_block are METHOD-ONLY execution styles that the
-        // adaptive builder intentionally applies to a single exercise (see
-        // lib/adaptive-program-builder.ts line ~12192 for cluster, and the
-        // styledGroups rebuild at ~12326-12354 for method-only density);
-        // they MUST survive variant prune even at 1 member, otherwise the
-        // variant-pruned styleMetadata silently loses method-only groups
-        // and the card falls back to flat when cluster/density were applied.
-        if (g.groupType === 'straight') return true
-        if (g.groupType === 'superset' || g.groupType === 'circuit') {
-          return g.exercises.length >= 2
-        }
-        return g.exercises.length >= 1
+        // [METHOD-MIN-MEMBERS-AUTHORITY] Method-specific minimums -- NOT a
+        // blanket `>= 2`. The prior blanket rule silently dropped legitimate
+        // single-exercise cluster groups (clusters are emitted as 1-member
+        // groups by adaptive-program-builder.ts line 12286), making every
+        // cluster invisible on the Program card. Now reuses the canonical
+        // `minMembersFor()` helper so this rule is identical across the card
+        // variant prune, Start-Workout variant prune, and the adapter's own
+        // partial-validity filter -- single source of truth.
+        return g.exercises.length >= minMembersFor(g.groupType)
       })
     return {
       ...sessionStyleMetadata,
@@ -1225,60 +644,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     }
   })()
 
-  // ==========================================================================
-  // [RAW-VS-DISPLAY-TRUTH-SPLIT] Grouped OWNERSHIP is decided from RAW session
-  // truth; grouped RENDERING order is derived from the DISPLAY surface. These
-  // are two separate concerns and must not share a single input.
-  //
-  // Why: prior behavior fed `variantPrunedStyleMetadata` + `fullVisibleExercises`
-  // (a downstream-prepared display surface) into a single `buildGroupedDisplayModel`
-  // call. That meant any weakening of the display pipeline -- a dropped blockId
-  // during `buildFullVisibleRoutineExercises`, an aggressive variant prune that
-  // stranded a surviving group below its minimum, a RoutineItem that never carried
-  // method/methodLabel forward -- silently degraded `hasGroupedTruth` /
-  // `hasRichRenderableGroups` for the FINAL visible body decision. The scanner
-  // strip, meanwhile, reads raw `session.styleMetadata.styledGroups[].groupType`
-  // and `session.exercises[].method` and honestly reports "grouped." The user
-  // sees "scanner says grouped, card body still flat."
-  //
-  // Fix: two independent model builds, then one authoritative merge.
-  //
-  //   1. `rawGroupedOwnership` -- built from THE RAW SESSION TRUTH
-  //      (`sessionStyleMetadata` + `safeExercises` with full blockId/method/
-  //      methodLabel fidelity). This is the FIRST-CLASS determinant of whether
-  //      the card is grouped at all. Cannot be weakened by any downstream
-  //      display weakening.
-  //
-  //   2. `displayGroupedRendering` -- built from THE DISPLAY SURFACE
-  //      (`variantPrunedStyleMetadata` + `fullVisibleExercises`). Used ONLY
-  //      to produce a render-block ordering that matches what the card
-  //      actually shows on screen (variant-pruned, hydration-aware).
-  //
-  //   3. `groupedRenderContract` -- the merged model downstream consumers
-  //      read. Ownership fields (hasGroupedTruth, hasRichRenderableGroups,
-  //      counts) come FROM RAW first; rendering fields (renderBlocks,
-  //      rawFallbackBlocks, groups) prefer display when display produced
-  //      them, falling back to raw when display lost them. This guarantees
-  //      the card cannot silently collapse to flat just because the
-  //      downstream display surface weakened the signal, and it also
-  //      guarantees the visible rows still match what the variant allows.
-  //
-  //  `fullVisibleExercises` remains the hydration source for row CONTENT
-  //  (sets/reps/RPE/rest) inside `MainExercisesRenderer`; this split does
-  //  not change that.
-  // ==========================================================================
-  const rawGroupedOwnership: GroupedDisplayModel = buildGroupedDisplayModel(
-    sessionStyleMetadata,
-    safeExercises.map(ex => ({
-      id: ex.id,
-      name: ex.name,
-      blockId: (ex as unknown as { blockId?: string }).blockId,
-      method: (ex as unknown as { method?: string }).method,
-      methodLabel: (ex as unknown as { methodLabel?: string }).methodLabel,
-    }))
-  )
-
-  const displayGroupedRendering: GroupedDisplayModel = buildGroupedDisplayModel(
+  const groupedRenderContract: GroupedDisplayModel = buildGroupedDisplayModel(
     variantPrunedStyleMetadata,
     fullVisibleExercises.map(ex => ({
       id: ex.id,
@@ -1288,246 +654,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       methodLabel: (ex as unknown as { methodLabel?: string }).methodLabel,
     }))
   )
-
-  // [METHOD-MATERIALIZATION-SUMMARY-LOCK] Primary session-level method verdict.
-  // The builder stamps a canonical session-level summary onto styleMetadata
-  // at materialization-complete time. When present, this summary OWNS the
-  // session-level grouped-vs-flat-vs-method-only decision -- the card
-  // cannot disagree with the page parity header or scanner because all
-  // three read the same single owner.
-  //
-  // The variant-narrowed body below (driven by displayGroupedRendering /
-  // fullVisibleExercises) still owns the visible row layout because the
-  // user may have picked a 30/45 min variant that prunes some grouped
-  // members; that variant scope is correct for the body and the summary
-  // is intentionally not used to override variant-narrowed render blocks.
-  // The summary's role is purely the SESSION-LEVEL truth verdict.
-  const sessionMethodMaterializationSummary =
-    (sessionStyleMetadata as unknown as {
-      methodMaterializationSummary?: {
-        groupedStructurePresent?: boolean
-        rowLevelMethodCuesPresent?: boolean
-        dominantRenderMode?: 'grouped' | 'flat_with_method_cues' | 'flat'
-        groupedBlockCount?: number
-        primaryPackagingOutcome?: string | null
-      } | null
-    } | null)?.methodMaterializationSummary || null
-
-  // [STEP 3B OF 19 — SHORT-VARIANT-FLAG] Authoritative "is the selected
-  // variant a short (45 / 30) variant?" flag. Lifted to outer scope so it
-  // is available to (a) the grouped render contract gate inside the IIFE
-  // below, AND (b) the chip-row integrity gate (`integrityForcesFlat`) and
-  // any other downstream surface that needs to know whether the canonical
-  // full-session method tally should be allowed to render grouped chips
-  // for the currently selected visible variant.
-  const isShortVariant: boolean = (() => {
-    const dur = (selectedVariantData as { duration?: number } | null | undefined)?.duration
-    return dur === 45 || dur === 30
-  })()
-
-  const groupedRenderContract: GroupedDisplayModel = (() => {
-    // [RAW-OWNERSHIP-WINS] Grouped-truth detection is owned by RAW source.
-    // Display path can only ADD to grouped truth (not subtract) because
-    // display is a downstream derivative -- if raw says grouped, the card
-    // must honor that even if the display surface cannot rehydrate every
-    // member cleanly.
-    //
-    // [METHOD-MATERIALIZATION-SUMMARY-LOCK] When the canonical summary is
-    // present, its `groupedStructurePresent` flag is the FIRST authority on
-    // session-level grouped truth. Raw + display readings remain as
-    // additive support so the existing variant-aware grouped rendering
-    // path still produces visible blocks; we never use the summary to
-    // suppress grouped truth that raw or display can prove.
-    const summaryGrouped =
-      sessionMethodMaterializationSummary?.groupedStructurePresent === true
-    const hasGroupedTruth =
-      summaryGrouped ||
-      rawGroupedOwnership.hasGroupedTruth ||
-      displayGroupedRendering.hasGroupedTruth
-    const hasRichRenderableGroups =
-      displayGroupedRendering.hasRichRenderableGroups ||
-      rawGroupedOwnership.hasRichRenderableGroups
-
-    // [DISPLAY-PREFERRED-RENDERING] Rendering fields prefer the display
-    // path because the renderer hydrates rows from `fullVisibleExercises`
-    // and its canonical walk already matches what the variant exposes.
-    // Raw is the fallback -- it owns rendering ONLY when display returned
-    // empty (variant pruned too aggressively, downstream weakening erased
-    // all rich groups, etc.). This keeps the card honestly grouped
-    // instead of collapsing to flat.
-    const renderBlocks =
-      displayGroupedRendering.renderBlocks.length > 0
-        ? displayGroupedRendering.renderBlocks
-        : rawGroupedOwnership.renderBlocks
-    const rawFallbackBlocks =
-      displayGroupedRendering.rawFallbackBlocks.length > 0
-        ? displayGroupedRendering.rawFallbackBlocks
-        : rawGroupedOwnership.rawFallbackBlocks
-    const groups =
-      displayGroupedRendering.groups.length > 0
-        ? displayGroupedRendering.groups
-        : rawGroupedOwnership.groups
-
-    // [COUNTS-TRACK-OWNERSHIP] Method counts track the rendering source
-    // that actually produced the blocks (so chips/tally never outrun the
-    // body). If display produced rich groups, display counts. Otherwise
-    // raw counts -- which matches the block list the renderer will now
-    // iterate. When both are empty we report zeros honestly.
-    const countsSource = displayGroupedRendering.hasRichRenderableGroups
-      ? displayGroupedRendering
-      : rawGroupedOwnership.hasRichRenderableGroups
-        ? rawGroupedOwnership
-        : displayGroupedRendering
-
-    // [SOURCE-USED-ATTRIBUTION] Attribute to whichever model owns the
-    // visible rendering. 'none' is only emitted when neither model has
-    // grouped truth at all.
-    const sourceUsed =
-      displayGroupedRendering.sourceUsed !== 'none'
-        ? displayGroupedRendering.sourceUsed
-        : rawGroupedOwnership.sourceUsed
-
-    // [FLAT-REASON] Only meaningful if neither raw nor display found
-    // grouped truth. Otherwise raw owns the truth and flatReason is null.
-    const flatReason = hasGroupedTruth
-      ? null
-      : displayGroupedRendering.flatReason
-
-    // ========================================================================
-    // [STEP 3B OF 19 — SELECTED-VARIANT-GROUPED-RENDER-GATE]
-    //
-    // The merged contract above intentionally lets RAW + materializationSummary
-    // truth own session-level grouped signal so that the full-session card
-    // cannot silently collapse to flat when downstream display weakening
-    // strands a real superset/circuit. That lock is correct for FULL Session
-    // mode but is the leak for SHORT variants (45 Min / 30 Min):
-    //
-    //   - When 45/30 variant pruning defers one half of a superset pair (or
-    //     every grouped member), `rawGroupedOwnership` and `summaryGrouped`
-    //     still report grouped truth from the FULL session. Counts above
-    //     read from `countsSource` which falls back to display only when
-    //     display had rich groups — for short variants stripped of all
-    //     grouped members, display has no rich groups, so chip/banner
-    //     counts come from rawGroupedOwnership (full-session counts).
-    //   - The merged `rawFallbackBlocks` also fall back to
-    //     rawGroupedOwnership when display empty, leaking full-session
-    //     fallback blocks into the dispatcher's raw_grouped_fallback arm.
-    //   - Even when both fallback paths are empty, `hasGroupedTruth=true`
-    //     drives the dispatcher into `simple_order_grouped`, which paints
-    //     a generic grouped banner over the variant body using RAW-derived
-    //     per-type counts — the exact "Grouped structure: 1 Superset" /
-    //     "1 Superset" chip + no visible bracket the user reported.
-    //   - And the synthesis backstop in `synthesizedRawFallbackBlocks`
-    //     (~L1659-1677) explicitly falls back to RAW `safeExercises` when
-    //     display synthesis returns empty — re-injecting full-session
-    //     grouped blocks into the variant body.
-    //
-    // The gate below is THE final selected-variant render authority:
-    //
-    //   - Full Session (duration neither 45 nor 30): pass-through. The
-    //     existing raw-rescue behavior is correct because variant pruning
-    //     was not applied.
-    //
-    //   - 45 / 30 Min: the variant-aware `displayGroupedRendering` model
-    //     (built from `variantPrunedStyleMetadata + fullVisibleExercises`)
-    //     IS the authority. If it has rich renderable groups OR raw
-    //     fallback blocks, the contract carries display-derived counts
-    //     and block lists ONLY (raw cannot leak in via `countsSource`
-    //     fallback). If display has NEITHER, hasGroupedTruth is forced
-    //     false; the contract is zeroed out; the dispatcher routes to
-    //     `flat_category` honestly; the strip + chip + GroupedBodyHeadline
-    //     all suppress; synthesis backstop returns empty (its first guard
-    //     is `if (!hasGroupedTruth) return []`).
-    //
-    // This is the single visible-truth lock for selected-variant grouped
-    // rendering. Every downstream surface (top chip strip, expanded chip
-    // row, GroupedBodyHeadline, finalVisibleBodyModel dispatch, body
-    // branch, Start Workout payload via the same selected variant body)
-    // consumes the gated contract through `hasGroupedTruth` /
-    // `hasRichRenderableGroups` / counts on this object.
-    //
-    // `isShortVariant` is lifted to the outer scope (above this IIFE) so
-    // both the contract gate AND the chip-row integrity gate downstream
-    // (`integrityForcesFlat`) can read the same authoritative flag.
-    // ========================================================================
-    if (!isShortVariant) {
-      return {
-        hasGroups: groups.length > 0 || rawGroupedOwnership.hasGroups,
-        totalGroupCount: Math.max(
-          displayGroupedRendering.totalGroupCount,
-          rawGroupedOwnership.totalGroupCount
-        ),
-        nonStraightGroupCount: countsSource.nonStraightGroupCount,
-        supersetCount: countsSource.supersetCount,
-        circuitCount: countsSource.circuitCount,
-        densityCount: countsSource.densityCount,
-        clusterCount: countsSource.clusterCount,
-        groups,
-        methodSummary:
-          displayGroupedRendering.methodSummary ?? rawGroupedOwnership.methodSummary,
-        sourceUsed,
-        flatReason,
-        renderBlocks,
-        hasGroupedTruth,
-        hasRichRenderableGroups,
-        rawFallbackBlocks,
-      }
-    }
-
-    // SHORT VARIANT: display authority. Check whether display has any
-    // backing for grouped rendering — rich renderable groups OR raw
-    // fallback blocks the renderer can iterate.
-    const displayHasRich = displayGroupedRendering.hasRichRenderableGroups
-    const displayHasRawFallback = displayGroupedRendering.rawFallbackBlocks.length > 0
-    const displayBacksGrouped = displayHasRich || displayHasRawFallback
-
-    if (!displayBacksGrouped) {
-      // Short variant has no display backing for grouped rendering. Suppress
-      // grouped truth entirely so the dispatcher routes to flat_category and
-      // every chip/banner/body surface stays consistent with the visible
-      // body. We keep `flatReason` so debug surfaces can attribute why.
-      return {
-        hasGroups: false,
-        totalGroupCount: 0,
-        nonStraightGroupCount: 0,
-        supersetCount: 0,
-        circuitCount: 0,
-        densityCount: 0,
-        clusterCount: 0,
-        groups: [],
-        methodSummary:
-          displayGroupedRendering.methodSummary ?? rawGroupedOwnership.methodSummary,
-        sourceUsed: displayGroupedRendering.sourceUsed,
-        flatReason: displayGroupedRendering.flatReason,
-        renderBlocks: [],
-        hasGroupedTruth: false,
-        hasRichRenderableGroups: false,
-        rawFallbackBlocks: [],
-      }
-    }
-
-    // Short variant DOES have display backing — return a contract whose
-    // counts and block lists track display ONLY (no raw fallback into
-    // countsSource or rawFallbackBlocks). Truth flags read from display.
-    return {
-      hasGroups: displayGroupedRendering.hasGroups,
-      totalGroupCount: displayGroupedRendering.totalGroupCount,
-      nonStraightGroupCount: displayGroupedRendering.nonStraightGroupCount,
-      supersetCount: displayGroupedRendering.supersetCount,
-      circuitCount: displayGroupedRendering.circuitCount,
-      densityCount: displayGroupedRendering.densityCount,
-      clusterCount: displayGroupedRendering.clusterCount,
-      groups: displayGroupedRendering.groups,
-      methodSummary:
-        displayGroupedRendering.methodSummary ?? rawGroupedOwnership.methodSummary,
-      sourceUsed: displayGroupedRendering.sourceUsed,
-      flatReason: displayGroupedRendering.flatReason,
-      renderBlocks: displayGroupedRendering.renderBlocks,
-      hasGroupedTruth: displayGroupedRendering.hasGroupedTruth,
-      hasRichRenderableGroups: displayGroupedRendering.hasRichRenderableGroups,
-      rawFallbackBlocks: displayGroupedRendering.rawFallbackBlocks,
-    }
-  })()
   // [DISPLAY-FIRST-FALLBACK] Two separate gates, each with a precise meaning:
   //   - hasGroupedTruth:         upstream grouped truth exists (raw signal,
   //                              pre-partial-validity filtering).
@@ -1544,11 +670,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const hasGroupedTruth = groupedRenderContract.hasGroupedTruth
   const hasRichRenderableGroups = groupedRenderContract.hasRichRenderableGroups
   const hasRenderableGroups = hasRichRenderableGroups
-
-  // [FINAL-VISIBLE-OWNERSHIP-LOCK] METHOD-MATERIALIZATION-SUMMARY render-loop
-  // verdict log removed. It fired once per card render with no athlete-facing
-  // value; the same verdict is structurally enforced by the grouped render
-  // contract that drives the visible body below.
 
   // ==========================================================================
   // [OUTER-BODY-DECISION] SINGLE AUTHORITATIVE OWNER
@@ -1636,7 +757,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
      *   but rawFallbackBlocks came back empty, so we render honestly ordered)
      * - rich / raw grouped -> null
      */
-    reasonIfNotRich: GroupedFlatReason | 'RAW_FALLBACK_EMPTY' | 'METHOD_ONLY_FLAT' | null
+    reasonIfNotRich: GroupedFlatReason | 'RAW_FALLBACK_EMPTY' | null
     /** Block list consumed by the rich grouped render path (mode 1). */
     renderBlocks: RenderBlock[]
     /** Block list consumed by the raw grouped fallback path (mode 2). */
@@ -1651,175 +772,11 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     hasGroupedTruth: boolean
     /** Rich path is possible. */
     hasRichRenderableGroups: boolean
-    /**
-     * [CARD-LOCAL-FAILURE-SURFACE] When grouped truth exists but no grouped
-     * block list could be produced by any source (rich path, contract raw
-     * fallback, or display synthesis), this codes the exact final losing
-     * stage so the simple_order_grouped body can expose ONE precise failure
-     * reason on the affected card only. Null for any card whose body paints
-     * real grouped blocks -- the surface never appears when grouped rendering
-     * succeeded.
-     *
-     * Stages:
-     *   - 'bridge_lost_group_fields'  : raw ownership had grouped truth but
-     *                                   fullVisibleExercises lost every
-     *                                   blockId/method carry -- the bridge
-     *                                   weakened the display surface.
-     *   - 'grouped_contract_empty'    : raw AND display both saw grouped
-     *                                   truth, but the adapter returned zero
-     *                                   renderable groups (member names
-     *                                   unusable or all pruned out).
-     *   - 'final_mode_flattened'      : grouped truth reached the final
-     *                                   dispatcher but no block source
-     *                                   produced anything renderable.
-     *   - 'hydration_render_loss'     : blocks existed but zero members
-     *                                   survived usable-name filtering.
-     */
-    groupedFailureStage:
-      | 'bridge_lost_group_fields'
-      | 'grouped_contract_empty'
-      | 'final_mode_flattened'
-      | 'hydration_render_loss'
-      | null
   }
-  // ==========================================================================
-  // [DISPLAY-SYNTHESIS-RESCUE] Last-mile rawFallbackBlocks synthesis.
-  //
-  // Problem closed: prior `finalVisibleBodyModel` fell through to
-  // `simple_order_grouped` whenever `hasGroupedTruth === true` and the
-  // contract's `rawFallbackBlocks` was empty (styledGroups had unusable member
-  // names OR the exercise-fallback path couldn't bind). That branch then
-  // rendered a visually flat ordered list, producing the exact "grouped truth
-  // exists upstream but the body looks flat" regression.
-  //
-  // Fix: before the mode dispatch, synthesize `RawFallbackBlock[]` DIRECTLY
-  // from `fullVisibleExercises[].blockId + .method`. The display surface
-  // always carries blockId/method forward (bridge contract), so any session
-  // with even one grouped exercise surviving the variant trim lands here with
-  // a block to render. If synthesis yields blocks, we flip the mode to
-  // `raw_grouped_fallback` (NOT `simple_order_grouped`) so the grouped body
-  // path owns the visible render, and the chip tally / banner counts also
-  // come from the synthesized per-type counts.
-  //
-  // Why this is safe vs the adapter path: this runs ONLY when the adapter's
-  // rich + rawFallback paths both came back empty. It cannot override the
-  // contract; it can only provide a grouped body when the contract's
-  // rendering-surface pipeline lost every block. `fullVisibleExercises` is
-  // the exact hydration source the grouped branches already consume for
-  // member rows, so any synthesized block member also hydrates cleanly.
-  // ==========================================================================
-  const synthesizedRawFallbackBlocks: RawFallbackBlock[] = (() => {
-    if (!hasGroupedTruth) return []
-    if (groupedRenderContract.rawFallbackBlocks.length > 0) return []
-    // [SYNTHESIS-SOURCE-PAIR] Try display-surface exercises first (so synthesized
-    // block members resolve cleanly against the same list the renderer hydrates
-    // from). Fall back to raw `safeExercises` when the display surface has lost
-    // `blockId`/`method` via variant-prune or hydration drift. This closes the
-    // last corridor where `rawGroupedOwnership.hasGroupedTruth === true` could
-    // silently route to `flat_category` when the display-side lost grouping.
-    type _Ex = { id: string; name: string; blockId?: string; method?: string; methodLabel?: string }
-    const buildFromSource = (source: _Ex[]): RawFallbackBlock[] => {
-      const blockOrder: string[] = []
-      const blockMembers = new Map<string, _Ex[]>()
-      const blockType = new Map<string, 'superset' | 'circuit' | 'cluster' | 'density_block'>()
-      for (const ex of source) {
-        if (!ex.method) continue
-        const m = ex.method.toLowerCase()
-        let gt: 'superset' | 'circuit' | 'cluster' | 'density_block' | null = null
-        if (m === 'superset') gt = 'superset'
-        else if (m === 'circuit') gt = 'circuit'
-        else if (m === 'cluster') gt = 'cluster'
-        else if (m === 'density_block' || m === 'density') gt = 'density_block'
-        if (!gt) continue
-        // [RENDERABLE-BLOCK-ONLY-SYNTH] A grouped block MUST be backed by a
-        // real `blockId` -- that is the builder's authoritative signal that
-        // multiple exercises are grouped together for coordinated execution
-        // (superset pair, circuit group, multi-member cluster/density).
-        //
-        // Single-row cluster/density *without* a blockId are METHOD CUES on
-        // one exercise, not grouped blocks (see governor prompt section C/E).
-        // Previously we synthesized a `method-only-${ex.id}` fake block key
-        // so each single-row cluster/density painted its own block header.
-        // That conflated "renderable grouped structure" with "row-level
-        // method cue" and caused the card body to wrap a single row in a
-        // fake "Cluster Set A" header -- misleading when the session should
-        // read as flat rows with a simple method chip.
-        //
-        // New rule: ANY method without a blockId is skipped from synthesis.
-        // The row still renders (below) with its row-level method chip, and
-        // the card-level status line at the top of the body reports the
-        // session as `method_only` so the user understands why the body is
-        // flat.
-        if (!ex.blockId) continue
-        const key = ex.blockId
-        if (!blockMembers.has(key)) {
-          blockMembers.set(key, [])
-          blockOrder.push(key)
-          blockType.set(key, gt)
-        }
-        blockMembers.get(key)!.push(ex)
-      }
-      const typeIdx: Record<string, number> = { superset: 0, circuit: 0, density_block: 0, cluster: 0 }
-      const out: RawFallbackBlock[] = []
-      for (const bId of blockOrder) {
-        const method = blockType.get(bId)!
-        const members = blockMembers.get(bId)!.filter(m => (m.name || '').trim().length >= 2)
-        if (members.length === 0) continue
-        const idx = typeIdx[method] ?? 0
-        typeIdx[method] = idx + 1
-        const letter = String.fromCharCode(65 + idx)
-        const labelPrefix =
-          method === 'superset' ? 'Superset'
-            : method === 'circuit' ? 'Circuit'
-              : method === 'density_block' ? 'Density Block'
-                : 'Cluster Set'
-        out.push({
-          type: 'group',
-          groupId: bId,
-          groupType: method,
-          label: `${labelPrefix} ${letter}`,
-          members: members.map((m, i) => ({
-            id: m.id,
-            name: m.name,
-            prefix: m.methodLabel?.match(/[A-Z]\d?$/)?.[0] || `${letter}${i + 1}`,
-          })),
-        })
-      }
-      return out
-    }
-    const fromDisplay = buildFromSource(fullVisibleExercises as unknown as _Ex[])
-    if (fromDisplay.length > 0) return fromDisplay
-    // [RAW-SYNTH-BACKSTOP] The display surface couldn't produce a grouped
-    // block list (variant prune removed every grouped member, or hydration
-    // lost method/blockId on the FullRoutineExercise pass). Synthesize from
-    // the raw session exercises -- this is the same input `rawGroupedOwnership`
-    // consumed to claim grouped truth in the first place, so it cannot
-    // contradict the authoritative ownership signal.
-    const fromRaw = buildFromSource(
-      safeExercises.map(ex => ({
-        id: ex.id,
-        name: ex.name,
-        blockId: (ex as unknown as { blockId?: string }).blockId,
-        method: (ex as unknown as { method?: string }).method,
-        methodLabel: (ex as unknown as { methodLabel?: string }).methodLabel,
-      }))
-    )
-    return fromRaw
-  })()
-
   const finalVisibleBodyModel: FinalVisibleBodyModel = (() => {
-    // Grouped truth wins whenever it exists. Rich first, raw fallback second
-    // (either contract-owned OR display-synthesized), flat_category reserved
-    // for sessions with NO grouped truth at all.
-    //
-    // [SIMPLE-ORDER-NEUTRALIZED] `simple_order_grouped` is retained as a type
-    // for backwards compat but is NO LONGER a valid dispatch target: any case
-    // that would have chosen it now routes to `raw_grouped_fallback` with
-    // display-synthesized blocks (see `synthesizedRawFallbackBlocks` above).
-    // If synthesis also returns empty (truly no visible grouped rows), the
-    // renderer's `simple_order_grouped` branch still renders an honest
-    // grouped-method banner above the ordered list so the body cannot
-    // silently read as flat.
+    // Grouped truth wins whenever it exists. Rich first, raw fallback second,
+    // simple-order third. Flat category is reserved for sessions with no
+    // grouped truth at all.
     if (hasRichRenderableGroups) {
       return {
         mode: 'rich_grouped' as const,
@@ -1834,7 +791,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         clusterCount: groupedRenderContract.clusterCount,
         hasGroupedTruth: true,
         hasRichRenderableGroups: true,
-        groupedFailureStage: null,
       }
     }
     if (hasGroupedTruth && groupedRenderContract.rawFallbackBlocks.length > 0) {
@@ -1851,300 +807,24 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         clusterCount: groupedRenderContract.clusterCount,
         hasGroupedTruth: true,
         hasRichRenderableGroups: false,
-        groupedFailureStage: null,
       }
     }
-    if (hasGroupedTruth && synthesizedRawFallbackBlocks.length > 0) {
-      // [DISPLAY-SYNTHESIS-RESCUE] Route through raw_grouped_fallback using
-      // the synthesized block list. Per-type counts come from synthesis so
-      // the chip tally + body banner tell the same story as the block list
-      // the renderer will iterate.
-      let sSuper = 0, sCirc = 0, sDens = 0, sClust = 0
-      for (const b of synthesizedRawFallbackBlocks) {
-        if (b.groupType === 'superset') sSuper++
-        else if (b.groupType === 'circuit') sCirc++
-        else if (b.groupType === 'density_block') sDens++
-        else if (b.groupType === 'cluster') sClust++
-      }
-      return {
-        mode: 'raw_grouped_fallback' as const,
-        sourceUsed: groupedRenderContract.sourceUsed !== 'none'
-          ? groupedRenderContract.sourceUsed
-          : 'exerciseFallback',
-        reasonIfNotRich: null,
-        renderBlocks: [],
-        rawFallbackBlocks: synthesizedRawFallbackBlocks,
-        nonStraightGroupCount: synthesizedRawFallbackBlocks.length,
-        supersetCount: sSuper,
-        circuitCount: sCirc,
-        densityCount: sDens,
-        clusterCount: sClust,
-        hasGroupedTruth: true,
-        hasRichRenderableGroups: false,
-        groupedFailureStage: null,
-      }
-    }
-    // [DISPLAY-CORRIDOR-TERMINAL] Final dispatch arm.
-    //
-    // Prior behavior collapsed to `flat_category` whenever no block source
-    // (rich path, contract rawFallback, display synthesis) produced a
-    // renderable block list, EVEN if `hasGroupedTruth === true`. That was
-    // the last silent corridor where grouped truth existed upstream but the
-    // card body still read as a flat category layout -- the exact visible
-    // regression this pass fixes.
-    //
-    // New rule: `flat_category` is ONLY selected when `hasGroupedTruth ===
-    // false`. When grouped truth exists but no block list could be produced,
-    // the dispatcher routes to `simple_order_grouped` with:
-    //   - a strong "Grouped structure" banner + method chips (via
-    //     GroupedBodyHeadline in the renderer)
-    //   - per-type counts sourced from the RAW pre-filter styledGroups +
-    //     session-exercise method truth (so chips surface claimed grouped
-    //     structure even when post-filter usable-member counts would have
-    //     been zero)
-    //   - a populated `groupedFailureStage` code that the renderer surfaces
-    //     inline as the ONE card-local failure reason (section F of the
-    //     governor prompt) so the broken card is never silently ambiguous.
-    //
-    // Cards where grouped rendering succeeded never reach this branch, so
-    // the failure surface never fires for healthy cards.
-    // [METHOD-ONLY-PRECHECK] Before entering the `simple_order_grouped`
-    // failure-attribution branch, determine whether the grouped truth
-    // claimed by `hasGroupedTruth` is actually rooted in RENDERABLE grouped
-    // block structure -- i.e. something with multi-exercise coordination
-    // that would paint a real block frame. The criteria here mirror the
-    // scanner's Priority-1/Priority-2 rules:
-    //   - any styledGroups entry with a non-straight groupType and >= 2
-    //     usable-named members, OR
-    //   - any blockId shared by >= 2 exercises with non-straight methods.
-    // If NEITHER is true but there ARE non-straight methods on individual
-    // rows, the session's only grouped-ish signal is method cues on single
-    // rows. That must read as FLAT with row-level method chips per section
-    // C/E of the governor prompt, not as a `simple_order_grouped` banner
-    // over a list (which implies renderable grouped structure).
-    const hasRenderableGroupedBlockStructure = (() => {
-      // Priority-1: multi-member styled groups
-      for (const g of sessionStyleMetadata?.styledGroups ?? []) {
-        if (g.groupType === 'straight') continue
-        const members = Array.isArray(g.exercises) ? g.exercises : []
-        const usable = members.filter(
-          m => typeof m?.name === 'string' && m.name.trim().length >= 2
-        )
-        if (usable.length >= 2) return true
-      }
-      // Priority-2: blockId shared by >=2 non-straight-method exercises
-      const blockMethodMembers = new Map<string, number>()
-      for (const ex of safeExercises) {
-        const b = (ex as unknown as { blockId?: string }).blockId
-        const m = ((ex as unknown as { method?: string }).method || '').toLowerCase()
-        if (!b) continue
-        if (!m || m === 'straight' || m === 'straight_sets') continue
-        blockMethodMembers.set(b, (blockMethodMembers.get(b) ?? 0) + 1)
-      }
-      for (const count of blockMethodMembers.values()) {
-        if (count >= 2) return true
-      }
-      return false
-    })()
-
-    // [SET-EXECUTION-TRUTH-RESOLVER] Single row-level method family resolver
-    // used by the visibility gates + tallies below. Priority:
-    //   1. `setExecutionMethod` (authoritative row-level set-execution truth)
-    //   2. `method` (legacy; still written by the builder for grouped members)
-    // Returns a collapsed family string or null when the row is straight.
-    // Only used for row-level method-cue surfaces -- grouped-STRUCTURE
-    // detection (`hasGroupedTruth`, synthesis of grouped blocks, blockId+method
-    // membership) intentionally still reads `.method` alone because the
-    // builder writes grouped identity onto `.method`. That keeps single-row
-    // cluster from reactivating fake grouped blocks.
-    const resolveRowExecFamily = (ex: unknown): 'superset' | 'circuit' | 'cluster' | 'density' | null => {
-      const e = ex as { method?: string; setExecutionMethod?: string }
-      const se = (e?.setExecutionMethod || '').toLowerCase().trim()
-      const mm = (e?.method || '').toLowerCase().trim()
-      const pick = (raw: string): 'superset' | 'circuit' | 'cluster' | 'density' | null => {
-        if (!raw || raw === 'straight' || raw === 'straight_sets') return null
-        if (raw === 'superset') return 'superset'
-        if (raw === 'circuit' || raw === 'circuits') return 'circuit'
-        if (raw === 'cluster' || raw === 'cluster_set' || raw === 'cluster_sets') return 'cluster'
-        if (raw === 'density' || raw === 'density_block') return 'density'
-        return null
-      }
-      return pick(se) || pick(mm)
-    }
-
-    // [SET-EXECUTION-TRUTH-GATE] Detect non-straight methods living on
-    // INDIVIDUAL exercise rows (cluster / density / etc.), independent of
-    // blockId and independent of `hasGroupedTruth`.
-    //
-    // Why this is a distinct signal from `hasGroupedTruth`:
-    //   After the taxonomy lock at components/programs/lib/session-group-display.ts
-    //   (~L820), `hasAnyExerciseMethodTruth` requires a blockId for cluster/
-    //   superset/circuit -- correctly excluding single-row cluster from the
-    //   GROUPED-STRUCTURE truth signal. The side-effect: when the builder
-    //   writes `method:'cluster'` onto a single primary-effort exercise (the
-    //   common set-execution case), `hasGroupedTruth` resolves to false, the
-    //   card never entered the METHOD_ONLY_FLAT branch, `reasonIfNotRich`
-    //   stayed at the generic flatReason, and the prior prompt's visible
-    //   surfaces (top chip row + in-body "Set-execution methods" headline)
-    //   silently stayed hidden. The only surviving surface was the tiny
-    //   8px row-level chip and 10px microcopy -- the exact "basically looks
-    //   unchanged" symptom the user reported.
-    //
-    // This gate re-captures that truth WITHOUT reopening grouped ownership:
-    //   - reads straight from `safeExercises[].method`,
-    //   - requires NO blockId (set-execution is a per-row concept),
-    //   - feeds only the METHOD_ONLY_FLAT dispatch arm (which returns
-    //     `hasGroupedTruth: false` / `hasRichRenderableGroups: false` so
-    //     nothing in the grouped corridor can be reactivated).
-    const hasAnySetExecutionMethodOnRows = safeExercises.some(ex => {
-      // [SET-EXECUTION-TRUTH-GATE] Read `setExecutionMethod` FIRST so a
-      // single-row cluster (builder writes `.setExecutionMethod='cluster'`
-      // but leaves legacy `.method` empty/straight) still activates the
-      // METHOD_ONLY_FLAT dispatch and its visible surfaces.
-      return resolveRowExecFamily(ex) !== null
-    })
-
-    if ((hasGroupedTruth || hasAnySetExecutionMethodOnRows) && !hasRenderableGroupedBlockStructure) {
-      // [METHOD-ONLY-FLAT] Session carries non-straight methods on individual
-      // rows but NO renderable grouped block structure (no multi-member
-      // styled group, no multi-member blockId). Route to flat_category so
-      // the body paints a clean flat row list with row-level method chips.
-      //
-      // [SET-EXECUTION-TRUTH-VISIBILITY] Count per-row set-execution methods
-      // directly from `safeExercises` and carry them on the model. This is
-      // the authoritative tally of set-execution methods applied to
-      // individual rows -- it is NOT a grouped-block count. Downstream:
-      //   - `visibleMethodTally` reads these counts so the top-of-body chip
-      //     row re-surfaces (prior behavior hid it because all counts were
-      //     zeroed here, leaving the taxonomy refactor's set-execution
-      //     stamping invisible at session level).
-      //   - The `flat_category` renderer reads these counts + the
-      //     `METHOD_ONLY_FLAT` reason to paint an honest "Set-execution
-      //     methods applied to individual rows" headline at the top of the
-      //     body. That headline is NOT a grouped-structure banner; its copy
-      //     explicitly says the methods live on single rows.
-      // `hasGroupedTruth` stays false so nothing in the grouped render
-      // corridor can be reactivated by these counts.
-      let meoSuper = 0, meoCirc = 0, meoDens = 0, meoClust = 0
-      for (const ex of safeExercises) {
-        // [SET-EXECUTION-TRUTH-TALLY] Count per-row set-execution families
-        // via the resolver so single-row cluster / density are counted even
-        // when only `setExecutionMethod` carries the truth. These feed the
-        // top-of-body chip tally + "Set-execution methods applied to
-        // individual rows" headline.
-        const fam = resolveRowExecFamily(ex)
-        if (!fam) continue
-        if (fam === 'cluster') meoClust++
-        else if (fam === 'density') meoDens++
-        else if (fam === 'superset') meoSuper++
-        else if (fam === 'circuit') meoCirc++
-      }
-      return {
-        mode: 'flat_category' as const,
-        sourceUsed: groupedRenderContract.sourceUsed,
-        reasonIfNotRich: 'METHOD_ONLY_FLAT' as const,
-        renderBlocks: [],
-        rawFallbackBlocks: [],
-        // nonStraightGroupCount is GROUPED-BLOCK semantics; stays 0 because
-        // no grouped blocks exist. Per-type counts below are SET-EXECUTION
-        // semantics (per-row), which is a distinct concept.
-        nonStraightGroupCount: 0,
-        supersetCount: meoSuper,
-        circuitCount: meoCirc,
-        densityCount: meoDens,
-        clusterCount: meoClust,
-        hasGroupedTruth: false,
-        hasRichRenderableGroups: false,
-        groupedFailureStage: null,
-      }
-    }
-
     if (hasGroupedTruth) {
-      // [RAW-PRE-FILTER-METHOD-COUNTS] Chip counts for simple_order_grouped
-      // come from the RAW upstream signal (styleMetadata.styledGroups types
-      // + session.exercises method truth) -- not from post-filter
-      // rawGroupedOwnership, which may have zeroed counts when member names
-      // were unusable. This is the same signal the FUNNEL-AUDIT uses to
-      // claim grouped truth exists at all, so banner chips cannot
-      // contradict the grouped ownership verdict.
-      let rawSuper = 0, rawCirc = 0, rawDens = 0, rawClust = 0
-      for (const g of sessionStyleMetadata?.styledGroups ?? []) {
-        if (g.groupType === 'superset') rawSuper++
-        else if (g.groupType === 'circuit') rawCirc++
-        else if (g.groupType === 'density_block') rawDens++
-        else if (g.groupType === 'cluster') rawClust++
-      }
-      const seenBlockIds = new Set<string>()
-      for (const ex of safeExercises) {
-        const fam = resolveRowExecFamily(ex)
-        const b = (ex as unknown as { blockId?: string }).blockId
-        if (b && seenBlockIds.has(b)) continue
-        if (b) seenBlockIds.add(b)
-        // Only tally method-only cluster/density execution (no blockId);
-        // superset/circuit require blockId and were already counted from
-        // the styledGroups signal above. Reads authoritative row-level
-        // set-execution first so single-row cluster is never silently lost.
-        if (!b && fam === 'cluster') rawClust++
-        else if (!b && fam === 'density') rawDens++
-      }
-
-      // [FAILURE-STAGE-ATTRIBUTION] Pick the ONE final losing stage. Each
-      // stage answers a different "why did this card reach simple_order
-      // despite grouped truth?" question and is chosen from the governor-
-      // prompt enumeration (superset/circuit/density_block/cluster taxonomy
-      // only; no top_set/drop_set contamination).
-      let failureStage:
-        | 'bridge_lost_group_fields'
-        | 'grouped_contract_empty'
-        | 'final_mode_flattened'
-        | 'hydration_render_loss'
-      const displayHasAnyCarry = fullVisibleExercises.some(e => {
-        const anyE = e as unknown as { blockId?: string; method?: string }
-        return !!anyE.blockId || (!!anyE.method && anyE.method !== 'straight' && anyE.method !== 'straight_sets')
-      })
-      if (rawGroupedOwnership.hasGroupedTruth && !displayHasAnyCarry) {
-        // Raw says grouped but the display surface dropped every
-        // blockId/method -- the bridge weakened the corridor.
-        failureStage = 'bridge_lost_group_fields'
-      } else if (
-        rawGroupedOwnership.hasGroupedTruth &&
-        rawGroupedOwnership.nonStraightGroupCount === 0
-      ) {
-        // Raw truth exists but the adapter could not form ANY non-straight
-        // group (every member's name was unusable or below the method minimum).
-        failureStage = 'hydration_render_loss'
-      } else if (
-        !rawGroupedOwnership.hasRichRenderableGroups &&
-        !displayGroupedRendering.hasRichRenderableGroups
-      ) {
-        // Both independent model builds came back without rich groups.
-        failureStage = 'grouped_contract_empty'
-      } else {
-        // Rich contract existed but was lost between contract merge and
-        // final dispatch.
-        failureStage = 'final_mode_flattened'
-      }
-
       return {
         mode: 'simple_order_grouped' as const,
         sourceUsed: groupedRenderContract.sourceUsed,
         reasonIfNotRich: 'RAW_FALLBACK_EMPTY' as const,
         renderBlocks: [],
         rawFallbackBlocks: [],
-        nonStraightGroupCount:
-          rawSuper + rawCirc + rawDens + rawClust || rawGroupedOwnership.nonStraightGroupCount,
-        supersetCount: rawSuper || rawGroupedOwnership.supersetCount,
-        circuitCount: rawCirc || rawGroupedOwnership.circuitCount,
-        densityCount: rawDens || rawGroupedOwnership.densityCount,
-        clusterCount: rawClust || rawGroupedOwnership.clusterCount,
+        nonStraightGroupCount: groupedRenderContract.nonStraightGroupCount,
+        supersetCount: groupedRenderContract.supersetCount,
+        circuitCount: groupedRenderContract.circuitCount,
+        densityCount: groupedRenderContract.densityCount,
+        clusterCount: groupedRenderContract.clusterCount,
         hasGroupedTruth: true,
         hasRichRenderableGroups: false,
-        groupedFailureStage: failureStage,
       }
     }
-
-    // Honest flat: NO grouped truth at all reached the card. The flat
-    // category layout is the correct outcome for these sessions.
     return {
       mode: 'flat_category' as const,
       sourceUsed: groupedRenderContract.sourceUsed,
@@ -2158,469 +838,9 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       clusterCount: 0,
       hasGroupedTruth: false,
       hasRichRenderableGroups: false,
-      groupedFailureStage: null,
     }
   })()
-
-  // ==========================================================================
-  // [PHASE 4U — CANONICAL-METHOD-BODY-RENDER-PROOF]
-  //
-  // This is the Phase G proof that the visible body's grouped blocks are
-  // backed by canonical `methodStructures`, not silently rendered off a
-  // parallel/stale source. The pure resolver lives in program-display-contract
-  // and never touches state, hooks, or I/O — it just returns a verdict object
-  // we can read in dev probes and surface in the blueprint evidence.
-  //
-  // Inputs we hand it:
-  //   1. `cardSurface.methodStructures` — canonical Phase 4P truth carried on
-  //      the surface (Phase 4S wired this end-to-end).
-  //   2. `safeExercises` (id+name only) — the row list the body actually
-  //      iterates. This is the same array the synthesized fallback path and
-  //      the rich grouped contract consume, so a successful canonical match
-  //      against it implies the body's blocks DID hit canonical-backed rows.
-  //   3. The body's already-built render block list (member ids extracted
-  //      from `finalVisibleBodyModel.renderBlocks` for rich_grouped, or
-  //      `rawFallbackBlocks` for raw_grouped_fallback). The resolver uses
-  //      this to compute `bodyBlocksMatchCanonical` — the strongest "the
-  //      visible body IS canonical" cross-check.
-  //
-  // Why this is an inline pass rather than a buildSessionCardSurface field:
-  // the rendered block list is only known here, after the dispatcher picked
-  // a mode. The resolver is pure so calling it during render is safe.
-  //
-  // What downstream consumers do with the verdict:
-  //   - the dev probe surfaces `canon=...` so the body's actual source is
-  //     observable without a new banner;
-  //   - the blueprint G.G5 evidence cites status === 'complete' as proof
-  //     that canonical truth reaches real rows;
-  //   - the body itself is unchanged this phase — on healthy generations
-  //     methodStructures, styledGroups, and exercise[].method are sibling
-  //     outputs of the same Phase 4P corridor that wrote them, so the
-  //     resolver's `bodyBlocksMatchCanonical` should be true and the verdict
-  //     should be 'canonical_method_structures'/'complete'. When it is not,
-  //     we have an exact attribution code (NO_CANONICAL_METHOD_STRUCTURES /
-  //     NO_GROUPED_FAMILY_APPLIED / ALL_CANONICAL_GROUPS_FAILED_TO_BIND) the
-  //     blueprint can call out instead of a silent fallback.
-  // ==========================================================================
-  const canonicalBodyRenderResolution: CanonicalMethodBodyRenderResolution = (() => {
-    // Extract member ids from whichever block list the body will actually
-    // render. `simple_order_grouped` and `flat_category` paint no grouped
-    // blocks, so we pass an empty list and let the resolver compute its
-    // canonical-only verdict (no body cross-check possible).
-    const renderedBlockMembers: { memberIds: string[]; groupType: string }[] = []
-    if (finalVisibleBodyModel.mode === 'rich_grouped') {
-      for (const rb of finalVisibleBodyModel.renderBlocks) {
-        if (rb.type === 'group') {
-          renderedBlockMembers.push({
-            memberIds: (rb.group.exercises || [])
-              .map(e => e.id)
-              .filter((id): id is string => typeof id === 'string' && id.length > 0),
-            groupType: rb.group.groupType,
-          })
-        }
-        // type==='exercise' rows are not grouped blocks; skip.
-      }
-    } else if (finalVisibleBodyModel.mode === 'raw_grouped_fallback') {
-      for (const rfb of finalVisibleBodyModel.rawFallbackBlocks) {
-        renderedBlockMembers.push({
-          memberIds: (rfb.members || [])
-            .map(m => m.id)
-            .filter((id): id is string => typeof id === 'string' && id.length > 0),
-          groupType: rfb.groupType,
-        })
-      }
-    }
-    // `safeExercises` is the row list the body iterates — id+name slice is
-    // all the resolver needs. Cast to the resolver's minimal row shape.
-    const rowsForResolver = (safeExercises as Array<{ id?: unknown; name?: unknown }>).map(
-      r => ({
-        id: typeof r.id === 'string' ? r.id : '',
-        name: typeof r.name === 'string' ? r.name : '',
-      }),
-    )
-    return resolveCanonicalMethodBodyRender(
-      cardSurface?.methodStructures ?? null,
-      rowsForResolver,
-      renderedBlockMembers,
-    )
-  })()
-
-  // ==========================================================================
-  // [FUNNEL-AUDIT-S5] CHECKPOINT E (card input) + CHECKPOINT F (final body mode)
-  //
-  // Completes the end-to-end grouped-truth funnel audit that already covers:
-  //   - STAGE 1/2 : builder output + current program object (logged from
-  //                 app/(app)/program/page.tsx FUNNEL-AUDIT-S1S2)
-  //   - STAGE 3   : normalizeProgramForDisplay output (logged from same site)
-  //   - STAGE 3/4 : normalized -> scaled session (logged from
-  //                 AdaptiveProgramDisplay FUNNEL-AUDIT-S3S4)
-  //
-  // This adds STAGE 5: scaled session -> actual card body mode. If S3/S4 say
-  // `hasGroupedTruth: true` but S5 logs `card_input_has_nonstraight_groups:
-  // false` OR `final_body_mode: 'flat_category'`, the weakening is inside THIS
-  // card (normalizeSessionForDisplay, variantPrune, rawGroupedOwnership/
-  // displayGroupedRendering merge, or finalVisibleBodyModel dispatch). If S5
-  // says `final_body_mode: 'rich_grouped' | 'raw_grouped_fallback'`, the body
-  // WILL paint visible grouped blocks and the user's "Program page still looks
-  // flat" complaint narrows to one of:
-  //   (a) a stale screenshot / expanded vs collapsed view confusion
-  //   (b) a CSS issue in the rendered grouped JSX (unlikely)
-  //   (c) the user genuinely has no grouped methods in their program (builder
-  //       never applied them - honest flat state)
-  //
-  // One compact log per card mount per session day. Keyed on session identity
-  // so repeated renders (state updates) do not spam; this fires exactly once
-  // per day number when the card first paints.
-  // ==========================================================================
-  // [FINAL-VISIBLE-OWNERSHIP-LOCK] FUNNEL-AUDIT-S5 verdict computation +
-  // once-per-mount log removed. The dead computation produced no athlete-
-  // facing surface; grouped-vs-flat dispatch is already structurally enforced
-  // by `groupedRenderContract` and `finalVisibleBodyModel` below.
-
-  // ==========================================================================
-  // [COLLAPSED-HEADER-METHOD-TRUTH] The Program card is collapsed by default.
-  // Prior behavior: every grouped-method signal (colored "Cluster Set" /
-  // "Density Block" pill header AND the method-summary chip row) lived inside
-  // the `{isExpanded && (...)}` gate. So on the exact surface the user is
-  // actually looking at -- the collapsed card list on the Program screen --
-  // nothing visibly communicated grouped structure, even when the session
-  // genuinely rendered a Cluster Set or Density Block in its body once opened.
-  //
-  // `visibleMethodTally` is a PURE CONSUMER of `finalVisibleBodyModel`. It
-  // does NOT introduce parallel grouped truth, it does NOT re-decide
-  // grouped-vs-flat, and it cannot overclaim a method the body will not
-  // render -- the tally is derived from the EXACT block list the renderer
-  // consumes per mode:
-  //
-  //   mode === 'rich_grouped'           -> carry the model's per-type counts
-  //                                        (same counts the rich renderer will
-  //                                        paint as "Cluster Set A", etc.)
-  //   mode === 'raw_grouped_fallback'   -> tally from rawFallbackBlocks so the
-  //                                        collapsed chip matches the grouped
-  //                                        headers the raw-fallback branch
-  //                                        paints in the body.
-  //   mode === 'simple_order_grouped'   -> zero (the body paints no grouped
-  //                                        headers, so the chip must not
-  //                                        claim any).
-  //   mode === 'flat_category'          -> zero (no grouped truth exists).
-  //
-  // This is the single authoritative tally consumed by BOTH the new collapsed
-  // header chip row and the existing expanded chip row, which eliminates the
-  // prior gap where the expanded chip row gated on `hasRichRenderableGroups`
-  // alone (under-claiming for raw_grouped_fallback sessions whose body did
-  // paint grouped headers).
-  // ==========================================================================
-  // ==========================================================================
-  // [SELECTED-VARIANT-EXECUTABLE-METHOD-TALLY] (Step 3 carryover)
-  //
-  // Authoritative chip/strip tally for the SELECTED VARIANT body.
-  //
-  // The original `finalVisibleBodyModel.{supersetCount,...}` counts are stamped
-  // upstream from `groupedRenderContract` / `rawFallbackBlocks`. Those sources
-  // do not know which exercises the selected variant (Full / 45 Min / 30 Min)
-  // actually preserved — so when the 45/30 variant prunes one half of a
-  // superset pair, the count remains "1 Superset" even though the visible body
-  // no longer paints any executable superset frame. That produced the screenshot
-  // bug: a "Grouped structure: 1 Superset" strip + "1 Superset" chip rendering
-  // above a body that has zero executable superset members.
-  //
-  // This derivation is the ONE place we reconcile group claims with the
-  // selected variant's visible row list. A group counts ONLY when the number
-  // of its members that ALSO appear in `fullVisibleExercises` (the variant-
-  // narrowed visible list) meets `minMembersFor(groupType)`.
-  //
-  // Method minimums (from session-group-display.minMembersFor):
-  //   superset >= 2, circuit >= 2, density_block >= 2, cluster >= 2
-  // (Single-row cluster/density route through METHOD_ONLY_FLAT and never
-  // reach this derivation, so we apply the same >=2 rule uniformly here.)
-  // ==========================================================================
-  const selectedVariantExecutableMethodTally: {
-    superset: number
-    circuit: number
-    density: number
-    cluster: number
-    hasAnyExecutableGroup: boolean
-  } = (() => {
-    const empty = { superset: 0, circuit: 0, density: 0, cluster: 0, hasAnyExecutableGroup: false }
-    if (
-      finalVisibleBodyModel.mode !== 'rich_grouped' &&
-      finalVisibleBodyModel.mode !== 'raw_grouped_fallback'
-    ) {
-      return empty
-    }
-    const visibleIds = new Set<string>()
-    const visibleNames = new Set<string>()
-    for (const ex of fullVisibleExercises) {
-      const id = (ex as unknown as { id?: string }).id
-      const nm = (ex as unknown as { name?: string }).name
-      if (typeof id === 'string' && id.length > 0) visibleIds.add(id)
-      if (typeof nm === 'string') {
-        const n = nm.trim().toLowerCase()
-        if (n.length >= 2) visibleNames.add(n)
-      }
-    }
-    const isMemberExecutable = (m: { id?: string; name?: string }): boolean => {
-      if (m.id && visibleIds.has(m.id)) return true
-      const n = (m.name || '').trim().toLowerCase()
-      if (n.length >= 2 && visibleNames.has(n)) return true
-      return false
-    }
-    let superset = 0, circuit = 0, density = 0, cluster = 0
-    if (finalVisibleBodyModel.mode === 'rich_grouped') {
-      for (const rb of finalVisibleBodyModel.renderBlocks) {
-        if (rb.type !== 'group') continue
-        const gt = rb.group.groupType
-        if (gt === 'straight') continue
-        const min = minMembersFor(gt)
-        const executableCount = (rb.group.exercises || []).filter(isMemberExecutable).length
-        if (executableCount < min) continue
-        if (gt === 'superset') superset++
-        else if (gt === 'circuit') circuit++
-        else if (gt === 'density_block') density++
-        else if (gt === 'cluster') cluster++
-      }
-    } else {
-      for (const rfb of finalVisibleBodyModel.rawFallbackBlocks) {
-        const gt = rfb.groupType
-        if (gt === 'straight') continue
-        const min = minMembersFor(gt)
-        const executableCount = (rfb.members || []).filter(isMemberExecutable).length
-        if (executableCount < min) continue
-        if (gt === 'superset') superset++
-        else if (gt === 'circuit') circuit++
-        else if (gt === 'density_block') density++
-        else if (gt === 'cluster') cluster++
-      }
-    }
-    return {
-      superset,
-      circuit,
-      density,
-      cluster,
-      hasAnyExecutableGroup: superset + circuit + density + cluster > 0,
-    }
-  })()
-
-  const visibleMethodTally: { superset: number; circuit: number; density: number; cluster: number } = (() => {
-    // [SELECTED-VARIANT-EXECUTABLE-METHOD-TALLY] For grouped modes, route through
-    // the executable tally so chip counts cannot exceed what the selected variant
-    // body actually paints. Prior behavior carried `finalVisibleBodyModel.*Count`
-    // straight through, which over-claimed for variant-pruned cards (e.g. 30 Min
-    // preserved single anchor with no superset partner left).
-    if (finalVisibleBodyModel.mode === 'rich_grouped') {
-      return {
-        superset: selectedVariantExecutableMethodTally.superset,
-        circuit: selectedVariantExecutableMethodTally.circuit,
-        density: selectedVariantExecutableMethodTally.density,
-        cluster: selectedVariantExecutableMethodTally.cluster,
-      }
-    }
-    if (finalVisibleBodyModel.mode === 'raw_grouped_fallback') {
-      // Trust the executable tally — it filters group claims down to those
-      // whose members actually survive into the selected variant body. If it
-      // returns 0, the chip strip and body must agree the selected variant
-      // has no grouped structure even though raw blocks existed upstream.
-      return {
-        superset: selectedVariantExecutableMethodTally.superset,
-        circuit: selectedVariantExecutableMethodTally.circuit,
-        density: selectedVariantExecutableMethodTally.density,
-        cluster: selectedVariantExecutableMethodTally.cluster,
-      }
-    }
-    // [SIMPLE-ORDER-BANNER-TALLY] Previously zero. But `simple_order_grouped`
-    // fires precisely when grouped truth exists but no renderable blocks
-    // could be built -- the body now renders a grouped-method banner above
-    // the ordered list (see MainExercisesRenderer), so the chip row ABOVE
-    // the body must also surface the same method identity or the collapsed
-    // card + expanded header would contradict the body's own banner.
-    // Counts here come from the contract's raw ownership counts, which
-    // remain meaningful even when rendering-side synthesis failed.
-    if (finalVisibleBodyModel.mode === 'simple_order_grouped') {
-      return {
-        superset: finalVisibleBodyModel.supersetCount,
-        circuit: finalVisibleBodyModel.circuitCount,
-        density: finalVisibleBodyModel.densityCount,
-        cluster: finalVisibleBodyModel.clusterCount,
-      }
-    }
-    // [SET-EXECUTION-TRUTH-VISIBILITY] flat_category + METHOD_ONLY_FLAT
-    // carries per-row set-execution tallies on the model (see the
-    // METHOD_ONLY_FLAT branch of finalVisibleBodyModel). Surface them here
-    // so the top-of-body chip row re-appears for cluster/density/etc. rows
-    // that live on single exercises. The chip labels remain generic
-    // ("Cluster Set", "Density Block") because those are the method names;
-    // the NEW headline inside the body makes it explicit they apply to
-    // individual rows rather than grouped blocks.
-    if (
-      finalVisibleBodyModel.mode === 'flat_category' &&
-      finalVisibleBodyModel.reasonIfNotRich === 'METHOD_ONLY_FLAT'
-    ) {
-      return {
-        superset: finalVisibleBodyModel.supersetCount,
-        circuit: finalVisibleBodyModel.circuitCount,
-        density: finalVisibleBodyModel.densityCount,
-        cluster: finalVisibleBodyModel.clusterCount,
-      }
-    }
-    return { superset: 0, circuit: 0, density: 0, cluster: 0 }
-  })()
-
-  // ==========================================================================
-  // [PHASE 4T — METHOD-STRUCTURES-DOMINANCE] Canonical methodStructures wins
-  // over the legacy styledGroups-derived `legacyVisibleMethodTally` whenever
-  // the canonical surface has anything to say. This is the visible-side half
-  // of Phase G: legacy and canonical agree on healthy generations, but on
-  // BUG_NORMALIZER_DROPPED_TRUTH / BUG_STALE_SOURCE_WON paths only canonical
-  // is reliable, and we must not paint chips that contradict the Phase 4S
-  // classified line directly below.
-  //
-  // Resolution rules (single point):
-  //   1. Canonical applied chips exist -> canonical is the dominant tally.
-  //   2. Canonical exists but says nothing applied -> suppress all four
-  //      chips (canonicalSaysNoneApplied=true). The classified line owns
-  //      the doctrine narrative; the chip row must not contradict it.
-  //   3. Canonical absent (older saved programs / pre Phase 4P) -> the
-  //      legacy styledGroups-derived tally is the fallback so existing
-  //      programs keep rendering chips exactly as before.
-  //
-  // `legacyVisibleMethodTally` is preserved as the second-priority source
-  // (the body's `finalVisibleBodyModel` still uses styledGroups for the
-  // grouped-block render path, unchanged — fallback only for chip dominance
-  // when canonical is absent).
-  // ==========================================================================
-  const legacyVisibleMethodTally = visibleMethodTally
-  const canonicalMethodTally = deriveCanonicalMethodTallyFromSurface(cardSurface)
-  const preGateDominantMethodTally: { superset: number; circuit: number; density: number; cluster: number } =
-    canonicalMethodTally.hasCanonicalApplied
-      ? {
-          superset: canonicalMethodTally.superset,
-          circuit: canonicalMethodTally.circuit,
-          density: canonicalMethodTally.density,
-          cluster: canonicalMethodTally.cluster,
-        }
-      : canonicalMethodTally.canonicalSaysNoneApplied
-        ? { superset: 0, circuit: 0, density: 0, cluster: 0 }
-        : legacyVisibleMethodTally
-
-  // ==========================================================================
-  // [PHASE AA1R-S2] FINAL EXECUTABLE METHOD TRUTH GATE FOR THE CHIP ROW
-  //
-  // The chip row above the body (collapsed header + expanded header) is the
-  // ONE remaining surface that could overclaim a grouped method even after
-  // the AA1R reconciler ran. It derived from `cardSurface.methodStructures`
-  // (canonical) or the legacy `finalVisibleBodyModel` tally — both of which
-  // can still report `simple_order_grouped` superset/circuit/density counts
-  // when the visible body is rendering a flat ordered list.
-  //
-  // The reconciler already wrote the final, integrity-verified
-  // `methodMaterializationSummary` onto `session.styleMetadata`. This gate is
-  // a PURE consumer of that summary:
-  //
-  //   integrity FAIL  -> zero superset/circuit/density chips (cluster row
-  //                       counts pass through; cluster is row-level and does
-  //                       not require a grouped block).
-  //   groupedExerciseRowCount < 2  -> zero grouped chips (a grouped claim
-  //                       requires at least two exercise rows bound to a
-  //                       renderable block by blockId).
-  //   summary disagrees per-method -> drop the disagreeing claim only. We do
-  //                       NOT add chips the summary proves; the chip's count
-  //                       still comes from the upstream tally so existing
-  //                       valid grouped sessions render exactly as before.
-  //
-  // simple_order_grouped also collapses to 0 grouped chips here because the
-  // body in that mode renders no real grouped blocks — the chip row would
-  // contradict what the body shows.
-  // ==========================================================================
-  const reconciledSummary =
-    ((session as unknown as {
-      styleMetadata?: {
-        methodMaterializationSummary?: {
-          summaryIntegrityVerdict?: string
-          groupedExerciseRowCount?: number
-          groupedMethodCounts?: { superset?: number; circuit?: number; density_block?: number }
-        } | null
-      } | null
-    }).styleMetadata?.methodMaterializationSummary) ?? null
-  const reconciledIntegrityVerdict =
-    reconciledSummary?.summaryIntegrityVerdict ?? 'PASS_FINAL_STRUCTURE_CONFIRMED'
-  const reconciledGroupedRows = reconciledSummary?.groupedExerciseRowCount ?? null
-  const reconciledGrouped = reconciledSummary?.groupedMethodCounts ?? null
-  // [STEP 3B OF 19 — SHORT-VARIANT-CHIP-GATE] When the selected-variant
-  // grouped render gate (inside the groupedRenderContract IIFE above) has
-  // suppressed grouped truth for a 45 / 30 variant, the collapsed-header
-  // chips would still emit grouped tokens if `canonicalMethodTally` carried
-  // session-level methodStructures from the full session (canonical surface
-  // is not variant-narrowed). Force the dominant tally flat in that case so
-  // the chip row, the strip, and the body all agree the selected short
-  // variant has no executable grouped structure.
-  const shortVariantSuppressedGroupedTruth =
-    isShortVariant && groupedRenderContract.hasGroupedTruth === false
-  const integrityForcesFlat =
-    reconciledIntegrityVerdict === 'FAIL_METHOD_CLAIM_WITH_ZERO_CHANGED_EXERCISES' ||
-    (reconciledGroupedRows !== null && reconciledGroupedRows < 2) ||
-    finalVisibleBodyModel.mode === 'simple_order_grouped' ||
-    shortVariantSuppressedGroupedTruth
-  const dominantMethodTally: { superset: number; circuit: number; density: number; cluster: number } = (() => {
-    if (integrityForcesFlat) {
-      // Cluster is row-level execution; preserve only that count. Grouped
-      // method claims are dropped because the final executable structure
-      // could not back them.
-      return { superset: 0, circuit: 0, density: 0, cluster: preGateDominantMethodTally.cluster }
-    }
-    // Per-method gate: drop a single grouped claim if the reconciled summary
-    // says that specific method's count is 0. This handles partial-failure
-    // cases (e.g. circuit survived but a stale superset claim did not).
-    if (reconciledGrouped) {
-      return {
-        superset: (reconciledGrouped.superset ?? 0) > 0 ? preGateDominantMethodTally.superset : 0,
-        circuit: (reconciledGrouped.circuit ?? 0) > 0 ? preGateDominantMethodTally.circuit : 0,
-        density: (reconciledGrouped.density_block ?? 0) > 0 ? preGateDominantMethodTally.density : 0,
-        cluster: preGateDominantMethodTally.cluster,
-      }
-    }
-    // Legacy program (no reconciled summary present) — fall back to the
-    // pre-gate tally so existing saved programs keep rendering as before.
-    return preGateDominantMethodTally
-  })()
-  const hasAnyVisibleMethod =
-    dominantMethodTally.superset > 0 ||
-    dominantMethodTally.circuit > 0 ||
-    dominantMethodTally.density > 0 ||
-    dominantMethodTally.cluster > 0
-
-  // ==========================================================================
-  // [METHOD-ONLY-VISIBILITY-CONTRACT] Card-level label truth.
-  //
-  // Chip labels must tell the user whether the body will render a grouped
-  // block or a method-only row cue. Prior behavior used "Cluster Set" /
-  // "Density Block" on BOTH paths -- the collapsed chip said "1 Cluster Set"
-  // even when the body had no Cluster Set block to paint (METHOD_ONLY_FLAT),
-  // so users expected a grouped block, expanded the card, found none, and
-  // concluded cluster "disappeared." The status line and in-body headline
-  // already use honest method-only language ("Method cues present: Cluster",
-  // "1 Cluster row"); only the two chip sites were out of contract.
-  //
-  // This is a pure label/vocabulary fix. No counter changes, no gate changes,
-  // no dispatch changes. Grouped paths (rich_grouped / raw_grouped_fallback /
-  // simple_order_grouped) keep the structural noun ("Cluster Set",
-  // "Density Block"). Method-only path (flat_category + METHOD_ONLY_FLAT)
-  // uses the row noun ("Cluster row", "Density row"), matching the
-  // SetExecutionBodyHeadline inside the body exactly. Superset/Circuit stay
-  // unchanged because they require blockId by doctrine and therefore never
-  // appear in the method-only path.
-  // ==========================================================================
-  const methodOnlyFlatActive =
-    finalVisibleBodyModel.mode === 'flat_category' &&
-    finalVisibleBodyModel.reasonIfNotRich === 'METHOD_ONLY_FLAT'
-  const clusterChipLabel = (n: number): string =>
-    methodOnlyFlatActive
-      ? `${n} Cluster ${n > 1 ? 'rows' : 'row'}`
-      : `${n} Cluster Set${n > 1 ? 's' : ''}`
-  const densityChipLabel = (n: number): string =>
-    methodOnlyFlatActive
-      ? `${n} Density ${n > 1 ? 'rows' : 'row'}`
-      : `${n} Density Block${n > 1 ? 's' : ''}`
-
+  
   // ==========================================================================
   // [TASK 5] VARIANT TRUTH AUDIT
   // Log whether 45 and 30 variants are actually different or collapsing together
@@ -2696,221 +916,10 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 </Badge>
               )}
             </div>
-            {/* ====================================================================
-                [DOMINANT-CARD-OWNERSHIP-LOCK]
-                The dominant visible identity slot now reads from the SAME
-                authoritative SessionCardSurface that the Program-page wrapper
-                consumes. Hierarchy:
-                  1. weeklyRoleLabel    -> primary red sm bold identity line
-                                           ("Heavier strength day", "Skill quality
-                                            day", etc.) — the per-day role from
-                                           the strengthened weekly contract.
-                  2. focusLabel         -> demoted to secondary smaller line as
-                                           legitimate skill/movement context
-                                           ("Pull skill — bar muscle-up").
-                When weeklyRoleLabel is absent (legacy / pre-contract sessions),
-                focusLabel keeps the dominant slot exactly as before — fully
-                backward compatible.
-                ==================================================================== */}
-            {cardSurface?.weeklyRoleLabel ? (
-              <>
-                <p className="text-sm text-[#E63946] font-semibold">
-                  {cardSurface.weeklyRoleLabel}
-                </p>
-                {/* Secondary skill/movement context (demoted, not removed) */}
-                {((session as any).resolvedSessionIdentity || session.focusLabel) && (
-                  <p className="text-xs text-[#9A9A9A] mt-0.5">
-                    {(session as any).resolvedSessionIdentity || session.focusLabel}
-                  </p>
-                )}
-              </>
-            ) : (
-              /* [PHASE 15F] Legacy path: resolved identity if available, else focusLabel */
-              <p className="text-sm text-[#E63946]">
-                {(session as any).resolvedSessionIdentity || session.focusLabel}
-              </p>
-            )}
-            {/* [DOMINANT-CARD-OWNERSHIP-LOCK] Supporting character line:
-                intensity * progression * breadth from authoritative role truth.
-                Plain text below the dominant identity — no chip-spam. Absent
-                when role truth is absent (legacy sessions unchanged). */}
-            {cardSurface?.weeklyRoleLabel && (() => {
-              const intensityLabels: Record<string, string> = {
-                high: 'High intensity',
-                moderate_high: 'Moderate-high intensity',
-                moderate: 'Moderate intensity',
-                moderate_low: 'Moderate-low intensity',
-                low: 'Low intensity',
-              }
-              const progressionLabels: Record<string, string> = {
-                direct_load: 'Direct load',
-                banded_support: 'Band-supported',
-                conservative_skill: 'Conservative skill',
-                mixed_breadth: 'Mixed breadth',
-                volume_direct: 'Volume-direct',
-                recovery_quality: 'Recovery quality',
-              }
-              const intensityLabel = cardSurface.weeklyIntensityClass
-                ? intensityLabels[cardSurface.weeklyIntensityClass] ?? null
-                : null
-              const progressionLabel = cardSurface.weeklyProgressionCharacter
-                ? progressionLabels[cardSurface.weeklyProgressionCharacter] ?? null
-                : null
-              const breadthLabel = cardSurface.weeklyBreadthLabel || null
-              const parts = [intensityLabel, progressionLabel, breadthLabel].filter(Boolean)
-              if (parts.length === 0) return null
-              return (
-                <p className="text-[11px] text-[#A8A8A8] mt-1 leading-snug">
-                  {parts.join(' \u00B7 ')}
-                </p>
-              )
-            })()}
-            {/* ============================================================
-                [PHASE-K] WEEKLY STRESS DISTRIBUTION PROOF
-                ----------------------------------------------------------------
-                Compact coach-facing chip + one-line explanation derived from
-                the canonical weekly stress plan (computed once in the builder
-                by `buildWeeklyStressDistributionPlan` and stamped onto
-                `session.stressDistributionProof`). This is the visible proof
-                that the week was reasoned about as a whole - not just six
-                isolated session labels.
-                Render rules:
-                  - Only renders when `session.stressDistributionProof` is
-                    present (legacy programs without Phase K classification
-                    show nothing - we never invent labels).
-                  - Label is the coach chip ("High strength day", "Moderate
-                    volume day", "Tendon-protective skill day", etc.).
-                  - Explanation is the post-governor one-liner
-                    ("Hard pull stress; next day softened", etc.) - omitted
-                    when the contract had nothing notable to say.
-                  - Sized one notch above the intensity meta line so the
-                    coach chip reads as the authoritative summary while
-                    intensity/progression/breadth above remain context.
-                ============================================================ */}
-            {session.stressDistributionProof?.label && (
-              <div className="mt-1.5 flex flex-col gap-0.5">
-                <span className="inline-flex items-center self-start gap-1 rounded-full border border-[#2B313A] bg-[#161A21] px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-wide text-[#E6E9EF]">
-                  {session.stressDistributionProof.label}
-                </span>
-                {session.stressDistributionProof.explanation && (
-                  <p className="text-[11px] text-[#9CA3AF] leading-snug">
-                    {session.stressDistributionProof.explanation}
-                  </p>
-                )}
-              </div>
-            )}
-            {/* ============================================================
-                [PHASE Y3 OF 3] WHY THIS DAY EXISTS
-                ----------------------------------------------------------------
-                Reads the Y2 calibrator's per-session `weeklyDayPurpose` stamp
-                (added in `applyTrainingDifferentiationCalibration`). Renders a
-                compact role label + intended-RPE band + one-sentence reason so
-                each day card answers "why this day exists" without forcing the
-                user to open the trust accordion. Falls back to nothing on
-                legacy programs without Y2.
-                ============================================================ */}
-            {(() => {
-              const dp = (session as unknown as {
-                weeklyDayPurpose?: {
-                  roleLabel?: string
-                  intendedRPEBand?: string
-                  intendedStressLevel?: 'low' | 'moderate' | 'high'
-                  reason?: string
-                }
-              }).weeklyDayPurpose
-              if (!dp || !dp.reason) return null
-
-              // Skip if the role label perfectly duplicates the stress proof
-              // label above — avoids two near-identical chip rows.
-              const stressLabel = session.stressDistributionProof?.label || ''
-              const roleLabel = dp.roleLabel || ''
-              const duplicate =
-                stressLabel.toLowerCase().trim() === roleLabel.toLowerCase().trim()
-
-              const stressTone =
-                dp.intendedStressLevel === 'high'
-                  ? 'text-amber-300/90'
-                  : dp.intendedStressLevel === 'low'
-                    ? 'text-blue-300/90'
-                    : 'text-zinc-300/90'
-
-              return (
-                <div className="mt-1.5 flex flex-col gap-0.5" data-phase-y3-day-purpose="true">
-                  {!duplicate && (roleLabel || dp.intendedRPEBand) && (
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {roleLabel && (
-                        <span className={`inline-flex items-center self-start gap-1 rounded-full border border-[#2B313A] bg-[#0F1318] px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-wide ${stressTone}`}>
-                          {roleLabel}
-                        </span>
-                      )}
-                      {dp.intendedRPEBand && (
-                        <span className="inline-flex items-center self-start gap-1 rounded-full border border-[#22272F] bg-[#0F1318] px-2 py-0.5 text-[10.5px] font-medium tracking-wide text-zinc-400">
-                          {dp.intendedRPEBand}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <p className="text-[11px] text-[#9CA3AF] leading-snug">
-                    {dp.reason}
-                  </p>
-                </div>
-              )
-            })()}
-            {/* ============================================================
-                [PHASE-P] SESSION-LEVEL QUALITY / DOCTRINE AUDIT — chip only
-                ----------------------------------------------------------------
-                Compact amber chip stays always-visible because it is a real
-                safety / realism warning the user MUST see at a glance
-                (Phase S spec: "Do not hide important warnings completely").
-                The longer one-line explanation that USED to render right
-                under the chip has been moved to the "Why this plan?"
-                trust dropdown below to keep the always-visible header
-                surface compact (Phase S compression target). Tap "Why this
-                plan?" to see the explanation; the original
-                `data-phase-p-session-proof` attribute remains on the chip
-                so screenshot verification and dev probes still work.
-                ============================================================ */}
-            {(() => {
-              const sqa = (session as unknown as {
-                qualityAudit?: {
-                  shortLabel?: string
-                  conciseExplanation?: string
-                  corrections?: string[]
-                  sessionLengthRealism?: { verdict?: 'within_tolerance' | 'over' | 'under' }
-                  straightArmOverlap?: { pattern?: string; explanation?: string }
-                }
-              }).qualityAudit
-              if (!sqa) return null
-              const corr = Array.isArray(sqa.corrections) ? sqa.corrections : []
-              const hasOverlap = corr.includes('straight_arm_overlap_warning_attached')
-              const hasTimeWarn = corr.includes('session_length_warning_attached')
-              if (!hasOverlap && !hasTimeWarn) return null
-              const label = hasOverlap ? 'OVERLAP WATCH' : 'TIME REALISM'
-              return (
-                <div className="mt-1 flex flex-col gap-0.5" data-phase-p-session-proof="true">
-                  <span className="inline-flex items-center self-start gap-1 rounded-full border border-amber-500/30 bg-amber-500/5 px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-wide text-amber-300">
-                    {label}
-                  </span>
-                </div>
-              )
-            })()}
-            {/* ====================================================================
-                [PHASE-S] PROOF CLUTTER COMPRESSION
-                ----------------------------------------------------------------
-                The Phase Q `doctrineUtilizationTrace.summary` line and the
-                Phase R `sessionLengthTruth.summary` line USED to render
-                always-visible right here, stacked under the Phase J/K stress
-                chip and the Phase P warning chip. That produced 4 stacked
-                proof rows on every session header — the exact "too cluttered"
-                state Phase S is correcting. Both lines have been MOVED into
-                the "Why this plan?" collapsible below the meta line. They
-                still render verbatim with their original `data-phase-q-*` /
-                `data-phase-r-*` data attributes intact so screenshot
-                verification, dev probes, and acceptance tests continue to
-                pass. Phase J/K stress + Phase P warning remain visible on
-                the header because they carry per-day identity / real safety
-                signals that should not be hidden behind a click.
-                ==================================================================== */}
+            {/* [PHASE 15F] Display resolved identity if available, otherwise fall back to focusLabel */}
+            <p className="text-sm text-[#E63946]">
+              {(session as any).resolvedSessionIdentity || session.focusLabel}
+            </p>
             {/* Compact meta line - time + exercise count only */}
             <div className="flex items-center gap-3 mt-1 text-xs text-[#6A6A6A]">
               <span className="flex items-center gap-1">
@@ -2922,899 +931,10 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 <span className="text-[#E63946]/70">({activeSessionView.variantLabel})</span>
               )}
             </div>
-
-            {/* ====================================================================
-                [PHASE-S] "WHY THIS PLAN?" TRUST DROPDOWN
-                ----------------------------------------------------------------
-                Default-collapsed trust details. Renders ONLY when there is
-                meaningful trust data to show — Phase Q `doctrineUtilizationTrace`,
-                Phase R `sessionLengthTruth`, Phase P `qualityAudit` extended
-                explanation, or a doctrine breakdown by category. Otherwise the
-                trigger does not render and the header stays calm.
-
-                Click handlers `e.stopPropagation()` so opening the trust
-                dropdown does NOT also toggle the parent header expand/collapse
-                (the parent `<div>` at L2335 has its own `onClick` for the body
-                expansion). Local state `showWhyThisPlan` keeps the dropdown
-                open/close stable per-card and does not reset on parent
-                re-render.
-                ==================================================================== */}
-            {(() => {
-              const sessionAny = session as unknown as {
-                doctrineUtilizationTrace?: {
-                  summary?: string
-                  dominantState?: DoctrineUtilizationState
-                  byCategory?: Record<
-                    string,
-                    {
-                      stateCounts?: Partial<Record<DoctrineUtilizationState, number>>
-                      dominantState?: DoctrineUtilizationState
-                    }
-                  >
-                }
-                sessionLengthTruth?: {
-                  verdict?:
-                    | 'STRUCTURALLY_REAL'
-                    | 'SHORTS_AT_LABEL_PARITY'
-                    | 'NO_LAUNCHABLE_SHORTS'
-                    | 'LEGACY_NO_VARIANTS'
-                  summary?: string
-                }
-                qualityAudit?: {
-                  conciseExplanation?: string
-                  corrections?: string[]
-                  straightArmOverlap?: { explanation?: string }
-                }
-              }
-              const trace = sessionAny.doctrineUtilizationTrace
-              const slt = sessionAny.sessionLengthTruth
-              const sqa = sessionAny.qualityAudit
-              const hasTrace = !!(trace && trace.summary)
-              const hasSlt =
-                !!slt &&
-                !!slt.summary &&
-                slt.verdict !== 'NO_LAUNCHABLE_SHORTS' &&
-                slt.verdict !== 'LEGACY_NO_VARIANTS'
-              const hasSqaExtended =
-                !!sqa &&
-                Array.isArray(sqa.corrections) &&
-                (sqa.corrections.includes('straight_arm_overlap_warning_attached') ||
-                  sqa.corrections.includes('session_length_warning_attached')) &&
-                !!(sqa.conciseExplanation || sqa.straightArmOverlap?.explanation)
-              const byCategoryEntries = trace?.byCategory
-                ? Object.entries(trace.byCategory).filter(
-                    ([, v]) => v && (v.dominantState || v.stateCounts),
-                  )
-                : []
-              const hasBreakdown = byCategoryEntries.length > 0
-              const insightCount =
-                (hasTrace ? 1 : 0) +
-                (hasSlt ? 1 : 0) +
-                (hasSqaExtended ? 1 : 0) +
-                (hasBreakdown ? 1 : 0)
-              if (insightCount === 0) return null
-              return (
-                <div className="mt-2" data-phase-s-trust-dropdown="true">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setShowWhyThisPlan((v) => !v)
-                    }}
-                    aria-expanded={showWhyThisPlan}
-                    aria-controls={`why-this-plan-${session.dayNumber}`}
-                    className="flex items-center gap-1.5 text-[11px] text-[#8A8A8A] hover:text-[#C5C5C5] transition-colors"
-                  >
-                    {showWhyThisPlan ? (
-                      <ChevronUp className="w-3 h-3" />
-                    ) : (
-                      <ChevronDown className="w-3 h-3" />
-                    )}
-                    <span className="font-medium">Why this plan?</span>
-                    <span className="text-[10px] text-[#6A6A6A]">
-                      {insightCount} insight{insightCount === 1 ? '' : 's'}
-                    </span>
-                  </button>
-                  {showWhyThisPlan && (
-                    <div
-                      id={`why-this-plan-${session.dayNumber}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="mt-2 space-y-2 rounded-md border border-[#2A2A2A] bg-[#1A1A1A]/60 p-3"
-                      data-phase-s-trust-details="true"
-                    >
-                      {/* [PHASE-Q] DOCTRINE UTILIZATION (CAUSAL) — moved into
-                          details. Original `data-phase-q-*` attributes
-                          preserved so screenshot verification still works. */}
-                      {(() => {
-                        if (!trace || !trace.summary) return null
-                        const tone =
-                          trace.dominantState === 'ELIGIBLE_AND_APPLIED'
-                            ? 'text-[#A1A8B2]'
-                            : trace.dominantState === 'POST_HOC_ONLY' ||
-                                trace.dominantState === 'ACKNOWLEDGED_ONLY'
-                              ? 'text-[#6F757D] italic'
-                              : 'text-[#9CA3AF]'
-                        return (
-                          <div>
-                            <div className="text-[10px] uppercase tracking-wide text-[#6A6A6A] mb-1">
-                              Doctrine application
-                            </div>
-                            <p
-                              className={`text-[11px] leading-snug ${tone}`}
-                              data-phase-q-utilization-summary="true"
-                              data-phase-q-dominant-state={trace.dominantState}
-                              title={trace.summary}
-                            >
-                              {trace.summary}
-                            </p>
-                            {hasBreakdown && (
-                              <ul
-                                className="mt-1.5 space-y-1"
-                                data-phase-s-doctrine-breakdown="true"
-                              >
-                                {byCategoryEntries.map(([catId, cat]) => {
-                                  const dom = cat.dominantState
-                                  if (!dom) return null
-                                  const labelInfo = doctrineStateLabel(dom)
-                                  const tones = trustToneClasses(labelInfo.tone)
-                                  const niceCat = catId
-                                    .replace(/([A-Z])/g, ' $1')
-                                    .replace(/^./, (c) => c.toUpperCase())
-                                    .trim()
-                                  return (
-                                    <li
-                                      key={catId}
-                                      className="flex items-center gap-2 text-[11px]"
-                                      data-phase-s-category={catId}
-                                      data-phase-q-dominant-state={dom}
-                                    >
-                                      <span className="text-[#A5A5A5] min-w-[80px]">
-                                        {niceCat}
-                                      </span>
-                                      <span
-                                        className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${tones.pill}`}
-                                        title={labelInfo.meaning}
-                                      >
-                                        {labelInfo.label}
-                                      </span>
-                                    </li>
-                                  )
-                                })}
-                              </ul>
-                            )}
-                          </div>
-                        )
-                      })()}
-
-                      {/* [PHASE-R] SESSION-LENGTH TRUTH — moved into details.
-                          Original `data-phase-r-*` attributes preserved. */}
-                      {hasSlt && slt && (
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wide text-[#6A6A6A] mb-1">
-                            Session length
-                          </div>
-                          <p
-                            className={`text-[11px] leading-snug ${
-                              slt.verdict === 'STRUCTURALLY_REAL'
-                                ? 'text-[#A1A8B2]'
-                                : 'text-[#9CA3AF] italic'
-                            }`}
-                            data-phase-r-session-length-truth="true"
-                            data-phase-r-verdict={slt.verdict}
-                            title={slt.summary}
-                          >
-                            {slt.summary}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* [PHASE-P] Extended quality-audit explanation. The
-                          severity chip itself stays on the always-visible
-                          header (real warnings should never hide); only the
-                          longer explanation moves here. */}
-                      {hasSqaExtended && sqa && (
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wide text-[#6A6A6A] mb-1">
-                            Quality &amp; safety
-                          </div>
-                          <p
-                            className="text-[11px] leading-snug text-amber-300/70 italic"
-                            data-phase-p-extended-explanation="true"
-                          >
-                            {sqa.conciseExplanation ||
-                              sqa.straightArmOverlap?.explanation}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
-
-            {/* ==================================================================
-                [DOCTRINE-METHOD-DECISION-PHASE3]
-                Compact, doctrine-attributable method label + rationale for
-                this session. Reads ONLY `session.methodDecision` (stamped by
-                the authoritative wrapper post-builder via
-                `stampMethodDecisionsOnSessions`). Renders nothing for legacy
-                sessions that lack the field — zero impact on existing visuals.
-                The render is intentionally minimal: one method label badge +
-                one short rationale + optional rejected-method line. We do
-                NOT claim "fully doctrine-driven programming" here; the badge
-                only attributes the materialized method to its doctrine
-                source via Batch 10 compatibility matrix + runtime method
-                doctrine. See lib/program/method-decision-engine.ts.
-                ================================================================== */}
-            {(() => {
-              // ============================================================
-              // [DOCTRINE-MATERIALIZATION-EVIDENCE-PHASE4A]
-              //
-              // PHASE 3C added an always-visible "Doctrine Decision" panel —
-              // it rendered on EVERY session, including pure straight-set
-              // sessions where the builder applied no grouping at all. That
-              // produced the exact fake-proof failure mode the user called
-              // out: "labels claiming density/superset/top set while rows
-              // remain plain straight sets."
-              //
-              // PHASE 4A correction: the panel now ONLY renders when the
-              // session has a real, structurally-different materialization
-              // — a non-straight grouped block, a per-row set-execution
-              // method (cluster / top_set / drop_set / rest_pause), or a
-              // cluster sidecar. The structural verdict comes from the
-              // builder-locked methodMaterializationSummary (or, on legacy
-              // programs, a faithful re-derivation from the same raw fields
-              // the builder used). Every line of visible text below cites a
-              // concrete count of changed program fields — never an
-              // abstract "data-driven" or "profile-driven" claim against an
-              // unchanged session.
-              //
-              // When the session is genuinely flat the panel HIDES, which
-              // is honest: a primary skill day with quality straight sets
-              // legitimately has no grouped doctrine to visualize, and we
-              // do not want to manufacture proof.
-              // ============================================================
-              const stamped = (session as unknown as { methodDecision?: MethodDecisionShape })
-                .methodDecision ?? null
-
-              const bridgeProfileContext = extractProfileContextFromSnapshot(
-                programProfileSnapshot ?? null,
-                'program.profileSnapshot',
-              )
-
-              let md: MethodDecisionShape | null = stamped
-              let bridged = false
-              if (!md) {
-                try {
-                  const bridgeInput = session as unknown as MethodDecisionSessionInput
-                  md = deriveMethodDecisionForSession({
-                    session: bridgeInput,
-                    runtimeContract: null,
-                    decisionContext: null,
-                    trainingGoal: typeof primaryGoal === 'string' ? primaryGoal : null,
-                    profileContext: bridgeProfileContext,
-                  })
-                  bridged = !!md
-                } catch {
-                  md = null
-                }
-              }
-              if (!md) return null
-
-              // [PHASE 4A] Strict gate: only proceed when the session has at
-              // least one real materialized change. Saved programs from
-              // before 4A may not have actualMaterialization on the stamp;
-              // recompute from the session in that case so this gate still
-              // works correctly for legacy programs.
-              const am =
-                md.actualMaterialization ??
-                (() => {
-                  try {
-                    const recomputed = deriveMethodDecisionForSession({
-                      session: session as unknown as MethodDecisionSessionInput,
-                      runtimeContract: null,
-                      decisionContext: null,
-                      trainingGoal: typeof primaryGoal === 'string' ? primaryGoal : null,
-                      profileContext: bridgeProfileContext,
-                    })
-                    return recomputed?.actualMaterialization ?? null
-                  } catch {
-                    return null
-                  }
-                })()
-
-              if (!am || !am.hasRealStructuralChange) {
-                // Honest hide: no structural change → no doctrine claim.
-                return null
-              }
-
-              // [PHASE AA1R] Defense-in-depth integrity gate. The doctrine
-              // panel MUST never claim "Superset applied / Circuit applied /
-              // Density Block applied" while the visible body has no rows
-              // bound to a renderable grouped block. The reconciler already
-              // zeroes such claims, but old saved programs (pre-AA1R) can
-              // still reach this code path with a stale summary. Read the
-              // freshly stamped summary's integrity verdict + groupedExerciseRowCount
-              // and refuse to render any grouped label that the row body
-              // cannot prove.
-              const finalSummary = (session as unknown as {
-                styleMetadata?: {
-                  methodMaterializationSummary?: {
-                    summaryIntegrityVerdict?: string
-                    groupedExerciseRowCount?: number
-                  } | null
-                } | null
-              }).styleMetadata?.methodMaterializationSummary ?? null
-              const integrityVerdict = finalSummary?.summaryIntegrityVerdict ?? 'PASS_FINAL_STRUCTURE_CONFIRMED'
-              const groupedRowProof = finalSummary?.groupedExerciseRowCount ?? am.changedExerciseCount
-
-              const claimsGroupedSomething =
-                am.groupedMethodCounts.superset > 0 ||
-                am.groupedMethodCounts.circuit > 0 ||
-                am.groupedMethodCounts.density_block > 0
-
-              // Hard refusal: any grouped claim with insufficient row proof
-              // OR an explicit FAIL verdict from the reconciler.
-              if (
-                integrityVerdict === 'FAIL_METHOD_CLAIM_WITH_ZERO_CHANGED_EXERCISES' ||
-                (claimsGroupedSomething && groupedRowProof < 2) ||
-                (claimsGroupedSomething && am.changedExerciseCount === 0)
-              ) {
-                return null
-              }
-
-              const profileSrc = md.profileInfluence?.source ?? 'legacyFallback'
-              const profileAware = profileSrc !== 'legacyFallback'
-              const isStaleProgram =
-                !!stamped && (!methodDecisionVersion || methodDecisionVersion !== METHOD_DECISION_VERSION)
-
-              // Build the visible label from REAL counts.
-              const labelParts: string[] = []
-              if (am.groupedMethodCounts.density_block > 0) labelParts.push('Density Block')
-              if (am.groupedMethodCounts.superset > 0) labelParts.push('Superset')
-              if (am.groupedMethodCounts.circuit > 0) labelParts.push('Circuit')
-              if (am.rowExecutionCounts.cluster > 0) labelParts.push('Cluster Set')
-              if (am.rowExecutionCounts.top_set > 0) labelParts.push('Top Set + Back-off')
-              if (am.rowExecutionCounts.drop_set > 0) labelParts.push('Drop Set')
-              if (am.rowExecutionCounts.rest_pause > 0) labelParts.push('Rest-pause')
-              const visibleLabel = labelParts.length === 1
-                ? labelParts[0]
-                : labelParts.length > 1
-                  ? `${labelParts.length} method${labelParts.length === 1 ? '' : 's'} applied`
-                  : 'Doctrine method'
-
-              const driverLine = md.profileInfluence?.primaryDriverLine
-              const avoidedLine = md.prescriptionIntent?.whyNotOtherMethods?.[0] ?? null
-
-              // Tag word — only sources that correspond to ACTUAL structural change.
-              let tagText: string | null = null
-              let tagClass = 'text-[10px] uppercase tracking-wide font-medium'
-              if (bridged && am.evidenceSource === 'derived_from_session') {
-                tagText = 'legacy program'
-                tagClass += ' text-amber-400/80'
-              } else if (isStaleProgram) {
-                tagText = 'stale stamp'
-                tagClass += ' text-amber-400/80'
-              } else if (profileAware) {
-                tagText = 'profile-driven'
-                tagClass += ' text-emerald-400/90'
-              }
-
-              const isLegacyEvidence = am.evidenceSource === 'derived_from_session' && !stamped
-
-              return (
-                <div
-                  className="mt-3 rounded-lg border border-[#E63946]/25 bg-[#E63946]/5 px-3 py-2.5 flex flex-col gap-1.5"
-                  data-doctrine-decision="true"
-                  data-method-id={md.methodId}
-                  data-profile-source={profileSrc}
-                  data-render-mode={am.dominantRenderMode}
-                  data-grouped-block-count={am.groupedBlockCount}
-                  data-changed-exercise-count={am.changedExerciseCount}
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] uppercase tracking-[0.08em] text-[#E63946]/80 font-semibold">
-                      Doctrine Materialization
-                    </span>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-md border border-[#E63946]/40 bg-[#E63946]/10 text-[12px] font-semibold text-[#E63946]">
-                      {visibleLabel}
-                    </span>
-                    <span className="text-[10px] text-[#6A6A6A] uppercase tracking-wide">
-                      {am.changedExerciseCount} exercise{am.changedExerciseCount === 1 ? '' : 's'} changed
-                    </span>
-                    {tagText && <span className={tagClass}>{tagText}</span>}
-                  </div>
-
-                  {/* Concrete change-set evidence — every line cites a real count. */}
-                  {am.structuralChangeDescriptions.slice(0, 3).map((line, i) => (
-                    <p key={i} className="text-[12px] text-[#C8C8C8] leading-snug">
-                      <span className="text-[#9A9A9A]">Applied:</span> {line}
-                    </p>
-                  ))}
-
-                  {driverLine && (
-                    <p className="text-[12px] text-[#A8A8A8] leading-snug">
-                      <span className="text-[#7A7A7A]">Profile driver:</span> {driverLine}
-                    </p>
-                  )}
-
-                  {avoidedLine && (
-                    <p className="text-[12px] text-[#8A8A8A] leading-snug italic">
-                      <span className="not-italic text-[#7A7A7A]">Avoided:</span> {avoidedLine}
-                    </p>
-                  )}
-
-                  {isLegacyEvidence && (
-                    <p className="text-[10px] text-amber-300/70 leading-snug">
-                      Materialization read from legacy session fields. Regenerate to receive a freshly profile-aware doctrine stamp.
-                    </p>
-                  )}
-                </div>
-              )
-            })()}
-
-            {/* ====================================================================
-                [MATERIAL-COMPOSITION-TRUTH-LOCK]
-                Structural per-day programming-difference strip. Renders only
-                when authoritative composition / adaptation truth is present
-                on the surface — null/empty leaves legacy sessions visually
-                unchanged. Three components, each guarded:
-                  1. Workload split bar (primary vs support %) — varies day to
-                     day based on real composition.workloadDistribution.
-                  2. Material adaptation chips — only TRUE reductions actually
-                     applied to this day (sets/RPE/secondary/density/finisher).
-                  3. Spine expression mini-tag — direct_intensity /
-                     technical_focus / strength_support classification.
-                Together they make programming difference visibly STRUCTURAL,
-                not descriptive. No prose added.
-                ==================================================================== */}
-            {cardSurface && (() => {
-              const hasWorkload =
-                typeof cardSurface.workloadPrimaryPercent === 'number' &&
-                typeof cardSurface.workloadSupportPercent === 'number' &&
-                cardSurface.workloadPrimaryPercent + cardSurface.workloadSupportPercent > 0
-              const hasAdaptations = (cardSurface.materialAdaptations?.length ?? 0) > 0
-              const spineLabels: Record<string, string> = {
-                direct_intensity: 'Direct intensity',
-                technical_focus: 'Technical focus',
-                strength_support: 'Strength support',
-              }
-              const spineLabel = cardSurface.spineExpression
-                ? spineLabels[cardSurface.spineExpression] ?? null
-                : null
-              const hasSpine = !!spineLabel
-              if (!hasWorkload && !hasAdaptations && !hasSpine) return null
-              return (
-                <div className="mt-2 space-y-1.5">
-                  {/* Workload split bar — structural, not prose */}
-                  {hasWorkload && (
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-1.5 bg-[#1A1A1A] rounded-full overflow-hidden flex">
-                        <div
-                          className="h-full bg-[#E63946] transition-all"
-                          style={{ width: `${cardSurface.workloadPrimaryPercent}%` }}
-                          aria-label={`Primary work ${cardSurface.workloadPrimaryPercent}%`}
-                        />
-                        <div
-                          className="h-full bg-[#5A5A5A] transition-all"
-                          style={{ width: `${cardSurface.workloadSupportPercent}%` }}
-                          aria-label={`Support work ${cardSurface.workloadSupportPercent}%`}
-                        />
-                      </div>
-                      <span className="text-[10px] text-[#A8A8A8] tabular-nums shrink-0">
-                        {cardSurface.workloadPrimaryPercent}
-                        <span className="text-[#6A6A6A]">% primary</span>
-                      </span>
-                    </div>
-                  )}
-                  {/* Material adaptation chips + spine expression tag */}
-                  {(hasAdaptations || hasSpine) && (
-                    <div className="flex flex-wrap gap-x-1.5 gap-y-1">
-                      {hasSpine && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#E63946]/10 text-[#C8C8C8] font-medium">
-                          {spineLabel}
-                        </span>
-                      )}
-                      {cardSurface.materialAdaptations!.map((adaptation) => (
-                        <span
-                          key={`adapt-${adaptation.key}`}
-                          className={
-                            adaptation.tone === 'reduction'
-                              ? 'text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300/90 font-medium'
-                              : 'text-[9px] px-1.5 py-0.5 rounded bg-[#3A3A3A] text-[#B8B8B8] font-medium'
-                          }
-                        >
-                          {adaptation.label}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
-
-            {/* [DOMINANT-CARD-OWNERSHIP-LOCK] One-line per-day "why" from the
-                authoritative role rationale. Demotes generic compactCoaching
-                purpose for non-role-aware sessions to fallback only. */}
-            {cardSurface?.weeklyRoleRationale && (
-              <p className="text-[11px] text-[#8A8A8A] mt-1 leading-relaxed italic">
-                {cardSurface.weeklyRoleRationale}
-              </p>
-            )}
-
-            {/* =====================================================================
-                [PHASE 4S] CANONICAL METHOD/DOCTRINE DELIVERY LINE
-                ---------------------------------------------------------------------
-                Reads `cardSurface.methodStructures` (Phase 4P) and
-                `cardSurface.doctrineBlockResolution` (Phase 4Q) — the
-                authoritative typed truth for what doctrine considered/applied
-                on this day. Renders ONE compact line classifying the result
-                so we never show a generic yellow "blocked" bubble when
-                classified entries exist.
-
-                This DOES NOT duplicate the existing visibleMethodTally chip
-                row (which is gated on `finalVisibleBodyModel` / styledGroups
-                — i.e. what the body will actually render when expanded). The
-                Phase 4S line summarizes doctrine-level resolution counts and
-                surfaces classified blocked statuses + bug-classifications
-                that the chip row could not express.
-
-                Tones (kept inside the existing palette):
-                  - applied       → muted green text                    [#7FB287]
-                  - blocked safety/audit → amber text                   [text-amber-300/85]
-                  - bug-classification  → red diagnostic chip           [text-red-300/90]
-                  - neutral classifiers → muted neutral text            [#8A8A8A]
-
-                Suppressed entirely on legacy programs that have no Phase
-                4P/4Q arrays — those keep their existing chip path.
-                ===================================================================== */}
-            {cardSurface && (() => {
-              const methodStructures = readMethodStructuresFromSession({
-                methodStructures: cardSurface.methodStructures,
-              })
-              const blockResolution = readDoctrineBlockResolutionFromSession({
-                doctrineBlockResolution: cardSurface.doctrineBlockResolution,
-              })
-              if (methodStructures.length === 0 && blockResolution.length === 0) {
-                return null
-              }
-
-              // Counts derived purely from the typed Phase 4Q classifier output.
-              // We prefer the classifier counts over methodStructures.status
-              // because the classifier is what owns the "applied vs blocked
-              // for what reason" verdict the user-facing line should reflect.
-              let appliedCount = 0
-              let trueSafetyCount = 0
-              let noTargetCount = 0
-              let notRelevantCount = 0
-              let needsAuditCount = 0
-              const bugEntries: ReturnType<typeof normalizeDoctrineBlockStatus>[] = []
-              for (const entry of blockResolution) {
-                const norm = normalizeDoctrineBlockStatus(entry?.resolvedStatus)
-                if (norm.isBug) {
-                  bugEntries.push(norm)
-                  continue
-                }
-                switch (entry?.resolvedStatus) {
-                  case 'APPLIED':
-                  case 'ALREADY_APPLIED':
-                    appliedCount += 1
-                    break
-                  case 'TRUE_SAFETY_BLOCK':
-                    trueSafetyCount += 1
-                    break
-                  case 'NO_RELEVANT_TARGET':
-                    noTargetCount += 1
-                    break
-                  case 'NOT_RELEVANT_TO_SESSION':
-                    notRelevantCount += 1
-                    break
-                  case 'UNKNOWN_NEEDS_AUDIT':
-                    needsAuditCount += 1
-                    break
-                }
-              }
-
-              // If only methodStructures exists (e.g. Phase 4P stamped but
-              // Phase 4Q rollup did not run on this saved program), derive
-              // applied count from the structure status as a graceful
-              // fallback. This keeps older saved programs informative.
-              if (blockResolution.length === 0 && methodStructures.length > 0) {
-                for (const ms of methodStructures) {
-                  if (ms?.status === 'applied' || ms?.status === 'already_applied') {
-                    appliedCount += 1
-                  }
-                }
-              }
-
-              const hasRenderableStructure = hasRenderableMethodStructure(cardSurface)
-              const totalClassifiedBlocks =
-                trueSafetyCount + noTargetCount + notRelevantCount + needsAuditCount
-              const hasBugs = bugEntries.length > 0
-
-              // No applied + no blocks + no bugs → nothing meaningful to say.
-              // (e.g. an older session with empty arrays.)
-              if (appliedCount === 0 && totalClassifiedBlocks === 0 && !hasBugs) {
-                return null
-              }
-
-              // [PHASE AB1] Per-AB1 Part E: this line counts METHOD-DECISION
-              // resolutions (e.g. "9 method blocks resolved as APPLIED"),
-              // not "9 of N rules". The previous label "9 doctrine applied"
-              // implicitly suggested rule-level counts and conflicted with
-              // AB1's semantic rule that "applied" must mean
-              // mutated/visible/executable at the level being labelled.
-              // The count is honest at method-decision-block level, so we
-              // keep the count and tighten the wording to match.
-              const segments: string[] = []
-              if (appliedCount > 0) {
-                segments.push(`${appliedCount} method ${appliedCount === 1 ? 'decision' : 'decisions'} applied`)
-              }
-              if (trueSafetyCount > 0) {
-                segments.push(`${trueSafetyCount} blocked for safety`)
-              }
-              if (noTargetCount > 0) {
-                segments.push(`${noTargetCount} no matching target`)
-              }
-              if (notRelevantCount > 0) {
-                segments.push(`${notRelevantCount} not for this day`)
-              }
-              if (needsAuditCount > 0) {
-                segments.push(`${needsAuditCount} needs audit`)
-              }
-
-              return (
-                <div
-                  className="mt-2 flex flex-col gap-1 text-[11px] leading-snug min-w-0"
-                  style={{ overflowWrap: 'anywhere' }}
-                >
-                  {/* Compact doctrine resolution summary. We deliberately do
-                      not duplicate any "Superset / Circuit / Density / Cluster"
-                      chip the body will render — those come from styledGroups
-                      via visibleMethodTally above. This line is doctrine-level
-                      truth: how many methods doctrine considered, and how
-                      they classified out. Suppressed when the segments list
-                      is empty AND there is no bug to surface. */}
-                  {segments.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                      {/* [PHASE AB1] Renamed label from "Doctrine:" to
-                          "Method decisions:" because every count below
-                          (applied / blocked / no target / not for this day /
-                          needs audit) is at METHOD-DECISION-BLOCK level via
-                          `cardSurface.doctrineBlockResolution`. The user-
-                          visible program-level rule rollup now lives in
-                          ProgramTruthSummary and reads
-                          `program.rulePopulationLedger`. */}
-                      <span className="text-[#8A8A8A]">Method decisions:</span>
-                      {appliedCount > 0 && (
-                        <span className="text-[#7FB287]">
-                          {appliedCount} applied
-                        </span>
-                      )}
-                      {appliedCount > 0 &&
-                        (trueSafetyCount > 0 ||
-                          noTargetCount > 0 ||
-                          notRelevantCount > 0 ||
-                          needsAuditCount > 0) && (
-                          <span className="text-[#5A5A5A]">·</span>
-                        )}
-                      {trueSafetyCount > 0 && (
-                        <span className="text-amber-300/85">
-                          {trueSafetyCount} blocked for safety
-                        </span>
-                      )}
-                      {(trueSafetyCount > 0 &&
-                        (noTargetCount > 0 || notRelevantCount > 0 || needsAuditCount > 0)) && (
-                        <span className="text-[#5A5A5A]">·</span>
-                      )}
-                      {noTargetCount > 0 && (
-                        <span className="text-[#8A8A8A]">
-                          {noTargetCount} no target
-                        </span>
-                      )}
-                      {(noTargetCount > 0 && (notRelevantCount > 0 || needsAuditCount > 0)) && (
-                        <span className="text-[#5A5A5A]">·</span>
-                      )}
-                      {notRelevantCount > 0 && (
-                        <span className="text-[#8A8A8A]">
-                          {notRelevantCount} not for this day
-                        </span>
-                      )}
-                      {(notRelevantCount > 0 && needsAuditCount > 0) && (
-                        <span className="text-[#5A5A5A]">·</span>
-                      )}
-                      {needsAuditCount > 0 && (
-                        <span className="text-amber-300/85">
-                          {needsAuditCount} needs audit
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Bug-classification surface. We do not silently hide these
-                      — if doctrine ran but a connection/runtime/normalizer/
-                      stale-source bug prevented its truth from reaching the
-                      card, the user has a right to see WHY their session
-                      doesn't reflect doctrine. The label text is one short
-                      sentence pulled from `normalizeDoctrineBlockStatus`. We
-                      cap the displayed list to the first 2 entries to keep
-                      mobile cards compact; remaining count is summarized. */}
-                  {hasBugs && (
-                    <div className="flex flex-wrap items-start gap-x-1.5 gap-y-0.5">
-                      <span className="text-red-300/90 font-medium">
-                        Doctrine connection issue:
-                      </span>
-                      <span className="text-red-300/85">
-                        {bugEntries
-                          .slice(0, 2)
-                          .map(b => b.label.replace(/^[A-Z][a-z]+ issue: /, ''))
-                          .join(' · ')}
-                        {bugEntries.length > 2
-                          ? ` · +${bugEntries.length - 2} more`
-                          : ''}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Method-structure existence breadcrumb. ONLY rendered when
-                      the canonical Phase 4P arrays exist with at least one
-                      applied entry AND the existing styledGroups chip row
-                      above did not already cover it. Stays one short line —
-                      no exercise lists, no rounds; the body renders the full
-                      grouped block when the card is expanded. */}
-                  {hasRenderableStructure && appliedCount === 0 && (
-                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                      <span className="text-[#8A8A8A]">Method structure present</span>
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
             {/* [REMOVED] GROUPED_TRUTH s4/s5/s7 breadcrumb chip. Grouped days are
                 now visibly recognized through the production method-summary
                 chips (Superset/Circuit/Density/Cluster) and the colored grouped
                 block headers inside MainExercisesRenderer, not via a debug chip. */}
-
-            {/* [COLLAPSED-HEADER-METHOD-TRUTH] Visible grouped-method chips on
-                the collapsed card header. This is the surface the user is
-                actually checking on the Program page (cards open collapsed by
-                default). Chip counts come from `visibleMethodTally`, which is
-                a pure consumer of `finalVisibleBodyModel`; a chip renders if
-                and only if the body WILL render a matching grouped header
-                block when the card is expanded. If the body will not render
-                a method's header (simple_order_grouped / flat_category), no
-                chip appears here -- honest non-claim. Palette intentionally
-                mirrors the colored block headers inside the body
-                (Superset blue, Circuit emerald, Density amber, Cluster purple)
-                so the collapsed chip and the in-body pill read as the same
-                visual language. */}
-            {hasAnyVisibleMethod && (
-              // [PHASE 4T] Chip counts now read from `dominantMethodTally`,
-              // which prefers canonical `cardSurface.methodStructures` over
-              // legacy styledGroups when canonical truth exists. See
-              // [METHOD-STRUCTURES-DOMINANCE] block above for the resolution
-              // rule. Older saved programs without canonical fields fall
-              // through to the legacy tally unchanged.
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                {dominantMethodTally.superset > 0 && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#4F6D8A]/15 text-[#7FA8CC] border border-[#4F6D8A]/40">
-                    <Layers className="w-3 h-3" />
-                    {dominantMethodTally.superset} Superset{dominantMethodTally.superset > 1 ? 's' : ''}
-                  </span>
-                )}
-                {dominantMethodTally.circuit > 0 && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
-                    <RefreshCw className="w-3 h-3" />
-                    {dominantMethodTally.circuit} Circuit{dominantMethodTally.circuit > 1 ? 's' : ''}
-                  </span>
-                )}
-                {dominantMethodTally.density > 0 && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/15 text-amber-300 border border-amber-500/40">
-                    <Timer className="w-3 h-3" />
-                    {densityChipLabel(dominantMethodTally.density)}
-                  </span>
-                )}
-                {dominantMethodTally.cluster > 0 && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-purple-500/15 text-purple-300 border border-purple-500/40">
-                    <Dumbbell className="w-3 h-3" />
-                    {clusterChipLabel(dominantMethodTally.cluster)}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* ==========================================================================
-                [CARD-LOCAL-GROUPED-MISMATCH-PROBE]
-                [FINAL-VISIBLE-OWNERSHIP-LOCK] Diagnostic strip moved off the
-                athlete-facing card surface. Gated behind the existing
-                `probeActive` flag (hard-disabled in production by the prior
-                [PROBES-HARD-DISABLED] phase). The bucket classifier remains
-                intact for QA without leaking debug-style amber font-mono
-                content into the production card body.
-                ========================================================================== */}
-            {probeActive &&
-              rawGroupedOwnership.hasGroupedTruth &&
-              finalVisibleBodyModel.mode === 'flat_category' && (() => {
-                const visibleWithBlockId = fullVisibleExercises.filter(
-                  ex => typeof (ex as unknown as { blockId?: string }).blockId === 'string' &&
-                    !!(ex as unknown as { blockId?: string }).blockId
-                ).length
-                const visibleWithNonStraightMethod = fullVisibleExercises.filter(ex => {
-                  const m = (ex as unknown as { method?: string }).method
-                  return typeof m === 'string' && m.length > 0 && m !== 'straight' && m !== 'straight_sets'
-                }).length
-                const rawWithBlockId = safeExercises.filter(
-                  ex => typeof (ex as unknown as { blockId?: string }).blockId === 'string' &&
-                    !!(ex as unknown as { blockId?: string }).blockId
-                ).length
-                const rawWithNonStraightMethod = safeExercises.filter(ex => {
-                  const m = (ex as unknown as { method?: string }).method
-                  return typeof m === 'string' && m.length > 0 && m !== 'straight' && m !== 'straight_sets'
-                }).length
-                // ====================================================================
-                // [BUCKET-CLASSIFIER] One of six allowed buckets. Strictest-first
-                // ordering so the bucket reflects the FIRST stage where truth was
-                // lost or bypassed for this exact card instance.
-                //   1. LOST_IN_VISIBLE_ROW_SURFACE     -- raw has grouped fields,
-                //                                         visible row surface does not
-                //   2. LOST_IN_VARIANT_PRUNE           -- visible rows kept method,
-                //                                         but variantPrune stripped
-                //                                         styledGroups to all-straight
-                //   3. LOST_IN_CARD_CONTRACT_MERGE    -- display lost grouped,
-                //                                         raw kept it, merge should
-                //                                         have rescued but didn't
-                //   4. LOST_IN_FINAL_VISIBLE_BODY_DECISION -- contract has grouped
-                //                                         truth, but dispatcher
-                //                                         still routed to flat
-                //   5. PRESENT_BUT_NOT_RENDERED_BY_CARD_UI -- model has blocks,
-                //                                         body picked flat anyway
-                //   6. NO_REAL_GROUPED_TRUTH_FOR_THIS_SESSION -- raw said grouped
-                //                                         but no renderable members
-                // ====================================================================
-                let bucket: string
-                if (rawGroupedOwnership.rawFallbackBlocks.length === 0 &&
-                    rawGroupedOwnership.renderBlocks.length === 0) {
-                  bucket = 'NO_REAL_GROUPED_TRUTH_FOR_THIS_SESSION'
-                } else if (rawWithNonStraightMethod > 0 && visibleWithNonStraightMethod === 0) {
-                  bucket = 'LOST_IN_VISIBLE_ROW_SURFACE'
-                } else if (
-                  (sessionStyleMetadata?.styledGroups?.some(g => g.groupType !== 'straight') ?? false) &&
-                  !(variantPrunedStyleMetadata?.styledGroups?.some(g => g.groupType !== 'straight') ?? false)
-                ) {
-                  bucket = 'LOST_IN_VARIANT_PRUNE'
-                } else if (!groupedRenderContract.hasGroupedTruth) {
-                  bucket = 'LOST_IN_CARD_CONTRACT_MERGE'
-                } else if (groupedRenderContract.rawFallbackBlocks.length === 0 &&
-                           synthesizedRawFallbackBlocks.length === 0 &&
-                           !groupedRenderContract.hasRichRenderableGroups) {
-                  bucket = 'LOST_IN_FINAL_VISIBLE_BODY_DECISION'
-                } else {
-                  bucket = 'PRESENT_BUT_NOT_RENDERED_BY_CARD_UI'
-                }
-                return (
-                  <div
-                    role="note"
-                    aria-label="Card grouped-truth mismatch probe"
-                    className="mt-2 rounded border border-amber-500/50 bg-amber-500/[0.08] px-2 py-1 font-mono text-[10px] leading-tight text-amber-200"
-                  >
-                    <div className="font-semibold text-amber-100">
-                      CARD_GROUPED_MISMATCH · day {session.dayNumber}
-                    </div>
-                    <div className="text-amber-200/90">
-                      raw_grouped_truth: YES · display_grouped_truth: {displayGroupedRendering.hasGroupedTruth ? 'YES' : 'NO'} · final_body_mode: <span className="text-amber-100">{finalVisibleBodyModel.mode}</span>
-                    </div>
-                    <div className="text-amber-200/80">
-                      raw_exs_with_blockId: {rawWithBlockId} · raw_exs_with_method: {rawWithNonStraightMethod} · visible_exs_with_blockId: {visibleWithBlockId} · visible_exs_with_method: {visibleWithNonStraightMethod}
-                    </div>
-                    <div className="text-amber-200/80">
-                      contract.renderBlocks: {groupedRenderContract.renderBlocks.length} · contract.rawFallbackBlocks: {groupedRenderContract.rawFallbackBlocks.length} · synthesized: {synthesizedRawFallbackBlocks.length}
-                    </div>
-                    <div className="mt-0.5 text-amber-100 font-semibold">
-                      bucket: {bucket}
-                    </div>
-                  </div>
-                )
-              })()}
 
             {/* [DOCTRINE-STRENGTHENING] Week-specific character badges */}
             {weekCharacter && (
@@ -3954,77 +1074,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   ================================================================= */}
               {/* Start Button - Primary Action (above detailed workout) */}
               <div className="mb-4">
-                {/* [SELECTED-SESSION-CONTRACT-PROOF] Launch-proof strip.
-                    [FINAL-VISIBLE-OWNERSHIP-LOCK] No longer renders in the
-                    athlete-facing card surface. The strip is preserved behind
-                    the existing `probeActive` flag (hard-disabled in
-                    production by the prior [PROBES-HARD-DISABLED] phase) so
-                    QA can still verify selected-variant ↔ visible-body parity.
-                    Athletes never see the `idx / mode / label / min / raw /
-                    vis / trim / body` mono-spaced debug row above the Start
-                    Workout button.
-
-                    CORRIDOR token semantics (probe-only):
-                      OK / OK_FULL / MISMATCH — see selected-variant contract. */}
-                {probeActive && (() => {
-                  const idx = selectedSessionContract.selectedVariantIndex
-                  const rawCount = safeExercises.length
-                  const visCount = fullVisibleExercises.length
-                  const trim = Math.max(0, rawCount - visCount)
-                  const fullMin = typeof session.estimatedMinutes === 'number'
-                    ? session.estimatedMinutes
-                    : null
-                  const selMin = typeof selectedSessionContract.selectedEstimatedMinutes === 'number'
-                    ? selectedSessionContract.selectedEstimatedMinutes
-                    : null
-                  const durationDiffers = fullMin !== null && selMin !== null && selMin !== fullMin
-                  let corridor: 'OK' | 'OK_FULL' | 'MISMATCH' = 'OK_FULL'
-                  if (idx > 0) {
-                    corridor = (trim > 0 || durationDiffers) ? 'OK' : 'MISMATCH'
-                  }
-                  return (
-                    <div className="mb-2 rounded-md border border-[#4F6D8A]/40 bg-[#12161C] px-2 py-1.5 text-[10px] font-mono text-[#7FA8CC] leading-tight">
-                      <div className="text-[#A4ACB8] uppercase tracking-wider text-[9px] mb-0.5 flex items-center gap-2">
-                        <span>Launch proof</span>
-                        <span
-                          className={
-                            corridor === 'MISMATCH'
-                              ? 'rounded-sm bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1'
-                              : 'rounded-sm bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-1'
-                          }
-                        >
-                          CORRIDOR:{corridor}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                        <span>idx={idx}</span>
-                        <span>mode={selectedSessionContract.selectedExecutionMode}</span>
-                        <span>label={selectedSessionContract.selectedVariantLabel}</span>
-                        <span>min={selectedSessionContract.selectedEstimatedMinutes}</span>
-                        <span>raw={rawCount}</span>
-                        <span>vis={visCount}</span>
-                        <span>trim={trim}</span>
-                        <span>body={finalVisibleBodyModel.mode}</span>
-                        {/* [PHASE 4U] Canonical body-render proof token. Reads
-                            the pure resolver verdict computed above. Format:
-                              canon=<source>/<status>[:bodyMatch]
-                            Examples:
-                              canon=canonical_method_structures/complete:1
-                              canon=styled_groups_fallback/fallback
-                              canon=ungrouped_fallback/empty
-                            When the verdict is canonical/complete with
-                            bodyMatch=1 the visible blocks are proven backed
-                            by canonical methodStructures. */}
-                        <span>
-                          canon={canonicalBodyRenderResolution.source}/{canonicalBodyRenderResolution.status}
-                          {canonicalBodyRenderResolution.bodyBlocksMatchCanonical !== null
-                            ? `:${canonicalBodyRenderResolution.bodyBlocksMatchCanonical ? '1' : '0'}`
-                            : ''}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })()}
                 <Button
                   onClick={handleStartWorkout}
                   className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2 h-10"
@@ -4044,40 +1093,11 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               - Full Session = null or 0 (explicitly reset to full)
               - 45 Min = idx of 45-minute variant
               - 30 Min = idx of 30-minute variant
-              - Clicking Full Session explicitly resets to null for canonical full behavior
-
-              [VARIANT-LAUNCHABILITY-CONTRACT] Buttons render ONLY for variants
-              that pass the canonical validity gate (`isVariantLaunchable`). A
-              variant whose `selection.main` is empty, missing, or contains
-              unusable rows will not render a tab here -- even if the
-              variant object itself exists and carries a duration/label. This
-              means 45 / 30 controls now match true launchability: if a 45 or
-              30 variant cannot be honestly materialized by the live-workout
-              route, it simply disappears from the toggle row instead of
-              presenting a button that would silently fall back to Full. The
-              underlying `selectedVariant` state still indexes the full
-              `session.variants` array so the launch URL's `variant=idx`
-              param lines up with what the route will read after session
-              load (the engine now never emits hollow variants, so indices
-              are dense). */}
-          {session.variants && session.variants.filter(v => isVariantLaunchable(v)).length > 1 && (
+              - Clicking Full Session explicitly resets to null for canonical full behavior */}
+          {session.variants && session.variants.length > 1 && (
             <div className="flex gap-2 flex-wrap">
               <span className="text-xs text-[#6A6A6A] self-center mr-1">Session length:</span>
               {session.variants.map((variant, idx) => {
-                // [VARIANT-LAUNCHABILITY-CONTRACT] Skip non-launchable entries
-                // without touching indices -- the idx we emit here must match
-                // the idx in `session.variants` so the launch URL and route
-                // post-load lookup agree.
-                if (!isVariantLaunchable(variant)) {
-                  console.warn('[VARIANT-LAUNCHABILITY-CONTRACT] Hiding non-launchable variant button', {
-                    sessionDay: session.dayNumber,
-                    idx,
-                    variantLabel: variant?.label,
-                    variantDuration: variant?.duration,
-                    mainCount: Array.isArray(variant?.selection?.main) ? variant.selection.main.length : 'not_array',
-                  })
-                  return null
-                }
                 // [TASK 4] Determine if this variant is the active selection
                 const isActive = selectedVariant === idx || (selectedVariant === null && idx === 0)
                 
@@ -4111,251 +1131,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             </div>
           )}
 
-          {/* [PHASE AB3] SHORT SESSION DOCTRINE RECOMPOSITION TRUTH SURFACE
-              Renders ONLY when a short variant (45 Min / 30 Min) is selected
-              AND the builder stamped a `recompositionTruth` sidecar onto the
-              chosen variant. The card reads through the `selectedDisplayContract`
-              so this is the SAME variant body that Start Workout will execute
-              (the route consumes `variant.selection.main` via
-              `buildSelectedVariantMain`, which is unchanged). Display rules:
-                - When `engine === 'doctrine_recomposition'`, the headline says
-                  "{label} recomposed" and lists strategy / preserved / deferred /
-                  delta highlights.
-                - When `engine === 'fallback_compression'`, the surface honestly
-                  labels itself "Compression-only fallback" so the user is never
-                  told "doctrine recomposed" for a body that wasn't.
-                - Hidden entirely when Full Session is selected (Full is parent
-                  truth, not a recomposition of itself). */}
-          {(() => {
-            const selectedIdx = selectedDisplayContract.selectedVariantIndex
-            if (selectedIdx <= 0) return null
-            const truth: RecompositionTruth | null = getRecompositionTruth(
-              selectedDisplayContract.variantData
-            )
-            if (!truth) return null
-            // [PHASE AB4] Engine-state-driven honesty.
-            //
-            // AB3 used a single `isFallback` boolean, which forced every
-            // non-fallback variant to render "{n} Min recomposed" — even
-            // when the per-variant ledger applied=0. AB4 splits the engine
-            // into four states and the UI must honor each one:
-            //
-            //   doctrine_materialized → "{n} Min materialized" (real causal mutation)
-            //   doctrine_preserved    → "{n} Min preserved"    (no mutation, by doctrine)
-            //   no_safe_mutation      → "{n} Min preserved"    (no mutation, safety)
-            //   fallback_compression  → "Compression-only fallback"
-            //   doctrine_recomposition (legacy) → treat like materialized for old saves
-            const isFallback = truth.engine === 'fallback_compression'
-            const isPreserved =
-              truth.engine === 'doctrine_preserved' || truth.engine === 'no_safe_mutation'
-            const isMaterialized =
-              truth.engine === 'doctrine_materialized' ||
-              truth.engine === 'doctrine_recomposition'
-            // Defensive: even if engine claims materialized, if applied=0 we
-            // refuse to use the materialized headline and downgrade to
-            // preserved. This is the AB4 honesty rule: applied=0 cannot ever
-            // display as "recomposed".
-            const appliedCount =
-              truth.ledger.mutated + truth.ledger.visible + truth.ledger.executable
-            const showAsMaterialized = isMaterialized && appliedCount > 0
-            const showAsPreserved = isPreserved || (isMaterialized && appliedCount === 0)
-            // Strategy chip label — short, scannable, matches the headline copy
-            // produced by the recomposer's `crunchTimeStrategy` field. Stable
-            // mapping (no fuzzy text) so QA can grep on it.
-            const strategyLabel = (() => {
-              // If the engine forces preserved/no-safe-mutation, the chip
-              // should not lie about a mixed-method strategy when the body
-              // has none materialised.
-              if (showAsPreserved) {
-                return truth.engine === 'no_safe_mutation' ? 'No Safe Mutation' : 'Preserved'
-              }
-              switch (truth.crunchTimeStrategy) {
-                case 'preserve_spine': return 'Preserve Spine'
-                case 'density_recompose': return 'Density'
-                case 'paired_accessory': return 'Paired Accessory'
-                case 'rest_pause_assist': return 'Rest-Pause'
-                case 'cluster_assist': return 'Cluster'
-                case 'superset_assist': return 'Superset'
-                case 'mixed_method': return 'Mixed Method'
-                case 'set_reduction': return 'Set Reduction'
-                case 'rest_reduction': return 'Rest Reduction'
-                case 'rpe_reduction': return 'RPE Reduction'
-                case 'minimal_priority': return 'Minimal Priority'
-                case 'straight_sets_best': return 'Straight Sets'
-                case 'identity_preserve': return 'Identity Preserve'
-                case 'doctrine_preserved': return 'Preserved'
-                default: return 'Materialized'
-              }
-            })()
-            const containerBorder = isFallback
-              ? 'border-amber-500/40 bg-amber-500/5'
-              : showAsPreserved
-                ? 'border-[#4F6D8A]/30 bg-[#0F1218]'
-                : 'border-[#4F6D8A]/40 bg-[#12161C]'
-            const headlineColor = isFallback ? 'text-amber-300' : 'text-[#A5A5A5]'
-            const labelColor = isFallback
-              ? 'text-amber-400/80'
-              : showAsPreserved
-                ? 'text-[#6A6A6A]'
-                : 'text-[#6A8FB0]'
-            // Cap method-changes / deltas / deferred lists so the card stays
-            // compact. Truth object always carries the full data for any
-            // downstream surface that wants to render it in detail.
-            const cappedDeferred = truth.deferredExercises.slice(0, 4)
-            const cappedSetDeltas = truth.setDeltas.slice(0, 3)
-            const cappedRpeDeltas = truth.rpeDeltas.slice(0, 2)
-            const cappedRestDeltas = truth.restDeltas.slice(0, 2)
-            const cappedAnchors = truth.preservedPriorityAnchors.slice(0, 3)
-            const executableMethods = truth.methodChanges.filter(
-              m => m.state === 'executable' || m.state === 'visible' || m.state === 'mutated'
-            )
-            return (
-              <div
-                className={`rounded-md border ${containerBorder} px-3 py-2 text-xs leading-relaxed`}
-                role="region"
-                aria-label="Short session recomposition summary"
-              >
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <Layers className="w-3.5 h-3.5 text-[#6A8FB0]" aria-hidden="true" />
-                    <span className={`uppercase tracking-wider text-[10px] font-semibold ${labelColor}`}>
-                      {isFallback
-                        ? 'Compression-only fallback'
-                        : showAsMaterialized
-                          ? `${truth.targetMinutes} Min materialized`
-                          : truth.engine === 'no_safe_mutation'
-                            ? `${truth.targetMinutes} Min preserved (no safe mutation)`
-                            : `${truth.targetMinutes} Min preserved`}
-                    </span>
-                  </div>
-                  {!isFallback && (
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] h-5 px-1.5 ${
-                        showAsPreserved
-                          ? 'border-[#3A3A3A] text-[#6A6A6A]'
-                          : 'border-[#4F6D8A]/50 text-[#A5A5A5]'
-                      }`}
-                    >
-                      {strategyLabel}
-                    </Badge>
-                  )}
-                </div>
-                <p className={`${headlineColor} text-pretty`}>{truth.visibleSummary}</p>
-                {!isFallback && (
-                  <div className="mt-2 flex flex-col gap-1">
-                    {cappedAnchors.length > 0 && (
-                      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                        <span className="text-[#6A8FB0] text-[10px] uppercase tracking-wider">Preserved:</span>
-                        <span className="text-[#A5A5A5]">{cappedAnchors.join(', ')}</span>
-                      </div>
-                    )}
-                    {cappedDeferred.length > 0 && (
-                      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                        <span className="text-[#6A8FB0] text-[10px] uppercase tracking-wider">Deferred:</span>
-                        <span className="text-[#A5A5A5]">
-                          {cappedDeferred.join(', ')}
-                          {truth.deferredExercises.length > cappedDeferred.length
-                            ? ` +${truth.deferredExercises.length - cappedDeferred.length} more`
-                            : ''}
-                        </span>
-                      </div>
-                    )}
-                    {cappedSetDeltas.length > 0 && (
-                      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                        <span className="text-[#6A8FB0] text-[10px] uppercase tracking-wider">Sets:</span>
-                        <span className="text-[#A5A5A5]">{cappedSetDeltas.join('; ')}</span>
-                      </div>
-                    )}
-                    {cappedRpeDeltas.length > 0 && (
-                      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                        <span className="text-[#6A8FB0] text-[10px] uppercase tracking-wider">RPE:</span>
-                        <span className="text-[#A5A5A5]">{cappedRpeDeltas.join('; ')}</span>
-                      </div>
-                    )}
-                    {cappedRestDeltas.length > 0 && (
-                      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                        <span className="text-[#6A8FB0] text-[10px] uppercase tracking-wider">Rest:</span>
-                        <span className="text-[#A5A5A5]">{cappedRestDeltas.join('; ')}</span>
-                      </div>
-                    )}
-                    {executableMethods.length > 0 && (
-                      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                        <span className="text-[#6A8FB0] text-[10px] uppercase tracking-wider">Methods:</span>
-                        <span className="text-[#A5A5A5]">
-                          {executableMethods.map(m => `${m.method} (${m.state})`).join(', ')}
-                        </span>
-                      </div>
-                    )}
-                    {truth.safetyBlocks.length > 0 && (
-                      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                        <span className="text-amber-400/80 text-[10px] uppercase tracking-wider">Blocked:</span>
-                        <span className="text-amber-200/90">{truth.safetyBlocks.join('; ')}</span>
-                      </div>
-                    )}
-                    {/* [PHASE AB4] Causal mutation records — proof of what
-                        AB4 actually did to the body (set/RPE/rest deltas the
-                        materialiser applied). Distinct from FULL→variant
-                        deltas above, which are seed-vs-Full. We render
-                        compactly and only when the engine produced honest
-                        records. */}
-                    {Array.isArray(truth.mutationRecords) && truth.mutationRecords.length > 0 && (() => {
-                      const causal = truth.mutationRecords.filter(
-                        m => m.type === 'set_delta' || m.type === 'rpe_delta' || m.type === 'rest_delta'
-                      )
-                      if (causal.length === 0) return null
-                      return (
-                        <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                          <span className="text-[#6A8FB0] text-[10px] uppercase tracking-wider">Mutator:</span>
-                          <span className="text-[#A5A5A5]">
-                            {causal.slice(0, 3).map(m => {
-                              const name = m.exerciseNames[0] ?? 'row'
-                              const verb =
-                                m.type === 'set_delta'
-                                  ? 'sets'
-                                  : m.type === 'rpe_delta'
-                                    ? 'RPE'
-                                    : 'rest'
-                              return `${name}: ${verb} ${m.before} → ${m.after}`
-                            }).join('; ')}
-                            {causal.length > 3 ? ` +${causal.length - 3} more` : ''}
-                          </span>
-                        </div>
-                      )
-                    })()}
-                    <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] font-mono text-[#7FA8CC]">
-                      <span>applied={appliedCount}</span>
-                      <span>mut={truth.ledger.mutated}</span>
-                      <span>vis={truth.ledger.visible}</span>
-                      <span>exec={truth.ledger.executable}</span>
-                      <span>blk={truth.ledger.blocked}</span>
-                      <span>sup={truth.ledger.suppressed}</span>
-                      <span>nt={truth.ledger.no_target}</span>
-                      <span>aud={truth.ledger.audit_only}</span>
-                      <span>state={truth.materializationState ?? 'unknown'}</span>
-                    </div>
-                    {/* [PHASE AB4] Honest preserved/no-safe-mutation note.
-                        When applied=0 we MUST tell the user this body was
-                        intentionally preserved — never let "{n} Min
-                        recomposed" appear with applied=0. */}
-                    {showAsPreserved && (
-                      <p className="mt-1 text-[10px] text-[#6A6A6A]">
-                        {truth.engine === 'no_safe_mutation'
-                          ? 'Doctrine evaluated this body and found no safe causal mutation. Every row is either a protected anchor or already fatigue-managed; the compression seed was kept intact to protect quality.'
-                          : 'Doctrine evaluated this body and intentionally preserved the compression seed. No additional set / RPE / rest mutation crossed the safety threshold for this variant.'}
-                      </p>
-                    )}
-                  </div>
-                )}
-                {isFallback && (
-                  <p className="mt-1 text-[10px] text-amber-200/80">
-                    Doctrine recomposition was unavailable for this variant. The body was produced by compression only and is not labelled as doctrine-recomposed.
-                  </p>
-                )}
-              </div>
-            )
-          })()}
-
           {/* Warmup Toggle */}
           <div>
             <button
@@ -4381,294 +1156,53 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   </p>
                 )}
                 {session.warmup.map((exercise, idx) => (
-                  // [PHASE-AA4] Pass authoritative `sectionKind="warmup"` so
-                  // the row renders the green Warm-Up identity tag and
-                  // suppresses main-row affordances. Replaces legacy
-                  // `isWarmupCooldown` boolean which collapsed warm-up and
-                  // cool-down into one flag.
-                  <ExerciseRow key={idx} exercise={exercise} sectionKind="warmup" />
+                  <ExerciseRow key={idx} exercise={exercise} isWarmupCooldown />
                 ))}
               </div>
             )}
           </div>
 
 {/* =========================================================================
-    [CARD-TRUTH-STATUS-LINE] Authoritative card-local display kind status.
-    Resolves the session to exactly one of three explicit states so the
-    user never has to infer from chips or scanner whether the body is
-    supposed to paint grouped structure:
-      1. grouped_blocks  -> body will render renderable grouped block(s)
-      2. method_only     -> body stays flat with row-level method cues
-      3. flat            -> honestly flat, no status line rendered
-    Reads `finalVisibleBodyModel.mode` directly (same contract the body
-    renderer consumes), so chip row, body, and status line can never
-    disagree.
-    ========================================================================= */}
-{(() => {
-  const mode = finalVisibleBodyModel.mode
-  // `simple_order_grouped` now only fires from the dispatcher when
-  // `hasRenderableGroupedBlockStructure === true` (multi-member styled
-  // group OR multi-member blockId methods) AND synthesis produced no
-  // block list -- i.e. the grouped-block truth-lost failure case. That
-  // still counts as grouped_blocks for the status line because the body
-  // will render a grouped banner + failure-stage surface.
-  const isGroupedBlocks =
-    mode === 'rich_grouped' ||
-    mode === 'raw_grouped_fallback' ||
-    mode === 'simple_order_grouped'
-  // Method cues: any non-straight method on any row, NOT counted as a block.
-  // [SET-EXECUTION-TRUTH-STATUS] Read `setExecutionMethod` FIRST then fall back
-  // to legacy `.method`. Without this, a session whose only non-straight signal
-  // is a single-row `setExecutionMethod='cluster'` would show "No method cues"
-  // in the status line even though the builder applied cluster set-execution.
-  let hasAnyNonStraightMethod = false
-  const methodSet = new Set<string>()
-  // [SELECTED-SESSION-CONTRACT] Method cues are now detected from the
-  // variant-narrowed visible exercise list (`fullVisibleExercises`), NOT from
-  // raw `safeExercises`. Previously this loop iterated raw safeExercises, so
-  // when the user selected 45 Min / 30 Min the status line kept reporting the
-  // FULL session's method cues even though the body below had been trimmed to
-  // the variant's smaller set. That was the exact "status line and body
-  // disagree" split the corridor lock is removing. `fullVisibleExercises`
-  // carries `method` + `blockId` through `buildFullVisibleRoutineExercises`
-  // for every surviving row, so iterating it produces cues that match the
-  // variant truth one-for-one.
-  for (const ex of fullVisibleExercises) {
-    const e = ex as unknown as { method?: string; setExecutionMethod?: string }
-    const se = (e.setExecutionMethod || '').toLowerCase()
-    const mm = (e.method || '').toLowerCase()
-    const raw =
-      se && se !== 'straight' && se !== 'straight_sets'
-        ? se
-        : (mm && mm !== 'straight' && mm !== 'straight_sets' ? mm : '')
-    if (!raw) continue
-    hasAnyNonStraightMethod = true
-    if (raw === 'superset') methodSet.add('superset')
-    else if (raw === 'circuit' || raw === 'circuits') methodSet.add('circuit')
-    else if (raw === 'cluster' || raw === 'cluster_set' || raw === 'cluster_sets') methodSet.add('cluster')
-    else if (raw === 'density' || raw === 'density_block') methodSet.add('density')
-    else methodSet.add(raw)
-  }
-  const isMethodOnly = !isGroupedBlocks && hasAnyNonStraightMethod
-  if (!isGroupedBlocks && !isMethodOnly) return null
-  if (isGroupedBlocks) {
-    // [SELECTED-VARIANT-EXECUTABLE-METHOD-TALLY] Strip counts now come from
-    // the executable tally so the strip cannot claim grouped methods that
-    // the selected variant body cannot paint (e.g. 30-min preserved variant
-    // dropping one half of a superset pair).
-    //
-    // Strip wording rules:
-    //   - rich_grouped / raw_grouped_fallback: use executable tally; if it
-    //     returns 0 across all four families, suppress the strip entirely.
-    //     The body's own zero-member guard ensures no empty group frame
-    //     paints, so chip + body are honest together.
-    //   - simple_order_grouped: keep the original model counts because that
-    //     mode renders a grouped-method banner over an ordered list with no
-    //     filterable rendered blocks.
-    const useExecutableTally =
-      mode === 'rich_grouped' || mode === 'raw_grouped_fallback'
-    const tokens: string[] = []
-    const s = useExecutableTally
-      ? selectedVariantExecutableMethodTally.superset
-      : finalVisibleBodyModel.supersetCount
-    const c = useExecutableTally
-      ? selectedVariantExecutableMethodTally.circuit
-      : finalVisibleBodyModel.circuitCount
-    const d = useExecutableTally
-      ? selectedVariantExecutableMethodTally.density
-      : finalVisibleBodyModel.densityCount
-    const cl = useExecutableTally
-      ? selectedVariantExecutableMethodTally.cluster
-      : finalVisibleBodyModel.clusterCount
-    if (s > 0) tokens.push(`${s} Superset${s > 1 ? 's' : ''}`)
-    if (c > 0) tokens.push(`${c} Circuit${c > 1 ? 's' : ''}`)
-    if (d > 0) tokens.push(`${d} Density Block${d > 1 ? 's' : ''}`)
-    if (cl > 0) tokens.push(`${cl} Cluster${cl > 1 ? 's' : ''}`)
-    // [VARIANT-PRUNE-HONESTY] If selected variant trimmed all grouped members
-    // below the method minimum, suppress the strip entirely rather than
-    // rendering "Grouped structure: grouped" with no count tokens.
-    if (useExecutableTally && tokens.length === 0) return null
-    const summary = tokens.length > 0 ? tokens.join(' · ') : 'grouped'
-    return (
-      <div className="mb-2 flex items-center gap-2 rounded-md border border-[#4F6D8A]/40 bg-[#4F6D8A]/10 px-3 py-1.5 text-xs text-[#7FA8CC]">
-        <Layers className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span>
-          <span className="font-semibold">Grouped structure:</span> {summary}
-        </span>
-      </div>
-    )
-  }
-  // Method-only -- body stays flat, tell the user what methods are present.
-  // [STATUS-LINE-LABEL-NORMALIZATION] Labels here MUST match the method-only
-  // chip wording above (Cluster / Density row) and avoid grouped structural
-  // nouns (Cluster Set / Density Block) because the body is flat -- no
-  // grouped block is being painted. Keeps the three surfaces (status line,
-  // collapsed chip, in-body headline) reading as one honest vocabulary.
-  const prettyMethod = (m: string) =>
-    m === 'superset' ? 'Superset'
-      : m === 'circuit' ? 'Circuit'
-        : m === 'density' ? 'Density'
-          : m === 'cluster' ? 'Cluster'
-            : m.charAt(0).toUpperCase() + m.slice(1).replace(/_/g, ' ')
-  const methodList = Array.from(methodSet).map(prettyMethod).join(', ')
-  return (
-    <div className="mb-2 flex items-center gap-2 rounded-md border border-[#3A3A3A] bg-[#1A1A1A] px-3 py-1.5 text-xs text-[#A5A5A5]">
-      <Dumbbell className="h-3.5 w-3.5 shrink-0" aria-hidden />
-      <span>
-        <span className="font-semibold text-[#C5C5C5]">Method cues present:</span> {methodList}
-      </span>
-    </div>
-  )
-})()}
-
-{/* =========================================================================
     [GROUPED-METHOD-SUMMARY] Visible session methodology indicator
     Uses the unified display adapter for consistent grouped truth consumption
     ========================================================================= */}
-{hasAnyVisibleMethod && (
-  // [COLLAPSED-HEADER-METHOD-TRUTH] Expanded chip row now consumes the SAME
-  // `visibleMethodTally` as the collapsed header, locked to
-  // `finalVisibleBodyModel`. Prior behavior gated on `hasRenderableGroups`
-  // alone (rich path only) and used `groupedRenderContract` counts, which
-  // under-claimed for `raw_grouped_fallback` sessions whose body DID paint
-  // grouped Cluster/Density headers but whose rich counts were zero. Now
-  // chip and body are structurally locked: a chip appears iff the body will
-  // paint a matching grouped header. Palette mirrors the in-body block
-  // headers (Superset blue, Circuit emerald, Density amber, Cluster purple)
-  // so chip colors read as the same visual language as the body.
-  // [PHASE 4T] Expanded chip row also reads from `dominantMethodTally`. The
-  // collapsed chip strip and this expanded row must agree, and both must
-  // honor canonical methodStructures over legacy styledGroups when canonical
-  // is present. See [METHOD-STRUCTURES-DOMINANCE] for the resolution rule.
-  <div className="mb-3 flex flex-wrap items-center gap-2">
-    {dominantMethodTally.superset > 0 && (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-[#4F6D8A]/15 text-[#7FA8CC] border border-[#4F6D8A]/40">
-        <Layers className="w-3.5 h-3.5" />
-        {dominantMethodTally.superset} Superset{dominantMethodTally.superset > 1 ? 's' : ''}
-      </span>
-    )}
-    {dominantMethodTally.circuit > 0 && (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
-        <RefreshCw className="w-3.5 h-3.5" />
-        {dominantMethodTally.circuit} Circuit{dominantMethodTally.circuit > 1 ? 's' : ''}
-      </span>
-    )}
-    {dominantMethodTally.density > 0 && (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/40">
-        <Timer className="w-3.5 h-3.5" />
-        {densityChipLabel(dominantMethodTally.density)}
-      </span>
-    )}
-    {dominantMethodTally.cluster > 0 && (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-purple-500/15 text-purple-300 border border-purple-500/40">
-        <Dumbbell className="w-3.5 h-3.5" />
-        {clusterChipLabel(dominantMethodTally.cluster)}
-      </span>
-    )}
-  </div>
-)}
-
-{/* [PHASE 4F — DISPLAY PROJECTION OWNERSHIP LOCK]
-    Per-session doctrine causal line, rendered INSIDE the card body (not in
-    a wrapper strip) so the user can tell, for THIS specific session,
-    whether doctrine actually changed the top exercise pick — answered from
-    the page-built read-only projection sourced from
-    `program.doctrineCausalChallenge.sessionDiffs[]` (Phase 4E).
-
-    Honest-display contract:
-      * Renders nothing when no projection slice is available (older saved
-        programs, or sessions for which Phase 4E recorded no audit).
-      * Emerald + summary copy when `materialChanged === true`. The summary
-        names the post-doctrine top winner (and pre-doctrine alternative
-        when known). Never claimed without `topCandidateChanged === true`.
-      * Zinc + honest no-change reason when doctrine evaluated this session
-        but did not change its top winner. Reason text is mapped from the
-        per-session verdict, never derived from rule/source counts.
-      * Amber when doctrine did not run or had no rules matching this
-        session — signals an upstream condition the user should know about.
-    No proof labels. No selected-rule counts. No source counts.
-
-    [PHASE 4T — DOCTRINE-CAUSAL-DEMOTION] When the canonical Phase 4Q
-    `doctrineBlockResolution` array exists on this card's surface, the
-    classified Phase 4S delivery line directly above this banner already
-    owns the doctrine narrative. Showing the legacy "Doctrine not applied
-    to this session" / "Doctrine evaluated this session" amber/zinc
-    pill on top of a classified line that says "Doctrine: 2 applied" is
-    the contradiction Phase 4S surfaced. This guard suppresses the
-    legacy banner whenever classified resolution exists. The single
-    exception is `materialChanged === true`: that conveys top-pick
-    causal evidence (which exercise won) the classified line does not,
-    so we keep the emerald summary chip when classified resolution
-    confirms doctrine engagement. Older saved programs without
-    `doctrineBlockResolution` still see the full legacy banner so we
-    do not regress non-Phase-4Q histories. */}
-{displayProjectionSession?.doctrineCausalDisplay?.available &&
-  // [PHASE 4T] Suppress when canonical classified resolution exists, except
-  // for the emerald `materialChanged` chip which carries unique top-pick
-  // causal evidence the classified line does not duplicate.
-  (!hasClassifiedDoctrineResolution(cardSurface) ||
-    !!displayProjectionSession.doctrineCausalDisplay.materialChanged) ? (
-  (() => {
-    const cd = displayProjectionSession.doctrineCausalDisplay
-    if (cd.materialChanged && cd.summary) {
-      return (
-        <div
-          role="status"
-          aria-live="polite"
-          data-phase4f-causal="changed"
-          className="mt-2 mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-emerald-500/20 bg-emerald-500/[0.04] px-3 py-2 max-w-full min-w-0 overflow-hidden"
-        >
-          <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400/90" aria-hidden />
-          <span className="text-[12px] font-medium text-emerald-200 shrink-0">
-            Doctrine changed this session
-          </span>
-          <span className="text-[12px] text-emerald-200/70 break-words [overflow-wrap:anywhere] min-w-0">
-            {cd.summary}
-          </span>
-        </div>
-      )
-    }
-    if (
-      cd.noChangeReason === 'doctrine_no_matching_rules' ||
-      cd.noChangeReason === 'doctrine_cache_empty' ||
-      cd.noChangeReason === 'doctrine_did_not_run'
-    ) {
-      return (
-        <div
-          role="status"
-          aria-live="polite"
-          data-phase4f-causal="not-applicable"
-          className="mt-2 mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-amber-500/30 bg-amber-500/[0.05] px-3 py-2 max-w-full min-w-0 overflow-hidden"
-        >
-          <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-400/90" aria-hidden />
-          <span className="text-[12px] font-medium text-amber-200 shrink-0">
-            Doctrine not applied to this session
-          </span>
-          <span className="text-[12px] text-amber-200/70 break-words [overflow-wrap:anywhere] min-w-0">
-            {cd.summary || 'See top-of-page line for details'}
-          </span>
-        </div>
-      )
-    }
-    // doctrine_evaluated_base_won OR doctrine_top3_changed_top1_did_not
-    return (
-      <div
-        role="status"
-        aria-live="polite"
-        data-phase4f-causal="evaluated-no-change"
-        className="mt-2 mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-zinc-700/40 bg-zinc-900/40 px-3 py-2 max-w-full min-w-0 overflow-hidden"
-      >
-        <MinusCircle className="w-3.5 h-3.5 shrink-0 text-zinc-400/80" aria-hidden />
-        <span className="text-[12px] font-medium text-zinc-300 shrink-0">
-          Doctrine evaluated this session
+{(() => {
+  // [GROUPED-RENDER-CONTRACT] Consume the SINGLE authoritative grouped render
+  // contract hoisted above. The chip and the body are now guaranteed to agree:
+  // chip visibility is gated by the EXACT same object that drives the body's
+  // grouped-vs-flat decision. No parallel computation, no drift.
+  const groupedDisplay = groupedRenderContract
+  if (!hasRenderableGroups) return null
+  
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      {groupedDisplay.supersetCount > 0 && (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-purple-500/15 text-purple-300 border border-purple-500/25">
+          <Layers className="w-3.5 h-3.5" />
+          {groupedDisplay.supersetCount} Superset{groupedDisplay.supersetCount > 1 ? 's' : ''}
         </span>
-        <span className="text-[12px] text-zinc-400/80 break-words [overflow-wrap:anywhere] min-w-0">
-          {cd.summary || 'Base ranking already optimal — no exercise change'}
+      )}
+      {groupedDisplay.circuitCount > 0 && (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-orange-500/15 text-orange-300 border border-orange-500/25">
+          <Zap className="w-3.5 h-3.5" />
+          {groupedDisplay.circuitCount} Circuit{groupedDisplay.circuitCount > 1 ? 's' : ''}
         </span>
-      </div>
-    )
-  })()
-) : null}
+      )}
+      {groupedDisplay.densityCount > 0 && (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/25">
+          <Timer className="w-3.5 h-3.5" />
+          {groupedDisplay.densityCount} Density Block{groupedDisplay.densityCount > 1 ? 's' : ''}
+        </span>
+      )}
+      {groupedDisplay.clusterCount > 0 && (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-cyan-500/15 text-cyan-300 border border-cyan-500/25">
+          <Layers className="w-3.5 h-3.5" />
+          {groupedDisplay.clusterCount} Cluster Set{groupedDisplay.clusterCount > 1 ? 's' : ''}
+        </span>
+      )}
+    </div>
+  )
+})()}
 
 {/* Main Exercises - [FULL-VISIBLE-ROUTINE] Uses full routine truth, not narrowed displayExercises */}
 <MainExercisesRenderer
@@ -4840,52 +1374,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                       )}
                     </div>
 
-                    {/* [CLUSTER-DECISION-EVIDENCE] Concrete proof of the cluster
-                        choice for this session: target exercise, reason, and
-                        method-cue vs grouped-block type. Reads the single
-                        authoritative truth the builder persisted on
-                        session.styleMetadata.clusterDecision -- no guessed
-                        text, no hardcoded fallback copy. Rendered only when
-                        cluster was actually applied. */}
-                    {(() => {
-                      const cd = (session as unknown as {
-                        styleMetadata?: {
-                          clusterDecision?: {
-                            targetExerciseName: string
-                            reasonSummary: string
-                            type: 'method_cue' | 'grouped_block'
-                          }
-                        }
-                      }).styleMetadata?.clusterDecision
-                      if (!cd) return null
-                      const typeLabel = cd.type === 'grouped_block' ? 'Grouped block' : 'Method cue'
-                      const typeHint = cd.type === 'grouped_block'
-                        ? 'Renders as a framed grouped block with shared pacing.'
-                        : 'Body stays flat; only the targeted row runs cluster execution.'
-                      return (
-                        <div className="rounded-md border border-purple-500/30 bg-purple-500/5 px-3 py-2">
-                          <div className="text-[10px] uppercase tracking-wide text-purple-300/80 mb-1.5">
-                            Cluster decision
-                          </div>
-                          <div className="space-y-1 text-[#C5C5C5] leading-relaxed">
-                            <div>
-                              <span className="text-[#8A8A8A]">Applied to:</span>{' '}
-                              <span className="font-medium text-[#E6E6E6]">{cd.targetExerciseName}</span>
-                            </div>
-                            <div>
-                              <span className="text-[#8A8A8A]">Why:</span>{' '}
-                              <span className="text-[#C5C5C5]">{cd.reasonSummary}</span>
-                            </div>
-                            <div>
-                              <span className="text-[#8A8A8A]">Type:</span>{' '}
-                              <span className="font-medium text-purple-300">{typeLabel}</span>
-                              <span className="text-[#7A7A7A]"> — {typeHint}</span>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })()}
-
                     {/* Rejected methods (only those the user selected) */}
                     {rejected.length > 0 && (
                       <div>
@@ -4905,109 +1393,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                         </ul>
                       </div>
                     )}
-
-                    {/* [PHASE-AA3] COACH REASONS BLOCK
-                        Reads `session.aa3CoachPlan` (stamped by the AA3
-                        coach-materialization corridor at generation time).
-                        Surfaces ONE specific coach-like line per method
-                        family that was considered but not used. Skips:
-                          - APPLIED_BY_*  (already shown in "Today's
-                            structure" / cluster-decision card / the body)
-                          - NOT_PREFERRED (implicit from onboarding — too
-                            noisy to repeat for every unselected family)
-                          - DEFAULT_STRAIGHT_SETS_INTENTIONAL (already
-                            captured by the appliedSummary line above)
-                        Renders only when the AA3 plan exists AND has at
-                        least one displayable entry, so legacy programs
-                        without a stamped plan render exactly as before.
-                        Compact by design: each row is "<Method>: <reason>".
-                        AA1R is preserved — these are reasons for NOT
-                        applying, never claims of application. */}
-                    {(() => {
-                      const plan = (session as unknown as {
-                        aa3CoachPlan?: {
-                          perMethod?: Record<string, {
-                            family: string
-                            verdict: string
-                            reason: string
-                            target: string | null
-                          }>
-                          appliedByAA3?: string[]
-                          summary?: string
-                        }
-                      }).aa3CoachPlan
-                      if (!plan?.perMethod) return null
-
-                      const aa3Label = (m: string): string => {
-                        switch (m) {
-                          case 'superset': return 'Superset'
-                          case 'circuit': return 'Circuit'
-                          case 'density_block': return 'Density block'
-                          case 'top_set': return 'Top set'
-                          case 'drop_set': return 'Drop set'
-                          case 'cluster': return 'Cluster sets'
-                          case 'rest_pause': return 'Rest-pause'
-                          case 'straight_sets': return 'Straight sets'
-                          default: return m
-                        }
-                      }
-
-                      const SHOWABLE_VERDICTS = new Set([
-                        'CONSIDERED_NOT_OPTIMAL',
-                        'BLOCKED_BY_RUNTIME',
-                        'NO_TARGET',
-                        'SUPPRESSED_BY_VOLUME_GUARD',
-                        'SUPPRESSED_BY_SKILL_PRIORITY',
-                      ])
-
-                      const FAMILY_ORDER = [
-                        'top_set', 'drop_set', 'superset', 'circuit',
-                        'density_block', 'rest_pause', 'cluster',
-                      ]
-
-                      const rows = FAMILY_ORDER
-                        .map(family => plan.perMethod![family])
-                        .filter((e): e is NonNullable<typeof e> =>
-                          !!e && SHOWABLE_VERDICTS.has(e.verdict))
-
-                      // AA3 applied by AA3 itself: surface a small confirmation line
-                      // so the user knows the row mutation is real and where it
-                      // lives. APPLIED_BY_PRIOR_PIPELINE rows are already covered
-                      // by the body (row's setExecutionMethod renders the badge).
-                      const aa3Applied = (plan.appliedByAA3 ?? [])
-                        .map(family => plan.perMethod![family])
-                        .filter((e): e is NonNullable<typeof e> => !!e)
-
-                      if (rows.length === 0 && aa3Applied.length === 0) return null
-
-                      return (
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wide text-[#6A6A6A] mb-1.5">
-                            Coach reasons
-                          </div>
-                          <ul className="space-y-1.5">
-                            {aa3Applied.map((e, i) => (
-                              <li key={`aa3-applied-${i}`} className="flex gap-2">
-                                <span className="text-emerald-400/70 shrink-0">+</span>
-                                <span className="text-[#A5A5A5] leading-relaxed">
-                                  <span className="text-emerald-300 font-medium">{aa3Label(e.family)} applied{e.target ? ` to ${e.target}` : ''}:</span>{' '}
-                                  {e.reason}
-                                </span>
-                              </li>
-                            ))}
-                            {rows.map((e, i) => (
-                              <li key={`aa3-not-${i}`} className="flex gap-2">
-                                <span className="text-[#6A6A6A] shrink-0">·</span>
-                                <span className="text-[#A5A5A5] leading-relaxed">
-                                  <span className="text-[#C5C5C5] font-medium">{aa3Label(e.family)}:</span>{' '}
-                                  {e.reason}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )
-                    })()}
 
                   </div>
                 )}
@@ -5058,15 +1443,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                   </p>
                 )}
                 {session.cooldown.map((exercise, idx) => (
-                  // [PHASE-AA4] Pass authoritative `sectionKind="cooldown"`
-                  // so the row renders the restrained slate-blue Cool-Down
-                  // identity tag (NOT the green Warm-Up tag). This is the
-                  // direct fix for the visible bug where every cool-down
-                  // row was labeled "Warm-Up". Phase 4I flexibility blocks
-                  // injected into session.cooldown by the builder render
-                  // through this exact path, so they receive the correct
-                  // label automatically.
-                  <ExerciseRow key={idx} exercise={exercise} sectionKind="cooldown" />
+                  <ExerciseRow key={idx} exercise={exercise} isWarmupCooldown />
                 ))}
               </div>
             )}
@@ -5090,138 +1467,6 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   </Card>
   )
   }
-
-// =============================================================================
-// [IN-BODY-GROUPED-BANNER]
-// Compact top-of-body headline that unambiguously marks the visible body as
-// grouped. Rendered as the FIRST child of every grouped branch so the user's
-// eye lands on a clear "this session is grouped" cue BEFORE the actual block
-// list. The banner is a pure consumer of the per-type counts on
-// `finalVisibleBodyModel` -- it introduces no parallel grouping truth.
-//
-// Why this exists: the collapsed-header chip row already surfaces grouped
-// counts above the card, but once the card is expanded the user's focus
-// shifts down to the body. The prior body started immediately with blocks
-// (rich) or with a plain flat list (simple_order_grouped), so the visible
-// body did not itself assert grouped identity. This banner places that
-// assertion inside the body, mirroring the same palette as the block headers
-// so the visual language is continuous from banner -> block pill -> member
-// rail.
-// =============================================================================
-// =============================================================================
-// [SET-EXECUTION-BODY-HEADLINE]
-// Honest session-body surface for METHOD_ONLY_FLAT cards -- where one or more
-// rows carry a set-execution method (cluster / density_block / etc.) applied
-// at the SINGLE-EXERCISE level, not as a multi-member grouped block. The copy
-// explicitly says "applied to individual exercise rows" so the user is never
-// misled into thinking the session has grouped structure.
-//
-// Taxonomy-aligned with lib/workout/execution-unit-contract.ts:
-//   - GROUPED STRUCTURE METHOD (multi-exercise)   -> GroupedBodyHeadline below
-//   - SET-EXECUTION METHOD     (per-row)          -> THIS component
-//   - CONTEXTUAL CUE           (informational)    -> row-level microcopy only
-// =============================================================================
-function SetExecutionBodyHeadline({
-  supersetCount: _supersetCount,
-  circuitCount: _circuitCount,
-  densityCount,
-  clusterCount,
-}: {
-  // superset/circuit not expected on this surface (they're grouped structures)
-  // but the signature is kept symmetric with GroupedBodyHeadline for safety.
-  supersetCount: number
-  circuitCount: number
-  densityCount: number
-  clusterCount: number
-}) {
-  const total = densityCount + clusterCount
-  if (total === 0) return null
-  const hint =
-    total === 1
-      ? 'One exercise in this session uses a set-execution method — applied to that single row, not as a grouped block.'
-      : 'Some exercises in this session use set-execution methods — applied to individual rows, not as grouped blocks.'
-  return (
-    <div className="mb-3 rounded-md border border-[#3A3A3A] bg-[#1A1A1A] px-3 py-2">
-      <div className="flex items-center gap-2 flex-wrap">
-        <Dumbbell className="w-3.5 h-3.5 text-[#A5A5A5]" />
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-[#C5C5C5]">
-          Set-execution methods
-        </span>
-        {clusterCount > 0 && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-purple-500/15 text-purple-300 border border-purple-500/40">
-            <Repeat className="w-3 h-3" />
-            {clusterCount} Cluster {clusterCount > 1 ? 'rows' : 'row'}
-          </span>
-        )}
-        {densityCount > 0 && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/15 text-amber-300 border border-amber-500/40">
-            <Timer className="w-3 h-3" />
-            {densityCount} Density {densityCount > 1 ? 'rows' : 'row'}
-          </span>
-        )}
-      </div>
-      <p className="mt-1 text-[10px] text-[#8A8A8A] leading-snug">{hint}</p>
-    </div>
-  )
-}
-
-function GroupedBodyHeadline({
-  supersetCount,
-  circuitCount,
-  densityCount,
-  clusterCount,
-  mode,
-}: {
-  supersetCount: number
-  circuitCount: number
-  densityCount: number
-  clusterCount: number
-  mode: 'rich_grouped' | 'raw_grouped_fallback' | 'simple_order_grouped'
-}) {
-  const total = supersetCount + circuitCount + densityCount + clusterCount
-  if (total === 0 && mode !== 'simple_order_grouped') return null
-  const hint =
-    mode === 'simple_order_grouped'
-      ? 'Grouped session — individual blocks shown as an ordered list below.'
-      : total === 1
-        ? 'Grouped session — one method applied to a block below.'
-        : 'Grouped session — multiple methods applied to blocks below.'
-  return (
-    <div className="mb-3 rounded-md border border-[#3A3A3A] bg-[#1A1A1A] px-3 py-2">
-      <div className="flex items-center gap-2 flex-wrap">
-        <Layers className="w-3.5 h-3.5 text-[#A5A5A5]" />
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-[#C5C5C5]">
-          Grouped structure
-        </span>
-        {supersetCount > 0 && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#4F6D8A]/15 text-[#7FA8CC] border border-[#4F6D8A]/40">
-            <Layers className="w-3 h-3" />
-            {supersetCount} Superset{supersetCount > 1 ? 's' : ''}
-          </span>
-        )}
-        {circuitCount > 0 && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
-            <RefreshCw className="w-3 h-3" />
-            {circuitCount} Circuit{circuitCount > 1 ? 's' : ''}
-          </span>
-        )}
-        {densityCount > 0 && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/15 text-amber-300 border border-amber-500/40">
-            <Timer className="w-3 h-3" />
-            {densityCount} Density Block{densityCount > 1 ? 's' : ''}
-          </span>
-        )}
-        {clusterCount > 0 && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-purple-500/15 text-purple-300 border border-purple-500/40">
-            <Dumbbell className="w-3 h-3" />
-            {clusterCount} Cluster Set{clusterCount > 1 ? 's' : ''}
-          </span>
-        )}
-      </div>
-      <p className="mt-1 text-[10px] text-[#8A8A8A] leading-snug">{hint}</p>
-    </div>
-  )
-}
 
 // =============================================================================
 // [PHASE 7B] MAIN EXERCISES RENDERER
@@ -5258,37 +1503,10 @@ interface MainExercisesRendererProps {
   // renderer's entire branch selection is `switch (finalVisibleBodyModel.mode)`
   // with no parallel boolean re-derivation. Grouped modes consume the block
   // lists carried here; flat/simple modes consume `displayExercises` directly.
-  //
-  // [IN-BODY-GROUPED-BANNER] Per-type counts are now REQUIRED because the
-  // renderer paints a top-of-body grouped-method headline in every grouped
-  // branch (rich / raw / simple-order), and that banner's chips are derived
-  // from these counts so banner + chip row + block headers cannot disagree.
   finalVisibleBodyModel: {
     mode: 'rich_grouped' | 'raw_grouped_fallback' | 'simple_order_grouped' | 'flat_category'
     renderBlocks: RenderBlock[]
     rawFallbackBlocks: RawFallbackBlock[]
-    nonStraightGroupCount: number
-    supersetCount: number
-    circuitCount: number
-    densityCount: number
-    clusterCount: number
-    // [SET-EXECUTION-TRUTH-VISIBILITY] Required by the flat_category branch
-    // so the renderer can distinguish an honestly flat session (no methods
-    // anywhere) from a METHOD_ONLY_FLAT session (non-straight methods live
-    // on single rows -- no grouped blocks). Only the latter paints the
-    // "Set-execution methods applied" in-body headline. Values other than
-    // 'METHOD_ONLY_FLAT' leave the flat body unchanged.
-    reasonIfNotRich?: GroupedFlatReason | 'RAW_FALLBACK_EMPTY' | 'METHOD_ONLY_FLAT' | null
-    // [CARD-LOCAL-FAILURE-SURFACE] Final losing stage for the simple_order
-    // grouped body. Renderer surfaces this as a single inline line ONLY on
-    // cards where grouped truth existed but no renderable block list could
-    // be produced. Null for every successful grouped render path.
-    groupedFailureStage?:
-      | 'bridge_lost_group_fields'
-      | 'grouped_contract_empty'
-      | 'final_mode_flattened'
-      | 'hydration_render_loss'
-      | null
   }
 }
 
@@ -5402,103 +1620,42 @@ function MainExercisesRenderer({
       }
     })
     let rawIdx = 0
-    // [IN-BODY-GROUPED-BANNER] Compute per-type counts directly from the
-    // block list the renderer iterates, so banner + block headers cannot
-    // disagree for this exact render.
-    let hSuper = 0, hCirc = 0, hDens = 0, hClust = 0
-    for (const b of fallbackBlocks) {
-      if (b.groupType === 'superset') hSuper++
-      else if (b.groupType === 'circuit') hCirc++
-      else if (b.groupType === 'density_block') hDens++
-      else if (b.groupType === 'cluster') hClust++
-    }
     return (
       <div className="space-y-4">
-        <GroupedBodyHeadline
-          supersetCount={hSuper}
-          circuitCount={hCirc}
-          densityCount={hDens}
-          clusterCount={hClust}
-          mode="raw_grouped_fallback"
-        />
         {fallbackBlocks.map((block, bIdx) => {
           const colors = getGroupTypeColors(block.groupType)
           const icon = getGroupTypeIcon(block.groupType)
-
-          // [PHASE AB5] Resolve grouped execution prescription for this
-          // raw-fallback block. Same single resolver the rich path uses;
-          // this is the parity guarantee — header rounds, member doses,
-          // and orphan handling are identical regardless of whether the
-          // card landed in the rich or raw branch.
-          const rawPrescription = resolveGroupedExecutionPrescription({
-            block: { kind: 'raw', block },
-            // [PHASE AB5] Mirror the raw fallback render path's hydration
-            // chain exactly. positionIndex is unused here (raw fallback has
-            // no blockId-positional map; the renderer resolves by id/name
-            // alone) but the resolver passes it for parity with the rich
-            // path so the function shape is uniform across both branches.
-            hydrate: ({ id, name }) => {
-              const direct =
-                (id ? hydrateMap.get(id) : undefined) ||
-                (name ? hydrateMap.get(name) : undefined) ||
-                (name ? hydrateMap.get(name.toLowerCase()) : undefined) ||
-                (name ? hydrateMap.get(normalizeKey(name)) : undefined)
-              if (!direct) return null
-              const scaled = direct as unknown as {
-                scaledSets?: number
-                scaledReps?: string
-                scaledTargetRPE?: number
-              }
-              return {
-                id: direct.id,
-                name: direct.name,
-                sets: direct.sets ?? null,
-                repsOrTime: direct.repsOrTime ?? null,
-                targetRPE: direct.targetRPE ?? null,
-                restSeconds: direct.restSeconds ?? null,
-                scaledSets: scaled.scaledSets,
-                scaledReps: scaled.scaledReps,
-                scaledTargetRPE: scaled.scaledTargetRPE,
-              }
-            },
-          })
-          const rawRoundsHeader = buildRoundsHeaderText(rawPrescription)
-          const rawOrphanIndexSet = new Set<number>()
-          rawPrescription.members.forEach((m, i) => {
-            if (!m.bound || !m.prescriptionComplete) rawOrphanIndexSet.add(i)
-          })
-          const rawRenderableCount =
-            rawPrescription.members.length - rawOrphanIndexSet.size
-
-          // [PHASE AB6 RECOVERY — ZERO-MEMBER GROUP GUARD (raw path)]
-          // Mirrors the rich path. A raw fallback block whose surviving
-          // members are below the method minimum cannot render as a grouped
-          // method (would produce "Superset · 0 exercises" or "Circuit · 1
-          // exercise"). Drop entirely when 0 survivors; degrade to flat row(s)
-          // when 1 survivor of a 2-member group.
-          {
-            const rawMinRequired = minMembersFor(block.groupType)
-            if (rawRenderableCount === 0) {
-              return null
-            }
-            if (rawRenderableCount < rawMinRequired) {
-              return (
-                <div key={block.groupId || `raw-degraded-${bIdx}`} className="space-y-2">
-                  {block.members.map((member, mIdx) => {
-                    if (rawOrphanIndexSet.has(mIdx)) return null
-                    const hydrated =
-                      (member.id ? hydrateMap.get(member.id) : undefined) ||
-                      (member.name ? hydrateMap.get(member.name) : undefined) ||
-                      (member.name ? hydrateMap.get(member.name.toLowerCase()) : undefined) ||
-                      (member.name ? hydrateMap.get(normalizeKey(member.name)) : undefined)
-                    if (!hydrated) return null
-                    rawIdx++
+          return (
+            <div
+              key={block.groupId || `raw-${bIdx}`}
+              // [GROUPED-VISIBLE-OWNERSHIP] Same dominant container treatment as
+              // the rich grouped path so the raw-fallback branch (grouped truth
+              // exists upstream but rich hydration incomplete) still visibly
+              // wins ownership of the card body instead of looking flat.
+              className={`rounded-lg border ${colors.border} ${colors.blockBg} p-2`}
+            >
+              <div className={`mb-2 flex items-center gap-2 flex-wrap px-2.5 py-1.5 rounded-md ${colors.bg}`}>
+                <span className={colors.text}>{icon}</span>
+                <span className={`text-sm font-semibold ${colors.text}`}>{block.label}</span>
+                <span className="text-[11px] text-[#8A8A8A]">
+                  · {block.members.length} {block.members.length === 1 ? 'exercise' : 'exercises'}
+                </span>
+              </div>
+              <div className={`space-y-2 pl-4 border-l-2 ${colors.border}`}>
+                {block.members.map((member, mIdx) => {
+                  rawIdx++
+                  const hydrated =
+                    (member.id ? hydrateMap.get(member.id) : undefined) ||
+                    (member.name ? hydrateMap.get(member.name) : undefined) ||
+                    (member.name ? hydrateMap.get(member.name.toLowerCase()) : undefined) ||
+                    (member.name ? hydrateMap.get(normalizeKey(member.name)) : undefined)
+                  if (hydrated) {
                     return (
                       <ExerciseRow
                         key={hydrated.id}
                         exercise={hydrated}
                         index={rawIdx}
-                        prefix={undefined}
+                        prefix={member.prefix}
                         sessionId={sessionId}
                         isSkipped={skippedExercises.has(hydrated.id)}
                         adjustedName={adjustedExercises.get(hydrated.id)}
@@ -5510,184 +1667,23 @@ function MainExercisesRenderer({
                         onProgressionAdjust={onProgressionAdjust}
                       />
                     )
-                  })}
-                </div>
-              )
-            }
-          }
-
-          return (
-            <div
-              key={block.groupId || `raw-${bIdx}`}
-              // [GROUPED-VISIBLE-OWNERSHIP] Same dominant container treatment as
-              // the rich grouped path so the raw-fallback branch (grouped truth
-              // exists upstream but rich hydration incomplete) still visibly
-              // wins ownership of the card body instead of looking flat.
-              // [GROUPED-BLOCK-FRAME-STRENGTHENED] Added `border-l-4` left
-              // accent so the grouped block visibly reads as a framed
-              // structural unit even on low-contrast card backgrounds. The
-              // accent color is the method color at full opacity (overriding
-              // the thin all-sides border for the left edge specifically).
-              className={`rounded-lg border border-l-4 ${colors.border} ${colors.blockBg} p-2`}
-            >
-              <div className={`mb-2 flex items-center gap-2 flex-wrap px-2.5 py-1.5 rounded-md ${colors.bg}`}>
-                <span className={colors.text}>{icon}</span>
-                <span className={`text-sm font-semibold ${colors.text}`}>{block.label}</span>
-                {/* [PHASE AB5] Method tagline (paired sets / rounds & stations
-                    / etc) followed by the rounds chip. Same idiom and same
-                    palette as the rich-grouped header above, so the two
-                    surfaces speak identically about block workload. */}
-                {(() => {
-                  const tagline = getGroupedMethodSemantics(block.groupType)?.headerTagline
-                  if (!tagline) return null
-                  return (
-                    <span className={`text-[11px] ${colors.text} opacity-80`}>
-                      · {tagline}
-                    </span>
-                  )
-                })()}
-                {rawRoundsHeader && (
-                  <span className={`text-[11px] ${colors.text} opacity-80 font-medium`}>
-                    · {rawRoundsHeader}
-                  </span>
-                )}
-                <span className="text-[11px] text-[#8A8A8A]">
-                  · {rawRenderableCount} {rawRenderableCount === 1 ? 'exercise' : 'exercises'}
-                </span>
-              </div>
-
-              {/* [METHOD-BODY-CUE] Same cluster/density in-body cue as the
-                  rich branch, rendered here so rich and raw-fallback
-                  surfaces paint identical method semantics. Null for every
-                  other groupType -- no layout change for superset/circuit
-                  fallbacks. */}
-              {(() => {
-                if (block.groupType !== 'cluster' && block.groupType !== 'density_block') return null
-                const cue =
-                  block.groupType === 'cluster'
-                    ? {
-                        Icon: Repeat,
-                        primary: 'Intra-set rest',
-                        secondary:
-                          'Mini-efforts with a short pause, then full rest between clusters.',
-                      }
-                    : {
-                        Icon: Timer,
-                        primary: 'Work capacity',
-                        secondary:
-                          'Rotate movements within the time cap — quality reps, rest as needed.',
-                      }
-                return (
-                  <div className={`mb-2 flex items-start gap-2 px-2.5 py-1.5 rounded-md border ${colors.border} bg-black/20`}>
-                    <cue.Icon className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${colors.text}`} />
-                    <div className="flex-1 min-w-0 text-[11px] leading-snug">
-                      <span className={`${colors.text} font-medium`}>{cue.primary}</span>
-                      <span className="text-[#A0A0A0]"> — {cue.secondary}</span>
-                    </div>
-                  </div>
-                )
-              })()}
-
-              {/* [GROUPED-MEMBER-FRAME] Replaced the old `pl-4 border-l-2`
-                  thin-line wrapper with `space-y-1.5`: grouped identity is
-                  now owned per-row by GroupedMemberFrame's method-colored
-                  rail, so the outer left line was redundant and visually
-                  weak. Each member (hydrated row or minimal fallback row)
-                  is wrapped in the frame so grouped ownership survives
-                  regardless of hydration. */}
-              <div className="space-y-1.5">
-                {block.members.map((member, mIdx) => {
-                  // [PHASE AB5] ORPHAN ROW GUARD (raw fallback path).
-                  // Same contract as the rich path: members the resolver
-                  // marked as unbound OR prescription-incomplete MUST NOT
-                  // render as a blank name-only row. They stay in the
-                  // upstream variant body but are dropped from this visible
-                  // surface — Start Workout would also refuse to launch
-                  // them via live-grouped-execution-contract.ts:561-565.
-                  if (rawOrphanIndexSet.has(mIdx)) return null
-
-                  rawIdx++
-                  const hydrated =
-                    (member.id ? hydrateMap.get(member.id) : undefined) ||
-                    (member.name ? hydrateMap.get(member.name) : undefined) ||
-                    (member.name ? hydrateMap.get(member.name.toLowerCase()) : undefined) ||
-                    (member.name ? hydrateMap.get(normalizeKey(member.name)) : undefined)
-                  // [GROUPED-MEMBER-SEMANTIC-LINE] Resolve partner name for
-                  // supersets from the SAME block.members list the block
-                  // already consumes. Only surfaces when pair length is 2,
-                  // otherwise the helper falls back to its generic paired
-                  // copy. Hydrated row name is preferred when the adjacent
-                  // member resolves; otherwise we use the raw grouped name.
-                  let partnerName: string | undefined
-                  if (block.groupType === 'superset' && block.members.length === 2) {
-                    const partner = block.members[mIdx === 0 ? 1 : 0]
-                    if (partner) {
-                      const partnerHydrated =
-                        (partner.id ? hydrateMap.get(partner.id) : undefined) ||
-                        (partner.name ? hydrateMap.get(partner.name) : undefined) ||
-                        (partner.name ? hydrateMap.get(partner.name.toLowerCase()) : undefined) ||
-                        (partner.name ? hydrateMap.get(normalizeKey(partner.name)) : undefined)
-                      partnerName = (partnerHydrated?.name || partner.name || '').trim() || undefined
-                    }
-                  }
-                  const semanticLine = buildGroupedMemberSemanticLine({
-                    groupType: block.groupType,
-                    prefix: member.prefix,
-                    positionIndex: mIdx + 1,
-                    totalMembers: block.members.length,
-                    partnerName,
-                  })
-                  if (hydrated) {
-                    return (
-                      <GroupedMemberFrame
-                        key={hydrated.id}
-                        colors={colors}
-                        groupType={block.groupType}
-                        prefix={member.prefix}
-                        positionIndex={mIdx + 1}
-                        totalMembers={block.members.length}
-                        semanticLine={semanticLine}
-                      >
-                        <ExerciseRow
-                          exercise={hydrated}
-                          index={rawIdx}
-                          // [GROUPED-MEMBER-FRAME] Suppress the row's
-                          // internal tiny 10px mono prefix -- the frame's
-                          // rail is now the authoritative prefix surface.
-                          prefix={undefined}
-                          sessionId={sessionId}
-                          isSkipped={skippedExercises.has(hydrated.id)}
-                          adjustedName={adjustedExercises.get(hydrated.id)}
-                          sessionContext={sessionContextForRows}
-                          sessionEvidence={sessionEvidence}
-                          coachingExplanation={coachingExplanation}
-                          onReplace={onReplace}
-                          onSkip={onSkip}
-                          onProgressionAdjust={onProgressionAdjust}
-                        />
-                      </GroupedMemberFrame>
-                    )
                   }
                   // Minimal text fallback row. Display-first: name must be
                   // visible even when rich hydration cannot resolve it.
-                  // [GROUPED-MEMBER-FRAME] Fallback row is also framed, so
-                  // hydration-incomplete members still read as grouped.
                   const safeName = (member.name || '').trim()
                   if (safeName.length < 2) return null
                   return (
-                    <GroupedMemberFrame
+                    <div
                       key={member.id || `${block.groupId}-${mIdx}`}
-                      colors={colors}
-                      groupType={block.groupType}
-                      prefix={member.prefix}
-                      positionIndex={mIdx + 1}
-                      totalMembers={block.members.length}
-                      semanticLine={semanticLine}
+                      className="flex items-baseline gap-2 py-1.5 text-sm text-[#C8C8C8]"
                     >
-                      <div className="flex items-center py-2 px-3 rounded-lg border bg-[#171717] border-[#282828] text-sm text-[#C8C8C8]">
-                        <span className="truncate">{safeName}</span>
-                      </div>
-                    </GroupedMemberFrame>
+                      {member.prefix && (
+                        <span className={`text-[11px] font-semibold ${colors.text} shrink-0`}>
+                          {member.prefix}
+                        </span>
+                      )}
+                      <span className="truncate">{safeName}</span>
+                    </div>
                   )
                 })}
               </div>
@@ -5728,29 +1724,9 @@ function MainExercisesRenderer({
       return ['skill', 'strength', 'accessory'].includes(cat) ? cat : 'other'
     }
 
-    // [SET-EXECUTION-TRUTH-VISIBILITY] Honest in-body headline for sessions
-    // where grouped truth does not exist but per-row set-execution methods
-    // do. Gated strictly on `reasonIfNotRich === 'METHOD_ONLY_FLAT'` so the
-    // headline never fires for genuinely flat sessions (no methods anywhere).
-    // Counts come straight off the authoritative `finalVisibleBodyModel`
-    // (populated by the METHOD_ONLY_FLAT dispatcher branch) -- same source
-    // the top chip row reads -- so banner / chip row / row-level microcopy
-    // cannot disagree.
-    const showSetExecHeadline =
-      finalVisibleBodyModel.reasonIfNotRich === 'METHOD_ONLY_FLAT' &&
-      (finalVisibleBodyModel.clusterCount > 0 || finalVisibleBodyModel.densityCount > 0)
-
     let lastCat: string | null = null
     return (
       <div className="space-y-4">
-        {showSetExecHeadline && (
-          <SetExecutionBodyHeadline
-            supersetCount={finalVisibleBodyModel.supersetCount}
-            circuitCount={finalVisibleBodyModel.circuitCount}
-            densityCount={finalVisibleBodyModel.densityCount}
-            clusterCount={finalVisibleBodyModel.clusterCount}
-          />
-        )}
         {displayExercises.map((exercise, idx) => {
           const thisCat = normalizeCat(exercise.category)
           const emitHeader = thisCat !== lastCat
@@ -5804,69 +1780,9 @@ function MainExercisesRenderer({
   // no fake category headers, no fake group headers.
   // ==========================================================================
   if (bodyMode === 'simple_order_grouped') {
-    // [IN-BODY-GROUPED-BANNER] `simple_order_grouped` is the last-resort
-    // branch where grouped truth exists but no renderable blocks could be
-    // built from any source (rich, raw contract, or display-synthesized).
-    // Prior behavior rendered a bare ordered list that looked identical to
-    // a flat session. Now the body opens with an honest grouped-method
-    // banner so the user is never misled into thinking the session was
-    // ungrouped. The rows below keep their normal ExerciseRow format --
-    // we don't invent fake block containers when there's no renderable
-    // block truth to back them.
-    //
-    // [CARD-LOCAL-FAILURE-SURFACE] When the dispatcher landed here with a
-    // groupedFailureStage populated, surface that exact stage inline. This
-    // is the tiny, card-local failure surface required by section F: it
-    // appears ONLY on cards that reached simple_order_grouped with a code,
-    // never on rich/raw grouped cards, and never on honestly flat cards.
-    // Copy is derived directly from the enumerated stage codes -- no
-    // invented language, no generic counts, no top-page spam.
-    const failureStage = finalVisibleBodyModel.groupedFailureStage
-    const failureCopy = (() => {
-      switch (failureStage) {
-        case 'bridge_lost_group_fields':
-          return 'Bridge lost group fields — grouped methods exist upstream but blockId/method did not reach this card body.'
-        case 'grouped_contract_empty':
-          return 'Grouped contract empty — the grouped render model produced no block list for this session.'
-        case 'final_mode_flattened':
-          return 'Final mode flattened — grouped truth reached the dispatcher but no block source produced renderable groups.'
-        case 'hydration_render_loss':
-          return 'Hydration render loss — grouped blocks existed but every member failed the usable-name filter.'
-        default:
-          return null
-      }
-    })()
     let globalIdx = 0
     return (
       <div className="space-y-2">
-        <GroupedBodyHeadline
-          supersetCount={finalVisibleBodyModel.supersetCount}
-          circuitCount={finalVisibleBodyModel.circuitCount}
-          densityCount={finalVisibleBodyModel.densityCount}
-          clusterCount={finalVisibleBodyModel.clusterCount}
-          mode="simple_order_grouped"
-        />
-        {/* [FINAL-VISIBLE-OWNERSHIP-LOCK] Grouped-fallback failure banner moved
-            off the athlete-facing surface. Both the raw stage token (font-mono
-            "HYDRATION_RENDER_LOSS" etc.) and the implementation-leaning failure
-            copy were diagnostic content in the production card body. The
-            simple_order_grouped path still renders the exercises in canonical
-            order via the GroupedBodyHeadline above, so users see a coherent
-            session story instead of an amber implementation note. The banner
-            is preserved for QA via the inner-renderer probe props (already
-            hard-disabled in production by the outer card's `probeActive`). */}
-        {(_innerShowProbe || _innerForceProbe) && failureCopy && failureStage && (
-          <div
-            className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] leading-snug"
-            role="status"
-            aria-label={`Grouped display fallback: ${failureStage}`}
-          >
-            <span className="font-mono text-amber-400/90 font-semibold">
-              {failureStage}
-            </span>
-            <span className="text-[#A0A0A0]"> — {failureCopy}</span>
-          </div>
-        )}
         {displayExercises.map((exercise) => {
           globalIdx++
           return (
@@ -5964,70 +1880,10 @@ function MainExercisesRenderer({
     }
   }
 
-      let globalExerciseIndex = 0
-
-  // ==========================================================================
-  // [METHOD-BODY-CUE] Compact, method-specific semantics strip rendered
-  // INSIDE the tinted group container, between the pill header and the
-  // member spine. Painted ONLY for groupType === 'cluster' and
-  // 'density_block' because those are the methods the pill + ExerciseRow
-  // combination cannot express structurally (superset/circuit already
-  // communicate via A1/A2/B1/B2 prefixes on their paired member rows and
-  // are intentionally left unchanged here).
-  //
-  // Copy is derived from the canonical method definition in the adapter's
-  // authoritative restProtocol strings (cluster = intra-set rest, density
-  // = work-capacity rotation within a time cap) -- no invented wording,
-  // no invented rule. Returns null for every other groupType so the strip
-  // renders nothing (no layout hole) when the method is already self-
-  // expressing. A 1-member cluster now gets a body line that explicitly
-  // says this is a cluster set, not just "a row with a small label above
-  // it."
-  // ==========================================================================
-  const getMethodBodyCue = (
-    groupType: string
-  ): { Icon: typeof Timer; primary: string; secondary: string } | null => {
-    // [PHASE 3F METHOD SEMANTIC TRUTH LOCK] Body cue reads from the single
-    // authoritative GROUPED_METHOD_SEMANTICS table. Only cluster + density
-    // have a non-null bodyCue in the table by design (superset/circuit
-    // express their semantic structurally via A1/A2/B1/B2 prefixes); the
-    // null return for those types preserves the prior contract that the
-    // strip is omitted entirely for self-expressing methods. Icon mapping
-    // stays local because lucide React components can't be serialised into
-    // the data table.
-    const semantics = getGroupedMethodSemantics(groupType as GroupType)
-    if (!semantics?.bodyCue) return null
-    const Icon = groupType === 'cluster' ? Repeat : Timer
-    return {
-      Icon,
-      primary: semantics.bodyCue.primary,
-      secondary: semantics.bodyCue.secondary,
-    }
-  }
-
-  // [IN-BODY-GROUPED-BANNER] Per-type counts come directly from the
-  // contract-owned block list the renderer is iterating, so banner +
-  // block headers cannot disagree for this exact render.
-  let richSuper = 0, richCirc = 0, richDens = 0, richClust = 0
-  for (const b of renderBlocks) {
-    if (b.type === 'group') {
-      const gt = b.group.groupType
-      if (gt === 'superset') richSuper++
-      else if (gt === 'circuit') richCirc++
-      else if (gt === 'density_block') richDens++
-      else if (gt === 'cluster') richClust++
-    }
-  }
-
+  let globalExerciseIndex = 0
+  
   return (
     <div className="space-y-4">
-      <GroupedBodyHeadline
-        supersetCount={richSuper}
-        circuitCount={richCirc}
-        densityCount={richDens}
-        clusterCount={richClust}
-        mode="rich_grouped"
-      />
       {renderBlocks.map((block, blockIdx) => {
         // [GROUPED-RENDER-CONTRACT] Handle ungrouped exercise -- hydrate the
         // row from exerciseDataMap (pure enrichment; NOT block ownership).
@@ -6042,39 +1898,17 @@ function MainExercisesRenderer({
             (block.exerciseName && exerciseDataMap.get(normalizeExerciseKey(block.exerciseName)))
 
           if (!fullExercise) {
-            // [PHASE AB5] ORPHAN ROW GUARD (flat path).
-            //
-            // Pre-AB5, an exercise that survived the render contract but
-            // failed display-side hydration would render as a name-only div
-            // — the exact "Explosive Pull-Ups appears with no sets/reps"
-            // symptom the user flagged. Start Workout would never launch
-            // such a row (the live runtime hydrates from the same source),
-            // so the Program card was lying about an executable row.
-            //
-            // The guard now drops the row entirely from RENDER. The
-            // underlying selected variant body is unchanged; the renderer
-            // simply refuses to display a row that has no executable
-            // prescription. globalExerciseIndex was already incremented;
-            // we decrement it back so the visible numbering stays
-            // contiguous with what actually rendered.
-            globalExerciseIndex--
-            return null
-          }
-
-          // [PHASE AB5] Hydration succeeded but the row may still lack a
-          // sets/reps prescription (compression seed dropped both fields,
-          // for example). Treat that as orphan too: ExerciseRow's "3 ×
-          // 8-12" defaults would silently invent a dose, and Start Workout
-          // would not be able to honor it. We drop the row and let the
-          // upstream variant ledger account for it elsewhere.
-          const fullExerciseHasSets =
-            typeof fullExercise.sets === 'number' && fullExercise.sets > 0
-          const fullExerciseHasReps =
-            typeof fullExercise.repsOrTime === 'string' &&
-            fullExercise.repsOrTime.trim().length > 0
-          if (!fullExerciseHasSets && !fullExerciseHasReps) {
-            globalExerciseIndex--
-            return null
+            const safeName = (block.exerciseName || '').trim()
+            if (!safeName || safeName.length < 2) return null
+            return (
+              <div
+                key={block.exerciseId || `ex-${blockIdx}`}
+                className="flex items-baseline gap-2 py-2 px-3 rounded-lg border bg-[#171717] border-[#282828] text-sm text-[#C8C8C8]"
+              >
+                <span className="text-[10px] text-[#4A4A4A] font-mono shrink-0">{globalExerciseIndex}.</span>
+                <span className="truncate">{safeName}</span>
+              </div>
+            )
           }
 
           return (
@@ -6101,139 +1935,7 @@ function MainExercisesRenderer({
         const label = getGroupTypeLabel(group.groupType)
         const icon = getGroupTypeIcon(group.groupType)
         const isSpecialGroup = group.groupType !== 'straight'
-
-        // [PHASE AB5] Resolve grouped execution prescription ONCE per block.
-        // The resolver computes rounds + per-member doses + orphan flags from
-        // the same hydration map the renderer already uses below
-        // (blockIdToDisplayExercises + exerciseDataMap). Reading here means
-        // header rounds, member dose visibility, and orphan handling all
-        // come from a single source. Pure function — no side effects, no
-        // re-renders introduced.
-        const groupPrescription = isSpecialGroup
-          ? resolveGroupedExecutionPrescription({
-              block: { kind: 'rich', group },
-              hydrate: ({ id, name, positionIndex }) => {
-                // Mirror the rich render path's preference order EXACTLY:
-                //   1. blockId + positional index (most reliable; survives rename)
-                //   2. exact id
-                //   3. exact raw name
-                //   4. lowercased name
-                //   5. normalized name (handles "Pull-Ups" vs "Pull Ups")
-                // This is the same chain at line 5826 below, so the
-                // resolver's "bound" verdict cannot disagree with the
-                // renderer's hydrated success path.
-                const renderSurfaceMembers = group.id
-                  ? blockIdToDisplayExercises.get(group.id)
-                  : undefined
-                const direct =
-                  (renderSurfaceMembers && renderSurfaceMembers[positionIndex]) ||
-                  (id ? exerciseDataMap.get(id) : undefined) ||
-                  (name ? exerciseDataMap.get(name) : undefined) ||
-                  (name ? exerciseDataMap.get(name.toLowerCase()) : undefined) ||
-                  (name ? exerciseDataMap.get(normalizeExerciseKey(name)) : undefined)
-                if (!direct) return null
-                // ExerciseRow's effective dose mirrors ScaledExercise; pass
-                // the same shape so the resolver honors week-progression
-                // truth without us re-implementing it here.
-                const scaled = direct as unknown as {
-                  scaledSets?: number
-                  scaledReps?: string
-                  scaledTargetRPE?: number
-                }
-                return {
-                  id: direct.id,
-                  name: direct.name,
-                  sets: direct.sets ?? null,
-                  repsOrTime: direct.repsOrTime ?? null,
-                  targetRPE: direct.targetRPE ?? null,
-                  restSeconds: direct.restSeconds ?? null,
-                  scaledSets: scaled.scaledSets,
-                  scaledReps: scaled.scaledReps,
-                  scaledTargetRPE: scaled.scaledTargetRPE,
-                }
-              },
-            })
-          : null
-        const roundsHeader = groupPrescription
-          ? buildRoundsHeaderText(groupPrescription)
-          : null
-        // [PHASE AB5] Orphan-member ids the renderer must skip. A member is
-        // an orphan when (a) it failed to hydrate to any session exercise,
-        // OR (b) it hydrated but has no resolvable sets/reps. The first
-        // case is a hard miss; the second is "shell row reached the
-        // display contract" — both produce blank rows under AB4 and both
-        // must be dropped. We map by index position because that is what
-        // the rich render path iterates with.
-        const orphanIndexSet = new Set<number>()
-        if (groupPrescription) {
-          groupPrescription.members.forEach((m, i) => {
-            if (!m.bound || !m.prescriptionComplete) orphanIndexSet.add(i)
-          })
-        }
-        // Renderable member count after orphan pruning — used for the
-        // header "· N exercises" label so the count never lies.
-        const renderableMemberCount = groupPrescription
-          ? groupPrescription.members.length - orphanIndexSet.size
-          : group.exercises.length
-
-        // [PHASE AB6 RECOVERY — ZERO-MEMBER GROUP GUARD]
-        // The previous render path could emit "Superset · paired sets · 0
-        // exercises" when 45/30 compression deferred a superset's members
-        // out of the selected variant body. A grouped block whose surviving
-        // executable member count is below the method's minimum is NOT a
-        // valid grouped method on this card — it must be hidden as a group
-        // and either dropped (zero survivors) or degraded to flat rows
-        // (1 survivor of a 2-member type) so the surviving exercise still
-        // appears in the visible body. This is the final reconciliation
-        // step for the selected variant: group metadata may have survived
-        // upstream pruning, but execution membership did not.
-        if (isSpecialGroup) {
-          const minRequired = minMembersFor(group.groupType)
-          if (renderableMemberCount === 0) {
-            // No surviving executable members. Drop the entire block.
-            return null
-          }
-          if (renderableMemberCount < minRequired) {
-            // 1 survivor of a 2-member group — degrade to flat row(s) so
-            // the exercise is not lost. No group frame, no header, no rounds.
-            return (
-              <div key={group.id || `degraded-${blockIdx}`} className="space-y-2">
-                {group.exercises.map((groupExercise, exIdx) => {
-                  if (orphanIndexSet.has(exIdx)) return null
-                  const renderSurfaceMembers = group.id
-                    ? blockIdToDisplayExercises.get(group.id)
-                    : undefined
-                  const fullExercise =
-                    (renderSurfaceMembers && renderSurfaceMembers[exIdx])
-                    || exerciseDataMap.get(groupExercise.id)
-                    || exerciseDataMap.get(groupExercise.name)
-                    || exerciseDataMap.get(groupExercise.name.toLowerCase())
-                    || exerciseDataMap.get(normalizeExerciseKey(groupExercise.name))
-                  if (!fullExercise) return null
-                  globalExerciseIndex++
-                  return (
-                    <ExerciseRow
-                      key={fullExercise.id}
-                      exercise={fullExercise}
-                      index={globalExerciseIndex}
-                      prefix={undefined}
-                      sessionId={sessionId}
-                      isSkipped={skippedExercises.has(fullExercise.id)}
-                      adjustedName={adjustedExercises.get(fullExercise.id)}
-                      sessionContext={sessionContextForRows}
-                      sessionEvidence={sessionEvidence}
-                      coachingExplanation={coachingExplanation}
-                      onReplace={onReplace}
-                      onSkip={onSkip}
-                      onProgressionAdjust={onProgressionAdjust}
-                    />
-                  )
-                })}
-              </div>
-            )
-          }
-        }
-
+        
         return (
           <div
             key={group.id || `group-${blockIdx}`}
@@ -6244,11 +1946,7 @@ function MainExercisesRenderer({
             // superset inside a 7-row session read as "mostly flat with a colored
             // pill". With a container tint + padding, the group is unmistakably
             // a distinct structural block.
-            // [GROUPED-BLOCK-FRAME-STRENGTHENED] Added `border-l-4` so the
-            // grouped block visibly reads as a framed structural unit. Matches
-            // the raw-fallback branch so grouped containers look identical
-            // across both render paths.
-            className={isSpecialGroup ? `rounded-lg border border-l-4 ${colors.border} ${colors.blockBg} p-2` : ''}
+            className={isSpecialGroup ? `rounded-lg border ${colors.border} ${colors.blockBg} p-2` : ''}
           >
             {/* [CLEAN-GROUP-HEADER-RESTORED] Compact but clearly visible header.
                 Previous pass made it too quiet (text-xs + opacity-80) which flattened grouped
@@ -6281,43 +1979,8 @@ function MainExercisesRenderer({
                     return `${purposePrefix}${label}`
                   })()}
                 </span>
-                {/* [PHASE 3F METHOD SEMANTIC TRUTH LOCK] Compact semantic
-                    qualifier rendered immediately after the pill noun, in the
-                    same color family as the rail. Pre-3F the user had to read
-                    the muted-grey rest microcopy ("Rest 30-60s between rounds")
-                    or the body cue strip to figure out whether a Density Block
-                    was structurally distinct from a Circuit. The tagline puts
-                    that distinction directly under the eye on the pill itself
-                    ("Density Block · timed work cap" vs "Circuit · rounds &
-                    stations"). Reads from the same authoritative semantics
-                    source that powers the row line, body cue, and rest
-                    microcopy — so the four visible surfaces can never disagree.
-                    Hidden when the semantics table has no entry (straight). */}
-                {(() => {
-                  const tagline = getGroupedMethodSemantics(group.groupType)?.headerTagline
-                  if (!tagline) return null
-                  return (
-                    <span className={`text-[11px] ${colors.text} opacity-80`}>
-                      · {tagline}
-                    </span>
-                  )
-                })()}
-                {/* [PHASE AB5] Rounds chip. The grouped execution prescription
-                    resolver tells us how many paired sets / rounds / cluster
-                    sets the block will execute. Rendered immediately after
-                    the method tagline so the user sees the workload at a
-                    glance: "Superset · paired sets · 2 paired sets". The
-                    chip uses the method-color palette (matches the rail) so
-                    it reads as part of the grouped frame, not as a separate
-                    badge. Hidden when the resolver could not bind any
-                    member (e.g. fully orphan block). */}
-                {roundsHeader && (
-                  <span className={`text-[11px] ${colors.text} opacity-80 font-medium`}>
-                    · {roundsHeader}
-                  </span>
-                )}
                 <span className="text-[11px] text-[#8A8A8A]">
-                  · {renderableMemberCount} {renderableMemberCount === 1 ? 'exercise' : 'exercises'}
+                  · {group.exercises.length} exercises
                 </span>
                 {group.restProtocol && (
                   <span className="text-[11px] text-[#8A8A8A]">
@@ -6330,56 +1993,10 @@ function MainExercisesRenderer({
                 />
               </div>
             )}
-
-            {/* [METHOD-BODY-CUE] Cluster / density in-body semantics strip.
-                Renders only when the method cannot be expressed by member
-                structure alone (cluster = single-member possible; density =
-                time-capped rotation without paired prefixes). Placed here so
-                the user reads the method's nature BEFORE the member rows,
-                which removes the "normal row with decoration" feel on
-                1-member cluster blocks. Null-returns for every other
-                groupType -- no layout hole for superset / circuit. */}
-            {(() => {
-              const cue = getMethodBodyCue(group.groupType)
-              if (!cue) return null
-              return (
-                <div className={`mb-2 flex items-start gap-2 px-2.5 py-1.5 rounded-md border ${colors.border} bg-black/20`}>
-                  <cue.Icon className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${colors.text}`} />
-                  <div className="flex-1 min-w-0 text-[11px] leading-snug">
-                    <span className={`${colors.text} font-medium`}>{cue.primary}</span>
-                    <span className="text-[#A0A0A0]"> — {cue.secondary}</span>
-                  </div>
-                </div>
-              )
-            })()}
-
+            
             {/* Exercises in this group */}
-            {/* [GROUPED-MEMBER-FRAME] Replaced the old `pl-4 border-l-2`
-                thin-line wrapper with `space-y-1.5`: grouped identity is
-                owned per-row by GroupedMemberFrame. Flat groups (straight)
-                keep the plain `space-y-2` they had before. */}
-            <div className={isSpecialGroup ? 'space-y-1.5' : 'space-y-2'}>
+            <div className={`space-y-2 ${isSpecialGroup ? `pl-4 border-l-2 ${colors.border}` : ''}`}>
               {group.exercises.map((groupExercise, exIdx) => {
-                // [PHASE AB5] ORPHAN ROW GUARD (rich grouped path).
-                //
-                // The resolver above already classified this member. If the
-                // member is unbound (no hydration) OR bound but missing
-                // sets/reps, we MUST NOT render a blank name-only row. The
-                // visible blocker symptom in AB4 was Explosive Pull-Ups
-                // appearing under a Superset block as a bare name with no
-                // dose; that path is closed here.
-                //
-                // Note: we drop the row from RENDER, but the underlying
-                // selected variant body is unchanged — the member still
-                // counts in the variant's own ledger. The renderer just
-                // refuses to display a row that has no executable
-                // prescription, which Start Workout would also refuse to
-                // launch (the live runtime drops orphan member refs at
-                // live-grouped-execution-contract.ts:561-565).
-                if (isSpecialGroup && orphanIndexSet.has(exIdx)) {
-                  return null
-                }
-
                 globalExerciseIndex++
                 
                 // [UNIFIED-RENDER-OWNERSHIP] Prefer the RENDER surface as the
@@ -6400,37 +2017,7 @@ function MainExercisesRenderer({
                   || exerciseDataMap.get(groupExercise.name)
                   || exerciseDataMap.get(groupExercise.name.toLowerCase())
                   || exerciseDataMap.get(normalizeExerciseKey(groupExercise.name))
-
-                // [GROUPED-MEMBER-SEMANTIC-LINE] Resolve partner name for
-                // supersets from the SAME group.exercises list. Partner
-                // prefers the render-surface hydrated name, then the
-                // exerciseDataMap hydrated name, then the raw grouped name,
-                // so the line stays meaningful even when one half of the
-                // pair is hydration-missed.
-                let partnerName: string | undefined
-                if (group.groupType === 'superset' && group.exercises.length === 2) {
-                  const partnerIdx = exIdx === 0 ? 1 : 0
-                  const partner = group.exercises[partnerIdx]
-                  if (partner) {
-                    const partnerHydrated =
-                      (renderSurfaceMembers && renderSurfaceMembers[partnerIdx])
-                      || exerciseDataMap.get(partner.id)
-                      || exerciseDataMap.get(partner.name)
-                      || exerciseDataMap.get(partner.name.toLowerCase())
-                      || exerciseDataMap.get(normalizeExerciseKey(partner.name))
-                    partnerName = (partnerHydrated?.name || partner.name || '').trim() || undefined
-                  }
-                }
-                const semanticLine = isSpecialGroup
-                  ? buildGroupedMemberSemanticLine({
-                      groupType: group.groupType,
-                      prefix: groupExercise.prefix,
-                      positionIndex: exIdx + 1,
-                      totalMembers: group.exercises.length,
-                      partnerName,
-                    })
-                  : null
-
+                
                 if (!fullExercise) {
                   // Exercise in styled groups but not in displayExercises.
                   // [GROUPED-TRUTH-RESCUE] Render a minimal row from styledGroups'
@@ -6442,78 +2029,27 @@ function MainExercisesRenderer({
                   if (!safeName || safeName.length < 2) {
                     return null
                   }
-                  // [GROUPED-MEMBER-FRAME] Even the hydration-miss fallback
-                  // row is framed for this (special) group type so grouped
-                  // identity survives. Flat 'straight' groups never enter
-                  // this branch so they are unaffected.
-                  if (isSpecialGroup) {
-                    return (
-                      <GroupedMemberFrame
-                        key={groupExercise.id || `${safeName}-${exIdx}`}
-                        colors={colors}
-                        groupType={group.groupType}
-                        prefix={groupExercise.prefix}
-                        positionIndex={exIdx + 1}
-                        totalMembers={group.exercises.length}
-                        semanticLine={semanticLine}
-                      >
-                        <div className="flex items-center py-2 px-3 rounded-lg border bg-[#171717] border-[#282828] text-sm text-[#C8C8C8]">
-                          <span className="truncate">{safeName}</span>
-                        </div>
-                      </GroupedMemberFrame>
-                    )
-                  }
                   return (
                     <div
                       key={groupExercise.id || `${safeName}-${exIdx}`}
                       className="flex items-baseline gap-2 py-1.5 text-sm text-[#C8C8C8]"
                     >
+                      {groupExercise.prefix && (
+                        <span className={`text-[11px] font-semibold ${colors.text} shrink-0`}>
+                          {groupExercise.prefix}
+                        </span>
+                      )}
                       <span className="truncate">{safeName}</span>
                     </div>
                   )
                 }
-
-                // [GROUPED-MEMBER-FRAME] Special (grouped) members sit in a
-                // frame that owns prefix/position/method-glyph identity.
-                // The inner ExerciseRow receives `prefix={undefined}` so
-                // its faint 10px mono prefix no longer competes with the
-                // rail. Flat 'straight' groups render ExerciseRow directly
-                // to preserve their existing visual contract.
-                if (isSpecialGroup) {
-                  return (
-                    <GroupedMemberFrame
-                      key={fullExercise.id}
-                      colors={colors}
-                      groupType={group.groupType}
-                      prefix={groupExercise.prefix}
-                      positionIndex={exIdx + 1}
-                      totalMembers={group.exercises.length}
-                      semanticLine={semanticLine}
-                    >
-                      <ExerciseRow
-                        exercise={fullExercise}
-                        index={globalExerciseIndex}
-                        prefix={undefined}
-                        sessionId={sessionId}
-                        isSkipped={skippedExercises.has(fullExercise.id)}
-                        adjustedName={adjustedExercises.get(fullExercise.id)}
-                        sessionContext={sessionContextForRows}
-                        sessionEvidence={sessionEvidence}
-                        coachingExplanation={coachingExplanation}
-                        onReplace={onReplace}
-                        onSkip={onSkip}
-                        onProgressionAdjust={onProgressionAdjust}
-                      />
-                    </GroupedMemberFrame>
-                  )
-                }
-
+                
                 return (
                   <ExerciseRow
                     key={fullExercise.id}
                     exercise={fullExercise}
                     index={globalExerciseIndex}
-                    prefix={groupExercise.prefix}
+                    prefix={groupExercise.prefix} // Pass superset prefix (A1, A2, etc)
                     sessionId={sessionId}
                     isSkipped={skippedExercises.has(fullExercise.id)}
                     adjustedName={adjustedExercises.get(fullExercise.id)}
@@ -6535,216 +2071,6 @@ function MainExercisesRenderer({
 }
 
 // =============================================================================
-// [ROW-METHOD-RESOLVER] Single authoritative resolver for row-level display
-// method truth. Consolidates what was previously two separate inline IIFEs
-// (Row 1 chip block and Row 2b MethodOwnershipPanel block) that each read
-// `exercise.method` alone and each accepted a narrow label set. That split
-// was the hidden uncertainty source: if one gating loop accepted a label
-// the other rejected, the row would silently show a half-painted method
-// state. It was also fragile to the save/load/normalize cycle because
-// `.method` is, per `lib/adaptive-program-builder.ts:1176-1190` and
-// `lib/workout/execution-unit-contract.ts:130-132`, the LEGACY field that
-// carries GROUPED-STRUCTURE membership -- while SET-EXECUTION identity
-// (cluster / rest-pause / top-set / drop-set) is authoritatively carried
-// on `.setExecutionMethod` on the single-row exercise.
-//
-// Resolution order (taxonomy-correct):
-//   1. If grouped `prefix` is set OR a non-empty `blockId` is present, the
-//      row is INSIDE a grouped frame. Return `isGroupedMember: true`. The
-//      grouped frame (or the Row 1 `prefix` mono tag in simple_order
-//      fallback) owns method identity; the row-level panel stays silent.
-//   2. Read `exercise.setExecutionMethod` FIRST. If present and in the
-//      taxonomy-approved set-execution set, that is the authoritative
-//      per-row set-execution method. This beats a stale legacy `.method`
-//      field on save/load roundtrips that may not have re-applied the
-//      builder's dual-write.
-//   3. Otherwise read `exercise.method`. Accept every documented label
-//      spelling: `'cluster' | 'cluster_set' | 'cluster_sets'` collapse to
-//      cluster, `'density' | 'density_block'` collapse to density, etc.
-//      `'straight' | 'straight_sets'` and empty return no method.
-//
-// Return shape is the single truth the ExerciseRow paints from. There
-// MUST NOT be any other inline reads of `.method` / `.setExecutionMethod`
-// anywhere inside ExerciseRow after this refactor -- the two old IIFEs
-// call this resolver so the Row 1 chip and Row 2b panel cannot disagree.
-// =============================================================================
-type RowMethodFamily = 'cluster' | 'density' | 'superset' | 'circuit' | 'rest_pause' | 'top_set' | 'drop_set' | null
-
-interface RowMethodTruth {
-  /** Present (raw) method string found on the exercise, lowercased. Null if none. */
-  raw: string | null
-  /** The raw field we trusted: 'setExecutionMethod' | 'method' | null. */
-  source: 'setExecutionMethod' | 'method' | null
-  /** Collapsed taxonomy family. Null = render as straight row. */
-  family: RowMethodFamily
-  /** True when this row sits inside a grouped structure (prefix or blockId). */
-  isGroupedMember: boolean
-  /**
-   * True when the row should paint the flat METHOD OWNERSHIP PANEL below its
-   * prescription line. Strictly: family ∈ row-level set-execution set
-   * {cluster, density, top_set, drop_set, rest_pause} AND not grouped AND not
-   * warm-up. Superset/circuit are grouped-structure by doctrine and
-   * intentionally never paint the flat panel; if they leak onto a flat row
-   * (builder bug / variant drift), the tiny 8px fallback chip in Row 1 handles
-   * them and does NOT promote to a full panel -- promotion would be dishonest
-   * because those methods' meaning requires a grouped partner.
-   *
-   * [PHASE-3E ROW-LEVEL SET-EXECUTION VISIBLE TRUTH LOCK]
-   * Previously this was hard-gated to `cluster | density` only. That meant
-   * top_set / drop_set / rest_pause truth (which the builder + selector +
-   * resolver all preserved) reached the row, was recognised by `family`, and
-   * then silently produced zero visible surface -- the user's "drop-set
-   * truth implied but invisible" symptom. The panel is the single visible
-   * owner of row-level set-execution truth, so all five row-level families
-   * paint through it.
-   */
-  shouldPaintPanel: boolean
-  /** Set-execution panel variant when shouldPaintPanel, else null. */
-  panelVariant: 'cluster' | 'density' | 'top_set' | 'drop_set' | 'rest_pause' | null
-  /** Uppercase-ready label for panel or chip. */
-  label: string | null
-  /** One-sentence execution-focused description for the panel. */
-  execLine: string | null
-}
-
-function resolveRowMethodTruth(
-  exercise: AdaptiveExercise,
-  opts: { prefix?: string; isWarmupCooldown?: boolean }
-): RowMethodTruth {
-  const prefix = opts.prefix
-  const isWarmup = opts.isWarmupCooldown === true
-
-  const rawExercise = exercise as unknown as {
-    method?: string
-    setExecutionMethod?: string
-    blockId?: string
-  }
-  const blockId = rawExercise.blockId
-  const isGroupedMember = !!prefix || !!(blockId && blockId.trim().length > 0)
-
-  // Authoritative per-row set-execution field wins when present.
-  const setExec = (rawExercise.setExecutionMethod || '').toLowerCase().trim()
-  // Legacy overloaded method field (grouped-structure identity by doctrine,
-  // but still dual-written for cluster/density for back-compat).
-  const legacy = (rawExercise.method || '').toLowerCase().trim()
-
-  let raw: string | null = null
-  let source: 'setExecutionMethod' | 'method' | null = null
-  if (setExec && setExec !== 'straight' && setExec !== 'straight_sets') {
-    raw = setExec
-    source = 'setExecutionMethod'
-  } else if (legacy && legacy !== 'straight' && legacy !== 'straight_sets') {
-    raw = legacy
-    source = 'method'
-  }
-
-  let family: RowMethodFamily = null
-  if (raw === 'cluster' || raw === 'cluster_set' || raw === 'cluster_sets') family = 'cluster'
-  else if (raw === 'density' || raw === 'density_block') family = 'density'
-  else if (raw === 'superset') family = 'superset'
-  else if (raw === 'circuit' || raw === 'circuits') family = 'circuit'
-  else if (raw === 'rest_pause') family = 'rest_pause'
-  else if (raw === 'top_set') family = 'top_set'
-  else if (raw === 'drop_set') family = 'drop_set'
-
-  // [PHASE Z1 GROUPED-METHOD-CONTIGUITY-LOCK] Orphan grouped-method defense.
-  //
-  // Superset and circuit are GROUPED-STRUCTURE methods: the method only has
-  // meaning when there is a real paired/coordinated block. A row whose
-  // `method='superset'` (or `setExecutionMethod='superset'`) survived without
-  // a `blockId` AND without a grouped `prefix` is an orphaned label -- the
-  // pair was demoted upstream (e.g. high-overlap STC+C2B demotion in
-  // training-differentiation-calibrator.ts) but the row's grouped-method
-  // metadata was not fully scrubbed. Painting a "Superset" chip on that bare
-  // flat row produces the visible "SUPSET label on separated rows" symptom
-  // -- the user reads grouped truth that the program cannot back with a
-  // visible bracket and Start Workout cannot back with grouped execution.
-  //
-  // The contract: a grouped-structure family on a row that is NOT a grouped
-  // member must be suppressed for visible chip purposes. We collapse `family`
-  // to null so the Row-1 fallback chip and any downstream consumer reading
-  // `family` see "no method here", matching what the visible body actually
-  // shows. The raw fields (`raw`, `source`) are preserved for diagnostics so
-  // the trust accordion / dev probe can still report "method orphaned and
-  // suppressed during display projection."
-  //
-  // Cluster and density are intentionally NOT suppressed by this gate:
-  // single-row cluster / density are legitimate row-level method cues per
-  // the cluster doctrine correction, owned by the row-level Method
-  // Ownership Panel and the "Method cues present" status line. Only
-  // superset / circuit -- which require a grouped partner to be honest --
-  // are caught here.
-  if ((family === 'superset' || family === 'circuit') && !isGroupedMember) {
-    if (typeof window !== 'undefined') {
-      // One-shot dev trace per orphan. Loud enough that an upstream demotion
-      // path that forgets to scrub method/methodLabel/setExecutionMethod is
-      // visible in the console; quiet enough that it does not spam the
-      // production preview. The trust accordion's Method decisions surface
-      // is the user-visible owner of this fact.
-      console.log('[v0] [GROUPED-METHOD-CONTIGUITY-LOCK] orphan_grouped_method_suppressed', {
-        exerciseId: (exercise as { id?: string }).id,
-        exerciseName: (exercise as { name?: string }).name,
-        rawMethodField: raw,
-        rawSource: source,
-        reason: 'family is grouped-structure (superset/circuit) but row has no blockId and no grouped prefix; chip suppressed to keep visible truth honest.',
-      })
-    }
-    family = null
-  }
-
-  // [PHASE-3E ROW-LEVEL SET-EXECUTION VISIBLE TRUTH LOCK]
-  // The row-level set-execution family set is taxonomy-locked to these five.
-  // Superset/circuit are grouped-structure -- not row-level -- and never
-  // paint the flat panel even when they leak onto a flat row.
-  const paintableFamily =
-    family === 'cluster' ||
-    family === 'density' ||
-    family === 'top_set' ||
-    family === 'drop_set' ||
-    family === 'rest_pause'
-  const shouldPaintPanel = paintableFamily && !isGroupedMember && !isWarmup
-
-  let label: string | null = null
-  let execLine: string | null = null
-  let panelVariant: RowMethodTruth['panelVariant'] = null
-  if (family === 'cluster') {
-    label = 'Cluster Set'
-    execLine = 'Brief 10-20s intra-set rests to preserve rep quality, full rest between sets.'
-    if (shouldPaintPanel) panelVariant = 'cluster'
-  } else if (family === 'density') {
-    label = 'Density Block'
-    execLine = 'Complete prescribed work within the timed window, short rests between rounds.'
-    if (shouldPaintPanel) panelVariant = 'density'
-  } else if (family === 'top_set') {
-    // Heavy single working set, then back-off volume. The panel is the only
-    // visible carrier of this truth -- prior to Phase 3E this row painted
-    // identical to a straight set even when the builder wrote top_set.
-    label = 'Top Set + Back-Off'
-    execLine = 'One heavy working set at target effort, then back-off sets at reduced load to bank volume.'
-    if (shouldPaintPanel) panelVariant = 'top_set'
-  } else if (family === 'drop_set') {
-    // Mechanical / load-drop continuation past first failure. Visible as a
-    // distinct panel so users can see drop_set truth on the program surface
-    // without entering live runtime.
-    label = 'Drop Set'
-    execLine = 'Run the prescribed set to target effort, then immediately reduce load and continue with no rest.'
-    if (shouldPaintPanel) panelVariant = 'drop_set'
-  } else if (family === 'rest_pause') {
-    // Short intra-set pauses to extend a working set past first stop. Row-
-    // level method, not a grouped block -- panel is the authoritative owner.
-    label = 'Rest-Pause'
-    execLine = 'Push the working set to target effort, rack-pause 10-20s, then resume for additional reps until cap.'
-    if (shouldPaintPanel) panelVariant = 'rest_pause'
-  } else if (family === 'superset') {
-    label = 'Superset'
-  } else if (family === 'circuit') {
-    label = 'Circuit'
-  }
-
-  return { raw, source, family, isGroupedMember, shouldPaintPanel, panelVariant, label, execLine }
-}
-
-// =============================================================================
 // EXERCISE ROW
 // =============================================================================
 
@@ -6752,14 +2078,6 @@ interface ExerciseRowProps {
   exercise: AdaptiveExercise
   index?: number
   prefix?: string // [PHASE 7B] Superset/circuit prefix like A1, A2, B1, etc
-  // [PHASE-AA4] Authoritative section discriminant. Replaces the ambiguous
-  // `isWarmupCooldown` boolean which previously collapsed warm-up and
-  // cool-down into one flag and forced cool-down rows to render the
-  // green "Warm-Up" badge. New callers MUST pass `sectionKind`.
-  // Legacy `isWarmupCooldown` is kept only as a backward-compatibility
-  // alias for any caller we have not migrated yet; when set without
-  // sectionKind it is treated as warm-up (the prior behavior).
-  sectionKind?: 'main' | 'warmup' | 'cooldown'
   isWarmupCooldown?: boolean
   sessionId?: string
   isSkipped?: boolean
@@ -6793,8 +2111,7 @@ function ExerciseRow({
   exercise, 
   index, 
   prefix, // [PHASE 7B] For grouped exercises
-  sectionKind, // [PHASE-AA4] Authoritative warmup/cooldown/main discriminant
-  isWarmupCooldown: isWarmupCooldownLegacy,
+  isWarmupCooldown, 
   sessionId,
   isSkipped,
   adjustedName,
@@ -6806,23 +2123,7 @@ function ExerciseRow({
   onProgressionAdjust,
 }: ExerciseRowProps) {
   const [showDetails, setShowDetails] = useState(false)
-
-  // [PHASE-AA4] Derive the resolved section kind. Precedence:
-  //   1. explicit `sectionKind` prop (new authoritative discriminant),
-  //   2. legacy `isWarmupCooldown` boolean (treated as warm-up to preserve
-  //      the prior behavior of the only legacy caller),
-  //   3. default 'main'.
-  // The single boolean `isWarmupCooldown` flag is preserved below for the
-  // many existing surface gates (`!isWarmupCooldown && ...`) that suppress
-  // main-row affordances on warm-up AND cool-down identically. AA4 only
-  // disambiguates the visible badge + reason styling between warm-up and
-  // cool-down; structural suppressions remain shared.
-  const resolvedSectionKind: 'main' | 'warmup' | 'cooldown' =
-    sectionKind ?? (isWarmupCooldownLegacy ? 'warmup' : 'main')
-  const isWarmupCooldown = resolvedSectionKind === 'warmup' || resolvedSectionKind === 'cooldown'
-  const isWarmupRow = resolvedSectionKind === 'warmup'
-  const isCooldownRow = resolvedSectionKind === 'cooldown'
-
+  
   // TASK 3: Safety guard for malformed exercise data
   if (!exercise || typeof exercise !== 'object') {
     console.warn('[ExerciseRow] Received invalid exercise:', exercise)
@@ -6838,28 +2139,7 @@ function ExerciseRow({
     weekScalingApplied?: boolean 
   }
   const effectiveSets = scaledExercise.scaledSets ?? exercise.sets ?? 3
-  const rawEffectiveReps = scaledExercise.scaledReps ?? exercise.repsOrTime ?? '8-12'
-  // [STEP-4B-PRESCRIPTION-UNIT-TRUTH] Repair reps/seconds mismatches before
-  // any downstream contract reads `repsOrTime`. If an upstream layer fed a
-  // hold exercise (e.g. "Wall Handstand Hold") a rep range like "8-15 reps",
-  // the helper restores the authored hold duration or maps the rep range
-  // proportionally into seconds. Pure pass-through for rep-based exercises
-  // and for already-time-based holds.
-  const exerciseAny = exercise as unknown as {
-    isIsometric?: boolean
-    defaultRepsOrTime?: string
-    difficultyLevel?: string
-  }
-  const unitTruth = resolveExercisePrescriptionUnitTruth({
-    name: exercise.name,
-    id: exercise.id,
-    category: exercise.category,
-    isIsometric: exerciseAny.isIsometric,
-    defaultRepsOrTime: exerciseAny.defaultRepsOrTime,
-    difficultyLevel: exerciseAny.difficultyLevel,
-    repsOrTime: rawEffectiveReps,
-  })
-  const effectiveReps = unitTruth.repsOrTime || rawEffectiveReps
+  const effectiveReps = scaledExercise.scaledReps ?? exercise.repsOrTime ?? '8-12'
   const effectiveTargetRPE = scaledExercise.scaledTargetRPE ?? exercise.targetRPE
   const weekScalingApplied = scaledExercise.weekScalingApplied ?? false
   
@@ -6908,18 +2188,7 @@ function ExerciseRow({
   const alignedRowSurface = rowSurface && sessionEvidence 
     ? alignRowWithSessionEvidence(rowSurface, sessionEvidence)
     : rowSurface
-
-  // [ROW-METHOD-TRUTH] Resolve the single authoritative method truth for this
-  // row ONCE per render. Both the Row 1 fallback chip and the Row 2b Method
-  // Ownership Panel read from this object -- they cannot go out of sync.
-  //
-  // [FINAL-VISIBLE-OWNERSHIP-LOCK] The previous render-loop console.log
-  // (`[v0] row-method-truth`) emitted one entry per visible exercise per paint
-  // of the Program page -- pure dev observability with no athlete-facing
-  // surface. Removed; the row's truth is already structurally consumed by the
-  // chip + panel below.
-  const rowMethodTruth = resolveRowMethodTruth(exercise, { prefix, isWarmupCooldown })
-
+  
   const hasRPE = !isWarmupCooldown && exerciseSupportsRPE(card.displayTitle)
   const exerciseId = card.displayTitle.toLowerCase().replace(/[\s-]+/g, '_')
   const hasKnowledge = hasExerciseKnowledge(exerciseId)
@@ -6996,92 +2265,17 @@ function ExerciseRow({
             <span className="text-[10px] text-[#4A4A4A] font-mono shrink-0">{prefix || `${index}.`}</span>
           )}
           <p className="font-medium text-[#E5E5E5] text-[13px] truncate">{displayName}</p>
-          {isWarmupRow ? (
+          {isWarmupCooldown ? (
             // [WARM-UP-STYLE-DEMOTED] Warm-up identity tag remains the sole
             // green accent in the row -- small, restrained, not saturated.
             <span className="text-[8px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400/80 shrink-0">
               Warm-Up
-            </span>
-          ) : isCooldownRow ? (
-            // [PHASE-AA4] Cool-down identity tag uses a restrained slate-blue
-            // treatment so it is visibly distinct from the warm-up green and
-            // from the main-row intent accents. This corrects the prior bug
-            // where every row inside the cool-down block rendered the green
-            // "Warm-Up" badge because warm-up and cool-down were collapsed
-            // into a single boolean.
-            <span className="text-[8px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-[#4F6D8A]/15 text-[#7FA8CC] shrink-0">
-              Cool-Down
             </span>
           ) : (
             <span className={`text-[9px] shrink-0 ${intentAccent[card.prescriptionIntent] || 'text-[#5A5A5A]'}`}>
               {card.intentLabel}
             </span>
           )}
-          {/*
-            [ROW-LEVEL-METHOD-CUE]
-            Single-exercise execution methods (cluster, density) sometimes land
-            on a row that is NOT wrapped in a grouped block frame -- typically
-            when the builder emits the method without a blockId, or when a
-            density has only one visible member (density min=2 in the grouped
-            adapter). Before this pill existed, those rows rendered as plain
-            flat rows while the scanner + method-summary chips were still
-            asserting grouped/method truth upstream, producing the "flat-lie"
-            symptom.
-
-            This pill is the honest row-level method cue: rendered ONLY when
-              (a) the exercise carries a non-straight `method`, AND
-              (b) no grouped `prefix` is set (i.e., the row is NOT inside a
-                  grouped block frame -- grouped frames already own the
-                  method identity via their pill header + colored rail).
-            It never appears on warm-up rows. Colors match the grouped
-            palette (cluster=purple, density=amber, superset=blue,
-            circuit=emerald) so the visual language is continuous across
-            flat rows, grouped-body headlines, and block headers.
-          */}
-          {/*
-            [ROW-HEADER-METHOD-CHIP-DELEGATED]
-            Cluster / density identity is OWNED by the dedicated Method
-            Ownership Panel below the prescription line (Row 2b).
-
-            [PHASE Z1 GROUPED-METHOD-CONTIGUITY-LOCK]
-            Pre-Z1 this slot painted a small fallback chip for flat-row
-            superset / circuit leaks. The chip was honest on paper but
-            visibly dishonest in practice: an orphaned `method='superset'`
-            (e.g. surviving a Y2 STC+C2B demotion that cleared blockId
-            but not method) made the row carry a "Superset" label even
-            though no grouped block, no paired partner, and no Start
-            Workout grouped execution backed it.
-
-            With Z1, `resolveRowMethodTruth` now suppresses the family
-            for any superset / circuit row that is NOT a grouped member
-            (no blockId, no prefix). Family collapses to null and this
-            chip path never fires for orphans. The chip remains as a
-            structural defense -- it would only paint if BOTH the
-            upstream demotion AND the orphan defense were bypassed, in
-            which case the chip's small visible footprint is a tractable
-            failure surface rather than a dominant lie.
-
-            All method resolution still goes through the single
-            authoritative `resolveRowMethodTruth` helper so chip, panel,
-            and grouped block render cannot disagree.
-          */}
-          {(() => {
-            if (isWarmupCooldown) return null
-            if (prefix) return null
-            if (rowMethodTruth.isGroupedMember) return null
-            if (rowMethodTruth.family !== 'superset' && rowMethodTruth.family !== 'circuit') return null
-            const chipClass = rowMethodTruth.family === 'superset'
-              ? 'bg-[#4F6D8A]/15 text-[#7FA8CC] border border-[#4F6D8A]/40'
-              : 'bg-emerald-500/12 text-emerald-300 border border-emerald-500/35'
-            return (
-              <span
-                className={`text-[8px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded shrink-0 ${chipClass}`}
-                title={`Execution method: ${rowMethodTruth.label}`}
-              >
-                {rowMethodTruth.label}
-              </span>
-            )
-          })()}
           {adjustedName && (
             <span className="text-[8px] px-1 rounded bg-[#4F6D8A]/10 text-[#4F6D8A] shrink-0">adj</span>
           )}
@@ -7102,7 +2296,7 @@ function ExerciseRow({
       {/* DOSAGE OWNER: prescriptionLine, intensityBadge, restGuidance */}
       {/* EXPLANATION OWNER: prescriptionContext (derived from same prescriptionIntent) */}
       {/* BANNED STALE SOURCES: exercise.note (doctrineFinalNote), alignedRowSurface chips, getBestRowSublabel */}
-      <div className="flex items-center gap-2 mt-1 flex-wrap">
+      <div className="flex items-center gap-2 mt-1">
         <span className="text-[13px] font-medium text-[#CACACA]">{card.prescriptionLine}</span>
         {card.intensityBadge && hasRPE && (
           <span className="text-[11px] text-[#7A7A7A]">{card.intensityBadge}</span>
@@ -7110,476 +2304,7 @@ function ExerciseRow({
         {card.restGuidance && (
           <span className="text-[10px] text-[#5A5A5A]">{card.restGuidance}</span>
         )}
-        {/* [STEP 4 OF 19 — PRESCRIPTION CLARITY OVERLAY] HSPU/pike sanity hint
-            rendered inline next to the prescription line so unrealistic generic
-            ranges read as a soft amber correction. ROM standard + purpose live
-            on Row 2b below to keep this line scannable. The hint is shown ONLY
-            when the resolver detected a mismatch between the row's HSPU family
-            and the prescribed reps; otherwise nothing renders. */}
-        {!isWarmupCooldown && (() => {
-          const clarity = resolveExercisePrescriptionClarity({
-            exerciseName: exercise.name || '',
-            reps: effectiveReps,
-          })
-          if (!clarity.repRangeHint) return null
-          return (
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30"
-              title={clarity.repRangeHint}
-              aria-label={`HSPU/pike sanity: ${clarity.repRangeHint}`}
-            >
-              Conservative target
-            </span>
-          )
-        })()}
-        {/* [PHASE 4Z / PHASE I] NUMERIC PRESCRIPTION MUTATION CHIP.
-            Single compact chip that surfaces the per-row numeric mutation
-            outcome stamped by lib/program/numeric-prescription-mutation-contract.ts.
-            Three honest states:
-              - mutated   = "Sets 3 → 4", "Reps 8-12 → 8-10", "Hold 30s → 25s"
-                            (visibleLabel from contract; one chip per row)
-              - protected = "Protected: skill_priority"   (no fake delta)
-              - clamped   = same label as mutated, with a thin amber dot to
-                            mark MUTATION_CLAMPED_TO_SAFE_BOUND.
-            Contract guarantees this is the SAME truth the live workout
-            consumes (preserved via load-authoritative-session.ts and
-            normalize-workout-session.ts) -- no Program-only mutation.
-            Hidden for warmup/cooldown rows. */}
-        {!isWarmupCooldown && (() => {
-          const numericDelta = (exercise as unknown as {
-            numericPrescriptionDelta?: {
-              status?: string
-              visibleLabel?: string
-              clamped?: boolean
-              protectedBy?: string | null
-              fieldChanges?: Array<unknown>
-            }
-          }).numericPrescriptionDelta
-          if (!numericDelta) return null
-          const status = numericDelta.status
-          const label = numericDelta.visibleLabel
-          if (!label) return null
-          // Only show a chip when there is actual content to render: an
-          // applied mutation, a clamped mutation, or a protection that
-          // explains why an eligible doctrine signal did NOT mutate the row.
-          // Silently skip "no change" / "no doctrine signal" cases to keep
-          // the row compact for the common path.
-          const isMutated = status === 'mutated'
-          const isProtectedWithReason =
-            status === 'protected' && !!numericDelta.protectedBy
-          if (!isMutated && !isProtectedWithReason) return null
-          const chipClass = isMutated
-            ? numericDelta.clamped
-              ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30'
-              : 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
-            : 'bg-[#3A3A3A]/40 text-[#9A9A9A] border border-[#4A4A4A]/40'
-          const titleText = isMutated
-            ? numericDelta.clamped
-              ? `Doctrine-driven dosage change (clamped to safe bound): ${label}`
-              : `Doctrine-driven dosage change: ${label}`
-            : `Numeric mutation skipped: ${label}`
-          return (
-            <span
-              className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded shrink-0 ${chipClass}`}
-              title={titleText}
-              aria-label={titleText}
-            >
-              {label}
-            </span>
-          )
-        })()}
-        {/* [PHASE-L] POST-WORKOUT PERFORMANCE FEEDBACK PROOF CHIP.
-            Single compact chip surfacing the per-row adaptation stamped by
-            lib/program/performance-feedback-adaptation-contract.ts after a
-            recent workout produced an under-target high-RPE / repeated
-            fatigue / tension / pain signal. Three honest variants:
-              - protective (held / reduced volume / lowered RPE): teal chip
-              - blocked (safety bound prevented apply): muted chip with
-                blocked title text so users see honesty rather than a fake
-                "adapted" claim
-              - skipped: nothing renders.
-            The chip's `aria-label` and `title` carry the
-            `userVisibleExplanation` string built from actual mutation
-            evidence — never invented. Hidden for warmup/cooldown rows.
-            Single-line, never wraps the row container. */}
-        {!isWarmupCooldown && (() => {
-          const adaptation = (exercise as unknown as {
-            performanceAdaptation?: {
-              applied?: boolean
-              status?: string
-              mutationType?: string
-              userVisibleExplanation?: string
-              shortLabel?: string
-              reasonCodes?: string[]
-              // [PHASE-O] Optional trend / coach slices, present when the
-              // resolver detected multi-session trend evidence on this row.
-              // Absent on legacy stamps and on rows without repeated evidence.
-              trendIntelligence?: {
-                trendCodes?: string[]
-                movementPattern?: string
-                severity?: 'low' | 'moderate' | 'high'
-                confidence?: 'low' | 'medium' | 'high'
-                conciseExplanation?: string
-                setCount?: number
-                sessionCount?: number
-              }
-              coachDecision?: {
-                action?: string
-                explanation?: string
-              }
-            }
-          }).performanceAdaptation
-          if (!adaptation) return null
-          const explanation = adaptation.userVisibleExplanation
-          const shortLabel = adaptation.shortLabel
-          if (!shortLabel || !explanation) return null
-          const isApplied = adaptation.applied === true
-          const chipClass = isApplied
-            ? 'bg-teal-500/10 text-teal-300 border border-teal-500/30'
-            : 'bg-[#3A3A3A]/40 text-[#9A9A9A] border border-[#4A4A4A]/40'
-          const titleText = isApplied
-            ? `Adjusted from last workout: ${explanation}`
-            : `Performance signal blocked by safety bound: ${explanation}`
-          return (
-            <span
-              className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded shrink-0 ${chipClass}`}
-              title={titleText}
-              aria-label={titleText}
-              data-phase-l-proof="true"
-              data-phase-o-trend-codes={adaptation.trendIntelligence?.trendCodes?.join(',') || undefined}
-              data-phase-o-coach-action={adaptation.coachDecision?.action || undefined}
-            >
-              {shortLabel}
-            </span>
-          )
-        })()}
       </div>
-
-      {/* [STEP 4 OF 19 — PRESCRIPTION CLARITY: ROM + PURPOSE ROW]
-          Row 2b: thin compact line under the prescription line carrying the
-          ROM/depth/position standard and the primary purpose / carryover for
-          this row. Resolved purely from the exercise name (and reps for HSPU
-          sanity classification) by `resolveExercisePrescriptionClarity`. Renders
-          nothing for unrecognized rows so the row layout stays compact for the
-          common path. Skipped for warmup/cooldown rows. */}
-      {!isWarmupCooldown && (() => {
-        const clarity = resolveExercisePrescriptionClarity({
-          exerciseName: exercise.name || '',
-          reps: effectiveReps,
-        })
-        if (!clarity.romStandard && !clarity.purposeText) return null
-        return (
-          <div className="mt-1 space-y-0.5">
-            {clarity.romStandard && (
-              <p
-                className="text-[10px] text-[#8A8A8A] leading-snug"
-                title={clarity.romStandard}
-              >
-                <span className="font-semibold text-[#A5A5A5]">ROM/standard:</span>{' '}
-                {clarity.romStandard}
-              </p>
-            )}
-            {clarity.purposeText && (
-              <p
-                className="text-[10px] italic text-[#7A7A7A] leading-snug"
-                title={clarity.purposeText}
-              >
-                {clarity.purposeText}
-              </p>
-            )}
-          </div>
-        )
-      })()}
-
-      {/* [PHASE-P] Quality / doctrine audit proof line — concise sibling line
-          rendered under the chip row, ABOVE the Phase O line, when the Phase P
-          resolver attached a `qualityAudit` slice carrying a non-trivial
-          finding. Single DOM block to avoid stacking multiple audit surfaces:
-            - tendon RPE cap correction → "Doctrine: tendon RPE held to N"
-            - skill carryover attribution → "Skill carryover: <skill> via <rationale>"
-            - unilateral per-side hint → "Per side"
-          Renders nothing on warm-up/cooldown rows and nothing when no Phase P
-          finding applies, so the UI never invents quality claims. */}
-      {!isWarmupCooldown && (() => {
-        const qa = (exercise as unknown as {
-          qualityAudit?: {
-            applied?: boolean
-            corrections?: string[]
-            shortLabel?: string
-            conciseExplanation?: string
-            skillCarryover?: { skill?: string; confidence?: 'low' | 'medium' | 'high'; rationale?: string }
-            rpeCap?: { before?: number; after?: number; reason?: string }
-            unilateralPerSide?: { addedNote?: string }
-          }
-        }).qualityAudit
-        if (!qa) return null
-        const corrections = Array.isArray(qa.corrections) ? qa.corrections : []
-        // Insufficient-finding stamps (only ['no_change']) render nothing —
-        // matches Phase O policy of "do not invent proof."
-        const hasFinding =
-          corrections.some((c) => c !== 'no_change') ||
-          !!qa.skillCarryover ||
-          !!qa.rpeCap ||
-          !!qa.unilateralPerSide
-        if (!hasFinding) return null
-        const dominant: string = (() => {
-          if (corrections.includes('tendon_rpe_capped') && qa.rpeCap) {
-            const after = typeof qa.rpeCap.after === 'number' ? qa.rpeCap.after : null
-            return after !== null ? `Doctrine: tendon RPE held at ${after}` : 'Doctrine: tendon RPE protected'
-          }
-          if (corrections.includes('skill_carryover_attributed') && qa.skillCarryover?.skill) {
-            const niceSkill = qa.skillCarryover.skill.replace(/_/g, ' ')
-            const confTail =
-              qa.skillCarryover.confidence === 'high'
-                ? ''
-                : qa.skillCarryover.confidence === 'medium'
-                  ? ' (indirect)'
-                  : ''
-            return `Skill carryover: ${niceSkill}${confTail}`
-          }
-          if (corrections.includes('unilateral_per_side_note_added')) {
-            return 'Per side'
-          }
-          return ''
-        })()
-        if (!dominant) return null
-        const fullTitle =
-          qa.conciseExplanation ||
-          qa.skillCarryover?.rationale ||
-          qa.rpeCap?.reason ||
-          'Quality audit'
-        return (
-          <p
-            className="mt-1 text-[10px] text-amber-300/70 italic leading-snug"
-            title={fullTitle}
-            aria-label={fullTitle}
-            data-phase-p-proof="true"
-            data-phase-p-corrections={corrections.join(',') || undefined}
-          >
-            {dominant}
-          </p>
-        )
-      })()}
-
-      {/* [PHASE-O] Trend / coach proof line — concise second line under
-          the existing performanceAdaptation chip when the resolver attached
-          a trend slice. Only renders when:
-            (a) the row is not a warm-up / cooldown,
-            (b) the row carries a performanceAdaptation stamp, AND
-            (c) that stamp carries a Phase O trendIntelligence or coachDecision
-                slice with a non-empty conciseExplanation / action.
-          Renders nothing when the trend layer had insufficient repeated
-          evidence so the UI never invents trend claims. The same DOM block
-          owns BOTH the trend label AND the coach-decision microcopy so users
-          see the reason chain on a single compact line, not two competing
-          surfaces. */}
-      {!isWarmupCooldown && (() => {
-        const adaptation = (exercise as unknown as {
-          performanceAdaptation?: {
-            applied?: boolean
-            trendIntelligence?: {
-              trendCodes?: string[]
-              movementPattern?: string
-              severity?: 'low' | 'moderate' | 'high'
-              confidence?: 'low' | 'medium' | 'high'
-              conciseExplanation?: string
-              setCount?: number
-              sessionCount?: number
-            }
-            coachDecision?: {
-              action?: string
-              explanation?: string
-            }
-          }
-        }).performanceAdaptation
-        if (!adaptation) return null
-        const trend = adaptation.trendIntelligence
-        const coach = adaptation.coachDecision
-        const hasTrend = !!trend && Array.isArray(trend.trendCodes) && trend.trendCodes.length > 0
-        const hasCoach = !!coach && typeof coach.action === 'string' && coach.action.length > 0
-        if (!hasTrend && !hasCoach) return null
-        // Honest "no change" trend on insufficient data is still useful proof,
-        // but only when the resolver ALSO produced a chip — otherwise we'd
-        // be adding noise to every row. We already gated on `adaptation`
-        // existing above, so this is satisfied by construction.
-        const trendCodes = trend?.trendCodes ?? []
-        // Build a short trend label from the dominant trend code.
-        const trendLabel = (() => {
-          if (trendCodes.includes('joint_caution_pressure_detected')) return 'caution flag'
-          if (trendCodes.includes('skill_tension_limiter_detected')) return 'tension limiter'
-          if (trendCodes.includes('overreaching_risk')) return 'overreaching risk'
-          if (trendCodes.includes('repeated_under_target') && trendCodes.includes('repeated_high_rpe'))
-            return 'repeated high effort under target'
-          if (trendCodes.includes('repeated_high_rpe')) return 'repeated high RPE'
-          if (trendCodes.includes('repeated_under_target')) return 'repeated under target'
-          if (trendCodes.includes('capacity_limiter_detected')) return 'capacity limiter'
-          if (trendCodes.includes('progressing_well')) return 'progressing well'
-          if (trendCodes.includes('stable_on_target')) return 'stable on target'
-          if (trendCodes.includes('high_effort_on_target')) return 'on target at high effort'
-          if (trendCodes.includes('insufficient_data')) return null
-          return null
-        })()
-        // Coach action label — short, plain English.
-        const coachLabel = (() => {
-          switch (coach?.action) {
-            case 'hold_progression': return 'hold progression'
-            case 'reduce_volume': return 'reduce volume'
-            case 'lower_rpe_target': return 'lower RPE target'
-            case 'extend_rest': return 'extend rest'
-            case 'preserve_current_dose': return 'preserve dose'
-            case 'small_progression': return 'small progression'
-            case 'maintain_and_monitor': return 'maintain and monitor'
-            case 'technique_focus': return 'technique focus'
-            case 'deload_candidate': return 'deload candidate'
-            case 'insufficient_data_no_change': return 'no change — insufficient data'
-            default: return null
-          }
-        })()
-        if (!trendLabel && !coachLabel) return null
-        const setCount = trend?.setCount ?? 0
-        const sessionCount = trend?.sessionCount ?? 0
-        // [PHASE-S] Evidence tail moved out of visible text. The "5 sets ·
-        // 3 sessions" counter was debug-flavored audit copy on the always-
-        // visible exercise row. Per Phase S "user-friendly wording" rule the
-        // visible line now reads as plain coaching ("Trend: progressing well
-        // · Coach: hold progression"), and the evidence count is preserved
-        // in the hover `title`, the `aria-label`, and the
-        // `data-phase-o-evidence` attribute so screenshot verification, dev
-        // probes, and acceptance assertions still see the raw counts.
-        const evidenceTail =
-          setCount > 0 && sessionCount > 0
-            ? `${setCount} set${setCount === 1 ? '' : 's'} · ${sessionCount} session${sessionCount === 1 ? '' : 's'}`
-            : ''
-        const fullTitle =
-          (trend?.conciseExplanation ? `Trend: ${trend.conciseExplanation}` : '') +
-          (coach?.explanation
-            ? `${trend?.conciseExplanation ? ' · ' : ''}Coach: ${coach.explanation}`
-            : '') +
-          (evidenceTail
-            ? `${trend?.conciseExplanation || coach?.explanation ? ' · ' : ''}Evidence: ${evidenceTail}`
-            : '')
-        return (
-          <p
-            className="mt-1 text-[10px] text-teal-300/70 italic leading-snug"
-            title={fullTitle || undefined}
-            aria-label={fullTitle || 'Performance trend'}
-            data-phase-o-proof="true"
-            data-phase-o-evidence={evidenceTail || undefined}
-          >
-            {trendLabel && <span>Trend: {trendLabel}</span>}
-            {trendLabel && coachLabel && <span className="text-[#5A5A5A]"> · </span>}
-            {coachLabel && <span>Coach: {coachLabel}</span>}
-          </p>
-        )
-      })()}
-
-      {/* ROW 2b: [METHOD-OWNERSHIP-PANEL]
-          ONE authoritative visible method surface for flat method-only rows
-          (no grouped `prefix`). Replaces the prior weak 8px chip + 10px
-          muted italic microcopy that the user reported as "basically still
-          looks flat." Design contract:
-            - 4px solid colored rail (not a dashed / soft accent): the rail
-              is the primary eye-catcher, locks the row as "special" at a
-              glance without faking a grouped header.
-            - Icon tile (colored background, 20px) carrying the method icon
-              (Repeat for cluster, Timer for density): matches the grouped
-              body headline and the session-level chip row palette so the
-              visual vocabulary is consistent across all method surfaces.
-            - Uppercase 11px label ("CLUSTER SET" / "DENSITY BLOCK") --
-              noticeably larger and more prominent than the prior 8px chip
-              and 10px italic microcopy, using full-opacity brand text.
-            - 11px execution sentence on the second line: readable, not
-              muted into the grey-on-grey band the prior microcopy used.
-            - Compact: ~36px tall total, inside the existing row container.
-              No fake grouped frame, no member rails, no extra vertical
-              bloat that would over-promise grouped structure.
-          Rendered ONLY when:
-            (a) not a warm-up/cooldown row,
-            (b) no grouped `prefix` is set (grouped frames already own
-                method identity via their own header + rail),
-            (c) the exercise carries `method: 'cluster' | 'cluster_sets'`
-                or `method: 'density' | 'density_block'`.
-          Superset/circuit do not paint this panel -- those are grouped-
-          structure methods and should only appear inside a real grouped
-          frame; if they leak onto a flat row the small fallback chip in
-          Row 1 remains. Straight rows render zero method surface. */}
-      {rowMethodTruth.shouldPaintPanel && rowMethodTruth.panelVariant && (() => {
-        // [PHASE-3E ROW-LEVEL SET-EXECUTION VISIBLE TRUTH LOCK]
-        // Per-variant visual treatment for all five row-level set-execution
-        // methods. Each variant gets a distinct rail color + icon so the user
-        // can visibly tell apart cluster / density / top-set / drop-set /
-        // rest-pause rows at a glance, without entering live workout runtime.
-        // The structural template (rail + icon tile + label + exec line) is
-        // identical across variants -- only color and icon vary -- so the
-        // visual vocabulary stays consistent and there's no UI redesign.
-        const variant = rowMethodTruth.panelVariant
-        // Icon mapping uses already-imported lucide icons:
-        //   cluster   -> Repeat   (intra-set bursts then resume)
-        //   density   -> Timer    (timed window)
-        //   top_set   -> Dumbbell (one heavy working set)
-        //   drop_set  -> Layers   (descending load layers)
-        //   rest_pause-> Zap      (short pause then continue)
-        const Icon =
-          variant === 'cluster' ? Repeat
-          : variant === 'density' ? Timer
-          : variant === 'top_set' ? Dumbbell
-          : variant === 'drop_set' ? Layers
-          : Zap
-        // Color palette: existing cluster=purple / density=amber kept; new
-        // row-level variants use rose / orange / teal to stay distinguishable
-        // from grouped methods (superset=blue, circuit=emerald) without
-        // adding new pages of color tokens.
-        const railColor =
-          variant === 'cluster' ? 'bg-purple-500'
-          : variant === 'density' ? 'bg-amber-500'
-          : variant === 'top_set' ? 'bg-rose-500'
-          : variant === 'drop_set' ? 'bg-orange-500'
-          : 'bg-teal-500'
-        const iconTileBg =
-          variant === 'cluster' ? 'bg-purple-500/20'
-          : variant === 'density' ? 'bg-amber-500/20'
-          : variant === 'top_set' ? 'bg-rose-500/20'
-          : variant === 'drop_set' ? 'bg-orange-500/20'
-          : 'bg-teal-500/20'
-        const iconColor =
-          variant === 'cluster' ? 'text-purple-300'
-          : variant === 'density' ? 'text-amber-300'
-          : variant === 'top_set' ? 'text-rose-300'
-          : variant === 'drop_set' ? 'text-orange-300'
-          : 'text-teal-300'
-        const labelColor =
-          variant === 'cluster' ? 'text-purple-200'
-          : variant === 'density' ? 'text-amber-200'
-          : variant === 'top_set' ? 'text-rose-200'
-          : variant === 'drop_set' ? 'text-orange-200'
-          : 'text-teal-200'
-        const execColor =
-          variant === 'cluster' ? 'text-purple-300/90'
-          : variant === 'density' ? 'text-amber-300/90'
-          : variant === 'top_set' ? 'text-rose-300/90'
-          : variant === 'drop_set' ? 'text-orange-300/90'
-          : 'text-teal-300/90'
-        return (
-          <div
-            className="mt-2 flex items-stretch gap-2 rounded-md bg-[#121212] border border-[#262626] overflow-hidden"
-            role="note"
-            aria-label={`Execution method: ${rowMethodTruth.label}`}
-          >
-            <div className={`w-1 shrink-0 ${railColor}`} aria-hidden="true" />
-            <div className={`flex items-center justify-center w-7 my-1.5 ${iconTileBg} rounded`} aria-hidden="true">
-              <Icon className={`w-3.5 h-3.5 ${iconColor}`} />
-            </div>
-            <div className="flex-1 py-1.5 pr-2 min-w-0">
-              <div className={`text-[11px] font-bold uppercase tracking-wider ${labelColor} leading-tight`}>
-                {rowMethodTruth.label}
-              </div>
-              <div className={`text-[11px] ${execColor} leading-snug mt-0.5`}>
-                {rowMethodTruth.execLine}
-              </div>
-            </div>
-          </div>
-        )
-      })()}
 
       {/* ROW 3a: [WARM-UP-ROW-CONTRACT-RESTORED] Per-row warm-up selectionReason.
           This is the "prior supporting subtitle / intent line behavior" that the

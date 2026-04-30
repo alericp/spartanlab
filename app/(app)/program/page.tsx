@@ -65,487 +65,7 @@ import Link from 'next/link'
 
 // TASK 5: Lightweight type imports only - actual modules loaded dynamically
 import type { AdaptiveProgramInputs, AdaptiveProgram, GenerationErrorCode, TemplateSimilarityResult } from '@/lib/adaptive-program-builder'
-// [STEP-4D] AdaptiveProgramInputs is composed of PrimaryGoal/ExperienceLevel/
-// TrainingDays/SessionLength from program-service plus EquipmentType from
-// adaptive-exercise-pool plus ScheduleMode from flexible-schedule-engine —
-// the same set lib/adaptive-program-builder.ts itself imports. The
-// `buildModifyEntryInputsFromVisibleProgram` helper near line ~3588 builds
-// an `AdaptiveProgramInputs` literal with `as PrimaryGoal`, `as ExperienceLevel`,
-// `as SessionLength`, `as ScheduleMode`, and `as EquipmentType[]` casts.
-// All six type names must therefore be visible in this file.
-import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength, GeneratedProgram } from '@/lib/program-service'
-import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
-import type { ScheduleMode } from '@/lib/flexible-schedule-engine'
-
-// [STEP-4I — 2 OF 3] Shared canonical contract adapter for the Program Page →
-// `evaluateUnifiedProgramStaleness` boundary. Single source of truth for
-// converting raw UI/builder unions (SessionLength with '60+', TrainingDaysPerWeek
-// with 'flexible', etc.) into the evaluator's strict `number | null` /
-// `string | null` / `string[] | null` contract. Both call sites in this file
-// (the active-program staleness useMemo and the post-rebuild staleness branch)
-// route through `buildStalenessEvaluatorProgram` instead of constructing
-// per-call-site normalizers — the previous in-file copy was lost during a
-// branch sync, which is exactly why this corridor needs an extracted shared
-// owner. See lib/program/program-page-contract-adapter.ts for full doctrine.
-import {
-  buildStalenessEvaluatorProgram,
-  type StalenessEvaluatorInput,
-} from '@/lib/program/program-page-contract-adapter'
-
-// [STEP-4D-SYNC] Compile-visible sentinel. Pure type-level + value-level
-// constant with no runtime behavior, no UI, no hooks, no side effects, no
-// state, and no function calls. Its sole purpose is to force a real
-// pullable file delta on top of commit efe0e3d so the deployed Vercel
-// build is no longer pinned to the pre-Step-4D source. The fields below
-// are the same invariants the Program Page type/fallback corridor relies
-// on — keeping them as a `const` lets a downstream audit grep the bundle
-// for the sentinel id and confirm the deployed artifact actually contains
-// the PrimaryGoal import + valid 'general' fallback fix. If a future
-// build regresses any of these invariants, this constant is the
-// deliberate canary the user can search for in Vercel build output.
-export const STEP4D_PROGRAM_PAGE_TYPE_SYNC_SENTINEL = {
-  id: 'STEP4D_PRIMARY_GOAL_TYPE_IMPORT_SYNC',
-  purpose: 'Confirms Program Page PrimaryGoal/goal-fallback type fix is present in the deployed bundle',
-  primaryGoalImportRequired: true,
-  fallbackLiteral: 'general',
-  forbidsInvalidFallback: 'general_fitness',
-  timestamp: '2026-04-29-step4d-sync',
-} as const
-
-// ==========================================================================
-// [STEP-4G-DELTA, RESTORED IN STEP-4J] AdaptiveProgramInputs excess-property
-// regression tripwire. This block was added in Step 4G-DELTA, dropped during
-// a branch sync (the same instability that lost the Step 4H module-scope
-// helpers), and is restored here to keep the corridor's defense-in-depth
-// intact across syncs.
-//
-// Step 4E removed four page/profile metadata fields from the
-// `const result = { ... } satisfies AdaptiveProgramInputs` literal inside
-// `buildModifyEntryInputsFromVisibleProgram`:
-//   - sessionDurationMode
-//   - trainingPathType
-//   - goalCategories
-//   - selectedFlexibility
-//
-// Those keys do NOT exist on the `AdaptiveProgramInputs` interface in
-// `lib/adaptive-program-builder.ts`. If any future change widens
-// `AdaptiveProgramInputs` to include any of those four keys (intentionally
-// or by accident), `_AdaptiveProgramInputsBannedKeys` stops being `never`,
-// the conditional resolves to `never`, and the
-// `_STEP_4G_CONTRACT_GUARD: true` assignment fails at compile time —
-// directly at the Program Page where the regression matters, with the
-// banned key name visible in the TypeScript error message. This protects
-// the interface side; the `satisfies AdaptiveProgramInputs` at the literal
-// site (~line 3876) protects the literal side.
-// ==========================================================================
-type _AdaptiveProgramInputsBannedKeys = Extract<
-  keyof AdaptiveProgramInputs,
-  'sessionDurationMode' | 'trainingPathType' | 'goalCategories' | 'selectedFlexibility'
->
-type _AdaptiveProgramInputsContractGuard = [_AdaptiveProgramInputsBannedKeys] extends [never]
-  ? true
-  : never
-const _STEP_4G_CONTRACT_GUARD: _AdaptiveProgramInputsContractGuard = true
-void _STEP_4G_CONTRACT_GUARD
-
-// ==========================================================================
-// [STEP-5A-XI] Program-page metadata view helper.
-//
-// `AdaptiveProgramInputs` (lib/adaptive-program-builder.ts:1088) is the
-// builder *input* contract. The four keys
-//   - sessionDurationMode
-//   - trainingPathType
-//   - goalCategories
-//   - selectedFlexibility
-// are intentionally NOT part of `AdaptiveProgramInputs` — the Step 4G guard
-// above enforces that. They live on the canonical profile / generation
-// entry / program-output side of the contract, and are added structurally
-// by `entryToAdaptiveInputs()` (lib/canonical-profile-service.ts:3614,
-// inline structural return type) and `getCanonicalProfile()`.
-//
-// At runtime, the page-level `inputs: AdaptiveProgramInputs | null` state
-// often holds a value that *also* carries those four metadata fields — it
-// was assigned from `entryToAdaptiveInputs()` output and the extra keys
-// survive the assignment because TS doesn't strip extra properties at
-// runtime. But the static type narrows them away, so direct reads like
-// `inputs.sessionDurationMode` emit TS2339 (the current build blocker).
-//
-// This helper provides a single typed *view* over any unknown-shaped
-// runtime object that may carry the four metadata fields. It does NOT
-// widen `AdaptiveProgramInputs`, does NOT use `as any`, does NOT use
-// `as AdaptiveProgramInputs & {...}`, and is purely additive — the Step 4G
-// guard remains intact above. Each call site that needs metadata snapshots
-// once near the start of its scope and reads from the snapshot, replacing
-// the unsafe `inputs.<bannedKey>` / `effectiveInputs.<bannedKey>` reads.
-// ==========================================================================
-type _ProgramPageMetadataView = {
-  sessionDurationMode: 'static' | 'adaptive' | null
-  trainingPathType: string | null
-  goalCategories: string[]
-  selectedFlexibility: string[]
-}
-
-// [STEP-5A-OMICRON] Record-cast quarantine helpers.
-//
-// `readProgramPageRecord` is the SINGLE allowed site for
-// `as Record<string, unknown>` in this file. Every other helper and call
-// site flows through it. The cast is safe because the parameter is `unknown`
-// and the function only returns the record after a real `typeof === 'object'`
-// guard — no strongly typed app object (`AdaptiveProgramInputs`,
-// `AdaptiveProgram`, `inputs`, `effectiveInputs`, `newProgram`, etc.) is
-// ever directly converted, which is what TS2352 was rejecting.
-//
-// All other Record-style reads in this file MUST go through one of the
-// four helpers below. No `as any`, no `@ts-ignore`, no non-null assertions,
-// and no direct `as Record<string, unknown>` casts outside this section.
-function readProgramPageRecord(source: unknown): Record<string, unknown> | null {
-  if (!source || typeof source !== 'object') return null
-  return source as Record<string, unknown>
-}
-function readProgramPageString(source: unknown, key: string): string | null {
-  const record = readProgramPageRecord(source)
-  const value = record?.[key]
-  return typeof value === 'string' ? value : null
-}
-function readProgramPageStringArray(source: unknown, key: string): string[] {
-  const record = readProgramPageRecord(source)
-  const value = record?.[key]
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string')
-    : []
-}
-
-// [STEP-5A-OMEGA-13] Typed audit-only accessor for union-shaped program objects.
-//
-// `savedState.activeProgram` (from `getProgramState()` in `lib/program-state.ts`)
-// is `AdaptiveProgram | GeneratedProgram | null`. The two halves carry the
-// per-week training day list under DIFFERENT field names:
-//   - `AdaptiveProgram.sessions: AdaptiveSession[]`
-//   - `GeneratedProgram.generatedDays: DayTemplate[]`     (NO `.sessions`)
-//
-// Direct `.sessions?.length` reads against the union therefore fail TS2339.
-// This audit-purpose-only helper performs union-narrowing safely via runtime
-// `'sessions' in program` / `'generatedDays' in program` checks plus
-// `Array.isArray` guards, returning the natural day count for whichever
-// shape was persisted. NO `as any`, NO `@ts-ignore`, NO widening of either
-// program type, and NO invented fields.
-function getProgramSessionCountForAudit(
-  program: AdaptiveProgram | GeneratedProgram | null | undefined,
-): number {
-  if (!program) return 0
-  if ('sessions' in program && Array.isArray(program.sessions)) {
-    return program.sessions.length
-  }
-  if ('generatedDays' in program && Array.isArray(program.generatedDays)) {
-    return program.generatedDays.length
-  }
-  return 0
-}
-
-// [STEP-5A-OMEGA-14] Schedule-mode canonicalizer for canonical-profile writeback.
-// [STEP-5A-OMEGA-15] Widened input from a narrow `ProgramPageRawScheduleMode`
-//   union to `unknown` so this becomes a true boundary helper. The prior
-//   narrow input rejected legitimately wider projection-boundary callers —
-//   notably `freshnessProjection.scheduleMode` (typed `string | undefined`
-//   per `toFreshnessSignatureProjection` at L340–356, which intentionally
-//   reads defensively from an `unknown` record) — producing TS2345 at
-//   `app/(app)/program/page.tsx:7762:48`. Equality comparisons against
-//   string literals are type-safe against `unknown`, so the helper body
-//   needs no other change. Runtime behavior preserved at all three
-//   callsites: 'flexible'/'adaptive' → 'flexible', 'static' → 'static',
-//   anything else → 'static' (the established fallback).
-//
-// Background:
-//   `ScheduleMode` (lib/flexible-schedule-engine.ts:73) is `'static' | 'flexible'`.
-//   `AdaptiveProgramInputs.scheduleMode`, `CanonicalProgrammingProfile.scheduleMode`,
-//   and the freshness-projection `scheduleMode` are *consumer-side* narrowed
-//   to canonical literals, but boundary projection helpers like
-//   `toFreshnessSignatureProjection` deliberately keep the value as raw
-//   `string | undefined` until canonicalization. Phase 29A separated schedule
-//   identity (`'static' | 'flexible'`) from adaptive-workload behavior;
-//   the legacy raw value `'adaptive'` was retired from the canonical type
-//   but is still mapped here so any pre-Phase-29A persisted profile reads
-//   collapse correctly.
-//
-// What this helper does:
-//   Accepts ANY raw projection-boundary value (`unknown`) and projects it
-//   onto the canonical `'static' | 'flexible'` shape, mapping legacy
-//   `'adaptive'` to canonical `'flexible'` exactly as the prior inline
-//   ternaries intended.
-//
-// Why this is safe:
-//   - No runtime behavior change at any callsite — the comparison ladder
-//     still produces the same `'flexible'` / `'static'` outcome the inline
-//     ternaries did, with `'static'` as the established unknown-fallback.
-//   - No widening of `AdaptiveProgramInputs` / `CanonicalProgrammingProfile` /
-//     `ScheduleMode` / `AdaptiveProgram` / `GeneratedProgram`.
-//   - No `as any`, no `@ts-ignore`.
-//   - Pure function — no state, no shadow normalizer, no side effects.
-function toCanonicalScheduleModeForProgramProfile(
-  scheduleMode: unknown,
-): 'static' | 'flexible' {
-  if (scheduleMode === 'flexible' || scheduleMode === 'adaptive') return 'flexible'
-  if (scheduleMode === 'static') return 'static'
-  return 'static'
-}
-
-// [STEP-5A-TAU] Promoted from `_readProgramPageNumber` (pre-declared per
-//   STEP-5A-OMICRON) to public `readProgramPageNumber`. Now actively used
-//   by the canonicalProfile projection in `handleGenerate` to source
-//   `bodyweight` safely from the wider builder/generationInputs object —
-//   `bodyweight` is NOT part of `ValidatedGenerationEntry` and must come
-//   from expanded onboarding/profile truth via the helper family.
-function readProgramPageNumber(source: unknown, key: string): number | null {
-  const record = readProgramPageRecord(source)
-  const value = record?.[key]
-  return typeof value === 'number' && Number.isFinite(value) ? value : null
-}
-
-// [STEP-5A-OMEGA-2] Freshness signature projection helper — INPUT BOUNDARY.
-//
-// `createProfileSignature(...)` (lib/program-state.ts:476) expects a strict
-// normalized profile shape:
-//   { primaryGoal?: string | null,
-//     secondaryGoal?: string | null,
-//     scheduleMode?: string,
-//     trainingDaysPerWeek?: number | null,
-//     sessionLengthMinutes?: number,
-//     selectedSkills?: string[] }
-//
-// The raw sources passed to this helper across the file's 8 callsites are
-// HETEROGENEOUS — they include `AdaptiveProgramInputs` (state/effective/
-// freshRebuild/updated inputs) AND the literal return type of
-// `entryToAdaptiveInputs` (generationInputs). Both carry shapes the strict
-// signature contract rejects:
-//   - `trainingDaysPerWeek: number | 'flexible'`  (string literal NOT accepted by `number | null`)
-//   - `sessionLength: SessionLength`              (a union that may include string values per
-//                                                  AdaptiveProgramInputs in lib/adaptive-program-builder.ts)
-// plus unrelated generation fields (`equipment`, `experienceLevel`, etc.) the
-// signature must not see.
-//
-// STEP 5A-OMEGA's previous narrow structural input type rejected
-// `AdaptiveProgramInputs.sessionLength: SessionLength` (the helper declared
-// `sessionLength?: number` but the union widens beyond number). The fix is
-// to make the input boundary `unknown` and do ALL narrowing internally —
-// this is precisely the boundary-helper pattern already established by
-// `readProgramPageRecord` / `readProgramPageString` etc. above.
-//
-// Behavior contract (unchanged from STEP 5A-OMEGA):
-//   - 'flexible' (or any non-numeric) training days  → null
-//   - numeric `sessionLengthMinutes` → preserved
-//   - else numeric `sessionLength`   → renamed (already minutes per
-//                                      `SessionLength`'s numeric variants)
-//   - else                           → undefined
-//   - drops all unrelated generation fields
-//   - normalizes missing/invalid primary/secondary goals to null
-type FreshnessSignatureProjection = {
-  primaryGoal?: string | null
-  secondaryGoal?: string | null
-  scheduleMode?: string
-  trainingDaysPerWeek?: number | null
-  sessionLengthMinutes?: number
-  selectedSkills?: string[]
-}
-function toFreshnessSignatureProjection(input: unknown): FreshnessSignatureProjection {
-  const record = readProgramPageRecord(input)
-  if (!record) {
-    return {
-      primaryGoal: null,
-      secondaryGoal: null,
-      trainingDaysPerWeek: null,
-      selectedSkills: [],
-    }
-  }
-
-  const primaryGoal =
-    typeof record.primaryGoal === 'string' ? record.primaryGoal : null
-  const secondaryGoal =
-    typeof record.secondaryGoal === 'string' ? record.secondaryGoal : null
-  const scheduleMode =
-    typeof record.scheduleMode === 'string' ? record.scheduleMode : undefined
-
-  // [STEP-5A-OMEGA-2] 'flexible' (or any non-numeric trainingDaysPerWeek)
-  //   collapses to null — preserves "no fixed weekly count" meaning without
-  //   inventing a fake number for flexible scheduling.
-  const trainingDaysPerWeek =
-    typeof record.trainingDaysPerWeek === 'number' &&
-    Number.isFinite(record.trainingDaysPerWeek)
-      ? record.trainingDaysPerWeek
-      : null
-
-  // [STEP-5A-OMEGA-2] String session-length labels (e.g. SessionLength's
-  //   string variants) are NOT converted — only numeric values pass through.
-  //   No invented defaults; missing/invalid → undefined.
-  const sessionLengthMinutes =
-    typeof record.sessionLengthMinutes === 'number' &&
-    Number.isFinite(record.sessionLengthMinutes)
-      ? record.sessionLengthMinutes
-      : typeof record.sessionLength === 'number' &&
-          Number.isFinite(record.sessionLength)
-        ? record.sessionLength
-        : undefined
-
-  const selectedSkills = Array.isArray(record.selectedSkills)
-    ? record.selectedSkills.filter(
-        (skill): skill is string => typeof skill === 'string',
-      )
-    : []
-
-  return {
-    primaryGoal,
-    secondaryGoal,
-    scheduleMode,
-    trainingDaysPerWeek,
-    sessionLengthMinutes,
-    selectedSkills,
-  }
-}
-
-function readProgramPageMetadataFromUnknown(source: unknown): _ProgramPageMetadataView {
-  // [STEP-5A-OMICRON] Refactored to flow through the quarantined record
-  //   helper above; no direct `as Record<string, unknown>` cast here.
-  const sessionDurationModeRaw = readProgramPageString(source, 'sessionDurationMode')
-  return {
-    sessionDurationMode:
-      sessionDurationModeRaw === 'static' || sessionDurationModeRaw === 'adaptive'
-        ? sessionDurationModeRaw
-        : null,
-    trainingPathType: readProgramPageString(source, 'trainingPathType'),
-    goalCategories: readProgramPageStringArray(source, 'goalCategories'),
-    selectedFlexibility: readProgramPageStringArray(source, 'selectedFlexibility'),
-  }
-}
-
-// ==========================================================================
-// [STEP-5A-PI] buildCanonicalGenerationEntry caller-side override contract.
-//
-// `buildCanonicalGenerationEntry(triggerSource, overrides?)` in
-// lib/canonical-profile-service.ts:3154 expects a STRICT Partial whose
-// `sessionLength` slot is `number` (canonical minutes), not the wider
-// `SessionLength` union exported from lib/program-service.ts:44 which also
-// permits string ranges like '10-20' / '60+'. The Program Page's
-// `effectiveInputs.sessionLength` is typed as `SessionLength`, so passing
-// it directly into the override slot breaks the contract.
-//
-// `ProgramPageCanonicalGenerationEntryOverrides` mirrors that strict slot
-// shape locally so call sites get an immediate compile-time error if a
-// non-numeric value sneaks back into `sessionLength`. The
-// `normalizeProgramPageSessionLengthOverride` helper turns any
-// `SessionLength`-shaped value into either canonical numeric minutes or
-// `undefined` (so the helper falls back to `profile.sessionLengthMinutes`
-// canonical truth). Range strings map to the upper bound of each range.
-// ==========================================================================
-type ProgramPageCanonicalGenerationEntryOverrides = Partial<{
-  primaryGoal: string
-  secondaryGoal: string
-  experienceLevel: 'beginner' | 'intermediate' | 'advanced'
-  trainingDaysPerWeek: number | 'flexible'
-  sessionLength: number
-  scheduleMode: 'static' | 'flexible'
-  sessionDurationMode: 'static' | 'adaptive'
-  equipment: string[]
-  regenerationMode: string
-  regenerationReason: string
-  selectedSkills: string[]
-  trainingPathType: string
-  goalCategories: string[]
-  selectedFlexibility: string[]
-}>
-
-function normalizeProgramPageSessionLengthOverride(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value
-  }
-  if (typeof value !== 'string') {
-    return undefined
-  }
-  switch (value) {
-    case '10-20':
-      return 20
-    case '20-30':
-      return 30
-    case '30-45':
-      return 45
-    case '45-60':
-      return 60
-    case '60+':
-      return 90
-    default:
-      return undefined
-  }
-}
-
-// ==========================================================================
-// [STEP-4J — 3 OF 3] Staleness-evaluator contract drift tripwire.
-//
-// `lib/program/program-page-contract-adapter.ts` exports
-// `StalenessEvaluatorInput` as a HAND-MIRRORED interface that matches the
-// real parameter shape of `evaluateUnifiedProgramStaleness` (declared in
-// `lib/canonical-profile-service.ts`). Hand-mirroring is intentional in the
-// adapter file (it avoids a runtime import cycle with
-// canonical-profile-service), but it means the mirror could silently
-// drift if the evaluator's signature ever changes.
-//
-// This block compares the hand-mirrored `StalenessEvaluatorInput` against
-// the type derived directly from `Parameters<typeof evaluateUnifiedProgramStaleness>[0]`
-// (only available HERE, where the evaluator is imported as a runtime
-// value). The comparison is bidirectional — the mirror must be a subtype
-// of the derived shape AND a supertype, i.e., structurally equivalent. If
-// the evaluator's signature ever gains, removes, or changes a field, one
-// of the two `extends` checks resolves to `never`, the conditional
-// resolves to `never`, and the `_STEP_4J_..._GUARD: true` assignment fails
-// at compile time at the Program Page itself.
-//
-// Result: any future change to `evaluateUnifiedProgramStaleness`'s parameter
-// MUST be mirrored in `program-page-contract-adapter.ts`, and the build
-// fails until both sides agree. This is exactly the protection the
-// repeating raw-vs-canonical blocker chain was missing — the adapter's
-// hand-mirror was a single point of silent drift.
-// ==========================================================================
-type _StalenessEvaluatorInputDerivedFromSignature = NonNullable<
-  Parameters<typeof evaluateUnifiedProgramStaleness>[0]
->
-type _StalenessEvaluatorContractMirrorCheck =
-  StalenessEvaluatorInput extends _StalenessEvaluatorInputDerivedFromSignature
-    ? _StalenessEvaluatorInputDerivedFromSignature extends StalenessEvaluatorInput
-      ? true
-      : never
-    : never
-const _STEP_4J_STALENESS_EVALUATOR_CONTRACT_MIRROR_GUARD: _StalenessEvaluatorContractMirrorCheck = true
-void _STEP_4J_STALENESS_EVALUATOR_CONTRACT_MIRROR_GUARD
-
-export const STEP_4J_PROGRAM_PAGE_CORRIDOR_SENTINEL = {
-  id: 'STEP4J_PROGRAM_PAGE_CONTRACT_BOUNDARY_SWEEP',
-  purpose:
-    'Compile-time + runtime sentinel proving the full Step 4 Program Page contract corridor (4D PrimaryGoal + 4E AdaptiveProgramInputs purity + 4F equipment bridge + 4G-DELTA banned-key tripwire + 4G-EXPORT-HARDLOCK satisfies-on-literal + 4H/4I shared staleness adapter + 4J evaluator-contract-mirror tripwire) is intact in the deployed bundle.',
-  guards: [
-    'AdaptiveProgramInputs banned-key tripwire (Step 4G-DELTA, restored)',
-    'StalenessEvaluatorInput ↔ evaluateUnifiedProgramStaleness mirror tripwire (Step 4J)',
-  ],
-  forbidsAsAny: true,
-  forbidsTsIgnore: true,
-  forbidsAdaptiveProgramInputsWidening: true,
-  forbidsEvaluatorWidening: true,
-  forbidsFakeFlexibleToNumberConversion: true,
-  forbidsFakeSessionLengthDefault: true,
-  preservesScheduleIdentitySeparateFromNumericTrainingDays: true,
-  staleAdapterOwner: 'lib/program/program-page-contract-adapter.ts → buildStalenessEvaluatorProgram',
-  timestamp: '2026-04-29-step4j-3-of-3',
-} as const
-// [PHASE-L] Post-workout performance feedback overlay. Pure client-side glue
-// that reads canonical workout logs and applies bounded future-only mutations
-// to the program object held in state. Imported statically because the
-// underlying contract is JSON-safe and side-effect free.
-//
-// [PHASE-M] Same module also exposes:
-//   - getRecentWorkoutLogsForGenerationRequest: the JSON-safe recent-log
-//     slice we forward to the authoritative server generator so fresh build /
-//     regenerate / modify / rebuild reflect recent performance at generation
-//     time, not only the client display overlay.
-import {
-  applyPerformanceFeedbackOverlay,
-  getRecentWorkoutLogsForGenerationRequest,
-} from '@/lib/program/performance-feedback-integration'
+import type { TrainingDays } from '@/lib/program-service'
 // [PHASE 28KL] Direct imports for athlete/onboarding profile readback during modify-open forensics
 import { getAthleteProfile as getAthleteProfileDirect } from '@/lib/data-service'
 import { getOnboardingProfile as getOnboardingProfileDirect } from '@/lib/athlete-profile'
@@ -626,81 +146,12 @@ const AdaptiveProgramDisplay = dynamic(
 )
 
 import { ProgramAdjustmentModal } from '@/components/programs/ProgramAdjustmentModal'
-// [PROGRAM-GROUP-SCANNER-R1] Read-only Program-surface grouped diagnostic strip.
-import { GroupedProgramScannerStrip } from '@/components/program/GroupedProgramScannerStrip'
-// [PROGRAM-TRUTH-SURFACE-CONNECTION-LOCK] Visible authoritative truth summary.
-// Static import is safe here because the page is 'use client' and the summary
-// is a lightweight, null-tolerant consumer. It is rendered inside
-// ProgramDisplayWrapper, which is the single canonical render point for every
-// visible program surface, so a static import cannot widen the render graph.
-import { ProgramTruthSummary } from '@/components/programs/ProgramTruthSummary'
-// [PHASE 4B] Single visible stale-program notice + "Regenerate with Doctrine"
-// action. Lightweight, null-tolerant, hides on fresh programs, calls only the
-// existing canonical onRegenerate handler — no second route, no second builder.
-import { ProgramMaterializationStaleNotice } from '@/components/programs/ProgramMaterializationStaleNotice'
-// [PHASE 4C] One compact, mobile-safe, honest materialization status line.
-// Replaces the proof-only DoctrineRuntimeProof / DoctrineIntegrationProofBlock
-// visibility on the athlete-facing page. Reads only the Phase 4A rollup the
-// wrapper already writes. Does NOT show selected-rule counts, batch keys,
-// source labels, or Phase-disclaimer copy.
-      import { MaterializationStatusLine, DoctrineCausalLine, WeeklyMethodChallengeLine } from '@/components/programs/MaterializationStatusLine'
-// [PHASE W] Honest doctrine causality ledger — splits Phase Q's
-// ELIGIBLE_AND_APPLIED into MATERIALIZED (concrete fields cited) vs
-// APPLIED_NO_STRUCTURAL_CHANGE, plus DISPLAYED_ONLY / UNKNOWN_UNVERIFIED.
-// Reads only canonical program artifacts already stamped by Phase Q/4A/4E/4L.
-// Pure observation — never mutates the program.
-//
-// [PHASE X] Phase W's `DoctrineCausalityLedgerLine` is no longer rendered
-// directly on the main Program surface — it now lives inside
-// `ProgramTrustAccordion` along with the Phase 4C / 4E / 4L proof lines.
-// The import is kept here so the accordion can be replaced or
-// short-circuited from this page in a future phase without re-importing.
-import { DoctrineCausalityLedgerLine } from '@/components/programs/DoctrineCausalityLedgerLine'
-// [PHASE X] PROGRAM TRUST ACCORDION — compact verdict + chips above the
-// fold, full Phase 4C / W / 4E / 4L proof preserved inside a native
-// <details> disclosure. Reduces vertical clutter while keeping every
-// causality state honestly accessible.
-import { ProgramTrustAccordion } from '@/components/programs/ProgramTrustAccordion'
-// [PHASE AB6] Top-level Weekly Method Decisions accordion. Renders directly
-// below ProgramTrustAccordion so the user sees AI-coach method reasoning
-// without expanding every day card. Pure read-only — derives from
-// `program.weeklyMethodRepresentation` (the Phase 4J contract). Renders an
-// honest "not available" fallback for older saved programs that lack the
-// contract instead of inventing fake reasoning.
-import { WeeklyMethodDecisionAccordion } from '@/components/programs/WeeklyMethodDecisionAccordion'
-// [VISIBLE-SESSION-TRUTH-LOCK] Single canonical visible-card display contract.
-// The page-level CanonicalProgramDisplayTruth now embeds these surfaces so
-// every visible day card consumes one authoritative contract owned by the
-// page, not a per-component recomputation.
-import {
-  buildAllSessionCardSurfaces,
-  buildProgramDisplayProjection,
-  hasCanonicalProgramTruth,
-  type SessionCardSurface,
-  type ProgramDisplayProjection,
-  type CanonicalProgramTruthPresence,
-} from '@/lib/program/program-display-contract'
-// [PHASE Y3 OF 3] Coach-facing narrative derived from the Y2
-// `trainingDifferentiationCalibration` already attached to the program.
-// Replaces the flat "Intensity: Conservative" chip with a session-derived
-// strategy label, supporting sentence, RPE wave, density verdict, and
-// safety tag. Pure JSON-safe helper — no React, no fetch, no DB.
-import {
-  buildProgramDecisionsNarrative,
-  type ProgramDecisionsNarrative,
-} from '@/lib/program/program-decisions-narrative'
 
 // [canonical-rebuild] Import type for adjustment rebuild requests
 import type { AdjustmentRebuildRequest, AdjustmentRebuildResult } from '@/components/programs/ProgramAdjustmentModal'
 // [canonical-rebuild] TASK 2: Import saveCanonicalProfile to persist inputs to canonical truth
 // NOTE: getCanonicalProfile is already imported above from the main canonical-profile-service import block
-// [STEP-5A-OMEGA-4] Import the strict canonical profile type for caller-side
-//   `Partial<CanonicalProgrammingProfile>` annotations on the three writeback
-//   truth objects below — locks each writeback construction to the strict
-//   save contract (number | null trainingDays, numeric sessionLengthMinutes,
-//   `'static' | 'flexible'` scheduleMode, `'static' | 'adaptive'` sessionDurationMode)
-//   without weakening the callee.
-import { saveCanonicalProfile, type CanonicalProgrammingProfile } from '@/lib/canonical-profile-service'
+import { saveCanonicalProfile } from '@/lib/canonical-profile-service'
 
 // ==========================================================================
 // [PHASE 16Q] STRUCTURED PAGE VALIDATION ERROR
@@ -734,16 +185,6 @@ type PageValidationSubCode =
   | 'route_not_found'
   | 'non_json_server_response'
   | 'server_regenerate_failed'
-  // [STEP-5A-UPSILON] Main-flow server generation failure. Distinct from
-  //   'server_regenerate_failed' (regen path, /api/program/regenerate-fresh)
-  //   and from 'orchestration_failed' (which is a top-level
-  //   PageValidationErrorCode, not a subcode). Used at the
-  //   handleGenerate -> /api/program/generate-fresh response throw site
-  //   when the server returns an error envelope on the main generation
-  //   corridor. Adding the literal to the central union (rather than
-  //   reusing 'server_regenerate_failed') preserves diagnostic fidelity
-  //   so downstream telemetry can distinguish main-gen vs regen failures.
-  | 'server_generation_failed'
 
 /**
  * Structured error for page-side validation failures.
@@ -787,34 +228,6 @@ function isBuilderGenerationError(err: unknown): err is { code: string; stage: s
     'code' in err && 
     'stage' in err &&
     !(err instanceof ProgramPageValidationError)
-}
-
-// ==========================================================================
-// [STEP-5A-DELTA] Drift-detail array-count extractor (build-blocker fix).
-//
-// `evaluateUnifiedProgramStaleness(...)` returns `result.driftDetails` whose
-// `profileValue` field is intentionally typed as a loose / object-shaped
-// value (it carries whatever the canonical profile said for that field —
-// arrays for equipment/selectedSkills, strings for goals, primitives for
-// ints, etc.). The Program Page diagnostic console.log at the
-// `stale-banner-exact-cause-verdict` site previously read
-// `.profileValue?.length` directly, which TypeScript correctly rejects
-// with "Property 'length' does not exist on type '{}'" because `{}` /
-// `unknown` does not own `.length`.
-//
-// The right fix is a tiny narrowing helper at the diagnostic boundary,
-// not loosening the evaluator contract or casting `as any`. For the two
-// call sites in scope (`equipment` and `selectedSkills`) the canonical
-// profile shape is `string[]`, so we count array items only and return
-// `'n/a'` for any non-array value (undefined drift, missing field,
-// non-array profile snapshot legacy shape, etc.). Strings are *not*
-// treated as length-1 here because that would silently mask a contract
-// drift where a string-valued canonical field starts being compared
-// against an array-valued program field — exactly the class of leak the
-// Step 4 corridor was hardened to prevent.
-// ==========================================================================
-function getArrayDriftProfileValueCount(value: unknown): number | 'n/a' {
-  return Array.isArray(value) ? value.length : 'n/a'
 }
 
 // ==========================================================================
@@ -1048,13 +461,6 @@ interface CanonicalProgramDisplayTruth {
   // Session cards source - canonical session array
   visibleSessionsSource: 'program.sessions'
   visibleSessionCount: number
-  // [VISIBLE-SESSION-TRUTH-LOCK] One authoritative per-card surface array.
-  // Built by the canonical helper `buildAllSessionCardSurfaces` so the
-  // visible day cards never read raw session/program structures for
-  // overlapping claims (headline, intent chips, protection signals,
-  // method signals, evidence). This is the SINGLE owner the JSX must
-  // consume. Length matches `visibleSessionCount` 1:1.
-  visibleSessionCards: SessionCardSurface[]
   // Ownership audit
   contractSource: 'saved_program_canonical_truth'
   noMixedOwnership: boolean
@@ -1076,41 +482,19 @@ function buildCanonicalProgramDisplayTruth(program: AdaptiveProgram): CanonicalP
     .map(p => p.skill)
   
   const visibleBuiltAroundSkills = [...headlineSkills, ...materiallyRepresentedOtherSkills]
-
-  // [VISIBLE-SESSION-TRUTH-LOCK] Build the per-card visible surfaces ONCE,
-  // here, from the canonical helper. AdaptiveProgramDisplay accepts these
-  // pre-built surfaces and consumes them directly, so the page is the
-  // single visible-truth owner for every day card.
-  const validSessions = Array.isArray(program.sessions)
-    ? program.sessions.filter(s => s && typeof s === 'object' && Array.isArray((s as { exercises?: unknown }).exercises))
-    : []
-  const secondaryGoal = (program as unknown as { secondaryGoal?: string }).secondaryGoal || null
-  const visibleSessionCards: SessionCardSurface[] = validSessions.length > 0
-    ? buildAllSessionCardSurfaces(
-        validSessions as Parameters<typeof buildAllSessionCardSurfaces>[0],
-        {
-          isFirstWeek: program.weekAdaptationDecision?.firstWeekGovernor?.active ?? false,
-          adaptationPhase: program.weekAdaptationDecision?.phase,
-          totalSessions: validSessions.length,
-          primaryGoal: program.primaryGoal,
-          secondaryGoal,
-        }
-      )
-    : []
-
+  
   return {
     visiblePrimaryGoal: program.primaryGoal || '',
-    visibleSecondaryGoal: secondaryGoal,
+    visibleSecondaryGoal: (program as unknown as { secondaryGoal?: string }).secondaryGoal || null,
     visibleBuiltAroundSkills,
     visibleSummaryText: summaryTruth?.truthfulHybridSummary || program.programRationale || '',
     visibleSummarySource: summaryTruth?.truthfulHybridSummary 
       ? 'summaryTruth.truthfulHybridSummary' 
       : 'programRationale_fallback',
     visibleWhyThisPlanPrimaryFocus: program.primaryGoal || '',
-    visibleWhyThisPlanSecondaryFocus: secondaryGoal,
+    visibleWhyThisPlanSecondaryFocus: (program as unknown as { secondaryGoal?: string }).secondaryGoal || null,
     visibleSessionsSource: 'program.sessions',
     visibleSessionCount: program.sessions?.length || 0,
-    visibleSessionCards,
     contractSource: 'saved_program_canonical_truth',
     noMixedOwnership: true,
   }
@@ -1208,170 +592,75 @@ function formatStressPattern(pattern: string | null): string {
 
 // ==========================================================================
 // [PROGRAM-DECISION-SUMMARY] Compact UI component
-// --------------------------------------------------------------------------
-// [PHASE Y3 OF 3] When the program carries the Y2 calibration, the chip
-// strip is rebuilt to reflect the *lived* weekly truth (per-day role
-// summary, RPE wave, density verdict, safety tag) instead of the flat
-// pre-generation `unifiedDoctrineDecision.dosageRules.intensityBias`
-// label. Falls back to the legacy chips when Y2 is absent so older
-// programs render exactly as they did before.
 // ==========================================================================
 function ProgramDecisionSummary({ program }: { program: AdaptiveProgram }) {
   const summary = extractProgramDecisionSummary(program)
-  // [PHASE Y3] Coach-facing narrative derived from Y2. Returns
-  // `available:false` when Y2 is missing — in that case we keep the
-  // legacy chip strip below.
-  const narrative: ProgramDecisionsNarrative = buildProgramDecisionsNarrative(program)
-
-  // [DEBUG-LEAKAGE-REMOVAL] Render-time corridor verification log removed.
-  // It produced a console entry on every render with no user-visible value.
-
-  // Y3-aware path: render the session-derived strategy + supporting sentence.
-  if (narrative.available && narrative.topLevelStrategyLabel) {
-    const chips: Array<{ label: string; value: string; color: string }> = []
-
-    if (summary.available && summary.dominantSpine) {
-      chips.push({
-        label: 'Focus',
-        value: formatSpineLabel(summary.dominantSpine),
-        color: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20',
-      })
-    }
-
-    chips.push({
-      label: 'Strategy',
-      value: narrative.topLevelStrategyLabel,
-      color: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
-    })
-
-    if (narrative.perDayStressBreakdown) {
-      chips.push({
-        label: 'Wave',
-        value: narrative.perDayStressBreakdown,
-        color: 'text-zinc-300 bg-zinc-700/30 border-zinc-600/40',
-      })
-    }
-
-    if (narrative.rpeWaveSummary) {
-      chips.push({
-        label: 'RPE',
-        value: narrative.rpeWaveSummary,
-        color: 'text-zinc-300 bg-zinc-700/30 border-zinc-600/40',
-      })
-    }
-
-    if (narrative.densityVerdict === 'real_density') {
-      chips.push({
-        label: 'Density',
-        value: 'Materialized',
-        color: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
-      })
-    } else if (narrative.densityVerdict === 'capacity_supportive') {
-      chips.push({
-        label: 'Density',
-        value: 'Capacity-supportive',
-        color: 'text-zinc-300 bg-zinc-700/30 border-zinc-600/40',
-      })
-    }
-
-    if (narrative.safetyTag) {
-      chips.push({
-        label: 'Safety',
-        value: narrative.safetyTag,
-        color: 'text-blue-400 bg-blue-400/10 border-blue-400/20',
-      })
-    }
-
-    return (
-      <div className="mb-4 p-3 bg-zinc-900/50 border border-zinc-800/60 rounded-lg">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">
-            Program Decisions
-          </span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {chips.map((chip, idx) => (
-            <div
-              key={idx}
-              className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs ${chip.color}`}
-            >
-              <span className="text-zinc-500">{chip.label}:</span>
-              <span className="font-medium">{chip.value}</span>
-            </div>
-          ))}
-        </div>
-        {narrative.supportingSentence && (
-          <p className="mt-2 text-xs text-zinc-400 leading-relaxed">
-            {narrative.supportingSentence}
-          </p>
-        )}
-        {narrative.densityVisibleLine && (
-          <p className="mt-1 text-[11px] text-zinc-500 italic">
-            {narrative.densityVisibleLine}
-          </p>
-        )}
-        {narrative.consistencyNote && (
-          <p className="mt-1 text-[11px] text-zinc-600 italic">
-            {narrative.consistencyNote}
-          </p>
-        )}
-      </div>
-    )
-  }
-
-  // ------- Legacy path (Y2 absent) — render the original chip strip --------
+  
+  // Log for corridor verification
+  console.log('[PROGRAM-DECISION-SUMMARY-RENDER]', {
+    programId: program.id,
+    doctrineAvailable: summary.available,
+    dominantSpine: summary.dominantSpine,
+    intensityBias: summary.intensityBias,
+    volumeBias: summary.volumeBias,
+    stressPattern: summary.stressPattern,
+    verdict: summary.available 
+      ? 'DOCTRINE_TRUTH_VISIBLE_IN_SUMMARY' 
+      : 'DOCTRINE_NOT_ATTACHED_USING_DEFAULTS',
+  })
+  
+  // Only render if doctrine truth is available
   if (!summary.available) {
     return null
   }
-
+  
+  // Build compact decision chips
   const chips: Array<{ label: string; value: string; color: string }> = []
-
+  
   if (summary.dominantSpine) {
     chips.push({
       label: 'Focus',
       value: formatSpineLabel(summary.dominantSpine),
-      color: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20',
+      color: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20'
     })
   }
-
+  
   if (summary.intensityBias) {
-    const intensityColor =
-      summary.intensityBias === 'aggressive'
-        ? 'text-red-400 bg-red-400/10 border-red-400/20'
-        : summary.intensityBias === 'conservative'
-          ? 'text-green-400 bg-green-400/10 border-green-400/20'
-          : 'text-amber-400 bg-amber-400/10 border-amber-400/20'
+    const intensityColor = summary.intensityBias === 'aggressive' 
+      ? 'text-red-400 bg-red-400/10 border-red-400/20'
+      : summary.intensityBias === 'conservative'
+      ? 'text-green-400 bg-green-400/10 border-green-400/20'
+      : 'text-amber-400 bg-amber-400/10 border-amber-400/20'
     chips.push({
       label: 'Intensity',
       value: formatBiasLabel(summary.intensityBias),
-      color: intensityColor,
+      color: intensityColor
     })
   }
-
+  
   if (summary.volumeBias) {
-    const volumeColor =
-      summary.volumeBias === 'high'
-        ? 'text-purple-400 bg-purple-400/10 border-purple-400/20'
-        : summary.volumeBias === 'low'
-          ? 'text-blue-400 bg-blue-400/10 border-blue-400/20'
-          : 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20'
+    const volumeColor = summary.volumeBias === 'high' 
+      ? 'text-purple-400 bg-purple-400/10 border-purple-400/20'
+      : summary.volumeBias === 'low'
+      ? 'text-blue-400 bg-blue-400/10 border-blue-400/20'
+      : 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20'
     chips.push({
       label: 'Volume',
       value: formatBiasLabel(summary.volumeBias),
-      color: volumeColor,
+      color: volumeColor
     })
   }
-
+  
   if (summary.stressPattern) {
     chips.push({
       label: 'Weekly',
       value: formatStressPattern(summary.stressPattern),
-      color: 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20',
+      color: 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20'
     })
   }
-
+  
   if (chips.length === 0) return null
-
+  
   return (
     <div className="mb-4 p-3 bg-zinc-900/50 border border-zinc-800/60 rounded-lg">
       <div className="flex items-center gap-2 mb-2">
@@ -1381,7 +670,7 @@ function ProgramDecisionSummary({ program }: { program: AdaptiveProgram }) {
       </div>
       <div className="flex flex-wrap gap-2">
         {chips.map((chip, idx) => (
-          <div
+          <div 
             key={idx}
             className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs ${chip.color}`}
           >
@@ -1393,347 +682,6 @@ function ProgramDecisionSummary({ program }: { program: AdaptiveProgram }) {
       {summary.sessionCharacter && (
         <p className="mt-2 text-xs text-zinc-500 italic">
           {summary.sessionCharacter}
-        </p>
-      )}
-    </div>
-  )
-}
-
-// ==========================================================================
-// [DOCTRINE-RUNTIME-PROOF] Compact visible proof that the generated program
-// actually used the doctrine runtime contract. Reads exclusively from the
-// final program object (`program.doctrineRuntimeContract`). Does not query
-// the DB, does not import server code, does not invent claims.
-// ==========================================================================
-function DoctrineRuntimeProof({ program }: { program: AdaptiveProgram }) {
-  // The contract is stamped onto the program by the adaptive builder. Use a
-  // tolerant read so we never crash if a legacy program object lacks the field.
-  const anyProgram = program as unknown as { doctrineRuntimeContract?: unknown }
-  const rc = anyProgram.doctrineRuntimeContract as
-    | {
-        available?: boolean
-        source?: string
-        globalCoherence?: number
-        sourceFamiliesUsed?: string[]
-        activeSourceKeys?: string[]
-        batchCoverage?: {
-          batchCount?: number
-          batchKeys?: string[]
-          batchAtomCounts?: Record<string, number>
-        }
-        dbCompleteness?: {
-          state?: 'empty' | 'partial' | 'complete'
-          totalDbAtoms?: number
-          totalFallbackBatchAtoms?: number
-          filledFromFallback?: string[]
-        }
-        doctrineCoverage?: {
-          principlesCount?: number
-          progressionRuleCount?: number
-          exerciseSelectionRuleCount?: number
-          methodRuleCount?: number
-          prescriptionRuleCount?: number
-          carryoverRuleCount?: number
-          sourcesCount?: number
-          hasLiveRules?: boolean
-        }
-        explanationDoctrine?: {
-          userVisibleSummary?: string[]
-          doctrineInfluenceLevel?: 'none' | 'minimal' | 'moderate' | 'strong'
-        }
-      }
-    | undefined
-
-  // No contract on this program object → render nothing. Do NOT claim doctrine.
-  if (!rc || rc.available !== true) return null
-
-  const cov = rc.doctrineCoverage ?? {}
-  const exp = rc.explanationDoctrine ?? {}
-  const totalRules =
-    (cov.principlesCount ?? 0) +
-    (cov.progressionRuleCount ?? 0) +
-    (cov.exerciseSelectionRuleCount ?? 0) +
-    (cov.methodRuleCount ?? 0) +
-    (cov.prescriptionRuleCount ?? 0) +
-    (cov.carryoverRuleCount ?? 0)
-
-  const sourceLabel =
-    rc.source === 'db_live'
-      ? 'DB live'
-      : rc.source === 'hybrid_db_plus_uploaded_fallback'
-      ? 'Hybrid DB + uploaded fallback'
-      : rc.source === 'fallback_uploaded_pdf_batches'
-      ? 'Uploaded PDF fallback'
-      : rc.source === 'fallback_batch_01'
-      ? 'Uploaded PDF fallback'
-      : rc.source === 'fallback_none'
-      ? 'No doctrine'
-      : 'Unknown'
-
-  // [DOCTRINE-COMPLETENESS-HONESTY] When DB had only partial coverage and
-  // in-code fallback completed missing batches, surface that fact compactly
-  // instead of pretending the program is fully DB-driven.
-  const filledFromFallback = rc.dbCompleteness?.filledFromFallback ?? []
-  const completenessLine =
-    rc.source === 'hybrid_db_plus_uploaded_fallback' && filledFromFallback.length > 0
-      ? `Hybrid source: DB anchors completed by uploaded fallback (${filledFromFallback.join(', ')})`
-      : null
-
-  const influence = exp.doctrineInfluenceLevel ?? 'none'
-  const influenceLabel =
-    influence === 'strong'
-      ? 'Strong influence'
-      : influence === 'moderate'
-      ? 'Moderate influence'
-      : influence === 'minimal'
-      ? 'Minimal influence'
-      : 'No influence'
-
-  const influenceColor =
-    influence === 'strong'
-      ? 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20'
-      : influence === 'moderate'
-      ? 'text-amber-400 bg-amber-400/10 border-amber-400/20'
-      : 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20'
-
-  const summaryLines = (exp.userVisibleSummary ?? []).slice(0, 2)
-  const sourceCount = cov.sourcesCount ?? rc.activeSourceKeys?.length ?? 0
-  const batchCount = rc.batchCoverage?.batchCount ?? 0
-
-  // [BATCH-05/06/07/08-PROOF] Surface Batch 5/6/7/8 inclusion compactly when
-  // active so the proof strip visibly changes after each ingestion. Reads only
-  // the final program object's batchCoverage.batchKeys; no DB / network query.
-  const batchKeys = rc.batchCoverage?.batchKeys ?? []
-  const batchFiveActive = batchKeys.includes('batch_05')
-  const batchSixActive = batchKeys.includes('batch_06')
-  const batchSevenActive = batchKeys.includes('batch_07')
-  const batchEightActive = batchKeys.includes('batch_08')
-  const batchNineActive = batchKeys.includes('batch_09')
-  const batchFiveLine = batchFiveActive
-  ? 'Batch 5 active: BL/FL, handstand, foundations, hypertrophy splits, circuits, theory/recovery'
-    : null
-  const batchSixLine = batchSixActive
-    ? 'Batch 6 active: OTZ beginner/intermediate, Iron Cross, full planche, front lever, muscle-up + legal source gate'
-    : null
-  const batchSevenLine = batchSevenActive
-    ? 'Batch 7 active: lower-body skill (pistol/dragon), leg-dose preference, military/tactical (Army AFT, Marine PFT/CFT, Navy PRT, AF/SF PFA, ruck, run engine)'
-    : null
-  const batchEightLine = batchEightActive
-    ? "Batch 8 active: elite rings + advanced calisthenics (Victorian, Maltese, OAFL, OABL, Azarian, Nakayama) classified by support level — direct vs carryover vs source-gap"
-    : null
-  const batchNineLine = batchNineActive
-    ? "Batch 9 active: mobility / flexibility / warm-up / cooldown / skill ramp-up — splits, pancake, toe touch, joint prep classified by warm-up vs cooldown vs micro-session role"
-    : null
-
-  return (
-    <div className="mb-4 p-3 bg-zinc-900/50 border border-zinc-800/60 rounded-lg w-full max-w-full min-w-0 overflow-hidden">
-      <div className="flex flex-wrap items-center gap-2 mb-2 min-w-0">
-        <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">
-          Doctrine Active
-        </span>
-        <span
-          className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] ${influenceColor}`}
-        >
-          {influenceLabel}
-        </span>
-      </div>
-      <div className="flex flex-wrap gap-2 text-xs">
-        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-zinc-800/60 text-zinc-300">
-          <span className="text-zinc-500">Source:</span>
-          <span className="font-medium">{sourceLabel}</span>
-        </span>
-        {sourceCount > 0 && (
-          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-zinc-800/60 text-zinc-300">
-            <span className="text-zinc-500">Sources:</span>
-            <span className="font-medium">{sourceCount}</span>
-          </span>
-        )}
-        {totalRules > 0 && (
-          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-zinc-800/60 text-zinc-300">
-            <span className="text-zinc-500">Rules:</span>
-            <span className="font-medium">{totalRules}</span>
-          </span>
-        )}
-        {batchCount > 0 && (
-          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-zinc-800/60 text-zinc-300">
-            <span className="text-zinc-500">Batches:</span>
-            <span className="font-medium">{batchCount}</span>
-          </span>
-        )}
-      </div>
-      {completenessLine && (
-        <p className="mt-2 text-xs text-amber-400/80 italic break-words [overflow-wrap:anywhere]">{completenessLine}</p>
-      )}
-      {batchFiveLine && (
-        <p className="mt-1 text-xs text-cyan-400/80 italic break-words [overflow-wrap:anywhere]">{batchFiveLine}</p>
-      )}
-      {batchSixLine && (
-        <p className="mt-1 text-xs text-emerald-400/80 italic break-words [overflow-wrap:anywhere]">{batchSixLine}</p>
-      )}
-      {batchSevenLine && (
-        <p className="mt-1 text-xs text-sky-400/80 italic break-words [overflow-wrap:anywhere]">{batchSevenLine}</p>
-      )}
-      {batchEightLine && (
-        <p className="mt-1 text-xs text-amber-400/80 italic break-words [overflow-wrap:anywhere]">{batchEightLine}</p>
-      )}
-      {batchNineLine && (
-        <p className="mt-1 text-xs text-teal-400/80 italic break-words [overflow-wrap:anywhere]">{batchNineLine}</p>
-      )}
-      {summaryLines.length > 0 && (
-        <ul className="mt-2 space-y-0.5">
-          {summaryLines.map((line, idx) => (
-            <li key={idx} className="text-xs text-zinc-500 italic break-words [overflow-wrap:anywhere]">
-              {line}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
-}
-
-// ==========================================================================
-// [DOCTRINE-INTEGRATION-PROOF-PHASE2] Compact program-specific proof that the
-// doctrine *decision context* reached the builder for THIS generation.
-//
-// This is intentionally distinct from the global doctrine availability proof
-// rendered above (DoctrineRuntimeProof). The runtime-proof strip says
-// "doctrine exists in the app and was loaded for the build". This block says
-// "for THIS specific saved program, the decision context was wired into
-// the builder".
-//
-// Reads only `program.doctrineIntegration` (attached by
-// `executeAuthoritativeGeneration` after the builder returns). Renders nothing
-// when absent so legacy programs degrade gracefully. Never claims that
-// exercise selection / sets / reps / methods are doctrine-driven yet — that
-// claim is reserved for Phase 3, and `disclaimer` enforces the contract.
-// ==========================================================================
-function DoctrineIntegrationProofBlock({ program }: { program: AdaptiveProgram }) {
-  const anyProgram = program as unknown as { doctrineIntegration?: unknown }
-  const di = anyProgram.doctrineIntegration as
-    | {
-        phase?: string
-        contextStatus?: 'active' | 'degraded' | 'unavailable'
-        sourceMode?: string
-        presentBatches?: string[]
-        missingBatches?: string[]
-        selectedCounts?: {
-          principles?: number
-          progressionRules?: number
-          exerciseSelectionRules?: number
-          contraindicationRules?: number
-          methodRules?: number
-          prescriptionRules?: number
-          carryoverRules?: number
-        }
-        decisionFlags?: Record<string, boolean>
-        diagnostics?: { usable?: boolean; blocker?: string | null; warnings?: string[] }
-        disclaimer?: string
-      }
-    | undefined
-
-  // No proof on this program object → render nothing. Do NOT invent claims.
-  if (!di || !di.contextStatus) return null
-
-  const status = di.contextStatus
-  const counts = di.selectedCounts ?? {}
-  const flags = di.decisionFlags ?? {}
-  const presentBatchCount = di.presentBatches?.length ?? 0
-  const missingBatchCount = di.missingBatches?.length ?? 0
-  const warnings = di.diagnostics?.warnings ?? []
-
-  const statusLabel =
-    status === 'active'
-      ? 'Active'
-      : status === 'degraded'
-      ? 'Degraded'
-      : 'Unavailable'
-
-  const statusColor =
-    status === 'active'
-      ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20'
-      : status === 'degraded'
-      ? 'text-amber-400 bg-amber-400/10 border-amber-400/20'
-      : 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20'
-
-  const sourceLabel =
-    di.sourceMode === 'db_live'
-      ? 'DB live'
-      : di.sourceMode === 'hybrid_db_plus_uploaded_fallback'
-      ? 'Hybrid (DB + fallback)'
-      : di.sourceMode === 'fallback_uploaded_batches'
-      ? 'Uploaded PDF fallback'
-      : 'Unavailable'
-
-  const totalSelected =
-    (counts.principles ?? 0) +
-    (counts.progressionRules ?? 0) +
-    (counts.exerciseSelectionRules ?? 0) +
-    (counts.contraindicationRules ?? 0) +
-    (counts.methodRules ?? 0) +
-    (counts.prescriptionRules ?? 0) +
-    (counts.carryoverRules ?? 0)
-
-  return (
-    <div className="mt-3 p-3 rounded-lg border border-zinc-800/60 bg-zinc-950/40 w-full max-w-full min-w-0 overflow-hidden">
-      <div className="flex flex-wrap items-center gap-2 mb-2 min-w-0">
-        <span
-          className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-medium ${statusColor} break-words [overflow-wrap:anywhere] max-w-full`}
-        >
-          Doctrine context reached builder · {statusLabel}
-        </span>
-        <span className="text-xs text-zinc-500 break-words [overflow-wrap:anywhere] min-w-0">Source: {sourceLabel}</span>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 text-xs min-w-0">
-        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-zinc-800/60 text-zinc-300">
-          <span className="text-zinc-500">Batches present:</span>
-          <span className="font-medium">{presentBatchCount}/10</span>
-        </span>
-        {missingBatchCount > 0 && (
-          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-amber-900/40 text-amber-300/80">
-            <span className="text-amber-500/80">Missing:</span>
-            <span className="font-medium">{missingBatchCount}</span>
-          </span>
-        )}
-        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-zinc-800/60 text-zinc-300">
-          <span className="text-zinc-500">Selected rules:</span>
-          <span className="font-medium">{totalSelected}</span>
-        </span>
-      </div>
-
-      <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1 text-[11px] text-zinc-400">
-        <span>Principles: <span className="text-zinc-200 font-medium">{counts.principles ?? 0}</span></span>
-        <span>Methods: <span className="text-zinc-200 font-medium">{counts.methodRules ?? 0}</span></span>
-        <span>Prescriptions: <span className="text-zinc-200 font-medium">{counts.prescriptionRules ?? 0}</span></span>
-        <span>Selection: <span className="text-zinc-200 font-medium">{counts.exerciseSelectionRules ?? 0}</span></span>
-        <span>Progression: <span className="text-zinc-200 font-medium">{counts.progressionRules ?? 0}</span></span>
-        <span>Carryover: <span className="text-zinc-200 font-medium">{counts.carryoverRules ?? 0}</span></span>
-        <span>Contra.: <span className="text-zinc-200 font-medium">{counts.contraindicationRules ?? 0}</span></span>
-        <span>
-          Skill protect:{' '}
-          <span className="text-zinc-200 font-medium">{flags.protectsPrimarySkill ? 'yes' : 'no'}</span>
-        </span>
-      </div>
-
-      {warnings.length > 0 && (
-        <p className="mt-2 text-[11px] text-amber-400/80 italic break-words [overflow-wrap:anywhere]">
-          {warnings.slice(0, 2).join(' · ')}
-        </p>
-      )}
-
-      {/* [PHASE 4C] Disclaimer text rendered ONLY when the builder/wrapper
-          attached one. The legacy Phase 2 fallback string ("Phase 2 does
-          not yet allow doctrine to change exercise selection or
-          prescriptions.") is no longer the default — Phase 4A wired
-          doctrine into the builder's materialization decisions, and the
-          honest user-facing materialization signal is the
-          MaterializationStatusLine + per-session Phase 4A panel above.
-          This panel is also gated behind ?programProbe=1 by the Program
-          page so athletes never see proof-only diagnostics. */}
-      {di.disclaimer && (
-        <p className="mt-2 text-[11px] text-zinc-500 italic break-words [overflow-wrap:anywhere]">
-          {di.disclaimer}
         </p>
       )}
     </div>
@@ -1767,121 +715,32 @@ function ProgramDisplayWrapper({
   // Build the single authoritative truth object for all visible surfaces
   // ==========================================================================
   const canonicalDisplayTruth = buildCanonicalProgramDisplayTruth(program)
-
-  // ==========================================================================
-  // [PHASE 4F — DISPLAY PROJECTION OWNERSHIP LOCK]
-  //
-  // Build the page-level Program display projection ONCE, here, from the SAME
-  // `program` object that:
-  //   * staleness reads
-  //   * `canonicalDisplayTruth` reads
-  //   * `<MaterializationStatusLine>` and `<DoctrineCausalLine>` (Phase 4E) read
-  //   * `<AdaptiveProgramDisplay>` receives
-  //
-  // The projection is read-only and minimal: per-session honest doctrine
-  // causal display + source audit. It does NOT pick exercises, methods, or
-  // prescriptions — those are owned by the builder. It does NOT count rules
-  // or sources or batches as proof of causality. It uses Phase 4E
-  // `program.doctrineCausalChallenge.sessionDiffs[]` (the literal pre-doctrine
-  // vs post-doctrine top-3 audit) as the single source of truth for whether
-  // doctrine actually changed any session's exercise selection.
-  //
-  // The projection is passed down to `AdaptiveProgramDisplay`, which looks up
-  // each visible day's slice by `dayNumber` and passes it through to the
-  // matching `<AdaptiveSessionCard>` so the per-session doctrine causal line
-  // renders inside the actual card body — not just at the top of the page.
-  // ==========================================================================
-  const programDisplayProjection: ProgramDisplayProjection | null = buildProgramDisplayProjection(program)
-  if (programDisplayProjection) {
-    console.log('[phase4f-display-projection-owner]', {
-      programId: programDisplayProjection.programId,
-      projectionVersion: programDisplayProjection.projectionVersion,
-      projectionSource: programDisplayProjection.projectionSource,
-      sessionCount: programDisplayProjection.audit.sessionCount,
-      projectedSessionCount: programDisplayProjection.audit.projectedSessionCount,
-      sessionsWithCausalDisplay: programDisplayProjection.audit.sessionsWithCausalDisplay,
-      sessionsWithMaterialChange: programDisplayProjection.audit.sessionsWithMaterialChange,
-      sessionsWithVisibleChange: programDisplayProjection.audit.sessionsWithVisibleChange,
-      legacyMissingCausalChallenge: programDisplayProjection.legacyMissingCausalChallenge,
-      noMixedOwnership: programDisplayProjection.audit.noMixedOwnership,
-      lostFieldsCount: programDisplayProjection.audit.lostFields.length,
-      repairedFieldsCount: programDisplayProjection.audit.repairedFields.length,
-      firstSessionFingerprint: programDisplayProjection.sessions[0]?.fingerprint || null,
-      displayObjectSource: 'app/(app)/program/page.tsx::buildProgramDisplayProjection',
-      // [VERDICT-NARROWING] If sessionsWithCausalDisplay > 0 AND
-      // sessionsWithMaterialChange === 0, doctrine ran but never won a
-      // top selection in any session. The honest reason will surface
-      // per-session in the card body via projection.sessions[i].doctrineCausalDisplay.
-      verdict:
-        programDisplayProjection.legacyMissingCausalChallenge
-          ? 'PROGRAM_PREDATES_PHASE_4E_CAUSAL_ROLLUP_REGENERATE_TO_REFRESH'
-          : programDisplayProjection.audit.sessionsWithMaterialChange > 0
-            ? 'DOCTRINE_MATERIALLY_CHANGED_AT_LEAST_ONE_SESSION'
-            : programDisplayProjection.audit.sessionsWithCausalDisplay > 0
-              ? 'DOCTRINE_RAN_BUT_DID_NOT_CHANGE_ANY_SESSION_TOP_WINNER'
-              : 'DOCTRINE_DID_NOT_RUN_ON_ANY_SESSION',
-    })
-  }
-
-  // ==========================================================================
-  // [PROGRAM-TRUTH-SURFACE-CONNECTION-LOCK] Resolve the single authoritative
-  // `truthExplanation` that the visible ProgramTruthSummary consumes.
-  //
-  // Priority (single-source-of-truth rule, enforced by this hook):
-  //   1. `program.truthExplanation` — the canonical stamp written by
-  //      `attachTruthExplanation` during server-side generation. Already
-  //      contains the dbTruthWinnerSummary rollup built from final stamped
-  //      exercises, the authoritativeMultiSkillIntentContract, and every
-  //      other field the summary surface renders. Preferred whenever
-  //      present because it reflects build-time truth, not render-time
-  //      recomputation.
-  //   2. Synchronous fallback via `buildProgramTruthExplanation(program,
-  //      getCanonicalProfile())` for older saved programs that were
-  //      generated before the attach step existed, or for programs whose
-  //      persisted truth was stripped. This uses the SAME extractor the
-  //      builder uses — it is not a second truth source, only a
-  //      regeneration of the same truth from the same inputs.
-  //   3. `null` → ProgramTruthSummary returns null internally, no crash,
-  //      no fake content. The user simply sees no summary on that program.
-  //
-  // This resolver is the ONLY site that materializes truth for the visible
-  // surface. The dev-only `logProgramTruthExplanation` call elsewhere on
-  // the page is a side-effect log, not a render feeder.
-  // ==========================================================================
-  const resolvedTruthExplanation = useMemo(() => {
-    // Step 1: saved canonical stamp (preferred)
-    const stamped = (program as AdaptiveProgram & {
-      truthExplanation?: ProgramTruthExplanation | null
-    }).truthExplanation
-    if (stamped && typeof stamped === 'object' && stamped.identityLabel) {
-      return stamped
-    }
-    // Step 2: synchronous fallback via the same builder the extractor uses
-    try {
-      const profile = getCanonicalProfile()
-      return buildProgramTruthExplanation(program, profile)
-    } catch (err) {
-      // Step 3: honest null → summary renders nothing rather than invented content
-      console.warn('[PROGRAM-TRUTH-SURFACE-CONNECTION-LOCK] truth fallback failed', err)
-      return null
-    }
-    // Rebuild truth only when the underlying program identity changes — this
-    // is the right granularity because truth is a function of the saved
-    // program, not of unrelated parent-component state churn.
-    // [BUILD-FIX] AdaptiveProgram (lib/adaptive-program-builder.ts:1583)
-    // owns `id` + `createdAt`, not `updatedAt`. A new program generation
-    // produces a new id AND a new createdAt, so this triple still
-    // captures every identity transition. `truthExplanation` is the
-    // optional stamp at line 2174 of the same interface — including it
-    // ensures the memo refreshes the moment the canonical stamp lands.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [program?.id, program?.createdAt, program?.truthExplanation])
   
-  // [VISIBLE-PROGRAM-TRUTH-CONTRACT] Render-time ownership audit removed.
-  // Truth ownership is now structurally enforced by `canonicalDisplayTruth`
-  // owning `visibleSessionCards` and feeding them into the visible display.
-  // The previous render-loop console audit produced noise on every render
-  // without surfacing user-visible value.
+  // ==========================================================================
+  // [VISIBLE-PROGRAM-TRUTH-CONTRACT] AUDIT - Verify unified ownership
+  // ==========================================================================
+  console.log('[VISIBLE-PROGRAM-TRUTH-CONTRACT-AUDIT]', {
+    programId: program.id,
+    // Identity surfaces
+    visiblePrimaryGoal: canonicalDisplayTruth.visiblePrimaryGoal,
+    visibleSecondaryGoal: canonicalDisplayTruth.visibleSecondaryGoal,
+    // Built around chips
+    visibleBuiltAroundSkillsCount: canonicalDisplayTruth.visibleBuiltAroundSkills.length,
+    visibleBuiltAroundSkills: canonicalDisplayTruth.visibleBuiltAroundSkills,
+    // Summary
+    visibleSummarySource: canonicalDisplayTruth.visibleSummarySource,
+    visibleSummaryTextSnippet: canonicalDisplayTruth.visibleSummaryText.slice(0, 100),
+    // Sessions
+    visibleSessionCount: canonicalDisplayTruth.visibleSessionCount,
+    visibleSessionsSource: canonicalDisplayTruth.visibleSessionsSource,
+    // Contract ownership
+    contractSource: canonicalDisplayTruth.contractSource,
+    noMixedOwnership: canonicalDisplayTruth.noMixedOwnership,
+    // Verdict
+    verdict: canonicalDisplayTruth.noMixedOwnership 
+      ? 'DISPLAY_CONTRACT_UNIFIED_ALL_SURFACES_FROM_CANONICAL_PROGRAM'
+      : 'DISPLAY_CONTRACT_SPLIT_OWNERSHIP_DETECTED',
+  })
   // [PHASE 10C] State to capture error details for fallback display
   const [capturedError, setCapturedError] = useState<{
     name: string
@@ -1933,391 +792,11 @@ function ProgramDisplayWrapper({
   )
   
   // [PHASE 9] Safe error handling via proper ErrorBoundary
-  //
-  // ==========================================================================
-  // [PROGRAM-RUNTIME-PARITY-PROBE] Compact, local, removable runtime probe.
-  //
-  // PURPOSE
-  // Prove the exact `program` object this render function is mounting for
-  // both `<GroupedProgramScannerStrip>` and `<AdaptiveProgramDisplay>` --
-  // reading directly from the live prop, not from the builder result, not
-  // from any audit object, not from any preserved snapshot. If the scanner
-  // returns null because no session carries grouped truth, this row proves
-  // that the page-mounted object itself is flat at runtime; if the row
-  // shows grouped_sessions > 0 while the scanner is still hidden, the
-  // scanner's internal min-members gate is the blocker.
-  //
-  // HARD CONSTRAINTS
-  //   - Reads only `program` (the exact prop name passed to both children)
-  //   - Does NOT memoize, transform, or cache -- fresh read per render
-  //   - Does NOT display per-session detail -- that's the scanner's job
-  //   - One visible line of text; mono, small, monochrome
-  //   - No effect on layout below it
-  //   - Safe to delete by removing just this block
-  // ==========================================================================
-  // ==========================================================================
-  // [PARITY-RESOLVER-ALIGNMENT] Prompt 6 fix.
-  //
-  // BEFORE: this probe read ONLY `ex.method`. The row renderer
-  // (AdaptiveSessionCard.resolveRowMethodTruth, ~L3820) reads
-  // `ex.setExecutionMethod` FIRST, then `ex.method`. That difference means
-  // a row can legitimately paint the purple Method Ownership Panel (because
-  // setExecutionMethod='cluster' survived) while this header counts zero
-  // (because the legacy overloaded `.method` field was dropped anywhere
-  // along save/load). That is exactly the user-reported symptom
-  // "cluster is visible but the parity header says nothing".
-  //
-  // AFTER: the probe uses the SAME resolver priority as the row renderer:
-  //   1. ex.setExecutionMethod  (authoritative per-row set-execution)
-  //   2. ex.method              (legacy overloaded / grouped identity)
-  //   3. session.styleMetadata.clusterDecision  (session-level cluster
-  //      evidence sidecar written by the builder at ~L12465; survives even
-  //      when per-exercise fields are stripped by a narrow save whitelist)
-  //
-  // SEMANTIC CLEANUP:
-  //   - An exercise inside a grouped frame (blockId present OR a matching
-  //     styledGroups entry) is NOT double-counted as a row-level method.
-  //     The grouped frame owns identity; counting the inner members too
-  //     would inflate superset/circuit tallies in lockstep with grouped
-  //     tallies and make the header lie in the opposite direction.
-  //   - `groupedSessionCount` now increments when EITHER a non-straight
-  //     styledGroup exists OR any resolved row-level non-straight method
-  //     exists OR a clusterDecision sidecar exists. This is what "does
-  //     this session carry any non-straight method truth at all" really
-  //     means for the user.
-  //
-  // This probe now reads from the same single authoritative truth source
-  // as the rows. They cannot disagree on counts vs visible labels.
-  // ==========================================================================
-  // [PARITY-SEMANTIC-HONESTY] Per-method counts are split into
-  // `<method>Sessions` (doctrine-meaningful; sessions carrying any signal)
-  // and `<method>Rows` (row-level tags across the program). Divergence
-  // (rows > sessions) is a stale-carry signal on `cluster` specifically
-  // since the builder writes cluster to at most one row per session.
-  const runtimeParity = (() => {
-    const sessions = Array.isArray(program?.sessions) ? program.sessions : []
-    let groupedSessionCount = 0
-    let supersetSessions = 0, circuitSessions = 0, densitySessions = 0, clusterSessions = 0
-    let supersetRows = 0, circuitRows = 0, densityRows = 0, clusterRows = 0
-    for (const sess of sessions) {
-      const sessAny = sess as unknown as {
-        exercises?: Array<{
-          method?: string | null
-          setExecutionMethod?: string | null
-          blockId?: string | null
-        }> | null
-        styleMetadata?: {
-          styledGroups?: Array<{ groupType?: string | null }> | null
-          clusterDecision?: { kind?: string | null; targetExerciseId?: string | null } | null
-          // [METHOD-MATERIALIZATION-SUMMARY-LOCK] Canonical session-level
-          // method verdict stamped by the builder. When present, it is the
-          // authoritative source for this header and the legacy scattered-
-          // field derivation below is skipped entirely.
-          methodMaterializationSummary?: {
-            groupedStructurePresent?: boolean
-            rowLevelMethodCuesPresent?: boolean
-            groupedMethodCounts?: { superset?: number; circuit?: number; density_block?: number }
-            rowExecutionCounts?: { superset?: number; circuit?: number; density?: number; cluster?: number }
-          } | null
-        } | null
-      }
-
-      // ----------------------------------------------------------------------
-      // [METHOD-MATERIALIZATION-SUMMARY-LOCK] Primary read.
-      // If the builder stamped the canonical summary onto this session,
-      // count from it directly. The legacy reconstruction below stays as
-      // backward-compatible fallback for older saved programs whose
-      // styleMetadata predates this lock.
-      // ----------------------------------------------------------------------
-      const canonicalSummary = sessAny?.styleMetadata?.methodMaterializationSummary
-      if (canonicalSummary && (canonicalSummary.groupedStructurePresent || canonicalSummary.rowLevelMethodCuesPresent)) {
-        const gmc = canonicalSummary.groupedMethodCounts || {}
-        const rec = canonicalSummary.rowExecutionCounts || {}
-        const supG = (gmc.superset || 0)
-        const circG = (gmc.circuit || 0)
-        const denG = (gmc.density_block || 0)
-        const supR = (rec.superset || 0)
-        const circR = (rec.circuit || 0)
-        const denR = (rec.density || 0)
-        const clusR = (rec.cluster || 0)
-        // Rows: grouped frames contribute, plus row-level cues outside frames
-        // (the summary already de-duplicates frame-owned members from row
-        // cues, so the two are additive without double-counting).
-        supersetRows += supG + supR
-        circuitRows += circG + circR
-        densityRows += denG + denR
-        clusterRows += clusR
-        // Sessions: +1 per session per method that is present in EITHER
-        // grouped or row form.
-        if (supG > 0 || supR > 0) supersetSessions += 1
-        if (circG > 0 || circR > 0) circuitSessions += 1
-        if (denG > 0 || denR > 0) densitySessions += 1
-        if (clusR > 0) clusterSessions += 1
-        groupedSessionCount += 1
-        continue
-      }
-
-      // ----------------------------------------------------------------------
-      // [BACKWARD-COMPAT FALLBACK] Legacy scattered-field derivation. Runs
-      // only when the canonical summary is absent (older saved programs).
-      // ----------------------------------------------------------------------
-      const exs = Array.isArray(sessAny?.exercises) ? sessAny.exercises! : []
-      const styled = Array.isArray(sessAny?.styleMetadata?.styledGroups)
-        ? sessAny.styleMetadata!.styledGroups!
-        : []
-      const clusterDecision = sessAny?.styleMetadata?.clusterDecision
-      let sessionHasAnyMethod = false
-      // Per-session "did we see this method on ANY signal" flags. These
-      // drive the `<method>Sessions` doctrine counts, which are +1 per
-      // session MAX regardless of how many rows/frames carry the tag.
-      let sessionHasSuperset = false
-      let sessionHasCircuit = false
-      let sessionHasDensity = false
-      let sessionHasCluster = false
-
-      // Session-level non-straight styledGroups (grouped frame identity).
-      // Frames contribute to Rows because the frame IS the row-surface for
-      // grouped methods; row-level pass below skips grouped members so we
-      // never double-count.
-      for (const g of styled) {
-        const t = (g?.groupType || '').toLowerCase()
-        if (t && t !== 'straight') {
-          sessionHasAnyMethod = true
-          if (t === 'superset') { supersetRows += 1; sessionHasSuperset = true }
-          else if (t === 'circuit') { circuitRows += 1; sessionHasCircuit = true }
-          else if (t === 'density' || t === 'density_block') { densityRows += 1; sessionHasDensity = true }
-          else if (t === 'cluster') { clusterRows += 1; sessionHasCluster = true }
-        }
-      }
-
-      // Row-level truth. Priority: setExecutionMethod > method.
-      // Skip grouped-frame members -- the frame already counted them above.
-      for (const ex of exs) {
-        const hasBlockId = typeof ex?.blockId === 'string' && ex.blockId.length > 0
-        if (hasBlockId) continue // grouped frame owns identity; don't double-count
-        const setExec = (ex?.setExecutionMethod || '').toLowerCase()
-        const legacy = (ex?.method || '').toLowerCase()
-        let resolved = ''
-        if (setExec && setExec !== 'straight' && setExec !== 'straight_sets') resolved = setExec
-        else if (legacy && legacy !== 'straight' && legacy !== 'straight_sets') resolved = legacy
-        if (!resolved) continue
-        sessionHasAnyMethod = true
-        if (resolved === 'superset') { supersetRows += 1; sessionHasSuperset = true }
-        else if (resolved === 'circuit' || resolved === 'circuits') { circuitRows += 1; sessionHasCircuit = true }
-        else if (resolved === 'cluster' || resolved === 'cluster_set' || resolved === 'cluster_sets') { clusterRows += 1; sessionHasCluster = true }
-        else if (resolved === 'density' || resolved === 'density_block') { densityRows += 1; sessionHasDensity = true }
-      }
-
-      // Session-level cluster sidecar. Builder writes `clusterDecision` when
-      // a cluster is materialized. It is SESSION-level truth, so it only
-      // promotes `clusterSessions`, never `clusterRows` -- counting it as a
-      // row would recreate the exact semantic conflation this refactor is
-      // fixing. If the per-exercise tags were stripped downstream but this
-      // sidecar survived, clusterSessions still reflects the doctrine
-      // decision honestly.
-      if (clusterDecision && typeof clusterDecision.targetExerciseId === 'string' && clusterDecision.targetExerciseId) {
-        sessionHasCluster = true
-        sessionHasAnyMethod = true
-      }
-
-      if (sessionHasSuperset) supersetSessions += 1
-      if (sessionHasCircuit) circuitSessions += 1
-      if (sessionHasDensity) densitySessions += 1
-      if (sessionHasCluster) clusterSessions += 1
-      if (sessionHasAnyMethod) groupedSessionCount += 1
-    }
-    return {
-      sessionCount: sessions.length,
-      groupedSessionCount,
-      supersetSessions,
-      circuitSessions,
-      densitySessions,
-      clusterSessions,
-      supersetRows,
-      circuitRows,
-      densityRows,
-      clusterRows,
-    }
-  })()
-
   return (
-    <div className="w-full max-w-full min-w-0 overflow-x-hidden">
-      {/* ==========================================================================
-          [PHASE 4C] Wrapper-level mobile-overflow safety net.
-          `overflow-x-hidden` + `max-w-full min-w-0` on the program wrapper
-          guarantees no descendant proof/scanner/parity strip can push the
-          page sideways on narrow viewports, even if a future diagnostic
-          surface adds an unbroken string. The wrapping fixes inside each
-          proof block are still the primary defense; this is belt-and-
-          suspenders so the athlete never feels horizontal scroll on the
-          Program page.
-          ========================================================================== */}
-
-      {/* ==========================================================================
-          [PHASE 4B] PROGRAM MATERIALIZATION STALE NOTICE
-          Renders ONLY when the saved program either lacks the current Phase 4A
-          materialization stamp on `program.doctrineIntegration` or the stamp
-          flagged the build as `allSessionsFlat`. Provides a single
-          "Regenerate with Doctrine" action that calls the EXISTING canonical
-          `onRegenerate` handler (handleRegenerate → /api/program/regenerate
-          → executeAuthoritativeGeneration). On success, the page calls
-          setProgram(newProgram) which causes this notice to re-evaluate its
-          state and hide itself. No new route, no new builder, no second
-          normalizer. Hides entirely on fresh, materialized programs so it
-          never claims doctrine on a stale program nor adds clutter to a
-          fresh one.
-          ========================================================================== */}
-      <ProgramMaterializationStaleNotice
-        program={program}
-        onRegenerate={onRegenerate}
-      />
-
-      {/* ==========================================================================
-          [PROGRAM-TRUTH-SURFACE-CONNECTION-LOCK] Visible authoritative truth.
-          Consumes the single canonical `resolvedTruthExplanation` computed
-          above — either the build-time stamp preserved on the saved program
-          OR the same-extractor fallback for legacy programs. The component
-          internally null-renders when truth is absent, so no extra guard
-          is needed here and no fake content can be invented. This is the
-          primary user-facing proof surface for everything the truth
-          pipeline (identity, skill coverage, schedule adaptation, method
-          materiality, working-state / DB-truth winner rollup, authoritative
-          multi-skill intent contract) has been computing. Placed above
-          ProgramDecisionSummary deliberately: decisions read BELOW, the
-          full truthful explanation reads ABOVE.
-          ========================================================================== */}
-      <ProgramTruthSummary
-        truthExplanation={resolvedTruthExplanation as unknown as Parameters<typeof ProgramTruthSummary>[0]['truthExplanation']}
-        // [PHASE AB1] Forward the Rule Population Ledger stamped by the
-        // builder so the user-facing summary can render the honest
-        // executable / visible / scoring-only / blocked / no-target /
-        // audit-only rollup. Defensive cast: the ledger is optional and
-        // missing on programs generated before AB1.
-        rulePopulationLedger={
-          (program as unknown as { rulePopulationLedger?: Parameters<typeof ProgramTruthSummary>[0]['rulePopulationLedger'] })?.rulePopulationLedger ?? null
-        }
-      />
-
-        {/* ==========================================================================
-            [PHASE X] PROGRAM TRUST ACCORDION
-            ----------------------------------------------------------------------
-            Replaces the four previously-stacked proof lines on the main
-            athlete-facing surface:
-              - Phase 4C MaterializationStatusLine
-              - Phase W  DoctrineCausalityLedgerLine
-              - Phase 4E DoctrineCausalLine
-              - Phase 4L WeeklyMethodChallengeLine
-
-            The accordion renders a compact two-tier surface:
-              LEVEL 1 (always visible): premium verdict header, one-line
-                Phase W summary, chip strip with non-zero buckets only.
-              LEVEL 2 (collapsed by default, behind <details>): the four
-                original proof lines render IDENTICALLY to their previous
-                behavior — same components, same `program` prop, same data
-                paths, same fail-closed null behavior.
-
-            Phase W causality states are PRESERVED INDIVIDUALLY:
-              materialized / applied (no change) / suppressed / blocked by
-              runtime / acknowledged / post-hoc / displayed-only /
-              unknown-unverified all remain accessible.
-
-            Cluster / circuit / density "blocked by runtime" remains
-            honestly visible inside the detail disclosure — never hidden,
-            never falsely promoted.
-
-            On legacy / inconclusive empty programs, the accordion hides
-            entirely (the Phase 4B stale notice owns that state).
-            ========================================================================== */}
-        <ProgramTrustAccordion program={program} />
-
-        {/* ==========================================================================
-            [PHASE AB6] WEEKLY METHOD DECISIONS ACCORDION
-            ----------------------------------------------------------------------
-            Compact top-level surface that explains, in one place above the day
-            cards:
-              - which training methods (supersets, circuits, clusters,
-                rest-pause, etc.) the AI coach actually used this week,
-              - which user-preferred methods were NOT used and why
-                (skill-quality protection / strength specificity / engine
-                gap / not selected),
-              - whether a future safe override could honor the preference,
-              - which decision dimensions are not yet evaluated by the
-                current method decision layer (recovery, fatigue,
-                progression-week, joint/tendon caution, dosage recompute,
-                session-length tradeoff, exercise-compatibility recompute).
-
-            Source of truth: `program.weeklyMethodRepresentation` (Phase 4J
-            `WeeklyMethodRepresentationContract`, set by
-            `lib/server/authoritative-program-generation.ts`). Reading
-            happens inside the accordion via the pure
-            `buildWeeklyMethodDecisionSummary` derivation — no second
-            method-selection engine, no UI-side reasoning invention.
-
-            Older saved programs that lack the Phase 4J contract render an
-            honest "not available — regenerate" fallback rather than fake
-            method reasoning.
-
-            The accordion is collapsed by default; the always-visible
-            header shows used / preferred-not-used / engine-gap counts so
-            the user gets the gist without expanding.
-            ========================================================================== */}
-        <WeeklyMethodDecisionAccordion program={program} />
-
-        {/* [PHASE 4C — PROOF DEMOTION] DoctrineRuntimeProof and
-            DoctrineIntegrationProofBlock are diagnostic surfaces. They
-            were leaking onto the athlete-facing page and creating the
-            illusion that "Selected rules: 18 · Batches: 10/10" was a
-            program outcome. They are now gated behind the same
-            `?programProbe=1` probe gate as the runtime parity strip and
-            the grouped scanner strip — preserved for QA, hidden from
-            athletes. The honest user-facing materialization signal is
-            `<MaterializationStatusLine>` above + the Phase 4B stale
-            notice + the per-session Phase 4A panel inside session cards
-            (which only renders when `actualMaterialization.hasRealStructuralChange`
-            is true). */}
-        {(showProbe || forceProbe) && (
-          <>
-            <DoctrineRuntimeProof program={program} />
-            <DoctrineIntegrationProofBlock program={program} />
-          </>
-        )}
-
+    <div>
       {/* [PROGRAM-DECISION-SUMMARY] Display doctrine-driven decisions above the program */}
       <ProgramDecisionSummary program={program} />
-
-      {/* [DEBUG-LEAKAGE-REMOVAL] PROGRAM_RUNTIME_PARITY parity probe + grouped
-          diagnostic scanner strip are diagnostic surfaces and were leaking
-          into the normal user-facing Program page. They now render only
-          when the existing probe gate is explicitly enabled
-          (`?programProbe=1` -> showProbe, or forceProbe). The athlete-facing
-          path stays clean; the probes remain available for QA without
-          deleting useful internal tooling. */}
-      {(showProbe || forceProbe) && (
-        <>
-          <div
-            role="note"
-            aria-label="Program runtime object parity probe"
-            className="mb-2 rounded border border-[#2B313A] bg-[#0A0C10] px-2 py-1 font-mono text-[10px] leading-tight text-[#A4ACB8]"
-          >
-            <span className="text-[#E6E9EF]">PROGRAM_RUNTIME_PARITY</span>
-            <span className="mx-1 text-[#6B7280]">·</span>
-            <span>sessions:<span className="text-[#E6E9EF]"> {runtimeParity.sessionCount}</span></span>
-            <span className="mx-1 text-[#6B7280]">·</span>
-            <span>grouped_sessions:<span className={runtimeParity.groupedSessionCount > 0 ? 'text-emerald-400' : 'text-[#E6E9EF]'}> {runtimeParity.groupedSessionCount}</span></span>
-            <span className="mx-1 text-[#6B7280]">·</span>
-            <span>
-              methods: superset=<span className="text-[#E6E9EF]">{runtimeParity.supersetSessions}s/{runtimeParity.supersetRows}r</span>
-              {' | '}circuit=<span className="text-[#E6E9EF]">{runtimeParity.circuitSessions}s/{runtimeParity.circuitRows}r</span>
-              {' | '}density=<span className="text-[#E6E9EF]">{runtimeParity.densitySessions}s/{runtimeParity.densityRows}r</span>
-              {' | '}cluster=<span className={runtimeParity.clusterRows > runtimeParity.clusterSessions ? 'text-amber-400' : 'text-[#E6E9EF]'}>{runtimeParity.clusterSessions}s/{runtimeParity.clusterRows}r</span>
-            </span>
-            <span className="mx-1 text-[#6B7280]">·</span>
-            <span>source:<span className="text-[#E6E9EF]"> CURRENT_PROGRAM_PAGE_OBJECT</span></span>
-          </div>
-          <GroupedProgramScannerStrip program={program} />
-        </>
-      )}
-
+      
       <ErrorBoundary
         fallback={renderFallback()}
         onError={handleDisplayError}
@@ -2330,19 +809,6 @@ function ProgramDisplayWrapper({
           unifiedStaleness={unifiedStaleness}
           showProbe={showProbe}
           forceProbe={forceProbe}
-          /* [VISIBLE-SESSION-TRUTH-LOCK] Pass page-built per-card surfaces.
-             AdaptiveProgramDisplay consumes these directly so the visible
-             day cards have one authoritative source of truth owned by the
-             page-level CanonicalProgramDisplayTruth contract. */
-          sessionCardSurfaces={canonicalDisplayTruth.visibleSessionCards}
-          /* [PHASE 4F — DISPLAY PROJECTION OWNERSHIP LOCK] Pass the page-built
-             read-only projection. AdaptiveProgramDisplay does not re-build
-             this; it only looks up the per-session slice by dayNumber and
-             passes it to the matching AdaptiveSessionCard. The card renders
-             the per-session doctrine causal line inside its body, not in a
-             wrapper strip — answering "did doctrine change THIS session?"
-             with honest copy that never claims change without Phase 4E proof. */
-          programDisplayProjection={programDisplayProjection}
         />
       </ErrorBoundary>
     </div>
@@ -2356,528 +822,6 @@ function ProgramDisplayWrapper({
 // Do NOT flip this constant back to true - use the query param instead.
 // ==========================================================================
 const FORCE_VISIBLE_SESSION_PROBE = false
-
-// =============================================================================
-// [PHASE 4X] CANONICAL FRESHNESS LOCK — SINGLE WINNER DECISION HELPER
-// -----------------------------------------------------------------------------
-// Phase F.F4 ("fresh successful generation beats stale stored truth") was
-// already partially defended by the Phase 17J/17K reconciliation effect
-// + the post-build authoritative lock + Phase 26E/26F createdAt rules.
-// What was missing: the reconciliation logic only compared IDs / timestamps /
-// session counts. It did NOT consult the canonical truth contract introduced
-// in Phase 4P-4W (`methodStructures`, `doctrineBlockResolution`,
-// materialization rollups, `hasCanonicalProgramTruth`). That meant a stale
-// localStorage program with the same id/timestamp could in principle replace
-// a fresher in-memory program that had richer canonical truth.
-//
-// Phase 4X consolidates the decision into ONE pure helper used by every
-// reconciliation trigger (visibility / focus / storage / periodic) and by
-// the boot hydration path. Rules are applied in priority order:
-//
-//   1. POST_BUILD_WINNER_LOCK_ACTIVE   — auth lock blocks all replacement
-//   2. NO_CURRENT_PROGRAM              — candidate may load (boot case)
-//   3. CANDIDATE_INVALID_OR_MISSING    — never replace with garbage
-//   4. BLOCK_STORAGE_CANONICAL_DOWNGRADE
-//      — current has canonical truth, candidate does not → block
-//   5. CANDIDATE_CANONICAL_UPGRADE
-//      — current lacks canonical truth, candidate has it → allow
-//   6. CURRENT_NEWER_PROTECTED         — current strictly newer → block
-//   7. CANDIDATE_CANONICAL_NEWER       — both canonical, candidate newer
-//   8. CANDIDATE_NEWER_LEGACY_OK       — both legacy, candidate newer
-//   9. CANDIDATE_ID_DIFFERS_NOT_NEWER  — id differs, current not newer
-//  10. SESSION_COUNT_ONLY_NOT_AUTHORITY
-//      — session-count diff alone never forces replacement
-//  11. NO_MATERIAL_DIFFERENCE          — keep current
-//
-// PURE: no React state, no localStorage, no side effects. The caller decides
-// whether to act on `shouldReplace`.
-// =============================================================================
-
-interface CanonicalWinnerInputs {
-  /** Current visible program (React state). May be null at boot. */
-  currentProgram: {
-    id: string
-    createdAt?: string
-    sessions?: { length?: number }[] | unknown[]
-  } | null
-  /** Candidate program from localStorage / getProgramState. */
-  candidateProgram: {
-    id?: string
-    createdAt?: string
-    sessions?: unknown[]
-  } | null
-  /** Trigger label, only used for logging by the caller. */
-  triggerSource: string
-  /** Active post-build lock snapshot, if any. */
-  authLock: {
-    programId: string
-    sessionCount: number
-    lockExpiresAt: number
-  } | null
-  /** Pre-computed canonical-truth verdicts. Pass null if not available. */
-  currentCanonicalTruth: CanonicalProgramTruthPresence | null
-  candidateCanonicalTruth: CanonicalProgramTruthPresence | null
-  /** Optional staleness signal from `evaluateUnifiedProgramStaleness`. */
-  currentIsStaleByEvaluator?: boolean
-}
-
-interface CanonicalWinnerDecision {
-  winner: 'current' | 'candidate' | 'locked'
-  shouldReplace: boolean
-  reason:
-    | 'POST_BUILD_WINNER_LOCK_ACTIVE'
-    | 'NO_CURRENT_PROGRAM'
-    | 'CANDIDATE_INVALID_OR_MISSING'
-    | 'BLOCK_STORAGE_CANONICAL_DOWNGRADE'
-    | 'CANDIDATE_CANONICAL_UPGRADE'
-    | 'CURRENT_NEWER_PROTECTED'
-    | 'CANDIDATE_CANONICAL_NEWER'
-    | 'CANDIDATE_NEWER_LEGACY_OK'
-    | 'CANDIDATE_ID_DIFFERS_NOT_NEWER'
-    | 'SESSION_COUNT_ONLY_NOT_AUTHORITY'
-    | 'LEGACY_COMPAT_RECONCILIATION'
-    | 'NO_MATERIAL_DIFFERENCE'
-  currentProgramId: string | null
-  candidateProgramId: string | null
-  currentCreatedAt: string | null
-  candidateCreatedAt: string | null
-  currentSessionCount: number
-  candidateSessionCount: number
-  currentHasCanonicalTruth: boolean
-  candidateHasCanonicalTruth: boolean
-  currentIsNewer: boolean
-  candidateIsNewer: boolean
-  protectedByAuthoritativeLock: boolean
-  staleOverwriteBlocked: boolean
-  canonicalUpgradeAllowed: boolean
-  canonicalDowngradeBlocked: boolean
-}
-
-/**
- * Pure single-source-of-truth decision for "should the candidate program
- * replace the current visible program?". Used by every reconciliation
- * trigger AND the boot hydration path so all paths share one winner rule.
- */
-export function decideCanonicalProgramWinner(
-  inputs: CanonicalWinnerInputs,
-): CanonicalWinnerDecision {
-  const {
-    currentProgram,
-    candidateProgram,
-    authLock,
-    currentCanonicalTruth,
-    candidateCanonicalTruth,
-    currentIsStaleByEvaluator,
-  } = inputs
-
-  const now = Date.now()
-  const lockActive = !!(authLock && now < authLock.lockExpiresAt)
-
-  const currentProgramId = currentProgram?.id ?? null
-  const candidateProgramId =
-    typeof candidateProgram?.id === 'string' ? candidateProgram.id : null
-  const currentCreatedAt = currentProgram?.createdAt ?? null
-  const candidateCreatedAt = candidateProgram?.createdAt ?? null
-  const currentSessionCount = Array.isArray(currentProgram?.sessions)
-    ? (currentProgram!.sessions as unknown[]).length
-    : 0
-  const candidateSessionCount = Array.isArray(candidateProgram?.sessions)
-    ? (candidateProgram!.sessions as unknown[]).length
-    : 0
-  const currentHasCanonicalTruth =
-    currentCanonicalTruth?.programHasAnyCanonicalTruth ?? false
-  const candidateHasCanonicalTruth =
-    candidateCanonicalTruth?.programHasAnyCanonicalTruth ?? false
-
-  // Numeric timestamps, NaN-safe.
-  const currentTs = currentCreatedAt ? new Date(currentCreatedAt).getTime() : NaN
-  const candidateTs = candidateCreatedAt
-    ? new Date(candidateCreatedAt).getTime()
-    : NaN
-  const tsComparable = Number.isFinite(currentTs) && Number.isFinite(candidateTs)
-  const currentIsNewer = tsComparable && currentTs > candidateTs
-  const candidateIsNewer = tsComparable && candidateTs > currentTs
-  const idDiffers = !!candidateProgramId && candidateProgramId !== currentProgramId
-
-  const baseDecision = {
-    currentProgramId,
-    candidateProgramId,
-    currentCreatedAt,
-    candidateCreatedAt,
-    currentSessionCount,
-    candidateSessionCount,
-    currentHasCanonicalTruth,
-    candidateHasCanonicalTruth,
-    currentIsNewer,
-    candidateIsNewer,
-    protectedByAuthoritativeLock: lockActive,
-    staleOverwriteBlocked: false,
-    canonicalUpgradeAllowed: false,
-    canonicalDowngradeBlocked: false,
-  }
-
-  // Rule 1: post-build authoritative lock wins absolutely.
-  if (lockActive) {
-    return {
-      ...baseDecision,
-      winner: 'locked',
-      shouldReplace: false,
-      reason: 'POST_BUILD_WINNER_LOCK_ACTIVE',
-      staleOverwriteBlocked: true,
-    }
-  }
-
-  // Rule 3: candidate must be a real, parseable program.
-  if (
-    !candidateProgram ||
-    typeof candidateProgram !== 'object' ||
-    !candidateProgramId
-  ) {
-    return {
-      ...baseDecision,
-      winner: 'current',
-      shouldReplace: false,
-      reason: 'CANDIDATE_INVALID_OR_MISSING',
-    }
-  }
-
-  // Rule 2: nothing to protect — boot/hydration with empty state.
-  if (!currentProgram || !currentProgramId) {
-    return {
-      ...baseDecision,
-      winner: 'candidate',
-      shouldReplace: true,
-      reason: 'NO_CURRENT_PROGRAM',
-      canonicalUpgradeAllowed: candidateHasCanonicalTruth,
-    }
-  }
-
-  // Rule 4: BLOCK canonical → fallback downgrade. This is the core of
-  // F.F4 + F.F5 enforcement: a healthy canonical current cannot be
-  // replaced by a candidate that lacks canonical truth, even if the
-  // candidate looks "newer" by createdAt or has more sessions.
-  if (currentHasCanonicalTruth && !candidateHasCanonicalTruth) {
-    return {
-      ...baseDecision,
-      winner: 'current',
-      shouldReplace: false,
-      reason: 'BLOCK_STORAGE_CANONICAL_DOWNGRADE',
-      staleOverwriteBlocked: true,
-      canonicalDowngradeBlocked: true,
-    }
-  }
-
-  // Rule 6: current strictly newer → keep, even when ids differ.
-  // Phase 26E precedent. Applied BEFORE upgrade rule 5 so a freshly-built
-  // legacy-shaped program (no canonical truth yet) is not immediately
-  // replaced by a slightly-older canonical candidate that had been
-  // sitting in storage. In practice this branch only matters when the
-  // user just regenerated and the lock hasn't been set yet — extremely
-  // narrow, but explicit.
-  if (currentIsNewer) {
-    return {
-      ...baseDecision,
-      winner: 'current',
-      shouldReplace: false,
-      reason: 'CURRENT_NEWER_PROTECTED',
-      staleOverwriteBlocked: true,
-    }
-  }
-
-  // Rule 5: legitimate canonical upgrade — current legacy, candidate canonical
-  // and candidate is at least as new as current.
-  if (!currentHasCanonicalTruth && candidateHasCanonicalTruth) {
-    return {
-      ...baseDecision,
-      winner: 'candidate',
-      shouldReplace: true,
-      reason: 'CANDIDATE_CANONICAL_UPGRADE',
-      canonicalUpgradeAllowed: true,
-    }
-  }
-
-  // Rule 7: both have canonical truth, candidate genuinely newer.
-  if (
-    currentHasCanonicalTruth &&
-    candidateHasCanonicalTruth &&
-    candidateIsNewer
-  ) {
-    return {
-      ...baseDecision,
-      winner: 'candidate',
-      shouldReplace: true,
-      reason: 'CANDIDATE_CANONICAL_NEWER',
-    }
-  }
-
-  // Rule 7b: evaluator says current is stale and candidate is at least as new.
-  // Treated as supporting proof, not a blind override — only fires when the
-  // candidate is also newer or ids differ + not currentIsNewer.
-  if (
-    currentIsStaleByEvaluator &&
-    (candidateIsNewer || (idDiffers && !currentIsNewer)) &&
-    // Allow when candidate canonical-truth ≥ current canonical-truth.
-    // (true ≥ true, true ≥ false, false ≥ false; only blocks true→false).
-    !(currentHasCanonicalTruth && !candidateHasCanonicalTruth)
-  ) {
-    return {
-      ...baseDecision,
-      winner: 'candidate',
-      shouldReplace: true,
-      reason: candidateHasCanonicalTruth
-        ? 'CANDIDATE_CANONICAL_NEWER'
-        : 'CANDIDATE_NEWER_LEGACY_OK',
-    }
-  }
-
-  // Rule 8: both legacy/no-canonical, candidate genuinely newer.
-  if (
-    !currentHasCanonicalTruth &&
-    !candidateHasCanonicalTruth &&
-    candidateIsNewer
-  ) {
-    return {
-      ...baseDecision,
-      winner: 'candidate',
-      shouldReplace: true,
-      reason: 'CANDIDATE_NEWER_LEGACY_OK',
-    }
-  }
-
-  // Rule 9: ids differ, neither timestamp side is strictly newer (or
-  // timestamps not comparable). Conservative default: do NOT replace,
-  // because we cannot prove the candidate is fresher.
-  if (idDiffers) {
-    return {
-      ...baseDecision,
-      winner: 'current',
-      shouldReplace: false,
-      reason: 'CANDIDATE_ID_DIFFERS_NOT_NEWER',
-      staleOverwriteBlocked: true,
-    }
-  }
-
-  // Rule 10: session count alone is NEVER authority. If we got here,
-  // session count must be the only difference left.
-  if (currentSessionCount !== candidateSessionCount) {
-    return {
-      ...baseDecision,
-      winner: 'current',
-      shouldReplace: false,
-      reason: 'SESSION_COUNT_ONLY_NOT_AUTHORITY',
-      staleOverwriteBlocked: true,
-    }
-  }
-
-  // Rule 11: same id, same/no-newer timestamp, same session count.
-  return {
-    ...baseDecision,
-    winner: 'current',
-    shouldReplace: false,
-    reason: 'NO_MATERIAL_DIFFERENCE',
-  }
-}
-
-// ==========================================================================
-// [STEP-4B] PROGRAM-PAGE SCHEDULE-TRUTH NORMALIZATION HELPERS
-// ==========================================================================
-// Two cooperating helpers used by the audit/snapshot, modify, regenerate,
-// and adjustment dispatch paths to keep `scheduleMode` and
-// `trainingDaysPerWeek` semantically separate at every Program-page
-// boundary:
-//
-//   1. `normalizeTrainingDaysForSnapshot(value)` — shared boundary
-//      normalizer for any source that overloads the field. Used by audit
-//      snapshots and as the numeric-extraction primitive inside the
-//      schedule-truth resolver.
-//
-//   2. `resolveProgramPageScheduleTruth({ scheduleMode, trainingDaysPerWeek
-//      })` — single authoritative resolver used by Modify, Regenerate, and
-//      Adjustment dispatch corridors. Returns one typed object exposing:
-//        - `scheduleMode` (`'static' | 'flexible' | null`)
-//        - `numericTrainingDays` (`number | null`)
-//        - `builderTrainingDays` (`number | 'flexible' | null`) for
-//          AdaptiveProgramInputs-shaped destinations
-//        - `canonicalTrainingDays` (`number | null`) for canonical-profile
-//          numeric slots
-//        - `isStatic` / `isFlexible` / `diagnosticLabel` for proof logs
-//
-// HARD RULES the resolver enforces:
-//   - `'flexible'` is mode truth, never numeric truth
-//   - missing/invalid → `null`, never an invented `4` or `6`
-//   - numeric values survive end-to-end when mode is static
-//   - the resolver is the only place that decides "is this static or
-//     flexible when mode is missing but a number/literal is present"
-// ==========================================================================
-function normalizeTrainingDaysForSnapshot(
-  value: TrainingDays | 'flexible' | number | string | null | undefined,
-): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value
-  }
-  // `'flexible'`, any other string, null, and undefined all collapse to
-  // explicit absence in the numeric truth slot. We accept the wider
-  // `string` because some upstream helpers (e.g. computeScheduleIntelligence
-  // in flexible-schedule-engine.ts) declare their return as
-  // `number | string | null` rather than the narrower `number | 'flexible' | null`.
-  return null
-}
-
-type ProgramPageScheduleTruth = {
-  scheduleMode: 'static' | 'flexible' | null
-  numericTrainingDays: number | null
-  builderTrainingDays: number | 'flexible' | null
-  canonicalTrainingDays: number | null
-  isStatic: boolean
-  isFlexible: boolean
-  diagnosticLabel: string
-}
-
-function resolveProgramPageScheduleTruth(input: {
-  scheduleMode?: string | null
-  trainingDaysPerWeek?: TrainingDays | 'flexible' | number | string | null
-  fallbackScheduleMode?: string | null
-  fallbackTrainingDaysPerWeek?: TrainingDays | 'flexible' | number | string | null
-}): ProgramPageScheduleTruth {
-  const rawMode = input.scheduleMode ?? input.fallbackScheduleMode ?? null
-  const rawDays = input.trainingDaysPerWeek ?? input.fallbackTrainingDaysPerWeek ?? null
-  const numericDays = normalizeTrainingDaysForSnapshot(
-    rawDays as TrainingDays | 'flexible' | number | string | null | undefined,
-  )
-
-  // Resolve scheduleMode honoring explicit-mode precedence, then falling
-  // back to inference from the days literal/number. Never fakes a default.
-  let scheduleMode: 'static' | 'flexible' | null
-  if (rawMode === 'static' || rawMode === 'flexible') {
-    scheduleMode = rawMode
-  } else if (rawDays === 'flexible') {
-    scheduleMode = 'flexible'
-  } else if (numericDays !== null) {
-    scheduleMode = 'static'
-  } else {
-    scheduleMode = null
-  }
-
-  const isFlexible = scheduleMode === 'flexible'
-  const isStatic = scheduleMode === 'static'
-
-  // Numeric/canonical truth: flexible mode owns no numeric count.
-  const numericTrainingDays = isFlexible ? null : numericDays
-  const canonicalTrainingDays = numericTrainingDays
-
-  // Builder-shape truth: AdaptiveProgramInputs.trainingDaysPerWeek is
-  // typed `TrainingDays | 'flexible'`, so flexible carries the literal.
-  const builderTrainingDays: number | 'flexible' | null = isFlexible
-    ? 'flexible'
-    : numericTrainingDays
-
-  let diagnosticLabel: string
-  if (isStatic && numericTrainingDays !== null) {
-    diagnosticLabel = `STATIC_TARGET_${numericTrainingDays}_SESSIONS`
-  } else if (isStatic) {
-    diagnosticLabel = 'STATIC_TARGET_UNKNOWN'
-  } else if (isFlexible) {
-    diagnosticLabel = 'FLEXIBLE_TARGET_DERIVED_BY_ENGINE'
-  } else {
-    diagnosticLabel = 'SCHEDULE_TRUTH_UNKNOWN'
-  }
-
-  return {
-    scheduleMode,
-    numericTrainingDays,
-    builderTrainingDays,
-    canonicalTrainingDays,
-    isStatic,
-    isFlexible,
-    diagnosticLabel,
-  }
-}
-
-// ==========================================================================
-// [STEP-4F-DELTA] Typed legacy/read bridge for visible-program equipment.
-//
-// `AdaptiveProgram` (lib/adaptive-program-builder.ts) does NOT define a
-// top-level `equipment` field. Older saved programs and snapshot-derived
-// shapes may carry equipment under several different paths. The
-// `buildModifyEntryInputsFromVisibleProgram` helper needs to recover that
-// value without (a) reading an undeclared property, (b) using `as any`,
-// (c) widening the global `AdaptiveProgram` type, or (d) inventing
-// equipment that does not exist on the saved program.
-//
-// `ProgramEquipmentCarrierForModifyEntry` enumerates only the carrier
-// shapes legacy/saved programs might use. The cast in
-// `getVisibleProgramEquipmentForModifyEntry` is `unknown as Carrier`, not
-// `any`, so structural drift in the carrier is still type-checked. The
-// candidates are walked in priority order; the first non-empty array wins.
-// If no candidate is populated, an empty array is returned and the
-// downstream fallback chain (currentInputs.equipment / canonical
-// equipmentAvailable) takes over.
-// ==========================================================================
-type ProgramEquipmentCarrierForModifyEntry = {
-  equipment?: EquipmentType[]
-  equipmentAvailable?: EquipmentType[]
-  inputs?: {
-    equipment?: EquipmentType[]
-  }
-  profile?: {
-    equipment?: EquipmentType[]
-    equipmentAvailable?: EquipmentType[]
-  }
-  sourceInputs?: {
-    equipment?: EquipmentType[]
-  }
-  generationInputs?: {
-    equipment?: EquipmentType[]
-  }
-  metadata?: {
-    equipment?: EquipmentType[]
-    equipmentAvailable?: EquipmentType[]
-  }
-  profileSnapshot?: {
-    equipmentAvailable?: EquipmentType[]
-  }
-  equipmentProfile?: {
-    available?: EquipmentType[]
-  }
-}
-
-function getVisibleProgramEquipmentForModifyEntry(program: AdaptiveProgram): EquipmentType[] {
-  const carrier = program as unknown as ProgramEquipmentCarrierForModifyEntry
-
-  const candidates: Array<EquipmentType[] | undefined> = [
-    carrier.equipment,
-    carrier.equipmentAvailable,
-    carrier.equipmentProfile?.available,
-    carrier.inputs?.equipment,
-    carrier.profile?.equipment,
-    carrier.profile?.equipmentAvailable,
-    carrier.sourceInputs?.equipment,
-    carrier.generationInputs?.equipment,
-    carrier.metadata?.equipment,
-    carrier.metadata?.equipmentAvailable,
-    carrier.profileSnapshot?.equipmentAvailable,
-  ]
-
-  for (const value of candidates) {
-    if (Array.isArray(value) && value.length > 0) {
-      return value
-    }
-  }
-
-  return []
-}
-
-// [STEP-4F-DELTA] Local sanitizer: snapshot.equipmentAvailable is typed
-// `string[]` and canonicalFallback.equipmentAvailable is typed `string[]`,
-// but `AdaptiveProgramInputs.equipment` is typed `EquipmentType[]`. Filter
-// to string-typed items and brand the result. No `as any` is used; the
-// brand happens via the `is EquipmentType` predicate, which keeps the
-// EquipmentType union honest and rejects non-string array entries.
-function normalizeEquipmentForModifyEntry(value: unknown): EquipmentType[] {
-  return Array.isArray(value)
-    ? (value.filter((item): item is EquipmentType => typeof item === 'string') as EquipmentType[])
-    : []
-}
 
 export default function ProgramPage() {
   // ==========================================================================
@@ -2903,87 +847,12 @@ export default function ProgramPage() {
   })
   
   const [inputs, setInputs] = useState<AdaptiveProgramInputs | null>(null)
-  // [STEP-5A-XI] Page-level metadata view of the four canonical-profile
-  //   fields that are intentionally NOT on `AdaptiveProgramInputs`
-  //   (Step 4G guard at top of file). At runtime, `inputs` often carries
-  //   these fields anyway because it was assigned from
-  //   `entryToAdaptiveInputs()` output; the helper recovers them via
-  //   `Record<string, unknown>` narrowing without widening the static
-  //   `AdaptiveProgramInputs` type or using `as any`. Used by the many
-  //   diagnostic logs and rebuild/regenerate paths below that previously
-  //   read `inputs?.sessionDurationMode` / `inputs?.trainingPathType` /
-  //   `inputs?.goalCategories` / `inputs?.selectedFlexibility` directly.
-  const inputsMeta = useMemo(() => readProgramPageMetadataFromUnknown(inputs), [inputs])
   const [program, setProgram] = useState<AdaptiveProgram | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [constraintLabel, setConstraintLabel] = useState<string>('')
   const [showBuilder, setShowBuilder] = useState(false)
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false)
   const [mounted, setMounted] = useState(false)
-
-  // ==========================================================================
-  // [PHASE-L] POST-WORKOUT PERFORMANCE FEEDBACK OVERLAY APPLICATION
-  // --------------------------------------------------------------------------
-  // After `program` is populated by any mount/reconciliation/regenerate path,
-  // read recent canonical workout logs and apply the bounded performance-
-  // feedback overlay. Stamps `performanceAdaptation` on affected future
-  // exercises and writes the post-mutation `sets` / `repsOrTime` /
-  // `targetRPE` directly so the same Program card render path that already
-  // exists consumes the adapted prescription — no parallel display-only
-  // banner.
-  //
-  // Dedup contract: the overlay computes a stable signature of
-  //   (program.id, log count, latest log id)
-  // and we keep the last-applied signature in a ref. This guarantees the
-  // overlay never re-runs in a render loop and never re-applies itself on
-  // top of an already-overlaid program.
-  //
-  // Future-only safety: the contract internally restricts mutations to
-  // sessions whose dayNumber is strictly greater than the largest completed
-  // dayNumber observed in the logs, so completed Day 6 is never mutated by
-  // a Day 6 log.
-  // ==========================================================================
-  const phaseLAppliedSignatureRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (!mounted) return
-    if (!program || !program.id) return
-    if (typeof window === 'undefined') return
-    try {
-      const result = applyPerformanceFeedbackOverlay(program)
-      if (!result) return
-      if (phaseLAppliedSignatureRef.current === result.signature) return
-      phaseLAppliedSignatureRef.current = result.signature
-      console.log('[phase-l-performance-feedback]', {
-        programId: program.id,
-        status: result.adaptation.status,
-        signals: result.adaptation.signals.length,
-        mutations: result.adaptation.mutations.length,
-        mutationsApplied: result.adaptation.proof.mutationsApplied,
-        mutationsBlocked: result.adaptation.proof.mutationsBlocked,
-        completedSetsRead: result.adaptation.proof.completedSetsRead,
-        sessionsRead: result.adaptation.proof.sessionsRead,
-        highRpeCount: result.adaptation.proof.highRpeCount,
-        underTargetCount: result.adaptation.proof.underTargetCount,
-        noteWarningsCount: result.adaptation.proof.noteWarningsCount,
-        changed: result.changed,
-        signature: result.signature,
-        // [PHASE-M] When the server already applied the same evidence
-        // corridor, the overlay returns skipReason='server_already_applied_*'
-        // and `changed=false`. We surface the reason in logs so we can audit
-        // server/client provenance without re-running the resolver.
-        skipReason: result.skipReason,
-      })
-      if (result.changed) {
-        setProgram(result.program as AdaptiveProgram)
-      }
-    } catch (err) {
-      console.error('[phase-l-performance-feedback] overlay failed', err)
-    }
-    // We deliberately depend on program identity + length so log changes
-    // forced by re-mount or regenerate retrigger the overlay. The signature
-    // ref guarantees idempotency.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mounted, program?.id, program?.sessions?.length])
   
   // ==========================================================================
   // [DEBUG-PROBE-GATE] Opt-in diagnostic visibility
@@ -3059,12 +928,7 @@ export default function ProgramPage() {
   // ==========================================================================
   const [builderSessionInputs, setBuilderSessionInputs] = useState<AdaptiveProgramInputs | null>(null)
   const [builderSessionKey, setBuilderSessionKey] = useState<string>('initial')
-  // [BUILD-FIX] Reuses the canonical BuilderSessionSource union defined
-  // alongside ModifyBuilderEntry above so producer (entry.source) and
-  // consumer (this state) share one source of truth. Includes every
-  // literal actually written at runtime (line ~14132 writes the
-  // canonical-start-new / fallback variants).
-  const [builderSessionSource, setBuilderSessionSource] = useState<BuilderSessionSource | null>(null)
+  const [builderSessionSource, setBuilderSessionSource] = useState<'default_inputs' | 'modify_visible_program' | null>(null)
   
   // ==========================================================================
   // [POST-REGEN TRUTH CORRIDOR] Comprehensive trace for the regen flow
@@ -3164,10 +1028,6 @@ export default function ProgramPage() {
     scheduleStatusRecommendedCountBeforeClick: number | null
     scheduleStatusTypeBeforeClick: string | null
     canonicalScheduleModeBeforeClick: string | null
-    // [STEP-5A-RHO] Numeric-only audit slot. Source: scheduleTruthAudit
-    //   already runs values through `normalizeTrainingDaysForSnapshot`,
-    //   which collapses 'flexible' to null. The numeric-only slot is the
-    //   correct contract here.
     canonicalTrainingDaysPerWeekBeforeClick: number | null
     selectedSkillsCountBeforeClick: number | null
     goalCategoriesCountBeforeClick: number | null
@@ -3175,12 +1035,7 @@ export default function ProgramPage() {
     sessionDurationModeBeforeClick: string | null
     // Step 2: Builder form input
     submittedScheduleMode: string | null
-    // [STEP-5A-RHO] IDENTITY-PRESERVING audit slot. Source:
-    //   AdaptiveProgramInputs.trainingDaysPerWeek is `TrainingDays | 'flexible'`
-    //   (= 2|3|4|5|'flexible'). The audit's purpose is to record exactly
-    //   what was submitted to the builder, including flexible-schedule
-    //   identity, so coercing 'flexible' to null would lose audit fidelity.
-    submittedTrainingDaysPerWeek: number | 'flexible' | null
+    submittedTrainingDaysPerWeek: number | null
     submittedSessionDurationMode: string | null
     submittedPrimaryGoal: string | null
     submittedSecondaryGoal: string | null
@@ -3190,12 +1045,7 @@ export default function ProgramPage() {
     submittedTrainingPathType: string | null
     // Step 3: Canonical entry result
     entryScheduleMode: string | null
-    // [STEP-5A-RHO] IDENTITY-PRESERVING audit slot. Source:
-    //   `buildCanonicalGenerationEntry` returns `entry.trainingDaysPerWeek`
-    //   typed as `number | 'flexible'` (lib/canonical-profile-service.ts).
-    //   The audit's purpose is to capture exactly what the canonical entry
-    //   builder produced, so 'flexible' must survive into the audit record.
-    entryTrainingDaysPerWeek: number | 'flexible' | null
+    entryTrainingDaysPerWeek: number | null
     entrySelectedSkillsCount: number | null
     entryExperienceLevel: string | null
     entryFallbacksUsed: string[] | null
@@ -3293,27 +1143,10 @@ export default function ProgramPage() {
   // - modifyFlowState may NEVER become 'builder' unless this entry exists
   // - showBuilder may NEVER be the sole authority for Modify rendering
   // ==========================================================================
-  // [BUILD-FIX] Single source of truth for the builder-session source
-  // signal. The runtime authority writes four literals across the
-  // Modify flow (default seed, visible-program modify, canonical
-  // start-new, and the fallback path at line ~14132). Encoding all
-  // four here lets `setBuilderSessionSource(...)` accept the typed
-  // entry's `source` without `as any` / casts, and forces every
-  // future writer to commit to a real literal.
-  type BuilderSessionSource =
-    | 'default_inputs'
-    | 'modify_visible_program'
-    | 'modify_canonical_start_new'
-    | 'modify_fallback'
-
   interface ModifyBuilderEntry {
     sessionKey: string
-    source: BuilderSessionSource
+    source: string
     inputs: AdaptiveProgramInputs
-    // Optional debug breadcrumb attached at construction time
-    // (line ~13223). Declared optional so existing readers and the
-    // `null` initial state remain valid.
-    __flowIntent?: 'modify_existing'
   }
   const [modifyBuilderEntry, setModifyBuilderEntry] = useState<ModifyBuilderEntry | null>(null)
   
@@ -3541,31 +1374,11 @@ export default function ProgramPage() {
           athleteTrainingDays: typeof realAthlete?.trainingDaysPerWeek === 'number'
             ? realAthlete.trainingDaysPerWeek : null,
           adaptiveWorkloadEnabled: (entryInputs as { adaptiveWorkloadEnabled?: boolean }).adaptiveWorkloadEnabled ?? true,
-          // [BUILD-FIX] Normalize optional source values to explicit null at
-          // the boundary. The destination type (line ~2516) declares
-          // canonicalScheduleMode / canonicalTrainingDaysPerWeek as REQUIRED
-          // `... | null` (no undefined), while AdaptiveProgramInputs marks
-          // both fields as optional. `?? null` preserves user truth — an
-          // unset value becomes explicit absence, never a fake default.
-          canonicalScheduleMode: entryInputs.scheduleMode ?? null,
-          // [STEP-4B] AdaptiveProgramInputs.trainingDaysPerWeek is
-          // `TrainingDays | 'flexible'` — overloaded with the flexible
-          // literal. Audit slot is `number | null`. Route through the
-          // boundary normalizer so 'flexible' becomes explicit null.
-          canonicalTrainingDaysPerWeek: normalizeTrainingDaysForSnapshot(entryInputs.trainingDaysPerWeek),
-          prefillScheduleMode: entryInputs.scheduleMode ?? null,
-          // [STEP-4C] AdaptiveProgramInputs.trainingDaysPerWeek is the
-          // overloaded `TrainingDays | 'flexible'` shape. The audit-state
-          // `prefillTrainingDays` slot is typed `number | null | undefined`,
-          // so the literal `'flexible'` must never reach it. Static mode
-          // routes the raw value through the same numeric-only normalizer
-          // used by `canonicalTrainingDaysPerWeek` directly above; flexible
-          // mode (and any other non-static state) records explicit null.
-          // No `as number` cast, no fake default — `'flexible'` collapses
-          // to null, matching the canonical audit slot's semantics.
-          prefillTrainingDays: entryInputs.scheduleMode === 'static'
-            ? normalizeTrainingDaysForSnapshot(entryInputs.trainingDaysPerWeek)
-            : null,
+          canonicalScheduleMode: entryInputs.scheduleMode,
+          canonicalTrainingDaysPerWeek: entryInputs.trainingDaysPerWeek,
+          prefillScheduleMode: entryInputs.scheduleMode,
+          prefillTrainingDays: entryInputs.scheduleMode === 'static' 
+            ? (entryInputs.trainingDaysPerWeek as number) : null,
           lastGeneratedScheduleMode: null,
           lastGeneratedTrainingDays: null,
           lastReconciliationDecision: null,
@@ -3684,11 +1497,7 @@ export default function ProgramPage() {
         setScheduleTruthAudit(prev => ({
           ...prev,
           canonicalScheduleMode: intelligence.scheduleIdentity,
-          // [STEP-4B] computeScheduleIntelligence declares its return as
-          // `number | string | null` (wider than 'flexible' literal). The
-          // normalizer's `string` branch collapses any non-finite value to
-          // null, keeping flexible-mode out of the numeric audit slot.
-          canonicalTrainingDaysPerWeek: normalizeTrainingDaysForSnapshot(intelligence.canonicalTrainingDaysPerWeek),
+          canonicalTrainingDaysPerWeek: intelligence.canonicalTrainingDaysPerWeek,
           complexityScore: intelligence.complexityScore,
           complexityElevated: intelligence.complexityTier !== 'low',
           baselineRecommendedSessionCount: intelligence.baselineRecommendedSessionCount,
@@ -4226,47 +2035,16 @@ export default function ProgramPage() {
       selectedFlexibility?: string[]
       equipmentAvailable?: string[]
     } | undefined
-
-    // [STEP-4F-DELTA] Compute the visible-program equipment value once via
-    // the typed legacy bridge before assembling `result`. Hoisted out of the
-    // ternary chain so the ternary stays readable and so the priority order
-    // (snapshot > visible program > current inputs > canonical fallback) is
-    // visually identical to the priority order for every other field in
-    // this helper.
-    const visibleProgramEquipment = getVisibleProgramEquipmentForModifyEntry(visibleProgram)
-
+    
     // Build inputs with strict priority: snapshot > program > inputs > canonical > default
-    //
-    // [STEP-4G-EXPORT-HARDLOCK] Switched from `const result: AdaptiveProgramInputs = { ... }`
-    // (a type annotation that widens `result` to the interface and loses
-    // literal narrowing on each field) to `const result = { ... } satisfies
-    // AdaptiveProgramInputs` (TS 4.9+ operator that validates the literal
-    // against the interface — same excess-property protection as the
-    // annotation — while preserving the precise inferred type of every
-    // field for downstream consumers). This is a real type-system upgrade,
-    // not a comment: `satisfies` keeps narrow tagged-union literals like
-    // `'static' | 'flexible'` on `scheduleMode` and `'flexible'` on
-    // `trainingDaysPerWeek` visible to the type checker at any future
-    // call site, instead of erasing them to the broader interface field
-    // type. It also pairs with the Step 4G-DELTA tripwire above: if
-    // AdaptiveProgramInputs is ever widened to re-accept the four banned
-    // excess keys, the tripwire fails first; if a NEW invalid excess key
-    // is introduced into this literal, `satisfies` fails here. Defense in
-    // depth, zero runtime cost, no `as any`, no `@ts-ignore`.
-    const result = {
+    const result: AdaptiveProgramInputs = {
       // Primary Goal: snapshot > program > inputs > canonical
-      // [STEP-4D] The `'general_fitness'` literal was invalid — program-service
-      // PrimaryGoal does not include it. The valid sentinel for an unknown
-      // goal in this union is `'general'`. Replacing the literal (rather than
-      // widening the type or adding `as any`) keeps the string union honest
-      // and prevents the fallback from silently producing an out-of-union
-      // value that downstream goal-aware logic would not recognize.
       primaryGoal: (
         snapshot?.primaryGoal ||
         visibleProgram.primaryGoal ||
         currentInputs?.primaryGoal ||
         canonicalFallback.primaryGoal ||
-        'general'
+        'general_fitness'
       ) as PrimaryGoal,
       
       // Secondary Goal: snapshot > program > inputs > canonical
@@ -4331,6 +2109,15 @@ export default function ProgramPage() {
           'static'
       ) as ScheduleMode,
       
+      // Session Duration Mode: snapshot > program > inputs > canonical
+      sessionDurationMode: (
+        snapshot?.sessionDurationMode ||
+        (visibleProgram as { sessionDurationMode?: string }).sessionDurationMode ||
+        currentInputs?.sessionDurationMode ||
+        canonicalFallback.sessionDurationMode ||
+        'standard'
+      ) as 'standard' | 'adaptive',
+      
       // Selected Skills: snapshot > program > inputs > canonical (arrays need special handling)
       selectedSkills: (
         (snapshot?.selectedSkills && snapshot.selectedSkills.length > 0) ? snapshot.selectedSkills :
@@ -4339,70 +2126,44 @@ export default function ProgramPage() {
         (canonicalFallback.selectedSkills && canonicalFallback.selectedSkills.length > 0) ? canonicalFallback.selectedSkills :
         []
       ),
-
-      // Equipment: snapshot.equipmentAvailable > visible program (typed bridge) > inputs > canonical
-      // [STEP-4F-DELTA] The previous read `visibleProgram.equipment` was a
-      // read-contract drift — `equipment` exists on `AdaptiveProgramInputs`
-      // (the builder INPUT shape) but NOT on `AdaptiveProgram` (the saved
-      // VISIBLE program shape), so TypeScript correctly rejected it at
-      // line 3730. Resolution: route the visible-program branch through
-      // `getVisibleProgramEquipmentForModifyEntry`, which performs a
-      // typed `unknown as ProgramEquipmentCarrierForModifyEntry` cast and
-      // walks legacy/nested carrier paths in priority order. The snapshot
-      // and canonical branches are routed through
-      // `normalizeEquipmentForModifyEntry` because their upstream types
-      // are `string[]` (not branded `EquipmentType[]`); the sanitizer
-      // filters to string entries and types the result without `as any`.
-      // The trailing `as EquipmentType[]` is removed because each branch
-      // now produces a typed `EquipmentType[]` directly.
-      equipment: (
-        (snapshot?.equipmentAvailable && snapshot.equipmentAvailable.length > 0)
-          ? normalizeEquipmentForModifyEntry(snapshot.equipmentAvailable)
-        : (visibleProgramEquipment.length > 0)
-          ? visibleProgramEquipment
-        : (currentInputs?.equipment && currentInputs.equipment.length > 0)
-          ? currentInputs.equipment
-        : (canonicalFallback.equipmentAvailable && canonicalFallback.equipmentAvailable.length > 0)
-          ? normalizeEquipmentForModifyEntry(canonicalFallback.equipmentAvailable)
-        : []
+      
+      // Training Path Type: snapshot > program > inputs > canonical
+      trainingPathType: (
+        snapshot?.trainingPathType ||
+        (visibleProgram as { trainingPathType?: string }).trainingPathType ||
+        currentInputs?.trainingPathType ||
+        canonicalFallback.trainingPathType ||
+        'hybrid'
+      ) as 'skill_first' | 'hybrid' | 'balanced',
+      
+      // Goal Categories: snapshot > program > inputs > canonical
+      goalCategories: (
+        (snapshot?.goalCategories && snapshot.goalCategories.length > 0) ? snapshot.goalCategories :
+        ((visibleProgram as { goalCategories?: string[] }).goalCategories?.length ?? 0) > 0 ? (visibleProgram as { goalCategories?: string[] }).goalCategories :
+        (currentInputs?.goalCategories && currentInputs.goalCategories.length > 0) ? currentInputs.goalCategories :
+        (canonicalFallback.goalCategories && canonicalFallback.goalCategories.length > 0) ? canonicalFallback.goalCategories :
+        []
       ),
-    } satisfies AdaptiveProgramInputs
-    // ==========================================================================
-    // [STEP-4E] AdaptiveProgramInputs object-contract repair.
-    //
-    // The previous shape of `result` included four excess properties that do
-    // NOT exist on the `AdaptiveProgramInputs` interface in
-    // lib/adaptive-program-builder.ts:
-    //   - sessionDurationMode  (canonical-profile metadata, not builder input)
-    //   - trainingPathType     (canonical-profile metadata, not builder input)
-    //   - goalCategories       (canonical-profile metadata, not builder input)
-    //   - selectedFlexibility  (canonical-profile metadata, not builder input)
-    //
-    // The builder consumes only: primaryGoal, secondaryGoal, experienceLevel,
-    // trainingDaysPerWeek, sessionLength, equipment, todaySessionMinutes,
-    // scheduleMode, adaptiveWorkloadEnabled, selectedSkills, regenerationMode,
-    // regenerationReason. Adding the four excess fields broke the literal-
-    // assignability check (`Object literal may only specify known properties`)
-    // at line 3719 on `sessionDurationMode`, and would have cascaded to the
-    // same error on the other three siblings on subsequent rebuilds.
-    //
-    // Resolution: drop the four excess fields from the builder-input literal.
-    // No metadata-side-channel object is reintroduced because this helper is
-    // currently orphaned — `buildModifyEntryInputsFromVisibleProgram` is only
-    // referenced in a `useCallback` deps array (line ~14676), never invoked.
-    // Splitting metadata into a separate const would create unused code that
-    // the next reviewer would be forced to delete anyway.
-    //
-    // If a future caller is wired up and genuinely needs those four canonical-
-    // profile fields, they should be read directly from `canonicalFallback`
-    // (which is already a parameter of this helper) rather than smuggled
-    // through the builder-input contract.
-    //
-    // Not widening AdaptiveProgramInputs because: (a) the builder generator
-    // does not consume these fields, (b) no other call site passes them as
-    // builder inputs, (c) widening would mask the same legitimate excess-
-    // property guard at every other AdaptiveProgramInputs construction site.
-    // ==========================================================================
+      
+      // Selected Flexibility: snapshot > program > inputs > canonical
+      selectedFlexibility: (
+        (snapshot?.selectedFlexibility && snapshot.selectedFlexibility.length > 0) ? snapshot.selectedFlexibility :
+        ((visibleProgram as { selectedFlexibility?: string[] }).selectedFlexibility?.length ?? 0) > 0 ? (visibleProgram as { selectedFlexibility?: string[] }).selectedFlexibility :
+        (currentInputs?.selectedFlexibility && currentInputs.selectedFlexibility.length > 0) ? currentInputs.selectedFlexibility :
+        (canonicalFallback.selectedFlexibility && canonicalFallback.selectedFlexibility.length > 0) ? canonicalFallback.selectedFlexibility :
+        []
+      ),
+      
+      // Equipment: snapshot.equipmentAvailable > program.equipment > inputs > canonical
+      equipment: (
+        (snapshot?.equipmentAvailable && snapshot.equipmentAvailable.length > 0) ? snapshot.equipmentAvailable :
+        (visibleProgram.equipment && visibleProgram.equipment.length > 0) ? visibleProgram.equipment :
+        (currentInputs?.equipment && currentInputs.equipment.length > 0) ? currentInputs.equipment :
+        (canonicalFallback.equipmentAvailable && canonicalFallback.equipmentAvailable.length > 0) ? canonicalFallback.equipmentAvailable :
+        []
+      ) as EquipmentType[],
+    }
+    
     return result
   }, [])
   
@@ -4464,20 +2225,8 @@ export default function ProgramPage() {
       selectedSkills: (activeProgram as unknown as { selectedSkills?: string[] }).selectedSkills,
       profileSnapshot: profileSnapshot,
     }
-
-    // [STEP-4I — 2 OF 3] Raw values from `activeProgram` carry UI/builder
-    // unions (`SessionLength` includes string members like '60+', and
-    // `TrainingDaysPerWeek` includes 'flexible'). The evaluator's contract
-    // is `number | null` for both. Route every value through
-    // `buildStalenessEvaluatorProgram` (imported from
-    // `@/lib/program/program-page-contract-adapter`) so the canonical-
-    // evaluator boundary is owned by one shared module instead of being
-    // re-defined inline at module scope (which is what got lost during
-    // the last branch sync and produced the current build blocker).
-    // `rawProgram` is preserved for the diagnostic console logs below;
-    // the evaluator receives the typed-normalized object.
-    const evaluatorProgram = buildStalenessEvaluatorProgram(rawProgram)
-    const result = evaluateUnifiedProgramStaleness(evaluatorProgram)
+    
+    const result = evaluateUnifiedProgramStaleness(rawProgram)
     
     // =========================================================================
     // [PHASE 32B] STALE SNAPSHOT SCHEDULE DETECTION
@@ -4726,16 +2475,8 @@ export default function ProgramPage() {
       activeDisplayedProgramCreatedAt: activeProgram.createdAt,
       lastBuildResultStatus: 'displayed_program_from_storage',
       canonicalProfileVersionIndicators: {
-        // [STEP-5A-DELTA] Route loose drift-detail `profileValue` through the
-        // `unknown`-narrowing helper. Direct `.length` access fails because
-        // the evaluator types `profileValue` as `{}` / object-shaped (arrays
-        // for equipment/selectedSkills, strings/primitives for other fields).
-        equipmentCount: getArrayDriftProfileValueCount(
-          result.driftDetails?.find(d => d.field === 'equipment')?.profileValue,
-        ),
-        selectedSkillsCount: getArrayDriftProfileValueCount(
-          result.driftDetails?.find(d => d.field === 'selectedSkills')?.profileValue,
-        ),
+        equipmentCount: result.driftDetails?.find(d => d.field === 'equipment')?.profileValue?.length || 'n/a',
+        selectedSkillsCount: result.driftDetails?.find(d => d.field === 'selectedSkills')?.profileValue?.length || 'n/a',
       },
       activeProgramSnapshotSource: authoritativeEquipmentQuality,
       changedFields: result.changedFields,
@@ -4928,22 +2669,10 @@ export default function ProgramPage() {
     let bannerTitleSeverity = 'minor'
     
     if (result.isStale) {
-      // [STEP-5A-EPSILON] Top-level `result.severity` is the
-      // `UnifiedStalenessResult.severity` union from
-      // `lib/canonical-profile-service.ts:1806` —
-      //   'none' | 'minor' | 'significant' | 'critical'
-      // It is NOT the field-level `driftDetails[].severity` union
-      // (`'minor' | 'major' | 'critical'`, line 1820). The previous
-      // `result.severity === 'major'` branch could never match (TS
-      // correctly rejected it as a no-overlap comparison) and was
-      // mixing the two contracts. `'major'` field-level escalations
-      // are already rolled up into `'significant'` / `'critical'`
-      // by the evaluator before they reach `result.severity`, so the
-      // narrowed branches below cover the full top-level union.
       if (result.severity === 'critical') {
         bannerTitle = 'Your settings have changed'
         bannerTitleSeverity = 'critical'
-      } else if (result.severity === 'significant') {
+      } else if (result.severity === 'significant' || result.severity === 'major') {
         bannerTitle = 'Training settings have changed'
         bannerTitleSeverity = 'significant'
       } else {
@@ -4957,18 +2686,10 @@ export default function ProgramPage() {
       unifiedSeverity: result.severity,
       recommendation: result.recommendation,
       changedFields: result.changedFields,
-      // [STEP-5A-EPSILON] Audit assertion narrowed to the top-level
-      // `UnifiedStalenessResult.severity` union ('none' | 'minor' |
-      // 'significant' | 'critical'). The prior
-      // `result.severity === 'major'` arm was a no-overlap comparison
-      // mixing top-level severity with field-level `d.severity`. The
-      // `'none'` arm is now explicit so non-stale states are not
-      // silently asserted as title mismatches.
       titleMatchesSeverity: (
         (result.severity === 'critical' && bannerTitle.includes('Your settings')) ||
-        (result.severity === 'significant' && bannerTitle.includes('Training settings')) ||
-        (result.severity === 'minor' && bannerTitle.includes('Minor')) ||
-        (result.severity === 'none' && !result.isStale)
+        ((result.severity === 'significant' || result.severity === 'major') && bannerTitle.includes('Training settings')) ||
+        (result.severity === 'minor' && bannerTitle.includes('Minor'))
       ),
       titleMatchesActualDrift: result.changedFields.length > 0 || !result.isStale,
     })
@@ -5383,62 +3104,24 @@ export default function ProgramPage() {
         setInputs(defaultInputs)
         console.log('[ProgramPage] Stage 6: Default inputs loaded')
         
-        // ==========================================================================
-        // [STEP-5A-ZETA] Builder-hydration diagnostic + display-truth validation.
-        //
-        // Two related fixes in this block, surfaced by the canonical-vs-builder
-        // contract boundary the Step 4 chain established:
-        //
-        // (1) `sessionDurationMode` is NOT a member of `AdaptiveProgramInputs`
-        //     (lib/adaptive-program-builder.ts:1088). Step 4E intentionally
-        //     removed it — `sessionDurationMode` is canonical-profile metadata
-        //     (`'static' | 'adaptive'` at lib/canonical-profile-service.ts:278),
-        //     not an adaptive-builder input. Reading
-        //     `defaultInputs.sessionDurationMode` was the cited blocker
-        //     (TS2339 at line 5022:46) AND was also passed as an excess
-        //     property to `validateBuilderDisplayTruth` (whose parameter shape
-        //     at lib/canonical-profile-service.ts:2686 does NOT accept
-        //     `sessionDurationMode` either). Both are now sourced from the
-        //     canonical profile and labeled truthfully in the log; the
-        //     validator call drops the excess property entirely. The
-        //     dedicated `sessionDurationMode` drift comparison still runs
-        //     elsewhere (line ~4448 inside the staleness diagnostic block),
-        //     so coverage is preserved.
-        //
-        // (2) `validateBuilderDisplayTruth` types `sessionLength?: number`,
-        //     but `AdaptiveProgramInputs.sessionLength` is the broader
-        //     `SessionLength = 30|45|60|75|90|120|'10-20'|'20-30'|'30-45'|'45-60'|'60+'`
-        //     union (lib/program-service.ts:44). Passing a non-numeric
-        //     `'60+'` token would be the same-corridor follow-on blocker. We
-        //     narrow with `typeof === 'number'` and pass `undefined` for
-        //     non-numeric tokens so the validator simply skips that field
-        //     instead of receiving a string-shaped value it cannot compare.
-        // ==========================================================================
-        const builderHydrationCanonicalProfile = getCanonicalProfile()
-        const defaultInputsSessionLengthNumeric: number | undefined =
-          typeof defaultInputs.sessionLength === 'number' ? defaultInputs.sessionLength : undefined
-
         // [planner-input-truth] TASK 6: Log builder hydration truth for debugging
         console.log('[builder-hydration-truth] Builder hydrated with inputs:', {
           primaryGoal: defaultInputs.primaryGoal,
           scheduleMode: defaultInputs.scheduleMode,
-          // [STEP-5A-ZETA] Canonical-side truth — `AdaptiveProgramInputs` does
-          // not own this field; the canonical profile is the single owner.
-          canonicalSessionDurationMode: builderHydrationCanonicalProfile.sessionDurationMode,
+          sessionDurationMode: defaultInputs.sessionDurationMode,
           trainingDaysPerWeek: defaultInputs.trainingDaysPerWeek,
           sessionLength: defaultInputs.sessionLength,
           equipmentCount: defaultInputs.equipment?.length || 0,
           hasWeights: defaultInputs.equipment?.includes('weights') || false,
         })
-
+        
         // [builder-hydration-truth] Validate builder display matches canonical profile
         const displayValidation = validateBuilderDisplayTruth({
           primaryGoal: defaultInputs.primaryGoal,
           scheduleMode: defaultInputs.scheduleMode,
-          // [STEP-5A-ZETA] sessionDurationMode is intentionally omitted —
-          // `validateBuilderDisplayTruth` does not declare that parameter.
+          sessionDurationMode: defaultInputs.sessionDurationMode,
           trainingDaysPerWeek: defaultInputs.trainingDaysPerWeek,
-          sessionLength: defaultInputsSessionLengthNumeric,
+          sessionLength: defaultInputs.sessionLength,
           equipment: defaultInputs.equipment,
         })
         
@@ -5467,26 +3150,14 @@ export default function ProgramPage() {
           // [TASK 5 & 7] MOUNT DIAGNOSTIC - Log exactly what is loaded and from where
           // This prevents resurrection of old snapshots during mount/migration
           // ==========================================================================
-          // [STEP-5A-ETA] `ProgramState` (lib/program-state.ts:1057) owns six
-          // fields: hasProgram, hasUsableWorkoutProgram, adaptiveProgram,
-          // legacyProgram, activeProgram, sessionCount. It does NOT own
-          // `migrationRan` or `fallbackRecoveryRan` — those are debug-only
-          // labels invented by an earlier diagnostic block. The
-          // program-state module does not actually track migration or
-          // fallback-recovery flags per load, so reporting them as `false`
-          // would be a fabricated truth. They are surfaced as the literal
-          // `'not_tracked'` instead, making the diagnostic honest without
-          // weakening the `ProgramState` contract or adding fake fields.
           console.log('[program-rebuild-identity-audit] MOUNT: Program state retrieved', {
             hasUsableProgram: programState.hasUsableWorkoutProgram,
             loadedProgramId: programState.adaptiveProgram?.id || 'none',
             loadedCreatedAt: programState.adaptiveProgram?.createdAt || 'none',
             loadedFromSource: 'getProgramState', // canonical active program storage
-            migrationRan: 'not_tracked' as const,
-            fallbackRecoveryRan: 'not_tracked' as const,
-            sessionCount: Array.isArray(programState.adaptiveProgram?.sessions)
-              ? programState.adaptiveProgram.sessions.length
-              : 0,
+            migrationRan: programState.migrationRan || false,
+            fallbackRecoveryRan: programState.fallbackRecoveryRan || false,
+            sessionCount: programState.adaptiveProgram?.sessions?.length || 0,
           })
           
           // TASK 2: Stage 8 - Normalize and validate program for display
@@ -5494,64 +3165,6 @@ export default function ProgramPage() {
           setLoadStage('normalizing-program')
           if (programState.hasUsableWorkoutProgram && programState.adaptiveProgram) {
             const normalizedProgram = stateMod.normalizeProgramForDisplay(programState.adaptiveProgram)
-
-            // ==========================================================================
-            // [STEP-5A-THETA] Honest null branch for normalizeProgramForDisplay.
-            //
-            // `stateMod.normalizeProgramForDisplay` is typed
-            // `(program: AdaptiveProgram | null) => AdaptiveProgram | null`
-            // (lib/program-state.ts:1226). It returns null when the stored
-            // program shape is invalid enough that normalization cannot
-            // safely produce a display-ready candidate. The downstream
-            // identity audit (`normalizedProgram.id !== programState.adaptiveProgram.id`),
-            // the displayCheck.safe true-branch logging block, and the
-            // `logProgramTruthExplanation(normalizedProgram, ...)` /
-            // `logExplanationGapAudit(normalizedProgram, ...)` calls all
-            // require `normalizedProgram` to be non-null — those helpers'
-            // signatures (lib/ai-truth-audit.ts:1406, :1442) take
-            // `program: AdaptiveProgram` (no null). Reading `.id` on a
-            // possibly-null value was the cited TS2531 blocker.
-            //
-            // Honest behavior for null mirrors the existing
-            // `displayCheck.safe === false` malformed-recovery branch:
-            // label the load malformed, mirror the active-Modify-transition
-            // guard so we do not interrupt a Modify flow, and skip identity
-            // audit + healthy-display hydration. We do NOT call
-            // `setProgram(null)` (that would clobber a healthy current
-            // program with an invalid candidate) and we do NOT invent a
-            // fake program id. The audit log surfaces
-            // `normalized_program_null` as an explicit reason.
-            // ==========================================================================
-            if (!normalizedProgram) {
-              console.warn(
-                '[program-rebuild-identity-audit] MOUNT WARNING: normalizeProgramForDisplay returned null; identity audit and display gate skipped for invalid stored program.',
-                {
-                  rawProgramId: programState.adaptiveProgram.id ?? 'missing',
-                  reason: 'normalized_program_null',
-                  context: 'page_load',
-                },
-              )
-              currentInitStage = 'program-malformed:normalized_program_null'
-              setLoadStage('program-malformed:normalized_program_null')
-              // Mirror the malformed-display branch's active-Modify-transition
-              // guard so a transient null normalize result does not yank an
-              // in-flight Modify flow back to the builder.
-              const hasModifyBuilderEntryRef = modifyBuilderEntryRef.current !== null
-              const hasModifyBuilderEntry = modifyBuilderEntry !== null
-              const isModifyLockActive = modifyBuilderLockRef.current
-              const isModifyFlowBuilder = modifyFlowState === 'builder'
-              const hasLiveBuilderEntry = builderSessionInputsRef.current !== null
-              const launcherEntered = modifyClickAudit.canonicalLauncherEntered
-              const isActiveModifyTransition =
-                hasModifyBuilderEntryRef ||
-                hasModifyBuilderEntry ||
-                launcherEntered ||
-                isModifyLockActive ||
-                (isModifyFlowBuilder && hasLiveBuilderEntry)
-              if (!isActiveModifyTransition) {
-                setShowBuilder(true)
-              }
-            } else {
 
             // ================================================================
             // [GROUPED-TRUTH-FUNNEL-AUDIT] STAGE 1 -> STAGE 2 PROBE
@@ -5629,41 +3242,7 @@ export default function ProgramPage() {
             
             if (displayCheck.safe) {
               loadedProgram = normalizedProgram
-              // [PHASE 4X] BOOT HYDRATION GUARD — refuse to overwrite a fresher
-              // current program with a stale storage candidate. Uses the same
-              // single-winner decision as reconcileWithCanonical so boot and
-              // reconciliation cannot disagree.
-              const bootCurrentCanonicalTruth = hasCanonicalProgramTruth(
-                program as unknown as Parameters<typeof hasCanonicalProgramTruth>[0],
-              )
-              const bootCandidateCanonicalTruth = hasCanonicalProgramTruth(
-                normalizedProgram as unknown as Parameters<typeof hasCanonicalProgramTruth>[0],
-              )
-              const bootDecision = decideCanonicalProgramWinner({
-                currentProgram: program as unknown as CanonicalWinnerInputs['currentProgram'],
-                candidateProgram: normalizedProgram as unknown as CanonicalWinnerInputs['candidateProgram'],
-                triggerSource: 'mount_hydration',
-                authLock: authoritativeSavedProgramRef.current,
-                currentCanonicalTruth: bootCurrentCanonicalTruth,
-                candidateCanonicalTruth: bootCandidateCanonicalTruth,
-              })
-              console.log('[phase4x-canonical-reconciliation-winner]', {
-                triggerSource: 'mount_hydration',
-                winner: bootDecision.winner,
-                shouldReplace: bootDecision.shouldReplace,
-                reason: bootDecision.reason,
-                currentProgramId: bootDecision.currentProgramId,
-                candidateProgramId: bootDecision.candidateProgramId,
-                currentHasCanonicalTruth: bootDecision.currentHasCanonicalTruth,
-                candidateHasCanonicalTruth: bootDecision.candidateHasCanonicalTruth,
-                protectedByAuthoritativeLock: bootDecision.protectedByAuthoritativeLock,
-                staleOverwriteBlocked: bootDecision.staleOverwriteBlocked,
-                canonicalDowngradeBlocked: bootDecision.canonicalDowngradeBlocked,
-                canonicalUpgradeAllowed: bootDecision.canonicalUpgradeAllowed,
-              })
-              if (bootDecision.shouldReplace) {
-                setProgram(normalizedProgram)
-              }
+              setProgram(normalizedProgram)
               // [PHASE 31F] INIT GUARD A - ATOMIC ENTRY AUTHORITY
               // PRIMARY: modifyBuilderEntryRef (synchronous) or modifyBuilderEntry state
               // SECONDARY: launcher entered flag, lock, flow-based checks
@@ -5684,31 +3263,15 @@ export default function ProgramPage() {
               setLoadStage('program-ready')
               
               // [TASK 7] MOUNT DIAGNOSTIC - Comprehensive audit log
-              // [STEP-5A-ETA] See note at the earlier MOUNT diagnostic above:
-              // `migrationRan` / `fallbackRecoveryRan` are not members of
-              // `ProgramState` and are not actually tracked by the
-              // program-state module. Reported as `'not_tracked'` so the
-              // diagnostic remains honest without inventing fields.
               console.log('[program-rebuild-identity-audit] MOUNT: Program loaded successfully', {
                 context: 'page_load',
                 loadedProgramId: normalizedProgram.id,
                 loadedSource: 'canonical_active_program',
-                migrationRan: 'not_tracked' as const,
-                fallbackRecoveryRan: 'not_tracked' as const,
+                migrationRan: programState.migrationRan || false,
+                fallbackRecoveryRan: programState.fallbackRecoveryRan || false,
               })
               
               // [PHASE 17D] Program preservation audit - verify 6-day program intact
-              // [STEP-5A-LAMBDA] `AdaptiveSession` (lib/adaptive-program-builder.ts:1114)
-              //   does NOT define an `id` field. Real available identifiers
-              //   are `dayNumber`, `dayLabel`, `focus`, `focusLabel`. The
-              //   diagnostic now derives a stable human-readable
-              //   `firstSessionKey` from those real fields. No fake `id`
-              //   was added to the type. The local `firstSession` const
-              //   is diagnostic-only, scoped to this branch (where
-              //   `normalizedProgram` is already narrowed non-null by the
-              //   STEP-5A-THETA wrap above), and reads `sessions?.[0]`
-              //   safely with `?? null` to satisfy TS narrowing.
-              const phase17dFirstSession = normalizedProgram.sessions?.[0] ?? null
               console.log('[phase17d-program-preservation-audit]', {
                 programId: normalizedProgram.id,
                 sessionCount: normalizedProgram.sessions?.length || 0,
@@ -5719,47 +3282,22 @@ export default function ProgramPage() {
                 verdict: 'existing_program_preserved_at_mount',
                 normalizedOnlyNoRestoration: true,
                 createdAt: normalizedProgram.createdAt,
-                // [STEP-5A-KAPPA] Duplicate `sessionCount` removed; canonical
-                // single occurrence is at the top of this object.
-                firstSessionKey: phase17dFirstSession
-                  ? `day${phase17dFirstSession.dayNumber}-${phase17dFirstSession.dayLabel || phase17dFirstSession.focusLabel || phase17dFirstSession.focus || 'session'}`
-                  : 'none',
-                firstSessionExerciseCount: Array.isArray(phase17dFirstSession?.exercises)
-                  ? phase17dFirstSession.exercises.length
-                  : 0,
+                sessionCount: normalizedProgram.sessions?.length || 0,
+                firstSessionId: normalizedProgram.sessions?.[0]?.id || 'none',
+                firstSessionExerciseCount: normalizedProgram.sessions?.[0]?.exercises?.length || 0,
                 provenanceMode: normalizedProgram.generationProvenance?.generationMode || 'unknown',
                 qualityTier: normalizedProgram.qualityClassification?.qualityTier || 'unknown',
               })
               
               // [PHASE 17D] Current active program input audit - what truth was used
-              // [STEP-5A-MU] `AdaptiveProgram` (lib/adaptive-program-builder.ts:1583+)
-              //   does NOT have an `equipment: string[]` field. That lives on
-              //   `AdaptiveProgramInputs` (line 1094). The output `AdaptiveProgram`
-              //   carries `equipmentProfile: EquipmentProfile` (line 1654) instead.
-              //   Reading `normalizedProgram.equipment` was emitting TS2339 because
-              //   the diagnostic was conflating two different contracts (input vs
-              //   output).
-              //
-              //   This audit reads the *normalized AdaptiveProgram output*, not
-              //   the original inputs object, so the honest equipment surface to
-              //   log here is `equipmentProfile` presence + source label. If
-              //   true raw input equipment[] is needed for an audit, it must be
-              //   sourced from the canonical profile or from a separate inputs
-              //   reference — NOT from `normalizedProgram`. That cross-object
-              //   logic is out of scope for this build-unblock task; we
-              //   intentionally drop input-equipment[] from this log per the
-              //   STEP-5A-MU efficiency rule (production build > diagnostic
-              //   verbosity). No fake `equipment` field was added to
-              //   `AdaptiveProgram`.
               console.log('[phase17d-current-active-program-input-audit]', {
                 programId: normalizedProgram.id,
                 primaryGoal: normalizedProgram.primaryGoal,
                 secondaryGoal: normalizedProgram.secondaryGoal || null,
                 selectedSkills: normalizedProgram.selectedSkills || [],
                 selectedSkillsCount: normalizedProgram.selectedSkills?.length || 0,
-                equipmentProfilePresent: Boolean(normalizedProgram.equipmentProfile),
-                equipmentSource: 'adaptiveProgram.equipmentProfile' as const,
-                programShapeSource: 'AdaptiveProgram output shape' as const,
+                equipment: normalizedProgram.equipment || [],
+                equipmentCount: normalizedProgram.equipment?.length || 0,
                 scheduleMode: normalizedProgram.scheduleMode,
                 sessionCount: normalizedProgram.sessions?.length || 0,
                 generationMode: normalizedProgram.generationProvenance?.generationMode || 'unknown',
@@ -5791,37 +3329,8 @@ export default function ProgramPage() {
               // TASK 2: Program exists but fails display sanity - show recovery state, not fatal error
               currentInitStage = `program-malformed:${displayCheck.reason || 'unknown'}`
               setLoadStage(`program-malformed:${displayCheck.reason || 'unknown'}`)
-              // [PHASE 4X] BOOT HYDRATION GUARD (malformed branch) — only set
-              // the recovery program reference if there is no fresher / more
-              // canonical current program already in state. A malformed
-              // storage program must never replace a healthy canonical
-              // current program.
-              const malformedCurrentCanonicalTruth = hasCanonicalProgramTruth(
-                program as unknown as Parameters<typeof hasCanonicalProgramTruth>[0],
-              )
-              const malformedCandidateCanonicalTruth = hasCanonicalProgramTruth(
-                normalizedProgram as unknown as Parameters<typeof hasCanonicalProgramTruth>[0],
-              )
-              const malformedDecision = decideCanonicalProgramWinner({
-                currentProgram: program as unknown as CanonicalWinnerInputs['currentProgram'],
-                candidateProgram: normalizedProgram as unknown as CanonicalWinnerInputs['candidateProgram'],
-                triggerSource: 'mount_hydration_malformed',
-                authLock: authoritativeSavedProgramRef.current,
-                currentCanonicalTruth: malformedCurrentCanonicalTruth,
-                candidateCanonicalTruth: malformedCandidateCanonicalTruth,
-              })
-              console.log('[phase4x-canonical-reconciliation-winner]', {
-                triggerSource: 'mount_hydration_malformed',
-                winner: malformedDecision.winner,
-                shouldReplace: malformedDecision.shouldReplace,
-                reason: malformedDecision.reason,
-                staleOverwriteBlocked: malformedDecision.staleOverwriteBlocked,
-                canonicalDowngradeBlocked: malformedDecision.canonicalDowngradeBlocked,
-              })
-              if (malformedDecision.shouldReplace) {
-                // Keep program reference so we can show "Program Needs Refresh" state
-                setProgram(normalizedProgram)
-              }
+              // Keep program reference so we can show "Program Needs Refresh" state
+              setProgram(normalizedProgram)
               // ROOT-CAUSE-FIX: Check for active modify transition before resetting showBuilder
               const hasModifyBuilderEntryRef = modifyBuilderEntryRef.current !== null
               const hasModifyBuilderEntry = modifyBuilderEntry !== null
@@ -5834,7 +3343,6 @@ export default function ProgramPage() {
                 setShowBuilder(false)
               }
             }
-            } // [STEP-5A-THETA] close `else` of `if (!normalizedProgram)`
           } else {
             // No usable program - show builder
             currentInitStage = 'no-program'
@@ -6182,29 +3690,7 @@ export default function ProgramPage() {
       // newer (just generated), keep the current program.
       // ==========================================================================
       const currentIsNewer = currentCreatedAt > canonicalCreatedAt
-      const legacyShouldReplace = canonicalIsNewer || (idDiffers && !currentIsNewer)
-
-      // ==========================================================================
-      // [PHASE 4X] CANONICAL FRESHNESS LOCK — single winner decision is now the
-      // ONLY gate that decides replacement. The legacy id/timestamp/session-count
-      // analysis above is preserved for diagnostic continuity (phase26e/26f
-      // logs) but it no longer drives `setProgram` directly.
-      // ==========================================================================
-      const currentCanonicalTruth = hasCanonicalProgramTruth(
-        currentProgram as unknown as Parameters<typeof hasCanonicalProgramTruth>[0],
-      )
-      const candidateCanonicalTruth = hasCanonicalProgramTruth(
-        canonicalProgram as unknown as Parameters<typeof hasCanonicalProgramTruth>[0],
-      )
-      const winnerDecision = decideCanonicalProgramWinner({
-        currentProgram: currentProgram as unknown as CanonicalWinnerInputs['currentProgram'],
-        candidateProgram: canonicalProgram as unknown as CanonicalWinnerInputs['candidateProgram'],
-        triggerSource,
-        authLock: authoritativeSavedProgramRef.current,
-        currentCanonicalTruth,
-        candidateCanonicalTruth,
-      })
-      const shouldReplace = winnerDecision.shouldReplace
+      const shouldReplace = canonicalIsNewer || (idDiffers && !currentIsNewer)
       
       console.log('[phase26e-canonical-modify-post-generation-overwrite-proof]', {
         stage: 'RECONCILIATION_DECISION',
@@ -6315,36 +3801,7 @@ export default function ProgramPage() {
             ? 'LOCKED_POST_BUILD_PROGRAM'
             : 'CURRENT_VISIBLE_PROGRAM',
       })
-
-      // ==========================================================================
-      // [PHASE 4X] CANONICAL RECONCILIATION WINNER — single authoritative log
-      // This is the ONLY decision actually used to gate setProgram below.
-      // The earlier phase17m/26e/26f/post-build-winner-decision logs above are
-      // retained for diagnostic continuity but do not drive replacement.
-      // ==========================================================================
-      console.log('[phase4x-canonical-reconciliation-winner]', {
-        triggerSource,
-        winner: winnerDecision.winner,
-        shouldReplace: winnerDecision.shouldReplace,
-        reason: winnerDecision.reason,
-        currentProgramId: winnerDecision.currentProgramId,
-        candidateProgramId: winnerDecision.candidateProgramId,
-        currentHasCanonicalTruth: winnerDecision.currentHasCanonicalTruth,
-        candidateHasCanonicalTruth: winnerDecision.candidateHasCanonicalTruth,
-        currentCanonicalVerdict: currentCanonicalTruth.verdict,
-        candidateCanonicalVerdict: candidateCanonicalTruth.verdict,
-        protectedByAuthoritativeLock: winnerDecision.protectedByAuthoritativeLock,
-        staleOverwriteBlocked: winnerDecision.staleOverwriteBlocked,
-        canonicalDowngradeBlocked: winnerDecision.canonicalDowngradeBlocked,
-        canonicalUpgradeAllowed: winnerDecision.canonicalUpgradeAllowed,
-        currentSessionCount: winnerDecision.currentSessionCount,
-        candidateSessionCount: winnerDecision.candidateSessionCount,
-        currentIsNewer: winnerDecision.currentIsNewer,
-        candidateIsNewer: winnerDecision.candidateIsNewer,
-        legacyDecisionWouldHaveReplaced: legacyShouldReplace,
-        decisionsAgree: legacyShouldReplace === winnerDecision.shouldReplace,
-      })
-
+      
       if (shouldReplace) {
         // [PHASE 17M] Program reconciliation replace - log the replacement with specific reason
         console.log('[phase17m-program-reconciliation-replace]', {
@@ -6454,27 +3911,16 @@ export default function ProgramPage() {
       reconcileWithCanonical('window_focus')
     }
     
-    // [PHASE 17K → 4X] Listen for storage events (cross-tab localStorage changes).
-    // Phase 4X narrows the filter to only the keys saveAdaptiveProgram + history
-    // actually touch. Previously it reacted to *any* key containing 'adaptive' or
-    // 'program' which created false-positive reconciliation runs (and therefore
-    // false-positive overwrite attempts, which the winner helper now blocks but
-    // shouldn't even be triggered by).
-    const PHASE_4X_RECONCILE_STORAGE_KEYS = new Set([
-      'spartanlab_active_program',
-      'spartanlab_adaptive_program',
-      'spartanlab_adaptive_programs',
-    ])
+    // [PHASE 17K] Listen for storage events (cross-tab localStorage changes)
     const handleStorage = (event: StorageEvent) => {
-      if (!event.key || !PHASE_4X_RECONCILE_STORAGE_KEYS.has(event.key)) {
-        return
+      // Check if the change is to the adaptive program key
+      if (event.key && (event.key.includes('adaptive') || event.key.includes('program'))) {
+        console.log('[phase17k-storage-event-detected]', {
+          key: event.key,
+          currentProgramId: program?.id || 'none',
+        })
+        reconcileWithCanonical('storage_event')
       }
-      console.log('[phase17k-storage-event-detected]', {
-        key: event.key,
-        currentProgramId: program?.id || 'none',
-        phase4xKeyAccepted: true,
-      })
-      reconcileWithCanonical('storage_event')
     }
     
     // [PHASE 17K] Periodic reconciliation check for same-tab changes
@@ -6826,20 +4272,8 @@ export default function ProgramPage() {
   // [PHASE 24N] UNIFIED CANONICAL HANDLER - Single entry point for ALL builder submits
   // This handler now accepts optional inputOverrides for Modify flow convergence
   // Both onboarding and modify flows now use this same handler
-  //
-  // [STEP-5A-NU] Local alias for handleGenerate's input-override parameter.
-  //   Earlier code referenced `AdaptiveBuilderInputs`, which was never
-  //   defined, imported, or exported anywhere in the project (TS2304
-  //   "Cannot find name `AdaptiveBuilderInputs`" at 6462:70). The real
-  //   contract is `AdaptiveProgramInputs` (lib/adaptive-program-builder.ts),
-  //   which is already imported at the top of this file and is the type
-  //   used by `useState<AdaptiveProgramInputs | null>` for `inputs`. We
-  //   alias the union locally so the handler signature stays readable
-  //   without inventing or exporting a new type. No type widening; both
-  //   members of the union are real.
   // ==========================================================================
-  type ProgramGenerateInputOverrides = Partial<AdaptiveProgramInputs> | AdaptiveProgramInputs
-  const handleGenerate = useCallback(async (inputOverrides?: ProgramGenerateInputOverrides) => {
+  const handleGenerate = useCallback(async (inputOverrides?: Partial<AdaptiveBuilderInputs> | AdaptiveProgramInputs) => {
     // ==========================================================================
     // [PHASE 24T] CRITICAL FIX: Use inputOverrides directly when it's a full object
     // Previously this merged {...inputs, ...inputOverrides} which caused stale `inputs`
@@ -6847,31 +4281,12 @@ export default function ProgramPage() {
     // Now we detect if inputOverrides is a complete inputs object and use it directly.
     // ==========================================================================
     const isFullInputsObject = inputOverrides && 'primaryGoal' in inputOverrides && 'scheduleMode' in inputOverrides
-    // [STEP-5A-NU] Casts updated from stale `as AdaptiveBuilderInputs` to
-    //   real `as AdaptiveProgramInputs`. Behavior unchanged: full-object
-    //   path uses overrides directly; partial path merges with page-level
-    //   `inputs` (null-safe — spreading `null` yields `{}`, and the
-    //   downstream code already reads `effectiveInputs?.scheduleMode`
-    //   etc. with optional chaining, so no new null guard is required).
     const effectiveInputs = isFullInputsObject
-      ? inputOverrides as AdaptiveProgramInputs  // [PHASE 24T] Use directly, don't merge with stale inputs
+      ? inputOverrides as AdaptiveBuilderInputs  // [PHASE 24T] Use directly, don't merge with stale inputs
       : inputOverrides 
-        ? { ...inputs, ...inputOverrides } as AdaptiveProgramInputs  // Partial override case
+        ? { ...inputs, ...inputOverrides } as AdaptiveBuilderInputs  // Partial override case
         : inputs  // No overrides, use page inputs
     const isModifyFlow = !!inputOverrides
-
-    // [STEP-5A-XI] Read the four canonical-profile metadata fields
-    //   (sessionDurationMode, trainingPathType, goalCategories,
-    //    selectedFlexibility) through the typed-view helper instead of
-    //   directly off `effectiveInputs`. Those four fields are NOT in the
-    //   `AdaptiveProgramInputs` interface (Step 4G guard at top of file
-    //   enforces this), but the runtime value held by `effectiveInputs`
-    //   often carries them anyway because it was assigned from
-    //   `entryToAdaptiveInputs()` output, which structurally includes
-    //   them. The helper reads via `Record<string, unknown>` narrowing,
-    //   so no `as any` and no `AdaptiveProgramInputs` widening is needed.
-    const effectiveInputsMeta = readProgramPageMetadataFromUnknown(effectiveInputs)
-    const inputOverridesMeta = readProgramPageMetadataFromUnknown(inputOverrides)
     
     console.log('[phase24t-inputs-merge-fix-audit]', {
       hasInputOverrides: !!inputOverrides,
@@ -6893,8 +4308,7 @@ export default function ProgramPage() {
       isFullInputsObject,
       effectiveInputsScheduleMode: effectiveInputs?.scheduleMode,
       effectiveInputsTrainingDaysPerWeek: effectiveInputs?.trainingDaysPerWeek,
-      // [STEP-5A-XI] sourced via metadata view helper, not from typed-AdaptiveProgramInputs read
-      effectiveInputsSessionDurationMode: effectiveInputsMeta.sessionDurationMode,
+      effectiveInputsSessionDurationMode: effectiveInputs?.sessionDurationMode,
       effectiveInputsPrimaryGoal: effectiveInputs?.primaryGoal,
       verdict: effectiveInputs?.scheduleMode === 'static' 
         ? `HANDLEGENERATE_RECEIVED_STATIC_${effectiveInputs?.trainingDaysPerWeek}_DAYS`
@@ -6912,13 +4326,6 @@ export default function ProgramPage() {
       setGenerationError('Program builder is still loading. Please wait a moment and try again.')
       return
     }
-    // [STEP-5A-CHI] Capture narrowed local. The guard above proves
-    //   `saveAdaptiveProgram` is non-null at this exact point, but
-    //   TypeScript loses property-access narrowing on
-    //   `programModules.saveAdaptiveProgram` across the ~700 lines of
-    //   async/branch-heavy body that follow. Local consts (unlike property
-    //   accesses) preserve narrowing across closures, awaits, and branches.
-    const saveAdaptiveProgram = programModules.saveAdaptiveProgram
     
     console.log('[ProgramPage] handleGenerate: Starting generation', { 
       source: isModifyFlow ? 'modify_builder_unified' : 'builder',
@@ -6949,12 +4356,10 @@ export default function ProgramPage() {
         secondaryGoal: effectiveInputs?.secondaryGoal,
         scheduleMode: effectiveInputs?.scheduleMode,
         trainingDaysPerWeek: effectiveInputs?.trainingDaysPerWeek,
-        // [STEP-5A-XI] metadata view, not direct AdaptiveProgramInputs read
-        sessionDurationMode: effectiveInputsMeta.sessionDurationMode,
+        sessionDurationMode: effectiveInputs?.sessionDurationMode,
         sessionLength: effectiveInputs?.sessionLength,
         selectedSkills: effectiveInputs?.selectedSkills,
-        // [STEP-5A-XI] metadata view, not direct AdaptiveProgramInputs read
-        trainingPathType: effectiveInputsMeta.trainingPathType,
+        trainingPathType: effectiveInputs?.trainingPathType,
         experienceLevel: effectiveInputs?.experienceLevel,
         equipmentCount: effectiveInputs?.equipment?.length ?? 0,
       },
@@ -6989,8 +4394,7 @@ export default function ProgramPage() {
       step: 'HANDLEGENERATE_RECEIVED',
       effectiveScheduleMode: effectiveInputs?.scheduleMode,
       effectiveTrainingDaysPerWeek: effectiveInputs?.trainingDaysPerWeek,
-      // [STEP-5A-XI] metadata view, not direct AdaptiveProgramInputs read
-      effectiveSessionDurationMode: effectiveInputsMeta.sessionDurationMode,
+      effectiveSessionDurationMode: effectiveInputs?.sessionDurationMode,
       effectivePrimaryGoal: effectiveInputs?.primaryGoal,
       inputOverridesProvided: !!inputOverrides,
       inputOverridesScheduleMode: (inputOverrides as AdaptiveProgramInputs)?.scheduleMode,
@@ -7058,19 +4462,11 @@ export default function ProgramPage() {
         inputs_secondaryGoal: effectiveInputs?.secondaryGoal ?? null,
         inputs_scheduleMode: effectiveInputs?.scheduleMode ?? null,
         inputs_trainingDaysPerWeek: effectiveInputs?.trainingDaysPerWeek ?? null,
-        // [STEP-5A-XI] metadata view (sessionDurationMode/trainingPathType not on AdaptiveProgramInputs)
-        inputs_sessionDurationMode: effectiveInputsMeta.sessionDurationMode,
+        inputs_sessionDurationMode: effectiveInputs?.sessionDurationMode ?? null,
         inputs_sessionLength: effectiveInputs?.sessionLength ?? null,
         inputs_selectedSkills: effectiveInputs?.selectedSkills ?? [],
-        // [STEP-5A-XI] selectedStyles is not on AdaptiveProgramInputs.
-        // [STEP-5A-OMICRON] Sourced via the quarantined record helper —
-        //   replaces the previous inline `(effectiveInputs as Record<string, unknown>)`
-        //   direct cast that TS2352 rejected.
-        inputs_selectedStyles: ((): string[] | null => {
-          const selectedStyles = readProgramPageStringArray(effectiveInputs, 'selectedStyles')
-          return selectedStyles.length > 0 ? selectedStyles : null
-        })(),
-        inputs_trainingPathType: effectiveInputsMeta.trainingPathType,
+        inputs_selectedStyles: effectiveInputs?.selectedStyles ?? null,
+        inputs_trainingPathType: effectiveInputs?.trainingPathType ?? null,
         inputs_equipment: effectiveInputs?.equipment ?? [],
       },
       entryBuilderUsed: 'buildCanonicalGenerationEntry',
@@ -7078,52 +4474,20 @@ export default function ProgramPage() {
     })
     
     // [PHASE 24N] Build canonical entry with overrides when in modify flow
-    // [STEP-5A-XI] The four metadata fields (sessionDurationMode,
-    //   trainingPathType, goalCategories, selectedFlexibility) are sourced
-    //   via the typed metadata view helper. They are not on
-    //   `AdaptiveProgramInputs` (Step 4G), but `effectiveInputs` at runtime
-    //   carries them when it was assigned from `entryToAdaptiveInputs()`
-    //   output, which the helper recovers via `Record<string, unknown>`
-    //   narrowing. Behavior is preserved — same runtime values, just read
-    //   through a typed view rather than a TS2339-emitting direct access.
-    // [STEP-5A-PI] Override object now matches buildCanonicalGenerationEntry's
-    //   strict Partial contract via the local
-    //   `ProgramPageCanonicalGenerationEntryOverrides` type. The previous
-    //   inferred shape was `{ ...; sessionLength: SessionLength; ... }`,
-    //   which TS rejected because `SessionLength` permits range strings
-    //   (e.g. '10-20', '60+') while the helper requires `number`.
-    //   `sessionLength` now flows through `normalizeProgramPageSessionLengthOverride`,
-    //   yielding either canonical numeric minutes or `undefined` (so the
-    //   helper falls back to `profile.sessionLengthMinutes`). Null-valued
-    //   metadata fields (`sessionDurationMode`, `trainingPathType`) are
-    //   coerced to `undefined` so the helper applies its own canonical-truth
-    //   fallback rather than trying to write `null` into a strict slot.
-    const entryOverrides: ProgramPageCanonicalGenerationEntryOverrides | undefined = isModifyFlow
-      ? {
-          primaryGoal: effectiveInputs.primaryGoal,
-          ...(effectiveInputs.secondaryGoal !== undefined
-            ? { secondaryGoal: effectiveInputs.secondaryGoal }
-            : {}),
-          experienceLevel: effectiveInputs.experienceLevel,
-          trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
-          sessionLength: normalizeProgramPageSessionLengthOverride(effectiveInputs.sessionLength),
-          ...(effectiveInputs.scheduleMode !== undefined
-            ? { scheduleMode: effectiveInputs.scheduleMode }
-            : {}),
-          ...(effectiveInputsMeta.sessionDurationMode !== null
-            ? { sessionDurationMode: effectiveInputsMeta.sessionDurationMode }
-            : {}),
-          equipment: effectiveInputs.equipment,
-          ...(effectiveInputs.selectedSkills !== undefined
-            ? { selectedSkills: effectiveInputs.selectedSkills }
-            : {}),
-          ...(effectiveInputsMeta.trainingPathType !== null
-            ? { trainingPathType: effectiveInputsMeta.trainingPathType }
-            : {}),
-          goalCategories: effectiveInputsMeta.goalCategories,
-          selectedFlexibility: effectiveInputsMeta.selectedFlexibility,
-        }
-      : undefined
+    const entryOverrides = isModifyFlow ? {
+      primaryGoal: effectiveInputs.primaryGoal,
+      secondaryGoal: effectiveInputs.secondaryGoal,
+      experienceLevel: effectiveInputs.experienceLevel,
+      trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
+      sessionLength: effectiveInputs.sessionLength,
+      scheduleMode: effectiveInputs.scheduleMode,
+      sessionDurationMode: effectiveInputs.sessionDurationMode,
+      equipment: effectiveInputs.equipment,
+      selectedSkills: effectiveInputs.selectedSkills,
+      trainingPathType: effectiveInputs.trainingPathType,
+      goalCategories: effectiveInputs.goalCategories,
+      selectedFlexibility: effectiveInputs.selectedFlexibility,
+    } : undefined
     
     const entryResult = buildCanonicalGenerationEntry(
       isModifyFlow ? 'handleGenerate_modifyFlow' : 'handleGenerate',
@@ -7147,14 +4511,7 @@ export default function ProgramPage() {
           entryTrainingDaysPerWeek: entry.trainingDaysPerWeek ?? null,
           entrySelectedSkillsCount: entry.selectedSkills?.length ?? null,
           entryExperienceLevel: entry.experienceLevel ?? null,
-          // [STEP-5A-SIGMA] Use the canonical prefixed metadata field name.
-          //   `ValidatedGenerationEntry` (lib/canonical-profile-service.ts:3137)
-          //   declares `__fallbacksUsed: string[]` — the `__` prefix marks it
-          //   as provenance/debug metadata, distinct from required generation
-          //   inputs. The other three Program-Page reads (L7025, L9427, L9481)
-          //   already use `entry.__fallbacksUsed`; this Step 3 audit slot was
-          //   the lone outlier reading the non-existent `entry.fallbacksUsed`.
-          entryFallbacksUsed: entry.__fallbacksUsed ?? null,
+          entryFallbacksUsed: entry.fallbacksUsed ?? null,
         }
         
         console.log('[MAIN-GEN-TRUTH step-3-canonical-entry]', {
@@ -7274,41 +4631,23 @@ export default function ProgramPage() {
   })
   
   // Build canonical profile from entry result for server route
-  // [STEP-5A-TAU] Projection contract: `entryResult.entry` is typed as
-  //   `ValidatedGenerationEntry` (lib/canonical-profile-service.ts:3114),
-  //   which is a BOUNDED generation-entry shape — it does NOT own
-  //   `selectedStrength`, `bodyweight`, or `sex`. Those expanded
-  //   onboarding/profile fields live on the wider builder input object
-  //   (`generationInputs`) and must be projected from there through the
-  //   safe `readProgramPage*` helper family. The `validatedEntry` alias
-  //   makes the typed-vs-projected source split explicit per field.
-  const validatedEntry = entryResult.entry
   const canonicalProfile = {
-    primaryGoal: validatedEntry?.primaryGoal,
-    secondaryGoal: validatedEntry?.secondaryGoal,
-    scheduleMode: validatedEntry?.scheduleMode,
-    sessionDurationMode: validatedEntry?.sessionDurationMode,
-    trainingDaysPerWeek: validatedEntry?.trainingDaysPerWeek,
-    sessionLengthMinutes: validatedEntry?.sessionLength,
-    selectedSkills: validatedEntry?.selectedSkills || [],
-    selectedFlexibility: validatedEntry?.selectedFlexibility || [],
-    // [STEP-5A-TAU] Sourced from generationInputs (NOT validatedEntry):
-    //   `selectedStrength` is not part of `ValidatedGenerationEntry`. It
-    //   matters for strength-goal truth and must survive into the
-    //   canonical profile, so it's read via the safe string-array helper.
-    selectedStrength: readProgramPageStringArray(generationInputs, 'selectedStrength'),
-    goalCategories: validatedEntry?.goalCategories || [],
-    trainingPathType: validatedEntry?.trainingPathType,
-    experienceLevel: validatedEntry?.experienceLevel,
-    equipment: validatedEntry?.equipment || [],
-    equipmentAvailable: validatedEntry?.equipment || [],
-    // [STEP-5A-TAU] Sourced from generationInputs (NOT validatedEntry):
-    //   `bodyweight` and `sex` are expanded profile fields not owned by
-    //   `ValidatedGenerationEntry`. `?? undefined` preserves the prior
-    //   "missing → undefined" semantics so downstream sentinel checks
-    //   (`if (canonicalProfile.bodyweight)` etc.) keep behaving identically.
-    bodyweight: readProgramPageNumber(generationInputs, 'bodyweight') ?? undefined,
-    sex: readProgramPageString(generationInputs, 'sex') ?? undefined,
+    primaryGoal: entryResult.entry?.primaryGoal,
+    secondaryGoal: entryResult.entry?.secondaryGoal,
+    scheduleMode: entryResult.entry?.scheduleMode,
+    sessionDurationMode: entryResult.entry?.sessionDurationMode,
+    trainingDaysPerWeek: entryResult.entry?.trainingDaysPerWeek,
+    sessionLengthMinutes: entryResult.entry?.sessionLength,
+    selectedSkills: entryResult.entry?.selectedSkills || [],
+    selectedFlexibility: entryResult.entry?.selectedFlexibility || [],
+    selectedStrength: entryResult.entry?.selectedStrength || [],
+    goalCategories: entryResult.entry?.goalCategories || [],
+    trainingPathType: entryResult.entry?.trainingPathType,
+    experienceLevel: entryResult.entry?.experienceLevel,
+    equipment: entryResult.entry?.equipment || [],
+    equipmentAvailable: entryResult.entry?.equipment || [],
+    bodyweight: entryResult.entry?.bodyweight,
+    sex: entryResult.entry?.sex,
     onboardingComplete: true,
   }
   
@@ -7320,10 +4659,6 @@ export default function ProgramPage() {
       canonicalProfile,
       builderInputs: generationInputs,
       existingProgramId: program?.id,
-      // [PHASE-M] Forward recent trusted workout logs so the freshly built
-      // program reflects recent performance at generation time. Server
-      // re-sanitizes / caps / hashes regardless of payload trust.
-      recentWorkoutLogs: getRecentWorkoutLogsForGenerationRequest(),
     }),
   })
   
@@ -7561,14 +4896,7 @@ export default function ProgramPage() {
           outputPrimaryGoal: newProgram.primaryGoal,
           outputSecondaryGoal: newProgram.secondaryGoal || null,
           outputSelectedSkills: newProgram.selectedSkills || [],
-          // [STEP-5A-PHI] AdaptiveProgram owns equipment via the typed
-          //   `equipmentProfile: EquipmentProfile` slot, NOT a flat
-          //   `equipment` field. The authoritative output equipment list
-          //   for diagnostics is `equipmentProfile.available` (see the
-          //   already-correct reads at L11671/L11710). The previous flat
-          //   `newProgram.equipment` read was a stale shape from before
-          //   the equipment-adaptation contract migration.
-          outputEquipment: newProgram.equipmentProfile?.available || [],
+          outputEquipment: newProgram.equipment || [],
           outputSessionCount: newProgram.sessions?.length || 0,
           outputScheduleMode: newProgram.scheduleMode,
           goalsMatch: generationInputs?.primaryGoal === newProgram.primaryGoal,
@@ -7609,8 +4937,7 @@ export default function ProgramPage() {
   generationStage = 'saving'
   console.log('[program-build] STAGE 6: Saving snapshot to storage...')
   try {
-    // [STEP-5A-CHI] Use narrowed local from handler-top capture.
-    saveAdaptiveProgram(newProgram)
+    programModules.saveAdaptiveProgram(newProgram)
     console.log('[program-build] STAGE 6: Save completed successfully')
   } catch (saveErr) {
     // [storage-quota-fix] TASK E: Classify storage save errors precisely
@@ -7692,35 +5019,7 @@ export default function ProgramPage() {
         // [freshness-sync] STAGE 6c: Update freshness identity and invalidate stale caches
         generationStage = 'freshness_sync'
         console.log('[freshness-sync] STAGE 6c: Updating canonical freshness identity...')
-        // [STEP-5A-PSI] Freshness signature source must be non-null.
-        //   `inputs` is React state typed `AdaptiveProgramInputs | null`
-        //   (L2724) — TypeScript can't prove non-null at this post-save
-        //   point, and in practice it CAN be null on the first build of a
-        //   freshly mounted page (state hasn't been hydrated from
-        //   `setInputs(defaultInputs)` yet on certain entry flows).
-        //   `generationInputs` (L7005) is the freshly built canonical
-        //   truth for THIS exact generation pass — derived from
-        //   `entryToAdaptiveInputs(entryResult.entry!)` after the
-        //   canonical-entry guard succeeded, so it is always non-null
-        //   here AND structurally identical to `inputs` per the
-        //   `AdaptiveProgramInputs` contract. Sibling callsites at L8048,
-        //   L11275, L11598, L13531 already pass equivalent inputs-shape
-        //   objects to `createProfileSignature` without issue, proving
-        //   structural compatibility. Falling through preserves the
-        //   "use page state when present, else use this-pass canonical
-        //   truth" priority required by the prompt without inventing a
-        //   parallel truth source or skipping the freshness sync (which
-        //   would corrupt cross-surface cache invalidation).
-        const freshnessSignatureSource = inputs ?? generationInputs
-        // [STEP-5A-OMEGA] Project to the narrow signature shape — raw
-        //   `trainingDaysPerWeek: number | 'flexible'` and `sessionLength`
-        //   don't match `createProfileSignature`'s contract.
-        // [STEP-5A-OMEGA-3] Bind the projection once so the post-build-truth
-        //   STAGE 6d block below can reuse it for narrow signature reads
-        //   (scheduleMode/trainingDaysPerWeek/sessionLengthMinutes) without
-        //   re-projecting.
-        const freshnessProjection = toFreshnessSignatureProjection(freshnessSignatureSource)
-        const profileSigForFreshness = createProfileSignature(freshnessProjection)
+        const profileSigForFreshness = createProfileSignature(inputs)
         invalidateStaleCaches()
         updateFreshnessIdentity(
           newProgram.id,
@@ -7741,122 +5040,51 @@ export default function ProgramPage() {
   generationStage = 'persisting_canonical_profile'
   console.log('[post-build-truth] STAGE 6d: Persisting builder inputs to canonical profile...')
   try {
-    // [STEP-5A-OMEGA-3] Bind a non-null narrowed source once for this whole
-    //   STAGE 6d try block. `inputs` (component state) is
-    //   `AdaptiveProgramInputs | null` and TypeScript correctly rejects
-    //   direct field access. `generationInputs` (L7105) is the freshly
-    //   built `AdaptiveProgramInputs` for THIS exact pass — derived from
-    //   `entryToAdaptiveInputs(entryResult.entry!)` after the canonical-entry
-    //   guard succeeded — so it is always non-null AND structurally
-    //   identical to `inputs` per the `AdaptiveProgramInputs` contract.
-    //   The fallback preserves the established
-    //   "use page state when present, else use this-pass canonical truth"
-    //   priority (same pattern as freshness sync at L7633 above).
-    const safeInputs = inputs ?? generationInputs
-
     // Use the program's actual values for consistent drift detection
-    // [STEP-5A-OMEGA-3] scheduleMode read goes through `freshnessProjection`
-    //   (the canonical narrow signature source) per primary projection rule.
-    // [STEP-5A-OMEGA-4] Explicit `'static' | 'flexible'` annotation — without
-    //   it the ternary widens to `string` and the canonical writeback object
-    //   below loses the literal-union shape `Partial<CanonicalProgrammingProfile>`
-    //   demands (TS2322 at the saveCanonicalProfile boundary). 'adaptive'
-    //   freshness intent collapses to canonical 'flexible' since the canonical
-    //   profile only models 'static' | 'flexible' (Phase 29A separates schedule
-    //   identity from adaptive workload behavior).
-    // [STEP-5A-OMEGA-14] Replaced inline `=== 'adaptive'` (TS2367 impossible
-    //   literal compare against narrowed `ScheduleMode = 'static' | 'flexible'`)
-    //   with the typed canonicalizer. Same canonical-writeback intent preserved.
-    const effectiveScheduleMode: 'static' | 'flexible' =
-      toCanonicalScheduleModeForProgramProfile(freshnessProjection.scheduleMode)
+    const effectiveScheduleMode = inputs.scheduleMode === 'flexible' || inputs.scheduleMode === 'adaptive'
+      ? 'flexible'
+      : 'static'
     
     // For flexible mode: save null to indicate "adaptive" identity
     // For static mode: save the actual generated days
-    // [STEP-5A-OMEGA-4] Explicit `number | null` — drops `safeInputs.trainingDaysPerWeek`'s
-    //   `'flexible'` string variant (AdaptiveProgramInputs.trainingDaysPerWeek
-    //   is `TrainingDays | 'flexible'`) which the canonical profile's
-    //   `trainingDaysPerWeek: number | null` rejects.
-    //   `newProgram.trainingDaysPerWeek` is already `TrainingDays` (pure
-    //   number); `safeInputs.trainingDaysPerWeek` is narrowed via
-    //   `typeof === 'number'` here.
-    const effectiveTrainingDays: number | null = effectiveScheduleMode === 'flexible'
+    const effectiveTrainingDays = effectiveScheduleMode === 'flexible'
       ? null // Flexible users don't have a fixed day count identity
-      : typeof newProgram.trainingDaysPerWeek === 'number'
-        ? newProgram.trainingDaysPerWeek
-        : typeof safeInputs.trainingDaysPerWeek === 'number'
-          ? safeInputs.trainingDaysPerWeek
-          : null
-
-    // [STEP-5A-OMEGA-4] Numeric session-length narrowing for canonical writeback.
-    //   Both `newProgram.sessionLength` and `safeInputs.sessionLength` are typed
-    //   `SessionLength`, which is `30 | 45 | 60 | 75 | 90 | 120 | '10-20' | '20-30' | '30-45' | '45-60' | '60+'`
-    //   (per lib/program-service.ts) — string label variants are NOT minutes
-    //   and the canonical profile's `sessionLengthMinutes: number` rejects them.
-    //   Only finite numeric values pass through; missing/string-label sources
-    //   collapse to `undefined` (Partial-safe).
-    const effectiveSessionLengthMinutes: number | undefined =
-      typeof newProgram.sessionLength === 'number' && Number.isFinite(newProgram.sessionLength)
-        ? newProgram.sessionLength
-        : typeof safeInputs.sessionLength === 'number' && Number.isFinite(safeInputs.sessionLength)
-          ? safeInputs.sessionLength
-          : undefined
+      : (newProgram.trainingDaysPerWeek ?? inputs.trainingDaysPerWeek ?? undefined)
     
     // [equipment-truth-fix] TASK C: Convert builder equipment keys to canonical profile keys
     // This strips floor/wall and maps pull_bar->pullup_bar, bands->resistance_bands
-    const canonicalEquipment = builderEquipmentToProfileEquipment(safeInputs.equipment || [])
+    const canonicalEquipment = builderEquipmentToProfileEquipment(inputs.equipment || [])
     
     // [equipment-truth-audit] Log equipment truth on successful build
     console.log('[equipment-truth-audit] Build success - equipment truth:', {
-      builderInputsEquipment: safeInputs.equipment,
+      builderInputsEquipment: inputs.equipment,
       canonicalSavedEquipment: canonicalEquipment,
-      hiddenRuntimeEquipmentStripped: (safeInputs.equipment || []).filter(e => e === 'floor' || e === 'wall'),
+      hiddenRuntimeEquipmentStripped: (inputs.equipment || []).filter(e => e === 'floor' || e === 'wall'),
     })
     
     // ==========================================================================
     // [PHASE 18F] TASK 3 - Expand canonical writeback to include FULL deep planner identity
     // This ensures future rebuilds reconstruct from the same truth class as this successful build
     // ==========================================================================
-    // [STEP-5A-OMEGA-4] Explicit `Partial<CanonicalProgrammingProfile>` —
-    //   forces every property below to be checked against the strict canonical
-    //   contract at construction time, NOT at the saveCanonicalProfile call
-    //   boundary (where TS reports a single error and stops).
-    const initialBuildWritebackTruth: Partial<CanonicalProgrammingProfile> = {
+    const initialBuildWritebackTruth = {
       // Schedule/duration fields
-      // [STEP-5A-OMEGA-4] `effectiveTrainingDays` is now `number | null` — pass
-      //   it through directly (canonical accepts both); no `?? undefined` collapse.
-      trainingDaysPerWeek: effectiveTrainingDays,
-      // [STEP-5A-OMEGA-3] sessionLength via narrowed safeInputs (preserves
-      //   exact existing fallback semantics: program output → inputs → undefined).
-      // [STEP-5A-OMEGA-4] Use the pre-narrowed `effectiveSessionLengthMinutes`
-      //   so the canonical's `sessionLengthMinutes: number` contract holds.
-      sessionLengthMinutes: effectiveSessionLengthMinutes,
+      trainingDaysPerWeek: effectiveTrainingDays ?? undefined,
+      sessionLengthMinutes: newProgram.sessionLength ?? inputs.sessionLength ?? undefined,
       scheduleMode: effectiveScheduleMode,
-      // [STEP-5A-XI] sessionDurationMode is not on AdaptiveProgramInputs —
-      //   sourced via inputsMeta (Record-narrowing helper)
-      sessionDurationMode: inputsMeta.sessionDurationMode ?? undefined,
+      sessionDurationMode: inputs.sessionDurationMode ?? undefined,
       // Equipment
       equipmentAvailable: canonicalEquipment,
-      // [STEP-5A-OMEGA-3] Profile fields via narrowed safeInputs.
       // Goal fields
-      primaryGoal: safeInputs.primaryGoal ?? undefined,
-      secondaryGoal: safeInputs.secondaryGoal ?? undefined,
+      primaryGoal: inputs.primaryGoal ?? undefined,
+      secondaryGoal: inputs.secondaryGoal ?? undefined,
       // Experience
-      experienceLevel: safeInputs.experienceLevel ?? undefined,
+      experienceLevel: inputs.experienceLevel ?? undefined,
       // [PHASE 18F] Deep planner identity fields - CRITICAL for rebuild parity
-      selectedSkills: safeInputs.selectedSkills?.length ? safeInputs.selectedSkills : undefined,
-      // [STEP-5A-XI] trainingPathType / goalCategories / selectedFlexibility
-      //   not on AdaptiveProgramInputs — sourced via inputsMeta
-      trainingPathType: inputsMeta.trainingPathType ?? undefined,
-      goalCategories: inputsMeta.goalCategories.length > 0 ? inputsMeta.goalCategories : undefined,
-      selectedFlexibility: inputsMeta.selectedFlexibility.length > 0 ? inputsMeta.selectedFlexibility : undefined,
-      // [STEP-5A-XI] selectedStrength is not on AdaptiveProgramInputs.
-      // [STEP-5A-OMICRON] Sourced via the quarantined record helper —
-      //   replaces the previous inline `(inputs as Record<string, unknown>)`
-      //   direct cast that TS2352 rejected.
-      selectedStrength: ((): string[] | undefined => {
-        const arr = readProgramPageStringArray(inputs, 'selectedStrength')
-        return arr.length > 0 ? arr : undefined
-      })(),
+      selectedSkills: inputs.selectedSkills?.length ? inputs.selectedSkills : undefined,
+      trainingPathType: inputs.trainingPathType ?? undefined,
+      goalCategories: inputs.goalCategories?.length ? inputs.goalCategories : undefined,
+      selectedFlexibility: inputs.selectedFlexibility?.length ? inputs.selectedFlexibility : undefined,
+      selectedStrength: inputs.selectedStrength?.length ? inputs.selectedStrength : undefined,
     }
     
     // [PHASE 18F] TASK 1 - Pre-writeback depth audit
@@ -7869,20 +5097,14 @@ export default function ProgramPage() {
         selectedSkills: (newProgram as unknown as { selectedSkills?: string[] }).selectedSkills ?? [],
       },
       inputsTruthContains: {
-        // [STEP-5A-OMEGA-3] Profile audit reads via narrowed safeInputs.
-        primaryGoal: safeInputs.primaryGoal ?? null,
-        secondaryGoal: safeInputs.secondaryGoal ?? null,
-        selectedSkills: safeInputs.selectedSkills ?? [],
-        // [STEP-5A-XI] inputsMeta-sourced — not on AdaptiveProgramInputs
-        trainingPathType: inputsMeta.trainingPathType,
-        goalCategories: inputsMeta.goalCategories,
-        selectedFlexibility: inputsMeta.selectedFlexibility,
-        // [STEP-5A-OMICRON] Sourced via the quarantined record helper —
-        //   replaces the previous inline `(inputs as Record<string, unknown>)`
-        //   direct cast that TS2352 rejected. Helper accepts `unknown`,
-        //   nullable `inputs` is safe here.
-        selectedStrength: readProgramPageStringArray(inputs, 'selectedStrength'),
-        experienceLevel: safeInputs.experienceLevel ?? null,
+        primaryGoal: inputs.primaryGoal ?? null,
+        secondaryGoal: inputs.secondaryGoal ?? null,
+        selectedSkills: inputs.selectedSkills ?? [],
+        trainingPathType: inputs.trainingPathType ?? null,
+        goalCategories: inputs.goalCategories ?? [],
+        selectedFlexibility: inputs.selectedFlexibility ?? [],
+        selectedStrength: inputs.selectedStrength ?? [],
+        experienceLevel: inputs.experienceLevel ?? null,
       },
       writebackTruthWillPersist: {
         primaryGoal: initialBuildWritebackTruth.primaryGoal ?? null,
@@ -7965,21 +5187,12 @@ export default function ProgramPage() {
         console.log('[program-build] STAGE 7: Updating UI state...')
         
         // [program-save-truth-audit] TASK H: Verify program being saved matches what will display
-        // [STEP-5A-LAMBDA] `AdaptiveSession` has no `id` field; replaced
-        //   `firstSessionId` with `firstSessionKey` derived from real
-        //   `dayNumber`/`dayLabel`/`focusLabel`/`focus` fields. Same fix
-        //   pattern applied at the regenerate save-audit site below.
-        const programSaveAuditFirstSession = newProgram.sessions?.[0] ?? null
         console.log('[program-save-truth-audit]', {
           programId: newProgram.id,
           createdAt: newProgram.createdAt,
           sessionCount: newProgram.sessions?.length || 0,
-          firstSessionKey: programSaveAuditFirstSession
-            ? `day${programSaveAuditFirstSession.dayNumber}-${programSaveAuditFirstSession.dayLabel || programSaveAuditFirstSession.focusLabel || programSaveAuditFirstSession.focus || 'session'}`
-            : 'none',
-          firstSessionExerciseCount: Array.isArray(programSaveAuditFirstSession?.exercises)
-            ? programSaveAuditFirstSession.exercises.length
-            : 0,
+          firstSessionId: newProgram.sessions?.[0]?.id || 'none',
+          firstSessionExerciseCount: newProgram.sessions?.[0]?.exercises?.length || 0,
           provenanceMode: newProgram.generationProvenance?.generationMode || 'unknown',
           provenanceFreshness: newProgram.generationProvenance?.generationFreshness || 'unknown',
           qualityTier: newProgram.qualityClassification?.qualityTier || 'unknown',
@@ -8211,36 +5424,16 @@ export default function ProgramPage() {
               earlyFailedStage = 'structure_build'
             }
             
-            // [STEP-5A-OMEGA-5] Safe typed projection of the built structure's
-            //   weekly day count for the audit slot. The previous code read
-            //   `newProgram.daysPerWeek` which does NOT exist on `AdaptiveProgram`
-            //   (TS2339). The real contract is:
-            //     - `trainingDaysPerWeek: TrainingDays`  (pure numeric union 2|3|4|5|6|7)
-            //     - `currentWeekFrequency?: number`     (resolved frequency for
-            //       flexible/adaptive weeks per AdaptiveProgram interface L1596)
-            //   Both audit slots (`builtStructureDayCount`, `savedProgramTrainingDaysPerWeek`)
-            //   are typed `number | null` (L3135, L3140) so we project to a
-            //   pure number without lying — flexible/adaptive resolution falls
-            //   through to `currentWeekFrequency`, missing → null.
-            //   The defensive `typeof === 'number'` guard tolerates any future
-            //   widening of TrainingDays without changing audit fidelity.
-            const builtStructureTrainingDays: number | null =
-              typeof newProgram.trainingDaysPerWeek === 'number'
-                ? newProgram.trainingDaysPerWeek
-                : typeof newProgram.currentWeekFrequency === 'number'
-                  ? newProgram.currentWeekFrequency
-                  : null
-
             const updatedMainGen: MainGenTruthAudit = {
               ...storedMainGen,
               // Step 5: Structure result
               builtStructureSessionCount: actualBuiltSessions,
-              builtStructureDayCount: builtStructureTrainingDays,
+              builtStructureDayCount: newProgram.daysPerWeek ?? (newProgram as unknown as { trainingDaysPerWeek?: number }).trainingDaysPerWeek ?? null,
               generatedProgramIdBeforeSave: newProgram.id,
               // Step 6: Save result (save happens before setProgram)
               savedProgramId: newProgram.id,
               savedProgramSessionCount: actualBuiltSessions,
-              savedProgramTrainingDaysPerWeek: builtStructureTrainingDays,
+              savedProgramTrainingDaysPerWeek: (newProgram as unknown as { trainingDaysPerWeek?: number }).trainingDaysPerWeek ?? null,
               localStorageProgramIdAfterSave: localStorageId,
               localStorageProgramSessionsAfterSave: localStorageSessions,
               // Step 7: setProgram target
@@ -8331,24 +5524,12 @@ export default function ProgramPage() {
           })
           setBuilderOrigin('default')
           setBuilderSessionInputsAndRef(null)
-          // [STEP-5A-TAU] Use the established `'initial'` sentinel — matches
-          //   the initial `useState<string>('initial')` declaration at L2986
-          //   AND the three sibling modify-flow reset sites at L9335 (post-success
-          //   modify reset), L9460 (unmount reset), L16901 (cancel modify reset).
-          //   The previous `null` here was an unambiguous copy-paste divergence
-          //   from the surrounding `setBuilderSessionInputsAndRef(null)` /
-          //   `setBuilderSessionSource(null)` calls — `builderSessionKey` is
-          //   typed `string` (NOT `string | null`) because it is consumed as
-          //   a React `key` prop at L16873 and as a string identity in 14+
-          //   other read sites. The `'initial'` sentinel is the canonical
-          //   "no active builder session" string value.
-          setBuilderSessionKey('initial')
+          setBuilderSessionKey(null)
           setBuilderSessionSource(null)
         }
         
         // [program-rebuild-truth] TASK 2: Create success result
-        // [STEP-5A-OMEGA] Project to narrow signature shape.
-        const profileSig = createProfileSignature(toFreshnessSignatureProjection(effectiveInputs))
+        const profileSig = createProfileSignature(effectiveInputs)
         const successResult = createSuccessBuildResult(profileSig, null, newProgram.id)
         
         // [PHASE 16S] Add runtime session metadata to success result
@@ -8733,39 +5914,11 @@ export default function ProgramPage() {
         // When server returns 500, serverResult in context contains exact diagnostic fields
         // This prevents "Step: unavailable / Reason: unavailable" in the banner
         // ==========================================================================
-        // [STEP-5A-UPSILON-OMEGA-7] Drive ingest purely off `context.serverResult`
-        //   presence via the typed `errorContext` (already declared above at
-        //   L8496-8497 as `Record<string, unknown> | undefined`).
-        //
-        //   The previous condition compared `errorSubCode === 'server_generation_failed'`,
-        //   but `errorSubCode` is locally declared as `BuildAttemptSubCode`
-        //   (L8475) — and that canonical union (lib/program-state.ts:210)
-        //   includes `'server_regenerate_failed'` (L276) but NOT
-        //   `'server_generation_failed'`. The cast at L8481 (`err.subCode as
-        //   BuildAttemptSubCode`) lied to TypeScript: `err.subCode` is the
-        //   local `PageValidationSubCode` (page.tsx L640), which DOES include
-        //   `'server_generation_failed'` (L671) — so at runtime the value
-        //   could be that literal, but TS correctly flagged the comparison
-        //   as impossible against the *declared* type.
-        //
-        //   Removing the literal comparison is safe because the producer at
-        //   L7269 always attaches `{ serverResult }` via context (L7271)
-        //   when throwing with this subcode — so `serverResult` presence is
-        //   a strict superset trigger. Per the prompt's "If no real producer
-        //   emits it [against the declared type], remove that comparison and
-        //   let `context.serverResult` be the trigger."
-        //
-        //   The `(err as any).context?.serverResult` access is replaced with
-        //   the typed `errorContext?.serverResult` flowing through
-        //   `readProgramPageRecord` (L201, the project's quarantined unknown
-        //   narrower) — eliminating the `as any` per project safety doctrine.
-        const mainGenServerResult = isPageValidationError
-          ? readProgramPageRecord(errorContext?.serverResult)
-          : null
-
-        if (mainGenServerResult) {
-          const serverResult = mainGenServerResult
-          {
+        if (isPageValidationError && (errorSubCode === 'server_generation_failed' || (err as any).context?.serverResult)) {
+          const ctx = (err as { context?: Record<string, unknown> }).context
+          const serverResult = ctx?.serverResult as Record<string, unknown> | undefined
+          
+          if (serverResult) {
             // Extract exact server diagnostic fields
             const serverFailedStage = serverResult.failedStage as string | undefined
             const exactFailingSubstep = serverResult.exactFailingSubstep as string | undefined
@@ -8773,7 +5926,7 @@ export default function ProgramPage() {
             const exactBuilderCorridor = serverResult.exactBuilderCorridor as string | undefined
             const exactLocalStep = serverResult.exactLocalStep as string | undefined
             const compactBuilderError = serverResult.compactBuilderError as string | undefined
-            const diagnostics = readProgramPageRecord(serverResult.diagnostics)
+            const diagnostics = serverResult.diagnostics as Record<string, unknown> | undefined
             
             // Map server fields to failure display fields
             // Priority: exactFailingSubstep > exactLocalStep > failedStage
@@ -8783,25 +5936,25 @@ export default function ProgramPage() {
             
             // Extract from diagnostics if available
             if (diagnostics?.phase15eDiagnostic) {
-              const p15e = readProgramPageRecord(diagnostics.phase15eDiagnostic)
-              if (!failureStep) failureStep = (p15e?.exactFailingSubstep as string) || null
-              if (!failureMiddleStep) failureMiddleStep = (p15e?.exactLastSafeSubstep as string) || null
+              const p15e = diagnostics.phase15eDiagnostic as Record<string, unknown>
+              if (!failureStep) failureStep = (p15e.exactFailingSubstep as string) || null
+              if (!failureMiddleStep) failureMiddleStep = (p15e.exactLastSafeSubstep as string) || null
             }
             // [POST_ALLOCATION_HANDOFF_FIX] Check ownerCorridorDiagnostic (current key from route)
             if (diagnostics?.ownerCorridorDiagnostic) {
-              const corr = readProgramPageRecord(diagnostics.ownerCorridorDiagnostic)
-              if (!failureStep) failureStep = (corr?.exactLocalStep as string) || (corr?.exactBuilderCorridor as string) || null
-              if (!failureMiddleStep) failureMiddleStep = (corr?.lastSuccessfulPostAllocationCheckpoint as string) || null
+              const corr = diagnostics.ownerCorridorDiagnostic as Record<string, unknown>
+              if (!failureStep) failureStep = (corr.exactLocalStep as string) || (corr.exactBuilderCorridor as string) || null
+              if (!failureMiddleStep) failureMiddleStep = (corr.lastSuccessfulPostAllocationCheckpoint as string) || null
               // Enrich failure reason with owner name if available
-              const ownerName = corr?.failingOwnerName as string | undefined
+              const ownerName = corr.failingOwnerName as string | undefined
               if (ownerName && !failureReason?.includes(ownerName)) {
                 failureReason = ownerName + (failureReason ? `: ${failureReason}` : '')
               }
             }
             // Legacy fallback for old key
             if (diagnostics?.corridorDiagnostic) {
-              const corr = readProgramPageRecord(diagnostics.corridorDiagnostic)
-              if (!failureStep) failureStep = (corr?.exactLocalStep as string) || null
+              const corr = diagnostics.corridorDiagnostic as Record<string, unknown>
+              if (!failureStep) failureStep = (corr.exactLocalStep as string) || null
             }
             
             console.log('[MAIN_GENERATION_PAGE_FAILURE_INGEST]', {
@@ -8911,10 +6064,7 @@ export default function ProgramPage() {
         })
         
         // Create failed build result with structured diagnostics
-        // [STEP-5A-OMEGA] Project to narrow signature shape.
-        const profileSig = inputs
-          ? createProfileSignature(toFreshnessSignatureProjection(inputs))
-          : 'unknown'
+        const profileSig = inputs ? createProfileSignature(inputs) : 'unknown'
         const failedResult = createFailedBuildResult(
           errorCode,
           errorStage,
@@ -9028,23 +6178,7 @@ export default function ProgramPage() {
         })
         
         // [TASK 9] ERROR PROPAGATION TRUTH FINAL VERDICT
-        // [STEP-5A-PHI-OMEGA-8] Local typed readonly tuple of the runtime
-        //   builder diagnostic subcodes that this page commits to surfacing.
-        //   The previous `knownSubCodes.includes(...)` calls referenced an
-        //   undeclared identifier (TS2304 — `knownSubCodes` was never
-        //   declared anywhere in this file or in any imported module).
-        //   The diagnostic intent is "this page recognizes the canonical
-        //   runtime builder subcodes" — that intent is now enforced at
-        //   compile time via `satisfies readonly BuildAttemptSubCode[]`,
-        //   which fails the build if either literal ever drops out of
-        //   the canonical union (lib/program-state.ts:246-247). The
-        //   `.includes(...)` calls are preserved verbatim so the log
-        //   shape and final-verdict ternary semantics are unchanged.
-        const runtimeBuilderDiagnosticSubcodes = [
-          'internal_builder_reference_error',
-          'internal_builder_type_error',
-        ] as const satisfies readonly BuildAttemptSubCode[]
-        const runtimeSubcodesSupported = runtimeBuilderDiagnosticSubcodes.includes('internal_builder_reference_error') && runtimeBuilderDiagnosticSubcodes.includes('internal_builder_type_error')
+        const runtimeSubcodesSupported = knownSubCodes.includes('internal_builder_reference_error') && knownSubCodes.includes('internal_builder_type_error')
         const runtimeReasonVisible = isRuntimeBuilderError ? !!failureReason : true
         const runtimeStepVisible = isRuntimeBuilderError ? !!failureStep : true
         console.log('[error-propagation-truth-final-verdict]', {
@@ -9100,12 +6234,6 @@ export default function ProgramPage() {
     // This ensures submit uses the same truth as render, not ambient inputs
     // ==========================================================================
     const effectiveInputs = builderSessionInputs ?? inputs
-    // [STEP-5A-XI] Local metadata view for the four canonical-profile
-    //   fields not on AdaptiveProgramInputs (Step 4G). Scoped to this
-    //   deprecated handler to avoid widening the static type or using
-    //   `as any`. Same Record-narrowing approach as the page-level
-    //   `inputsMeta` above.
-    const effectiveInputsMeta = readProgramPageMetadataFromUnknown(effectiveInputs)
     
     // [PHASE 24A] Submit parity audit - verify render and submit use same truth
     console.log('[phase24a-modify-render-submit-parity-audit]', {
@@ -9119,8 +6247,7 @@ export default function ProgramPage() {
         scheduleMode: effectiveInputs.scheduleMode,
         trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
         selectedSkillsCount: effectiveInputs.selectedSkills?.length ?? 0,
-        // [STEP-5A-XI] metadata view, not direct AdaptiveProgramInputs read
-        trainingPathType: effectiveInputsMeta.trainingPathType,
+        trainingPathType: effectiveInputs.trainingPathType,
         sessionLength: effectiveInputs.sessionLength,
         experienceLevel: effectiveInputs.experienceLevel,
       } : null,
@@ -9142,12 +6269,10 @@ export default function ProgramPage() {
         secondaryGoal: effectiveInputs.secondaryGoal,
         scheduleMode: effectiveInputs.scheduleMode,
         trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
-        // [STEP-5A-XI] metadata view, not direct AdaptiveProgramInputs read
-        sessionDurationMode: effectiveInputsMeta.sessionDurationMode,
+        sessionDurationMode: effectiveInputs.sessionDurationMode,
         sessionLength: effectiveInputs.sessionLength,
         selectedSkillsCount: effectiveInputs.selectedSkills?.length ?? 0,
-        // [STEP-5A-XI] metadata view, not direct AdaptiveProgramInputs read
-        trainingPathType: effectiveInputsMeta.trainingPathType,
+        trainingPathType: effectiveInputs.trainingPathType,
         experienceLevel: effectiveInputs.experienceLevel,
         equipmentCount: effectiveInputs.equipment?.length ?? 0,
       } : null,
@@ -9165,8 +6290,6 @@ export default function ProgramPage() {
       setGenerationError('Program builder is still loading. Please wait a moment.')
       return
     }
-    // [STEP-5A-CHI] Capture narrowed local — see handleGenerate rationale.
-    const saveAdaptiveProgram = programModules.saveAdaptiveProgram
     
     setIsGenerating(true)
     setGenerationError(null)
@@ -9194,10 +6317,9 @@ export default function ProgramPage() {
         builderInputsScheduleMode: effectiveInputs.scheduleMode,
         builderInputsTrainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
         builderInputsSelectedSkillsCount: effectiveInputs.selectedSkills?.length ?? 0,
-        // [STEP-5A-XI] metadata view, not direct AdaptiveProgramInputs read
-        builderInputsTrainingPathType: effectiveInputsMeta.trainingPathType,
-        builderInputsGoalCategoriesCount: effectiveInputsMeta.goalCategories.length,
-        builderInputsSelectedFlexibilityCount: effectiveInputsMeta.selectedFlexibility.length,
+        builderInputsTrainingPathType: effectiveInputs.trainingPathType,
+        builderInputsGoalCategoriesCount: effectiveInputs.goalCategories?.length ?? 0,
+        builderInputsSelectedFlexibilityCount: effectiveInputs.selectedFlexibility?.length ?? 0,
         builderInputsExperienceLevel: effectiveInputs.experienceLevel,
         builderInputsEquipmentCount: effectiveInputs.equipment?.length ?? 0,
         clientCanonicalSnapshotPrimaryGoal: clientCanonicalSnapshot.primaryGoal,
@@ -9241,65 +6363,37 @@ export default function ProgramPage() {
         verdict: 'ROUTING_TO_AUTHORITATIVE_SERVER_REBUILD',
       })
       
-      // [STEP-4B] One authoritative schedule-truth resolution for the
-      // entire Modify dispatch corridor. Replaces the prior `|| 4` fake
-      // default and prevents any per-call-site re-interpretation.
-      // - canonicalTrainingDays: number | null (for canonical profile)
-      // - builderTrainingDays:   number | 'flexible' | null (for AdaptiveProgramInputs)
-      // - scheduleMode:          'static' | 'flexible' | null
-      const modifyScheduleTruth = resolveProgramPageScheduleTruth({
-        scheduleMode: effectiveInputs.scheduleMode,
-        trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
-      })
-
       // Build canonical profile override with builder inputs
       const modifyCanonicalOverride = {
         primaryGoal: effectiveInputs.primaryGoal || 'skill_acquisition',
         secondaryGoal: effectiveInputs.secondaryGoal || null,
         experienceLevel: effectiveInputs.experienceLevel || 'intermediate',
-        // [STEP-4B] Removed `|| 4` fake default. Canonical profile expects
-        // numeric truth or null — flexible mode owns flexibility, the
-        // numeric slot stores absence. No invented day count.
-        trainingDaysPerWeek: modifyScheduleTruth.canonicalTrainingDays,
+        trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek || 4,
         sessionLengthMinutes: effectiveInputs.sessionLength || 60,
-        // [STEP-4B] scheduleMode resolved through the same truth object.
-        // Falls back to 'flexible' only if both explicit-mode and any
-        // numeric/literal inference yielded null — preserves prior visible
-        // behavior for genuinely-empty inputs while no longer overriding a
-        // valid static numeric intent.
-        scheduleMode: modifyScheduleTruth.scheduleMode ?? 'flexible',
-        // [STEP-5A-XI] These four fields are not on AdaptiveProgramInputs
-        //   (Step 4G). Recovered via the typed metadata view; behavior is
-        //   preserved — same runtime values, no `as any`, no widening.
-        sessionDurationMode: effectiveInputsMeta.sessionDurationMode || 'adaptive',
+        scheduleMode: effectiveInputs.scheduleMode || 'flexible',
+        sessionDurationMode: effectiveInputs.sessionDurationMode || 'adaptive',
         equipment: effectiveInputs.equipment || ['pull_up_bar', 'parallettes', 'rings'],
         selectedSkills: effectiveInputs.selectedSkills || [],
-        trainingPathType: effectiveInputsMeta.trainingPathType || 'custom',
-        goalCategories: effectiveInputsMeta.goalCategories,
-        selectedFlexibility: effectiveInputsMeta.selectedFlexibility,
+        trainingPathType: effectiveInputs.trainingPathType || 'custom',
+        goalCategories: effectiveInputs.goalCategories || [],
+        selectedFlexibility: effectiveInputs.selectedFlexibility || [],
         onboardingComplete: true,
       }
       
       // Build program inputs for server route
-      // [STEP-4B] AdaptiveProgramInputs.trainingDaysPerWeek is
-      // `TrainingDays | 'flexible'` — builder shape carries the literal,
-      // which the server route's adaptive builder knows how to interpret.
       const modifyProgramInputs = {
         primaryGoal: effectiveInputs.primaryGoal,
         secondaryGoal: effectiveInputs.secondaryGoal,
         experienceLevel: effectiveInputs.experienceLevel,
-        trainingDaysPerWeek: modifyScheduleTruth.builderTrainingDays ?? effectiveInputs.trainingDaysPerWeek,
+        trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
         sessionLength: effectiveInputs.sessionLength,
-        scheduleMode: modifyScheduleTruth.scheduleMode ?? effectiveInputs.scheduleMode,
-        // [STEP-5A-XI] Four canonical-profile metadata fields not on
-        //   AdaptiveProgramInputs (Step 4G); sourced through the typed
-        //   metadata view rather than direct property access.
-        sessionDurationMode: effectiveInputsMeta.sessionDurationMode,
+        scheduleMode: effectiveInputs.scheduleMode,
+        sessionDurationMode: effectiveInputs.sessionDurationMode,
         equipment: effectiveInputs.equipment,
         selectedSkills: effectiveInputs.selectedSkills,
-        trainingPathType: effectiveInputsMeta.trainingPathType,
-        goalCategories: effectiveInputsMeta.goalCategories,
-        selectedFlexibility: effectiveInputsMeta.selectedFlexibility,
+        trainingPathType: effectiveInputs.trainingPathType,
+        goalCategories: effectiveInputs.goalCategories,
+        selectedFlexibility: effectiveInputs.selectedFlexibility,
       }
       
       console.log('[modify-unified-fix-dispatch]', {
@@ -9321,9 +6415,6 @@ export default function ProgramPage() {
           programInputs: modifyProgramInputs,
           regenerationReason: 'modify_builder_submit',
           currentProgramId: program?.id ?? null,
-          // [PHASE-M] Forward recent trusted workout logs to the
-          // authoritative regenerate corridor.
-          recentWorkoutLogs: getRecentWorkoutLogsForGenerationRequest(),
         }),
       })
       
@@ -9386,62 +6477,24 @@ export default function ProgramPage() {
       })
       
       // Save the program to localStorage (server already validated it)
-      // [STEP-5A-CHI] Use narrowed local from handler-top capture.
-      await saveAdaptiveProgram(newProgram)
+      await programModules.saveAdaptiveProgram(newProgram)
       
       // Update canonical profile to match what was just generated
-      // [STEP-4B] Canonical profile numeric slot must hold number | null —
-      // flexible mode collapses to null here, never the overloaded literal
-      // and never a fake `|| 4`. scheduleMode comes from the resolved
-      // truth so the two fields cannot disagree.
-      // [STEP-5A-CHI-2-OMEGA-9] Replace the nonexistent
-      //   `updateCanonicalProfile` with the real exported
-      //   `saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfile>)`.
-      //   `saveCanonicalProfile` is already top-level imported at L628 along
-      //   with the `CanonicalProgrammingProfile` type — no dynamic import
-      //   needed. Pattern mirrors the regenerate sibling at L11618, the
-      //   initial-build sibling at L7825, and the adjustment sibling at
-      //   L13977 — all three use `Partial<CanonicalProgrammingProfile>`
-      //   annotation + pre-narrowed schedule/duration locals.
-      //
-      //   Pre-narrowings (only where the canonical contract requires
-      //   stricter unions than the input shape provides):
-      //
-      //   - `scheduleMode: 'static' | 'flexible'` (canonical L273 — NOT
-      //     nullable). Mirrors the upstream `modifyCanonicalOverride`
-      //     fallback at L9194 (`?? 'flexible'`) — same flow, same handler.
-      //
-      //   - `sessionDurationMode: 'static' | 'adaptive'` (canonical L278).
-      //     Mirrors regen sibling L11589-11590 narrowing.
-      //
-      //   - `sessionLengthMinutes: number` (canonical L279). Mirrors regen
-      //     sibling L11595-11600 — undefined is acceptable under
-      //     `Partial<...>` so `Number.isFinite` guard collapses non-numeric
-      //     SessionLength label variants ('10-20', '45-60', etc.) to
-      //     undefined rather than passing a string into a numeric slot.
-      const modifyCanonicalScheduleMode: 'static' | 'flexible' =
-        modifyScheduleTruth.scheduleMode ?? 'flexible'
-      const modifyCanonicalSessionDurationMode: 'static' | 'adaptive' =
-        modifyProgramInputs.sessionDurationMode === 'adaptive' ? 'adaptive' : 'static'
-      const modifyCanonicalSessionLengthMinutes: number | undefined =
-        typeof modifyProgramInputs.sessionLength === 'number' && Number.isFinite(modifyProgramInputs.sessionLength)
-          ? modifyProgramInputs.sessionLength
-          : undefined
-      const modifyWritebackTruth: Partial<CanonicalProgrammingProfile> = {
+      const { updateCanonicalProfile } = await import('@/lib/canonical-profile-service')
+      updateCanonicalProfile({
         primaryGoal: modifyProgramInputs.primaryGoal,
         secondaryGoal: modifyProgramInputs.secondaryGoal,
-        trainingDaysPerWeek: modifyScheduleTruth.canonicalTrainingDays,
-        scheduleMode: modifyCanonicalScheduleMode,
-        sessionDurationMode: modifyCanonicalSessionDurationMode,
-        sessionLengthMinutes: modifyCanonicalSessionLengthMinutes,
+        trainingDaysPerWeek: modifyProgramInputs.trainingDaysPerWeek,
+        scheduleMode: modifyProgramInputs.scheduleMode,
+        sessionDurationMode: modifyProgramInputs.sessionDurationMode,
+        sessionLengthMinutes: modifyProgramInputs.sessionLength,
         selectedSkills: modifyProgramInputs.selectedSkills,
         trainingPathType: modifyProgramInputs.trainingPathType,
         experienceLevel: modifyProgramInputs.experienceLevel,
         equipmentAvailable: modifyProgramInputs.equipment,
         goalCategories: modifyProgramInputs.goalCategories,
         selectedFlexibility: modifyProgramInputs.selectedFlexibility,
-      }
-      saveCanonicalProfile(modifyWritebackTruth)
+      })
       
       // [PHASE 24F] TASK 5 - Post-save parity audit
       const visibleSessionCountBeforeSet = program?.sessions?.length ?? 0
@@ -9508,42 +6561,29 @@ export default function ProgramPage() {
       })
       
       // [MODIFY-UNIFIED-FIX] Authoritative result proof - production-safe verification
-      // [STEP-4B] Honest schedule-truth proof. The prior `flexible ? 6 : days`
-      // hardcode lied about flexible mode having a fixed 6-session target.
-      // Static mode: requestedSessionTarget = numeric day count from resolved truth.
-      // Flexible mode: requestedSessionTarget = null. Adaptive engine derives the
-      // session count; we report it without inventing an expected target.
       const savedSessionCount = newProgram.sessions?.length ?? 0
-      const requestedSessionTarget = modifyScheduleTruth.numericTrainingDays
+      const requestedSessionTarget = modifyProgramInputs.scheduleMode === 'flexible' ? 6 : modifyProgramInputs.trainingDaysPerWeek
       const sameSessionCount = savedSessionCount === visibleSessionCountBeforeSet
-
-      // Determine verdict honestly:
-      // - static + match → STATIC_TARGET_MATCH
-      // - static + miss  → STATIC_TARGET_MISMATCH (real bug signal)
-      // - flexible       → FLEXIBLE_RESULT_ACCEPTED_NO_FAKE_TARGET
-      //   (with session-count appended for diagnostic context, never as a
-      //   pass/fail criterion since flexible has no fixed target)
+      const isRealAdaptiveReduction = savedSessionCount < (typeof requestedSessionTarget === 'number' ? requestedSessionTarget : 6)
+      
+      // Determine verdict
       let modifyVerdict: string
-      if (modifyScheduleTruth.isStatic && requestedSessionTarget !== null) {
-        modifyVerdict = savedSessionCount === requestedSessionTarget
-          ? `STATIC_TARGET_MATCH_${requestedSessionTarget}_SESSIONS`
-          : `STATIC_TARGET_MISMATCH_REQUESTED_${requestedSessionTarget}_GOT_${savedSessionCount}`
-      } else if (modifyScheduleTruth.isFlexible) {
-        modifyVerdict = `FLEXIBLE_RESULT_ACCEPTED_NO_FAKE_TARGET_SESSION_COUNT_${savedSessionCount}`
+      if (savedSessionCount >= 6 && modifyProgramInputs.scheduleMode === 'flexible') {
+        modifyVerdict = 'MODIFY_SAVED_AND_DISPLAYED_MATCH'
+      } else if (savedSessionCount === 4 && modifyProgramInputs.scheduleMode === 'flexible') {
+        // This should NOT happen anymore with server route fix
+        modifyVerdict = 'UNEXPECTED_4_SESSION_RESULT_CHECK_SERVER_ROUTE'
+      } else if (isRealAdaptiveReduction) {
+        modifyVerdict = 'REAL_ADAPTIVE_REDUCTION'
       } else {
-        modifyVerdict = `MODIFY_SCHEDULE_TRUTH_UNKNOWN_SESSION_COUNT_${savedSessionCount}`
+        modifyVerdict = 'MODIFY_FULLY_ROUTED_TO_AUTHORITATIVE_REBUILD'
       }
-
+      
       console.log('[modify-authoritative-result-proof]', {
         modifySubmitHandler: 'handleGenerateFromModifyBuilder',
         authoritativeRebuildWinner: '/api/program/regenerate',
         overridePayloadApplied: true,
-        // Honest schedule-truth fields
-        scheduleTruthDiagnostic: modifyScheduleTruth.diagnosticLabel,
-        scheduleMode: modifyScheduleTruth.scheduleMode,
-        isStatic: modifyScheduleTruth.isStatic,
-        isFlexible: modifyScheduleTruth.isFlexible,
-        requestedSessionTarget, // null for flexible, numeric for static
+        requestedSessionTarget,
         resolvedSessionTarget: savedSessionCount,
         savedProgramId: newProgram.id,
         savedSessionCount,
@@ -9565,66 +6605,26 @@ export default function ProgramPage() {
       })
       setBuilderOrigin('default')
       
-      // [STEP-5A-PSI-OMEGA-10] Align modify-success build result with the
-      //   canonical `createSuccessBuildResult(...)` + [PHASE 16S] metadata
-      //   spread pattern already used by the 3 sibling success paths:
-      //     - main generation (L8276 / L8279-L8313)
-      //     - regeneration   (L11931 / L11934-L11996)
-      //     - adjustment     (L14187 / L14190-L14254)
-      //
-      //   The previous inline object literal:
-      //     1. Used the stale field name `devMessage` (canonical is `devSummary`,
-      //        per BuildAttemptResult.devSummary at lib/program-state.ts:307).
-      //     2. Used non-canonical `timestamp` instead of `attemptedAt` (L289).
-      //     3. Was missing 10 required BuildAttemptResult fields:
-      //        attemptedAt, replacedVisibleProgram, preservedLastGoodProgram,
-      //        visibleProgramIsStale, devSummary, usedProfileSignature,
-      //        previousProgramId, newProgramId, failureReason, failureGoal.
-      //
-      //   The factory `createSuccessBuildResult` (lib/program-state.ts:678)
-      //   produces a fully-typed `BuildAttemptResult` with all required fields
-      //   filled in canonical form. Per-site metadata is layered via the same
-      //   `[PHASE 16S]` spread shape used by the 3 siblings.
-      //
-      //   `pageFlow: 'regeneration'` matches the modify handler's actual server
-      //   route (per L9056 `[MODIFY-SUBMIT-FIX]` comment: "Modify routes through
-      //   /api/program/regenerate") — same route, same `pageFlow` slot. It is
-      //   NOT 'main_generation' (this is a rebuild of an existing program) and
-      //   NOT 'adjustment_rebuild' (this is a unified rebuild, not a fine-tune
-      //   adjustment). The BuildAttemptStatus enum has no `'modify_*'` member,
-      //   so 'regeneration' is the truthful canonical match.
-      //
-      //   `dispatchStartedAt` reuses `currentAttemptStartedAtRef.current` which
-      //   was set at L9100 at the start of this handler (same `new Date()` call
-      //   semantics the other 3 siblings use for their `*DispatchStartTime`
-      //   locals).
-      //
-      //   Any dev-only message previously stored on the result is preserved
-      //   in `console.log` only — never in typed app state.
-      const modifySuccessProfileSig = createProfileSignature(
-        toFreshnessSignatureProjection(effectiveInputs)
-      )
-      const modifySuccessResult = createSuccessBuildResult(
-        modifySuccessProfileSig,
-        program?.id ?? null,
-        newProgram.id
-      )
-      const modifySuccessResultWithMetadata: BuildAttemptResult = {
-        ...modifySuccessResult,
+      // Build success result for consistency
+      const successResult = {
+        status: 'success' as const,
+        attemptId: `modify_unified_${Date.now()}`,
         runtimeSessionId: runtimeSessionIdRef.current,
-        pageFlow: 'regeneration',
-        dispatchStartedAt: currentAttemptStartedAtRef.current,
-        requestDispatched: true,
-        responseReceived: true,
-        hydratedFromStorage: false,
+        timestamp: new Date().toISOString(),
       }
-      console.log('[modify-builder-success]', {
-        message: 'Modify builder unified canonical generation completed',
-        programId: newProgram?.id ?? null,
-        previousProgramId: program?.id ?? null,
-        source: 'PHASE_24M',
+      setLastBuildResult({
+        ...successResult,
+        stage: 'complete',
+        errorCode: null,
+        subCode: 'none',
+        userMessage: 'Program generated successfully',
+        devMessage: 'Modify builder unified canonical generation completed',  // [PHASE 24M]
+        failureStep: null,
+        failureMiddleStep: null,
+        failureDayNumber: null,
+        failureFocus: null,
+        hydratedFromStorage: false,
       })
-      setLastBuildResult(modifySuccessResultWithMetadata)
       
       // [MODIFY-UNIFIED-FIX] Final unified architecture verdict - now uses server route
       const sessionCount = newProgram.sessions?.length ?? 0
@@ -9668,14 +6668,8 @@ export default function ProgramPage() {
       if (process.env.NODE_ENV !== 'production') {
         console.log('[v0] Restart Program confirmed - archiving and returning to builder')
       }
-      // Record program end for history/archival before deleting.
-      // [STEP-5A-OMEGA-11] `recordProgramEnd` accepts only the canonical union
-      //   `'completed' | 'new_program' | 'abandoned'` (lib/program-adjustment-engine.ts:209).
-      //   Restart-from-scratch ends the current program because the user is
-      //   replacing it with a freshly built one — semantically `'new_program'`,
-      //   matching the modify-flow sibling at L15823 and ProgramAdjustmentModal.tsx:363.
-      //   The user-facing "Restart Program" UI label is intentionally unchanged.
-      programModules.recordProgramEnd?.('new_program')
+      // Record program end for history/archival before deleting
+      programModules.recordProgramEnd?.('restart')
       programModules.deleteAdaptiveProgram(program.id)
       setProgram(null)
       setShowBuilder(true)
@@ -9713,8 +6707,6 @@ export default function ProgramPage() {
       setGenerationError('Program builder is still loading. Please wait a moment and try again.')
       return
     }
-    // [STEP-5A-CHI] Capture narrowed local — see handleGenerate rationale.
-    const saveAdaptiveProgram = programModules.saveAdaptiveProgram
     
     // ==========================================================================
     // [TASK 1] REGEN ENTRYPOINT AUDIT
@@ -9997,19 +6989,7 @@ export default function ProgramPage() {
         const existingProgram = program
         const staleOverrideAudit = {
           existingProgramHadSelectedSkills: existingProgram?.selectedSkills?.length || 0,
-          // [STEP-5A-OMEGA-7] `AdaptiveProgram` does not declare an
-          //   `equipment` field at the program level — equipment lives on
-          //   sessions/exercises and on the (optional) `profileSnapshot`.
-          //   Legacy persisted programs may carry an `equipmentAvailable`
-          //   structural field, so the audit reads it via the same
-          //   structural-cast pattern already used 5x in the
-          //   `[phase23b-modify-entry-source-candidate-audit]` block at
-          //   L15290-L15298 (`(program as { X?: T }).X`). This is NOT
-          //   `as any`, does NOT widen `AdaptiveProgram`, and does NOT add
-          //   a fake field — it is a structural read that returns
-          //   `undefined` (collapsing to 0) when the legacy field is
-          //   absent, preserving the audit's "could contaminate" intent.
-          existingProgramEquipment: (existingProgram as { equipmentAvailable?: string[] } | null)?.equipmentAvailable?.length || 0,
+          existingProgramEquipment: existingProgram?.equipment?.length || 0,
           existingProgramSessionLength: existingProgram?.sessionLength,
           existingProgramScheduleMode: existingProgram?.scheduleMode,
           canonicalSelectedSkills: canonicalProfileNow.selectedSkills?.length || 0,
@@ -10035,12 +7015,7 @@ export default function ProgramPage() {
         
         // [program-build] REGEN STAGE 2: Record regeneration event
         regenerateStage = 'recording_event'
-        // [STEP-5A-OMEGA-11] Regenerate replaces the current program with a
-        //   freshly generated one from current canonical truth. Canonical
-        //   `recordProgramEnd` reason is `'new_program'` (no `'regenerate'`
-        //   member exists in the union; the user-facing "Regenerate" UI label
-        //   is intentionally unchanged).
-        programModules.recordProgramEnd?.('new_program')
+        programModules.recordProgramEnd?.('regenerate')
         
         // [program-build] REGEN STAGE 3: Generate new program with FRESH canonical input
         regenerateStage = 'generating'
@@ -10056,10 +7031,10 @@ export default function ProgramPage() {
             secondaryGoal: inputs?.secondaryGoal ?? null,
             scheduleMode: inputs?.scheduleMode ?? null,
             trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
-            sessionDurationMode: inputsMeta.sessionDurationMode,
+            sessionDurationMode: inputs?.sessionDurationMode ?? null,
             sessionLength: inputs?.sessionLength ?? null,
             selectedSkills: inputs?.selectedSkills ?? [],
-            trainingPathType: inputsMeta.trainingPathType,
+            trainingPathType: inputs?.trainingPathType ?? null,
             equipment: inputs?.equipment ?? [],
           },
           freshRebuildInputTruth: {
@@ -10097,15 +7072,15 @@ export default function ProgramPage() {
             secondaryGoal: inputs?.secondaryGoal ?? null,
             scheduleMode: inputs?.scheduleMode ?? null,
             trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
-            sessionDurationMode: inputsMeta.sessionDurationMode,
+            sessionDurationMode: inputs?.sessionDurationMode ?? null,
             sessionLength: inputs?.sessionLength ?? null,
             selectedSkills: inputs?.selectedSkills ?? [],
-            trainingPathType: inputsMeta.trainingPathType,
+            trainingPathType: inputs?.trainingPathType ?? null,
             equipment: inputs?.equipment ?? [],
-            goalCategories: inputsMeta.goalCategories,
-            selectedFlexibility: inputsMeta.selectedFlexibility,
+            goalCategories: inputs?.goalCategories ?? [],
+            selectedFlexibility: inputs?.selectedFlexibility ?? [],
             experienceLevel: inputs?.experienceLevel ?? null,
-            selectedStyles: readProgramPageStringArray(inputs, 'selectedStyles'),
+            selectedStyles: inputs?.selectedStyles ?? [],
           },
           freshRebuildInputTruth: {
             primaryGoal: freshRebuildInput?.primaryGoal ?? null,
@@ -10120,7 +7095,7 @@ export default function ProgramPage() {
             goalCategories: freshRebuildInput?.goalCategories ?? [],
             selectedFlexibility: freshRebuildInput?.selectedFlexibility ?? [],
             experienceLevel: freshRebuildInput?.experienceLevel ?? null,
-            selectedStyles: readProgramPageStringArray(freshRebuildInput, 'selectedStyles'),
+            selectedStyles: freshRebuildInput?.selectedStyles ?? [],
           },
           canonicalBaselineTruth: {
             primaryGoal: canonicalProfileNow?.primaryGoal ?? null,
@@ -10135,7 +7110,7 @@ export default function ProgramPage() {
             goalCategories: canonicalProfileNow?.goalCategories ?? [],
             selectedFlexibility: canonicalProfileNow?.selectedFlexibility ?? [],
             experienceLevel: canonicalProfileNow?.experienceLevel ?? null,
-            selectedStyles: readProgramPageStringArray(canonicalProfileNow, 'selectedStyles'),
+            selectedStyles: canonicalProfileNow?.selectedStyles ?? [],
           },
           fieldsStillAtRiskIfNotExplicitlyMerged: [
             'goalCategories',
@@ -10158,13 +7133,13 @@ export default function ProgramPage() {
           secondaryGoalMatch: (inputs?.secondaryGoal ?? null) === (canonicalProfileNow?.secondaryGoal ?? null),
           scheduleModeMatch: (inputs?.scheduleMode ?? null) === (canonicalProfileNow?.scheduleMode ?? null),
           trainingDaysMatch: (inputs?.trainingDaysPerWeek ?? null) === (canonicalProfileNow?.trainingDaysPerWeek ?? null),
-          sessionDurationModeMatch: (inputsMeta.sessionDurationMode) === (canonicalProfileNow?.sessionDurationMode ?? null),
+          sessionDurationModeMatch: (inputs?.sessionDurationMode ?? null) === (canonicalProfileNow?.sessionDurationMode ?? null),
           sessionLengthMatch: (inputs?.sessionLength ?? null) === (canonicalProfileNow?.sessionLengthMinutes ?? null),
           selectedSkillsMatch: JSON.stringify(inputs?.selectedSkills ?? []) === JSON.stringify(canonicalProfileNow?.selectedSkills ?? []),
-          trainingPathTypeMatch: (inputsMeta.trainingPathType) === (canonicalProfileNow?.trainingPathType ?? null),
+          trainingPathTypeMatch: (inputs?.trainingPathType ?? null) === (canonicalProfileNow?.trainingPathType ?? null),
           equipmentMatch: JSON.stringify(inputs?.equipment ?? []) === JSON.stringify(canonicalProfileNow?.equipmentAvailable ?? []),
-          goalCategoriesMatch: JSON.stringify(inputsMeta.goalCategories) === JSON.stringify(canonicalProfileNow?.goalCategories ?? []),
-          selectedFlexibilityMatch: JSON.stringify(inputsMeta.selectedFlexibility) === JSON.stringify(canonicalProfileNow?.selectedFlexibility ?? []),
+          goalCategoriesMatch: JSON.stringify(inputs?.goalCategories ?? []) === JSON.stringify(canonicalProfileNow?.goalCategories ?? []),
+          selectedFlexibilityMatch: JSON.stringify(inputs?.selectedFlexibility ?? []) === JSON.stringify(canonicalProfileNow?.selectedFlexibility ?? []),
           experienceLevelMatch: (inputs?.experienceLevel ?? null) === (canonicalProfileNow?.experienceLevel ?? null),
         }
         const __p18c_inputsVsFresh = {
@@ -10172,13 +7147,13 @@ export default function ProgramPage() {
           secondaryGoalMatch: (inputs?.secondaryGoal ?? null) === (freshRebuildInput?.secondaryGoal ?? null),
           scheduleModeMatch: (inputs?.scheduleMode ?? null) === (freshRebuildInput?.scheduleMode ?? null),
           trainingDaysMatch: (inputs?.trainingDaysPerWeek ?? null) === (freshRebuildInput?.trainingDaysPerWeek ?? null),
-          sessionDurationModeMatch: (inputsMeta.sessionDurationMode) === (freshRebuildInput?.sessionDurationMode ?? null),
+          sessionDurationModeMatch: (inputs?.sessionDurationMode ?? null) === (freshRebuildInput?.sessionDurationMode ?? null),
           sessionLengthMatch: (inputs?.sessionLength ?? null) === (freshRebuildInput?.sessionLength ?? null),
           selectedSkillsMatch: JSON.stringify(inputs?.selectedSkills ?? []) === JSON.stringify(freshRebuildInput?.selectedSkills ?? []),
-          trainingPathTypeMatch: (inputsMeta.trainingPathType) === (freshRebuildInput?.trainingPathType ?? null),
+          trainingPathTypeMatch: (inputs?.trainingPathType ?? null) === (freshRebuildInput?.trainingPathType ?? null),
           equipmentMatch: JSON.stringify(inputs?.equipment ?? []) === JSON.stringify(freshRebuildInput?.equipment ?? []),
-          goalCategoriesMatch: JSON.stringify(inputsMeta.goalCategories) === JSON.stringify(freshRebuildInput?.goalCategories ?? []),
-          selectedFlexibilityMatch: JSON.stringify(inputsMeta.selectedFlexibility) === JSON.stringify(freshRebuildInput?.selectedFlexibility ?? []),
+          goalCategoriesMatch: JSON.stringify(inputs?.goalCategories ?? []) === JSON.stringify(freshRebuildInput?.goalCategories ?? []),
+          selectedFlexibilityMatch: JSON.stringify(inputs?.selectedFlexibility ?? []) === JSON.stringify(freshRebuildInput?.selectedFlexibility ?? []),
           experienceLevelMatch: (inputs?.experienceLevel ?? null) === (freshRebuildInput?.experienceLevel ?? null),
         }
         const __p18c_freshVsCanonical = {
@@ -10216,13 +7191,13 @@ export default function ProgramPage() {
             secondaryGoal: inputs?.secondaryGoal ?? null,
             scheduleMode: inputs?.scheduleMode ?? null,
             trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
-            sessionDurationMode: inputsMeta.sessionDurationMode,
+            sessionDurationMode: inputs?.sessionDurationMode ?? null,
             sessionLength: inputs?.sessionLength ?? null,
             selectedSkills: inputs?.selectedSkills ?? [],
-            trainingPathType: inputsMeta.trainingPathType,
+            trainingPathType: inputs?.trainingPathType ?? null,
             equipment: inputs?.equipment ?? [],
-            goalCategories: inputsMeta.goalCategories,
-            selectedFlexibility: inputsMeta.selectedFlexibility,
+            goalCategories: inputs?.goalCategories ?? [],
+            selectedFlexibility: inputs?.selectedFlexibility ?? [],
             experienceLevel: inputs?.experienceLevel ?? null,
           },
           freshRebuildInputTruth: {
@@ -10274,9 +7249,9 @@ export default function ProgramPage() {
             primaryGoal: !!(inputs?.primaryGoal),
             scheduleMode: !!(inputs?.scheduleMode),
             selectedSkills: (inputs?.selectedSkills?.length ?? 0) > 0,
-            trainingPathType: !!inputsMeta.trainingPathType,
-            goalCategories: inputsMeta.goalCategories.length > 0,
-            selectedFlexibility: inputsMeta.selectedFlexibility.length > 0,
+            trainingPathType: !!(inputs?.trainingPathType),
+            goalCategories: (inputs?.goalCategories?.length ?? 0) > 0,
+            selectedFlexibility: (inputs?.selectedFlexibility?.length ?? 0) > 0,
             experienceLevel: !!(inputs?.experienceLevel),
           },
           likelyRebuildCollapseIfInputsWins: 
@@ -10314,7 +7289,7 @@ export default function ProgramPage() {
           sessionDurationMode:
             freshRebuildInput?.sessionDurationMode ||
             canonicalProfileNow?.sessionDurationMode ||
-            inputsMeta.sessionDurationMode ||
+            inputs?.sessionDurationMode ||
             null,
           sessionLength:
             freshRebuildInput?.sessionLength ??
@@ -10332,7 +7307,7 @@ export default function ProgramPage() {
           trainingPathType:
             freshRebuildInput?.trainingPathType ||
             canonicalProfileNow?.trainingPathType ||
-            inputsMeta.trainingPathType ||
+            inputs?.trainingPathType ||
             null,
           equipment:
             (freshRebuildInput?.equipment?.length ?? 0) > 0
@@ -10348,16 +7323,16 @@ export default function ProgramPage() {
               ? freshRebuildInput.goalCategories
               : (canonicalProfileNow?.goalCategories?.length ?? 0) > 0
               ? canonicalProfileNow.goalCategories
-              : inputsMeta.goalCategories.length > 0
-              ? inputsMeta.goalCategories
+              : (inputs?.goalCategories?.length ?? 0) > 0
+              ? inputs.goalCategories
               : [],
           selectedFlexibility:
             (freshRebuildInput?.selectedFlexibility?.length ?? 0) > 0
               ? freshRebuildInput.selectedFlexibility
               : (canonicalProfileNow?.selectedFlexibility?.length ?? 0) > 0
               ? canonicalProfileNow.selectedFlexibility
-              : inputsMeta.selectedFlexibility.length > 0
-              ? inputsMeta.selectedFlexibility
+              : (inputs?.selectedFlexibility?.length ?? 0) > 0
+              ? inputs.selectedFlexibility
               : [],
           experienceLevel:
             freshRebuildInput?.experienceLevel ||
@@ -10405,7 +7380,7 @@ export default function ProgramPage() {
           sessionDurationMode: strongestRegenerateTruth.sessionDurationMode,
           sessionLength: strongestRegenerateTruth.sessionLength,
           selectedSkills: strongestRegenerateTruth.selectedSkills,
-          selectedStyles: (((): string[] => { const a = readProgramPageStringArray(inputs, 'selectedStyles'); return a.length > 0 ? a : readProgramPageStringArray(freshRebuildInput, 'selectedStyles') })()),
+          selectedStyles: (inputs?.selectedStyles?.length ?? 0) > 0 ? inputs.selectedStyles : freshRebuildInput?.selectedStyles,
           trainingPathType: strongestRegenerateTruth.trainingPathType,
           equipment: strongestRegenerateTruth.equipment,
           // [PHASE 18B] TASK 4 - Deep planner identity fields
@@ -10427,11 +7402,11 @@ export default function ProgramPage() {
             secondaryGoal: inputs?.secondaryGoal ?? null,
             scheduleMode: inputs?.scheduleMode ?? null,
             trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
-            sessionDurationMode: inputsMeta.sessionDurationMode,
+            sessionDurationMode: inputs?.sessionDurationMode ?? null,
             sessionLength: inputs?.sessionLength ?? null,
             selectedSkills: inputs?.selectedSkills ?? [],
-            selectedStyles: readProgramPageStringArray(inputs, 'selectedStyles'),
-            trainingPathType: inputsMeta.trainingPathType,
+            selectedStyles: inputs?.selectedStyles ?? [],
+            trainingPathType: inputs?.trainingPathType ?? null,
             equipment: inputs?.equipment ?? [],
           },
           preMergeRebuildInput: {
@@ -10442,7 +7417,7 @@ export default function ProgramPage() {
             sessionDurationMode: freshRebuildInput?.sessionDurationMode ?? null,
             sessionLength: freshRebuildInput?.sessionLength ?? null,
             selectedSkills: freshRebuildInput?.selectedSkills ?? [],
-            selectedStyles: readProgramPageStringArray(freshRebuildInput, 'selectedStyles'),
+            selectedStyles: freshRebuildInput?.selectedStyles ?? [],
             trainingPathType: freshRebuildInput?.trainingPathType ?? null,
             equipment: freshRebuildInput?.equipment ?? [],
           },
@@ -10473,7 +7448,7 @@ export default function ProgramPage() {
           preservedSelectedSkillsFromInputs:
             JSON.stringify(rebuildBuilderInput?.selectedSkills ?? []) === JSON.stringify(inputs?.selectedSkills ?? rebuildBuilderInput?.selectedSkills ?? []),
           preservedTrainingPathTypeFromInputs:
-            rebuildBuilderInput?.trainingPathType === (inputsMeta.trainingPathType ?? rebuildBuilderInput?.trainingPathType),
+            rebuildBuilderInput?.trainingPathType === (inputs?.trainingPathType ?? rebuildBuilderInput?.trainingPathType),
           verdict: 'final_rebuild_input_now_prefers_current_settings_truth',
         })
         
@@ -10504,55 +7479,17 @@ export default function ProgramPage() {
         // [PHASE 17W] Reuse earlier canonicalProfileNow from handleRegenerate scope.
         // Do not redeclare here or Turbopack build will fail with duplicate identifier.
         // [PHASE 17Y] TASK 4 - Use strongestRegenerateTruth for canonical override
-        // [METHOD-PREFERENCE-BRIDGE] Explicitly derive `trainingMethodPreferences`
-        // for the override. Priority: inputs.selectedStyles (live UI truth) →
-        // freshRebuildInput.selectedStyles → canonicalProfileNow.trainingMethodPreferences.
-        // `straight_sets` is always included as the universal baseline.
-        const METHOD_PREF_VOCAB = new Set([
-          'straight_sets',
-          'supersets',
-          'circuits',
-          'density_blocks',
-          'cluster_sets',
-          'drop_sets',
-          'rest_pause',
-          'ladder_sets',
-        ])
-        const pageStylesFromInputs = readProgramPageStringArray(inputs, 'selectedStyles')
-        const pageStylesFromFresh = readProgramPageStringArray(freshRebuildInput, 'selectedStyles')
-        const pageStylesTruth: string[] = pageStylesFromInputs.length > 0 ? pageStylesFromInputs : pageStylesFromFresh
-        const pageStylesFiltered = pageStylesTruth.filter(s => typeof s === 'string' && METHOD_PREF_VOCAB.has(s))
-        const canonicalMethodPrefs = Array.isArray(canonicalProfileNow?.trainingMethodPreferences)
-          ? (canonicalProfileNow!.trainingMethodPreferences as unknown as string[])
-          : []
-        // Merge: user UI truth wins when present, otherwise canonical inference.
-        // Always include 'straight_sets' as the universal baseline.
-        const mergedBase = pageStylesFiltered.length > 0 ? pageStylesFiltered : canonicalMethodPrefs
-        const mergedSet = new Set<string>(mergedBase)
-        mergedSet.add('straight_sets')
-        const mergedMethodPreferences = Array.from(mergedSet)
-
-        // [STEP-4B] Run the strongest-truth schedule pair through the
-        // shared resolver so Regenerate uses identical semantics to Modify
-        // and Adjustment. Flexible → canonical numeric is null. Static →
-        // numeric value preserved. No hand-rolled ternary, no fake fallback.
-        const regenerateScheduleTruth = resolveProgramPageScheduleTruth({
-          scheduleMode: strongestRegenerateTruth.scheduleMode,
-          trainingDaysPerWeek: strongestRegenerateTruth.trainingDaysPerWeek,
-        })
-
         const rebuildCanonicalOverride = {
           ...canonicalProfileNow,
           // [PHASE 17Y/18B] Material identity fields - use strongestRegenerateTruth
           primaryGoal: strongestRegenerateTruth.primaryGoal,
           secondaryGoal: strongestRegenerateTruth.secondaryGoal,
           selectedSkills: strongestRegenerateTruth.selectedSkills,
-          // [STEP-4B] scheduleMode + trainingDaysPerWeek both flow from
-          // the same resolved truth object. If both are absent, fall back
-          // to the strongestRegenerateTruth raw mode (preserving prior
-          // behavior for the genuinely-unknown case) without faking.
-          scheduleMode: regenerateScheduleTruth.scheduleMode ?? strongestRegenerateTruth.scheduleMode,
-          trainingDaysPerWeek: regenerateScheduleTruth.canonicalTrainingDays,
+          scheduleMode: strongestRegenerateTruth.scheduleMode,
+          // [PHASE 17V] Flexible null semantics - if flexible, force null trainingDaysPerWeek
+          trainingDaysPerWeek: strongestRegenerateTruth.scheduleMode === 'flexible' 
+            ? null 
+            : strongestRegenerateTruth.trainingDaysPerWeek,
           sessionDurationMode: strongestRegenerateTruth.sessionDurationMode,
           sessionLengthMinutes: strongestRegenerateTruth.sessionLength,
           equipmentAvailable: strongestRegenerateTruth.equipment,
@@ -10561,29 +7498,7 @@ export default function ProgramPage() {
           goalCategories: strongestRegenerateTruth.goalCategories,
           selectedFlexibility: strongestRegenerateTruth.selectedFlexibility,
           experienceLevel: strongestRegenerateTruth.experienceLevel,
-          // [METHOD-PREFERENCE-BRIDGE] The builder reads this field directly.
-          trainingMethodPreferences: mergedMethodPreferences,
         }
-
-        // [METHOD-PREFERENCE-BRIDGE] Pre-fetch audit.
-        console.log('[rebuild-method-preference-truth-entry-audit]', {
-          source: 'handleRegenerate:program_page_before_fetch',
-          inputs_selectedStyles: pageStylesFromInputs,
-          inputs_selectedStyles_count: pageStylesFromInputs.length,
-          freshRebuildInput_selectedStyles: pageStylesFromFresh,
-          canonical_trainingMethodPreferences: canonicalMethodPrefs,
-          canonical_trainingMethodPreferences_count: canonicalMethodPrefs.length,
-          pageStylesTruth_filtered: pageStylesFiltered,
-          mergedMethodPreferences,
-          mergedMethodPreferences_count: mergedMethodPreferences.length,
-          // Will the builder treat grouped-method truth as EMPTY or PRESENT?
-          // "PRESENT" means at least one non-straight-sets preference exists,
-          // which is the trigger condition for grouped method application.
-          builderWillSeeMethodTruthAs:
-            mergedMethodPreferences.filter(m => m !== 'straight_sets').length > 0
-              ? 'PRESENT'
-              : 'EMPTY',
-        })
         
         // [PHASE 17V] TASK 6A - Rebuild canonical override audit
         console.log('[phase17v-rebuild-canonical-override-audit]', {
@@ -10605,10 +7520,10 @@ export default function ProgramPage() {
             selectedSkills: inputs?.selectedSkills ?? [],
             scheduleMode: inputs?.scheduleMode ?? null,
             trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
-            sessionDurationMode: inputsMeta.sessionDurationMode,
+            sessionDurationMode: inputs?.sessionDurationMode ?? null,
             sessionLength: inputs?.sessionLength ?? null,
             equipment: inputs?.equipment ?? [],
-            trainingPathType: inputsMeta.trainingPathType,
+            trainingPathType: inputs?.trainingPathType ?? null,
           },
           freshRebuildInputTruth: {
             primaryGoal: freshRebuildInput?.primaryGoal ?? null,
@@ -10846,9 +7761,9 @@ export default function ProgramPage() {
           currentInputs: {
             primaryGoal: inputs?.primaryGoal ?? null,
             selectedSkills: inputs?.selectedSkills ?? [],
-            trainingPathType: inputsMeta.trainingPathType,
-            goalCategories: inputsMeta.goalCategories,
-            selectedFlexibility: inputsMeta.selectedFlexibility,
+            trainingPathType: inputs?.trainingPathType ?? null,
+            goalCategories: inputs?.goalCategories ?? [],
+            selectedFlexibility: inputs?.selectedFlexibility ?? [],
             experienceLevel: inputs?.experienceLevel ?? null,
             scheduleMode: inputs?.scheduleMode ?? null,
             trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
@@ -10868,7 +7783,7 @@ export default function ProgramPage() {
             canonicalHasTrainingPathType: !!canonicalProfileNow?.trainingPathType,
             canonicalHasGoalCategories: (canonicalProfileNow?.goalCategories?.length ?? 0) > 0,
             canonicalMatchesInputsSkills: JSON.stringify(canonicalProfileNow?.selectedSkills ?? []) === JSON.stringify(inputs?.selectedSkills ?? []),
-            canonicalMatchesInputsPathType: (canonicalProfileNow?.trainingPathType ?? null) === (inputsMeta.trainingPathType),
+            canonicalMatchesInputsPathType: (canonicalProfileNow?.trainingPathType ?? null) === (inputs?.trainingPathType ?? null),
           },
           verdict: (canonicalProfileNow?.selectedSkills?.length ?? 0) > 0 && !!canonicalProfileNow?.trainingPathType
             ? 'CANONICAL_NOW_CARRIES_DEEP_PLANNER_IDENTITY'
@@ -10908,9 +7823,6 @@ export default function ProgramPage() {
             programInputs: rebuildBuilderInput,
             regenerationReason: 'rebuild_from_current_settings',
             currentProgramId: program?.id ?? null,
-            // [PHASE-M] Forward recent trusted workout logs to the
-            // authoritative regenerate corridor.
-            recentWorkoutLogs: getRecentWorkoutLogsForGenerationRequest(),
           }),
         })
         
@@ -11137,8 +8049,7 @@ export default function ProgramPage() {
             'session_building_failure' as GenerationErrorCode,
             'degraded_regenerate',
             'generation_degraded' as BuildAttemptSubCode,
-            // [STEP-5A-OMEGA] Project to narrow signature shape.
-            createProfileSignature(toFreshnessSignatureProjection(freshRebuildInput)),
+            createProfileSignature(freshRebuildInput),
             program?.id || null,
             'Your rebuild returned degraded sessions, so your last good program was preserved.',
             {
@@ -11211,10 +8122,7 @@ export default function ProgramPage() {
           finalProgramSessionCount: (newProgram as AdaptiveProgram)?.sessions?.length ?? 0,
           finalProgramPrimaryGoal: (newProgram as AdaptiveProgram)?.primaryGoal ?? null,
           finalProgramScheduleMode: (newProgram as AdaptiveProgram)?.scheduleMode ?? null,
-          // [STEP-5A-OMICRON] Sourced via the quarantined record helper —
-          //   `trainingPathType` is not on `AdaptiveProgram`, but the
-          //   runtime value carries it. Replaces direct `as Record<string, unknown>`.
-          finalProgramTrainingPathType: readProgramPageString(newProgram, 'trainingPathType'),
+          finalProgramTrainingPathType: (newProgram as Record<string, unknown>)?.trainingPathType ?? null,
           finalProgramSelectedSkills: (newProgram as AdaptiveProgram)?.selectedSkills ?? [],
           verdict: 'rebuild_used_explicit_canonical_override_path',
         })
@@ -11414,14 +8322,7 @@ export default function ProgramPage() {
           outputPrimaryGoal: newProgram.primaryGoal,
           outputSecondaryGoal: newProgram.secondaryGoal || null,
           outputSelectedSkills: newProgram.selectedSkills || [],
-          // [STEP-5A-PHI] AdaptiveProgram owns equipment via the typed
-          //   `equipmentProfile: EquipmentProfile` slot, NOT a flat
-          //   `equipment` field. The authoritative output equipment list
-          //   for diagnostics is `equipmentProfile.available` (see the
-          //   already-correct reads at L11671/L11710). The previous flat
-          //   `newProgram.equipment` read was a stale shape from before
-          //   the equipment-adaptation contract migration.
-          outputEquipment: newProgram.equipmentProfile?.available || [],
+          outputEquipment: newProgram.equipment || [],
           outputSessionCount: newProgram.sessions?.length || 0,
           outputScheduleMode: newProgram.scheduleMode,
           goalsMatch: freshRebuildInput.primaryGoal === newProgram.primaryGoal,
@@ -11564,8 +8465,7 @@ export default function ProgramPage() {
   regenerateStage = 'saving'
   console.log('[program-build] REGEN STAGE 7: Saving snapshot...')
   try {
-    // [STEP-5A-CHI] Use narrowed local from handler-top capture.
-    saveAdaptiveProgram(newProgram)
+    programModules.saveAdaptiveProgram(newProgram)
     console.log('[program-build] REGEN STAGE 7: Save completed successfully')
   } catch (saveErr) {
     // [storage-quota-fix] TASK E: Classify storage save errors precisely
@@ -11672,12 +8572,7 @@ export default function ProgramPage() {
         }
         
         // Step 4: Verify session count matches
-        // [STEP-5A-OMEGA-13] `savedState.activeProgram` is `AdaptiveProgram |
-        //   GeneratedProgram | null` — the latter has no `.sessions` field.
-        //   Use the typed audit helper to extract the natural day count from
-        //   whichever shape was persisted. `newProgram` is cast to
-        //   `AdaptiveProgram` upstream, so its `.sessions` read remains safe.
-        const storedSessionCount = getProgramSessionCountForAudit(savedState?.activeProgram)
+        const storedSessionCount = savedState?.activeProgram?.sessions?.length || 0
         const newSessionCount = newProgram.sessions?.length || 0
         
         // [PHASE 16R] Session count verification audit
@@ -11716,10 +8611,7 @@ export default function ProgramPage() {
         regenerateStage = 'freshness_sync'
         console.log('[freshness-sync] REGEN STAGE 7c: Updating canonical freshness identity...')
         // [TASK 2] Use freshRebuildInput for signature, NOT stale inputs
-        // [STEP-5A-OMEGA] Project to narrow signature shape.
-        const regenProfileSig = createProfileSignature(
-          toFreshnessSignatureProjection(freshRebuildInput),
-        )
+        const regenProfileSig = createProfileSignature(freshRebuildInput)
         invalidateStaleCaches()
         updateFreshnessIdentity(
           newProgram.id,
@@ -11742,38 +8634,15 @@ export default function ProgramPage() {
   console.log('[post-build-truth] REGEN STAGE 7d: Persisting FULL programming truth to canonical profile...')
   try {
     // Use freshRebuildInput values (already composed from canonical truth + overrides)
-    // [STEP-5A-OMEGA-4] Explicit literal-union annotations to lock the canonical
-    //   writeback contract at construction (mirrors the initial-build writeback
-    //   above). Without these, ternaries widen to `string` / `number | undefined`
-    //   and `Partial<CanonicalProgrammingProfile>` rejects the object below.
-    // [STEP-5A-OMEGA-14] Replaced inline `=== 'adaptive'` (TS2367 impossible
-    //   literal compare against narrowed `ScheduleMode = 'static' | 'flexible'`)
-    //   with the typed canonicalizer. Same regen-writeback intent preserved.
-    const effectiveScheduleMode: 'static' | 'flexible' =
-      toCanonicalScheduleModeForProgramProfile(freshRebuildInput.scheduleMode)
+    const effectiveScheduleMode = freshRebuildInput.scheduleMode === 'flexible' || freshRebuildInput.scheduleMode === 'adaptive'
+      ? 'flexible'
+      : 'static'
     
-    // [STEP-5A-OMEGA-4] Explicit `number | null` — drops the `'flexible'`
-    //   string variant `freshRebuildInput.trainingDaysPerWeek` may carry.
-    const effectiveTrainingDays: number | null = effectiveScheduleMode === 'flexible'
+    const effectiveTrainingDays = effectiveScheduleMode === 'flexible'
       ? null
-      : typeof newProgram.trainingDaysPerWeek === 'number'
-        ? newProgram.trainingDaysPerWeek
-        : typeof freshRebuildInput.trainingDaysPerWeek === 'number'
-          ? freshRebuildInput.trainingDaysPerWeek
-          : null
+      : (newProgram.trainingDaysPerWeek ?? (typeof freshRebuildInput.trainingDaysPerWeek === 'number' ? freshRebuildInput.trainingDaysPerWeek : undefined))
     
-    const effectiveSessionDurationMode: 'static' | 'adaptive' =
-      freshRebuildInput.sessionDurationMode === 'adaptive' ? 'adaptive' : 'static'
-
-    // [STEP-5A-OMEGA-4] Numeric session-length narrowing — `SessionLength`
-    //   includes string label variants ('10-20', '45-60', etc.) that the
-    //   canonical profile's `sessionLengthMinutes: number` rejects.
-    const effectiveSessionLengthMinutes: number | undefined =
-      typeof newProgram.sessionLength === 'number' && Number.isFinite(newProgram.sessionLength)
-        ? newProgram.sessionLength
-        : typeof freshRebuildInput.sessionLength === 'number' && Number.isFinite(freshRebuildInput.sessionLength)
-          ? freshRebuildInput.sessionLength
-          : undefined
+    const effectiveSessionDurationMode = freshRebuildInput.sessionDurationMode === 'adaptive' ? 'adaptive' : 'static'
     
     // [equipment-truth-fix] TASK C: Convert builder equipment keys to canonical profile keys
     const canonicalEquipment = builderEquipmentToProfileEquipment(freshRebuildInput.equipment || [])
@@ -11789,19 +8658,15 @@ export default function ProgramPage() {
     // [PHASE 18F] TASK 3 - Expand canonical writeback to include FULL deep planner identity
     // This ensures future rebuilds reconstruct from the same truth class as this successful regen
     // ==========================================================================
-    // [STEP-5A-OMEGA-4] Explicit `Partial<CanonicalProgrammingProfile>`
-    //   annotation locks every field to the strict canonical contract.
-    const regenerateWritebackTruth: Partial<CanonicalProgrammingProfile> = {
+    const regenerateWritebackTruth = {
       // Goal fields
       primaryGoal: freshRebuildInput.primaryGoal,
       secondaryGoal: freshRebuildInput.secondaryGoal,
       // Schedule fields
-      // [STEP-5A-OMEGA-4] `effectiveTrainingDays` is now `number | null`.
-      trainingDaysPerWeek: effectiveTrainingDays,
+      trainingDaysPerWeek: effectiveTrainingDays ?? undefined,
       scheduleMode: effectiveScheduleMode,
       // Duration fields
-      // [STEP-5A-OMEGA-4] Use pre-narrowed `effectiveSessionLengthMinutes`.
-      sessionLengthMinutes: effectiveSessionLengthMinutes,
+      sessionLengthMinutes: newProgram.sessionLength ?? freshRebuildInput.sessionLength ?? undefined,
       sessionDurationMode: effectiveSessionDurationMode,
       // Equipment/constraints
       equipmentAvailable: canonicalEquipment,
@@ -11812,27 +8677,7 @@ export default function ProgramPage() {
       trainingPathType: strongestRegenerateTruth.trainingPathType ?? undefined,
       goalCategories: strongestRegenerateTruth.goalCategories?.length ? strongestRegenerateTruth.goalCategories : undefined,
       selectedFlexibility: strongestRegenerateTruth.selectedFlexibility?.length ? strongestRegenerateTruth.selectedFlexibility : undefined,
-      // [STEP-5A-OMEGA-17] `selectedStrength` is not on `AdaptiveProgramInputs`
-      //   (`lib/adaptive-program-builder.ts:1088` — the contract only owns
-      //   `primaryGoal`, `secondaryGoal`, `experienceLevel`, `trainingDaysPerWeek`,
-      //   `sessionLength`, `equipment`, `todaySessionMinutes`, `scheduleMode`,
-      //   `adaptiveWorkloadEnabled`, `selectedSkills`, `regenerationMode`,
-      //   `regenerationReason`). The prior `(inputs?.selectedStrength as string[]
-      //   | undefined)` bandage cast triggered TS2339 at L11815:34. Replaced with
-      //   the *exact same IIFE + boundary-helper pattern* the sibling
-      //   `initialBuildWritebackTruth` already uses at L7856 for the same field
-      //   from the same `inputs` source — so the regenerate and initial-build
-      //   writebacks are now architecturally symmetric. Runtime: identical
-      //   non-empty-array → assign, empty → `undefined`. Same-class sweep across
-      //   all 4 `Partial<CanonicalProgrammingProfile>` writebacks (initial-build
-      //   L7823 ✓, modify L9430 omits this field, regenerate L11794 [this fix],
-      //   adjustment L14099 reads from `canonicalProfileNow` ✓) confirms L11815
-      //   is the only active occurrence — no further regenerate/freshness/
-      //   writeback metadata corruption remains.
-      selectedStrength: ((): string[] | undefined => {
-        const arr = readProgramPageStringArray(inputs, 'selectedStrength')
-        return arr.length > 0 ? arr : undefined
-      })(),
+      selectedStrength: (inputs?.selectedStrength as string[] | undefined)?.length ? inputs.selectedStrength : undefined,
     }
     
     // [PHASE 18F] TASK 1 - Pre-writeback depth audit for regenerate
@@ -11935,22 +8780,14 @@ export default function ProgramPage() {
         regenerateStage = 'updating_ui'
         
         // [program-save-truth-audit] TASK H: Verify regenerated program matches what will display
-        // [STEP-5A-LAMBDA] Same pattern as the post-build save audit above:
-        //   `AdaptiveSession` has no `id`; derive `firstSessionKey` from
-        //   real fields.
-        const regenerateSaveAuditFirstSession = newProgram.sessions?.[0] ?? null
         console.log('[program-save-truth-audit]', {
           context: 'regeneration',
           oldProgramId: program?.id || 'none',
           newProgramId: newProgram.id,
           createdAt: newProgram.createdAt,
           sessionCount: newProgram.sessions?.length || 0,
-          firstSessionKey: regenerateSaveAuditFirstSession
-            ? `day${regenerateSaveAuditFirstSession.dayNumber}-${regenerateSaveAuditFirstSession.dayLabel || regenerateSaveAuditFirstSession.focusLabel || regenerateSaveAuditFirstSession.focus || 'session'}`
-            : 'none',
-          firstSessionExerciseCount: Array.isArray(regenerateSaveAuditFirstSession?.exercises)
-            ? regenerateSaveAuditFirstSession.exercises.length
-            : 0,
+          firstSessionId: newProgram.sessions?.[0]?.id || 'none',
+          firstSessionExerciseCount: newProgram.sessions?.[0]?.exercises?.length || 0,
           provenanceMode: newProgram.generationProvenance?.generationMode || 'unknown',
           provenanceFreshness: newProgram.generationProvenance?.generationFreshness || 'unknown',
           qualityTier: newProgram.qualityClassification?.qualityTier || 'unknown',
@@ -12089,8 +8926,7 @@ export default function ProgramPage() {
         setShowBuilder(false)
         
         // [program-rebuild-truth] Create success result using freshRebuildInput signature
-        // [STEP-5A-OMEGA] Project to narrow signature shape.
-        const profileSig = createProfileSignature(toFreshnessSignatureProjection(freshRebuildInput))
+        const profileSig = createProfileSignature(freshRebuildInput)
         const successResult = createSuccessBuildResult(profileSig, program?.id || null, newProgram.id)
         
         // [PHASE 16S] Add runtime session metadata to regeneration success result
@@ -12194,31 +9030,21 @@ export default function ProgramPage() {
           || newProgram.equipmentProfile?.available 
           || []
         
-        // [STEP-4H] Same canonical-evaluator boundary as the unifiedStaleness
-        // call site (~line 3963). `newProgram.sessionLength` is `SessionLength`
-        // (string members like '60+' / '10-20'); `newProgram.trainingDaysPerWeek`
-        // is `TrainingDaysPerWeek` ('flexible' member). Both must normalize to
-        // `number | null` before crossing the evaluator contract. Routing
-        // through `buildStalenessEvaluatorProgram` keeps the boundary unified
-        // with the other call site so future evaluator-contract changes flow
-        // through one place.
-        const postBuildStaleness = evaluateUnifiedProgramStaleness(
-          buildStalenessEvaluatorProgram({
-            primaryGoal: newProgram.primaryGoal,
-            secondaryGoal: (newProgram as unknown as { secondaryGoal?: string }).secondaryGoal,
-            trainingDaysPerWeek: newProgram.trainingDaysPerWeek,
-            sessionLength: newProgram.sessionLength,
-            scheduleMode: (newProgram as unknown as { scheduleMode?: string }).scheduleMode,
-            sessionDurationMode: (newProgram as unknown as { sessionDurationMode?: string }).sessionDurationMode,
-            // CRITICAL FIX: Use authoritative equipment from stored build snapshot
-            equipment: postBuildAuthoritativeEquipment,
-            // CRITICAL: Use profileSnapshot jointCautions - AdaptiveProgram doesn't have top-level jointCautions
-            jointCautions: (postBuildProfileSnapshot as { jointCautions?: string[] })?.jointCautions,
-            experienceLevel: newProgram.experienceLevel,
-            selectedSkills: (newProgram as unknown as { selectedSkills?: string[] }).selectedSkills,
-            profileSnapshot: postBuildProfileSnapshot,
-          }),
-        )
+        const postBuildStaleness = evaluateUnifiedProgramStaleness({
+          primaryGoal: newProgram.primaryGoal,
+          secondaryGoal: (newProgram as unknown as { secondaryGoal?: string }).secondaryGoal,
+          trainingDaysPerWeek: newProgram.trainingDaysPerWeek,
+          sessionLength: newProgram.sessionLength,
+          scheduleMode: (newProgram as unknown as { scheduleMode?: string }).scheduleMode,
+          sessionDurationMode: (newProgram as unknown as { sessionDurationMode?: string }).sessionDurationMode,
+          // CRITICAL FIX: Use authoritative equipment from stored build snapshot
+          equipment: postBuildAuthoritativeEquipment,
+          // CRITICAL: Use profileSnapshot jointCautions - AdaptiveProgram doesn't have top-level jointCautions
+          jointCautions: (postBuildProfileSnapshot as { jointCautions?: string[] })?.jointCautions || [],
+          experienceLevel: newProgram.experienceLevel,
+          selectedSkills: (newProgram as unknown as { selectedSkills?: string[] }).selectedSkills,
+          profileSnapshot: postBuildProfileSnapshot,
+        })
         
         // Get canonical profile for comparison
         const canonicalProfileAfterBuild = getCanonicalProfile()
@@ -12694,20 +9520,9 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         // When server returns 500, serverResult in context contains exact diagnostic fields
         // This prevents "Step: unavailable / Reason: unavailable" in the banner
         // ==========================================================================
-        // [STEP-5A-UPSILON-OMEGA-7] Replace the `(err as any).context?.serverResult`
-        //   access with the typed `errorContext` (already declared above at
-        //   L12319-12320 as `Record<string, unknown> | undefined`) flowing
-        //   through `readProgramPageRecord`. The literal comparison
-        //   `errorSubCode === 'server_regenerate_failed'` is preserved here
-        //   (unlike the main-gen sibling) because `'server_regenerate_failed'`
-        //   IS a member of the canonical `BuildAttemptSubCode` union
-        //   (lib/program-state.ts:276) — the comparison is valid against
-        //   the declared type. Only the `as any` is unsafe and must go.
-        if (isPageValidationError && (errorSubCode === 'server_regenerate_failed' || readProgramPageRecord(errorContext?.serverResult))) {
-          // [STEP-5A-OMICRON] Server-result diagnostic chain refactored to
-          //   flow through the quarantined record helper. See the
-          //   matching comment in the generation handler above.
-          const serverResult = readProgramPageRecord(errorContext?.serverResult)
+        if (isPageValidationError && (errorSubCode === 'server_regenerate_failed' || (err as any).context?.serverResult)) {
+          const ctx = (err as { context?: Record<string, unknown> }).context
+          const serverResult = ctx?.serverResult as Record<string, unknown> | undefined
           
           if (serverResult) {
             // Extract exact server diagnostic fields
@@ -12717,7 +9532,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             const exactBuilderCorridor = serverResult.exactBuilderCorridor as string | undefined
             const exactLocalStep = serverResult.exactLocalStep as string | undefined
             const compactBuilderError = serverResult.compactBuilderError as string | undefined
-            const diagnostics = readProgramPageRecord(serverResult.diagnostics)
+            const diagnostics = serverResult.diagnostics as Record<string, unknown> | undefined
             
             // Map server fields to failure display fields
             // Priority: exactFailingSubstep > exactLocalStep > failedStage
@@ -12727,26 +9542,25 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             
             // Extract from diagnostics if available
             if (diagnostics?.phase15eDiagnostic) {
-              const p15e = readProgramPageRecord(diagnostics.phase15eDiagnostic)
-              if (!failureStep) failureStep = (p15e?.exactFailingSubstep as string) || null
-              if (!failureMiddleStep) failureMiddleStep = (p15e?.exactLastSafeSubstep as string) || null
+              const p15e = diagnostics.phase15eDiagnostic as Record<string, unknown>
+              if (!failureStep) failureStep = (p15e.exactFailingSubstep as string) || null
+              if (!failureMiddleStep) failureMiddleStep = (p15e.exactLastSafeSubstep as string) || null
             }
             // [POST_ALLOCATION_HANDOFF_FIX] Check ownerCorridorDiagnostic (current key from route)
-            // [STEP-5A-OMICRON] Refactored to flow through the quarantined record helper.
             if (diagnostics?.ownerCorridorDiagnostic) {
-              const corr = readProgramPageRecord(diagnostics.ownerCorridorDiagnostic)
-              if (!failureStep) failureStep = (corr?.exactLocalStep as string) || (corr?.exactBuilderCorridor as string) || null
-              if (!failureMiddleStep) failureMiddleStep = (corr?.lastSuccessfulPostAllocationCheckpoint as string) || null
+              const corr = diagnostics.ownerCorridorDiagnostic as Record<string, unknown>
+              if (!failureStep) failureStep = (corr.exactLocalStep as string) || (corr.exactBuilderCorridor as string) || null
+              if (!failureMiddleStep) failureMiddleStep = (corr.lastSuccessfulPostAllocationCheckpoint as string) || null
               // Enrich failure reason with owner name if available
-              const ownerName = corr?.failingOwnerName as string | undefined
+              const ownerName = corr.failingOwnerName as string | undefined
               if (ownerName && !failureReason?.includes(ownerName)) {
                 failureReason = ownerName + (failureReason ? `: ${failureReason}` : '')
               }
             }
             // Legacy fallback for old key
             if (diagnostics?.corridorDiagnostic) {
-              const corr = readProgramPageRecord(diagnostics.corridorDiagnostic)
-              if (!failureStep) failureStep = (corr?.exactLocalStep as string) || null
+              const corr = diagnostics.corridorDiagnostic as Record<string, unknown>
+              if (!failureStep) failureStep = (corr.exactLocalStep as string) || null
             }
             
             console.log('[REGENERATE_PAGE_FAILURE_INGEST]', {
@@ -12854,10 +9668,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         })
         
         // Create failed build result with structured diagnostics
-        // [STEP-5A-OMEGA] Project to narrow signature shape.
-        const profileSig = inputs
-          ? createProfileSignature(toFreshnessSignatureProjection(inputs))
-          : 'unknown'
+        const profileSig = inputs ? createProfileSignature(inputs) : 'unknown'
         const failedResult = createFailedBuildResult(
           errorCode,
           errorStage,
@@ -13152,8 +9963,6 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       console.error('[canonical-rebuild] Modules not loaded')
       return { success: false, error: 'Program builder still loading' }
     }
-    // [STEP-5A-CHI] Capture narrowed local — see handleGenerate rationale.
-    const saveAdaptiveProgram = programModules.saveAdaptiveProgram
     
     // [canonical-rebuild] TASK A: Build updated canonical entry based on adjustment
     // [PHASE 6 TASK 2] Use canonical entry builder instead of just spreading inputs
@@ -13173,11 +9982,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     
     // Build canonical entry with overrides for the requested changes
     // [PHASE 24O] CRITICAL FIX: Explicit numeric day-count override must also flip scheduleMode to static
-    // [STEP-5A-PI] Override object now uses the local strict-Partial type
-    //   `ProgramPageCanonicalGenerationEntryOverrides` so this caller stays
-    //   contract-aligned with `buildCanonicalGenerationEntry`. `Record<string, unknown>`
-    //   was previously incompatible with the helper's strict slot contract.
-    const overrides: ProgramPageCanonicalGenerationEntryOverrides = {}
+    const overrides: Record<string, unknown> = {}
     if (request.type === 'training_days' && request.newTrainingDays) {
       overrides.trainingDaysPerWeek = request.newTrainingDays
       // [PHASE 24O] Numeric day selection implies static schedule mode
@@ -13227,7 +10032,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         currentInputsScheduleMode: inputs?.scheduleMode ?? null,
         currentInputsTrainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
         currentInputsSelectedSkills: inputs?.selectedSkills ?? null,
-        currentInputsTrainingPathType: inputsMeta.trainingPathType,
+        currentInputsTrainingPathType: inputs?.trainingPathType ?? null,
       },
       overridesAboutToApply: overrides,
     })
@@ -13327,7 +10132,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       effectiveScheduleMode: updatedInputs.scheduleMode ?? null,
       effectiveTrainingDays: updatedInputs.trainingDaysPerWeek ?? null,
       effectiveSelectedSkills: updatedInputs.selectedSkills ?? null,
-      effectiveSelectedStyles: (((): string[] | null => { const a = readProgramPageStringArray(updatedInputs, 'selectedStyles'); return a.length > 0 ? a : null })()),
+      effectiveSelectedStyles: updatedInputs.selectedStyles ?? null,
       effectiveTargetSessionDuration: updatedInputs.sessionLength ?? null,
     })
     
@@ -13417,12 +10222,12 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         // For session-related fields, only preserve from inputs if request is NOT session_time
         sessionDurationMode: request.type === 'session_time'
           ? updatedInputs?.sessionDurationMode
-          : (inputsMeta.sessionDurationMode || updatedInputs?.sessionDurationMode),
+          : (inputs?.sessionDurationMode || updatedInputs?.sessionDurationMode),
         sessionLength: request.type === 'session_time'
           ? updatedInputs?.sessionLength
           : (inputs?.sessionLength ?? updatedInputs?.sessionLength),
         // selectedStyles still prefers inputs as fallback (not part of 4 material identity fields)
-        selectedStyles: (((): string[] => { const a = readProgramPageStringArray(inputs, 'selectedStyles'); return a.length > 0 ? a : readProgramPageStringArray(updatedInputs, 'selectedStyles') })()),
+        selectedStyles: (inputs?.selectedStyles?.length ?? 0) > 0 ? inputs.selectedStyles : updatedInputs?.selectedStyles,
         // For equipment, only preserve from inputs if request is NOT equipment
         equipment: request.type === 'equipment'
           ? updatedInputs?.equipment
@@ -13443,11 +10248,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           secondaryGoal: inputs?.secondaryGoal ?? null,
           scheduleMode: inputs?.scheduleMode ?? null,
           trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
-          sessionDurationMode: inputsMeta.sessionDurationMode,
+          sessionDurationMode: inputs?.sessionDurationMode ?? null,
           sessionLength: inputs?.sessionLength ?? null,
           selectedSkills: inputs?.selectedSkills ?? [],
-          selectedStyles: readProgramPageStringArray(inputs, 'selectedStyles'),
-          trainingPathType: inputsMeta.trainingPathType,
+          selectedStyles: inputs?.selectedStyles ?? [],
+          trainingPathType: inputs?.trainingPathType ?? null,
           equipment: inputs?.equipment ?? [],
         },
         preMergeAdjustmentInput: {
@@ -13458,7 +10263,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           sessionDurationMode: updatedInputs?.sessionDurationMode ?? null,
           sessionLength: updatedInputs?.sessionLength ?? null,
           selectedSkills: updatedInputs?.selectedSkills ?? [],
-          selectedStyles: readProgramPageStringArray(updatedInputs, 'selectedStyles'),
+          selectedStyles: updatedInputs?.selectedStyles ?? [],
           trainingPathType: updatedInputs?.trainingPathType ?? null,
           equipment: updatedInputs?.equipment ?? [],
         },
@@ -13490,7 +10295,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         preservedSelectedSkillsFromInputs:
           JSON.stringify(adjustmentBuilderInput?.selectedSkills ?? []) === JSON.stringify(inputs?.selectedSkills ?? adjustmentBuilderInput?.selectedSkills ?? []),
         preservedTrainingPathTypeFromInputs:
-          adjustmentBuilderInput?.trainingPathType === (inputsMeta.trainingPathType ?? adjustmentBuilderInput?.trainingPathType),
+          adjustmentBuilderInput?.trainingPathType === (inputs?.trainingPathType ?? adjustmentBuilderInput?.trainingPathType),
         verdict: 'final_adjustment_input_preserves_current_settings_truth_except_requested_field',
       })
       
@@ -13530,7 +10335,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           primaryGoal: inputs?.primaryGoal ?? null,
           secondaryGoal: inputs?.secondaryGoal ?? null,
           selectedSkills: inputs?.selectedSkills ?? [],
-          trainingPathType: inputsMeta.trainingPathType,
+          trainingPathType: inputs?.trainingPathType ?? null,
         },
         updatedInputsTruth: {
           primaryGoal: updatedInputs?.primaryGoal ?? null,
@@ -13573,30 +10378,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         trainingPathType:
           updatedInputs?.trainingPathType ||
           adjCanonicalProfileNow?.trainingPathType ||
-          inputsMeta.trainingPathType ||
+          inputs?.trainingPathType ||
           null,
       }
       
-      // [STEP-4B] One authoritative schedule-truth resolution for the
-      // adjustment dispatch corridor. Preserves the existing request-type
-      // priority contract (training_days request → updatedInputs wins;
-      // otherwise inputs > updatedInputs > canonical), then routes the
-      // chosen pair through the shared resolver so flexible mode never
-      // leaks into the numeric trainingDaysPerWeek slot and missing values
-      // never become a fake `4` or `6`.
+      // Determine effective schedule mode based on request type
       const adjEffectiveScheduleMode = request.type === 'training_days'
         ? updatedInputs?.scheduleMode
         : (inputs?.scheduleMode || updatedInputs?.scheduleMode || adjCanonicalProfileNow?.scheduleMode)
-
-      const adjEffectiveRawTrainingDays = request.type === 'training_days'
-        ? updatedInputs?.trainingDaysPerWeek
-        : (inputs?.trainingDaysPerWeek ?? updatedInputs?.trainingDaysPerWeek ?? adjCanonicalProfileNow?.trainingDaysPerWeek)
-
-      const adjustmentScheduleTruth = resolveProgramPageScheduleTruth({
-        scheduleMode: adjEffectiveScheduleMode,
-        trainingDaysPerWeek: adjEffectiveRawTrainingDays,
-      })
-
+      
       const adjustmentCanonicalOverride = {
         ...adjCanonicalProfileNow,
         // [PHASE 17X] TASK 3 - Use strongestMaterialIdentityTruth for 4 material identity fields
@@ -13605,16 +10395,18 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         secondaryGoal: strongestMaterialIdentityTruth.secondaryGoal,
         selectedSkills: strongestMaterialIdentityTruth.selectedSkills,
         trainingPathType: strongestMaterialIdentityTruth.trainingPathType,
-        // [STEP-4B] scheduleMode + trainingDaysPerWeek both come from the
-        // same resolved object. Fallback to the raw effective mode only
-        // when the resolver returned null (genuinely unknown), preserving
-        // existing visible behavior without faking.
-        scheduleMode: adjustmentScheduleTruth.scheduleMode ?? adjEffectiveScheduleMode,
-        trainingDaysPerWeek: adjustmentScheduleTruth.canonicalTrainingDays,
+        // scheduleMode - let request win if training_days, else preserve
+        scheduleMode: adjEffectiveScheduleMode,
+        // trainingDaysPerWeek - flexible null semantics, let request win if training_days
+        trainingDaysPerWeek: adjEffectiveScheduleMode === 'flexible'
+          ? null
+          : request.type === 'training_days'
+          ? updatedInputs?.trainingDaysPerWeek
+          : (inputs?.trainingDaysPerWeek ?? updatedInputs?.trainingDaysPerWeek ?? adjCanonicalProfileNow?.trainingDaysPerWeek),
         // sessionDurationMode - let request win if session_time
         sessionDurationMode: request.type === 'session_time'
           ? updatedInputs?.sessionDurationMode
-          : (inputsMeta.sessionDurationMode || updatedInputs?.sessionDurationMode || adjCanonicalProfileNow?.sessionDurationMode),
+          : (inputs?.sessionDurationMode || updatedInputs?.sessionDurationMode || adjCanonicalProfileNow?.sessionDurationMode),
         // sessionLengthMinutes - let request win if session_time
         sessionLengthMinutes: request.type === 'session_time'
           ? updatedInputs?.sessionLength
@@ -13650,10 +10442,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           selectedSkills: inputs?.selectedSkills ?? [],
           scheduleMode: inputs?.scheduleMode ?? null,
           trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
-          sessionDurationMode: inputsMeta.sessionDurationMode,
+          sessionDurationMode: inputs?.sessionDurationMode ?? null,
           sessionLength: inputs?.sessionLength ?? null,
           equipment: inputs?.equipment ?? [],
-          trainingPathType: inputsMeta.trainingPathType,
+          trainingPathType: inputs?.trainingPathType ?? null,
         },
         updatedInputsTruth: {
           primaryGoal: updatedInputs?.primaryGoal ?? null,
@@ -13792,9 +10584,6 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           currentProgramId: program?.id ?? null,
           // Pass client canonical as LOW-trust fallback, server will resolve its own
           clientCanonicalSnapshot: adjustmentCanonicalOverride,
-          // [PHASE-M] Forward recent trusted workout logs to the
-          // authoritative rebuild corridor.
-          recentWorkoutLogs: getRecentWorkoutLogsForGenerationRequest(),
         }),
       })
       
@@ -13848,10 +10637,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         finalProgramSessionCount: (newProgram as AdaptiveProgram)?.sessions?.length ?? 0,
         finalProgramPrimaryGoal: (newProgram as AdaptiveProgram)?.primaryGoal ?? null,
         finalProgramScheduleMode: (newProgram as AdaptiveProgram)?.scheduleMode ?? null,
-        // [STEP-5A-OMICRON] Sourced via the quarantined record helper —
-        //   `trainingPathType` is not on `AdaptiveProgram`, but the
-        //   runtime value carries it. Replaces direct `as Record<string, unknown>`.
-        finalProgramTrainingPathType: readProgramPageString(newProgram, 'trainingPathType'),
+        finalProgramTrainingPathType: (newProgram as Record<string, unknown>)?.trainingPathType ?? null,
         finalProgramSelectedSkills: (newProgram as AdaptiveProgram)?.selectedSkills ?? [],
         verdict: 'adjustment_rebuild_used_explicit_canonical_override_path',
       })
@@ -14001,24 +10787,16 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       
       // [canonical-rebuild] STAGE 3: Save to canonical storage
       console.log('[canonical-rebuild] STAGE 3: Saving to canonical storage...')
-      // [STEP-5A-CHI] Use narrowed local from handler-top capture.
-      saveAdaptiveProgram(newProgram)
+      programModules.saveAdaptiveProgram(newProgram)
       
       // [canonical-rebuild] STAGE 4: Verify save
-      // [STEP-5A-CHI] Match the sibling save-verification pattern at
-      //   L7463 / L11155 / L16897 — `getProgramState` is nullable on the
-      //   lazy-loaded modules object, so use optional chaining (this site
-      //   was the lone outlier without `?.`). The subsequent
-      //   `savedState?.adaptiveProgram` chain narrows correctly: after the
-      //   `if (!savedState?.adaptiveProgram)` short-circuit throws, the
-      //   second `||` clause sees a non-null `savedState.adaptiveProgram`.
-      const savedState = programModules.getProgramState?.()
-      if (!savedState?.adaptiveProgram || savedState.adaptiveProgram.id !== newProgram.id) {
+      const savedState = programModules.getProgramState()
+      if (!savedState.adaptiveProgram || savedState.adaptiveProgram.id !== newProgram.id) {
         console.log('[phase17a-adjustment-stage-failure]', { 
           stage: 'save_program',
           reason: 'save_verification_failed',
           expectedId: newProgram.id,
-          actualId: savedState?.adaptiveProgram?.id || null,
+          actualId: savedState.adaptiveProgram?.id || null,
         })
         throw new ProgramPageValidationError(
           'snapshot_save_failed', 'save_verification', 'save_verification_failed',
@@ -14034,8 +10812,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       
       // [canonical-rebuild] STAGE 5: Update freshness identity
       console.log('[canonical-rebuild] STAGE 5: Updating freshness identity...')
-      // [STEP-5A-OMEGA] Project to narrow signature shape.
-      const profileSig = createProfileSignature(toFreshnessSignatureProjection(updatedInputs))
+      const profileSig = createProfileSignature(updatedInputs)
       invalidateStaleCaches()
       updateFreshnessIdentity(newProgram.id, newProgram.createdAt, profileSig)
       
@@ -14058,14 +10835,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   // If request.type === 'training_days' BUT newTrainingDays is undefined/null,
   // this is a flexible-preserving rebuild - do NOT force static mode
   const canonicalProfileNow = getCanonicalProfile()
-  // [STEP-5A-OMEGA-14] Replaced inline `=== 'adaptive'` (TS2367 impossible
-  //   literal compare against narrowed `ScheduleMode = 'static' | 'flexible'`)
-  //   with the typed canonicalizer compared to canonical `'flexible'`. Same
-  //   flexible-preserving-rebuild detection semantics preserved.
   const flexiblePreservingRebuild = 
     request.type === 'training_days' &&
     (request.newTrainingDays === undefined || request.newTrainingDays === null) &&
-    toCanonicalScheduleModeForProgramProfile(canonicalProfileNow?.scheduleMode) === 'flexible'
+    (canonicalProfileNow?.scheduleMode === 'flexible' || canonicalProfileNow?.scheduleMode === 'adaptive')
   
   // [PHASE 17P] Flexible rebuild request truth log
   console.log('[phase17p-flexible-rebuild-request-truth]', {
@@ -14106,23 +10879,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   // [PHASE 18F] TASK 3 - Expand canonical writeback to include FULL deep planner identity
   // This ensures future rebuilds reconstruct from the same truth class as this successful adjustment
   // ==========================================================================
-  // [STEP-5A-OMEGA-4] Numeric session-length narrowing for canonical writeback —
-  //   `updatedInputs.sessionLength: SessionLength` includes string label variants
-  //   that the canonical profile's `sessionLengthMinutes: number` rejects.
-  const adjustmentSessionLengthMinutes: number | undefined =
-    typeof updatedInputs.sessionLength === 'number' && Number.isFinite(updatedInputs.sessionLength)
-      ? updatedInputs.sessionLength
-      : undefined
-
-  // [STEP-5A-OMEGA-4] `Partial<CanonicalProgrammingProfile>` annotation locks
-  //   the writeback object to the strict canonical contract.
-  const adjustmentWritebackTruth: Partial<CanonicalProgrammingProfile> = {
+  const adjustmentWritebackTruth = {
     // Schedule/duration fields (may be adjusted)
-    // [STEP-5A-OMEGA-4] persistedTrainingDays already typed `number | undefined`
-    //   above — pass through directly. persistedScheduleMode already typed
-    //   `'static' | 'flexible' | undefined` above.
     trainingDaysPerWeek: persistedTrainingDays,
-    sessionLengthMinutes: adjustmentSessionLengthMinutes,
+    sessionLengthMinutes: updatedInputs.sessionLength ?? undefined,
     scheduleMode: persistedScheduleMode,
     sessionDurationMode: updatedInputs.sessionDurationMode ?? canonicalProfileNow?.sessionDurationMode ?? undefined,
     // Equipment (may be adjusted)
@@ -14820,17 +11580,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         })
         
         // Update audit with generation input info
-        // [STEP-4C] `inputTrainingDays` is `freshInputs?.trainingDaysPerWeek`
-        // (overloaded `TrainingDays | 'flexible' | undefined`). `storedAudit`
-        // is `JSON.parse` → `any`, so TypeScript would not flag this — but
-        // when the audit is later read back as the typed audit-state shape,
-        // the canonical numeric slot must hold `number | null`. Normalize at
-        // the write boundary so a flexible-mode regen run doesn't poison the
-        // stored audit with the literal `'flexible'`.
         const updatedAudit = {
           ...storedAudit,
           canonicalScheduleMode: inputScheduleMode,
-          canonicalTrainingDaysPerWeek: normalizeTrainingDaysForSnapshot(inputTrainingDays),
+          canonicalTrainingDaysPerWeek: inputTrainingDays ?? null,
         }
         sessionStorage.setItem('regenTruthAudit', JSON.stringify(updatedAudit))
       }
@@ -15412,26 +12165,19 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         goalCategoriesCount: visibleProgramSnapshot?.goalCategories?.length ?? 0,
         selectedFlexibilityCount: visibleProgramSnapshot?.selectedFlexibility?.length ?? 0,
         experienceLevel: visibleProgramSnapshot?.experienceLevel || (program as { experienceLevel?: string }).experienceLevel,
-        // [STEP-5A-OMEGA-7] `program.equipment` is invalid — `AdaptiveProgram`
-        //   has no `equipment` field. Mirror the established 5x sibling pattern
-        //   in this same audit block (L15290/L15291/L15292/L15295/L15298) and
-        //   read the legacy structural `equipmentAvailable` field instead.
-        equipmentCount: (visibleProgramSnapshot?.equipmentAvailable || (program as { equipmentAvailable?: string[] }).equipmentAvailable)?.length ?? 0,
+        equipmentCount: (visibleProgramSnapshot?.equipmentAvailable || program.equipment)?.length ?? 0,
       } : null,
       currentInputsTruth: inputs ? {
         primaryGoal: inputs.primaryGoal,
         secondaryGoal: inputs.secondaryGoal,
         scheduleMode: inputs.scheduleMode,
         trainingDaysPerWeek: inputs.trainingDaysPerWeek,
-        // [STEP-5A-XI] These four fields are not on AdaptiveProgramInputs
-        //   (Step 4G banned-key guard). Sourced via the page-level
-        //   `inputsMeta` Record-narrowing helper.
-        sessionDurationMode: inputsMeta.sessionDurationMode,
+        sessionDurationMode: inputs.sessionDurationMode,
         sessionLength: inputs.sessionLength,
         selectedSkillsCount: inputs.selectedSkills?.length ?? 0,
-        trainingPathType: inputsMeta.trainingPathType,
-        goalCategoriesCount: inputsMeta.goalCategories.length,
-        selectedFlexibilityCount: inputsMeta.selectedFlexibility.length,
+        trainingPathType: inputs.trainingPathType,
+        goalCategoriesCount: inputs.goalCategories?.length ?? 0,
+        selectedFlexibilityCount: inputs.selectedFlexibility?.length ?? 0,
         experienceLevel: inputs.experienceLevel,
         equipmentCount: inputs.equipment?.length ?? 0,
       } : null,
@@ -15460,10 +12206,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       modify_action: 'start_new_program',
       expected_truth_contract: 'canonical_onboarding_truth_first',
       current_visible_program_session_count: program?.sessions?.length ?? 0,
-      // [STEP-5A-OMEGA-7] Same-class fix as L15303 — `program.equipment` is
-      //   invalid on `AdaptiveProgram`. Read legacy structural `equipmentAvailable`
-      //   instead, mirroring the established sibling cast pattern.
-      current_visible_program_equipment_count: (visibleProgramSnapshot?.equipmentAvailable || (program as { equipmentAvailable?: string[] } | null)?.equipmentAvailable)?.length ?? 0,
+      current_visible_program_equipment_count: (visibleProgramSnapshot?.equipmentAvailable || program?.equipment)?.length ?? 0,
       current_inputs_equipment_count: inputs?.equipment?.length ?? 0,
       canonical_profile_equipment_count: canonical.equipmentAvailable?.length ?? 0,
       canonical_profile_selected_skills_count: canonical.selectedSkills?.length ?? 0,
@@ -15928,26 +12671,12 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       athleteTrainingDays: typeof athleteProfileForAudit?.trainingDaysPerWeek === 'number'
         ? athleteProfileForAudit.trainingDaysPerWeek : null,
       // Canonical resolved
-      // [BUILD-FIX] Same boundary normalization as the line ~2800 setter:
-      // canonical.* / freshInputs.* are optional on their source types but
-      // canonicalScheduleMode / canonicalTrainingDaysPerWeek are REQUIRED
-      // `... | null` on the audit-state type. `?? null` keeps absence
-      // explicit instead of leaking undefined.
-      canonicalScheduleMode: canonical.scheduleMode ?? null,
-      // [STEP-4B] getCanonicalProfile() returns the same overloaded
-      // `TrainingDays | 'flexible'` shape; route through the normalizer.
-      canonicalTrainingDaysPerWeek: normalizeTrainingDaysForSnapshot(canonical.trainingDaysPerWeek),
+      canonicalScheduleMode: canonical.scheduleMode,
+      canonicalTrainingDaysPerWeek: canonical.trainingDaysPerWeek,
       // Builder prefill (what form opens with)
-      prefillScheduleMode: freshInputs.scheduleMode ?? null,
-      // [STEP-4C] Same overloaded-source / numeric-destination issue as
-      // the entry-builder setter above. `freshInputs.trainingDaysPerWeek`
-      // is `TrainingDays | 'flexible'`; this audit slot is `number | null`.
-      // Route static-mode values through the normalizer; non-static
-      // (flexible / unknown) records explicit absence as null. Mirrors
-      // the line ~2941 fix exactly.
-      prefillTrainingDays: freshInputs.scheduleMode === 'static'
-        ? normalizeTrainingDaysForSnapshot(freshInputs.trainingDaysPerWeek)
-        : null,
+      prefillScheduleMode: freshInputs.scheduleMode,
+      prefillTrainingDays: freshInputs.scheduleMode === 'static' 
+        ? (freshInputs.trainingDaysPerWeek as number) : null,
       // History
       lastGeneratedScheduleMode: program?.scheduleMode || null,
       lastGeneratedTrainingDays: (program as { trainingDaysPerWeek?: number })?.trainingDaysPerWeek || null,
@@ -16117,20 +12846,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     )
   }
 
-  // [DEBUG-LEAKAGE-REMOVAL] The bottom diagnostic strip used to render in
-  // BOTH local dev AND every preview deploy, which meant athletes saw
-  // `modifyFlow / showBuilder / program / modalOpen / truth: G/Y/R` debug
-  // text on the user-facing program page. It is now opt-in via the same
-  // `?programProbe=1` gate already used for other internal probes, with a
-  // dedicated `?diagnostics=1` alias kept so QA can request it explicitly.
-  // Local dev still shows it automatically. The internal tooling is fully
-  // preserved -- only its default visibility changed.
-  const showDiagnosticStrip = (() => {
-    if (process.env.NODE_ENV === 'development') return true
-    if (typeof window === 'undefined') return false
-    const params = new URLSearchParams(window.location.search)
-    return params.get('diagnostics') === '1' || params.get('programProbe') === '1'
-  })()
+  // [PHASE 24D] Enable diagnostic strip only in development/preview
+  const showDiagnosticStrip = process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview'
   
   // [AI-TRUTH-MATERIALITY] Log materiality audit on mount (dev only)
   // This provides compact verification of which fields are GREEN/YELLOW/RED
@@ -16842,15 +13559,6 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 // [PHASE 26] Read CURRENT state from ref, not stale closure
                 const currentBuilderSessionInputs = builderSessionInputsRef.current
                 const hasCurrentSessionInputs = !!currentBuilderSessionInputs
-                // [STEP-5A-XI] `builderSessionInputsRef` is typed
-                //   `useRef<AdaptiveProgramInputs | null>`, so the four
-                //   canonical-profile metadata fields (sessionDurationMode,
-                //   trainingPathType, goalCategories, selectedFlexibility)
-                //   are NOT visible on this static type (Step 4G banned
-                //   keys). At runtime the ref carries them anyway because
-                //   it was assigned from `entryToAdaptiveInputs()` output.
-                //   Read them through the typed metadata view helper.
-                const currentBuilderSessionInputsMeta = readProgramPageMetadataFromUnknown(currentBuilderSessionInputs)
                 
                 // ==========================================================================
                 // [MAIN-GEN-TRUTH step-1] Capture pre-click state for main generation trace
@@ -16873,20 +13581,17 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   selectedSkillsCountBeforeClick: currentBuilderSessionInputs?.selectedSkills?.length ?? inputs?.selectedSkills?.length ?? null,
                   goalCategoriesCountBeforeClick: currentBuilderSessionInputs?.selectedGoalCategories?.length ?? inputs?.selectedGoalCategories?.length ?? null,
                   experienceLevelBeforeClick: currentBuilderSessionInputs?.experienceLevel ?? inputs?.experienceLevel ?? null,
-                  // [STEP-5A-XI] sourced via metadata view helpers, not direct AdaptiveProgramInputs reads
-                  sessionDurationModeBeforeClick: currentBuilderSessionInputsMeta.sessionDurationMode ?? inputsMeta.sessionDurationMode,
+                  sessionDurationModeBeforeClick: currentBuilderSessionInputs?.sessionDurationMode ?? inputs?.sessionDurationMode ?? null,
                   // Step 2: Form input - will be filled from what goes to handleGenerate
                   submittedScheduleMode: hasCurrentSessionInputs ? currentBuilderSessionInputs?.scheduleMode ?? null : inputs?.scheduleMode ?? null,
                   submittedTrainingDaysPerWeek: hasCurrentSessionInputs ? currentBuilderSessionInputs?.trainingDaysPerWeek ?? null : inputs?.trainingDaysPerWeek ?? null,
-                  // [STEP-5A-XI] sourced via metadata view helpers, not direct AdaptiveProgramInputs reads
-                  submittedSessionDurationMode: hasCurrentSessionInputs ? currentBuilderSessionInputsMeta.sessionDurationMode : inputsMeta.sessionDurationMode,
+                  submittedSessionDurationMode: hasCurrentSessionInputs ? currentBuilderSessionInputs?.sessionDurationMode ?? null : inputs?.sessionDurationMode ?? null,
                   submittedPrimaryGoal: hasCurrentSessionInputs ? currentBuilderSessionInputs?.primaryGoal ?? null : inputs?.primaryGoal ?? null,
                   submittedSecondaryGoal: hasCurrentSessionInputs ? currentBuilderSessionInputs?.secondaryGoal ?? null : inputs?.secondaryGoal ?? null,
                   submittedSelectedSkillsCount: hasCurrentSessionInputs ? currentBuilderSessionInputs?.selectedSkills?.length ?? null : inputs?.selectedSkills?.length ?? null,
                   submittedGoalCategoriesCount: hasCurrentSessionInputs ? currentBuilderSessionInputs?.selectedGoalCategories?.length ?? null : inputs?.selectedGoalCategories?.length ?? null,
                   submittedExperienceLevel: hasCurrentSessionInputs ? currentBuilderSessionInputs?.experienceLevel ?? null : inputs?.experienceLevel ?? null,
-                  // [STEP-5A-XI] sourced via metadata view helpers, not direct AdaptiveProgramInputs reads
-                  submittedTrainingPathType: hasCurrentSessionInputs ? currentBuilderSessionInputsMeta.trainingPathType : inputsMeta.trainingPathType,
+                  submittedTrainingPathType: hasCurrentSessionInputs ? currentBuilderSessionInputs?.trainingPathType ?? null : inputs?.trainingPathType ?? null,
                   // Remaining steps filled later
                   entryScheduleMode: null,
                   entryTrainingDaysPerWeek: null,
@@ -17040,8 +13745,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   step: 'MODIFY_SUBMIT_SNAPSHOT',
                   refScheduleMode: currentBuilderSessionInputs?.scheduleMode,
                   refTrainingDaysPerWeek: currentBuilderSessionInputs?.trainingDaysPerWeek,
-                  // [STEP-5A-XI] sourced via metadata view, not direct AdaptiveProgramInputs read
-                  refSessionDurationMode: currentBuilderSessionInputsMeta.sessionDurationMode,
+                  refSessionDurationMode: currentBuilderSessionInputs?.sessionDurationMode,
                   refPrimaryGoal: currentBuilderSessionInputs?.primaryGoal,
                   hasBuilderSessionInputs: hasCurrentSessionInputs,
                   verdict: hasCurrentSessionInputs

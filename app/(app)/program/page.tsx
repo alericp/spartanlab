@@ -13327,8 +13327,18 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       console.error('[canonical-rebuild] Entry validation failed', entryResult.error)
       console.log('[phase17a-adjustment-stage-failure]', {
         stage: 'build_canonical_entry',
-        errorName: entryResult.error?.name || 'unknown',
+        // [PRE-AB6 BUILD GREEN GATE] `entryResult.error` is the structured
+        //   build-entry discriminated union { code, message, missingFields },
+        //   NOT an Error instance — it has no `name` field. Reading
+        //   `entryResult.error?.name` was a stale shape from when this site
+        //   logged a thrown Error. Replace with the real typed discriminator
+        //   (`code`) so the diagnostic stays meaningful, and surface
+        //   `missingFields` since it is already typed and the most
+        //   actionable signal for the `profile_incomplete` /
+        //   `validation_failed` cases. No type weakening, no `as any`.
+        errorCode: entryResult.error?.code || 'unknown',
         errorMessage: entryResult.error?.message || 'unknown',
+        missingFields: entryResult.error?.missingFields ?? [],
         requestedTrainingDays: request.newTrainingDays || null,
       })
       return { 

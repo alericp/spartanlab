@@ -241,6 +241,45 @@ function getProgramSessionCountForAudit(
   }
   return 0
 }
+
+// [STEP-5A-OMEGA-14] Schedule-mode canonicalizer for canonical-profile writeback.
+//
+// Background:
+//   `ScheduleMode` (lib/flexible-schedule-engine.ts:73) is `'static' | 'flexible'`.
+//   `AdaptiveProgramInputs.scheduleMode`, `CanonicalProgrammingProfile.scheduleMode`,
+//   and the freshness-projection `scheduleMode` are all narrowed to that union.
+//
+//   Phase 29A separated schedule identity (`'static' | 'flexible'`) from
+//   adaptive-workload behavior; the legacy raw value `'adaptive'` was retired
+//   from the canonical type but defensive `=== 'adaptive'` branches remained
+//   in three Program Page canonical-writeback / freshness sites. After the
+//   narrowing tightened, those comparisons became impossible literal compares
+//   (TS2367 — "this comparison appears to be unintentional").
+//
+// What this helper does:
+//   Accepts a *deliberately wider* raw super-union that still includes
+//   `'adaptive'` (so any future caller passing a pre-Phase-29A value compiles)
+//   and projects it onto the canonical `'static' | 'flexible'` shape, mapping
+//   legacy `'adaptive'` to canonical `'flexible'` exactly as the prior inline
+//   ternaries intended.
+//
+// Why this is safe:
+//   - No runtime behavior change at the three current callsites: their
+//     value type is `'static' | 'flexible' | undefined`, and the helper
+//     produces the same `'flexible'` / `'static'` outcome the inline
+//     ternary did.
+//   - No widening of `AdaptiveProgramInputs` / `CanonicalProgrammingProfile`.
+//   - No `as any`, no `@ts-ignore`.
+//   - Pure function — no state, no shadow normalizer.
+type ProgramPageRawScheduleMode = 'static' | 'flexible' | 'adaptive' | null | undefined
+
+function toCanonicalScheduleModeForProgramProfile(
+  scheduleMode: ProgramPageRawScheduleMode,
+): 'static' | 'flexible' {
+  if (scheduleMode === 'flexible' || scheduleMode === 'adaptive') return 'flexible'
+  return 'static'
+}
+
 // [STEP-5A-TAU] Promoted from `_readProgramPageNumber` (pre-declared per
 //   STEP-5A-OMICRON) to public `readProgramPageNumber`. Now actively used
 //   by the canonicalProfile projection in `handleGenerate` to source
@@ -7716,10 +7755,11 @@ export default function ProgramPage() {
     //   freshness intent collapses to canonical 'flexible' since the canonical
     //   profile only models 'static' | 'flexible' (Phase 29A separates schedule
     //   identity from adaptive workload behavior).
+    // [STEP-5A-OMEGA-14] Replaced inline `=== 'adaptive'` (TS2367 impossible
+    //   literal compare against narrowed `ScheduleMode = 'static' | 'flexible'`)
+    //   with the typed canonicalizer. Same canonical-writeback intent preserved.
     const effectiveScheduleMode: 'static' | 'flexible' =
-      freshnessProjection.scheduleMode === 'flexible' || freshnessProjection.scheduleMode === 'adaptive'
-        ? 'flexible'
-        : 'static'
+      toCanonicalScheduleModeForProgramProfile(freshnessProjection.scheduleMode)
     
     // For flexible mode: save null to indicate "adaptive" identity
     // For static mode: save the actual generated days
@@ -11697,10 +11737,11 @@ export default function ProgramPage() {
     //   writeback contract at construction (mirrors the initial-build writeback
     //   above). Without these, ternaries widen to `string` / `number | undefined`
     //   and `Partial<CanonicalProgrammingProfile>` rejects the object below.
+    // [STEP-5A-OMEGA-14] Replaced inline `=== 'adaptive'` (TS2367 impossible
+    //   literal compare against narrowed `ScheduleMode = 'static' | 'flexible'`)
+    //   with the typed canonicalizer. Same regen-writeback intent preserved.
     const effectiveScheduleMode: 'static' | 'flexible' =
-      freshRebuildInput.scheduleMode === 'flexible' || freshRebuildInput.scheduleMode === 'adaptive'
-        ? 'flexible'
-        : 'static'
+      toCanonicalScheduleModeForProgramProfile(freshRebuildInput.scheduleMode)
     
     // [STEP-5A-OMEGA-4] Explicit `number | null` — drops the `'flexible'`
     //   string variant `freshRebuildInput.trainingDaysPerWeek` may carry.
@@ -13988,10 +14029,14 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   // If request.type === 'training_days' BUT newTrainingDays is undefined/null,
   // this is a flexible-preserving rebuild - do NOT force static mode
   const canonicalProfileNow = getCanonicalProfile()
+  // [STEP-5A-OMEGA-14] Replaced inline `=== 'adaptive'` (TS2367 impossible
+  //   literal compare against narrowed `ScheduleMode = 'static' | 'flexible'`)
+  //   with the typed canonicalizer compared to canonical `'flexible'`. Same
+  //   flexible-preserving-rebuild detection semantics preserved.
   const flexiblePreservingRebuild = 
     request.type === 'training_days' &&
     (request.newTrainingDays === undefined || request.newTrainingDays === null) &&
-    (canonicalProfileNow?.scheduleMode === 'flexible' || canonicalProfileNow?.scheduleMode === 'adaptive')
+    toCanonicalScheduleModeForProgramProfile(canonicalProfileNow?.scheduleMode) === 'flexible'
   
   // [PHASE 17P] Flexible rebuild request truth log
   console.log('[phase17p-flexible-rebuild-request-truth]', {

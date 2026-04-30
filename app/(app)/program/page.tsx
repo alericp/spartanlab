@@ -11812,7 +11812,27 @@ export default function ProgramPage() {
       trainingPathType: strongestRegenerateTruth.trainingPathType ?? undefined,
       goalCategories: strongestRegenerateTruth.goalCategories?.length ? strongestRegenerateTruth.goalCategories : undefined,
       selectedFlexibility: strongestRegenerateTruth.selectedFlexibility?.length ? strongestRegenerateTruth.selectedFlexibility : undefined,
-      selectedStrength: (inputs?.selectedStrength as string[] | undefined)?.length ? inputs.selectedStrength : undefined,
+      // [STEP-5A-OMEGA-17] `selectedStrength` is not on `AdaptiveProgramInputs`
+      //   (`lib/adaptive-program-builder.ts:1088` — the contract only owns
+      //   `primaryGoal`, `secondaryGoal`, `experienceLevel`, `trainingDaysPerWeek`,
+      //   `sessionLength`, `equipment`, `todaySessionMinutes`, `scheduleMode`,
+      //   `adaptiveWorkloadEnabled`, `selectedSkills`, `regenerationMode`,
+      //   `regenerationReason`). The prior `(inputs?.selectedStrength as string[]
+      //   | undefined)` bandage cast triggered TS2339 at L11815:34. Replaced with
+      //   the *exact same IIFE + boundary-helper pattern* the sibling
+      //   `initialBuildWritebackTruth` already uses at L7856 for the same field
+      //   from the same `inputs` source — so the regenerate and initial-build
+      //   writebacks are now architecturally symmetric. Runtime: identical
+      //   non-empty-array → assign, empty → `undefined`. Same-class sweep across
+      //   all 4 `Partial<CanonicalProgrammingProfile>` writebacks (initial-build
+      //   L7823 ✓, modify L9430 omits this field, regenerate L11794 [this fix],
+      //   adjustment L14099 reads from `canonicalProfileNow` ✓) confirms L11815
+      //   is the only active occurrence — no further regenerate/freshness/
+      //   writeback metadata corruption remains.
+      selectedStrength: ((): string[] | undefined => {
+        const arr = readProgramPageStringArray(inputs, 'selectedStrength')
+        return arr.length > 0 ? arr : undefined
+      })(),
     }
     
     // [PHASE 18F] TASK 1 - Pre-writeback depth audit for regenerate

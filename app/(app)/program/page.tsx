@@ -9318,21 +9318,54 @@ export default function ProgramPage() {
       // flexible mode collapses to null here, never the overloaded literal
       // and never a fake `|| 4`. scheduleMode comes from the resolved
       // truth so the two fields cannot disagree.
-      const { updateCanonicalProfile } = await import('@/lib/canonical-profile-service')
-      updateCanonicalProfile({
+      // [STEP-5A-CHI-2-OMEGA-9] Replace the nonexistent
+      //   `updateCanonicalProfile` with the real exported
+      //   `saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfile>)`.
+      //   `saveCanonicalProfile` is already top-level imported at L628 along
+      //   with the `CanonicalProgrammingProfile` type — no dynamic import
+      //   needed. Pattern mirrors the regenerate sibling at L11618, the
+      //   initial-build sibling at L7825, and the adjustment sibling at
+      //   L13977 — all three use `Partial<CanonicalProgrammingProfile>`
+      //   annotation + pre-narrowed schedule/duration locals.
+      //
+      //   Pre-narrowings (only where the canonical contract requires
+      //   stricter unions than the input shape provides):
+      //
+      //   - `scheduleMode: 'static' | 'flexible'` (canonical L273 — NOT
+      //     nullable). Mirrors the upstream `modifyCanonicalOverride`
+      //     fallback at L9194 (`?? 'flexible'`) — same flow, same handler.
+      //
+      //   - `sessionDurationMode: 'static' | 'adaptive'` (canonical L278).
+      //     Mirrors regen sibling L11589-11590 narrowing.
+      //
+      //   - `sessionLengthMinutes: number` (canonical L279). Mirrors regen
+      //     sibling L11595-11600 — undefined is acceptable under
+      //     `Partial<...>` so `Number.isFinite` guard collapses non-numeric
+      //     SessionLength label variants ('10-20', '45-60', etc.) to
+      //     undefined rather than passing a string into a numeric slot.
+      const modifyCanonicalScheduleMode: 'static' | 'flexible' =
+        modifyScheduleTruth.scheduleMode ?? 'flexible'
+      const modifyCanonicalSessionDurationMode: 'static' | 'adaptive' =
+        modifyProgramInputs.sessionDurationMode === 'adaptive' ? 'adaptive' : 'static'
+      const modifyCanonicalSessionLengthMinutes: number | undefined =
+        typeof modifyProgramInputs.sessionLength === 'number' && Number.isFinite(modifyProgramInputs.sessionLength)
+          ? modifyProgramInputs.sessionLength
+          : undefined
+      const modifyWritebackTruth: Partial<CanonicalProgrammingProfile> = {
         primaryGoal: modifyProgramInputs.primaryGoal,
         secondaryGoal: modifyProgramInputs.secondaryGoal,
         trainingDaysPerWeek: modifyScheduleTruth.canonicalTrainingDays,
-        scheduleMode: modifyScheduleTruth.scheduleMode ?? modifyProgramInputs.scheduleMode,
-        sessionDurationMode: modifyProgramInputs.sessionDurationMode,
-        sessionLengthMinutes: modifyProgramInputs.sessionLength,
+        scheduleMode: modifyCanonicalScheduleMode,
+        sessionDurationMode: modifyCanonicalSessionDurationMode,
+        sessionLengthMinutes: modifyCanonicalSessionLengthMinutes,
         selectedSkills: modifyProgramInputs.selectedSkills,
         trainingPathType: modifyProgramInputs.trainingPathType,
         experienceLevel: modifyProgramInputs.experienceLevel,
         equipmentAvailable: modifyProgramInputs.equipment,
         goalCategories: modifyProgramInputs.goalCategories,
         selectedFlexibility: modifyProgramInputs.selectedFlexibility,
-      })
+      }
+      saveCanonicalProfile(modifyWritebackTruth)
       
       // [PHASE 24F] TASK 5 - Post-save parity audit
       const visibleSessionCountBeforeSet = program?.sessions?.length ?? 0

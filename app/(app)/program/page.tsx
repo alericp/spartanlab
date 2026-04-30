@@ -243,40 +243,49 @@ function getProgramSessionCountForAudit(
 }
 
 // [STEP-5A-OMEGA-14] Schedule-mode canonicalizer for canonical-profile writeback.
+// [STEP-5A-OMEGA-15] Widened input from a narrow `ProgramPageRawScheduleMode`
+//   union to `unknown` so this becomes a true boundary helper. The prior
+//   narrow input rejected legitimately wider projection-boundary callers —
+//   notably `freshnessProjection.scheduleMode` (typed `string | undefined`
+//   per `toFreshnessSignatureProjection` at L340–356, which intentionally
+//   reads defensively from an `unknown` record) — producing TS2345 at
+//   `app/(app)/program/page.tsx:7762:48`. Equality comparisons against
+//   string literals are type-safe against `unknown`, so the helper body
+//   needs no other change. Runtime behavior preserved at all three
+//   callsites: 'flexible'/'adaptive' → 'flexible', 'static' → 'static',
+//   anything else → 'static' (the established fallback).
 //
 // Background:
 //   `ScheduleMode` (lib/flexible-schedule-engine.ts:73) is `'static' | 'flexible'`.
 //   `AdaptiveProgramInputs.scheduleMode`, `CanonicalProgrammingProfile.scheduleMode`,
-//   and the freshness-projection `scheduleMode` are all narrowed to that union.
-//
-//   Phase 29A separated schedule identity (`'static' | 'flexible'`) from
-//   adaptive-workload behavior; the legacy raw value `'adaptive'` was retired
-//   from the canonical type but defensive `=== 'adaptive'` branches remained
-//   in three Program Page canonical-writeback / freshness sites. After the
-//   narrowing tightened, those comparisons became impossible literal compares
-//   (TS2367 — "this comparison appears to be unintentional").
+//   and the freshness-projection `scheduleMode` are *consumer-side* narrowed
+//   to canonical literals, but boundary projection helpers like
+//   `toFreshnessSignatureProjection` deliberately keep the value as raw
+//   `string | undefined` until canonicalization. Phase 29A separated schedule
+//   identity (`'static' | 'flexible'`) from adaptive-workload behavior;
+//   the legacy raw value `'adaptive'` was retired from the canonical type
+//   but is still mapped here so any pre-Phase-29A persisted profile reads
+//   collapse correctly.
 //
 // What this helper does:
-//   Accepts a *deliberately wider* raw super-union that still includes
-//   `'adaptive'` (so any future caller passing a pre-Phase-29A value compiles)
-//   and projects it onto the canonical `'static' | 'flexible'` shape, mapping
-//   legacy `'adaptive'` to canonical `'flexible'` exactly as the prior inline
+//   Accepts ANY raw projection-boundary value (`unknown`) and projects it
+//   onto the canonical `'static' | 'flexible'` shape, mapping legacy
+//   `'adaptive'` to canonical `'flexible'` exactly as the prior inline
 //   ternaries intended.
 //
 // Why this is safe:
-//   - No runtime behavior change at the three current callsites: their
-//     value type is `'static' | 'flexible' | undefined`, and the helper
-//     produces the same `'flexible'` / `'static'` outcome the inline
-//     ternary did.
-//   - No widening of `AdaptiveProgramInputs` / `CanonicalProgrammingProfile`.
+//   - No runtime behavior change at any callsite — the comparison ladder
+//     still produces the same `'flexible'` / `'static'` outcome the inline
+//     ternaries did, with `'static'` as the established unknown-fallback.
+//   - No widening of `AdaptiveProgramInputs` / `CanonicalProgrammingProfile` /
+//     `ScheduleMode` / `AdaptiveProgram` / `GeneratedProgram`.
 //   - No `as any`, no `@ts-ignore`.
-//   - Pure function — no state, no shadow normalizer.
-type ProgramPageRawScheduleMode = 'static' | 'flexible' | 'adaptive' | null | undefined
-
+//   - Pure function — no state, no shadow normalizer, no side effects.
 function toCanonicalScheduleModeForProgramProfile(
-  scheduleMode: ProgramPageRawScheduleMode,
+  scheduleMode: unknown,
 ): 'static' | 'flexible' {
   if (scheduleMode === 'flexible' || scheduleMode === 'adaptive') return 'flexible'
+  if (scheduleMode === 'static') return 'static'
   return 'static'
 }
 

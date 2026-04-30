@@ -8135,16 +8135,36 @@ export default function ProgramPage() {
               earlyFailedStage = 'structure_build'
             }
             
+            // [STEP-5A-OMEGA-5] Safe typed projection of the built structure's
+            //   weekly day count for the audit slot. The previous code read
+            //   `newProgram.daysPerWeek` which does NOT exist on `AdaptiveProgram`
+            //   (TS2339). The real contract is:
+            //     - `trainingDaysPerWeek: TrainingDays`  (pure numeric union 2|3|4|5|6|7)
+            //     - `currentWeekFrequency?: number`     (resolved frequency for
+            //       flexible/adaptive weeks per AdaptiveProgram interface L1596)
+            //   Both audit slots (`builtStructureDayCount`, `savedProgramTrainingDaysPerWeek`)
+            //   are typed `number | null` (L3135, L3140) so we project to a
+            //   pure number without lying — flexible/adaptive resolution falls
+            //   through to `currentWeekFrequency`, missing → null.
+            //   The defensive `typeof === 'number'` guard tolerates any future
+            //   widening of TrainingDays without changing audit fidelity.
+            const builtStructureTrainingDays: number | null =
+              typeof newProgram.trainingDaysPerWeek === 'number'
+                ? newProgram.trainingDaysPerWeek
+                : typeof newProgram.currentWeekFrequency === 'number'
+                  ? newProgram.currentWeekFrequency
+                  : null
+
             const updatedMainGen: MainGenTruthAudit = {
               ...storedMainGen,
               // Step 5: Structure result
               builtStructureSessionCount: actualBuiltSessions,
-              builtStructureDayCount: newProgram.daysPerWeek ?? (newProgram as unknown as { trainingDaysPerWeek?: number }).trainingDaysPerWeek ?? null,
+              builtStructureDayCount: builtStructureTrainingDays,
               generatedProgramIdBeforeSave: newProgram.id,
               // Step 6: Save result (save happens before setProgram)
               savedProgramId: newProgram.id,
               savedProgramSessionCount: actualBuiltSessions,
-              savedProgramTrainingDaysPerWeek: (newProgram as unknown as { trainingDaysPerWeek?: number }).trainingDaysPerWeek ?? null,
+              savedProgramTrainingDaysPerWeek: builtStructureTrainingDays,
               localStorageProgramIdAfterSave: localStorageId,
               localStorageProgramSessionsAfterSave: localStorageSessions,
               // Step 7: setProgram target

@@ -14621,27 +14621,68 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           : 'SESSION_COUNT_STILL_BELOW_6__CHECK_IF_REAL_REDUCTION_REASON_EXISTS',
       })
       
-      // [POST-BUILD AUTHORITATIVE LOCK] Set single winner for adjustment/onboarding flow
+      // [POST-BUILD AUTHORITATIVE LOCK] Set single winner for the
+      //   adjustment / rebuild-from-current-settings flow.
+      //   [PRE-AB6 BUILD GREEN GATE] The previous literal
+      //   'rebuild_from_current_settings' was not a member of the
+      //   `authoritativeSavedProgramRef` flowSource union declared at
+      //   L3203 — `'main_generation' | 'regenerate' | 'modify' |
+      //   'onboarding'`. This block executes inside the
+      //   `handleAdjustmentRebuild` success path (an existing-program
+      //   adjustment that rebuilds from current canonical settings),
+      //   which matches the same contract bucket used at L9655/L9661
+      //   for the modify flow. Use the canonical `'modify'` literal so
+      //   downstream lock consumers (L3943, L5843, L6006, L6208,
+      //   L6400, L6485) continue to read a value the union allows.
+      //   The descriptive "rebuild_from_current_settings" label is
+      //   preserved as a separate debug-only `flowDetail` field on the
+      //   adjacent console.log so audit history retains the precise
+      //   sub-flow identity. Stale `'onboarding'` debug label below
+      //   is also corrected — this corridor is never the onboarding
+      //   flow.
       authoritativeSavedProgramRef.current = {
         programId: newProgram.id,
         savedAt: Date.now(),
         sessionCount: newProgram.sessions?.length ?? 0,
         createdAt: newProgram.createdAt || new Date().toISOString(),
-        flowSource: 'rebuild_from_current_settings',  // [ROOT-CAUSE-FIX] More accurate flow source
+        flowSource: 'modify',
         lockExpiresAt: Date.now() + 5000,
       }
-      console.log('[post-build-auth-lock] Authoritative winner locked (adjustment/onboarding flow)', {
+      console.log('[post-build-auth-lock] Authoritative winner locked (adjustment / rebuild-from-current-settings flow)', {
         programId: newProgram.id,
         sessionCount: newProgram.sessions?.length ?? 0,
-        flowSource: 'onboarding',
+        flowSource: 'modify',
+        flowDetail: 'rebuild_from_current_settings',
         verdict: 'POST_BUILD_WINNER_LOCKED',
       })
       
       // ==========================================================================
       // [PHASE 28A] POST_GENERATION_CANONICAL_UPDATE AUDIT
       // Proves whether the generated program schedule matches what we expect
+      //
+      // [PRE-AB6 BUILD GREEN GATE] The previous call
+      //   `programModules.reconcileCanonicalProfile?.()` referenced a method
+      //   that does not exist on the typed `programModules` object — its
+      //   actual keys (verified by grep audit) are limited to
+      //   `generateAdaptiveProgram`, `saveAdaptiveProgram`,
+      //   `deleteAdaptiveProgram`, `getProgramState`, `getProgramStatus`,
+      //   `normalizeProgramForDisplay`, `isRenderableProgram`,
+      //   `computeTemplateSimilarity`, `recordProgramEnd`. The
+      //   `reconcileCanonicalProfile` symbol lives in
+      //   `lib/canonical-profile-service.ts` / `lib/profile-truth-contract.ts`
+      //   and is NOT exposed through `programModules`.
+      //
+      //   Replaced with `getCanonicalProfile()`, the same authoritative
+      //   readback already used everywhere else in this corridor — including
+      //   `adjCanonicalProfileNow` at L13662 (start of this
+      //   `handleAdjustmentRebuild` flow) and `adjCanonicalReadback` at
+      //   L14514 (~150 lines above this audit, post-canonical-update). Calling
+      //   it again here captures the post-generation canonical state, which
+      //   is exactly what the Phase 28A audit needs. No new module API is
+      //   invented; no `as any`; no `programModules` widening; no schema /
+      //   package / generator / live-workout / UI change.
       // ==========================================================================
-      const phase28aCanonicalAfter = programModules.reconcileCanonicalProfile?.() || null
+      const phase28aCanonicalAfter = getCanonicalProfile() ?? null
       console.log('[phase28a-canonical-schedule-truth-audit]', {
         checkpoint: 'POST_GENERATION_CANONICAL_UPDATE',
         // New program schedule

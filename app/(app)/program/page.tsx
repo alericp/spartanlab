@@ -9489,26 +9489,66 @@ export default function ProgramPage() {
       })
       setBuilderOrigin('default')
       
-      // Build success result for consistency
-      const successResult = {
-        status: 'success' as const,
-        attemptId: `modify_unified_${Date.now()}`,
+      // [STEP-5A-PSI-OMEGA-10] Align modify-success build result with the
+      //   canonical `createSuccessBuildResult(...)` + [PHASE 16S] metadata
+      //   spread pattern already used by the 3 sibling success paths:
+      //     - main generation (L8276 / L8279-L8313)
+      //     - regeneration   (L11931 / L11934-L11996)
+      //     - adjustment     (L14187 / L14190-L14254)
+      //
+      //   The previous inline object literal:
+      //     1. Used the stale field name `devMessage` (canonical is `devSummary`,
+      //        per BuildAttemptResult.devSummary at lib/program-state.ts:307).
+      //     2. Used non-canonical `timestamp` instead of `attemptedAt` (L289).
+      //     3. Was missing 10 required BuildAttemptResult fields:
+      //        attemptedAt, replacedVisibleProgram, preservedLastGoodProgram,
+      //        visibleProgramIsStale, devSummary, usedProfileSignature,
+      //        previousProgramId, newProgramId, failureReason, failureGoal.
+      //
+      //   The factory `createSuccessBuildResult` (lib/program-state.ts:678)
+      //   produces a fully-typed `BuildAttemptResult` with all required fields
+      //   filled in canonical form. Per-site metadata is layered via the same
+      //   `[PHASE 16S]` spread shape used by the 3 siblings.
+      //
+      //   `pageFlow: 'regeneration'` matches the modify handler's actual server
+      //   route (per L9056 `[MODIFY-SUBMIT-FIX]` comment: "Modify routes through
+      //   /api/program/regenerate") — same route, same `pageFlow` slot. It is
+      //   NOT 'main_generation' (this is a rebuild of an existing program) and
+      //   NOT 'adjustment_rebuild' (this is a unified rebuild, not a fine-tune
+      //   adjustment). The BuildAttemptStatus enum has no `'modify_*'` member,
+      //   so 'regeneration' is the truthful canonical match.
+      //
+      //   `dispatchStartedAt` reuses `currentAttemptStartedAtRef.current` which
+      //   was set at L9100 at the start of this handler (same `new Date()` call
+      //   semantics the other 3 siblings use for their `*DispatchStartTime`
+      //   locals).
+      //
+      //   Any dev-only message previously stored on the result is preserved
+      //   in `console.log` only — never in typed app state.
+      const modifySuccessProfileSig = createProfileSignature(
+        toFreshnessSignatureProjection(effectiveInputs)
+      )
+      const modifySuccessResult = createSuccessBuildResult(
+        modifySuccessProfileSig,
+        program?.id ?? null,
+        newProgram.id
+      )
+      const modifySuccessResultWithMetadata: BuildAttemptResult = {
+        ...modifySuccessResult,
         runtimeSessionId: runtimeSessionIdRef.current,
-        timestamp: new Date().toISOString(),
-      }
-      setLastBuildResult({
-        ...successResult,
-        stage: 'complete',
-        errorCode: null,
-        subCode: 'none',
-        userMessage: 'Program generated successfully',
-        devMessage: 'Modify builder unified canonical generation completed',  // [PHASE 24M]
-        failureStep: null,
-        failureMiddleStep: null,
-        failureDayNumber: null,
-        failureFocus: null,
+        pageFlow: 'regeneration',
+        dispatchStartedAt: currentAttemptStartedAtRef.current,
+        requestDispatched: true,
+        responseReceived: true,
         hydratedFromStorage: false,
+      }
+      console.log('[modify-builder-success]', {
+        message: 'Modify builder unified canonical generation completed',
+        programId: newProgram?.id ?? null,
+        previousProgramId: program?.id ?? null,
+        source: 'PHASE_24M',
       })
+      setLastBuildResult(modifySuccessResultWithMetadata)
       
       // [MODIFY-UNIFIED-FIX] Final unified architecture verdict - now uses server route
       const sessionCount = newProgram.sessions?.length ?? 0

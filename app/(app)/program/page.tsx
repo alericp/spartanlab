@@ -619,7 +619,13 @@ import {
 import type { AdjustmentRebuildRequest, AdjustmentRebuildResult } from '@/components/programs/ProgramAdjustmentModal'
 // [canonical-rebuild] TASK 2: Import saveCanonicalProfile to persist inputs to canonical truth
 // NOTE: getCanonicalProfile is already imported above from the main canonical-profile-service import block
-import { saveCanonicalProfile } from '@/lib/canonical-profile-service'
+// [STEP-5A-OMEGA-4] Import the strict canonical profile type for caller-side
+//   `Partial<CanonicalProgrammingProfile>` annotations on the three writeback
+//   truth objects below — locks each writeback construction to the strict
+//   save contract (number | null trainingDays, numeric sessionLengthMinutes,
+//   `'static' | 'flexible'` scheduleMode, `'static' | 'adaptive'` sessionDurationMode)
+//   without weakening the callee.
+import { saveCanonicalProfile, type CanonicalProgrammingProfile } from '@/lib/canonical-profile-service'
 
 // ==========================================================================
 // [PHASE 16Q] STRUCTURED PAGE VALIDATION ERROR
@@ -7676,15 +7682,48 @@ export default function ProgramPage() {
     // Use the program's actual values for consistent drift detection
     // [STEP-5A-OMEGA-3] scheduleMode read goes through `freshnessProjection`
     //   (the canonical narrow signature source) per primary projection rule.
-    const effectiveScheduleMode = freshnessProjection.scheduleMode === 'flexible' || freshnessProjection.scheduleMode === 'adaptive'
-      ? 'flexible'
-      : 'static'
+    // [STEP-5A-OMEGA-4] Explicit `'static' | 'flexible'` annotation — without
+    //   it the ternary widens to `string` and the canonical writeback object
+    //   below loses the literal-union shape `Partial<CanonicalProgrammingProfile>`
+    //   demands (TS2322 at the saveCanonicalProfile boundary). 'adaptive'
+    //   freshness intent collapses to canonical 'flexible' since the canonical
+    //   profile only models 'static' | 'flexible' (Phase 29A separates schedule
+    //   identity from adaptive workload behavior).
+    const effectiveScheduleMode: 'static' | 'flexible' =
+      freshnessProjection.scheduleMode === 'flexible' || freshnessProjection.scheduleMode === 'adaptive'
+        ? 'flexible'
+        : 'static'
     
     // For flexible mode: save null to indicate "adaptive" identity
     // For static mode: save the actual generated days
-    const effectiveTrainingDays = effectiveScheduleMode === 'flexible'
+    // [STEP-5A-OMEGA-4] Explicit `number | null` — drops `safeInputs.trainingDaysPerWeek`'s
+    //   `'flexible'` string variant (AdaptiveProgramInputs.trainingDaysPerWeek
+    //   is `TrainingDays | 'flexible'`) which the canonical profile's
+    //   `trainingDaysPerWeek: number | null` rejects.
+    //   `newProgram.trainingDaysPerWeek` is already `TrainingDays` (pure
+    //   number); `safeInputs.trainingDaysPerWeek` is narrowed via
+    //   `typeof === 'number'` here.
+    const effectiveTrainingDays: number | null = effectiveScheduleMode === 'flexible'
       ? null // Flexible users don't have a fixed day count identity
-      : (newProgram.trainingDaysPerWeek ?? safeInputs.trainingDaysPerWeek ?? undefined)
+      : typeof newProgram.trainingDaysPerWeek === 'number'
+        ? newProgram.trainingDaysPerWeek
+        : typeof safeInputs.trainingDaysPerWeek === 'number'
+          ? safeInputs.trainingDaysPerWeek
+          : null
+
+    // [STEP-5A-OMEGA-4] Numeric session-length narrowing for canonical writeback.
+    //   Both `newProgram.sessionLength` and `safeInputs.sessionLength` are typed
+    //   `SessionLength`, which is `30 | 45 | 60 | 75 | 90 | 120 | '10-20' | '20-30' | '30-45' | '45-60' | '60+'`
+    //   (per lib/program-service.ts) — string label variants are NOT minutes
+    //   and the canonical profile's `sessionLengthMinutes: number` rejects them.
+    //   Only finite numeric values pass through; missing/string-label sources
+    //   collapse to `undefined` (Partial-safe).
+    const effectiveSessionLengthMinutes: number | undefined =
+      typeof newProgram.sessionLength === 'number' && Number.isFinite(newProgram.sessionLength)
+        ? newProgram.sessionLength
+        : typeof safeInputs.sessionLength === 'number' && Number.isFinite(safeInputs.sessionLength)
+          ? safeInputs.sessionLength
+          : undefined
     
     // [equipment-truth-fix] TASK C: Convert builder equipment keys to canonical profile keys
     // This strips floor/wall and maps pull_bar->pullup_bar, bands->resistance_bands
@@ -7701,12 +7740,20 @@ export default function ProgramPage() {
     // [PHASE 18F] TASK 3 - Expand canonical writeback to include FULL deep planner identity
     // This ensures future rebuilds reconstruct from the same truth class as this successful build
     // ==========================================================================
-    const initialBuildWritebackTruth = {
+    // [STEP-5A-OMEGA-4] Explicit `Partial<CanonicalProgrammingProfile>` —
+    //   forces every property below to be checked against the strict canonical
+    //   contract at construction time, NOT at the saveCanonicalProfile call
+    //   boundary (where TS reports a single error and stops).
+    const initialBuildWritebackTruth: Partial<CanonicalProgrammingProfile> = {
       // Schedule/duration fields
-      trainingDaysPerWeek: effectiveTrainingDays ?? undefined,
+      // [STEP-5A-OMEGA-4] `effectiveTrainingDays` is now `number | null` — pass
+      //   it through directly (canonical accepts both); no `?? undefined` collapse.
+      trainingDaysPerWeek: effectiveTrainingDays,
       // [STEP-5A-OMEGA-3] sessionLength via narrowed safeInputs (preserves
       //   exact existing fallback semantics: program output → inputs → undefined).
-      sessionLengthMinutes: newProgram.sessionLength ?? safeInputs.sessionLength ?? undefined,
+      // [STEP-5A-OMEGA-4] Use the pre-narrowed `effectiveSessionLengthMinutes`
+      //   so the canonical's `sessionLengthMinutes: number` contract holds.
+      sessionLengthMinutes: effectiveSessionLengthMinutes,
       scheduleMode: effectiveScheduleMode,
       // [STEP-5A-XI] sessionDurationMode is not on AdaptiveProgramInputs —
       //   sourced via inputsMeta (Record-narrowing helper)
@@ -11451,15 +11498,37 @@ export default function ProgramPage() {
   console.log('[post-build-truth] REGEN STAGE 7d: Persisting FULL programming truth to canonical profile...')
   try {
     // Use freshRebuildInput values (already composed from canonical truth + overrides)
-    const effectiveScheduleMode = freshRebuildInput.scheduleMode === 'flexible' || freshRebuildInput.scheduleMode === 'adaptive'
-      ? 'flexible'
-      : 'static'
+    // [STEP-5A-OMEGA-4] Explicit literal-union annotations to lock the canonical
+    //   writeback contract at construction (mirrors the initial-build writeback
+    //   above). Without these, ternaries widen to `string` / `number | undefined`
+    //   and `Partial<CanonicalProgrammingProfile>` rejects the object below.
+    const effectiveScheduleMode: 'static' | 'flexible' =
+      freshRebuildInput.scheduleMode === 'flexible' || freshRebuildInput.scheduleMode === 'adaptive'
+        ? 'flexible'
+        : 'static'
     
-    const effectiveTrainingDays = effectiveScheduleMode === 'flexible'
+    // [STEP-5A-OMEGA-4] Explicit `number | null` — drops the `'flexible'`
+    //   string variant `freshRebuildInput.trainingDaysPerWeek` may carry.
+    const effectiveTrainingDays: number | null = effectiveScheduleMode === 'flexible'
       ? null
-      : (newProgram.trainingDaysPerWeek ?? (typeof freshRebuildInput.trainingDaysPerWeek === 'number' ? freshRebuildInput.trainingDaysPerWeek : undefined))
+      : typeof newProgram.trainingDaysPerWeek === 'number'
+        ? newProgram.trainingDaysPerWeek
+        : typeof freshRebuildInput.trainingDaysPerWeek === 'number'
+          ? freshRebuildInput.trainingDaysPerWeek
+          : null
     
-    const effectiveSessionDurationMode = freshRebuildInput.sessionDurationMode === 'adaptive' ? 'adaptive' : 'static'
+    const effectiveSessionDurationMode: 'static' | 'adaptive' =
+      freshRebuildInput.sessionDurationMode === 'adaptive' ? 'adaptive' : 'static'
+
+    // [STEP-5A-OMEGA-4] Numeric session-length narrowing — `SessionLength`
+    //   includes string label variants ('10-20', '45-60', etc.) that the
+    //   canonical profile's `sessionLengthMinutes: number` rejects.
+    const effectiveSessionLengthMinutes: number | undefined =
+      typeof newProgram.sessionLength === 'number' && Number.isFinite(newProgram.sessionLength)
+        ? newProgram.sessionLength
+        : typeof freshRebuildInput.sessionLength === 'number' && Number.isFinite(freshRebuildInput.sessionLength)
+          ? freshRebuildInput.sessionLength
+          : undefined
     
     // [equipment-truth-fix] TASK C: Convert builder equipment keys to canonical profile keys
     const canonicalEquipment = builderEquipmentToProfileEquipment(freshRebuildInput.equipment || [])
@@ -11475,15 +11544,19 @@ export default function ProgramPage() {
     // [PHASE 18F] TASK 3 - Expand canonical writeback to include FULL deep planner identity
     // This ensures future rebuilds reconstruct from the same truth class as this successful regen
     // ==========================================================================
-    const regenerateWritebackTruth = {
+    // [STEP-5A-OMEGA-4] Explicit `Partial<CanonicalProgrammingProfile>`
+    //   annotation locks every field to the strict canonical contract.
+    const regenerateWritebackTruth: Partial<CanonicalProgrammingProfile> = {
       // Goal fields
       primaryGoal: freshRebuildInput.primaryGoal,
       secondaryGoal: freshRebuildInput.secondaryGoal,
       // Schedule fields
-      trainingDaysPerWeek: effectiveTrainingDays ?? undefined,
+      // [STEP-5A-OMEGA-4] `effectiveTrainingDays` is now `number | null`.
+      trainingDaysPerWeek: effectiveTrainingDays,
       scheduleMode: effectiveScheduleMode,
       // Duration fields
-      sessionLengthMinutes: newProgram.sessionLength ?? freshRebuildInput.sessionLength ?? undefined,
+      // [STEP-5A-OMEGA-4] Use pre-narrowed `effectiveSessionLengthMinutes`.
+      sessionLengthMinutes: effectiveSessionLengthMinutes,
       sessionDurationMode: effectiveSessionDurationMode,
       // Equipment/constraints
       equipmentAvailable: canonicalEquipment,
@@ -13756,10 +13829,23 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   // [PHASE 18F] TASK 3 - Expand canonical writeback to include FULL deep planner identity
   // This ensures future rebuilds reconstruct from the same truth class as this successful adjustment
   // ==========================================================================
-  const adjustmentWritebackTruth = {
+  // [STEP-5A-OMEGA-4] Numeric session-length narrowing for canonical writeback —
+  //   `updatedInputs.sessionLength: SessionLength` includes string label variants
+  //   that the canonical profile's `sessionLengthMinutes: number` rejects.
+  const adjustmentSessionLengthMinutes: number | undefined =
+    typeof updatedInputs.sessionLength === 'number' && Number.isFinite(updatedInputs.sessionLength)
+      ? updatedInputs.sessionLength
+      : undefined
+
+  // [STEP-5A-OMEGA-4] `Partial<CanonicalProgrammingProfile>` annotation locks
+  //   the writeback object to the strict canonical contract.
+  const adjustmentWritebackTruth: Partial<CanonicalProgrammingProfile> = {
     // Schedule/duration fields (may be adjusted)
+    // [STEP-5A-OMEGA-4] persistedTrainingDays already typed `number | undefined`
+    //   above — pass through directly. persistedScheduleMode already typed
+    //   `'static' | 'flexible' | undefined` above.
     trainingDaysPerWeek: persistedTrainingDays,
-    sessionLengthMinutes: updatedInputs.sessionLength ?? undefined,
+    sessionLengthMinutes: adjustmentSessionLengthMinutes,
     scheduleMode: persistedScheduleMode,
     sessionDurationMode: updatedInputs.sessionDurationMode ?? canonicalProfileNow?.sessionDurationMode ?? undefined,
     // Equipment (may be adjusted)

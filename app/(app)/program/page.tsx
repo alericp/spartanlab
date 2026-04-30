@@ -9592,8 +9592,14 @@ export default function ProgramPage() {
       if (process.env.NODE_ENV !== 'production') {
         console.log('[v0] Restart Program confirmed - archiving and returning to builder')
       }
-      // Record program end for history/archival before deleting
-      programModules.recordProgramEnd?.('restart')
+      // Record program end for history/archival before deleting.
+      // [STEP-5A-OMEGA-11] `recordProgramEnd` accepts only the canonical union
+      //   `'completed' | 'new_program' | 'abandoned'` (lib/program-adjustment-engine.ts:209).
+      //   Restart-from-scratch ends the current program because the user is
+      //   replacing it with a freshly built one — semantically `'new_program'`,
+      //   matching the modify-flow sibling at L15823 and ProgramAdjustmentModal.tsx:363.
+      //   The user-facing "Restart Program" UI label is intentionally unchanged.
+      programModules.recordProgramEnd?.('new_program')
       programModules.deleteAdaptiveProgram(program.id)
       setProgram(null)
       setShowBuilder(true)
@@ -9941,7 +9947,12 @@ export default function ProgramPage() {
         
         // [program-build] REGEN STAGE 2: Record regeneration event
         regenerateStage = 'recording_event'
-        programModules.recordProgramEnd?.('regenerate')
+        // [STEP-5A-OMEGA-11] Regenerate replaces the current program with a
+        //   freshly generated one from current canonical truth. Canonical
+        //   `recordProgramEnd` reason is `'new_program'` (no `'regenerate'`
+        //   member exists in the union; the user-facing "Regenerate" UI label
+        //   is intentionally unchanged).
+        programModules.recordProgramEnd?.('new_program')
         
         // [program-build] REGEN STAGE 3: Generate new program with FRESH canonical input
         regenerateStage = 'generating'

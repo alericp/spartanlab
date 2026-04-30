@@ -15201,7 +15201,24 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         console.log('[REGEN-TRUTH step-2-generation-input]', {
           scheduleModePassed: inputScheduleMode,
           trainingDaysPerWeekPassed: inputTrainingDays,
-          adaptiveWorkloadEnabledPassed: freshInputs?.adaptiveWorkloadEnabled ?? null,
+          // [PRE-AB6 BUILD GREEN GATE] `freshInputs` here is the return
+          //   type of `entryToAdaptiveInputs(entryResult.entry)` (declared
+          //   at lib/canonical-profile-service.ts:3614), whose 14-field
+          //   contract intentionally does NOT include
+          //   `adaptiveWorkloadEnabled`. That flag lives on the
+          //   `AdaptiveProgramInputs` builder contract (lib/adaptive-
+          //   program-builder.ts:1105) and on the canonical profile —
+          //   neither of which is the same object as `freshInputs`. The
+          //   surrounding sibling fields (`sessionDurationMode`,
+          //   `scheduleMode`, `trainingDaysPerWeek`, `selectedSkills`,
+          //   `primaryGoal`, `secondaryGoal`) ARE on the
+          //   `entryToAdaptiveInputs` return type and remain valid reads.
+          //   For this audit-only field, report null + an explicit
+          //   source-note rather than invent a property, widen the
+          //   builder contract, or cast — keeping the diagnostic
+          //   non-blocking without distorting truth.
+          adaptiveWorkloadEnabledPassed: null,
+          adaptiveWorkloadEnabledSource: 'not_present_on_entryToAdaptiveInputs_contract',
           sessionDurationModePassed: freshInputs?.sessionDurationMode ?? null,
           selectedSkillsCount: freshInputs?.selectedSkills?.length ?? 0,
           primaryGoal: freshInputs?.primaryGoal ?? null,

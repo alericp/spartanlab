@@ -142,3 +142,27 @@ If the user truly cannot pull/merge:
   fetch THIS branch directly and verify the fix is present at L11815.
 - If the head branch shows up empty or stale on the user's local clone,
   the issue is GitHub remote sync, not v0 — refer to vercel.com/help.
+
+---
+
+## OMEGA-21 DIAGNOSTIC APPEND
+
+OMEGA-21-EXPORT-ROUTING-PROOF — APPENDED INTO AN EXISTING TRACKED FILE
+
+If the user's NEXT downloaded zip contains this exact line below but does
+NOT contain `OMEGA_21_EXPORT_ROUTING_PROOF_ROOT.txt` at the repo root, the
+export channel is delivering ONLY pre-existing files at older snapshots —
+NEW files written by recent v0 turns are being excluded. This is a
+v0-platform-side bug (likely "Download ZIP" pinned to an older version
+block, or a stale GitHub branch checkout) and must be escalated to
+vercel.com/help.
+
+If the next zip contains BOTH this appended line AND the root marker, the
+channel is healthy — the user simply needs to download from the LATEST
+version block (three-dots menu on the most recent version, not an older
+one) or pull the LATEST `v0/...` head branch.
+
+If the next zip contains NEITHER, the user is downloading or pulling from
+a different chat/project entirely than this workspace.
+
+OMEGA-21-DIAGNOSTIC-APPEND-MARKER

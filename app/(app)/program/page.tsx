@@ -12815,6 +12815,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   if (loadError) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] text-white">
+        {/* OMEGA WORKSPACE LIVE PROOF BANNER - temporary, remove once delivery is confirmed */}
+        <div className="w-full bg-[#E63946] text-white text-center font-bold py-3 px-4 text-sm sm:text-base border-b-2 border-white">
+          OMEGA WORKSPACE LIVE — CURRENT PROJECT EDIT CONFIRMED
+        </div>
         <div className="max-w-4xl mx-auto p-4 sm:p-6">
           <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 text-center">
             <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
@@ -12836,6 +12840,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   if (!mounted || !inputs) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] text-white">
+        {/* OMEGA WORKSPACE LIVE PROOF BANNER - temporary, remove once delivery is confirmed */}
+        <div className="w-full bg-[#E63946] text-white text-center font-bold py-3 px-4 text-sm sm:text-base border-b-2 border-white">
+          OMEGA WORKSPACE LIVE — CURRENT PROJECT EDIT CONFIRMED
+        </div>
         <div className="max-w-4xl mx-auto p-4 sm:p-6">
           <div className="animate-pulse space-y-4">
             <div className="h-8 w-48 bg-[#2A2A2A] rounded" />
@@ -12869,6 +12877,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white">
+      {/* OMEGA WORKSPACE LIVE PROOF BANNER - temporary, remove once delivery is confirmed */}
+      <div className="w-full bg-[#E63946] text-white text-center font-bold py-3 px-4 text-sm sm:text-base border-b-2 border-white">
+        OMEGA WORKSPACE LIVE — CURRENT PROJECT EDIT CONFIRMED
+      </div>
       {/* [PHASE 24D] TASK 7 - Temporary diagnostic strip for modify flow state */}
       {showDiagnosticStrip && (
         <div className="fixed bottom-0 left-0 right-0 z-[200] bg-black/90 border-t border-[#3A3A3A] px-4 py-1 text-xs font-mono text-[#6A6A6A]">

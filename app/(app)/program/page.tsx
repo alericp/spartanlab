@@ -12509,7 +12509,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         console.log('[regenerate-determinism-audit]', {
           canonicalProfileSignature: profileSig.slice(0, 60),
           rebuildInputSignature: profileSig,
-          generatedSessionFocusLabels: newProgram.sessions?.map(s => s.focusLabel || s.dayFocus).join(' | '),
+          // [PRE-AB6 BUILD GREEN GATE] Removed legacy `s.dayFocus` fallback —
+          //   `AdaptiveSession` exposes `focusLabel: string` (non-optional)
+          //   and `dayLabel: string` (non-optional); `dayFocus` was a stale
+          //   field name from an earlier session shape and never existed on
+          //   the current type. Audit-only console.log; preserves the same
+          //   diagnostic intent (best human-readable per-session label,
+          //   pipe-joined) using only typed fields. No `as any`, no schema
+          //   widening, no runtime behavior change.
+          generatedSessionFocusLabels: newProgram.sessions?.map(s => s.focusLabel || s.dayLabel).join(' | '),
           perDayMainExerciseNames: newProgram.sessions?.map(s => 
             s.exercises?.slice(0, 3).map(e => e.name).join(', ')
           ),

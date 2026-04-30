@@ -13927,12 +13927,27 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           error: serverResult.error,
           failedStage: serverResult.failedStage,
         })
+        // [PRE-AB6 BUILD GREEN GATE] The previous literal
+        //   'server_adjustment_rebuild_failed' was not part of the
+        //   `PageValidationSubCode` union (defined at L720). The closest
+        //   existing canonical subcode is `server_regenerate_failed` —
+        //   adjustment rebuild is semantically a regenerate-from-existing
+        //   -program operation (it dispatches to the adjustment endpoint
+        //   to rebuild the active program), which aligns with the
+        //   documented pattern that distinguishes main-gen
+        //   (`server_generation_failed`) from regen
+        //   (`server_regenerate_failed`). Diagnostic specificity is
+        //   preserved by the human-readable message ("Server adjustment
+        //   rebuild failed"), the `{ serverResult }` context bag, and the
+        //   adjacent `[phase18e-adjustment-server-error]` console.log
+        //   (L13925–13929). No `as any`, no `@ts-ignore`, no union
+        //   loosening.
         throw new ProgramPageValidationError(
           'orchestration_failed',
           'generating',
-          'server_adjustment_rebuild_failed',
+          'server_regenerate_failed',
           serverResult.error || 'Server adjustment rebuild failed',
-          { serverResult }
+          { serverResult, failurePath: 'adjustment_rebuild' }
         )
       }
       

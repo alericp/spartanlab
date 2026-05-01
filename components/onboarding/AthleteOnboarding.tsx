@@ -3307,13 +3307,48 @@ function ReviewSection({ profile, onEditSection, onClearAll, showClearConfirm, s
   return items.length > 0 ? items : null
   }
 
+  // [PRE-AB6 BUILD GREEN GATE / STRICT LABEL MAP KEY GUARDS]
+  // SkillBenchmark.progression is canonically typed as plain `string`
+  // (lib/athlete-profile.ts:401), so direct indexing into the strict label
+  // maps Record<FrontLeverProgression | PlancheProgression | HSPUProgression, string>
+  // produces TS7053. Each helper below derives its key set from the actual
+  // label-map shape via `keyof typeof MAP`, type-guards the input via a
+  // hasOwnProperty check, and returns null on miss — preserving the existing
+  // `|| rawString` runtime fallback used at the highest-level-ever sites.
+  type FrontLeverProgressionKey = keyof typeof FRONT_LEVER_LABELS
+  type PlancheProgressionKey = keyof typeof PLANCHE_LABELS
+  type HSPUProgressionKey = keyof typeof HSPU_LABELS
+
+  const isFrontLeverProgressionKey = (value: unknown): value is FrontLeverProgressionKey =>
+    typeof value === 'string' && Object.prototype.hasOwnProperty.call(FRONT_LEVER_LABELS, value)
+
+  const isPlancheProgressionKey = (value: unknown): value is PlancheProgressionKey =>
+    typeof value === 'string' && Object.prototype.hasOwnProperty.call(PLANCHE_LABELS, value)
+
+  const isHSPUProgressionKey = (value: unknown): value is HSPUProgressionKey =>
+    typeof value === 'string' && Object.prototype.hasOwnProperty.call(HSPU_LABELS, value)
+
+  const getFrontLeverProgressionLabel = (value: unknown): string | null =>
+    isFrontLeverProgressionKey(value) ? FRONT_LEVER_LABELS[value] : null
+
+  const getPlancheProgressionLabel = (value: unknown): string | null =>
+    isPlancheProgressionKey(value) ? PLANCHE_LABELS[value] : null
+
+  const getHSPUProgressionLabel = (value: unknown): string | null =>
+    isHSPUProgressionKey(value) ? HSPU_LABELS[value] : null
+
   // Helper for skill level summary with history
   const getSkillSummary = () => {
   const items: string[] = []
   
   // Front Lever
-  if (profile.frontLever?.progression && profile.frontLever.progression !== 'unknown' && profile.frontLever.progression !== 'none') {
-    let flSummary = `Front Lever: ${FRONT_LEVER_LABELS[profile.frontLever.progression]}`
+  const flProgressionLabel = getFrontLeverProgressionLabel(profile.frontLever?.progression)
+  if (
+    flProgressionLabel &&
+    profile.frontLever?.progression !== 'unknown' &&
+    profile.frontLever?.progression !== 'none'
+  ) {
+    let flSummary = `Front Lever: ${flProgressionLabel}`
     // Add hold time + band assistance
     if (profile.frontLever.holdSeconds) {
       flSummary += ` ${profile.frontLever.holdSeconds}s`
@@ -3323,7 +3358,8 @@ function ReviewSection({ profile, onEditSection, onClearAll, showClearConfirm, s
     }
     // Add highest level ever
     if (profile.frontLever.highestLevelEverReached && profile.frontLever.highestLevelEverReached !== profile.frontLever.progression) {
-      flSummary += ` — was ${FRONT_LEVER_LABELS[profile.frontLever.highestLevelEverReached as FrontLeverProgression] || profile.frontLever.highestLevelEverReached}`
+      const flHighestLabel = getFrontLeverProgressionLabel(profile.frontLever.highestLevelEverReached)
+      flSummary += ` — was ${flHighestLabel || profile.frontLever.highestLevelEverReached}`
     }
     const flHistory = profile.skillHistory?.front_lever
     if (flHistory?.trainingHistory && flHistory.trainingHistory !== 'never') {
@@ -3336,8 +3372,13 @@ function ReviewSection({ profile, onEditSection, onClearAll, showClearConfirm, s
   }
   
   // Planche
-  if (profile.planche?.progression && profile.planche.progression !== 'unknown' && profile.planche.progression !== 'none') {
-    let plSummary = `Planche: ${PLANCHE_LABELS[profile.planche.progression]}`
+  const plProgressionLabel = getPlancheProgressionLabel(profile.planche?.progression)
+  if (
+    plProgressionLabel &&
+    profile.planche?.progression !== 'unknown' &&
+    profile.planche?.progression !== 'none'
+  ) {
+    let plSummary = `Planche: ${plProgressionLabel}`
     // Add hold time + band assistance
     if (profile.planche.holdSeconds) {
       plSummary += ` ${profile.planche.holdSeconds}s`
@@ -3347,7 +3388,8 @@ function ReviewSection({ profile, onEditSection, onClearAll, showClearConfirm, s
     }
     // Add highest level ever
     if (profile.planche.highestLevelEverReached && profile.planche.highestLevelEverReached !== profile.planche.progression) {
-      plSummary += ` — was ${PLANCHE_LABELS[profile.planche.highestLevelEverReached as PlancheProgression] || profile.planche.highestLevelEverReached}`
+      const plHighestLabel = getPlancheProgressionLabel(profile.planche.highestLevelEverReached)
+      plSummary += ` — was ${plHighestLabel || profile.planche.highestLevelEverReached}`
     }
     const plHistory = profile.skillHistory?.planche
     if (plHistory?.trainingHistory && plHistory.trainingHistory !== 'never') {
@@ -3378,8 +3420,13 @@ function ReviewSection({ profile, onEditSection, onClearAll, showClearConfirm, s
   }
   
   // HSPU
-  if (profile.hspu?.progression && profile.hspu.progression !== 'unknown' && profile.hspu.progression !== 'none') {
-    let hspuSummary = `HSPU: ${HSPU_LABELS[profile.hspu.progression]}`
+  const hspuProgressionLabel = getHSPUProgressionLabel(profile.hspu?.progression)
+  if (
+    hspuProgressionLabel &&
+    profile.hspu?.progression !== 'unknown' &&
+    profile.hspu?.progression !== 'none'
+  ) {
+    let hspuSummary = `HSPU: ${hspuProgressionLabel}`
     const hspuHistory = profile.skillHistory?.handstand_pushup
     if (hspuHistory?.trainingHistory && hspuHistory.trainingHistory !== 'never') {
       hspuSummary += ` • ${SKILL_TRAINING_HISTORY_LABELS[hspuHistory.trainingHistory]}`

@@ -148,23 +148,34 @@ export async function POST(request: Request) {
       equipment: builderInputs.equipment ?? [],
       equipmentAvailable: builderInputs.equipment ?? [],
       // NON-BUILDER FIELDS - preserve from canonical base
+      // [PRE-AB6 BUILD GREEN GATE / CANONICAL FLAT-FIELD CONTRACT]
+      // AuthoritativeGenerationRequest.canonicalProfile is typed as
+      //   Partial<CanonicalProgrammingProfile> & { primaryGoal?: string }
+      // (lib/server/authoritative-program-generation.ts:133), and
+      // CanonicalProgrammingProfile (lib/canonical-profile-service.ts:248)
+      // exposes benchmark truth as FLAT fields, not nested aggregate
+      // buckets. The previous payload referenced four buckets that do
+      // not exist on the canonical contract — `benchmarks`,
+      // `skillBenchmarks`, `flexibilityBenchmarks`, `weightedBenchmarks` —
+      // and three flat fields that also do not exist on the contract:
+      //   - `backLeverProgression` (no canonical equivalent — removed)
+      //   - `muscleUpProgression` → real field is `muscleUpReadiness`
+      //   - `handstandProgression` → real field is `hspuProgression`
+      // Field name drift was the entire source of the build break.
+      // The route remains a thin adapter; no fallback truth is invented,
+      // no helper rewrite, no widening of CanonicalProgrammingProfile.
       selectedStrength: canonicalBase.selectedStrength ?? [],
       bodyweight: canonicalBase.bodyweight,
       sex: canonicalBase.sex,
       trainingStyle: canonicalBase.trainingStyle,
       jointCautions: canonicalBase.jointCautions ?? [],
       weakestArea: canonicalBase.weakestArea,
-      benchmarks: canonicalBase.benchmarks ?? {},
-      skillBenchmarks: canonicalBase.skillBenchmarks ?? {},
-      flexibilityBenchmarks: canonicalBase.flexibilityBenchmarks ?? {},
-      weightedBenchmarks: canonicalBase.weightedBenchmarks ?? {},
       trainingMethodPreferences: canonicalBase.trainingMethodPreferences,
       sessionStylePreference: canonicalBase.sessionStylePreference,
       plancheProgression: canonicalBase.plancheProgression,
       frontLeverProgression: canonicalBase.frontLeverProgression,
-      backLeverProgression: canonicalBase.backLeverProgression,
-      muscleUpProgression: canonicalBase.muscleUpProgression,
-      handstandProgression: canonicalBase.handstandProgression,
+      muscleUpReadiness: canonicalBase.muscleUpReadiness,
+      hspuProgression: canonicalBase.hspuProgression,
       weightedPullUp: canonicalBase.weightedPullUp,
       weightedDip: canonicalBase.weightedDip,
     }

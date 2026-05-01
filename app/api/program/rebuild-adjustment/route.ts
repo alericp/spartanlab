@@ -138,9 +138,25 @@ export async function POST(request: Request) {
       ? newEquipment
       : canonicalEquipmentAvailable
 
-    // [PRE-AB6 BUILD GREEN GATE / CANONICAL FLAT-FIELD CONTRACT]
+    // [PRE-AB6 BUILD GREEN GATE / CANONICAL NULLABILITY CONTRACT]
     // AuthoritativeGenerationRequest.canonicalProfile is typed as
     //   Partial<CanonicalProgrammingProfile> & { primaryGoal?: string }
+    // The intersection narrows `primaryGoal` to `string | undefined`,
+    // so emitting `null` (which CanonicalProgrammingProfile.primaryGoal
+    // permits as raw truth) violates the request contract. The helper
+    // below normalizes nullable string truth into the optional-string
+    // shape the request expects without inventing fake defaults.
+    // secondaryGoal / goalCategory stay as-is because Partial<...>
+    // preserves their `string | null | undefined` permissiveness;
+    // re-mapping them would change runtime semantics unnecessarily.
+    const toOptionalNonEmptyString = (value: unknown): string | undefined => {
+      if (typeof value !== 'string') return undefined
+      const trimmed = value.trim()
+      return trimmed.length > 0 ? trimmed : undefined
+    }
+    const canonicalPrimaryGoal = toOptionalNonEmptyString(canonicalBase.primaryGoal)
+
+    // [PRE-AB6 BUILD GREEN GATE / CANONICAL FLAT-FIELD CONTRACT]
     // Removed stale fields that do not exist on the canonical contract:
     //   - benchmarks / skillBenchmarks / flexibilityBenchmarks /
     //     weightedBenchmarks (no aggregate buckets exist; benchmark
@@ -153,7 +169,7 @@ export async function POST(request: Request) {
     // helper rewrite, no widening of CanonicalProgrammingProfile.
     const canonicalProfile = {
       onboardingComplete: canonicalBase.onboardingComplete ?? true,
-      primaryGoal: canonicalBase.primaryGoal,
+      primaryGoal: canonicalPrimaryGoal,
       secondaryGoal: canonicalBase.secondaryGoal ?? null,
       goalCategory: canonicalBase.goalCategory || canonicalBase.primaryGoal,
       selectedSkills: canonicalBase.selectedSkills || [],

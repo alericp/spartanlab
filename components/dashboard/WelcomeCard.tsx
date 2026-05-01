@@ -16,6 +16,12 @@ import { SpartanIcon } from '@/components/brand/SpartanLogo'
 // Type-only imports are safe at module scope
 import type { FirstRunResult, ProgramReasoning } from '@/lib/onboarding-service'
 import type { OnboardingProfile } from '@/lib/athlete-profile'
+// [PRE-AB6 BUILD GREEN GATE / GETPROGRAMREASONING CONTRACT]
+// Pure type-only import — no runtime evaluation. AdaptiveProgram is the
+// authoritative input shape for getProgramReasoning (lib/onboarding-service.ts:1159
+// signature: `(program: AdaptiveProgram | null) => ProgramReasoning`) and the
+// real return field type from getProgramState (lib/program-state.ts:1063).
+import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
 
 // [PRE-AB6 BUILD GREEN GATE / GETONBOARDINGSUMMARY TYPE QUERY]
 // `getOnboardingSummary` (lib/onboarding-service.ts:1079) is intentionally
@@ -94,14 +100,25 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
         // DYNAMIC IMPORT: Load heavy modules at runtime, not at module evaluation
         // This prevents import-graph crashes from taking down the entire route
         // =======================================================================
-        let getProgramState: () => { adaptiveProgram: unknown; hasUsableWorkoutProgram: boolean }
+        // [PRE-AB6 BUILD GREEN GATE / GETPROGRAMREASONING CONTRACT]
+        // Tighten `adaptiveProgram: unknown` to the authoritative
+        // `AdaptiveProgram | null` from getProgramState's real return type
+        // (lib/program-state.ts:1063). This removes the need for a runtime
+        // type-guard at the getProgramReasoning(adaptiveProgram) call site.
+        let getProgramState: () => { adaptiveProgram: AdaptiveProgram | null; hasUsableWorkoutProgram: boolean }
         // [PRE-AB6 BUILD GREEN GATE / GETONBOARDINGSUMMARY TYPE QUERY]
         // Tighten from `() => unknown` to the real return shape so the
         // setSummary(getOnboardingSummary()) call site below stays type-safe
         // against the OnboardingSummary state type. The fallback `() => null`
         // remains assignable because OnboardingSummary already includes null.
         let getOnboardingSummary: () => OnboardingSummary
-        let getProgramReasoning: (program: unknown) => ProgramReasoning | null
+        // [PRE-AB6 BUILD GREEN GATE / GETPROGRAMREASONING CONTRACT]
+        // Match the real exported helper's input contract (AdaptiveProgram | null)
+        // instead of an over-wide `unknown`. The return is widened to
+        // `ProgramReasoning | null` so the no-module-loaded fallback `() => null`
+        // remains assignable; the real helper returns `ProgramReasoning` which is
+        // assignable to the wider `ProgramReasoning | null` (covariant return).
+        let getProgramReasoning: (program: AdaptiveProgram | null) => ProgramReasoning | null
         
         try {
           const programStateModule = await import('@/lib/program-state')

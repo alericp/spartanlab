@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { type AdaptiveSession, type AdaptiveExercise, type AdaptiveProgram } from '@/lib/adaptive-program-builder'
+import { buildSelectedVariantMain } from '@/lib/workout/selected-variant-session-contract'
 import { getProgramState } from '@/lib/program-state'
 import { getWeekAdaptationDisplay, getOmittedSkillDisplay, buildExercisePurposeLine } from '@/lib/program/program-display-contract'
 import {
@@ -182,32 +183,35 @@ export default function TodaySessionPage() {
     
     if (!baseSession) return null
     
-    // If variants exist and a non-default variant is selected, merge variant exercises
+    // [PRE-AB6 BUILD GREEN GATE / STEP-5A-OMEGA] Delegate variant body
+    //   resolution to the canonical shared helper
+    //   `buildSelectedVariantMain` (also used by
+    //   `app/(app)/workout/session/page.tsx` and
+    //   `components/programs/AdaptiveSessionCard.tsx`). The previous
+    //   inline mapper read invalid fields (`sel.name`, `sel.category`,
+    //   `sel.wasAdapted`, `sel.coachingMeta`) directly off
+    //   `SelectedExercise`, but the authoritative contract at
+    //   `lib/program-exercise-selector.ts:796` places identity under
+    //   `sel.exercise` (Exercise: id/name/category/...) and exposes
+    //   prescription fields directly on `sel`. The shared helper
+    //   already does the correct identity match (by id, then
+    //   normalized name) against the full session, overlays variant
+    //   prescription, preserves `wasAdapted`/`coachingMeta`/method
+    //   metadata, and stamps the variant-declared duration into
+    //   `estimatedMinutes`. Today page now consumes that single
+    //   source of truth instead of maintaining a parallel stale
+    //   mapper. No casts, no suppressions, no widening, no
+    //   SelectedExercise contract change. Behavior preserved exactly:
+    //   selected-variant rendering still occurs only when
+    //   `selectedVariant > 0` and within range; full-session
+    //   rendering is untouched.
     const variants = baseSession.variants
     if (variants && variants.length > 1 && selectedVariant > 0 && selectedVariant < variants.length) {
-      const variant = variants[selectedVariant]
-      if (variant?.selection?.main) {
-        // Map variant selection to exercises format
-        const variantExercises = variant.selection.main.map((sel, idx) => ({
-          id: `variant-${selectedVariant}-${idx}`,
-          name: sel.name,
-          category: sel.category || 'general',
-          sets: sel.sets,
-          repsOrTime: sel.repsOrTime,
-          note: sel.note || '',
-          isOverrideable: true,
-          selectionReason: sel.selectionReason || '',
-          targetRPE: sel.targetRPE,
-          restSeconds: sel.restSeconds,
-          wasAdapted: sel.wasAdapted,
-          coachingMeta: sel.coachingMeta,
-        }))
-        
-        return {
-          ...baseSession,
-          exercises: variantExercises,
-          estimatedMinutes: variant.duration,
-        }
+      const resolved = buildSelectedVariantMain(baseSession, selectedVariant)
+      return {
+        ...baseSession,
+        exercises: resolved.exercises,
+        estimatedMinutes: resolved.estimatedMinutes,
       }
     }
     

@@ -148,6 +148,24 @@ export default function StrengthPage() {
                   ? getTrendIcon(exerciseAnalysis.trend.direction)
                   : AlertCircle
 
+                // [PRE-AB6 BUILD GREEN GATE / STEP-5A-OMEGA] Stable
+                //   narrowed locals for the JSX subtree. `relativeMetrics`
+                //   is nullable on `StrengthExerciseAnalysis`, so direct
+                //   reads like `exerciseAnalysis.relativeMetrics.oneRMRatio`
+                //   inside JSX cannot be narrowed by an earlier `?.x !== null`
+                //   check. Coalescing `relativeMetrics` to `null` once and
+                //   pre-deriving a strict numeric `relativeOneRMRatio`
+                //   gives the renderer a real `number | null` it can
+                //   narrow against. No casts, no non-null assertions, no
+                //   widening, no fake defaults — UI behavior preserved
+                //   (Relative row still shows iff oneRMRatio is a real
+                //   number; tier badge still shows iff tier exists).
+                const relativeMetrics = exerciseAnalysis?.relativeMetrics ?? null
+                const relativeOneRMRatio =
+                  typeof relativeMetrics?.oneRMRatio === 'number'
+                    ? relativeMetrics.oneRMRatio
+                    : null
+
                 return (
                   <Card
                     key={exercise.id}
@@ -158,9 +176,9 @@ export default function StrengthPage() {
                       <div className="w-10 h-10 rounded-lg bg-[#1A1A1A] flex items-center justify-center">
                         <Dumbbell className="w-5 h-5 text-[#E63946]" />
                       </div>
-                      {exerciseAnalysis?.relativeMetrics?.tier && (
-                        <span className={`text-xs font-medium ${getTierColor(exerciseAnalysis.relativeMetrics.tier)}`}>
-                          {exerciseAnalysis.relativeMetrics.tierLabel}
+                      {relativeMetrics?.tier && (
+                        <span className={`text-xs font-medium ${getTierColor(relativeMetrics.tier)}`}>
+                          {relativeMetrics.tierLabel}
                         </span>
                       )}
                     </div>
@@ -182,11 +200,11 @@ export default function StrengthPage() {
                         </div>
 
                         {/* Relative Strength */}
-                        {exerciseAnalysis.relativeMetrics?.oneRMRatio !== null && (
+                        {relativeOneRMRatio !== null && (
                           <div className="flex items-baseline justify-between">
                             <span className="text-xs text-[#6A6A6A]">Relative</span>
                             <span className="text-sm font-medium">
-                              {(exerciseAnalysis.relativeMetrics.oneRMRatio * 100).toFixed(0)}% BW
+                              {(relativeOneRMRatio * 100).toFixed(0)}% BW
                             </span>
                           </div>
                         )}

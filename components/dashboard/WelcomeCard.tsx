@@ -17,6 +17,19 @@ import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import type { FirstRunResult, ProgramReasoning } from '@/lib/onboarding-service'
 import type { OnboardingProfile } from '@/lib/athlete-profile'
 
+// [PRE-AB6 BUILD GREEN GATE / GETONBOARDINGSUMMARY TYPE QUERY]
+// `getOnboardingSummary` (lib/onboarding-service.ts:1079) is intentionally
+// loaded via dynamic import inside the useEffect to preserve the
+// module-evaluation safety pattern documented above. We need its return
+// type at module scope (for the useState generic) without re-introducing
+// a runtime dependency, so we use TypeScript's `typeof import(...)` type
+// query — this is a pure type-only reference, identical in runtime impact
+// to an `import type`. The function's signature already includes `| null`,
+// so this alias is already nullable.
+type OnboardingSummary = ReturnType<
+  typeof import('@/lib/onboarding-service').getOnboardingSummary
+>
+
 interface WelcomeCardProps {
   onDismiss?: () => void
   onProgramReady?: (result: FirstRunResult) => void
@@ -32,7 +45,7 @@ interface WelcomeCardProps {
 export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [result, setResult] = useState<FirstRunResult | null>(null)
-  const [summary, setSummary] = useState<ReturnType<typeof getOnboardingSummary>>(null)
+  const [summary, setSummary] = useState<OnboardingSummary>(null)
   const [reasoning, setReasoning] = useState<ProgramReasoning | null>(null)
   
   // ==========================================================================
@@ -82,7 +95,12 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
         // This prevents import-graph crashes from taking down the entire route
         // =======================================================================
         let getProgramState: () => { adaptiveProgram: unknown; hasUsableWorkoutProgram: boolean }
-        let getOnboardingSummary: () => unknown
+        // [PRE-AB6 BUILD GREEN GATE / GETONBOARDINGSUMMARY TYPE QUERY]
+        // Tighten from `() => unknown` to the real return shape so the
+        // setSummary(getOnboardingSummary()) call site below stays type-safe
+        // against the OnboardingSummary state type. The fallback `() => null`
+        // remains assignable because OnboardingSummary already includes null.
+        let getOnboardingSummary: () => OnboardingSummary
         let getProgramReasoning: (program: unknown) => ProgramReasoning | null
         
         try {

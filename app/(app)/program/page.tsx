@@ -18137,8 +18137,18 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           })()}
           currentEquipment={(() => {
             // [PHASE 5] Use canonical profile equipment
+            // [PRE-AB6 BUILD GREEN GATE / STEP-5A-PHI] `currentEquipment`
+            //   expects strict `EquipmentType[]`, but
+            //   `canonical.equipmentAvailable` is `string[]`-shaped at
+            //   this prop boundary. Route through the established
+            //   `normalizeEquipmentForModifyEntry(...)` helper at L3040
+            //   — the same normalizer used for the modify-entry
+            //   equipment boundary at L4524 and L4530 — to filter to
+            //   real `EquipmentType` values without casts. Source of
+            //   truth (canonical profile) is unchanged; only the prop
+            //   adaptation is added.
             const canonical = getCanonicalProfile()
-            return canonical.equipmentAvailable || []
+            return normalizeEquipmentForModifyEntry(canonical.equipmentAvailable)
           })()}
           // [PHASE 32A] Pass canonical schedule mode - default to 'static' not 'adaptive'
           // 'adaptive' as fallback was WRONG - undefined scheduleMode should mean static, not flexible

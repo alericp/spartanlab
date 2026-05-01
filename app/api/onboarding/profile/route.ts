@@ -5,6 +5,39 @@ import { resolveCanonicalDbUserId } from '@/lib/subscription-service'
 
 export const dynamic = 'force-dynamic'
 
+/*
+  [PRE-AB6 BUILD GREEN GATE / DB BOUNDARY TYPE]
+  Local 1:1 mirror of this route's SQL RETURNING shape. The shared
+  query() helper returns unknown[] rows; this type is intentionally
+  scoped to this single route to keep the DB type boundary narrow
+  (no global query() helper rewrite, no schema change).
+*/
+type SavedOnboardingProfile = {
+  userId: string
+  sex: string | null
+  height: number | null
+  heightUnit: string | null
+  bodyweight: number | null
+  weightUnit: string | null
+  bodyFatPercent: number | null
+  experienceLevel: string | null
+  trainingDaysPerWeek: number | null
+  scheduleMode: string | null
+  sessionDurationMode: string | null
+  sessionLengthMinutes: number | null
+  primaryGoal: string | null
+  secondaryGoal: string | null
+  selectedSkills: unknown
+  selectedFlexibility: unknown
+  selectedStrength: unknown
+  goalCategory: string | null
+  equipmentAvailable: unknown
+  jointCautions: unknown
+  weakestArea: string | null
+  trainingStyle: string | null
+  onboardingComplete: boolean
+}
+
 /**
  * TASK 1: POST /api/onboarding/profile - Canonical DB write for onboarding
  * 
@@ -220,7 +253,7 @@ export async function POST(request: Request) {
       }, { status: 500 })
     }
     
-    const savedProfile = upsertResult[0]
+    const savedProfile = upsertResult[0] as SavedOnboardingProfile
     
     console.log('[Onboarding API] Profile upserted successfully for dbUserId:', dbUserId?.slice(0, 12) + '...', {
       scheduleMode: savedProfile.scheduleMode,

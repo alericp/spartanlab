@@ -1695,27 +1695,36 @@ export default function SettingsPage() {
                 // [PHASE 30C] SETTINGS UI SELECTION FINAL (days change)
                 // THE DEFINITIVE LOG proving UI state change
                 // ==========================================================================
+                // [PRE-AB6 BUILD GREEN GATE / STEP-5A-PSI] These two
+                //   diagnostic verdicts run inside the JSX branch
+                //   `{scheduleMode === 'static' && ...}` at L1688, so
+                //   `scheduleMode` is narrowed to the literal `'static'`
+                //   here. Comparisons against `'flexible'` are
+                //   structurally impossible and TypeScript correctly
+                //   rejects them. Collapsed the verdicts to static-only
+                //   cases keyed off `nextTrainingDaysPerWeek`. The logged
+                //   `next_scheduleMode` is now pinned to the literal
+                //   `'static'` to make the static-branch invariant
+                //   explicit. No casts, no suppressions, no widening,
+                //   no behavior change — `setTrainingDays(v)` below is
+                //   untouched.
                 console.log('[phase30c-settings-ui-selection-final]', {
-                  next_scheduleMode: scheduleMode,
+                  next_scheduleMode: 'static',
                   next_trainingDaysPerWeek: nextTrainingDaysPerWeek,
                   next_adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
                   verdict:
-                    scheduleMode === 'static' && nextTrainingDaysPerWeek === 6
+                    nextTrainingDaysPerWeek === 6
                       ? 'SETTINGS_UI_STATIC_6'
-                      : scheduleMode === 'flexible'
-                      ? 'SETTINGS_UI_FLEXIBLE'
                       : `SETTINGS_UI_STATIC_${nextTrainingDaysPerWeek}`,
                 })
                 // [PHASE 30B] SETTINGS UI DAYS SELECTION AUTHORITATIVE
                 console.log('[phase30b-settings-ui-selection-authoritative]', {
-                  next_scheduleMode: scheduleMode,
+                  next_scheduleMode: 'static',
                   next_trainingDaysPerWeek: nextTrainingDaysPerWeek,
                   next_adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
                   verdict:
-                    scheduleMode === 'static' && nextTrainingDaysPerWeek === 6
+                    nextTrainingDaysPerWeek === 6
                       ? 'SETTINGS_UI_NOW_STATIC_6'
-                      : scheduleMode === 'flexible'
-                      ? 'SETTINGS_UI_NOW_FLEXIBLE'
                       : `SETTINGS_UI_NOW_STATIC_${nextTrainingDaysPerWeek}`,
                 })
                 setTrainingDays(v)

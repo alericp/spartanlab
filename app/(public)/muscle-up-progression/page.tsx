@@ -164,20 +164,21 @@ export default function MuscleUpProgressionPage() {
       />
 
       {/* Progression Ladder */}
+      {/*
+        [PRE-AB6 BUILD GREEN GATE / COMPONENT PROP CONTRACT]
+        ProgressionLadderCard owns whole-ladder rendering: it accepts
+        `title: string` and `steps: ProgressionStep[]`, renders its own
+        <h2> title, numbered step circles, and difficulty badges.
+        The previous caller incorrectly mapped per-step with stale props
+        (`step`, `name`, `description`, `difficulty`) that do not exist
+        on `ProgressionLadderCardProps`. Aligned to the authoritative
+        whole-ladder shape used by the sibling planche/front-lever
+        progression pages. The outer <h2> wrapper was removed because
+        the component renders the title itself.
+      */}
       <section className="py-12 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl font-bold mb-6">Muscle-Up Progression Ladder</h2>
-          <div className="space-y-4">
-            {muscleUpSteps.map((step, index) => (
-              <ProgressionLadderCard
-                key={step.name}
-                step={index + 1}
-                name={step.name}
-                description={step.description}
-                difficulty={step.difficulty}
-              />
-            ))}
-          </div>
+          <ProgressionLadderCard title="Muscle-Up Progression Ladder" steps={muscleUpSteps} />
         </div>
       </section>
 

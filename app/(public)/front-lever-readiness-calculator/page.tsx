@@ -94,7 +94,11 @@ export default function FrontLeverReadinessCalculator() {
     setResult(calcResult)
     
     // Track tool usage
-    trackToolUsed('front_lever_calculator', { readiness_score: calcResult.readinessScore })
+    // [PRE-AB6 BUILD GREEN GATE / READINESS RESULT CONTRACT]
+    // ReadinessResult exposes `score`, not `readinessScore`. Preserve the
+    // analytics payload key `readiness_score` (existing event schema)
+    // and source the value from the authoritative `calcResult.score`.
+    trackToolUsed('front_lever_calculator', { readiness_score: calcResult.score })
     
     // Calculate Spartan Strength Score
     const spartanResult = spartanScoreFromFrontLeverInputs({
@@ -514,9 +518,16 @@ export default function FrontLeverReadinessCalculator() {
               weightedPullUp: weightedPullUpLoad ? parseFloat(weightedPullUpLoad) : undefined,
               hollowHold: hollowHoldTime ? parseInt(hollowHoldTime) : undefined,
               tuckFrontLeverHold: tuckFrontLeverHold ? parseInt(tuckFrontLeverHold) : undefined,
-              readinessScore: result.readinessScore,
-              classification: result.classification,
-              limitingFactors: result.limitingFactors.map(lf => lf.factor),
+              // [PRE-AB6 BUILD GREEN GATE / READINESS RESULT CONTRACT]
+              // ReadinessResult exposes `score`, `level`, and a single
+              // `limitingFactor: string` (not `readinessScore`,
+              // `classification`, or `limitingFactors[]`). The
+              // ToolDataPayload keys (`readinessScore`, `classification`,
+              // `limitingFactors[]`) are correct for the payload schema;
+              // only the *source* fields needed contract realignment.
+              readinessScore: result.score,
+              classification: result.level,
+              limitingFactors: result.limitingFactor ? [result.limitingFactor] : [],
             } : undefined}
           />
         </section>

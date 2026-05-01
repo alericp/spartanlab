@@ -316,6 +316,43 @@ export default function DashboardHeavyContent({
   const safeSkills = safeProgressOverview && Array.isArray(safeProgressOverview.skills) ? safeProgressOverview.skills : []
   const safeStrength = safeProgressOverview && Array.isArray(safeProgressOverview.strength) ? safeProgressOverview.strength : []
 
+  // [PRE-AB6 BUILD GREEN GATE / SKILLFOCUSNOTE CONTRACT]
+  // CurrentFocus (lib/dashboard-service.ts:104) exposes only
+  // { mainFocus, supportingFocus, hasEnoughData } — there is no
+  // `skillName` field. SkillFocusNote (PremiumSkillProgressCard.tsx:12)
+  // requires a skillName that is matched case-insensitively against
+  // SkillProgressData.skillName (lib/progress-streak-engine.ts:22).
+  // Derive a real skill identifier by matching focusSummary's
+  // user-facing focus labels against each skill's canonical
+  // `skillName` and user-facing `displayName`. Only emit a focus
+  // note when constraintInsight has a real label AND a matching
+  // skill exists in safeSkills — otherwise pass an empty array
+  // rather than fabricating a blank skillName.
+  const normalize = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, ' ').trim()
+  const mainFocusNorm = focusSummary?.mainFocus ? normalize(focusSummary.mainFocus) : ''
+  const supportingFocusNorm = focusSummary?.supportingFocus ? normalize(focusSummary.supportingFocus) : ''
+  const matchedFocusSkill = (mainFocusNorm || supportingFocusNorm)
+    ? safeSkills.find((skill) => {
+        const candidates = [skill.skillName, skill.displayName]
+          .filter((c): c is string => typeof c === 'string' && c.length > 0)
+          .map(normalize)
+        return candidates.some((candidate) => {
+          if (!candidate) return false
+          if (mainFocusNorm && (mainFocusNorm.includes(candidate) || candidate.includes(mainFocusNorm))) return true
+          if (supportingFocusNorm && (supportingFocusNorm.includes(candidate) || candidate.includes(supportingFocusNorm))) return true
+          return false
+        })
+      })
+    : undefined
+  const focusNotesForSkillProgress: SkillFocusNote[] =
+    constraintInsight?.hasInsight && constraintInsight.label && matchedFocusSkill?.skillName
+      ? [{
+          skillName: matchedFocusSkill.skillName,
+          note: constraintInsight.label,
+          type: 'limiter' as const,
+        }]
+      : []
+
   return (
     <>
       {/* SECTION: FIRST RUN GUIDE */}
@@ -422,11 +459,7 @@ export default function DashboardHeavyContent({
             <SafeWidget name="SkillProgressSection">
               <SkillProgressSection 
                 skills={safeSkills}
-                focusNotes={constraintInsight?.hasInsight ? [{
-                  skillName: focusSummary?.skillName || '',
-                  note: constraintInsight.label || '',
-                  type: 'limiter' as const,
-                }] : []}
+                focusNotes={focusNotesForSkillProgress}
                 goalSummaries={[]}
                 maxDisplay={4}
               />

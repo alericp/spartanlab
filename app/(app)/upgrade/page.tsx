@@ -93,7 +93,11 @@ export default function UpgradePage() {
   // [PHASE 14C TASK 4] Derive state from canonical entitlement hook
   const isPro = entitlement.hasProAccess
   const isTrial = entitlement.isTrialing
-  const trialDays = 0 // Trial days would need API enhancement
+  // [PRE-AB6 BUILD GREEN GATE / UPGRADE TRIAL DAYS] `trialDays` removed
+  //   alongside the unreachable trial-day-count paragraph below. There is
+  //   no authoritative trial-days source on `entitlement` today (see
+  //   `useEntitlement`); reintroduce a real `number`-typed value here when
+  //   the trial-days API field actually exists.
   
   // Derive owner bypass: owner with simulation off = bypass checkout
   const isOwnerBypassActive = ownerState.isOwner && ownerState.simulationMode === 'off'
@@ -238,11 +242,18 @@ console.error('Checkout error:', error)
             {isTrial ? 'Your Pro Trial is Active!' : "You're on SpartanLab Pro!"}
           </h1>
           <p className="text-[#A4ACB8] mb-2">All advanced features are now unlocked.</p>
-          {isTrial && trialDays > 0 && (
-            <p className="text-sm text-[#6B7280] mb-4">
-              {trialDays} day{trialDays !== 1 ? 's' : ''} remaining in your trial.
-            </p>
-          )}
+          {/* [PRE-AB6 BUILD GREEN GATE / UPGRADE TRIAL DAYS] The previous
+              "{trialDays} day(s) remaining in your trial." paragraph
+              relied on `trialDays = 0` (a hardcoded placeholder pending
+              API enhancement, see L96 prior to removal). The literal `0`
+              type narrowed the `trialDays !== 1` check to an impossible
+              comparison, and the surrounding `trialDays > 0` guard made
+              the paragraph unreachable. Removed entirely rather than
+              displayed with a fabricated count, per prompt directive
+              "Do NOT invent a real source". The `'Your Pro Trial is
+              Active!'` headline above and `'All advanced features are
+              now unlocked.'` body still convey trial-active state. No
+              billing, entitlement, Stripe, or CTA behavior changed. */}
           <div className="flex gap-3 justify-center">
             <Link href="/dashboard">
               <Button className="bg-[#C1121F] hover:bg-[#9A0F19] text-white">

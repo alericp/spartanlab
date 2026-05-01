@@ -69,10 +69,17 @@ function getDailyContext(): DailyContext {
     // Get last workout info
     if (logs.length > 0) {
       const lastLog = logs[0]
-      defaultContext.lastWorkoutDate = lastLog.date
-      
+      // [PRE-AB6 BUILD GREEN GATE / WORKOUTLOG DATE CONTRACT]
+      // WorkoutLog (lib/workout-log-service.ts:40) exposes the canonical
+      // workout date as `sessionDate` (L45) and the persistence timestamp
+      // as `createdAt` (L42). There is no `date` field. Older or
+      // partially-migrated logs may be missing `sessionDate`, so
+      // `createdAt` is the safe fallback.
+      const lastWorkoutDate = lastLog.sessionDate || lastLog.createdAt
+      defaultContext.lastWorkoutDate = lastWorkoutDate
+
       // Calculate days since last workout
-      const lastDate = new Date(lastLog.date)
+      const lastDate = new Date(lastWorkoutDate)
       const today = new Date()
       const diffTime = Math.abs(today.getTime() - lastDate.getTime())
       defaultContext.daysSinceLastWorkout = Math.floor(diffTime / (1000 * 60 * 60 * 24))

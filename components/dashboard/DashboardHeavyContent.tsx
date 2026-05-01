@@ -181,7 +181,17 @@ export default function DashboardHeavyContent({
       setOverview(data)
     } catch (e) {
       console.error('[v0] DashboardHeavy CRASH at getDashboardOverview:', e)
-      setOverview({ profile: null as any, progressions: [], workouts: [], goals: [] })
+      // [PRE-AB6 BUILD GREEN GATE / DASHBOARDOVERVIEW FALLBACK CONTRACT]
+      // The authoritative DashboardOverview (lib/dashboard-service.ts:50)
+      // requires non-null `user`, `profile`, `progressions`,
+      // `strengthRecords`, and a `latestProgram: GeneratedProgram | null`.
+      // The previous fallback invented phantom `workouts`/`goals` fields,
+      // omitted required fields, and faked `profile: null as any`. The
+      // safe path is to leave overview null — the render guard at the
+      // top of the component (`if (!loaded || !overview || !userState)`)
+      // already routes a null overview to <DashboardSkeleton />, so no
+      // UI redesign or fake-healthy-data is needed here.
+      setOverview(null)
       setLoaded(true)
       return
     }
@@ -208,6 +218,25 @@ export default function DashboardHeavyContent({
       try {
         const profile = data.profile
         const recovery = calculateRecoverySignal()
+        // [PRE-AB6 BUILD GREEN GATE / RECOVERYSIGNAL CONTRACT]
+        // Authoritative RecoverySignal (lib/recovery-engine.ts:14)
+        // exposes:
+        //   level: 'HIGH' | 'MODERATE' | 'LOW'
+        //   score: number (0-100)
+        //   message: string
+        //   factors: { volumeLoad, trainingFrequency, recencyGap, ... }
+        // There is no `readinessLevel` field. Recovery and fatigue are
+        // inverses: HIGH recovery means LOW fatigue, LOW recovery means
+        // HIGH fatigue. Map directly off the canonical `level` field
+        // and default to 'moderate' when recovery is unavailable. This
+        // is a dashboard-side translator only; it does not introduce a
+        // second recovery engine.
+        const currentFatigueLevel: 'low' | 'moderate' | 'high' =
+          recovery?.level === 'LOW'
+            ? 'high'
+            : recovery?.level === 'HIGH'
+              ? 'low'
+              : 'moderate'
         const selectionContext: SelectionContext = {
           primaryGoal: (profile.primaryGoal || 'general_strength') as any,
           experienceLevel: profile.experienceLevel || 'intermediate',
@@ -215,7 +244,7 @@ export default function DashboardHeavyContent({
           sorenessToleranceHigh: false,
           sessionMinutes: typeof profile.sessionLengthMinutes === 'number' ? profile.sessionLengthMinutes : 60,
           trainingDaysPerWeek: typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : 4,
-          currentFatigueLevel: recovery?.readinessLevel === 'low' ? 'high' : 'moderate',
+          currentFatigueLevel,
           recentSorenessLevel: 'mild',
           rangeTrainingMode: profile.rangeTrainingMode || undefined,
         }

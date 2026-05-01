@@ -15974,8 +15974,27 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       const { buildCanonicalGenerationEntry, entryToAdaptiveInputs } = await import('@/lib/canonical-profile-service')
       const entryResult = buildCanonicalGenerationEntry('handleConfirmNewProgram_startNew')
       
-      if (entryResult.success && entryResult.entry) {
-        freshInputs = entryToAdaptiveInputs(entryResult.entry)
+      // [PRE-AB6 BUILD GREEN GATE] Route the wide `entryToAdaptiveInputs()`
+      //   return shape (`primaryGoal: string`, plus extra metadata fields
+      //   like `sessionDurationMode` / `trainingPathType` /
+      //   `goalCategories` / `selectedFlexibility`) through the existing
+      //   `toCanonicalAdaptiveProgramInputs` quarantined narrowing
+      //   boundary so TS sees the strict `AdaptiveProgramInputs`
+      //   (`primaryGoal: PrimaryGoal`) before assignment to the strict
+      //   `freshInputs` slot. If narrowing fails, fall through to the
+      //   same `inputs → getDefaultAdaptiveInputs()` fallback chain
+      //   the existing code already used. The raw entry shape is
+      //   preserved as `rawEntryInputs` so audit logs in the success
+      //   branch can still report `sessionDurationMode` truth via
+      //   `readProgramPageMetadataFromUnknown` without inventing a
+      //   field on the strict contract or widening domain types.
+      //   Behavior unchanged.
+      const rawEntryInputs = (entryResult.success && entryResult.entry) ? entryToAdaptiveInputs(entryResult.entry) : null
+      const narrowedEntryInputs = rawEntryInputs ? toCanonicalAdaptiveProgramInputs(rawEntryInputs) : null
+      const rawEntryMetadata = readProgramPageMetadataFromUnknown(rawEntryInputs)
+      
+      if (narrowedEntryInputs) {
+        freshInputs = narrowedEntryInputs
         sourceWinner = 'canonical_start_new_truth'
         canonicalEntrySuccess = true
         
@@ -16025,13 +16044,16 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             selectedSkills: freshInputs.selectedSkills,
             scheduleMode: freshInputs.scheduleMode,
             trainingDaysPerWeek: freshInputs.trainingDaysPerWeek,
-            sessionDurationMode: freshInputs.sessionDurationMode,
+            // [PRE-AB6 BUILD GREEN GATE] `sessionDurationMode` is not on the
+            //   strict `AdaptiveProgramInputs` contract — read from the raw
+            //   entry metadata snapshot captured at the narrowing boundary.
+            sessionDurationMode: rawEntryMetadata.sessionDurationMode,
             sessionLength: freshInputs.sessionLength,
             equipmentCount: freshInputs.equipment?.length ?? 0,
           },
         })
       } else {
-        // Canonical entry build failed - fall back to inputs
+        // Canonical entry build OR canonical narrowing failed - fall back to inputs
         if (inputs) {
           freshInputs = inputs
           sourceWinner = 'inputs_fallback'
@@ -16052,7 +16074,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         console.log('[phase24g-modify-startnew-source-winner-verdict]', {
           sourceWinner,
           canonicalEntrySuccess: false,
-          canonicalEntryError: entryResult.error,
+          // [PRE-AB6 BUILD GREEN GATE] When `entryResult` succeeded but
+          //   `toCanonicalAdaptiveProgramInputs` returned null, surface the
+          //   narrowing-failure reason so the diagnostic stays honest.
+          canonicalEntryError: entryResult.error ?? (rawEntryInputs ? 'narrowing_failed_post_entryToAdaptiveInputs' : 'entry_build_failed'),
           visibleProgramWasExcludedFromPrimarySeed: true,
           canonicalSavedProgramWasExcludedFromPrimarySeed: true,
           selectedSkillsNormalized: true,
@@ -16106,6 +16131,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     
     stage = 'session_key_creation'
     
+    // [PRE-AB6 BUILD GREEN GATE] Unified metadata snapshot for all subsequent
+    //   diagnostic reads of fields that live on the wide entry shape but
+    //   not on the strict `AdaptiveProgramInputs` contract
+    //   (`sessionDurationMode`, `trainingPathType`, `goalCategories`,
+    //   `selectedFlexibility`). Computed once after the freshInputs
+    //   resolution chain so audit logs stay consistent regardless of
+    //   which fallback won. Diagnostic-only — no behavior change.
+    const freshInputsMeta = readProgramPageMetadataFromUnknown(freshInputs)
+    
     // ==========================================================================
     // [PHASE 24I] FIX: Create newSessionKey IMMEDIATELY after freshInputs is determined
     // This MUST happen BEFORE any log that references newSessionKey to avoid TDZ error
@@ -16114,8 +16148,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     
     // [PHASE 24G] TASK 3 - Builder seed audit
     const canonicalEquipment = canonical.equipmentAvailable || []
-    const includesPullBar = (freshInputs.equipment || []).includes('Pull-Up Bar') || (freshInputs.equipment || []).includes('Pull-up Bar')
-    const includesBands = (freshInputs.equipment || []).includes('Resistance Bands')
+    // [PRE-AB6 BUILD GREEN GATE] After narrowing, `freshInputs.equipment` is
+    //   the strict `EquipmentType[]` union (canonical IDs). Audit logs
+    //   historically searched for human-readable labels like
+    //   `'Pull-Up Bar'` / `'Resistance Bands'`, which are not assignable
+    //   to that union. Project a string view for audit-only label
+    //   compatibility — equipment source truth is unchanged.
+    const freshEquipmentStrings = (freshInputs.equipment ?? []).map(String)
+    const includesPullBar = freshEquipmentStrings.includes('Pull-Up Bar') || freshEquipmentStrings.includes('Pull-up Bar') || freshEquipmentStrings.includes('pull_bar')
+    const includesBands = freshEquipmentStrings.includes('Resistance Bands') || freshEquipmentStrings.includes('bands')
     
     console.log('[phase24g-modify-startnew-builder-seed-audit]', {
       sourceWinner,
@@ -16127,7 +16168,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         selectedSkillsFirst3: (freshInputs.selectedSkills || []).slice(0, 3),
         scheduleMode: freshInputs.scheduleMode,
         trainingDaysPerWeek: freshInputs.trainingDaysPerWeek,
-        sessionDurationMode: freshInputs.sessionDurationMode,
+        sessionDurationMode: freshInputsMeta.sessionDurationMode,
         sessionLength: freshInputs.sessionLength,
         equipmentCount: freshInputs.equipment?.length ?? 0,
         equipment: freshInputs.equipment,
@@ -16170,7 +16211,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       selectedSkillsCount: freshInputs.selectedSkills?.length ?? 0,
       scheduleMode: freshInputs.scheduleMode,
       trainingDaysPerWeek: freshInputs.trainingDaysPerWeek,
-      sessionDurationMode: freshInputs.sessionDurationMode,
+      sessionDurationMode: freshInputsMeta.sessionDurationMode,
       equipmentCount: freshInputs.equipment?.length ?? 0,
       includesPullBar,
       includesBands,
@@ -16212,13 +16253,16 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         secondaryGoal: freshInputs.secondaryGoal,
         scheduleMode: freshInputs.scheduleMode,
         trainingDaysPerWeek: freshInputs.trainingDaysPerWeek,
-        sessionDurationMode: freshInputs.sessionDurationMode,
+        // [PRE-AB6 BUILD GREEN GATE] Metadata fields below are not on the
+        //   strict `AdaptiveProgramInputs` contract — read via the
+        //   `readProgramPageMetadataFromUnknown` snapshot computed earlier.
+        sessionDurationMode: freshInputsMeta.sessionDurationMode,
         sessionLength: freshInputs.sessionLength,
         selectedSkillsCount: freshInputs.selectedSkills?.length ?? 0,
         selectedSkillsFirst3: (freshInputs.selectedSkills || []).slice(0, 3),
-        trainingPathType: freshInputs.trainingPathType,
-        goalCategoriesCount: freshInputs.goalCategories?.length ?? 0,
-        selectedFlexibilityCount: freshInputs.selectedFlexibility?.length ?? 0,
+        trainingPathType: freshInputsMeta.trainingPathType,
+        goalCategoriesCount: freshInputsMeta.goalCategories?.length ?? 0,
+        selectedFlexibilityCount: freshInputsMeta.selectedFlexibility?.length ?? 0,
         experienceLevel: freshInputs.experienceLevel,
         equipmentCount: freshInputs.equipment?.length ?? 0,
       },
@@ -16244,7 +16288,9 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         scheduleMode: freshInputs.scheduleMode,
         trainingDaysPerWeek: freshInputs.trainingDaysPerWeek,
         selectedSkillsCount: freshInputs.selectedSkills?.length ?? 0,
-        trainingPathType: freshInputs.trainingPathType,
+        // [PRE-AB6 BUILD GREEN GATE] `trainingPathType` is not on the strict
+        //   `AdaptiveProgramInputs` contract — read via metadata snapshot.
+        trainingPathType: freshInputsMeta.trainingPathType,
         sessionLength: freshInputs.sessionLength,
         experienceLevel: freshInputs.experienceLevel,
         equipmentCount: freshInputs.equipment?.length ?? 0,

@@ -3341,25 +3341,36 @@ function ReviewSection({ profile, onEditSection, onClearAll, showClearConfirm, s
   const getSkillSummary = () => {
   const items: string[] = []
   
+  // [PRE-AB6 BUILD GREEN GATE / NULLABLE SKILL NARROWING]
+  // profile.frontLever / profile.planche / profile.hspu are canonically
+  // nullable SkillBenchmark objects. Optional-chain guards on `.progression`
+  // do not narrow re-reads of `profile.frontLever.holdSeconds` etc. because
+  // `profile` is a re-readable property access, not a stable reference.
+  // Lift each nullable object into a local const once, then read exclusively
+  // through the local. Preserves all existing summary semantics, the
+  // previously-introduced typed label-key guards, and the SkillHistory lookup.
+
   // Front Lever
-  const flProgressionLabel = getFrontLeverProgressionLabel(profile.frontLever?.progression)
+  const frontLever = profile.frontLever
+  const flProgressionLabel = getFrontLeverProgressionLabel(frontLever?.progression)
   if (
+    frontLever &&
     flProgressionLabel &&
-    profile.frontLever?.progression !== 'unknown' &&
-    profile.frontLever?.progression !== 'none'
+    frontLever.progression !== 'unknown' &&
+    frontLever.progression !== 'none'
   ) {
     let flSummary = `Front Lever: ${flProgressionLabel}`
     // Add hold time + band assistance
-    if (profile.frontLever.holdSeconds) {
-      flSummary += ` ${profile.frontLever.holdSeconds}s`
+    if (frontLever.holdSeconds) {
+      flSummary += ` ${frontLever.holdSeconds}s`
     }
-    if (profile.frontLever.isAssisted && profile.frontLever.bandLevel) {
-      flSummary += ` (${profile.frontLever.bandLevel} band)`
+    if (frontLever.isAssisted && frontLever.bandLevel) {
+      flSummary += ` (${frontLever.bandLevel} band)`
     }
     // Add highest level ever
-    if (profile.frontLever.highestLevelEverReached && profile.frontLever.highestLevelEverReached !== profile.frontLever.progression) {
-      const flHighestLabel = getFrontLeverProgressionLabel(profile.frontLever.highestLevelEverReached)
-      flSummary += ` — was ${flHighestLabel || profile.frontLever.highestLevelEverReached}`
+    if (frontLever.highestLevelEverReached && frontLever.highestLevelEverReached !== frontLever.progression) {
+      const flHighestLabel = getFrontLeverProgressionLabel(frontLever.highestLevelEverReached)
+      flSummary += ` — was ${flHighestLabel || frontLever.highestLevelEverReached}`
     }
     const flHistory = profile.skillHistory?.front_lever
     if (flHistory?.trainingHistory && flHistory.trainingHistory !== 'never') {
@@ -3372,24 +3383,26 @@ function ReviewSection({ profile, onEditSection, onClearAll, showClearConfirm, s
   }
   
   // Planche
-  const plProgressionLabel = getPlancheProgressionLabel(profile.planche?.progression)
+  const planche = profile.planche
+  const plProgressionLabel = getPlancheProgressionLabel(planche?.progression)
   if (
+    planche &&
     plProgressionLabel &&
-    profile.planche?.progression !== 'unknown' &&
-    profile.planche?.progression !== 'none'
+    planche.progression !== 'unknown' &&
+    planche.progression !== 'none'
   ) {
     let plSummary = `Planche: ${plProgressionLabel}`
     // Add hold time + band assistance
-    if (profile.planche.holdSeconds) {
-      plSummary += ` ${profile.planche.holdSeconds}s`
+    if (planche.holdSeconds) {
+      plSummary += ` ${planche.holdSeconds}s`
     }
-    if (profile.planche.isAssisted && profile.planche.bandLevel) {
-      plSummary += ` (${profile.planche.bandLevel} band)`
+    if (planche.isAssisted && planche.bandLevel) {
+      plSummary += ` (${planche.bandLevel} band)`
     }
     // Add highest level ever
-    if (profile.planche.highestLevelEverReached && profile.planche.highestLevelEverReached !== profile.planche.progression) {
-      const plHighestLabel = getPlancheProgressionLabel(profile.planche.highestLevelEverReached)
-      plSummary += ` — was ${plHighestLabel || profile.planche.highestLevelEverReached}`
+    if (planche.highestLevelEverReached && planche.highestLevelEverReached !== planche.progression) {
+      const plHighestLabel = getPlancheProgressionLabel(planche.highestLevelEverReached)
+      plSummary += ` — was ${plHighestLabel || planche.highestLevelEverReached}`
     }
     const plHistory = profile.skillHistory?.planche
     if (plHistory?.trainingHistory && plHistory.trainingHistory !== 'never') {
@@ -3420,11 +3433,13 @@ function ReviewSection({ profile, onEditSection, onClearAll, showClearConfirm, s
   }
   
   // HSPU
-  const hspuProgressionLabel = getHSPUProgressionLabel(profile.hspu?.progression)
+  const hspu = profile.hspu
+  const hspuProgressionLabel = getHSPUProgressionLabel(hspu?.progression)
   if (
+    hspu &&
     hspuProgressionLabel &&
-    profile.hspu?.progression !== 'unknown' &&
-    profile.hspu?.progression !== 'none'
+    hspu.progression !== 'unknown' &&
+    hspu.progression !== 'none'
   ) {
     let hspuSummary = `HSPU: ${hspuProgressionLabel}`
     const hspuHistory = profile.skillHistory?.handstand_pushup

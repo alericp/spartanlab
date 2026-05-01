@@ -206,6 +206,71 @@ function normalizeStoredEquipmentForUI(rawEquipment: unknown): EquipmentType[] |
   return Array.from(new Set(canonical))
 }
 
+// =============================================================================
+// [PRE-AB6 BUILD GREEN GATE / ALL-TIME PR BENCHMARK BOUNDARY NORMALIZATION]
+// AllTimePRBenchmark (lib/athlete-profile.ts:337-342) requires:
+//   load: number | null, unit: 'lbs' | 'kg', reps?: number, timeframe: PRTimeframe
+// Canonical sources may surface a looser shape with `timeframe: string`.
+// Direct assignment of that loose shape into OnboardingProfile.allTimePR*
+// produces TS2322. This boundary helper validates each field, narrows
+// `timeframe` to the canonical PRTimeframe union via a type guard, and
+// returns the supplied fallback when required fields are missing or
+// invalid — never inventing PR data, never widening the canonical type.
+// =============================================================================
+const PR_TIMEFRAMES = [
+  'current',
+  'within_3_months',
+  '3_to_6_months',
+  '6_to_12_months',
+  '1_to_2_years',
+  'over_2_years',
+] as const satisfies readonly PRTimeframe[]
+
+function isPRTimeframe(value: unknown): value is PRTimeframe {
+  return typeof value === 'string' && (PR_TIMEFRAMES as readonly string[]).includes(value)
+}
+
+function normalizeAllTimePRBenchmark(
+  incoming: unknown,
+  fallback: AllTimePRBenchmark | null
+): AllTimePRBenchmark | null {
+  if (!incoming || typeof incoming !== 'object') {
+    return fallback ?? null
+  }
+
+  const raw = incoming as {
+    load?: unknown
+    reps?: unknown
+    timeframe?: unknown
+    unit?: unknown
+  }
+
+  // unit and timeframe are REQUIRED. If either is invalid, do not silently
+  // drop into a default — preserve any previously-valid user-entered PR.
+  const unit: 'lbs' | 'kg' | null =
+    raw.unit === 'lbs' || raw.unit === 'kg' ? raw.unit : null
+  if (unit === null) return fallback ?? null
+
+  if (!isPRTimeframe(raw.timeframe)) return fallback ?? null
+  const timeframe: PRTimeframe = raw.timeframe
+
+  // load is `number | null` — accept null, accept finite numbers, reject NaN/Infinity/strings.
+  const load: number | null =
+    raw.load === null || raw.load === undefined
+      ? null
+      : typeof raw.load === 'number' && Number.isFinite(raw.load)
+        ? raw.load
+        : null
+
+  // reps is optional `number?` — accept finite numbers, omit otherwise.
+  const reps: number | undefined =
+    typeof raw.reps === 'number' && Number.isFinite(raw.reps) ? raw.reps : undefined
+
+  return reps === undefined
+    ? { load, unit, timeframe }
+    : { load, unit, reps, timeframe }
+}
+
 function reconcileStoredProfileForUI(
   storedProfile: Partial<OnboardingProfile>,
   canonicalProfile?: ReturnType<typeof getCanonicalProfile>
@@ -3957,8 +4022,13 @@ export function AthleteOnboarding() {
         } : prev.weightedDip,
         
         // All-time PRs
-        allTimePRPullUp: canonical.allTimePRPullUp || prev.allTimePRPullUp,
-        allTimePRDip: canonical.allTimePRDip || prev.allTimePRDip,
+        // [PRE-AB6 BUILD GREEN GATE / ALL-TIME PR BENCHMARK BOUNDARY NORMALIZATION]
+        // Canonical PR objects may carry a loose `timeframe: string` shape that
+        // does not satisfy `PRTimeframe`. Route through normalizeAllTimePRBenchmark
+        // so the timeframe and unit are guarded before assignment, with prev as
+        // the fallback when canonical data is missing required fields.
+        allTimePRPullUp: normalizeAllTimePRBenchmark(canonical.allTimePRPullUp, prev.allTimePRPullUp),
+        allTimePRDip: normalizeAllTimePRBenchmark(canonical.allTimePRDip, prev.allTimePRDip),
         
         // Skill benchmarks with band context
         frontLever: canonical.frontLeverProgression ? {

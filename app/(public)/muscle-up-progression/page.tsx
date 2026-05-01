@@ -254,7 +254,19 @@ export default function MuscleUpProgressionPage() {
       {/* Readiness Calculator CTA */}
       <section className="py-12 px-4 sm:px-6 bg-[#1A1A1A]/50">
         <div className="max-w-4xl mx-auto">
+          {/*
+            [PRE-AB6 BUILD GREEN GATE / COMPONENT PROP CONTRACT]
+            RelatedFeatureCTAProps requires `icon: LucideIcon` (the
+            component reference itself, not a JSX element — see
+            components/seo/RelatedFeatureCTA.tsx where the icon is
+            destructured as `icon: Icon` and rendered as <Icon />).
+            `Target` is already imported above in this file and matches
+            the readiness-calculator CTA semantics (assessing readiness
+            against a target standard). No casts, no suppressions, no
+            shared component contract changes.
+          */}
           <RelatedFeatureCTA
+            icon={Target}
             title="Check Your Muscle-Up Readiness"
             description="Enter your current strength metrics and find out if you are ready to start muscle-up training."
             ctaText="Use Readiness Calculator"

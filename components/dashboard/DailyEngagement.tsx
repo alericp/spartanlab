@@ -107,10 +107,19 @@ function getDailyContext(): DailyContext {
     }
     
     // Determine next session focus
-    if (program?.sessions && program.sessions.length > 0) {
-      const nextIndex = logs.length % program.sessions.length
-      const nextSession = program.sessions[nextIndex]
-      defaultContext.nextSessionFocus = nextSession?.name || 'Training Session'
+    // [PRE-AB6 BUILD GREEN GATE / GENERATEDPROGRAM SESSION CONTRACT]
+    // GeneratedProgram (lib/program-service.ts:56) exposes the
+    // per-day plan as `generatedDays: DayTemplate[]`, not `sessions`.
+    // DayTemplate (lib/program-templates.ts:11) has only
+    // { dayLabel, emphasis, exercises } — no `name` field — so the
+    // focus label uses `emphasis` (e.g. "Push") with `dayLabel`
+    // (e.g. "Day 1") as the safe fallback before the literal default.
+    const generatedDays = program?.generatedDays
+    if (generatedDays && generatedDays.length > 0) {
+      const nextIndex = logs.length % generatedDays.length
+      const nextDay = generatedDays[nextIndex]
+      defaultContext.nextSessionFocus =
+        nextDay?.emphasis || nextDay?.dayLabel || 'Training Session'
     }
     
   } catch {

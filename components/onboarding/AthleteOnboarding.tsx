@@ -162,6 +162,50 @@ import {
  * - sessionDurationMode 'adaptive' → sessionLengthMinutes 'flexible'
  * - equipment alias reconciliation (bench → bench_box)
  */
+
+// =============================================================================
+// [PRE-AB6 BUILD GREEN GATE / RAW EQUIPMENT BOUNDARY NORMALIZATION]
+// EquipmentType (lib/athlete-profile.ts:584) is the canonical 10-value union:
+//   'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands'
+//   | 'weights' | 'bench_box' | 'minimal' | 'barbell' | 'weight_plates'
+// It does NOT include 'bench' — that's a legacy raw localStorage alias.
+// Once a value is typed as EquipmentType, comparing it to 'bench' is a
+// TS2367 "no overlap" error. The fix is to do alias normalization at the
+// raw-input boundary BEFORE the canonical type narrows the value space.
+// This helper accepts `unknown` (so legacy raw arrays from storage are
+// representable), maps 'bench' → 'bench_box', filters via a real type
+// guard against the canonical union, and dedupes.
+// =============================================================================
+const CANONICAL_EQUIPMENT_TYPES: ReadonlySet<EquipmentType> = new Set<EquipmentType>([
+  'pullup_bar',
+  'dip_bars',
+  'parallettes',
+  'rings',
+  'resistance_bands',
+  'weights',
+  'bench_box',
+  'minimal',
+  'barbell',
+  'weight_plates',
+])
+
+function isCanonicalEquipmentType(value: unknown): value is EquipmentType {
+  return typeof value === 'string' && (CANONICAL_EQUIPMENT_TYPES as ReadonlySet<string>).has(value)
+}
+
+function normalizeStoredEquipmentForUI(rawEquipment: unknown): EquipmentType[] | undefined {
+  if (!Array.isArray(rawEquipment)) return undefined
+
+  const aliased = rawEquipment.map((value): unknown => {
+    // Legacy alias 'bench' → canonical 'bench_box'
+    if (value === 'bench') return 'bench_box'
+    return value
+  })
+
+  const canonical = aliased.filter(isCanonicalEquipmentType)
+  return Array.from(new Set(canonical))
+}
+
 function reconcileStoredProfileForUI(
   storedProfile: Partial<OnboardingProfile>,
   canonicalProfile?: ReturnType<typeof getCanonicalProfile>
@@ -169,19 +213,25 @@ function reconcileStoredProfileForUI(
   const reconciled = { ...storedProfile }
   
   // [PHASE 16A TASK 2] Equipment alias normalization - bench → bench_box
-  if (Array.isArray(reconciled.equipment)) {
-    const normalizedEquipment = reconciled.equipment.map(e => {
-      // Legacy alias 'bench' should become 'bench_box'
-      if (e === 'bench') return 'bench_box' as EquipmentType
-      return e
-    }).filter((e, i, arr) => arr.indexOf(e) === i) // Remove duplicates
-    
+  // Pass storedProfile.equipment through the raw-input normalizer (which
+  // accepts `unknown`) so legacy 'bench' aliases from localStorage are
+  // converted before reaching canonical typing — no `as EquipmentType`
+  // casts on impossible string literals.
+  const normalizedEquipment = normalizeStoredEquipmentForUI(storedProfile.equipment)
+  if (normalizedEquipment) {
     reconciled.equipment = normalizedEquipment
-    
+
+    // Untyped raw view used only for the audit signal — checking whether the
+    // legacy 'bench' alias was present requires comparing against an unknown
+    // value, which would be impossible against the canonical EquipmentType.
+    const rawEquipmentForAudit: unknown[] = Array.isArray(storedProfile.equipment)
+      ? storedProfile.equipment
+      : []
+
     console.log('[phase16a-benchbox-raw-equipment-audit]', {
       rawEquipment: storedProfile.equipment,
       normalizedEquipment,
-      hadBenchAlias: storedProfile.equipment?.includes('bench' as any),
+      hadBenchAlias: rawEquipmentForAudit.some((value) => value === 'bench'),
       nowHasBenchBox: normalizedEquipment.includes('bench_box'),
     })
   }
@@ -3736,9 +3786,12 @@ export function AthleteOnboarding() {
         sessionStyle: (canonical.sessionStylePreference as SessionStylePreference) || prev.sessionStyle,
         
         // Equipment & diagnostics - [PHASE 16A TASK 2] normalize bench → bench_box
-        equipment: ((canonical.equipmentAvailable || prev.equipment) as EquipmentType[])?.map(e => 
-          e === 'bench' ? 'bench_box' as EquipmentType : e
-        ).filter((e, i, arr) => arr.indexOf(e) === i) || prev.equipment,
+        // [PRE-AB6 BUILD GREEN GATE / RAW EQUIPMENT BOUNDARY NORMALIZATION]
+        // Route through normalizeStoredEquipmentForUI so the canonical
+        // `EquipmentType[]` cast on a possibly-legacy source is replaced with
+        // proper raw-input normalization. Falls back to prev.equipment (already
+        // canonical) if neither source produces a usable array.
+        equipment: normalizeStoredEquipmentForUI(canonical.equipmentAvailable ?? prev.equipment) ?? prev.equipment,
         jointCautions: canonical.jointCautions as JointCaution[] || prev.jointCautions,
         weakestArea: (canonical.weakestArea as WeakestArea) || prev.weakestArea,
         primaryLimitation: (canonical.primaryLimitation as PrimaryLimitation) || prev.primaryLimitation,

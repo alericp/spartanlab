@@ -271,6 +271,13 @@ interface SkillConstraintCardProps {
 export function SkillConstraintCard({ skill, result }: SkillConstraintCardProps) {
   if (!result) return null
   
+  // [PRE-AB6 BUILD GREEN GATE / SKILLTYPE LABEL EXHAUSTIVENESS]
+  // Record<SkillType, string> requires every member of the canonical
+  // SkillType union (lib/constraint-detection-engine.ts). 'iron_cross'
+  // was added to the union but its label was missing here, so the
+  // exhaustive Record check correctly failed. Adding the canonical
+  // 'Iron Cross' label restores exhaustiveness without weakening
+  // the type to Partial<Record<...>> or casting.
   const skillLabels: Record<SkillType, string> = {
     front_lever: 'Front Lever',
     back_lever: 'Back Lever',
@@ -278,6 +285,7 @@ export function SkillConstraintCard({ skill, result }: SkillConstraintCardProps)
     hspu: 'HSPU',
     muscle_up: 'Muscle-Up',
     l_sit: 'L-Sit',
+    iron_cross: 'Iron Cross',
   }
   
   const CONSTRAINT_LABELS: Record<ConstraintCategory, string> = {

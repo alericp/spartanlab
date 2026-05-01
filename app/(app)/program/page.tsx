@@ -16343,10 +16343,20 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     // [PHASE 27A] MODIFY_BUILDER_OPENED - forensic chain step 1
     // Records the exact initial state when the modify builder opens
     // ==========================================================================
+    // [PRE-AB6 BUILD GREEN GATE] `canonicalProfile` is not declared in this
+    //   scope — it was a leftover identifier from a copied diagnostic
+    //   block. The authoritative canonical-truth snapshot for this
+    //   function is the in-scope `canonical` variable (already used
+    //   elsewhere in this same handler at the [phase28a] audit
+    //   immediately below). Route the forensic read through `canonical`
+    //   so the diagnostic semantics are preserved without inventing a
+    //   new variable, importing helpers, or calling
+    //   `getCanonicalProfile()` again. Diagnostic-only — no behavior
+    //   change.
     console.log('[phase27a-modify-forensic-chain]', {
       step: 'MODIFY_BUILDER_OPENED',
-      canonicalScheduleMode: canonicalProfile?.scheduleMode || 'unknown',
-      canonicalTrainingDaysPerWeek: canonicalProfile?.trainingDaysPerWeek || 'unknown',
+      canonicalScheduleMode: canonical?.scheduleMode || 'unknown',
+      canonicalTrainingDaysPerWeek: canonical?.trainingDaysPerWeek || 'unknown',
       initialBuilderSessionScheduleMode: freshInputs.scheduleMode,
       initialBuilderSessionTrainingDays: freshInputs.trainingDaysPerWeek,
       builderSessionKey: newSessionKey,
@@ -16444,8 +16454,12 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       event: 'MODIFY_BUILDER_OPENED',
       modifyEntryPath: 'CANONICAL_PHASE27C_LAUNCHER',
       usesLegacyModifyHandler: false,
-      canonicalProfileScheduleMode: canonicalProfile?.scheduleMode || 'unknown',
-      canonicalProfileTrainingDays: canonicalProfile?.trainingDaysPerWeek || 'unknown',
+      // [PRE-AB6 BUILD GREEN GATE] Same out-of-scope leftover as the
+      //   [phase27a-modify-forensic-chain] block above — `canonicalProfile`
+      //   is not declared in this scope; route through the in-scope
+      //   `canonical` snapshot. Diagnostic-only — no behavior change.
+      canonicalProfileScheduleMode: canonical?.scheduleMode || 'unknown',
+      canonicalProfileTrainingDays: canonical?.trainingDaysPerWeek || 'unknown',
       builderPrefillScheduleMode: freshInputs.scheduleMode,
       builderPrefillTrainingDays: freshInputs.trainingDaysPerWeek,
       verdict: 'VISIBLE_MODIFY_BUTTON_IS_CANONICAL',

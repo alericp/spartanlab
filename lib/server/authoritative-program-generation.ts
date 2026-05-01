@@ -175,7 +175,30 @@ export interface AuthoritativeGenerationResult {
   compactStackPreview?: string
   degradationAttempted?: boolean
   degradationSucceeded?: boolean
-  
+
+  // [POST-TRUTH-CORRIDOR] Builder corridor diagnostic fields produced by
+  // the failure return path of executeAuthoritativeGeneration (see the
+  // failure return statement around the builder_execution stage). These
+  // fields were previously read by app/api/program/regenerate/route.ts
+  // via unsafe `(result as Record<string, unknown>).<field>` casts
+  // because the route owner had no typed contract for them. Declaring
+  // them here as optional aligns the producer's actual return shape
+  // with the consumer's read shape — no broad index signature, no
+  // route-side type widening. Optional because they are only emitted
+  // on the builder failure path.
+  exactBuilderCorridor?: string
+  exactLocalStep?: string
+  fallbackApplied?: boolean
+
+  // [POST_ALLOCATION_HANDOFF_FIX] Owner-corridor failure diagnostics
+  // produced by the same failure return path. Strings because the
+  // producer derives them either from structured context or regex
+  // fallback over the builder error message — both string sources.
+  lastSuccessfulPostAllocationCheckpoint?: string
+  failingOwnerClass?: string
+  failingOwnerName?: string
+  failureContextSource?: 'structured_context' | 'regex_fallback'
+
   // Timing metadata
   timings: Record<string, number>
   totalElapsedMs: number

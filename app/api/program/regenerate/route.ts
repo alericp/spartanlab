@@ -228,20 +228,22 @@ export async function POST(request: Request) {
     if (!result.success) {
       // [PHASE 15E] Extract exact substep diagnostics from service result (now typed)
       // [POST-TRUTH-CORRIDOR] Also extract corridor diagnostic fields
-      const { 
-        exactFailingSubstep, 
-        exactLastSafeSubstep, 
-        compactBuilderError, 
-        compactStackPreview, 
+      // [PRE-AB6 BUILD GREEN GATE / DIAGNOSTIC RESULT CONTRACT]
+      // All fields below are now declared on AuthoritativeGenerationResult
+      // (see lib/server/authoritative-program-generation.ts) so the
+      // intersection cast that previously silenced the missing-owner
+      // mismatch has been removed. The result type is the single
+      // source of truth for these failure diagnostics.
+      const {
+        exactFailingSubstep,
+        exactLastSafeSubstep,
+        compactBuilderError,
+        compactStackPreview,
         degradationAttempted,
         exactBuilderCorridor,
         exactLocalStep,
         fallbackApplied,
-      } = result as typeof result & { 
-        exactBuilderCorridor?: string
-        exactLocalStep?: string
-        fallbackApplied?: boolean
-      }
+      } = result
       
     console.log('[regenerate-route-generation-failed]', {
       error: result.error,
@@ -283,9 +285,14 @@ export async function POST(request: Request) {
     // [REGENERATE_ROUTE_FAILURE_PAYLOAD] Final payload being sent to client
     // ==========================================================================
     // Extract post-allocation tracking fields - consolidated owner corridor
-    const lastSuccessfulPostAllocationCheckpointPayload = (result as Record<string, unknown>).lastSuccessfulPostAllocationCheckpoint as string | undefined
-    const failingOwnerClassPayload = (result as Record<string, unknown>).failingOwnerClass as string | undefined
-    const failingOwnerNamePayload = (result as Record<string, unknown>).failingOwnerName as string | undefined
+    // [PRE-AB6 BUILD GREEN GATE / DIAGNOSTIC RESULT CONTRACT]
+    // Direct typed reads — these fields are now owned by
+    // AuthoritativeGenerationResult, replacing the prior unsafe
+    // `(result as Record<string, unknown>).<field> as string | undefined`
+    // pattern that caused the index-signature TS error here.
+    const lastSuccessfulPostAllocationCheckpointPayload = result.lastSuccessfulPostAllocationCheckpoint
+    const failingOwnerClassPayload = result.failingOwnerClass
+    const failingOwnerNamePayload = result.failingOwnerName
     
     const failurePayload = {
       success: false,
@@ -353,9 +360,11 @@ export async function POST(request: Request) {
     // This is THE single log that shows the exact failing owner on regenerate failure.
     // Consolidated owner corridor - no more micro-step fragmentation.
     // ==========================================================================
-    const lastSuccessfulPostAllocationCheckpoint = (result as Record<string, unknown>).lastSuccessfulPostAllocationCheckpoint as string | undefined
-    const failingOwnerClass = (result as Record<string, unknown>).failingOwnerClass as string | undefined
-    const failingOwnerName = (result as Record<string, unknown>).failingOwnerName as string | undefined
+    // [PRE-AB6 BUILD GREEN GATE / DIAGNOSTIC RESULT CONTRACT]
+    // Direct typed reads from the now-owned diagnostic fields.
+    const lastSuccessfulPostAllocationCheckpoint = result.lastSuccessfulPostAllocationCheckpoint
+    const failingOwnerClass = result.failingOwnerClass
+    const failingOwnerName = result.failingOwnerName
     
     // Determine verdict - supports handoff chain and consolidated owner corridor
     const verdictType = exactBuilderCorridor === 'post_allocation_handoff'

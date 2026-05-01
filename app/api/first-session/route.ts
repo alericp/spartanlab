@@ -65,22 +65,42 @@ export async function GET() {
     }
 
     // Calculate readiness context
+    // [PRE-AB6 BUILD GREEN GATE / READINESS INPUT + FIELD CONTRACT]
+    // calculateReadinessScores (lib/athlete-profile.ts:896) takes
+    // `Partial<ReadinessCalibration>`, NOT the full OnboardingProfile.
+    // The correct source is `profile.readinessCalibration` which is
+    // declared on OnboardingProfile (line 1092) as
+    // `ReadinessCalibration | null`; falling back to `{}` keeps the
+    // input within the helper's `Partial<...>` contract when the user
+    // has not yet completed calibration.
+    //
+    // The actual ReadinessScores shape (line 812) is:
+    //   { strengthPotentialScore, skillAdaptationScore,
+    //     recoveryToleranceScore, volumeToleranceScore }
+    // — there are no `pullStrength`/`pushStrength`/`compression`/
+    // `straightArmStrength`/`overall` fields. The four real fields
+    // are realigned below; `readinessScore` (response shape) is
+    // computed as the mean of the four real subscores since the
+    // contract does not expose a precomputed overall.
     let readinessContext = null
     if (profile) {
-      const readiness = calculateReadinessScores(profile)
+      const readiness = calculateReadinessScores(profile.readinessCalibration ?? {})
       const scores = [
-        { key: 'Pull Strength', value: readiness.pullStrength },
-        { key: 'Push Strength', value: readiness.pushStrength },
-        { key: 'Compression', value: readiness.compression },
-        { key: 'Straight-Arm', value: readiness.straightArmStrength },
+        { key: 'Strength Potential', value: readiness.strengthPotentialScore },
+        { key: 'Skill Adaptation', value: readiness.skillAdaptationScore },
+        { key: 'Recovery Tolerance', value: readiness.recoveryToleranceScore },
+        { key: 'Volume Tolerance', value: readiness.volumeToleranceScore },
       ].filter(s => s.value > 0)
-      
+
       const sorted = [...scores].sort((a, b) => b.value - a.value)
-      
+      const overall = scores.length > 0
+        ? Math.round(scores.reduce((sum, s) => sum + s.value, 0) / scores.length)
+        : 0
+
       readinessContext = {
-        primaryStrength: sorted[0]?.value >= 70 ? sorted[0].key : null,
-        primaryLimiter: sorted[sorted.length - 1]?.value < 50 ? sorted[sorted.length - 1].key : null,
-        readinessScore: readiness.overall,
+        primaryStrength: sorted[0] && sorted[0].value >= 70 ? sorted[0].key : null,
+        primaryLimiter: sorted.length > 0 && sorted[sorted.length - 1].value < 50 ? sorted[sorted.length - 1].key : null,
+        readinessScore: overall,
       }
     }
 

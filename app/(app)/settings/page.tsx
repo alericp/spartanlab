@@ -1308,8 +1308,24 @@ export default function SettingsPage() {
             ))
             const hasDerivedRecovery = !!result.profile.recoveryQuality
             
+            // [PRE-AB6 BUILD GREEN GATE / SETTINGS RECOVERY DIAGNOSTIC]
+            //   The previous `recoveryQualitySent: recoveryQuality` reference
+            //   pointed at an undeclared local — there is no in-scope
+            //   `recoveryQuality` variable in this Settings save handler, and
+            //   the Settings page does not send a `recoveryQuality` field in
+            //   its save payload (recovery quality is derived server-side
+            //   from `recoveryRaw` and surfaced via `result.profile.recoveryQuality`).
+            //   Degrade the diagnostic honestly: emit `null` for the "sent"
+            //   slot and a `recoveryQualitySentAvailable: false` flag so any
+            //   downstream log consumer can distinguish "not sent" from
+            //   "sent but null". The `Stored`, `Raw`, `hasRawRecovery`,
+            //   `hasDerivedRecovery`, and `verdict` slots remain unchanged
+            //   and continue to reflect real server roundtrip truth. No
+            //   recovery state invented, no save payload changed, no schema
+            //   touched.
             console.log('[phase14a-recovery-roundtrip-audit]', {
-              recoveryQualitySent: recoveryQuality,
+              recoveryQualitySent: null,
+              recoveryQualitySentAvailable: false,
               recoveryQualityStored: result.profile.recoveryQuality,
               recoveryRawStored: result.profile.recoveryRaw,
               hasRawRecovery: hasRawRecovery,

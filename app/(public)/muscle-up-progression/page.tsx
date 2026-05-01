@@ -13,6 +13,7 @@ import { ProgressionTable } from '@/components/seo/ProgressionTable'
 import { CommonMistakes } from '@/components/seo/CommonMistakes'
 import { FAQ } from '@/components/seo/FAQ'
 import { generateHowToSchema, generateBreadcrumbSchema, generateArticleSchema, generateFAQSchema, SITE_CONFIG } from '@/lib/seo'
+import { getSkillCluster } from '@/lib/seo/skill-clusters'
 import { Target, Dumbbell, ArrowRight, Zap, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -275,28 +276,39 @@ export default function MuscleUpProgressionPage() {
         </div>
       </section>
 
-      {/* FAQ */}
-      <section className="py-12 px-4 sm:px-6">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl font-bold mb-6">Frequently Asked Questions</h2>
-          <FAQ questions={faqs} />
-        </div>
-      </section>
+      {/*
+        [PRE-AB6 BUILD GREEN GATE / SEO COMPONENT CONTRACT SWEEP]
+        FAQ contract: `faqs: FAQItem[]` (required) + optional `title`,
+        `defaultOpen`. The previous caller passed `questions={faqs}`
+        which is not a valid prop on `FAQProps`. The component renders
+        its own `<section>` wrapper and `<h2>{title}</h2>` (default
+        "Frequently Asked Questions"), so the outer wrapper section/h2
+        is removed for the same reason the ProgressionLadderCard wrapper
+        was removed earlier in this file. Aligned to the majority caller
+        pattern across the repo.
+      */}
+      <FAQ faqs={faqs} title="Frequently Asked Questions" />
 
-      {/* Related Content */}
-      <section className="py-12 px-4 sm:px-6 bg-[#1A1A1A]/50">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl font-bold mb-6">Related Resources</h2>
-          <RelatedContent
-            items={[
-              { title: 'Muscle-Up Training Guide', href: '/guides/muscle-up-training', description: 'Complete training guide with workouts' },
-              { title: 'Pull-Up Strength Standards', href: '/pull-up-strength-standards', description: 'Know your pulling strength level' },
-              { title: 'How Many Pull-Ups for Front Lever?', href: '/how-many-pull-ups-for-front-lever', description: 'Related pulling skill requirements' },
-              { title: 'Muscle-Up Readiness Calculator', href: '/muscle-up-readiness-calculator', description: 'Check if you are ready' },
-            ]}
-          />
-        </div>
-      </section>
+      {/*
+        [PRE-AB6 BUILD GREEN GATE / SEO COMPONENT CONTRACT SWEEP]
+        RelatedContent contract: `cluster: SkillCluster` (required) +
+        optional `maxItems`, `showDescriptions`, `title`. The previous
+        caller passed `items={[...]}` which is not a valid prop. The
+        authoritative pattern (front-lever-progression L255-258,
+        planche-progression L233-236, guides/muscle-up-training L568-571)
+        sources the cluster from `getSkillCluster('muscle-up')` defined
+        at lib/seo/skill-clusters.ts:61, which already contains the
+        muscle-up training guide, pull-up strength guide, and readiness
+        calculator links the inline list was duplicating. The component
+        renders its own `<section>` wrapper and `<h2>` so the outer
+        wrapper section/h2 is removed for consistency with siblings.
+      */}
+      {getSkillCluster('muscle-up') && (
+        <RelatedContent
+          cluster={getSkillCluster('muscle-up')!}
+          title="Continue Your Training"
+        />
+      )}
 
       {/* Final CTA */}
       <section className="py-16 px-4 sm:px-6">

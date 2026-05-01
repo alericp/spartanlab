@@ -17443,6 +17443,24 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 //   no generator behavior change.
                 const expectedSessionsForFlexible = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 6
                 
+                // [PRE-AB6 BUILD GREEN GATE / STEP-5A-TAU] `selectedGoalCategories`
+                //   is NOT a property of `AdaptiveProgramInputs` (Step 4G banned-key
+                //   guard). The canonical metadata field is `goalCategories`,
+                //   surfaced via `readProgramPageMetadataFromUnknown(...)` →
+                //   `currentBuilderSessionInputsMeta.goalCategories` (declared at
+                //   L17429) and `inputsMeta.goalCategories` (declared at L3080).
+                //   Derive the diagnostic counts from the metadata view, with
+                //   `currentBuilderSessionInputsMeta` preferred when populated and
+                //   `inputsMeta` as fallback. `null` final fallback preserves the
+                //   prior "no count available" semantics. Diagnostic-only — no
+                //   generator behavior change.
+                const goalCategoriesCountBeforeClick =
+                  currentBuilderSessionInputsMeta.goalCategories.length > 0
+                    ? currentBuilderSessionInputsMeta.goalCategories.length
+                    : inputsMeta.goalCategories.length > 0
+                      ? inputsMeta.goalCategories.length
+                      : null
+                
                 const mainGenClickAudit: MainGenTruthAudit = {
                   // Step 1: Click source
                   attemptId: mainGenAttemptId,
@@ -17459,7 +17477,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   canonicalScheduleModeBeforeClick: scheduleTruthAudit?.canonicalScheduleMode ?? null,
                   canonicalTrainingDaysPerWeekBeforeClick: scheduleTruthAudit?.canonicalTrainingDaysPerWeek ?? null,
                   selectedSkillsCountBeforeClick: currentBuilderSessionInputs?.selectedSkills?.length ?? inputs?.selectedSkills?.length ?? null,
-                  goalCategoriesCountBeforeClick: currentBuilderSessionInputs?.selectedGoalCategories?.length ?? inputs?.selectedGoalCategories?.length ?? null,
+                  // [STEP-5A-TAU] sourced via metadata view helpers, not direct AdaptiveProgramInputs reads
+                  goalCategoriesCountBeforeClick,
                   experienceLevelBeforeClick: currentBuilderSessionInputs?.experienceLevel ?? inputs?.experienceLevel ?? null,
                   // [STEP-5A-XI] sourced via metadata view helpers, not direct AdaptiveProgramInputs reads
                   sessionDurationModeBeforeClick: currentBuilderSessionInputsMeta.sessionDurationMode ?? inputsMeta.sessionDurationMode,
@@ -17471,7 +17490,14 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   submittedPrimaryGoal: hasCurrentSessionInputs ? currentBuilderSessionInputs?.primaryGoal ?? null : inputs?.primaryGoal ?? null,
                   submittedSecondaryGoal: hasCurrentSessionInputs ? currentBuilderSessionInputs?.secondaryGoal ?? null : inputs?.secondaryGoal ?? null,
                   submittedSelectedSkillsCount: hasCurrentSessionInputs ? currentBuilderSessionInputs?.selectedSkills?.length ?? null : inputs?.selectedSkills?.length ?? null,
-                  submittedGoalCategoriesCount: hasCurrentSessionInputs ? currentBuilderSessionInputs?.selectedGoalCategories?.length ?? null : inputs?.selectedGoalCategories?.length ?? null,
+                  // [STEP-5A-TAU] sourced via metadata view helpers, not direct AdaptiveProgramInputs reads
+                  submittedGoalCategoriesCount: hasCurrentSessionInputs
+                    ? (currentBuilderSessionInputsMeta.goalCategories.length > 0
+                        ? currentBuilderSessionInputsMeta.goalCategories.length
+                        : null)
+                    : (inputsMeta.goalCategories.length > 0
+                        ? inputsMeta.goalCategories.length
+                        : null),
                   submittedExperienceLevel: hasCurrentSessionInputs ? currentBuilderSessionInputs?.experienceLevel ?? null : inputs?.experienceLevel ?? null,
                   // [STEP-5A-XI] sourced via metadata view helpers, not direct AdaptiveProgramInputs reads
                   submittedTrainingPathType: hasCurrentSessionInputs ? currentBuilderSessionInputsMeta.trainingPathType : inputsMeta.trainingPathType,

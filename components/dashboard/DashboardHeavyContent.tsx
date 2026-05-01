@@ -353,6 +353,45 @@ export default function DashboardHeavyContent({
         }]
       : []
 
+  // [PRE-AB6 BUILD GREEN GATE / SKILLREADINESS PROFILE ADAPTER]
+  // The active AthleteProfile (lib/data-service.ts:42) exposes only
+  // pullUpMax?, dipMax?, experienceLevel, and equipmentAvailable
+  // (Equipment[]) for strength/equipment data. It does NOT expose
+  // pushUpMax, hollowHoldTime, or `equipment`. SkillReadinessPanelProps
+  // (components/readiness/SkillReadinessPanel.tsx:21-31) accepts every
+  // field as optional with `| null` for benchmarks, so the honest
+  // adapter passes:
+  //   - real pullUpMax / dipMax (with `?? null`)
+  //   - null for unstored benchmarks (pushUpMax, hollowHoldTime)
+  //   - equipmentAvailable mapped to string[] (Equipment is a string-
+  //     literal union, structurally assignable to string[])
+  //   - primarySkill derived from focusSummary.mainFocus /
+  //     supportingFocus (real CurrentFocus fields), normalized and
+  //     constrained to known skill keys, or undefined.
+  const KNOWN_SKILL_KEYS = ['front_lever', 'back_lever', 'planche', 'hspu', 'muscle_up', 'l_sit', 'iron_cross'] as const
+  type KnownSkillKey = typeof KNOWN_SKILL_KEYS[number]
+  const toKnownSkillKey = (s: string | null | undefined): KnownSkillKey | undefined => {
+    if (!s) return undefined
+    const normalized = s.toLowerCase().replace(/[\s-]+/g, '_').trim()
+    return KNOWN_SKILL_KEYS.find(
+      (k) => normalized === k || normalized.includes(k) || k.includes(normalized)
+    )
+  }
+  const primarySkillFromFocus =
+    toKnownSkillKey(focusSummary?.mainFocus) ??
+    toKnownSkillKey(focusSummary?.supportingFocus)
+  const readinessAthleteProfile = overview?.profile
+    ? {
+        pullUpMax: overview.profile.pullUpMax ?? null,
+        dipMax: overview.profile.dipMax ?? null,
+        pushUpMax: null,
+        hollowHoldTime: null,
+        experienceLevel: overview.profile.experienceLevel,
+        equipment: overview.profile.equipmentAvailable ?? [],
+        primarySkill: primarySkillFromFocus,
+      }
+    : undefined
+
   return (
     <>
       {/* SECTION: FIRST RUN GUIDE */}
@@ -479,16 +518,8 @@ export default function DashboardHeavyContent({
       {/* SECTION: SKILL READINESS - Only show for users with real workout data */}
       {ENABLE_SECTION_SKILL_READINESS && showMatureWidgets && overview?.profile && (
         <SafeWidget name="SkillReadinessPanel">
-          <SkillReadinessPanel 
-            athleteProfile={{
-              pullUpMax: overview.profile.pullUpMax,
-              dipMax: overview.profile.dipMax,
-              pushUpMax: overview.profile.pushUpMax,
-              hollowHoldTime: overview.profile.hollowHoldTime,
-              experienceLevel: overview.profile.experienceLevel,
-              equipment: overview.profile.equipment,
-              primarySkill: focusSummary?.skillName?.toLowerCase().replace(/[\s-]+/g, '_'),
-            }}
+          <SkillReadinessPanel
+            athleteProfile={readinessAthleteProfile}
             skills={['front_lever', 'planche', 'muscle_up', 'hspu', 'l_sit']}
             maxDisplay={3}
           />

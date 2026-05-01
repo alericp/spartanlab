@@ -22,11 +22,23 @@ export function AthleteOverviewCard({ user, profile }: AthleteOverviewCardProps)
           <p className="text-[#A5A5A5]">
             <span className="capitalize">{profile.experienceLevel}</span>
             {' Athlete'}
-            {typeof profile.trainingDaysPerWeek === 'number' && profile.trainingDaysPerWeek > 0 && (
-              <span className="text-[#6A6A6A]"> • {profile.trainingDaysPerWeek} days/week</span>
-            )}
-            {profile.trainingDaysPerWeek === 'flexible' && (
+            {/*
+              [PRE-AB6 BUILD GREEN GATE / SCHEDULE CONTRACT]
+              AthleteProfile.trainingDaysPerWeek is numeric only
+              (lib/data-service.ts:53). Flexible-schedule truth lives on
+              the separate optional `scheduleMode` field
+              (lib/data-service.ts:62). The previous code compared the
+              numeric field to the string 'flexible', which TS correctly
+              flagged as a no-overlap comparison. The corrected branch
+              reads scheduleMode for flexible mode and falls back to
+              numeric days/week display for static schedules.
+            */}
+            {profile.scheduleMode === 'flexible' ? (
               <span className="text-[#6A6A6A]"> • Flexible schedule</span>
+            ) : (
+              profile.trainingDaysPerWeek > 0 && (
+                <span className="text-[#6A6A6A]"> • {profile.trainingDaysPerWeek} days/week</span>
+              )
             )}
           </p>
           {goalName && (

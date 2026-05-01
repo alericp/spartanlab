@@ -16695,23 +16695,21 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     return params.get('diagnostics') === '1' || params.get('programProbe') === '1'
   })()
   
-  // [AI-TRUTH-MATERIALITY] Log materiality audit on mount (dev only)
-  // This provides compact verification of which fields are GREEN/YELLOW/RED
+  // [AI-TRUTH-MATERIALITY] Materiality audit values (dev/QA-gated only)
+  // These feed the visible DiagnosticStrip UI below — do NOT remove.
   const materialitySummary = showDiagnosticStrip ? getMaterialitySummary() : null
   const personalAlignment = showDiagnosticStrip ? analyzePersonalAlignment() : null
   
-  // Log once on initial render for debugging
-  if (showDiagnosticStrip && program && !isLoading) {
-    // Use console.log for dev debugging - will be removed in production
-    console.log('[AI-TRUTH-MATERIALITY-MAP]', {
-      greenCount: materialitySummary?.greenCount,
-      yellowCount: materialitySummary?.yellowCount,
-      redCount: materialitySummary?.redCount,
-      highPriorityFixes: materialitySummary?.highPriorityFixes,
-      alignmentVerdict: personalAlignment?.alignmentVerdict,
-      topUnderexpressedField: materialitySummary?.topUnderexpressedField,
-    })
-  }
+  // [PRE-AB6 BUILD GREEN GATE] Removed a render-time `console.log`
+  //   diagnostic block that was guarded by `if (showDiagnosticStrip
+  //   && program && !isLoading) { ... }`. `isLoading` was never declared
+  //   anywhere in this component (verified by grep — only 1 occurrence
+  //   in the file, that failing line), so the block was a stale leftover
+  //   debug log. Removing it eliminates the
+  //   `Cannot find name 'isLoading'` TypeScript blocker without
+  //   touching the visible DiagnosticStrip UI, the materialitySummary /
+  //   personalAlignment computations that feed that UI, or any runtime
+  //   logic. No behavior change for users.
   
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white">

@@ -7,12 +7,19 @@ import {
   type AchievementTier,
   getTierColors 
 } from '@/lib/achievements/achievement-definitions'
-import { Trophy, Flame, Target, Zap, Star, Medal, Crown, Dumbbell, Lock } from 'lucide-react'
+import { Trophy, Flame, Target, Zap, Star, Medal, Crown, Dumbbell, Lock, Swords } from 'lucide-react'
 
 // =============================================================================
 // ICON MAP
 // =============================================================================
-
+// [PRE-AB6 BUILD GREEN GATE / ACHIEVEMENT ICON CONTRACT]
+// Mirrors the authoritative Achievement icon union in
+// lib/achievements/achievement-definitions.ts. Even though this
+// component falls back to `|| Trophy` at runtime, TypeScript
+// still rejects ICON_MAP[achievement.icon] when the indexed key
+// is not present on the `as const` map. 'swords' is added to
+// satisfy the indexed-access check for sibling parity with
+// AchievementBadge.tsx.
 const ICON_MAP = {
   trophy: Trophy,
   flame: Flame,
@@ -23,6 +30,7 @@ const ICON_MAP = {
   medal: Medal,
   crown: Crown,
   dumbbell: Dumbbell,
+  swords: Swords,
 } as const
 
 // =============================================================================

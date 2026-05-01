@@ -1,6 +1,6 @@
 'use client'
 
-import { Trophy, Medal, Star, Flame, Target, Dumbbell, Crown, Zap, Lock } from 'lucide-react'
+import { Trophy, Medal, Star, Flame, Target, Dumbbell, Crown, Zap, Lock, Swords } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { 
   type Achievement, 
@@ -8,7 +8,13 @@ import {
   TIER_COLORS 
 } from '@/lib/achievements/achievement-definitions'
 
-// Icon mapping
+// [PRE-AB6 BUILD GREEN GATE / ACHIEVEMENT ICON CONTRACT]
+// Achievement.icon (lib/achievements/achievement-definitions.ts:15)
+// declares the canonical icon union, including 'swords'. ICON_MAP
+// must cover every member of that union because the component
+// indexes it directly via ICON_MAP[achievement.icon] with no
+// guarded fallback. Adding 'swords: Swords' aligns the map with
+// the authoritative union without weakening the source type.
 const ICON_MAP = {
   trophy: Trophy,
   medal: Medal,
@@ -18,6 +24,7 @@ const ICON_MAP = {
   dumbbell: Dumbbell,
   crown: Crown,
   lightning: Zap,
+  swords: Swords,
 } as const
 
 interface AchievementBadgeProps {

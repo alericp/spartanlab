@@ -1,11 +1,14 @@
-// REDEPLOY_TRIGGER_v3
+// REDEPLOY_TRIGGER_v4
 // No-op change to force Vercel rebuild. Do not remove.
-// Timestamp: 2026-04-30T15:00:00Z - PRE-AB6 BUILD GREEN GATE / branch-head delivery
-// Purpose: force a real new commit on top of ceab071 so Vercel picks up the
-// hoisted `adjCanonicalProfileNow` + `strongestMaterialIdentityTruth`
-// declarations (now at L13501 / L13506, single declarations, all reads at
-// L13542+ and L13720+ are after declaration) and stops rebuilding the old
-// failing TDZ commit at app/(app)/program/page.tsx:13492:22.
+// Timestamp: 2026-04-30T18:00:00Z - PRE-AB6 BUILD GREEN GATE / branch-head delivery
+// Purpose: force a real new commit on top of 0cc4bc6 so Vercel picks up the
+// schedule-truth-audit stale-property fix already in source: three reads of
+// the non-existent `scheduleTruthAudit?.recommendedSessionsPerWeek` were
+// replaced with the real typed contract field
+// `scheduleTruthAudit?.baselineRecommendedSessionCount` at L17441 (?? 6),
+// L17454 (?? null), and L17520. The previous 0cc4bc6 deployment was a
+// stale push/sync — the working tree had the fix; this trigger guarantees
+// a new committed HEAD lands on the branch Vercel is building.
 
 'use client'
 
@@ -17429,7 +17432,16 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 // [MAIN-GEN-TRUTH step-1] Capture pre-click state for main generation trace
                 // ==========================================================================
                 const mainGenAttemptId = `maingen-${Date.now()}`
-                const expectedSessionsForFlexible = scheduleTruthAudit?.recommendedSessionsPerWeek ?? 6
+                // [PRE-AB6 BUILD GREEN GATE] `recommendedSessionsPerWeek` is
+                //   not on the typed `scheduleTruthAudit` contract (see
+                //   useState<{...}> at L3413) — the authoritative field
+                //   for recommended weekly session count is
+                //   `baselineRecommendedSessionCount` (already used by
+                //   the visible Schedule Status panel at L16808-L16933
+                //   and by the rehydration baseline read at L4275).
+                //   Routed through the real typed field. Diagnostic-only —
+                //   no generator behavior change.
+                const expectedSessionsForFlexible = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 6
                 
                 const mainGenClickAudit: MainGenTruthAudit = {
                   // Step 1: Click source
@@ -17439,7 +17451,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   existingVisibleProgramIdBeforeClick: program?.id ?? null,
                   existingVisibleProgramSessionsBeforeClick: program?.sessions?.length ?? null,
                   existingGeneratedDateBeforeClick: program?.createdAt ?? null,
-                  scheduleStatusRecommendedCountBeforeClick: scheduleTruthAudit?.recommendedSessionsPerWeek ?? null,
+                  // [PRE-AB6 BUILD GREEN GATE] Same stale-property fix as the
+                  //   `expectedSessionsForFlexible` derivation above — the
+                  //   real typed field is `baselineRecommendedSessionCount`.
+                  scheduleStatusRecommendedCountBeforeClick: scheduleTruthAudit?.baselineRecommendedSessionCount ?? null,
                   scheduleStatusTypeBeforeClick: scheduleTruthAudit?.canonicalScheduleMode ?? null,
                   canonicalScheduleModeBeforeClick: scheduleTruthAudit?.canonicalScheduleMode ?? null,
                   canonicalTrainingDaysPerWeekBeforeClick: scheduleTruthAudit?.canonicalTrainingDaysPerWeek ?? null,
@@ -17503,7 +17518,9 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   attemptId: mainGenAttemptId,
                   existingProgramId: program?.id,
                   existingProgramSessions: program?.sessions?.length,
-                  scheduleStatusRecommended: scheduleTruthAudit?.recommendedSessionsPerWeek,
+                  // [PRE-AB6 BUILD GREEN GATE] Same stale-property fix —
+                  //   real typed field is `baselineRecommendedSessionCount`.
+                  scheduleStatusRecommended: scheduleTruthAudit?.baselineRecommendedSessionCount,
                   scheduleStatusType: scheduleTruthAudit?.canonicalScheduleMode,
                   submittedScheduleMode: mainGenClickAudit.submittedScheduleMode,
                   submittedTrainingDays: mainGenClickAudit.submittedTrainingDaysPerWeek,

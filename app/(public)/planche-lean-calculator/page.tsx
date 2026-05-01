@@ -789,15 +789,28 @@ export default function PlancheLeanCalculator() {
 
         {/* Conversion CTA */}
         <section className="mt-12">
+          {/*
+            [PRE-AB6 BUILD GREEN GATE / LOCAL VAR CONTRACT]
+            The page state is declared as `holdTime` (L268), `maxPushUps`
+            (L269), and `maxDips` (L270). The previous toolData payload
+            referenced three identifiers that do not exist anywhere in
+            this file: `leanHoldTime`, `pushUps`, and `dips`. Aligned
+            each to the real local state variable. The
+            `result.classification` and `result.limitingFactors` reads
+            are intentionally preserved — this file uses its own local
+            `PlancheLeanResult` interface (declared at L28 with real
+            `classification: string` and `limitingFactors: string[]`
+            fields), not the shared `ReadinessResult` contract.
+          */}
           <ToolConversionCardStatic
             context="planche-lean"
             toolData={result ? {
-              plancheLeanHold: leanHoldTime ? parseInt(leanHoldTime) : undefined,
+              plancheLeanHold: holdTime ? parseInt(holdTime, 10) : undefined,
               plancheLeanDistance: leanDistance ? parseFloat(leanDistance) : undefined,
-              maxPushUps: pushUps ? parseInt(pushUps) : undefined,
-              maxDips: dips ? parseInt(dips) : undefined,
+              maxPushUps: maxPushUps ? parseInt(maxPushUps, 10) : undefined,
+              maxDips: maxDips ? parseInt(maxDips, 10) : undefined,
               weightedDip: weightedDip ? parseFloat(weightedDip) : undefined,
-              lSitHold: lSitHold ? parseInt(lSitHold) : undefined,
+              lSitHold: lSitHold ? parseInt(lSitHold, 10) : undefined,
               bodyweight: bodyweight ? parseFloat(bodyweight) : undefined,
               readinessScore: result.score,
               classification: result.classification,

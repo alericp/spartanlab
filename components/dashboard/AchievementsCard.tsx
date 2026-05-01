@@ -153,9 +153,20 @@ export function AchievementsCard({ className, maxDisplay = 6 }: AchievementsCard
         <div className="mt-4 pt-3 border-t border-[#2A2D31]">
           <p className="text-xs text-[#6B7280] mb-1">Most recent</p>
           <div className="flex items-center gap-2">
-            <span 
-              className="text-sm font-medium"
-              style={{ color: TIER_COLORS[unlockedAchievements[0].tier].primary }}
+            {/*
+              [PRE-AB6 BUILD GREEN GATE / TIER_COLORS CLASS-TOKEN CONTRACT]
+              TIER_COLORS exposes Tailwind class tokens
+              ({ bg, text, border, glow }), not raw inline color values.
+              The previous `style={{ color: ...primary }}` read a phantom
+              field that does not exist on the contract. Switching to the
+              existing `text` class token preserves the tier-colored
+              styling without widening TIER_COLORS or casting.
+            */}
+            <span
+              className={cn(
+                "text-sm font-medium",
+                TIER_COLORS[unlockedAchievements[0].tier].text
+              )}
             >
               {unlockedAchievements[0].name}
             </span>

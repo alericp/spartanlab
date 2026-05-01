@@ -10,7 +10,6 @@ import {
   getAllChallengesWithProgress,
   getChallengesByPeriodWithProgress,
   getChallengeSummary,
-  getActiveChallengesWithProgress,
   type ChallengeWithProgress,
   type ChallengeSummary,
 } from '@/lib/challenges/challenge-engine'
@@ -263,26 +262,42 @@ interface ChallengesWidgetProps {
 
 export function ChallengesWidget({ className }: ChallengesWidgetProps) {
   const [challenges, setChallenges] = useState<ChallengeWithProgress[]>([])
-  
+
   useEffect(() => {
-    const active = getActiveChallengesWithProgress()
-      .filter(c => !c.isCompleted)
-      .sort((a, b) => b.progressPercent - a.progressPercent)
+    // [PRE-AB6 BUILD GREEN GATE / CHALLENGE DISPLAY CONTRACT]
+    // Use the flattened display helper (getAllChallengesWithProgress)
+    // instead of the raw nested engine helper (getActiveChallengesWithProgress).
+    // The widget state is typed as ChallengeWithProgress[] (flattened
+    // UI shape with id/name/percentComplete/isCompleted at the top
+    // level), so feeding it the raw { challenge, progress, percentComplete }
+    // engine shape was a contract mismatch. ChallengeWithProgress exposes
+    // both `percentComplete` (required) and `progressPercent?` (optional)
+    // plus both `completed` and `isCompleted?`, so the safe-fallback
+    // form below is fully type-checked and matches the pattern already
+    // used in ChallengesSummaryCard above.
+    const active = getAllChallengesWithProgress()
+      .filter(c => !(c.isCompleted ?? c.completed))
+      .sort(
+        (a, b) =>
+          (b.progressPercent ?? b.percentComplete ?? 0) -
+          (a.progressPercent ?? a.percentComplete ?? 0)
+      )
       .slice(0, 1)
     setChallenges(active)
   }, [])
-  
+
   if (challenges.length === 0) return null
-  
+
   const challenge = challenges[0]
-  
+  const progressPercent = challenge.progressPercent ?? challenge.percentComplete ?? 0
+
   return (
     <Link href="/challenges" className={cn('block', className)}>
       <div className="flex items-center gap-3 p-3 rounded-lg bg-[#1A1D23] border border-[#2A2F38] hover:border-[#3A3F48] transition-colors">
         <div className="w-8 h-8 rounded-lg bg-[#2A2F38] flex items-center justify-center shrink-0">
           <Target className="w-4 h-4 text-amber-400" />
         </div>
-        
+
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-[#E6E9EF] truncate">
             {challenge.name}
@@ -291,11 +306,11 @@ export function ChallengesWidget({ className }: ChallengesWidgetProps) {
             <div className="flex-1 h-1.5 rounded-full bg-[#2A2F38] overflow-hidden">
               <div
                 className="h-full bg-amber-500 transition-all duration-300"
-                style={{ width: `${challenge.progressPercent}%` }}
+                style={{ width: `${progressPercent}%` }}
               />
             </div>
             <span className="text-xs text-[#6B7280] shrink-0">
-              {challenge.progressPercent}%
+              {progressPercent}%
             </span>
           </div>
         </div>

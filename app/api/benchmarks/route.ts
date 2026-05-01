@@ -134,10 +134,24 @@ export async function POST(request: NextRequest) {
     
     // Create the benchmark
     const benchmark = await createBenchmark(userId, input)
-    
+
+    // [PRE-AB6 BUILD GREEN GATE / NULLABLE BENCHMARK GUARD]
+    // createBenchmark returns Promise<Benchmark | null> (insert may
+    // fail at the persistence layer). Both generateProgressFeedback
+    // and calculateReadinessAdjustment require a non-null Benchmark.
+    // Surface a real error response instead of force-asserting; the
+    // type narrowing below makes `benchmark` Benchmark for the
+    // remainder of the function.
+    if (!benchmark) {
+      return NextResponse.json(
+        { error: 'Failed to create benchmark', details: 'Persistence layer returned no record' },
+        { status: 500 }
+      )
+    }
+
     // Generate feedback
     const feedback = generateProgressFeedback(benchmark)
-    
+
     // Calculate readiness adjustments
     const readinessAdjustments = calculateReadinessAdjustment(benchmark)
     

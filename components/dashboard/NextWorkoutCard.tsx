@@ -111,7 +111,15 @@ export function NextWorkoutCard({ className }: NextWorkoutCardProps) {
         const allLogs = getWorkoutLogs()
         // TASK 6: Filter to trusted logs only - no demo/seed/untrusted data
         workoutLogs = allLogs.filter(log => {
-          if (log.sourceRoute === 'demo' || (log as any).isDemo === true) return false
+          // [PRE-AB6 BUILD GREEN GATE / WORKOUTLOG CONTRACT]
+          // WorkoutLog (lib/workout-log-service.ts:40) does not expose
+          // an `isDemo` field — only `sourceRoute` and `trusted`. The
+          // canonical demo signal is `sourceRoute === 'demo'`, which
+          // workout-log-service.ts:323 sets whenever a log is created
+          // with `isDemo: true`. The previous `(log as any).isDemo`
+          // suppression read a phantom field redundantly; the
+          // sourceRoute check fully covers the demo case.
+          if (log.sourceRoute === 'demo') return false
           if (log.trusted === false) return false
           // Require explicit trust OR known good sourceRoute
           const hasValidSource = log.sourceRoute === 'workout_session' || 

@@ -67,19 +67,31 @@ export default function OneArmPullUpReadinessCalculator() {
     const pullUps = parseInt(maxPullUps) || 0
     const weighted = parseFloat(weightedPullUpLoad) || 0
     const archers = parseInt(archerPullUps) || 0
-    const bw = parseFloat(bodyweight) || 0
-    
+
     if (pullUps === 0 && weighted === 0) {
       setError('Please enter at least your pull-up count or weighted pull-up load')
       return
     }
-    
+
+    /*
+      [PRE-AB6 BUILD GREEN GATE / READINESS INPUT CONTRACT]
+      OneArmPullUpInputs (lib/readiness/skill-readiness.ts:2910) requires
+      exactly: { maxPullUps: number; weightedPullUpLoad: number;
+      archerPullUpReps: number; hasBar: boolean }. The previous shape
+      used the stale name `archerPullUps` and added `bodyweight` and
+      `gripStrength` keys that do not exist on the contract. The
+      bodyweight and gripStrength UI form fields are preserved as
+      user-context inputs but are not consumed by the current engine.
+      `archerPullUpReps` is typed as required `number`, so empty input
+      becomes `0` (not `undefined`). `hasBar: true` is the safe explicit
+      value for this calculator since the entire form assumes pull-up
+      bar access. The unused `bw` parse variable was removed.
+    */
     const inputs: OneArmPullUpInputs = {
       maxPullUps: pullUps,
       weightedPullUpLoad: weighted,
-      archerPullUps: archers > 0 ? archers : undefined,
-      bodyweight: bw > 0 ? bw : undefined,
-      gripStrength,
+      archerPullUpReps: archers > 0 ? archers : 0,
+      hasBar: true,
     }
     
     const calcResult = calculateOneArmPullUpReadiness(inputs)
@@ -403,11 +415,24 @@ export default function OneArmPullUpReadinessCalculator() {
 
         {/* CTA Section */}
         <section className="mt-12">
+          {/*
+            [PRE-AB6 BUILD GREEN GATE / TOOL CARD CONTRACT]
+            ToolConversionCardStaticProps (components/tools/
+            ToolConversionCardStatic.tsx:139) requires `context:
+            ToolContext` and uses `headline` (not `heading`) plus
+            `primaryCtaText` (not `ctaText`). There is no `ctaHref`
+            prop — the component routes to `/onboarding` internally,
+            which is exactly what the previous `ctaHref="/onboarding"`
+            override expressed, so dropping it preserves behavior.
+            ToolContext (tool-conversion-types.ts:11-22) does not
+            include `'one-arm-pull-up'`; `'general'` is the closest
+            valid match for a generic OAP-readiness CTA.
+          */}
           <ToolConversionCardStatic
-            heading="Ready to Train for One-Arm Pull-Up?"
+            context="general"
+            headline="Ready to Train for One-Arm Pull-Up?"
             description="SpartanLab builds personalized programs that progressively develop the pulling strength needed for OAP."
-            ctaText="Generate Your Program"
-            ctaHref="/onboarding"
+            primaryCtaText="Generate Your Program"
           />
         </section>
 

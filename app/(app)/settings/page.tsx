@@ -304,6 +304,28 @@ function OwnerInlineSimulationControl() {
   )
 }
 
+// [PRE-AB6 BUILD GREEN GATE / STEP-5A-CHI] Diagnostic-only equipment
+//   membership helper. The legacy `Equipment` union exported from
+//   `lib/data-service.ts` is narrow (5 values: pullup_bar / dip_bars /
+//   parallettes / rings / resistance_bands) — it does NOT include
+//   `'weights'`, `'bench_box'`, or `'minimal'`. The Settings page
+//   imports `AthleteProfile` from `data-service`, so its
+//   `equipmentAvailable` is typed as the narrow `Equipment[]`, which
+//   blocks direct `.includes('weights' | 'bench_box')` calls at the
+//   type level. The full canonical union in `types/domain.ts` does
+//   include those values, and the persisted profile / API / save+load
+//   path already round-trips them correctly via the local
+//   `equipment: EquipmentType[]` state. This helper widens the input
+//   to `readonly string[]` via direct assignment (no cast, no
+//   suppression, no `Equipment` widening) for diagnostic membership
+//   checks only — it does NOT modify the data-service `Equipment`
+//   union, the `AthleteProfile` shape, the persisted profile, save /
+//   load behavior, or any operational logic.
+const equipmentListIncludes = (
+  list: readonly string[] | null | undefined,
+  value: string,
+): boolean => (list != null && list.includes(value))
+
 export default function SettingsPage() {
   // [PHASE 14D] Use canonical owner source from OwnerBootstrapProvider
   const { isOwner } = useOwnerBootstrap()
@@ -396,7 +418,8 @@ export default function SettingsPage() {
     console.log('[adjustment-sync] sessionLengthMinutes:', data.sessionLengthMinutes)
     console.log('[adjustment-sync] primaryGoal:', data.primaryGoal)
     console.log('[adjustment-sync] equipmentAvailable:', data.equipmentAvailable)
-    console.log('[adjustment-sync] hasWeights:', data.equipmentAvailable?.includes('weights'))
+    // [STEP-5A-CHI] routed via diagnostic helper to bypass narrow data-service Equipment union
+    console.log('[adjustment-sync] hasWeights:', equipmentListIncludes(data.equipmentAvailable, 'weights'))
     console.log('[adjustment-sync] === END CANONICAL TRUTH ===')
     
     setProfile(data as AthleteProfile)
@@ -496,7 +519,8 @@ export default function SettingsPage() {
     console.log('[phase16a-settings-benchbox-normalization-audit]', {
       rawEquipment,
       normalizedEquipment,
-      hadBenchAlias: rawEquipment.includes('bench'),
+      // [STEP-5A-CHI] routed via diagnostic helper — `rawEquipment` is typed as the narrow data-service `Equipment[]`, which does not include the legacy `'bench'` alias
+      hadBenchAlias: equipmentListIncludes(rawEquipment, 'bench'),
       nowHasBenchBox: normalizedEquipment.includes('bench_box'),
     })
     
@@ -524,7 +548,8 @@ export default function SettingsPage() {
     console.log('[phase15a-field-truth-map-equipment-bench-audit]', {
       stage: 'settings_load',
       equipmentAvailable: data.equipmentAvailable,
-      hasBenchBox: data.equipmentAvailable?.includes('bench_box'),
+      // [STEP-5A-CHI] routed via diagnostic helper to bypass narrow data-service Equipment union
+      hasBenchBox: equipmentListIncludes(data.equipmentAvailable, 'bench_box'),
       sourceField: 'API response or localStorage',
     })
     
@@ -546,8 +571,9 @@ export default function SettingsPage() {
       equipmentLoadedIntoState: loadedEquipment,
       equipmentShownInUIList: visibleEquipmentKeys,
       hiddenEquipmentNotEditable: hiddenEquipment,
-      hasWeights: loadedEquipment.includes('weights'),
-      hasBenchBox: loadedEquipment.includes('bench_box'),
+      // [STEP-5A-CHI] routed via diagnostic helper to bypass narrow data-service Equipment union
+      hasWeights: equipmentListIncludes(loadedEquipment, 'weights'),
+      hasBenchBox: equipmentListIncludes(loadedEquipment, 'bench_box'),
       verdict: hiddenEquipment.length === 0 ? 'all_equipment_visible' : 'some_equipment_hidden',
     })
     
@@ -1065,7 +1091,8 @@ export default function SettingsPage() {
             // [PHASE 14A TASK 3] Settings equipment roundtrip verdict
             const sentEquipment = equipment
             const returnedEquipment = result.profile.equipmentAvailable || []
-            const droppedOnSave = sentEquipment.filter((e: string) => !returnedEquipment.includes(e))
+            // [STEP-5A-CHI] routed via diagnostic helper — `returnedEquipment` is typed as the narrow data-service `Equipment[]`, so a direct `.includes(e: string)` call would fail TS narrowing
+            const droppedOnSave = sentEquipment.filter((e: string) => !equipmentListIncludes(returnedEquipment, e))
             
             console.log('[phase14a-settings-equipment-roundtrip-verdict]', {
               equipmentSentInPUT: sentEquipment,
@@ -1131,13 +1158,15 @@ export default function SettingsPage() {
               verdict: sessionDurationMode === result.profile.sessionDurationMode ? 'no_mask' : 'MASK_DETECTED',
             })
             
+            // [STEP-5A-CHI] routed via diagnostic helper to bypass narrow data-service Equipment union on the right-hand side
+            const benchBoxReturnedRoundtrip = equipmentListIncludes(result.profile.equipmentAvailable, 'bench_box')
             console.log('[phase15a-no-default-mask-equipment-verdict]', {
               equipmentAtSave: equipment,
               equipmentReturned: result.profile.equipmentAvailable,
               benchBoxAtSave: equipment.includes('bench_box'),
-              benchBoxReturned: result.profile.equipmentAvailable?.includes('bench_box'),
-              masked: equipment.includes('bench_box') !== (result.profile.equipmentAvailable?.includes('bench_box') || false),
-              verdict: equipment.includes('bench_box') === (result.profile.equipmentAvailable?.includes('bench_box') || false) ? 'no_mask' : 'BENCH_BOX_MASK_DETECTED',
+              benchBoxReturned: benchBoxReturnedRoundtrip,
+              masked: equipment.includes('bench_box') !== benchBoxReturnedRoundtrip,
+              verdict: equipment.includes('bench_box') === benchBoxReturnedRoundtrip ? 'no_mask' : 'BENCH_BOX_MASK_DETECTED',
             })
             
             // Note: selectedSkills are not directly edited on settings page - they come from onboarding
@@ -1162,16 +1191,19 @@ export default function SettingsPage() {
               uiWillReflect: result.profile.sessionDurationMode === 'adaptive' ? 'Adaptive toggle active' : `${result.profile.sessionLengthMinutes} min`,
             })
             
+            // [STEP-5A-CHI] routed via diagnostic helper to bypass narrow data-service Equipment union
+            const benchBoxSavedDiag = equipmentListIncludes(result.profile.equipmentAvailable, 'bench_box')
             console.log('[phase15a-settings-read-canonical-bench-audit]', {
               savedEquipment: result.profile.equipmentAvailable,
-              benchBoxSaved: result.profile.equipmentAvailable?.includes('bench_box'),
-              uiWillReflect: result.profile.equipmentAvailable?.includes('bench_box') ? 'Bench/Box checked' : 'Bench/Box unchecked',
+              benchBoxSaved: benchBoxSavedDiag,
+              uiWillReflect: benchBoxSavedDiag ? 'Bench/Box checked' : 'Bench/Box unchecked',
             })
             
             console.log('[phase15a-settings-visual-roundtrip-final-verdict]', {
               scheduleRoundTrip: scheduleMode === result.profile.scheduleMode ? 'PASS' : 'FAIL',
               durationRoundTrip: sessionDurationMode === result.profile.sessionDurationMode ? 'PASS' : 'FAIL',
-              benchBoxRoundTrip: equipment.includes('bench_box') === (result.profile.equipmentAvailable?.includes('bench_box') || false) ? 'PASS' : 'FAIL',
+              // [STEP-5A-CHI] reuses helper-derived value — no direct narrow-union .includes call
+              benchBoxRoundTrip: equipment.includes('bench_box') === benchBoxSavedDiag ? 'PASS' : 'FAIL',
               overallVerdict: 'settings_visual_roundtrip_audited',
             })
             

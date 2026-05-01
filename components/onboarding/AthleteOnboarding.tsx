@@ -4408,7 +4408,20 @@ export function AthleteOnboarding() {
              : 90)
           : 60,
         sessionStylePreference: profile.sessionStyle,
-        trainingStyle: profile.trainingStyle,
+        // [PRE-AB6 BUILD GREEN GATE / trainingStyle PAYLOAD COMPATIBILITY — PATH B]
+        // Canonical OnboardingProfile (lib/athlete-profile.ts:1075-1089) tracks
+        // ONLY `sessionStyle: SessionStylePreference | null` — there is no
+        // `trainingStyle` field. The destination CanonicalProgrammingProfile
+        // (lib/canonical-profile-service.ts:282) still declares
+        // `trainingStyle: string | null` for legacy compatibility, and its own
+        // merge logic falls through onboarding to athleteProfile to null
+        // (canonical-profile-service.ts:714 pick(...)). The `trainingStyle`
+        // enum (skill_focused/strength_focused/endurance_focused/balanced_hybrid)
+        // is semantically distinct from both `sessionStyle` and
+        // `trainingPathType`, so we cannot truthfully derive it from either.
+        // We send null to let the canonical merge layer pick from athleteProfile
+        // — never inventing training-intent truth, never widening OnboardingProfile.
+        trainingStyle: null,
         
         // TASK A: Equipment - was missing from canonical save!
         equipmentAvailable: profile.equipment || [],
@@ -4616,7 +4629,14 @@ export function AthleteOnboarding() {
           equipmentAvailable: profile.equipment || [],
           jointCautions: profile.jointCautions || [],
           weakestArea: profile.weakestArea || null,
-          trainingStyle: profile.trainingStyle || 'balanced_hybrid',
+          // [PRE-AB6 BUILD GREEN GATE / trainingStyle PAYLOAD COMPATIBILITY — PATH B]
+          // See note at saveCanonicalProfile call site above. Canonical
+          // OnboardingProfile has no `trainingStyle` field, so the previous
+          // `profile.trainingStyle || 'balanced_hybrid'` always evaluated to the
+          // 'balanced_hybrid' literal at runtime. Preserving exact runtime DB
+          // write behavior with the literal — never deriving fake user-selected
+          // training-intent truth from canonical onboarding data.
+          trainingStyle: 'balanced_hybrid',
         }
         
         // TASK 6: Log DB payload for verification

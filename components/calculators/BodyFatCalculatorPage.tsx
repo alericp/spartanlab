@@ -351,7 +351,13 @@ export function BodyFatCalculatorPage() {
               context="body-fat"
               toolData={{
                 bodyweight: undefined, // Bodyweight isn't collected separately
-                bodyFatPercentage: result.bodyFatPercentage,
+                // [PRE-AB6 BUILD GREEN GATE / BODY FAT RESULT FIELD CONTRACT]
+                // BodyFatResult exposes the calculated percentage as
+                // `bodyFatPercent` (lib/body-fat-calculator.ts:28). The
+                // ToolDataPayload display key is `bodyFatPercentage`
+                // (components/tools/tool-conversion-types.ts:47), so the
+                // key stays as-is and only the source read is corrected.
+                bodyFatPercentage: result.bodyFatPercent,
               }}
             />
           </section>

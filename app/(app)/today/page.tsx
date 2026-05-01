@@ -383,11 +383,30 @@ export default function TodaySessionPage() {
                       )
                     })}
                   </div>
+                  {/* [PRE-AB6 BUILD GREEN GATE / TODAY COMPRESSION CONTRACT]
+                        The authoritative `compressionLevel` union (defined in
+                        `lib/program/session-length-truth-contract.ts:114` and
+                        `lib/session-compression-engine.ts:16`) is
+                        `'none' | 'light' | 'moderate' | 'heavy'`. The previous
+                        ternary compared against a legacy literal that is no
+                        longer part of the contract — TypeScript correctly
+                        rejected the comparison as having no overlap with the
+                        narrowed union. Replaced the stale literal with the
+                        canonical `'heavy'` (significant trimming / skill work
+                        preserved) and added a `'light'` branch so minor
+                        trimming also surfaces a message, matching the full
+                        union. The outer guard
+                        `selectedVariant > 0 && compressionLevel` is preserved,
+                        and `'none'` continues to render no message because its
+                        branch returns `''`. No casts, no suppressions, no
+                        widening, no new compression values. */}
                   {selectedVariant > 0 && sessionVariants[selectedVariant]?.compressionLevel && (
                     <p className="text-[10px] text-[#6A6A6A] mt-1">
-                      {sessionVariants[selectedVariant].compressionLevel === 'moderate' 
-                        ? 'Lower-priority exercises trimmed to fit time.' 
-                        : sessionVariants[selectedVariant].compressionLevel === 'aggressive'
+                      {sessionVariants[selectedVariant].compressionLevel === 'light'
+                        ? 'Minor trimming applied to fit your selected session length.'
+                        : sessionVariants[selectedVariant].compressionLevel === 'moderate'
+                        ? 'Lower-priority exercises trimmed to fit time.'
+                        : sessionVariants[selectedVariant].compressionLevel === 'heavy'
                         ? 'Significant trimming applied. Skill work preserved.'
                         : ''}
                     </p>

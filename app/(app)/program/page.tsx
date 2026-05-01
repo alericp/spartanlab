@@ -17725,6 +17725,19 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   : `PREFILL_IS_STATIC_${effectiveBuilderInputs?.trainingDaysPerWeek}_DAYS`,
               })
               
+              // [PRE-AB6 BUILD GREEN GATE / STEP-5A-UPSILON] `sessionDurationMode`
+              //   and `trainingPathType` are NOT properties of
+              //   `AdaptiveProgramInputs` (Step 4G banned-key guard).
+              //   They live on the metadata view surfaced by
+              //   `readProgramPageMetadataFromUnknown(...)`. Build a local
+              //   metadata snapshot from the same source for diagnostic
+              //   reads only — `AdaptiveProgramInputs` is unchanged, the
+              //   strict builder-input contract is preserved, and the
+              //   real generator/runtime path (the `<AdaptiveProgramForm
+              //   inputs={effectiveBuilderInputs} />` below) is untouched.
+              const effectiveBuilderInputsMeta = effectiveBuilderInputs
+                ? readProgramPageMetadataFromUnknown(effectiveBuilderInputs)
+                : null
               console.log('[modify-submit-fix-builder-render-audit]', {
                 builderOrigin,
                 isLegacyModifyFlow,
@@ -17734,10 +17747,12 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   primaryGoal: effectiveBuilderInputs.primaryGoal,
                   scheduleMode: effectiveBuilderInputs.scheduleMode,
                   trainingDaysPerWeek: effectiveBuilderInputs.trainingDaysPerWeek,
-                  sessionDurationMode: effectiveBuilderInputs.sessionDurationMode,
+                  // [STEP-5A-UPSILON] sourced via metadata view, not direct AdaptiveProgramInputs read
+                  sessionDurationMode: effectiveBuilderInputsMeta?.sessionDurationMode ?? null,
                   sessionLength: effectiveBuilderInputs.sessionLength,
                   selectedSkillsCount: effectiveBuilderInputs.selectedSkills?.length ?? 0,
-                  trainingPathType: effectiveBuilderInputs.trainingPathType,
+                  // [STEP-5A-UPSILON] sourced via metadata view, not direct AdaptiveProgramInputs read
+                  trainingPathType: effectiveBuilderInputsMeta?.trainingPathType ?? null,
                   experienceLevel: effectiveBuilderInputs.experienceLevel,
                   equipmentCount: effectiveBuilderInputs.equipment?.length ?? 0,
                 } : null,

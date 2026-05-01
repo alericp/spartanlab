@@ -17102,8 +17102,20 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             
             <div className="mt-2 pt-2 border-t border-amber-800/50">
               <div className="text-zinc-500 text-xs">Verdict:</div>
+              {/*
+                [PRE-AB6 BUILD GREEN GATE] The enclosing panel at L17043
+                already gates rendering on
+                  finalVerdict !== 'FULL_REGEN_SUCCESS_6'
+                  && finalVerdict !== 'PENDING'
+                  && finalVerdict !== 'REQUEST_CAPTURED'
+                so inside this block TS narrows `finalVerdict` to the
+                failure/incomplete literals only — the previous
+                `=== 'FULL_REGEN_SUCCESS_6' ? 'text-green-400'` ternary
+                branch was provably unreachable. Removed the dead
+                success comparison; semantics preserved (red for
+                TARGET_LOST_*, amber for TRACE_INCOMPLETE / ERROR).
+              */}
               <div className={`text-xs font-semibold ${
-                regenTruthAudit.finalVerdict === 'FULL_REGEN_SUCCESS_6' ? 'text-green-400' :
                 regenTruthAudit.finalVerdict.includes('TARGET_LOST') ? 'text-red-400' :
                 'text-amber-400'
               }`}>

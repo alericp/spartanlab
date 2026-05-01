@@ -230,6 +230,57 @@ function isPRTimeframe(value: unknown): value is PRTimeframe {
   return typeof value === 'string' && (PR_TIMEFRAMES as readonly string[]).includes(value)
 }
 
+// =============================================================================
+// [PRE-AB6 BUILD GREEN GATE / SESSION LENGTH PREFERENCE BOUNDARY NORMALIZATION]
+// SessionLengthPreference (lib/athlete-profile.ts:751) is the canonical strict
+// union: 20 | 30 | 45 | 60 | 75 | 90 | 120 | 'flexible'. Canonical/raw sources
+// surface `sessionLengthMinutes` as plain `number | 'flexible' | null`, which
+// is structurally too broad to assign into OnboardingProfile.sessionLengthMinutes
+// (TS2322). This boundary helper validates the literal set, snaps arbitrary
+// numeric values to the nearest valid bucket, and falls back to the previous
+// valid value when the input is unrecognized — never widening the canonical
+// union, never inventing duration data when none was provided.
+// =============================================================================
+const SESSION_LENGTH_PREFERENCES = [
+  20,
+  30,
+  45,
+  60,
+  75,
+  90,
+  120,
+  'flexible',
+] as const satisfies readonly SessionLengthPreference[]
+
+function isSessionLengthPreference(value: unknown): value is SessionLengthPreference {
+  return (SESSION_LENGTH_PREFERENCES as readonly (string | number)[]).includes(
+    value as string | number
+  )
+}
+
+function normalizeSessionLengthPreference(
+  value: unknown,
+  fallback: SessionLengthPreference | null
+): SessionLengthPreference | null {
+  // Already a canonical literal — pass through.
+  if (isSessionLengthPreference(value)) return value
+
+  // Arbitrary finite numeric minutes (e.g. canonical `number`) — snap to
+  // the nearest canonical bucket. Reject NaN/Infinity/negative.
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    if (value <= 20) return 20
+    if (value <= 30) return 30
+    if (value <= 45) return 45
+    if (value <= 60) return 60
+    if (value <= 75) return 75
+    if (value <= 90) return 90
+    return 120
+  }
+
+  // null / undefined / unrecognized → preserve previous valid user state.
+  return fallback
+}
+
 function normalizeAllTimePRBenchmark(
   incoming: unknown,
   fallback: AllTimePRBenchmark | null
@@ -3988,10 +4039,18 @@ export function AthleteOnboarding() {
           ? 'flexible' 
           : (canonical.trainingDaysPerWeek as TrainingDaysPerWeek) || prev.trainingDaysPerWeek,
         // ISSUE B FIX: Restore sessionDurationMode and sessionLengthMinutes correctly
-        // When sessionDurationMode is 'adaptive', set sessionLengthMinutes to 'flexible' string
+        // When sessionDurationMode is 'adaptive', set sessionLengthMinutes to 'flexible' string.
+        // [PRE-AB6 BUILD GREEN GATE / SESSION LENGTH PREFERENCE BOUNDARY NORMALIZATION]
+        // For static mode, canonical.sessionLengthMinutes is typed as plain `number`
+        // (broader than SessionLengthPreference). Route through
+        // normalizeSessionLengthPreference so arbitrary minute values snap to the
+        // nearest canonical bucket and prev is preserved when the input is invalid.
         sessionLengthMinutes: canonical.sessionDurationMode === 'adaptive'
           ? 'flexible'
-          : canonical.sessionLengthMinutes || prev.sessionLengthMinutes,
+          : normalizeSessionLengthPreference(
+              canonical.sessionLengthMinutes,
+              prev.sessionLengthMinutes
+            ),
         sessionStyle: (canonical.sessionStylePreference as SessionStylePreference) || prev.sessionStyle,
         
         // Equipment & diagnostics - [PHASE 16A TASK 2] normalize bench → bench_box

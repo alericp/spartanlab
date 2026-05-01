@@ -126,6 +126,31 @@ export async function POST(request: Request) {
     // ==========================================================================
     // STEP 5: Build Canonical Profile with Thin Adjustments Applied
     // ==========================================================================
+    // [PRE-AB6 BUILD GREEN GATE / CANONICAL EQUIPMENT CONTRACT]
+    // Canonical equipment truth is exposed only as `equipmentAvailable`
+    // on CanonicalProgrammingProfile (lib/canonical-profile-service.ts).
+    // The previous code read `canonicalBase.equipment` as a fallback,
+    // which does not exist on the contract. A single local derived
+    // value keeps both the override branch and canonical truth branch
+    // in sync without referencing nonexistent aliases.
+    const canonicalEquipmentAvailable = canonicalBase.equipmentAvailable ?? []
+    const resolvedEquipment = requestType === 'equipment' && newEquipment
+      ? newEquipment
+      : canonicalEquipmentAvailable
+
+    // [PRE-AB6 BUILD GREEN GATE / CANONICAL FLAT-FIELD CONTRACT]
+    // AuthoritativeGenerationRequest.canonicalProfile is typed as
+    //   Partial<CanonicalProgrammingProfile> & { primaryGoal?: string }
+    // Removed stale fields that do not exist on the canonical contract:
+    //   - benchmarks / skillBenchmarks / flexibilityBenchmarks /
+    //     weightedBenchmarks (no aggregate buckets exist; benchmark
+    //     truth is exposed as flat fields on the canonical profile)
+    //   - backLeverProgression (no canonical equivalent — removed)
+    //   - muscleUpProgression  → real field is muscleUpReadiness
+    //   - handstandProgression → real field is hspuProgression
+    //   - equipment alias       → only equipmentAvailable is canonical
+    // The route remains a thin adapter: no fake fallback truth, no
+    // helper rewrite, no widening of CanonicalProgrammingProfile.
     const canonicalProfile = {
       onboardingComplete: canonicalBase.onboardingComplete ?? true,
       primaryGoal: canonicalBase.primaryGoal,
@@ -137,12 +162,7 @@ export async function POST(request: Request) {
       goalCategories: canonicalBase.goalCategories || [],
       trainingPathType: canonicalBase.trainingPathType || 'hybrid',
       // Equipment - only override if request type is equipment
-      equipment: requestType === 'equipment' && newEquipment 
-        ? newEquipment 
-        : canonicalBase.equipmentAvailable || canonicalBase.equipment || [],
-      equipmentAvailable: requestType === 'equipment' && newEquipment 
-        ? newEquipment 
-        : canonicalBase.equipmentAvailable || canonicalBase.equipment || [],
+      equipmentAvailable: resolvedEquipment,
       scheduleMode: canonicalBase.scheduleMode || 'flexible',
       sessionDurationMode: canonicalBase.sessionDurationMode || 'adaptive',
       // Schedule - only override if request type matches
@@ -158,17 +178,12 @@ export async function POST(request: Request) {
       trainingStyle: canonicalBase.trainingStyle,
       jointCautions: canonicalBase.jointCautions || [],
       weakestArea: canonicalBase.weakestArea,
-      benchmarks: canonicalBase.benchmarks || {},
-      skillBenchmarks: canonicalBase.skillBenchmarks || {},
-      flexibilityBenchmarks: canonicalBase.flexibilityBenchmarks || {},
-      weightedBenchmarks: canonicalBase.weightedBenchmarks || {},
       trainingMethodPreferences: canonicalBase.trainingMethodPreferences,
       sessionStylePreference: canonicalBase.sessionStylePreference,
       plancheProgression: canonicalBase.plancheProgression,
       frontLeverProgression: canonicalBase.frontLeverProgression,
-      backLeverProgression: canonicalBase.backLeverProgression,
-      muscleUpProgression: canonicalBase.muscleUpProgression,
-      handstandProgression: canonicalBase.handstandProgression,
+      muscleUpReadiness: canonicalBase.muscleUpReadiness,
+      hspuProgression: canonicalBase.hspuProgression,
       weightedPullUp: canonicalBase.weightedPullUp,
       weightedDip: canonicalBase.weightedDip,
     }
@@ -176,6 +191,13 @@ export async function POST(request: Request) {
     // ==========================================================================
     // STEP 6: Build Builder Inputs from Canonical Profile
     // ==========================================================================
+    // [PRE-AB6 BUILD GREEN GATE / BUILDER-INPUTS CONTRACT]
+    // builderInputs is typed as Partial<AdaptiveProgramInputs>. The
+    // four aggregate benchmark buckets have been removed because they
+    // do not exist on the canonical profile — the authoritative
+    // generator already reads benchmark truth from the flat fields on
+    // canonicalProfile. The legacy `equipment` alias is replaced with
+    // `equipmentAvailable`, the canonical field name now in scope.
     const builderInputs = {
       primaryGoal: canonicalProfile.primaryGoal,
       secondaryGoal: canonicalProfile.secondaryGoal,
@@ -189,16 +211,12 @@ export async function POST(request: Request) {
       trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
       sessionDurationMode: canonicalProfile.sessionDurationMode,
       sessionLength: canonicalProfile.sessionLengthMinutes,
-      equipment: canonicalProfile.equipment,
+      equipmentAvailable: canonicalProfile.equipmentAvailable,
       bodyweight: canonicalProfile.bodyweight,
       sex: canonicalProfile.sex,
       trainingStyle: canonicalProfile.trainingStyle,
       jointCautions: canonicalProfile.jointCautions,
       weakestArea: canonicalProfile.weakestArea,
-      benchmarks: canonicalProfile.benchmarks,
-      skillBenchmarks: canonicalProfile.skillBenchmarks,
-      flexibilityBenchmarks: canonicalProfile.flexibilityBenchmarks,
-      weightedBenchmarks: canonicalProfile.weightedBenchmarks,
     }
     
     // ==========================================================================

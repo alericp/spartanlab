@@ -511,6 +511,12 @@ interface OptionButtonProps {
   description?: string
   className?: string
   /**
+   * When true, the button is non-interactive and visually muted.
+   * Used by gated options that require an upstream selection
+   * (e.g. body-fat calculator requires `profile.sex` first).
+   */
+  disabled?: boolean
+  /**
    * Content rendering mode:
    * - "compact": for short numeric/range labels (0, 1–3, 21–25) — centered, no wrapping
    * - "standard": default behavior with controlled wrapping
@@ -519,19 +525,52 @@ interface OptionButtonProps {
   contentMode?: 'compact' | 'standard' | 'wrapSafe'
 }
 
-function OptionButton({ selected, onClick, children, description, className = '', contentMode = 'standard' }: OptionButtonProps) {
+function OptionButton({
+  selected,
+  onClick,
+  children,
+  description,
+  className = '',
+  disabled = false,
+  contentMode = 'standard',
+}: OptionButtonProps) {
+  // [PRE-AB6 BUILD GREEN GATE / OPTIONBUTTON DISABLED CONTRACT]
+  // Belt-and-suspenders click suppression: native `disabled` attribute
+  // hardware-blocks the click event, and this guard prevents the wrapped
+  // onClick callback from running even if a synthetic event somehow fires.
+  const handleClick = () => {
+    if (disabled) return
+    onClick()
+  }
+
+  // Disabled visual treatment, applied via Tailwind `disabled:` variants
+  // so the styles only activate when the native `disabled` attribute is
+  // present. Matches the existing `disabled:opacity-50 disabled:cursor-not-allowed`
+  // convention already used elsewhere in this file (e.g. L4548 next button).
+  const disabledStateClasses = 'disabled:opacity-50 disabled:cursor-not-allowed'
+
+  // Unselected branch swaps to a no-hover variant when disabled so the
+  // button does not visually respond to hover while unavailable. The
+  // selected branch keeps its full styling (a disabled selected option
+  // is rare and should still read as selected, just dimmed via opacity).
+  const unselectedClasses = disabled
+    ? 'bg-[#0F1115] border-[#2B313A] text-[#A4ACB8]'
+    : 'bg-[#0F1115] border-[#2B313A] text-[#A4ACB8] hover:border-[#4F6D8A] hover:text-[#E6E9EF]'
+
   // Compact mode: centered content, no icon slot, no text wrapping
   if (contentMode === 'compact') {
     return (
       <button
         type="button"
-        onClick={onClick}
+        onClick={handleClick}
+        disabled={disabled}
+        aria-disabled={disabled || undefined}
         data-selected={selected ? 'true' : 'false'}
         className={`py-2.5 px-2 rounded-lg border text-sm font-medium transition-all duration-150 flex items-center justify-center min-h-[44px] ${
           selected
             ? 'bg-[#C1121F]/15 border-[#C1121F] text-[#E6E9EF] ring-1 ring-[#C1121F]/40 shadow-[0_0_0_1px_rgba(193,18,31,0.2)]'
-            : 'bg-[#0F1115] border-[#2B313A] text-[#A4ACB8] hover:border-[#4F6D8A] hover:text-[#E6E9EF]'
-        } ${className}`}
+            : unselectedClasses
+        } ${disabledStateClasses} ${className}`}
       >
         <span className="whitespace-nowrap text-center">{children}</span>
       </button>
@@ -543,13 +582,15 @@ function OptionButton({ selected, onClick, children, description, className = ''
     return (
       <button
         type="button"
-        onClick={onClick}
+        onClick={handleClick}
+        disabled={disabled}
+        aria-disabled={disabled || undefined}
         data-selected={selected ? 'true' : 'false'}
         className={`py-2.5 px-3 rounded-lg border text-sm font-medium transition-all duration-150 flex items-center justify-center text-center min-h-[44px] ${
           selected
             ? 'bg-[#C1121F]/15 border-[#C1121F] text-[#E6E9EF] ring-1 ring-[#C1121F]/40 shadow-[0_0_0_1px_rgba(193,18,31,0.2)]'
-            : 'bg-[#0F1115] border-[#2B313A] text-[#A4ACB8] hover:border-[#4F6D8A] hover:text-[#E6E9EF]'
-        } ${className}`}
+            : unselectedClasses
+        } ${disabledStateClasses} ${className}`}
       >
         <span className="leading-tight">{children}</span>
       </button>
@@ -560,13 +601,15 @@ function OptionButton({ selected, onClick, children, description, className = ''
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={handleClick}
+      disabled={disabled}
+      aria-disabled={disabled || undefined}
       data-selected={selected ? 'true' : 'false'}
       className={`py-3 px-4 rounded-lg border text-sm font-medium transition-all duration-150 flex items-center gap-2 text-left ${
         selected
           ? 'bg-[#C1121F]/15 border-[#C1121F] text-[#E6E9EF] ring-1 ring-[#C1121F]/40 shadow-[0_0_0_1px_rgba(193,18,31,0.2)]'
-          : 'bg-[#0F1115] border-[#2B313A] text-[#A4ACB8] hover:border-[#4F6D8A] hover:text-[#E6E9EF]'
-      } ${className}`}
+          : unselectedClasses
+      } ${disabledStateClasses} ${className}`}
     >
       {/* Fixed-width icon slot — always reserves space so content never shifts */}
       <span className="w-4 h-4 shrink-0 flex items-center justify-center">

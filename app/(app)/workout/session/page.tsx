@@ -1188,22 +1188,74 @@ function WorkoutSessionContent() {
         //      this lockdown) will drop under-minimum blocks defensively.
         const snapshotHasExplicitMeta = 'styleMetadata' in sb
         const snapshotMeta = (sb as { styleMetadata?: unknown }).styleMetadata
-        const mergedSession: Record<string, unknown> = {
-          ...(finalSession as unknown as Record<string, unknown>),
+        // [PRE-AB6 BUILD GREEN GATE / STEP-5A-OMEGA]
+        //   The previous merge spread `finalSession` into a
+        //   `Record<string, unknown>` so it could `delete` a key, then
+        //   force-cast back to `typeof finalSession`. TypeScript
+        //   correctly rejected the cast because `Record<string, unknown>`
+        //   does not structurally prove the required AdaptiveSession
+        //   fields (dayNumber, dayLabel, focus, focusLabel, etc.).
+        //
+        //   Replaced with a type-preserving merge:
+        //     1. Spread `finalSession` (already validly typed as
+        //        AdaptiveSession from `result.session` at L888) into a
+        //        fresh object literal annotated `typeof finalSession`.
+        //        All required fields survive without an intermediate
+        //        Record cast.
+        //     2. Override the snapshot-overlay fields (`exercises`,
+        //        `estimatedMinutes`) — both already match the
+        //        AdaptiveSession field types (`SelectedBodySnapshot`
+        //        in `lib/workout/selected-variant-session-contract.ts`
+        //        explicitly types `exercises: AdaptiveSession['exercises']`
+        //        and `estimatedMinutes: number`).
+        //     3. For `styleMetadata`, preserve the original three-case
+        //        contract documented at L1178-1188:
+        //        - explicit object  -> assign via `snapshotMeta as
+        //          typeof mergedSession.styleMetadata` AFTER the runtime
+        //          `typeof === 'object'` guard. Per
+        //          `selected-variant-session-contract.ts:472`,
+        //          `sb.styleMetadata` is intentionally typed
+        //          `unknown | null` to decouple the snapshot module from
+        //          AdaptiveSession's strict styleMetadata shape; the
+        //          card-side `variantPrunedStyleMetadata` runtime
+        //          contract guarantees the same shape.
+        //        - explicit null    -> drop the key via destructuring
+        //          rest. `styleMetadata?:` is optional on
+        //          AdaptiveSession, so `Omit<AdaptiveSession,
+        //          'styleMetadata'>` is structurally assignable back
+        //          to AdaptiveSession. Behavior matches the previous
+        //          `delete` exactly: key absence triggers the
+        //          safe-contract flat-path.
+        //        - absent (pre-lockdown) -> finalSession.styleMetadata
+        //          from the loader is preserved unchanged (no branch
+        //          taken).
+        //
+        //   No `as unknown`, no `as unknown as AdaptiveSession`, no
+        //   suppressions, no widening of AdaptiveSession.
+        let mergedSession: typeof finalSession = {
+          ...finalSession,
           exercises: sb.exercises,
           estimatedMinutes: sb.estimatedMinutes,
         }
         if (snapshotHasExplicitMeta) {
           if (snapshotMeta && typeof snapshotMeta === 'object') {
-            mergedSession.styleMetadata = snapshotMeta
+            mergedSession = {
+              ...mergedSession,
+              styleMetadata: snapshotMeta as typeof mergedSession.styleMetadata,
+            }
           } else {
-            // null -> clear. Deleting the key is cleaner than `undefined`
-            // because the safe-contract normalizer re-reads via
-            // `sessionAny.styleMetadata` and absence triggers the flat path.
-            delete mergedSession.styleMetadata
+            // null -> drop the key. Behavior-equivalent to the previous
+            // `delete mergedSession.styleMetadata` since the
+            // safe-contract normalizer reads via
+            // `sessionAny.styleMetadata?.styledGroups` and treats key
+            // absence identically to `undefined` for the flat-path
+            // trigger.
+            const { styleMetadata: _droppedStyleMetadata, ...withoutStyleMetadata } = mergedSession
+            void _droppedStyleMetadata
+            mergedSession = withoutStyleMetadata
           }
         }
-        finalSession = mergedSession as typeof finalSession
+        finalSession = mergedSession
         setBootSource('visible_snapshot')
         console.log('[PROGRAM-TO-LIVE MIRROR CONTRACT] BOOT_FROM_SNAPSHOT', {
           variantIndex,

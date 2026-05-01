@@ -16011,6 +16011,22 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           normalizedSelectedSkills.push(freshInputs.secondaryGoal)
         }
         
+        // [PRE-AB6 BUILD GREEN GATE] Project both skill arrays to plain
+        //   `string[]` views for diagnostic comparison only. The real
+        //   arrays (`originalSelectedSkills`, `normalizedSelectedSkills`)
+        //   are typed `PrimaryGoal[]` because `freshInputs.selectedSkills`
+        //   and `freshInputs.primaryGoal` are domain-typed. That makes
+        //   `Array<PrimaryGoal>.includes(s: string)` and literal-string
+        //   `.includes('back_lever')` / `.includes('dragon_flag')` fail
+        //   because the included literals are not in the `PrimaryGoal`
+        //   union. The string projection lets the audit log compare
+        //   against arbitrary historical onboarding skill IDs without
+        //   widening the domain type or casting. The real domain arrays
+        //   are still used as authoritative training truth below
+        //   (`selectedSkills: normalizedSelectedSkills`). Diagnostic-only.
+        const originalSelectedSkillStrings = originalSelectedSkills.map(String)
+        const normalizedSelectedSkillStrings = normalizedSelectedSkills.map(String)
+        
         console.log('[phase24k-modify-startnew-selectedSkills-normalization]', {
           originalSelectedSkills,
           originalCount: originalSelectedSkills.length,
@@ -16018,10 +16034,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           normalizedCount: normalizedSelectedSkills.length,
           primaryGoal: freshInputs.primaryGoal,
           secondaryGoal: freshInputs.secondaryGoal,
-          droppedSkills: originalSelectedSkills.filter((s: string) => !normalizedSelectedSkills.includes(s)),
-          droppedBackLever: originalSelectedSkills.includes('back_lever') && !normalizedSelectedSkills.includes('back_lever'),
-          droppedDragonFlag: originalSelectedSkills.includes('dragon_flag') && !normalizedSelectedSkills.includes('dragon_flag'),
-          verdict: originalSelectedSkills.length !== normalizedSelectedSkills.length
+          droppedSkills: originalSelectedSkillStrings.filter((s) => !normalizedSelectedSkillStrings.includes(s)),
+          droppedBackLever: originalSelectedSkillStrings.includes('back_lever') && !normalizedSelectedSkillStrings.includes('back_lever'),
+          droppedDragonFlag: originalSelectedSkillStrings.includes('dragon_flag') && !normalizedSelectedSkillStrings.includes('dragon_flag'),
+          verdict: originalSelectedSkillStrings.length !== normalizedSelectedSkillStrings.length
             ? 'SELECTED_SKILLS_NORMALIZED_TO_GOALS'
             : 'SELECTED_SKILLS_ALREADY_MATCHED_GOALS',
         })
@@ -16182,15 +16198,24 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     // [PHASE 24J] TASK 1 - CRITICAL: Builder seed selectedSkills trace
     // Root-cause audit for identity drift at builder session creation
     // ==========================================================================
+    // [PRE-AB6 BUILD GREEN GATE] Project both selected-skill arrays to
+    //   `string[]` views for diagnostic literal comparison. `freshInputs.
+    //   selectedSkills` is `PrimaryGoal[]` and `canonical.selectedSkills`
+    //   may also be a domain-typed array, so literal `.includes('back_lever'
+    //   | 'dragon_flag')` would fail because those literals are not in
+    //   the domain unions. Domain arrays remain authoritative training
+    //   truth — projection is audit-only.
+    const freshSelectedSkillStrings = (freshInputs.selectedSkills ?? []).map(String)
+    const canonicalSelectedSkillStrings = (canonical.selectedSkills ?? []).map(String)
     console.log('[phase24j-modify-startnew-selectedSkills-seed-trace]', {
       freshInputsSelectedSkills: freshInputs.selectedSkills ?? [],
       freshInputsSelectedSkillsCount: freshInputs.selectedSkills?.length ?? 0,
       canonicalProfileSelectedSkills: canonical.selectedSkills ?? [],
       canonicalProfileSelectedSkillsCount: canonical.selectedSkills?.length ?? 0,
-      freshInputsHasBackLever: freshInputs.selectedSkills?.includes('back_lever') ?? false,
-      freshInputsHasDragonFlag: freshInputs.selectedSkills?.includes('dragon_flag') ?? false,
-      canonicalHasBackLever: canonical.selectedSkills?.includes('back_lever') ?? false,
-      canonicalHasDragonFlag: canonical.selectedSkills?.includes('dragon_flag') ?? false,
+      freshInputsHasBackLever: freshSelectedSkillStrings.includes('back_lever'),
+      freshInputsHasDragonFlag: freshSelectedSkillStrings.includes('dragon_flag'),
+      canonicalHasBackLever: canonicalSelectedSkillStrings.includes('back_lever'),
+      canonicalHasDragonFlag: canonicalSelectedSkillStrings.includes('dragon_flag'),
       sourceWinner,
       verdict: (freshInputs.selectedSkills?.length ?? 0) === (canonical.selectedSkills?.length ?? 0)
         ? 'FRESH_INPUTS_MATCH_CANONICAL_SELECTED_SKILLS_COUNT'

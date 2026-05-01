@@ -4366,17 +4366,18 @@ export function AthleteOnboarding() {
         secondaryGoal: profile.secondaryGoal,
         selectedSkills: profile.selectedSkills,
         selectedFlexibility: profile.selectedFlexibility,
-        // [PRE-AB6 BUILD GREEN GATE / STALE selectedStrength PROFILE FIELD — CASE C]
-        // Canonical OnboardingProfile (lib/athlete-profile.ts:1020-1080) does NOT
-        // track a `selectedStrength` field — strength training intent is already
-        // represented through goalCategories + selectedSkills + the strength
-        // benchmark numerics (pullUpMax/dipMax/etc.). Downstream payload contracts
-        // (app/api/onboarding/profile/route.ts:32, lib/profile-truth-contract.ts:34)
-        // do still accept the key but document it as "rarely used" and default to
-        // [] when missing. We pass an empty array literal here as the typed local
-        // derivation — never inventing strength-goal data, never widening the
-        // canonical OnboardingProfile to add a stale field.
-        selectedStrength: [] as readonly string[],
+        // [PRE-AB6 BUILD GREEN GATE / selectedStrength PAYLOAD COMPATIBILITY — PATH B]
+        // saveCanonicalProfile expects Partial<CanonicalProgrammingProfile>, where
+        // selectedStrength is canonically declared as a mutable `string[]`
+        // (lib/canonical-profile-service.ts:264). Canonical OnboardingProfile
+        // (lib/athlete-profile.ts:1020-1080) does NOT itself track a
+        // `selectedStrength` field — strength intent is already represented through
+        // goalCategories + selectedSkills + the strength benchmark numerics
+        // (pullUpMax/dipMax/etc.). The destination contract still requires this
+        // key for legacy payload compatibility, so we send a typed mutable empty
+        // array literal — compatibility-only, never inventing strength-goal data,
+        // never widening the canonical OnboardingProfile to add a stale field.
+        selectedStrength: [] as string[],
         goalCategory: profile.goalCategory,
         goalCategories: profile.goalCategories,
         trainingPathType: profile.trainingPathType,
@@ -4583,11 +4584,13 @@ export function AthleteOnboarding() {
           secondaryGoal: profile.secondaryGoal || null,
           selectedSkills: profile.selectedSkills || [],
           selectedFlexibility: profile.selectedFlexibility || [],
-          // [PRE-AB6 BUILD GREEN GATE / STALE selectedStrength PROFILE FIELD — CASE C]
-          // See note above (saveCanonicalProfile call). OnboardingProfile has no
-          // canonical source for selectedStrength; the DB payload contract keeps
-          // the column for shape compatibility but it always serializes to [].
-          selectedStrength: [] as readonly string[],
+          // [PRE-AB6 BUILD GREEN GATE / selectedStrength PAYLOAD COMPATIBILITY — PATH B]
+          // See note above (saveCanonicalProfile call). The API route declares
+          // selectedStrength: unknown (app/api/onboarding/profile/route.ts:32) and
+          // the DB column always serializes to []. We mirror the canonical save
+          // shape with a mutable string[] for cross-site consistency — never
+          // inventing strength-goal data, never widening any canonical type.
+          selectedStrength: [] as string[],
           goalCategory: profile.goalCategory || null,
           // [PHASE 14A TASK 2] FIX: Preserve FULL equipment array without lossy filtering
           equipmentAvailable: profile.equipment || [],

@@ -4378,7 +4378,19 @@ export function AthleteOnboarding() {
         // array literal — compatibility-only, never inventing strength-goal data,
         // never widening the canonical OnboardingProfile to add a stale field.
         selectedStrength: [] as string[],
-        goalCategory: profile.goalCategory,
+        // [PRE-AB6 BUILD GREEN GATE / goalCategory PAYLOAD COMPATIBILITY — PATH B]
+        // Canonical OnboardingProfile (lib/athlete-profile.ts:1025) tracks ONLY
+        // the plural `goalCategories: GoalCategory[]` — there is no singular
+        // `goalCategory` field. The destination CanonicalProgrammingProfile
+        // (lib/canonical-profile-service.ts:265-266) still declares both
+        // `goalCategory: string | null` and `goalCategories: string[]` for
+        // legacy payload compatibility. We derive the singular value from the
+        // canonical plural source at this boundary only — never inventing
+        // separate singular profile truth, never widening OnboardingProfile.
+        goalCategory:
+          Array.isArray(profile.goalCategories) && profile.goalCategories.length > 0
+            ? profile.goalCategories[0]
+            : null,
         goalCategories: profile.goalCategories,
         trainingPathType: profile.trainingPathType,
         primaryTrainingOutcome: profile.primaryTrainingOutcome,
@@ -4591,7 +4603,15 @@ export function AthleteOnboarding() {
           // shape with a mutable string[] for cross-site consistency — never
           // inventing strength-goal data, never widening any canonical type.
           selectedStrength: [] as string[],
-          goalCategory: profile.goalCategory || null,
+          // [PRE-AB6 BUILD GREEN GATE / goalCategory PAYLOAD COMPATIBILITY — PATH B]
+          // See note at saveCanonicalProfile call site above. The DB row keeps
+          // a singular `goalCategory` column for legacy compatibility but the
+          // canonical OnboardingProfile only tracks plural `goalCategories`.
+          // Derive at the boundary; never invent separate singular truth.
+          goalCategory:
+            Array.isArray(profile.goalCategories) && profile.goalCategories.length > 0
+              ? profile.goalCategories[0]
+              : null,
           // [PHASE 14A TASK 2] FIX: Preserve FULL equipment array without lossy filtering
           equipmentAvailable: profile.equipment || [],
           jointCautions: profile.jointCautions || [],

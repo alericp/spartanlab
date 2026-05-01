@@ -49,12 +49,25 @@ function generateProgressSignals(): ProgressSignal[] {
     }
     
     // Check strength progress
-    if (strengthRecords && Object.keys(strengthRecords).length > 0) {
-      const pullRecords = strengthRecords.weighted_pullup || strengthRecords.pullup
-      if (pullRecords && pullRecords.length >= 2) {
+    // [PRE-AB6 BUILD GREEN GATE / STRENGTHRECORD ARRAY CONTRACT]
+    // getStrengthRecords() returns StrengthRecord[] (lib/strength-service.ts:189),
+    // not an object map. The authoritative StrengthRecord shape (lib/strength-service.ts:29)
+    // owns { exercise, weightAdded, reps, estimatedOneRM, dateLogged, ... } —
+    // no `value` field, no object keys. The only pull-related ExerciseType is
+    // 'weighted_pull_up' (lib/strength-service.ts:5). Filter as an array, sort
+    // newest-first by dateLogged, and compare via estimatedOneRM.
+    if (strengthRecords.length > 0) {
+      const pullRecords = strengthRecords
+        .filter((record) => record.exercise === 'weighted_pull_up')
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(b.dateLogged).getTime() - new Date(a.dateLogged).getTime()
+        )
+      if (pullRecords.length >= 2) {
         const recent = pullRecords[0]
         const previous = pullRecords[1]
-        if (recent.value > previous.value) {
+        if (recent.estimatedOneRM > previous.estimatedOneRM) {
           signals.push({
             id: 'pull_strength',
             icon: TrendingUp,

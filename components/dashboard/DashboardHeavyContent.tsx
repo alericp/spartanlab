@@ -237,6 +237,12 @@ export default function DashboardHeavyContent({
             : recovery?.level === 'HIGH'
               ? 'low'
               : 'moderate'
+        // [PRE-AB6 BUILD GREEN GATE / ATHLETEPROFILE CONTRACT]
+        // AthleteProfile (lib/data-service.ts:42-67) does NOT expose
+        // `rangeTrainingMode`. SelectionContext.rangeTrainingMode
+        // (lib/training-principles-engine.ts:906) is optional, so
+        // omitting it here is type-correct and avoids inventing
+        // athlete-profile truth that the data layer does not store.
         const selectionContext: SelectionContext = {
           primaryGoal: (profile.primaryGoal || 'general_strength') as any,
           experienceLevel: profile.experienceLevel || 'intermediate',
@@ -246,7 +252,6 @@ export default function DashboardHeavyContent({
           trainingDaysPerWeek: typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : 4,
           currentFatigueLevel,
           recentSorenessLevel: 'mild',
-          rangeTrainingMode: profile.rangeTrainingMode || undefined,
         }
         const methods = selectMethodProfiles(selectionContext)
         setTrainingMethods(methods)

@@ -326,6 +326,39 @@ const equipmentListIncludes = (
   value: string,
 ): boolean => (list != null && list.includes(value))
 
+// [PRE-AB6 BUILD GREEN GATE / STEP-5A-PSI] Settings-local exhaustive
+//   `EquipmentType` allowlist + type guard. Mirrors the canonical
+//   union exported from `@/lib/athlete-profile` (imported as
+//   `EquipmentType` at L29) and is enforced by
+//   `satisfies readonly EquipmentType[]` — if the canonical union
+//   ever changes, TypeScript fails compile here, so this list cannot
+//   silently drift. Used by the equipment normalization pipeline
+//   below to safely narrow legacy/raw `string[]` profile equipment
+//   into strict `EquipmentType[]` before reaching `setEquipment(...)`
+//   (state typed as `EquipmentType[]` at L351). No casts, no
+//   suppressions, no widening — `EquipmentType` is unchanged, the
+//   persisted profile shape is unchanged, and unknown legacy values
+//   are filtered out safely.
+const EQUIPMENT_TYPE_VALUES = [
+  'pullup_bar',
+  'dip_bars',
+  'parallettes',
+  'rings',
+  'resistance_bands',
+  'weights',
+  'bench_box',
+  'minimal',
+  'barbell',
+  'weight_plates',
+] as const satisfies readonly EquipmentType[]
+
+// `Set<EquipmentType>` is assignable to `ReadonlySet<string>` via
+//   ReadonlySet covariance — no cast needed.
+const EQUIPMENT_TYPE_SET: ReadonlySet<string> = new Set(EQUIPMENT_TYPE_VALUES)
+
+const isEquipmentType = (value: unknown): value is EquipmentType =>
+  typeof value === 'string' && EQUIPMENT_TYPE_SET.has(value)
+
 export default function SettingsPage() {
   // [PHASE 14D] Use canonical owner source from OwnerBootstrapProvider
   const { isOwner } = useOwnerBootstrap()
@@ -510,10 +543,23 @@ export default function SettingsPage() {
     setPrimaryGoal(data.primaryGoal || 'none')
     
     // [PHASE 16A TASK 2] Equipment normalization - bench → bench_box
+    // [PRE-AB6 BUILD GREEN GATE / STEP-5A-PSI] `setEquipment` expects
+    //   `EquipmentType[]` (state typed at L351). The previous pipeline
+    //   produced `string[]` because the legacy-alias `.map(...)` widens
+    //   the result. Route through `isEquipmentType` (the exhaustive
+    //   `EquipmentType` guard at module scope) to narrow back to
+    //   `EquipmentType[]` and drop unknown legacy values safely.
+    //   Deduplication preserved via `Array.from(new Set(...))`. The
+    //   `'bench' → 'bench_box'` legacy alias is preserved exactly.
+    //   No casts, no suppressions, no `EquipmentType` widening.
     const rawEquipment = data.equipmentAvailable || []
-    const normalizedEquipment = rawEquipment.map((e: string) => 
-      e === 'bench' ? 'bench_box' : e
-    ).filter((e: string, i: number, arr: string[]) => arr.indexOf(e) === i)
+    const normalizedEquipment: EquipmentType[] = Array.from(
+      new Set(
+        rawEquipment
+          .map((e: string) => (e === 'bench' ? 'bench_box' : e))
+          .filter(isEquipmentType)
+      )
+    )
     setEquipment(normalizedEquipment)
     
     console.log('[phase16a-settings-benchbox-normalization-audit]', {

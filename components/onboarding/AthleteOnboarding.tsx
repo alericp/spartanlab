@@ -2237,11 +2237,43 @@ const SKILL_PROGRESSION_OPTIONS: Record<string, { value: string; label: string }
   ],
 }
 
+// [PRE-AB6 BUILD GREEN GATE / SKILLHISTORY KEY NARROWING]
+// SkillGoal is broader than the canonical OnboardingProfile.skillHistory key
+// set (lib/athlete-profile.ts:1052-1060 → 'front_lever' | 'planche' |
+// 'muscle_up' | 'handstand_pushup' | 'handstand' | 'l_sit' | 'v_sit').
+// Broader SkillGoal members like 'back_lever' or 'i_sit' must NOT be allowed
+// to index profile.skillHistory. Derive the allowed key set straight from
+// the canonical type so future changes propagate, and provide a runtime
+// type guard that narrows SkillGoal → SkillHistoryKey before any indexing.
+type SkillHistoryKey = keyof OnboardingProfile['skillHistory']
+
+const SKILL_HISTORY_KEYS = [
+  'front_lever',
+  'planche',
+  'muscle_up',
+  'handstand_pushup',
+  'handstand',
+  'l_sit',
+  'v_sit',
+] as const satisfies readonly SkillHistoryKey[]
+
+function isSkillHistoryKey(skillKey: SkillGoal): skillKey is SkillHistoryKey {
+  return (SKILL_HISTORY_KEYS as readonly string[]).includes(skillKey)
+}
+
 function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: SkillHistoryInputProps) {
   const historyOptions: SkillTrainingHistory[] = ['never', 'tried_little', 'trained_consistently', 'previously_strong']
   const lastTrainedOptions: SkillLastTrained[] = ['currently', 'within_3_months', '3_to_6_months', '6_to_12_months', '1_to_2_years', 'over_2_years']
   
-  const currentHistory = profile.skillHistory?.[skillKey]
+  // [PRE-AB6 BUILD GREEN GATE / SKILLHISTORY KEY NARROWING]
+  // Narrow once at the top of the component. Every read/write against
+  // profile.skillHistory below uses skillHistoryKey, never raw skillKey.
+  // For unsupported SkillGoal values, skillHistoryKey is null and history
+  // reads/writes short-circuit safely without crashing or storing under
+  // unsupported keys.
+  const skillHistoryKey: SkillHistoryKey | null = isSkillHistoryKey(skillKey) ? skillKey : null
+
+  const currentHistory = skillHistoryKey ? profile.skillHistory?.[skillHistoryKey] : undefined
   const showLastTrained = currentHistory?.trainingHistory && currentHistory.trainingHistory !== 'never'
   const showHighestLevel = currentHistory?.trainingHistory === 'previously_strong'
   const progressionOptions = SKILL_PROGRESSION_OPTIONS[skillKey] || []
@@ -2259,13 +2291,15 @@ function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: Ski
     : currentHistory?.highestLevelEverReached ?? null
   
   const updateHistory = (trainingHistory: SkillTrainingHistory) => {
+    if (!skillHistoryKey) return
+
     const lastTrained = trainingHistory === 'never' ? null : (currentHistory?.lastTrained || null)
     const tendonAdaptationScore = calculateTendonAdaptation(trainingHistory, lastTrained)
     
     updateProfile({
       skillHistory: {
         ...profile.skillHistory,
-        [skillKey]: {
+        [skillHistoryKey]: {
           ...currentHistory,
           trainingHistory,
           lastTrained,
@@ -2276,13 +2310,15 @@ function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: Ski
   }
   
   const updateLastTrained = (lastTrained: SkillLastTrained) => {
+    if (!skillHistoryKey) return
+
     const trainingHistory = currentHistory?.trainingHistory || 'never'
     const tendonAdaptationScore = calculateTendonAdaptation(trainingHistory, lastTrained)
     
     updateProfile({
       skillHistory: {
         ...profile.skillHistory,
-        [skillKey]: {
+        [skillHistoryKey]: {
           ...currentHistory,
           trainingHistory,
           lastTrained,
@@ -2303,24 +2339,27 @@ function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: Ski
           highestLevelEverReached: level,
         }
       })
-    } else {
-      // For skills without SkillBenchmark (muscle_up, l_sit, v_sit), store on SkillHistoryEntry
-      const trainingHistory = currentHistory?.trainingHistory || 'previously_strong'
-      const tendonAdaptationScore = currentHistory?.tendonAdaptationScore || calculateTendonAdaptation(trainingHistory, currentHistory?.lastTrained ?? null)
-      
-      updateProfile({
-        skillHistory: {
-          ...profile.skillHistory,
-          [skillKey]: {
-            ...currentHistory,
-            trainingHistory,
-            lastTrained: currentHistory?.lastTrained ?? null,
-            tendonAdaptationScore,
-            highestLevelEverReached: level,
-          }
-        }
-      })
+      return
     }
+
+    // For skills without SkillBenchmark (muscle_up, l_sit, v_sit), store on SkillHistoryEntry
+    if (!skillHistoryKey) return
+
+    const trainingHistory = currentHistory?.trainingHistory || 'previously_strong'
+    const tendonAdaptationScore = currentHistory?.tendonAdaptationScore || calculateTendonAdaptation(trainingHistory, currentHistory?.lastTrained ?? null)
+
+    updateProfile({
+      skillHistory: {
+        ...profile.skillHistory,
+        [skillHistoryKey]: {
+          ...currentHistory,
+          trainingHistory,
+          lastTrained: currentHistory?.lastTrained ?? null,
+          tendonAdaptationScore,
+          highestLevelEverReached: level,
+        }
+      }
+    })
   }
   
   return (

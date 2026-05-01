@@ -322,6 +322,45 @@ function normalizeAllTimePRBenchmark(
     : { load, unit, reps, timeframe }
 }
 
+// =============================================================================
+// [PRE-AB6 BUILD GREEN GATE / WEIGHTED BENCHMARK PAYLOAD SHAPE BOUNDARY MAP]
+// Canonical WeightedBenchmark (lib/athlete-profile.ts:328-332) is:
+//   { load: number | null; unit: 'lbs' | 'kg'; reps?: number }
+// Destination CanonicalProgrammingProfile.weightedPullUp / weightedDip
+// (lib/canonical-profile-service.ts:298-299) requires the narrower shape:
+//   { addedWeight: number; reps: number; unit?: 'lbs' | 'kg' } | null
+// Field renames + tightened nullability (load:number|null → addedWeight:number,
+// reps optional → required) mean direct assignment is structurally invalid.
+// This mapper renames `load` → `addedWeight`, drops back to null when either
+// required numeric is missing or non-finite, and preserves only canonical
+// 'lbs' | 'kg' unit literals — never inventing weight or rep data, never
+// widening either canonical or destination types.
+// =============================================================================
+type WeightedBenchmarkPayload = {
+  addedWeight: number
+  reps: number
+  unit?: 'lbs' | 'kg'
+}
+
+function toWeightedBenchmarkPayload(
+  value: WeightedBenchmark | null | undefined
+): WeightedBenchmarkPayload | null {
+  if (!value) return null
+
+  // canonical `load: number | null` — destination requires non-null finite number.
+  const addedWeight = value.load
+  if (typeof addedWeight !== 'number' || !Number.isFinite(addedWeight)) return null
+
+  // canonical `reps?: number` — destination requires non-null finite number.
+  const reps = value.reps
+  if (typeof reps !== 'number' || !Number.isFinite(reps)) return null
+
+  // unit is optional at destination — pass through only canonical literals.
+  return value.unit === 'lbs' || value.unit === 'kg'
+    ? { addedWeight, reps, unit: value.unit }
+    : { addedWeight, reps }
+}
+
 function reconcileStoredProfileForUI(
   storedProfile: Partial<OnboardingProfile>,
   canonicalProfile?: ReturnType<typeof getCanonicalProfile>
@@ -4436,8 +4475,14 @@ export function AthleteOnboarding() {
         dipMax: profile.dipMax || null,
         pushUpMax: profile.pushUpMax || null,
         wallHSPUReps: profile.wallHSPUReps || null,
-        weightedPullUp: profile.weightedPullUp || null,
-        weightedDip: profile.weightedDip || null,
+        // [PRE-AB6 BUILD GREEN GATE / WEIGHTED BENCHMARK PAYLOAD SHAPE — BOUNDARY MAP]
+        // Canonical WeightedBenchmark uses `load: number | null`; destination
+        // requires `addedWeight: number` with required `reps: number`. Route
+        // both fields through toWeightedBenchmarkPayload — never silently drops
+        // valid user-entered benchmarks; returns null only when load or reps
+        // are missing/non-finite (which the destination null-branch accepts).
+        weightedPullUp: toWeightedBenchmarkPayload(profile.weightedPullUp),
+        weightedDip: toWeightedBenchmarkPayload(profile.weightedDip),
         allTimePRPullUp: profile.allTimePRPullUp || null,
         allTimePRDip: profile.allTimePRDip || null,
         

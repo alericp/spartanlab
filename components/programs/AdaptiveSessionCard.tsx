@@ -995,7 +995,21 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
 
   const handleWorkoutComplete = () => {
     finishSession()
-    trackWorkoutCompleted(resolveSessionDisplayIdentity(session), stats.durationMinutes, stats.completedExercises)
+    // [BUILD GREEN GATE / SESSIONSTATS DURATION DRIFT] `SessionStats` owns
+    // `elapsedSeconds` (canonical timer source), not `durationMinutes`. The
+    // analytics function expects minutes, so derive at this boundary only.
+    // Guarded against non-finite / non-positive timer values.
+    const durationMinutes =
+      typeof stats.elapsedSeconds === 'number' &&
+      Number.isFinite(stats.elapsedSeconds) &&
+      stats.elapsedSeconds > 0
+        ? Math.max(0, Math.round(stats.elapsedSeconds / 60))
+        : 0
+    trackWorkoutCompleted(
+      resolveSessionDisplayIdentity(session),
+      durationMinutes,
+      stats.completedExercises,
+    )
     onWorkoutComplete?.()
   }
 

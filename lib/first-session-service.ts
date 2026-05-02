@@ -2,7 +2,12 @@
 // Generates personalized reasoning and context for the first training session
 // Uses athlete profile, constraints, readiness, and training style to explain why this session was chosen
 
-import { getOnboardingProfile, type OnboardingProfile, calculateReadinessScores } from './athlete-profile'
+import {
+  getOnboardingProfile,
+  type OnboardingProfile,
+  type ReadinessCalibration,
+  calculateReadinessScores,
+} from './athlete-profile'
 import { type AdaptiveProgram, type AdaptiveSession } from './adaptive-program-builder'
 import { type ProgramReasoning } from './onboarding-service'
 import { getConstraintInsight } from './constraint-engine'
@@ -80,8 +85,52 @@ function getFocusDisplay(focus: string | null | undefined): string {
   return FOCUS_DISPLAY_MAP[focus] || focus.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
+// =============================================================================
+// [PRE-AB6 BUILD GREEN GATE / FIRST-SESSION READINESS BOUNDARY MAPPER]
+// Boundary mapper: OnboardingProfile is broader than ReadinessCalibration.
+// Only pass readiness-calibration fields into calculateReadinessScores.
+//
+// calculateReadinessScores(calibration: Partial<ReadinessCalibration>) reads
+// 5 raw answer fields nested under OnboardingProfile.readinessCalibration:
+//   trainingConsistency | recoveryTolerance | strengthPerception
+//   | skillFamiliarity | bodyType
+//
+// Returns {} when calibration is absent so the calculator falls back to
+// its built-in middle-of-road defaults rather than us inventing answers.
+// Mirrors components/onboarding/OnboardingCompleteClient.tsx — duplicated
+// locally to avoid widening the lib surface and to keep this readiness
+// boundary self-contained per the bounded corridor scope.
+// =============================================================================
+function toReadinessCalibrationInput(
+  profile: OnboardingProfile | null | undefined,
+): Partial<ReadinessCalibration> {
+  if (!profile) return {}
+
+  const calibration = profile.readinessCalibration
+  if (!calibration) return {}
+
+  return {
+    trainingConsistency: calibration.trainingConsistency,
+    recoveryTolerance: calibration.recoveryTolerance,
+    strengthPerception: calibration.strengthPerception,
+    skillFamiliarity: calibration.skillFamiliarity,
+    bodyType: calibration.bodyType,
+  }
+}
+
 /**
  * Analyze profile to find primary strengths and limiters
+ *
+ * [PRE-AB6 BUILD GREEN GATE / READINESS CONTRACT REALIGNMENT]
+ * The authoritative ReadinessScores contract (lib/athlete-profile.ts:812-817)
+ * exposes exactly 4 fields:
+ *   strengthPotentialScore | skillAdaptationScore
+ *   | recoveryToleranceScore | volumeToleranceScore
+ * The previous code read stale fields (pullStrength, pushStrength,
+ * compression, straightArmStrength, overall) that no longer exist on
+ * ReadinessScores. There is also no `overall` field — readinessScore is
+ * derived as the average of the 4 finite numeric scores, matching the
+ * 0-100 internal scale of each individual score.
  */
 function analyzeReadinessProfile(profile: OnboardingProfile | null): {
   primaryStrength: string | null
@@ -92,25 +141,37 @@ function analyzeReadinessProfile(profile: OnboardingProfile | null): {
     return { primaryStrength: null, primaryLimiter: null, readinessScore: 50 }
   }
 
-  const readiness = calculateReadinessScores(profile)
-  
-  const scores = [
-    { key: 'Pull Strength', value: readiness.pullStrength },
-    { key: 'Push Strength', value: readiness.pushStrength },
-    { key: 'Compression', value: readiness.compression },
-    { key: 'Straight-Arm Strength', value: readiness.straightArmStrength },
-  ].filter(s => s.value > 0)
+  const readiness = calculateReadinessScores(toReadinessCalibrationInput(profile))
+
+  // Build scores array from the authoritative 4-field ReadinessScores
+  // contract. Labels are human-readable for use in keyFactors copy.
+  const scores: Array<{ key: string; value: number }> = [
+    { key: 'Strength Potential', value: readiness.strengthPotentialScore },
+    { key: 'Skill Adaptation', value: readiness.skillAdaptationScore },
+    { key: 'Recovery Tolerance', value: readiness.recoveryToleranceScore },
+    { key: 'Volume Tolerance', value: readiness.volumeToleranceScore },
+  ].filter(s => Number.isFinite(s.value) && s.value > 0)
+
+  // Derive overall readinessScore as the average of the finite scores.
+  // Falls back to the calculator default (50) when nothing is finite.
+  const finiteValues = scores.map(s => s.value)
+  const readinessScore =
+    finiteValues.length > 0
+      ? Math.round(finiteValues.reduce((sum, v) => sum + v, 0) / finiteValues.length)
+      : 50
 
   if (scores.length === 0) {
-    return { primaryStrength: null, primaryLimiter: null, readinessScore: readiness.overall }
+    return { primaryStrength: null, primaryLimiter: null, readinessScore }
   }
 
   const sorted = [...scores].sort((a, b) => b.value - a.value)
-  
+  const top = sorted[0]
+  const bottom = sorted[sorted.length - 1]
+
   return {
-    primaryStrength: sorted[0]?.value >= 65 ? sorted[0].key : null,
-    primaryLimiter: sorted[sorted.length - 1]?.value < 50 ? sorted[sorted.length - 1].key : null,
-    readinessScore: readiness.overall,
+    primaryStrength: top && top.value >= 65 ? top.key : null,
+    primaryLimiter: bottom && bottom.value < 50 ? bottom.key : null,
+    readinessScore,
   }
 }
 

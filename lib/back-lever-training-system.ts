@@ -1193,16 +1193,8 @@ export const BACK_LEVER_SESSION_TEMPLATE = {
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export {
-  BACK_LEVER_EXERCISE_LIBRARY,
-  BACK_LEVER_READINESS_GATES,
-  BACK_LEVER_WEAK_POINTS,
-  BACK_LEVER_PROGRESSION_SYSTEM,
-  BACK_LEVER_SKILL_RELATIONSHIPS,
-  BACK_LEVER_SKILL_CYCLE,
-  BACK_LEVER_GUIDE_STRUCTURE,
-  BACK_LEVER_SEO_PAGES,
-  BACK_LEVER_MARKETING_CLAIMS,
-  BACK_LEVER_SESSION_TEMPLATE,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] All ten BACK_LEVER_* constants are
+// exported inline at their declarations. The previous bottom export block
+// duplicated every name (TS2300/TS2484). Inline `export const` remains the
+// single canonical export style; public API is unchanged.

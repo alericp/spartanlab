@@ -987,13 +987,9 @@ function capitalize(str: string): string {
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export {
-  analyzeSessionForRecovery,
-  selectRecoveryExercises,
-  generateIntelligentCooldown,
-  generateCompressedCooldown,
-  getRecoveryKnowledgeBubble,
-  generateCooldownExplanation,
-  createCooldownLogEntry,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] All seven functions are exported inline
+// at their declarations (lines 572, 686, 747, 819, 885, 943, 962). The
+// previous bottom export block duplicated every name (TS2300/TS2484).
+// Inline `export function` remains the single canonical export style;
+// public API is unchanged.

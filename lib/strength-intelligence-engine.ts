@@ -1066,9 +1066,9 @@ export function selectStrengthMethod(
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export {
-  STRENGTH_METHOD_PROFILES,
-  INTENSITY_ZONES,
-  DEFAULT_FATIGUE_BUDGETS,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] STRENGTH_METHOD_PROFILES (line 99),
+// INTENSITY_ZONES (line 218), and DEFAULT_FATIGUE_BUDGETS (line 416) are
+// exported inline at their declarations. The previous bottom export block
+// duplicated all three names (TS2300/TS2484). Inline export remains the
+// single canonical export style; public API is unchanged.

@@ -977,10 +977,8 @@ function getProtocolRationale(
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export {
-  analyzeConstraints,
-  formatBuilderReasoning,
-  generateWarmupProtocols,
-  SESSION_TIERS,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] All four symbols are exported inline at
+// their declarations (lines 72, 209, 801, 903). The previous bottom export
+// block duplicated every name (TS2300/TS2484). Inline export remains the
+// single canonical export style; public API is unchanged.

@@ -1189,9 +1189,10 @@ export function getCoachingMessage(selectedMethods: SelectedMethods): string {
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export {
-  type MethodProfile,
-  type MethodRules,
-  type SkillMethodCompatibility,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] MethodProfile (line 68), MethodRules
+// (line 105), and SkillMethodCompatibility (line 745) are declared as
+// `export interface ...` inline. The previous bottom `export { type ... }`
+// block re-exported all three names, producing TS2300/TS2484. Inline
+// `export interface` remains the single canonical export style; public API
+// is unchanged.

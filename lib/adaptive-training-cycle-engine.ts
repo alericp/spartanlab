@@ -905,8 +905,14 @@ export function selectInitialCycle(
 // EXPORTS
 // =============================================================================
 
-export {
-  PHASE_DEFINITIONS,
-  type PhaseDefinition,
-  type TransitionContext,
+// [DUPLICATE-EXPORT-CONTRACT-FIX] PHASE_DEFINITIONS is exported inline at
+// its declaration (line 141), so re-listing it here produced TS2300/TS2484.
+// The two type names PhaseDefinition (line 124) and TransitionContext
+// (line 320) are declared WITHOUT inline `export` — this bottom block is
+// their SOLE export site, so we keep only those two. Public API is
+// unchanged: every previously-exported symbol is still exported with the
+// same name, with no duplicate declarations.
+export type {
+  PhaseDefinition,
+  TransitionContext,
 }

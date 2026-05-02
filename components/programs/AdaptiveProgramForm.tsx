@@ -21,7 +21,17 @@ import {
 import type { AdaptiveProgramInputs } from '@/lib/adaptive-program-builder'
 import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
 import { Sparkles, Info, CheckCircle2 } from 'lucide-react'
-import { DURATION_PREFERENCE_LABELS, type SessionDurationMinutes } from '@/lib/duration-contract'
+import {
+  DURATION_PREFERENCE_LABELS,
+  type SessionDurationMinutes,
+  // [BUILD GREEN GATE / DURATION-MODE RESOLVER] `sessionDurationMode` is
+  // canonical profile truth, not a field on `AdaptiveProgramInputs`. The
+  // form's `inputs` object carries it structurally at runtime (assembled by
+  // `entryToAdaptiveInputs`) but the static type does not expose it. Read
+  // through the typed unknown-boundary resolver instead of direct dotted
+  // access so we don't pollute the input contract or use `as any`.
+  readSessionDurationMode,
+} from '@/lib/duration-contract'
 
 // ==========================================================================
 // [PHASE 27C] BUILD IDENTITY FOR FORM COMPONENT
@@ -140,7 +150,16 @@ export function AdaptiveProgramForm({
   const selectorValue = inputs.scheduleMode === 'flexible' || inputs.trainingDaysPerWeek === 'flexible' 
     ? 'flexible' 
     : String(inputs.trainingDaysPerWeek)
-  
+
+  // [BUILD GREEN GATE / DURATION-MODE RESOLVER] Read sessionDurationMode
+  // through the guarded resolver. The runtime `inputs` object carries the
+  // mode (set by `entryToAdaptiveInputs()`), but the static
+  // `AdaptiveProgramInputs` type does not declare it. The resolver returns
+  // `'static' | 'adaptive' | null` — `null` collapses to the static-mode
+  // branches below, preserving prior display behavior when the field is
+  // genuinely missing instead of inventing 'adaptive'.
+  const isAdaptiveDurationMode = readSessionDurationMode(inputs) === 'adaptive'
+
   return (
     <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-6">
       <div className="space-y-6">
@@ -261,7 +280,7 @@ export function AdaptiveProgramForm({
         {/* Session Length - ISSUE B FIX: Preserve duration mode + baseline separately */}
         <div className="space-y-2">
             <label className="text-sm text-[#A5A5A5]">Target Session Duration</label>
-            {inputs.sessionDurationMode === 'adaptive' ? (
+            {isAdaptiveDurationMode ? (
               // ISSUE B FIX: Adaptive duration user - show adaptive state with baseline selector
               <div className="space-y-2">
                 <div className="bg-[#1A1A1A] border border-[#3A3A3A] rounded-md px-3 py-2">
@@ -308,7 +327,7 @@ export function AdaptiveProgramForm({
               </Select>
             )}
           <p className="text-xs text-[#6A6A6A]">
-            {inputs.sessionDurationMode === 'adaptive' 
+            {isAdaptiveDurationMode
               ? 'Adaptive mode - sessions expand/contract based on day intensity'
               : 'Pre-filled from your profile. Actual sessions may vary based on day focus.'}
           </p>
@@ -406,7 +425,7 @@ export function AdaptiveProgramForm({
           {/* Secondary Details */}
           <div className="flex flex-wrap gap-2">
             <div className="px-3 py-1.5 rounded-md text-sm font-medium bg-[#2A2A2A] text-[#A5A5A5] border border-[#3A3A3A]">
-              {inputs.sessionDurationMode === 'adaptive'
+              {isAdaptiveDurationMode
                 ? `~${inputs.sessionLength}min adaptive`
                 : `${inputs.sessionLength}min sessions`}
             </div>

@@ -250,6 +250,14 @@ import {
 } from './program/short-session-materializer'
 import { analyzeEquipmentProfile, adaptSessionForEquipment, getEquipmentRecommendations, type EquipmentProfile } from './equipment-adaptation-engine'
 import { GOAL_LABELS } from './program-service'
+// [BUILD GREEN GATE / DURATION-MODE RESOLVER] `sessionDurationMode` is
+// canonical profile/program truth, not a field on `AdaptiveProgramInputs`.
+// At runtime, `entryToAdaptiveInputs()` (canonical-profile-service) attaches
+// it to the inputs object structurally, but the static type does not declare
+// it. Read through the typed unknown-boundary resolver below — purely
+// structural, no runtime semantic change vs prior `inputs.sessionDurationMode`
+// reads (which TypeScript now correctly rejects).
+import { readSessionDurationMode } from './duration-contract'
 // [planner-truth-audit] TASK 7: Final audit for generic shell detection
 import { runPlannerTruthAudit, getAuditGatingResult, type PlannerTruthAuditReport, type AuditSeverity } from './planner-truth-audit'
 // [PHASE 1] CANONICAL MATERIALITY CONTRACT - Strengthens truth-to-generation coupling
@@ -5054,7 +5062,7 @@ export async function generateAdaptiveProgram(
     hasCanonicalOverride: !!serverOptions?.canonicalProfileOverride,
     scheduleMode: inputs.scheduleMode,
     trainingDaysPerWeek: inputs.trainingDaysPerWeek,
-    sessionDurationMode: inputs.sessionDurationMode,
+    sessionDurationMode: readSessionDurationMode(inputs),
     selectedSkillsCount: inputs.selectedSkills?.length ?? 0,
     experienceLevel: inputs.experienceLevel,
     primaryGoal: inputs.primaryGoal,
@@ -5553,7 +5561,10 @@ async function generateAdaptiveProgramImpl(
       trainingDaysPerWeek: typeof inputs.trainingDaysPerWeek === 'number' ? inputs.trainingDaysPerWeek : undefined,
       sessionLength: inputs.sessionLength,
       scheduleMode: inputs.scheduleMode,
-      sessionDurationMode: inputs.sessionDurationMode,
+      // [BUILD GREEN GATE / DURATION-MODE] composeCanonicalPlannerInput
+      // accepts `'static' | 'adaptive' | undefined`; the resolver returns
+      // `null` for missing input, so coerce to undefined at this boundary.
+      sessionDurationMode: readSessionDurationMode(inputs) ?? undefined,
       equipment: inputs.equipment,
     })
   } catch (err) {
@@ -5697,7 +5708,7 @@ async function generateAdaptiveProgramImpl(
     // [PHASE 29A] Preserve baseline schedule mode - do NOT default to 'flexible'
     scheduleMode: inputs.scheduleMode || (typeof trainingDaysPerWeek === 'number' ? 'static' : 'flexible'),
     adaptiveWorkloadEnabled: inputAdaptiveWorkload,
-    sessionDurationMode: inputs.sessionDurationMode || 'adaptive',
+    sessionDurationMode: readSessionDurationMode(inputs) || 'adaptive',
     selectedSkills: inputs.selectedSkills || [],
     trainingPathType: inputs.trainingPathType || 'balanced',
   }
@@ -6115,20 +6126,26 @@ async function generateAdaptiveProgramImpl(
       : 'static_schedule_or_not_selected',
   })
   
+  // [BUILD GREEN GATE / DURATION-MODE] Snapshot the input-side mode once
+  // through the typed resolver; reuse below in console.log + verdict logic.
+  // Pure structural replacement — no runtime semantic change. All falsy
+  // checks (`||`) and `=== 'adaptive'` comparisons behave identically vs
+  // the prior raw `inputs.sessionDurationMode` reads.
+  const inputsSessionDurationMode_audit = readSessionDurationMode(inputs)
   console.log('[phase16a-builder-entry-adaptive-duration-truth-audit]', {
     canonicalSessionDurationMode: canonicalProfile.sessionDurationMode,
-    inputsSessionDurationMode: inputs.sessionDurationMode,
+    inputsSessionDurationMode: inputsSessionDurationMode_audit,
     canonicalSessionLength: canonicalProfile.sessionLengthMinutes,
-    effectiveSessionDurationMode: canonicalProfile.sessionDurationMode || inputs.sessionDurationMode || 'static',
-    adaptivePreserved: canonicalProfile.sessionDurationMode === 'adaptive' || inputs.sessionDurationMode === 'adaptive',
-    verdict: (canonicalProfile.sessionDurationMode === 'adaptive' || inputs.sessionDurationMode === 'adaptive')
+    effectiveSessionDurationMode: canonicalProfile.sessionDurationMode || inputsSessionDurationMode_audit || 'static',
+    adaptivePreserved: canonicalProfile.sessionDurationMode === 'adaptive' || inputsSessionDurationMode_audit === 'adaptive',
+    verdict: (canonicalProfile.sessionDurationMode === 'adaptive' || inputsSessionDurationMode_audit === 'adaptive')
       ? 'adaptive_duration_preserved_in_builder'
       : 'static_duration_or_not_selected',
   })
   
   // Final visual vs builder verdict
   const isFlexScheduleInBuilder = canonicalProfile.scheduleMode === 'flexible' || inputs.scheduleMode === 'flexible'
-  const isAdaptiveDurationInBuilder = canonicalProfile.sessionDurationMode === 'adaptive' || inputs.sessionDurationMode === 'adaptive'
+  const isAdaptiveDurationInBuilder = canonicalProfile.sessionDurationMode === 'adaptive' || inputsSessionDurationMode_audit === 'adaptive'
   
   console.log('[phase16a-visual-vs-builder-final-verdict]', {
     benchBoxInBuilder: benchBoxTruthPreserved,
@@ -6308,7 +6325,7 @@ async function generateAdaptiveProgramImpl(
     candidateSources: {
       rawInputs: {
         trainingPathType: inputs.trainingPathType,
-        sessionDurationMode: inputs.sessionDurationMode,
+        sessionDurationMode: readSessionDurationMode(inputs),
         sessionLength: inputs.sessionLength,
         scheduleMode: inputs.scheduleMode,
         selectedSkills: inputs.selectedSkills?.length ?? 0,
@@ -6477,7 +6494,7 @@ async function generateAdaptiveProgramImpl(
     
     // CRITICAL FIX: Use canonical sessionLengthMinutes, NOT stale onboarding workoutDurationPreference
     sessionLengthMinutes: canonicalProfile.sessionLengthMinutes ?? (typeof inputs.sessionLength === 'number' ? inputs.sessionLength : 60),
-    sessionDurationMode: canonicalProfile.sessionDurationMode || inputs.sessionDurationMode || 'standard',
+    sessionDurationMode: canonicalProfile.sessionDurationMode || readSessionDurationMode(inputs) || 'standard',
     
     // [PHASE 25V] CRITICAL FIX: Use computed inputScheduleMode which respects explicit numeric day selection
     // inputs.scheduleMode takes precedence when user explicitly selects days in the builder
@@ -6670,21 +6687,25 @@ async function generateAdaptiveProgramImpl(
       : 'COLLAPSE_DETECTED_MODE_OVERWRITTEN',
   })
   
+  // [BUILD GREEN GATE / DURATION-MODE] Snapshot the input-side mode once
+  // through the typed resolver; identical truthy/=== semantics vs the
+  // prior raw read.
+  const inputsSessionDurationMode_collapse = readSessionDurationMode(inputs)
   console.log('[phase15c-adaptive-duration-collapse-trace-audit]', {
     step: 'builder_entry',
     canonicalProfileSessionDurationMode: canonicalProfile.sessionDurationMode,
-    inputsSessionDurationMode: inputs.sessionDurationMode,
+    inputsSessionDurationMode: inputsSessionDurationMode_collapse,
     canonicalSessionLength: canonicalProfile.sessionLengthMinutes,
     inputSessionLength: inputs.sessionLength,
     collapse: {
-      modeSourcedFrom: canonicalProfile.sessionDurationMode ? 'canonicalProfile' : inputs.sessionDurationMode ? 'inputs' : 'fallback',
-      modeIsAdaptive: canonicalProfile.sessionDurationMode === 'adaptive' || inputs.sessionDurationMode === 'adaptive',
+      modeSourcedFrom: canonicalProfile.sessionDurationMode ? 'canonicalProfile' : inputsSessionDurationMode_collapse ? 'inputs' : 'fallback',
+      modeIsAdaptive: canonicalProfile.sessionDurationMode === 'adaptive' || inputsSessionDurationMode_collapse === 'adaptive',
       sessionLengthIsNumeric: typeof canonicalProfile.sessionLengthMinutes === 'number',
-      collapseDetected: canonicalProfile.sessionDurationMode === 'adaptive' && !(canonicalProfile.sessionDurationMode || inputs.sessionDurationMode),
+      collapseDetected: canonicalProfile.sessionDurationMode === 'adaptive' && !(canonicalProfile.sessionDurationMode || inputsSessionDurationMode_collapse),
     },
     verdict: canonicalProfile.sessionDurationMode 
       ? 'mode_preserved_from_canonical'
-      : inputs.sessionDurationMode 
+      : inputsSessionDurationMode_collapse 
         ? 'mode_preserved_from_inputs'
         : 'mode_defaulted',
   })

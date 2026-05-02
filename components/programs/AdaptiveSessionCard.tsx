@@ -455,6 +455,36 @@ function getGroupTypeColors(groupType: StyledGroup['groupType']): { border: stri
  * PHASE 3: Normalize session for safe display
  * Ensures all required properties exist with safe defaults
  */
+// [BUILD GREEN GATE / FALLBACK ADAPTIVESESSION FACTORY — DISPLAY-ONLY]
+//
+// Returns a structurally complete `AdaptiveSession` with every required
+// field present. Used ONLY by the display normalizer below when an invalid
+// session reaches the card (typeof check fails). Never injected into the
+// generator, never persisted, never replaces a real session.
+//
+// Doctrine notes:
+// - No `name` field (AdaptiveSession does not own one).
+// - `isPrimary: false` and an honest rationale make the degraded state
+//   readable to any contract that inspects this fallback.
+// - Empty arrays for exercises/warmup/cooldown are intentional — fabricating
+//   exercises here would hide degraded state from the user.
+// - No `as AdaptiveSession`, no `as unknown as AdaptiveSession`, no `as any`.
+function createDisplayFallbackAdaptiveSession(): AdaptiveSession {
+  return {
+    dayNumber: 0,
+    dayLabel: 'Day',
+    focus: 'training',
+    focusLabel: 'Training',
+    isPrimary: false,
+    rationale: 'Fallback display session used because the provided session was invalid.',
+    exercises: [],
+    warmup: [],
+    cooldown: [],
+    estimatedMinutes: 60,
+    finisherIncluded: false,
+  }
+}
+
 function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
   // [BUILD GREEN GATE / SESSION IDENTITY] AdaptiveSession does not own a
   // `name` field — canonical identity flows through `focusLabel` / `focus` /
@@ -465,24 +495,48 @@ function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
   // its declared `AdaptiveSession` return type.
   if (!session || typeof session !== 'object') {
     console.log('[AdaptiveSessionCard] Session is invalid, using empty default')
-    return {
-      dayNumber: 0,
-      dayLabel: 'Day',
-      focusLabel: 'Training',
-      estimatedMinutes: 60,
-      exercises: [],
-    } as AdaptiveSession
+    // [BUILD GREEN GATE / FALLBACK SHAPE] Use the typed factory instead of
+    // an incomplete object-literal cast. AdaptiveSession requires `focus`,
+    // `isPrimary`, `rationale`, `warmup`, `cooldown`, `finisherIncluded`
+    // (plus the original five) — the prior `{ ... } as AdaptiveSession`
+    // cast hid the missing fields.
+    return createDisplayFallbackAdaptiveSession()
   }
-  
+
+  // [BUILD GREEN GATE / DISPLAY NORMALIZER HARDENING] This branch defends
+  // against partially-malformed persisted sessions. Even though the static
+  // type says required fields exist, the function exists precisely because
+  // runtime data may be partial. Each required field is repaired only when
+  // the runtime value is missing or invalid — real session content is
+  // preserved untouched. No doctrine, no method selection, no exercise
+  // synthesis is performed here.
   return {
     ...session,
-    dayNumber: session.dayNumber || 0,
-    dayLabel: session.dayLabel || `Day ${session.dayNumber || 1}`,
-    focusLabel: session.focusLabel || 'General Training',
-    estimatedMinutes: session.estimatedMinutes || 60,
+    dayNumber: typeof session.dayNumber === 'number' ? session.dayNumber : 0,
+    dayLabel: typeof session.dayLabel === 'string' && session.dayLabel.trim()
+      ? session.dayLabel
+      : `Day ${typeof session.dayNumber === 'number' ? session.dayNumber : 1}`,
+    focus: typeof session.focus === 'string' && session.focus.trim()
+      ? session.focus
+      : typeof session.focusLabel === 'string' && session.focusLabel.trim()
+        ? session.focusLabel
+        : 'training',
+    focusLabel: typeof session.focusLabel === 'string' && session.focusLabel.trim()
+      ? session.focusLabel
+      : typeof session.focus === 'string' && session.focus.trim()
+        ? session.focus
+        : 'General Training',
+    isPrimary: typeof session.isPrimary === 'boolean' ? session.isPrimary : false,
+    rationale: typeof session.rationale === 'string' && session.rationale.trim()
+      ? session.rationale
+      : 'Session prepared for display from available program data.',
+    estimatedMinutes: typeof session.estimatedMinutes === 'number' && session.estimatedMinutes > 0
+      ? session.estimatedMinutes
+      : 60,
     exercises: Array.isArray(session.exercises) ? session.exercises : [],
     warmup: Array.isArray(session.warmup) ? session.warmup : [],
     cooldown: Array.isArray(session.cooldown) ? session.cooldown : [],
+    finisherIncluded: typeof session.finisherIncluded === 'boolean' ? session.finisherIncluded : false,
   }
 }
 

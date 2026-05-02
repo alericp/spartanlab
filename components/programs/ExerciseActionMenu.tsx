@@ -94,21 +94,31 @@ export function ExerciseActionMenu({
   }
 
   const handleProgressionSelect = (option: ProgressionOption) => {
-    // Record the progression signal
+    // [PATTERN-BANK-N / DIRECTION-VOCABULARY-BOUNDARY]
+    // Two valid direction vocabularies meet here:
+    //   - UI / progression option layer: 'easier' | 'harder'  (difficulty intent)
+    //   - canonical signal/callback layer: 'up' | 'down'      (progression direction)
+    // We translate at this exact boundary and nowhere else: 'easier' -> 'down',
+    // 'harder' -> 'up'. `option.direction` stays in the 'easier' | 'harder'
+    // vocabulary for user-facing display below (Regression/Progression label,
+    // tone color); only the canonical signal sinks receive the converted form.
+    const canonicalDirection: 'up' | 'down' = option.direction === 'harder' ? 'up' : 'down'
+
+    // Record the progression signal (canonical 'up' | 'down')
     recordProgressionSignal(
       sessionId,
       exercise.id,
       exercise.name,
       exercise.category,
-      option.direction,
+      canonicalDirection,
       option.name
     )
-    
-    // Trigger progression adjust
-    onProgressionAdjust(exercise.id, option.name, option.direction)
-    
+
+    // Trigger progression adjust (canonical 'up' | 'down')
+    onProgressionAdjust(exercise.id, option.name, canonicalDirection)
+
     setShowProgressionDialog(false)
-    showFeedback(`Progression ${option.direction === 'up' ? 'increased' : 'decreased'}`)
+    showFeedback(`Progression ${canonicalDirection === 'up' ? 'increased' : 'decreased'}`)
   }
 
   const showFeedback = (message: string) => {

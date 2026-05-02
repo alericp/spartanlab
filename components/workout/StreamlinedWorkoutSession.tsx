@@ -5850,7 +5850,13 @@ export function StreamlinedWorkoutSession({
             <Button
               onClick={() => {
                 setComponentError(null)
-                machineDispatch({ type: 'RESET' })
+                // [LIVE-WORKOUT-MACHINE] Canonical recovery action.
+                // The machine action union (lib/workout/live-workout-machine.ts)
+                // exposes RESET_TO_READY (any phase -> 'ready') and RETRY
+                // (only valid from 'invalid' phase). After a caught React error
+                // the machine phase is unknown, so RESET_TO_READY is the
+                // correct universal recovery transition.
+                machineDispatch({ type: 'RESET_TO_READY' })
               }}
               className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
             >

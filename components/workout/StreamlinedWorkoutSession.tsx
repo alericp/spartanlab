@@ -1349,8 +1349,18 @@ function loadSessionFromStorage(
     }
     
     // savedAt must be a valid timestamp within 4 hours
-    if (typeof savedAt !== 'number' || !Number.isFinite(savedAt) || Date.now() - savedAt > 4 * 60 * 60 * 1000) {
-      return rejectRestore('session_expired_or_invalid_timestamp', { savedAt, age: savedAt ? Date.now() - savedAt : 'invalid' })
+    // [RESTORE-TIMESTAMP-CONTROL-FLOW] Narrow savedAt to a finite number
+    // BEFORE doing any subtraction. The previous inline `savedAt ? Date.now()
+    // - savedAt : 'invalid'` was unsafe because a truthy non-number could
+    // reach the subtraction. Derive a typed `number | null` age first.
+    const nowMs = Date.now()
+    const savedAtIsValidNumber = typeof savedAt === 'number' && Number.isFinite(savedAt)
+    const savedAtAgeMs: number | null = savedAtIsValidNumber ? nowMs - savedAt : null
+    if (!savedAtIsValidNumber || (savedAtAgeMs !== null && savedAtAgeMs > 4 * 60 * 60 * 1000)) {
+      return rejectRestore('session_expired_or_invalid_timestamp', {
+        savedAt,
+        age: savedAtAgeMs ?? 'invalid',
+      })
     }
     
     // sessionId must match

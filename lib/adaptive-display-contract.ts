@@ -15,6 +15,21 @@
  * - Settings preview
  */
 
+import type { TrainingDaysPerWeek } from '@/lib/athlete-profile'
+
+// =============================================================================
+// [PRE-AB6 BUILD GREEN GATE / ADAPTIVE DISPLAY CONTRACT BOUNDARY]
+// Real onboarding/profile/program schedule truth uses
+//   TrainingDaysPerWeek = 2 | 3 | 4 | 5 | 6 | 7 | 'flexible'
+// (per lib/athlete-profile.ts). Display helpers were previously typed
+// as `number | null | undefined` only, which rejected the legitimate
+// 'flexible' literal. Widen the helper boundary to accept the real
+// union and normalize 'flexible' inside the helper. Display-only —
+// callers never need to fake-convert flexible into a numeric stand-in.
+// =============================================================================
+type ScheduleModeInput = 'flexible' | 'static' | null | undefined
+type TrainingDaysInput = TrainingDaysPerWeek | number | null | undefined
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -51,12 +66,17 @@ export interface AdaptiveDisplayContract {
  * [PHASE 14B] Truthful display:
  * - flexible mode shows "Adaptive" not a fixed number
  * - static mode shows the actual day count
+ *
+ * [PRE-AB6] Treat schedule as flexible if EITHER scheduleMode === 'flexible'
+ * OR trainingDaysPerWeek === 'flexible' — legacy/partially-normalized
+ * profiles may carry the flexible signal on either field. Numeric fallback
+ * is display-only and is never written back into profile/program data.
  */
 export function getScheduleDisplayInfo(
-  scheduleMode: 'flexible' | 'static' | undefined,
-  trainingDaysPerWeek: number | null | undefined
+  scheduleMode: ScheduleModeInput,
+  trainingDaysPerWeek: TrainingDaysInput
 ): ScheduleDisplayInfo {
-  const isFlexible = scheduleMode === 'flexible'
+  const isFlexible = scheduleMode === 'flexible' || trainingDaysPerWeek === 'flexible'
   
   if (isFlexible) {
     return {
@@ -122,8 +142,8 @@ export function getDurationDisplayInfo(
  * Get full adaptive display contract from profile data
  */
 export function getAdaptiveDisplayContract(
-  scheduleMode: 'flexible' | 'static' | undefined,
-  trainingDaysPerWeek: number | null | undefined,
+  scheduleMode: ScheduleModeInput,
+  trainingDaysPerWeek: TrainingDaysInput,
   sessionDurationMode: 'adaptive' | 'static' | undefined,
   sessionLengthMinutes: number | undefined
 ): AdaptiveDisplayContract {
@@ -159,12 +179,16 @@ export function getAdaptiveDisplayContract(
 
 /**
  * Get compact schedule label for card headers
+ *
+ * [PRE-AB6] Accepts the real TrainingDaysPerWeek union (numbers + 'flexible').
+ * Flexible signal on either input maps to the adaptive label; non-flexible
+ * non-numeric values fall through to the display-only numeric fallback.
  */
 export function getCompactScheduleLabel(
-  scheduleMode: 'flexible' | 'static' | undefined,
-  trainingDaysPerWeek: number | null | undefined
+  scheduleMode: ScheduleModeInput,
+  trainingDaysPerWeek: TrainingDaysInput
 ): string {
-  if (scheduleMode === 'flexible') {
+  if (scheduleMode === 'flexible' || trainingDaysPerWeek === 'flexible') {
     return 'Adaptive Schedule'
   }
   const days = typeof trainingDaysPerWeek === 'number' ? trainingDaysPerWeek : 4
@@ -195,8 +219,8 @@ export function getCompactDurationLabel(
  */
 export function runAdaptiveDisplayParityAudit(
   source: string,
-  scheduleMode: 'flexible' | 'static' | undefined,
-  trainingDaysPerWeek: number | null | undefined,
+  scheduleMode: ScheduleModeInput,
+  trainingDaysPerWeek: TrainingDaysInput,
   sessionDurationMode: 'adaptive' | 'static' | undefined,
   sessionLengthMinutes: number | undefined,
   displayedScheduleLabel: string,

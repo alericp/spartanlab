@@ -1303,15 +1303,25 @@ export function getWeightedRecommendationsForWeakPoint(
   weakPoint: WeakPointType
 ): WeakPointWeightedRecommendation {
   const recommendations: Record<string, WeakPointWeightedRecommendation> = {
-    explosive_pull: {
-      weakPoint: 'explosive_pull',
+    // [WEAK-POINT-TYPE-CONTRACT] Mapped stale alias 'explosive_pull' to
+    // canonical 'explosive_power' (WeakPointType in lib/weak-point-engine.ts;
+    // canonical label "Explosive Pull Power" at WEAK_POINT_LABELS line 87).
+    // The doctrine intent is preserved verbatim — only the union-conformant
+    // identifier changes. The map is keyed `Record<string, ...>` so the key
+    // change is structural only; the function's resolution logic still
+    // accepts a `WeakPointType` parameter and dereferences via canonical key.
+    explosive_power: {
+      weakPoint: 'explosive_power',
       recommendedWeightedSkills: ['weighted_pullup', 'weighted_chinup'],
       recommendedTempoWork: ['tempo_pullup'],
       avoidUntilResolved: ['weighted_muscle_up'],
       rationale: 'Build explosive pulling strength with weighted basics before heavy skill work.',
     },
-    transition_control: {
-      weakPoint: 'transition_control',
+    // [WEAK-POINT-TYPE-CONTRACT] Mapped stale alias 'transition_control' to
+    // canonical 'transition_strength' (label "Transition Strength" at
+    // WEAK_POINT_LABELS line 88). Same doctrine, canonical identifier.
+    transition_strength: {
+      weakPoint: 'transition_strength',
       recommendedWeightedSkills: ['straight_bar_dip'],
       recommendedTempoWork: ['slow_muscle_up', 'tempo_muscle_up', 'tempo_dip'],
       avoidUntilResolved: ['weighted_muscle_up'],
@@ -1331,8 +1341,12 @@ export function getWeightedRecommendationsForWeakPoint(
       avoidUntilResolved: [],
       rationale: 'Target lockout specifically with partial range and heavy dip work.',
     },
-    straight_arm_pull: {
-      weakPoint: 'straight_arm_pull',
+    // [WEAK-POINT-TYPE-CONTRACT] Mapped stale alias 'straight_arm_pull' to
+    // canonical 'straight_arm_pull_strength' (canonical WeakPointType union
+    // member at lib/weak-point-engine.ts:47, label "Straight-Arm Pull
+    // Strength"). Same doctrine, canonical identifier.
+    straight_arm_pull_strength: {
+      weakPoint: 'straight_arm_pull_strength',
       recommendedWeightedSkills: ['weighted_front_lever_row'],
       recommendedTempoWork: ['tempo_front_lever_row'],
       avoidUntilResolved: [],
@@ -1345,8 +1359,14 @@ export function getWeightedRecommendationsForWeakPoint(
       avoidUntilResolved: ['weighted_pullup'],
       rationale: 'Focus on tempo work to develop scapular awareness before heavy loading.',
     },
-    compression: {
-      weakPoint: 'compression',
+    // [WEAK-POINT-TYPE-CONTRACT] Mapped stale alias 'compression' to
+    // canonical 'compression_strength' (WeakPointType member at
+    // lib/weak-point-engine.ts:51, label "Compression Strength"). The
+    // canonical union also has 'core_compression' (line 57) — that one is
+    // a control/stability concept; this entry's doctrine is about pressing
+    // compression strength, so 'compression_strength' is the correct match.
+    compression_strength: {
+      weakPoint: 'compression_strength',
       recommendedWeightedSkills: [],
       recommendedTempoWork: [],
       avoidUntilResolved: [],

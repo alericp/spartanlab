@@ -1147,26 +1147,39 @@ function createEmptyBootLedger(): BootLedgerState {
   }
   }
 
-  function markBootStage(stage: BootStage, data?: Partial<BootLedgerState>): void {
+  // [BOOT-LEDGER-CONTRACT] markBootStage accepts:
+  //   - `data`: typed ledger field updates that are persisted onto the
+  //     authoritative BootLedgerState (canonical keys only).
+  //   - `debug`: free-form instrumentation context that is logged alongside
+  //     the stage marker but NEVER assigned onto the ledger.
+  // Splitting these prevents stale-named debug fields (e.g. `status`,
+  // `totalExerciseCount`, `exerciseId`, `hasMessage`) from polluting the
+  // typed ledger while still preserving their value as console diagnostics.
+  function markBootStage(
+    stage: BootStage,
+    data?: Partial<BootLedgerState>,
+    debug?: Record<string, unknown>,
+  ): void {
   // [PHASE LW2-FIX] CRITICAL: Wrap entire function in try-catch
   // This function is called in useState initializers which MUST NOT throw
   // Any exception here would crash the entire component render
   try {
-    if (typeof window === 'undefined') return // SSR safe
-    
-    const ledger = getBootLedger()
-    ledger.currentStage = stage
-    ledger.stages[stage] = Date.now()
-    if (data) {
-      Object.assign(ledger, data)
-    }
-    // Update window marker for error boundary
-    (window as unknown as { __spartanlabWorkoutStage?: string }).__spartanlabWorkoutStage = stage
-    setBootLedger(ledger)
-    console.log(`[BOOT-LEDGER] ${stage}`, {
-      ...data,
-      timestamp: Date.now(),
-    })
+  if (typeof window === 'undefined') return // SSR safe
+  
+  const ledger = getBootLedger()
+  ledger.currentStage = stage
+  ledger.stages[stage] = Date.now()
+  if (data) {
+  Object.assign(ledger, data)
+  }
+  // Update window marker for error boundary
+  (window as unknown as { __spartanlabWorkoutStage?: string }).__spartanlabWorkoutStage = stage
+  setBootLedger(ledger)
+  console.log(`[BOOT-LEDGER] ${stage}`, {
+  ...data,
+  ...debug,
+  timestamp: Date.now(),
+  })
   } catch (error) {
     // Silently absorb errors - boot ledger is diagnostic only, not critical
     console.warn('[BOOT-LEDGER] Failed to mark stage:', stage, error)
@@ -2642,7 +2655,16 @@ export function StreamlinedWorkoutSession({
   // This is the ONLY source for render values - no scattered ad hoc derivations
   // ==========================================================================
   const viewModel = useMemo(() => {
-    return deriveViewModel(machineState, machineSessionContract, existingSession ? { completedSets: existingSession.completedSets } : null)
+    // [SAVED-SESSION-CONTRACT] deriveViewModel expects a
+    // `{ completedSets: number } | null` saved-progress summary. On
+    // SavedSessionInfo the count lives at
+    // `existingSession.progress.completedSets` (already a `number`); the
+    // top-level field of the same name does not exist on this contract.
+    return deriveViewModel(
+      machineState,
+      machineSessionContract,
+      existingSession ? { completedSets: existingSession.progress.completedSets } : null,
+    )
   }, [machineState, machineSessionContract, existingSession])
   
   // ==========================================================================
@@ -2708,6 +2730,45 @@ export function StreamlinedWorkoutSession({
   }
   }, [machineState])
   
+  // [LIVE-SESSION-ACTION-CONTRACT]
+  // The legacy `dispatch` wrapper consumes a discriminated action union
+  // distinct from the canonical machine action type
+  // (`WorkoutMachineAction` in lib/workout/live-workout-machine.ts). It
+  // exists so older call-sites and UI handlers can keep emitting their
+  // historical action shapes; this wrapper translates each one into the
+  // canonical machine action(s) the reducer expects.
+  //
+  // Each member of this union is verified against an actual `dispatch({
+  // type: '...' })` call-site in this file. Field shapes match the
+  // upstream callers (e.g. handlers in this component, the
+  // HYDRATE_FROM_STORAGE boot effect, and the rest/transition flow).
+  // Adding a member here without a corresponding case in the switch below
+  // would be unreachable; the `default` branch logs unmapped actions.
+  type LiveSessionAction =
+    | { type: 'START_WORKOUT_ACTIVE'; startTime: number }
+    | { type: 'RESUME_WORKOUT'; startTime: number }
+    | { type: 'START_FRESH_WORKOUT'; startTime: number }
+    | { type: 'FINISH_WORKOUT' }
+    | { type: 'RESET_TO_READY' }
+    | { type: 'SET_STATUS' }
+    | { type: 'TICK_TIMER' }
+    | { type: 'SET_RPE'; rpe: RPEValue | null }
+    | { type: 'SET_REPS'; value: number }
+    | { type: 'SET_HOLD'; value: number }
+    | { type: 'SET_BAND'; band: ResistanceBandColor | 'none' }
+    | { type: 'SET_WORKOUT_NOTES'; notes: string }
+    | { type: 'COMPLETE_SET_SAME_EXERCISE'; newCompletedSets: CompletedSet[] }
+    | { type: 'SHOW_INTER_EXERCISE_REST'; newCompletedSets: CompletedSet[] }
+    | { type: 'COMPLETE_INTER_EXERCISE_REST'; snapshot: { nextExerciseIndex: number; nextRepsValue: number } }
+    | { type: 'SKIP_INTER_EXERCISE_REST'; snapshot: { nextExerciseIndex: number; nextRepsValue: number } }
+    | { type: 'SKIP_EXERCISE' }
+    | { type: 'ADVANCE_TO_NEXT_EXERCISE'; snapshot: { nextExerciseIndex: number; nextRepsValue: number } }
+    | { type: 'COMPLETE_WORKOUT'; newCompletedSets: CompletedSet[] }
+    | { type: 'HYDRATE_FROM_STORAGE'; savedState: WorkoutSessionState }
+    | { type: 'UNDO_OVERRIDE'; index: number }
+    | { type: 'SET_TRANSITION_ERROR'; error: { type: string; message: string } }
+    | { type: 'CLEAR_TRANSITION_ERROR' }
+
   // Wrapper dispatch that maps old action types to machine actions
   const dispatch = useCallback((action: LiveSessionAction) => {
     if (process.env.NODE_ENV === 'development') {
@@ -2717,17 +2778,31 @@ export function StreamlinedWorkoutSession({
       case 'START_WORKOUT_ACTIVE':
         machineDispatch({ type: 'START_WORKOUT', startTime: action.startTime })
         break
-      case 'RESUME_WORKOUT':
-        // Resume needs to restore saved state
-        const savedState = existingSession ? {
-          currentExerciseIndex: existingSession.currentExerciseIndex,
-          currentSetNumber: existingSession.currentSetNumber,
-          completedSets: existingSession.completedSets as unknown as CompletedSet[],
-          elapsedSeconds: existingSession.elapsedSeconds,
-          workoutNotes: existingSession.notes || '',
-        } : {}
+      case 'RESUME_WORKOUT': {
+        // [SAVED-SESSION-CONTRACT] `existingSession: SavedSessionInfo` is
+        // the metadata-only resume summary. Its canonical fields live
+        // under `existingSession.progress.{exerciseIndex, setNumber,
+        // elapsedSeconds, completedSets:number}`. SavedSessionInfo
+        // intentionally does NOT carry the array of CompletedSet objects
+        // or the notes string — those live in the full validated payload
+        // hydrated through HYDRATE_FROM_STORAGE (see the dedicated case
+        // below). The previous implementation read flat fields that did
+        // not exist on the contract and force-cast a missing property
+        // through `as unknown as CompletedSet[]`, which would have left
+        // the machine resuming with an empty array regardless. We now
+        // only forward what SavedSessionInfo actually owns; the full
+        // state restoration remains the responsibility of the
+        // HYDRATE_FROM_STORAGE corridor.
+        const savedState: Partial<WorkoutMachineState> = existingSession
+          ? {
+              currentExerciseIndex: existingSession.progress.exerciseIndex,
+              currentSetNumber: existingSession.progress.setNumber,
+              elapsedSeconds: existingSession.progress.elapsedSeconds,
+            }
+          : {}
         machineDispatch({ type: 'RESUME_WORKOUT', startTime: action.startTime, savedState })
         break
+      }
       case 'START_FRESH_WORKOUT':
         machineDispatch({ type: 'START_FRESH', startTime: action.startTime })
         break
@@ -3165,11 +3240,12 @@ export function StreamlinedWorkoutSession({
         restoreWasAccepted: false,
         restoreRejectReason: 'demo_mode',
       })
-      markBootStage('state_initialized', {
-        currentExerciseIndex: 0,
-        status: 'ready',
-      })
-      markBootStage('core_boot_complete', { coreBootComplete: true })
+  markBootStage(
+    'state_initialized',
+    { currentExerciseIndex: 0 },
+    { status: 'ready' },
+  )
+  markBootStage('core_boot_complete', { coreBootComplete: true })
       hydrationAppliedRef.current = hydrationKey
       setBootHydrationReady(true)
       return
@@ -3203,10 +3279,11 @@ export function StreamlinedWorkoutSession({
         })
         // [UNIFIED-HANDOFF] True hydration from storage - the ONLY valid use of HYDRATE_FROM_STORAGE
         dispatch({ type: 'HYDRATE_FROM_STORAGE', savedState: validatedPayload })
-        markBootStage('state_initialized', {
-          currentExerciseIndex: validatedPayload.currentExerciseIndex,
-          status: validatedPayload.status,
-        })
+  markBootStage(
+    'state_initialized',
+    { currentExerciseIndex: validatedPayload.currentExerciseIndex },
+    { status: validatedPayload.status },
+  )
       } else {
         // Restore rejected - validation failed
         console.warn('[workout-restore] Hydration payload validation failed, starting fresh', {
@@ -4023,15 +4100,30 @@ export function StreamlinedWorkoutSession({
       exerciseCount: exercises.length,
       firstExerciseName: exercises[0]?.name ?? null,
     })
-    markBootStage('session_runtime_truth_build_done', { 
-      sessionId: sessionRuntimeTruth.sessionId, 
-      totalExerciseCount: sessionRuntimeTruth.totalExerciseCount 
-    })
-    markBootStage('exercise_runtime_truth_build_done', { 
-      exerciseId: exerciseRuntimeTruth.exerciseId, 
-      exerciseName: exerciseRuntimeTruth.exerciseName 
-    })
-    markBootStage('calibration_message_built', { hasMessage: !!calibrationMessage })
+    // [BOOT-LEDGER-CONTRACT] Map drift names to canonical BootLedgerState
+    // fields (totalExerciseCount -> exerciseCount). Pass instrumentation-only
+    // values (exerciseId, exerciseName, hasMessage) via the debug arg so the
+    // typed ledger stays clean while console diagnostics are preserved.
+    markBootStage(
+      'session_runtime_truth_build_done',
+      {
+        sessionId: sessionRuntimeTruth.sessionId,
+        exerciseCount: sessionRuntimeTruth.totalExerciseCount,
+      },
+    )
+    markBootStage(
+      'exercise_runtime_truth_build_done',
+      undefined,
+      {
+        exerciseId: exerciseRuntimeTruth.exerciseId,
+        exerciseName: exerciseRuntimeTruth.exerciseName,
+      },
+    )
+    markBootStage(
+      'calibration_message_built',
+      undefined,
+      { hasMessage: !!calibrationMessage },
+    )
   }, [bootHydrationReady, exercises, sessionRuntimeTruth, exerciseRuntimeTruth, calibrationMessage])
   
   // ==========================================================================

@@ -5401,6 +5401,29 @@ function GroupedBodyHeadline({
 // Handles both grouped (styled) and flat exercise rendering
 // =============================================================================
 
+// [PATTERN-BANK-L] Display-only union for the renderer's hydration maps. The
+// visible body owner (`buildFullVisibleRoutineExercises`) emits
+// `FullRoutineExercise` rows; legacy paths can still hand AdaptiveExercise rows
+// through this same renderer prop. The hydration maps therefore store the
+// union exactly as it lives in the display list -- no fake `sets` defaults, no
+// `as AdaptiveExercise` force-casts, no weakening of AdaptiveExercise.
+//
+// Consumers that need a full AdaptiveExercise (i.e. `<ExerciseRow exercise=.../>`)
+// MUST guard with `isAdaptiveExerciseForDisplay(...)` first. When the guard
+// fails, the consumer falls back to the same minimal text row that the path
+// already renders for hydration misses, preserving grouped/flat visibility
+// without lying about prescription.
+type DisplayHydratableExercise = AdaptiveExercise | FullRoutineExercise
+
+function isAdaptiveExerciseForDisplay(
+  value: DisplayHydratableExercise | null | undefined,
+): value is AdaptiveExercise {
+  if (!value || typeof value !== 'object') return false
+  const sets = (value as { sets?: unknown }).sets
+  if (typeof sets !== 'number' || !Number.isFinite(sets)) return false
+  return true
+}
+
 interface MainExercisesRendererProps {
   session: AdaptiveSession
   // [FULL-VISIBLE-ROUTINE] Now accepts full routine exercises (all non-warmup/cooldown)
@@ -5564,7 +5587,12 @@ function MainExercisesRenderer({
     const fallbackBlocks = finalVisibleBodyModel.rawFallbackBlocks
     const normalizeKey = (s: string): string =>
       (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
-    const hydrateMap = new Map<string, AdaptiveExercise>()
+    // [PATTERN-BANK-L] Map type now reflects the actual `displayExercises`
+    // union (AdaptiveExercise | FullRoutineExercise). Consumers below that
+    // pass the resolved value into `<ExerciseRow exercise={...}>` (which
+    // requires AdaptiveExercise) MUST guard via `isAdaptiveExerciseForDisplay`
+    // and fall back to the existing minimal text row when the guard fails.
+    const hydrateMap = new Map<string, DisplayHydratableExercise>()
     displayExercises.forEach(e => {
       if (e.id) hydrateMap.set(e.id, e)
       if (e.name) {
@@ -5664,7 +5692,14 @@ function MainExercisesRenderer({
                       (member.name ? hydrateMap.get(member.name) : undefined) ||
                       (member.name ? hydrateMap.get(member.name.toLowerCase()) : undefined) ||
                       (member.name ? hydrateMap.get(normalizeKey(member.name)) : undefined)
-                    if (!hydrated) return null
+                    // [PATTERN-BANK-L] Drop the row if hydration miss OR the
+                    // hydrated record is a partial display exercise without
+                    // the AdaptiveExercise-required `sets`. Mirrors the
+                    // existing orphan-row drop in this degraded sub-method
+                    // path (1-of-2 superset survivor): we never pass a
+                    // FullRoutineExercise into ExerciseRow as if it were
+                    // AdaptiveExercise.
+                    if (!hydrated || !isAdaptiveExerciseForDisplay(hydrated)) return null
                     rawIdx++
                     return (
                       <ExerciseRow
@@ -5810,7 +5845,14 @@ function MainExercisesRenderer({
                     totalMembers: block.members.length,
                     partnerName,
                   })
-                  if (hydrated) {
+                  // [PATTERN-BANK-L] Only emit ExerciseRow when the hydrated
+                  // record is a full AdaptiveExercise (sets is a finite
+                  // number). FullRoutineExercise rows that hydrated without a
+                  // resolved `sets` value fall through to the same minimal
+                  // text fallback row that already exists below for
+                  // hydration-miss members -- grouped visibility is preserved
+                  // without faking prescription.
+                  if (hydrated && isAdaptiveExerciseForDisplay(hydrated)) {
                     return (
                       <GroupedMemberFrame
                         key={hydrated.id}
@@ -5929,6 +5971,13 @@ function MainExercisesRenderer({
           const emitHeader = thisCat !== lastCat
           lastCat = thisCat
           const contract = emitHeader ? getCategoryDisplayContract(thisCat, sessionEvidence) : null
+          // [PATTERN-BANK-L] `displayExercises` is a `(AdaptiveExercise |
+          // FullRoutineExercise)[]` union. ExerciseRow strictly requires
+          // AdaptiveExercise, so we narrow per-row. A FullRoutineExercise
+          // without a numeric `sets` cannot legally render as ExerciseRow;
+          // we emit a minimal text row so the exercise stays visible
+          // without faking a prescription.
+          const rowIsAdaptive = isAdaptiveExerciseForDisplay(exercise)
           return (
             <div key={exercise.id} className="space-y-2">
               {emitHeader && contract && (
@@ -5944,19 +5993,25 @@ function MainExercisesRenderer({
                   <div className="flex-1 h-px bg-[#2A2A2A]" />
                 </div>
               )}
-              <ExerciseRow
-                exercise={exercise}
-                index={idx + 1}
-                sessionId={sessionId}
-                isSkipped={skippedExercises.has(exercise.id)}
-                adjustedName={adjustedExercises.get(exercise.id)}
-                sessionContext={sessionContextForRows}
-                sessionEvidence={sessionEvidence}
-                coachingExplanation={coachingExplanation}
-                onReplace={onReplace}
-                onSkip={onSkip}
-                onProgressionAdjust={onProgressionAdjust}
-              />
+              {rowIsAdaptive ? (
+                <ExerciseRow
+                  exercise={exercise}
+                  index={idx + 1}
+                  sessionId={sessionId}
+                  isSkipped={skippedExercises.has(exercise.id)}
+                  adjustedName={adjustedExercises.get(exercise.id)}
+                  sessionContext={sessionContextForRows}
+                  sessionEvidence={sessionEvidence}
+                  coachingExplanation={coachingExplanation}
+                  onReplace={onReplace}
+                  onSkip={onSkip}
+                  onProgressionAdjust={onProgressionAdjust}
+                />
+              ) : (
+                <div className="flex items-center py-2 px-3 rounded-lg border bg-[#171717] border-[#282828] text-sm text-[#C8C8C8]">
+                  <span className="truncate">{(exercise.name || '').trim()}</span>
+                </div>
+              )}
             </div>
           )
         })}
@@ -6042,6 +6097,21 @@ function MainExercisesRenderer({
         )}
         {displayExercises.map((exercise) => {
           globalIdx++
+          // [PATTERN-BANK-L] Same display-union narrowing as the
+          // flat_category branch above. ExerciseRow requires AdaptiveExercise
+          // (sets: number); a FullRoutineExercise without a numeric `sets`
+          // renders as a minimal text row so the exercise stays visible
+          // without faking a prescription.
+          if (!isAdaptiveExerciseForDisplay(exercise)) {
+            return (
+              <div
+                key={exercise.id}
+                className="flex items-center py-2 px-3 rounded-lg border bg-[#171717] border-[#282828] text-sm text-[#C8C8C8]"
+              >
+                <span className="truncate">{(exercise.name || '').trim()}</span>
+              </div>
+            )
+          }
           return (
             <ExerciseRow
               key={exercise.id}
@@ -6073,13 +6143,17 @@ function MainExercisesRenderer({
   // variant-rename drift, the blockId map below is authoritative.
   // Four lookup tiers on exerciseDataMap: raw id, raw name, lowercased name,
   // normalized name (punctuation/whitespace collapsed -- matches bridge).
-  const exerciseDataMap = new Map<string, AdaptiveExercise>()
+  // [PATTERN-BANK-L] Map types reflect the actual displayExercises union
+  // (AdaptiveExercise | FullRoutineExercise). Consumers below that pass into
+  // ExerciseRow MUST guard via `isAdaptiveExerciseForDisplay` before using
+  // the result.
+  const exerciseDataMap = new Map<string, DisplayHydratableExercise>()
   const normalizeExerciseKey = (s: string): string =>
     (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
   // blockId -> list of displayExercises with that blockId, in canonical order.
   // This is the authoritative render-surface member list per group and is the
   // preferred lookup for grouped block rendering.
-  const blockIdToDisplayExercises = new Map<string, AdaptiveExercise[]>()
+  const blockIdToDisplayExercises = new Map<string, DisplayHydratableExercise[]>()
   displayExercises.forEach(e => {
     if (e.id) exerciseDataMap.set(e.id, e)
     if (e.name) {
@@ -6250,6 +6324,18 @@ function MainExercisesRenderer({
             return null
           }
 
+          // [PATTERN-BANK-L] After the orphan-row prescription guard, narrow
+          // to a full AdaptiveExercise. ExerciseRow requires AdaptiveExercise
+          // (sets: number). A FullRoutineExercise that hydrated with reps but
+          // without a numeric `sets` would survive the orphan check above
+          // yet cannot legally render as an ExerciseRow without faking the
+          // `sets` value. Drop it (consistent with the orphan-drop pattern
+          // already in this branch).
+          if (!isAdaptiveExerciseForDisplay(fullExercise)) {
+            globalExerciseIndex--
+            return null
+          }
+
           return (
             <ExerciseRow
               key={fullExercise.id}
@@ -6382,7 +6468,11 @@ function MainExercisesRenderer({
                     || exerciseDataMap.get(groupExercise.name)
                     || exerciseDataMap.get(groupExercise.name.toLowerCase())
                     || exerciseDataMap.get(normalizeExerciseKey(groupExercise.name))
-                  if (!fullExercise) return null
+                  // [PATTERN-BANK-L] Drop on hydration miss OR partial display
+                  // exercise lacking a numeric `sets`. ExerciseRow strictly
+                  // requires AdaptiveExercise; we never force-cast a
+                  // FullRoutineExercise.
+                  if (!fullExercise || !isAdaptiveExerciseForDisplay(fullExercise)) return null
                   globalExerciseIndex++
                   return (
                     <ExerciseRow
@@ -6604,7 +6694,14 @@ function MainExercisesRenderer({
                     })
                   : null
 
-                if (!fullExercise) {
+                // [PATTERN-BANK-L] Hydration miss OR partial display exercise
+                // (FullRoutineExercise with no numeric `sets`) routes through
+                // the SAME minimal grouped-truth-rescue fallback below. The
+                // fallback reads identity solely from `groupExercise`, never
+                // from `fullExercise`, so merging the two cases preserves
+                // visible behavior while keeping ExerciseRow's
+                // AdaptiveExercise-only contract honest.
+                if (!fullExercise || !isAdaptiveExerciseForDisplay(fullExercise)) {
                   // Exercise in styled groups but not in displayExercises.
                   // [GROUPED-TRUTH-RESCUE] Render a minimal row from styledGroups'
                   // authoritative truth so grouped structure stays visible.

@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { AdaptiveSession, AdaptiveExercise, TrainingMethodPreference } from '@/lib/adaptive-program-builder'
-import { isVariantLaunchable } from '@/lib/session-compression-engine'
+import { isVariantLaunchable, getVariantDiagnosticSnapshot } from '@/lib/session-compression-engine'
 // [PHASE AB3] SHORT SESSION DOCTRINE RECOMPOSITION TRUTH
 // Read-only access to the per-variant `recompositionTruth` sidecar stamped by
 // the program builder after VARIANT-PARENT-TRUTH-RECONCILE. The card surfaces
@@ -3898,7 +3898,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                       raw_exs_with_blockId: {rawWithBlockId} · raw_exs_with_method: {rawWithNonStraightMethod} · visible_exs_with_blockId: {visibleWithBlockId} · visible_exs_with_method: {visibleWithNonStraightMethod}
                     </div>
                     <div className="text-amber-200/80">
-                      contract.renderBlocks: {groupedRenderContract.renderBlocks.length} · contract.rawFallbackBlocks: {groupedRenderContract.rawFallbackBlocks.length} · synthesized: {synthesizedRawFallbackBlocks.length}
+                      contract.renderBlocks: {groupedRenderContract.renderBlocks.length} �� contract.rawFallbackBlocks: {groupedRenderContract.rawFallbackBlocks.length} · synthesized: {synthesizedRawFallbackBlocks.length}
                     </div>
                     <div className="mt-0.5 text-amber-100 font-semibold">
                       bucket: {bucket}
@@ -4160,12 +4160,19 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 // the idx in `session.variants` so the launch URL and route
                 // post-load lookup agree.
                 if (!isVariantLaunchable(variant)) {
+                  // [BUILD GREEN GATE / VARIANT NEVER-NARROWING] The
+                  // failed-predicate branch narrows `variant` to `never`
+                  // when `session.variants` is `SessionVariant[]`. Inspect
+                  // the rejected value through the typed unknown-boundary
+                  // diagnostic snapshot so the warning still names the
+                  // hidden variant without breaking type-check.
+                  const diagnostic = getVariantDiagnosticSnapshot(variant)
                   console.warn('[VARIANT-LAUNCHABILITY-CONTRACT] Hiding non-launchable variant button', {
                     sessionDay: session.dayNumber,
                     idx,
-                    variantLabel: variant?.label,
-                    variantDuration: variant?.duration,
-                    mainCount: Array.isArray(variant?.selection?.main) ? variant.selection.main.length : 'not_array',
+                    variantLabel: diagnostic.label,
+                    variantDuration: diagnostic.duration,
+                    mainCount: diagnostic.mainCount,
                   })
                   return null
                 }

@@ -226,6 +226,7 @@ import { evaluateExerciseProgression, type ProgressionDecision as SimpleProgress
 import {
   generateSessionVariants,
   isVariantLaunchable,
+  getVariantDiagnosticSnapshot,
   areVariantsMateriallyDistinct,
   type SessionVariant,
 } from './session-compression-engine'
@@ -14991,12 +14992,21 @@ async function generateAdaptiveProgramImpl(
             const launchableRegenerated: SessionVariant[] = []
             for (const v of regeneratedVariants) {
               if (!isVariantLaunchable(v)) {
+                // [BUILD GREEN GATE / VARIANT NEVER-NARROWING] Same pattern
+                // as the Program card's failed-branch diagnostic — the
+                // type predicate narrows `v` away from `SessionVariant`
+                // here, so direct `v?.label` / `v?.duration` /
+                // `v?.selection?.main` reads cannot type-check on a
+                // `SessionVariant[]` source. Snapshot the rejected value
+                // through the typed unknown-boundary helper and log
+                // identical fields. No fabrication, no rescue.
+                const diagnostic = getVariantDiagnosticSnapshot(v)
                 console.warn('[VARIANT-LAUNCHABILITY-CONTRACT] Dropping non-launchable regenerated variant', {
                   dayNumber: session.dayNumber,
                   focus: session.focus,
-                  variantLabel: v?.label,
-                  variantDuration: v?.duration,
-                  mainCount: Array.isArray(v?.selection?.main) ? v.selection.main.length : 'not_array',
+                  variantLabel: diagnostic.label,
+                  variantDuration: diagnostic.duration,
+                  mainCount: diagnostic.mainCount,
                 })
                 continue
               }

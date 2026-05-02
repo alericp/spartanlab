@@ -845,6 +845,52 @@ export function isVariantLaunchable(
 }
 
 // =============================================================================
+// [VARIANT-LAUNCHABILITY-CONTRACT] FAILED-BRANCH DIAGNOSTIC SNAPSHOT
+// =============================================================================
+// `isVariantLaunchable` is a type predicate, so inside an
+// `if (!isVariantLaunchable(variant)) { ... }` branch TypeScript correctly
+// narrows `variant` away from `SessionVariant`. When the upstream array is
+// already typed as `SessionVariant[]` (the normal case at consumer sites
+// like the Program card and the regenerated-variant filter loop in the
+// builder), that residual narrows further to `never`, which makes property
+// reads such as `variant?.label` fail to type-check.
+//
+// We still want loud diagnostic logs in that failed branch — silently
+// dropping a non-launchable variant without saying which one is exactly the
+// regression failure mode this contract was added to prevent. This helper
+// inspects the value as `unknown`, validates each field at the boundary,
+// and returns a small structured snapshot that callers can drop straight
+// into a `console.warn` / `console.error` payload. It performs no rescue,
+// no fabrication, no fallback — only honest read-out of whatever shape the
+// rejected value happens to have.
+// =============================================================================
+export type VariantDiagnosticSnapshot = {
+  label?: string
+  duration?: number
+  mainCount: number | 'not_array' | 'missing'
+}
+
+export function getVariantDiagnosticSnapshot(rawVariant: unknown): VariantDiagnosticSnapshot {
+  if (!rawVariant || typeof rawVariant !== 'object') {
+    return { mainCount: 'missing' }
+  }
+
+  const record = rawVariant as {
+    label?: unknown
+    duration?: unknown
+    selection?: { main?: unknown }
+  }
+
+  return {
+    label: typeof record.label === 'string' ? record.label : undefined,
+    duration: typeof record.duration === 'number' ? record.duration : undefined,
+    mainCount: Array.isArray(record.selection?.main)
+      ? record.selection.main.length
+      : 'not_array',
+  }
+}
+
+// =============================================================================
 // [VARIANT-MATERIAL-DISTINCTNESS-CONTRACT] CANONICAL DISTINCTNESS HELPER
 // =============================================================================
 // A short variant ("45 Min" / "30 Min") must not survive if it is effectively

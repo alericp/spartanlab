@@ -1104,14 +1104,8 @@ export function assessCycleCompatibility(
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export {
-  assessRecoveryNeed,
-  generatePhaseAdjustments,
-  calculatePhaseDuration,
-  applyRecoveryAdjustmentsToSession,
-  generateRecoveryPhaseExplanation,
-  generateRecoveryCoachMessage,
-  assessPhaseCompletion,
-  assessCycleCompatibility,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] All public symbols are exported inline at
+// their declaration sites. The previous bottom `export { ... }` block
+// duplicated every name, producing TS2300/TS2484. Inline `export function`
+// remains the single canonical export style; public API is unchanged.

@@ -1630,16 +1630,11 @@ export function getAvailableWeightedSkillsForAthlete(
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export {
-  WEIGHTED_SKILL_PROFILES,
-  WEIGHTED_PROGRESSION_LADDERS,
-  TENDON_SAFETY_RULES,
-  checkWeightedSkillPrerequisites,
-  getTempoRecommendation,
-  getFrameworkWeightedGuidance,
-  getWeightedRecommendationsForWeakPoint,
-  applyTendonSafetyRules,
-  generateWeightedSkillExplanation,
-  getAvailableWeightedSkillsForAthlete,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] All public symbols are exported inline at
+// their declaration sites (`export const WEIGHTED_SKILL_PROFILES`,
+// `export const WEIGHTED_PROGRESSION_LADDERS`, `export const
+// TENDON_SAFETY_RULES`, and seven `export function` declarations). The
+// previous bottom `export { ... }` block duplicated every name, producing
+// TS2300/TS2484. Inline export remains the single canonical export style;
+// public API is unchanged.

@@ -1799,6 +1799,23 @@ interface StreamlinedWorkoutSessionProps {
   routeBuildChip?: string
 }
 
+// [WEEK-TRUTH-CORRIDOR / OPTIONAL-FIELD-READER]
+// Safely read an optional property off an unknown source without violating
+// the canonical AdaptiveExercise / AdaptiveSession types. The previous
+// implementation cast a strongly-typed object directly to
+// `Record<string, unknown>`, which TypeScript rejects because canonical
+// domain types do not declare a string index signature. This helper
+// isolates the dynamic access by treating the source as `unknown` first,
+// performing an object guard, and only then accessing the field. The
+// returned value is `unknown` so each callsite must perform its own
+// `typeof` narrowing before use. Do NOT widen this to return a typed
+// value; the whole point is forcing per-field narrowing.
+function readUnknownObjectField(source: unknown, key: string): unknown {
+  if (!source || typeof source !== 'object') return undefined
+  if (!Object.prototype.hasOwnProperty.call(source, key)) return undefined
+  return (source as Record<string, unknown>)[key]
+}
+
 // MERGE_LANE_REACTIVATE_V1
 export function StreamlinedWorkoutSession({
   session,
@@ -1915,7 +1932,16 @@ export function StreamlinedWorkoutSession({
       // so that getEffectiveExerciseValues() can actually see them and prefer
       // them over base Week-1 values. NO new scaling logic is introduced here;
       // we only preserve what the loader already resolved.
-      const exAny = ex as Record<string, unknown>
+      // [WEEK-TRUTH-CORRIDOR / OPTIONAL-FIELD-READER] Read optional scaled
+      // dosage fields off the loader-resolved AdaptiveExercise without an
+      // unsafe `as Record<string, unknown>` cast. Each value is `unknown`
+      // here and is narrowed at the assignment site below.
+      const scaledSetsValue = readUnknownObjectField(ex, 'scaledSets')
+      const scaledRepsValue = readUnknownObjectField(ex, 'scaledReps')
+      const scaledHoldDurationValue = readUnknownObjectField(ex, 'scaledHoldDuration')
+      const scaledTargetRPEValue = readUnknownObjectField(ex, 'scaledTargetRPE')
+      const scaledRestPeriodValue = readUnknownObjectField(ex, 'scaledRestPeriod')
+      const weekScalingAppliedValue = readUnknownObjectField(ex, 'weekScalingApplied')
       return {
         // Core identity - ALWAYS strings, never undefined
         id: typeof ex.id === 'string' && ex.id ? ex.id : `exercise-${idx}`,
@@ -1929,12 +1955,12 @@ export function StreamlinedWorkoutSession({
         
         // [WEEK-TRUTH-CORRIDOR] Preserved scaled dosage fields from loader.
         // getEffectiveExerciseValues() at line ~371 prefers these over base values.
-        scaledSets: typeof exAny.scaledSets === 'number' && (exAny.scaledSets as number) > 0 ? (exAny.scaledSets as number) : undefined,
-        scaledReps: typeof exAny.scaledReps === 'string' && exAny.scaledReps ? (exAny.scaledReps as string) : undefined,
-        scaledHoldDuration: typeof exAny.scaledHoldDuration === 'number' ? (exAny.scaledHoldDuration as number) : undefined,
-        scaledTargetRPE: typeof exAny.scaledTargetRPE === 'number' ? (exAny.scaledTargetRPE as number) : undefined,
-        scaledRestPeriod: typeof exAny.scaledRestPeriod === 'number' ? (exAny.scaledRestPeriod as number) : undefined,
-        weekScalingApplied: exAny.weekScalingApplied === true,
+        scaledSets: typeof scaledSetsValue === 'number' && scaledSetsValue > 0 ? scaledSetsValue : undefined,
+        scaledReps: typeof scaledRepsValue === 'string' && scaledRepsValue ? scaledRepsValue : undefined,
+        scaledHoldDuration: typeof scaledHoldDurationValue === 'number' ? scaledHoldDurationValue : undefined,
+        scaledTargetRPE: typeof scaledTargetRPEValue === 'number' ? scaledTargetRPEValue : undefined,
+        scaledRestPeriod: typeof scaledRestPeriodValue === 'number' ? scaledRestPeriodValue : undefined,
+        weekScalingApplied: weekScalingAppliedValue === true,
         
         // Override/selection
         isOverrideable: ex.isOverrideable !== false,
@@ -1968,8 +1994,15 @@ export function StreamlinedWorkoutSession({
     // ready-shell grouped rendering at line ~4836, acclimation microcopy
     // gating at line ~5083, and compositionMetadata fallback at line ~6150
     // all depend on these being preserved.
-    const sessionAny = session as Record<string, unknown>
-    
+    // [WEEK-TRUTH-CORRIDOR / OPTIONAL-FIELD-READER] Same family as the
+    // exercise normalizer above: AdaptiveSession does not declare a string
+    // index signature, so a direct `as Record<string, unknown>` cast is a
+    // compiler-dangerous overlap drift. Use the safe unknown reader for
+    // these optional pass-through metadata fields.
+    const styleMetadataValue = readUnknownObjectField(session, 'styleMetadata')
+    const prescriptionPropagationAuditValue = readUnknownObjectField(session, 'prescriptionPropagationAudit')
+    const compositionMetadataValue = readUnknownObjectField(session, 'compositionMetadata')
+
     // Build the authoritative contract
     return {
       // Session identity
@@ -2001,11 +2034,11 @@ export function StreamlinedWorkoutSession({
       // shapes inside the component. The `any` cast matches the existing
       // access pattern for these optional runtime fields.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      styleMetadata: sessionAny.styleMetadata as any,
+      styleMetadata: styleMetadataValue as any,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      prescriptionPropagationAudit: sessionAny.prescriptionPropagationAudit as any,
+      prescriptionPropagationAudit: prescriptionPropagationAuditValue as any,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      compositionMetadata: sessionAny.compositionMetadata as any,
+      compositionMetadata: compositionMetadataValue as any,
     }
   }, [session, sessionIsValid])
   

@@ -4808,13 +4808,82 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               pruned grouped truth the body consumes, so chip/summary and body can never
               disagree for the same rendered card instance. */}
           {(() => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const styleMeta: any = (session as any).styleMetadata
+            // [BUILD GREEN GATE / PATTERN BANK K — METHOD/REASON CALLBACK
+            //  INFERENCE] Previously this IIFE started from
+            //  `const styleMeta: any = (session as any).styleMetadata`,
+            //  which made every chained `.filter(...).filter((r, idx, arr) => ...)`
+            //  callback below lose contextual typing and surface
+            //  `Parameter 'r' implicitly has an 'any' type` at the dedupe step.
+            //  We now normalise the loose `unknown` styleMetadata into a typed
+            //  snapshot through a single boundary, with runtime guards. No
+            //  domain interface is weakened, no field is invented, no `as any`
+            //  remains, and the downstream output shape (applied / rejected
+            //  arrays, narrative copy) is identical.
+            type MethodRejectionReason = { method: string; reason: string }
+            type MethodStyleMetadataSnapshot = {
+              appliedMethods: string[]
+              rejectedMethods: MethodRejectionReason[]
+              methodIntentContract?: { userPreferences: string[] }
+            }
+
+            const isMethodRejectionReason = (value: unknown): value is MethodRejectionReason => {
+              if (!value || typeof value !== 'object') return false
+              const record = value as { method?: unknown; reason?: unknown }
+              return typeof record.method === 'string' && typeof record.reason === 'string'
+            }
+
+            const toStringArray = (value: unknown): string[] =>
+              Array.isArray(value)
+                ? value.filter((item): item is string => typeof item === 'string')
+                : []
+
+            const toMethodRejectionReasons = (value: unknown): MethodRejectionReason[] =>
+              Array.isArray(value) ? value.filter(isMethodRejectionReason) : []
+
+            const dedupeMethodRejectionReasons = (
+              rejections: MethodRejectionReason[],
+            ): MethodRejectionReason[] => {
+              const seen = new Set<string>()
+              const result: MethodRejectionReason[] = []
+              for (const rejection of rejections) {
+                if (seen.has(rejection.method)) continue
+                seen.add(rejection.method)
+                result.push(rejection)
+              }
+              return result
+            }
+
+            const getMethodStyleMetadataSnapshot = (
+              rawStyleMeta: unknown,
+            ): MethodStyleMetadataSnapshot | null => {
+              if (!rawStyleMeta || typeof rawStyleMeta !== 'object') return null
+              const record = rawStyleMeta as {
+                appliedMethods?: unknown
+                rejectedMethods?: unknown
+                methodIntentContract?: unknown
+              }
+              const rawIntent =
+                record.methodIntentContract && typeof record.methodIntentContract === 'object'
+                  ? (record.methodIntentContract as { userPreferences?: unknown })
+                  : undefined
+              return {
+                appliedMethods: toStringArray(record.appliedMethods),
+                rejectedMethods: toMethodRejectionReasons(record.rejectedMethods),
+                methodIntentContract: rawIntent
+                  ? { userPreferences: toStringArray(rawIntent.userPreferences) }
+                  : undefined,
+              }
+            }
+
+            const styleMeta = getMethodStyleMetadataSnapshot(
+              (session as { styleMetadata?: unknown }).styleMetadata,
+            )
             if (!styleMeta) return null
-            const userSelected: string[] = styleMeta.methodIntentContract?.userPreferences || []
+
+            const userSelected: string[] = styleMeta.methodIntentContract?.userPreferences ?? []
             // Only surface grouped-corridor methods; top_set/drop_set are per-exercise, not this corridor
             const groupedCorridor = ['supersets', 'circuits', 'density_blocks', 'cluster_sets']
-            const userSelectedGrouped = userSelected.filter((m: string) => groupedCorridor.includes(m))
+            const userSelectedGrouped = userSelected.filter((m) => groupedCorridor.includes(m))
 
             // =================================================================
             // [SINGLE-BODY-OWNER] Derive `applied` from the authoritative pruned
@@ -4845,23 +4914,29 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             )]
             
             // Build rejected array: methods user selected that did NOT materialize in final groups
-            const intentApplied: string[] = (styleMeta.appliedMethods || []).filter((m: string) => groupedCorridor.includes(m))
-            const falsePositiveApplied = intentApplied.filter(m => !applied.includes(m))
-            
-            // Start with explicit rejected methods from builder
-            const builderRejected: Array<{ method: string; reason: string }> = (styleMeta.rejectedMethods || [])
-              .filter((r: unknown): r is { method: string; reason: string } =>
-                !!r && typeof r === 'object' && 'method' in r && 'reason' in r && groupedCorridor.includes((r as { method: string }).method))
-              // De-duplicate by method, keeping the first (most specific) reason
-              .filter((r, idx, arr) => arr.findIndex((x) => x.method === r.method) === idx)
-            
+            const intentApplied: string[] = styleMeta.appliedMethods.filter((m) =>
+              groupedCorridor.includes(m),
+            )
+            const falsePositiveApplied = intentApplied.filter((m) => !applied.includes(m))
+
+            // Start with explicit rejected methods from builder. The snapshot
+            // already validated each entry as `{ method: string; reason: string }`
+            // and discarded malformed values; we only narrow to the grouped
+            // corridor and de-duplicate via the typed helper, preserving the
+            // "first reason wins" semantics of the prior chained dedupe.
+            const builderRejected: MethodRejectionReason[] = dedupeMethodRejectionReasons(
+              styleMeta.rejectedMethods.filter((rejection) =>
+                groupedCorridor.includes(rejection.method),
+              ),
+            )
+
             // [TRUTH-CONTRACT] Add false-positive "applied" methods to rejected with honest reason
             // These are methods that upstream intent marked as applied, but no actual grouped blocks exist
-            const falsePositiveRejected: Array<{ method: string; reason: string }> = falsePositiveApplied
-              .filter(m => !builderRejected.some(r => r.method === m))
-              .map(m => ({
+            const falsePositiveRejected: MethodRejectionReason[] = falsePositiveApplied
+              .filter((m) => !builderRejected.some((r) => r.method === m))
+              .map((m) => ({
                 method: m,
-                reason: 'No eligible exercise pairs found for grouping in final session structure.'
+                reason: 'No eligible exercise pairs found for grouping in final session structure.',
               }))
             
             // Combine builder rejected + false-positive rejected

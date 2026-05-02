@@ -95,6 +95,8 @@ function getLimiterMicrocopy(skill: string, limiter: LimitingFactor): string {
     shoulder_extension_mobility: `Shoulder extension mobility is the key limiter for ${skillLabel}.`,
     skill_coordination: `Skill-specific coordination needs more practice for ${skillLabel}.`,
     balance_control: `Balance and control are the limiting factors for your ${skillLabel}.`,
+    tendon_tolerance: `Tendon and connective-tissue readiness is currently limiting your ${skillLabel}. Progress slowly with isometric holds and tempo work to let tendons adapt.`,
+    ring_support_stability: `Ring support stability is the limiting factor for your ${skillLabel} on rings. Build support-position holds and shoulder control before adding load.`,
     none: `You're progressing well toward ${skillLabel}!`,
   }
   

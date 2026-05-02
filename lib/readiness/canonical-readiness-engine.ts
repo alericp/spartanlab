@@ -862,6 +862,8 @@ export function getLimiterExplanation(skill: SkillType, limiter: LimitingFactor)
     shoulder_extension_mobility: `${limiterLabel} is limiting ${skillLabel}. Work on german hangs and skin the cats.`,
     skill_coordination: `${limiterLabel} can improve through consistent practice at your current progression level.`,
     balance_control: `${limiterLabel} needs development. Practice wall-assisted work and balance drills.`,
+    tendon_tolerance: `${limiterLabel} is currently limiting ${skillLabel}. Build slowly with isometric holds, tempo reps, and longer adaptation periods to develop connective-tissue resilience before increasing intensity.`,
+    ring_support_stability: `${limiterLabel} is your current limiter for ${skillLabel}. Prioritize ring support holds, dip negatives on rings, and shoulder-position control drills.`,
     none: `You have solid readiness across all components for ${skillLabel}. Focus on skill practice.`,
   }
   

@@ -375,6 +375,59 @@ function toWeightedBenchmarkPayload(
     : { addedWeight, reps }
 }
 
+// =============================================================================
+// [PRE-AB6 BUILD GREEN GATE / ALL-TIME PR BENCHMARK PAYLOAD SHAPE BOUNDARY MAP]
+// Canonical AllTimePRBenchmark (lib/athlete-profile.ts:337-342) is:
+//   { load: number | null; unit: 'lbs' | 'kg'; reps?: number; timeframe: PRTimeframe }
+// Destination CanonicalProgrammingProfile.allTimePRPullUp / allTimePRDip
+// requires the narrower shape:
+//   { load: number; reps: number; timeframe: string; unit: 'lbs' | 'kg' } | null
+// Tightened nullability (load:number|null → load:number, reps optional →
+// reps required) means direct assignment is structurally invalid.
+// This mapper preserves all four required fields when canonical truth is
+// complete, and returns null when ANY required field is missing/invalid —
+// never inventing PR weights, reps, units, or timeframes, never widening
+// either canonical or destination types. Mirrors the WeightedBenchmark
+// helper above for the same payload corridor.
+// =============================================================================
+type AllTimePRBenchmarkPayload = {
+  load: number
+  reps: number
+  timeframe: string
+  unit: 'lbs' | 'kg'
+}
+
+type OnboardingAllTimePRBenchmark =
+  | NonNullable<OnboardingProfile['allTimePRPullUp']>
+  | NonNullable<OnboardingProfile['allTimePRDip']>
+
+function toAllTimePRBenchmarkPayload(
+  value: OnboardingAllTimePRBenchmark | null | undefined
+): AllTimePRBenchmarkPayload | null {
+  if (!value) return null
+
+  // canonical `load: number | null` — destination requires non-null finite number.
+  const load = value.load
+  if (typeof load !== 'number' || !Number.isFinite(load)) return null
+
+  // canonical `reps?: number` — destination requires non-null finite number.
+  const reps = value.reps
+  if (typeof reps !== 'number' || !Number.isFinite(reps)) return null
+
+  // canonical `unit: 'lbs' | 'kg'` — destination requires the same literal pair.
+  const unit = value.unit
+  if (unit !== 'lbs' && unit !== 'kg') return null
+
+  // canonical `timeframe: PRTimeframe` — destination accepts any non-empty
+  // string. Tighten the runtime guard to the canonical PRTimeframe union via
+  // the in-file `isPRTimeframe` type guard so we never forward stale or
+  // empty timeframe data into the destination payload.
+  const timeframe = value.timeframe
+  if (!isPRTimeframe(timeframe)) return null
+
+  return { load, reps, unit, timeframe }
+}
+
 function reconcileStoredProfileForUI(
   storedProfile: Partial<OnboardingProfile>,
   canonicalProfile?: ReturnType<typeof getCanonicalProfile>
@@ -3590,7 +3643,7 @@ function ReviewSection({ profile, onEditSection, onClearAll, showClearConfirm, s
     // Add highest level ever reached from skill history
     if (muHistory?.highestLevelEverReached && muHistory.highestLevelEverReached !== profile.muscleUp) {
       const highestLabel = SKILL_PROGRESSION_OPTIONS['muscle_up']?.find(o => o.value === muHistory.highestLevelEverReached)?.label || muHistory.highestLevelEverReached
-      muSummary += ` — was ${highestLabel}`
+      muSummary += ` �� was ${highestLabel}`
     }
     if (muHistory?.trainingHistory && muHistory.trainingHistory !== 'never') {
       muSummary += ` • ${SKILL_TRAINING_HISTORY_LABELS[muHistory.trainingHistory]}`
@@ -4497,8 +4550,15 @@ export function AthleteOnboarding() {
         // are missing/non-finite (which the destination null-branch accepts).
         weightedPullUp: toWeightedBenchmarkPayload(profile.weightedPullUp),
         weightedDip: toWeightedBenchmarkPayload(profile.weightedDip),
-        allTimePRPullUp: profile.allTimePRPullUp || null,
-        allTimePRDip: profile.allTimePRDip || null,
+        // [PRE-AB6 BUILD GREEN GATE / ALL-TIME PR BENCHMARK PAYLOAD SHAPE — BOUNDARY MAP]
+        // Canonical AllTimePRBenchmark allows `load: number | null` and
+        // `reps?: number`; destination requires both as non-null finite numbers
+        // plus a non-empty timeframe and a 'lbs'|'kg' unit. Route both fields
+        // through toAllTimePRBenchmarkPayload — never silently drops valid
+        // user-entered PRs; returns null only when a required field is
+        // missing/invalid (which the destination null-branch accepts).
+        allTimePRPullUp: toAllTimePRBenchmarkPayload(profile.allTimePRPullUp),
+        allTimePRDip: toAllTimePRBenchmarkPayload(profile.allTimePRDip),
         
         // TASK A: Skill benchmarks - CRITICAL for engine
         frontLeverProgression: profile.frontLever?.progression || null,

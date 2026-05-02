@@ -427,11 +427,20 @@ export function AdaptiveProgramDisplay({
   // B. Compute unrepresentedSkills
   const sharedUnrepresentedSkills = safeSelectedSkills.filter(s => !sharedRepresentedSkills.includes(s))
   
-  // C. Compute headline skills
-  const sharedHeadlineSkills = safeSummaryTruth.headlineFocusSkills || [program.primaryGoal, program.secondaryGoal].filter(Boolean)
+  // C. Compute headline skills.
+  // [BUILD GREEN GATE] safeSummaryTruth is typed `T | null` (declared L214).
+  // When summary truth is missing, fall back to the program's selected primary
+  // and secondary goals — the existing honest fallback. Type predicate produces
+  // a clean string[] for downstream `.includes()` callers without casts.
+  const sharedHeadlineSkills: string[] =
+    safeSummaryTruth?.headlineFocusSkills && safeSummaryTruth.headlineFocusSkills.length > 0
+      ? safeSummaryTruth.headlineFocusSkills
+      : [program.primaryGoal, program.secondaryGoal].filter(
+          (skill): skill is string => typeof skill === 'string' && skill.length > 0,
+        )
   
-  // D. Compute week support skills
-  const sharedWeekSupportSkills = safeSummaryTruth.weekSupportSkills || []
+  // D. Compute week support skills (empty array when summary truth missing).
+  const sharedWeekSupportSkills: string[] = safeSummaryTruth?.weekSupportSkills ?? []
   
   // E. ChipState type and getChipState helper
   type SharedChipState = 'headline_priority' | 'represented_broader' | 'support_only' | 'selected_not_represented'

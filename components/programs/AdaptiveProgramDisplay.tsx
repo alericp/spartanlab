@@ -96,6 +96,37 @@ interface AdaptiveProgramDisplayProps {
   programDisplayProjection?: ProgramDisplayProjection | null
   }
 
+// =============================================================================
+// [BUILD GREEN GATE / DISPLAY STRING-ARRAY NORMALIZER — DISPLAY-ONLY]
+//
+// Program/profile fields like `program.primaryGoal` are typed as literal
+// unions (PrimaryGoal | undefined). Building a fallback `string[]` from those
+// values via `.filter(Boolean)` or `.filter((x): x is string => ...)` does NOT
+// collapse the element type to plain `string` — TypeScript keeps it as
+// `(PrimaryGoal | undefined)[]` because a type predicate cannot narrow a
+// subtype-of-string union to the broader `string` type.
+//
+// This helper accepts `readonly unknown[] | null | undefined` and produces a
+// guaranteed `string[]` — fresh, trimmed, non-empty values only. It is
+// read-only, never mutates source data, never invents defaults, and never
+// transforms identity beyond stripping wrapper whitespace.
+// =============================================================================
+function compactDisplayStrings(
+  values: readonly unknown[] | null | undefined,
+): string[] {
+  if (!Array.isArray(values)) return []
+
+  return values.reduce<string[]>((acc, value) => {
+    if (typeof value !== 'string') return acc
+
+    const trimmed = value.trim()
+    if (trimmed.length === 0) return acc
+
+    acc.push(trimmed)
+    return acc
+  }, [])
+}
+
 export function AdaptiveProgramDisplay({
   program,
   onDelete,
@@ -428,19 +459,24 @@ export function AdaptiveProgramDisplay({
   const sharedUnrepresentedSkills = safeSelectedSkills.filter(s => !sharedRepresentedSkills.includes(s))
   
   // C. Compute headline skills.
-  // [BUILD GREEN GATE] safeSummaryTruth is typed `T | null` (declared L214).
-  // When summary truth is missing, fall back to the program's selected primary
-  // and secondary goals — the existing honest fallback. Type predicate produces
-  // a clean string[] for downstream `.includes()` callers without casts.
+  // [BUILD GREEN GATE] safeSummaryTruth is `T | null`; primaryGoal/secondaryGoal
+  // are `PrimaryGoal | undefined` literal unions. Use compactDisplayStrings to
+  // normalize both sources into a guaranteed `string[]` — TS cannot collapse
+  // a literal-union subtype to plain string via predicate, so the helper does
+  // it structurally instead. Honest fallback: real present primary/secondary
+  // goals only; never invent skills.
+  const summaryHeadlineSkills = compactDisplayStrings(safeSummaryTruth?.headlineFocusSkills)
+  const fallbackHeadlineSkills = compactDisplayStrings([
+    program.primaryGoal,
+    program.secondaryGoal,
+  ])
   const sharedHeadlineSkills: string[] =
-    safeSummaryTruth?.headlineFocusSkills && safeSummaryTruth.headlineFocusSkills.length > 0
-      ? safeSummaryTruth.headlineFocusSkills
-      : [program.primaryGoal, program.secondaryGoal].filter(
-          (skill): skill is string => typeof skill === 'string' && skill.length > 0,
-        )
+    summaryHeadlineSkills.length > 0 ? summaryHeadlineSkills : fallbackHeadlineSkills
   
   // D. Compute week support skills (empty array when summary truth missing).
-  const sharedWeekSupportSkills: string[] = safeSummaryTruth?.weekSupportSkills ?? []
+  const sharedWeekSupportSkills: string[] = compactDisplayStrings(
+    safeSummaryTruth?.weekSupportSkills,
+  )
   
   // E. ChipState type and getChipState helper
   type SharedChipState = 'headline_priority' | 'represented_broader' | 'support_only' | 'selected_not_represented'

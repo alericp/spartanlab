@@ -399,9 +399,15 @@ export function AdaptiveProgramDisplay({
     if (safeRepresentedSkills.length > 0) {
       return safeRepresentedSkills
     }
-    // Client-side fallback computation
-    const allExerciseNames = safeSessions.flatMap(s => 
-      s.exercises?.map(e => (e.exercise?.name || '').toLowerCase()) || []
+    // Client-side fallback computation.
+    // [BUILD GREEN GATE] AdaptiveExercise is flat — exercise truth lives on
+    // `e.name` directly (lib/adaptive-program-builder.ts AdaptiveExercise).
+    // Read the canonical flat shape; empty/missing names are filtered out so
+    // the keyword-match loop below never matches against a hollow string.
+    const allExerciseNames = safeSessions.flatMap(s =>
+      s.exercises
+        ?.map(e => (typeof e?.name === 'string' ? e.name.toLowerCase() : ''))
+        .filter((name): name is string => name.length > 0) || []
     ) || []
     
     const skillKeywords: Record<string, string[]> = {

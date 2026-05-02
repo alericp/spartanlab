@@ -1228,13 +1228,20 @@ function buildCanonicalProgramDisplayTruth(program: AdaptiveProgram): CanonicalP
   const weeklyRep = (program as unknown as { weeklyRepresentation?: { policies?: Array<{ skill: string; actualExposure?: { direct: number; total: number } }> } }).weeklyRepresentation
   const summaryTruth = (program as unknown as { summaryTruth?: { truthfulHybridSummary?: string; headlineFocusSkills?: string[] } }).summaryTruth
   
-  // Built around skills: primary/secondary always included, others only if materially represented
-  const headlineSkills = summaryTruth?.headlineFocusSkills || [program.primaryGoal, (program as unknown as { secondaryGoal?: string }).secondaryGoal].filter(Boolean) as string[]
-  const materiallyRepresentedOtherSkills = (weeklyRep?.policies || [])
+  // [BUILD GREEN GATE] Built around skills: primary/secondary always included,
+  // others only if materially represented. Use a typed predicate so the
+  // fallback collapses to a guaranteed `string[]` without an `as string[]` cast.
+  // Honest fallback: only real selected primary/secondary goals; never invent.
+  const isNonEmptyString = (value: unknown): value is string =>
+    typeof value === 'string' && value.length > 0
+  const headlineSkills: string[] = summaryTruth?.headlineFocusSkills && summaryTruth.headlineFocusSkills.length > 0
+    ? summaryTruth.headlineFocusSkills
+    : [program.primaryGoal, (program as unknown as { secondaryGoal?: string }).secondaryGoal].filter(isNonEmptyString)
+  const materiallyRepresentedOtherSkills = (weeklyRep?.policies ?? [])
     .filter(p => {
       if (headlineSkills.includes(p.skill)) return false // Already in headline
-      const direct = p.actualExposure?.direct || 0
-      const total = p.actualExposure?.total || 0
+      const direct = p.actualExposure?.direct ?? 0
+      const total = p.actualExposure?.total ?? 0
       return direct >= 2 || total >= 3 // Same threshold as AdaptiveProgramDisplay
     })
     .map(p => p.skill)
@@ -2067,8 +2074,8 @@ function ProgramDisplayWrapper({
       selectedSkillsCount: program?.selectedSkills?.length ?? 'undefined',
       hasSessions: Array.isArray(program?.sessions),
       sessionCount: program?.sessions?.length ?? 'undefined',
-      hasSummaryTruth: !!(program as unknown as { summaryTruth?: object })?.summaryTruth,
-      hasWeeklyRepresentation: !!(program as unknown as { weeklyRepresentation?: object })?.weeklyRepresentation,
+      hasSummaryTruth: !!(program as unknown as { summaryTruth?: unknown })?.summaryTruth,
+      hasWeeklyRepresentation: !!(program as unknown as { weeklyRepresentation?: unknown })?.weeklyRepresentation,
       crashedBeforeSessionsRendered: !errorInfo.componentStack?.includes('AdaptiveSessionCard'),
       firstComponentInStack: firstComponent,
       verdict: 'EXACT_DISPLAY_ERROR_CAPTURED',

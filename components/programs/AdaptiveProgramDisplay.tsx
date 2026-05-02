@@ -127,6 +127,98 @@ function compactDisplayStrings(
   }, [])
 }
 
+// =============================================================================
+// [BUILD GREEN GATE / DISPLAY WEEKLY-REPRESENTATION CONTRACT — DISPLAY-ONLY]
+//
+// Program decoration fields like `weeklyRepresentation` enter this display
+// component through an `as unknown as { weeklyRepresentation?: ... }` cast.
+// Reading them through a loose `object` boundary forces every downstream
+// `.policies`, `.find`, `.actualExposure.direct` access to fail TS or
+// require an inline structural cast. This narrow display-only contract +
+// runtime guard gives the rest of the file a single typed entry point.
+//
+// Read-only by construction: the guard never mutates program data, never
+// invents policies, and never falsifies representation truth — invalid or
+// missing input always degrades to `null`, preserving the existing honest
+// fallback (chip-state logic at L539 already handles `null` policies by
+// downgrading to headline-identity-only chip rules).
+// =============================================================================
+type DisplayRepresentationVerdict =
+  | 'headline_represented'
+  | 'broadly_represented'
+  | 'support_only'
+  | 'selected_but_underexpressed'
+  | 'filtered_out_by_constraints'
+  | 'not_selected'
+
+type DisplayActualExposure = {
+  direct?: number
+  technical?: number
+  support?: number
+  warmupOnly?: number
+  total?: number
+}
+
+type DisplayWeeklyRepresentationPolicy = {
+  skill: string
+  selectedRank?: 'headline' | 'secondary' | 'tertiary' | 'optional'
+  targetExposure?: number
+  eligibleSessionTypes?: string[]
+  actualExposure?: DisplayActualExposure
+  representationVerdict?: DisplayRepresentationVerdict
+  narrowingPoint?: string | null
+}
+
+type DisplayWeeklyRepresentation = {
+  policies: DisplayWeeklyRepresentationPolicy[]
+  coverageRatio?: number
+  verdictCounts?: Record<string, number>
+}
+
+function isDisplayWeeklyRepresentation(
+  value: unknown,
+): value is DisplayWeeklyRepresentation {
+  if (!value || typeof value !== 'object') return false
+
+  const maybe = value as { policies?: unknown }
+
+  if (!Array.isArray(maybe.policies)) return false
+
+  return maybe.policies.every(policy => {
+    if (!policy || typeof policy !== 'object') return false
+
+    const maybePolicy = policy as {
+      skill?: unknown
+      actualExposure?: unknown
+      representationVerdict?: unknown
+    }
+
+    if (
+      typeof maybePolicy.skill !== 'string' ||
+      maybePolicy.skill.trim().length === 0
+    ) {
+      return false
+    }
+
+    if (
+      maybePolicy.actualExposure !== undefined &&
+      maybePolicy.actualExposure !== null &&
+      typeof maybePolicy.actualExposure !== 'object'
+    ) {
+      return false
+    }
+
+    if (
+      maybePolicy.representationVerdict !== undefined &&
+      typeof maybePolicy.representationVerdict !== 'string'
+    ) {
+      return false
+    }
+
+    return true
+  })
+}
+
 export function AdaptiveProgramDisplay({
   program,
   onDelete,
@@ -212,8 +304,8 @@ export function AdaptiveProgramDisplay({
   // Get raw program fields with type assertions for optional fields
   const rawSelectedSkills = (program as unknown as { selectedSkills?: string[] }).selectedSkills
   const rawRepresentedSkills = (program as unknown as { representedSkills?: string[] }).representedSkills
-  const rawSummaryTruth = (program as unknown as { summaryTruth?: object }).summaryTruth
-  const rawWeeklyRepresentation = (program as unknown as { weeklyRepresentation?: object }).weeklyRepresentation
+  const rawSummaryTruth = (program as unknown as { summaryTruth?: unknown }).summaryTruth
+  const rawWeeklyRepresentation = (program as unknown as { weeklyRepresentation?: unknown }).weeklyRepresentation
   
   // Build safe locals from raw fields - NO self-references allowed
   const safeSelectedSkills = Array.isArray(rawSelectedSkills) ? rawSelectedSkills : []
@@ -242,6 +334,8 @@ export function AdaptiveProgramDisplay({
 
   
   const safeRepresentedSkills = Array.isArray(rawRepresentedSkills) ? rawRepresentedSkills : []
+  // [BUILD GREEN GATE] safeSummaryTruth — narrow shape via inline structural
+  // cast (kept for inline-cast continuity; existing downstream access is safe).
   const safeSummaryTruth = rawSummaryTruth && typeof rawSummaryTruth === 'object'
     ? (rawSummaryTruth as { 
         headlineFocusSkills?: string[]
@@ -252,9 +346,14 @@ export function AdaptiveProgramDisplay({
         summaryRenderableSkills?: string[]
       })
     : null
-  const safeWeeklyRepresentation = rawWeeklyRepresentation && typeof rawWeeklyRepresentation === 'object'
-    ? rawWeeklyRepresentation
-    : null
+  // [BUILD GREEN GATE] safeWeeklyRepresentation — narrow through the typed
+  // runtime guard so every downstream `.policies` / `.find` / `.actualExposure`
+  // read typechecks structurally without inline casts. Invalid or missing
+  // input degrades to `null`, preserving the existing honest fallback in
+  // chip-state logic (L541-544 returns headline-identity only when policies
+  // are absent).
+  const safeWeeklyRepresentation: DisplayWeeklyRepresentation | null =
+    isDisplayWeeklyRepresentation(rawWeeklyRepresentation) ? rawWeeklyRepresentation : null
   
   // [VISIBLE-SESSION-TRUTH-LOCK] Build authoritative per-card display surfaces.
   // Prefer surfaces injected by the page-level CanonicalProgramDisplayTruth
@@ -522,9 +621,9 @@ export function AdaptiveProgramDisplay({
   // Only skills that meet strict representation thresholds appear as chips
   const sharedStrictRepresentedSkillsForChips = safeSelectedSkills.filter(skill => {
     const chipState = getSharedChipState(skill)
-    const policy = safeWeeklyRepresentation?.policies?.find(p => p.skill === skill)
-    const directExposure = policy?.actualExposure?.direct || 0
-    const totalExposure = policy?.actualExposure?.total || 0
+    const policy = safeWeeklyRepresentation?.policies.find(p => p.skill === skill)
+    const directExposure = policy?.actualExposure?.direct ?? 0
+    const totalExposure = policy?.actualExposure?.total ?? 0
     
     // [PHASE 6B TASK 2] TIGHTENED MEANINGFUL REPRESENTATION THRESHOLDS
     const isHeadline = chipState === 'headline_priority'
@@ -536,7 +635,7 @@ export function AdaptiveProgramDisplay({
     // When weeklyRepresentation policies are unavailable, ONLY show headline skills
     // Do NOT show broader skills from fallback client-side exercise name matching
     // This prevents stale/generic chips when canonical truth is unavailable
-    const hasWeeklyRepPolicies = safeWeeklyRepresentation?.policies && safeWeeklyRepresentation.policies.length > 0
+    const hasWeeklyRepPolicies = (safeWeeklyRepresentation?.policies.length ?? 0) > 0
     
     if (!hasWeeklyRepPolicies) {
       // Fallback: only headline identity chips, no others
@@ -562,9 +661,12 @@ export function AdaptiveProgramDisplay({
   
   const allSelectedSkillsWithRepresentation: SkillWithRepresentation[] = safeSelectedSkills.map(skill => {
     const chipState = getSharedChipState(skill)
-    const policy = (safeWeeklyRepresentation as { policies?: Array<{ skill: string; actualExposure?: { direct?: number; total?: number } }> })?.policies?.find(p => p.skill === skill)
-    const directExposure = policy?.actualExposure?.direct || 0
-    const totalExposure = policy?.actualExposure?.total || 0
+    // [BUILD GREEN GATE] safeWeeklyRepresentation is now typed via the local
+    // DisplayWeeklyRepresentation contract, so `.policies.find(...)` resolves
+    // without inline casts. `??` preserves valid zero exposures.
+    const policy = safeWeeklyRepresentation?.policies.find(p => p.skill === skill)
+    const directExposure = policy?.actualExposure?.direct ?? 0
+    const totalExposure = policy?.actualExposure?.total ?? 0
     
     const isHeadline = chipState === 'headline_priority'
     const hasMeaningfulDirect = directExposure >= 2

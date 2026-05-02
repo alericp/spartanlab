@@ -85,43 +85,56 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
   const [isPro, setIsPro] = useState(false)
 
   useEffect(() => {
+    // [PRE-AB6 BUILD GREEN GATE / OC-ASYNC-1]
+    // generateFirstProgram() returns Promise<FirstRunResult> — must be awaited
+    // before storing in setProgramResult or reading .success/.program/.error.
+    // Cancellation guard prevents setState-after-unmount in dev Strict Mode
+    // double-invocation and during the long readiness/upgrade timing chain
+    // below; intentional empty deps preserve one-time generation on mount.
+    let cancelled = false
+
     // Check Pro status
     setIsPro(hasProAccess())
 
     // Generate program with error handling
     const generateProgram = async () => {
       await new Promise(resolve => setTimeout(resolve, 1200))
-      
+      if (cancelled) return
+
       try {
-        const result = generateFirstProgram()
+        const result = await generateFirstProgram()
+        if (cancelled) return
+
         setProgramResult(result)
-        
+
         if (!result.success || !result.program) {
           console.error('[OnboardingComplete] Generation failed:', result.error)
           // Still continue to allow user to retry or use demo
           setStep('ready')
           return
         }
-        
+
         // CRITICAL: Verify program is actually readable from canonical storage
         // This prevents routing forward if save didn't work
         const { getProgramState } = await import('@/lib/program-state')
+        if (cancelled) return
+
         const verificationState = getProgramState()
-        
+
         if (!verificationState.hasUsableWorkoutProgram) {
           console.error('[OnboardingComplete] Program saved but not readable from program-state')
           setStep('ready')
           return
         }
-        
+
         // Generate program reasoning
         const reasoning = getProgramReasoning(result.program)
         setProgramReasoning(reasoning)
-        
+
         // Calculate initial Spartan Score
         const score = calculateSpartanScore()
         setSpartanScore(score.totalScore)
-        
+
         // Create program history entry via API (if authenticated)
         // This runs in background - don't block the UI flow
         fetch('/api/program/history', {
@@ -136,11 +149,12 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
           // Silent fail - history will be created later if needed
           console.error('[OnboardingComplete] Failed to create program history:', err)
         })
-        
+
         // Show readiness for 2 seconds
         setStep('readiness')
         await new Promise(resolve => setTimeout(resolve, 2500))
-        
+        if (cancelled) return
+
         // If already Pro, skip upgrade step
         if (hasProAccess()) {
           setStep('ready')
@@ -148,13 +162,18 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
           setStep('upgrade')
         }
       } catch (err) {
+        if (cancelled) return
         console.error('[OnboardingComplete] Exception:', err)
         // Still allow user to continue
         setStep('ready')
       }
     }
-    
+
     generateProgram()
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const handleStartTraining = () => {

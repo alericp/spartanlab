@@ -16,6 +16,7 @@
  */
 
 import type { TrainingDaysPerWeek, SessionLengthPreference } from '@/lib/athlete-profile'
+import type { SessionLength as ProgramSessionLength } from '@/lib/program-service'
 
 // =============================================================================
 // [PRE-AB6 BUILD GREEN GATE / ADAPTIVE DISPLAY CONTRACT BOUNDARY]
@@ -35,7 +36,21 @@ import type { TrainingDaysPerWeek, SessionLengthPreference } from '@/lib/athlete
 type ScheduleModeInput = 'flexible' | 'static' | null | undefined
 type TrainingDaysInput = TrainingDaysPerWeek | number | null | undefined
 type SessionDurationModeInput = 'adaptive' | 'static' | null | undefined
-type SessionLengthInput = SessionLengthPreference | number | null | undefined
+// [BUILD GREEN GATE / PROGRAM SESSION-LENGTH BOUNDARY]
+// Program truth from lib/program-service.ts uses SessionLength which includes
+// range tokens ('10-20' | '20-30' | '30-45' | '45-60' | '60+') in addition
+// to numeric minutes. Athlete profile preference uses SessionLengthPreference
+// which adds 'flexible'. The display contract is the shared boundary for
+// BOTH sources, so SessionLengthInput must accept the full union — display
+// helpers normalize range tokens to a numeric baseline for layout math and
+// preserve the original token for label rendering. Program truth is never
+// mutated and no normalized value is written back.
+type SessionLengthInput =
+  | SessionLengthPreference
+  | ProgramSessionLength
+  | number
+  | null
+  | undefined
 
 // =============================================================================
 // TYPES
@@ -61,6 +76,67 @@ export interface AdaptiveDisplayContract {
   schedule: ScheduleDisplayInfo
   duration: DurationDisplayInfo
   summary: string
+}
+
+// =============================================================================
+// SESSION-LENGTH DISPLAY-ONLY NORMALIZERS
+// =============================================================================
+// These two helpers exist purely to render labels and run baseline math for
+// adaptive copy. They are NEVER persisted, NEVER passed back into program
+// generation, and NEVER overwrite program.sessionLength.
+//
+// Baseline mapping rationale:
+//   - numeric              -> use as-is
+//   - 'flexible'           -> 60 (athlete-profile adaptive default)
+//   - '10-20' / '20-30' / '30-45' / '45-60' -> upper bound of the range
+//   - '60+'                -> 75 (conservative extended-session baseline;
+//                            extended sessions in the runtime average above 60
+//                            but the program truth doesn't claim a fixed 90)
+//   - null / undefined     -> 60 (existing display fallback preserved)
+
+function resolveSessionLengthBaselineMinutes(
+  sessionLengthMinutes: SessionLengthInput
+): number {
+  if (typeof sessionLengthMinutes === 'number') return sessionLengthMinutes
+
+  switch (sessionLengthMinutes) {
+    case 'flexible':
+      return 60
+    case '10-20':
+      return 20
+    case '20-30':
+      return 30
+    case '30-45':
+      return 45
+    case '45-60':
+      return 60
+    case '60+':
+      return 75
+    default:
+      return 60
+  }
+}
+
+function getSessionLengthDisplayLabel(
+  sessionLengthMinutes: SessionLengthInput,
+  baseline: number
+): string {
+  switch (sessionLengthMinutes) {
+    case '10-20':
+      return '10-20 min'
+    case '20-30':
+      return '20-30 min'
+    case '30-45':
+      return '30-45 min'
+    case '45-60':
+      return '45-60 min'
+    case '60+':
+      return '60+ min'
+    case 'flexible':
+      return `~${baseline} min`
+    default:
+      return `${baseline} min`
+  }
 }
 
 // =============================================================================
@@ -123,7 +199,7 @@ export function getDurationDisplayInfo(
   sessionLengthMinutes: SessionLengthInput
 ): DurationDisplayInfo {
   const isAdaptive = sessionDurationMode === 'adaptive' || sessionLengthMinutes === 'flexible'
-  const baseline = typeof sessionLengthMinutes === 'number' ? sessionLengthMinutes : 60
+  const baseline = resolveSessionLengthBaselineMinutes(sessionLengthMinutes)
   
   // Map baseline to display range
   const rangeLabel = baseline <= 30 ? '~25-35' 
@@ -142,8 +218,11 @@ export function getDurationDisplayInfo(
     }
   }
   
+  // [BUILD GREEN GATE] Preserve range-token truth in label rendering when the
+  // program carries a token like '60+' or '45-60'. Numeric program truth still
+  // renders as `${baseline} min` via the default branch.
   return {
-    label: `${baseline} min`,
+    label: getSessionLengthDisplayLabel(sessionLengthMinutes, baseline),
     sublabel: 'Fixed session duration',
     mode: 'static',
     baselineMinutes: baseline,
@@ -221,11 +300,11 @@ export function getCompactDurationLabel(
   sessionLengthMinutes: SessionLengthInput
 ): string {
   const isAdaptive = sessionDurationMode === 'adaptive' || sessionLengthMinutes === 'flexible'
-  const baseline = typeof sessionLengthMinutes === 'number' ? sessionLengthMinutes : 60
+  const baseline = resolveSessionLengthBaselineMinutes(sessionLengthMinutes)
   if (isAdaptive) {
     return `~${baseline} min (Adaptive)`
   }
-  return `${baseline} min`
+  return getSessionLengthDisplayLabel(sessionLengthMinutes, baseline)
 }
 
 // =============================================================================

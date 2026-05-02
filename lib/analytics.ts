@@ -296,11 +296,22 @@ export function trackCTAClicked(sourceTool: string, destination?: string): void 
   })
 }
 
-export function trackProgramGenerated(programType?: string, skillFocus?: string): void {
+// [PRE-AB6 BUILD GREEN GATE / ONBOARDING ANALYTICS NULLABILITY BOUNDARY]
+// Real onboarding/profile state has validly-nullable optional fields
+// (e.g. OnboardingProfile.primaryGoal: PrimaryGoalType | null when the
+// user has not yet selected a goal). Analytics is a non-fatal edge:
+// accept null at the boundary and normalize to undefined for the event
+// payload rather than forcing callers to invent a fake default goal or
+// pre-coerce nullable profile truth at every site. Both onboarding
+// completion call sites (initial + retry) pass through here.
+export function trackProgramGenerated(
+  programType?: string | null,
+  skillFocus?: string | null
+): void {
   try {
-    trackEvent(AnalyticsEvents.PROGRAM_GENERATED, { 
-      program_type: programType,
-      skill_focus: skillFocus,
+    trackEvent(AnalyticsEvents.PROGRAM_GENERATED, {
+      program_type: programType ?? undefined,
+      skill_focus: skillFocus ?? undefined,
       generated_at: new Date().toISOString()
     })
   } catch (err) {

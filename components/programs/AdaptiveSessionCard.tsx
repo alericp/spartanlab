@@ -7018,6 +7018,37 @@ function resolveRowMethodTruth(
 // EXERCISE ROW
 // =============================================================================
 
+// [PATTERN-BANK-M] Single named local context type for the ExerciseRow / row
+// surface / card surface corridor. All fields are optional because not every
+// session carries every piece of explanation truth (e.g. early-stage sessions
+// may have no `compositionMetadata`, sessions with no propagation audit may
+// omit `prescriptionPropagationAudit`, and not every program has a recorded
+// `primaryGoal`). The downstream builders already handle missing optional
+// fields without inventing fallback language. This stays in lockstep with
+// `sessionContextForRows` (built above ~line 5531) and with the
+// `sessionContext` parameter of `buildExerciseCardContract` and
+// `buildExerciseRowSurface` in lib/program/program-display-contract.ts.
+type ExerciseRowSessionContext = {
+  sessionFocus?: string
+  isPrimarySession?: boolean
+  primaryGoal?: string
+  prescriptionPropagationAudit?: {
+    appliedReductions?: {
+      setsReduced?: boolean
+      rpeReduced?: boolean
+    }
+  }
+  styleMetadata?: {
+    primaryStyle?: string
+    hasSupersetsApplied?: boolean
+    hasDensityApplied?: boolean
+  }
+  compositionMetadata?: {
+    spineSessionType?: string
+    sessionIntent?: string
+  }
+}
+
 interface ExerciseRowProps {
   exercise: AdaptiveExercise
   index?: number
@@ -7034,22 +7065,23 @@ interface ExerciseRowProps {
   sessionId?: string
   isSkipped?: boolean
   adjustedName?: string
-  // [EXERCISE-ROW-SURFACE] Session context for building authoritative row surface
-  sessionContext?: {
-    sessionFocus?: string
-    isPrimarySession?: boolean
-    prescriptionPropagationAudit?: {
-      appliedReductions?: {
-        setsReduced?: boolean
-        rpeReduced?: boolean
-      }
-    }
-    styleMetadata?: {
-      primaryStyle?: string
-      hasSupersetsApplied?: boolean
-      hasDensityApplied?: boolean
-    }
-  }
+  // [EXERCISE-ROW-SURFACE] Session context for building authoritative row surface.
+  //
+  // [PATTERN-BANK-M / ROW-SURFACE-CONTEXT-ALIGNMENT]
+  // This shape MUST stay in lockstep with `sessionContextForRows` (built around
+  // line ~5531) and with the `sessionContext` parameter of the two downstream
+  // builders that ultimately consume it:
+  //   - `buildExerciseCardContract`  (lib/program/program-display-contract.ts)
+  //   - `buildExerciseRowSurface`    (lib/program/program-display-contract.ts)
+  // Both builders already accept `primaryGoal` and `compositionMetadata`, and
+  // `sessionContextForRows` already constructs them honestly from the program's
+  // primary goal and the session's composition metadata. The only thing that
+  // had drifted was this prop type — it omitted those two optional fields, so
+  // the call site at the bottom of this file (`buildExerciseCardContract({...},
+  // sessionContext ? { ..., primaryGoal: ..., compositionMetadata: ... } : ...)`)
+  // could not type-check. Declaring the fields here as honestly optional
+  // (no fake defaults) restores the contract.
+  sessionContext?: ExerciseRowSessionContext
   // [AI-EVIDENCE-BRIDGE] Session evidence for row alignment
   sessionEvidence?: SessionAiEvidenceSurface
   // [COACHING-EXPLANATION-CONTRACT] Authoritative exercise explanation from coaching surface

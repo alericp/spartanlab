@@ -60,7 +60,7 @@ import { getCompactScheduleLabel, getCompactDurationLabel } from '@/lib/adaptive
 
 // Type-only imports are safe at module scope
 import type { FirstRunResult } from '@/lib/onboarding-service'
-import type { OnboardingProfile, ReadinessScores } from '@/lib/athlete-profile'
+import type { OnboardingProfile, ReadinessScores, ReadinessCalibration } from '@/lib/athlete-profile'
 
 // PRICING is a static const object - check if safe to keep at module scope
 // Moving to dynamic import for maximum safety
@@ -94,6 +94,42 @@ type PageStep = 'generating' | 'ready' | 'error'
 
 // Session-scoped idempotency key for this specific onboarding completion flow
 const GENERATION_SESSION_KEY = 'spartanlab_onboarding_generation_attempted'
+
+// =============================================================================
+// [PRE-AB6 BUILD GREEN GATE / OCC-READINESS-1 BOUNDARY MAPPER]
+// Boundary mapper: OnboardingProfile is broader than ReadinessCalibration.
+// Only pass readiness-calibration fields into calculateReadinessScores.
+//
+// calculateReadinessScores(calibration: Partial<ReadinessCalibration>) reads
+// 5 raw answer fields nested under OnboardingProfile.readinessCalibration:
+//   trainingConsistency | recoveryTolerance | strengthPerception
+//   | skillFamiliarity | bodyType
+//
+// All other OnboardingProfile fields (selectedSkills, equipment, goals,
+// trainingDaysPerWeek, etc.) are intentionally OMITTED — they are not
+// part of the ReadinessCalibration contract. The `scores` field is also
+// intentionally omitted: the function computes scores from the raw
+// answers; passing back a pre-computed scores object would be redundant
+// and the function ignores it. When readinessCalibration is null
+// (user skipped calibration), return {} so the function falls back to
+// its built-in middle-of-road defaults rather than us inventing answers.
+// =============================================================================
+function toReadinessCalibrationInput(
+  profile: OnboardingProfile | null | undefined
+): Partial<ReadinessCalibration> {
+  if (!profile) return {}
+
+  const calibration = profile.readinessCalibration
+  if (!calibration) return {}
+
+  return {
+    trainingConsistency: calibration.trainingConsistency,
+    recoveryTolerance: calibration.recoveryTolerance,
+    strengthPerception: calibration.strengthPerception,
+    skillFamiliarity: calibration.skillFamiliarity,
+    bodyType: calibration.bodyType,
+  }
+}
 
 export default function OnboardingCompleteClient() {
   const router = useRouter()
@@ -363,9 +399,15 @@ export default function OnboardingCompleteClient() {
             })
             setProfile(loadedProfile)
             
-            // Calculate readiness scores
+            // Calculate readiness scores.
+            // [PRE-AB6 BUILD GREEN GATE / OCC-READINESS-1] OnboardingProfile is
+            // broader than ReadinessCalibration; route through the typed
+            // boundary mapper so only the 5 raw answer fields nested under
+            // profile.readinessCalibration reach the calculator. Empty input
+            // is safe — the function falls back to middle-of-road defaults.
             try {
-              const scores = athleteModule.calculateReadinessScores(loadedProfile)
+              const readinessInput = toReadinessCalibrationInput(loadedProfile)
+              const scores = athleteModule.calculateReadinessScores(readinessInput)
               setReadiness(scores)
               console.log('[OnboardingCompleteClient] Readiness calculated')
             } catch (err) {

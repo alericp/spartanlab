@@ -15,20 +15,27 @@
  * - Settings preview
  */
 
-import type { TrainingDaysPerWeek } from '@/lib/athlete-profile'
+import type { TrainingDaysPerWeek, SessionLengthPreference } from '@/lib/athlete-profile'
 
 // =============================================================================
 // [PRE-AB6 BUILD GREEN GATE / ADAPTIVE DISPLAY CONTRACT BOUNDARY]
-// Real onboarding/profile/program schedule truth uses
-//   TrainingDaysPerWeek = 2 | 3 | 4 | 5 | 6 | 7 | 'flexible'
-// (per lib/athlete-profile.ts). Display helpers were previously typed
-// as `number | null | undefined` only, which rejected the legitimate
-// 'flexible' literal. Widen the helper boundary to accept the real
-// union and normalize 'flexible' inside the helper. Display-only —
-// callers never need to fake-convert flexible into a numeric stand-in.
+// Real onboarding/profile/program schedule + duration truth use literal
+// unions that include adaptive/flexible signals:
+//   TrainingDaysPerWeek      = 2 | 3 | 4 | 5 | 6 | 7 | 'flexible'
+//   SessionLengthPreference  = 20 | 30 | 45 | 60 | 75 | 90 | 120 | 'flexible'
+//   sessionDurationMode      = 'static' | 'adaptive' | undefined
+// Display helpers were previously typed for `number | undefined` only,
+// which rejected legitimate 'flexible' / null / undefined values that
+// flow naturally from optional chaining on profile/program objects.
+// Widen the helper boundary to accept the real unions and normalize
+// flexible/adaptive signals inside the helpers. Display-only — callers
+// never need to fake-convert flexible into a numeric stand-in, and no
+// fallback is ever written back into profile/program data.
 // =============================================================================
 type ScheduleModeInput = 'flexible' | 'static' | null | undefined
 type TrainingDaysInput = TrainingDaysPerWeek | number | null | undefined
+type SessionDurationModeInput = 'adaptive' | 'static' | null | undefined
+type SessionLengthInput = SessionLengthPreference | number | null | undefined
 
 // =============================================================================
 // TYPES
@@ -100,16 +107,22 @@ export function getScheduleDisplayInfo(
 
 /**
  * Get duration display info from canonical profile data
- * 
+ *
  * [PHASE 14B] Truthful display:
  * - adaptive mode shows "Adaptive" with baseline target
  * - static mode shows exact duration
+ *
+ * [PRE-AB6] Treat duration as adaptive if EITHER sessionDurationMode === 'adaptive'
+ * OR sessionLengthMinutes === 'flexible' — legacy/partially-normalized
+ * profiles may carry the adaptive signal on either field. Numeric baseline
+ * fallback (60) is display-only and is never written back into profile/program
+ * data.
  */
 export function getDurationDisplayInfo(
-  sessionDurationMode: 'adaptive' | 'static' | undefined,
-  sessionLengthMinutes: number | undefined
+  sessionDurationMode: SessionDurationModeInput,
+  sessionLengthMinutes: SessionLengthInput
 ): DurationDisplayInfo {
-  const isAdaptive = sessionDurationMode === 'adaptive'
+  const isAdaptive = sessionDurationMode === 'adaptive' || sessionLengthMinutes === 'flexible'
   const baseline = typeof sessionLengthMinutes === 'number' ? sessionLengthMinutes : 60
   
   // Map baseline to display range
@@ -144,8 +157,8 @@ export function getDurationDisplayInfo(
 export function getAdaptiveDisplayContract(
   scheduleMode: ScheduleModeInput,
   trainingDaysPerWeek: TrainingDaysInput,
-  sessionDurationMode: 'adaptive' | 'static' | undefined,
-  sessionLengthMinutes: number | undefined
+  sessionDurationMode: SessionDurationModeInput,
+  sessionLengthMinutes: SessionLengthInput
 ): AdaptiveDisplayContract {
   const schedule = getScheduleDisplayInfo(scheduleMode, trainingDaysPerWeek)
   const duration = getDurationDisplayInfo(sessionDurationMode, sessionLengthMinutes)
@@ -197,13 +210,19 @@ export function getCompactScheduleLabel(
 
 /**
  * Get compact duration label for card headers
+ *
+ * [PRE-AB6] Accepts the real SessionLengthPreference union (numbers + 'flexible')
+ * plus null/undefined from optional chaining. Adaptive signal on either input
+ * maps to the adaptive label; non-adaptive non-numeric values fall through
+ * to the display-only numeric baseline of 60.
  */
 export function getCompactDurationLabel(
-  sessionDurationMode: 'adaptive' | 'static' | undefined,
-  sessionLengthMinutes: number | undefined
+  sessionDurationMode: SessionDurationModeInput,
+  sessionLengthMinutes: SessionLengthInput
 ): string {
+  const isAdaptive = sessionDurationMode === 'adaptive' || sessionLengthMinutes === 'flexible'
   const baseline = typeof sessionLengthMinutes === 'number' ? sessionLengthMinutes : 60
-  if (sessionDurationMode === 'adaptive') {
+  if (isAdaptive) {
     return `~${baseline} min (Adaptive)`
   }
   return `${baseline} min`
@@ -221,8 +240,8 @@ export function runAdaptiveDisplayParityAudit(
   source: string,
   scheduleMode: ScheduleModeInput,
   trainingDaysPerWeek: TrainingDaysInput,
-  sessionDurationMode: 'adaptive' | 'static' | undefined,
-  sessionLengthMinutes: number | undefined,
+  sessionDurationMode: SessionDurationModeInput,
+  sessionLengthMinutes: SessionLengthInput,
   displayedScheduleLabel: string,
   displayedDurationLabel: string
 ): void {

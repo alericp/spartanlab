@@ -457,7 +457,10 @@ function getEffectiveExerciseValues(exercise: AdaptiveExercise | null | undefine
     sets: scaled.scaledSets ?? exercise.sets ?? 3,
     repsOrTime: scaled.scaledReps ?? exercise.repsOrTime ?? '8-12 reps',
     targetRPE: scaled.scaledTargetRPE ?? exercise.targetRPE ?? 8,
-    restPeriod: scaled.scaledRestPeriod ?? exercise.restPeriod ?? 90,
+    // [REST-FIELD-CONTRACT] AdaptiveExercise canonical rest field is
+    // `restSeconds`. The local `EffectiveExerciseValues.restPeriod` is a
+    // live-session UI/runtime value name and is intentionally preserved.
+    restPeriod: scaled.scaledRestPeriod ?? exercise.restSeconds ?? 90,
     weekScalingApplied: scaled.weekScalingApplied === true,
   }
 }
@@ -3312,8 +3315,8 @@ export function StreamlinedWorkoutSession({
     const baseRestSeconds = typeof safeCurrentExercise?.restSeconds === 'number'
       ? safeCurrentExercise.restSeconds
       : undefined
-    // eff.restPeriod returns either scaledRestPeriod or base exercise.restPeriod
-    // or the 90s default from the resolver. We only prefer it over
+    // eff.restPeriod returns either scaledRestPeriod or canonical
+    // exercise.restSeconds or the 90s default from the resolver. We only prefer it over
     // baseRestSeconds when week scaling is actually applied, so un-scaled
     // sessions keep their existing rest behaviour bit-identical.
     const effectiveRestSeconds = eff.weekScalingApplied

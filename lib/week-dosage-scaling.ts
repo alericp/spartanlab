@@ -397,7 +397,9 @@ export function scaleExerciseForWeek(
   // Parse original values
   const originalSets = typeof exercise.sets === 'number' ? exercise.sets : parseInt(String(exercise.sets)) || 3
   const originalTargetRPE = exercise.targetRPE || 8
-  const originalRestPeriod = exercise.restPeriod || 90
+  // [REST-FIELD-CONTRACT] AdaptiveExercise canonical rest field is `restSeconds`.
+  // The downstream `scaledRestPeriod` output name is preserved.
+  const originalRestPeriod = exercise.restSeconds || 90
   // [STEP-5-ADAPTIVE-DOSAGE] Detect a hold RANGE first so we can scale both
   // endpoints together; falling back to the single-value parser preserves
   // backward compatibility with rows that emit "30s hold" / "45s".

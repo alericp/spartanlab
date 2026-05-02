@@ -491,6 +491,56 @@ function toLegacyAthleteProfileEquipment(
   return result
 }
 
+// =============================================================================
+// [PRE-AB6 BUILD GREEN GATE / LEGACY ATHLETE WEAKEST-AREA PAYLOAD BOUNDARY MAP]
+// Two weakest-area unions exist in this codebase by design:
+//
+//   1. CANONICAL onboarding `WeakestArea` (lib/athlete-profile.ts:123):
+//      pulling_strength | pushing_strength | core_strength
+//      | shoulder_stability | hip_mobility | hamstring_flexibility | not_sure
+//      — broad 7-value canonical truth; "not_sure" means the user has not
+//      identified a specific weak point yet.
+//
+//   2. LEGACY data-service AthleteProfile.weakestArea (lib/data-service.ts):
+//      pulling_strength | pushing_strength | core_strength
+//      | shoulder_stability | hip_mobility | hamstring_flexibility | null
+//      — narrow 6-value union; the legacy local-storage compatibility
+//      contract used by saveAthleteProfile (no "not_sure" representation).
+//
+// "not_sure" has NO semantic equivalent in the narrow legacy union. The
+// honest mapping is null (legacy programming emphasis treats the absence
+// of a specified weak point the same way) — fake-mapping it to any
+// specific weakness would be a lie. Canonical "not_sure" is preserved
+// unchanged by saveCanonicalProfile and the API DB payload.
+// =============================================================================
+type LegacyAthleteWeakestArea =
+  | 'pulling_strength'
+  | 'pushing_strength'
+  | 'core_strength'
+  | 'shoulder_stability'
+  | 'hip_mobility'
+  | 'hamstring_flexibility'
+
+function toLegacyAthleteWeakestArea(
+  weakestArea: WeakestArea | null | undefined
+): LegacyAthleteWeakestArea | null {
+  switch (weakestArea) {
+    case 'pulling_strength':
+    case 'pushing_strength':
+    case 'core_strength':
+    case 'shoulder_stability':
+    case 'hip_mobility':
+    case 'hamstring_flexibility':
+      return weakestArea
+    case 'not_sure':
+    case null:
+    case undefined:
+      return null
+    default:
+      return null
+  }
+}
+
 function reconcileStoredProfileForUI(
   storedProfile: Partial<OnboardingProfile>,
   canonicalProfile?: ReturnType<typeof getCanonicalProfile>
@@ -4764,8 +4814,13 @@ export function AthleteOnboarding() {
         equipmentAvailable: toLegacyAthleteProfileEquipment(profile.equipment),
         // Sync joint cautions for protocol recommendations and exercise selection
         jointCautions: profile.jointCautions || [],
-        // Sync weakest area for programming emphasis
-        weakestArea: profile.weakestArea || null,
+        // [PRE-AB6 BUILD GREEN GATE / LEGACY WEAKEST-AREA BOUNDARY]
+        // saveAthleteProfile() cannot represent canonical "not_sure".
+        // Preserve "not_sure" in the canonical save and API DB payload
+        // (where the destination accepts it); here, map it to null for
+        // legacy programming emphasis rather than inventing a fake weak
+        // point — see toLegacyAthleteWeakestArea header comment.
+        weakestArea: toLegacyAthleteWeakestArea(profile.weakestArea),
         onboardingComplete: true,
       })
       
@@ -4905,6 +4960,12 @@ export function AthleteOnboarding() {
               ...dbResult.profile,
               equipmentAvailable: toLegacyAthleteProfileEquipment(
                 dbResult.profile.equipmentAvailable
+              ),
+              // Same rationale as equipmentAvailable above: the spread carries
+              // a possibly-canonical "not_sure" through the `any`-typed JSON,
+              // which tsc would not flag but the legacy contract rejects.
+              weakestArea: toLegacyAthleteWeakestArea(
+                dbResult.profile.weakestArea
               ),
               onboardingComplete: true,
             })

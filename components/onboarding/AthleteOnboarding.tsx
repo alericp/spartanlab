@@ -29,7 +29,7 @@ import {
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { trackOnboardingCompleted } from '@/lib/analytics'
 import { TestingGuideLink, DontKnowHelper } from '@/components/testing/TestingGuideModal'
-import { saveAthleteProfile } from '@/lib/data-service'
+import { saveAthleteProfile, type Equipment as LegacyEquipment } from '@/lib/data-service'
 import {
   type OnboardingProfile,
   type Sex,
@@ -426,6 +426,69 @@ function toAllTimePRBenchmarkPayload(
   if (!isPRTimeframe(timeframe)) return null
 
   return { load, reps, unit, timeframe }
+}
+
+// =============================================================================
+// [PRE-AB6 BUILD GREEN GATE / LEGACY ATHLETE EQUIPMENT PAYLOAD BOUNDARY MAP]
+// Two equipment unions exist in this codebase by design:
+//
+//   1. CANONICAL onboarding `EquipmentType` (lib/athlete-profile.ts):
+//      pullup_bar | dip_bars | parallettes | rings | resistance_bands
+//      | weights | bench_box | minimal | barbell | weight_plates
+//      — broad 10-value canonical truth carried by `profile.equipment` and
+//      accepted by saveCanonicalProfile and the API DB payload.
+//
+//   2. LEGACY data-service `Equipment` (lib/data-service.ts):
+//      pullup_bar | dip_bars | parallettes | rings | resistance_bands
+//      — narrow 5-value union; the legacy local-storage compatibility
+//      contract used by saveAthleteProfile (predates the broader
+//      categories).
+//
+// The narrow legacy union has NO semantic equivalent for the 5 broader
+// values (weights, bench_box, minimal, barbell, weight_plates) — fake-
+// mapping any of them into 'pullup_bar' or another unrelated value would
+// be a lie. We therefore route only the 5 representable values through
+// to saveAthleteProfile, while the FULL 10-value equipment truth flows
+// unchanged through the canonical save and the API DB payload, which
+// each accept the wider canonical contract.
+//
+// Mapper input is `readonly string[] | null | undefined` so it can safely
+// consume both `OnboardingProfile['equipment']` (EquipmentType[]) and the
+// `any`-typed DB-response sync path (`dbResult.profile.equipmentAvailable`)
+// without any cast or `as` escape — runtime guards do the narrowing.
+// =============================================================================
+const LEGACY_ATHLETE_EQUIPMENT_VALUES = [
+  'pullup_bar',
+  'dip_bars',
+  'parallettes',
+  'rings',
+  'resistance_bands',
+] as const satisfies readonly LegacyEquipment[]
+
+function isLegacyAthleteEquipment(value: unknown): value is LegacyEquipment {
+  return (
+    typeof value === 'string' &&
+    (LEGACY_ATHLETE_EQUIPMENT_VALUES as readonly string[]).includes(value)
+  )
+}
+
+function toLegacyAthleteProfileEquipment(
+  values: readonly string[] | null | undefined
+): LegacyEquipment[] {
+  if (!Array.isArray(values)) return []
+
+  const result: LegacyEquipment[] = []
+  for (const value of values) {
+    // Pass through only values representable in the narrow legacy union.
+    // Broader EquipmentType values (weights, bench_box, minimal, barbell,
+    // weight_plates) are intentionally excluded here — they are NOT
+    // representable in the legacy contract and are preserved unchanged
+    // by the canonical save and the API DB payload.
+    if (isLegacyAthleteEquipment(value) && !result.includes(value)) {
+      result.push(value)
+    }
+  }
+  return result
 }
 
 function reconcileStoredProfileForUI(
@@ -4666,8 +4729,15 @@ export function AthleteOnboarding() {
       // Log canonical state after save for debugging
       logProfileTruthState('After onboarding submit')
       
-      // LEGACY: Also sync to athlete profile for backward compatibility
-      // [PHASE 14A TASK 2] FIX: Preserve FULL equipment array without lossy filtering
+      // LEGACY: Also sync to athlete profile for backward compatibility.
+      // [PRE-AB6 BUILD GREEN GATE / LEGACY ATHLETE EQUIPMENT BOUNDARY]
+      // saveAthleteProfile() uses the narrow lib/data-service Equipment[]
+      // union, which CANNOT represent broader onboarding equipment values
+      // (weights, bench_box, minimal, barbell, weight_plates). The full
+      // 10-value canonical equipment truth is preserved in the canonical
+      // save (saveCanonicalProfile, above) and the API DB payload (below);
+      // here we map only to the legacy-accepted subset. No casts, no fake
+      // aliases, no truth loss outside this legacy local-storage path.
       saveAthleteProfile({
         sex: profile.sex,
         experienceLevel: profile.trainingExperience === 'new' || profile.trainingExperience === 'some' 
@@ -4686,8 +4756,12 @@ export function AthleteOnboarding() {
              : 90)
           : 60,
         primaryGoal: profile.selectedSkills[0] || profile.primaryGoal || null,
-        // [PHASE 14A] REMOVED LOSSY FILTER - preserve full equipment array
-        equipmentAvailable: profile.equipment || [],
+        // Map full canonical EquipmentType[] truth into the narrow legacy
+        // Equipment[] union the data-service contract accepts. Values not
+        // representable here (weights, bench_box, minimal, barbell,
+        // weight_plates) remain preserved by canonical/DB payloads above
+        // and below — see toLegacyAthleteProfileEquipment header comment.
+        equipmentAvailable: toLegacyAthleteProfileEquipment(profile.equipment),
         // Sync joint cautions for protocol recommendations and exercise selection
         jointCautions: profile.jointCautions || [],
         // Sync weakest area for programming emphasis
@@ -4818,10 +4892,20 @@ export function AthleteOnboarding() {
             onboardingComplete: dbResult.profile?.onboardingComplete,
           })
           
-          // Sync DB response back to local storage - DB truth wins
+          // Sync DB response back to local storage - DB truth wins.
+          // [PRE-AB6 BUILD GREEN GATE / LEGACY ATHLETE EQUIPMENT BOUNDARY]
+          // dbResult.profile comes from `await dbResponse.json()` (typed `any`),
+          // so tsc would not flag a wider EquipmentType[] flowing into the
+          // narrow legacy Equipment[] contract here. Normalize defensively
+          // through the same mapper so the legacy local-storage contract
+          // never sees unrepresentable values at runtime — full canonical
+          // equipment truth still lives in the DB and canonical caches.
           if (dbResult.success && dbResult.profile) {
             saveAthleteProfile({
               ...dbResult.profile,
+              equipmentAvailable: toLegacyAthleteProfileEquipment(
+                dbResult.profile.equipmentAvailable
+              ),
               onboardingComplete: true,
             })
             console.log('[Onboarding] Synced DB profile to local storage')

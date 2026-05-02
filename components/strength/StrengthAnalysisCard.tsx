@@ -39,6 +39,22 @@ export function StrengthAnalysisCard({ analysis, hasBodyweight }: StrengthAnalys
 
   const bestRecord = recentPerformance.bestRecent || recentPerformance.bestAllTime
 
+  // [PATTERN-BANK / NULLABLE-OBJECT-JSX-CONTROL-FLOW]
+  // Both `relativeMetrics` and `nextTierInfo` are doubly nullable:
+  //   relativeMetrics: RelativeStrengthMetrics | null
+  //     -> oneRMRatio: number | null
+  //   nextTierInfo: { nextTier: string | null; gapWeight: number | null } | null
+  // The previous JSX used `obj?.field !== null` and then read `obj.field`
+  // directly. That predicate does NOT narrow the outer object: it is true
+  // when the outer is undefined too, so direct member access remained unsafe.
+  // We derive typed `number | null` locals up-front via `typeof === 'number'`
+  // (Phase 7 Pattern 1). No `!`, no casts, no fake values — when data is
+  // missing we render the existing honest '—' fallback.
+  const oneRMRatio: number | null =
+    typeof relativeMetrics?.oneRMRatio === 'number' ? relativeMetrics.oneRMRatio : null
+  const gapWeight: number | null =
+    typeof nextTierInfo?.gapWeight === 'number' ? nextTierInfo.gapWeight : null
+
   return (
     <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-5 space-y-4">
       {/* Header */}
@@ -84,8 +100,8 @@ export function StrengthAnalysisCard({ analysis, hasBodyweight }: StrengthAnalys
         <div className="bg-[#1A1A1A] rounded-lg p-3">
           <p className="text-xs text-[#6A6A6A] mb-1">Relative</p>
           <p className="text-lg font-bold">
-            {relativeMetrics?.oneRMRatio !== null 
-              ? `${(relativeMetrics.oneRMRatio * 100).toFixed(0)}%` 
+            {oneRMRatio !== null
+              ? `${(oneRMRatio * 100).toFixed(0)}%`
               : '—'}
           </p>
           {!hasBodyweight && (
@@ -115,12 +131,12 @@ export function StrengthAnalysisCard({ analysis, hasBodyweight }: StrengthAnalys
       </div>
 
       {/* Next Tier Progress (if close) */}
-      {nextTierInfo?.gapWeight !== null && nextTierInfo.gapWeight <= 25 && (
+      {gapWeight !== null && gapWeight <= 25 && (
         <div className="flex items-center gap-2 text-xs text-[#A5A5A5]">
           <Target className="w-3 h-3" />
           <span>
-            +{nextTierInfo.gapWeight}lbs to reach{' '}
-            <span className="text-[#F5F5F5]">{nextTierInfo.nextTier}</span> tier
+            +{gapWeight}lbs to reach{' '}
+            <span className="text-[#F5F5F5]">{nextTierInfo?.nextTier ?? '—'}</span> tier
           </span>
         </div>
       )}

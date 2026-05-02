@@ -342,8 +342,22 @@ type WeightedBenchmarkPayload = {
   unit?: 'lbs' | 'kg'
 }
 
+// [PRE-AB6 BUILD GREEN GATE / WEIGHTED BENCHMARK HELPER INPUT TYPE-SCOPE FIX]
+// `WeightedBenchmark` is not exported into this file's import surface from
+// '@/lib/athlete-profile' (only OnboardingProfile and its companion types
+// are imported above). Rather than add a new cross-module import or risk a
+// stale duplicate type definition, we derive the helper's input type
+// directly from the authoritative OnboardingProfile field types it
+// consumes at the call sites: profile.weightedPullUp / profile.weightedDip.
+// Using the union of both fields' NonNullable variants keeps the helper
+// tied to exactly the data it receives, and any future canonical
+// WeightedBenchmark shape change automatically flows through.
+type OnboardingWeightedBenchmark =
+  | NonNullable<OnboardingProfile['weightedPullUp']>
+  | NonNullable<OnboardingProfile['weightedDip']>
+
 function toWeightedBenchmarkPayload(
-  value: WeightedBenchmark | null | undefined
+  value: OnboardingWeightedBenchmark | null | undefined
 ): WeightedBenchmarkPayload | null {
   if (!value) return null
 

@@ -377,6 +377,60 @@ function toneClasses(tone: Tone): string {
   }
 }
 
+/**
+ * [PATTERN-BANK-O / SKILL-TRACE-READ-BOUNDARY]
+ * Typed read boundary for the optional `skillTraces` array carried on the
+ * safe skill trace object returned by `getSafeSkillTrace` (lib/safe-access.ts).
+ *
+ * Why this exists:
+ *   `getSafeSkillTrace`'s return type is `typeof EMPTY_SKILL_TRACE`, and
+ *   `EMPTY_SKILL_TRACE` is declared `as const` with `skillTraces: []`. That
+ *   makes the field's static type the literal readonly empty tuple `readonly []`,
+ *   even though the runtime value can be any array recovered from the raw
+ *   trace metadata. The Truth Summary block below only READS rows (filter,
+ *   slice, supplement up to 4), so the safe contract here is:
+ *     unknown -> Array.isArray guard -> per-row type guard -> ReadonlyArray<Row>
+ *
+ *   This replaces a previous `(safeTrace.skillTraces ?? []) as Array<{...}>`
+ *   cast, which was unsafe under both readonly inference and unknown-row
+ *   shape (no `as unknown as`, no `as any`, no fake row defaults).
+ */
+type SkillTraceSummaryRow = {
+  skill?: string
+  currentWorkingProgression?: string | null
+  historicalCeiling?: string | null
+  isConservative?: boolean
+}
+
+function isSkillTraceSummaryRow(value: unknown): value is SkillTraceSummaryRow {
+  if (!value || typeof value !== 'object') return false
+  const row = value as Record<string, unknown>
+
+  const skillOk =
+    row.skill === undefined || typeof row.skill === 'string'
+
+  const currentWorkingProgressionOk =
+    row.currentWorkingProgression === undefined ||
+    row.currentWorkingProgression === null ||
+    typeof row.currentWorkingProgression === 'string'
+
+  const historicalCeilingOk =
+    row.historicalCeiling === undefined ||
+    row.historicalCeiling === null ||
+    typeof row.historicalCeiling === 'string'
+
+  const isConservativeOk =
+    row.isConservative === undefined ||
+    typeof row.isConservative === 'boolean'
+
+  return skillOk && currentWorkingProgressionOk && historicalCeilingOk && isConservativeOk
+}
+
+function readSkillTraceSummaryRows(value: unknown): ReadonlyArray<SkillTraceSummaryRow> {
+  if (!Array.isArray(value)) return []
+  return value.filter(isSkillTraceSummaryRow)
+}
+
 export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, rulePopulationLedger, className }: ProgramTruthSummaryProps) {
   const [isExpanded, setIsExpanded] = useState(false)
 
@@ -544,12 +598,14 @@ export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, rule
     }
     // Supplement from trace if we still have room
     if (safeTrace && rows.length < 4) {
-      const typedTraces = (safeTrace.skillTraces ?? []) as Array<{
-        skill?: string
-        currentWorkingProgression?: string | null
-        historicalCeiling?: string | null
-        isConservative?: boolean
-      }>
+      // [PATTERN-BANK-O] Typed read boundary instead of an unsafe array cast.
+      // `safeTrace.skillTraces` is statically typed as `readonly []` (the
+      // literal empty tuple inferred from EMPTY_SKILL_TRACE in
+      // lib/safe-access.ts), but at runtime it can be any array recovered
+      // from raw trace metadata. We use Array.isArray + a per-row guard to
+      // produce a ReadonlyArray<SkillTraceSummaryRow>. Invalid rows are
+      // filtered (not faked); existing supplement-up-to-4 logic is preserved.
+      const typedTraces = readSkillTraceSummaryRows(safeTrace.skillTraces)
       for (const trace of typedTraces) {
         if (rows.length >= 4) break
         if (!trace.skill) continue

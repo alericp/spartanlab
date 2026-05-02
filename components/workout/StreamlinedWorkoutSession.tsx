@@ -1816,6 +1816,32 @@ function readUnknownObjectField(source: unknown, key: string): unknown {
   return (source as Record<string, unknown>)[key]
 }
 
+// [GROUPED-RENDER-CALLBACK-TYPING]
+// Minimal local shape of `safeSession.styleMetadata.styledGroups[]` as
+// consumed by this file's two grouped-render corridors:
+//   1. `machineSessionContract` useMemo (executionPlan derivation)
+//   2. shell pre-start preview render
+// `styleMetadata` is intentionally a loose pass-through metadata blob on
+// the AdaptiveSession contract, so without an explicit local annotation
+// the array type collapses to `any` and every callback parameter (`g`,
+// `group`, `b`, `e`) becomes implicit-any under strict TS. Declaring this
+// minimal shape at module scope restores natural inference for `.some`,
+// `.every`, `.map`, `.flatMap`, `.filter`, `.reduce`, and `for…of` over
+// styledGroups WITHOUT widening the canonical AdaptiveSession type and
+// WITHOUT adding any cast at the callsites. Only fields actually read by
+// this file are declared; unknown extras flowing through are tolerated.
+type StyledWorkoutGroupExerciseRef = {
+  id: string
+  name: string
+  prefix?: string | null
+}
+type StyledWorkoutGroup = {
+  id: string
+  groupType?: string | null
+  instruction?: string | null
+  exercises: StyledWorkoutGroupExerciseRef[]
+}
+
 // MERGE_LANE_REACTIVATE_V1
 export function StreamlinedWorkoutSession({
   session,
@@ -2108,7 +2134,14 @@ export function StreamlinedWorkoutSession({
     // [GROUPED-TRUTH-UNIFY] Derive execution plan from AUTHORITATIVE source
     // Priority 1: styleMetadata.styledGroups (same source as Program screen / Today's Plan)
     // Priority 2: Fallback to flat blockId-based derivation
-    const styledGroups = safeSession.styleMetadata?.styledGroups
+    //
+    // [GROUPED-RENDER-CALLBACK-TYPING] `safeSession.styleMetadata` is a loose
+    // pass-through metadata blob. The local `StyledWorkoutGroup[]`
+    // annotation (defined at module scope above) restores natural callback
+    // inference for `some`, `every`, `flatMap`, `map`, and `for…of` below
+    // without any cast, suppression, or canonical-type widening.
+    const styledGroups: StyledWorkoutGroup[] | undefined =
+      safeSession.styleMetadata?.styledGroups
 
     // [FINAL-MIRROR-LOCK Part 3] styleMetadata SHADOW-OWNER GUARD.
     //
@@ -6054,7 +6087,12 @@ if (shouldShowLocalFallback) {
     // `styleMetadata`: the flattening order of the groups disagrees with
     // fullVisibleExercises order for shortened sessions, and the prior
     // code always honored the flattening.
-    const shellStyledGroups = safeSession.styleMetadata?.styledGroups
+    // [GROUPED-RENDER-CALLBACK-TYPING] Same source as the executionPlan
+    // useMemo above. Annotate to restore strict callback inference for the
+    // shell preview render's `.some`, `.map`, `.reduce`, and `for…of` over
+    // styledGroups and member exercises.
+    const shellStyledGroups: StyledWorkoutGroup[] | undefined =
+      safeSession.styleMetadata?.styledGroups
     const shellStyledGroupsCanOwnOrder = ((): boolean => {
       if (!shellStyledGroups || shellStyledGroups.length === 0) return false
       const hasTrulyGrouped = shellStyledGroups.some(
@@ -6074,10 +6112,10 @@ if (shouldShowLocalFallback) {
 
     // Priority 1: Authoritative styleMetadata grouped render
     // (only when styledGroups legitimately owns order per the shadow-owner guard)
-    if (shellStyledGroupsCanOwnOrder && safeSession.styleMetadata?.styledGroups && safeSession.styleMetadata.styledGroups.length > 0) {
+    if (shellStyledGroupsCanOwnOrder && shellStyledGroups && shellStyledGroups.length > 0) {
       const previewGroupCounters: Record<string, number> = { superset: 0, circuit: 0, cluster: 0, density_block: 0 }
-      
-      return safeSession.styleMetadata.styledGroups.map((group, groupIdx) => {
+
+      return shellStyledGroups.map((group, groupIdx) => {
         const isGrouped = group.groupType !== 'straight'
         
         let blockLetter = ''
@@ -6141,7 +6179,7 @@ if (shouldShowLocalFallback) {
         } else {
           const exInfo = group.exercises[0]
           const fullEx = exercises.find(e => e.id === exInfo?.id)
-          const globalIndex = safeSession.styleMetadata!.styledGroups
+          const globalIndex = shellStyledGroups
             .slice(0, groupIdx)
             .reduce((sum, g) => sum + g.exercises.length, 0) + 1
           
@@ -6393,7 +6431,11 @@ if (shouldShowLocalFallback) {
               const min = typeof safeSession.estimatedMinutes === 'number'
                 ? safeSession.estimatedMinutes
                 : null
-              const groupCount = safeSession.styleMetadata?.styledGroups?.filter(
+              // [GROUPED-RENDER-CALLBACK-TYPING] Type the array locally so the
+              // `.filter` callback is not implicit-any.
+              const debugStyledGroups: StyledWorkoutGroup[] | undefined =
+                safeSession.styleMetadata?.styledGroups
+              const groupCount = debugStyledGroups?.filter(
                 (g) => g.groupType !== 'straight'
               ).length ?? 0
               const totalSets = (safeSession.exercises ?? []).reduce(

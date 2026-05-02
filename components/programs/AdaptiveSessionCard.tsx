@@ -65,6 +65,12 @@ import {
   // fallback. Run inline on the card after `finalVisibleBodyModel`; the
   // verdict drives the dev probe and the blueprint Phase G evidence.
   resolveCanonicalMethodBodyRender,
+  // [BUILD GREEN GATE / SESSION IDENTITY RESOLVER] Pure read-only resolver
+  // for visible session identity. AdaptiveSession / ScaledSession do not own
+  // a `name` field — the resolver prefers canonical fields (focusLabel,
+  // focus, dayLabel, dayNumber) and reads legacy `name` only via guarded
+  // `unknown` access. Used for React keys, analytics labels, instance IDs.
+  resolveSessionDisplayIdentity,
   type CanonicalMethodBodyRenderResolution,
   type ExerciseRowSurface,
   type SessionCardSurface,
@@ -450,10 +456,16 @@ function getGroupTypeColors(groupType: StyledGroup['groupType']): { border: stri
  * Ensures all required properties exist with safe defaults
  */
 function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
+  // [BUILD GREEN GATE / SESSION IDENTITY] AdaptiveSession does not own a
+  // `name` field — canonical identity flows through `focusLabel` / `focus` /
+  // `dayLabel`. Earlier display code leaked an extra `name` field through
+  // this normalizer; downstream readers now go through
+  // `resolveSessionDisplayIdentity(session)` instead. Removing the leaked
+  // field keeps this normalizer's return value structurally compatible with
+  // its declared `AdaptiveSession` return type.
   if (!session || typeof session !== 'object') {
     console.log('[AdaptiveSessionCard] Session is invalid, using empty default')
     return {
-      name: 'Session',
       dayNumber: 0,
       dayLabel: 'Day',
       focusLabel: 'Training',
@@ -464,7 +476,6 @@ function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
   
   return {
     ...session,
-    name: session.name || 'Training Session',
     dayNumber: session.dayNumber || 0,
     dayLabel: session.dayLabel || `Day ${session.dayNumber || 1}`,
     focusLabel: session.focusLabel || 'General Training',
@@ -483,7 +494,9 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   // are dead code that never renders. showProbe/forceProbe props are kept for
   // interface compatibility but are not honored. To revive probes, wire a
   // new explicitly dev-only gate behind process.env.NODE_ENV checks.
-  const cardInstanceId = `card-${rawSession.dayNumber}-${rawSession.name?.slice(0,10) || 'session'}-${Date.now().toString(36).slice(-4)}`
+  // [BUILD GREEN GATE / SESSION IDENTITY] Use the typed resolver instead of
+  // reading `rawSession.name` (which AdaptiveSession does not own).
+  const cardInstanceId = `card-${rawSession.dayNumber}-${resolveSessionDisplayIdentity(rawSession).slice(0,10) || 'session'}-${Date.now().toString(36).slice(-4)}`
   const probeActive = false as boolean
   // PHASE 3: Normalize session immediately to prevent crashes
   const session = normalizeSessionForDisplay(rawSession)
@@ -504,7 +517,11 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     const rawEvidence = buildSessionAiEvidenceSurface(
       {
         dayNumber: session.dayNumber,
-        name: session.name,
+        // [BUILD GREEN GATE / SESSION IDENTITY] AdaptiveSession does not own
+        // `name`; route the bridge's optional `name` slot through the typed
+        // resolver. The bridge already prefers focusLabel over name, so this
+        // preserves prior behavior while satisfying the type.
+        name: resolveSessionDisplayIdentity(session),
         dayLabel: session.dayLabel,
         focus: session.focus,
         focusLabel: session.focusLabel,
@@ -547,7 +564,10 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   // [TASK 4] Track session identity to reset variant state when session changes
   // Using ref to avoid setting state during render
   const lastSessionIdentityRef = useRef<string>('')
-  const currentSessionIdentity = `${programId || 'unknown'}-${session.dayNumber}-${session.name}`
+  // [BUILD GREEN GATE / SESSION IDENTITY] Session-identity string used to
+  // detect program/day changes for variant-state reset. Read through the
+  // typed resolver so this stays stable across the canonical session shape.
+  const currentSessionIdentity = `${programId || 'unknown'}-${session.dayNumber}-${resolveSessionDisplayIdentity(session)}`
   
   // [TASK 4] Reset variant state when program or session changes
   // This prevents stale Full/45/30 selections from persisting across regenerations
@@ -566,7 +586,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   }, [currentSessionIdentity]) // eslint-disable-line react-hooks/exhaustive-deps
   
   // Generate unique session ID for tracking overrides
-  const sessionId = `${session.name}-${session.dayLabel}-${Date.now().toString(36)}`
+  const sessionId = `${resolveSessionDisplayIdentity(session)}-${session.dayLabel}-${Date.now().toString(36)}`
 
   // Session lifecycle hook
   const workoutSession = useWorkoutSession(session)
@@ -745,7 +765,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     // authoritative selectedSessionContract. No independent re-derivation of
     // executionMode / variant index / week param here. If the contract says
     // 45_min + variant=1, the URL is 45_min + variant=1. Full stop.
-    trackWorkoutStarted(session.name)
+    trackWorkoutStarted(resolveSessionDisplayIdentity(session))
 
     // [SELECTED-VARIANT-SESSION-CONTRACT] Stamp the expected selected-variant
     // fingerprint immediately before router.push. This is the card's promise
@@ -921,7 +941,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
 
   const handleWorkoutComplete = () => {
     finishSession()
-    trackWorkoutCompleted(session.name, stats.durationMinutes, stats.completedExercises)
+    trackWorkoutCompleted(resolveSessionDisplayIdentity(session), stats.durationMinutes, stats.completedExercises)
     onWorkoutComplete?.()
   }
 
@@ -1102,7 +1122,10 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     {
       dayNumber: session.dayNumber,
       dayLabel: session.dayLabel,
-      name: session.name,
+      // [BUILD GREEN GATE / SESSION IDENTITY] AdaptiveSession does not own
+      // `name`; route the bridge's optional `name` slot through the typed
+      // resolver so the canonical session shape stays clean.
+      name: resolveSessionDisplayIdentity(session),
       focus: session.focus,
       focusLabel: session.focusLabel,
       isPrimary: session.isPrimary,

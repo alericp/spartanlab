@@ -40,6 +40,11 @@ import {
   getProgramSurfaceSignals,
   getSessionSurfaceSignals,
   buildAllSessionCardSurfaces,
+  // [BUILD GREEN GATE / SESSION IDENTITY RESOLVER] Pure read-only resolver
+  // for visible session identity (React keys + display labels). Replaces
+  // direct `session.name` reads, which fail TS on canonical AdaptiveSession /
+  // ScaledSession types (those types do not own `name`).
+  resolveSessionKeyParts,
   type ProgramIntelligenceContract,
   type SessionCardSurface,
   type ProgramDisplayProjection,
@@ -1277,8 +1282,15 @@ export function AdaptiveProgramDisplay({
               (cardSurface.microSignals?.length ?? 0) > 0
             )
 
+            // [BUILD GREEN GATE / SESSION IDENTITY] React-key fragments derived
+            // through the typed resolver. ScaledSession does not own `name` —
+            // the resolver prefers `focusLabel`/`focus`/`dayLabel` and only
+            // reads legacy `name` through a guarded `unknown` path. The key
+            // remains stable across day reorders and week changes.
+            const sessionKeyParts = resolveSessionKeyParts(session)
+
             return (
-              <div key={`${program.id}-${session.dayNumber}-${session.name || session.focusLabel}-week${currentWeekNumber}`}>
+              <div key={`${program.id}-${sessionKeyParts.dayPart}-${sessionKeyParts.identityPart}-week${currentWeekNumber}`}>
                 {/* [FINAL-DAY-CARD-OWNERSHIP-LOCK] Visible header reads ONLY
                     `cardSurface.*`. Border / badge styling derive from the
                     same surface; nothing here re-reads `session` or

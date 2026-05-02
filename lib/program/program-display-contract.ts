@@ -36,6 +36,80 @@ import type { CanonicalMethodStructure } from '@/lib/program/method-structure-co
 import type { DoctrineBlockResolutionEntry } from '@/lib/program/doctrine-block-resolution-contract'
 
 // =============================================================================
+// [BUILD GREEN GATE / SESSION IDENTITY RESOLVER — DISPLAY-ONLY]
+//
+// Pure read-only resolver for visible session identity (React keys, analytics
+// labels, card instance IDs, etc.). The canonical `AdaptiveSession` /
+// `ScaledSession` types do NOT own a `name` field — the canonical display
+// identity fields are `focusLabel`, `focus`, `dayLabel`, `dayNumber`. Earlier
+// display code reached for `session.name`, which fails TS on the canonical
+// types and was only working at runtime when a legacy normalizer leaked an
+// extra `name` field.
+//
+// This resolver accepts `unknown` and prefers canonical fields first, falling
+// back to legacy `name` ONLY through a guarded `unknown` access. It never
+// mutates session data, never invents identity, never adds `name` to a source
+// type. If nothing identifies the session, it returns the safe sentinel
+// 'session'. The `resolveSessionKeyParts` variant produces stable React-key
+// fragments that survive day reorders and week changes.
+// =============================================================================
+type SessionIdentityLike = {
+  id?: unknown
+  dayNumber?: unknown
+  dayLabel?: unknown
+  focusLabel?: unknown
+  focus?: unknown
+  sessionType?: unknown
+  title?: unknown
+  name?: unknown
+}
+
+function cleanIdentityPart(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+export function resolveSessionDisplayIdentity(session: unknown): string {
+  if (!session || typeof session !== 'object') return 'session'
+
+  const s = session as SessionIdentityLike
+
+  return (
+    cleanIdentityPart(s.focusLabel) ||
+    cleanIdentityPart(s.title) ||
+    cleanIdentityPart(s.name) ||
+    cleanIdentityPart(s.focus) ||
+    cleanIdentityPart(s.sessionType) ||
+    (typeof s.dayNumber === 'number' ? `day-${s.dayNumber}` : null) ||
+    cleanIdentityPart(s.dayLabel) ||
+    cleanIdentityPart(s.id) ||
+    'session'
+  )
+}
+
+export function resolveSessionKeyParts(session: unknown): {
+  dayPart: string
+  identityPart: string
+} {
+  if (!session || typeof session !== 'object') {
+    return { dayPart: 'day-unknown', identityPart: 'session' }
+  }
+
+  const s = session as SessionIdentityLike
+
+  const dayPart =
+    typeof s.dayNumber === 'number'
+      ? `day-${s.dayNumber}`
+      : cleanIdentityPart(s.id) || 'day-unknown'
+
+  return {
+    dayPart,
+    identityPart: resolveSessionDisplayIdentity(session),
+  }
+}
+
+// =============================================================================
 // TYPES
 // =============================================================================
 

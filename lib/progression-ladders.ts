@@ -1118,8 +1118,8 @@ function parseHoldTime(timeStr: string): number {
 // =============================================================================
 // EXPORTS FOR PROGRAM BUILDER INTEGRATION
 // =============================================================================
-
-export {
-  PROGRESSION_LADDERS,
-  SUBSTITUTION_MAPPINGS,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] Both constants are declared with inline
+// `export const` at lines 53 and 712. The previous bottom export block
+// re-listed both and produced TS2300/TS2484. Inline `export const` remains
+// the single canonical export style; public API is unchanged.

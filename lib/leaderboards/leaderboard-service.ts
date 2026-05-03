@@ -501,5 +501,13 @@ export function getMotivationalMessage(
 // EXPORTS
 // =============================================================================
 
+// [DUPLICATE-EXPORT-CONTRACT-FIX] `BestScopeResult` is declared with
+// inline `export interface ...` at line 398. The previous
+// `export type { BestScopeResult }` re-export here produced TS2484 and has
+// been removed.
+//
+// `LEADERBOARD_CATEGORIES`, `SKILL_LEVEL_NAMES`, `TIME_SCOPE_CONFIGS` are
+// IMPORTED (lines 11-13) from another module, not declared in this file.
+// This single-line re-export is their sole local export site and is kept
+// to preserve the public API surface that callers of this service rely on.
 export { LEADERBOARD_CATEGORIES, SKILL_LEVEL_NAMES, TIME_SCOPE_CONFIGS }
-export type { BestScopeResult }

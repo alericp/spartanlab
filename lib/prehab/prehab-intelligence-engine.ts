@@ -667,12 +667,17 @@ export function generateGuidePrehabSection(skill: SkillGoal): SkillGuidePrehabSe
 // EXPORTS
 // =============================================================================
 
+// [DUPLICATE-EXPORT-CONTRACT-FIX] Six of the seven previously-listed names
+// are exported inline at their declarations:
+//   PREHAB_PLACEMENT_RULES        line 155 (export const)
+//   SKILL_PREHAB_RECOMMENDATIONS  line 241 (export const)
+//   generateIntelligentPrehab     line 345 (export function)
+//   getSkillPrehabRecommendations line 482 (export function)
+//   validatePrehabSpecificity     line 531 (export function)
+//   generateGuidePrehabSection    line 620 (export function)
+// Those six produced TS2300/TS2484 and have been removed from this block.
+// `WEAK_POINT_PREHAB_ADJUSTMENTS` is declared as `const` (no inline
+// `export`) at line 94 — this block is its SOLE export site, so it stays.
 export {
-  generateIntelligentPrehab,
-  getSkillPrehabRecommendations,
-  validatePrehabSpecificity,
-  generateGuidePrehabSection,
   WEAK_POINT_PREHAB_ADJUSTMENTS,
-  PREHAB_PLACEMENT_RULES,
-  SKILL_PREHAB_RECOMMENDATIONS,
 }

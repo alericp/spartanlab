@@ -961,12 +961,9 @@ export function getEffectiveFrequency(
 // =============================================================================
 // EXPORTS
 // =============================================================================
-
-export type {
-  FlexibleFrequencyInput,
-  FlexibleWeekStructure,
-  WeeklyAdaptationInput,
-  WeeklyAdaptationResult,
-  FlexibleFrequencyReasonCategory,
-  FlexibleFrequencyRootCauseAudit,
-}
+//
+// [DUPLICATE-EXPORT-CONTRACT-FIX] All six types are declared with inline
+// `export interface ...` / `export type ...` at lines 87, 139, 156, 199,
+// 225, 234. The previous bottom `export type { ... }` block re-listed all
+// six and produced TS2484. Inline declarations remain the single canonical
+// export style; public API is unchanged.

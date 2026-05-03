@@ -139,6 +139,115 @@ import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionR
 import { selectOptimalStructure, getDayExplanation } from './program-structure-engine'
 import { selectExercisesForSession, evaluateSessionProgressions, getSmartProgressionExercise, buildFallbackSelectionForSession } from './program-exercise-selector'
 
+// =============================================================================
+// [BUILDER-CONTRACT-DRIFT-NORMALIZERS]
+// Boundary normalizers that consume the *current* canonical contracts and
+// produce the values legacy call-sites in this 31k-line builder were
+// reading off stale field names (e.g. `fatigueDecision.overallDecision`,
+// `sessionLength === 'short'`). These accessors are pure, narrow, and add
+// NO new training truth — they only translate from current canonical
+// fields to the legacy call-site shape. No `as any`, no `@ts-ignore`.
+// =============================================================================
+
+/**
+ * Map a `SessionLength` (`30 | 45 | 60 | 75 | 90 | 120 | '10-20' | '20-30'
+ *  | '30-45' | '45-60' | '60+'`) to a single conservative numeric minute
+ * value used by call-sites that need scalar arithmetic.
+ *
+ * Range strings collapse to their lower bound (truthful for "fits inside
+ * available minutes" gating). `'60+'` collapses to 60 (lower bound).
+ * Unknown shapes fall back to 60.
+ */
+function normalizeSessionLengthMinutes(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    switch (value) {
+      case '10-20': return 10
+      case '20-30': return 20
+      case '30-45': return 30
+      case '45-60': return 45
+      case '60+': return 60
+      // Tolerate stale legacy literals that some call-sites still emit.
+      // Map them to the closest canonical minute floor instead of failing
+      // typing; this keeps existing comparisons truthful.
+      case 'short': return 30
+      case 'medium': return 45
+      case 'long': return 60
+      case 'extended': return 75
+    }
+  }
+  return 60
+}
+
+/**
+ * `sessionLength === 'short'` legacy comparison → canonical numeric test.
+ * Short = sessions whose effective minutes are at or under 30.
+ */
+function isShortSession(value: unknown): boolean {
+  return normalizeSessionLengthMinutes(value) <= 30
+}
+
+/**
+ * `sessionLength === 'medium'` legacy comparison → canonical numeric test.
+ * Medium = sessions whose effective minutes fall in (30, 45].
+ */
+function isMediumSession(value: unknown): boolean {
+  const m = normalizeSessionLengthMinutes(value)
+  return m > 30 && m <= 45
+}
+
+/**
+ * Read the canonical `decision: TrainingDecision` field off a fatigue
+ * decision wrapper. The legacy field name was `overallDecision`; today
+ * the wrapper exposes `decision`. Returns `null` when absent so call
+ * sites can use `?? null` rather than throw on a malformed record.
+ */
+function getTrainingDecisionValue(
+  result: unknown,
+): import('./fatigue-decision-engine').TrainingDecision | null {
+  if (!result || typeof result !== 'object') return null
+  const r = result as { decision?: unknown }
+  const v = r.decision
+  if (
+    v === 'TRAIN_AS_PLANNED' ||
+    v === 'PRESERVE_QUALITY' ||
+    v === 'LIGHTEN_SESSION' ||
+    v === 'COMPRESS_WEEKLY_LOAD' ||
+    v === 'DELOAD_RECOMMENDED'
+  ) return v
+  return null
+}
+
+/** True when the wrapped decision suggests reducing this session's load. */
+function isReduceTrainingDecision(result: unknown): boolean {
+  const v = getTrainingDecisionValue(result)
+  return v === 'LIGHTEN_SESSION' || v === 'PRESERVE_QUALITY'
+}
+
+/** True when the wrapped decision is a deload recommendation. */
+function isDeloadTrainingDecision(result: unknown): boolean {
+  return getTrainingDecisionValue(result) === 'DELOAD_RECOMMENDED'
+}
+
+/**
+ * Truthful accessor for legacy `straightArmFatigue` numeric reads. The
+ * canonical `FatigueDecision` does NOT carry per-axis fatigue scores;
+ * those live on `FatigueScore` objects feeding the engine. Returning 0
+ * here is the correct "no signal" value used by all current call sites.
+ */
+function getStraightArmFatigueSignal(_result: unknown): number {
+  return 0
+}
+
+/**
+ * Truthful accessor for legacy `overallFatigue` numeric reads. Same
+ * rationale as `getStraightArmFatigueSignal` — the canonical wrapper
+ * never owned this scalar.
+ */
+function getOverallFatigueSignal(_result: unknown): number {
+  return 0
+}
+
 // [CORRIDOR_KILL_V4] Version fingerprint for cache/deploy proof
 // Final selector corridor hardening - all corridor layers must show V4
 const SESSION_ASSEMBLY_VERSION = 'BUILDER_CORRIDOR_KILL_V4_2026_04_14'
@@ -16104,7 +16213,8 @@ async function generateAdaptiveProgramImpl(
   })
   
   // [PHASE15E-MICRO-CORRIDOR-AUDIT] Push session corridor summary
-  const pushSessions = sessions.filter(s => s?.dayFocus?.includes('push'))
+  // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] AdaptiveSession.focus replaces legacy `dayFocus`.
+  const pushSessions = sessions.filter(s => s?.focus?.includes('push'))
   const pushSessionsWithExercises = pushSessions.filter(s => (s?.exercises?.length || 0) > 0)
   const pushSessionsEmpty = pushSessions.filter(s => (s?.exercises?.length || 0) === 0)
   
@@ -16115,7 +16225,8 @@ async function generateAdaptiveProgramImpl(
       pushSessionsWithExercises: pushSessionsWithExercises.length,
       pushSessionsEmpty: pushSessionsEmpty.length,
       emptyPushDayNumbers: pushSessionsEmpty.map(s => s?.dayNumber || 'unknown'),
-      pushSessionFocuses: pushSessions.map(s => s?.dayFocus || 'unknown'),
+      // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] focus replaces legacy dayFocus.
+      pushSessionFocuses: pushSessions.map(s => s?.focus || 'unknown'),
       // Track if the first failed session was a push session
       firstFailedWasPush: sessionFailureTracker.firstFailedFocus?.includes('push') || false,
       verdict: pushSessionsEmpty.length === 0
@@ -17850,7 +17961,13 @@ async function generateAdaptiveProgramImpl(
         primaryGoal,
         secondaryGoal,
         recoveryLevel: canonicalProfile.recoveryLevel as any,
-        isDeloadSession: session.isDeload || session.focus?.includes('recovery'),
+        // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] AdaptiveSession does not own
+        // `isDeload`. Deload state is communicated through `focus` /
+        // `weekAdaptationDecision` on the parent program. The legacy
+        // fallback `session.focus?.includes('recovery')` already captures
+        // the recovery/deload signal at the session level — the redundant
+        // `session.isDeload ||` was dead code.
+        isDeloadSession: session.focus?.includes('recovery'),
         dayNumber: session.dayNumber,
       })
     })
@@ -18415,8 +18532,12 @@ async function generateAdaptiveProgramImpl(
       (secondaryGoal ? isAdvancedSkill(secondaryGoal) : false)
     const hasWeightedHistory = canonicalProfile.weightedPullUp?.load > 0 || 
       canonicalProfile.weightedDip?.load > 0
-    const hasLongSessionPreference = canonicalProfile.sessionLength === 'long' ||
-      canonicalProfile.sessionLength === 'extended'
+    // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] Canonical SessionLength is
+    // `30 | 45 | 60 | 75 | 90 | 120 | '10-20' | '20-30' | '30-45' | '45-60' | '60+'`.
+    // Legacy `'long'`/`'extended'` literals are no longer on the union;
+    // map a long-session preference to the canonical 60+-minute zone.
+    const hasLongSessionPreference =
+      normalizeSessionLengthMinutes(canonicalProfile.sessionLength) >= 60
     const isHybridPath = canonicalProfile.trainingStyle === 'hybrid' ||
       canonicalProfile.trainingPathType === 'hybrid'
     
@@ -19974,19 +20095,37 @@ fatigueDecision: fatigueDecision ? {
     constraintAnalysis: (() => {
       try {
         // Build constraint input from available data
+        // [BUILDER-CONTRACT-DRIFT-NORMALIZERS]
+        // - `sessionLength` may be a numeric minute or a canonical range
+        //   string ('20-30', '45-60', etc.). The legacy 'short'/'medium'
+        //   string literals no longer exist on `SessionLength`; map via
+        //   the boundary normalizer instead.
+        // - `fatigueDecision.decision` is the canonical field; the
+        //   legacy `overallDecision` was renamed and `straightArmFatigue`
+        //   / `overallFatigue` were never on the wrapper.
+        // - jointCautions canonical literals are 'wrists' / 'shoulders'
+        //   / 'elbows' (plural). Use plural reads.
+        const _availableMinutesForConstraint = isShortSession(sessionLength)
+          ? 30
+          : isMediumSession(sessionLength)
+            ? 45
+            : 60
         const constraintInput: ConstraintAwareInput = {
-          targetMinutes: sessionLength === 'short' ? 30 : sessionLength === 'medium' ? 45 : 60,
-          preferredMinutes: sessionLength === 'short' ? 30 : sessionLength === 'medium' ? 45 : 60,
-          fatigueLevel: fatigueDecision?.overallDecision === 'reduce' ? 'fatigued' : 
-                        fatigueDecision?.overallDecision === 'deload' ? 'overtrained' : 'normal',
-          straightArmFatigue: fatigueDecision?.straightArmFatigue || 0,
-          overallFatigue: fatigueDecision?.overallFatigue || 0,
+          targetMinutes: _availableMinutesForConstraint,
+          preferredMinutes: _availableMinutesForConstraint,
+          fatigueLevel: isReduceTrainingDecision(fatigueDecision)
+            ? 'fatigued'
+            : isDeloadTrainingDecision(fatigueDecision)
+              ? 'overtrained'
+              : 'normal',
+          straightArmFatigue: getStraightArmFatigueSignal(fatigueDecision),
+          overallFatigue: getOverallFatigueSignal(fatigueDecision),
           fatigueDecision: fatigueDecision || null,
           jointCautions: profile?.jointCautions || [],
           tendonStress: {
-            wrist: profile?.jointCautions?.includes('wrist') ? 70 : 30,
-            shoulder: profile?.jointCautions?.includes('shoulder') ? 70 : 30,
-            elbow: profile?.jointCautions?.includes('elbow') ? 70 : 30,
+            wrist: profile?.jointCautions?.includes('wrists') ? 70 : 30,
+            shoulder: profile?.jointCautions?.includes('shoulders') ? 70 : 30,
+            elbow: profile?.jointCautions?.includes('elbows') ? 70 : 30,
           },
           activeInjuries: [],
           discomfortFlags: profile?.jointCautions || [],
@@ -20016,19 +20155,28 @@ fatigueDecision: fatigueDecision ? {
     // Formatted Builder Reasoning - coach-style explanations
     builderReasoning: (() => {
       try {
+        // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] See note above.
+        const _availableMinutesForReasoning = isShortSession(sessionLength)
+          ? 30
+          : isMediumSession(sessionLength)
+            ? 45
+            : 60
         const constraintInput: ConstraintAwareInput = {
-          targetMinutes: sessionLength === 'short' ? 30 : sessionLength === 'medium' ? 45 : 60,
-          preferredMinutes: sessionLength === 'short' ? 30 : sessionLength === 'medium' ? 45 : 60,
-          fatigueLevel: fatigueDecision?.overallDecision === 'reduce' ? 'fatigued' : 
-                        fatigueDecision?.overallDecision === 'deload' ? 'overtrained' : 'normal',
-          straightArmFatigue: fatigueDecision?.straightArmFatigue || 0,
-          overallFatigue: fatigueDecision?.overallFatigue || 0,
+          targetMinutes: _availableMinutesForReasoning,
+          preferredMinutes: _availableMinutesForReasoning,
+          fatigueLevel: isReduceTrainingDecision(fatigueDecision)
+            ? 'fatigued'
+            : isDeloadTrainingDecision(fatigueDecision)
+              ? 'overtrained'
+              : 'normal',
+          straightArmFatigue: getStraightArmFatigueSignal(fatigueDecision),
+          overallFatigue: getOverallFatigueSignal(fatigueDecision),
           fatigueDecision: fatigueDecision || null,
           jointCautions: profile?.jointCautions || [],
           tendonStress: {
-            wrist: profile?.jointCautions?.includes('wrist') ? 70 : 30,
-            shoulder: profile?.jointCautions?.includes('shoulder') ? 70 : 30,
-            elbow: profile?.jointCautions?.includes('elbow') ? 70 : 30,
+            wrist: profile?.jointCautions?.includes('wrists') ? 70 : 30,
+            shoulder: profile?.jointCautions?.includes('shoulders') ? 70 : 30,
+            elbow: profile?.jointCautions?.includes('elbows') ? 70 : 30,
           },
           activeInjuries: [],
           discomfortFlags: profile?.jointCautions || [],
@@ -20146,7 +20294,12 @@ return explanations.length > 0 ? explanations : undefined
     // Session Structure - intelligent workout format selection
     sessionStructure: (() => {
       try {
-        const availableMinutes = sessionLength === 'short' ? 30 : sessionLength === 'medium' ? 45 : 60
+        // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] See top-of-file note.
+        const availableMinutes = isShortSession(sessionLength)
+          ? 30
+          : isMediumSession(sessionLength)
+            ? 45
+            : 60
         const trainingStyle = trainingEmphasis?.styleMode || 'skill_focused'
         const frameworkId = trainingEmphasis?.primaryMethod || undefined
         
@@ -20166,11 +20319,12 @@ return explanations.length > 0 ? explanations : undefined
           frameworkId: frameworkId as any,
           primaryGoal,
           primaryWeakPoint: profile?.weakestArea as any,
-          fatigueLevel: fatigueDecision?.overallDecision === 'reduce' ? 'fatigued' : 
-                        fatigueDecision?.overallDecision === 'deload' ? 'fatigued' : 'normal',
+          fatigueLevel: isReduceTrainingDecision(fatigueDecision) || isDeloadTrainingDecision(fatigueDecision)
+            ? 'fatigued'
+            : 'normal',
           experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
           preferDensityTraining: trainingEmphasis?.styleRules?.densityPreference === 'high',
-          isDeloadWeek: fatigueDecision?.overallDecision === 'deload',
+          isDeloadWeek: isDeloadTrainingDecision(fatigueDecision),
         }
         
         const result = selectSessionStructure(structureInput as any)
@@ -20181,7 +20335,12 @@ return explanations.length > 0 ? explanations : undefined
           const envelopeAdjusted = adjustStructureForEnvelope(
             result.selectedStructure,
             {
-              straightArmPull: fatigueDecision?.straightArmFatigue ? 100 - fatigueDecision.straightArmFatigue : 70,
+              // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] `straightArmFatigue` no
+              // longer lives on the canonical wrapper. The accessor returns
+              // 0 (no signal), which the legacy formula (100 - 0) would map
+              // to 100; the historical fallback was 70 when the value was
+              // absent or zero. Preserve the historical fallback truthfully.
+              straightArmPull: 70,
               straightArmPush: 70,
               verticalPull: 80,
             }
@@ -20246,8 +20405,13 @@ return explanations.length > 0 ? explanations : undefined
           athleteId: 'current',
           plannedExercises,
           sessionStructureType: 'standard',
-          sessionDurationMinutes: sessionLength === 'short' ? 30 : sessionLength === 'medium' ? 45 : 60,
-          isDeloadWeek: fatigueDecision?.overallDecision === 'deload',
+          // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] See top-of-file note.
+          sessionDurationMinutes: isShortSession(sessionLength)
+            ? 30
+            : isMediumSession(sessionLength)
+              ? 45
+              : 60,
+          isDeloadWeek: isDeloadTrainingDecision(fatigueDecision),
           currentFramework: trainingEmphasis?.primaryMethod,
           trainingStyle: trainingEmphasis?.styleMode,
         }
@@ -20598,8 +20762,11 @@ return explanations.length > 0 ? explanations : undefined
             ex.exerciseName?.toLowerCase().includes('accessory')
           ).length || 0), 0)
         
+        // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] Canonical AdaptiveSession
+        // owns `estimatedMinutes`. Legacy `estimatedDurationMinutes` and
+        // `targetDurationMinutes` were never on the public contract.
         const avgDuration = sessions.reduce((sum, s) => 
-          sum + (s.estimatedDurationMinutes || s.targetDurationMinutes || 60), 0) / Math.max(1, sessions.length)
+          sum + (s.estimatedMinutes || 60), 0) / Math.max(1, sessions.length)
         
         const result = validateMateriality(materialityContract, {
           sessionCount: sessions.length,
@@ -30733,8 +30900,9 @@ export function computeTemplateSimilarity(
   
   const signals: TemplateSimilaritySignals = {
     sameSessionCount: newProgram.sessions.length === previousProgram.sessions.length,
-    sameDayFocusOrder: newProgram.sessions.map(s => s.dayFocus).join(',') === 
-                       previousProgram.sessions.map(s => s.dayFocus).join(','),
+    // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] focus replaces legacy dayFocus on AdaptiveSession.
+    sameDayFocusOrder: newProgram.sessions.map(s => s.focus).join(',') === 
+                       previousProgram.sessions.map(s => s.focus).join(','),
     sameFirstTwoExercisesPerDay: (() => {
       if (newProgram.sessions.length !== previousProgram.sessions.length) return false
       for (let i = 0; i < newProgram.sessions.length; i++) {
@@ -30744,10 +30912,13 @@ export function computeTemplateSimilarity(
       }
       return true
     })(),
-    sameDayDurations: newProgram.sessions.map(s => s.estimatedDuration || 0).join(',') ===
-                      previousProgram.sessions.map(s => s.estimatedDuration || 0).join(','),
-    sameSessionTitles: newProgram.sessions.map(s => s.title || '').join(',') ===
-                       previousProgram.sessions.map(s => s.title || '').join(','),
+    // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] AdaptiveSession owns
+    // `estimatedMinutes` and `dayLabel`; the legacy `estimatedDuration`
+    // and `title` fields no longer exist on the canonical contract.
+    sameDayDurations: newProgram.sessions.map(s => s.estimatedMinutes || 0).join(',') ===
+                      previousProgram.sessions.map(s => s.estimatedMinutes || 0).join(','),
+    sameSessionTitles: newProgram.sessions.map(s => s.dayLabel || '').join(',') ===
+                       previousProgram.sessions.map(s => s.dayLabel || '').join(','),
     samePrimaryExerciseFamilies: (() => {
       const getExerciseFamilies = (sessions: AdaptiveSession[]) => 
         sessions.map(s => s.exercises?.slice(0, 3).map(e => e.exercise?.movementFamily || '').sort().join(',')).join('|')
@@ -31343,14 +31514,18 @@ export function buildProgramSelectionTrace(program: AdaptiveProgram): ProgramSel
     return {
       sessionIndex: index,
       dayLabel: session.dayLabel || `Day ${index + 1}`,
-      sessionRole: session.dayType?.includes('skill') ? 'primary_focus' as const :
-                   session.dayType?.includes('support') ? 'recovery' as const :
+      // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] AdaptiveSession owns `focus`
+      // (and `focusLabel`), not the legacy `dayType` / `explanation`
+      // fields. Map session role from the canonical focus string and
+      // session rationale from the canonical `rationale` field.
+      sessionRole: session.focus?.includes('skill') ? 'primary_focus' as const :
+                   session.focus?.includes('support') ? 'recovery' as const :
                    'mixed' as const,
       primarySkillExpressed: program.primaryGoal,
       secondarySkillExpressed: program.secondaryGoal || null,
       exerciseTraces,
       unexpressedSkills: [],
-      sessionRationale: session.explanation || '',
+      sessionRationale: session.rationale || '',
     }
   })
 

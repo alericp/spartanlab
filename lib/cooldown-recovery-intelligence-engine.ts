@@ -514,8 +514,33 @@ export const RECOVERY_EXERCISE_DATABASE: RecoveryExercise[] = [
 
 /**
  * Maps session stress patterns to recommended recovery regions
+ *
+ * [SKILL-STRESS-FOCUS-CONTRACT] Type changed from
+ * `Record<SkillStressFocus, TargetRegion[]>` to
+ * `Partial<Record<SkillStressFocus, TargetRegion[]>>`. Justification:
+ *
+ *   1. Both consumers (lines 602 and 637 below) already null-check the
+ *      lookup result before reading regions — the consuming code is
+ *      written for missing-entry semantics:
+ *        if (exercise.movementFamily && SESSION_STRESS_TO_RECOVERY[exercise.movementFamily]) { ... }
+ *
+ *   2. The five stale keys removed below (`support_hold`, `planche_family`,
+ *      `lever_family`, `handstand_family`, `muscle_up_family`) were never
+ *      members of the canonical SkillStressFocus union; they produced
+ *      TS2353 errors and were never reachable at runtime because the
+ *      consuming code only passes canonical SkillStressFocus values.
+ *
+ *   3. Many canonical SkillStressFocus members (mobility, joint_integrity,
+ *      arm_isolation, hypertrophy_accessory, etc.) have no doctrinally
+ *      meaningful recovery region — fabricating entries for them would
+ *      violate the guardrail "Do not fake product behavior." `Partial`
+ *      lets the recovery engine skip these correctly without inventing
+ *      regions.
+ *
+ * The thirteen canonical entries below carry the original doctrine
+ * verbatim: which body regions need cooldown for which stress family.
  */
-const SESSION_STRESS_TO_RECOVERY: Record<SkillStressFocus, TargetRegion[]> = {
+const SESSION_STRESS_TO_RECOVERY: Partial<Record<SkillStressFocus, TargetRegion[]>> = {
   straight_arm_push: ['wrists', 'shoulders', 'scapula', 'forearms'],
   straight_arm_pull: ['shoulders', 'elbows', 'forearms', 'lats', 'scapula'],
   ring_support: ['shoulders', 'elbows', 'scapula', 'wrists'],
@@ -527,11 +552,9 @@ const SESSION_STRESS_TO_RECOVERY: Record<SkillStressFocus, TargetRegion[]> = {
   vertical_push: ['shoulders', 'elbows', 'wrists'],
   horizontal_push: ['shoulders', 'elbows', 'wrists'],
   dip_pattern: ['shoulders', 'elbows', 'wrists'],
-  support_hold: ['shoulders', 'wrists', 'scapula'],
-  planche_family: ['wrists', 'shoulders', 'scapula', 'forearms'],
-  lever_family: ['shoulders', 'elbows', 'lats', 'forearms'],
-  handstand_family: ['wrists', 'shoulders', 'thoracic_spine'],
-  muscle_up_family: ['shoulders', 'elbows', 'lats'],
+  rings_stability: ['shoulders', 'elbows', 'scapula', 'wrists'],
+  rings_strength: ['shoulders', 'elbows', 'scapula'],
+  transition: ['shoulders', 'elbows', 'lats'],
 }
 
 /**

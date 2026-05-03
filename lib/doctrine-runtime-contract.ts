@@ -254,9 +254,15 @@ export async function buildDoctrineRuntimeContract(
       getDoctrineSources(),
       getDoctrinePrinciples({}),
       getProgressionRules({}),
-      getMethodRules({}),
+      // [DOCTRINE-RUNTIME-CONTRACT-SIGNATURE-DRIFT] `getMethodRules` and
+      // `getCarryoverRules` take a single optional string filter
+      // (`methodKey?` / `targetSkillKey?`), not a filter-object. The
+      // previous `({})` calls were copy-paste from the object-filter
+      // siblings and failed TS2345 ({} not assignable to string). Pass
+      // no filter to fetch the full set, which is the intent here.
+      getMethodRules(),
       getPrescriptionRules({}),
-      getCarryoverRules({}),
+      getCarryoverRules(),
       getExerciseSelectionRules({}),
     ])
     
@@ -299,8 +305,17 @@ export async function buildDoctrineRuntimeContract(
       const m = sid.match(/^src_batch_(\d{2})_/)
       return m ? `batch_${m[1]}` : null
     }
-    const countAtomsByBatch = <T extends { source_id?: string | null }>(rows: T[], batchKey: string): number =>
-      rows.filter(r => batchKeyFromSourceId(r.source_id) === batchKey).length
+    // [DOCTRINE-RUNTIME-CONTRACT-FIELD-NAMING] Canonical doctrine rule
+    // shapes (`DoctrinePrinciple`, `ProgressionRule`, `MethodRule`,
+    // `PrescriptionRule`, `CarryoverRule`, `ExerciseSelectionRule` from
+    // `lib/doctrine-db.ts`) use `sourceId` (camelCase). The previous
+    // generic constraint and field reads here used `source_id`
+    // (snake_case), which doesn't exist on those types — making every
+    // typed rule array un-assignable to the generic parameter. Rename
+    // to canonical `sourceId` to match the rule shape and unblock the
+    // typed merge.
+    const countAtomsByBatch = <T extends { sourceId?: string | null }>(rows: T[], batchKey: string): number =>
+      rows.filter(r => batchKeyFromSourceId(r.sourceId) === batchKey).length
 
     type PerBatchStat = { dbTotal: number; fallbackTotal: number; filled: 'db' | 'fallback' }
     const perBatch: Record<string, PerBatchStat> = {}
@@ -327,14 +342,16 @@ export async function buildDoctrineRuntimeContract(
     const fbCarryoverAll = getUploadedDoctrineBatchCarryoverRules()
     const fbSelectionAll = getUploadedDoctrineBatchExerciseSelectionRules()
 
-    const mergeForCategory = <T extends { source_id?: string | null }>(dbRows: T[], fbRows: T[]): T[] => {
+    // [DOCTRINE-RUNTIME-CONTRACT-FIELD-NAMING] See countAtomsByBatch
+    // above — canonical rule shape uses `sourceId`, not `source_id`.
+    const mergeForCategory = <T extends { sourceId?: string | null }>(dbRows: T[], fbRows: T[]): T[] => {
       const out: T[] = []
-      for (const r of dbRows) if (batchKeyFromSourceId(r.source_id) === null) out.push(r) // legacy non-batch
+      for (const r of dbRows) if (batchKeyFromSourceId(r.sourceId) === null) out.push(r) // legacy non-batch
       for (const bk of REGISTERED_BATCH_KEYS) {
         if (perBatch[bk].filled === 'db') {
-          for (const r of dbRows) if (batchKeyFromSourceId(r.source_id) === bk) out.push(r)
+          for (const r of dbRows) if (batchKeyFromSourceId(r.sourceId) === bk) out.push(r)
         } else {
-          for (const r of fbRows) if (batchKeyFromSourceId(r.source_id) === bk) out.push(r)
+          for (const r of fbRows) if (batchKeyFromSourceId(r.sourceId) === bk) out.push(r)
         }
       }
       return out

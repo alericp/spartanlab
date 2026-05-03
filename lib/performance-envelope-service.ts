@@ -20,6 +20,20 @@ import {
 } from './performance-envelope-engine'
 import type { MovementFamily, TrainingGoalType } from './movement-family-registry'
 
+// [PERFORMANCE-ENVELOPE-SERVICE-RE-EXPORT]
+// `getEnvelopeBasedRecommendations` is the canonical envelope→recommendation
+// derivation function and is implemented in `performance-envelope-engine.ts`
+// (the pure-logic engine that owns rep-zone / volume / density inference).
+// Multiple callers (`lib/unified-coaching-engine.ts:15`,
+// `lib/adaptive-program-builder.ts:416`) historically import it through
+// this *service* module — which is the public API surface for envelope
+// integration — alongside `getAthleteEnvelopes` and `PerformanceEnvelope`.
+// That split caused TS2305 ("no exported member") because the import
+// path didn't match the implementation file. Re-exporting here preserves
+// every existing call site and the conventional service-as-public-API
+// boundary, with no doctrinal/runtime change.
+export { getEnvelopeBasedRecommendations } from './performance-envelope-engine'
+
 /**
  * Get or create performance envelope for athlete + movement family + goal type
  */

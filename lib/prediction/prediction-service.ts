@@ -74,11 +74,19 @@ export function getAllSkillPredictions(): BatchPredictionResult {
     }
   })
   
-  // Add primary goals from onboarding
+  // [PREDICTION-SERVICE-CANONICAL-FIELD] Iterate over canonical
+  // onboarding skill targets. The previous `primaryGoals` field never
+  // existed on `OnboardingProfile`; the canonical skill-target collection
+  // is `selectedSkills: SkillGoal[]` (declared on OnboardingProfile in
+  // `lib/athlete-profile.ts`). The singular `primaryGoal` is a *single*
+  // overall goal type, not a per-skill list — using it here would be
+  // wrong both type-wise and semantically. Iterating `selectedSkills`
+  // matches the prior intent: surface skill IDs the athlete actively
+  // selected as goals so prediction can compute skill-specific outlooks.
   const onboarding = getOnboardingProfile()
-  if (onboarding?.primaryGoals) {
-    onboarding.primaryGoals.forEach(goal => {
-      if (SKILL_DIFFICULTY_CONFIG[goal]) {
+  if (onboarding?.selectedSkills) {
+    onboarding.selectedSkills.forEach(goal => {
+      if (SKILL_DIFFICULTY_CONFIG[goal as SkillId]) {
         activeSkillIds.add(goal as SkillId)
       }
     })
@@ -174,7 +182,11 @@ function gatherPredictionInputs(skillId: SkillId): PredictionInputs {
     const wpResult = analyzeWeakPoints({
       experienceLevel: profile.experienceLevel as any || 'intermediate',
       primaryOutcome: onboarding?.primaryOutcome || 'skill_mastery',
-      skillGoals: onboarding?.primaryGoals,
+      // [PREDICTION-SERVICE-CANONICAL-FIELD] `skillGoals` parameter
+      // accepts the athlete's chosen skill targets. Canonical
+      // OnboardingProfile field is `selectedSkills`; `primaryGoals`
+      // never existed.
+      skillGoals: onboarding?.selectedSkills,
       trainingDaysPerWeek: profile.trainingDaysPerWeek || 3,  // Prediction display fallback
       sessionLengthMinutes: profile.sessionLengthMinutes || 60,  // Prediction display fallback
       pullUpMax: profile.pullUpMax,

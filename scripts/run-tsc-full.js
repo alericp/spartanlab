@@ -9,16 +9,40 @@ import { fileURLToPath } from 'node:url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
-const repoRoot = resolve(__dirname, '..')
-const outDir = resolve(repoRoot, 'tsc-reports')
+// Hard-code the absolute project root to avoid edge cases where the
+// script is executed via `node --eval` or in a context where
+// `import.meta.url` resolves outside the project tree (which previously
+// caused mkdir to attempt `/home/tsc-reports` and fail with EACCES).
+const repoRoot = '/vercel/share/v0-project'
+// The project tree is read-only in this execution context; write the
+// full tsc dump to a tmp dir but still cd into the project root for the
+// spawn so tsc resolves the correct tsconfig.
+const outDir = '/tmp/tsc-reports'
 mkdirSync(outDir, { recursive: true })
 const outPath = resolve(outDir, 'TSC_FULL_OUTPUT.txt')
 
-const result = spawnSync('pnpm', ['exec', 'tsc', '--noEmit', '--pretty', 'false'], {
+// Use process.execPath to invoke node directly (PATH may not include
+// node when this script is executed from an isolated worker context).
+const nodeBin = process.execPath
+const tscBin = resolve(repoRoot, 'node_modules/typescript/bin/tsc')
+console.error('[run-tsc-full] node:', nodeBin)
+console.error('[run-tsc-full] tsc :', tscBin)
+
+let result = spawnSync(nodeBin, [tscBin, '--noEmit', '--pretty', 'false'], {
   cwd: repoRoot,
   encoding: 'utf8',
   maxBuffer: 256 * 1024 * 1024,
+  env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=8192' },
 })
+
+if (result.error || result.status === null) {
+  console.error('[run-tsc-full] tsc invocation failed:', {
+    status: result.status,
+    signal: result.signal,
+    error: result.error?.message,
+    stderrPreview: (result.stderr || '').slice(0, 500),
+  })
+}
 
 const out = (result.stdout || '') + (result.stderr || '')
 writeFileSync(outPath, out, 'utf8')

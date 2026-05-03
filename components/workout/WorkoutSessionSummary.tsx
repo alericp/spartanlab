@@ -108,8 +108,18 @@ export function WorkoutSessionSummary({
 
   // Calculate session performance score
   const readiness = getDailyReadiness()
+  // [SESSION-STATS-BOUNDARY] `SessionStats.averageRPE` is `number | null`
+  // (canonical absence-of-data sentinel), but
+  // `createPerformanceInputFromStats` accepts `number | undefined`. Map
+  // null -> undefined at this single boundary; same semantic ("no RPE
+  // data"), no widening of either side.
   const performanceInput = createPerformanceInputFromStats(
-    stats,
+    {
+      completedSets: stats.completedSets,
+      totalSets: stats.totalSets,
+      elapsedSeconds: stats.elapsedSeconds,
+      averageRPE: stats.averageRPE ?? undefined,
+    },
     completedSets,
     'mixed', // Default session type
     sessionName,
@@ -246,8 +256,14 @@ export function WorkoutSessionSummary({
             <CheckCircle2 className="w-5 h-5 text-green-400" />
             <div>
               <p className="font-medium text-green-400">Session Saved to Your History</p>
+              {/* [SESSION-STATS-BOUNDARY] PR detection lives on the
+                  workout history result (`historyResult.prsDetected` in
+                  `useWorkoutSession`), NOT on `SessionStats`. Display
+                  the always-true tracking line and omit a fake PR count
+                  here; PR celebration is owned by the dedicated PR
+                  surface elsewhere in the app. */}
               <p className="text-sm text-[#A4ACB8]">
-                Recorded for progress tracking and fatigue analysis. {stats.prsHit > 0 && `${stats.prsHit} new PR${stats.prsHit > 1 ? 's' : ''} tracked.`}
+                Recorded for progress tracking and fatigue analysis.
               </p>
             </div>
           </div>

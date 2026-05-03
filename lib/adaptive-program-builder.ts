@@ -61,7 +61,12 @@ import type { WeightedBenchmark, WeightedPRBenchmark } from './prescription-cont
 import type { ProtocolRecommendation } from './protocols/joint-integrity-protocol'
 import type { ConstraintResult, ConstraintIntervention } from './constraint-detection-engine'
 
-import { getAthleteProfile } from './data-service'
+// [BUILDER-ATHLETE-PROFILE-IMPORT] `AthleteProfile` is the canonical
+// athlete profile shape consumed by `getAthleteProfile()` and is used
+// at line ~6998 as a structural cast to read optional `trainingStyle`.
+// Importing the type here resolves the TS2304 ("Cannot find name") at
+// that site without inventing fields elsewhere.
+import { getAthleteProfile, type AthleteProfile } from './data-service'
 // [ONBOARDING-TRUTH-AUDIT] Import for onboarding truth expression tracing
 import { 
   buildOnboardingTruthExpressionAudit, 
@@ -85,6 +90,13 @@ import {
   getCanonicalProfile, 
   logCanonicalProfileState, 
   type ProfileSnapshot,
+  // [BUILDER-CANONICAL-PROFILE-IMPORT] Add the canonical profile contract
+  // type explicitly. Multiple internal helpers in this file accept a
+  // `canonicalProfile: CanonicalProgrammingProfile` parameter (lines
+  // ~3548, ~3558, ~3775, ~4079, ~6998 …); without this import they fail
+  // TS2304 ("Cannot find name 'CanonicalProgrammingProfile'"). The
+  // canonical contract is exported from canonical-profile-service.ts.
+  type CanonicalProgrammingProfile,
   composeCanonicalPlannerInput,
   validateBuilderDisplayTruth,
   // [weighted-truth] TASK A: Import weighted readiness check
@@ -4985,8 +4997,17 @@ export interface ServerGenerationOptions {
    * [PHASE 16J] Canonical profile override for server-side generation.
    * When provided, builder uses this instead of calling getCanonicalProfile().
    * This is REQUIRED for server routes where localStorage is unavailable.
+   *
+   * [BUILDER-CANONICAL-PROFILE-TYPE-CORRECTION]
+   * Type is `CanonicalProgrammingProfile`, NOT `ProfileSnapshot`. The
+   * canonical full profile is the override contract used by every server
+   * caller (e.g. `lib/program/programming-truth-bundle.ts:693` already
+   * declares `canonicalProfileOverride?: CanonicalProgrammingProfile | null`).
+   * The previous local declaration as `ProfileSnapshot` was a stale type
+   * annotation that triggered a cascade of "field does not exist on
+   * ProfileSnapshot" errors across the builder.
    */
-  canonicalProfileOverride?: ProfileSnapshot
+  canonicalProfileOverride?: CanonicalProgrammingProfile
   
   /**
    * [FLOW-PARITY-FIX] When true, indicates this is a fresh baseline build
@@ -5783,7 +5804,21 @@ async function generateAdaptiveProgramImpl(
     verdict: 'serverOptions_legally_scoped',
   })
   
-  let canonicalProfile: ProfileSnapshot
+  // [BUILDER-CANONICAL-PROFILE-TYPE-CORRECTION]
+  // `canonicalProfile` is sourced from either:
+  //   - `serverOptions.canonicalProfileOverride` (type: CanonicalProgrammingProfile)
+  //   - `getCanonicalProfile()` (return: CanonicalProgrammingProfile)
+  // Both sources return the FULL canonical contract — the previous
+  // declaration as `ProfileSnapshot` (a much narrower per-generation
+  // snapshot type owning only ~13 fields) was a stale type annotation
+  // and was the root cause of ~700 downstream stale-field errors in
+  // this file (reads of `canonicalProfile.equipment`,
+  // `canonicalProfile.equipmentAvailable`, `selectedFlexibility`,
+  // `selectedStrength`, `onboardingComplete`, etc. — all of which
+  // exist on CanonicalProgrammingProfile but NOT on ProfileSnapshot).
+  // No runtime change: the values were always CanonicalProgrammingProfile;
+  // only the local TS annotation was wrong.
+  let canonicalProfile: CanonicalProgrammingProfile
   const usingOverride = !!serverOptions?.canonicalProfileOverride
   
   if (usingOverride) {

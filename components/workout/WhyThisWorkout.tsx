@@ -53,8 +53,11 @@ export function WhyThisWorkout({
       typeof val === 'string' && val.trim() ? val : fallback
     
     // Safe object helper
+    // [REASONING-DISPLAY-SAFETY] Cast through `unknown` so this guard
+    // accepts either a structural reasoning union or an arbitrary value
+    // (such as the `reasoning || {}` fallback) without a TS2352 error.
     const safeObj = (val: unknown): Record<string, unknown> | null =>
-      val && typeof val === 'object' && !Array.isArray(val) ? val as Record<string, unknown> : null
+      val && typeof val === 'object' && !Array.isArray(val) ? val as unknown as Record<string, unknown> : null
     
     // Safe array helper
     const safeArr = (val: unknown): string[] => {
@@ -62,17 +65,25 @@ export function WhyThisWorkout({
       return val.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
     }
     
-    const r = reasoning || {}
-    const primaryLimiter = safeObj((r as Record<string, unknown>).primaryLimiter)
-    const secondaryLimiter = safeObj((r as Record<string, unknown>).secondaryLimiter)
-    const frameworkInfluence = safeObj((r as Record<string, unknown>).frameworkInfluence)
-    const envelopeInfluence = safeObj((r as Record<string, unknown>).envelopeInfluence)
+    // [REASONING-DISPLAY-SAFETY] Convert the reasoning prop to a plain
+    // Record<string, unknown> ONCE via the safeObj guard. The reasoning
+    // prop type is a structural union (WorkoutReasoningDisplayContract |
+    // WorkoutReasoningSummary) — neither variant structurally satisfies
+    // Record<string, unknown>, so direct `as Record<string, unknown>`
+    // casts at every property read fail TS2352. Going through `safeObj`
+    // funnels the union through `unknown` before narrowing to a record,
+    // preserving runtime behavior with no `as any`.
+    const r: Record<string, unknown> = safeObj(reasoning) ?? {}
+    const primaryLimiter = safeObj(r.primaryLimiter)
+    const secondaryLimiter = safeObj(r.secondaryLimiter)
+    const frameworkInfluence = safeObj(r.frameworkInfluence)
+    const envelopeInfluence = safeObj(r.envelopeInfluence)
     
     return {
-      whyThisWorkout: safeStr((r as Record<string, unknown>).whyThisWorkout, 'This workout was loaded successfully.'),
-      workoutFocus: safeStr((r as Record<string, unknown>).workoutFocus, 'Adaptive Session'),
-      reasoningConfidence: safeStr((r as Record<string, unknown>).reasoningConfidence, 'low'),
-      dataQuality: safeStr((r as Record<string, unknown>).dataQuality, 'sparse') as 'sparse' | 'developing' | 'solid',
+      whyThisWorkout: safeStr(r.whyThisWorkout, 'This workout was loaded successfully.'),
+      workoutFocus: safeStr(r.workoutFocus, 'Adaptive Session'),
+      reasoningConfidence: safeStr(r.reasoningConfidence, 'low'),
+      dataQuality: safeStr(r.dataQuality, 'sparse') as 'sparse' | 'developing' | 'solid',
       primaryLimiterLabel: primaryLimiter ? safeStr(primaryLimiter.label, 'Current training priority') : 'Current training priority',
       secondaryLimiterLabel: secondaryLimiter ? safeStr(secondaryLimiter.label, '') : null,
       frameworkInfluence: frameworkInfluence ? safeStr(frameworkInfluence.influence, '') : null,

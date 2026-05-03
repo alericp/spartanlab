@@ -333,15 +333,32 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
           focusArea: session.focusLabel,
           durationMinutes,
           completedSets: state.completedSets,
-          exercises: session.exercises.map(ex => ({
-            id: ex.id,
-            name: ex.name,
-            category: ex.category,
-            sets: ex.sets,
-            targetReps: typeof ex.reps === 'number' ? ex.reps : parseInt(ex.reps) || undefined,
-            targetHold: ex.hold,
-            weight: ex.weight,
-          })),
+          // [ADAPTIVE-EXERCISE-CANONICAL-FIELDS] AdaptiveExercise stores
+          // prescription as the single string `repsOrTime` (e.g. "8",
+          // "10-12", "20s", "30-45s") and prescribed weight inside
+          // `prescribedLoad.load`. The legacy fields `reps`, `hold`,
+          // `weight` never existed on AdaptiveExercise. Parse the
+          // canonical strings into the persisted history shape.
+          exercises: session.exercises.map(ex => {
+            const repsOrTime = ex.repsOrTime ?? ''
+            // Hold prescription is the time-based form ending in 's'
+            // (e.g. "20s", "30-45s"). Reps prescription is everything
+            // else. Use the canonical lower bound for numeric history.
+            const isHold = /s\s*$/i.test(repsOrTime)
+            const numericLowerBound = (() => {
+              const m = repsOrTime.match(/(\d+(?:\.\d+)?)/)
+              return m ? Number.parseFloat(m[1]) : undefined
+            })()
+            return {
+              id: ex.id,
+              name: ex.name,
+              category: ex.category,
+              sets: ex.sets,
+              targetReps: isHold ? undefined : numericLowerBound,
+              targetHold: isHold ? repsOrTime : undefined,
+              weight: ex.prescribedLoad?.load,
+            }
+          }),
           notes,
         })
         setLastSaveResult(historyResult)
@@ -377,8 +394,10 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
         })
       }
 
-      // Check for newly unlocked achievements
-      const newAchievements = onTrainingEvent()
+      // [ACHIEVEMENT-EVENT-TYPE] `onTrainingEvent` requires a canonical
+      // event type from `TrainingEventType`. Save-after-completion is
+      // semantically the `'workout_complete'` event.
+      const newAchievements = onTrainingEvent('workout_complete')
       if (newAchievements.length > 0) {
         showAchievementNotifications(newAchievements)
       }

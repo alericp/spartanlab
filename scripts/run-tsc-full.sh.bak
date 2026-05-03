@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# [DIAGNOSTIC] Run a full TypeScript type-check and capture output.
+# Used by the build-unblock workflow to produce a fresh compiler proof.
+set -u
+cd "$(dirname "$0")/.."
+mkdir -p tsc-reports
+
+# Run tsc; capture all output regardless of exit code.
+pnpm exec tsc --noEmit --pretty false > tsc-reports/TSC_FULL_OUTPUT.txt 2>&1 || true
+
+TOTAL_LINES=$(wc -l < tsc-reports/TSC_FULL_OUTPUT.txt | tr -d ' ')
+ERROR_LINES=$(grep -cE '^[^ ].*\([0-9]+,[0-9]+\): error TS' tsc-reports/TSC_FULL_OUTPUT.txt || true)
+ERROR_FILES=$(grep -oE '^[^(]+\([0-9]+,[0-9]+\): error TS' tsc-reports/TSC_FULL_OUTPUT.txt | sed 's/(.*//' | sort -u | wc -l | tr -d ' ')
+
+echo "=== TSC SUMMARY ==="
+echo "total output lines: $TOTAL_LINES"
+echo "error lines:        $ERROR_LINES"
+echo "files with errors:  $ERROR_FILES"
+echo
+echo "=== TOP 30 ERROR FILES ==="
+grep -oE '^[^(]+\([0-9]+,[0-9]+\): error TS' tsc-reports/TSC_FULL_OUTPUT.txt \
+  | sed 's/(.*//' \
+  | sort | uniq -c | sort -rn | head -30
+echo
+echo "=== FIRST 5 ERRORS ==="
+grep -E '^[^ ].*\([0-9]+,[0-9]+\): error TS' tsc-reports/TSC_FULL_OUTPUT.txt | head -5
+echo
+echo "=== TARGET FILE COUNTS ==="
+for f in \
+  components/workout/StreamlinedWorkoutSession.tsx \
+  components/workout/WhyThisWorkout.tsx \
+  components/workout/WorkoutSessionSummary.tsx \
+  hooks/useWorkoutSession.ts \
+  lib/adaptive-program-builder.ts \
+  lib/program-exercise-selector.ts \
+  lib/server/authoritative-program-generation.ts \
+  lib/canonical-profile-service.ts \
+  lib/weak-point-engine.ts \
+  lib/prediction/prediction-service.ts \
+  lib/program-history-versioning.ts \
+  lib/unified-coaching-engine.ts \
+  lib/weak-point-detection.ts \
+  lib/program-state.ts \
+  lib/doctrine/source-batches/batch-02-uploaded-pdf-doctrine.ts \
+  lib/doctrine/source-batches/batch-03-uploaded-pdf-doctrine.ts \
+  lib/doctrine-runtime-contract.ts \
+  lib/advanced-skill-graphs.ts \
+  lib/performance-envelope-service.ts ; do
+  count=$(grep -cE "^${f}\([0-9]+,[0-9]+\): error TS" tsc-reports/TSC_FULL_OUTPUT.txt || true)
+  printf "  %-70s %s\n" "$f" "$count"
+done

@@ -1114,11 +1114,13 @@ export function getTempoRecommendation(
     context.currentGoal === 'technique' ||
     context.fatigueLevel === 'fatigued' ||
     context.isDeloadWeek ||
-    context.primaryWeakPoint === 'transition_control'
+    // [WEAK-POINT-TYPE-CONTRACT] primaryWeakPoint is canonical WeakPointType;
+    // mapped 'transition_control' (stale) → 'transition_strength' (canonical).
+    context.primaryWeakPoint === 'transition_strength'
   
   if (tempoOverWeight && profile.tempoSupportTypes.length > 1) {
     // Transition control weakness
-    if (context.primaryWeakPoint === 'transition_control') {
+    if (context.primaryWeakPoint === 'transition_strength') {
       tempoType = 'slow_both'
       rationale = 'Slow tempo chosen to develop transition control weakness.'
       prescription = {

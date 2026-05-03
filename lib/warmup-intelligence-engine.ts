@@ -729,6 +729,38 @@ const WEAK_POINT_WARMUP_ADDITIONS: Record<WeakPointType, {
     rationale: 'No weak point detected',
     priorityBoost: 0,
   },
+  // [WEAK-POINT-TYPE-CONTRACT] These five keys complete the
+  // Record<WeakPointType, ...> exhaustiveness contract for the canonical
+  // WeakPointType union (lib/weak-point-engine.ts:43-77). Each entry is a
+  // conservative warm-up addition derived from the existing nearest-neighbour
+  // entries above; no new exercise IDs are introduced. Doctrine intent:
+  // these weak points get standard activation work without overriding the
+  // joint-stress-driven primary warm-up.
+  bent_arm_pull: {
+    extraExercises: ['scapular_pull_ups', 'band_pull_aparts'],
+    rationale: 'Bent-arm pulling activation to prepare elbows and lats',
+    priorityBoost: 1,
+  },
+  bent_arm_push: {
+    extraExercises: ['scapular_push_ups', 'shoulder_rotations'],
+    rationale: 'Bent-arm pushing activation to prepare elbows and shoulders',
+    priorityBoost: 1,
+  },
+  core_compression: {
+    extraExercises: ['pike_pulses', 'hollow_hold_activation', 'dead_bugs'],
+    rationale: 'Compression activation to support core weak point',
+    priorityBoost: 1,
+  },
+  core_anti_extension: {
+    extraExercises: ['hollow_hold_activation', 'dead_bugs'],
+    rationale: 'Anti-extension activation to stabilize lumbar spine',
+    priorityBoost: 1,
+  },
+  general_fatigue: {
+    extraExercises: [],
+    rationale: 'Reduce warm-up intensity due to general fatigue load',
+    priorityBoost: 0,
+  },
 }
 
 // =============================================================================

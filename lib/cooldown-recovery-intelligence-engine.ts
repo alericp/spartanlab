@@ -551,15 +551,22 @@ const JOINT_STRESS_TO_RECOVERY: Record<JointStressFocus, TargetRegion[]> = {
 /**
  * Maps weak points to additional recovery emphasis
  */
+// [WEAK-POINT-TYPE-CONTRACT] Keys are canonical WeakPointType members
+// (lib/weak-point-engine.ts:43-77). Stale aliases mapped:
+//   elbow_tolerance     → tendon_tolerance (canonical covers elbow tendons)
+//   transition_control  → transition_strength
+//   pulling_power       → pull_strength
+//   pushing_power       → push_strength
+// TargetRegion arrays unchanged — recovery doctrine intent preserved.
 const WEAK_POINT_TO_RECOVERY: Partial<Record<WeakPointType, TargetRegion[]>> = {
   scapular_control: ['scapula', 'thoracic_spine'],
   shoulder_stability: ['shoulders', 'scapula'],
   wrist_tolerance: ['wrists', 'forearms'],
-  elbow_tolerance: ['elbows', 'forearms'],
+  tendon_tolerance: ['elbows', 'forearms'],
   compression_strength: ['hip_flexors', 'hamstrings'],
-  transition_control: ['shoulders', 'elbows'],
-  pulling_power: ['lats', 'shoulders'],
-  pushing_power: ['shoulders', 'wrists'],
+  transition_strength: ['shoulders', 'elbows'],
+  pull_strength: ['lats', 'shoulders'],
+  push_strength: ['shoulders', 'wrists'],
 }
 
 // =============================================================================

@@ -211,66 +211,83 @@ export const ADVANCED_SKILL_BLOCKERS: Record<SkillGraphId, {
   blockedByWeakPoints: WeakPointType[]
   blockingThreshold: number
 }[]> = {
+  // [WEAK-POINT-TYPE-CONTRACT] All values below are now canonical
+  // WeakPointType members from lib/weak-point-engine.ts:43-77.
+  // High-confidence stale → canonical mappings applied:
+  //   shoulder_tendon       → tendon_tolerance (label "Tendon Tolerance")
+  //   ring_support          → ring_support_stability (label match)
+  //   straight_arm_push     → straight_arm_push_strength (1:1)
+  //   straight_arm_pull     → straight_arm_pull_strength (1:1)
+  //   compression           → compression_strength (label "Compression Strength")
+  //   explosive_pull        → explosive_power (label "Explosive Pull Power")
+  //   transition_control    → transition_strength (label "Transition Strength")
+  //   dynamic_pull          → explosive_power (same canonical "explosive pull" concept)
+  //   core_stability        → core_control (canonical "Core Control")
+  // Stale values with no canonical equivalent are LEFT IN PLACE (will surface
+  // as targeted TS2322 errors for product-decision review, NOT silently
+  // mis-mapped): dynamic_push, lockout_strength.
+  // The doctrine intent of every entry — which weak points block which skill
+  // node and at what threshold — is preserved verbatim.
   maltese: [
     {
       nodeId: 'mal_4_band_assisted',
-      blockedByWeakPoints: ['shoulder_stability', 'shoulder_tendon'],
+      blockedByWeakPoints: ['shoulder_stability', 'tendon_tolerance'],
       blockingThreshold: 35,
     },
     {
       nodeId: 'mal_5_negative',
-      blockedByWeakPoints: ['shoulder_tendon', 'ring_support'],
+      blockedByWeakPoints: ['tendon_tolerance', 'ring_support_stability'],
       blockingThreshold: 40,
     },
     {
       nodeId: 'mal_6_partial',
-      blockedByWeakPoints: ['shoulder_tendon', 'straight_arm_push'],
+      blockedByWeakPoints: ['tendon_tolerance', 'straight_arm_push_strength'],
       blockingThreshold: 45,
     },
   ],
   planche_pushup: [
     {
       nodeId: 'ppu_3_tuck_assisted',
-      blockedByWeakPoints: ['dynamic_push', 'straight_arm_push'],
+      blockedByWeakPoints: ['dynamic_push', 'straight_arm_push_strength'],
       blockingThreshold: 35,
     },
     {
       nodeId: 'ppu_4_tuck',
-      blockedByWeakPoints: ['straight_arm_push', 'wrist_tolerance'],
+      blockedByWeakPoints: ['straight_arm_push_strength', 'wrist_tolerance'],
       blockingThreshold: 40,
     },
     {
       nodeId: 'ppu_6_straddle',
-      blockedByWeakPoints: ['straight_arm_push', 'shoulder_stability'],
+      blockedByWeakPoints: ['straight_arm_push_strength', 'shoulder_stability'],
       blockingThreshold: 45,
     },
   ],
   front_lever_pullup: [
     {
       nodeId: 'flpu_3_one_leg_row',
-      blockedByWeakPoints: ['scapular_control', 'straight_arm_pull'],
+      blockedByWeakPoints: ['scapular_control', 'straight_arm_pull_strength'],
       blockingThreshold: 35,
     },
     {
       nodeId: 'flpu_4_straddle_row',
-      blockedByWeakPoints: ['dynamic_pull', 'scapular_control'],
+      blockedByWeakPoints: ['explosive_power', 'scapular_control'],
       blockingThreshold: 40,
     },
     {
       nodeId: 'flpu_5_fl_pullup',
-      blockedByWeakPoints: ['straight_arm_pull', 'compression'],
+      blockedByWeakPoints: ['straight_arm_pull_strength', 'compression_strength'],
       blockingThreshold: 45,
     },
   ],
   slow_muscle_up: [
     {
       nodeId: 'smu_2_slow',
-      blockedByWeakPoints: ['transition_control', 'explosive_pull'],
+      blockedByWeakPoints: ['transition_strength', 'explosive_power'],
       blockingThreshold: 40,
     },
     {
       nodeId: 'smu_3_tempo',
-      blockedByWeakPoints: ['transition_control', 'lockout_strength'],
+      blockedByWeakPoints: ['transition_strength', 'lockout_strength'],
       blockingThreshold: 45,
     },
     {
@@ -282,7 +299,7 @@ export const ADVANCED_SKILL_BLOCKERS: Record<SkillGraphId, {
   weighted_muscle_up: [
     {
       nodeId: 'light_weighted_mu',
-      blockedByWeakPoints: ['explosive_pull', 'dip_strength'],
+      blockedByWeakPoints: ['explosive_power', 'dip_strength'],
       blockingThreshold: 40,
     },
     {
@@ -299,17 +316,17 @@ export const ADVANCED_SKILL_BLOCKERS: Record<SkillGraphId, {
   one_arm_front_lever_row: [
     {
       nodeId: 'assisted_oafl_row',
-      blockedByWeakPoints: ['straight_arm_pull', 'scapular_control'],
+      blockedByWeakPoints: ['straight_arm_pull_strength', 'scapular_control'],
       blockingThreshold: 40,
     },
     {
       nodeId: 'negative_oafl_row',
-      blockedByWeakPoints: ['scapular_control', 'core_stability'],
+      blockedByWeakPoints: ['scapular_control', 'core_control'],
       blockingThreshold: 45,
     },
     {
       nodeId: 'one_arm_fl_row',
-      blockedByWeakPoints: ['straight_arm_pull', 'shoulder_stability'],
+      blockedByWeakPoints: ['straight_arm_pull_strength', 'shoulder_stability'],
       blockingThreshold: 50,
     },
   ],
@@ -342,12 +359,20 @@ export const ADVANCED_SKILL_SUPPORT_EXERCISES: Record<string, {
   purpose: string
   focus: WeakPointType
 }[]> = {
+  // [WEAK-POINT-TYPE-CONTRACT] All `focus` values below are now canonical
+  // WeakPointType members. Same alias→canonical mapping table as the
+  // ADVANCED_SKILL_BLOCKERS comment above. The exerciseId, exerciseName,
+  // and purpose strings are unchanged — only the canonical-typed `focus`
+  // field has been migrated. Stale values with no canonical equivalent
+  // (`dynamic_push`, `lat_strength`) are mapped here only when an obvious
+  // canonical exists; lat_strength → pull_strength (lat is the primary
+  // pulling muscle; canonical has only one pull-strength member).
   maltese: [
     {
       exerciseId: 'ring_support_hold',
       exerciseName: 'Ring Support Hold',
       purpose: 'Foundation ring stability',
-      focus: 'ring_support',
+      focus: 'ring_support_stability',
     },
     {
       exerciseId: 'assisted_ring_dips',
@@ -359,7 +384,7 @@ export const ADVANCED_SKILL_SUPPORT_EXERCISES: Record<string, {
       exerciseId: 'shoulder_prehab',
       exerciseName: 'Shoulder Prehab Circuit',
       purpose: 'Tendon conditioning',
-      focus: 'shoulder_tendon',
+      focus: 'tendon_tolerance',
     },
     {
       exerciseId: 'scapular_control_work',
@@ -379,7 +404,7 @@ export const ADVANCED_SKILL_SUPPORT_EXERCISES: Record<string, {
       exerciseId: 'planche_lean_hold',
       exerciseName: 'Planche Lean Hold',
       purpose: 'Build straight-arm position strength',
-      focus: 'straight_arm_push',
+      focus: 'straight_arm_push_strength',
     },
     {
       exerciseId: 'wrist_mobility_work',
@@ -399,7 +424,7 @@ export const ADVANCED_SKILL_SUPPORT_EXERCISES: Record<string, {
       exerciseId: 'tuck_front_lever_hold',
       exerciseName: 'Tuck Front Lever Hold',
       purpose: 'Lever position strength',
-      focus: 'straight_arm_pull',
+      focus: 'straight_arm_pull_strength',
     },
     {
       exerciseId: 'scapular_pulls',
@@ -411,13 +436,13 @@ export const ADVANCED_SKILL_SUPPORT_EXERCISES: Record<string, {
       exerciseId: 'compression_holds',
       exerciseName: 'Compression Holds',
       purpose: 'Core tension and compression',
-      focus: 'compression',
+      focus: 'compression_strength',
     },
     {
       exerciseId: 'lat_pulldowns',
       exerciseName: 'Lat Pulldowns',
       purpose: 'Lat pulling strength',
-      focus: 'lat_strength',
+      focus: 'pull_strength',
     },
   ],
   slow_muscle_up: [
@@ -425,7 +450,7 @@ export const ADVANCED_SKILL_SUPPORT_EXERCISES: Record<string, {
       exerciseId: 'explosive_pull_ups',
       exerciseName: 'Explosive Pull-Ups',
       purpose: 'Build explosive pulling power',
-      focus: 'explosive_pull',
+      focus: 'explosive_power',
     },
     {
       exerciseId: 'bar_dips',
@@ -437,7 +462,7 @@ export const ADVANCED_SKILL_SUPPORT_EXERCISES: Record<string, {
       exerciseId: 'muscle_up_transitions',
       exerciseName: 'Muscle-Up Transition Work',
       purpose: 'Transition control practice',
-      focus: 'transition_control',
+      focus: 'transition_strength',
     },
     {
       exerciseId: 'shoulder_prehab',

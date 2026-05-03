@@ -289,43 +289,62 @@ export interface AssistanceWeakPointSignal {
 /**
  * Exercise-to-weak-point mapping for assistance analysis
  */
+// [WEAK-POINT-TYPE-CONTRACT] Every `weakPoints` array below is typed
+// `WeakPointType[]` (see Record<...> annotation on this map). Stale aliases
+// have been mapped to canonical WeakPointType members from
+// lib/weak-point-engine.ts:43-77:
+//   explosive_pull        → explosive_power
+//   high_pull_strength    → pull_strength (canonical "Pulling Strength")
+//   transition_control    → transition_strength
+//   straight_bar_dip      → dip_strength (doctrine intent: dip-portion struggle)
+//   straight_arm_pull     → straight_arm_pull_strength
+//   straight_arm_push     → straight_arm_push_strength
+//   lat_strength          → pull_strength (lat is primary pull muscle)
+//   ring_support          → ring_support_stability
+//   shoulder_tendon       → tendon_tolerance
+//   pulling_strength      → pull_strength (alias confirmed at
+//                          lib/weak-point-engine.ts:1479 normalizer table)
+// `grip_strength` has no canonical equivalent — left in place (will surface
+// as a targeted TS2322 error for product-decision review, NOT silently
+// mis-mapped). Doctrine intent of each row (which weak points trigger which
+// assistance level on which skill) is preserved verbatim.
 const ASSISTANCE_WEAK_POINT_MAP: Record<string, { weakPoints: WeakPointType[]; bodyweightThreshold: AssistanceLevel }[]> = {
   muscle_up: [
-    { weakPoints: ['explosive_pull', 'high_pull_strength'], bodyweightThreshold: 'moderate_assistance' },
-    { weakPoints: ['transition_control', 'straight_bar_dip'], bodyweightThreshold: 'low_assistance' },
+    { weakPoints: ['explosive_power', 'pull_strength'], bodyweightThreshold: 'moderate_assistance' },
+    { weakPoints: ['transition_strength', 'dip_strength'], bodyweightThreshold: 'low_assistance' },
   ],
   muscle_up_transition: [
-    { weakPoints: ['transition_control', 'straight_bar_dip'], bodyweightThreshold: 'moderate_assistance' },
+    { weakPoints: ['transition_strength', 'dip_strength'], bodyweightThreshold: 'moderate_assistance' },
   ],
   front_lever_tuck: [
-    { weakPoints: ['straight_arm_pull', 'scapular_control'], bodyweightThreshold: 'moderate_assistance' },
+    { weakPoints: ['straight_arm_pull_strength', 'scapular_control'], bodyweightThreshold: 'moderate_assistance' },
   ],
   front_lever_adv_tuck: [
-    { weakPoints: ['straight_arm_pull', 'core_compression'], bodyweightThreshold: 'low_assistance' },
+    { weakPoints: ['straight_arm_pull_strength', 'core_compression'], bodyweightThreshold: 'low_assistance' },
   ],
   front_lever_straddle: [
-    { weakPoints: ['straight_arm_pull', 'lat_strength'], bodyweightThreshold: 'moderate_assistance' },
+    { weakPoints: ['straight_arm_pull_strength', 'pull_strength'], bodyweightThreshold: 'moderate_assistance' },
   ],
   front_lever_full: [
-    { weakPoints: ['straight_arm_pull', 'lat_strength', 'core_compression'], bodyweightThreshold: 'high_assistance' },
+    { weakPoints: ['straight_arm_pull_strength', 'pull_strength', 'core_compression'], bodyweightThreshold: 'high_assistance' },
   ],
   tuck_planche: [
-    { weakPoints: ['straight_arm_push', 'shoulder_stability'], bodyweightThreshold: 'moderate_assistance' },
+    { weakPoints: ['straight_arm_push_strength', 'shoulder_stability'], bodyweightThreshold: 'moderate_assistance' },
   ],
   adv_tuck_planche: [
-    { weakPoints: ['straight_arm_push', 'wrist_tolerance'], bodyweightThreshold: 'low_assistance' },
+    { weakPoints: ['straight_arm_push_strength', 'wrist_tolerance'], bodyweightThreshold: 'low_assistance' },
   ],
   straddle_planche: [
-    { weakPoints: ['straight_arm_push', 'shoulder_stability', 'wrist_tolerance'], bodyweightThreshold: 'high_assistance' },
+    { weakPoints: ['straight_arm_push_strength', 'shoulder_stability', 'wrist_tolerance'], bodyweightThreshold: 'high_assistance' },
   ],
   iron_cross: [
-    { weakPoints: ['ring_support', 'straight_arm_push', 'shoulder_tendon'], bodyweightThreshold: 'very_high_assistance' },
+    { weakPoints: ['ring_support_stability', 'straight_arm_push_strength', 'tendon_tolerance'], bodyweightThreshold: 'very_high_assistance' },
   ],
   ring_muscle_up: [
-    { weakPoints: ['ring_support', 'explosive_pull', 'transition_control'], bodyweightThreshold: 'moderate_assistance' },
+    { weakPoints: ['ring_support_stability', 'explosive_power', 'transition_strength'], bodyweightThreshold: 'moderate_assistance' },
   ],
   one_arm_pullup: [
-    { weakPoints: ['pulling_strength', 'grip_strength', 'scapular_control'], bodyweightThreshold: 'high_assistance' },
+    { weakPoints: ['pull_strength', 'grip_strength', 'scapular_control'], bodyweightThreshold: 'high_assistance' },
   ],
 }
 
@@ -385,17 +404,22 @@ export function detectWeakPointsFromAssistance(exerciseId: string): AssistanceWe
 }
 
 function getWeakPointFocusSuggestion(weakPoint: WeakPointType): string {
+  // [WEAK-POINT-TYPE-CONTRACT] Same alias→canonical mapping table as
+  // ASSISTANCE_WEAK_POINT_MAP above. Only canonical WeakPointType keys
+  // (lib/weak-point-engine.ts:43-77) are used here. Coaching-string values
+  // are unchanged. `lat_strength` collapses into `pull_strength` because
+  // canonical has only one pull-strength member; the coaching string keeps
+  // the lat-pulldown wording so user-facing guidance is preserved.
   const suggestions: Partial<Record<WeakPointType, string>> = {
-    explosive_pull: 'High pulls, weighted pull-ups, explosive pull-up variations',
-    transition_control: 'Slow muscle-up negatives, transition drills, straight bar dip work',
-    straight_arm_pull: 'Front lever rows, straight-arm pulldown variations',
-    straight_arm_push: 'Planche leans, pseudo planche push-ups, support holds',
+    explosive_power: 'High pulls, weighted pull-ups, explosive pull-up variations',
+    transition_strength: 'Slow muscle-up negatives, transition drills, straight bar dip work',
+    straight_arm_pull_strength: 'Front lever rows, straight-arm pulldown variations',
+    straight_arm_push_strength: 'Planche leans, pseudo planche push-ups, support holds',
     scapular_control: 'Scapular pulls, scapular push-ups, band face pulls',
     core_compression: 'L-sit work, compression drills, hanging leg raises',
-    ring_support: 'Ring support holds, ring turned out holds',
+    ring_support_stability: 'Ring support holds, ring turned out holds',
     shoulder_stability: 'External rotation work, band shoulder exercises',
-    pulling_strength: 'Weighted pull-ups, row variations',
-    lat_strength: 'Weighted pull-ups, straight-arm pulldowns',
+    pull_strength: 'Weighted pull-ups, row variations, straight-arm pulldowns',
   }
   return suggestions[weakPoint] || 'Address this weak point with targeted accessory work'
 }

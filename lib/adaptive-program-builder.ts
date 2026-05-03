@@ -15411,10 +15411,18 @@ async function generateAdaptiveProgramImpl(
       },
     }
     
+    // [BUILDER-STYLE-METADATA-NON-NULL-LOCAL] `session.styleMetadata` is
+    // optional on the type owner; we just assigned it directly above
+    // (L15340), but TS does not narrow object-property assignments
+    // through subsequent reads. Capture a non-null local — same object,
+    // narrowed type — so the rest of the block can read fields without
+    // optional-chaining each access.
+    const styleMetadataLocal = session.styleMetadata as NonNullable<typeof session.styleMetadata>
+
     // Add methodIntentContract to the already-set styleMetadata
     // [AUTHORITATIVE-METHOD-INTENT-CONTRACT] Persist the computed contract
     // This ensures UI and workout consumers can read authoritative truth
-    session.styleMetadata.methodIntentContract = {
+    styleMetadataLocal.methodIntentContract = {
       userPreferences: sessionMethodIntentContract.selectedUserMethodPreferences,
       accessoryTailSize: sessionMethodIntentContract.accessoryTailSize,
       isSkillDominated: sessionMethodIntentContract.isSkillDominated,
@@ -15458,10 +15466,10 @@ async function generateAdaptiveProgramImpl(
         }>,
         styleMetadata: {
           styledGroups: finalStyledGroups,
-          clusterDecision: session.styleMetadata.clusterDecision,
+          clusterDecision: styleMetadataLocal.clusterDecision,
         },
       })
-      session.styleMetadata.methodMaterializationSummary = summary
+      styleMetadataLocal.methodMaterializationSummary = summary
       console.log('[METHOD-MATERIALIZATION-SUMMARY-STAMPED]', {
         dayNumber: session.dayNumber,
         focus: session.focus,
@@ -15477,7 +15485,7 @@ async function generateAdaptiveProgramImpl(
     console.log('[TRAINING-METHOD-MATERIALIZATION-COMPLETE]', {
       dayNumber: session.dayNumber,
       focus: session.focus,
-      appliedMethods: session.styleMetadata.appliedMethods,
+      appliedMethods: styleMetadataLocal.appliedMethods,
       rejectedMethods: methodMaterializationResult.rejectedMethods.map(r => `${r.method}: ${r.reason}`),
       styledGroupsCount: finalStyledGroups.length,
       primaryStyle,
@@ -15496,7 +15504,7 @@ async function generateAdaptiveProgramImpl(
       const lateCorridorClaim: string[] = Array.isArray(existingStyleMeta.appliedMethods)
         ? existingStyleMeta.appliedMethods
         : []
-      const materializedTruth: string[] = session.styleMetadata.appliedMethods || []
+      const materializedTruth: string[] = styleMetadataLocal.appliedMethods || []
       const leakSuppressed = lateCorridorClaim.filter(
         m => m !== 'straight_sets' && !materializedTruth.includes(m),
       )

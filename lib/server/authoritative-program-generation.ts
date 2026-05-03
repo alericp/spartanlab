@@ -352,7 +352,10 @@ function buildCanonicalProfileOverride(
     selectedFlexibility: builderInputs.selectedFlexibility || canonicalProfile.selectedFlexibility || [],
     
     // Equipment - builder inputs can override
-    equipment: builderInputs.equipment || canonicalProfile.equipment || [],
+    // [AUTHORITATIVE-CANONICAL-EQUIPMENT-OWNER] CanonicalProgrammingProfile
+    // exposes ONLY `equipmentAvailable` (the canonical owner). Reuse it
+    // for both keys; the runtime semantics are identical.
+    equipment: builderInputs.equipment || canonicalProfile.equipmentAvailable || [],
     equipmentAvailable: builderInputs.equipment || canonicalProfile.equipmentAvailable || [],
     
     // Schedule - builder inputs can override
@@ -371,11 +374,12 @@ function buildCanonicalProfileOverride(
     jointCautions: canonicalProfile.jointCautions || [],
     weakestArea: canonicalProfile.weakestArea,
     
-    // Benchmark data
-    benchmarks: canonicalProfile.benchmarks || {},
-    skillBenchmarks: canonicalProfile.skillBenchmarks || {},
-    flexibilityBenchmarks: canonicalProfile.flexibilityBenchmarks || {},
-    weightedBenchmarks: canonicalProfile.weightedBenchmarks || {},
+    // [AUTHORITATIVE-BENCHMARK-AGGREGATES-DROPPED] CanonicalProgrammingProfile
+    // no longer ships aggregate `benchmarks`/`skillBenchmarks`/`flexibilityBenchmarks`/
+    // `weightedBenchmarks` maps — each benchmark now lives on its own
+    // canonical field (`pullUpMax`, `frontLeverProgression`, `weightedPullUp`,
+    // `pancakeLevel`, ...). The downstream builder reads those owners
+    // directly, so emitting empty placeholder maps is no longer needed.
     
     // Method preferences
     trainingMethodPreferences: canonicalProfile.trainingMethodPreferences,
@@ -387,10 +391,14 @@ function buildCanonicalProfileOverride(
     plancheProgression: resolvedProgressions?.planche?.currentWorkingProgression ?? canonicalProfile.plancheProgression,
     frontLeverProgression: resolvedProgressions?.frontLever?.currentWorkingProgression ?? canonicalProfile.frontLeverProgression,
     hspuProgression: resolvedProgressions?.hspu?.currentWorkingProgression ?? canonicalProfile.hspuProgression,
-    // These don't have calibration-based resolution yet, use canonical directly
-    backLeverProgression: canonicalProfile.backLeverProgression,
-    muscleUpProgression: canonicalProfile.muscleUpProgression,
-    handstandProgression: canonicalProfile.handstandProgression,
+    // [AUTHORITATIVE-CANONICAL-EXTRA-PROGRESSIONS-LEGACY] `backLever`,
+    // `muscleUp` and `handstand` progression strings are not declared on
+    // the strict canonical type yet, but persisted documents may carry
+    // them. Read defensively through a structural slice so the builder
+    // still receives them when present.
+    backLeverProgression: (canonicalProfile as { backLeverProgression?: string | null }).backLeverProgression ?? null,
+    muscleUpProgression: (canonicalProfile as { muscleUpProgression?: string | null }).muscleUpProgression ?? null,
+    handstandProgression: (canonicalProfile as { handstandProgression?: string | null }).handstandProgression ?? null,
     
     // Weighted benchmarks
     weightedPullUp: canonicalProfile.weightedPullUp,
@@ -1030,7 +1038,8 @@ export async function executeAuthoritativeGeneration(
             selectedSkillsCount: request.canonicalProfile.selectedSkills?.length ?? 'MISSING',
             selectedSkillsRaw: request.canonicalProfile.selectedSkills,
             experienceLevel: request.canonicalProfile.experienceLevel || 'MISSING',
-            equipmentCount: request.canonicalProfile.equipment?.length ?? 'MISSING',
+            // [AUTHORITATIVE-CANONICAL-EQUIPMENT-OWNER] use `equipmentAvailable`.
+    equipmentCount: request.canonicalProfile.equipmentAvailable?.length ?? 'MISSING',
           },
           stackPreview: errorStack?.split('\n').slice(0, 10).join('\n'),
         },
@@ -1226,19 +1235,37 @@ export async function executeAuthoritativeGeneration(
       selectedFlexibility: canonicalProfileTyped.selectedFlexibility || [],
       
       // HIGH-PRIORITY: Weighted strength truth
-      weightedStrengthSnapshot: {
-        hasWeightedPullUp: !!(canonicalProfileTyped.weightedPullUp?.oneRepMax || canonicalProfileTyped.weightedPullUp?.addedWeight),
-        hasWeightedDip: !!(canonicalProfileTyped.weightedDip?.oneRepMax || canonicalProfileTyped.weightedDip?.addedWeight),
-        pullUp1RM: canonicalProfileTyped.weightedPullUp?.oneRepMax || null,
-        dip1RM: canonicalProfileTyped.weightedDip?.oneRepMax || null,
-        bodyweight: canonicalProfileTyped.bodyweight || null,
-        loadingEligible: !!(canonicalProfileTyped.weightedPullUp || canonicalProfileTyped.weightedDip),
-        dataSource: canonicalProfileTyped.weightedPullUp?.oneRepMax || canonicalProfileTyped.weightedDip?.oneRepMax 
-          ? 'current_benchmark' 
-          : canonicalProfileTyped.weightedPullUp || canonicalProfileTyped.weightedDip 
-            ? 'onboarding' 
-            : 'none',
-      },
+      // [AUTHORITATIVE-WEIGHTED-1RM-OWNER] The canonical
+      // `weightedPullUp` / `weightedDip` shape is `{ addedWeight: number;
+      // reps: number; unit?: ... }` — there is no separate `oneRepMax`
+      // field. Compute a 1RM from `addedWeight + reps` using the
+      // standard Brzycki estimator (load * (36/(37 - reps))). For a
+      // single-rep entry this collapses to addedWeight, and the
+      // estimator stays bounded for higher rep ranges.
+      weightedStrengthSnapshot: (() => {
+        const pull = canonicalProfileTyped.weightedPullUp
+        const dip = canonicalProfileTyped.weightedDip
+        const est1RM = (b: { addedWeight: number; reps: number } | null | undefined): number | null => {
+          if (!b || !b.addedWeight) return null
+          const reps = Math.max(1, Math.min(10, b.reps || 1))
+          return Math.round(b.addedWeight * (36 / (37 - reps)))
+        }
+        const pull1RM = est1RM(pull)
+        const dip1RM = est1RM(dip)
+        return {
+          hasWeightedPullUp: !!(pull1RM || pull?.addedWeight),
+          hasWeightedDip: !!(dip1RM || dip?.addedWeight),
+          pullUp1RM: pull1RM,
+          dip1RM: dip1RM,
+          bodyweight: canonicalProfileTyped.bodyweight || null,
+          loadingEligible: !!(pull || dip),
+          dataSource: (pull1RM || dip1RM)
+            ? 'current_benchmark'
+            : (pull || dip)
+              ? 'onboarding'
+              : 'none',
+        }
+      })(),
       
       // MEDIUM-PRIORITY: Recovery and readiness
       recoveryQuality: canonicalProfileTyped.recoveryQuality || null,
@@ -1246,12 +1273,14 @@ export async function executeAuthoritativeGeneration(
       weakestArea: canonicalProfileTyped.weakestArea || null,
       
       // MEDIUM-PRIORITY: Skill benchmarks
+      // [AUTHORITATIVE-CANONICAL-EXTRA-PROGRESSIONS-LEGACY] read defensively
+      // (back-lever / handstand / muscle-up not on strict canonical type).
       skillBenchmarksUsed: {
         plancheProgression: canonicalProfileTyped.plancheProgression || null,
         frontLeverProgression: canonicalProfileTyped.frontLeverProgression || null,
-        backLeverProgression: canonicalProfileTyped.backLeverProgression || null,
-        handstandProgression: canonicalProfileTyped.handstandProgression || null,
-        muscleUpProgression: canonicalProfileTyped.muscleUpProgression || null,
+        backLeverProgression: (canonicalProfileTyped as { backLeverProgression?: string | null }).backLeverProgression || null,
+        handstandProgression: (canonicalProfileTyped as { handstandProgression?: string | null }).handstandProgression || null,
+        muscleUpProgression: (canonicalProfileTyped as { muscleUpProgression?: string | null }).muscleUpProgression || null,
       },
       
       // Identity fields

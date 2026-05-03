@@ -19,6 +19,7 @@ import {
   getExercisesByTransfer,
   hasRequiredEquipment,
   getAllExercises,
+  getExerciseById,
 } from './adaptive-exercise-pool'
 import { FLEXIBILITY_SEQUENCES, generateFlexibilitySession } from './flexibility-sequences'
 import {
@@ -7452,7 +7453,11 @@ function buildExecutionTruth(
   let fallbackEasierBandColor: ResistanceBandColor | null = null
   
   // Get easier progression if available
-  const easierProgression = getProgressionDown(exercise.id)
+  // [PROGRESSION-DOWN-IS-EXERCISE-ID] `getProgressionDown` returns the
+  // EXERCISE ID string, not an Exercise record. Resolve the full
+  // exercise via `getExerciseById` before reading `.id` / `.name`.
+  const easierProgressionId = getProgressionDown(exercise.id)
+  const easierProgression = easierProgressionId ? getExerciseById(easierProgressionId) : null
   if (easierProgression) {
     fallbackEasierExerciseId = easierProgression.id
     fallbackEasierExerciseName = easierProgression.name

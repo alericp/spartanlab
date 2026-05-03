@@ -1734,8 +1734,11 @@ export function clearCanonicalProfileData(): void {
  * - Experience level (advanced → more variety available)
  */
 function inferTrainingMethodPreferences(
-  onboardingProfile: OnboardingProfile | null,
-  athleteProfile: AthleteProfile | null
+  // [CANONICAL-PROFILE-LEGACY-FIELD-EXTENSIONS] Accept legacy-extended
+  // shapes so the function body can read backward-compat `trainingStyle`
+  // without TS2339. Caller already passes the extended cast.
+  onboardingProfile: OnboardingProfileWithLegacy | null,
+  athleteProfile: AthleteProfileWithLegacy | null
 ): TrainingMethodPreference[] {
   // Check if explicitly set (future-proofing for when UI captures this)
   const explicitPrefs = (onboardingProfile as unknown as { trainingMethodPreferences?: TrainingMethodPreference[] })?.trainingMethodPreferences

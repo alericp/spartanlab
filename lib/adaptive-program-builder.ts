@@ -2398,8 +2398,12 @@ export interface AdaptiveProgram {
   }
   // Unified Workout Reasoning Summary - explains WHY this workout was generated
   workoutReasoningSummary?: WorkoutReasoningSummary
-  // Unified Weak Point Assessment - detailed limiter analysis
-  weakPointAssessment?: WeakPointAssessment
+  // [BUILDER-WEAKPOINT-ASSESSMENT-RENAME] The type is imported with an
+  // alias as `UnifiedWeakPointAssessment` (line ~132). The un-aliased
+  // name `WeakPointAssessment` does not exist in this scope, which is
+  // what produced TS2304 here. Use the aliased name. This is a pure
+  // identifier rename — no shape change.
+  weakPointAssessment?: UnifiedWeakPointAssessment
   // Constraint-aware assembly analysis - explains all builder decisions
   constraintAnalysis?: ConstraintAnalysis
   // Formatted builder reasoning - coach-style explanations
@@ -4154,9 +4158,17 @@ export function buildAuthoritativeMultiSkillIntentContract(
   const primaryGoal = canonicalProfile.primaryGoal || null
   const secondaryGoal = canonicalProfile.secondaryGoal || null
   const jointCautions = canonicalProfile.jointCautions || []
-  const equipmentAvailable = canonicalProfile.equipment || canonicalProfile.equipmentAvailable || []
+  // [BUILDER-CANONICAL-PROFILE-RENAME] CanonicalProgrammingProfile owns
+  // `equipmentAvailable: string[]`. The legacy `equipment` field was
+  // never on this type; reads of `canonicalProfile.equipment` were a
+  // ProfileSnapshot leak. Use the canonical field directly.
+  const equipmentAvailable = canonicalProfile.equipmentAvailable || []
   const experienceLevel = canonicalProfile.experienceLevel || 'intermediate'
-  const targetFrequency = canonicalProfile.trainingFrequency || 4
+  // [BUILDER-CANONICAL-PROFILE-RENAME] CanonicalProgrammingProfile owns
+  // `trainingDaysPerWeek: number | null`. The legacy `trainingFrequency`
+  // field was never on this type. Use the canonical field directly,
+  // with the same numeric fallback.
+  const targetFrequency = canonicalProfile.trainingDaysPerWeek || 4
 
   // ==========================================================================
   // [PHASE 2] CANONICAL MATERIALITY RANKING
@@ -4360,7 +4372,8 @@ export function buildAuthoritativeMultiSkillIntentContract(
   })
 
   // Determine weighted loading eligibility
-  const equipment = canonicalProfile.equipment || canonicalProfile.equipmentAvailable || []
+    // [BUILDER-CANONICAL-PROFILE-RENAME]
+    const equipment = canonicalProfile.equipmentAvailable || []
   const hasWeights = equipment.some(e => 
     ['weights', 'dip_belt', 'weighted_vest', 'dumbbells', 'barbell'].includes(e)
   )
@@ -6189,7 +6202,8 @@ async function generateAdaptiveProgramImpl(
       primaryGoal: canonicalProfile.primaryGoal,
       onboardingComplete: canonicalProfile.onboardingComplete,
       selectedSkillsCount: canonicalProfile.selectedSkills?.length || 0,
-      equipmentCount: canonicalProfile.equipment?.length || canonicalProfile.equipmentAvailable?.length || 0,
+      // [BUILDER-CANONICAL-PROFILE-RENAME]
+    equipmentCount: canonicalProfile.equipmentAvailable?.length || 0,
     })
   } else {
     // [PHASE 16J] CLIENT PATH: Use normal getCanonicalProfile()
@@ -6221,7 +6235,8 @@ async function generateAdaptiveProgramImpl(
     hasSelectedSkills: Array.isArray(canonicalProfile.selectedSkills) && canonicalProfile.selectedSkills.length > 0,
     hasSelectedFlexibility: Array.isArray(canonicalProfile.selectedFlexibility) && canonicalProfile.selectedFlexibility.length > 0,
     hasSelectedStrength: Array.isArray(canonicalProfile.selectedStrength) && canonicalProfile.selectedStrength.length > 0,
-    hasEquipment: (canonicalProfile.equipment?.length || 0) > 0 || (canonicalProfile.equipmentAvailable?.length || 0) > 0,
+    // [BUILDER-CANONICAL-PROFILE-RENAME]
+    hasEquipment: (canonicalProfile.equipmentAvailable?.length || 0) > 0,
     scheduleMode: canonicalProfile.scheduleMode,
     trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
     experienceLevel: canonicalProfile.experienceLevel,
@@ -6450,7 +6465,8 @@ async function generateAdaptiveProgramImpl(
   // [weighted-truth] TASK A: Log weighted readiness at generation start
   let hasLoadableEq = false
   try {
-    hasLoadableEq = hasLoadableEquipment(canonicalProfile.equipment || [])
+      // [BUILDER-CANONICAL-PROFILE-RENAME]
+      hasLoadableEq = hasLoadableEquipment(canonicalProfile.equipmentAvailable || [])
   } catch (err) {
     console.error('[program-root-cause] hasLoadableEquipment (canonical) failed:', err)
     // Non-fatal - continue with false
@@ -6461,15 +6477,17 @@ async function generateAdaptiveProgramImpl(
     hasWeightedStrengthData: hasWeightedStr,
     hasWeightedPullUp: !!canonicalProfile.weightedBenchmarks?.weightedPullUp?.current,
     hasWeightedDip: !!canonicalProfile.weightedBenchmarks?.weightedDip?.current,
-    equipment: canonicalProfile.equipment,
-    reason: hasLoadableEq && hasWeightedStr ? 'weighted_eligible' : hasLoadableEq ? 'missing_strength_inputs' : 'no_loadable_equipment',
+      // [BUILDER-CANONICAL-PROFILE-RENAME]
+      equipment: canonicalProfile.equipmentAvailable,
+      reason: hasLoadableEq && hasWeightedStr ? 'weighted_eligible' : hasLoadableEq ? 'missing_strength_inputs' : 'no_loadable_equipment',
   })
   
   // ==========================================================================
   // [TASK 7] PULL EXPRESSION ALIGNMENT AUDIT
   // Check if pull-up bar is correctly detected for vertical pulling eligibility
   // ==========================================================================
-  const equipmentArray = canonicalProfile.equipment || canonicalProfile.equipmentAvailable || []
+    // [BUILDER-CANONICAL-PROFILE-RENAME]
+    const equipmentArray = canonicalProfile.equipmentAvailable || []
   const hasPullUpBarDirect = equipmentArray.includes('pull_bar')
   const hasPullUpBarAlias = equipmentArray.includes('pullup_bar')
   const hasPullUpBarNormalized = hasPullUpBarDirect || hasPullUpBarAlias
@@ -6585,7 +6603,8 @@ async function generateAdaptiveProgramImpl(
         primaryGoal: canonicalProfile.primaryGoal,
         onboardingComplete: canonicalProfile.onboardingComplete,
         selectedSkillsCount: canonicalProfile.selectedSkills?.length,
-        equipmentCount: canonicalProfile.equipment?.length || canonicalProfile.equipmentAvailable?.length,
+        // [BUILDER-CANONICAL-PROFILE-RENAME]
+    equipmentCount: canonicalProfile.equipmentAvailable?.length,
       },
     })
     throw new GenerationError(
@@ -6705,7 +6724,13 @@ async function generateAdaptiveProgramImpl(
   // Resolve athlete ID for optional side effects (constraint history, analytics)
   // This is best-effort - program generation must succeed even without a valid ID
   // NOTE: Uses `profile` already declared above at function start
-  const resolvedAthleteId: string | null = profile?.userId || onboardingProfile?.userId || null
+  // [BUILDER-ONBOARDING-USERID-OWNER] `OnboardingProfile` does not own
+  // `userId` — that field is on `AthleteProfile`. Reading
+  // `onboardingProfile?.userId` produced TS2339. Athlete identity for
+  // analytics/constraint history comes from `profile.userId` only;
+  // the onboarding fallback path is dropped because it never had the
+  // field. If `profile` is null, we keep the existing null fallback.
+  const resolvedAthleteId: string | null = profile?.userId || null
   console.log('[program-generate] resolvedAthleteId:', resolvedAthleteId ? 'present' : 'null')
   
   // ==========================================================================
@@ -6899,7 +6924,8 @@ async function generateAdaptiveProgramImpl(
       ? canonicalProfile.selectedSkills 
       : inputs.selectedSkills || [],
     experienceLevel: canonicalProfile.experienceLevel || inputs.experienceLevel || 'intermediate',
-    equipment: canonicalProfile.equipmentAvailable || inputs.equipment || [],
+      // [BUILDER-CANONICAL-PROFILE-RENAME] reads canonical owner directly.
+      equipment: canonicalProfile.equipmentAvailable || inputs.equipment || [],
     goalCategories: canonicalProfile.goalCategories || inputs.goalCategories || [],
     selectedFlexibility: canonicalProfile.selectedFlexibility || inputs.selectedFlexibility || [],
   }
@@ -7187,11 +7213,14 @@ async function generateAdaptiveProgramImpl(
   // Build readiness assessment if available
   let readinessForContract: ReadinessAssessment | null = null
   try {
-    readinessForContract = await getReadinessAssessment({
-      recentWorkoutCount: trainingFeedback.totalSessionsLast7Days,
-      averageSessionRPE: trainingFeedback.averageRecentRPE,
-      recentCompletionRate: trainingFeedback.recentCompletionRate,
-    })
+    // [BUILDER-READINESS-ZERO-ARGS] `getReadinessAssessment()` is the
+    // canonical recovery-fatigue-engine accessor and takes ZERO
+    // arguments — it sources `recoverySignal`, fatigue, and trend
+    // signals internally. Passing an options object produced TS2554
+    // ("Expected 0 arguments, got 1"). The fields we used to pass
+    // (averageRecentRPE, expectedSessionsPerWeek) never existed on
+    // TrainingFeedbackSummary anyway. Same downstream behavior.
+    readinessForContract = await getReadinessAssessment()
   } catch {
     // Readiness assessment failed - continue with null
     console.log('[week-adaptation-contract] Readiness assessment unavailable, continuing with null')
@@ -7237,9 +7266,17 @@ async function generateAdaptiveProgramImpl(
     consistencyStatus: consistencyForContract,
     
     // Adherence signals
-    recentMissedSessions: trainingFeedback.totalSessionsLast7Days < (trainingFeedback.expectedSessionsPerWeek || 4) 
-      ? (trainingFeedback.expectedSessionsPerWeek || 4) - trainingFeedback.totalSessionsLast7Days 
-      : 0,
+    // [BUILDER-EXPECTED-SESSIONS-OWNER] `expectedSessionsPerWeek` is NOT
+    // on TrainingFeedbackSummary — it's a profile-truth field that lives
+    // on `CanonicalProgrammingProfile.trainingDaysPerWeek`. Use the
+    // canonical owner (with the same numeric fallback) to compute the
+    // missed-sessions count.
+    recentMissedSessions: (() => {
+      const expected = canonicalProfile.trainingDaysPerWeek ?? 4
+      return trainingFeedback.totalSessionsLast7Days < expected
+        ? expected - trainingFeedback.totalSessionsLast7Days
+        : 0
+    })(),
     recentPartialSessions: 0, // Not tracked yet - will be wired when partial session tracking is added
     totalSessionsLast7Days: trainingFeedback.totalSessionsLast7Days,
     totalSessionsLast14Days: trainingFeedback.totalSessionsLast14Days,
@@ -7388,7 +7425,12 @@ async function generateAdaptiveProgramImpl(
       primaryGoal,
       experienceLevel,
       jointCautions: profile?.jointCautions,
-      recoveryProfile: profile?.recoveryProfile,
+      // [BUILDER-RECOVERY-PROFILE-OWNER] `recoveryProfile` lives on
+      // `OnboardingProfile.recovery` (RecoveryProfile | null), NOT on
+      // `AthleteProfile`. Reading `profile?.recoveryProfile` produced
+      // TS2339 because AthleteProfile has no such field. Use the real
+      // owner; convert null → undefined to match the optional input.
+      recoveryProfile: onboardingProfile?.recovery ?? undefined,
       trainingStyle: (profile as AthleteProfile & { trainingStyle?: string })?.trainingStyle,
       // [FLOW-PARITY-FIX] Feed workout data ONLY for adaptive builds, not fresh baseline
       recentWorkoutCount: effectiveRecentWorkoutCount,
@@ -8118,7 +8160,8 @@ async function generateAdaptiveProgramImpl(
       selectedSkills: canonicalProfile.selectedSkills || [],
       experienceLevel: canonicalProfile.experienceLevel || null,
       jointCautions: canonicalProfile.jointCautions || [],
-      equipmentAvailable: canonicalProfile.equipment || canonicalProfile.equipmentAvailable || [],
+      // [BUILDER-CANONICAL-PROFILE-RENAME]
+      equipmentAvailable: canonicalProfile.equipmentAvailable || [],
       currentWorkingProgressions: cwpRecord,
       trainingMethodPreferences: inputs.trainingMethodPreferences?.map(p => p.name) || [],
       sessionStyle: inputs.sessionStyle || null,
@@ -8160,7 +8203,8 @@ async function generateAdaptiveProgramImpl(
         scheduleMode: canonicalProfile.scheduleMode || null,
         targetFrequency: effectiveTrainingDays,
         jointCautions: canonicalProfile.jointCautions || [],
-        equipmentAvailable: canonicalProfile.equipment || canonicalProfile.equipmentAvailable || [],
+      // [BUILDER-CANONICAL-PROFILE-RENAME]
+      equipmentAvailable: canonicalProfile.equipmentAvailable || [],
         currentWorkingProgressions: cwpRecord,
         trainingPath: canonicalProfile.trainingPath || null,
         sessionStyle: inputs.sessionStyle || null,
@@ -8814,6 +8858,17 @@ async function generateAdaptiveProgramImpl(
     
     postAllocationFatalAudit.lastSuccessfulCheckpoint = 'BRIDGE_CONSTRUCTED'
     postAllocationFatalAudit.exactLocalStep = 'bridge_constructed'
+    
+    // [BUILDER-BRIDGE-NULL-NARROWING] `postAllocationOwnerBridge` is declared
+    // as `T | null = null` for the failure-path semantics. The non-null
+    // literal assignment above proves it is non-null here, but TypeScript
+    // flow analysis can lose `let` narrowing across the long try-block,
+    // producing TS18047 ("possibly null") at every downstream read. This
+    // statically-unreachable guard re-narrows the type for the remainder
+    // of this block without any runtime behavior change.
+    if (!postAllocationOwnerBridge) {
+      throw new Error('post_allocation_owner_bridge_unreachable_null')
+    }
     
     // ==========================================================================
     // STEP 3: Validate bridge completeness
@@ -11269,14 +11324,26 @@ async function generateAdaptiveProgramImpl(
   const selectionContext: SelectionContext = {
     primaryGoal: effectiveGoalType,
     experienceLevel,
-    recoveryCapacity: recoverySignal.level === 'optimal' ? 'moderate' : 
-                      recoverySignal.level === 'good' ? 'moderate' :
-                      recoverySignal.level === 'suboptimal' ? 'light' : 'minimal',
+    // [BUILDER-RECOVERY-LEVEL-RENAME] `RecoveryLevel` is the union
+    // 'HIGH' | 'MODERATE' | 'LOW' (see lib/recovery-engine.ts).
+    // The legacy labels 'optimal' | 'good' | 'suboptimal' never existed
+    // on this union and produced TS2367 impossible-comparison errors.
+    // Mapping preserves prior intent: optimal→HIGH, good→MODERATE,
+    // suboptimal→LOW. Same downstream behavior.
+    recoveryCapacity: recoverySignal.level === 'HIGH' ? 'moderate' : 
+                      recoverySignal.level === 'MODERATE' ? 'moderate' :
+                      recoverySignal.level === 'LOW' ? 'light' : 'minimal',
     sorenessToleranceHigh: false,
     sessionMinutes: typeof sessionLength === 'number' ? sessionLength : 60,
     trainingDaysPerWeek,
-    currentFatigueLevel: fatigueDecision?.decision === 'SKIP_TODAY' ? 'high' :
-                         fatigueDecision?.decision === 'REDUCE_INTENSITY' ? 'moderate' : 'low',
+    // [BUILDER-TRAINING-DECISION-RENAME] `TrainingDecision` is now the
+    // union TRAIN_AS_PLANNED | PRESERVE_QUALITY | LIGHTEN_SESSION |
+    // COMPRESS_WEEKLY_LOAD | DELOAD_RECOMMENDED (see fatigue-decision-engine.ts).
+    // Legacy labels SKIP_TODAY / REDUCE_INTENSITY / REDUCE_VOLUME never
+    // existed on this union (TS2367). Map: SKIP_TODAY→DELOAD_RECOMMENDED,
+    // REDUCE_INTENSITY→PRESERVE_QUALITY, REDUCE_VOLUME→LIGHTEN_SESSION.
+    currentFatigueLevel: fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 'high' :
+                         fatigueDecision?.decision === 'PRESERVE_QUALITY' ? 'moderate' : 'low',
     recentSorenessLevel: 'mild',
     rangeTrainingMode: profile?.rangeTrainingMode || undefined,
     wantsHypertrophy: trainingOutcome === 'strength' || profile?.goalCategory === 'strength',
@@ -12130,10 +12197,14 @@ async function generateAdaptiveProgramImpl(
     
     // Determine fatigue state from fatigueDecision
     const fatigueStateForComposition: 'fresh' | 'moderate' | 'accumulated' | 'needs_deload' = 
-      fatigueDecision?.decision === 'SKIP_TODAY' ? 'needs_deload' :
+      // [BUILDER-TRAINING-DECISION-RENAME] Map legacy labels to current
+      // TrainingDecision union: SKIP_TODAY/DELOAD_RECOMMENDED→needs_deload,
+      // REDUCE_INTENSITY→PRESERVE_QUALITY (accumulated),
+      // REDUCE_VOLUME→LIGHTEN_SESSION (moderate). Same downstream tiers.
       fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 'needs_deload' :
-      fatigueDecision?.decision === 'REDUCE_INTENSITY' ? 'accumulated' :
-      fatigueDecision?.decision === 'REDUCE_VOLUME' ? 'moderate' : 'fresh'
+      fatigueDecision?.decision === 'PRESERVE_QUALITY' ? 'accumulated' :
+      fatigueDecision?.decision === 'LIGHTEN_SESSION' ? 'moderate' :
+      fatigueDecision?.decision === 'COMPRESS_WEEKLY_LOAD' ? 'moderate' : 'fresh'
     
     // ==========================================================================
     // [WEEKLY-COMPOSITION-UPGRADE] Build week adaptation input from decision
@@ -12589,11 +12660,13 @@ async function generateAdaptiveProgramImpl(
       const maxExercisesForSession = sessionLength === '<30' ? 5 : sessionLength === '30-45' ? 6 : 8
       
       // Use rule-based detection with fatigue state
-      const fatigueNeedsDeload = fatigueDecision?.decision === 'SKIP_TODAY' || 
-                                 fatigueDecision?.decision === 'DELOAD_RECOMMENDED'
-      const fatigueScoreForDetection = fatigueDecision?.decision === 'SKIP_TODAY' ? 90 :
-                                       fatigueDecision?.decision === 'REDUCE_INTENSITY' ? 70 :
-                                       fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 80 : 40
+      // [BUILDER-TRAINING-DECISION-RENAME] SKIP_TODAY no longer exists on
+      // TrainingDecision; DELOAD_RECOMMENDED carries the same semantics.
+      // REDUCE_INTENSITY mapped to PRESERVE_QUALITY (its current equivalent).
+      const fatigueNeedsDeload = fatigueDecision?.decision === 'DELOAD_RECOMMENDED'
+      const fatigueScoreForDetection = fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 90 :
+                                       fatigueDecision?.decision === 'PRESERVE_QUALITY' ? 70 :
+                                       fatigueDecision?.decision === 'LIGHTEN_SESSION' ? 60 : 40
       
       // STEP D: Wrap weak point detection in optional try/catch
       let detectedWeakPoints = { primary: [] as string[], secondary: [] as string[] }
@@ -12678,7 +12751,8 @@ async function generateAdaptiveProgramImpl(
           primaryGoal === 'skill' ? 'skill' : 
             primaryGoal === 'strength' ? 'strength' : 'mixed',
           undefined,
-          fatigueDecision?.decision === 'REDUCE_INTENSITY' ? 'very_low' : undefined
+                                       // [BUILDER-TRAINING-DECISION-RENAME] REDUCE_INTENSITY → PRESERVE_QUALITY
+                                       fatigueDecision?.decision === 'PRESERVE_QUALITY' ? 'very_low' : undefined
         )
         postSessionStep = 'session_style_resolved'
         

@@ -16276,7 +16276,11 @@ async function generateAdaptiveProgramImpl(
     const failedDayInfo = structure?.days?.[sessionLoopIndex]
     
     // [PHASE15E-SESSION-ROOT-CAUSE] Track outer catch failure
-    const outerErrorName = sessionAssemblyErr instanceof Error ? sessionAssemblyErr.name : 'Unknown'
+    // [BUILDER-OUTER-CATCH-BINDING-FIX] The enclosing `catch` at line ~16215
+    // binds the error as `err`, not `sessionAssemblyErr`. The previous name
+    // produced TS2552 ("Cannot find name 'sessionAssemblyErr'"). Use the
+    // actual catch binding — same Error instance, same downstream check.
+    const outerErrorName = err instanceof Error ? err.name : 'Unknown'
     if (sessionFailureTracker.firstFailedIndex === null) {
       sessionFailureTracker.firstFailedIndex = sessionLoopIndex
       sessionFailureTracker.firstFailedFocus = failedDayInfo?.focus || 'unknown'
@@ -17269,6 +17273,16 @@ async function generateAdaptiveProgramImpl(
     equipmentProfile,
     canonicalProfile.selectedSkills || []
   )
+
+  // [BUILDER-TRUTHFUL-HYBRID-SUMMARY-HOIST] The audit blocks at
+  // ~lines 17705 and ~17725 read `truthfulHybridSummary` before its
+  // original declaration at ~18018, producing TS2448 / TS2454
+  // (used-before-declaration / used-before-assigned). Hoisting the
+  // initial value here — using the same `programRationale` seed as
+  // the original — gives flow analysis a definite assignment for all
+  // downstream reads. The later block continues to mutate the same
+  // binding via reassignment (no second declaration).
+  let truthfulHybridSummary: string = programRationale
   
   // ==========================================================================
   // [TASK 2] BUILT-AROUND SKILL AUDIT - WRAPPED IN TRY-CATCH FOR SAFETY
@@ -18015,7 +18029,10 @@ async function generateAdaptiveProgramImpl(
   })
   
   // [SUMMARY-TRUTH] Hoist truthfulHybridSummary so it can be used in summaryTruth object
-  let truthfulHybridSummary = programRationale
+  // [BUILDER-TRUTHFUL-HYBRID-SUMMARY-HOIST] Declaration moved to line ~17273
+  // so the audit blocks above can read it without TS2448. Reassign the
+  // already-declared binding here so the surrounding mutation logic is unchanged.
+  truthfulHybridSummary = programRationale
   
   try {
     // Use canonical exercise names from earlier safe collection (TASK 2)
@@ -18844,7 +18861,11 @@ async function generateAdaptiveProgramImpl(
       secondaryGoal,
       selectedSkills: canonicalProfile.selectedSkills || [],
       trainingStyle: canonicalProfile.trainingStyle,
-      adaptiveScheduleUsed: finalScheduleMode === 'flexible',
+      // [BUILDER-FINAL-SCHEDULE-MODE-EARLY-READ] `finalScheduleMode` is
+      // declared at ~line 19595 as `const finalScheduleMode = inputScheduleMode`.
+      // This read happens before that declaration (TS2552). Use the actual
+      // upstream source `inputScheduleMode` — same value, same string union.
+      adaptiveScheduleUsed: inputScheduleMode === 'flexible',
       pullExpressionPresent,
       pushExpressionPresent,
       weightedSupportPresent,
@@ -19120,7 +19141,8 @@ async function generateAdaptiveProgramImpl(
       expressedPrimary: primaryGoal,
       expressedSecondary: secondaryGoal,
       sessionCount: sessions.length,
-      usedFlexibleSchedule: finalScheduleMode === 'flexible',
+      // [BUILDER-FINAL-SCHEDULE-MODE-EARLY-READ] same hoist-fix as above.
+      usedFlexibleSchedule: inputScheduleMode === 'flexible',
       skillsWithExercises: weekRepresentedSkills.length,
       methodsUsed: {
         supersets: sessionsWithSupersets > 0,
@@ -20554,7 +20576,13 @@ fatigueDecision: fatigueDecision ? {
               : 'normal',
           straightArmFatigue: getStraightArmFatigueSignal(fatigueDecision),
           overallFatigue: getOverallFatigueSignal(fatigueDecision),
-          fatigueDecision: fatigueDecision || null,
+          // [BUILDER-FATIGUE-DECISION-UNWRAP] `ConstraintAwareInput.fatigueDecision`
+          // expects `TrainingDecision | null`, but the local `fatigueDecision` is
+          // the wrapper `{ decision; shortGuidance; needsAttention } | null` —
+          // assigning the wrapper produced TS2322. Project the inner `.decision`
+          // (or null) so the contract matches without altering the wrapper used
+          // elsewhere in this scope.
+          fatigueDecision: fatigueDecision?.decision ?? null,
           jointCautions: profile?.jointCautions || [],
           tendonStress: {
             wrist: profile?.jointCautions?.includes('wrists') ? 70 : 30,
@@ -20605,7 +20633,8 @@ fatigueDecision: fatigueDecision ? {
               : 'normal',
           straightArmFatigue: getStraightArmFatigueSignal(fatigueDecision),
           overallFatigue: getOverallFatigueSignal(fatigueDecision),
-          fatigueDecision: fatigueDecision || null,
+          // [BUILDER-FATIGUE-DECISION-UNWRAP] same wrapper→inner-decision projection.
+          fatigueDecision: fatigueDecision?.decision ?? null,
           jointCautions: profile?.jointCautions || [],
           tendonStress: {
             wrist: profile?.jointCautions?.includes('wrists') ? 70 : 30,

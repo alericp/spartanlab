@@ -78,7 +78,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { buildExercisePurposeLine, buildExerciseEffortReasonLine } from '@/lib/program/program-display-contract'
 import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-builder'
 // [WEEK-PROGRESSION-TRUTH] Import scaled exercise type for week-aware dosage in live workout
-import type { ScaledExercise } from '@/lib/week-dosage-scaling'
 // [LIVE-UNIT-CONTRACT] Canonical hold-vs-reps detector - single source of truth
 // for classifying an exercise as hold-based vs reps-based across the entire
 // live workout corridor (active card, set logging, completed-set serialization,
@@ -432,6 +431,68 @@ function getBlockForExercise(plan: ExecutionPlan | undefined, exerciseIndex: num
 // =============================================================================
 
 // =============================================================================
+// [LIVE-WORKOUT-FRONTIER] Typed runtime exercise metadata reader.
+//
+// The live-session corridor receives exercises through `NormalizedExercise`
+// (validate-live-session-runtime.ts), where `executionTruth` is intentionally
+// typed as `unknown` to keep the runtime contract decoupled from the builder
+// type tree. Several render-time and dispatch-time consumers need a few
+// specific metadata signals (e.g. `recommendedBand`, `bandSelectable`) that
+// upstream truth resolvers do write into `executionTruth`. Reading those
+// fields directly off `unknown` (or off `{}` after a guard) is unsound and
+// blocks compilation.
+//
+// `readRuntimeExerciseMetadata` is the single safe boundary: it validates
+// that the input is an object, copies ONLY the known signal fields, and
+// drops everything else. It never mutates the source. Invalid values are
+// dropped silently rather than coerced into lies (e.g. an unknown band name
+// is dropped rather than masquerading as a real ResistanceBandColor).
+// =============================================================================
+type RuntimeExerciseMetadata = {
+  bandSelectable?: boolean
+  isWeighted?: boolean
+  isTimedHold?: boolean
+  isUnilateral?: boolean
+  assistedAllowed?: boolean
+  supportsBandAdjustment?: boolean
+  recommendedBand?: ResistanceBandColor | null
+  recommendedBandColor?: ResistanceBandColor | null
+}
+
+const VALID_RESISTANCE_BAND_COLORS: ReadonlySet<string> = new Set([
+  'yellow', 'red', 'black', 'purple', 'green', 'blue',
+])
+
+function readRuntimeExerciseMetadata(value: unknown): RuntimeExerciseMetadata {
+  if (typeof value !== 'object' || value === null) return {}
+  const src = value as Record<string, unknown>
+  const out: RuntimeExerciseMetadata = {}
+
+  if (typeof src.bandSelectable === 'boolean') out.bandSelectable = src.bandSelectable
+  if (typeof src.isWeighted === 'boolean') out.isWeighted = src.isWeighted
+  if (typeof src.isTimedHold === 'boolean') out.isTimedHold = src.isTimedHold
+  if (typeof src.isUnilateral === 'boolean') out.isUnilateral = src.isUnilateral
+  if (typeof src.assistedAllowed === 'boolean') out.assistedAllowed = src.assistedAllowed
+  if (typeof src.supportsBandAdjustment === 'boolean') out.supportsBandAdjustment = src.supportsBandAdjustment
+
+  const rb = src.recommendedBand
+  if (rb === null) {
+    out.recommendedBand = null
+  } else if (typeof rb === 'string' && VALID_RESISTANCE_BAND_COLORS.has(rb)) {
+    out.recommendedBand = rb as ResistanceBandColor
+  }
+
+  const rbc = src.recommendedBandColor
+  if (rbc === null) {
+    out.recommendedBandColor = null
+  } else if (typeof rbc === 'string' && VALID_RESISTANCE_BAND_COLORS.has(rbc)) {
+    out.recommendedBandColor = rbc as ResistanceBandColor
+  }
+
+  return out
+}
+
+// =============================================================================
 // [WEEK-PROGRESSION-TRUTH] Helper to extract effective exercise values
 // Prefers week-scaled values when available, falls back to base values
 // This ensures the live workout uses the same dosage as the Program page displays
@@ -444,24 +505,49 @@ interface EffectiveExerciseValues {
   weekScalingApplied: boolean
 }
 
-function getEffectiveExerciseValues(exercise: AdaptiveExercise | null | undefined): EffectiveExerciseValues {
+/**
+ * [LIVE-WORKOUT-FRONTIER] Display-safe input contract for the effective
+ * value resolver. The resolver only ever reads base dosage fields (sets,
+ * repsOrTime, targetRPE, restSeconds) and the optional scaled-week fields.
+ * Both `AdaptiveExercise` (builder-canonical), `MachineExercise`
+ * (lib/workout/live-workout-machine.ts), and `NormalizedExercise`
+ * (lib/workout/validate-live-session-runtime.ts) carry these fields with
+ * the same meaning, so widening to a structural input here lets the live
+ * session pass any of those without lying with `as AdaptiveExercise`.
+ *
+ * No new scaling logic is introduced - the body is unchanged.
+ */
+type EffectiveExerciseInput = {
+  sets?: number
+  repsOrTime?: string
+  targetRPE?: number
+  restSeconds?: number
+  // Week-scaled overrides (lib/week-dosage-scaling.ts). Optional because not
+  // every input shape carries them; when absent we fall back to base values.
+  scaledSets?: number
+  scaledReps?: string
+  scaledTargetRPE?: number
+  scaledRestPeriod?: number
+  weekScalingApplied?: boolean
+}
+
+function getEffectiveExerciseValues(
+  exercise: EffectiveExerciseInput | null | undefined
+): EffectiveExerciseValues {
   if (!exercise) {
     return { sets: 3, repsOrTime: '8-12 reps', targetRPE: 8, restPeriod: 90, weekScalingApplied: false }
   }
-  
-  // Cast to ScaledExercise to access optional scaled fields
-  const scaled = exercise as unknown as ScaledExercise
-  
+
   return {
     // [WEEK-PROGRESSION-TRUTH] Prefer scaled values, fall back to base values
-    sets: scaled.scaledSets ?? exercise.sets ?? 3,
-    repsOrTime: scaled.scaledReps ?? exercise.repsOrTime ?? '8-12 reps',
-    targetRPE: scaled.scaledTargetRPE ?? exercise.targetRPE ?? 8,
+    sets: exercise.scaledSets ?? exercise.sets ?? 3,
+    repsOrTime: exercise.scaledReps ?? exercise.repsOrTime ?? '8-12 reps',
+    targetRPE: exercise.scaledTargetRPE ?? exercise.targetRPE ?? 8,
     // [REST-FIELD-CONTRACT] AdaptiveExercise canonical rest field is
     // `restSeconds`. The local `EffectiveExerciseValues.restPeriod` is a
     // live-session UI/runtime value name and is intentionally preserved.
-    restPeriod: scaled.scaledRestPeriod ?? exercise.restSeconds ?? 90,
-    weekScalingApplied: scaled.weekScalingApplied === true,
+    restPeriod: exercise.scaledRestPeriod ?? exercise.restSeconds ?? 90,
+    weekScalingApplied: exercise.weekScalingApplied === true,
   }
 }
 
@@ -3988,11 +4074,14 @@ export function StreamlinedWorkoutSession({
       console.log('[v0] [active_contract_inputs_resolved]', { setNumber, isHoldExercise, targetValue })
       
       // [LIVE-WORKOUT-AUTHORITY] Resolve exercise input mode using authoritative resolver
+      // [LIVE-WORKOUT-FRONTIER] executionTruth is typed `unknown` on
+      // NormalizedExercise; route through the typed metadata reader so the
+      // resolver receives a structurally validated metadata view.
       const inputModeContract = resolveExerciseInputMode({
         name: exerciseName,
         category: exerciseCategory,
         method: safeCurrentExercise?.method,
-        executionTruth: safeCurrentExercise?.executionTruth,
+        executionTruth: readRuntimeExerciseMetadata(safeCurrentExercise?.executionTruth),
         prescribedLoad: safeCurrentExercise?.prescribedLoad,
       })
       
@@ -4462,11 +4551,14 @@ export function StreamlinedWorkoutSession({
     
     // Handle workout complete
     if (isWorkoutComplete) {
-      dispatch({ 
-        type: 'COMPLETE_WORKOUT', 
-        newCompletedSets: snapshot.newCompletedSets,
-        lastRPE: snapshot.lastSetRPE || 8
-      })
+  // [LIVE-WORKOUT-FRONTIER] The wrapper LiveSessionAction `COMPLETE_WORKOUT`
+  // owns only `newCompletedSets`; the final RPE is already preserved in
+  // each completed set's `actualRPE`. The previously included `lastRPE`
+  // payload was a stale field with no consumer in the wrapper reducer.
+  dispatch({
+  type: 'COMPLETE_WORKOUT',
+  newCompletedSets: snapshot.newCompletedSets,
+  })
       writeTransitionTrace({ transitionStage: 'committed' })
       clearRestTimerState()
       clearSessionStorage()
@@ -4760,11 +4852,13 @@ export function StreamlinedWorkoutSession({
     // as a second commit path.
     const buildSetDataPayload = (): CompletedSetData => {
       // [LIVE-WORKOUT-AUTHORITY] Resolve input mode for execution fact capture
+      // [LIVE-WORKOUT-FRONTIER] executionTruth is typed `unknown` on the
+      // runtime exercise; route through the typed metadata reader.
       const inputMode = resolveExerciseInputMode({
         name: safeCurrentExercise?.name || '',
         category: safeCurrentExercise?.category,
         method: safeCurrentExercise?.method,
-        executionTruth: safeCurrentExercise?.executionTruth,
+        executionTruth: readRuntimeExerciseMetadata(safeCurrentExercise?.executionTruth),
         prescribedLoad: safeCurrentExercise?.prescribedLoad,
       })
 
@@ -4950,7 +5044,10 @@ export function StreamlinedWorkoutSession({
       // [LIVE-WORKOUT-ACTION-PLANNER] Include exercise context for action planning
       // [LIVE-SESSION-FIX] Derive recommendedBand from safeCurrentExercise directly
       // This fixes the reference error where corridorRecommendedBand was defined after this callback
-      const localRecommendedBand = safeCurrentExercise?.executionTruth?.recommendedBand as ResistanceBandColor | undefined
+      // [LIVE-WORKOUT-FRONTIER] executionTruth is typed `unknown`; read
+      // through the typed metadata reader and normalize null -> undefined.
+      const localRecommendedBand: ResistanceBandColor | undefined =
+        readRuntimeExerciseMetadata(safeCurrentExercise?.executionTruth).recommendedBand ?? undefined
       
       // [RPE-REST-AUTHORITY] On the last set of the exercise, compute the real
       // inter-exercise rest NOW using the RPE being logged + exercise category
@@ -5558,12 +5655,21 @@ export function StreamlinedWorkoutSession({
   // corridor counts as "interactive" so this flag does NOT flip on a
   // Log-Set-driven active -> resting transition, and the effect below
   // therefore does NOT tear down + re-arm during a commit.
+  // [LIVE-WORKOUT-FRONTIER] Canonical safeStatus union from the
+  // LiveSessionState contract is
+  //   'ready' | 'active' | 'resting' | 'completed' | 'inter_exercise_rest'
+  // The legacy comparisons against `between_exercise_rest`,
+  // `block_round_rest`, and `transitioning` were stale: those statuses no
+  // longer exist in the state machine. Their semantic intent ("user is in
+  // a between-exercise / between-round transition but still inside the
+  // live corridor") is now carried by the single canonical
+  // `inter_exercise_rest` status. We map to canonical truth here rather
+  // than widening the status union, because the reducer / state machine
+  // does not emit the legacy values.
   const isInteractivePhase =
     safeStatus === 'active' ||
     safeStatus === 'resting' ||
-    safeStatus === 'between_exercise_rest' ||
-    safeStatus === 'block_round_rest' ||
-    safeStatus === 'transitioning'
+    safeStatus === 'inter_exercise_rest'
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -5684,8 +5790,14 @@ export function StreamlinedWorkoutSession({
     const isCompleted = completedSetCount >= getEffectiveExerciseValues(exercise).sets
         const bestReps = exerciseSets.length > 0 ? Math.max(...exerciseSets.map(s => s.actualReps)) : 0
         const bestHold = exerciseSets.length > 0 ? Math.max(...exerciseSets.map(s => s.holdSeconds || 0)) : 0
-        const bandUsed = exerciseSets.find(s => s.bandUsed && s.bandUsed !== 'none')?.bandUsed
-        
+        // [LIVE-WORKOUT-FRONTIER] BandUsage.bandColor is `ResistanceBandColor | undefined`
+    // (no 'none'). CompletedSetData.bandUsed is `ResistanceBandColor | 'none' | undefined`.
+    // Normalize at this boundary: any 'none' / nullish value drops to undefined so the
+    // outer truthy check below resolves to `band: undefined`, never `{ bandColor: 'none' }`.
+    const bandUsedRaw = exerciseSets.find(s => s.bandUsed && s.bandUsed !== 'none')?.bandUsed
+    const bandUsed: ResistanceBandColor | undefined =
+      bandUsedRaw && bandUsedRaw !== 'none' ? bandUsedRaw : undefined
+
         return {
           id: exercise.id || `ex-${exerciseIndex}`,
     name: exercise.name,
@@ -5855,11 +5967,17 @@ export function StreamlinedWorkoutSession({
     // [LIVE-WORKOUT-MACHINE] Use safe values from machine
     // [ACTIVE-ENTRY-GUARD] Only mark active render complete if entry succeeded
     if (safeStatus === 'active' && activeEntryPreparation.ok) {
-      markBootStage('active_state_render_complete', {
-        sessionId,
-        currentExerciseIndex: safeExerciseIndex,
-        currentSetNumber: validatedSetNumber,
-      })
+      // [BOOT-LEDGER-CONTRACT] `currentSetNumber` is NOT a canonical
+      // BootLedgerState field; pass it through the debug arg so the
+      // typed ledger stays clean while the diagnostic is preserved.
+      markBootStage(
+        'active_state_render_complete',
+        {
+          sessionId,
+          currentExerciseIndex: safeExerciseIndex,
+        },
+        { currentSetNumber: validatedSetNumber },
+      )
     }
     
     markBootStage('live_workout_ready', {
@@ -6287,7 +6405,7 @@ if (shouldShowLocalFallback) {
                       </div>
                       <span className="text-[11px] text-[#6B7280] tabular-nums">
                         {effective.sets}×{effective.repsOrTime}
-                        {fullEx?.prescribedLoad && fullEx.prescribedLoad.load > 0 && (
+                        {fullEx?.prescribedLoad && typeof fullEx.prescribedLoad.load === 'number' && fullEx.prescribedLoad.load > 0 && (
                           <span className="ml-1 text-[#C1121F] font-medium">@ +{fullEx.prescribedLoad.load}{fullEx.prescribedLoad.unit}</span>
                         )}
                       </span>
@@ -6316,7 +6434,7 @@ if (shouldShowLocalFallback) {
               </div>
               <span className="text-[11px] text-[#6B7280] tabular-nums">
                 {effective.sets}×{effective.repsOrTime}
-                {fullEx.prescribedLoad && fullEx.prescribedLoad.load > 0 && (
+                {fullEx.prescribedLoad && typeof fullEx.prescribedLoad.load === 'number' && fullEx.prescribedLoad.load > 0 && (
                   <span className="ml-1 text-[#C1121F] font-medium">@ +{fullEx.prescribedLoad.load}{fullEx.prescribedLoad.unit}</span>
                 )}
               </span>
@@ -6365,7 +6483,7 @@ if (shouldShowLocalFallback) {
                     </div>
                     <span className="text-[11px] text-[#6B7280] tabular-nums">
                       {effective.sets}×{effective.repsOrTime}
-                      {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
+                      {ex.prescribedLoad && typeof ex.prescribedLoad.load === 'number' && ex.prescribedLoad.load > 0 && (
                         <span className="ml-1 text-[#C1121F] font-medium">@ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}</span>
                       )}
                     </span>
@@ -6390,7 +6508,7 @@ if (shouldShowLocalFallback) {
               </div>
               <span className="text-[11px] text-[#6B7280] tabular-nums">
                 {effective.sets}×{effective.repsOrTime}
-                {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
+                {ex.prescribedLoad && typeof ex.prescribedLoad.load === 'number' && ex.prescribedLoad.load > 0 && (
                   <span className="ml-1 text-[#C1121F] font-medium">@ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}</span>
                 )}
               </span>
@@ -6412,7 +6530,7 @@ if (shouldShowLocalFallback) {
         </div>
         <span className="text-[11px] text-[#6B7280] tabular-nums">
           {effective.sets}×{effective.repsOrTime}
-          {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
+          {ex.prescribedLoad && typeof ex.prescribedLoad.load === 'number' && ex.prescribedLoad.load > 0 && (
             <span className="ml-1 text-[#C1121F] font-medium">@ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}</span>
           )}
         </span>
@@ -7194,14 +7312,19 @@ function InterExerciseRestCountdown({
     
     const corridorCurrentSetNote = machineState.currentSetNote || ''
     const corridorCurrentSetReasonTags = (machineState.currentSetReasonTags || []) as import('./ActiveWorkoutStartCorridor').SetReasonTag[]
-    const corridorRecommendedBand = safeCurrentExercise?.executionTruth?.recommendedBand as ResistanceBandColor | undefined
-    
+    // [LIVE-WORKOUT-FRONTIER] executionTruth on the runtime exercise is
+    // typed `unknown`. Use the typed metadata reader to safely extract the
+    // recommendedBand signal once and reuse it for the corridor input mode.
+    const corridorMetadata = readRuntimeExerciseMetadata(safeCurrentExercise?.executionTruth)
+    const corridorRecommendedBand: ResistanceBandColor | undefined =
+      corridorMetadata.recommendedBand ?? undefined
+
     // [LIVE-WORKOUT-AUTHORITY] Use authoritative input mode resolver for corridor
     const corridorInputMode = resolveExerciseInputMode({
       name: safeCurrentExercise?.name || '',
       category: safeCurrentExercise?.category,
       method: safeCurrentExercise?.method,
-      executionTruth: safeCurrentExercise?.executionTruth,
+      executionTruth: corridorMetadata,
       prescribedLoad: safeCurrentExercise?.prescribedLoad,
     })
     

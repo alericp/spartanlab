@@ -3,11 +3,33 @@
 // Provides smart rest suggestions based on exercise type, RPE, and fatigue
 // =============================================================================
 
-import type { AdaptiveExercise } from '@/lib/adaptive-program-builder'
-
 // =============================================================================
 // TYPES
 // =============================================================================
+
+/**
+ * [LIVE-WORKOUT-FRONTIER] Narrow display-safe input contract for rest helpers.
+ *
+ * `getRestCategory` / `getRestRecommendation` only ever read `category`,
+ * `name`, `repsOrTime`, and (defensively, via a structural cast) the
+ * optional weighted prescription `prescribedLoad.load`. They never need
+ * the full `AdaptiveExercise` truth (no `isOverrideable`, `selectionReason`,
+ * `executionTruth`, etc.). Widening the parameter to this narrow shape
+ * lets the live-session corridor pass `MachineExercise` /
+ * `NormalizedExercise` (which carry these display fields with the same
+ * meanings) without lying with `as AdaptiveExercise`. `AdaptiveExercise`
+ * itself remains structurally assignable to `RestExerciseInput`.
+ */
+export interface RestExerciseInput {
+  name: string
+  category?: string
+  repsOrTime?: string
+  prescribedLoad?: {
+    load?: number
+    unit?: string
+    confidenceLevel?: string
+  }
+}
 
 export interface RestRecommendation {
   baseSeconds: number
@@ -58,7 +80,7 @@ export const REST_TIMES_BY_CATEGORY: Record<ExerciseRestCategory, { min: number;
  * style name is routed to heavy_strength (default 180s, max 240s) so the
  * RPE-aware extension produces doctrine-aligned rest (e.g. RPE 9 -> 225s).
  */
-export function getRestCategory(exercise: AdaptiveExercise): ExerciseRestCategory {
+export function getRestCategory(exercise: RestExerciseInput): ExerciseRestCategory {
   const category = exercise.category?.toLowerCase() || ''
   const name = exercise.name?.toLowerCase() || ''
   const repsOrTime = exercise.repsOrTime?.toLowerCase() || ''
@@ -230,7 +252,7 @@ export function getFatigueRestAdjustment(
  * Get intelligent rest recommendation based on exercise, RPE, and session fatigue
  */
 export function getRestRecommendation(
-  exercise: AdaptiveExercise,
+  exercise: RestExerciseInput,
   lastSetRPE?: number,
   sessionContext?: {
     setNumber: number

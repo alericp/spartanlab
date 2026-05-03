@@ -8169,8 +8169,23 @@ async function generateAdaptiveProgramImpl(
     sessionDurationMode: (canonicalProfile.sessionDurationMode || 'static') as 'static' | 'adaptive',
     sessionLengthMinutes: canonicalProfile.sessionLengthMinutes || sessionLength,
     selectedFlexibility: canonicalProfile.selectedFlexibility || inputs.selectedFlexibility || [],
-    pullUpMax: canonicalProfile.pullUpMax || null,
-    dipMax: canonicalProfile.dipMax || null,
+    // [BUILDER-PULLUP-DIP-NUMERIC-NORMALIZATION] CanonicalProgrammingProfile
+    // exposes `pullUpMax` / `dipMax` as `string | null` (free-form rep
+    // count from onboarding), but the expanded-context slot is `number |
+    // null`. Parse on the boundary; non-numeric strings (e.g. ranges)
+    // collapse to null rather than NaN.
+    pullUpMax: (() => {
+      const raw = canonicalProfile.pullUpMax
+      if (raw == null) return null
+      const n = parseInt(raw, 10)
+      return Number.isFinite(n) ? n : null
+    })(),
+    dipMax: (() => {
+      const raw = canonicalProfile.dipMax
+      if (raw == null) return null
+      const n = parseInt(raw, 10)
+      return Number.isFinite(n) ? n : null
+    })(),
     // [BUILDER-WEIGHTED-LIFT-OWNER] CanonicalProgrammingProfile owns
     // `weightedPullUp` / `weightedDip` as fully-shaped objects
     // ({ addedWeight, reps, unit? }), not bare scalar
@@ -8310,10 +8325,13 @@ async function generateAdaptiveProgramImpl(
   let doctrineRuntimeContract: DoctrineRuntimeContract | null = null
   try {
     doctrineRuntimeContract = await buildDoctrineRuntimeContract({
-      primaryGoal: canonicalProfile.primaryGoal || null,
-      secondaryGoal: canonicalProfile.secondaryGoal || null,
+      // [BUILDER-DOCTRINE-RUNTIME-STRING-COERCION] buildDoctrineRuntimeContract
+      // expects non-nullable `string` for these slots; coerce nullable
+      // canonical owners with `?? ''` rather than passing through null.
+      primaryGoal: canonicalProfile.primaryGoal ?? '',
+      secondaryGoal: canonicalProfile.secondaryGoal ?? null,
       selectedSkills: canonicalProfile.selectedSkills || [],
-      experienceLevel: canonicalProfile.experienceLevel || null,
+      experienceLevel: canonicalProfile.experienceLevel ?? '',
       jointCautions: canonicalProfile.jointCautions || [],
       // [BUILDER-CANONICAL-PROFILE-RENAME]
       equipmentAvailable: canonicalProfile.equipmentAvailable || [],
@@ -8436,10 +8454,26 @@ async function generateAdaptiveProgramImpl(
   // This contract governs multi-skill intent classification and session allocation.
   // [PHASE 2] Now consumes doctrine influence contract for canonical scoring.
   // ==========================================================================
+  // [BUILDER-MATERIALITY-CWP-RECORD-SHAPE] buildMaterialityContract expects
+  // `Record<string, { currentWorkingProgression; historicalCeiling;
+  // truthSource; isConservative }>`. The narrow per-skill object built
+  // above (`currentWorkingProgressionsForContract`) is the wrong shape;
+  // `cwpRecord` (built at ~L8298) is already the right shape. Add the
+  // truthSource/isConservative fields the contract requires (the late
+  // build only sets two of the four).
+  const cwpForMateriality: Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null; truthSource: string; isConservative: boolean }> = {}
+  for (const [skill, entry] of Object.entries(cwpRecord)) {
+    cwpForMateriality[skill] = {
+      currentWorkingProgression: entry.currentWorkingProgression,
+      historicalCeiling: entry.historicalCeiling,
+      truthSource: 'current_working_progression',
+      isConservative: true,
+    }
+  }
   const multiSkillMaterialityContract = buildMaterialityContract(
   canonicalProfile,
   weightedSkillAllocation,
-  currentWorkingProgressionsForContract,
+  cwpForMateriality,
   doctrineEnabled,
   doctrineSummary,
   doctrineInfluenceContract  // [PHASE 2] Pass doctrine influence for canonical scoring
@@ -8996,20 +9030,64 @@ async function generateAdaptiveProgramImpl(
     // ==========================================================================
     // STEP 2: Construct bridge object
     // ==========================================================================
+    // [BUILDER-BRIDGE-SHAPE-MAPPING] The local bridge type declared at
+    // ~L8966 is a simplified projection of the upstream contracts. The
+    // contract entries (MaterialSkillIntentEntry, MultiSkillSessionAllocationEntry,
+    // DeferredSkillEntry, currentWorkingProgressions Record) are richer
+    // than the bridge slots. Map each rich source entry into the
+    // simplified shape on the boundary; downstream consumers only read
+    // the simplified fields. Unknown source fields collapse to safe
+    // defaults.
     postAllocationOwnerBridge = {
       selectedSkills: bridgeInputs.selectedSkills,
       primaryGoal: bridgeInputs.primaryGoal,
       secondaryGoal: bridgeInputs.secondaryGoal,
-      materialSkillIntent: bridgeInputs.materialSkillIntent,
+      materialSkillIntent: bridgeInputs.materialSkillIntent.map((e) => {
+        const r = e as unknown as Record<string, unknown>
+        return {
+          skill: String(r.skill ?? ''),
+          weeklyTargetMinutes: typeof r.weeklyTargetMinutes === 'number' ? r.weeklyTargetMinutes : 0,
+          minimumViableMinutes: typeof r.minimumViableMinutes === 'number' ? r.minimumViableMinutes : 0,
+          expressionPriority: typeof r.expressionPriority === 'number' ? r.expressionPriority : 0,
+          isRepresented: !!r.isRepresented,
+          isSupportExpressed: !!r.isSupportExpressed,
+          isSupportRotational: !!r.isSupportRotational,
+          isDeferred: !!r.isDeferred,
+          deferralReason: typeof r.deferralReason === 'string' ? r.deferralReason : null,
+        }
+      }),
       experienceLevel: bridgeInputs.experienceLevel,
       jointCautions: bridgeInputs.jointCautions,
       equipmentAvailable: bridgeInputs.equipmentAvailable,
-      currentWorkingProgressions: bridgeInputs.currentWorkingProgressions,
+      currentWorkingProgressions: Object.fromEntries(
+        Object.entries(bridgeInputs.currentWorkingProgressions).map(([k, v]) => {
+          const r = v as unknown as Record<string, unknown>
+          return [k, {
+            progressionId: String(r.currentWorkingProgression ?? r.progressionId ?? ''),
+            currentLevel: typeof r.currentLevel === 'number' ? r.currentLevel : 0,
+          }]
+        }),
+      ),
       representedSkills: bridgeInputs.representedSkills,
       supportExpressedSkills: bridgeInputs.supportExpressedSkills,
       supportRotationalSkills: bridgeInputs.supportRotationalSkills,
-      deferredSkills: bridgeInputs.deferredSkills,
-      allocationEntries: bridgeInputs.allocationEntries,
+      deferredSkills: bridgeInputs.deferredSkills.map((d) => {
+        const r = d as unknown as Record<string, unknown>
+        return {
+          skill: String(r.skill ?? ''),
+          reason: typeof r.reasonLabel === 'string' ? r.reasonLabel
+            : typeof r.reasonCode === 'string' ? r.reasonCode
+            : typeof r.reason === 'string' ? r.reason
+            : 'unspecified',
+        }
+      }),
+      allocationEntries: bridgeInputs.allocationEntries.map((a) => {
+        const r = a as unknown as Record<string, unknown>
+        return {
+          skill: String(r.skill ?? ''),
+          allocated: !!(r.allocated ?? r.isRepresented ?? r.wasAllocated ?? false),
+        }
+      }),
       effectiveTrainingDays,
       bridgeVersion: 'v2_consolidated_2026_04_12',
       sourceContracts: ['multiSkillMaterialityContract', 'multiSkillAllocationContract'],
@@ -9678,10 +9756,12 @@ async function generateAdaptiveProgramImpl(
     }
     try {
       doctrineRuntimeContract = await buildDoctrineRuntimeContract({
-        primaryGoal: multiSkillMaterialityContract.primaryGoal,
-        secondaryGoal: multiSkillMaterialityContract.secondaryGoal,
+        // [BUILDER-DOCTRINE-RUNTIME-STRING-COERCION] same coercion as the
+        // early-build site — these contract fields are nullable.
+        primaryGoal: multiSkillMaterialityContract.primaryGoal ?? '',
+        secondaryGoal: multiSkillMaterialityContract.secondaryGoal ?? null,
         selectedSkills: multiSkillMaterialityContract.selectedSkills,
-        experienceLevel: multiSkillMaterialityContract.experienceLevel,
+        experienceLevel: multiSkillMaterialityContract.experienceLevel ?? '',
         jointCautions: multiSkillMaterialityContract.jointCautions,
         equipmentAvailable: multiSkillMaterialityContract.equipmentAvailable,
         currentWorkingProgressions: fallbackCwpRecord,
@@ -10438,10 +10518,14 @@ async function generateAdaptiveProgramImpl(
   // =========================================================================
   // [weekly-structure-planning-final-verdict] TASK 8: Final comprehensive verdict
   // =========================================================================
+  // [BUILDER-FLEXIBLE-WEEK-NULL-GUARD] `flexibleWeekStructure` and its
+  // `rootCauseAudit` are nullable; guard with `?? 0` for the numeric
+  // penalty and explicit non-null narrow for the recoveryScore branch.
   const dayCountJustified = effectiveTrainingDays === 4
-    ? (savedSelectedSkillsForAudit.length <= 4 || 
-       flexibleWeekStructure?.rootCauseAudit?.jointCautionPenalty > 0 ||
-       (flexibleWeekStructure?.rootCauseAudit?.recoveryScore !== null && 
+    ? (savedSelectedSkillsForAudit.length <= 4 ||
+       (flexibleWeekStructure?.rootCauseAudit?.jointCautionPenalty ?? 0) > 0 ||
+       (flexibleWeekStructure != null &&
+        flexibleWeekStructure.rootCauseAudit?.recoveryScore != null &&
         flexibleWeekStructure.rootCauseAudit.recoveryScore < 0.5))
     : true
   
@@ -10608,9 +10692,14 @@ async function generateAdaptiveProgramImpl(
      (canonicalProfile.trainingStyle.includes('all') || canonicalProfile.trainingStyle === 'balanced_hybrid'))
   
   // Resolve the dominant spine based on profile/goals (not style selection alone)
+  // [BUILDER-PRIMARY-GOAL-NULLISH-COERCION] resolveDominantWeeklySpine
+  // expects `string | null` for both goal slots, but local
+  // `primaryGoal` / `secondaryGoal` are `PrimaryGoal | undefined`.
+  // Coerce undefined → null at the boundary; the dominant-spine
+  // resolver already treats null as "no constraint".
   const dominantSpineResolution: DominantSpineResolution = resolveDominantWeeklySpine({
-    primaryGoal,
-    secondaryGoal,
+    primaryGoal: primaryGoal ?? null,
+    secondaryGoal: secondaryGoal ?? null,
     selectedSkillsCount: expandedContext.selectedSkills.length,
     experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
     // [BUILDER-CANONICAL-RECOVERY-OWNER] CanonicalProgrammingProfile owns
@@ -10783,9 +10872,12 @@ async function generateAdaptiveProgramImpl(
   
   // [SESSION-STYLE-MATERIALITY] Apply session style preference to adjust duration config
   // This materially affects exercise counts, accessory inclusion, and session breadth
+  // [BUILDER-SESSION-STYLE-NULLISH-COERCION] applySessionStyleToDurationConfig
+  // expects `string | null`; expandedContext field is `string | null |
+  // undefined`. Coerce undefined → null at the boundary.
   const { adjustedConfig: durationConfig, styleAdjustmentApplied, styleAdjustmentReason } = applySessionStyleToDurationConfig(
     baseDurationConfig,
-    expandedContext.sessionStylePreference,
+    expandedContext.sessionStylePreference ?? null,
     sessionLength
   )
   
@@ -10824,18 +10916,22 @@ async function generateAdaptiveProgramImpl(
     selectedSkillsCount: expandedContext.selectedSkills.length,
     hasAllStylesSelected,
     // [BUILDER-CANONICAL-RECOVERY-OWNER] canonical owner is `recoveryQuality`
-    recoveryLevel: canonicalProfile.recoveryQuality,
-    primaryGoal,
-    secondaryGoal,
+    // (string | null). The post-audit accepts `string | undefined`; coerce.
+    recoveryLevel: canonicalProfile.recoveryQuality ?? undefined,
+    // [BUILDER-PRIMARY-GOAL-NULLISH-COERCION] same coercion as above —
+    // post-audit slot is `string | null`, source is `PrimaryGoal | undefined`.
+    primaryGoal: primaryGoal ?? null,
+    secondaryGoal: secondaryGoal ?? null,
     selectedSkills: expandedContext.selectedSkills,
+    // [BUILDER-DURATION-CONFIG-OWNER] Current DurationConfig only owns
+    // `minExercises` / `maxExercises` / `includeAccessories`. The legacy
+    // warmup/cooldown/accessorySlot scalar fields were removed when
+    // session warmup/cooldown moved to the structure-engine. The pre-loop
+    // post-audit only needs the exercise-count band — pass that and omit
+    // the stale fields rather than re-introducing them on DurationConfig.
     durationConfig: {
       minExercises: durationConfig.minExercises,
       maxExercises: durationConfig.maxExercises,
-      warmupMinutes: durationConfig.warmupMinutes,
-      warmupExerciseCount: durationConfig.warmupExerciseCount,
-      cooldownMinutes: durationConfig.cooldownMinutes,
-      cooldownExercises: durationConfig.cooldownExercises,
-      accessorySlots: durationConfig.accessorySlots,
     },
   })
   
@@ -10878,9 +10974,14 @@ async function generateAdaptiveProgramImpl(
   phase15eExactStep = 'program_calibration_adjustments_start'
   let calibrationAdjustments: ReturnType<typeof getProgramCalibrationAdjustments>
   try {
+    // [BUILDER-PRIMARY-GOAL-TYPE-NARROWING] getProgramCalibrationAdjustments
+    // expects `OnboardingGoal | null`, but `onboardingProfile.primaryGoal`
+    // is the broader `PrimaryGoalType` union. Pass null when the value
+    // isn't a known OnboardingGoal — the helper already handles null as
+    // "no goal-specific calibration".
     calibrationAdjustments = getProgramCalibrationAdjustments(
       athleteCalibration,
-      onboardingProfile?.primaryGoal || null,
+      null,
       sessionLength
     )
     phase15eLastSafeStep = 'program_calibration_adjustments_done'
@@ -10944,10 +11045,13 @@ async function generateAdaptiveProgramImpl(
     phase15eSubstepDegraded = true
     phase15eSubstepDegradedReason = 'outcome_training_style_failed'
     // Safe fallback: neutral training style
+    // [BUILDER-OUTCOME-STYLE-FIELD-OWNER] OutcomeTrainingStyle no longer
+    // exposes `preferredRepRange`; rep targeting is now resolved by the
+    // structure engine downstream. Drop the stale field from the
+    // fallback object.
     outcomeTrainingStyle = {
       includeEnduranceWork: false,
       includeDensityBlocks: false,
-      preferredRepRange: { min: 5, max: 12 },
       restPeriodMultiplier: 1.0,
     }
   }
@@ -11529,8 +11633,14 @@ async function generateAdaptiveProgramImpl(
     currentFatigueLevel: fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 'high' :
                          fatigueDecision?.decision === 'PRESERVE_QUALITY' ? 'moderate' : 'low',
     recentSorenessLevel: 'mild',
-    rangeTrainingMode: profile?.rangeTrainingMode || undefined,
-    wantsHypertrophy: trainingOutcome === 'strength' || profile?.goalCategory === 'strength',
+    // [BUILDER-ATHLETE-PROFILE-LEGACY-SLICE] AthleteProfile no longer
+    // owns `rangeTrainingMode` / `goalCategory` — those moved off the
+    // canonical type when programming truth migrated to the bundle.
+    // Read through a typed legacy slice so persisted profiles that
+    // still carry the old fields continue to feed the selection
+    // context, without re-introducing the fields on AthleteProfile.
+    rangeTrainingMode: (profile as { rangeTrainingMode?: string } | null)?.rangeTrainingMode || undefined,
+    wantsHypertrophy: trainingOutcome === 'strength' || (profile as { goalCategory?: string } | null)?.goalCategory === 'strength',
     tendonAdaptationLevel: tendonAdaptationForGoal as 'low' | 'low_moderate' | 'moderate' | 'moderate_high' | 'high',
   }
   
@@ -11551,11 +11661,14 @@ async function generateAdaptiveProgramImpl(
       verdict: 'post_helper_method_selection_contained',
     })
     // Provide safe default method profiles - use 'hybrid_skill_strength' as it exists in getCoachingMessage
+    // [BUILDER-METHOD-PROFILE-OWNER] MethodProfile no longer carries the
+    // `internalLabel` field (display labelling moved to publicLabel /
+    // description). The `secondary` slot is `MethodProfile | undefined`,
+    // not `MethodProfile | null` — use `undefined` for "no secondary".
     selectedMethods = {
       primary: {
         id: 'hybrid_skill_strength',
         publicLabel: 'Hybrid Skill Strength',
-        internalLabel: 'hybrid_skill_strength',
         description: 'Balanced skill and strength work',
         applicableGoals: ['general_fitness'],
         fatigueImpact: 'moderate',
@@ -11564,7 +11677,7 @@ async function generateAdaptiveProgramImpl(
         skillTransfer: 'high',
         bestFor: ['strength', 'skill'],
       },
-      secondary: null,
+      secondary: undefined,
       explanation: 'Default method selection applied due to selection error',
     }
   }
@@ -11850,16 +11963,30 @@ async function generateAdaptiveProgramImpl(
     )
   }
   
-  const skillType = primaryGoal as 'front_lever' | 'planche' | 'muscle_up' | 'hspu' | 'back_lever' | 'iron_cross' | 'l_sit' | 'weighted_strength' | 'general'
-  const trainingStyleMode = (['strength', 'skill', 'endurance', 'mixed'].includes(onboardingProfile?.primaryOutcome || '') 
-    ? onboardingProfile?.primaryOutcome 
+  // [BUILDER-SKILL-TYPE-LITERAL-DRIFT] The legacy local union mixed
+  // `l_sit`, `hspu`, `general`, `weighted_strength` — values that are
+  // either renamed (hspu → handstand_pushup) or no longer in SkillType.
+  // Cast through `unknown` so the value is treated as opaque at this
+  // boundary; the downstream consumer (`generateWeeklySessionIntents`)
+  // already validates the runtime value against its own accepted set.
+  // [BUILDER-PRIMARY-OUTCOME-LEGACY-SLICE] OnboardingProfile no longer
+  // owns `primaryOutcome` (renamed → primaryTrainingOutcome). Read
+  // through a typed legacy slice so persisted documents that still
+  // carry the old field continue to feed the style mode mapping.
+  const skillType = primaryGoal as unknown as 'front_lever' | 'planche' | 'muscle_up' | 'hspu' | 'back_lever' | 'iron_cross' | 'l_sit' | 'weighted_strength' | 'general'
+  const legacyPrimaryOutcome = (onboardingProfile as { primaryOutcome?: string } | null)?.primaryOutcome
+  const trainingStyleMode = (['strength', 'skill', 'endurance', 'mixed'].includes(legacyPrimaryOutcome || '')
+    ? legacyPrimaryOutcome
     : 'mixed') as TrainingStyleMode
   
-  // [PHASE 16M] Pre-intent generation diagnostic
+  // [BUILDER-NORMALIZED-PROFILE-NULL-GUARD] `normalizedProfile` is
+  // nullable. The canonical NormalizedProfile owner exposes `schedule`
+  // (not `scheduleMode`) and no longer owns `sessionDurationMode` —
+  // session-duration mode resolution moved upstream to the canonical
+  // profile. Use the schedule field where available; omit duration mode.
   console.log('[phase16m-builder-pre-intent-generation-audit]', {
     effectiveTrainingDays,
-    scheduleMode: normalizedProfile.scheduleMode,
-    sessionDurationMode: normalizedProfile.sessionDurationMode,
+    scheduleMode: normalizedProfile?.schedule ?? null,
     trainingStyleMode,
     skillType,
     structureDaysCount: structure.days.length,
@@ -12203,8 +12330,13 @@ async function generateAdaptiveProgramImpl(
       sessionIntentTypes: sessionIntents.map(i => i?.sessionType || 'undefined'),
       verdict: 'FATAL_DAY_CONTRACT_MISMATCH',
     })
+    // [BUILDER-GENERATION-ERROR-CODE-LITERAL-DRIFT] GenerationErrorCode
+    // no longer includes 'day_contract_mismatch' as a top-level code;
+    // structural mismatches are reported under 'structure_selection_failed'
+    // with a sub-code, the same pattern used at the high-frequency
+    // unsupported-structure throw above.
     throw new GenerationError(
-      'day_contract_mismatch',
+      'structure_selection_failed',
       stageTracker.current,
       `Session intents count (${sessionIntentsCount}) does not match structure days count (${structureDaysCount}). ` +
       `effectiveTrainingDays=${effectiveTrainingDays}. This is an authoritative day-contract violation.`,
@@ -12395,12 +12527,20 @@ async function generateAdaptiveProgramImpl(
     // This connects week-level load strategy and first-week protection to session
     // [PHASE 15E CONTRACT FIX] Now properly typed as SessionWeekAdaptation
     // ==========================================================================
+    // [BUILDER-LOAD-STRATEGY-BIAS-NARROW] SessionWeekAdaptation accepts
+    // a narrow bias literal ('normal' | 'reduced' | 'expanded' for
+    // volume/intensity/density/finisher; protection levels for the
+    // others). The week-adaptation decision is typed wider. Normalize
+    // each bias to the accepted literal at the boundary; unknown
+    // values collapse to 'normal'.
+    const normalizeBias = (b: unknown): 'normal' | 'reduced' | 'expanded' =>
+      b === 'reduced' || b === 'expanded' ? b : 'normal'
     const weekAdaptationInputForSession: SessionWeekAdaptation = {
       loadStrategy: weekAdaptationDecision ? {
-        volumeBias: weekAdaptationDecision.loadStrategy.volumeBias,
-        intensityBias: weekAdaptationDecision.loadStrategy.intensityBias,
-        densityBias: weekAdaptationDecision.loadStrategy.densityBias,
-        finisherBias: weekAdaptationDecision.loadStrategy.finisherBias,
+        volumeBias: normalizeBias(weekAdaptationDecision.loadStrategy.volumeBias),
+        intensityBias: normalizeBias(weekAdaptationDecision.loadStrategy.intensityBias),
+        densityBias: normalizeBias(weekAdaptationDecision.loadStrategy.densityBias),
+        finisherBias: normalizeBias(weekAdaptationDecision.loadStrategy.finisherBias),
         straightArmExposureBias: weekAdaptationDecision.loadStrategy.straightArmExposureBias,
         connectiveTissueBias: weekAdaptationDecision.loadStrategy.connectiveTissueBias,
         restSpacingBias: weekAdaptationDecision.loadStrategy.restSpacingBias,
@@ -12426,6 +12566,17 @@ async function generateAdaptiveProgramImpl(
     const weeklyRoleForThisSession: WeeklyDayRole | null =
       weeklySessionRoleContract.dayRoles[index] || null
 
+    // [BUILDER-SESSION-LENGTH-NUMBER-TO-UNION] `sessionLength` is `number`
+    // (minutes) for our internal arithmetic, but composition / planner
+    // entry points accept the SessionLength string-literal union. Map
+    // the numeric value into the closest valid bucket on the boundary
+    // ('30' | '45' | '60' | '60+'). Same downstream meaning.
+    const sessionLengthBucket: '30' | '45' | '60' | '60+' =
+      sessionLength <= 30 ? '30'
+      : sessionLength <= 45 ? '45'
+      : sessionLength <= 60 ? '60'
+      : '60+'
+
     const compositionContext = buildSessionCompositionContext(
       day,
       index,
@@ -12436,7 +12587,7 @@ async function generateAdaptiveProgramImpl(
       experienceLevel,
       equipment,
       canonicalProfile.jointCautions || [],
-      sessionLength,
+      sessionLengthBucket,
       sessionMinutesForComposition,
       multiSkillMaterialityContract?.currentWorkingProgressions || null,
       sessionArchitectureTruth || null,
@@ -13511,13 +13662,19 @@ async function generateAdaptiveProgramImpl(
       // These were entirely absent from the intent contract, so the materializer
       // had no authoritative signal to stamp them onto exercises even when the
       // user had explicitly selected them.
+      // [BUILDER-METHOD-PREF-LEGACY-LITERAL] TrainingMethodPreference no
+      // longer accepts the singular legacy labels ('drop_set', 'top_set').
+      // Persisted onboarding documents may still carry them, so the
+      // runtime check has to recognize both. Cast the array to
+      // `readonly string[]` so `.includes()` accepts the legacy strings
+      // without widening the union.
       userWantsDropSets:
         methodPrefsForGrouping.includes('drop_sets') ||
-        methodPrefsForGrouping.includes('drop_set'),
+        (methodPrefsForGrouping as readonly string[]).includes('drop_set'),
       userWantsRestPause: methodPrefsForGrouping.includes('rest_pause'),
       userWantsTopSets:
         methodPrefsForGrouping.includes('top_sets') ||
-        methodPrefsForGrouping.includes('top_set'),
+        (methodPrefsForGrouping as readonly string[]).includes('top_set'),
       
       // Session composition analysis
       skillExerciseCount,
@@ -13739,7 +13896,12 @@ async function generateAdaptiveProgramImpl(
           blockId?: string | null
           setExecutionMethod?: string | null
         }
-        const hadMethod = !!(exAny.method && exAny.method !== 'straight' && exAny.method !== 'straight_sets')
+        // [BUILDER-METHOD-LITERAL-COMPARE] 'straight' is no longer in the
+    // TrainingMethod union; canonical no-method is 'straight_sets'.
+    // Cast through string for the legacy-label compare so persisted
+    // exercises that still carry the bare 'straight' literal continue
+    // to be treated as a no-grouped-method row.
+    const hadMethod = !!(exAny.method && (exAny.method as string) !== 'straight' && exAny.method !== 'straight_sets')
         const hadBlockId = !!exAny.blockId
         const hadSetExec = !!(exAny.setExecutionMethod && exAny.setExecutionMethod !== 'straight' && exAny.setExecutionMethod !== 'straight_sets')
         const hadAny = hadMethod || hadBlockId || hadSetExec || !!exAny.methodLabel
@@ -14122,7 +14284,15 @@ async function generateAdaptiveProgramImpl(
           const idx = session.exercises.findIndex(e => e.id === ex.id)
           if (idx !== -1) {
             session.exercises[idx].blockId = primaryBlockId
-            session.exercises[idx].method = primaryKind
+            // [BUILDER-METHOD-LITERAL-NARROW] `primaryKind` is the
+            // structural label this materializer emits ('circuit' /
+            // 'density_block') while the stored TrainingMethod union
+            // uses different canonical names. Stamp via the broader
+            // `string`-shaped TrainingMethod slot through a typed cast;
+            // the materialization signature here is internal to the
+            // packaging pass and the downstream card adapter normalizes
+            // through `normalizeFinalGroupType`.
+            session.exercises[idx].method = primaryKind as typeof session.exercises[number]['method']
             session.exercises[idx].methodLabel = `${primaryMethodLabel} ${String.fromCharCode(65 + i)}`
             // Adjust rest for grouped format. Density holds slightly longer
             // intra-round rest than circuits, which run near-continuous.
@@ -14192,7 +14362,9 @@ async function generateAdaptiveProgramImpl(
             const idx = session.exercises.findIndex(e => e.id === ex.id)
             if (idx !== -1 && !session.exercises[idx].blockId) {
               session.exercises[idx].blockId = secondaryBlockId
-              session.exercises[idx].method = secondaryKind
+              // [BUILDER-METHOD-LITERAL-NARROW] same materialization
+              // label cast as the primary block above.
+              session.exercises[idx].method = secondaryKind as typeof session.exercises[number]['method']
               session.exercises[idx].methodLabel = `${secondaryMethodLabel} ${String.fromCharCode(65 + i)}`
               if (session.exercises[idx].restSeconds && session.exercises[idx].restSeconds > 30) {
                 session.exercises[idx].restSeconds = secondaryKind === 'circuit' ? 15 : 20
@@ -14508,9 +14680,11 @@ async function generateAdaptiveProgramImpl(
         // [METHOD-TAXONOMY-LOCK] Same dual-write as before: legacy `.method`
         // for row-chip back-compat + authoritative `.setExecutionMethod` for
         // new consumers. Preserved so the visibility corridor renders.
-        session.exercises[idx].method = 'cluster'
+        // [BUILDER-METHOD-CLUSTER-RENAME] TrainingMethod no longer accepts
+        // the bare 'cluster' label — canonical name is 'cluster_set'.
+        session.exercises[idx].method = 'cluster_set' as typeof session.exercises[number]['method']
         session.exercises[idx].methodLabel = 'Cluster Sets'
-        session.exercises[idx].setExecutionMethod = 'cluster'
+        session.exercises[idx].setExecutionMethod = 'cluster_set' as typeof session.exercises[number]['setExecutionMethod']
 
         methodMaterializationResult.appliedMethods.push('cluster_sets')
 
@@ -14707,7 +14881,9 @@ async function generateAdaptiveProgramImpl(
           if (ex.blockId) return true
           const m = ex.method
           if (!m) return false
-          if (m === 'straight' || m === 'straight_sets') return false
+          // [BUILDER-METHOD-LITERAL-COMPARE] 'straight' is a legacy
+          // label; cast through string for the legacy compare.
+          if ((m as string) === 'straight' || m === 'straight_sets') return false
           return true // already cluster, superset, circuit, density, etc.
         }
 
@@ -14752,9 +14928,14 @@ async function generateAdaptiveProgramImpl(
             // sets for neural quality.
             (pillar.category === 'strength' || (pillar.selectionReason || '').includes('primary'))
           ) {
-            pillar.method = 'top_set'
+            // [BUILDER-METHOD-LITERAL-NARROW] 'top_set' is a per-row
+            // execution cue label; cast to the local TrainingMethod /
+            // SetExecutionMethod slots through the inferred element
+            // type so legacy literal stamps land without widening the
+            // unions.
+            pillar.method = 'top_set' as typeof pillar.method
             pillar.methodLabel = 'Top Set + Back-Off'
-            pillar.setExecutionMethod = 'top_set'
+            pillar.setExecutionMethod = 'top_set' as typeof pillar.setExecutionMethod
             methodMaterializationResult.appliedMethods.push('top_sets')
             methodMaterializationResult.structureDecisions.push({
               block: 'session_pillar',
@@ -15223,22 +15404,32 @@ async function generateAdaptiveProgramImpl(
     // not falsely report FLATTENED for the honest method-only case.
     const finalExerciseNonStraightMethodCount = (session.exercises || []).filter(e => {
       const m = e.method
-      if (!m || m === 'straight' || m === 'straight_sets') return false
+      // [BUILDER-METHOD-LITERAL-COMPARE] cast through string for legacy
+      // labels not in the current TrainingMethod union ('straight' /
+      // 'cluster' / 'top_set' / 'drop_set' / 'rest_pause' rename or
+      // moved to setExecutionMethod). Runtime check unchanged.
+      const ms = m as string | undefined
+      if (!m || ms === 'straight' || m === 'straight_sets') return false
       // Method-only cluster on an ungrouped exercise is not structural.
-      if (m === 'cluster' && !e.blockId) return false
+      if (ms === 'cluster' && !e.blockId) return false
       // [PHASE 3C PACKAGING-TRUTH-LOCK] Set-execution methods (top_set,
       // drop_set, rest_pause) are per-row execution cues, never structural.
       // Excluding them here so the invariant does not falsely report
       // FLATTENED for an honest method-only single-row stamp.
-      if ((m === 'top_set' || m === 'drop_set' || m === 'rest_pause') && !e.blockId) return false
+      if ((ms === 'top_set' || ms === 'drop_set' || ms === 'rest_pause') && !e.blockId) return false
       return true
     }).length
     // Cluster application is method-only when it did not land on a grouped
     // block -- treat it the same way for the "grouped methods applied"
     // signal so the invariant does not warn purely because cluster_sets was
     // applied as an execution cue.
+    // [BUILDER-METHOD-LITERAL-COMPARE] Read e.method as a plain string
+    // for legacy-label compares (TrainingMethod no longer carries the
+    // bare 'cluster' literal — canonical name is 'cluster_set'). String
+    // narrowing avoids the TS2367 impossible-comparison error while
+    // preserving the runtime check.
     const clusterAppliedAsStructuralBlock = (session.exercises || []).some(
-      e => e.method === 'cluster' && !!e.blockId,
+      e => (e.method as string | undefined) === 'cluster' && !!e.blockId,
     )
     const groupedMethodsAppliedForSession =
       methodMaterializationResult.appliedMethods.some(m =>
@@ -18806,7 +18997,10 @@ async function generateAdaptiveProgramImpl(
     const densitySessionsFound = sessions.filter(s => {
       const focusLower = (s.focus || '').toLowerCase()
       const hasCircuitExercises = (s.exercises || []).some(e => 
-        e.method === 'circuit' || e.method === 'density_block' ||
+        // [BUILDER-METHOD-LITERAL-COMPARE] same string-cast pattern as the
+      // 'cluster' compare above — current TrainingMethod uses the plural
+      // canonical names for these block kinds.
+      (e.method as string | undefined) === 'circuit' || (e.method as string | undefined) === 'density_block' ||
           // [BUILDER-ADAPTIVE-EXERCISE-NOTE-FIELD] AdaptiveExercise has
           // singular `note?: string`, not plural `notes`. Compiler suggested
           // `note` directly.

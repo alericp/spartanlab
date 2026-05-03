@@ -1501,6 +1501,30 @@ type AdaptiveSessionContext = {
     maxClusterSessionsPerWeek: number
     clusterAppliedDays: number[] // dayNumbers that received cluster -- for audit logs
   } | null
+  // ==========================================================================
+  // [BUILDER-DB-TRUTH-CORRIDOR-CONTEXT-OWNER] dbTruth ranking modifiers,
+  // prescription calibration, skill-specific modifiers, and the exposure
+  // readiness map are computed inside `generateAdaptiveProgramImpl`
+  // (~L11273-L11297, L8545) but consumed inside the sibling
+  // `generateAdaptiveSession` non-fatal corridors (db-truth main ranking
+  // L27460+, prescription calibration L28746+, skill-specific modifier
+  // L27782, post-selection exposure logging L28922). Pre-fix every
+  // reference was an out-of-scope read producing a TS2304 "cannot find
+  // name" — same scope-leak class as the prior `programmingTruthBundle`
+  // and `progressionDepthAdjustments` clusters, fixed identically:
+  // thread the value through this context as an optional field, pass
+  // from the construction site, destructure inside the session function.
+  //
+  // Field shapes mirror the `ReturnType<typeof …>` of each builder so
+  // there is no impedance mismatch at construction or read time. Every
+  // consumer is null-tolerant (corridor entry checks `!!modifiers`
+  // before applying), so passing `null` keeps the corridor honest when
+  // the bundle was unavailable.
+  // ==========================================================================
+  dbTruthRankingModifiers?: ReturnType<typeof buildRankingModifiersFromBundle> | null
+  dbTruthPrescriptionCalibration?: ReturnType<typeof buildPrescriptionCalibrationFromBundle> | null
+  skillSpecificModifiers?: ReturnType<typeof buildSkillSpecificRankingModifiers> | null
+  exposureReadinessMap?: ReturnType<typeof resolveAllSkillReadiness> | null
   }
 
 export interface AdaptiveProgramInputs {
@@ -10927,7 +10951,7 @@ async function generateAdaptiveProgramImpl(
     // `minExercises` / `maxExercises` / `includeAccessories`. The legacy
     // warmup/cooldown/accessorySlot scalar fields were removed when
     // session warmup/cooldown moved to the structure-engine. The pre-loop
-    // post-audit only needs the exercise-count band — pass that and omit
+    // post-audit only needs the exercise-count band �� pass that and omit
     // the stale fields rather than re-introducing them on DurationConfig.
     durationConfig: {
       minExercises: durationConfig.minExercises,
@@ -12686,6 +12710,13 @@ async function generateAdaptiveProgramImpl(
   // cluster application is visible to session N+1's cluster materializer.
   // See the initialization block directly above the week loop (~L10958).
   weeklyMethodBudget,
+  // [BUILDER-DB-TRUTH-CORRIDOR-CONTEXT-OWNER] Pass dbTruth corridor inputs so
+  // the sibling `generateAdaptiveSession` can read them without an
+  // out-of-scope reference. Every consumer is null-tolerant.
+  dbTruthRankingModifiers,
+  dbTruthPrescriptionCalibration,
+  skillSpecificModifiers,
+  exposureReadinessMap,
   }
   
   // ==========================================================================
@@ -26492,6 +26523,15 @@ function generateAdaptiveSession(
   // current-vs-history truth becomes decisive at the final winner stage.
   // ==========================================================================
   progressionDepthAdjustments = {},
+  // [BUILDER-DB-TRUTH-CORRIDOR-CONTEXT-OWNER] Destructure the dbTruth
+  // corridor inputs threaded through context. Default to null so the
+  // pre-existing `!!dbTruthRankingModifiers` corridor-eligibility check
+  // and `dbTruthPrescriptionCalibration?.calibrationApplied` reads
+  // continue to behave identically when the bundle was unavailable.
+  dbTruthRankingModifiers = null,
+  dbTruthPrescriptionCalibration = null,
+  skillSpecificModifiers = null,
+  exposureReadinessMap = null,
   } = context
   
   // ==========================================================================
@@ -28743,7 +28783,12 @@ function generateAdaptiveSession(
         after: number
       }> = []
       
-      if (dbTruthPrescriptionCalibration.calibrationApplied && 
+      // [BUILDER-DB-TRUTH-CORRIDOR-CONTEXT-OWNER] dbTruthPrescriptionCalibration
+      // is now context-threaded and may be null when the bundle was
+      // unavailable. Guard up-front; the corridor body below assumes
+      // a non-null calibration shape.
+      if (dbTruthPrescriptionCalibration &&
+          dbTruthPrescriptionCalibration.calibrationApplied &&
           dbTruthPrescriptionCalibration.overallCalibrationConfidence !== 'none') {
         
         exercisesForDosageAdjustment = exercisesForDosageAdjustment.map(ex => {
@@ -29026,16 +29071,19 @@ function generateAdaptiveSession(
         sessionIndex,
         dayFocus: day.focus,
         calibrationApplied: dbTruthPrescriptionApplied,
-        calibrationConfidence: dbTruthPrescriptionCalibration.overallCalibrationConfidence,
+        // [BUILDER-DB-TRUTH-CORRIDOR-CONTEXT-OWNER] Use optional chaining
+        // throughout this audit log — calibration may be null when the
+        // bundle was unavailable upstream.
+        calibrationConfidence: dbTruthPrescriptionCalibration?.overallCalibrationConfidence ?? 'none',
         globalModifiersUsed: {
-          sets: dbTruthPrescriptionCalibration.setsModifier,
-          intensity: dbTruthPrescriptionCalibration.intensityModifier,
-          rest: dbTruthPrescriptionCalibration.restModifier,
+          sets: dbTruthPrescriptionCalibration?.setsModifier ?? 0,
+          intensity: dbTruthPrescriptionCalibration?.intensityModifier ?? 0,
+          rest: dbTruthPrescriptionCalibration?.restModifier ?? 0,
         },
         patternSpecificOverrides: patternSpecificChanges.length,
         changesApplied: dbTruthPrescriptionChanges.slice(0, 5),
         totalExercisesModified: dbTruthPrescriptionChanges.length,
-        sourceSections: dbTruthPrescriptionCalibration.sourceSections,
+        sourceSections: dbTruthPrescriptionCalibration?.sourceSections ?? [],
         verdict: dbTruthPrescriptionApplied 
           ? (patternSpecificChanges.length > 0 ? 'DB_TRUTH_PATTERN_SPECIFIC_MODIFIED' : 'DB_TRUTH_GLOBAL_PRESCRIPTION_MODIFIED')
           : 'DB_TRUTH_PRESCRIPTION_NO_CHANGE',
@@ -29961,7 +30009,10 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       initialCandidateCount: safeMain.length,
       postRescueCount: rescuedMain.length,
       postEquipmentCount: adaptedMain.adapted.length,
-      recoveredCount: wasRecoveredFromInvalidation ? effectiveMainSource.length : 0,
+      // [BUILDER-EFFECTIVE-MAIN-SOURCE-RENAME] The local in this scope
+      // is `effectiveMainForSession` (set at L27277). The legacy
+      // `effectiveMainSource` symbol no longer exists.
+      recoveredCount: wasRecoveredFromInvalidation ? (effectiveMainForSession?.length ?? 0) : 0,
       finalExerciseCount: validatedSession.exercises.length,
       sessionWasRescued,
       wasRecoveredFromInvalidation,

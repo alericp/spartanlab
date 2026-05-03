@@ -223,8 +223,12 @@ export function buildAdaptiveExecutionSummary(
     const recommendedBands = target.recommendedBands || (target.recommendedBand ? [target.recommendedBand] : [])
     
     // Calculate rough assistance levels
+    // [RESISTANCE-BAND-COLOR-CONTRACT] Removed stale 'orange' entry: not a
+    // member of the canonical ResistanceBandColor union. Same fix as in
+    // lib/workout/live-workout-normalizers.ts:277 and
+    // lib/workout/live-workout-authority-contract.ts:340.
     const bandAssistance: Record<ResistanceBandColor, number> = {
-      'black': 100, 'purple': 80, 'green': 60, 'blue': 45, 'red': 30, 'yellow': 15, 'orange': 10,
+      'black': 100, 'purple': 80, 'green': 60, 'blue': 45, 'red': 30, 'yellow': 15,
     }
     
     const actualAssistance = selectedBands.reduce((sum, b) => sum + (bandAssistance[b] || 20), 0)

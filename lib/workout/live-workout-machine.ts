@@ -508,6 +508,16 @@ export function workoutMachineReducer(
     
     // [LIVE-WORKOUT-AUTHORITY] Set selected bands array directly (for MultiBandSelector)
     case 'SET_SELECTED_BANDS':
+      // [MULTI-BAND-CONTRACT] The canonical MultiBandSelection shape
+      // (lib/workout/live-workout-authority-contract.ts:316-320) has exactly
+      // three fields: `bands`, `combinedAssistanceLevel`, and `displayLabel`.
+      // The previous inline construction wrote stale `primaryBand` and
+      // `assistanceSummary` keys that are not part of the contract,
+      // producing TS2353 errors. We now mirror the shape produced by the
+      // canonical `createMultiBandSelection()` helper at line 325 of the
+      // authority contract, with `displayLabel` carrying the same human
+      // text that `assistanceSummary` previously held. Display callers that
+      // need a primary band derive it locally from `bands[0]`.
       return {
         ...state,
         selectedBands: action.bands,
@@ -515,10 +525,18 @@ export function workoutMachineReducer(
         bandUsed: action.bands[0] || 'none',
         multiBandSelection: action.bands.length > 0 ? {
           bands: action.bands,
-          primaryBand: action.bands[0],
-          assistanceSummary: action.bands.length === 1 
-            ? `${action.bands[0]} band` 
-            : `${action.bands.join(' + ')} bands combined`,
+          combinedAssistanceLevel:
+            action.bands.length === 1
+              ? 'minimal'
+              : action.bands.length === 2
+              ? 'light'
+              : action.bands.length === 3
+              ? 'medium'
+              : 'heavy',
+          displayLabel:
+            action.bands.length === 1
+              ? `${action.bands[0]} band`
+              : `${action.bands.join(' + ')} bands combined`,
         } : null,
       }
     

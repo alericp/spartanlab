@@ -337,9 +337,11 @@ export function createMultiBandSelection(bands: ResistanceBandColor[]): MultiBan
     'purple': 80,
     'green': 60,
     'blue': 45,
-    'red': 30,
-    'yellow': 15,
-    'orange': 10,
+  // [RESISTANCE-BAND-COLOR-CONTRACT] Removed stale 'orange' entry: not a
+  // member of the canonical ResistanceBandColor union (yellow/red/black/
+  // purple/green/blue). Same fix as live-workout-normalizers.ts.
+  'red': 30,
+  'yellow': 15,
   }
   
   const totalAssistance = bands.reduce((sum, band) => sum + (bandAssistance[band] || 20), 0)

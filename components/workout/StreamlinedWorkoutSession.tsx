@@ -4144,12 +4144,18 @@ export function StreamlinedWorkoutSession({
         exerciseTruth: exerciseRuntimeTruth,
         executionPlan: machineSessionContract?.executionPlan ?? null,
         currentExerciseIndex: safeExerciseIndex,
-    currentSet: machineState.currentSet,
-    currentRound: machineState.currentRound,
-    // [WEEK-PROGRESSION-TRUTH] Use effective scaled sets
-    targetSets: getEffectiveExerciseValues(safeCurrentExercise).sets,
-    lastSetRPE: machineState.lastSetRPE ?? null,
-  })
+        // [WORKOUT-MACHINE-STATE-CONTRACT] The canonical 1-based set counter
+        // on WorkoutMachineState is `currentSetNumber` (machine line 130).
+        // The destination contract field is named `currentSet` per
+        // buildLiveExecutionContract's signature — both are 1-based and
+        // semantically identical, so we read from the machine field of
+        // record and forward it under the contract's parameter name.
+        currentSet: machineState.currentSetNumber,
+        currentRound: machineState.currentRound,
+        // [WEEK-PROGRESSION-TRUTH] Use effective scaled sets
+        targetSets: getEffectiveExerciseValues(safeCurrentExercise).sets,
+        lastSetRPE: machineState.lastSetRPE ?? null,
+      })
     } catch (err) {
       console.error('[v0] [live_execution_contract] Failed to build contract:', err)
       return null
@@ -4160,7 +4166,7 @@ export function StreamlinedWorkoutSession({
     sessionRuntimeTruth,
     machineSessionContract?.executionPlan,
     safeExerciseIndex,
-    machineState.currentSet,
+    machineState.currentSetNumber,
     machineState.currentRound,
     machineState.lastSetRPE,
     safeCurrentExercise?.sets,
@@ -5287,9 +5293,20 @@ export function StreamlinedWorkoutSession({
     }
     addOverride(sessionId, override)
     
-    // Update local state via dispatch
-    dispatch({
-      type: 'ADD_EXERCISE_OVERRIDE',
+    // [OVERRIDE-DISPATCH-CONTRACT] Route through the canonical machine action
+    // `ADD_OVERRIDE` (live-workout-machine.ts:302, reducer at line 1032).
+    // The previous dispatch used a stale `ADD_EXERCISE_OVERRIDE` type that
+    // does not exist in either the LiveSessionAction wrapper union or the
+    // machine reducer — it hit the wrapper's default branch and was a
+    // no-op at runtime, meaning replaced exercises were saved to storage
+    // (via addOverride above) but never reflected in machineState
+    // exerciseOverrides for in-session UI. Routing through machineDispatch
+    // fixes this latent runtime bug while clearing the TS2322 error. The
+    // ExerciseOverride machine shape (line 108-114) is identical to the
+    // ExerciseOverrideState component shape, so the payload is forward
+    // compatible.
+    machineDispatch({
+      type: 'ADD_OVERRIDE',
       index: safeExerciseIndex,
       override: {
         originalName: originalExercise.name,
@@ -5325,9 +5342,13 @@ export function StreamlinedWorkoutSession({
     }
     addOverride(sessionId, override)
     
-    // Mark as skipped via dispatch
-    dispatch({
-      type: 'MARK_EXERCISE_SKIPPED',
+    // [OVERRIDE-DISPATCH-CONTRACT] See replace handler above — `ADD_OVERRIDE`
+    // is the canonical machine action for recording any of the three
+    // override flavours (replace / skip / progression-adjust). The override
+    // payload's `isSkipped` flag distinguishes the kind, mirroring how the
+    // override is saved to storage at line 5326.
+    machineDispatch({
+      type: 'ADD_OVERRIDE',
       index: safeExerciseIndex,
       override: {
         originalName: originalExercise.name,
@@ -5362,9 +5383,11 @@ export function StreamlinedWorkoutSession({
     }
     addOverride(sessionId, override)
     
-    // Update local state via dispatch
-    dispatch({
-      type: 'ADJUST_PROGRESSION',
+    // [OVERRIDE-DISPATCH-CONTRACT] See replace/skip handlers above — same
+    // canonical `ADD_OVERRIDE` machine action; the `isProgressionAdjusted`
+    // flag identifies this as a progression-adjust override.
+    machineDispatch({
+      type: 'ADD_OVERRIDE',
       index: safeExerciseIndex,
       override: {
         originalName: originalExercise.name,

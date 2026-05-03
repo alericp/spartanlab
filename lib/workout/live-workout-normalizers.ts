@@ -274,6 +274,11 @@ export function normalizePerformanceOutcome(
 // SUPPORT/LOAD NORMALIZATION
 // =============================================================================
 
+// [RESISTANCE-BAND-COLOR-CONTRACT] Removed stale 'orange' entry: not a
+// member of the canonical ResistanceBandColor union (yellow/red/black/
+// purple/green/blue per lib/band-progression-engine.ts:13). 'orange'
+// produced a TS2353 object-literal error and was unreachable at runtime
+// because the union prevents callers from passing 'orange' as a band color.
 const BAND_ASSISTANCE_VALUES: Record<ResistanceBandColor, number> = {
   'black': 100,
   'purple': 80,
@@ -281,7 +286,6 @@ const BAND_ASSISTANCE_VALUES: Record<ResistanceBandColor, number> = {
   'blue': 45,
   'red': 30,
   'yellow': 15,
-  'orange': 10,
 }
 
 export function normalizeSupportLoad(

@@ -6475,8 +6475,14 @@ async function generateAdaptiveProgramImpl(
   console.log('[weighted-truth] Generation weighted readiness:', {
     hasLoadableEquipment: hasLoadableEq,
     hasWeightedStrengthData: hasWeightedStr,
-    hasWeightedPullUp: !!canonicalProfile.weightedBenchmarks?.weightedPullUp?.current,
-    hasWeightedDip: !!canonicalProfile.weightedBenchmarks?.weightedDip?.current,
+    // [BUILDER-WEIGHTED-LIFT-OWNER] CanonicalProgrammingProfile owns
+    // `weightedPullUp` / `weightedDip` directly as nullable record objects
+    // ({ addedWeight, reps, unit? }). The legacy nested
+    // `weightedBenchmarks.{weightedPullUp,weightedDip}.current` shape was
+    // never on the canonical contract — those reads produced TS2339.
+    // Truthiness on the record itself preserves the same observable boolean.
+    hasWeightedPullUp: !!canonicalProfile.weightedPullUp,
+    hasWeightedDip: !!canonicalProfile.weightedDip,
       // [BUILDER-CANONICAL-PROFILE-RENAME]
       equipment: canonicalProfile.equipmentAvailable,
       reason: hasLoadableEq && hasWeightedStr ? 'weighted_eligible' : hasLoadableEq ? 'missing_strength_inputs' : 'no_loadable_equipment',
@@ -7149,11 +7155,17 @@ async function generateAdaptiveProgramImpl(
   // NOTE: This is the CANONICAL owner. See multiSkillMaterialityContract below
   // for the separate multi-skill allocation contract (line ~6090).
   // ==========================================================================
+  // [BUILDER-LIMITER-MODS-NULLISH] `buildCanonicalMaterialityContract`
+  // declares `limiterMods?: LimiterDrivenProgramMods` (optional → undefined),
+  // but `limiterDrivenMods` here is `LimiterDrivenProgramMods | null` from
+  // its earlier defaulted assignment. Convert null → undefined to match
+  // the optional parameter contract; same downstream behavior because
+  // the consumer treats both as "no limiter mods".
   const materialityContract = buildCanonicalMaterialityContract(
     canonicalProfile,
     trainingFeedback,
     undefined, // detectedWeakPoints - not available yet, will be added to bottleneck.rankedBottlenecks from limiterDrivenMods
-    limiterDrivenMods
+    limiterDrivenMods ?? undefined
   )
   
   // [PHASE 15E FIX] Wrapped in try-catch - logging should never crash generation
@@ -7244,7 +7256,19 @@ async function generateAdaptiveProgramImpl(
     experienceLevel: canonicalProfile.experienceLevel || experienceLevel,
     trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek ?? trainingDaysPerWeek,
     scheduleMode: inputScheduleMode,
-    trainingPathType: canonicalProfile.trainingPathType || inputs.trainingPathType,
+    // [BUILDER-TRAINING-PATH-TYPE-NORMALIZER] WeekAdaptationInput.trainingPathType
+    // is the strict union TrainingPathType ('skill_progression' | 'strength_endurance'
+    // | 'hybrid'). CanonicalProgrammingProfile.trainingPathType is `string | null`.
+    // Narrow to the union by validating against the known label set,
+    // falling back to the typed `inputs.trainingPathType` when the
+    // canonical value is null/unrecognized. No invented values.
+    trainingPathType: ((): TrainingPathType | undefined => {
+      const raw = canonicalProfile.trainingPathType
+      if (raw === 'skill_progression' || raw === 'strength_endurance' || raw === 'hybrid') {
+        return raw
+      }
+      return inputs.trainingPathType
+    })(),
     
     // Goal complexity
     primaryGoal: canonicalProfile.primaryGoal || primaryGoal,
@@ -7258,8 +7282,16 @@ async function generateAdaptiveProgramImpl(
     // Style complexity
     trainingStyles: canonicalProfile.trainingMethodPreferences,
     
-    // Constraints
-    jointCautions: canonicalProfile.jointCautions,
+    // [BUILDER-JOINT-CAUTIONS-NORMALIZER] WeekAdaptationInput.jointCautions
+    // is `JointCaution[]` (strict union: 'shoulders'|'elbows'|'wrists'|
+    // 'lower_back'|'knees'). CanonicalProgrammingProfile.jointCautions is
+    // raw `string[]`. Filter to only the known JointCaution labels — any
+    // unknown legacy strings are dropped truthfully rather than cast.
+    jointCautions: (canonicalProfile.jointCautions ?? []).filter(
+      (c): c is JointCaution =>
+        c === 'shoulders' || c === 'elbows' || c === 'wrists' ||
+        c === 'lower_back' || c === 'knees'
+    ),
     
     // Recovery/Readiness
     readinessAssessment: readinessForContract,
@@ -8043,8 +8075,19 @@ async function generateAdaptiveProgramImpl(
     selectedFlexibility: canonicalProfile.selectedFlexibility || inputs.selectedFlexibility || [],
     pullUpMax: canonicalProfile.pullUpMax || null,
     dipMax: canonicalProfile.dipMax || null,
-    weightedPullUp: canonicalProfile.weightedPullUpWeight ? { weight: canonicalProfile.weightedPullUpWeight, reps: 1 } : null,
-    weightedDip: canonicalProfile.weightedDipWeight ? { weight: canonicalProfile.weightedDipWeight, reps: 1 } : null,
+    // [BUILDER-WEIGHTED-LIFT-OWNER] CanonicalProgrammingProfile owns
+    // `weightedPullUp` / `weightedDip` as fully-shaped objects
+    // ({ addedWeight, reps, unit? }), not bare scalar
+    // `weightedPullUpWeight` / `weightedDipWeight` numbers — those legacy
+    // fields never existed on the canonical contract and produced TS2339.
+    // Map the canonical `addedWeight` onto the local `weight` field this
+    // expanded context expects, preserving the recorded rep count.
+    weightedPullUp: canonicalProfile.weightedPullUp
+      ? { weight: canonicalProfile.weightedPullUp.addedWeight, reps: canonicalProfile.weightedPullUp.reps }
+      : null,
+    weightedDip: canonicalProfile.weightedDip
+      ? { weight: canonicalProfile.weightedDip.addedWeight, reps: canonicalProfile.weightedDip.reps }
+      : null,
     frontLeverProgression: canonicalProfile.frontLeverProgression || null,
     plancheProgression: canonicalProfile.plancheProgression || null,
     hspuProgression: canonicalProfile.hspuProgression || null,
@@ -8206,9 +8249,13 @@ async function generateAdaptiveProgramImpl(
       // [BUILDER-CANONICAL-PROFILE-RENAME]
       equipmentAvailable: canonicalProfile.equipmentAvailable || [],
         currentWorkingProgressions: cwpRecord,
-        trainingPath: canonicalProfile.trainingPath || null,
+        // [BUILDER-CANONICAL-PROFILE-FIELD-OWNERS] CanonicalProgrammingProfile
+        // owns `trainingPathType` and `sessionLengthMinutes`. The legacy
+        // `trainingPath` and `sessionDurationMinutes` names produced TS2339
+        // — same downstream meaning, canonical owner.
+        trainingPath: canonicalProfile.trainingPathType || null,
         sessionStyle: inputs.sessionStyle || null,
-        timeAvailability: canonicalProfile.sessionDurationMinutes || null,
+        timeAvailability: canonicalProfile.sessionLengthMinutes || null,
       },
       doctrineRuntimeContract
     )
@@ -9117,9 +9164,23 @@ async function generateAdaptiveProgramImpl(
       exactLastSafeSubstep: 'weekly_allocator_entry',
       // Verify outputs
       decisionsCount: weeklyExpressionAllocatorContract.decisions.length,
-      primaryRepresentedCount: weeklyExpressionAllocatorContract.decisions.filter(d => d.representationType === 'primary').length,
-      supportCount: weeklyExpressionAllocatorContract.decisions.filter(d => d.representationType === 'support').length,
-      deferredCount: weeklyExpressionAllocatorContract.decisions.filter(d => d.representationType === 'deferred').length,
+      // [BUILDER-WEEKLY-EXPRESSION-FIELD-MIGRATION] The legacy `representationType`
+      // field was renamed in the canonical contract to `doctrineDisposition`
+      // (typed: 'direct_priority' | 'direct_limited' | 'carryover_only' |
+      // 'temporary_defer'). The previous names map onto the new tokens as
+      // follows so the audit log keeps the same observable buckets:
+      //   primary  ← direct_priority | direct_limited
+      //   support  ← carryover_only
+      //   deferred ← temporary_defer
+      primaryRepresentedCount: weeklyExpressionAllocatorContract.decisions.filter(
+        d => d.doctrineDisposition === 'direct_priority' || d.doctrineDisposition === 'direct_limited'
+      ).length,
+      supportCount: weeklyExpressionAllocatorContract.decisions.filter(
+        d => d.doctrineDisposition === 'carryover_only'
+      ).length,
+      deferredCount: weeklyExpressionAllocatorContract.decisions.filter(
+        d => d.doctrineDisposition === 'temporary_defer'
+      ).length,
       overlapPairsCount: weeklyExpressionAllocatorContract.highOverlapPairs.length,
       verdict: 'ALLOCATOR_OUTPUTS_VALID',
     })
@@ -10440,7 +10501,12 @@ async function generateAdaptiveProgramImpl(
     secondaryGoal,
     selectedSkillsCount: expandedContext.selectedSkills.length,
     experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
-    recoveryLevel: canonicalProfile.recoveryLevel as 'poor' | 'fair' | 'normal' | 'good' | undefined,
+    // [BUILDER-CANONICAL-RECOVERY-OWNER] CanonicalProgrammingProfile owns
+    // `recoveryQuality` (string | null) — `recoveryLevel` was never on
+    // the canonical contract. Cast through unknown so the legacy enum
+    // shape consumers expect ('poor'|'fair'|'normal'|'good') still works
+    // while the value is sourced from the canonical owner.
+    recoveryLevel: (canonicalProfile.recoveryQuality ?? undefined) as 'poor' | 'fair' | 'normal' | 'good' | undefined,
     selectedTrainingStyles: normalizedStyles as TrainingStyleMode[],
     trainingMethodPreferences: normalizedStyles,
     hasWeightedEquipment: equipment.some(e => 
@@ -10640,7 +10706,8 @@ async function generateAdaptiveProgramImpl(
     sessionLength,
     selectedSkillsCount: expandedContext.selectedSkills.length,
     hasAllStylesSelected,
-    recoveryLevel: canonicalProfile.recoveryLevel,
+    // [BUILDER-CANONICAL-RECOVERY-OWNER] canonical owner is `recoveryQuality`
+    recoveryLevel: canonicalProfile.recoveryQuality,
     primaryGoal,
     secondaryGoal,
     selectedSkills: expandedContext.selectedSkills,
@@ -17066,7 +17133,8 @@ async function generateAdaptiveProgramImpl(
       selectedSkillsCount: expandedContext.selectedSkills.length,
       primaryGoal,
       secondaryGoal,
-      recoveryLevel: canonicalProfile.recoveryLevel,
+      // [BUILDER-CANONICAL-RECOVERY-OWNER]
+      recoveryLevel: canonicalProfile.recoveryQuality,
     },
     calibrationDeterministic: true,
     spineResolutionDeterministic: true,
@@ -18299,7 +18367,8 @@ async function generateAdaptiveProgramImpl(
         templateLabel: session.focusLabel || session.dayLabel,
         primaryGoal,
         secondaryGoal,
-        recoveryLevel: canonicalProfile.recoveryLevel as any,
+        // [BUILDER-CANONICAL-RECOVERY-OWNER]
+        recoveryLevel: canonicalProfile.recoveryQuality as any,
         // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] AdaptiveSession does not own
         // `isDeload`. Deload state is communicated through `focus` /
         // `weekAdaptationDecision` on the parent program. The legacy
@@ -18351,7 +18420,8 @@ async function generateAdaptiveProgramImpl(
         resolvedIdentity: resolved,
         dayNumber: session.dayNumber,
         totalDaysInWeek: sessions.length,
-        recoveryState: canonicalProfile.recoveryLevel as any,
+        // [BUILDER-CANONICAL-RECOVERY-OWNER]
+        recoveryState: canonicalProfile.recoveryQuality as any,
         primaryGoal,
         secondaryGoal,
         isAdvancedAthlete: experienceLevel === 'advanced',
@@ -18454,7 +18524,8 @@ async function generateAdaptiveProgramImpl(
         hasAllStylesSelected,
         sessionMinutes: sessionLength,
         experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced' | 'elite',
-        recoveryState: canonicalProfile.recoveryLevel as any,
+        // [BUILDER-CANONICAL-RECOVERY-OWNER]
+        recoveryState: canonicalProfile.recoveryQuality as any,
         dominantSpine: dominantSpineResolution.primarySpine,
         dayNumber: session.dayNumber,
       })
@@ -18880,7 +18951,8 @@ async function generateAdaptiveProgramImpl(
     // Legacy `'long'`/`'extended'` literals are no longer on the union;
     // map a long-session preference to the canonical 60+-minute zone.
     const hasLongSessionPreference =
-      normalizeSessionLengthMinutes(canonicalProfile.sessionLength) >= 60
+      // [BUILDER-CANONICAL-SESSION-LENGTH-OWNER] canonical owner is `sessionLengthMinutes`
+      normalizeSessionLengthMinutes(canonicalProfile.sessionLengthMinutes) >= 60
     const isHybridPath = canonicalProfile.trainingStyle === 'hybrid' ||
       canonicalProfile.trainingPathType === 'hybrid'
     
@@ -19039,8 +19111,9 @@ async function generateAdaptiveProgramImpl(
       secondary: canonicalProfile.secondaryGoal,
       selectedSkillCount: (canonicalProfile.selectedSkills || []).length,
       scheduleMode: canonicalProfile.scheduleMode,
-      sessionLength: canonicalProfile.sessionLength,
-      recoveryLevel: canonicalProfile.recoveryLevel,
+      // [BUILDER-CANONICAL-PROFILE-FIELD-OWNERS] sessionLengthMinutes / recoveryQuality
+      sessionLength: canonicalProfile.sessionLengthMinutes,
+      recoveryLevel: canonicalProfile.recoveryQuality,
     }
     
     const outputReality = {
@@ -20355,9 +20428,12 @@ fatigueDecision: fatigueDecision ? {
           : 'mixed'
 
         // Get first session exercises for exercise reasons
+        // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS] `sessions[0].exercises`
+        // is `AdaptiveExercise[]` (flat) — `e.exercise` does not exist on
+        // that type and produced TS2339. Use the polymorphic id accessor
+        // already defined for SelectedExercise/AdaptiveExercise.
         const firstSessionExercises = sessions[0]?.exercises?.slice(0, 5).map(e => ({
-          id: e.exercise?.id || '',
-          // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+          id: getExerciseId(e),
           name: getExerciseName(e),
         })) || []
 
@@ -21098,15 +21174,19 @@ return explanations.length > 0 ? explanations : undefined
       try {
         // Build program summary for validation
         const totalExercises = sessions.reduce((sum, s) => sum + (s.exercises?.length || 0), 0)
+        // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS] AdaptiveExercise (flat)
+        // owns `name` (not `exerciseName`) and `category` (no `role`).
+        // Use the polymorphic accessors so legacy field references that
+        // never existed on the canonical contract no longer trip TS2339.
         const weightedExercises = sessions.reduce((sum, s) => 
           sum + (s.exercises?.filter(ex => 
             ex.weightedPrescription || 
-            ex.id?.includes('weighted') || 
-            ex.exerciseName?.toLowerCase().includes('weighted')
+            getExerciseId(ex)?.includes('weighted') || 
+            getExerciseName(ex)?.toLowerCase().includes('weighted')
           ).length || 0), 0)
         
         const skillsExpressed = sessions.flatMap(s => 
-          s.exercises?.filter(ex => ex.skillTarget)?.map(ex => ex.skillTarget) || []
+          s.exercises?.filter(ex => !!getExerciseSkill(ex))?.map(ex => getExerciseSkill(ex)) || []
         ).filter((s, i, arr) => arr.indexOf(s) === i) as string[]
         
         const methodsUsed = sessions.flatMap(s => 
@@ -21115,9 +21195,9 @@ return explanations.length > 0 ? explanations : undefined
         
         const accessoryCount = sessions.reduce((sum, s) => 
           sum + (s.exercises?.filter(ex => 
-            ex.role === 'accessory' || 
-            ex.category === 'accessory' ||
-            ex.exerciseName?.toLowerCase().includes('accessory')
+            getExerciseRole(ex) === 'accessory' || 
+            getExerciseCategory(ex) === 'accessory' ||
+            getExerciseName(ex)?.toLowerCase().includes('accessory')
           ).length || 0), 0)
         
         // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] Canonical AdaptiveSession
@@ -24663,8 +24743,16 @@ return explanations.length > 0 ? explanations : undefined
       sessionIntent: meta?.sessionIntent || s.focusLabel,
       firstThreeCategories: firstThreeExercises.join(','),
       exerciseCount: s.exercises?.length || 0,
-      primaryCount: s.exercises?.filter(e => (e as any).selectionTrace?.sessionRole?.includes('primary') || (e as any).selectionTrace?.sessionRole?.includes('direct_skill')).length || 0,
-      supportCount: s.exercises?.filter(e => (e as any).selectionTrace?.sessionRole?.includes('support') || (e as any).selectionTrace?.sessionRole?.includes('accessory')).length || 0,
+      // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS] Replace `(e as any).selectionTrace`
+      // casts with the typed accessor that probes both nested+flat shapes.
+      primaryCount: s.exercises?.filter(e => {
+        const role = getExerciseSelectionTrace(e)?.sessionRole || ''
+        return role.includes('primary') || role.includes('direct_skill')
+      }).length || 0,
+      supportCount: s.exercises?.filter(e => {
+        const role = getExerciseSelectionTrace(e)?.sessionRole || ''
+        return role.includes('support') || role.includes('accessory')
+      }).length || 0,
     }
   })
   
@@ -24823,12 +24911,15 @@ return explanations.length > 0 ? explanations : undefined
     day: i + 1,
     focus: s.focus,
     sessionIntent: sessionIntents[i]?.sessionType || 'unknown',
+    // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
     exerciseCategories: s.exercises.reduce((acc, ex) => {
-      acc[ex.category] = (acc[ex.category] || 0) + 1
+      const cat = getExerciseCategory(ex) || 'unknown'
+      acc[cat] = (acc[cat] || 0) + 1
       return acc
     }, {} as Record<string, number>),
-    weightedExercises: s.exercises.filter(ex => ex.id?.includes('weighted')).length,
-    skillExercises: s.exercises.filter(ex => ex.category === 'skill').length,
+      // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+      weightedExercises: s.exercises.filter(ex => getExerciseId(ex)?.includes('weighted')).length,
+      skillExercises: s.exercises.filter(ex => getExerciseCategory(ex) === 'skill').length,
   })))
   
   return tempProgram
@@ -28813,10 +28904,15 @@ function generateAdaptiveSession(
     dayFocus: day.focus,
     middleStep: 'effective_selection_built',
     candidateCount: effectiveSelection.main.length,
-    candidateNames: effectiveSelection.main.slice(0, 5).map(e => e.exercise?.name || 'unknown'),
-    skillShapesValid: effectiveSelection.main.every(e => 
-      typeof e.skill === 'string' || typeof e.exercise?.skill === 'string' || e.skill === undefined
-    ),
+    // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS] effectiveSelection.main
+    // can be either SelectedExercise[] (nested `.exercise`) or already-
+    // flattened AdaptiveExercise[] depending on which corridor delivered
+    // it. Use the polymorphic accessors so neither shape produces TS2339.
+    candidateNames: effectiveSelection.main.slice(0, 5).map(e => getExerciseName(e) || 'unknown'),
+    skillShapesValid: effectiveSelection.main.every(e => {
+      const s = getExerciseSkill(e)
+      return typeof s === 'string' || s === ''
+    }),
     verdict: 'PASS',
   })
   
@@ -28827,7 +28923,8 @@ function generateAdaptiveSession(
   // ==========================================================================
   const effectiveSelectionValid = 
     Array.isArray(effectiveSelection.main) &&
-    effectiveSelection.main.every(item => item?.exercise?.name && (item.sets !== undefined || item.repsOrTime !== undefined)) &&
+    // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+    effectiveSelection.main.every(item => !!getExerciseName(item) && (item.sets !== undefined || item.repsOrTime !== undefined)) &&
     Number.isFinite(effectiveSelection.totalEstimatedTime) &&
     effectiveSelection.totalEstimatedTime > 0 &&
     Array.isArray(effectiveSelection.warmup) &&
@@ -29246,7 +29343,8 @@ function generateAdaptiveSession(
         primaryGoal,
         inputCount: canonicalFinalMain.length,
         outputCount: 0,
-        inputExercises: canonicalFinalMain.map(e => e.exercise?.name || 'unknown'),
+        // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+        inputExercises: canonicalFinalMain.map(e => getExerciseName(e) || 'unknown'),
         rescueAttempted: sessionWasRescued,
       })
       throw new Error(

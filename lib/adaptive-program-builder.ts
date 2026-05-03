@@ -352,6 +352,37 @@ function getExerciseSkillTags(ex: unknown): string[] {
   return _readNestedOrFlatStringArray(ex, 'skillTags')
 }
 
+/** Required equipment array for the exercise. Lives on Exercise (nested). */
+function getExerciseRequiredEquipment(ex: unknown): string[] {
+  return _readNestedOrFlatStringArray(ex, 'requiredEquipment')
+}
+
+/** Movement family classifier (Exercise.movementFamily). Empty string when absent. */
+function getExerciseMovementFamily(ex: unknown): string {
+  return _readNestedOrFlatString(ex, 'movementFamily') ?? ''
+}
+
+/** Stable exercise id. Both shapes carry an `id` slot at slightly
+ *  different depths — flat on AdaptiveExercise, nested on
+ *  SelectedExercise. Empty string when absent. */
+function getExerciseId(ex: unknown): string {
+  return _readNestedOrFlatString(ex, 'id') ?? ''
+}
+
+/** Neural demand score (0-5). Lives on Exercise (nested) but we probe
+ *  flat in case future flattening copies it up. Returns `undefined`
+ *  when not provided so callers can use numeric guards. */
+function getExerciseNeuralDemand(ex: unknown): number | undefined {
+  const o = _asExerciseLike(ex)
+  if (!o) return undefined
+  const flat = o.neuralDemand
+  if (typeof flat === 'number') return flat
+  const nested = o.exercise && typeof o.exercise === 'object'
+    ? (o.exercise as Record<string, unknown>).neuralDemand
+    : undefined
+  return typeof nested === 'number' ? nested : undefined
+}
+
 /** Target skills array (legacy field that selector populates pre-flattening). */
 function getExerciseTargetSkills(ex: unknown): string[] {
   return _readNestedOrFlatStringArray(ex, 'targetSkills')
@@ -378,6 +409,78 @@ function getExerciseScore(ex: unknown): number | undefined {
   if (!o) return undefined
   const flat = o.scoreFromSelector
   if (typeof flat === 'number') return flat
+  return undefined
+}
+
+/** Selection trace audit field — record-shaped optional metadata
+ * attached by the selector (`primarySelectionReason`, `influencingSkills`,
+ * `sessionRole`, `doctrineSource`, …). Returns `undefined` when the
+ * runtime shape lacks the trace (post-flattening AdaptiveExercise). */
+function getExerciseSelectionTrace(ex: unknown): {
+  primarySelectionReason?: string
+  influencingSkills?: Array<{ skillId: string; influence?: string; expressionMode?: string }>
+  sessionRole?: string
+  doctrineSource?: string | boolean
+  [k: string]: unknown
+} | undefined {
+  const o = _asExerciseLike(ex)
+  if (!o) return undefined
+  const t = o.selectionTrace
+  if (t && typeof t === 'object') return t as Record<string, unknown>
+  return undefined
+}
+
+/**
+ * Read all sessions from an AdaptiveProgram regardless of legacy shape.
+ *
+ * Canonical shape: `program.sessions: AdaptiveSession[]` (flat week of sessions).
+ *
+ * Some legacy audit code wrote `program.weeks?.[0]?.days?` against an
+ * older multi-week shape. The current contract owns only flat
+ * `sessions`. This accessor probes both safely and returns the flat
+ * array. It does NOT invent a `weeks` array.
+ */
+function getProgramSessions(program: unknown): unknown[] {
+  if (!program || typeof program !== 'object') return []
+  const p = program as Record<string, unknown>
+  const sessions = p.sessions
+  if (Array.isArray(sessions)) return sessions
+  // Legacy weeks-of-days shape: flatten if present
+  const weeks = p.weeks
+  if (Array.isArray(weeks)) {
+    const out: unknown[] = []
+    for (const w of weeks) {
+      const days = (w as { days?: unknown }).days
+      if (Array.isArray(days)) out.push(...days)
+    }
+    return out
+  }
+  return []
+}
+
+/**
+ * Read the per-week-day exercises array off either an AdaptiveSession
+ * (flat `exercises`) or a legacy week-day record. Returns the array
+ * without inventing missing entries.
+ */
+function getSessionExercisesArray(session: unknown): unknown[] {
+  if (!session || typeof session !== 'object') return []
+  const s = session as { exercises?: unknown }
+  return Array.isArray(s.exercises) ? s.exercises : []
+}
+
+/** Selection context audit field — same rationale as selection trace. */
+function getExerciseSelectionContext(ex: unknown): {
+  expressionMode?: string
+  doctrineSource?: string | boolean
+  primarySelectionReason?: string
+  influencingSkills?: Array<{ skillId: string; influence?: string; expressionMode?: string }>
+  [k: string]: unknown
+} | undefined {
+  const o = _asExerciseLike(ex)
+  if (!o) return undefined
+  const c = o.selectionContext
+  if (c && typeof c === 'object') return c as Record<string, unknown>
   return undefined
 }
 
@@ -493,6 +596,9 @@ import {
 import {
   type ProgramSelectionTrace,
   type SessionSelectionTrace,
+  // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS] Type used by the
+  // selection-trace fallback constructor in `buildProgramSelectionTrace`.
+  type ExerciseSelectionTrace,
   compareExerciseSelectionTraces,
   logExerciseComparison,
   // [PHASE 15E] Advanced athlete session calibration
@@ -1096,21 +1202,24 @@ function validateSessionCandidate(
   }
   
   // Extract names safely
+  // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
   const exerciseNames = (exercises || [])
-    .map(e => e?.exercise?.name || 'unknown')
+    .map(e => getExerciseName(e) || 'unknown')
     .filter(n => n !== 'unknown')
   
   // Check for valid exercise structures
   const hasValidStructure = (exercises || []).every(item => 
-    item?.exercise?.name && (item.sets !== undefined || item.repsOrTime !== undefined)
+    // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+    !!getExerciseName(item) && (item.sets !== undefined || item.repsOrTime !== undefined)
   )
   if (!hasValidStructure && exercises && exercises.length > 0) {
     failureReasons.push('invalid_exercise_structure')
   }
   
   // Check equipment compatibility
+  // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
   const equipmentValid = (exercises || []).every(item => {
-    const required = item?.exercise?.requiredEquipment || []
+    const required = getExerciseRequiredEquipment(item)
     if (required.length === 0) return true
     return required.some(req => equipment.includes(req) || req === 'none' || req === 'bodyweight')
   })
@@ -18936,8 +19045,10 @@ async function generateAdaptiveProgramImpl(
     for (const session of sessions) {
       for (const ex of session.exercises || []) {
         allSessionExercises.push({
-          skill: ex.skill || ex.selectionTrace?.influencingSkills?.[0]?.skillId,
-          name: ex.name || ex.exercise?.name,
+          // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+          skill: getExerciseSkill(ex) || getExerciseSelectionTrace(ex)?.influencingSkills?.[0]?.skillId,
+          // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+    name: getExerciseName(ex),
         })
       }
     }
@@ -19270,7 +19381,8 @@ console.log('[program-generate] Generation complete:', {
   
   for (const session of sessions) {
     for (const exercise of session.exercises || []) {
-      const trace = exercise.selectionTrace
+      // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+      const trace = getExerciseSelectionTrace(exercise)
       if (trace?.influencingSkills) {
         for (const skillInfluence of trace.influencingSkills) {
           if (!skillExposureByTrace[skillInfluence.skillId]) {
@@ -19303,7 +19415,8 @@ console.log('[program-generate] Generation complete:', {
     totalExercises,
     weightedExerciseCount,
     doctrineHitCount: sessions.reduce((sum, s) => 
-      sum + (s.exercises || []).filter(e => e.selectionTrace?.doctrineSource).length, 0
+      // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+      sum + (s.exercises || []).filter(e => getExerciseSelectionTrace(e)?.doctrineSource).length, 0
     ),
   })
   
@@ -20170,7 +20283,8 @@ fatigueDecision: fatigueDecision ? {
         // Get first session exercises for exercise reasons
         const firstSessionExercises = sessions[0]?.exercises?.slice(0, 5).map(e => ({
           id: e.exercise?.id || '',
-          name: e.exercise?.name || '',
+          // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+          name: getExerciseName(e),
         })) || []
 
         return buildWorkoutReasoningSummary(
@@ -21370,7 +21484,8 @@ return explanations.length > 0 ? explanations : undefined
       hasRepsOrHold: progressionReadyExercises.filter(e => e.reps || e.hold).length,
       hasCategory: progressionReadyExercises.filter(e => e.category).length,
       hasProgression: progressionReadyExercises.filter(e => e.progression).length,
-      hasSelectionTrace: progressionReadyExercises.filter(e => e.selectionTrace).length,
+      // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+      hasSelectionTrace: progressionReadyExercises.filter(e => !!getExerciseSelectionTrace(e)).length,
     }
     
     console.log('[phase15b-progression-readiness-prep-audit]', {
@@ -21612,7 +21727,8 @@ return explanations.length > 0 ? explanations : undefined
         (skill === 'v_sit' && (exName.includes('v-sit') || exName.includes('v sit') || exName.includes('straddle')))
       
       if (matchesSkill) {
-        const trace = ex.selectionTrace
+        // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+        const trace = getExerciseSelectionTrace(ex)
         const sessionRole = trace?.sessionRole || ''
         const isWarmup = sessionRole === 'warmup' || category === 'warmup'
         const isSupport = sessionRole.includes('support') || category === 'accessory'
@@ -22838,12 +22954,18 @@ return explanations.length > 0 ? explanations : undefined
   if (sessionArchitectureTruth) {
     finalProgram.sessionArchitectureTruth = sessionArchitectureTruth
     
-    // Run weekly materiality validation
-    const sessionsForValidation = finalProgram.weeks?.[0]?.days?.map(d => ({
-      exercises: d.exercises || [],
-      dayType: d.dayType,
-      focus: d.focus,
-    })) || []
+    // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+    // Run weekly materiality validation. Canonical shape uses
+    // `finalProgram.sessions` (flat AdaptiveSession[]); legacy shape
+    // had `weeks[0].days`. `getProgramSessions` reconciles both.
+    const sessionsForValidation = getProgramSessions(finalProgram).map(d => {
+      const day = (d ?? {}) as { dayType?: unknown; focus?: unknown }
+      return {
+        exercises: getSessionExercisesArray(d),
+        dayType: day.dayType,
+        focus: day.focus,
+      }
+    })
     
     const materialityValidation = validateWeeklyMateriality(sessionsForValidation, sessionArchitectureTruth)
     
@@ -22883,15 +23005,18 @@ return explanations.length > 0 ? explanations : undefined
   let supportSkillExerciseCount = 0
   const supportSkillExerciseSample: string[] = []
   
-  for (const week of finalProgram.weeks || []) {
-    for (const day of week.days || []) {
-      for (const ex of day.exercises || []) {
+  // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+  // Canonical AdaptiveProgram owns flat `sessions`, not nested
+  // `weeks[].days[]`. Iterate sessions directly via the accessor.
+  for (const day of getProgramSessions(finalProgram)) {
+    {
+      for (const ex of getSessionExercisesArray(day) as Array<{ selectionReason?: string; name?: string }>) {
         if (ex.selectionReason?.includes('[Support Skill]') || 
             ex.selectionReason?.toLowerCase().includes('support skill') ||
-            ex.selectionContext?.expressionMode === 'skill_accessory') {
+            getExerciseSelectionContext(ex)?.expressionMode === 'skill_accessory') {
           supportSkillExerciseCount++
           if (supportSkillExerciseSample.length < 5) {
-            supportSkillExerciseSample.push(`${ex.name}[${ex.selectionReason?.slice(0, 30) || 'support'}]`)
+            supportSkillExerciseSample.push(`${getExerciseName(ex) || ex.name || ''}[${ex.selectionReason?.slice(0, 30) || 'support'}]`)
           }
         }
       }
@@ -23095,7 +23220,8 @@ return explanations.length > 0 ? explanations : undefined
   // The visibleWeekSkillExpressionAudit was already computed from authoritative contracts
   // but was being ignored. Now it is the PRIMARY truth source.
   // ==========================================================================
-  const sessionsForAudit = finalProgram.weeks?.[0]?.days || []
+  // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+  const sessionsForAudit = getProgramSessions(finalProgram) as Array<{ exercises?: Array<{ selectionContext?: { doctrineSource?: unknown } }> }>
   const selectedSkillsFromProfile = canonicalProfile.selectedSkills || [primaryGoal]
   const architectureSkillsCount = sessionArchitectureTruth 
     ? sessionArchitectureTruth.primarySpineSkills.length + 
@@ -23365,7 +23491,8 @@ return explanations.length > 0 ? explanations : undefined
   let totalDoctrineDriven = 0
   for (const day of sessionsForAudit) {
     for (const ex of (day.exercises || [])) {
-      if (ex.selectionContext?.doctrineSource) {
+      // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+      if (getExerciseSelectionContext(ex)?.doctrineSource) {
         totalDoctrineDriven++
       }
     }
@@ -24324,8 +24451,12 @@ return explanations.length > 0 ? explanations : undefined
       sessionCountMatchesSchedule: sessions.length === effectiveTrainingDays,
       primarySkillHasDominance: true,
       tertiarySkillsHaveExpression: weightedSkillAllocation.filter(a => a.priorityLevel === 'tertiary').length > 0,
+      // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
       styleMethodExpressed: sessions.some(s => 
-        (s.exercises || []).some(e => e.groupType === 'superset' || e.groupType === 'circuit')
+        (s.exercises || []).some(e => {
+          const gt = getExerciseGroupType(e)
+          return gt === 'superset' || gt === 'circuit'
+        })
       ),
     },
     // Phase 15B success criteria
@@ -24560,22 +24691,23 @@ return explanations.length > 0 ? explanations : undefined
   const skillExposureSummary = selectedSkillList.map(skill => {
     const skillLower = skill.toLowerCase()
     
+    // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
     // Count direct expressions (skill category exercises for this skill)
     const directExpressions = allExercisesInWeek.filter(ex => 
-      ex.transferTo?.some((t: string) => t.toLowerCase().includes(skillLower)) &&
+      getExerciseTransferTo(ex).some((t: string) => t.toLowerCase().includes(skillLower)) &&
       ex.category === 'skill'
     )
     
     // Count technical expressions (moderate fatigue, good transfer)
     const technicalExpressions = allExercisesInWeek.filter(ex =>
-      ex.transferTo?.some((t: string) => t.toLowerCase().includes(skillLower)) &&
+      getExerciseTransferTo(ex).some((t: string) => t.toLowerCase().includes(skillLower)) &&
       ex.category !== 'skill' &&
       (ex.fatigueCost ?? 5) <= 3
     )
     
     // Count support expressions (strength/accessory supporting this skill)
     const supportExpressions = allExercisesInWeek.filter(ex =>
-      ex.transferTo?.some((t: string) => t.toLowerCase().includes(skillLower)) &&
+      getExerciseTransferTo(ex).some((t: string) => t.toLowerCase().includes(skillLower)) &&
       (ex.category === 'strength' || ex.category === 'accessory')
     )
     
@@ -26272,7 +26404,8 @@ function generateAdaptiveSession(
   console.log('[session-assembly-phase-audit]', {
     phaseName: 'post_selection',
     candidateCount: safeMain.length,
-    selectedExerciseNames: safeMain.map(e => e?.exercise?.name || 'unknown').slice(0, 8),
+    // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+        selectedExerciseNames: safeMain.map(e => getExerciseName(e) || 'unknown').slice(0, 8),
     selectedMovementPatterns: safeMain.map(e => e?.exercise?.movementPattern || 'unknown').slice(0, 8),
     selectedSkillTags: selectedSkills?.slice(0, 5) || [],
     selectedEquipmentNeeds: [...new Set(safeMain.flatMap(e => e?.exercise?.requiredEquipment || []))],
@@ -26573,7 +26706,8 @@ function generateAdaptiveSession(
       dayFocus: day.focus,
       primaryGoal,
       equipmentCount: equipment?.length || 0,
-      inputExercises: rescuedMain.map(e => e.exercise?.name || 'unknown').slice(0, 5),
+      // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+        inputExercises: rescuedMain.map(e => getExerciseName(e) || 'unknown').slice(0, 5),
     })
     throw new Error(
       `equipment_adaptation_zeroed_session: day=${day.dayNumber} focus=${day.focus} ` +
@@ -26591,7 +26725,8 @@ function generateAdaptiveSession(
   console.log('[session-assembly-phase-audit]', {
     phaseName: 'post_equipment_adaptation',
     candidateCount: adaptedMain.adapted.length,
-    selectedExerciseNames: adaptedMain.adapted.map(e => e?.exercise?.name || 'unknown').slice(0, 8),
+    // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+        selectedExerciseNames: adaptedMain.adapted.map(e => getExerciseName(e) || 'unknown').slice(0, 8),
     selectedMovementPatterns: adaptedMain.adapted.map(e => e?.exercise?.movementPattern || 'unknown').slice(0, 8),
     selectedSkillTags: selectedSkills?.slice(0, 5) || [],
     selectedEquipmentNeeds: [...new Set(adaptedMain.adapted.flatMap(e => e?.exercise?.requiredEquipment || []))],
@@ -26627,7 +26762,8 @@ function generateAdaptiveSession(
       originalCandidateCount: rescuedMain.length,
       currentValidCount: 0,
       recoveryAttempt: 'trying_fallback_reselection',
-      originalExercises: rescuedMain.map(e => e.exercise?.name || 'unknown').slice(0, 5),
+      // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+        originalExercises: rescuedMain.map(e => getExerciseName(e) || 'unknown').slice(0, 5),
     })
     
     // Attempt recovery via fallback selection with relaxed constraints
@@ -26655,7 +26791,8 @@ function generateAdaptiveSession(
         recoverySucceeded: true,
         recoveredCount: recoveryRescue.main.length,
         recoveryPath: recoveryRescue.rescuePath,
-        recoveredExercises: recoveryRescue.main.map(e => e.exercise?.name || 'unknown').slice(0, 5),
+        // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+        recoveredExercises: recoveryRescue.main.map(e => getExerciseName(e) || 'unknown').slice(0, 5),
       })
     } else {
       console.log('[candidate-invalidation-recovery-audit]', {
@@ -26771,7 +26908,8 @@ function generateAdaptiveSession(
           }
           safeSnapshot.push(snapshot)
           // Safely extract name with optional chaining only
-          const name = candidate?.exercise?.name ?? candidate?.name ?? 'unknown'
+          // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+  const name = getExerciseName(candidate) || 'unknown'
           safeNames.push(typeof name === 'string' ? name : 'unknown')
         } else {
           // Invalid candidate - drop and record
@@ -27341,7 +27479,8 @@ function generateAdaptiveSession(
       localCheckpoint = 'after_resort'
       console.log('[db-truth-main-ranking-checkpoint]', { checkpoint: localCheckpoint, sessionIndex })
       
-      const postRankingOrder = resortedExercises.map(e => e?.exercise?.name || 'unknown')
+      // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+      const postRankingOrder = resortedExercises.map(e => getExerciseName(e) || 'unknown')
       const rankingChanged = preRankingOrder.join(',') !== postRankingOrder.join(',')
       
       // Count skill-family-specific vs global modifications
@@ -27373,7 +27512,8 @@ function generateAdaptiveSession(
         depthShiftedCount,
         depthDeltaSum: scoredExercises.reduce((sum, e) => sum + (e.dbTruthDepthDelta || 0), 0),
         modifierBreakdowns: scoredExercises.slice(0, 3).map(e => ({
-          name: e?.exercise?.name,
+          // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+          name: getExerciseName(e),
           skillFamily: e.dbTruthSkillFamily,
           precedence: e.dbTruthPrecedenceUsed,
           modifier: e.dbTruthModifier,
@@ -27472,7 +27612,8 @@ function generateAdaptiveSession(
         dayFocus: day?.focus ?? 'unknown',
         candidateCountBeforeRollback: effectiveMainForSession?.length ?? 0,
         candidateCountAfterRollback: preRerankSnapshot.length,
-        firstFewNamesBeforeRollback: effectiveMainForSession?.slice?.(0, 3)?.map?.(e => e?.exercise?.name || 'unknown') ?? [],
+        // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+      firstFewNamesBeforeRollback: effectiveMainForSession?.slice?.(0, 3)?.map?.(e => getExerciseName(e) || 'unknown') ?? [],
         firstFewNamesAfterRollback: preRerankNames.slice(0, 3),
         invalidCountAtBoundary: preRerankSafe.invalidCount,
         droppedIndexes: preRerankSafe.droppedIndexes.slice(0, 10),
@@ -27637,7 +27778,8 @@ function generateAdaptiveSession(
       )
       
       const check = {
-        exerciseName: ex.exercise?.name || 'unknown',
+          // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+          exerciseName: getExerciseName(ex) || 'unknown',
         skillFamily: skillHint,
         pattern,
         shouldSubstitute: substitution.shouldSubstitute,
@@ -27953,7 +28095,8 @@ function generateAdaptiveSession(
             const removed = familyExercises.slice(maxPerFamily)
             
             preservedSecondary.push(...kept)
-            removedExercises.push(...removed.map(e => `${e.exercise?.name || 'unknown'}[${family}]`))
+            // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+      removedExercises.push(...removed.map(e => `${getExerciseName(e) || 'unknown'}[${family}]`))
           }
         }
         
@@ -28114,10 +28257,12 @@ function generateAdaptiveSession(
           if (effectiveSetsModifier !== 0) {
             const newSets = Math.max(2, Math.min(6, adjustedSets + effectiveSetsModifier))
             if (newSets !== adjustedSets) {
-              changes.push({ name: ex.exercise?.name || 'unknown', field: 'sets', before: adjustedSets, after: newSets })
+              // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+              changes.push({ name: getExerciseName(ex) || 'unknown', field: 'sets', before: adjustedSets, after: newSets })
               if (patternPrescription.patternSpecific) {
                 patternSpecificChanges.push({
-                  name: ex.exercise?.name || 'unknown',
+                  // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+                  name: getExerciseName(ex) || 'unknown',
                   pattern: patternPrescription.patternUsed,
                   action: patternPrescription.actionRecommended,
                   field: 'sets',
@@ -28135,10 +28280,12 @@ function generateAdaptiveSession(
           if (effectiveIntensityModifier !== 0) {
             const newRPE = Math.max(5, Math.min(10, adjustedRPE + effectiveIntensityModifier))
             if (Math.abs(newRPE - adjustedRPE) > 0.25) { // Only apply if meaningful change
-              changes.push({ name: ex.exercise?.name || 'unknown', field: 'targetRPE', before: adjustedRPE, after: newRPE })
+              // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+              changes.push({ name: getExerciseName(ex) || 'unknown', field: 'targetRPE', before: adjustedRPE, after: newRPE })
               if (patternPrescription.patternSpecific) {
                 patternSpecificChanges.push({
-                  name: ex.exercise?.name || 'unknown',
+                  // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+                  name: getExerciseName(ex) || 'unknown',
                   pattern: patternPrescription.patternUsed,
                   action: patternPrescription.actionRecommended,
                   field: 'targetRPE',
@@ -28157,10 +28304,12 @@ function generateAdaptiveSession(
           if (effectiveRestModifier !== 0) {
             const newRest = Math.max(30, Math.min(300, adjustedRest + effectiveRestModifier))
             if (Math.abs(newRest - adjustedRest) >= 15) { // Only apply if meaningful change
-              changes.push({ name: ex.exercise?.name || 'unknown', field: 'rest', before: adjustedRest, after: newRest })
+              // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+              changes.push({ name: getExerciseName(ex) || 'unknown', field: 'rest', before: adjustedRest, after: newRest })
               if (patternPrescription.patternSpecific) {
                 patternSpecificChanges.push({
-                  name: ex.exercise?.name || 'unknown',
+                  // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+                  name: getExerciseName(ex) || 'unknown',
                   pattern: patternPrescription.patternUsed,
                   action: patternPrescription.actionRecommended,
                   field: 'rest',
@@ -28234,7 +28383,8 @@ function generateAdaptiveSession(
           if (typeof rawExerciseSkill !== 'string') {
             // Log malformed skill shape but don't throw
             console.log('[effective-selection-shape-audit]', {
-              exerciseName: ex.exercise?.name || ex.name || 'unknown',
+              // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+          exerciseName: getExerciseName(ex) || 'unknown',
               rawSkillType: typeof rawExerciseSkill,
               isArray: Array.isArray(rawExerciseSkill),
               constructorName: rawExerciseSkill?.constructor?.name || 'unknown',
@@ -28260,7 +28410,8 @@ function generateAdaptiveSession(
             if (currentSets > 3) {
               const gatedSets = Math.max(2, currentSets - 1)
               readinessGatedPrescriptions.push({
-                exerciseName: ex.exercise?.name || 'unknown',
+                // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+                exerciseName: getExerciseName(ex) || 'unknown',
                 family,
                 field: 'sets',
                 preSuggestedValue: currentSets,
@@ -28275,7 +28426,8 @@ function generateAdaptiveSession(
             const originalSets = typeof ex.sets === 'number' ? ex.sets : 3
             if (modifiedEx.sets > originalSets + 1) {
               readinessGatedPrescriptions.push({
-                exerciseName: ex.exercise?.name || 'unknown',
+                // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+                exerciseName: getExerciseName(ex) || 'unknown',
                 family,
                 field: 'sets',
                 preSuggestedValue: modifiedEx.sets,
@@ -28293,7 +28445,8 @@ function generateAdaptiveSession(
             if (currentRPE >= 8) {
               const gatedRPE = Math.max(6, currentRPE - 1)
               readinessGatedPrescriptions.push({
-                exerciseName: ex.exercise?.name || 'unknown',
+                // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+                exerciseName: getExerciseName(ex) || 'unknown',
                 family,
                 field: 'targetRPE',
                 preSuggestedValue: currentRPE,
@@ -28307,7 +28460,8 @@ function generateAdaptiveSession(
             // Prevent load pushes for families with maintain permission
             if (modifiedEx.targetRPE > 8.5) {
               readinessGatedPrescriptions.push({
-                exerciseName: ex.exercise?.name || 'unknown',
+                // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+                exerciseName: getExerciseName(ex) || 'unknown',
                 family,
                 field: 'targetRPE',
                 preSuggestedValue: modifiedEx.targetRPE,
@@ -30973,14 +31127,17 @@ function buildGenerationProvenance(
   
   for (const session of sessions) {
     // Check session metadata for rescue/fallback indicators
-    const wasRescued = session.exercises?.some(e => 
-      e.selectionContext?.primarySelectionReason?.includes('rescue') ||
-      e.selectionContext?.primarySelectionReason?.includes('fallback')
-    )
-    const wasDowngraded = session.exercises?.some(e =>
-      e.selectionContext?.expressionMode === 'support_fallback' ||
-      e.selectionContext?.expressionMode === 'emergency_support'
-    )
+    // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
+    const wasRescued = session.exercises?.some(e => {
+      const ctx = getExerciseSelectionContext(e)
+      return ctx?.primarySelectionReason?.includes('rescue') ||
+        ctx?.primarySelectionReason?.includes('fallback')
+    })
+    const wasDowngraded = session.exercises?.some(e => {
+      const ctx = getExerciseSelectionContext(e)
+      return ctx?.expressionMode === 'support_fallback' ||
+        ctx?.expressionMode === 'emergency_support'
+    })
     
     if (wasRescued) {
       rescueCount++
@@ -31107,11 +31264,12 @@ export function computeTemplateSimilarity(
     // [BUILDER-CONTRACT-DRIFT-NORMALIZERS] focus replaces legacy dayFocus on AdaptiveSession.
     sameDayFocusOrder: newProgram.sessions.map(s => s.focus).join(',') === 
                        previousProgram.sessions.map(s => s.focus).join(','),
+    // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
     sameFirstTwoExercisesPerDay: (() => {
       if (newProgram.sessions.length !== previousProgram.sessions.length) return false
       for (let i = 0; i < newProgram.sessions.length; i++) {
-        const newFirst2 = newProgram.sessions[i].exercises?.slice(0, 2).map(e => e.exercise?.id || e.name).join(',')
-        const prevFirst2 = previousProgram.sessions[i]?.exercises?.slice(0, 2).map(e => e.exercise?.id || e.name).join(',')
+        const newFirst2 = newProgram.sessions[i].exercises?.slice(0, 2).map(e => getExerciseId(e) || getExerciseName(e)).join(',')
+        const prevFirst2 = previousProgram.sessions[i]?.exercises?.slice(0, 2).map(e => getExerciseId(e) || getExerciseName(e)).join(',')
         if (newFirst2 !== prevFirst2) return false
       }
       return true
@@ -31124,8 +31282,9 @@ export function computeTemplateSimilarity(
     sameSessionTitles: newProgram.sessions.map(s => s.dayLabel || '').join(',') ===
                        previousProgram.sessions.map(s => s.dayLabel || '').join(','),
     samePrimaryExerciseFamilies: (() => {
+      // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
       const getExerciseFamilies = (sessions: AdaptiveSession[]) => 
-        sessions.map(s => s.exercises?.slice(0, 3).map(e => e.exercise?.movementFamily || '').sort().join(',')).join('|')
+        sessions.map(s => s.exercises?.slice(0, 3).map(e => getExerciseMovementFamily(e) || '').sort().join(',')).join('|')
       return getExerciseFamilies(newProgram.sessions) === getExerciseFamilies(previousProgram.sessions)
     })(),
     sameLimiterPath: newProgram.constraintInsight?.primaryConstraint === previousProgram.constraintInsight?.primaryConstraint,
@@ -31682,14 +31841,19 @@ export function getTimeOptimizationInfo(session: AdaptiveSession): {
 export function buildProgramSelectionTrace(program: AdaptiveProgram): ProgramSelectionTrace {
   const sessionTraces: SessionSelectionTrace[] = program.sessions.map((session, index) => {
     const exerciseTraces = session.exercises.map(ex => {
+      // [BUILDER-EXERCISE-POLYMORPHIC-ACCESSORS]
       // Use existing selection trace if available, otherwise create minimal
-      if (ex.selectionTrace) {
-        return ex.selectionTrace
+      const existingTrace = getExerciseSelectionTrace(ex)
+      if (existingTrace) {
+        // Cast through unknown — `existingTrace` is the structural shape
+        // attached at selection time; ExerciseSelectionTrace is its
+        // canonical contract type.
+        return existingTrace as unknown as ExerciseSelectionTrace
       }
       // Fallback: create minimal trace for older programs
       return {
-        exerciseId: ex.exercise.id,
-        exerciseName: ex.exercise.name,
+        exerciseId: ex.id || '',
+        exerciseName: getExerciseName(ex),
         slotType: 'main' as const,
         sessionRole: 'accessory' as const,
         expressionMode: 'strength_support' as const,
@@ -31697,7 +31861,7 @@ export function buildProgramSelectionTrace(program: AdaptiveProgram): ProgramSel
         secondaryInfluences: [],
         influencingSkills: [],
         doctrineSource: null,
-        exerciseFamily: ex.exercise.movementPattern || null,
+        exerciseFamily: getExerciseMovementPattern(ex) || null,
         candidatePoolSummary: {
           totalCandidates: 0,
           filteredByEquipment: 0,

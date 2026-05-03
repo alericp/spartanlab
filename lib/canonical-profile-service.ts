@@ -99,6 +99,11 @@ type LegacyOnboardingFields = {
   height?: number | null
   primaryOutcome?: string | null
   trainingStyles?: string[]
+  // [LEGACY-GOAL-CATEGORY-SINGULAR] Older onboarding documents persisted
+  // a singular `goalCategory: GoalCategory | null` before migration to
+  // the `goalCategories: GoalCategory[]` plural field. Reconciliation
+  // still reads the singular form defensively when present.
+  goalCategory?: string | null
 }
 type LegacyAthleteFields = {
   userId?: string
@@ -734,11 +739,18 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       // ISSUE D FIX: Infer from sessionLengthMinutes if sessionDurationMode not set
       onboardingProfile?.sessionLengthMinutes === 'flexible' ? 'adaptive' : 'static'
     ),
-    sessionLengthMinutes: pick(
-      onboardingProfile?.sessionLengthMinutes,
-      athleteProfile?.sessionLengthMinutes,
-      45  // Reasonable default for new users
-    ),
+    // [SESSION-LENGTH-FLEXIBLE-COERCION] Onboarding stores
+    // `SessionLengthPreference | null` which is the literal 'flexible'
+    // OR a numeric bucket. CanonicalProgrammingProfile.sessionLengthMinutes
+    // is strictly `number`. Coerce 'flexible' to the default 45 here
+    // (sessionDurationMode: 'adaptive' carries the flexibility semantic
+    // separately).
+    sessionLengthMinutes: (() => {
+      const onb = onboardingProfile?.sessionLengthMinutes
+      const ath = athleteProfile?.sessionLengthMinutes
+      const raw = onb ?? ath ?? 45
+      return typeof raw === 'number' ? raw : 45
+    })(),
     sessionStylePreference: onboardingProfile?.sessionStyle ?? null,
     equipmentAvailable: pickArray(
       onboardingProfile?.equipment,
@@ -759,13 +771,16 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
     dipMax: pick(onboardingProfile?.dipMax, athleteProfile?.dipMax?.toString(), null),
     pushUpMax: pick(onboardingProfile?.pushUpMax, null, null),
     wallHSPUReps: pick(onboardingProfile?.wallHSPUReps, null, null),
+    // [WEIGHTED-BENCHMARK-CANONICAL-OWNER] WeightedBenchmark exposes
+    // `addedWeight` (not legacy `load`). Reads of `.load` were left over
+    // from the migration. Use the canonical field directly.
     weightedPullUp: onboardingProfile?.weightedPullUp ? {
-      addedWeight: onboardingProfile.weightedPullUp.load ?? onboardingProfile.weightedPullUp.addedWeight ?? 0,
+      addedWeight: onboardingProfile.weightedPullUp.addedWeight ?? 0,
       reps: onboardingProfile.weightedPullUp.reps ?? 1,
       unit: onboardingProfile.weightedPullUp.unit ?? 'lbs',
     } : null,
     weightedDip: onboardingProfile?.weightedDip ? {
-      addedWeight: onboardingProfile.weightedDip.load ?? onboardingProfile.weightedDip.addedWeight ?? 0,
+      addedWeight: onboardingProfile.weightedDip.addedWeight ?? 0,
       reps: onboardingProfile.weightedDip.reps ?? 1,
       unit: onboardingProfile.weightedDip.unit ?? 'lbs',
     } : null,
@@ -1372,7 +1387,12 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
   // 2. Update onboarding profile (athlete-profile)
   const currentOnboarding = getOnboardingProfile()
   if (currentOnboarding) {
-    const onboardingUpdates: Partial<OnboardingProfile> = { ...currentOnboarding }
+    // [LEGACY-ONBOARDING-UPDATES-WIDENED] Some persisted-only legacy fields
+    // (e.g. singular `goalCategory`) are still synced from the canonical
+    // service even though they no longer appear on the strict
+    // `OnboardingProfile` type. Widen the local update accumulator with
+    // the same legacy slice the reconciler uses.
+    const onboardingUpdates: Partial<OnboardingProfileWithLegacy> = { ...currentOnboarding }
     
     if (updates.primaryGoal !== undefined) onboardingUpdates.primaryGoal = updates.primaryGoal
     if (updates.secondaryGoal !== undefined) onboardingUpdates.secondaryGoal = updates.secondaryGoal
@@ -1414,15 +1434,22 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
       onboardingUpdates.allTimePRDip = updates.allTimePRDip as OnboardingProfile['allTimePRDip']
     }
     
-    // Skill benchmarks (with band/history context)
+    // [SKILL-BENCHMARK-NULLABLE-INDEX] OnboardingProfile.frontLever is
+    // `SkillBenchmark | null`, so `OnboardingProfile['frontLever']['progression']`
+    // tries to index `progression` on a nullable type, producing TS2339.
+    // Use `NonNullable<...>` to get the SkillBenchmark slice. Same for
+    // planche/hspu and the flexibility benchmarks below.
+    type FrontLeverSlice = NonNullable<OnboardingProfile['frontLever']>
+    type PlancheSlice = NonNullable<OnboardingProfile['planche']>
+    type HspuSlice = NonNullable<OnboardingProfile['hspu']>
     if (updates.frontLeverProgression !== undefined || updates.frontLeverHoldSeconds !== undefined || 
         updates.frontLeverIsAssisted !== undefined || updates.frontLeverBandLevel !== undefined ||
         updates.frontLeverHighestEver !== undefined) {
       onboardingUpdates.frontLever = {
-        progression: (updates.frontLeverProgression ?? currentOnboarding.frontLever?.progression ?? 'none') as OnboardingProfile['frontLever']['progression'],
+        progression: (updates.frontLeverProgression ?? currentOnboarding.frontLever?.progression ?? 'none') as FrontLeverSlice['progression'],
         holdSeconds: updates.frontLeverHoldSeconds ?? currentOnboarding.frontLever?.holdSeconds,
         isAssisted: updates.frontLeverIsAssisted ?? currentOnboarding.frontLever?.isAssisted,
-        bandLevel: (updates.frontLeverBandLevel ?? currentOnboarding.frontLever?.bandLevel) as OnboardingProfile['frontLever']['bandLevel'],
+        bandLevel: (updates.frontLeverBandLevel ?? currentOnboarding.frontLever?.bandLevel) as FrontLeverSlice['bandLevel'],
         highestLevelEverReached: updates.frontLeverHighestEver ?? currentOnboarding.frontLever?.highestLevelEverReached,
       }
     }
@@ -1430,10 +1457,10 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
         updates.plancheIsAssisted !== undefined || updates.plancheBandLevel !== undefined ||
         updates.plancheHighestEver !== undefined) {
       onboardingUpdates.planche = {
-        progression: (updates.plancheProgression ?? currentOnboarding.planche?.progression ?? 'none') as OnboardingProfile['planche']['progression'],
+        progression: (updates.plancheProgression ?? currentOnboarding.planche?.progression ?? 'none') as PlancheSlice['progression'],
         holdSeconds: updates.plancheHoldSeconds ?? currentOnboarding.planche?.holdSeconds,
         isAssisted: updates.plancheIsAssisted ?? currentOnboarding.planche?.isAssisted,
-        bandLevel: (updates.plancheBandLevel ?? currentOnboarding.planche?.bandLevel) as OnboardingProfile['planche']['bandLevel'],
+        bandLevel: (updates.plancheBandLevel ?? currentOnboarding.planche?.bandLevel) as PlancheSlice['bandLevel'],
         highestLevelEverReached: updates.plancheHighestEver ?? currentOnboarding.planche?.highestLevelEverReached,
       }
     }
@@ -1442,7 +1469,7 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
     }
     if (updates.hspuProgression !== undefined) {
       onboardingUpdates.hspu = {
-        progression: updates.hspuProgression as OnboardingProfile['hspu']['progression'],
+        progression: updates.hspuProgression as HspuSlice['progression'],
       }
     }
     if (updates.lSitHoldSeconds !== undefined) {
@@ -1452,23 +1479,28 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
       onboardingUpdates.vSitHold = updates.vSitHoldSeconds as OnboardingProfile['vSitHold']
     }
     
+    // [FLEX-BENCHMARK-NULLABLE-INDEX] same NonNullable<> pattern as skill
+    // benchmarks above (FlexibilityBenchmark | null indexers).
+    type PancakeSlice = NonNullable<OnboardingProfile['pancake']>
+    type ToeTouchSlice = NonNullable<OnboardingProfile['toeTouch']>
+    type FrontSplitsSlice = NonNullable<OnboardingProfile['frontSplits']>
     // Flexibility benchmarks (with range intent)
     if (updates.pancakeLevel !== undefined || updates.pancakeRangeIntent !== undefined) {
       onboardingUpdates.pancake = { 
-        level: (updates.pancakeLevel ?? currentOnboarding.pancake?.level ?? 'unknown') as OnboardingProfile['pancake']['level'], 
-        rangeIntent: (updates.pancakeRangeIntent ?? currentOnboarding.pancake?.rangeIntent ?? null) as OnboardingProfile['pancake']['rangeIntent'],
+        level: (updates.pancakeLevel ?? currentOnboarding.pancake?.level ?? 'unknown') as PancakeSlice['level'], 
+        rangeIntent: (updates.pancakeRangeIntent ?? currentOnboarding.pancake?.rangeIntent ?? null) as PancakeSlice['rangeIntent'],
       }
     }
     if (updates.toeTouchLevel !== undefined || updates.toeTouchRangeIntent !== undefined) {
       onboardingUpdates.toeTouch = { 
-        level: (updates.toeTouchLevel ?? currentOnboarding.toeTouch?.level ?? 'unknown') as OnboardingProfile['toeTouch']['level'], 
-        rangeIntent: (updates.toeTouchRangeIntent ?? currentOnboarding.toeTouch?.rangeIntent ?? null) as OnboardingProfile['toeTouch']['rangeIntent'],
+        level: (updates.toeTouchLevel ?? currentOnboarding.toeTouch?.level ?? 'unknown') as ToeTouchSlice['level'], 
+        rangeIntent: (updates.toeTouchRangeIntent ?? currentOnboarding.toeTouch?.rangeIntent ?? null) as ToeTouchSlice['rangeIntent'],
       }
     }
     if (updates.frontSplitsLevel !== undefined || updates.frontSplitsRangeIntent !== undefined) {
       onboardingUpdates.frontSplits = { 
-        level: (updates.frontSplitsLevel ?? currentOnboarding.frontSplits?.level ?? 'unknown') as OnboardingProfile['frontSplits']['level'], 
-        rangeIntent: (updates.frontSplitsRangeIntent ?? currentOnboarding.frontSplits?.rangeIntent ?? null) as OnboardingProfile['frontSplits']['rangeIntent'],
+        level: (updates.frontSplitsLevel ?? currentOnboarding.frontSplits?.level ?? 'unknown') as FrontSplitsSlice['level'], 
+        rangeIntent: (updates.frontSplitsRangeIntent ?? currentOnboarding.frontSplits?.rangeIntent ?? null) as FrontSplitsSlice['rangeIntent'],
       }
     }
     if (updates.sideSplitsLevel !== undefined || updates.sideSplitsRangeIntent !== undefined) {

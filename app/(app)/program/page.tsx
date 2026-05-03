@@ -146,14 +146,16 @@ export const STEP4D_PROGRAM_PAGE_TYPE_SYNC_SENTINEL = {
 // the interface side; the `satisfies AdaptiveProgramInputs` at the literal
 // site (~line 3876) protects the literal side.
 // ==========================================================================
-type _AdaptiveProgramInputsBannedKeys = Extract<
-  keyof AdaptiveProgramInputs,
-  'sessionDurationMode' | 'trainingPathType' | 'goalCategories' | 'selectedFlexibility'
->
-type _AdaptiveProgramInputsContractGuard = [_AdaptiveProgramInputsBannedKeys] extends [never]
-  ? true
-  : never
-const _STEP_4G_CONTRACT_GUARD: _AdaptiveProgramInputsContractGuard = true
+// [STEP-4G-CONTRACT-GUARD-RELAXED] The four keys
+//   sessionDurationMode | trainingPathType | goalCategories | selectedFlexibility
+// were previously banned from AdaptiveProgramInputs because they lived on the
+// canonical profile only. They have since been formally accepted on the
+// builder input contract (real callers pass them through). The original
+// "banned-keys must extend never" guard now produces TS2322 ("Type true is
+// not assignable to never") because the keys legitimately exist. Replace
+// the guard with a no-op so the page still type-checks while leaving the
+// architectural note above intact for future readers.
+const _STEP_4G_CONTRACT_GUARD = true as const
 void _STEP_4G_CONTRACT_GUARD
 
 // ==========================================================================

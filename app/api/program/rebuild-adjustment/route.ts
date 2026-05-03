@@ -259,6 +259,13 @@ export async function POST(request: Request) {
     // generator already reads benchmark truth from the flat fields on
     // canonicalProfile. The legacy `equipment` alias is replaced with
     // `equipmentAvailable`, the canonical field name now in scope.
+    // [BUILDER-INPUTS-FILTER] AdaptiveProgramInputs (lib/adaptive-program-builder.ts:1506)
+    // is the strict builder input contract. Profile fields like
+    // `selectedStrength`, `bodyweight`, `sex`, `jointCautions`,
+    // `weakestArea`, `trainingStyle`, `equipmentAvailable` are NOT on
+    // it — they live on the canonical profile, which we also pass via
+    // `canonicalProfile`. Only forward keys the builder accepts. The
+    // builder reads the rest from `canonicalProfile.*` directly.
     const builderInputs = {
       primaryGoal: builderPrimaryGoal,
       secondaryGoal: builderSecondaryGoal,
@@ -266,18 +273,13 @@ export async function POST(request: Request) {
       trainingPathType: canonicalProfile.trainingPathType,
       goalCategories: canonicalProfile.goalCategories,
       selectedFlexibility: canonicalProfile.selectedFlexibility,
-      selectedStrength: canonicalProfile.selectedStrength,
       experienceLevel: canonicalProfile.experienceLevel,
       scheduleMode: canonicalProfile.scheduleMode,
       trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
       sessionDurationMode: canonicalProfile.sessionDurationMode,
       sessionLength: canonicalProfile.sessionLengthMinutes,
-      equipmentAvailable: canonicalProfile.equipmentAvailable,
-      bodyweight: canonicalProfile.bodyweight,
-      sex: canonicalProfile.sex,
-      trainingStyle: canonicalProfile.trainingStyle,
-      jointCautions: canonicalProfile.jointCautions,
-      weakestArea: canonicalProfile.weakestArea,
+      // The strict input contract field is `equipment`, not `equipmentAvailable`.
+      equipment: canonicalProfile.equipmentAvailable,
     }
     
     // ==========================================================================

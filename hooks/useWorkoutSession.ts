@@ -355,7 +355,13 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
               category: ex.category,
               sets: ex.sets,
               targetReps: isHold ? undefined : numericLowerBound,
-              targetHold: isHold ? repsOrTime : undefined,
+              // [WORKOUT-HISTORY-TARGET-HOLD-IS-NUMERIC] history shape
+              // requires `number | undefined` (seconds). The canonical
+              // hold-prescription string ("20s" / "30-45s") was being
+              // assigned directly. Reuse `numericLowerBound` (already
+              // parsed from the leading number in repsOrTime) so a hold
+              // is persisted as the seconds count.
+              targetHold: isHold ? numericLowerBound : undefined,
               weight: ex.prescribedLoad?.load,
             }
           }),

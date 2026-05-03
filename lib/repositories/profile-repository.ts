@@ -342,7 +342,10 @@ export function saveAthleteProfile(
   }
   
   // Check for newly unlocked achievements (strength milestones, etc.)
-  const newAchievements = onTrainingEvent()
+  // [ACHIEVEMENT-EVENT-TYPE-REQUIRED] onTrainingEvent now requires a
+  // TrainingEventType. Use 'strength_record' since this fires after a
+  // profile-level save (often triggered by max-test updates).
+  const newAchievements = onTrainingEvent('strength_record')
   if (newAchievements.length > 0) {
     showAchievementNotifications(newAchievements)
   }

@@ -75,7 +75,10 @@ export function QuickLogModal({
       })
 
       // Check for newly unlocked achievements
-      const newAchievements = onTrainingEvent()
+      // [ACHIEVEMENT-EVENT-TYPE-REQUIRED] onTrainingEvent now requires
+      // a TrainingEventType. Use 'workout_complete' to mirror the call
+      // in useWorkoutSession.ts:400.
+      const newAchievements = onTrainingEvent('workout_complete')
       if (newAchievements.length > 0) {
         showAchievementNotifications(newAchievements)
       }

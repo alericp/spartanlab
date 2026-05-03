@@ -2,14 +2,20 @@
 // Central integration layer that synthesizes all SpartanLab tools into unified athlete intelligence
 
 import { getAthleteProfile, getSkillProgressions, type AthleteProfile, type SkillProgression } from './data-service'
-import { getConstraintInsight, analyzeConstraints, deriveCanonicalDisplayedLimiter, type ConstraintResult } from './constraint-engine'
+// [TYPE-OWNER-IMPORT] ConstraintResult lives in @/types/constraint-engine,
+// not in ./constraint-engine. Import the type directly from its owner.
+import { getConstraintInsight, analyzeConstraints, deriveCanonicalDisplayedLimiter } from './constraint-engine'
+import type { ConstraintResult } from '@/types/constraint-engine'
 import { assessDeloadNeed, type DeloadAssessment, type DeloadStatus } from './deload-detection-engine'
 import { calculateRecoverySignal, type RecoverySignal, type RecoveryLevel } from './recovery-engine'
 import { getStrengthRecords } from './strength-service'
 import { calculateStrengthTrend, getOverallMomentum, type TrendDirection } from './strength-trend-engine'
 import { getSkillSessions, getRecentSkillSessions } from './skill-session-service'
 import { calculateSkillDensityMetrics, analyzeHoldTrend, analyzeDensityTrend } from './skill-density-engine'
-import { calculateReadinessDecision, type ReadinessDecision, type ReadinessStatus } from './skill-readiness-engine'
+// [TYPE-OWNER-IMPORT] ReadinessDecision/ReadinessStatus live in
+// @/types/skill-readiness, not in ./skill-readiness-engine.
+import { calculateReadinessDecision } from './skill-readiness-engine'
+import type { ReadinessDecision, ReadinessStatus } from '@/types/skill-readiness'
 import { getWorkoutLogs } from './workout-log-service'
 import { calculateWeeklyVolume, getWorkoutsLastNDays } from './volume-analyzer'
 import { getSkillProgression } from './skill-progression-rules'
@@ -610,7 +616,11 @@ export function buildAthleteState(): AthleteState {
       currentLevel: null,
       targetLevel: null,
       momentumScore: 0,
-      plateauStatus: 'insufficient_data',
+      // [PLATEAU-STATUS-LITERAL-DRIFT] PlateauStatus is
+      // 'no_plateau' | 'possible_plateau' | 'plateau_detected' — there
+      // is no 'insufficient_data' value. Map to 'no_plateau' since
+      // absence of evidence is the conservative no-plateau verdict.
+      plateauStatus: 'no_plateau',
       strengthTrends: { pull: 'insufficient_data', push: 'insufficient_data' },
       readinessStatus: null,
       fatigueLevel: 'optimal',

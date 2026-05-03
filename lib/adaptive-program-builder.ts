@@ -7953,7 +7953,9 @@ async function generateAdaptiveProgramImpl(
   // [PHASE 8 FINAL] FLEX CHAIN VERDICT
   // ==========================================================================
   console.log('[phase8-flex-chain-final-verdict]', {
-    is4DaysLegitimate: classifiedReason !== 'stale_feedback_false_4_days' && classifiedReason !== 'hidden_modifier_collision_4_days',
+    // [PHASE-8-LITERAL-DRIFT] `stale_feedback_false_4_days` is no longer
+    // part of the classifiedReason union — drop the impossible compare.
+    is4DaysLegitimate: classifiedReason !== 'hidden_modifier_collision_4_days',
     currentResultIs: classifiedReason,
     shouldChangeAfter2Workouts: trainingFeedback.trustedWorkoutCount < 2,
     rebuildUsesFreshFeedback: true,
@@ -8113,8 +8115,11 @@ async function generateAdaptiveProgramImpl(
     realWorkoutFeedbackCurrentlyChangesActiveWeek: true, // [PHASE 13] Now true via active-week-mutation-service
     currentAppOversellsAdaptiveBehavior: false, // [PHASE 13] Wording now truthful
     currentWeekFrequencyIsTruthful: true, // Value is correct for rebuild context
-    systemReadyForPushWorkoutForward: futurePhaseReadinessVerdict !== 'state_not_ready_for_future_adaptation',
-    systemReadyForPreWorkoutReadiness: futurePhaseReadinessVerdict !== 'state_not_ready_for_future_adaptation',
+    // [PHASE-12-READINESS-LITERAL-DRIFT] `state_not_ready_for_future_adaptation`
+    // dropped from union; `structurally_ready_for_next_phases` is the
+    // canonical "ready" verdict.
+    systemReadyForPushWorkoutForward: futurePhaseReadinessVerdict === 'structurally_ready_for_next_phases',
+    systemReadyForPreWorkoutReadiness: futurePhaseReadinessVerdict === 'structurally_ready_for_next_phases',
     exactRemainingGap: 'none', // [PHASE 13] Gap closed by active-week-mutation-service
     phase13Status: 'active_week_mutation_implemented',
     verdict: phase12FinalVerdict,
@@ -8153,7 +8158,14 @@ async function generateAdaptiveProgramImpl(
     goalCategories: canonicalProfile.goalCategories || inputs.goalCategories || [],
     trainingPathType: (canonicalProfile.trainingPathType || 'hybrid') as 'hybrid' | 'skill_progression' | 'strength_endurance' | 'balanced',
     scheduleMode: inputScheduleMode as 'static' | 'flexible',  // [PHASE 25U] Use computed inputScheduleMode, not canonicalProfile
-    trainingDaysPerWeek: hasExplicitNumericDays ? inputs.trainingDaysPerWeek : canonicalProfile.trainingDaysPerWeek,  // [PHASE 25U] Use explicit selection if present
+    // [BUILDER-TRAINING-DAYS-FLEXIBLE-NORMALIZATION] inputs.trainingDaysPerWeek
+    // is `number | 'flexible' | null` but the expanded-context field is
+    // `number | null`. Treat 'flexible' as null at the boundary so the
+    // computed inputScheduleMode (already 'flexible' above) carries the
+    // semantic; the numeric slot stays clean.
+    trainingDaysPerWeek: hasExplicitNumericDays
+      ? (typeof inputs.trainingDaysPerWeek === 'number' ? inputs.trainingDaysPerWeek : null)
+      : (typeof canonicalProfile.trainingDaysPerWeek === 'number' ? canonicalProfile.trainingDaysPerWeek : null),
     sessionDurationMode: (canonicalProfile.sessionDurationMode || 'static') as 'static' | 'adaptive',
     sessionLengthMinutes: canonicalProfile.sessionLengthMinutes || sessionLength,
     selectedFlexibility: canonicalProfile.selectedFlexibility || inputs.selectedFlexibility || [],

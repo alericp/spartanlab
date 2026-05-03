@@ -4637,9 +4637,24 @@ export function StreamlinedWorkoutSession({
     // the canonical-ladder narrowing). The pure snapshot helper requires
     // `RPEValue | null`. Normalize at the boundary - off-ladder values
     // become null rather than being pushed through as a lie.
+    // [SNAPSHOT-EXERCISE-SHAPE-NARROW] buildUnifiedTransitionSnapshot
+    // accepts a precise structural shape (id?/name/category:string/
+    // sets/repsOrTime/note?/executionTruth?). MachineExercise narrows
+    // some of these fields more (e.g. typed category union, optional
+    // note). Project to the exact shape so the helper's typing applies
+    // without widening MachineExercise itself.
+    const exercisesForSnapshot = exercises.map(ex => ({
+      id: ex.id,
+      name: ex.name,
+      category: String(ex.category),
+      sets: ex.sets,
+      repsOrTime: ex.repsOrTime,
+      note: ex.note,
+      executionTruth: ex.executionTruth,
+    }))
     const { snapshot, isWorkoutComplete, guardError } = buildUnifiedTransitionSnapshot(
       { ...liveSession, selectedRPE: normalizeRPEValue(liveSession.selectedRPE) },
-      exercises,
+      exercisesForSnapshot,
       normalizedCompletedSets, // Use machine-derived completed sets
       safeExerciseIndex
     )

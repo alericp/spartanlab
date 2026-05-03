@@ -603,6 +603,102 @@ interface WorkoutSessionState {
 }
 
 // =============================================================================
+// [LIVE-WORKOUT-FRONTIER] BOUNDARY NORMALIZERS
+// =============================================================================
+// The hydration corridor receives `Partial<LiveSessionState>` from the
+// canonical runtime validator (`validateHydrationPayload` in
+// `lib/workout/validate-live-session-runtime.ts`). The local
+// `WorkoutSessionState` (above) is a NARROWER status union — it does NOT
+// carry `'inter_exercise_rest'` because the reducer in this file collapses
+// inter-exercise rest into the `'resting'` runtime status. These tiny
+// normalizers are the SINGLE boundary where validated-runtime truth is
+// turned into reducer-state truth, with NO cast and NO data invented.
+// =============================================================================
+
+const CANONICAL_RPE_VALUES: ReadonlySet<number> = new Set([
+  5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10,
+])
+
+/**
+ * Normalize an unknown numeric/RPE input to the canonical `RPEValue` union.
+ * Returns null for values outside the canonical 5..10 (0.5 step) ladder.
+ * Used at boundaries where machine-state numbers (which carry `number`
+ * for typing convenience) flow into helpers typed as `RPEValue | null`.
+ */
+function normalizeRPEValue(value: unknown): RPEValue | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null
+  return CANONICAL_RPE_VALUES.has(value) ? (value as RPEValue) : null
+}
+
+/**
+ * Normalize a `Partial<LiveSessionState>` into the local
+ * `WorkoutSessionState` shape required by the reducer's
+ * `HYDRATE_FROM_STORAGE` action.
+ *
+ * - `'inter_exercise_rest'` -> `'resting'` (canonical collapse used by
+ *   `safeStatus` everywhere else in this file).
+ * - `undefined` status uses the supplied fallback.
+ * - Only fields owned by `WorkoutSessionState` are forwarded; extra
+ *   fields from `LiveSessionState` (e.g. `selectedRPE`, `repsValue`,
+ *   `bandUsed`) are intentionally dropped because the reducer state
+ *   does not own them.
+ *
+ * No `as any`, no widening of either union.
+ */
+function normalizeWorkoutSessionState(
+  value: Partial<import('@/lib/workout/validate-live-session-runtime').LiveSessionState>,
+  fallback: WorkoutSessionState,
+): WorkoutSessionState {
+  const rawStatus = value.status
+  let status: WorkoutSessionState['status']
+  if (rawStatus === 'ready' || rawStatus === 'active' || rawStatus === 'resting' || rawStatus === 'completed') {
+    status = rawStatus
+  } else if (rawStatus === 'inter_exercise_rest') {
+    status = 'resting'
+  } else {
+    status = fallback.status
+  }
+
+  return {
+    status,
+    currentExerciseIndex:
+      typeof value.currentExerciseIndex === 'number' ? value.currentExerciseIndex : fallback.currentExerciseIndex,
+    currentSetNumber:
+      typeof value.currentSetNumber === 'number' ? value.currentSetNumber : fallback.currentSetNumber,
+    completedSets: Array.isArray(value.completedSets)
+      ? (value.completedSets as CompletedSetData[])
+      : fallback.completedSets,
+    startTime: typeof value.startTime === 'number' ? value.startTime : fallback.startTime,
+    elapsedSeconds:
+      typeof value.elapsedSeconds === 'number' ? value.elapsedSeconds : fallback.elapsedSeconds,
+    lastSetRPE: normalizeRPEValue(value.lastSetRPE) ?? fallback.lastSetRPE,
+    workoutNotes: typeof value.workoutNotes === 'string' ? value.workoutNotes : fallback.workoutNotes,
+    exerciseOverrides:
+      value.exerciseOverrides && typeof value.exerciseOverrides === 'object'
+        ? (value.exerciseOverrides as Record<number, ExerciseOverrideState>)
+        : fallback.exerciseOverrides,
+  }
+}
+
+/**
+ * Normalize an unknown `confidenceLevel` value to the canonical
+ * `LiveWorkoutSnapshot.prescribedLoad.confidenceLevel` union of
+ * `'low' | 'medium' | 'high' | undefined`.
+ *
+ * `AdaptiveExercise.prescribedLoad.confidenceLevel` carries the broader
+ * builder-side union `'high' | 'moderate' | 'low' | 'none'`. The live
+ * snapshot exposes a UI-facing 3-bucket scale; this normalizer maps:
+ *   - 'moderate' -> 'medium'   (semantic equivalent at the UI layer)
+ *   - 'none'     -> undefined  (no UI signal to render)
+ *   - unknown    -> undefined  (defensive, never invents a level)
+ */
+function normalizeConfidenceLevel(value: unknown): 'low' | 'medium' | 'high' | undefined {
+  if (value === 'low' || value === 'medium' || value === 'high') return value
+  if (value === 'moderate') return 'medium'
+  return undefined
+}
+
+// =============================================================================
 // [UNIFIED-HANDOFF] TRANSITION SNAPSHOT TYPE
 // Used by buildUnifiedTransitionSnapshot helper for exercise transitions
 // =============================================================================
@@ -3364,7 +3460,25 @@ export function StreamlinedWorkoutSession({
           completedSetsCount: validatedPayload.completedSets?.length ?? 0,
         })
         // [UNIFIED-HANDOFF] True hydration from storage - the ONLY valid use of HYDRATE_FROM_STORAGE
-        dispatch({ type: 'HYDRATE_FROM_STORAGE', savedState: validatedPayload })
+        // [LIVE-WORKOUT-FRONTIER] `validatedPayload` is `Partial<LiveSessionState>`
+        // (canonical runtime contract carries `'inter_exercise_rest'` as a
+        // possible status). The local reducer state `WorkoutSessionState`
+        // collapses inter-exercise rest into `'resting'`. Normalize here at
+        // the single boundary - no cast, no field invented.
+        dispatch({
+          type: 'HYDRATE_FROM_STORAGE',
+          savedState: normalizeWorkoutSessionState(validatedPayload, {
+            status: 'ready',
+            currentExerciseIndex: 0,
+            currentSetNumber: 1,
+            completedSets: [],
+            startTime: null,
+            elapsedSeconds: 0,
+            lastSetRPE: null,
+            workoutNotes: '',
+            exerciseOverrides: {},
+          }),
+        })
   markBootStage(
     'state_initialized',
     { currentExerciseIndex: validatedPayload.currentExerciseIndex },
@@ -3380,10 +3494,13 @@ export function StreamlinedWorkoutSession({
           restoreWasAccepted: false,
           restoreRejectReason: 'payload_validation_failed',
         })
-        markBootStage('state_initialized', {
-          currentExerciseIndex: 0,
-          status: 'ready',
-        })
+        // [BOOT-LEDGER-CONTRACT] `status` is a debug breadcrumb here, not a
+        // canonical BootLedgerState field. Pass via the third (debug) arg.
+        markBootStage(
+          'state_initialized',
+          { currentExerciseIndex: 0 },
+          { status: 'ready' },
+        )
       }
     } else {
       // Restore rejected or no saved state
@@ -3391,10 +3508,13 @@ export function StreamlinedWorkoutSession({
         restoreWasAccepted: false,
         restoreRejectReason: saved ? 'completed_session' : 'no_saved_state',
       })
-      markBootStage('state_initialized', {
-        currentExerciseIndex: 0,
-        status: 'ready',
-      })
+      // [BOOT-LEDGER-CONTRACT] `status` is a debug breadcrumb here, not a
+      // canonical BootLedgerState field. Pass via the third (debug) arg.
+      markBootStage(
+        'state_initialized',
+        { currentExerciseIndex: 0 },
+        { status: 'ready' },
+      )
     }
     
     markBootStage('core_boot_complete', { coreBootComplete: true })
@@ -4512,8 +4632,13 @@ export function StreamlinedWorkoutSession({
     
     // Build snapshot using PURE helper - no side effects
     // [CRASH-FIX] Use normalizedCompletedSets instead of liveSession.completedSets
+    // [LIVE-WORKOUT-FRONTIER] `liveSession.selectedRPE` is a `number` on
+    // the machine view-model (machine state stores numeric RPE without
+    // the canonical-ladder narrowing). The pure snapshot helper requires
+    // `RPEValue | null`. Normalize at the boundary - off-ladder values
+    // become null rather than being pushed through as a lie.
     const { snapshot, isWorkoutComplete, guardError } = buildUnifiedTransitionSnapshot(
-      liveSession,
+      { ...liveSession, selectedRPE: normalizeRPEValue(liveSession.selectedRPE) },
       exercises,
       normalizedCompletedSets, // Use machine-derived completed sets
       safeExerciseIndex
@@ -5657,19 +5782,18 @@ export function StreamlinedWorkoutSession({
   // therefore does NOT tear down + re-arm during a commit.
   // [LIVE-WORKOUT-FRONTIER] Canonical safeStatus union from the
   // LiveSessionState contract is
-  //   'ready' | 'active' | 'resting' | 'completed' | 'inter_exercise_rest'
+  //   'ready' | 'active' | 'resting' | 'completed'
   // The legacy comparisons against `between_exercise_rest`,
-  // `block_round_rest`, and `transitioning` were stale: those statuses no
-  // longer exist in the state machine. Their semantic intent ("user is in
-  // a between-exercise / between-round transition but still inside the
-  // live corridor") is now carried by the single canonical
-  // `inter_exercise_rest` status. We map to canonical truth here rather
-  // than widening the status union, because the reducer / state machine
-  // does not emit the legacy values.
+  // `block_round_rest`, `transitioning`, and `inter_exercise_rest` were
+  // stale: those phases are mapped by `safeStatus` (above) into the
+  // narrow runtime statuses below. `between_exercise_rest` and
+  // `block_round_rest` -> 'resting'; `transitioning` -> 'active'.
+  // The semantic intent ("user is in an inter-exercise / inter-round
+  // transition but still inside the live corridor") is therefore fully
+  // covered by `safeStatus === 'resting'`.
   const isInteractivePhase =
     safeStatus === 'active' ||
-    safeStatus === 'resting' ||
-    safeStatus === 'inter_exercise_rest'
+    safeStatus === 'resting'
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -7840,13 +7964,19 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           exerciseRepsOrTime: activeEffectiveContract.effectiveRepsOrTime,
           targetRPE: activeEffectiveContract.effectiveTargetRPE,
           // Optional prescribed weighted load
+          // [LIVE-WORKOUT-FRONTIER] `confidenceLevel` on the builder side is
+          // 'high' | 'moderate' | 'low' | 'none'. The live snapshot's
+          // 3-bucket UI scale is 'low' | 'medium' | 'high' | undefined.
+          // Normalize at the boundary; nothing is invented or widened.
           prescribedLoad:
             safeCurrentExercise?.prescribedLoad?.load &&
             safeCurrentExercise.prescribedLoad.load > 0
               ? {
                   load: safeCurrentExercise.prescribedLoad.load,
                   unit: safeCurrentExercise.prescribedLoad.unit || 'lbs',
-                  confidenceLevel: safeCurrentExercise.prescribedLoad.confidenceLevel,
+                  confidenceLevel: normalizeConfidenceLevel(
+                    safeCurrentExercise.prescribedLoad.confidenceLevel,
+                  ),
                 }
               : undefined,
           // Flat progression (machine-direct)
@@ -7895,7 +8025,9 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
           // from the canonical effective-contract resolver so the rest card
           // shows the EXACT same setup the active card will show after the
           // transition. Optional - omitted if no useful detail exists.
-          nextExerciseSetup,
+          // [LIVE-WORKOUT-FRONTIER] Snapshot field is optional (string | undefined).
+          // Local builder uses null to express "no useful detail". Convert at boundary.
+          nextExerciseSetup: nextExerciseSetup ?? undefined,
           // [PHASE-U / UP-NEXT-DETAIL] Structured per-field next-exercise
           // prescription. Each field is null when the underlying
           // authoritative truth is missing - the corridor decides per-chip
@@ -8283,7 +8415,11 @@ const blockMemberExercises = currentBlock?.block.memberExercises?.map(ex => ({
                   targetRPE: contractTargetRPE,
                   selectionReason: safeCurrentExercise?.selectionReason || undefined,
                   isPrimary: exerciseCategory === 'skill',
-                  isProtected: (safeCurrentExercise as AdaptiveExercise)?.isProtected,
+                  // [LIVE-WORKOUT-FRONTIER] `isProtected` lives on
+                  // NormalizedExercise (the runtime shape of
+                  // safeCurrentExercise), not on AdaptiveExercise. Reading
+                  // it directly without a (wrong) cast is the truthful path.
+                  isProtected: safeCurrentExercise?.isProtected,
                   coachingMeta: safeCurrentExercise?.coachingMeta,
                 },
                 {
